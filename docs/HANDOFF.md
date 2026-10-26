@@ -55,8 +55,11 @@ are restated across the README and the design doc.
    - Copy only the finished PNGs into `frontend/sprites/<species>/` and write its
      `species.json`. Keep prompts and scripts in `art/`, but not Sol's tool logs (they
      contain local paths).
-6. **The owner's live HA:** they install by copying `custom_components/virtual_pet/` and
-   restarting, after taking a backup. Their suggested options are in the README's
+6. **The owner's live HA:** the repo is public and packaged for HACS (custom repository,
+   type Integration); v0.6.1 is the first release. Release by bumping the version and
+   running Actions → Release (this session can't push tags, but can dispatch it). The
+   repo has no license yet; `validate.yml` skips HACS's license check until the owner
+   picks one. Manual copy still works, after taking a backup. Their suggested options are in the README's
    "Connect it to your house" tables. Remind them to delete the old manual card resource
    from 0.3.x.
 
