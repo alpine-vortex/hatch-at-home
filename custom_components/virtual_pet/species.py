@@ -15,7 +15,9 @@ from typing import Any
 
 _LOGGER = logging.getLogger(__package__)
 
-REQUIRED = {"name": str, "stages": list, "moods": list, "egg": dict}
+# "egg" is optional: the egg belongs to the device's world, and the card draws
+# it from the first species on the world's roster that has one.
+REQUIRED = {"name": str, "stages": list, "moods": list}
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 

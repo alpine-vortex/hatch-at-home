@@ -14,7 +14,7 @@ while its adult sprites are being redrawn.
 | `stages` | Stages that have sprites, besides the egg |
 | `stage_fallback` | Which drawn stage to use for one that has none (e.g. adult → teen until adult forms exist) |
 | `moods`, `frames` | Every stage has `{stage}_{mood}_{1..frames}.png` for each mood. A missing mood falls back to `content`. |
-| `egg` | Frames for the egg: `idle`, `wiggle` (calling or nearly hatched), `crack` |
+| `egg` | Optional. Frames for the world's egg: `idle`, `wiggle` (calling), `crack` (about to hatch). Only the first species on a world's roster needs it; the others hatch from that egg. |
 | `extras` | Special poses used by home awareness (phase 3): one sprite name, or a list of frames |
 | `props` | Sprite for each care action, plus `blanket`, `attention`, `away` and three `poop`. A name with a slash, like `bird/medicine`, borrows another species' sprite. |
 | `backgrounds` | `day`, `night`, `rain`, `dim` scenes, 512×384. Only `day` is required; missing scenes reuse it, dimmed by the card. |

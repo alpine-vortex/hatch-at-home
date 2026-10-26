@@ -288,7 +288,7 @@ def test_broken_species_files_are_skipped(tmp_path, monkeypatch) -> None:
     (tmp_path / "sprites" / "good").mkdir(parents=True)
     (tmp_path / "sprites" / "bad").mkdir()
     (tmp_path / "sprites" / "good" / "species.json").write_text(
-        '{"name": "Good", "stages": ["baby"], "moods": ["content"], "egg": {}}'
+        '{"name": "Good", "stages": ["baby"], "moods": ["content"]}'
     )
     (tmp_path / "sprites" / "bad" / "species.json").write_text('{"name": "Bad"}')
     (tmp_path / "worlds.json").write_text(

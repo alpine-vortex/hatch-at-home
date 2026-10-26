@@ -685,6 +685,7 @@ class HatchPetCard extends HTMLElement {
 
   _petFrames(sp, stage, mood, calling, days) {
     if (stage === "egg") {
+      if (!sp.egg) return [];
       if (days != null && days * 24 >= 0.4) return sp.egg.crack;
       return calling ? sp.egg.wiggle : sp.egg.idle;
     }

@@ -2,9 +2,14 @@
 
 ## The idea
 
-- **A world** is a theme with a roster of creatures: Woodland (bird, then squirrel and
-  deer), Terrarium (leopard gecko, blue death-feigning beetle), later Ocean (dolphin,
-  shark, goldfish) and more.
+- **A world** is a theme with a roster of creatures: Woodland (bird, then Douglas
+  squirrel and deer), Terrarium (leopard gecko, then Mexican red-knee tarantula; the
+  blue death-feigning beetle is shelved after several failed attempts), later Ocean
+  (dolphin, shark, goldfish) and more.
+- **New creatures go through probe and review.** Sol first draws a probe sheet
+  (baby, child and teen in content, the teen sick and asleep, and one signature pose).
+  The owner approves it before the full set is drawn. Creatures after the first in a
+  world need no egg sprites: they hatch from the world's egg.
 - **A device** is one pet's home: a handheld toy shaped and coloured for its world
   (Woodland is an orange egg with a keychain loop; Terrarium is a sandstone tank with
   a vented lid). One device holds **one pet at a time**. Each device is one config
