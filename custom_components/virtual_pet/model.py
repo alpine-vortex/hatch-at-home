@@ -9,7 +9,7 @@ whatever events these return.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field, fields
-from datetime import datetime, time, tzinfo
+from datetime import datetime, time, timedelta, tzinfo
 import math
 import random
 from typing import Any
@@ -73,6 +73,7 @@ class PetState:
     napping: bool = False  # asleep outside sleep hours
     lights_out: bool = False
     stayed_up_since: float | None = None  # awake inside sleep hours since
+    wake_at: float | None = None  # when the night's sleep ends (fixed at bedtime)
     call: Call | None = None
     latched: list[str] = field(default_factory=list)  # called, not re-armed
     care_misses: int = 0
@@ -94,8 +95,14 @@ class PetState:
         """Load from the Store, ignoring unknown keys and defaulting new ones."""
         known = {f.name for f in fields(cls)}
         kwargs = {k: v for k, v in data.items() if k in known}
-        if kwargs.get("call") is not None:
-            kwargs["call"] = Call(**kwargs["call"])
+        # Drop anything a newer or older version knew about and this one doesn't.
+        reasons = set(CALL_PRIORITY) | {"fake"}
+        kwargs["latched"] = [r for r in kwargs.get("latched", []) if r in reasons]
+        call = kwargs.get("call")
+        if call is not None:
+            call_keys = {f.name for f in fields(Call)}
+            call = {k: v for k, v in call.items() if k in call_keys}
+            kwargs["call"] = Call(**call) if call.get("reason") in reasons else None
         return cls(**kwargs)
 
     @classmethod
@@ -176,6 +183,8 @@ def shift_times(state: PetState, delta: float) -> None:
         state.call.deadline += delta
     if state.stayed_up_since is not None:
         state.stayed_up_since += delta
+    if state.wake_at is not None:
+        state.wake_at += delta
     state.last_praise += delta
     state.last_excite += delta
     state.last_updated += delta
@@ -185,8 +194,7 @@ def catch_up(state: PetState, now: float) -> None:
     """Account for time HA was not running.
 
     Downtime uses the away (frozen) rates: nothing decays, ages or expires, so
-    a restart can never make the pet sick or cost a care miss. The cap only
-    matters if the away rates are ever made non-zero.
+    a restart can never make the pet sick or cost a care miss.
     """
     elapsed = now - state.last_updated
     if elapsed <= 0:
@@ -200,14 +208,25 @@ def catch_up(state: PetState, now: float) -> None:
 
 
 def advance(
-    state: PetState, now: float, settings: Settings, rng: random.Random
+    state: PetState,
+    now: float,
+    settings: Settings,
+    rng: random.Random,
+    max_gap: float | None = R.MAX_LIVE_GAP_MINUTES * 60,
 ) -> list[Event]:
-    """Advance the pet from state.last_updated to now in small steps."""
+    """Advance the pet from state.last_updated to now in small steps.
+
+    A gap longer than max_gap means the clock jumped; the excess is frozen.
+    Fast-forward passes max_gap=None to live through every hour on purpose.
+    """
     events: list[Event] = []
-    t = state.last_updated
-    if now <= t:
-        state.last_updated = now  # no time passed, or the clock went back
+    if now <= state.last_updated:
+        # No time passed, or the clock went back: move the timers back with it.
+        shift_times(state, now - state.last_updated)
         return events
+    if max_gap is not None and now - state.last_updated > max_gap:
+        shift_times(state, now - state.last_updated - max_gap)
+    t = state.last_updated
     while t < now:
         t_next = min(now, t + R.MAX_STEP_SECONDS)
         if state.away:
@@ -233,7 +252,11 @@ def _step(
     stage = life_stage(state)
     if stage != was_stage:
         if was_stage == "egg":
-            _hatch(state, settings, rng, events)
+            if not settings.roster:
+                # Nothing it could hatch into (no ready species): stay an egg.
+                state.age_hours = R.STAGE_STARTS[1][1] - 1e-6
+                return
+            _hatch(state, settings, rng, events, t1)
         events.append({"type": "stage_changed", "stage": stage, "from": was_stage})
     if stage == "egg":
         return
@@ -246,7 +269,11 @@ def _step(
 
 
 def _hatch(
-    state: PetState, settings: Settings, rng: random.Random, events: list[Event]
+    state: PetState,
+    settings: Settings,
+    rng: random.Random,
+    events: list[Event],
+    t: float,
 ) -> None:
     """The egg decides: a surprise, preferring species not raised here yet."""
     if state.species is None:
@@ -255,17 +282,39 @@ def _hatch(
     if state.species not in state.raised:
         state.raised.append(state.species)
     events.append({"type": "hatched", "species": state.species})
+    if state.lights_out:
+        # Someone put the egg to bed; the hatchling goes straight to sleep.
+        _fall_asleep(state, not in_sleep_hours(t, settings), events, t, settings)
+
+
+def next_wake(ts: float, settings: Settings) -> float:
+    """The next wake time after ts, as a timestamp (DST-safe)."""
+    local = datetime.fromtimestamp(ts, settings.tz)
+    wake = datetime.combine(local.date(), settings.wake_time, tzinfo=settings.tz)
+    if wake.timestamp() <= ts:
+        wake = datetime.combine(
+            local.date() + timedelta(days=1), settings.wake_time, tzinfo=settings.tz
+        )
+    return wake.timestamp()
 
 
 def _sleep(state: PetState, t: float, settings: Settings, events: list[Event]) -> None:
     night = in_sleep_hours(t, settings)
     if state.asleep:
-        if night:
-            state.napping = False  # a late nap turns into the night's sleep
+        if state.napping:
+            if night:
+                # A late nap turns into the night's sleep.
+                state.napping = False
+                state.wake_at = next_wake(t, settings)
+            elif state.energy >= R.NAP_WAKE_ENERGY and (
+                minutes_to_bedtime(t, settings) > R.NAP_INTO_NIGHT_MINUTES
+            ):
+                _wake(state, events)
             return
-        if state.napping and state.energy < R.NAP_WAKE_ENERGY:
-            return
-        _wake(state, events)
+        if state.wake_at is None:
+            state.wake_at = next_wake(t, settings)
+        if t >= state.wake_at:
+            _wake(state, events)
         return
     if not night:
         state.stayed_up_since = None
@@ -274,13 +323,16 @@ def _sleep(state: PetState, t: float, settings: Settings, events: list[Event]) -
         state.stayed_up_since = t
     elif t - state.stayed_up_since >= R.FALL_ASLEEP_ANYWAY_MINUTES * 60:
         # Nobody turned the lights out; it dozes off anyway. No penalty.
-        _fall_asleep(state, napping=False, events=events, t=t)
+        _fall_asleep(state, False, events, t, settings)
 
 
-def _fall_asleep(state: PetState, napping: bool, events: list[Event], t: float) -> None:
+def _fall_asleep(
+    state: PetState, napping: bool, events: list[Event], t: float, settings: Settings
+) -> None:
     state.asleep = True
     state.napping = napping
     state.stayed_up_since = None
+    state.wake_at = None if napping else next_wake(t, settings)
     if state.call is not None:
         if state.call.reason == "energy":
             events.append({"type": "call_answered", "reason": "energy"})
@@ -295,6 +347,7 @@ def _wake(state: PetState, events: list[Event]) -> None:
     state.asleep = False
     state.napping = False
     state.lights_out = False
+    state.wake_at = None
     events.append({"type": "woke_up"})
 
 
@@ -418,6 +471,9 @@ def _calls(
             else:
                 state.care_misses += 1
                 state.recent_misses.append(t)
+                # One neglect is one miss: no new call about this until it
+                # recovers past the re-arm level.
+                state.latched.append(call.reason)
                 events.append(
                     {
                         "type": "care_miss",
@@ -453,10 +509,11 @@ def _wants_to_whine(state: PetState) -> bool:
 
 def _start_call(state: PetState, reason: str, t: float, events: list[Event]) -> None:
     state.call = Call(reason, t, t + R.CALL_WINDOW_MINUTES * 60)
-    if reason != "fake":
-        state.latched.append(reason)
-    # A fake call looks exactly like a real one from outside.
-    events.append({"type": "call_started", "reason": reason})
+    # A fake call looks like a plea to play from outside; the status screen
+    # (happiness is fine) is how a player catches it.
+    events.append(
+        {"type": "call_started", "reason": "happiness" if reason == "fake" else reason}
+    )
 
 
 # --- Care actions -----------------------------------------------------------
@@ -592,10 +649,12 @@ def set_lights_out(
     if on == state.lights_out and on == state.asleep:
         return events
     state.lights_out = on
-    if state.away or life_stage(state) == "egg":
+    if state.away:
         return events
+    if life_stage(state) == "egg":
+        return events  # remembered: the hatchling goes straight to sleep
     if on and not state.asleep:
-        _fall_asleep(state, not in_sleep_hours(now, settings), events, now)
+        _fall_asleep(state, not in_sleep_hours(now, settings), events, now, settings)
     elif not on and state.asleep:
         night = in_sleep_hours(now, settings)
         if night:
@@ -646,7 +705,7 @@ _CALL_REASONS = {
     "dirty": "it's getting stinky in here",
     "energy": "so tired... lights out?",
     "happiness": "play with me?",
-    "fake": "hey! hey! look at me!",
+    "fake": "play with me?",
 }
 
 _MOOD_REASONS = {

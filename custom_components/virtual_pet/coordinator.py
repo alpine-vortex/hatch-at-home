@@ -99,7 +99,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if CONF_WORLD not in self.config_entry.data and old_species:
             self.world = catalog.world_of(old_species) or DEFAULT_WORLD
         self.world_name = catalog.worlds.get(self.world, {}).get("name", self.world)
-        self.roster = tuple(catalog.roster(self.world)) or tuple(catalog.species)
+        self.roster = tuple(catalog.roster(self.world))
+        if not self.roster:
+            LOGGER.warning(
+                "World %s has no ready species yet; %s stays an egg until it does",
+                self.world,
+                self.config_entry.title,
+            )
         now = self._now()
         data = await self.store.async_load()
         if data is None:
@@ -111,10 +117,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             model.catch_up(self.state, now)
             LOGGER.debug("Caught up %.1f min of downtime (frozen)", downtime / 60)
             self.debug["last_catch_up_minutes"] = round(downtime / 60, 1)
-            if self.state.species is None and model.life_stage(self.state) != "egg":
-                # Hatched before species existed (phase 2): it was a bird.
-                self.state.species = old_species or self.roster[0]
-                self.state.raised.append(self.state.species)
+            if self.state.species is None and old_species:
+                # Set up before worlds existed (phase 2): keep the species it
+                # was created as, whether it has hatched yet or not.
+                self.state.species = old_species
+                if model.life_stage(self.state) != "egg":
+                    self.state.raised.append(old_species)
         self._save()
 
     async def _async_update_data(self) -> model.PetState:
@@ -178,7 +186,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         now = self._now()
         self._advance(now)
         seconds = hours * 3600
-        events = model.advance(self.state, now + seconds, self.settings, self.rng)
+        events = model.advance(
+            self.state, now + seconds, self.settings, self.rng, max_gap=None
+        )
         # Pull the simulated future back to the real present.
         model.shift_times(self.state, -seconds)
         self._fire(events, simulated=True)

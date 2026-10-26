@@ -41,7 +41,8 @@ def hatched(now: float, **stats: float) -> model.PetState:
 
 
 def run(pet: model.PetState, until: float) -> list[model.Event]:
-    return model.advance(pet, until, SETTINGS, NoLuck())
+    """Live through every minute, as the coordinator's 5-minute ticks do."""
+    return model.advance(pet, until, SETTINGS, NoLuck(), max_gap=None)
 
 
 def types(events: list[model.Event]) -> list[str]:
@@ -319,7 +320,107 @@ def test_hatching_prefers_a_species_not_raised_yet():
     settings = model.Settings(tz=UTC, roster=("bird", "squirrel"))
     pet = model.PetState.new("Pip", start)
     pet.raised = ["bird"]
-    events = model.advance(pet, start + HOUR, settings, random.Random(1))
+    events = model.advance(pet, start + HOUR, settings, random.Random(1), max_gap=None)
     assert pet.species == "squirrel"
     assert pet.raised == ["bird", "squirrel"]
     assert {"type": "hatched", "species": "squirrel"} in events
+
+
+# --- Regressions from the 2026-10-26 audit ---------------------------------
+
+
+def test_small_answer_does_not_silence_the_next_call():
+    start = at(9)
+    pet = hatched(start, hunger=25.2)
+    run(pet, start + 5 * MIN)
+    assert pet.call and pet.call.reason == "hunger"
+    model.apply_action(pet, "snack", start + 5 * MIN, NoLuck())  # only to ~35
+    assert pet.call is None
+    events = run(pet, start + 5 * HOUR)
+    assert {"type": "call_started", "reason": "hunger"} in events
+
+
+def test_clock_jump_while_running_is_frozen():
+    start = at(9)
+    pet = hatched(start)
+    events = model.advance(pet, start + 60 * 24 * HOUR, SETTINGS, NoLuck())
+    assert "care_miss" not in types(events)
+    assert pet.age_hours == pytest.approx(30 + R.MAX_LIVE_GAP_MINUTES / 60)
+    assert pet.last_updated == start + 60 * 24 * HOUR
+
+
+def test_clock_going_back_moves_timers_back():
+    start = at(9)
+    pet = hatched(start)
+    pet.call = model.Call("hunger", start, start + 20 * MIN)
+    model.advance(pet, start - HOUR, SETTINGS, NoLuck())
+    assert pet.call.deadline == start - HOUR + 20 * MIN
+
+
+def test_lights_out_on_the_egg_puts_the_hatchling_to_bed():
+    start = at(22, 40)
+    pet = model.PetState.new("Pip", start)
+    model.set_lights_out(pet, True, start, SETTINGS)
+    run(pet, start + HOUR)
+    assert pet.asleep and pet.lights_out
+
+
+def test_nap_just_before_bedtime_lasts_the_night():
+    pet = hatched(at(22), energy=88.0)
+    model.set_lights_out(pet, True, at(22), SETTINGS)
+    run(pet, at(23, 30))
+    assert pet.asleep and pet.lights_out
+    run(pet, at(7, 5, day=2))
+    assert not pet.asleep
+
+
+def test_sleep_survives_dst_fall_back():
+    from zoneinfo import ZoneInfo
+
+    london = model.Settings(
+        tz=ZoneInfo("Europe/London"),
+        bedtime=model.parse_hhmm("01:30"),
+        wake_time=model.parse_hhmm("07:00"),
+    )
+    # Clocks go back at 02:00 BST on 2026-10-25.
+    start = datetime(2026, 10, 25, 1, 40, tzinfo=ZoneInfo("Europe/London")).timestamp()
+    pet = hatched(start, hunger=40.0)
+    model.set_lights_out(pet, True, start, london)
+    events = model.advance(pet, start + 3 * HOUR, london, NoLuck(), max_gap=None)
+    assert pet.asleep
+    assert "woke_up" not in types(events)
+    assert "care_miss" not in types(events)
+
+
+def test_empty_roster_keeps_the_egg():
+    start = at(9)
+    pet = model.PetState.new("Pip", start)
+    events = model.advance(
+        pet, start + 3 * HOUR, model.Settings(tz=UTC, roster=()), NoLuck(), max_gap=None
+    )
+    assert model.life_stage(pet) == "egg"
+    assert "hatched" not in types(events)
+
+
+def test_unknown_saved_reasons_are_dropped():
+    data = hatched(at(9)).to_dict()
+    data["latched"] = ["boredom", "hunger"]
+    data["call"] = {"reason": "boredom", "started": 1.0, "deadline": 2.0, "extra": 1}
+    pet = model.PetState.from_dict(data)
+    assert pet.latched == ["hunger"]
+    assert pet.call is None
+    run(pet, at(10))  # must not raise
+
+
+def test_fake_call_looks_like_a_plea_to_play():
+    start = at(9)
+    pet = hatched(start)
+
+    class Lucky(NoLuck):
+        def random(self):
+            return 0.0
+
+    events = model.advance(pet, start + 5 * MIN, SETTINGS, Lucky())
+    assert pet.call and pet.call.reason == "fake"
+    assert {"type": "call_started", "reason": "happiness"} in events
+    assert model.mood(pet, start + 5 * MIN, SETTINGS)[2] == "play with me?"

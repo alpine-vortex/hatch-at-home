@@ -11,7 +11,11 @@ from __future__ import annotations
 
 TICK_MINUTES = 5  # how often the coordinator advances the pet
 MAX_STEP_SECONDS = 300  # the simulation never takes a bigger bite than this
-CATCH_UP_CAP_HOURS = 24  # restart catch-up never covers more than this
+# A gap longer than this while HA is running (the clock jumped: an NTP sync,
+# a resumed VM) is frozen like downtime instead of lived through. Restart
+# downtime is always frozen entirely, so it needs no cap.
+MAX_LIVE_GAP_MINUTES = 30
+NAP_INTO_NIGHT_MINUTES = 60  # a nap this close to bedtime lasts the night
 
 # --- Decay while awake (per hour) ----------------------------------------
 

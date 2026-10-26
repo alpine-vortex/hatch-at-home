@@ -36,6 +36,8 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
                 data={CONF_NAME: name, CONF_WORLD: user_input[CONF_WORLD]},
             )
         catalog = await self.hass.async_add_executor_job(load_catalog)
+        if not catalog.worlds:
+            return self.async_abort(reason="no_worlds")
         options = [
             SelectOptionDict(
                 value=key,

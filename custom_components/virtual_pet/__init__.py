@@ -35,7 +35,7 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 FAST_FORWARD_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_HOURS): vol.All(
-            vol.Coerce(float), vol.Range(min=0.01, max=168)
+            vol.Coerce(float), vol.Range(min=0.1, max=168)
         ),
         vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
     }

@@ -3,37 +3,74 @@
     "step": {
       "user": {
         "title": "Add a pet device",
-        "description": "Name your pet and pick its world. The egg decides which of that world's creatures hatches. Bedtime and home sensors are set later in its options.",
+        "description": "Name your pet and pick its world. The egg decides which of that world's creatures hatches.",
         "data": {
           "name": "Name",
           "world": "World"
         }
       }
+    },
+    "abort": {
+      "no_worlds": "No pet worlds are ready yet. Reinstall the integration files and try again."
     }
   },
   "entity": {
     "binary_sensor": {
-      "asleep": { "name": "Asleep" },
-      "calling": { "name": "Calling" },
-      "sick": { "name": "Sick" }
+      "asleep": {
+        "name": "Asleep"
+      },
+      "calling": {
+        "name": "Calling"
+      },
+      "sick": {
+        "name": "Sick"
+      }
     },
     "button": {
-      "feed": { "name": "Feed" },
-      "snack": { "name": "Snack" },
-      "play": { "name": "Play" },
-      "clean": { "name": "Clean" },
-      "medicine": { "name": "Medicine" },
-      "scold": { "name": "Scold" },
-      "praise": { "name": "Praise" }
+      "feed": {
+        "name": "Feed"
+      },
+      "snack": {
+        "name": "Snack"
+      },
+      "play": {
+        "name": "Play"
+      },
+      "clean": {
+        "name": "Clean"
+      },
+      "medicine": {
+        "name": "Medicine"
+      },
+      "scold": {
+        "name": "Scold"
+      },
+      "praise": {
+        "name": "Praise"
+      }
     },
     "sensor": {
-      "hunger": { "name": "Hunger" },
-      "happiness": { "name": "Happiness" },
-      "energy": { "name": "Energy" },
-      "health": { "name": "Health" },
-      "discipline": { "name": "Discipline" },
-      "poop": { "name": "Poop" },
-      "care_misses": { "name": "Care misses" },
+      "hunger": {
+        "name": "Hunger"
+      },
+      "happiness": {
+        "name": "Happiness"
+      },
+      "energy": {
+        "name": "Energy"
+      },
+      "health": {
+        "name": "Health"
+      },
+      "discipline": {
+        "name": "Discipline"
+      },
+      "poop": {
+        "name": "Poop"
+      },
+      "care_misses": {
+        "name": "Care misses"
+      },
       "mood": {
         "name": "Mood",
         "state": {
@@ -61,15 +98,23 @@
           "adult": "Adult"
         }
       },
-      "last_care": { "name": "Last care" },
-      "debug": { "name": "Debug" }
+      "last_care": {
+        "name": "Last care"
+      },
+      "debug": {
+        "name": "Debug"
+      }
     },
     "switch": {
-      "lights_out": { "name": "Lights out" }
+      "lights_out": {
+        "name": "Lights out"
+      }
     }
   },
   "exceptions": {
-    "no_pet": { "message": "No virtual pet matches that config entry." }
+    "no_pet": {
+      "message": "No virtual pet matches that config entry."
+    }
   },
   "services": {
     "fast_forward": {
