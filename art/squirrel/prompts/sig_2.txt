@@ -1,0 +1,10 @@
+Use your image generation tool to draw ONE square image and save it as sig_2.png in the current directory.
+
+A sheet of 2 rows x 2 columns of equal square cells, each cell one pose of the same original cute Douglas squirrel as in the attached probe sheet: identical palette, markings, outline and proportions, same cute face with lots of attitude. Faces three-quarters to the right. LOOK: small compact tree squirrel, dark olive-brown back, bright orange-rust belly and chest, a CLEAR BRIGHT WHITE EYE RING around each eye (clearly visible, 1 art pixel wide), small rounded ears, bushy tail curled up over its back, four paws.
+CHILD stage: the fluffy juvenile from the probe sheet (row 1 middle).
+- Row 1: 'cheeks': sitting up with its cheeks comically stuffed round with seeds. Left = frame 1; right = frame 2 = cheeks a bit rounder, a seed falling.
+- Row 2: leave both cells empty grey.
+In every cell the creature is the same size and rests on the same height, low in the cell.
+
+Art style: chunky retro pixel art exactly like the attached reference sheet: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark pixel outline. Keep the reference's pixel size relative to the subject, so the pixels are large and clearly visible
+Background: one flat even mid-grey everywhere (no gradient, no texture, no floor, no shadows on it). Every subject is drawn whole inside its own cell with a generous empty margin; nothing crosses a cell edge. No text labels, no titles, no cell borders, no grid lines.

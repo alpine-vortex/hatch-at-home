@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.5.1";
+const VERSION = "0.6.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -148,6 +148,17 @@ const STYLE = `
   .body { width: 100%; box-sizing: border-box; background: var(--d-shell);
     box-shadow: inset 0 -9px 0 var(--d-dark), inset 0 5px 0 rgba(255,255,255,.28), 0 16px 34px rgba(20,15,5,.32);
     display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .body { position: relative; }
+  .trim-top { position: absolute; top: -30px; left: 50%; width: 256px; height: 76px;
+    margin-left: -128px; pointer-events: none; image-rendering: pixelated; }
+  .trim-corner { position: absolute; bottom: -18px; width: 64px; height: 44px;
+    pointer-events: none; image-rendering: pixelated; }
+  .trim-corner.left { left: 14%; } .trim-corner.right { right: 14%; transform: scaleX(-1); }
+  .label.plate { width: 192px; height: 44px; display: flex; align-items: center;
+    justify-content: center; background-size: 100% 100%; image-rendering: pixelated;
+    color: #fff4dc; text-shadow: 0 2px 0 #3a1e0c; margin-top: 10px; letter-spacing: .08em; }
+  .compact .trim-top { transform: scale(.75); }
+  .compact .trim-corner { display: none; }
   .egg .body { border-radius: 50% 50% 46% 46% / 30% 30% 18% 18%; padding: 36px 20px 30px; }
   .tank .body { border-radius: 18px; padding: 16px 18px 22px; }
   .label { font-size: 14px; letter-spacing: .12em; color: var(--d-ink); }
@@ -216,7 +227,20 @@ const STYLE = `
     transition: transform .08s, box-shadow .08s, background .2s; }
   .egg .toy .cap { border-radius: 50%; }
   .tank .toy .cap { border-radius: 14px; }
-  .toy:active .cap { transform: translateY(4px); box-shadow: 0 1px 0 var(--d-btn-shadow); }
+  /* Pressed: held down for at least 160 ms so even a quick tap reads as a press. */
+  .toy:active .cap, .toy.pressed .cap { transform: translateY(4px);
+    box-shadow: 0 1px 0 var(--d-btn-shadow); transition-duration: .04s; }
+  .toy.pending .cap { animation: waiting .9s ease-in-out infinite; }
+  @keyframes waiting { 50% { filter: brightness(.9); } }
+  .toy.failed .cap { animation: shake .35s; }
+  @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+  .burst { position: absolute; left: 50%; top: 0; width: 46px; height: 46px; margin-left: -23px;
+    border-radius: 50%; pointer-events: none; border: 3px solid #ffe9a8;
+    animation: burst .45s ease-out forwards; }
+  @keyframes burst { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
+  .toy { position: relative; }
+  .pet.perk { animation: perk .3s ease-out; }
+  @keyframes perk { 40% { transform: translateY(-6%) scale(1.04, .96); } }
   .toy.wanted .cap { background: #ffe9a8;
     box-shadow: 0 5px 0 var(--d-btn-shadow), 0 0 0 4px #fff3c4, 0 0 16px 5px #ffd76a; }
   .toy.on .cap { background: #3a2a1a; color: #ffe9a8; }
@@ -375,6 +399,7 @@ class HatchPetCard extends HTMLElement {
       <div class="device">
         <div class="loop"></div><div class="lid"><span></span><span></span><span></span></div>
         <div class="body">
+          <img class="trim-top" alt="">
           <span class="label"></span>
           <div class="bezel"><div class="screen" role="button" tabindex="0" aria-label="Show status">
             <img class="bg" alt="">
@@ -387,6 +412,7 @@ class HatchPetCard extends HTMLElement {
             <div class="status"></div>
           </div><button class="request"></button></div>
           <div class="buttons"></div>
+          <img class="trim-corner left" alt=""><img class="trim-corner right" alt="">
         </div>
         <div class="feet"><span></span><span></span></div>
       </div>`;
@@ -610,6 +636,17 @@ class HatchPetCard extends HTMLElement {
     dev.style.setProperty("--d-btn-shadow", shade(color, 0.6));
     dev.style.setProperty("--d-bezel", shell.bezel || "#f3ead7");
     s.label.textContent = world.label || world.name;
+    // Optional pixel-art trim from Sol (worlds.json "trim"), like stickers on the toy.
+    const trim = world.trim || {};
+    const uiSrc = (name) => `${BASE}/ui/${name}.png?v=${VERSION}`;
+    dev.querySelector(".trim-top").style.display = trim.top ? "" : "none";
+    if (trim.top) dev.querySelector(".trim-top").src = uiSrc(trim.top);
+    dev.querySelectorAll(".trim-corner").forEach((img) => {
+      img.style.display = trim.corner ? "" : "none";
+      if (trim.corner) img.src = uiSrc(trim.corner);
+    });
+    s.label.classList.toggle("plate", !!trim.plate);
+    s.label.style.backgroundImage = trim.plate ? `url(${uiSrc(trim.plate)})` : "";
 
     const mood = this._state(s, "sensor.mood");
     const stageState = this._state(s, "sensor.life_stage");
@@ -802,16 +839,51 @@ class HatchPetCard extends HTMLElement {
 
   // --- Actions ----------------------------------------------------------------
 
+  // Instant feedback on every tap: the button stays pressed long enough to
+  // see, a ring bursts out, the phone ticks, and the pet perks up. The real
+  // reaction (a prop, or a refusal in the bubble) follows when HA confirms.
+  _tapped(button, s) {
+    button.classList.add("pressed");
+    setTimeout(() => button.classList.remove("pressed"), 160);
+    const ring = document.createElement("span");
+    ring.className = "burst";
+    button.append(ring);
+    setTimeout(() => ring.remove(), 500);
+    if (navigator.vibrate) navigator.vibrate(12);
+    if (s?.pet) {
+      s.pet.classList.remove("perk");
+      void s.pet.offsetWidth; // restart the animation
+      s.pet.classList.add("perk");
+      setTimeout(() => s.pet.classList.remove("perk"), 320); // let "hop" run again
+    }
+  }
+
+  async _call(button, s, domain, service, entityId) {
+    this._tapped(button, s);
+    button.classList.add("pending");
+    try {
+      await this._hass.callService(domain, service, { entity_id: entityId });
+    } catch (err) {
+      button.classList.add("failed");
+      setTimeout(() => button.classList.remove("failed"), 400);
+      s.bubble.textContent = "hmm, that didn't work";
+      s.sayUntil = Date.now() + 3500;
+    } finally {
+      button.classList.remove("pending");
+    }
+  }
+
   _press(s, action) {
     const id = s.ids?.[`button.${action}`];
-    if (id) this._hass.callService("button", "press", { entity_id: id });
+    const button = action in s.buttons ? s.buttons[action] : s.request;
+    if (id) this._call(button, s, "button", "press", id);
   }
 
   _toggleLights(s) {
     const id = s.ids?.["switch.lights_out"];
     if (!id) return;
     const on = this._hass.states[id]?.state === "on";
-    this._hass.callService("switch", on ? "turn_off" : "turn_on", { entity_id: id });
+    this._call(s.buttons.lights, s, "switch", on ? "turn_off" : "turn_on", id);
   }
 }
 

@@ -1,0 +1,7 @@
+Use your image generation tool to draw ONE square image and save it as trim_sheet.png in the current directory.
+
+Three separate decorative pixel-art trim pieces for a toy device (stickers on an orange plastic egg-shaped toy), in EXACTLY the chunky retro pixel style of the attached references: big hard square pixels, no anti-aliasing, no gradients, limited palette, 1-art-pixel dark brown outline. Each piece is a separate object with lots of empty space between them, on one flat even mid-grey background. No text, no labels, no borders, no shadows.
+- TOP third of the image: a wide horizontal garland of curling ivy / fern leaves with one tiny red-capped mushroom, about 64 art pixels wide and 20 art pixels tall, shaped like a gentle downward arc (a smile-shaped curve): its bottom edge follows the arc, so it could drape over the top curve of an egg. Leave a small gap in the middle of the garland (for a keychain loop), so it is two halves meeting near the centre.
+- MIDDLE third: a small blank wooden name plate, a horizontal rounded plank about 48 art pixels wide and 12 art pixels tall, warm wood grain, a small nail head at each end, nothing written on it.
+- BOTTOM third, left side: a small cluster of one acorn and two oak leaves, about 16 x 16 art pixels.
+Use warm greens, browns and cream that sit nicely on orange plastic.

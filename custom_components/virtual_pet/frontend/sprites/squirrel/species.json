@@ -1,0 +1,32 @@
+{
+  "name": "Douglas squirrel",
+  "ready": true,
+  "stages": ["baby", "child", "teen"],
+  "stage_fallback": { "adult": "teen" },
+  "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
+  "frames": 2,
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "chatter": ["child_chatter_1", "child_chatter_2"],
+    "cache": ["child_cache_1", "child_cache_2"],
+    "cheeks": ["child_cheeks_1", "child_cheeks_2"]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "bird/snack",
+    "play": "pinecone",
+    "clean": "bird/sparkle_clean",
+    "medicine": "bird/medicine",
+    "blanket": "bird/blanket",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
+  },
+  "backgrounds": { "day": "bird/bg_day", "night": "bird/bg_night", "rain": "bird/bg_rain", "dim": "bird/bg_dim" },
+  "words": { "food": "hazelnuts", "home": "drey" }
+}

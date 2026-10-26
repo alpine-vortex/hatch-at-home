@@ -20,7 +20,12 @@
     "deco": [
       "deco_moss",
       "deco_mushroom"
-    ]
+    ],
+    "trim": {
+      "top": "trim_woodland_top",
+      "plate": "trim_woodland_plate",
+      "corner": "trim_woodland_corner"
+    }
   },
   "terrarium": {
     "name": "Terrarium",

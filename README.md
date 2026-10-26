@@ -11,8 +11,8 @@ poop, sleep, care buttons, restart catch-up, fast-forward), sits on a pixel-art
 lights, bedtime, people coming and going, and the TV and music.
 
 Each pet lives in a **device** themed for its **world**: an orange egg-shaped toy for
-Woodland (the bird), and a sandstone tank for Terrarium (the leopard gecko, with the
-blue death-feigning beetle to come). The egg decides which of that world's
+Woodland (the bird and the Douglas squirrel), and a sandstone tank for Terrarium (the
+leopard gecko, with the red-knee tarantula to come). The egg decides which of that world's
 creatures hatches. See `docs/design-worlds.md`.
 
 ## Install (manual copy until HACS packaging)
@@ -54,6 +54,10 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   its mind, or why it refused something ("I'm full!").
 - Tap the screen for the status page: hearts, meters, care misses and who did what
   recently. Tap again to go back.
+- Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
+  and phones give a tiny vibration. Then the real reaction follows (a food bowl, a
+  sparkle, or a refusal like "I'm full!"). If HA rejects the press, the button shakes
+  and the pet says so.
 - The toy buttons press the pet's button entities, so anything you do here works
   from automations and voice too. A button glows when the pet needs it, for example
   Feed when it's hungry. Medicine is greyed out unless it's sick.
