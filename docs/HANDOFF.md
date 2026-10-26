@@ -41,16 +41,10 @@ or the owner for such details before committing it.
 
 ## Open items, in priority order
 
-1. **No GitHub release exists yet.** The recreated repo never registered
-   `release.yml`: only Validate appears under Actions, and dispatching Release returns
-   404, even after a second push. This session can push only its branch, not tags.
-   Last time, the owner was asked to make the release by hand: Releases → Draft a new
-   release → tag `v0.6.1` on this branch → Generate release notes → Publish. They were
-   also told to check Settings → Actions → General → Workflow permissions ("Read and
-   write"). Check whether that happened, and whether Release now shows under Actions.
-   Until a release exists, HACS installs from the branch. Still true on the third
-   session's check; the owner was given the same steps again. `release.yml` now exits
-   green when a tag push finds its release already published by hand.
+1. **Releases work.** The owner published `v0.6.1` by hand on 2026-10-26 (and set
+   Workflow permissions to "Read and write"). That tag push registered `release.yml`,
+   and its first run passed. From now on, use Actions → Release → Run workflow (see
+   "How to"). HACS now offers releases instead of the branch.
 2. **Art from Sol, still in progress.** The tabby kitten (Hearth) is in
    `frontend/sprites/kitten/` with `"ready": false`; review notes are in
    `art/README.md`. Sol was asked (2026-10-26) for one zip containing:
@@ -105,8 +99,7 @@ or the owner for such details before committing it.
     probes and scripts in `art/<species>/`, but not the raw sheets or Sol's tool logs.
 - **Release:** bump the version in `const.py`, `manifest.json` and
   `frontend/hatch-pet-card.js` (the card URL's `?v=` busts the service-worker cache),
-  push, then run Actions → Release (or have the owner make the release by hand while
-  it's unregistered; see item 1).
+  push, then run Actions → Release → Run workflow. It tags the manifest's version.
 - **Message Sol:** use `send_message` to Sol's session (ID in the private notes; a new
   session may need the owner's approval to reach other sessions). Sol can't reply; the
   owner relays share links.
