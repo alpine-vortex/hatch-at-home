@@ -2,21 +2,46 @@
   "woodland": {
     "name": "Woodland",
     "label": "hatch · woods",
-    "roster": ["bird", "squirrel", "deer"],
-    "shell": { "shape": "egg", "color": "#e8834a", "bezel": "#f3ead7" },
+    "roster": [
+      "bird",
+      "squirrel",
+      "deer"
+    ],
+    "shell": {
+      "shape": "egg",
+      "color": "#e8834a",
+      "bezel": "#f3ead7"
+    },
     "backdrop": "#2f4a3a",
     "ground": "#25392d",
     "ink": "#f4ecd8",
-    "subink": "#bfcdb8"
+    "subink": "#bfcdb8",
+    "emblem": "emblem_woodland",
+    "deco": [
+      "deco_moss",
+      "deco_mushroom"
+    ]
   },
   "terrarium": {
     "name": "Terrarium",
     "label": "hatch · terra",
-    "roster": ["gecko", "beetle"],
-    "shell": { "shape": "tank", "color": "#d8b07a", "bezel": "#5b4632" },
+    "roster": [
+      "gecko",
+      "beetle"
+    ],
+    "shell": {
+      "shape": "tank",
+      "color": "#d8b07a",
+      "bezel": "#5b4632"
+    },
     "backdrop": "#ead6b0",
     "ground": "#dcc192",
     "ink": "#4a3520",
-    "subink": "#6a523a"
+    "subink": "#6a523a",
+    "emblem": "emblem_terrarium",
+    "deco": [
+      "deco_pebbles",
+      "deco_succulent"
+    ]
   }
 }

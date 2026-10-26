@@ -3,11 +3,11 @@
   "name": "Virtual Pet",
   "codeowners": [],
   "config_flow": true,
-  "dependencies": ["http"],
+  "dependencies": ["frontend", "http"],
   "documentation": "https://github.com/alpine-vortex/hatch-at-home",
   "integration_type": "device",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/alpine-vortex/hatch-at-home/issues",
   "requirements": [],
-  "version": "0.3.1"
+  "version": "0.4.0"
 }

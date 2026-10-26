@@ -3,22 +3,24 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.3.1";
+const VERSION = "0.4.0";
 const BASE = "/virtual_pet/frontend";
 
+// Outline icons for the shelf's own arrows; everything on a device is pixel art.
 const ICON_PATHS = {
-  feed: '<path d="M4 13h16a8 8 0 0 1-16 0z"/><path d="M9 9c0-2 2-2 2-4M14 9c0-2 2-2 2-4"/>',
-  snack: '<circle cx="12" cy="14" r="6"/><path d="M12 8c0-3 2-4 4-4"/>',
-  play: '<circle cx="12" cy="12" r="8"/><path d="M5 9c4 1 10 1 14 0M5 15c4-1 10-1 14 0"/>',
-  clean: '<path d="M14 3l-4 9"/><path d="M6 12h10l2 9H4z"/>',
-  medicine: '<rect x="3" y="8" width="18" height="8" rx="4" transform="rotate(-35 12 12)"/><path d="M9.5 8.5l5 7"/>',
-  scold: '<path d="M7 11V6a1.5 1.5 0 0 1 3 0v5M10 10V4.5a1.5 1.5 0 0 1 3 0V10M13 10V5.5a1.5 1.5 0 0 1 3 0V12M16 9.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-1a6 6 0 0 1-5-3l-2-4a1.5 1.5 0 0 1 2.5-1.5L7 14"/>',
-  praise: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>',
-  lights: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
-  wake: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
   prev: '<path d="M15 5l-7 7 7 7"/>',
-  status: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',
   next: '<path d="M9 5l7 7-7 7"/>',
+};
+
+// Sol's pixel icons (frontend/ui). Drawn on a 24-pixel grid at 4x, so 24 and
+// 48 CSS pixels stay crisp.
+function pixelIcon(name, size = 24, alt = "") {
+  return `<img class="picon" src="${BASE}/ui/${name}.png?v=${VERSION}" width="${size}" height="${size}" alt="${alt}">`;
+}
+
+const ACTION_ICONS = {
+  feed: "icon_feed", snack: "icon_snack", play: "icon_play", clean: "icon_clean",
+  medicine: "icon_medicine", scold: "icon_scold", praise: "icon_praise",
 };
 
 function icon(name, size = 22) {
@@ -180,6 +182,19 @@ const STYLE = `
     background: none; padding: 0; cursor: pointer; font: 400 13px 'Tiny5', monospace;
     letter-spacing: .02em; border-radius: 12px;
     color: var(--d-ink); -webkit-tap-highlight-color: transparent; }
+  .picon { image-rendering: pixelated; display: block; pointer-events: none; }
+  .title-row { display: flex; align-items: center; gap: 8px; }
+  .emblem { width: 32px; height: 32px; image-rendering: pixelated; }
+  .deco { position: absolute; bottom: 6%; width: 48px; height: 48px; image-rendering: pixelated;
+    pointer-events: none; transition: opacity .5s; }
+  .deco.left { left: 4%; } .deco.right { right: 4%; }
+  .compact .deco { display: none; }
+  .screen.faded .bg { filter: brightness(.55) saturate(.8); }
+  .screen .status img { position: static; } /* not scene sprites */
+  .row.icons { grid-template-columns: 18px 76px minmax(0, 1fr); }
+  .row .picon { width: 18px; height: 18px; }
+  .hearts { display: flex; gap: 3px; }
+  .hearts img { width: 18px; height: 18px; image-rendering: pixelated; }
   .toy .cap { width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;
     background: #fff7ec; color: #3a2a1a; box-shadow: 0 5px 0 var(--d-btn-shadow);
     transition: transform .08s, box-shadow .08s, background .2s; }
@@ -288,13 +303,16 @@ class HatchPetCard extends HTMLElement {
       <style>${STYLE}</style>
       <ha-card>
         <div class="head">
-          <div><div class="title"></div><div class="sub"></div></div>
+          <div><div class="title-row"><img class="emblem" alt=""><div class="title"></div></div>
+            <div class="sub"></div></div>
           <div class="chips">
             <span class="chip"></span>
-            <button class="statusbtn" aria-pressed="false">${icon("status", 18)}<span>Status</span></button>
+            <button class="statusbtn" aria-pressed="false">${pixelIcon("icon_status", 24)}<span>Status</span></button>
           </div>
         </div>
-        <div class="viewport"><div class="ground"></div><div class="track"></div></div>
+        <div class="viewport"><div class="ground"></div>
+          <img class="deco left" alt=""><img class="deco right" alt="">
+          <div class="track"></div></div>
         <div class="foot">
           <button class="nav prev" aria-label="Previous device">${icon("prev", 20)}</button>
           <div class="dots"></div>
@@ -381,7 +399,7 @@ class HatchPetCard extends HTMLElement {
     for (const action of ACTIONS) {
       const b = document.createElement("button");
       b.className = "toy";
-      b.innerHTML = `<span class="cap">${icon(action.key)}</span><span>${action.label}</span>`;
+      b.innerHTML = `<span class="cap">${pixelIcon(ACTION_ICONS[action.key])}</span><span>${action.label}</span>`;
       if (action.aria) b.setAttribute("aria-label", action.aria);
       b.addEventListener("click", () => this._press(s, action.key));
       box.append(b);
@@ -508,6 +526,18 @@ class HatchPetCard extends HTMLElement {
     const days = stage?.attributes.age_days;
     const kind = stage?.state === "egg" ? "Egg" : s.species?.name || "";
     this._card.querySelector(".title").textContent = device?.name_by_user || device?.name || "Pet";
+    const emblem = this._card.querySelector(".emblem");
+    if (world.emblem) {
+      emblem.src = `${BASE}/ui/${world.emblem}.png?v=${VERSION}`;
+      emblem.style.display = "";
+    } else {
+      emblem.style.display = "none";
+    }
+    this._card.querySelectorAll(".deco").forEach((img, i) => {
+      const name = world.deco?.[i];
+      img.style.display = name ? "" : "none";
+      if (name) img.src = `${BASE}/ui/${name}.png?v=${VERSION}`;
+    });
     this._card.querySelector(".sub").textContent = [world.name, kind,
       stage?.state !== "egg" ? STAGE_LABELS[stage?.state] : null,
       days != null ? `day ${Math.floor(days) + 1}` : null].filter(Boolean).join(" · ");
@@ -537,7 +567,9 @@ class HatchPetCard extends HTMLElement {
       img.style.display = "none";
       return;
     }
-    const src = `${BASE}/sprites/${s.speciesId}/${sprite}.png?v=${VERSION}`;
+    // "bird/medicine" borrows another species' sprite.
+    const path = sprite.includes("/") ? sprite : `${s.speciesId}/${sprite}`;
+    const src = `${BASE}/sprites/${path}.png?v=${VERSION}`;
     if (img.getAttribute("src") !== src) img.setAttribute("src", src);
     img.style.display = "";
   }
@@ -573,8 +605,10 @@ class HatchPetCard extends HTMLElement {
     if (flags.includes("rainy")) scene = "rain";
     if (this._hass.states["sun.sun"]?.state === "below_horizon") scene = "night";
     if (asleep || lightsOut) scene = "dim";
-    this._show(s, s.bg, sp.backgrounds?.[scene] || sp.backgrounds?.day ||
-      Object.values(sp.backgrounds || {})[0]);
+    const own = sp.backgrounds?.[scene];
+    this._show(s, s.bg, own || sp.backgrounds?.day || Object.values(sp.backgrounds || {})[0]);
+    // A species with only a day scene gets it darkened for night and sleep.
+    s.screen.classList.toggle("faded", !own && scene !== "day" && scene !== "rain");
     s.screen.classList.toggle("night", scene === "night");
     s.screen.classList.toggle("dim", scene === "dim");
 
@@ -619,7 +653,11 @@ class HatchPetCard extends HTMLElement {
     lights.disabled = !lightsEnt || lightsEnt.state === "unavailable" || away;
     lights.classList.toggle("on", lightsOut);
     lights.classList.toggle("wanted", !lightsOut && !asleep && flags.includes("sleepy") && calling);
-    lights.querySelector(".cap").innerHTML = icon(lightsOut ? "wake" : "lights");
+    const lightsIcon = lightsOut ? "icon_lights_on" : "icon_lights_out";
+    if (lights.dataset.icon !== lightsIcon) {
+      lights.querySelector(".cap").innerHTML = pixelIcon(lightsIcon);
+      lights.dataset.icon = lightsIcon;
+    }
     lights.querySelector(".lbl").textContent = lightsOut ? "wake" : "sleep";
     lights.title = lightsOut ? "Lights on: wake the pet" : "Lights out: put the pet to bed";
 
@@ -701,20 +739,27 @@ class HatchPetCard extends HTMLElement {
     };
     const hearts = (v) => {
       if (v === null) return "–";
-      const full = Math.ceil(v / 25);
-      return `<span class="hearts">${"♥".repeat(full)}<span class="off">${"♥".repeat(4 - full)}</span></span>`;
+      const halves = Math.ceil(v / 12.5); // 4 hearts, in halves
+      const img = (n) => `<img src="${BASE}/ui/stat_heart_${n}.png?v=${VERSION}" alt="">`;
+      let out = "";
+      for (let i = 0; i < 4; i++) {
+        const left = halves - i * 2;
+        out += img(left >= 2 ? "full" : left === 1 ? "half" : "empty");
+      }
+      return `<span class="hearts" role="img" aria-label="${Math.round(v)} of 100">${out}</span>`;
     };
+    const ic = (n) => pixelIcon(n, 18);
     const bar = (v) => v === null ? "–" : `<div class="bar"><div style="width:${v}%"></div></div>`;
     const lines = log.slice(0, 3).map((e) =>
       `<div>${escape(e.action)}${e.by ? ` by ${escape(e.by)}` : ""} · ${timeAgo(e.at)}` +
       `${e.result && e.result !== "ok" ? ` (${escape(e.result.replace("_", " "))})` : ""}</div>`);
     s.status.innerHTML = `
-      <div class="row"><span>hunger</span>${hearts(value("hunger"))}</div>
-      <div class="row"><span>happy</span>${hearts(value("happiness"))}</div>
-      <div class="row"><span>energy</span>${bar(value("energy"))}</div>
-      <div class="row"><span>health</span>${bar(value("health"))}</div>
-      <div class="row"><span>discipline</span>${bar(value("discipline"))}</div>
-      <div class="row"><span>misses</span><span>${value("care_misses") ?? "–"}</span></div>
+      <div class="row icons">${ic("icon_feed")}<span>hunger</span>${hearts(value("hunger"))}</div>
+      <div class="row icons">${ic("icon_play")}<span>happy</span>${hearts(value("happiness"))}</div>
+      <div class="row icons">${ic("stat_energy")}<span>energy</span>${bar(value("energy"))}</div>
+      <div class="row icons">${ic("stat_health")}<span>health</span>${bar(value("health"))}</div>
+      <div class="row icons">${ic("stat_discipline")}<span>discipline</span>${bar(value("discipline"))}</div>
+      <div class="row icons">${ic("stat_care_miss")}<span>misses</span><span>${value("care_misses") ?? "–"}</span></div>
       <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>`;
   }
 
@@ -733,10 +778,14 @@ class HatchPetCard extends HTMLElement {
   }
 }
 
-customElements.define("hatch-pet-card", HatchPetCard);
+// The integration loads this file on every dashboard. If an old manual
+// resource also loads it, keep the first definition instead of erroring.
+if (!customElements.get("hatch-pet-card")) {
+  customElements.define("hatch-pet-card", HatchPetCard);
+}
 
 window.customCards = window.customCards || [];
-window.customCards.push({
+if (!window.customCards.some((c) => c.type === "hatch-pet-card")) window.customCards.push({
   type: "hatch-pet-card",
   name: "Hatch at Home pet shelf",
   description: "Your virtual pets, each in its world's handheld device.",

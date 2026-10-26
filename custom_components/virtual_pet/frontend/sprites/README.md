@@ -15,9 +15,9 @@ while its adult sprites are being redrawn.
 | `stage_fallback` | Which drawn stage to use for one that has none (e.g. adult → teen until adult forms exist) |
 | `moods`, `frames` | Every stage has `{stage}_{mood}_{1..frames}.png` for each mood. A missing mood falls back to `content`. |
 | `egg` | Frames for the egg: `idle`, `wiggle` (calling or nearly hatched), `crack` |
-| `extras` | Single-frame special poses, used by home awareness (phase 3) |
-| `props` | Sprite for each care action, plus `blanket`, `attention`, `away` and three `poop` |
-| `backgrounds` | `day`, `night`, `rain`, `dim` scenes, 512×384 |
+| `extras` | Special poses used by home awareness (phase 3): one sprite name, or a list of frames |
+| `props` | Sprite for each care action, plus `blanket`, `attention`, `away` and three `poop`. A name with a slash, like `bird/medicine`, borrows another species' sprite. |
+| `backgrounds` | `day`, `night`, `rain`, `dim` scenes, 512×384. Only `day` is required; missing scenes reuse it, dimmed by the card. |
 | `words` | Optional flavour words for speech |
 
 Sprites are 256×256 transparent PNGs with the feet on y=224; props are 128×128.

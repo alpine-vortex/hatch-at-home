@@ -1,0 +1,9 @@
+Use your image generation tool to draw ONE square image and save it as emblems.png in the current directory.
+
+A 2 x 2 grid of equal square cells. Three small round sticker badges for a game's worlds, each a filled circle with a 1-art-pixel dark brown outline and a thin cream inner rim, with a simple motif inside:
+- top-left: woodland: a green leaf and a small pinecone on mossy green.
+- top-right: terrarium: a small cactus under a sun over a sand dune on warm sandstone.
+- bottom-left: ocean: a curling wave and a small shell on sea blue.
+- bottom-right: leave empty grey.
+Chunky retro pixel art like the attached reference: each badge on a 32 x 32 art-pixel grid, big hard square pixels, no anti-aliasing, limited palette.
+Background: one flat even mid-grey everywhere (no gradient, no texture, no shadows). Each icon centred in its cell, filling about 60% of it, with a generous empty margin. No text, no labels, no borders, no grid lines.

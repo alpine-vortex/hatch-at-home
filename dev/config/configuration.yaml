@@ -94,10 +94,7 @@ template:
 # --- The card -----------------------------------------------------------------
 
 lovelace:
-  resource_mode: yaml
-  resources:
-    - url: /virtual_pet/frontend/hatch-pet-card.js?v=0.3.1
-      type: module
+  # The integration loads the card itself; no resource needed.
   dashboards:
     pet-bench:
       mode: yaml

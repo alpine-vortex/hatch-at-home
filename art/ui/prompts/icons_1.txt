@@ -1,0 +1,14 @@
+Use your image generation tool to draw ONE square image and save it as icons_1.png in the current directory.
+
+A 3 x 3 grid of equal square cells, one UI icon per cell, reading left to right, top to bottom:
+- row 1, column 1: a small bowl of food with a little curl of steam.
+- row 1, column 2: a single plump berry with a leaf.
+- row 1, column 3: a small striped ball.
+- row 2, column 1: a small broom.
+- row 2, column 2: a single two-tone capsule pill.
+- row 2, column 3: a raised open hand with a small angry puff mark.
+- row 3, column 1: a bold five-point star.
+- row 3, column 2: a crescent moon.
+- row 3, column 3: a round sun with short rays.
+Chunky retro pixel art icons in the same style, outline and palette family as the attached reference (big hard square pixels, no anti-aliasing, no gradients). Each icon drawn on a 24 x 24 art-pixel grid, so the pixels are large: a bold, simple, instantly readable silhouette, a 1-art-pixel dark brown outline, at most 2-3 fill colours plus a highlight pixel. They must read at tiny size.
+Background: one flat even mid-grey everywhere (no gradient, no texture, no shadows). Each icon centred in its cell, filling about 60% of it, with a generous empty margin. No text, no labels, no borders, no grid lines.

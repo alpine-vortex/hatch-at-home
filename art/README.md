@@ -2,7 +2,14 @@
 
 Sprites were drawn by Sol (an image-generation agent) on 2026-10-26, in chunky
 pixel style. The finished PNGs the card uses are in
-`custom_components/virtual_pet/frontend/sprites/{bird,beetle}/`.
+`custom_components/virtual_pet/frontend/sprites/{bird,gecko,beetle}/`, and the UI kit
+(button and status icons, world emblems, ground decorations) is in
+`custom_components/virtual_pet/frontend/ui/`.
+
+- `gecko/`: the prompts, the anatomy fix-ups that led to the approved
+  `gecko_ref_v5.png`, and the cutting script.
+- `ui/`: the icon prompts and `cut_ui.py`. Icons are drawn on a 24-pixel grid at 4×,
+  so they're crisp at 24 or 48 CSS pixels.
 
 This folder keeps what's needed to make more in the same style: the
 reference images, the prompts, and Sol's scripts (`make_*prompts.py` writes

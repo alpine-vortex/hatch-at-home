@@ -1,0 +1,9 @@
+Use your image generation tool to draw ONE square image and save it as deco.png in the current directory.
+
+A 2 x 2 grid of equal square cells, each holding one small shelf decoration sitting on the ground:
+- top-left: a soft green moss tuft.
+- top-right: a small red-capped mushroom with white dots.
+- bottom-left: a little pile of smooth sandy pebbles.
+- bottom-right: a small succulent rosette in a tiny clay pot.
+Chunky retro pixel art like the attached reference: each object on a 32 x 32 art-pixel grid, big hard square pixels, 1-art-pixel dark brown outline, no anti-aliasing, limited palette.
+Background: one flat even mid-grey everywhere (no gradient, no texture, no shadows). Each icon centred in its cell, filling about 60% of it, with a generous empty margin. No text, no labels, no borders, no grid lines.

@@ -1,0 +1,34 @@
+{
+  "name": "Leopard gecko",
+  "ready": true,
+  "stages": ["baby", "child", "teen"],
+  "stage_fallback": { "adult": "teen" },
+  "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
+  "frames": 2,
+  "egg": { "idle": ["egg_idle_1", "egg_idle_2"], "wiggle": ["egg_wiggle_1", "egg_wiggle_2"], "crack": ["egg_crack_1", "egg_crack_2"] },
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "eye_lick": ["child_eye_lick_1", "child_eye_lick_2"],
+    "shed": ["child_shed_1", "child_shed_2"],
+    "tail_wiggle": ["child_tail_wiggle_1", "child_tail_wiggle_2"]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "cricket",
+    "clean": "bird/sparkle_clean",
+    "medicine": "bird/medicine",
+    "blanket": "hide",
+    "heat": "heat_glow",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
+  },
+  "backgrounds": { "day": "bg_vivarium" },
+  "words": { "food": "mealworms", "home": "vivarium" }
+}

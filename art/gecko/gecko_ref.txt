@@ -1,0 +1,18 @@
+Use your image generation tool to draw ONE square image and save it as gecko_ref.png in the current directory.
+
+A character reference sheet for a third virtual-pet creature in EXACTLY the same chunky retro pixel art style as the attached bird: same big hard square pixels (no anti-aliasing, no gradients, limited palette), same dark-brown pixel outline, same cute kaomoji-like face charm (shiny dot eyes, soft blush, gentle smile) and cute chunky proportions, so they feel like one set. The bird itself does NOT appear.
+
+The creature: an original cute leopard gecko, with correct anatomy:
+- chubby low-slung lizard body, belly close to the ground;
+- four short legs splayed out to the sides, elbows and knees bent outward;
+- broad rounded head, big eyes WITH visible eyelids, a wide gentle smile mouth line;
+- thin toes with tiny claws, NO sticky toe pads;
+- thick fat carrot-shaped tail almost as long as the body (may curve so it fits);
+- bumpy skin shown with a few highlight pixels.
+Seen from the side, three-quarters to the right, whole body and whole tail inside the cell.
+
+Layout: a 2 x 2 grid of equal square cells on one flat even mid-grey background, one subject per cell, each drawn whole with a generous margin, all resting on the same height low in their cells. No text, no borders.
+- top-left: its egg, a leathery white oval, slightly dented (drawn small).
+- top-right: BABY hatchling: small, bold dark-brown/black and yellow BANDS across body and tail, no spots.
+- bottom-left: CHILD juvenile: a bit bigger, the bands breaking up into blotches, first small spots appearing.
+- bottom-right: TEEN: the classic adult look, golden-yellow body, cream belly, black spots all over, faint lavender-grey tinge on the tail; the biggest.

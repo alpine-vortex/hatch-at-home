@@ -1,0 +1,3 @@
+Use your image generation tool to edit the attached gecko reference sheet and save the result as gecko_ref.png in the current directory.
+
+Change ONLY the bottom-right TEEN gecko's tail colour: the tail should be the same golden-yellow as its body with the same black spots, with just a faint lavender-grey wash toward the base of the tail (a subtle tinge, mostly golden). Keep everything else exactly as it is: layout, background, pixel size, outline, poses, tail shape, legs, faces, the egg, the baby and the child.

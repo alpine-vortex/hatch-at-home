@@ -1,0 +1,4 @@
+Use your image generation tool to draw ONE landscape image (4:3, wide) and save it as bg_vivarium.png in the current directory.
+
+A background scene for a virtual-pet game, no creature in it: a cozy desert-scrub vivarium interior seen from the front, sand-coloured substrate, a flat slate rock, a small half-log hide and a little plant, soft warm lamp light. Leave the lower-middle floor open where the pet will rest. No text.
+Art style: chunky retro pixel art exactly like the attached reference sheet: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark pixel outline. Keep the reference's pixel size relative to the subject, so the pixels are large and clearly visible

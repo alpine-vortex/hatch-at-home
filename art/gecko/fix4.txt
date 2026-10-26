@@ -1,0 +1,3 @@
+Use your image generation tool to edit the attached gecko reference sheet and save the result as gecko_ref.png in the current directory.
+
+Change ONLY the pattern on the bottom-right TEEN gecko's tail: like a real adult leopard gecko, the tail keeps soft banding carried over from the younger stages. Give it broad cream/pale-lavender-grey and golden bands across the tail (echoing the child's tail bands, but softer and lighter), with black spots sprinkled over the bands. The body stays golden with black spots. Keep everything else exactly as it is: layout, background, pixel size, outline, poses, tail shape and size, legs, faces, the egg, the baby and the child.

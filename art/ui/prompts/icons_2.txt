@@ -1,0 +1,14 @@
+Use your image generation tool to draw ONE square image and save it as icons_2.png in the current directory.
+
+A 3 x 3 grid of equal square cells, one UI icon per cell, reading left to right, top to bottom:
+- row 1, column 1: a small heart with a plus sign.
+- row 1, column 2: a small closed book.
+- row 1, column 3: a full red heart.
+- row 2, column 1: a heart with the left half red and the right half empty (outline only).
+- row 2, column 2: an empty heart, outline only with a pale fill.
+- row 2, column 3: a lightning bolt.
+- row 3, column 1: a plus-shaped cross.
+- row 3, column 2: a five-point star (different colour from the praise star: silver-blue).
+- row 3, column 3: a small cracked heart.
+Chunky retro pixel art icons in the same style, outline and palette family as the attached reference (big hard square pixels, no anti-aliasing, no gradients). Each icon drawn on a 24 x 24 art-pixel grid, so the pixels are large: a bold, simple, instantly readable silhouette, a 1-art-pixel dark brown outline, at most 2-3 fill colours plus a highlight pixel. They must read at tiny size.
+Background: one flat even mid-grey everywhere (no gradient, no texture, no shadows). Each icon centred in its cell, filling about 60% of it, with a generous empty margin. No text, no labels, no borders, no grid lines.

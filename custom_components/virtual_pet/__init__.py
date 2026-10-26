@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.const import Platform
 from homeassistant.core import (
@@ -21,10 +22,12 @@ import voluptuous as vol
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_HOURS,
+    CARD_FILENAME,
     DOMAIN,
     FRONTEND_URL,
     SERVICE_FAST_FORWARD,
     STORE_VERSION,
+    VERSION,
 )
 from .coordinator import PetConfigEntry, PetCoordinator, PetStore
 
@@ -43,11 +46,12 @@ FAST_FORWARD_SCHEMA = vol.Schema(
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Serve the card and register the debug service."""
-    # The owner adds the card JS as a dashboard resource by hand (see README).
+    """Serve the card, load it on every dashboard, register the debug service."""
     await hass.http.async_register_static_paths(
         [StaticPathConfig(FRONTEND_URL, str(Path(__file__).parent / "frontend"), False)]
     )
+    # The version in the URL makes browsers fetch the new card after an update.
+    add_extra_js_url(hass, f"{FRONTEND_URL}/{CARD_FILENAME}?v={VERSION}")
 
     async def fast_forward(call: ServiceCall) -> ServiceResponse:
         entries: list[PetConfigEntry] = hass.config_entries.async_loaded_entries(DOMAIN)

@@ -10,7 +10,8 @@ poop, sleep, care buttons, restart catch-up, fast-forward), and every pet sits o
 a pixel-art **device shelf** card. Home awareness comes in phase 3.
 
 Each pet lives in a **device** themed for its **world**: an orange egg-shaped toy for
-Woodland, and a sandstone tank for Terrarium. The egg decides which of that world's
+Woodland (the bird), and a sandstone tank for Terrarium (the leopard gecko, with the
+blue death-feigning beetle to come). The egg decides which of that world's
 creatures hatches. See `docs/design-worlds.md`.
 
 ## Install (phases 1–3: manual copy)
@@ -21,33 +22,28 @@ creatures hatches. See `docs/design-worlds.md`.
    The Samba share, the SSH add-on or the Studio Code Server add-on all work.
 3. Restart HA: Settings → System → power icon (top right) → Restart Home Assistant.
 4. Settings → Devices & services → Add integration → search **Virtual Pet**,
-   then name your pet and pick its world (only Woodland, with the bird, is ready so
-   far). Add the integration again for each extra pet device.
+   then name your pet and pick its world: Woodland (bird) or Terrarium (leopard
+   gecko). Add the integration again for each extra pet device.
 
-### Add the card (once)
+### Add the card
 
-The integration serves the card itself; you only tell the dashboard about it.
+The integration loads the card on every dashboard by itself; there's no resource
+to add and no Advanced mode needed. After installing or updating, restart HA and
+reload the browser page. On a phone or wall tablet, pull to refresh.
 
-1. Turn on Advanced mode: click your name (bottom left) → Advanced mode.
-2. Settings → Dashboards → ⋮ (top right) → Resources → Add resource:
-   - URL: `/virtual_pet/frontend/hatch-pet-card.js?v=0.3.1`
-   - Type: JavaScript module
-3. Reload the browser page. On a phone or wall tablet, pull to refresh, or
-   clear the app's frontend cache if the card doesn't appear.
-4. Edit a dashboard → Add card → search **Hatch at Home pet shelf**. With no
-   settings it shows every pet. To show only some, pick any one entity of each.
-   In YAML:
+Edit a dashboard → Add card → search **Hatch at Home pet shelf**. With no settings
+it shows every pet. To show only some, pick any one entity of each. In YAML:
 
-   ```yaml
-   type: custom:hatch-pet-card
-   # optional:
-   entities:
-     - sensor.pip_mood
-   ```
+```yaml
+type: custom:hatch-pet-card
+# optional:
+entities:
+  - sensor.pip_mood
+```
 
-**After each update**, bump the `?v=` number in the resource URL to the new
-version (shown in `manifest.json`), so browsers fetch the new card instead of
-a cached one.
+**Upgrading from 0.3.x:** you added the card as a dashboard resource back then.
+Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
+`hatch-pet-card.js` row), or an old cached copy may load first.
 
 ### Using the card
 

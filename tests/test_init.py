@@ -72,7 +72,9 @@ async def test_config_flow_names_the_pet(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.FORM
     # Only worlds with a ready species are offered.
     worlds = result["data_schema"].schema["world"].config["options"]
-    assert [o["value"] for o in worlds] == ["woodland"]
+    assert [o["value"] for o in worlds] == ["woodland", "terrarium"]
+    # The beetle isn't ready yet, so the terrarium lists only the gecko.
+    assert worlds[1]["label"] == "Terrarium: Leopard gecko"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_NAME: "Juniper", "world": "woodland"}
     )
@@ -296,3 +298,22 @@ def test_broken_species_files_are_skipped(tmp_path, monkeypatch) -> None:
     catalog = species.load_catalog()
     assert list(catalog.species) == ["good"]
     assert catalog.roster("w") == ["good"]
+
+
+async def test_card_is_loaded_on_every_dashboard(
+    hass: HomeAssistant, now: float
+) -> None:
+    import json
+    from pathlib import Path
+
+    from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+
+    from custom_components.virtual_pet.const import VERSION
+
+    await setup(hass)
+    manifest = Path(__file__).parents[1] / "custom_components/virtual_pet/manifest.json"
+    assert json.loads(manifest.read_text())["version"] == VERSION
+    assert (
+        f"/virtual_pet/frontend/hatch-pet-card.js?v={VERSION}"
+        in hass.data[DATA_EXTRA_MODULE_URL].urls
+    )

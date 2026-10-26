@@ -1,0 +1,3 @@
+Use your image generation tool to edit the attached gecko reference sheet and save the result as gecko_ref.png in the current directory.
+
+Change ONLY the tail pattern on the bottom-right TEEN gecko: give it exactly the same tail pattern and colours as the bottom-left CHILD gecko's tail: the same dark-brown and cream bands, same band colours and spacing style, same few small dark flecks, just scaled up to the teen's bigger tail. No golden on the tail, no lavender, no black spots on the tail. Keep everything else exactly as it is: the teen's spotted golden body, tail shape and size, layout, background, pixel size, outline, poses, legs, faces, the egg, the baby and the child.

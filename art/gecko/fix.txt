@@ -1,0 +1,7 @@
+Use your image generation tool to edit the attached gecko reference sheet and save the result as gecko_ref.png in the current directory.
+
+Keep the same 2 x 2 layout, flat mid-grey background, chunky pixel size, outline, palette, the egg, the three colour patterns (banded baby, blotchy child, spotted golden teen with lavender-grey tail tinge), the cute faces and the relative sizes. Fix the anatomy of the three geckos:
+- TAIL: thick, fat and carrot-shaped, as wide as the hips where it joins and tapering only near the tip, almost as long as the body, lying ON THE GROUND behind the gecko and curving gently (a soft S or a curl around toward the viewer is fine). Not a short pointed tail flicked up in the air, not a fin.
+- LEGS: four short legs splayed OUT to the sides like a lizard, upper legs angled outward and elbows/knees bent outward, feet planted wide; belly almost touching the ground. Thin toes with tiny claws, no toe pads.
+- EYES: big eyes with a visible eyelid line above each eye (leopard geckos have eyelids).
+Every gecko must fit whole, tail included, inside its cell with a margin; shrink slightly if needed.

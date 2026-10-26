@@ -1,0 +1,12 @@
+Use your image generation tool to draw ONE square image and save it as extra_1.png in the current directory.
+
+A 2 x 2 grid of equal square cells, each cell one pose of the same original cute leopard gecko as in the attached reference sheet: identical palette, markings, outline and proportions, same cute kaomoji-like face. Faces three-quarters to the right. ANATOMY: chubby low-slung body, belly near the ground; four short legs splayed out to the sides with elbows and knees bent outward; broad rounded head, big eyes with eyelids, wide gentle smile; thin toes with tiny claws, no toe pads; thick fat carrot-shaped tail almost as long as the body, resting on the ground and curving gently. The whole gecko, tail included, fits inside its cell.
+CHILD stage: the juvenile from the reference sheet (bottom-left): bands breaking into blotches, first small spots, banded brown/cream tail.
+- top-left: 'squint': squinting against bright light, one front foot shading its eyes.
+- top-right: 'shiver': shivering cold, small shake lines.
+- bottom-left: 'sweat': too hot, small sweat drops, mouth open.
+- bottom-right: 'mask': wearing a small white face mask over its snout.
+In every cell the creature is the same size and rests on the same height, low in the cell.
+
+Art style: chunky retro pixel art exactly like the attached reference sheet: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark pixel outline. Keep the reference's pixel size relative to the subject, so the pixels are large and clearly visible
+Background: one flat even mid-grey everywhere (no gradient, no texture, no floor, no shadows on it). Every subject is drawn whole inside its own cell with a generous empty margin; nothing crosses a cell edge. No text labels, no titles, no cell borders, no grid lines.
