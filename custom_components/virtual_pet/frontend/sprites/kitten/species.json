@@ -1,10 +1,11 @@
 {
   "name": "Tabby kitten",
-  "ready": false,
+  "ready": true,
   "stages": ["baby", "child", "teen"],
   "stage_fallback": { "adult": "teen" },
   "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
   "frames": 2,
+  "egg": { "idle": ["egg_idle_1", "egg_idle_2"], "wiggle": ["egg_wiggle_1", "egg_wiggle_2"], "crack": ["egg_crack_1", "egg_crack_2"] },
   "extras": {
     "squint": "child_squint",
     "shiver": "child_shiver",
@@ -27,5 +28,6 @@
     "away": "bird/sitter_sign",
     "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
   },
+  "backgrounds": { "day": "bg_day", "night": "bg_night", "rain": "bg_rain", "dim": "bg_dim" },
   "words": { "food": "kibble", "home": "basket" }
 }

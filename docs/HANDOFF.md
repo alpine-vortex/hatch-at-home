@@ -30,7 +30,7 @@ or the owner for such details before committing it.
     `.github/workflows/validate.yml` (HACS action, hassfest, tests; green) and
     `.github/workflows/release.yml`. Actions minutes are free on a public repo.
 - **Worlds:** Woodland (bird ✅, Douglas squirrel ✅) and Terrarium (leopard gecko ✅;
-  tarantula pending). Hearth has the kitten imported but not ready. Tidepool, Pond and
+  tarantula pending). Hearth has the tabby kitten ✅ (bunny pending). Tidepool, Pond and
   Night Sky are listed in `frontend/worlds.json` and stay hidden until a creature is
   ready. The beetle is shelved; its partial art is in `art/beetle/`.
 - **Woodland trim:** the smaller, lower garland and the egg's bottom labels were checked
@@ -45,23 +45,12 @@ or the owner for such details before committing it.
    Workflow permissions to "Read and write"). That tag push registered `release.yml`,
    and its first run passed. From now on, use Actions → Release → Run workflow (see
    "How to"). HACS now offers releases instead of the branch.
-2. **Art from Sol, still in progress.** The tabby kitten (Hearth) is in
-   `frontend/sprites/kitten/` with `"ready": false`; review notes are in
-   `art/README.md`. Sol was asked (2026-10-26) for one zip containing:
-   - `teen_content_1` redrawn at `teen_content_2`'s size (it's about 20% bigger, with
-     the ears clipped at y=0, so the idle animation pulses);
-   - Hearth's egg: `egg_idle`, `egg_wiggle`, `egg_crack`, two frames each (the kitten
-     is first on Hearth's roster, so it supplies the egg);
-   - Hearth backgrounds, 512×384: `bg_day` required; `bg_night`, `bg_rain`, `bg_dim`
-     welcome;
-   - optionally, `teen_sick` frames at the other teens' size.
-   When the owner relays the link: download, review, add the files, add `egg` and
-   `backgrounds` to `species.json`, then set `"ready": true`. Then check Hearth in the
-   browser.
-3. **Hearth's own art beyond the kitten.** The card's `house` shell (roof and chimney)
-   is done and checked at 320/412/900 px with a test Hearth pet, but `emblem_hearth`,
-   `deco_yarn` and `deco_cushion` don't exist yet and show as broken images. Ask Sol for
-   them with the next batch. Shapes `porthole`, `pad` and `moon` still fall back to the egg.
+2. **Hearth is live (kitten ready).** Sol's "Hearth v2" pack fixed the kitten's
+   flagged frames and brought Hearth's egg, four rooms, emblem and decorations; review
+   notes are in `art/README.md`. Checked in the dev HA: egg, baby, child and teen inside
+   the card's new `house` shell. Shapes `porthole`, `pad` and `moon` still fall back to
+   the egg; draw each before its world goes live.
+3. (merged into 2)
 4. **The flaky test is not pinned down.** About 2 failures in about 25 runs were seen
    in the first session. A sweep of seeds 0–60 passed every time, which argues against
    the rng being the cause. If it flakes again, save the full failure output; the next
@@ -85,7 +74,8 @@ or the owner for such details before committing it.
 ## How to
 
 - **Get art from Sol:** the owner forwards a share link.
-  - POST `/api/shares/<id>/token` (keep the cookie), then GET `/api/shares/<id>` for
+  - POST `/api/shares/<id>/token` with a JSON body `{}` (without it the server
+    answers 500; keep the cookie), then GET `/api/shares/<id>` for
     the file list and description, then GET `/api/shares/<id>/files/<file id>`.
     The share host is reachable from cloud sessions.
   - Check the sha256 in the description.

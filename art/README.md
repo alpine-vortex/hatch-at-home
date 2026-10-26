@@ -39,16 +39,19 @@ the head, so they looked like raised arms. Those sprites are in
 short, beaded antennae pointing forward and down. The egg, larva, props and
 terrarium are approved and stay in `sprites/beetle/`.
 
-## Tabby kitten (Hearth): imported 2026-10-26, not ready yet
+## Tabby kitten (Hearth): ready 2026-10-26
 
-The sprites are in `sprites/kitten/` with `"ready": false`, so Hearth stays hidden.
 `art/kitten/` has the prompts, the probe and Sol's generic scripts
 (`creatures.py` holds every creature's config; `cut_creature.py` cuts any of them).
-Before the kitten can be marked ready:
+The first import (75 sprites) was held back for three things, all fixed in Sol's
+"Hearth v2" pack (sha256 checked):
 
-- `teen_content_1` is drawn about 20% bigger than `teen_content_2` and its ears
-  touch the top edge, so the idle animation pulses. Asked Sol to redraw it at frame
-  2's size.
-- The kitten is first on Hearth's roster, so it must supply Hearth's egg
-  (`egg_idle`, `egg_wiggle`, `egg_crack`, two frames each) and at least `bg_day`.
-- The card has no `house` shell shape yet (Hearth's device); it falls back to the egg.
+- `teen_content_1` is now `teen_content_2` raised one art pixel, so the idle bobs
+  instead of pulsing; `teen_sick_1/2` match the other teens' height.
+- Hearth's egg (a knitted egg in a wicker basket) comes from the kitten, first on
+  Hearth's roster.
+- `bg_day`, `bg_night`, `bg_rain` and `bg_dim` show one room: brick fireplace, braided
+  rug, lace-curtained window seat. They replace an earlier kit that copied the
+  Woodland cabin and was never imported.
+
+Hearth's `emblem_hearth`, `deco_yarn` and `deco_cushion` came in the same pack.

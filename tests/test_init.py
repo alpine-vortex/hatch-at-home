@@ -72,7 +72,7 @@ async def test_config_flow_names_the_pet(hass: HomeAssistant) -> None:
     assert result["type"] is FlowResultType.FORM
     # Only worlds with a ready species are offered.
     worlds = result["data_schema"].schema["world"].config["options"]
-    assert [o["value"] for o in worlds] == ["woodland", "terrarium"]
+    assert [o["value"] for o in worlds] == ["woodland", "terrarium", "hearth"]
     # The beetle isn't ready yet, so the terrarium lists only the gecko.
     assert worlds[1]["label"] == "Terrarium: Leopard gecko"
     result = await hass.config_entries.flow.async_configure(
