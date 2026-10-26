@@ -32,7 +32,7 @@ creatures hatches. See `docs/design-worlds.md`.
 3. Restart HA: Settings → System → power icon (top right) → Restart Home Assistant.
 4. Settings → Devices & services → Add integration → search **Virtual Pet**,
    then name your pet and pick its world: Woodland (bird, squirrel), Terrarium
-   (leopard gecko), Hearth (kitten, bunny) Tidepool (sea otter, octopus) or Pond (tree frog, axolotl). Add the integration again for each extra pet device.
+   (leopard gecko), Hearth (kitten, bunny), Tidepool (sea otter, octopus) or Pond (tree frog, axolotl). Add the integration again for each extra pet device.
 
 ### Updating
 
