@@ -1,7 +1,7 @@
 # Handoff (2026-10-26, third session)
 
 Branch: `ccr-a5f628ca-979gik`, which is also the repo's default branch (all work
-pushed; no PR). Version **0.8.0** (released through Actions → Release). Read the README first, then `docs/design-worlds.md`
+pushed; no PR). Version **0.8.1** (released through Actions → Release). Read the README first, then `docs/design-worlds.md`
 and `docs/audit-2026-10-26.md`. The owner's original brief is not in the repo; its key
 rules are restated across the README and the design doc.
 
@@ -30,7 +30,7 @@ or the owner for such details before committing it.
     `.github/workflows/validate.yml` (HACS action, hassfest, tests; green) and
     `.github/workflows/release.yml`. Actions minutes are free on a public repo.
 - **Worlds:** Woodland (bird ✅, Douglas squirrel ✅) and Terrarium (leopard gecko ✅;
-  tarantula pending). Hearth (tabby kitten ✅, lop bunny ✅) and Tidepool (sea otter ✅; octopus pending). Pond and
+  tarantula pending). Hearth (tabby kitten ✅, lop bunny ✅) and Tidepool (sea otter ✅, giant Pacific octopus ✅). Pond and
   Night Sky are listed in `frontend/worlds.json` and stay hidden until a creature is
   ready. The beetle is shelved; its partial art is in `art/beetle/`.
 - **Woodland trim:** the smaller, lower garland and the egg's bottom labels were checked
@@ -44,7 +44,7 @@ or the owner for such details before committing it.
 1. **Releases work.** The owner published `v0.6.1` by hand on 2026-10-26 (and set
    Workflow permissions to "Read and write"). That tag push registered `release.yml`,
    and its first run passed. This session released 0.7.0 (Hearth), 0.7.1 (leg-gap fix)
-   and 0.8.0 (Tidepool) with Actions → Release → Run workflow, dispatched through the
+   0.8.0 (Tidepool) and 0.8.1 (octopus) with Actions → Release → Run workflow, dispatched through the
    GitHub MCP tool (`actions_run_trigger`, `release.yml`, ref = this branch).
 2. **Hearth is live (kitten ready).** Sol's "Hearth v2" pack fixed the kitten's
    flagged frames and brought Hearth's egg, four rooms, emblem and decorations; review
@@ -69,7 +69,7 @@ or the owner for such details before committing it.
    - sky events: moon and BirdNET visits (the owner's entities, the stalled
      `last_bird` feed and the fallback are in the private house notes)
    - optional notifications and a chirp sound
-6. **Art queue:** octopus (Tidepool), then Pond and Night Sky (each needs its shell
+6. **Art queue:** Pond and Night Sky (each needs its shell
    shape, `pad` and `moon`). Asked of Sol: Tidepool's `bg_night` redrawn on the day
    scene's layout (the current one is a different stretch of coast).
    Review tip: run a connected-pieces check on every sprite; the leg gap that shipped in

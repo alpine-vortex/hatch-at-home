@@ -80,3 +80,13 @@ speckled egg in a clam), `bg_day`, `bg_night`, the `murk` overlay, the emblem an
 starfish and anemone decorations. Its bubbles became the otter's `clean` prop
 (`sprites/otter/bubbles.png`). The night scene is not the day scene's layout; Sol was
 asked for an aligned redraw. Kit prompts are in `art/tidepool/`.
+
+## Giant Pacific octopus (Tidepool): ready 2026-10-26
+
+74 sprites (sha256 checked). Signature poses: ink, colour_shift, jar. Props: shrimp
+(`feed`) and a puzzle jar (`play`); it borrows the otter's crab as `snack`, and the
+otter's scenes, murk and bubbles. Six frames (`child_excited_1/2`, `teen_excited_1/2`,
+`teen_hungry_1/2`) came with dark slivers floating above the head: the tentacle tips
+of the sheet row above, caught by the crop. They were erased here with
+`art/octopus/erase_slivers.py` (dark, flat pieces wholly above the body); the
+sparkles and bubbles were kept. Sol was told so the cutter can trim them.
