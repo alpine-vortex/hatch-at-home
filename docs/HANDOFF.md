@@ -1,6 +1,6 @@
-# Handoff (2026-10-26, end of the first session)
+# Handoff (2026-10-26, updated in the second session)
 
-Branch: `ccr-a5f628ca-979gik` (all work pushed; no PR opened). Version **0.6.0**.
+Branch: `ccr-a5f628ca-979gik` (all work pushed; no PR opened). Version **0.6.1**.
 Read the README first, then `docs/design-worlds.md`, `docs/entity-mapping.md` and
 `docs/audit-2026-10-26.md`. The owner's original brief is not in the repo; its key rules
 are restated across the README and the design doc.
@@ -24,26 +24,18 @@ are restated across the README and the design doc.
 
 ## Open items, in priority order
 
-1. **The card sometimes doesn't appear.** The test dashboard showed "Configuration
-   error" in place of the card on some page loads, while `customElements.get(...)` was
-   true and a manual import worked. Not yet reproduced reliably.
-   - Suspect: the card module (from `add_extra_js_url`) defines the element after
-     Lovelace builds the card, and the error card isn't rebuilt.
-   - Investigate with `/tmp`-style Playwright scripts like the ones described below.
-   - A likely fix: `window.loadCardHelpers` or a `ll-rebuild` event, or registering the
-     card JS as a Lovelace resource as well.
-2. **Unverified CSS fix for the owner's feedback (committed with this note,
-   not yet checked in a browser):**
-   - The woodland garland was "too big and too high". It's now 192×57 (3 CSS px per art
-     pixel) at `top: -12px`.
-   - The bottom row's labels were cut off by the egg's curve. The fix is
-     `.egg .buttons { width: 88% }` and more bottom padding.
-   - Check both in the browser at 320, 360, 412, 520 and 900 px, and send screenshots
-     to the owner. The trim itself is still an experiment the owner is judging.
-3. **A flaky test:** about 2 failures in ~25 suite runs, never reproduced on demand.
-   Likely cause: the coordinator uses a real `random.Random()`, so a random fake call or
-   a poop-sickness roll can change a mood assertion in `tests/test_init.py`. Fix: seed
-   or stub `coordinator.rng` in the test `setup` helpers.
+1. ~~**The card sometimes doesn't appear.**~~ Fixed in 0.6.1. Once HA's service
+   worker caches the card module, it can run before the frontend installs its scoped
+   custom element registry, so the card was defined in a registry Lovelace never asks.
+   The card now defines itself after `<home-assistant>` is defined. Playwright reloads
+   of the bench: 11 of 15 bad before, 0 of 25 after.
+2. ~~**Unverified CSS fix (garland size, egg labels)**~~ Checked at 320, 360, 412, 520
+   and 900 px: the garland sits low on the cap and every bottom label stays inside the
+   egg. Screenshots sent to the owner. The trim itself is still the owner's call.
+3. **The flaky test is not pinned down.** `tests/conftest.py` now seeds the
+   coordinator's rng (`PET_SEED` picks another seed). A sweep of seeds 0–60 passed every
+   time, which argues *against* the rng being the cause. If it flakes again, save the
+   full failure output; the next suspects are wall-clock time and task timing.
 4. **Phase 4 (not started):**
    - adult forms per species
    - traits learned from the house (night owl, music lover, homebody)
