@@ -6,6 +6,20 @@
   squirrel and deer), Terrarium (leopard gecko, then Mexican red-knee tarantula; the
   blue death-feigning beetle is shelved after several failed attempts), later Ocean
   (dolphin, shark, goldfish) and more.
+- **Six worlds planned** (2026-10-26). They're listed in `worlds.json` and hidden until
+  one of their creatures is ready:
+
+  | World | Creatures | Device shell | Notes |
+  | --- | --- | --- | --- |
+  | Woodland | bird ✅, Douglas squirrel | egg with keychain loop | |
+  | Terrarium | leopard gecko ✅, red-knee tarantula | tank with lid and feet | beetle shelved |
+  | Hearth | kitten, lop bunny | little house (roof and chimney) | cozy living room |
+  | Tidepool | sea otter, giant Pacific octopus | round porthole with rivets | water world |
+  | Pond | Pacific tree frog, axolotl | lily-pad rounded body | water world |
+  | Night Sky | little brown bat, luna moth | crescent-topped body | moon events |
+
+- **Water worlds** (`"mess": "murk"`) show cloudy water instead of poop sprites. Clean
+  is a water change with bubbles. The rules are identical; only the drawing differs.
 - **New creatures go through probe and review.** Sol first draws a probe sheet
   (baby, child and teen in content, the teen sick and asleep, and one signature pose).
   The owner approves it before the full set is drawn. Creatures after the first in a

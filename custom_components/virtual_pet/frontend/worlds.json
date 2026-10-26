@@ -44,5 +44,95 @@
       "deco_pebbles",
       "deco_succulent"
     ]
+  },
+  "hearth": {
+    "name": "Hearth",
+    "label": "hatch · home",
+    "roster": [
+      "kitten",
+      "bunny"
+    ],
+    "shell": {
+      "shape": "house",
+      "color": "#c75b5b",
+      "bezel": "#f6ead8"
+    },
+    "backdrop": "#4a3348",
+    "ground": "#3a2838",
+    "ink": "#f7e9e0",
+    "subink": "#d8c3cf",
+    "emblem": "emblem_hearth",
+    "deco": [
+      "deco_yarn",
+      "deco_cushion"
+    ]
+  },
+  "tidepool": {
+    "name": "Tidepool",
+    "label": "hatch · tide",
+    "roster": [
+      "otter",
+      "octopus"
+    ],
+    "shell": {
+      "shape": "porthole",
+      "color": "#3f7f8c",
+      "bezel": "#d9c79a"
+    },
+    "backdrop": "#22414a",
+    "ground": "#1a3239",
+    "ink": "#e6f2ef",
+    "subink": "#b4cfcb",
+    "mess": "murk",
+    "emblem": "emblem_tidepool",
+    "deco": [
+      "deco_starfish",
+      "deco_anemone"
+    ]
+  },
+  "pond": {
+    "name": "Pond",
+    "label": "hatch · pond",
+    "roster": [
+      "treefrog",
+      "axolotl"
+    ],
+    "shell": {
+      "shape": "pad",
+      "color": "#6f9e4f",
+      "bezel": "#eef0d6"
+    },
+    "backdrop": "#2e4630",
+    "ground": "#243826",
+    "ink": "#eef3e2",
+    "subink": "#c3d3b4",
+    "mess": "murk",
+    "emblem": "emblem_pond",
+    "deco": [
+      "deco_cattail",
+      "deco_lilypad"
+    ]
+  },
+  "nightsky": {
+    "name": "Night Sky",
+    "label": "hatch · night",
+    "roster": [
+      "bat",
+      "lunamoth"
+    ],
+    "shell": {
+      "shape": "moon",
+      "color": "#3d4a8a",
+      "bezel": "#e6e3f4"
+    },
+    "backdrop": "#151b38",
+    "ground": "#0f1429",
+    "ink": "#ece9ff",
+    "subink": "#bdb8e0",
+    "emblem": "emblem_nightsky",
+    "deco": [
+      "deco_glowshroom",
+      "deco_lantern"
+    ]
   }
 }
