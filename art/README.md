@@ -108,3 +108,15 @@ Tidepool. Kit prompts are in `art/pond/`.
 poses: float, gill_flutter, smile. Props: a bowl of bloodworms (`feed`) and a shrimp
 (`snack`); `play` borrows the bird's ball. Second on Pond's roster, it hatches from
 the frog-spawn egg and borrows the frog's scenes, murk and bubbles.
+
+## Little brown bat and the Night Sky kit: ready 2026-10-26
+
+74 bat sprites (sha256 checked); the size, gap and sliver checks came back clean.
+Signature poses: echo, hang (hanging from a twig, so its head is on y=224, not its
+feet), wing_wrap. Props: a dish of bugs (`feed`) and a fig (`snack`); `play` borrows
+the bird's ball. The Night Sky kit (sha256 checked) brings the starry egg, `bg_day` (a
+twilight meadow), `bg_night` on the same layout, the emblem and the lantern. Its
+mushroom came as `ui/deco_mushroom.png`, which is Woodland's red toadstool, so it's
+saved as `deco_glowshroom`, the name `worlds.json` already used for Night Sky. Ask Sol
+to name world decorations uniquely. Night Sky isn't a water world, so poop stays poop.
+Kit prompts are in `art/nightsky/`.

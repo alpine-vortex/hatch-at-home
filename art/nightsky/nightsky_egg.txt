@@ -1,0 +1,8 @@
+Use your image generation tool to draw ONE square image and save it as nightsky_egg.png in the current directory.
+
+A sheet of 3 rows x 2 columns of equal square cells. Each cell shows the same virtual-pet egg: a deep-blue egg covered in tiny twinkling stars. Same size, resting on the same height low in the cell.
+- Row 1 'idle': left = still; right = a tiny shine shift.
+- Row 2 'wiggle': left = tilted left with small motion marks; right = tilted right.
+- Row 3 'crack': left = a small zigzag crack on top; right = bigger crack with a peeking eye in the gap.
+Chunky retro pixel art exactly like the attached reference: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark brown pixel outline.
+Background: one flat even mid-grey everywhere (no gradient, no shadows). Each subject whole inside its cell with a generous margin. No text, no labels, no borders.

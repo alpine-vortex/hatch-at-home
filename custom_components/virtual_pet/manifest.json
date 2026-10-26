@@ -9,5 +9,5 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/alpine-vortex/hatch-at-home/issues",
   "requirements": [],
-  "version": "0.13.2"
+  "version": "0.14.0"
 }

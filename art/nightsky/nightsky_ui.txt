@@ -1,0 +1,9 @@
+Use your image generation tool to draw ONE square image and save it as nightsky_ui.png in the current directory.
+
+A 2 x 2 grid of equal square cells:
+- top-left: a round sticker badge (filled circle, 1-art-pixel dark brown outline, thin cream inner rim) with a crescent moon and three stars on deep night blue, drawn like the reference emblems on a 32x32 art-pixel grid
+- top-right: a small softly glowing blue mushroom, a small ground decoration on a 32x32 art-pixel grid
+- bottom-left: a little brass lantern with a warm glow, a small ground decoration on a 32x32 art-pixel grid
+- bottom-right: leave empty grey.
+Chunky retro pixel art exactly like the attached reference: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark brown pixel outline.
+Background: one flat even mid-grey everywhere (no gradient, no shadows). Each subject whole inside its cell with a generous margin. No text, no labels, no borders.
