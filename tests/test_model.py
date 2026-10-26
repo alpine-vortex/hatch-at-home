@@ -440,12 +440,12 @@ def live(pet: model.PetState, until: float, settings: model.Settings) -> list:
 
 def test_music_lover_is_learned_from_music():
     pet = hatched(at(12))
-    pet.trait_hours = {"awake": 20.0, "music": R.TRAIT_MUSIC_LOVER_HOURS - 0.25}
+    pet.trait_hours = {"awake": 20.0, "dancing": R.TRAIT_MUSIC_LOVER_HOURS - 0.25}
     events = live(pet, at(12, 10), house("dancing"))
     assert "trait_learned" not in types(events)
     events = live(pet, at(12, 30), house("dancing"))
     assert [e for e in events if e["type"] == "trait_learned"] == [
-        {"type": "trait_learned", "trait": "music_lover"}
+        {"type": "trait_learned", "trait": "music_lover", "level": 1}
     ]
     assert pet.traits == ["music_lover"]
     assert live(pet, at(13), house("dancing")) == []  # learned once
@@ -454,13 +454,9 @@ def test_music_lover_is_learned_from_music():
 def test_quiet_hours_teach_nothing():
     pet = hatched(at(12))
     live(pet, at(14), house())
-    assert pet.trait_hours.get("music", 0.0) == 0.0
+    assert pet.trait_hours.get("dancing", 0.0) == 0.0
     assert pet.trait_hours["awake"] == pytest.approx(2.0)
-    assert model.trait_progress(pet) == {
-        "night_owl": 0.0,
-        "music_lover": 0.0,
-        "homebody": 0.0,
-    }
+    assert model.trait_progress(pet) == dict.fromkeys(model.TRAITS, 0.0)
 
 
 def test_sleeping_through_music_teaches_nothing():
@@ -552,6 +548,8 @@ def test_laying_an_egg_retires_the_parent_to_the_journal():
             "name": "Pip",
             "species": "squirrel",
             "traits": ["night_owl", "homebody"],
+            "levels": {"night_owl": 1, "homebody": 1},
+            "inherited": None,
             "born": pet.born,
             "retired": at(12),
             "age_days": round(pet.age_hours / 24, 1),
@@ -564,9 +562,12 @@ def test_laying_an_egg_retires_the_parent_to_the_journal():
             "generation": 2,
             "parent_species": "squirrel",
             "inherited_trait": egg.traits[0],
+            "level": 1,
         }
     ]
-    assert model.trait_progress(egg)[egg.traits[0]] == 1.0
+    # Inherited at the parent's level, but not yet learned in its own life.
+    assert egg.inherited == {egg.traits[0]: 1}
+    assert model.trait_progress(egg)[egg.traits[0]] == 0.0
 
 
 def test_a_parent_without_traits_passes_none_on():
@@ -581,3 +582,69 @@ def test_the_journal_survives_a_save():
     egg, _ = model.lay_egg(pet, at(12), random.Random(1))
     again = model.PetState.from_dict(egg.to_dict())
     assert again.generation == 2 and again.journal == egg.journal
+
+
+# --- Trait levels and the new traits -------------------------------------------
+
+
+def test_new_flag_traits_are_learned_from_their_flags():
+    for trait, (flag, needed) in R.TRAIT_FLAG_HOURS.items():
+        pet = hatched(at(12))
+        pet.trait_hours = {"awake": 50.0, flag: needed - 0.1}
+        events = live(pet, at(12, 10), house(flag))
+        assert pet.traits == [trait], trait
+        assert {"type": "trait_learned", "trait": trait, "level": 1} in events
+
+
+def test_relearning_an_inherited_trait_deepens_it_to_at_most_three_stars():
+    pet = hatched(at(12))
+    pet.traits, pet.trait_levels, pet.inherited = (
+        ["sun_lover"],
+        {"sun_lover": 2},
+        {"sun_lover": 2},
+    )
+    pet.trait_hours = {"awake": 50.0, "sunny": R.TRAIT_FLAG_HOURS["sun_lover"][1] - 0.1}
+    events = live(pet, at(12, 10), house("sunny"))
+    assert {"type": "trait_deepened", "trait": "sun_lover", "level": 3} in events
+    assert model.trait_level(pet, "sun_lover") == 3 and pet.inherited == {}
+    capped = hatched(at(12))
+    capped.traits, capped.trait_levels, capped.inherited = (
+        ["sun_lover"],
+        {"sun_lover": 3},
+        {"sun_lover": 3},
+    )
+    capped.trait_hours = dict(pet.trait_hours)
+    live(capped, at(12, 10), house("sunny"))
+    assert model.trait_level(capped, "sun_lover") == 3
+
+
+def test_effects_grow_with_the_level():
+    one, two = hatched(at(12), happiness=40.0), hatched(at(12), happiness=40.0)
+    for pet, level in ((one, 1), (two, 2)):
+        pet.traits, pet.trait_levels = ["music_lover"], {"music_lover": level}
+    live(one, at(13), house("dancing"))
+    live(two, at(13), house("dancing"))
+    extra = R.HOME_MUSIC_HAPPINESS * (R.TRAIT_LEVEL_SCALE[2] - 1)
+    assert two.happiness - one.happiness == pytest.approx(extra)
+    owl = hatched(at(23), energy=100.0)
+    owl.traits, owl.trait_levels = ["night_owl"], {"night_owl": 2}
+    assert model._stay_up_minutes(owl) == R.FALL_ASLEEP_ANYWAY_MINUTES * 2.5
+
+
+def test_the_egg_inherits_at_the_parents_level_and_the_journal_keeps_levels():
+    pet = hatched(at(12), age_hours=ADULT + R.LAY_EGG_AFTER_ADULT_HOURS)
+    pet.traits, pet.trait_levels = ["fireside"], {"fireside": 2}
+    pet.inherited_from = "fireside"
+    egg, events = model.lay_egg(pet, at(12), random.Random(1))
+    assert egg.trait_levels == {"fireside": 2} and egg.inherited == {"fireside": 2}
+    assert egg.inherited_from == "fireside"
+    assert egg.journal[-1]["levels"] == {"fireside": 2}
+    assert egg.journal[-1]["inherited"] == "fireside"
+    assert events[0]["level"] == 2
+
+
+def test_old_saves_keep_their_music_hours():
+    data = hatched(at(12)).to_dict()
+    data["trait_hours"] = {"awake": 5.0, "music": 4.0}
+    pet = model.PetState.from_dict(data)
+    assert pet.trait_hours == {"awake": 5.0, "dancing": 4.0}

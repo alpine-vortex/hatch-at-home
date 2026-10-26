@@ -681,3 +681,16 @@ async def test_fast_forward_never_notifies(
     await hass.services.async_call(DOMAIN, "fast_forward", {"hours": 3}, blocking=True)
     await hass.async_block_till_done()
     assert mine == []
+
+
+async def test_attributes_are_copies_of_the_pets_lists(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    # HA sends the frontend only attributes that changed. A live list changed
+    # in place would compare equal to itself, and the dashboard would miss it.
+    hass_storage[STORE_KEY] = hatched_pet(now, traits=["homebody"], raised=["bird"])
+    config = await setup(hass)
+    attrs = hass.states.get("sensor.pip_life_stage").attributes
+    pet = config.runtime_data.state
+    for key in ("traits", "raised", "journal", "notify_users"):
+        assert attrs[key] is not getattr(pet, key), key

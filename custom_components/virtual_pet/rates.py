@@ -147,6 +147,19 @@ TRAIT_HOMEBODY_SHARE = 0.75  # of awake time with someone home...
 TRAIT_HOMEBODY_MIN_AWAKE_HOURS = 48.0  # ...over at least this much awake time
 TRAIT_HAPPINESS = 0.5  # per hour: a night owl up late, a homebody with company
 NIGHT_OWL_STAY_UP_FACTOR = 2.0  # stays up this much longer before dozing off
+# Hours awake under a house flag that teach the other traits.
+TRAIT_FLAG_HOURS: dict[str, tuple[str, float]] = {
+    "sun_lover": ("sunny", 20.0),
+    "fireside": ("fireside", 10.0),
+    "moon_child": ("full_moon", 3.0),  # a full moon only lasts a night or two
+    "storm_watcher": ("rainy", 15.0),
+    "couch_potato": ("watching_tv", 12.0),
+    "social_butterfly": ("greeting", 2.5),  # about 15 arrivals of 10 minutes
+}
+# Effects grow with the level (★ to ★★★): an inherited trait the pet also learns
+# for itself goes up one level.
+TRAIT_MAX_LEVEL = 3
+TRAIT_LEVEL_SCALE = {1: 1.0, 2: 1.5, 3: 2.0}
 
 HOME_BEDTIME_WINDOW_MINUTES = 60  # dark-and-quiet works this long before bedtime
 HOME_QUIET_MINUTES = 10  # no motion for this long counts as quiet

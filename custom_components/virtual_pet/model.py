@@ -92,6 +92,9 @@ class PetState:
     species: str | None = None  # decided when the egg hatches
     raised: list[str] = field(default_factory=list)  # species this device has hatched
     traits: list[str] = field(default_factory=list)  # learned, in order (TRAITS)
+    trait_levels: dict[str, int] = field(default_factory=dict)  # 1-3 per trait
+    inherited: dict[str, int] = field(default_factory=dict)  # not yet relearned
+    inherited_from: str | None = None  # the trait handed down at hatching
     generation: int = 1  # the device's first pet is generation 1
     journal: list[dict[str, Any]] = field(default_factory=list)  # retired parents
     notify_users: list[str] = field(default_factory=list)  # HA user IDs, opted in
@@ -109,6 +112,10 @@ class PetState:
         # Drop anything a newer or older version knew about and this one doesn't.
         reasons = set(CALL_PRIORITY) | {"fake"}
         kwargs["latched"] = [r for r in kwargs.get("latched", []) if r in reasons]
+        seen = dict(kwargs.get("trait_hours") or {})
+        if "music" in seen:  # 0.9-0.11 counted music hours under this name
+            seen["dancing"] = seen.get("dancing", 0.0) + seen.pop("music")
+            kwargs["trait_hours"] = seen
         call = kwargs.get("call")
         if call is not None:
             call_keys = {f.name for f in fields(Call)}
@@ -557,43 +564,85 @@ def _wants_to_whine(state: PetState) -> bool:
 
 # --- Traits -----------------------------------------------------------------
 
-TRAITS = ("night_owl", "music_lover", "homebody")
+TRAITS = (
+    "night_owl",
+    "music_lover",
+    "homebody",
+    *R.TRAIT_FLAG_HOURS,
+)
+# While its flag is up, each flag trait adds this much happiness per hour (at ★).
+_FLAG_TRAIT_HAPPINESS = {
+    "music_lover": ("dancing", R.HOME_MUSIC_HAPPINESS),
+    "sun_lover": ("sunny", R.HOME_SUN_HAPPINESS),
+    "fireside": ("fireside", R.HOME_FIRE_HAPPINESS),
+    "moon_child": ("full_moon", R.HOME_MOON_HAPPINESS),
+    "storm_watcher": ("rainy", R.TRAIT_HAPPINESS),
+    "couch_potato": ("watching_tv", R.TRAIT_HAPPINESS),
+    "social_butterfly": ("greeting", 2 * R.TRAIT_HAPPINESS),
+}
+
+
+def trait_level(state: PetState, trait: str) -> int:
+    """★ to ★★★; 0 if the pet doesn't have the trait."""
+    return state.trait_levels.get(trait, 1) if trait in state.traits else 0
+
+
+def _scale(state: PetState, trait: str) -> float:
+    return R.TRAIT_LEVEL_SCALE.get(trait_level(state, trait), 0.0)
 
 
 def _learn(
     state: PetState, hours: float, t: float, settings: Settings, events: list[Event]
 ) -> None:
-    """Count what the pet lives through while awake; past a threshold it's a trait."""
+    """Count what the pet lives through while awake; past a threshold it's a trait.
+
+    Learning a trait it inherited (and hasn't relearned yet) deepens it one level.
+    """
     if state.asleep:
         return
     seen = state.trait_hours
     seen["awake"] = seen.get("awake", 0.0) + hours
     if in_sleep_hours(t, settings):
         seen["night"] = seen.get("night", 0.0) + hours
-    if "dancing" in settings.home.flags:
-        seen["music"] = seen.get("music", 0.0) + hours
     if settings.home.company:
         seen["company"] = seen.get("company", 0.0) + hours
+    for flag in {"dancing", *(f for f, _ in R.TRAIT_FLAG_HOURS.values())}:
+        if flag in settings.home.flags:
+            seen[flag] = seen.get(flag, 0.0) + hours
     for trait, progress in trait_progress(state).items():
-        if progress >= 1.0 and trait not in state.traits:
+        if progress < 1.0:
+            continue
+        if trait in state.inherited:
+            level = min(state.inherited.pop(trait) + 1, R.TRAIT_MAX_LEVEL)
+            state.trait_levels[trait] = level
+            events.append({"type": "trait_deepened", "trait": trait, "level": level})
+        elif trait not in state.traits:
             state.traits.append(trait)
-            events.append({"type": "trait_learned", "trait": trait})
+            state.trait_levels[trait] = 1
+            events.append({"type": "trait_learned", "trait": trait, "level": 1})
 
 
 def trait_progress(state: PetState) -> dict[str, float]:
-    """How close each trait is, 0 to 1 (1 = learned)."""
+    """How close the pet is to learning each trait in its own life, 0 to 1.
+
+    An inherited trait shows its own progress until the pet relearns it.
+    """
     seen = state.trait_hours
     awake = seen.get("awake", 0.0)
     share = seen.get("company", 0.0) / awake if awake else 0.0
     progress = {
         "night_owl": seen.get("night", 0.0) / R.TRAIT_NIGHT_OWL_HOURS,
-        "music_lover": seen.get("music", 0.0) / R.TRAIT_MUSIC_LOVER_HOURS,
+        "music_lover": seen.get("dancing", 0.0) / R.TRAIT_MUSIC_LOVER_HOURS,
         "homebody": min(
             share / R.TRAIT_HOMEBODY_SHARE, awake / R.TRAIT_HOMEBODY_MIN_AWAKE_HOURS
         ),
     }
+    for trait, (flag, needed) in R.TRAIT_FLAG_HOURS.items():
+        progress[trait] = seen.get(flag, 0.0) / needed
     return {
-        t: 1.0 if t in state.traits else round(min(p, 1.0), 3)
+        t: 1.0
+        if t in state.traits and t not in state.inherited
+        else round(min(p, 1.0), 3)
         for t, p in progress.items()
     }
 
@@ -601,18 +650,20 @@ def trait_progress(state: PetState) -> dict[str, float]:
 def _trait_bonus(state: PetState, t: float, settings: Settings) -> dict[str, float]:
     """Small extra happiness per hour from what the pet has come to love."""
     happiness = 0.0
-    if "night_owl" in state.traits and in_sleep_hours(t, settings):
-        happiness += R.TRAIT_HAPPINESS
-    if "music_lover" in state.traits and "dancing" in settings.home.flags:
-        happiness += R.HOME_MUSIC_HAPPINESS
-    if "homebody" in state.traits and settings.home.company:
-        happiness += R.TRAIT_HAPPINESS
+    if in_sleep_hours(t, settings):
+        happiness += R.TRAIT_HAPPINESS * _scale(state, "night_owl")
+    if settings.home.company:
+        happiness += R.TRAIT_HAPPINESS * _scale(state, "homebody")
+    for trait, (flag, rate) in _FLAG_TRAIT_HAPPINESS.items():
+        if flag in settings.home.flags:
+            happiness += rate * _scale(state, trait)
     return {"happiness": happiness} if happiness else {}
 
 
 def _stay_up_minutes(state: PetState) -> float:
-    factor = R.NIGHT_OWL_STAY_UP_FACTOR if "night_owl" in state.traits else 1.0
-    return R.FALL_ASLEEP_ANYWAY_MINUTES * factor
+    """A night owl stays up twice as long before dozing off (more at ★★, ★★★)."""
+    extra = (R.NIGHT_OWL_STAY_UP_FACTOR - 1) * _scale(state, "night_owl")
+    return R.FALL_ASLEEP_ANYWAY_MINUTES * (1 + extra)
 
 
 def sitter_settles(state: PetState) -> bool:
@@ -667,6 +718,8 @@ def lay_egg(
         "name": state.name,
         "species": state.species,
         "traits": list(state.traits),
+        "levels": {t: trait_level(state, t) for t in state.traits},
+        "inherited": state.inherited_from,
         "born": state.born,
         "retired": now,
         "age_days": round(state.age_hours / 24, 1),
@@ -679,13 +732,18 @@ def lay_egg(
     egg.notify_users = list(state.notify_users)
     inherited = rng.choice(state.traits) if state.traits else None
     if inherited:
+        level = trait_level(state, inherited)
         egg.traits = [inherited]
+        egg.trait_levels = {inherited: level}
+        egg.inherited = {inherited: level}
+        egg.inherited_from = inherited
     return egg, [
         {
             "type": "egg_laid",
             "generation": egg.generation,
             "parent_species": state.species,
             "inherited_trait": inherited,
+            "level": egg.trait_levels.get(inherited) if inherited else None,
         }
     ]
 

@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.11.0";
+const VERSION = "0.12.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -84,6 +84,11 @@ function shade(hex, amount) {
   const n = parseInt(hex.slice(1), 16);
   const c = (v) => Math.max(0, Math.min(255, Math.round(v * amount)));
   return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
+}
+
+// "night owl ★★", with "↓" when it was handed down from the parent.
+function traitLabel(trait, level, inherited) {
+  return `${inherited ? "↓" : ""}${escape(trait.replace("_", " "))} ${"★".repeat(level || 1)}`;
 }
 
 function timeAgo(iso) {
@@ -263,7 +268,9 @@ const STYLE = `
     text-align: center; line-height: 1.1; }
   .jtile img { width: 48px; height: 48px; image-rendering: pixelated; }
   .jtile.locked img { filter: brightness(0); opacity: .3; }
-  .jlist { font-size: 12px; opacity: .9; }
+  .jlist { font-size: 12px; opacity: .9; display: flex; flex-direction: column; gap: 3px; }
+  .jlist .gt { opacity: .8; padding-left: 10px; }
+  .jlist .gen.now { font-weight: 700; }
   .log { margin-top: 3px; font-size: 12px; opacity: .85; }
   .buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 6px; width: 100%; }
   .toy { display: flex; flex-direction: column; align-items: center; gap: 5px; border: none;
@@ -908,7 +915,9 @@ class HatchPetCard extends HTMLElement {
       }
       return `<span class="hearts" role="img" aria-label="${Math.round(v)} of 100">${out}</span>`;
     };
-    const traits = this._state(s, "sensor.life_stage")?.attributes.traits || [];
+    const stageAttrs = this._state(s, "sensor.life_stage")?.attributes || {};
+    const traits = (stageAttrs.traits || []).map((t) => traitLabel(t, stageAttrs.trait_levels?.[t],
+      t === stageAttrs.inherited_trait));
     const notifying = (this._state(s, "sensor.life_stage")?.attributes.notify_users || [])
       .includes(this._hass.user?.id);
     const ic = (n) => pixelIcon(n, 18);
@@ -923,7 +932,7 @@ class HatchPetCard extends HTMLElement {
       <div class="row icons">${ic("stat_health")}<span>health</span>${bar(value("health"))}</div>
       <div class="row icons">${ic("stat_discipline")}<span>discipline</span>${bar(value("discipline"))}</div>
       <div class="row icons">${ic("stat_care_miss")}<span>misses</span><span>${value("care_misses") ?? "–"}</span></div>
-      <div class="row traits"><span>traits</span><span>${traits.length ? traits.map((t) => escape(t.replace("_", " "))).join(" · ") : "none yet"}</span></div>
+      <div class="row traits"><span>traits</span><span>${traits.length ? traits.join(" · ") : "none yet"}</span></div>
       <div class="row traits"><span>notify me</span><span><button class="bell" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span></div>
       <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>
       <button class="jlink">journal ›</button>`;
@@ -952,6 +961,7 @@ class HatchPetCard extends HTMLElement {
       e.stopPropagation(); // the screen behind would close the status
       s.journal = open;
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      s.status.scrollTop = 0; // a new view starts at its top
     });
   }
 
@@ -964,7 +974,13 @@ class HatchPetCard extends HTMLElement {
       const st = this._state(other, "sensor.life_stage")?.attributes;
       if (st?.world === stage.world) (st.raised || []).forEach((r) => raised.add(r));
     }
-    const past = [...(stage.journal || [])].reverse().slice(0, 4);
+    const now = {
+      generation: stage.generation || 1, name: this._hass.devices?.[s.ids?.device]?.name_by_user
+        || this._hass.devices?.[s.ids?.device]?.name || "", species: stage.species,
+      traits: stage.traits || [], levels: stage.trait_levels || {}, inherited: stage.inherited_trait,
+      current: true,
+    };
+    const past = [...(stage.journal || []), now].slice(-4);
     const ids = [...new Set([...roster, ...past.map((p) => p.species).filter(Boolean)])];
     const names = {};
     await Promise.all(ids.map((id) => loadJson(`sprites/${id}/species.json`)
@@ -976,15 +992,20 @@ class HatchPetCard extends HTMLElement {
         `<img src="${BASE}/sprites/${id}/child_content_1.png?v=${VERSION}" alt="">` +
         `<span>${known ? escape(names[id]).toLowerCase() : "???"}</span></div>`;
     });
+    // The family line, oldest first: each generation and its traits.
     const lines = past.map((p) =>
-      `<div>gen ${p.generation} · ${escape(p.name)} · ${escape((names[p.species] || "egg").toLowerCase())}` +
-      ` · ${Math.round(p.age_days)} d${p.traits?.length ? ` · ${p.traits.map((t) => escape(t.replace("_", " "))).join(", ")}` : ""}</div>`);
+      `<div class="gen${p.current ? " now" : ""}">gen ${p.generation}${p.current ? " (now)" : ""} · ` +
+      `${escape(p.name)} · ${escape((names[p.species] || "egg").toLowerCase())}` +
+      `${p.age_days != null ? ` · ${Math.round(p.age_days)} d` : ""}` +
+      `${p.traits?.length ? `<br><span class="gt">${p.traits.map((t) =>
+        traitLabel(t, p.levels?.[t], t === p.inherited)).join(", ")}</span>` : ""}</div>`);
     s.status.innerHTML = `
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
       <div class="jgrid">${tiles.join("")}</div>
-      <div class="jlist">${lines.join("") || "<div>No past pets yet. A week into adulthood, a pet can lay an egg.</div>"}</div>
+      <div class="jlist">${lines.join("")}${past.length < 2 ? "<div class=\"gt\">A week into adulthood, a pet can lay an egg.</div>" : ""}</div>
       <button class="jlink">‹ status</button>`;
+    s.status.scrollTop = 0;
     this._journalLink(s, false);
   }
 

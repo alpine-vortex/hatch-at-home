@@ -92,7 +92,7 @@ One device named after your pet, with:
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `call_deadline`. |
-| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_progress` (0–1 per trait), `generation` and `journal` (the device's retired pets). |
+| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `generation` and `journal` (the device's retired pets). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far. |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
@@ -226,20 +226,34 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 - **Sickness:** health below 25, four care misses in a day, or old poop.
   Medicine cures it. **It never dies.**
 - **Traits:** the pet picks up habits from your house and keeps them for life.
-  Only hours it spends awake count, and a trait only ever adds a little.
-  - *Night owl*, after 10 hours awake during sleep hours: stays up twice as long
-    before dozing off, and enjoys being up late (+0.5 happiness an hour).
-  - *Music lover*, after 12 hours of music: music makes it twice as happy.
-  - *Homebody*, when someone was home for at least 75% of 48 or more awake
-    hours (needs the home zone): +0.5 happiness an hour while someone's home.
+  Only hours it spends awake count, and traits only ever add a little happiness
+  (all house bonuses together stay under the cap of +3 an hour).
+
+  | Trait | Learned from | While it happens |
+  | --- | --- | --- |
+  | Night owl | 10 h up during sleep hours | Stays up twice as long before dozing off; +0.5 an hour up late |
+  | Music lover | 12 h of music | +1.5 an hour on top of the music bonus |
+  | Homebody | someone home ≥ 75% of 48+ awake hours (needs the home zone) | +0.5 an hour with company |
+  | Sun lover | 20 h of sunshine | +1 an hour on sunny days |
+  | Fireside | 10 h by a lit fireplace | +1 an hour by the fire |
+  | Moon child | 3 h awake under a full moon | +1 an hour under a full moon |
+  | Storm watcher | 15 h of rain | +0.5 an hour while it rains |
+  | Couch potato | 12 h of TV | +0.5 an hour watching TV |
+  | Social butterfly | 2.5 h of greetings (about 15 arrivals) | +1 an hour while greeting |
+
+  Traits have levels, ★ to ★★★: effects are ×1, ×1.5 and ×2. A new egg
+  inherits one of its parent's traits at the parent's level (shown with ↓). If
+  the child also learns it for itself, it goes up a level, so a trait kept in the
+  family deepens over the generations. Seasonal traits (sun lover, fireside) carry
+  through the seasons this way.
 - **Generations:** a week into adulthood the card offers "lay an egg?" (two taps,
   so it can't happen by accident). Nothing ends until you choose it, so a favourite
   pet can stay forever. The adult retires to the journal and a new egg takes its
   place; it inherits one of the parent's traits and, as always, prefers a creature
   this device hasn't raised yet.
 - **The journal:** on the status screen, tap "journal". It shows the world's
-  creatures (ones nobody on this home has raised yet are silhouettes) and this
-  device's past pets.
+  creatures (ones nobody in this home has raised yet are silhouettes) and this
+  device's family line: each generation with its traits and stars.
 - **Notifications:** opt in per person. On the status screen, tap "notify me" to get
   this pet's calls, sickness, hatching, new traits and eggs on your phone, through
   the Home Assistant app. It only changes them for whoever is signed in; each person
@@ -258,7 +272,7 @@ names are included.
 `virtual_pet_recovered`, `virtual_pet_fell_asleep`, `virtual_pet_woke_up`,
 `virtual_pet_stage_changed`, `virtual_pet_care`, `virtual_pet_hatched`,
 `virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`,
-`virtual_pet_trait_learned` (with `trait`), `virtual_pet_egg_laid` (with `generation`,
+`virtual_pet_trait_learned` and `virtual_pet_trait_deepened` (with `trait`, `level`), `virtual_pet_egg_laid` (with `generation`,
 `parent_species`, `inherited_trait`).
 
 Events fired during a fast-forward carry `simulated: true`.

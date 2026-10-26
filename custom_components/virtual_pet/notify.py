@@ -35,6 +35,9 @@ def message(event: dict[str, Any], name: str, species: dict[str, str]) -> str | 
         return f"{name} hatched: it's a {found.lower()}!"
     if kind == "trait_learned":
         return f"{name} is a {event['trait'].replace('_', ' ')} now."
+    if kind == "trait_deepened":
+        stars = "★" * event["level"]
+        return f"{name}'s {event['trait'].replace('_', ' ')} runs deep now: {stars}"
     if kind == "egg_laid":
         return f"{name} laid an egg: generation {event['generation']} is on its way."
     return None

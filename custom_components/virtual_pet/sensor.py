@@ -140,15 +140,22 @@ class LifeStageSensor(PetEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
+        # Copies: the model changes its lists in place, and HA only sends the
+        # frontend attributes that differ from the last state, which would
+        # otherwise be the same (already changed) list.
         return {
             "age_days": round(self.pet.age_hours / 24, 1),
             "species": self.pet.species,
             "world": self.coordinator.world,
-            "raised": self.pet.raised,
-            "traits": self.pet.traits,
+            "raised": list(self.pet.raised),
+            "traits": list(self.pet.traits),
+            "trait_levels": {
+                t: model.trait_level(self.pet, t) for t in self.pet.traits
+            },
+            "inherited_trait": self.pet.inherited_from,
             "generation": self.pet.generation,
-            "journal": self.pet.journal,
-            "notify_users": self.pet.notify_users,
+            "journal": [dict(r) for r in self.pet.journal],
+            "notify_users": list(self.pet.notify_users),
             "trait_progress": model.trait_progress(self.pet),
             "roster": list(self.coordinator.roster),
             "hatches_at": self._hatches_at(),
@@ -220,6 +227,6 @@ class DebugSensor(PetEntity, SensorEntity):
             "state": {stat: round(getattr(pet, stat), 2) for stat in model.STATS},
             "poops": [stamp(t).isoformat() for t in pet.poops],
             "digesting": [stamp(t).isoformat() for t in pet.digesting],
-            "latched": pet.latched,
+            "latched": list(pet.latched),
             "calculation": dict(self.coordinator.debug),
         }
