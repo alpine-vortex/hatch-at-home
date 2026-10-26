@@ -23,3 +23,11 @@ named `{stage}_{mood}_{frame}.png`.
   visible hop, it can add a small CSS bounce.
 - Beetle stages (the owner's choice): egg → baby (pale larva) → child (small blue
   adult) → teen (bigger blue adult). No pupa.
+
+## Beetle child/teen: redraw requested (2026-10-26)
+
+The first child and teen beetles had the antennae standing straight up out of
+the head, so they looked like raised arms. Those sprites are in
+`art/beetle/rejected-v1/` for reference. Sol has been asked to redraw them with
+short, beaded antennae pointing forward and down. The egg, larva, props and
+terrarium are approved and stay in `sprites/beetle/`.
