@@ -145,6 +145,13 @@ const STYLE = `
   .lid span { width: 12%; height: 4px; border-radius: 2px; background: rgba(0,0,0,.25); }
   .feet { width: 82%; display: flex; justify-content: space-between; }
   .feet span { width: 34px; height: 10px; background: var(--d-dark); border-radius: 0 0 6px 6px; }
+  /* House: a pitched roof with a chimney, sitting on the body like a cottage. */
+  .roof { position: relative; width: 108%; height: 64px; margin-bottom: -2px; }
+  .roof::before { content: ""; position: absolute; right: 20%; top: 6px; width: 22px; height: 40px;
+    background: var(--d-dark); box-shadow: inset 0 5px 0 rgba(255,255,255,.18); }
+  .roof::after { content: ""; position: absolute; inset: 0; background: var(--d-dark);
+    clip-path: polygon(50% 0, 100% 100%, 0 100%); }
+  .compact .roof { height: 46px; }
   .body { width: 100%; box-sizing: border-box; background: var(--d-shell);
     box-shadow: inset 0 -9px 0 var(--d-dark), inset 0 5px 0 rgba(255,255,255,.28), 0 16px 34px rgba(20,15,5,.32);
     display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -162,6 +169,7 @@ const STYLE = `
   .egg .body { border-radius: 50% 50% 46% 46% / 30% 30% 18% 18%; padding: 36px 20px 40px; }
   .egg .buttons { width: 88%; }
   .tank .body { border-radius: 18px; padding: 16px 18px 22px; }
+  .house .body { border-radius: 0 0 10px 10px; padding: 18px 18px 24px; }
   .label { font-size: 14px; letter-spacing: .12em; color: var(--d-ink); }
   .request { position: absolute; right: 14px; bottom: 14px; z-index: 2; min-height: 44px;
     display: none; align-items: center; gap: 6px; padding: 0 14px; border: 2px solid #3a2a1a;
@@ -228,6 +236,7 @@ const STYLE = `
     transition: transform .08s, box-shadow .08s, background .2s; }
   .egg .toy .cap { border-radius: 50%; }
   .tank .toy .cap { border-radius: 14px; }
+  .house .toy .cap { border-radius: 10px 10px 4px 4px; }
   /* Pressed: held down for at least 160 ms so even a quick tap reads as a press. */
   .toy:active .cap, .toy.pressed .cap { transform: translateY(4px);
     box-shadow: 0 1px 0 var(--d-btn-shadow); transition-duration: .04s; }
@@ -398,7 +407,7 @@ class HatchPetCard extends HTMLElement {
     slide.className = "slide";
     slide.innerHTML = `
       <div class="device">
-        <div class="loop"></div><div class="lid"><span></span><span></span><span></span></div>
+        <div class="roof"></div><div class="loop"></div><div class="lid"><span></span><span></span><span></span></div>
         <div class="body">
           <img class="trim-top" alt="">
           <span class="label"></span>
@@ -627,10 +636,13 @@ class HatchPetCard extends HTMLElement {
     const shell = world.shell || {};
     const color = shell.color || "#e8834a";
     const dev = s.device;
-    dev.className = `device ${shell.shape === "tank" ? "tank" : "egg"}`;
-    dev.querySelector(".loop").style.display = shell.shape === "tank" ? "none" : "";
-    dev.querySelector(".lid").style.display = shell.shape === "tank" ? "" : "none";
-    dev.querySelector(".feet").style.display = shell.shape === "tank" ? "" : "none";
+    // Shapes the card can't draw yet (porthole, pad, moon) fall back to the egg.
+    const shape = ["tank", "house"].includes(shell.shape) ? shell.shape : "egg";
+    dev.className = `device ${shape}`;
+    dev.querySelector(".roof").style.display = shape === "house" ? "" : "none";
+    dev.querySelector(".loop").style.display = shape === "egg" ? "" : "none";
+    dev.querySelector(".lid").style.display = shape === "tank" ? "" : "none";
+    dev.querySelector(".feet").style.display = shape === "tank" ? "" : "none";
     dev.style.setProperty("--d-shell", color);
     dev.style.setProperty("--d-dark", shade(color, 0.72));
     dev.style.setProperty("--d-ink", shade(color, 0.28));

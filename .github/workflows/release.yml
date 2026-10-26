@@ -41,6 +41,11 @@ jobs:
             git push origin ":refs/tags/$TAG" || true
           fi
           if gh release view "$TAG" >/dev/null 2>&1; then
+            if [ "$GITHUB_REF_TYPE" = tag ]; then
+              # Publishing a release in the web UI creates its tag, which runs this.
+              echo "::notice::$TAG was already released by hand; nothing to do"
+              exit 0
+            fi
             echo "::error::$TAG is already released; bump the version first"
             exit 1
           fi

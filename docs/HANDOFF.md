@@ -48,7 +48,9 @@ or the owner for such details before committing it.
    release → tag `v0.6.1` on this branch → Generate release notes → Publish. They were
    also told to check Settings → Actions → General → Workflow permissions ("Read and
    write"). Check whether that happened, and whether Release now shows under Actions.
-   Until a release exists, HACS installs from the branch.
+   Until a release exists, HACS installs from the branch. Still true on the third
+   session's check; the owner was given the same steps again. `release.yml` now exits
+   green when a tag push finds its release already published by hand.
 2. **Art from Sol, still in progress.** The tabby kitten (Hearth) is in
    `frontend/sprites/kitten/` with `"ready": false`; review notes are in
    `art/README.md`. Sol was asked (2026-10-26) for one zip containing:
@@ -62,10 +64,10 @@ or the owner for such details before committing it.
    When the owner relays the link: download, review, add the files, add `egg` and
    `backgrounds` to `species.json`, then set `"ready": true`. Then check Hearth in the
    browser.
-3. **A `house` shell shape for the card.** Hearth's device is `"shape": "house"` in
-   `worlds.json`, but the card only knows `egg` and `tank`
-   (`hatch-pet-card.js`, `dev.className = ...`) and falls back to the egg. It's needed
-   before Hearth goes live.
+3. **Hearth's own art beyond the kitten.** The card's `house` shell (roof and chimney)
+   is done and checked at 320/412/900 px with a test Hearth pet, but `emblem_hearth`,
+   `deco_yarn` and `deco_cushion` don't exist yet and show as broken images. Ask Sol for
+   them with the next batch. Shapes `porthole`, `pad` and `moon` still fall back to the egg.
 4. **The flaky test is not pinned down.** About 2 failures in about 25 runs were seen
    in the first session. A sweep of seeds 0–60 passed every time, which argues against
    the rng being the cause. If it flakes again, save the full failure output; the next
