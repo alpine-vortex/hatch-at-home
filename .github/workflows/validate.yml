@@ -1,0 +1,33 @@
+# HACS and Home Assistant's own checks, plus the test suite. Free on a public repo.
+name: Validate
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: integration
+          # Not in home-assistant/brands (the icon ships in brand/), and the repo
+          # description and topics only matter for HACS's default store.
+          ignore: brands description topics
+
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: scripts/setup
+      - run: scripts/test

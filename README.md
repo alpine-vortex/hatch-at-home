@@ -15,16 +15,31 @@ Woodland (the bird and the Douglas squirrel), and a sandstone tank for Terrarium
 leopard gecko, with the red-knee tarantula to come). The egg decides which of that world's
 creatures hatches. See `docs/design-worlds.md`.
 
-## Install (manual copy until HACS packaging)
+## Install
 
 1. **Take a backup first**: Settings → System → Backups → Back up now.
-2. Copy `custom_components/virtual_pet/` from this repo into your HA config
-   folder, so you end up with `/config/custom_components/virtual_pet/manifest.json`.
-   The Samba share, the SSH add-on or the Studio Code Server add-on all work.
+2. Get the files, through HACS (recommended) or by hand:
+   - **HACS:** HACS → ⋮ (top right) → Custom repositories. Paste
+     `https://github.com/alpine-vortex/hatch-at-home`, pick type **Integration**
+     and press Add. Then search HACS for **Virtual Pet** and press Download.
+   - **By hand:** copy `custom_components/virtual_pet/` from this repo into your
+     HA config folder, so you end up with
+     `/config/custom_components/virtual_pet/manifest.json`. The Samba share, the
+     SSH add-on or the Studio Code Server add-on all work.
 3. Restart HA: Settings → System → power icon (top right) → Restart Home Assistant.
 4. Settings → Devices & services → Add integration → search **Virtual Pet**,
    then name your pet and pick its world: Woodland (bird) or Terrarium (leopard
    gecko). Add the integration again for each extra pet device.
+
+### Updating
+
+With HACS, new versions appear under Settings → Updates. Install, restart HA,
+then reload the browser page. By hand, copy the folder over the old one and do the
+same. Either way your pets are safe: they live in HA's own storage, not in the
+integration folder.
+
+Moving a manual install to HACS needs nothing special: add the custom repository,
+download, restart. HACS replaces the folder you copied.
 
 ### Add the card
 
@@ -247,6 +262,12 @@ scripts/develop   # throwaway HA at http://localhost:8123, config in dev/config
 indoor temperature, AQI, motion, presence and music) for the home-awareness
 phases.
 
+To release: bump the version in `const.py`, `manifest.json` and
+`frontend/hatch-pet-card.js`, then push a tag like `v0.6.1` on that commit. The
+release workflow checks that the tag matches the manifest and publishes a GitHub
+release, which is what HACS offers as an update. The Validate workflow runs
+HACS's and Home Assistant's checks and the tests on every push.
+
 ## Roadmap
 
 0. ✅ Test bench
@@ -254,4 +275,5 @@ phases.
 2. ✅ The card: device shelf, sprites, speech bubble, poop, attention icon, status screen
 3. ✅ Home awareness: options (entity mapping, bedtime, privacy), weather, light, bedtime, presence, activity, AQI and requests
 4. Life: adult forms, traits, generations, journal, sky events (plus bird visits from BirdNET-Pi), notifications
-5. HACS packaging, chores, minigames, more species
+5. ✅ HACS packaging
+6. Chores, minigames, more species
