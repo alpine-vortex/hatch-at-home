@@ -455,9 +455,7 @@ async def test_on_off_rain_entity(
     hass_storage[STORE_KEY] = hatched_pet(now)
     hass.states.async_set("input_boolean.raining", "off")
     hass.states.async_set("weather.home", "rainy")  # the gauge wins over this
-    await setup_with_house(
-        hass, rain="input_boolean.raining", weather="weather.home"
-    )
+    await setup_with_house(hass, rain="input_boolean.raining", weather="weather.home")
     assert "rainy" not in hass.states.get("sensor.pip_mood").attributes["flags"]
     hass.states.async_set("input_boolean.raining", "on")
     await settle(hass, freezer)

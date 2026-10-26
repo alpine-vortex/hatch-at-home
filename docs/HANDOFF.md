@@ -1,9 +1,15 @@
 # Handoff (2026-10-26, updated in the second session)
 
 Branch: `ccr-a5f628ca-979gik` (all work pushed; no PR opened). Version **0.6.1**.
-Read the README first, then `docs/design-worlds.md`, `docs/entity-mapping.md` and
-`docs/audit-2026-10-26.md`. The owner's original brief is not in the repo; its key rules
-are restated across the README and the design doc.
+Read the README first, then `docs/design-worlds.md` and `docs/audit-2026-10-26.md`. The
+owner's original brief is not in the repo; its key rules are restated across the README
+and the design doc.
+
+**The repo is public. Keep the owner's personal details out of it**: real entity IDs,
+location, hostnames, session IDs. They live in a private Artifact on the owner's account,
+**Hatch house notes** (find it with the Artifact tool's `list`, then `read` it): the
+entity mapping for their house, BirdNET notes, the file-share host and Sol's session
+ID. History was rewritten on 2026-10-26 to remove them; don't reintroduce them.
 
 ## Where things stand
 
@@ -40,13 +46,13 @@ are restated across the README and the design doc.
    - adult forms per species
    - traits learned from the house (night owl, music lover, homebody)
    - generations and per-world journals
-   - sky events: moon (the `sensor.home_moon_*` entities) and BirdNET visits (see
-     `docs/entity-mapping.md`, including the stalled `last_bird` feed and the fallback)
+   - sky events: moon and BirdNET visits (the owner's entities, the stalled
+     `last_bird` feed and the fallback are in the private house notes)
    - optional notifications and a chirp sound
 5. **Art queue with Sol** (an image agent in another session, which can't reply here):
    - tarantula probe, then the four new worlds (probe, review, batch)
    - more trim if the owner likes the woodland test
-   - The owner forwards share links like `the owner's file share/share/hatch-…`.
+   - The owner forwards share links from their file share (host in the private notes).
    - Download recipe: POST `/api/shares/<id>/token`, GET `/api/shares/<id>` for the
      file list, then GET `/api/shares/<id>/files/<file id>` with the cookie.
    - Check the sha256 in the share description.
@@ -59,8 +65,8 @@ are restated across the README and the design doc.
    type Integration); v0.6.1 is the first release. Release by bumping the version and
    running Actions → Release (this session can't push tags, but can dispatch it). The
    repo has no license yet; `validate.yml` skips HACS's license check until the owner
-   picks one. Manual copy still works, after taking a backup. Their suggested options are in the README's
-   "Connect it to your house" tables. Remind them to delete the old manual card resource
+   picks one. Manual copy still works, after taking a backup. The README's "Connect it to your
+   house" tables show generic examples; the owner's real entities are in the private notes. Remind them to delete the old manual card resource
    from 0.3.x.
 
 ## Conventions the owner cares about
@@ -70,6 +76,6 @@ are restated across the README and the design doc.
 - Verify UI changes in the browser (Playwright plus Chromium are preinstalled), and
   send screenshots.
 - Commit attribution: no `Co-Authored-By` trailer; keep the `Claude-Session:` line.
-- Messages to Sol go through `send_message` to `(Sol's session ID: ask the owner)` (this
+- Messages to Sol go through `send_message` to Sol's session (ID in the private notes; this
   session was granted access to the owner's other sessions; a new one may need the owner's
   approval again). Sol can't reply here; the owner relays share links.
