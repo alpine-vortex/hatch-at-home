@@ -458,3 +458,22 @@ async def test_on_off_rain_entity(
     hass.states.async_set("input_boolean.raining", "on")
     await settle(hass, freezer)
     assert "rainy" in hass.states.get("sensor.pip_mood").attributes["flags"]
+
+
+async def test_dark_bedroom_puts_pet_to_bed_promptly(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-26 23:10:00+00:00")
+    now = dt_util.utcnow().timestamp()
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("light.bed", "on")
+    await setup_with_house(hass, bedtime_lights=["light.bed"])
+    assert hass.states.get("binary_sensor.pip_asleep").state == STATE_OFF
+    hass.states.async_set("light.bed", "off")
+    await settle(hass, freezer)  # one debounce, no tick
+    assert hass.states.get("binary_sensor.pip_asleep").state == STATE_ON
+    hass.states.async_set("light.bed", "on")
+    await settle(hass, freezer)
+    assert hass.states.get("binary_sensor.pip_asleep").state == STATE_ON  # never woken

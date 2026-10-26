@@ -198,6 +198,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         now = self._now()
         self._advance(now)  # the past was lived under the old house state
         self._sense_home(now)
+        self._fire(model.react(self.state, now, self.settings))
         self._save()
         self._publish()
 

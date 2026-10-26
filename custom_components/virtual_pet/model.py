@@ -248,6 +248,17 @@ def advance(
     return events
 
 
+def react(state: PetState, now: float, settings: Settings) -> list[Event]:
+    """Respond right away to a change in the house (no time passes).
+
+    The caller advances the pet to now first, under the old house state.
+    """
+    events: list[Event] = []
+    if not state.away and life_stage(state) != "egg":
+        _sleep(state, now, settings, events)
+    return events
+
+
 def _step(
     state: PetState,
     t0: float,
