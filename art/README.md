@@ -38,3 +38,17 @@ the head, so they looked like raised arms. Those sprites are in
 `art/beetle/rejected-v1/` for reference. Sol has been asked to redraw them with
 short, beaded antennae pointing forward and down. The egg, larva, props and
 terrarium are approved and stay in `sprites/beetle/`.
+
+## Tabby kitten (Hearth): imported 2026-10-26, not ready yet
+
+The sprites are in `sprites/kitten/` with `"ready": false`, so Hearth stays hidden.
+`art/kitten/` has the prompts, the probe and Sol's generic scripts
+(`creatures.py` holds every creature's config; `cut_creature.py` cuts any of them).
+Before the kitten can be marked ready:
+
+- `teen_content_1` is drawn about 20% bigger than `teen_content_2` and its ears
+  touch the top edge, so the idle animation pulses. Asked Sol to redraw it at frame
+  2's size.
+- The kitten is first on Hearth's roster, so it must supply Hearth's egg
+  (`egg_idle`, `egg_wiggle`, `egg_crack`, two frames each) and at least `bg_day`.
+- The card has no `house` shell shape yet (Hearth's device); it falls back to the egg.
