@@ -29,5 +29,6 @@
   },
   "murk": "treefrog/murk",
   "backgrounds": { "day": "treefrog/bg_day", "night": "treefrog/bg_night", "dim": "treefrog/bg_night" },
-  "words": { "food": "bloodworms", "home": "pond" }
+  "words": { "food": "bloodworms", "home": "pond" },
+  "reactions": { "play": "float", "won": "gill_flutter", "praise": "smile", "snack": "smile" }
 }

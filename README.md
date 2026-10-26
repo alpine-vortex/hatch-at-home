@@ -84,7 +84,15 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 - The toy buttons press the pet's button entities, so anything you do here works
   from automations and voice too. A button glows when the pet needs it, for example
   Feed when it's hungry. Medicine is greyed out unless it's sick.
-- The scene follows the sun (`sun.sun`), and dims when the lights are out.
+- The pet reacts to what happens to it, even when nobody pressed anything: a missed
+  call ("...nobody came"), hatching ("hello!"), growing up, a new trait, a good
+  morning, a fair scolding. In its child stage, each creature also has its own
+  reactions, like the squirrel stuffing its cheeks with a snack or the kitten's
+  zoomies after play.
+- The scene follows the sun (`sun.sun`), and dims when the lights are out. Creatures
+  without their own rain scene get rain drawn over theirs.
+- The sleep button turns into "wake" whenever the pet is asleep, even if it dozed off
+  by itself; one tap wakes it.
 
 **Updating:** replace the folder with the new copy and restart. The pet's
 save file lives in `/config/.storage/virtual_pet.<entry id>` and is kept.
@@ -100,8 +108,8 @@ notifications and journal follow), with:
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline`, `_weight` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. Weight is healthy between 25 and 75. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `call_deadline`. |
 | `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `generation`, `upbringing` (final once adult, what it's on track for before) and `journal` (the device's retired pets). |
-| `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far. |
-| `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them. |
+| `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far (attribute `discipline_misses`: fake calls nobody answered). |
+| `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them; `moments`: the last 10 things that happened to it, for the card to react to. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
 | `switch.<pet>_lights_out` | On puts it to bed, off wakes it. |
 | `button.<pet>_feed`, `_snack`, `_play`, `_clean`, `_medicine`, `_scold`, `_praise` | Care. Medicine is unavailable unless the pet is sick. |
@@ -246,7 +254,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 - **Sickness:** health below 25, four care misses in a day, old poop, or being too heavy.
   Medicine cures it. **It never dies.**
 - **Upbringing:** on reaching adulthood, how it was raised sets its upbringing for
-  life. Each care miss while growing up costs 10 of 100 care points; the score is
+  life. Each care miss while growing up costs 6 of 100 care points; the score is
   70% care and 30% discipline. The status screen shows what it's on track for.
 
   | Upbringing | Score | As an adult |
@@ -255,7 +263,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   | Steady | 50+ | As usual |
   | Scrappy | below 50 | Whines half as often again (it never hurts it) |
 
-  A pet with no care misses and some discipline (40 or more) grows up devoted.
+  A pet with no care misses and a little discipline (35 or more) grows up devoted;
+  it takes about five misses, with no scolding, to grow up scrappy.
 - **Traits:** the pet picks up habits from your house and keeps them for life.
   Only hours it spends awake count, and traits only ever add a little happiness
   (all house bonuses together stay under the cap of +3 an hour).

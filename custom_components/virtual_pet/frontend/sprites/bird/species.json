@@ -27,5 +27,6 @@
     "poop": ["poop_1", "poop_2", "poop_3"]
   },
   "backgrounds": { "day": "bg_day", "night": "bg_night", "rain": "bg_rain", "dim": "bg_dim" },
-  "words": { "food": "berries", "home": "nest" }
+  "words": { "food": "berries", "home": "nest" },
+  "reactions": { "play": "birdwatch", "won": "birdwatch" }
 }

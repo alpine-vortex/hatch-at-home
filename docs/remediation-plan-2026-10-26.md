@@ -1,5 +1,14 @@
 # Remediation plan, 2026-10-26 (after 0.16.0, unreleased)
 
+**Status:** phases 1–3 are done, shipped in 0.16.0 with the upbringing tuning
+(cost per miss 10 → 6). The owner approved the plan as written.
+- Two changes from the plan:
+  - 2.8: the egg pops in with a sparkle; the adult doesn't fade out first,
+    because the state has already swapped by the time the card hears of it.
+  - 2.1: the miss counter doesn't flash.
+- Phase 4: the request is going to Sol.
+- Phase 5: open.
+
 Covers everything the interaction-feedback review found. That review ran against
 commit `348143f`; the findings were rechecked by hand on `3982a11`. The plan also
 covers new gaps from weight, the game and chores, and the open items left from

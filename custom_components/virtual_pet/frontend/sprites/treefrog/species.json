@@ -30,5 +30,6 @@
   },
   "murk": "murk",
   "backgrounds": { "day": "bg_day", "night": "bg_night", "dim": "bg_night" },
-  "words": { "food": "flies", "home": "lily pad" }
+  "words": { "food": "flies", "home": "lily pad" },
+  "reactions": { "feed": "tongue", "snack": "tongue", "won": "croak", "praise": "croak" }
 }

@@ -50,6 +50,23 @@ type PetConfigEntry = ConfigEntry[PetCoordinator]
 
 SAVE_DELAY = 10  # seconds; the Store also writes once more on shutdown
 
+# Events the card reacts to on screen. The card only sees state, so these are
+# published as a short list (the last_care sensor's "moments").
+MOMENTS = {
+    "care_miss",
+    "discipline_miss",
+    "hatched",
+    "stage_changed",
+    "trait_learned",
+    "trait_deepened",
+    "egg_laid",
+    "call_answered",
+    "woke_up",
+    "fell_asleep",
+    "pooped",
+}
+MOMENTS_KEPT = 10
+
 
 class PetStore(Store[dict[str, Any]]):
     """The pet's JSON file, with a hook for future schema migrations."""
@@ -95,6 +112,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.state: model.PetState | None = None
         # Last calculation, for the diagnostic sensor.
         self.debug: dict[str, Any] = {}
+        # Recent events for the card to react to, newest first (not saved).
+        self.moments: list[dict[str, Any]] = []
         # The house: nothing is read until HA has fully started.
         self.home = HomeEffect()
         self.presence = Presence(
@@ -335,6 +354,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 data["simulated"] = True
             self.hass.bus.async_fire(f"{DOMAIN}_{event['type']}", data)
             self._notify(event, simulated)
+            if not simulated and event["type"] in MOMENTS:
+                self.moments.insert(0, {**event, "at": dt_util.utcnow().isoformat()})
+                del self.moments[MOMENTS_KEPT:]
         if events:
             self.debug["last_events"] = [e["type"] for e in events][-10:]
 

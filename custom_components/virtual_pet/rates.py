@@ -149,7 +149,7 @@ STAGE_STARTS: list[tuple[str, float]] = [
 
 # --- Upbringing: decided on reaching adulthood, kept for life ---------------
 
-UPBRINGING_MISS_COST = 10.0  # care points lost per care miss while growing up
+UPBRINGING_MISS_COST = 6.0  # care points lost per care miss while growing up
 UPBRINGING_CARE_WEIGHT = 0.7  # the rest of the score is discipline
 # Highest first: the first grade whose score the pet reaches.
 UPBRINGING_GRADES: list[tuple[str, float]] = [

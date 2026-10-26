@@ -880,3 +880,22 @@ async def test_chores_from_a_real_todo_list(
     )
     await hass.async_block_till_done(wait_background_tasks=True)
     assert len(treats) == 1
+
+
+async def test_moments_reach_the_card_but_not_from_fast_forward(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, hunger=26.0)
+    config = await setup(hass)
+    await hass.services.async_call(DOMAIN, "fast_forward", {"hours": 2}, blocking=True)
+    attrs = hass.states.get("sensor.pip_last_care").attributes
+    assert attrs["moments"] == []  # a fast-forward is not a moment
+    config.runtime_data._fire([{"type": "care_miss", "reason": "hunger"}])
+    config.runtime_data._fire([{"type": "care", "action": "feed", "result": "ok"}])
+    config.runtime_data._publish()
+    await hass.async_block_till_done()
+    moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
+    assert [m["type"] for m in moments] == ["care_miss"]  # care has its own log
+    assert "at" in moments[0]
+    misses = hass.states.get("sensor.pip_care_misses")
+    assert misses.attributes["discipline_misses"] == 0

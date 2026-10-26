@@ -27,5 +27,6 @@
     "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
   },
   "backgrounds": { "day": "bat/bg_day", "night": "bat/bg_night", "dim": "bat/bg_night" },
-  "words": { "food": "leaves", "home": "cocoon" }
+  "words": { "food": "leaves", "home": "cocoon" },
+  "reactions": { "play": "glow", "won": "wing_spread", "praise": "wing_spread" }
 }

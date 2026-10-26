@@ -28,6 +28,7 @@ class StatDescription(SensorEntityDescription):
     """A whole-number stat."""
 
     value_fn: Callable[[model.PetState], float]
+    attrs_fn: Callable[[model.PetState], dict[str, Any]] | None = None
 
 
 STAT_SENSORS = [
@@ -48,6 +49,7 @@ STAT_SENSORS = [
         key="care_misses",
         translation_key="care_misses",
         value_fn=lambda pet: pet.care_misses,
+        attrs_fn=lambda pet: {"discipline_misses": pet.discipline_misses},
     ),
 ]
 
@@ -83,6 +85,11 @@ class StatSensor(PetEntity, SensorEntity):
     @property
     def native_value(self) -> int:
         return round(self.entity_description.value_fn(self.pet))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        attrs_fn = self.entity_description.attrs_fn
+        return attrs_fn(self.pet) if attrs_fn else None
 
 
 class MoodSensor(PetEntity, SensorEntity):
@@ -197,7 +204,7 @@ class LastCareSensor(PetEntity, SensorEntity):
     """When the pet was last cared for, with the who-did-what log."""
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
-    _unrecorded_attributes = frozenset({"log"})
+    _unrecorded_attributes = frozenset({"log", "moments"})
 
     def __init__(self, coordinator: PetCoordinator) -> None:
         super().__init__(coordinator, "last_care")
@@ -216,7 +223,9 @@ class LastCareSensor(PetEntity, SensorEntity):
                     "at": dt_util.utc_from_timestamp(entry["at"]).isoformat(),
                 }
                 for entry in self.pet.care_log
-            ]
+            ],
+            # What just happened, for the card to react to (newest first).
+            "moments": [dict(m) for m in self.coordinator.moments],
         }
 
 

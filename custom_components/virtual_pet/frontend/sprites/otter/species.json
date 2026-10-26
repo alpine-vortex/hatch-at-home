@@ -30,5 +30,6 @@
   },
   "murk": "murk",
   "backgrounds": { "day": "bg_day", "night": "bg_night", "dim": "bg_night" },
-  "words": { "food": "clams", "home": "kelp bed" }
+  "words": { "food": "clams", "home": "kelp bed" },
+  "reactions": { "feed": "rock", "snack": "rock", "praise": "hold_paws", "blanket": "kelp_wrap" }
 }

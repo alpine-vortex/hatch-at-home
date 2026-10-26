@@ -64,3 +64,10 @@ def test_the_first_ready_creature_of_each_world_brings_the_egg_and_scenes(
     for name in [WORLDS[world].get("emblem"), *WORLDS[world].get("deco", [])]:
         if name:
             assert (SPRITES.parent / "ui" / f"{name}.png").exists(), name
+
+
+@pytest.mark.parametrize("species", READY)
+def test_reactions_point_at_poses_the_species_has(species: str) -> None:
+    sp = json.loads((SPRITES / species / "species.json").read_text())
+    for action, pose in (sp.get("reactions") or {}).items():
+        assert pose in (sp.get("extras") or {}), f"{species} {action} -> {pose}"

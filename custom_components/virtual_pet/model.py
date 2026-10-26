@@ -387,12 +387,12 @@ def _sleep(state: PetState, t: float, settings: Settings, events: list[Event]) -
             elif state.energy >= R.NAP_WAKE_ENERGY and (
                 minutes_to_bedtime(t, settings) > R.NAP_INTO_NIGHT_MINUTES
             ):
-                _wake(state, events)
+                _wake(state, events, "rested")
             return
         if state.wake_at is None:
             state.wake_at = next_wake(t, settings)
         if t >= state.wake_at:
-            _wake(state, events)
+            _wake(state, events, "morning")
         return
     if (
         settings.home.dark_and_quiet
@@ -401,7 +401,7 @@ def _sleep(state: PetState, t: float, settings: Settings, events: list[Event]) -
     ):
         # Bedtime lights off and the house quiet: off to bed. (The house can put
         # the pet to sleep, never wake it.)
-        _fall_asleep(state, False, events, t, settings)
+        _fall_asleep(state, False, events, t, settings, "house")
         return
     if not night:
         state.stayed_up_since = None
@@ -410,12 +410,19 @@ def _sleep(state: PetState, t: float, settings: Settings, events: list[Event]) -
         state.stayed_up_since = t
     elif t - state.stayed_up_since >= _stay_up_minutes(state) * 60:
         # Nobody turned the lights out; it dozes off anyway. No penalty.
-        _fall_asleep(state, False, events, t, settings)
+        _fall_asleep(state, False, events, t, settings, "dozed")
 
 
 def _fall_asleep(
-    state: PetState, napping: bool, events: list[Event], t: float, settings: Settings
+    state: PetState,
+    napping: bool,
+    events: list[Event],
+    t: float,
+    settings: Settings,
+    how: str = "lights",
 ) -> None:
+    """how: "lights" (put to bed), "house" (dark and quiet) or "dozed" (stayed
+    up too long)."""
     state.asleep = True
     state.napping = napping
     state.game = None
@@ -428,15 +435,17 @@ def _fall_asleep(
             # Calls pause for sleep; it will ask again after waking.
             _unlatch(state, state.call.reason)
         state.call = None
-    events.append({"type": "fell_asleep", "napping": napping})
+    events.append({"type": "fell_asleep", "napping": napping, "how": how})
 
 
-def _wake(state: PetState, events: list[Event]) -> None:
+def _wake(state: PetState, events: list[Event], how: str) -> None:
+    """how: "morning" (wake time), "rested" (a nap ended), "lights" (woken by
+    hand) or "night" (woken by hand during sleep hours, which costs a little)."""
     state.asleep = False
     state.napping = False
     state.lights_out = False
     state.wake_at = None
-    events.append({"type": "woke_up"})
+    events.append({"type": "woke_up", "how": how})
 
 
 def _decay(state: PetState, hours: float, t: float, settings: Settings) -> None:
@@ -1166,7 +1175,7 @@ def _apply_lights(
             state.happiness = _clamp(state.happiness + R.WAKE_IN_NIGHT_HAPPINESS)
             state.stayed_up_since = now
             state.kept_up_until = now + R.FALL_ASLEEP_ANYWAY_MINUTES * 60
-        _wake(state, events)
+        _wake(state, events, "night" if night else "lights")
 
 
 # --- Mood -------------------------------------------------------------------
@@ -1223,7 +1232,15 @@ def mood(state: PetState, now: float, settings: Settings) -> tuple[str, list[str
         # Say what the house is doing, so the connection is visible.
         effect = HomeEffect(flags=[f for f in flags if f in home])
         reason = effect.reason() or reason
+        # The pet's own body comes before what the house is doing.
+        reason = _WEIGHT_REASONS.get(weight_band(state), reason)
     return current, flags, reason
+
+
+_WEIGHT_REASONS = {
+    "heavy": "feeling a bit round...",
+    "light": "could use a proper meal",
+}
 
 
 _CALL_REASONS = {

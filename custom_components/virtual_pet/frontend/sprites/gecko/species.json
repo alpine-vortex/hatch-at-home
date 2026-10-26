@@ -30,5 +30,6 @@
     "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
   },
   "backgrounds": { "day": "bg_vivarium" },
-  "words": { "food": "mealworms", "home": "vivarium" }
+  "words": { "food": "mealworms", "home": "vivarium" },
+  "reactions": { "feed": "eye_lick", "snack": "eye_lick", "play": "tail_wiggle", "won": "tail_wiggle" }
 }

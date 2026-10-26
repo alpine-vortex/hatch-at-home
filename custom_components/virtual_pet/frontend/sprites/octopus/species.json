@@ -29,5 +29,6 @@
   },
   "murk": "otter/murk",
   "backgrounds": { "day": "otter/bg_day", "night": "otter/bg_night", "dim": "otter/bg_night" },
-  "words": { "food": "shrimp", "home": "den" }
+  "words": { "food": "shrimp", "home": "den" },
+  "reactions": { "play": "jar", "won": "colour_shift", "praise": "colour_shift", "scold": "ink" }
 }

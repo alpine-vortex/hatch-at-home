@@ -557,7 +557,7 @@ def test_laying_an_egg_retires_the_parent_to_the_journal():
             "retired": at(12),
             "age_days": round(pet.age_hours / 24, 1),
             "care_misses": 3,
-            "upbringing": "scrappy",  # 3 misses and no discipline
+            "upbringing": "steady",  # 3 misses and no discipline
         }
     ]
     assert events == [
@@ -921,3 +921,36 @@ def test_old_saves_without_weight_start_in_the_middle():
     assert pet.weight == R.WEIGHT_START and pet.game is None
     data["game"] = {"started": 1.0, "last_at": 2.0, "rounds": 2, "wins": 1, "x": 0}
     assert model.PetState.from_dict(data).game == model.Game(1.0, 2.0, 2, 1)
+
+
+def test_waking_says_how():
+    pet = hatched(at(23, 30))
+    pet.asleep = True
+    pet.wake_at = at(7, day=2)
+    events = model.advance(pet, at(7, 5, day=2), SETTINGS, NoLuck(), max_gap=None)
+    assert {"type": "woke_up", "how": "morning"} in events
+    night = hatched(at(23, 30))
+    model.set_lights_out(night, True, at(23, 30), SETTINGS)
+    assert model.set_lights_out(night, False, at(23, 40), SETTINGS) == [
+        {"type": "woke_up", "how": "night"}
+    ]
+
+
+def test_dozing_off_is_told_apart_from_lights_out():
+    start = at(23, 0)
+    pet = hatched(start, energy=90.0)
+    events = run(pet, start + 2 * HOUR)
+    asleep = [e for e in events if e["type"] == "fell_asleep"]
+    assert asleep and asleep[0]["how"] == "dozed"
+    # One "off" wakes a pet that dozed off with the switch already off.
+    assert not pet.lights_out
+    assert types(model.set_lights_out(pet, False, start + 2 * HOUR, SETTINGS)) == [
+        "woke_up"
+    ]
+
+
+def test_weight_shows_in_what_it_says():
+    pet = hatched(at(9), weight=90.0)
+    assert model.mood(pet, at(9), SETTINGS)[2] == "feeling a bit round..."
+    pet.weight = 10.0
+    assert model.mood(pet, at(9), SETTINGS)[2] == "could use a proper meal"

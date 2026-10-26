@@ -53,6 +53,10 @@ const REFUSALS = {
 
 // Actions that borrow another action's prop sprite.
 const PROP_FOR = { game: "play", chore_treat: "snack" };
+// Shared pixel icons for props no species has drawn yet ("../ui/" leaves sprites/).
+const FALLBACK_PROPS = { scold: "../ui/icon_scold", praise: "../ui/icon_praise" };
+// Missing sprites are reported once each in the console.
+const WARNED = new Set();
 
 // Home flags that swap the pet into a special pose (species.json "extras").
 const POSES = {
@@ -273,6 +277,42 @@ const STYLE = `
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .screen.show-status .game { display: none; }
   .pet { transition: translate .25s ease-out; }
+  /* Reactions to moments (see _moment). */
+  .pet.sulk { animation: shake .35s 2; }
+  .pet.born { animation: pop .45s ease-out; }
+  .pet.stretch { animation: perk .5s ease-out 2; }
+  .poop.born { animation: pop .4s ease-out; }
+  .screen .burst.big { top: 38%; width: 96px; height: 96px; margin-left: -48px; z-index: 2; }
+  /* Stand-ins for house poses that are only drawn for the child. */
+  .pet.dance { animation: hop .45s ease-in-out infinite; }
+  .pet.shiver { animation: shake .25s linear infinite; }
+  /* The fan: wind lines cross the scene and the pet sways. */
+  .breeze { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1; }
+  .screen.breezy .breeze { display: block; }
+  .breeze span { position: absolute; left: -40%; height: 3px; width: 34%; border-radius: 2px;
+    background: rgba(255,255,255,.8); animation: wind 1.1s linear infinite; }
+  .breeze span:nth-child(1) { top: 30%; }
+  .breeze span:nth-child(2) { top: 48%; animation-delay: .35s; }
+  .breeze span:nth-child(3) { top: 64%; animation-delay: .7s; }
+  @keyframes wind { to { left: 110%; } }
+  .screen.breezy .pet { animation: sway .7s ease-in-out infinite; }
+  @keyframes sway { 50% { transform: rotate(-4deg); } }
+  /* Rain for species with no rain scene of their own. */
+  .rain { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1;
+    background: repeating-linear-gradient(105deg, transparent 0 13px, rgba(215,230,255,.5) 13px 15px);
+    background-size: 40px 40px; animation: rainfall .45s linear infinite; }
+  .screen.raining .rain { display: block; }
+  .screen.raining .bg { filter: brightness(.82) saturate(.75); }
+  @keyframes rainfall { to { background-position: -10px 40px; } }
+  /* Water worlds: lighter streaks, and rings where the drops land. */
+  .screen.raining.watery .rain { opacity: .6; }
+  .screen.raining.watery .rain::after { content: ""; position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 10% 4% at 22% 80%, transparent 55%, rgba(255,255,255,.95) 62%, transparent 75%),
+      radial-gradient(ellipse 10% 4% at 72% 70%, transparent 55%, rgba(255,255,255,.95) 62%, transparent 75%),
+      radial-gradient(ellipse 10% 4% at 50% 90%, transparent 55%, rgba(255,255,255,.95) 62%, transparent 75%);
+    animation: ripple 1.4s ease-out infinite; }
+  @keyframes ripple { 0% { opacity: 0; transform: scale(.7); } 30% { opacity: 1; } 100% { opacity: 0; transform: scale(1.25); } }
   .pet.go-left { translate: -60% 0; }
   .pet.go-right { translate: 60% 0; }
   .status { position: absolute; inset: 0; background: #e9e2c6; color: #2f3a24; padding: 9px 12px;
@@ -505,6 +545,8 @@ class HatchPetCard extends HTMLElement {
             <img class="pet" alt="">
             <img class="prop" alt="">
             <img class="murk" alt="">
+            <div class="rain"></div>
+            <div class="breeze"><span></span><span></span><span></span></div>
             <img class="attention" alt="">
             <div class="bubble"></div>
             <div class="game" hidden>
@@ -528,6 +570,13 @@ class HatchPetCard extends HTMLElement {
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"),
     };
+    slide.querySelectorAll("img").forEach((img) => img.addEventListener("error", () => {
+      const src = img.getAttribute("src");
+      if (src && !WARNED.has(src)) {
+        WARNED.add(src);
+        console.warn("hatch-pet-card: missing sprite", src);
+      }
+    }));
     // Taps on the game mustn't reach the screen behind (which opens the status).
     s.gameBox.addEventListener("click", (e) => e.stopPropagation());
     q(".gl").addEventListener("click", () => this._guess(s, "left"));
@@ -622,7 +671,8 @@ class HatchPetCard extends HTMLElement {
       const stage = this._state(s, "sensor.life_stage");
       s.world = worlds[stage?.attributes.world] || Object.values(worlds)[0];
       const roster = stage?.attributes.roster || [];
-      const speciesId = stage?.attributes.species || roster[0];
+      // An egg is always drawn as its world's egg (the first species on the roster).
+      const speciesId = (stage?.state === "egg" && roster[0]) || stage?.attributes.species || roster[0];
       if (speciesId && speciesId !== s.speciesId) {
         s.speciesId = speciesId;
         s.species = null;
@@ -800,15 +850,24 @@ class HatchPetCard extends HTMLElement {
     } else {
       this._show(s, s.awaysign, null);
       s.awaylabel.textContent = "";
-      s.frames = this._petFrames(sp, stage, mood?.state, calling, stageState?.attributes.age_days, flags);
-      this._show(s, s.pet, s.frames[s.frame % s.frames.length]);
+      s.frames = this._petFrames(sp, stage, mood?.state, calling, this._eggMinutes(stageState), flags);
+      const frames = this._frames(s);
+      this._show(s, s.pet, frames[s.frame % frames.length]);
     }
     s.pet.classList.toggle("hop", mood?.state === "excited");
     s.pet.alt = s.species?.name || "pet";
     // Some stages are drawn smaller in the frame (long adults fit 256 px wide by
     // coming out shorter); species.json "scale" sizes them back up, feet fixed.
     const drawn = sp.stages?.includes(stage) ? stage : sp.stage_fallback?.[stage];
+    s.drawn = drawn;
     s.pet.style.scale = String(sp.scale?.[drawn] || 1);
+    // Baby, teen and adult have no house poses: a hop dances, a shake shivers.
+    const standIn = drawn !== "child" && !away && !asleep && POSE_MOODS.has(mood?.state);
+    s.pet.classList.toggle("dance", standIn && flags.includes("dancing"));
+    s.pet.classList.toggle("shiver", standIn && flags.includes("chilly"));
+    const rainScene = scene === "rain" && !!sp.backgrounds?.rain;
+    s.screen.classList.toggle("raining", flags.includes("rainy") && !rainScene && !away);
+    s.screen.classList.toggle("watery", world.mess === "murk");
 
     const poop = away ? 0 : Number(this._state(s, "sensor.poop")?.state || 0);
     // Water worlds cloud over instead of showing poop (worlds.json "mess": "murk").
@@ -825,6 +884,19 @@ class HatchPetCard extends HTMLElement {
     if (latestAt !== s.lastLogAt) {
       if (Date.now() - new Date(latestAt) < 15000) this._react(s, log[0]);
       s.lastLogAt = latestAt;
+    }
+    const moments = this._state(s, "sensor.last_care")?.attributes.moments || [];
+    const momentKey = (m) => m && `${m.at}|${m.type}`;
+    if (s.lastMoment === undefined) s.lastMoment = momentKey(moments[0]) ?? null; // not old ones
+    if (moments.length && momentKey(moments[0]) !== s.lastMoment) {
+      const fresh = [];
+      for (const m of moments) {
+        if (momentKey(m) === s.lastMoment) break;
+        fresh.push(m);
+      }
+      s.lastMoment = momentKey(moments[0]);
+      fresh.reverse().filter((m) => Date.now() - new Date(m.at) < 15000)
+        .forEach((m) => this._moment(s, m));
     }
     const egg = stage === "egg";
     if (s.game && (asleep || away || egg)) this._endGame(s, null);
@@ -849,15 +921,17 @@ class HatchPetCard extends HTMLElement {
     const lights = s.buttons.lights;
     const lightsEnt = this._state(s, "switch.lights_out");
     lights.disabled = !lightsEnt || lightsEnt.state === "unavailable" || away;
-    lights.classList.toggle("on", lightsOut);
-    lights.classList.toggle("wanted", !lightsOut && !asleep && flags.includes("sleepy") && calling);
-    const lightsIcon = lightsOut ? "icon_lights_on" : "icon_lights_out";
+    // Asleep counts even when it dozed off by itself (the switch stays off then).
+    const sleeping = lightsOut || asleep;
+    lights.classList.toggle("on", sleeping);
+    lights.classList.toggle("wanted", !sleeping && flags.includes("sleepy") && calling);
+    const lightsIcon = sleeping ? "icon_lights_on" : "icon_lights_out";
     if (lights.dataset.icon !== lightsIcon) {
       lights.querySelector(".cap").innerHTML = pixelIcon(lightsIcon);
       lights.dataset.icon = lightsIcon;
     }
-    lights.querySelector(".lbl").textContent = lightsOut ? "wake" : "sleep";
-    lights.title = lightsOut ? "Lights on: wake the pet" : "Lights out: put the pet to bed";
+    lights.querySelector(".lbl").textContent = sleeping ? "wake" : "sleep";
+    lights.title = sleeping ? "Lights on: wake the pet" : "Lights out: put the pet to bed";
 
     this._renderStatus(s, log);
   }
@@ -882,11 +956,19 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
-  _petFrames(sp, stage, mood, calling, days, flags = []) {
+  // Minutes until the egg hatches, or null.
+  _eggMinutes(stageState) {
+    const at = stageState?.state === "egg" ? stageState.attributes.hatches_at : null;
+    return at ? (new Date(at) - Date.now()) / 60000 : null;
+  }
+
+  _petFrames(sp, stage, mood, calling, eggMinutes, flags = []) {
     if (stage === "egg") {
       if (!sp.egg) return [];
-      if (days != null && days * 24 >= 0.4) return sp.egg.crack;
-      return calling ? sp.egg.wiggle : sp.egg.idle;
+      // HA ticks every 5 minutes, so each phase spans at least one tick.
+      if (eggMinutes != null && eggMinutes <= 6) return sp.egg.crack || sp.egg.idle;
+      if (eggMinutes != null && eggMinutes <= 15) return sp.egg.wiggle || sp.egg.idle;
+      return sp.egg.idle;
     }
     let drawn = stage;
     if (!sp.stages.includes(drawn)) drawn = sp.stage_fallback?.[stage] || sp.stages[sp.stages.length - 1];
@@ -908,9 +990,11 @@ class HatchPetCard extends HTMLElement {
     if (!this._slides || !this._visible || document.hidden) return;
     this._ticks = (this._ticks || 0) + 1;
     for (const s of this._slides) {
-      if (s.frames?.length && !(s.asleep && this._ticks % 2)) {
-        s.frame = (s.frame + 1) % s.frames.length;
-        this._show(s, s.pet, s.frames[s.frame]);
+      if (s.poseUntil && Date.now() > s.poseUntil) s.poseUntil = 0;
+      const frames = this._frames(s);
+      if (frames.length && !(s.asleep && this._ticks % 2)) {
+        s.frame = (s.frame + 1) % frames.length;
+        this._show(s, s.pet, frames[s.frame]);
       }
       if (s.propUntil && Date.now() > s.propUntil) {
         this._show(s, s.prop, null);
@@ -924,13 +1008,110 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
+  // The frames to draw now: a reaction pose while one runs, else the mood's.
+  _frames(s) {
+    return s.poseUntil && Date.now() < s.poseUntil ? s.poseFrames : s.frames || [];
+  }
+
+  _animate(s, el, cls, ms) {
+    el.classList.remove(cls);
+    void el.offsetWidth; // restart the animation
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), ms);
+  }
+
+  _sparkle(s) {
+    const ring = document.createElement("span");
+    ring.className = "burst big";
+    s.screen.append(ring);
+    setTimeout(() => ring.remove(), 600);
+  }
+
+  // Something happened in HA (sensor.last_care "moments"): show it.
+  _moment(s, m) {
+    const say = (text, ms = 4500) => {
+      s.bubble.textContent = text;
+      s.sayUntil = Date.now() + ms;
+    };
+    switch (m.type) {
+      case "care_miss":
+        say("...nobody came", 6000);
+        this._animate(s, s.pet, "sulk", 800);
+        break;
+      case "discipline_miss":
+        say("...fine, I'll stop");
+        break;
+      case "call_answered":
+        if (m.reason === "fake") { // only a fair scold answers a fake call
+          say("ok... sorry");
+          this._animate(s, s.pet, "sulk", 800);
+        }
+        break;
+      case "hatched":
+        say("hello!");
+        this._animate(s, s.pet, "born", 500);
+        this._sparkle(s);
+        break;
+      case "stage_changed":
+        if (m.stage === "baby") break; // hatching says hello
+        say(m.stage === "adult"
+          ? `all grown up${m.upbringing ? `: ${m.upbringing}` : ""}!`
+          : `I'm a ${m.stage} now!`);
+        this._animate(s, s.pet, "stretch", 1100);
+        this._sparkle(s);
+        break;
+      case "trait_learned":
+      case "trait_deepened":
+        say(`${m.type === "trait_learned" ? "new trait" : "deeper"}: ` +
+          `${String(m.trait).replace("_", " ")} ${"★".repeat(m.level || 1)}`);
+        this._sparkle(s);
+        break;
+      case "egg_laid":
+        say("see you in the journal!");
+        this._animate(s, s.pet, "born", 500);
+        this._sparkle(s);
+        break;
+      case "woke_up":
+        if (m.how === "morning") {
+          say("good morning!");
+          this._animate(s, s.pet, "stretch", 1100);
+        } else if (m.how === "night") {
+          say("...so sleepy");
+        }
+        break;
+      case "pooped": {
+        const img = s.poops[(m.count || 1) - 1];
+        if (img) this._animate(s, img, "born", 450);
+        break;
+      }
+    }
+  }
+
   _react(s, entry) {
     if (entry.action === "chore_treat") {
       s.bubble.textContent = "a treat! someone did a chore ♪";
       s.sayUntil = Date.now() + 3500;
     }
     if (["ok", "won", "lost"].includes(entry.result)) {
-      const prop = s.species?.props?.[PROP_FOR[entry.action] || entry.action];
+      const key = PROP_FOR[entry.action] || entry.action;
+      // The species' own reaction pose, drawn for the child only.
+      const pose = s.species?.reactions?.[entry.result === "won" ? "won" : entry.action];
+      const poseFrames = s.drawn === "child" && s.species?.extras?.[pose];
+      if (poseFrames) {
+        s.poseFrames = Array.isArray(poseFrames) ? poseFrames : [poseFrames];
+        s.poseUntil = Date.now() + 2500;
+        this._show(s, s.pet, s.poseFrames[0]);
+      }
+      if (entry.action === "fan" && !s.species?.props?.fan) {
+        s.screen.classList.add("breezy");
+        clearTimeout(s.breezeTimer);
+        s.breezeTimer = setTimeout(() => s.screen.classList.remove("breezy"), 2600);
+      }
+      if (entry.action === "praise") {
+        s.bubble.textContent = "♥";
+        s.sayUntil = Date.now() + 2500;
+      }
+      const prop = s.species?.props?.[key] || FALLBACK_PROPS[key];
       if (prop) {
         this._show(s, s.prop, prop);
         s.propUntil = Date.now() + 2500;
@@ -982,6 +1163,7 @@ class HatchPetCard extends HTMLElement {
       <div class="row icons">${ic("stat_discipline")}<span>discipline</span>${bar(value("discipline"))}</div>
       <div class="row traits"><span>weight</span><span>${weightLabel(value("weight"))}</span></div>
       <div class="row icons">${ic("stat_care_miss")}<span>misses</span><span>${value("care_misses") ?? "–"}</span></div>
+      <div class="row traits"><span>whines</span><span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0} ignored</span></div>
       <div class="row traits"><span>traits</span><span>${traits.length ? traits.join(" · ") : "none yet"}</span></div>
       ${stageAttrs.upbringing ? `<div class="row traits"><span>${this._state(s, "sensor.life_stage")?.state === "adult" ? "raised" : "growing up"}</span><span>${escape(stageAttrs.upbringing)}</span></div>` : ""}
       <div class="row traits"><span>notify me</span><span><button class="bell" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span></div>
@@ -1182,7 +1364,8 @@ class HatchPetCard extends HTMLElement {
   _toggleLights(s) {
     const id = s.ids?.["switch.lights_out"];
     if (!id) return;
-    const on = this._hass.states[id]?.state === "on";
+    // Turning the switch off wakes a pet that dozed off with the switch already off.
+    const on = this._hass.states[id]?.state === "on" || s.asleep;
     this._call(s.buttons.lights, s, "switch", on ? "turn_off" : "turn_on", id);
   }
 }

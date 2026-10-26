@@ -28,5 +28,6 @@
     "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
   },
   "backgrounds": { "day": "kitten/bg_day", "night": "kitten/bg_night", "rain": "kitten/bg_rain", "dim": "kitten/bg_dim" },
-  "words": { "food": "hay", "home": "hutch" }
+  "words": { "food": "hay", "home": "hutch" },
+  "reactions": { "play": "binky", "won": "binky", "praise": "flop", "scold": "thump" }
 }
