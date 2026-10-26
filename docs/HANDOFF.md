@@ -103,11 +103,11 @@ or the owner for such details before committing it.
    0.7.0 was a 4 px transparent band only that check caught.
 8. **License:** MIT (owner's choice, 2026-10-26), `LICENSE` in the repo root; HACS's
    license check is on again. The Tiny5 font stays under its OFL.
-9. **The owner's live HA:** install through HACS (custom repository, type Integration)
-   or by manual copy, after taking a backup. The README's "Connect it to your house"
-   tables show generic stand-ins; the owner's real entities are in the private notes.
-   Remind them to delete the old manual card resource from 0.3.x.
-
+9. **The owner's live HA: installed (2026-10-26)** through HACS, with their real entities
+   mapped in the options (the private house notes list them). The card needed a hard
+   refresh / "Reset frontend cache" in the companion app before it appeared in the card
+   picker. Next: ask the owner to enable the pet's diagnostic sensor ("debug", off by
+   default) and read it to see what the pet actually senses in their house.
 ## How to
 
 - **Get art from Sol:** the owner forwards a share link.
