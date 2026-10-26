@@ -87,15 +87,23 @@ or the owner for such details before committing it.
    - BirdNET visits (the owner's entities, the stalled `last_bird` feed and the
      fallback are in the private house notes)
    - a chirp sound on calls (browser autoplay rules apply)
-6. **Art queue:** the axolotl (Pond), then Night Sky (its shell is drawn; it needs its
+6. **Adult forms requested from Sol (2026-10-26, one batch):** a 4th stage for the 8 live
+   creatures, 4 sheets each, 160 sprites: `sprites/<species>/adult_<mood>_<1|2>.png`
+   for the 10 moods, at the teen's height (teens are already the biggest; adults look
+   grown-up through details, not size). The creatures still to come get the same 4
+   adult sheets in their own batches. When the zip arrives: run the usual checks, add
+   "adult" to each `species.json` `stages`, drop `stage_fallback`, and check an adult in
+   the browser. A slim set (content, asleep, sick, calling) was the cheaper option, not
+   chosen.
+7. **Art queue:** the axolotl (Pond), then Night Sky (its shell is drawn; it needs its
    creatures, egg, scenes, emblem and decorations). Sol is sending `bg_night`
    replacements for Pond and Tidepool on their day scenes' layouts: drop them into
    `sprites/treefrog/` and `sprites/otter/` after the usual checks.
    Review tip: run a connected-pieces check on every sprite; the leg gap that shipped in
    0.7.0 was a 4 px transparent band only that check caught.
-7. **License:** none yet; `validate.yml` skips HACS's license check until the owner
+8. **License:** none yet; `validate.yml` skips HACS's license check until the owner
    picks one. MIT was suggested.
-8. **The owner's live HA:** install through HACS (custom repository, type Integration)
+9. **The owner's live HA:** install through HACS (custom repository, type Integration)
    or by manual copy, after taking a backup. The README's "Connect it to your house"
    tables show generic stand-ins; the owner's real entities are in the private notes.
    Remind them to delete the old manual card resource from 0.3.x.
