@@ -1,7 +1,7 @@
-# Handoff (2026-10-26, end of the second session)
+# Handoff (2026-10-26, third session)
 
 Branch: `ccr-a5f628ca-979gik`, which is also the repo's default branch (all work
-pushed; no PR). Version **0.6.1**. Read the README first, then `docs/design-worlds.md`
+pushed; no PR). Version **0.6.1** (released); Hearth and the bunny are pushed but not yet released. Read the README first, then `docs/design-worlds.md`
 and `docs/audit-2026-10-26.md`. The owner's original brief is not in the repo; its key
 rules are restated across the README and the design doc.
 
@@ -30,7 +30,7 @@ or the owner for such details before committing it.
     `.github/workflows/validate.yml` (HACS action, hassfest, tests; green) and
     `.github/workflows/release.yml`. Actions minutes are free on a public repo.
 - **Worlds:** Woodland (bird ✅, Douglas squirrel ✅) and Terrarium (leopard gecko ✅;
-  tarantula pending). Hearth has the tabby kitten ✅ (bunny pending). Tidepool, Pond and
+  tarantula pending). Hearth (tabby kitten ✅, lop bunny ✅). Tidepool, Pond and
   Night Sky are listed in `frontend/worlds.json` and stay hidden until a creature is
   ready. The beetle is shelved; its partial art is in `art/beetle/`.
 - **Woodland trim:** the smaller, lower garland and the egg's bottom labels were checked
@@ -50,7 +50,13 @@ or the owner for such details before committing it.
    notes are in `art/README.md`. Checked in the dev HA: egg, baby, child and teen inside
    the card's new `house` shell. Shapes `porthole`, `pad` and `moon` still fall back to
    the egg; draw each before its world goes live.
-3. (merged into 2)
+3. **Tarantula set held back for the owner's call.** Sol's set (`hatch-4664de9c`,
+   sha256 `b5076cd8…`, 73 sprites) passes the size and feet checks, but its faces are
+   dark lines on a dark body and mostly vanish, so moods don't read. Sol offered a cheap
+   re-run of the sheets with lighter eye highlights and a cream mouth line. Nothing is in
+   the repo yet; the owner decides between shipping as-is and waiting for that re-run.
+   Its props: only `web_mat`; borrow `gecko/cricket` for feed and the gecko's other props
+   for the rest, and the gecko's `bg_vivarium`.
 4. **The flaky test is not pinned down.** About 2 failures in about 25 runs were seen
    in the first session. A sweep of seeds 0–60 passed every time, which argues against
    the rng being the cause. If it flakes again, save the full failure output; the next
@@ -62,8 +68,8 @@ or the owner for such details before committing it.
    - sky events: moon and BirdNET visits (the owner's entities, the stalled
      `last_bird` feed and the fallback are in the private house notes)
    - optional notifications and a chirp sound
-6. **Art queue after the kitten:** tarantula probe, then the remaining new worlds
-   (probe, review, batch).
+6. **Art queue:** Sol is on the otter, then the Tidepool kit. Each new world also needs
+   its card shell shape (`porthole`, `pad`, `moon`).
 7. **License:** none yet; `validate.yml` skips HACS's license check until the owner
    picks one. MIT was suggested.
 8. **The owner's live HA:** install through HACS (custom repository, type Integration)
