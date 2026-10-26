@@ -9,7 +9,8 @@ and the design doc.
 location, hostnames, session IDs. They live in a private Artifact on the owner's account,
 **Hatch house notes** (find it with the Artifact tool's `list`, then `read` it): the
 entity mapping for their house, BirdNET notes, the file-share host and Sol's session
-ID. History was rewritten on 2026-10-26 to remove them; don't reintroduce them.
+ID. History was rewritten on 2026-10-26 to remove them, and the GitHub repo was deleted
+and recreated so the old commits are gone too; don't reintroduce them.
 
 ## Where things stand
 
