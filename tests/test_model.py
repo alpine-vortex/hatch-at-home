@@ -515,3 +515,69 @@ def test_traits_survive_a_save():
     again = model.PetState.from_dict(pet.to_dict())
     assert again.traits == ["homebody"]
     assert again.trait_hours == {"awake": 50.0, "company": 45.0}
+
+
+# --- Generations -----------------------------------------------------------------
+
+ADULT = dict(R.STAGE_STARTS)["adult"]
+
+
+def test_lay_egg_waits_a_week_into_adulthood():
+    pet = hatched(at(12), age_hours=ADULT + 24.0)
+    assert model.life_stage(pet) == "adult"
+    assert not model.can_lay_egg(pet)
+    assert model.lay_egg(pet, at(12), random.Random(1)) == (pet, [])
+    pet.age_hours = ADULT + R.LAY_EGG_AFTER_ADULT_HOURS
+    assert model.can_lay_egg(pet)
+    assert "lay_egg" in model.requests(pet, at(12), SETTINGS)
+    pet.away = True
+    assert not model.can_lay_egg(pet)
+
+
+def test_laying_an_egg_retires_the_parent_to_the_journal():
+    pet = hatched(at(12), age_hours=ADULT + R.LAY_EGG_AFTER_ADULT_HOURS + 5)
+    pet.species, pet.raised = "squirrel", ["bird", "squirrel"]
+    pet.traits = ["night_owl", "homebody"]
+    pet.care_misses = 3
+    egg, events = model.lay_egg(pet, at(12), random.Random(1))
+    assert model.life_stage(egg) == "egg"
+    assert egg.name == "Pip" and egg.born == at(12)
+    assert egg.generation == 2
+    assert egg.species is None and egg.raised == ["bird", "squirrel"]
+    assert egg.care_misses == 0 and egg.trait_hours == {}
+    assert len(egg.traits) == 1 and egg.traits[0] in pet.traits  # inherited
+    assert egg.journal == [
+        {
+            "generation": 1,
+            "name": "Pip",
+            "species": "squirrel",
+            "traits": ["night_owl", "homebody"],
+            "born": pet.born,
+            "retired": at(12),
+            "age_days": round(pet.age_hours / 24, 1),
+            "care_misses": 3,
+        }
+    ]
+    assert events == [
+        {
+            "type": "egg_laid",
+            "generation": 2,
+            "parent_species": "squirrel",
+            "inherited_trait": egg.traits[0],
+        }
+    ]
+    assert model.trait_progress(egg)[egg.traits[0]] == 1.0
+
+
+def test_a_parent_without_traits_passes_none_on():
+    pet = hatched(at(12), age_hours=ADULT + R.LAY_EGG_AFTER_ADULT_HOURS)
+    egg, events = model.lay_egg(pet, at(12), random.Random(1))
+    assert egg.traits == []
+    assert events[0]["inherited_trait"] is None
+
+
+def test_the_journal_survives_a_save():
+    pet = hatched(at(12), age_hours=ADULT + R.LAY_EGG_AFTER_ADULT_HOURS)
+    egg, _ = model.lay_egg(pet, at(12), random.Random(1))
+    again = model.PetState.from_dict(egg.to_dict())
+    assert again.generation == 2 and again.journal == egg.journal

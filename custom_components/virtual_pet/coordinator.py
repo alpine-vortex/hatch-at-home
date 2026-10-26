@@ -286,6 +286,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._publish()
         return result
 
+    async def async_lay_egg(self) -> None:
+        """Start the next generation: the adult retires, an egg takes its place."""
+        assert self.state is not None
+        now = self._now()
+        self._advance(now)
+        self.state, events = model.lay_egg(self.state, now, self.rng)
+        self._fire(events)
+        self._save()
+        self._publish()
+
     async def async_set_lights_out(self, on: bool) -> None:
         """Flip the lights-out switch."""
         assert self.state is not None

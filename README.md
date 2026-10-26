@@ -92,12 +92,13 @@ One device named after your pet, with:
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `call_deadline`. |
-| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits` and `trait_progress` (0–1 per trait). |
+| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_progress` (0–1 per trait), `generation` and `journal` (the device's retired pets). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far. |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
 | `switch.<pet>_lights_out` | On puts it to bed, off wakes it. |
 | `button.<pet>_feed`, `_snack`, `_play`, `_clean`, `_medicine`, `_scold`, `_praise` | Care. Medicine is unavailable unless the pet is sick. |
+| `button.<pet>_lay_egg` | Starts the next generation. Available from a week into adulthood (day 21). |
 | `button.<pet>_blanket`, `_fan` | Answers to what the house makes the pet ask for. Unavailable unless it's asking. |
 | `sensor.<pet>_debug` | Diagnostic, **disabled by default**. Enable it on the entity's settings page to see the raw numbers. |
 
@@ -223,6 +224,14 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   - *Music lover*, after 12 hours of music: music makes it twice as happy.
   - *Homebody*, when someone was home for at least 75% of 48 or more awake
     hours (needs the home zone): +0.5 happiness an hour while someone's home.
+- **Generations:** a week into adulthood the card offers "lay an egg?" (two taps,
+  so it can't happen by accident). Nothing ends until you choose it, so a favourite
+  pet can stay forever. The adult retires to the journal and a new egg takes its
+  place; it inherits one of the parent's traits and, as always, prefers a creature
+  this device hasn't raised yet.
+- **The journal:** on the status screen, tap "journal". It shows the world's
+  creatures (ones nobody on this home has raised yet are silhouettes) and this
+  device's past pets.
 - **Restarts never hurt it.** HA downtime freezes the pet: nothing decays,
   ages or expires while HA is off.
 
@@ -236,7 +245,8 @@ names are included.
 `virtual_pet_recovered`, `virtual_pet_fell_asleep`, `virtual_pet_woke_up`,
 `virtual_pet_stage_changed`, `virtual_pet_care`, `virtual_pet_hatched`,
 `virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`,
-`virtual_pet_trait_learned` (with `trait`).
+`virtual_pet_trait_learned` (with `trait`), `virtual_pet_egg_laid` (with `generation`,
+`parent_species`, `inherited_trait`).
 
 Events fired during a fast-forward carry `simulated: true`.
 
@@ -286,6 +296,6 @@ HACS's and Home Assistant's checks and the tests on every push.
 1. ✅ Living pet
 2. ✅ The card: device shelf, sprites, speech bubble, poop, attention icon, status screen
 3. ✅ Home awareness: options (entity mapping, bedtime, privacy), weather, light, bedtime, presence, activity, AQI and requests
-4. Life (in progress): ✅ traits; adult forms, generations, journal, sky events (plus bird visits from BirdNET-Pi), notifications
+4. Life (in progress): ✅ traits, ✅ generations and journal; adult forms, journal, sky events (plus bird visits from BirdNET-Pi), notifications
 5. ✅ HACS packaging
 6. Chores, minigames, more species

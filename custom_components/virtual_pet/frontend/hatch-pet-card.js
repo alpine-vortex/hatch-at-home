@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.9.0";
+const VERSION = "0.10.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -57,7 +57,11 @@ const POSES = {
 };
 const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
 
-const REQUEST_LABELS = { blanket: "blanket?", fan: "fan?" };
+const REQUEST_LABELS = { blanket: "blanket?", fan: "fan?", lay_egg: "lay an egg?" };
+const REQUEST_ARIA = {
+  lay_egg: "Lay an egg: the pet retires to the journal and a new egg takes its place",
+};
+const CONFIRM_MS = 4000; // laying an egg ends this pet's turn, so it takes two taps
 
 const STAGE_LABELS = { egg: "Egg", baby: "Baby", child: "Child", teen: "Teen", adult: "Adult" };
 
@@ -248,6 +252,15 @@ const STYLE = `
   .hearts { letter-spacing: 2px; }
   .hearts .off { opacity: .25; }
   .row.traits { grid-template-columns: 100px minmax(0, 1fr); }
+  .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 2px 0;
+    font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
+  .jhead { display: flex; justify-content: space-between; align-items: baseline; }
+  .jgrid { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+  .jtile { display: flex; flex-direction: column; align-items: center; width: 64px; font-size: 11px;
+    text-align: center; line-height: 1.1; }
+  .jtile img { width: 48px; height: 48px; image-rendering: pixelated; }
+  .jtile.locked img { filter: brightness(0); opacity: .3; }
+  .jlist { font-size: 12px; opacity: .9; }
   .log { margin-top: 3px; font-size: 12px; opacity: .85; }
   .buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 6px; width: 100%; }
   .toy { display: flex; flex-direction: column; align-items: center; gap: 5px; border: none;
@@ -472,7 +485,16 @@ class HatchPetCard extends HTMLElement {
       request: q(".request"),
     };
     s.request.addEventListener("click", () => {
-      if (s.request.dataset.key) this._press(s, s.request.dataset.key);
+      const key = s.request.dataset.key;
+      if (!key) return;
+      if (key === "lay_egg" && !(Date.now() < s.confirmUntil)) {
+        s.confirmUntil = Date.now() + CONFIRM_MS;
+        s.request.textContent = "sure? tap again";
+        setTimeout(() => { this._sig = null; this._update(); }, CONFIRM_MS + 50);
+        return;
+      }
+      s.confirmUntil = 0;
+      this._press(s, key);
     });
     s.screen.addEventListener("click", () => {
       if (!this._swiped) this._toggleStatus(s);
@@ -764,8 +786,9 @@ class HatchPetCard extends HTMLElement {
     s.request.classList.toggle("show", !!wanted && !away && !asleep);
     if (wanted) {
       s.request.dataset.key = wanted;
-      s.request.textContent = REQUEST_LABELS[wanted] || `${wanted}?`;
-      s.request.setAttribute("aria-label", `Give the pet a ${wanted}`);
+      const confirming = wanted === "lay_egg" && Date.now() < s.confirmUntil;
+      s.request.textContent = confirming ? "sure? tap again" : REQUEST_LABELS[wanted] || `${wanted}?`;
+      s.request.setAttribute("aria-label", REQUEST_ARIA[wanted] || `Give the pet a ${wanted}`);
     }
 
     const lights = s.buttons.lights;
@@ -797,6 +820,7 @@ class HatchPetCard extends HTMLElement {
     const open = !s.screen.classList.contains("show-status");
     s.screen.classList.toggle("show-status", open);
     s.screen.setAttribute("aria-label", open ? "Hide status" : "Show status");
+    s.journal = false;
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     if (s === this._slides[this._index]) {
       this._card.querySelector(".statusbtn").setAttribute("aria-pressed", open ? "true" : "false");
@@ -862,6 +886,10 @@ class HatchPetCard extends HTMLElement {
   }
 
   _renderStatus(s, log) {
+    if (s.journal) {
+      this._renderJournal(s);
+      return;
+    }
     const value = (key) => {
       const v = Number.parseFloat(this._state(s, `sensor.${key}`)?.state);
       return Number.isFinite(v) ? v : null;
@@ -891,7 +919,54 @@ class HatchPetCard extends HTMLElement {
       <div class="row icons">${ic("stat_discipline")}<span>discipline</span>${bar(value("discipline"))}</div>
       <div class="row icons">${ic("stat_care_miss")}<span>misses</span><span>${value("care_misses") ?? "–"}</span></div>
       <div class="row traits"><span>traits</span><span>${traits.length ? traits.map((t) => escape(t.replace("_", " "))).join(" · ") : "none yet"}</span></div>
-      <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>`;
+      <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>
+      <button class="jlink">journal ›</button>`;
+    this._journalLink(s, true);
+  }
+
+  _journalLink(s, open) {
+    s.status.querySelector(".jlink").addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      s.journal = open;
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+    });
+  }
+
+  // The world's creatures (unraised ones as silhouettes) and this device's past pets.
+  async _renderJournal(s) {
+    const stage = this._state(s, "sensor.life_stage")?.attributes || {};
+    const roster = stage.roster || [];
+    const raised = new Set();
+    for (const other of this._slides) {
+      const st = this._state(other, "sensor.life_stage")?.attributes;
+      if (st?.world === stage.world) (st.raised || []).forEach((r) => raised.add(r));
+    }
+    const past = [...(stage.journal || [])].reverse().slice(0, 4);
+    const ids = [...new Set([...roster, ...past.map((p) => p.species).filter(Boolean)])];
+    const names = {};
+    await Promise.all(ids.map((id) => loadJson(`sprites/${id}/species.json`)
+      .then((d) => { names[id] = d.name; }).catch(() => { names[id] = id; })));
+    if (!s.journal) return; // closed while the names loaded
+    const tiles = roster.map((id) => {
+      const known = raised.has(id);
+      return `<div class="jtile${known ? "" : " locked"}">` +
+        `<img src="${BASE}/sprites/${id}/child_content_1.png?v=${VERSION}" alt="">` +
+        `<span>${known ? escape(names[id]).toLowerCase() : "???"}</span></div>`;
+    });
+    const lines = past.map((p) =>
+      `<div>gen ${p.generation} · ${escape(p.name)} · ${escape((names[p.species] || "egg").toLowerCase())}` +
+      ` · ${Math.round(p.age_days)} d${p.traits?.length ? ` · ${p.traits.map((t) => escape(t.replace("_", " "))).join(", ")}` : ""}</div>`);
+    s.status.innerHTML = `
+      <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
+        <span>gen ${stage.generation || 1}</span></div>
+      <div class="jgrid">${tiles.join("")}</div>
+      <div class="jlist">${lines.join("") || "<div>No past pets yet. A week into adulthood, a pet can lay an egg.</div>"}</div>
+      <button class="jlink">‹ status</button>`;
+    this._journalLink(s, false);
+  }
+
+  _worldName(s) {
+    return s.world?.name || "";
   }
 
   // --- Actions ----------------------------------------------------------------

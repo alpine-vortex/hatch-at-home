@@ -1,7 +1,7 @@
 # Handoff (2026-10-26, third session)
 
 Branch: `ccr-a5f628ca-979gik`, which is also the repo's default branch (all work
-pushed; no PR). Version **0.9.0** (released through Actions → Release). Read the README first, then `docs/design-worlds.md`
+pushed; no PR). Version **0.10.0** (released through Actions → Release). Read the README first, then `docs/design-worlds.md`
 and `docs/audit-2026-10-26.md`. The owner's original brief is not in the repo; its key
 rules are restated across the README and the design doc.
 
@@ -44,7 +44,7 @@ or the owner for such details before committing it.
 1. **Releases work.** The owner published `v0.6.1` by hand on 2026-10-26 (and set
    Workflow permissions to "Read and write"). That tag push registered `release.yml`,
    and its first run passed. This session released 0.7.0 (Hearth), 0.7.1 (leg-gap fix)
-   0.8.0 (Tidepool), 0.8.1 (octopus) and 0.9.0 (traits, sitter option) with Actions → Release → Run workflow, dispatched through the
+   0.8.0 (Tidepool), 0.8.1 (octopus) 0.9.0 (traits, sitter option) and 0.10.0 (generations, journal) with Actions → Release → Run workflow, dispatched through the
    GitHub MCP tool (`actions_run_trigger`, `release.yml`, ref = this branch).
 2. **Hearth is live (kitten ready).** Sol's "Hearth v2" pack fixed the kitten's
    flagged frames and brought Hearth's egg, four rooms, emblem and decorations; review
@@ -71,9 +71,11 @@ or the owner for such details before committing it.
    85-second probe of the same steps didn't reproduce it, so it was most likely the
    test page reloading; watch for it.
 5. **Phase 4 (in progress):** traits are done (`model._learn`, `trait_progress`,
-   `_trait_bonus`; README "How the pet works"). Still to do:
+   `_trait_bonus`), and so are generations (`model.lay_egg`, `button.<pet>_lay_egg`,
+   the card's two-tap "lay an egg?" pill; the owner chose: offered from a week into
+   adulthood, never automatic, the egg inherits one trait) and the journal (status
+   screen → "journal"). README "How the pet works" covers all three. Still to do:
    - adult forms per species
-   - generations and per-world journals
    - sky events: moon and BirdNET visits (the owner's entities, the stalled
      `last_bird` feed and the fallback are in the private house notes)
    - optional notifications and a chirp sound

@@ -132,6 +132,10 @@ HOME_BRIGHT_LEVEL = 0.5  # a room light at half brightness or more, at night
 HOME_BRIGHT_LUX_AT_NIGHT = 100.0
 HOME_DIM_LEVEL = 0.35  # evening lights this low feel cozy
 HOME_BAD_AQI = 100.0
+# --- Generations (phase 4) ---------------------------------------------------
+
+LAY_EGG_AFTER_ADULT_HOURS = 7 * 24.0  # the owner may let it lay an egg after this
+
 # --- Traits (phase 4): learned from the house, kept for life. Bonuses only. ---
 
 TRAIT_NIGHT_OWL_HOURS = 10.0  # awake inside sleep hours

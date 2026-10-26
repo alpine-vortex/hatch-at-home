@@ -19,8 +19,13 @@ async def async_setup_entry(
 ) -> None:
     """Add a button per care action."""
     async_add_entities(
-        CareButton(entry.runtime_data, action)
-        for action in (*model.ACTIONS, *model.REQUEST_ACTIONS)
+        [
+            *(
+                CareButton(entry.runtime_data, action)
+                for action in (*model.ACTIONS, *model.REQUEST_ACTIONS)
+            ),
+            LayEggButton(entry.runtime_data),
+        ]
     )
 
 
@@ -42,3 +47,17 @@ class CareButton(PetEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         await self.coordinator.async_action(self.action, self._context)
+
+
+class LayEggButton(PetEntity, ButtonEntity):
+    """Start the next generation. Only available a week into adulthood."""
+
+    def __init__(self, coordinator: PetCoordinator) -> None:
+        super().__init__(coordinator, "lay_egg")
+
+    @property
+    def available(self) -> bool:
+        return super().available and model.can_lay_egg(self.pet)
+
+    async def async_press(self) -> None:
+        await self.coordinator.async_lay_egg()

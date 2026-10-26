@@ -150,6 +150,9 @@
       },
       "fan": {
         "name": "Fan"
+      },
+      "lay_egg": {
+        "name": "Lay egg"
       }
     },
     "sensor": {

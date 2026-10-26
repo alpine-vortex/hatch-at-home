@@ -578,3 +578,37 @@ async def test_new_pet_gets_a_free_default_name(
     )
     name_key = next(k for k in result["data_schema"].schema if str(k) == "name")
     assert name_key.default() == "Fern"
+
+
+async def test_lay_egg_button_starts_the_next_generation(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    age = 14 * 24 + 7 * 24 + 1.0  # a week and an hour into adulthood
+    hass_storage[STORE_KEY] = hatched_pet(
+        now,
+        age_hours=age,
+        born=now - age * 3600,
+        species="bird",
+        raised=["bird"],
+        traits=["music_lover"],
+    )
+    laid = async_capture_events(hass, f"{DOMAIN}_egg_laid")
+    await setup(hass)
+    assert hass.states.get("button.pip_lay_egg").state != STATE_UNAVAILABLE
+    assert "lay_egg" in hass.states.get("sensor.pip_mood").attributes["requests"]
+    await press(hass, "button.pip_lay_egg")
+    stage = hass.states.get("sensor.pip_life_stage")
+    assert stage.state == "egg"
+    assert stage.attributes["generation"] == 2
+    assert stage.attributes["traits"] == ["music_lover"]
+    assert [r["species"] for r in stage.attributes["journal"]] == ["bird"]
+    assert hass.states.get("button.pip_lay_egg").state == STATE_UNAVAILABLE
+    assert len(laid) == 1 and laid[0].data["inherited_trait"] == "music_lover"
+
+
+async def test_lay_egg_button_is_unavailable_before_then(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    assert hass.states.get("button.pip_lay_egg").state == STATE_UNAVAILABLE

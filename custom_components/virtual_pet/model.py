@@ -92,6 +92,8 @@ class PetState:
     species: str | None = None  # decided when the egg hatches
     raised: list[str] = field(default_factory=list)  # species this device has hatched
     traits: list[str] = field(default_factory=list)  # learned, in order (TRAITS)
+    generation: int = 1  # the device's first pet is generation 1
+    journal: list[dict[str, Any]] = field(default_factory=list)  # retired parents
     trait_hours: dict[str, float] = field(default_factory=dict)  # exposure, awake
 
     def to_dict(self) -> dict[str, Any]:
@@ -633,11 +635,57 @@ def _start_call(state: PetState, reason: str, t: float, events: list[Event]) -> 
 
 
 def requests(state: PetState, now: float, settings: Settings) -> list[str]:
-    """What the pet is asking for because of the house, minus what it got."""
+    """What the pet is asking for (the house's requests, minus what it got),
+    then "lay_egg" once it's ready to start the next generation."""
     satisfied = {"blanket": now < state.cozy_until, "fan": now < state.cool_until}
     if state.asleep or state.away or life_stage(state) == "egg":
         return []
-    return [r for r in settings.home.requests if not satisfied.get(r)]
+    wanted = [r for r in settings.home.requests if not satisfied.get(r)]
+    if can_lay_egg(state):
+        wanted.append("lay_egg")
+    return wanted
+
+
+# --- Generations --------------------------------------------------------------
+
+
+def can_lay_egg(state: PetState) -> bool:
+    """A week into adulthood the owner may start the next generation."""
+    adult = dict(R.STAGE_STARTS)["adult"]
+    return not state.away and state.age_hours >= adult + R.LAY_EGG_AFTER_ADULT_HOURS
+
+
+def lay_egg(
+    state: PetState, now: float, rng: random.Random
+) -> tuple[PetState, list[Event]]:
+    """The adult retires to the journal and leaves an egg with one of its traits."""
+    if not can_lay_egg(state):
+        return state, []
+    record = {
+        "generation": state.generation,
+        "name": state.name,
+        "species": state.species,
+        "traits": list(state.traits),
+        "born": state.born,
+        "retired": now,
+        "age_days": round(state.age_hours / 24, 1),
+        "care_misses": state.care_misses,
+    }
+    egg = PetState.new(state.name, now)
+    egg.generation = state.generation + 1
+    egg.raised = list(state.raised)
+    egg.journal = [*state.journal, record]
+    inherited = rng.choice(state.traits) if state.traits else None
+    if inherited:
+        egg.traits = [inherited]
+    return egg, [
+        {
+            "type": "egg_laid",
+            "generation": egg.generation,
+            "parent_species": state.species,
+            "inherited_trait": inherited,
+        }
+    ]
 
 
 def action_available(
@@ -648,6 +696,8 @@ def action_available(
         return state.sick
     if action in REQUEST_ACTIONS:
         return settings is not None and action in requests(state, now, settings)
+    if action == "lay_egg":
+        return can_lay_egg(state)
     return True
 
 

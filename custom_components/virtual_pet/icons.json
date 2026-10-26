@@ -41,6 +41,9 @@
       },
       "fan": {
         "default": "mdi:fan"
+      },
+      "lay_egg": {
+        "default": "mdi:egg-outline"
       }
     },
     "sensor": {
