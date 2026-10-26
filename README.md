@@ -263,9 +263,10 @@ indoor temperature, AQI, motion, presence and music) for the home-awareness
 phases.
 
 To release: bump the version in `const.py`, `manifest.json` and
-`frontend/hatch-pet-card.js`, then push a tag like `v0.6.1` on that commit. The
-release workflow checks that the tag matches the manifest and publishes a GitHub
-release, which is what HACS offers as an update. The Validate workflow runs
+`frontend/hatch-pet-card.js` and push. Then on GitHub open Actions → Release →
+Run workflow. It tags that commit with the manifest's version and publishes a
+GitHub release, which is what HACS offers as an update. (Pushing a tag like
+`v0.6.1` does the same.) The Validate workflow runs
 HACS's and Home Assistant's checks and the tests on every push.
 
 ## Roadmap
