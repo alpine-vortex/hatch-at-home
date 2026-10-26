@@ -70,3 +70,13 @@ transparent band across the legs (`baby`, `child` and `teen_content_1` of both
 the kitten and the bunny). Sol's Hearth v3 and bunny v2 packs (sha256 checked) close it. The
 review now also runs a connected-pieces check, which catches a band like that; the
 floating "z", bowls and TVs are the expected extra pieces.
+
+## Sea otter and the Tidepool kit: ready 2026-10-26
+
+75 otter sprites (sha256 checked). It floats on its back on a water ripple that sits on
+y=224. Signature poses: rock, hold_paws, kelp_wrap. Props: clams and urchin (`feed`),
+crab (`snack`), stone (`play`). The Tidepool kit (sha256 checked) brings the egg (a
+speckled egg in a clam), `bg_day`, `bg_night`, the `murk` overlay, the emblem and the
+starfish and anemone decorations. Its bubbles became the otter's `clean` prop
+(`sprites/otter/bubbles.png`). The night scene is not the day scene's layout; Sol was
+asked for an aligned redraw. Kit prompts are in `art/tidepool/`.

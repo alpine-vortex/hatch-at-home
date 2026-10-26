@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.7.1";
+const VERSION = "0.8.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -152,6 +152,22 @@ const STYLE = `
   .roof::after { content: ""; position: absolute; inset: 0; background: var(--d-dark);
     clip-path: polygon(50% 0, 100% 100%, 0 100%); }
   .compact .roof { height: 46px; }
+  /* Porthole: a riveted brass ring around a rounded window. */
+  .porthole .body { border-radius: 40px; padding: 22px 18px 26px; }
+  .porthole .bezel { padding: 14px; border-radius: 30% / 38%;
+    background-image: radial-gradient(circle at 50% 7px, var(--d-dark) 0 3px, transparent 4px),
+      radial-gradient(circle at 50% calc(100% - 7px), var(--d-dark) 0 3px, transparent 4px),
+      radial-gradient(circle at 7px 50%, var(--d-dark) 0 3px, transparent 4px),
+      radial-gradient(circle at calc(100% - 7px) 50%, var(--d-dark) 0 3px, transparent 4px),
+      radial-gradient(circle at calc(8.8% + 5px) calc(11% + 5px), var(--d-dark) 0 3px, transparent 4px),
+      radial-gradient(circle at calc(91.2% - 5px) calc(11% + 5px), var(--d-dark) 0 3px, transparent 4px),
+      radial-gradient(circle at calc(8.8% + 5px) calc(89% - 5px), var(--d-dark) 0 3px, transparent 4px),
+      radial-gradient(circle at calc(91.2% - 5px) calc(89% - 5px), var(--d-dark) 0 3px, transparent 4px); }
+  .porthole .screen { border-radius: 28% / 36%; }
+  .porthole .bubble { left: 13%; top: 10%; }
+  .porthole .attention { right: 13%; top: 9%; }
+  .porthole .toy .cap { border-radius: 50%; box-shadow: 0 5px 0 var(--d-btn-shadow), inset 0 0 0 3px var(--d-bezel); }
+  .murk { inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .8s; }
   .body { width: 100%; box-sizing: border-box; background: var(--d-shell);
     box-shadow: inset 0 -9px 0 var(--d-dark), inset 0 5px 0 rgba(255,255,255,.28), 0 16px 34px rgba(20,15,5,.32);
     display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -417,6 +433,7 @@ class HatchPetCard extends HTMLElement {
             <img class="poop p0" alt=""><img class="poop p1" alt=""><img class="poop p2" alt="">
             <img class="pet" alt="">
             <img class="prop" alt="">
+            <img class="murk" alt="">
             <img class="attention" alt="">
             <div class="bubble"></div>
             <div class="status"></div>
@@ -431,7 +448,7 @@ class HatchPetCard extends HTMLElement {
       el: slide, device: q(".device"), label: q(".label"), screen: q(".screen"), bg: q(".bg"),
       awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), pet: q(".pet"), prop: q(".prop"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
-      poops: [...slide.querySelectorAll(".poop")], buttons: {}, frame: 0,
+      poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"),
     };
     s.request.addEventListener("click", () => {
@@ -637,8 +654,8 @@ class HatchPetCard extends HTMLElement {
     const shell = world.shell || {};
     const color = shell.color || "#e8834a";
     const dev = s.device;
-    // Shapes the card can't draw yet (porthole, pad, moon) fall back to the egg.
-    const shape = ["tank", "house"].includes(shell.shape) ? shell.shape : "egg";
+    // Shapes the card can't draw yet (pad, moon) fall back to the egg.
+    const shape = ["tank", "house", "porthole"].includes(shell.shape) ? shell.shape : "egg";
     dev.className = `device ${shape}`;
     dev.querySelector(".roof").style.display = shape === "house" ? "" : "none";
     dev.querySelector(".loop").style.display = shape === "egg" ? "" : "none";
@@ -698,7 +715,11 @@ class HatchPetCard extends HTMLElement {
     s.pet.alt = s.species?.name || "pet";
 
     const poop = away ? 0 : Number(this._state(s, "sensor.poop")?.state || 0);
-    s.poops.forEach((img, i) => this._show(s, img, i < poop ? sp.props?.poop?.[i] : null));
+    // Water worlds cloud over instead of showing poop (worlds.json "mess": "murk").
+    const murky = world.mess === "murk" && !!sp.murk;
+    s.poops.forEach((img, i) => this._show(s, img, !murky && i < poop ? sp.props?.poop?.[i] : null));
+    this._show(s, s.murk, murky ? sp.murk : null);
+    s.murk.style.opacity = murky ? [0, 0.45, 0.75, 1][Math.min(poop, 3)] : 0;
     this._show(s, s.attention, calling && !away ? sp.props?.attention : null);
     if (!s.propUntil || Date.now() > s.propUntil) this._show(s, s.prop, null);
 

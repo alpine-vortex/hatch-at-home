@@ -1,7 +1,7 @@
 # Handoff (2026-10-26, third session)
 
 Branch: `ccr-a5f628ca-979gik`, which is also the repo's default branch (all work
-pushed; no PR). Version **0.6.1** (released); Hearth and the bunny are pushed but not yet released. Read the README first, then `docs/design-worlds.md`
+pushed; no PR). Version **0.8.0** (released through Actions → Release). Read the README first, then `docs/design-worlds.md`
 and `docs/audit-2026-10-26.md`. The owner's original brief is not in the repo; its key
 rules are restated across the README and the design doc.
 
@@ -30,7 +30,7 @@ or the owner for such details before committing it.
     `.github/workflows/validate.yml` (HACS action, hassfest, tests; green) and
     `.github/workflows/release.yml`. Actions minutes are free on a public repo.
 - **Worlds:** Woodland (bird ✅, Douglas squirrel ✅) and Terrarium (leopard gecko ✅;
-  tarantula pending). Hearth (tabby kitten ✅, lop bunny ✅). Tidepool, Pond and
+  tarantula pending). Hearth (tabby kitten ✅, lop bunny ✅) and Tidepool (sea otter ✅; octopus pending). Pond and
   Night Sky are listed in `frontend/worlds.json` and stay hidden until a creature is
   ready. The beetle is shelved; its partial art is in `art/beetle/`.
 - **Woodland trim:** the smaller, lower garland and the egg's bottom labels were checked
@@ -43,13 +43,14 @@ or the owner for such details before committing it.
 
 1. **Releases work.** The owner published `v0.6.1` by hand on 2026-10-26 (and set
    Workflow permissions to "Read and write"). That tag push registered `release.yml`,
-   and its first run passed. From now on, use Actions → Release → Run workflow (see
-   "How to"). HACS now offers releases instead of the branch.
+   and its first run passed. This session released 0.7.0 (Hearth), 0.7.1 (leg-gap fix)
+   and 0.8.0 (Tidepool) with Actions → Release → Run workflow, dispatched through the
+   GitHub MCP tool (`actions_run_trigger`, `release.yml`, ref = this branch).
 2. **Hearth is live (kitten ready).** Sol's "Hearth v2" pack fixed the kitten's
    flagged frames and brought Hearth's egg, four rooms, emblem and decorations; review
    notes are in `art/README.md`. Checked in the dev HA: egg, baby, child and teen inside
-   the card's new `house` shell. Shapes `porthole`, `pad` and `moon` still fall back to
-   the egg; draw each before its world goes live.
+   the card's new `house` shell. The card now draws `egg`, `tank`, `house` and `porthole`;
+   `pad` and `moon` still fall back to the egg. Draw each before its world goes live.
 3. **Tarantula set held back for the owner's call.** Sol's set (`hatch-4664de9c`,
    sha256 `b5076cd8…`, 73 sprites) passes the size and feet checks, but its faces are
    dark lines on a dark body and mostly vanish, so moods don't read. Sol offered a cheap
@@ -68,8 +69,11 @@ or the owner for such details before committing it.
    - sky events: moon and BirdNET visits (the owner's entities, the stalled
      `last_bird` feed and the fallback are in the private house notes)
    - optional notifications and a chirp sound
-6. **Art queue:** Sol is on the otter, then the Tidepool kit. Each new world also needs
-   its card shell shape (`porthole`, `pad`, `moon`).
+6. **Art queue:** octopus (Tidepool), then Pond and Night Sky (each needs its shell
+   shape, `pad` and `moon`). Asked of Sol: Tidepool's `bg_night` redrawn on the day
+   scene's layout (the current one is a different stretch of coast).
+   Review tip: run a connected-pieces check on every sprite; the leg gap that shipped in
+   0.7.0 was a 4 px transparent band only that check caught.
 7. **License:** none yet; `validate.yml` skips HACS's license check until the owner
    picks one. MIT was suggested.
 8. **The owner's live HA:** install through HACS (custom repository, type Integration)

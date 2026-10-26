@@ -17,6 +17,7 @@ while its adult sprites are being redrawn.
 | `egg` | Optional. Frames for the world's egg: `idle`, `wiggle` (calling), `crack` (about to hatch). Only the first species on a world's roster needs it; the others hatch from that egg. |
 | `extras` | Special poses used by home awareness (phase 3): one sprite name, or a list of frames |
 | `props` | Sprite for each care action, plus `blanket`, `attention`, `away` and three `poop`. A name with a slash, like `bird/medicine`, borrows another species' sprite. |
+| `murk` | Water worlds only (`"mess": "murk"` in `worlds.json`): a 512×384 overlay that clouds the scene instead of showing poop, stronger with each mess |
 | `backgrounds` | `day`, `night`, `rain`, `dim` scenes, 512×384. Only `day` is required; missing scenes reuse it, dimmed by the card. |
 | `words` | Optional flavour words for speech |
 
