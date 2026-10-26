@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.const import Platform
 from homeassistant.core import (
     HomeAssistant,
@@ -19,6 +22,7 @@ from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_HOURS,
     DOMAIN,
+    FRONTEND_URL,
     SERVICE_FAST_FORWARD,
     STORE_VERSION,
 )
@@ -39,7 +43,11 @@ FAST_FORWARD_SCHEMA = vol.Schema(
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the debug service."""
+    """Serve the card and register the debug service."""
+    # The owner adds the card JS as a dashboard resource by hand (see README).
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(FRONTEND_URL, str(Path(__file__).parent / "frontend"), False)]
+    )
 
     async def fast_forward(call: ServiceCall) -> ServiceResponse:
         entries: list[PetConfigEntry] = hass.config_entries.async_loaded_entries(DOMAIN)

@@ -1,0 +1,16 @@
+title: Pet bench
+views:
+  - title: Pet
+    path: pet
+    cards:
+      - type: custom:hatch-pet-card
+        entity: sensor.pip_mood
+      - type: entities
+        title: Stand-ins
+        entities:
+          - input_select.fake_weather
+          - input_number.fake_lux
+          - input_number.fake_indoor_temp
+          - input_boolean.fake_someone_home
+          - input_boolean.fake_motion
+          - input_boolean.fake_music

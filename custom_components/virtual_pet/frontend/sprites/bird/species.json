@@ -1,0 +1,31 @@
+{
+  "name": "Woodland bird",
+  "ready": true,
+  "stages": ["baby", "child", "teen"],
+  "stage_fallback": { "adult": "teen" },
+  "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
+  "frames": 2,
+  "egg": { "idle": ["egg_idle_1", "egg_idle_2"], "wiggle": ["egg_wiggle_1", "egg_wiggle_2"], "crack": ["egg_crack_1", "egg_crack_2"] },
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "birdwatch": "child_birdwatch"
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "ball",
+    "clean": "sparkle_clean",
+    "medicine": "medicine",
+    "blanket": "blanket",
+    "attention": "attention",
+    "away": "sitter_sign",
+    "poop": ["poop_1", "poop_2", "poop_3"]
+  },
+  "backgrounds": { "day": "bg_day", "night": "bg_night", "rain": "bg_rain", "dim": "bg_dim" },
+  "words": { "food": "berries", "home": "nest" }
+}

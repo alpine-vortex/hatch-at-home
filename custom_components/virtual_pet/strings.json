@@ -3,9 +3,10 @@
     "step": {
       "user": {
         "title": "Hatch a new pet",
-        "description": "Give your pet a name. Bedtime and home sensors are set later in its options.",
+        "description": "Give your pet a name and pick what it is. Bedtime and home sensors are set later in its options.",
         "data": {
-          "name": "Name"
+          "name": "Name",
+          "species": "Species"
         }
       }
     }

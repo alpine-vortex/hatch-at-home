@@ -4,8 +4,12 @@ homeassistant:
   name: Pet test bench
   time_zone: America/Los_Angeles
   unit_system: us_customary
+  latitude: 45.52
+  longitude: -122.68
+  elevation: 60
 
 frontend:
+sun:
 config:
 history:
 logbook:
@@ -86,3 +90,18 @@ template:
         temperature_template: "52"
         humidity_template: "85"
         temperature_unit: "°F"
+
+# --- The card -----------------------------------------------------------------
+
+lovelace:
+  resource_mode: yaml
+  resources:
+    - url: /virtual_pet/frontend/hatch-pet-card.js?v=0.2.0
+      type: module
+  dashboards:
+    pet-bench:
+      mode: yaml
+      title: Pet bench
+      icon: mdi:bird
+      show_in_sidebar: true
+      filename: dashboards/pet.yaml

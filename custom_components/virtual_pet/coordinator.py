@@ -15,12 +15,15 @@ from homeassistant.util import dt as dt_util
 from . import model, rates as R
 from .const import (
     CONF_BEDTIME,
+    CONF_SPECIES,
     CONF_WAKE_TIME,
+    DEFAULT_SPECIES,
     DOMAIN,
     LOGGER,
     STORE_MINOR_VERSION,
     STORE_VERSION,
 )
+from .species import load_species
 
 type PetConfigEntry = ConfigEntry[PetCoordinator]
 
@@ -62,6 +65,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             f"{DOMAIN}.{entry.entry_id}",
             minor_version=STORE_MINOR_VERSION,
         )
+        self.species: str = entry.data.get(CONF_SPECIES, DEFAULT_SPECIES)
+        self.species_name = self.species  # filled in by async_load
         self.rng = random.Random()
         self.state: model.PetState | None = None
         # Last calculation, for the diagnostic sensor.
@@ -85,6 +90,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     async def async_load(self) -> None:
         """Load the pet, or lay a new egg, and catch up on downtime."""
+        species = await self.hass.async_add_executor_job(load_species)
+        if self.species in species:
+            self.species_name = species[self.species].get("name", self.species)
         now = self._now()
         data = await self.store.async_load()
         if data is None:

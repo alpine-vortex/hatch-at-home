@@ -70,11 +70,15 @@ async def test_config_flow_names_the_pet(hass: HomeAssistant) -> None:
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     assert result["type"] is FlowResultType.FORM
+    # Only species with a ready species.json are offered.
+    species = result["data_schema"].schema["species"].config["options"]
+    assert [o["value"] for o in species] == ["bird"]
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_NAME: "Juniper"}
+        result["flow_id"], {CONF_NAME: "Juniper", "species": "bird"}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Juniper"
+    assert result["data"]["species"] == "bird"
 
 
 async def test_new_pet_is_an_egg(hass: HomeAssistant, now: float) -> None:
@@ -214,3 +218,18 @@ async def test_state_survives_reload(
     assert await hass.config_entries.async_setup(config.entry_id)
     await hass.async_block_till_done()
     assert hass.states.get("sensor.pip_hunger").state == "75"
+
+
+async def test_card_and_sprites_are_served(
+    hass: HomeAssistant, now: float, hass_client
+) -> None:
+    await setup(hass)
+    assert hass.states.get("sensor.pip_life_stage").attributes["species"] == "bird"
+    client = await hass_client()
+    resp = await client.get("/virtual_pet/frontend/hatch-pet-card.js")
+    assert resp.status == 200
+    assert "hatch-pet-card" in await resp.text()
+    resp = await client.get("/virtual_pet/frontend/sprites/bird/species.json")
+    assert resp.status == 200
+    resp = await client.get("/virtual_pet/frontend/sprites/bird/child_content_1.png")
+    assert resp.status == 200
