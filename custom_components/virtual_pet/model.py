@@ -43,6 +43,8 @@ LIFE_STAGES = tuple(name for name, _ in R.STAGE_STARTS)
 
 CALL_PRIORITY = ("sick", "hunger", "dirty", "energy", "happiness")
 
+UPBRINGINGS = tuple(name for name, _ in R.UPBRINGING_GRADES)
+
 # Results an action can come back with. "ok" means it did something.
 OK = "ok"
 
@@ -75,6 +77,7 @@ class PetState:
     asleep: bool = False
     napping: bool = False  # asleep outside sleep hours
     lights_out: bool = False
+    lights_before_away: bool | None = None  # flipped while away: applied on return
     stayed_up_since: float | None = None  # awake inside sleep hours since
     wake_at: float | None = None  # when the night's sleep ends (fixed at bedtime)
     kept_up_until: float = 0.0  # woken by hand: the house can't put it back to bed yet
@@ -99,6 +102,7 @@ class PetState:
     journal: list[dict[str, Any]] = field(default_factory=list)  # retired parents
     notify_users: list[str] = field(default_factory=list)  # HA user IDs, opted in
     trait_hours: dict[str, float] = field(default_factory=dict)  # exposure, awake
+    upbringing: str | None = None  # decided on reaching adulthood (UPBRINGINGS)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store."""
@@ -121,7 +125,13 @@ class PetState:
             call_keys = {f.name for f in fields(Call)}
             call = {k: v for k, v in call.items() if k in call_keys}
             kwargs["call"] = Call(**call) if call.get("reason") in reasons else None
-        return cls(**kwargs)
+        if kwargs.get("upbringing") not in UPBRINGINGS:
+            kwargs["upbringing"] = None
+        state = cls(**kwargs)
+        if state.upbringing is None and life_stage(state) == "adult":
+            # Grew up before upbringings existed: judge it on its record so far.
+            state.upbringing = upbringing(state)
+        return state
 
     @classmethod
     def new(cls, name: str, now: float) -> PetState:
@@ -290,7 +300,11 @@ def _step(
                 state.age_hours = R.STAGE_STARTS[1][1] - 1e-6
                 return
             _hatch(state, settings, rng, events, t1)
-        events.append({"type": "stage_changed", "stage": stage, "from": was_stage})
+        changed: Event = {"type": "stage_changed", "stage": stage, "from": was_stage}
+        if stage == "adult":
+            state.upbringing = upbringing(state)
+            changed["upbringing"] = state.upbringing
+        events.append(changed)
     if stage == "egg":
         return
 
@@ -395,15 +409,17 @@ def _wake(state: PetState, events: list[Event]) -> None:
 
 
 def _decay(state: PetState, hours: float, t: float, settings: Settings) -> None:
+    # A devoted adult keeps itself fed and busy better.
+    easy = R.DEVOTED_DECAY_FACTOR if state.upbringing == "devoted" else 1.0
     if state.asleep:
-        state.hunger -= R.HUNGER_DECAY * R.ASLEEP_HUNGER_FACTOR * hours
+        state.hunger -= R.HUNGER_DECAY * R.ASLEEP_HUNGER_FACTOR * easy * hours
         state.happiness -= R.HAPPINESS_DECAY * R.ASLEEP_HAPPINESS_FACTOR * hours
         state.energy += R.ENERGY_REGEN_ASLEEP * hours
     else:
-        state.hunger -= R.HUNGER_DECAY * hours
-        state.happiness -= R.HAPPINESS_DECAY * hours
+        state.hunger -= R.HUNGER_DECAY * easy * hours
+        state.happiness -= R.HAPPINESS_DECAY * easy * hours
         state.energy -= R.ENERGY_DECAY * hours
-    state.discipline -= R.DISCIPLINE_DECAY * hours
+        state.discipline -= R.DISCIPLINE_DECAY * hours
 
     # The house only ever adds, and never more than the cap per stat.
     if not state.asleep:
@@ -545,16 +561,26 @@ def _calls(
             return
 
     if _wants_to_whine(state) and rng.random() < 1 - math.exp(
-        -R.FAKE_CALL_RATE * hours
+        -whine_rate(state) * hours
     ):
         _start_call(state, "fake", t, events)
+
+
+def whine_rate(state: PetState) -> float:
+    """Fake calls per awake hour: discipline makes them rarer, a scrappy
+    upbringing more common."""
+    rate = R.FAKE_CALL_RATE * (
+        1 - R.FAKE_CALL_DISCIPLINE_DAMPING * state.discipline / 100
+    )
+    if state.upbringing == "scrappy":
+        rate *= R.SCRAPPY_WHINE_FACTOR
+    return rate
 
 
 def _wants_to_whine(state: PetState) -> bool:
     return (
         not state.sick
         and not state.poops
-        and state.discipline < 100
         and all(
             getattr(state, s) > R.FAKE_CALL_MIN_STATS
             for s in ("hunger", "happiness", "energy", "health")
@@ -698,6 +724,24 @@ def requests(state: PetState, now: float, settings: Settings) -> list[str]:
     return wanted
 
 
+# --- Upbringing ---------------------------------------------------------------
+
+
+def upbringing_score(state: PetState) -> float:
+    """0-100 from how it was raised: care misses cost the most, discipline helps."""
+    care = max(0.0, 100.0 - R.UPBRINGING_MISS_COST * state.care_misses)
+    weight = R.UPBRINGING_CARE_WEIGHT
+    return weight * care + (1 - weight) * state.discipline
+
+
+def upbringing(state: PetState) -> str:
+    """The adult's upbringing, or the one it's on track for while growing up."""
+    if state.upbringing is not None:
+        return state.upbringing
+    score = upbringing_score(state)
+    return next(name for name, low in R.UPBRINGING_GRADES if score >= low)
+
+
 # --- Generations --------------------------------------------------------------
 
 
@@ -729,6 +773,7 @@ def lay_egg(
         "retired": now,
         "age_days": round(state.age_hours / 24, 1),
         "care_misses": state.care_misses,
+        "upbringing": upbringing(state),
     }
     egg = PetState.new(state.name, now)
     egg.generation = state.generation + 1
@@ -738,6 +783,9 @@ def lay_egg(
     inherited = rng.choice(state.traits) if state.traits else None
     if inherited:
         level = trait_level(state, inherited)
+        if upbringing(state) == "devoted":
+            # A devoted parent hands its trait down one level deeper.
+            level = min(level + 1, R.TRAIT_MAX_LEVEL)
         egg.traits = [inherited]
         egg.trait_levels = {inherited: level}
         egg.inherited = {inherited: level}
@@ -912,11 +960,31 @@ def set_lights_out(
     events: list[Event] = []
     if on == state.lights_out and on == state.asleep:
         return events
-    state.lights_out = on
     if state.away:
+        if state.lights_before_away is None:
+            state.lights_before_away = state.lights_out
+        state.lights_out = on  # applied when it comes home
         return events
+    state.lights_out = on
+    _apply_lights(state, now, settings, events)
+    return events
+
+
+def come_home(state: PetState, now: float, settings: Settings) -> list[Event]:
+    """Back from the sitter's: apply a lights-out flip made while it was away."""
+    events: list[Event] = []
+    before, state.lights_before_away = state.lights_before_away, None
+    if before is not None and before != state.lights_out:
+        _apply_lights(state, now, settings, events)
+    return events
+
+
+def _apply_lights(
+    state: PetState, now: float, settings: Settings, events: list[Event]
+) -> None:
+    on = state.lights_out
     if life_stage(state) == "egg":
-        return events  # remembered: the hatchling goes straight to sleep
+        return  # remembered: the hatchling goes straight to sleep
     if on and not state.asleep:
         _fall_asleep(state, not in_sleep_hours(now, settings), events, now, settings)
     elif not on and state.asleep:
@@ -926,7 +994,6 @@ def set_lights_out(
             state.stayed_up_since = now
             state.kept_up_until = now + R.FALL_ASLEEP_ANYWAY_MINUTES * 60
         _wake(state, events)
-    return events
 
 
 # --- Mood -------------------------------------------------------------------

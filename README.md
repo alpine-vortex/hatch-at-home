@@ -88,13 +88,14 @@ Restoring an HA backup rewinds the pet to that point, which is fine.
 
 ## What you get
 
-One device named after your pet, with:
+One device named after your pet (rename the device to rename the pet; its
+notifications and journal follow), with:
 
 | Entity | What it is |
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `call_deadline`. |
-| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `generation` and `journal` (the device's retired pets). |
+| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `generation`, `upbringing` (final once adult, what it's on track for before) and `journal` (the device's retired pets). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far. |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
@@ -154,7 +155,8 @@ and it adds at most +3 happiness an hour.
 | Motion sensors | none | Movement in the last 10 minutes means the house isn't quiet yet. | indoor occupancy sensors |
 
 Lights-out (the switch, or the sleep button on the card) always wins, and the house
-never wakes the pet.
+never wakes the pet. Flipped while the pet is at the sitter's, it takes effect when
+the pet comes home.
 
 ### Weather and air
 
@@ -173,7 +175,7 @@ never wakes the pet.
 | Field | Default | What it does | This house |
 | --- | --- | --- | --- |
 | Room lights | none | At half brightness or more, from an hour before bedtime: squints, "too bright, it's late!". Dim evening light makes it cozy. Daylight never counts. | living room lights |
-| Fireplace | none | Any entity that's on, heating or above 0 when lit. Curls up by it and gets a little happier. | `switch.fireplace` |
+| Fireplace | none | Any entity that's on, heating or above 0 when lit (not a thermometer: that's always above 0). Curls up by it and gets a little happier. | `switch.fireplace` |
 | Light sensors | none | 100 lx or more at night also counts as too bright. | optional |
 
 ### People and activity
@@ -198,7 +200,7 @@ never wakes the pet.
 
 | Field | Default | What it does |
 | --- | --- | --- |
-| Keep presence private | on | An empty house shows the pet napping, never at the sitter's, and the pet never names anyone. Turn it off to see "at the sitter's". |
+| Keep presence private | on | An empty house shows the pet napping, never at the sitter's (care while it's away is refused as "asleep"), and the pet never names anyone. Turn it off to see "at the sitter's". |
 
 ### Fixed rules (not settings)
 
@@ -219,6 +221,9 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 - **Fake calls:** now and then it whines while everything is fine. *Scold*
   raises discipline. *Praise* during a fake call spoils it. Scolding for
   nothing makes it sad. Ignoring a fake call is not a care miss.
+- **Discipline:** the more of it, the less the pet whines: at 100 it whines a
+  quarter as often (never not at all). It fades slowly while the pet is awake,
+  about 4 points a day, so the habit needs a reminder now and then.
 - **Poop:** a meal comes out about 2 hours later. Poop older than an hour slowly
   costs health and may make it sick. *Clean* flushes it.
 - **Sleep:** bedtime 23:00, wake 07:00 (editable from phase 3). Lights-out puts it
@@ -227,6 +232,17 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   lights-out off during sleep hours costs a little happiness. No calls while asleep.
 - **Sickness:** health below 25, four care misses in a day, or old poop.
   Medicine cures it. **It never dies.**
+- **Upbringing:** on reaching adulthood, how it was raised sets its upbringing for
+  life. Each care miss while growing up costs 10 of 100 care points; the score is
+  70% care and 30% discipline. The status screen shows what it's on track for.
+
+  | Upbringing | Score | As an adult |
+  | --- | --- | --- |
+  | Devoted | 80+ | Gets hungry and bored 20% more slowly; hands its trait down one star deeper |
+  | Steady | 50+ | As usual |
+  | Scrappy | below 50 | Whines half as often again (it never hurts it) |
+
+  A pet with no care misses and some discipline (40 or more) grows up devoted.
 - **Traits:** the pet picks up habits from your house and keeps them for life.
   Only hours it spends awake count, and traits only ever add a little happiness
   (all house bonuses together stay under the cap of +3 an hour).
@@ -255,9 +271,9 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   this device hasn't raised yet.
 - **The journal:** on the status screen, tap "journal". It shows the world's
   creatures (ones nobody in this home has raised yet are silhouettes) and this
-  device's family line: each generation with its traits and stars.
+  device's family line: each generation with its traits, stars and upbringing.
 - **Notifications:** opt in per person. On the status screen, tap "notify me" to get
-  this pet's calls, sickness, hatching, new traits and eggs on your phone, through
+  this pet's calls, sickness, hatching, growing up, new traits and eggs on your phone, through
   the Home Assistant app. It only changes them for whoever is signed in; each person
   chooses for themselves. Automations can use `virtual_pet.notify_me` the same way.
   Fast-forward never notifies.
@@ -272,7 +288,7 @@ names are included.
 `virtual_pet_call_started`, `virtual_pet_call_answered`, `virtual_pet_care_miss`,
 `virtual_pet_discipline_miss`, `virtual_pet_pooped`, `virtual_pet_became_sick`,
 `virtual_pet_recovered`, `virtual_pet_fell_asleep`, `virtual_pet_woke_up`,
-`virtual_pet_stage_changed`, `virtual_pet_care`, `virtual_pet_hatched`,
+`virtual_pet_stage_changed` (with `upbringing` on reaching adulthood), `virtual_pet_care`, `virtual_pet_hatched`,
 `virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`,
 `virtual_pet_trait_learned` and `virtual_pet_trait_deepened` (with `trait`, `level`), `virtual_pet_egg_laid` (with `generation`,
 `parent_species`, `inherited_trait`).

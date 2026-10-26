@@ -696,3 +696,96 @@ async def test_attributes_are_copies_of_the_pets_lists(
     pet = config.runtime_data.state
     for key in ("traits", "raised", "journal", "notify_users"):
         assert attrs[key] is not getattr(pet, key), key
+
+
+async def test_privacy_hides_away_behind_a_nap(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, away=True)
+    await setup(hass)
+    assert hass.states.get("sensor.pip_mood").state == "asleep"
+    assert hass.states.get("binary_sensor.pip_asleep").state == STATE_ON
+    await press(hass, "button.pip_feed")
+    log = hass.states.get("sensor.pip_last_care").attributes["log"]
+    assert log[0]["result"] == "asleep"  # not "away"
+
+
+async def test_without_privacy_away_is_away(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, away=True)
+    await setup_with_house(hass, privacy=False)
+    assert hass.states.get("binary_sensor.pip_asleep").state == STATE_OFF
+    await press(hass, "button.pip_feed")
+    log = hass.states.get("sensor.pip_last_care").attributes["log"]
+    assert log[0]["result"] == "away"
+
+
+async def test_notifications_follow_a_rename(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    from homeassistant.helpers import device_registry as dr
+
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    config = await setup(hass)
+    registry = dr.async_get(hass)
+    device = registry.async_get_device_by_identifier(
+        (DOMAIN, config.entry_id), config.entry_id
+    )
+    registry.async_update_device(device.id, name_by_user="Fern")
+    await settle(hass, freezer, 5 * 60)
+    assert config.runtime_data.state.name == "Fern"
+    registry.async_update_device(device.id, name_by_user=None)
+    hass.config_entries.async_update_entry(config, title="Mochi")
+    await settle(hass, freezer, 5 * 60)
+    assert config.runtime_data.state.name == "Mochi"
+
+
+async def test_options_reject_impossible_settings(
+    hass: HomeAssistant, now: float
+) -> None:
+    hass.states.async_set(
+        "sensor.fire_temp",
+        "21",
+        {"device_class": "temperature", "unit_of_measurement": "°C"},
+    )
+    config = await setup_with_house(hass)
+    result = await hass.config_entries.options.async_init(config.entry_id)
+    sections = {
+        "sleep": {"bedtime": "23:00:00", "wake_time": "23:00:00"},
+        "weather": {},
+        "room": {"fireplace": "sensor.fire_temp"},
+        "activity": {"zone": "zone.home"},
+        "sky": {},
+        "privacy": {"privacy": True},
+    }
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], sections
+    )
+    assert result["errors"] == {
+        "sleep": "same_times",
+        "room": "fireplace_temperature",
+    }
+    sections["sleep"]["wake_time"] = "07:00:00"
+    sections["room"] = {}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], sections
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+
+
+async def test_busy_attributes_stay_out_of_history(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    from custom_components.virtual_pet.sensor import LifeStageSensor
+
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    attrs = hass.states.get("sensor.pip_life_stage").attributes
+    for key in ("journal", "trait_progress", "traits", "notify_users"):
+        assert key in attrs
+        assert key in LifeStageSensor._unrecorded_attributes, key
+    assert attrs["upbringing"] == "steady"  # on track: no misses, no discipline

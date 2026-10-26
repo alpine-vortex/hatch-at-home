@@ -62,7 +62,9 @@ from .const import (
     DEFAULT_ZONE,
     DOMAIN,
 )
+from .model import parse_hhmm
 from .species import load_catalog
+from .watcher import is_temperature
 
 PET_NAMES = ("Pip", "Fern", "Nutmeg", "Mochi", "Juniper", "Pebble", "Bramble", "Clover")
 
@@ -244,7 +246,11 @@ class PetOptionsFlow(OptionsFlowWithReload):
                     flat[key] = self._to_celsius(flat[key])
             if flat.get(CONF_COMFORT_LOW, 0) >= flat.get(CONF_COMFORT_HIGH, 1e9):
                 errors["weather"] = "comfort_range"
-            else:
+            if parse_hhmm(flat[CONF_BEDTIME]) == parse_hhmm(flat[CONF_WAKE_TIME]):
+                errors["sleep"] = "same_times"
+            if is_temperature(self.hass.states.get(flat.get(CONF_FIREPLACE, ""))):
+                errors["room"] = "fireplace_temperature"
+            if not errors:
                 return self.async_create_entry(data=flat)
 
         current = dict(self.config_entry.options)

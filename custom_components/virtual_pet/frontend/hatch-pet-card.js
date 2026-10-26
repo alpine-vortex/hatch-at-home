@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.15.0";
+const VERSION = "0.16.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -48,6 +48,7 @@ const REFUSALS = {
   unfair: "hey, I didn't do anything!",
   spoiled: "hehe, whining works",
   egg: "...",
+  away: "I'm at the sitter's!",
 };
 
 // Home flags that swap the pet into a special pose (species.json "extras").
@@ -937,6 +938,7 @@ class HatchPetCard extends HTMLElement {
       <div class="row icons">${ic("stat_discipline")}<span>discipline</span>${bar(value("discipline"))}</div>
       <div class="row icons">${ic("stat_care_miss")}<span>misses</span><span>${value("care_misses") ?? "–"}</span></div>
       <div class="row traits"><span>traits</span><span>${traits.length ? traits.join(" · ") : "none yet"}</span></div>
+      ${stageAttrs.upbringing ? `<div class="row traits"><span>${this._state(s, "sensor.life_stage")?.state === "adult" ? "raised" : "growing up"}</span><span>${escape(stageAttrs.upbringing)}</span></div>` : ""}
       <div class="row traits"><span>notify me</span><span><button class="bell" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span></div>
       <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>
       <button class="jlink">journal ›</button>`;
@@ -982,6 +984,7 @@ class HatchPetCard extends HTMLElement {
       generation: stage.generation || 1, name: this._hass.devices?.[s.ids?.device]?.name_by_user
         || this._hass.devices?.[s.ids?.device]?.name || "", species: stage.species,
       traits: stage.traits || [], levels: stage.trait_levels || {}, inherited: stage.inherited_trait,
+      upbringing: this._state(s, "sensor.life_stage")?.state === "adult" ? stage.upbringing : null,
       current: true,
     };
     const past = [...(stage.journal || []), now].slice(-4);
@@ -1001,6 +1004,7 @@ class HatchPetCard extends HTMLElement {
       `<div class="gen${p.current ? " now" : ""}">gen ${p.generation}${p.current ? " (now)" : ""} · ` +
       `${escape(p.name)} · ${escape((names[p.species] || "egg").toLowerCase())}` +
       `${p.age_days != null ? ` · ${Math.round(p.age_days)} d` : ""}` +
+      `${p.upbringing ? ` · ${escape(p.upbringing)}` : ""}` +
       `${p.traits?.length ? `<br><span class="gt">${p.traits.map((t) =>
         traitLabel(t, p.levels?.[t], t === p.inherited)).join(", ")}</span>` : ""}</div>`);
     s.status.innerHTML = `

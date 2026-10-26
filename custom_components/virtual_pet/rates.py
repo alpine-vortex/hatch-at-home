@@ -22,7 +22,7 @@ NAP_INTO_NIGHT_MINUTES = 60  # a nap this close to bedtime lasts the night
 HUNGER_DECAY = 5.0  # full to calling in ~15 h: three or four meals a day
 HAPPINESS_DECAY = 4.0
 ENERGY_DECAY = 5.0
-DISCIPLINE_DECAY = 0.0
+DISCIPLINE_DECAY = 0.25  # per awake hour: habits fade unless reminded (~4 a day)
 
 # --- While asleep (per hour) ----------------------------------------------
 
@@ -83,6 +83,8 @@ CALL_THRESHOLDS: dict[str, tuple[float, float]] = {
 }
 FAKE_CALL_RATE = 0.12  # fake calls per awake hour while everything is fine
 FAKE_CALL_MIN_STATS = 50.0  # only whines when all core stats are above this
+# Discipline makes whining rarer: at 100 it whines this much less often.
+FAKE_CALL_DISCIPLINE_DAMPING = 0.75
 
 # --- Sickness ---------------------------------------------------------------
 
@@ -113,6 +115,19 @@ STAGE_STARTS: list[tuple[str, float]] = [
     ("teen", 120.0),
     ("adult", 336.0),  # about two weeks
 ]
+
+# --- Upbringing: decided on reaching adulthood, kept for life ---------------
+
+UPBRINGING_MISS_COST = 10.0  # care points lost per care miss while growing up
+UPBRINGING_CARE_WEIGHT = 0.7  # the rest of the score is discipline
+# Highest first: the first grade whose score the pet reaches.
+UPBRINGING_GRADES: list[tuple[str, float]] = [
+    ("devoted", 80.0),
+    ("steady", 50.0),
+    ("scrappy", 0.0),
+]
+DEVOTED_DECAY_FACTOR = 0.8  # a devoted adult gets hungry and bored more slowly
+SCRAPPY_WHINE_FACTOR = 1.5  # a scrappy adult whines more (it never hurts it)
 
 # --- Log --------------------------------------------------------------------
 

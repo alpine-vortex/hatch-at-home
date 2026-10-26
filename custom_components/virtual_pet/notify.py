@@ -23,6 +23,30 @@ CALLS = {
 }
 
 
+# How each trait reads in "Pip ... now" and "Pip's ... runs deep now".
+TRAITS = {
+    "night_owl": ("is a night owl", "night-owl streak"),
+    "music_lover": ("is a music lover", "love of music"),
+    "homebody": ("is a homebody", "homebody heart"),
+    "sun_lover": ("is a sun lover", "love of the sun"),
+    "fireside": ("loves the fireside", "love of the fire"),
+    "moon_child": ("is a moon child", "moonchild soul"),
+    "storm_watcher": ("is a storm watcher", "love of storms"),
+    "couch_potato": ("is a couch potato", "couch-potato streak"),
+    "social_butterfly": ("is a social butterfly", "social streak"),
+}
+
+
+def _a(noun: str) -> str:
+    """'a' or 'an', by the first letter."""
+    return f"{'an' if noun[:1].lower() in 'aeiou' else 'a'} {noun}"
+
+
+def _trait(trait: str) -> tuple[str, str]:
+    words = trait.replace("_", " ")
+    return TRAITS.get(trait, (f"is {_a(words)}", words))
+
+
 def message(event: dict[str, Any], name: str, species: dict[str, str]) -> str | None:
     """The notification for a pet event, or None for events that don't notify."""
     kind = event["type"]
@@ -31,13 +55,15 @@ def message(event: dict[str, Any], name: str, species: dict[str, str]) -> str | 
     if kind == "became_sick":
         return f"{name} is feeling sick. Medicine?"
     if kind == "hatched":
-        found = species.get(event.get("species", ""), "a new friend")
-        return f"{name} hatched: it's a {found.lower()}!"
+        found = species.get(event.get("species", ""), "new friend")
+        return f"{name} hatched: it's {_a(found.lower())}!"
+    if kind == "stage_changed" and event.get("upbringing"):
+        return f"{name} is all grown up: {_a(event['upbringing'])} adult."
     if kind == "trait_learned":
-        return f"{name} is a {event['trait'].replace('_', ' ')} now."
+        return f"{name} {_trait(event['trait'])[0]} now."
     if kind == "trait_deepened":
         stars = "★" * event["level"]
-        return f"{name}'s {event['trait'].replace('_', ' ')} runs deep now: {stars}"
+        return f"{name}'s {_trait(event['trait'])[1]} runs deep now: {stars}"
     if kind == "egg_laid":
         return f"{name} laid an egg: generation {event['generation']} is on its way."
     return None

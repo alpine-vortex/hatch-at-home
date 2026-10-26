@@ -74,6 +74,15 @@ def _float(state: State | None) -> float | None:
         return None
 
 
+def is_temperature(state: State | None) -> bool:
+    """A thermometer: always above 0, so it can't say whether a fire is lit."""
+    return state is not None and (
+        state.attributes.get("device_class") == "temperature"
+        or state.attributes.get(ATTR_UNIT_OF_MEASUREMENT)
+        in (UnitOfTemperature.CELSIUS, UnitOfTemperature.FAHRENHEIT)
+    )
+
+
 class Watcher:
     """Holds the mapping and the last good value of each entity."""
 
@@ -176,7 +185,7 @@ class Watcher:
 
     @staticmethod
     def _lit(state: State | None) -> bool:
-        if state is None:
+        if state is None or is_temperature(state):
             return False
         value = _float(state)
         return value > 0 if value is not None else state.state in LIT

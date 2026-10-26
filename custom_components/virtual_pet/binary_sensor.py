@@ -64,6 +64,12 @@ class PetBinarySensor(PetEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool:
+        if (
+            self.entity_description.key == "asleep"
+            and self.pet.away
+            and self.coordinator.privacy
+        ):
+            return True  # privacy: an empty house looks like a nap, as on the mood
         return self.entity_description.is_on_fn(self.pet)
 
     @property

@@ -16,6 +16,7 @@ from homeassistant.core import (
     HomeAssistant,
     callback,
 )
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -238,6 +239,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._fire([{"type": "went_away" if away else "came_home"}])
             if not away:
                 self.home.flags.insert(0, "greeting")
+                self._fire(model.come_home(self.state, now, settings))
         self.debug["home"] = {
             "readings": {k: v for k, v in vars(readings).items() if v is not None},
             "flags": effect.flags,
@@ -246,8 +248,20 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "dark_and_quiet": effect.dark_and_quiet,
         }
 
+    def _sync_name(self) -> None:
+        """Follow renames: the device's own name if the owner set one, else the
+        entry's title. Notifications and the journal use it."""
+        assert self.state is not None
+        device = dr.async_get(self.hass).async_get_device_by_identifier(
+            (DOMAIN, self.pet_id), self.pet_id
+        )
+        name = (device and device.name_by_user) or self.config_entry.title
+        if name != self.state.name:
+            self.state.name = name
+
     def _advance(self, now: float, simulated: bool = False) -> None:
         assert self.state is not None
+        self._sync_name()
         before = self.state.last_updated
         events = model.advance(self.state, now, self.settings, self.rng)
         self.debug["last_tick"] = dt_util.utc_from_timestamp(now).isoformat()
@@ -312,6 +326,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         result, events = model.apply_action(
             self.state, action, now, self.rng, by, self.settings
         )
+        if result == "away" and self.privacy:
+            # Privacy: an empty house looks like a nap, so the refusal does too.
+            result = "asleep"
+            self.state.care_log[0]["result"] = result
+            for event in events:
+                if event["type"] == "care":
+                    event["result"] = result
         self._fire(events)
         self._save()
         self._publish()

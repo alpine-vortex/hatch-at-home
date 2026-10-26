@@ -129,7 +129,21 @@ class LifeStageSensor(PetEntity, SensorEntity):
 
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = list(model.LIFE_STAGES)
-    _unrecorded_attributes = frozenset({"raised", "roster", "hatches_at"})
+    # Only the stage itself and small, slow-changing facts go to history.
+    # trait_progress changes almost every tick and the journal only grows.
+    _unrecorded_attributes = frozenset(
+        {
+            "raised",
+            "roster",
+            "hatches_at",
+            "traits",
+            "trait_levels",
+            "trait_progress",
+            "journal",
+            "notify_users",
+            "upbringing_score",
+        }
+    )
 
     def __init__(self, coordinator: PetCoordinator) -> None:
         super().__init__(coordinator, "life_stage")
@@ -159,6 +173,13 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "trait_progress": model.trait_progress(self.pet),
             "roster": list(self.coordinator.roster),
             "hatches_at": self._hatches_at(),
+            # Final once adult; before that, what it's on track for.
+            "upbringing": (
+                model.upbringing(self.pet)
+                if model.life_stage(self.pet) != "egg"
+                else None
+            ),
+            "upbringing_score": round(model.upbringing_score(self.pet)),
         }
 
     def _hatches_at(self) -> str | None:

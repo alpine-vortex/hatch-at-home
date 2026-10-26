@@ -122,7 +122,9 @@
       }
     },
     "error": {
-      "comfort_range": "\"Too cold below\" must be lower than \"Too warm above\"."
+      "comfort_range": "\"Too cold below\" must be lower than \"Too warm above\".",
+      "same_times": "Bedtime and wake time can't be the same, or the pet would never sleep.",
+      "fireplace_temperature": "Pick the fireplace's switch, power sensor or climate entity. A temperature sensor is always above 0, so the fire would always look lit."
     }
   },
   "entity": {

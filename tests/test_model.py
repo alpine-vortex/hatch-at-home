@@ -557,6 +557,7 @@ def test_laying_an_egg_retires_the_parent_to_the_journal():
             "retired": at(12),
             "age_days": round(pet.age_hours / 24, 1),
             "care_misses": 3,
+            "upbringing": "scrappy",  # 3 misses and no discipline
         }
     ]
     assert events == [
@@ -651,3 +652,131 @@ def test_old_saves_keep_their_music_hours():
     data["trait_hours"] = {"awake": 5.0, "music": 4.0}
     pet = model.PetState.from_dict(data)
     assert pet.trait_hours == {"awake": 5.0, "dancing": 4.0}
+
+
+def test_discipline_fades_while_awake_but_not_asleep():
+    start = at(9)
+    pet = hatched(start, discipline=50.0)
+    run(pet, start + 4 * HOUR)
+    assert pet.discipline == pytest.approx(50 - 4 * R.DISCIPLINE_DECAY)
+    night = hatched(at(23, 30), discipline=50.0)
+    night.asleep = True
+    night.wake_at = at(7, day=2)
+    model.advance(night, at(6, day=2), SETTINGS, NoLuck(), max_gap=None)
+    assert night.discipline == 50.0
+
+
+def test_discipline_makes_whining_rarer_but_never_stops_it():
+    pet = hatched(at(9))
+    wild = model.whine_rate(pet)
+    pet.discipline = 100.0
+    tame = model.whine_rate(pet)
+    assert wild == R.FAKE_CALL_RATE
+    assert 0 < tame < wild
+    pet.upbringing = "scrappy"
+    assert model.whine_rate(pet) == pytest.approx(tame * R.SCRAPPY_WHINE_FACTOR)
+
+
+@pytest.mark.parametrize(
+    ("misses", "discipline", "grade"),
+    [(0, 40.0, "devoted"), (2, 30.0, "steady"), (5, 0.0, "scrappy")],
+)
+def test_upbringing_is_decided_on_growing_up(misses, discipline, grade):
+    adult = dict(R.STAGE_STARTS)["adult"]
+    start = at(9)
+    pet = hatched(start, age_hours=adult - 0.1, discipline=discipline)
+    pet.care_misses = misses
+    pet.hunger = pet.happiness = 99.0
+    assert model.upbringing(pet) == grade  # on track before the day comes
+    events = run(pet, start + 10 * MIN)
+    grown = [e for e in events if e["type"] == "stage_changed"]
+    assert grown == [
+        {"type": "stage_changed", "stage": "adult", "from": "teen", "upbringing": grade}
+    ]
+    assert pet.upbringing == grade
+    # Kept for life: later misses don't change it.
+    pet.care_misses = 50
+    assert model.upbringing(pet) == grade
+
+
+def test_a_devoted_adult_gets_hungry_and_bored_more_slowly():
+    start = at(9)
+    steady = hatched(start, age_hours=400.0, upbringing="steady")
+    devoted = hatched(start, age_hours=400.0, upbringing="devoted")
+    for pet in (steady, devoted):
+        run(pet, start + 2 * HOUR)
+    assert devoted.hunger == pytest.approx(
+        90 - 2 * R.HUNGER_DECAY * R.DEVOTED_DECAY_FACTOR
+    )
+    assert devoted.happiness > steady.happiness
+    assert devoted.energy == steady.energy
+
+
+def test_a_devoted_parent_hands_its_trait_down_deeper():
+    age = 14 * 24 + 7 * 24 + 1.0
+    pet = hatched(at(12), age_hours=age, upbringing="devoted")
+    pet.traits = ["homebody"]
+    pet.trait_levels = {"homebody": 2}
+    egg, events = model.lay_egg(pet, at(12), random.Random(1))
+    assert egg.trait_levels == {"homebody": 3}
+    assert events[0]["level"] == 3
+    assert egg.journal[-1]["upbringing"] == "devoted"
+    assert egg.upbringing is None
+
+
+def test_old_adult_saves_get_an_upbringing_and_bad_ones_are_dropped():
+    pet = hatched(at(9), age_hours=400.0)
+    data = pet.to_dict()
+    del data["upbringing"]
+    assert model.PetState.from_dict(data).upbringing == "steady"  # 0 misses, 0 disc.
+    young = hatched(at(9)).to_dict()
+    young["upbringing"] = "legendary"
+    assert model.PetState.from_dict(young).upbringing is None
+
+
+def test_lights_out_while_away_is_applied_on_return():
+    start = at(14)
+    pet = hatched(start)
+    pet.away = True
+    model.set_lights_out(pet, True, start, SETTINGS)
+    assert pet.lights_out and not pet.asleep
+    events = model.come_home(pet, start + HOUR, SETTINGS)
+    assert types(events) == ["fell_asleep"]
+    assert pet.asleep and pet.napping
+
+
+def test_lights_flipped_on_and_off_while_away_change_nothing():
+    pet = hatched(at(23, 30))
+    pet.asleep = True  # dozed off on its own
+    pet.wake_at = at(7, day=2)
+    pet.away = True
+    model.set_lights_out(pet, True, at(23, 40), SETTINGS)
+    model.set_lights_out(pet, False, at(23, 45), SETTINGS)
+    assert model.come_home(pet, at(23, 50), SETTINGS) == []
+    assert pet.asleep
+
+
+@pytest.mark.parametrize(
+    ("event", "text"),
+    [
+        ({"type": "hatched", "species": "axolotl"}, "Pip hatched: it's an axolotl!"),
+        ({"type": "hatched", "species": "bird"}, "Pip hatched: it's a bird!"),
+        ({"type": "hatched"}, "Pip hatched: it's a new friend!"),
+        ({"type": "trait_learned", "trait": "fireside"}, "Pip loves the fireside now."),
+        ({"type": "trait_learned", "trait": "night_owl"}, "Pip is a night owl now."),
+        (
+            {"type": "trait_deepened", "trait": "fireside", "level": 2},
+            "Pip's love of the fire runs deep now: ★★",
+        ),
+        (
+            {"type": "stage_changed", "stage": "adult", "upbringing": "devoted"},
+            "Pip is all grown up: a devoted adult.",
+        ),
+        ({"type": "stage_changed", "stage": "child"}, None),
+    ],
+)
+def test_notification_wording(event, text):
+    from custom_components.virtual_pet import notify
+
+    names = {"axolotl": "Axolotl", "bird": "Bird"}
+    assert notify.message(event, "Pip", names) == text
