@@ -2,11 +2,11 @@
   "config": {
     "step": {
       "user": {
-        "title": "Hatch a new pet",
-        "description": "Give your pet a name and pick what it is. Bedtime and home sensors are set later in its options.",
+        "title": "Add a pet device",
+        "description": "Name your pet and pick its world. The egg decides which of that world's creatures hatches. Bedtime and home sensors are set later in its options.",
         "data": {
           "name": "Name",
-          "species": "Species"
+          "world": "World"
         }
       }
     }

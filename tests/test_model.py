@@ -312,3 +312,14 @@ def test_round_trip_through_store_dict():
     data = pet.to_dict()
     data["from_the_future"] = 1
     assert model.PetState.from_dict(data) == pet
+
+
+def test_hatching_prefers_a_species_not_raised_yet():
+    start = at(9)
+    settings = model.Settings(tz=UTC, roster=("bird", "squirrel"))
+    pet = model.PetState.new("Pip", start)
+    pet.raised = ["bird"]
+    events = model.advance(pet, start + HOUR, settings, random.Random(1))
+    assert pet.species == "squirrel"
+    assert pet.raised == ["bird", "squirrel"]
+    assert {"type": "hatched", "species": "squirrel"} in events

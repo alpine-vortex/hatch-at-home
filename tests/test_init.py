@@ -70,15 +70,15 @@ async def test_config_flow_names_the_pet(hass: HomeAssistant) -> None:
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     assert result["type"] is FlowResultType.FORM
-    # Only species with a ready species.json are offered.
-    species = result["data_schema"].schema["species"].config["options"]
-    assert [o["value"] for o in species] == ["bird"]
+    # Only worlds with a ready species are offered.
+    worlds = result["data_schema"].schema["world"].config["options"]
+    assert [o["value"] for o in worlds] == ["woodland"]
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_NAME: "Juniper", "species": "bird"}
+        result["flow_id"], {CONF_NAME: "Juniper", "world": "woodland"}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Juniper"
-    assert result["data"]["species"] == "bird"
+    assert result["data"]["world"] == "woodland"
 
 
 async def test_new_pet_is_an_egg(hass: HomeAssistant, now: float) -> None:
@@ -224,7 +224,9 @@ async def test_card_and_sprites_are_served(
     hass: HomeAssistant, now: float, hass_client
 ) -> None:
     await setup(hass)
-    assert hass.states.get("sensor.pip_life_stage").attributes["species"] == "bird"
+    attrs = hass.states.get("sensor.pip_life_stage").attributes
+    assert attrs["world"] == "woodland"
+    assert attrs["species"] is None  # still an egg
     client = await hass_client()
     resp = await client.get("/virtual_pet/frontend/hatch-pet-card.js")
     assert resp.status == 200
@@ -233,3 +235,33 @@ async def test_card_and_sprites_are_served(
     assert resp.status == 200
     resp = await client.get("/virtual_pet/frontend/sprites/bird/child_content_1.png")
     assert resp.status == 200
+
+
+async def test_egg_hatches_into_a_roster_species(
+    hass: HomeAssistant, now: float
+) -> None:
+    await setup(hass)
+    hatched = async_capture_events(hass, f"{DOMAIN}_hatched")
+    await hass.services.async_call(DOMAIN, "fast_forward", {"hours": 1}, blocking=True)
+    assert hatched[0].data["species"] == "bird"
+    attrs = hass.states.get("sensor.pip_life_stage").attributes
+    assert attrs["species"] == "bird"
+    assert attrs["raised"] == ["bird"]
+
+
+async def test_phase2_pet_becomes_a_woodland_bird(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await hass.config.async_set_time_zone("UTC")
+    MockConfigEntry(
+        domain=DOMAIN,
+        title="Pip",
+        data={CONF_NAME: "Pip", "species": "bird"},
+        entry_id="test_pet",
+    ).add_to_hass(hass)
+    assert await hass.config_entries.async_setup("test_pet")
+    await hass.async_block_till_done()
+    attrs = hass.states.get("sensor.pip_life_stage").attributes
+    assert attrs["world"] == "woodland"
+    assert attrs["species"] == "bird"

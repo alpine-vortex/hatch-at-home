@@ -17,13 +17,14 @@ from .const import (
     CONF_BEDTIME,
     CONF_SPECIES,
     CONF_WAKE_TIME,
-    DEFAULT_SPECIES,
+    CONF_WORLD,
+    DEFAULT_WORLD,
     DOMAIN,
     LOGGER,
     STORE_MINOR_VERSION,
     STORE_VERSION,
 )
-from .species import load_species
+from .species import load_catalog
 
 type PetConfigEntry = ConfigEntry[PetCoordinator]
 
@@ -65,8 +66,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             f"{DOMAIN}.{entry.entry_id}",
             minor_version=STORE_MINOR_VERSION,
         )
-        self.species: str = entry.data.get(CONF_SPECIES, DEFAULT_SPECIES)
-        self.species_name = self.species  # filled in by async_load
+        # Filled in by async_load from the files in frontend/.
+        self.world: str = entry.data.get(CONF_WORLD, DEFAULT_WORLD)
+        self.world_name = self.world
+        self.roster: tuple[str, ...] = ()
         self.rng = random.Random()
         self.state: model.PetState | None = None
         # Last calculation, for the diagnostic sensor.
@@ -78,6 +81,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         options = self.config_entry.options
         return model.Settings(
             tz=dt_util.get_default_time_zone(),
+            roster=self.roster,
             bedtime=model.parse_hhmm(options.get(CONF_BEDTIME, R.DEFAULT_BEDTIME)),
             wake_time=model.parse_hhmm(
                 options.get(CONF_WAKE_TIME, R.DEFAULT_WAKE_TIME)
@@ -90,9 +94,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     async def async_load(self) -> None:
         """Load the pet, or lay a new egg, and catch up on downtime."""
-        species = await self.hass.async_add_executor_job(load_species)
-        if self.species in species:
-            self.species_name = species[self.species].get("name", self.species)
+        catalog = await self.hass.async_add_executor_job(load_catalog)
+        old_species = self.config_entry.data.get(CONF_SPECIES)
+        if CONF_WORLD not in self.config_entry.data and old_species:
+            self.world = catalog.world_of(old_species) or DEFAULT_WORLD
+        self.world_name = catalog.worlds.get(self.world, {}).get("name", self.world)
+        self.roster = tuple(catalog.roster(self.world)) or tuple(catalog.species)
         now = self._now()
         data = await self.store.async_load()
         if data is None:
@@ -104,6 +111,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             model.catch_up(self.state, now)
             LOGGER.debug("Caught up %.1f min of downtime (frozen)", downtime / 60)
             self.debug["last_catch_up_minutes"] = round(downtime / 60, 1)
+            if self.state.species is None and model.life_stage(self.state) != "egg":
+                # Hatched before species existed (phase 2): it was a bird.
+                self.state.species = old_species or self.roster[0]
+                self.state.raised.append(self.state.species)
         self._save()
 
     async def _async_update_data(self) -> model.PetState:

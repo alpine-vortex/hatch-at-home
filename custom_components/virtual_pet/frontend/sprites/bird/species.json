@@ -1,5 +1,5 @@
 {
-  "name": "Woodland bird",
+  "name": "Bird",
   "ready": true,
   "stages": ["baby", "child", "teen"],
   "stage_fallback": { "adult": "teen" },

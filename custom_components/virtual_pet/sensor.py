@@ -134,7 +134,9 @@ class LifeStageSensor(PetEntity, SensorEntity):
     def extra_state_attributes(self) -> dict[str, Any]:
         return {
             "age_days": round(self.pet.age_hours / 24, 1),
-            "species": self.coordinator.species,
+            "species": self.pet.species,
+            "world": self.coordinator.world,
+            "raised": self.pet.raised,
         }
 
 

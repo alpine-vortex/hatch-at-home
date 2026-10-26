@@ -82,6 +82,8 @@ class PetState:
     last_excite: float = 0.0
     away: bool = False
     care_log: list[dict[str, Any]] = field(default_factory=list)
+    species: str | None = None  # decided when the egg hatches
+    raised: list[str] = field(default_factory=list)  # species this device has hatched
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store."""
@@ -107,6 +109,7 @@ class Settings:
     """Per-pet settings from the config entry options."""
 
     tz: tzinfo
+    roster: tuple[str, ...] = ("bird",)  # what this device's eggs can hatch into
     bedtime: time = field(default_factory=lambda: parse_hhmm(R.DEFAULT_BEDTIME))
     wake_time: time = field(default_factory=lambda: parse_hhmm(R.DEFAULT_WAKE_TIME))
 
@@ -229,6 +232,8 @@ def _step(
     state.age_hours += hours
     stage = life_stage(state)
     if stage != was_stage:
+        if was_stage == "egg":
+            _hatch(state, settings, rng, events)
         events.append({"type": "stage_changed", "stage": stage, "from": was_stage})
     if stage == "egg":
         return
@@ -238,6 +243,18 @@ def _step(
     _digest(state, t1, events)
     _sickness(state, hours, t1, rng, events)
     _calls(state, t1, hours, rng, events)
+
+
+def _hatch(
+    state: PetState, settings: Settings, rng: random.Random, events: list[Event]
+) -> None:
+    """The egg decides: a surprise, preferring species not raised here yet."""
+    if state.species is None:
+        fresh = [s for s in settings.roster if s not in state.raised]
+        state.species = rng.choice(fresh or list(settings.roster))
+    if state.species not in state.raised:
+        state.raised.append(state.species)
+    events.append({"type": "hatched", "species": state.species})
 
 
 def _sleep(state: PetState, t: float, settings: Settings, events: list[Event]) -> None:

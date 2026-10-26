@@ -25,7 +25,7 @@ class PetEntity(CoordinatorEntity[PetCoordinator]):
             identifiers={(DOMAIN, entry.entry_id)},
             name=entry.title,
             manufacturer="Hatch at Home",
-            model=coordinator.species_name,
+            model=f"{coordinator.world_name} device",
         )
 
     @property

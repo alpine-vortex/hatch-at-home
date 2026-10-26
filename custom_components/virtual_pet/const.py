@@ -19,8 +19,10 @@ SERVICE_FAST_FORWARD = "fast_forward"
 ATTR_HOURS = "hours"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 
+CONF_WORLD = "world"
+DEFAULT_WORLD = "woodland"
+# Phase 2 entries stored a species instead of a world.
 CONF_SPECIES = "species"
-DEFAULT_SPECIES = "bird"
 
 # The card and sprites are served from here, see frontend/.
 FRONTEND_URL = "/virtual_pet/frontend"
