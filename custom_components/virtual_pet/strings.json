@@ -163,13 +163,13 @@
             "description": "A local weather station beats a forecast: a rain sensor decides rainy days, and a solar radiation sensor decides sunny ones. The weather entity fills in the rest (snow, fog).",
             "data": {
               "weather": "Weather entity",
-              "rain": "Rain rate sensor",
+              "rain": "Rain sensor",
               "solar": "Solar radiation sensor",
               "indoor_temperature": "Indoor temperature",
               "aqi": "Air quality index"
             },
             "data_description": {
-              "rain": "Any value above 0 means it's raining.",
+              "rain": "A rain rate (any value above 0 means raining) or an on/off \"it's raining\" entity.",
               "solar": "Watts per square metre. 300 or more counts as sunny.",
               "indoor_temperature": "Too cold or warm makes the pet ask for a blanket or a fan. It never makes it sick."
             }

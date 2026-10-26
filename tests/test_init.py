@@ -440,3 +440,21 @@ async def test_empty_house_goes_to_the_sitter_privately(
     mood = hass.states.get("sensor.pip_mood")
     assert mood.state == "excited"
     assert mood.attributes["reason"] == "you're back!!"
+
+
+async def test_on_off_rain_entity(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("input_boolean.raining", "off")
+    hass.states.async_set("weather.home", "rainy")  # the gauge wins over this
+    await setup_with_house(
+        hass, rain="input_boolean.raining", weather="weather.home"
+    )
+    assert "rainy" not in hass.states.get("sensor.pip_mood").attributes["flags"]
+    hass.states.async_set("input_boolean.raining", "on")
+    await settle(hass, freezer)
+    assert "rainy" in hass.states.get("sensor.pip_mood").attributes["flags"]

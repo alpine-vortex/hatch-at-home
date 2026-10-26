@@ -121,7 +121,7 @@ class Watcher:
             night=night,
             sun_up=None if sun is None else sun.state == "above_horizon",
             condition=weather.state if weather else None,
-            rain_rate=_float(self._one(CONF_RAIN, now)),
+            rain_rate=self._rain(self._one(CONF_RAIN, now)),
             solar=_float(self._one(CONF_SOLAR, now)),
             indoor_c=self._celsius(self._one(CONF_INDOOR_TEMP, now)),
             room_light_level=self._light_level(self._all(CONF_ROOM_LIGHTS, now)),
@@ -140,6 +140,15 @@ class Watcher:
             aqi=_float(self._one(CONF_AQI, now)),
             fireplace=self._lit(self._one(CONF_FIREPLACE, now)),
         )
+
+    @staticmethod
+    def _rain(state: State | None) -> float | None:
+        """A rain rate, or an on/off "it's raining" entity read as 1 or 0."""
+        if state is None:
+            return None
+        if state.state in ("on", "off"):
+            return 1.0 if state.state == "on" else 0.0
+        return _float(state)
 
     @staticmethod
     def _lit(state: State | None) -> bool:

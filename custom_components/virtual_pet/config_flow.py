@@ -125,7 +125,15 @@ SECTIONS: dict[str, list[tuple[str, Any, Any]]] = {
     ],
     "weather": [
         (CONF_WEATHER, _entities("weather"), None),
-        (CONF_RAIN, _entities("sensor"), None),
+        (
+            CONF_RAIN,
+            EntitySelector(
+                EntitySelectorConfig(
+                    domain=["sensor", "binary_sensor", "input_boolean"]
+                )
+            ),
+            None,
+        ),
         (CONF_SOLAR, _entities("sensor"), None),
         (CONF_INDOOR_TEMP, _entities("sensor", device_class="temperature"), None),
         (CONF_AQI, _entities("sensor"), None),

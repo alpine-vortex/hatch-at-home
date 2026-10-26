@@ -120,14 +120,14 @@ optional; anything you leave empty is ignored. Changes apply straight away.
 | Sleep | Bedtime / wake time | 23:00 / 07:00 |
 | | Bedtime lights | the **bedroom** lights: when they're all off at bedtime and the house is quiet, the pet goes to bed |
 | | Motion sensors | indoor occupancy sensors (living room, office, dining room, kitchen) |
-| Weather | Rain rate sensor | your **Ambient Weather** station's hourly rain rate |
-| | Solar radiation sensor | the Ambient station's solar radiation |
-| | Weather entity | `weather.forecast_home` (only used for snow and fog) |
+| Weather | Rain sensor | `input_boolean.raining` (your rain automations), or the Ambient station's `sensor.weather_hourly_rain`, which lingers about an hour after rain stops |
+| | Solar radiation sensor | leave empty: this station doesn't report it, so sunny comes from the forecast |
+| | Weather entity | `weather.forecast_home` (sunny, snow and fog) |
 | | Indoor temperature | `sensor.indoor_temperature` |
 | | Air quality | `sensor.air_quality_index` |
 | The pet's room | Room lights | the **living room** lights |
 | | Light sensors | optional |
-| | Fireplace | your fireplace entity: when it's lit, the pet curls up by it |
+| | Fireplace | `switch.fireplace` (your "Fireplace"): when it's on, the pet curls up by it |
 | People and activity | Home zone | `zone.home` |
 | | Music players | your speakers and displays |
 | | TVs | `media_player.tv` |
