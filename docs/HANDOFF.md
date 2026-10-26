@@ -30,9 +30,8 @@ or the owner for such details before committing it.
     `.github/workflows/validate.yml` (HACS action, hassfest, tests; green) and
     `.github/workflows/release.yml`. Actions minutes are free on a public repo.
 - **Worlds:** Woodland (bird ✅, Douglas squirrel ✅) and Terrarium (leopard gecko ✅;
-  tarantula pending). Hearth (tabby kitten ✅, lop bunny ✅) and Tidepool (sea otter ✅, giant Pacific octopus ✅) and Pond (tree frog ✅; axolotl pending). Pond and
-  Night Sky are listed in `frontend/worlds.json` and stay hidden until a creature is
-  ready. The beetle is shelved; its partial art is in `art/beetle/`.
+  tarantula pending). Hearth (tabby kitten ✅, lop bunny ✅) and Tidepool (sea otter ✅, giant Pacific octopus ✅) and Pond (tree frog ✅; axolotl pending). Night
+  Sky is listed in `frontend/worlds.json` and stays hidden until a creature is ready. The beetle is shelved; its partial art is in `art/beetle/`.
 - **Woodland trim:** the smaller, lower garland and the egg's bottom labels were checked
   at 320–900 px and shown to the owner, who was happy with it. More trim is the owner's
   call.
