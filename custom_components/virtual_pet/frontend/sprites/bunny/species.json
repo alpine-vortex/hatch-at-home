@@ -1,10 +1,10 @@
 {
   "name": "Lop bunny",
   "ready": true,
-  "stages": ["baby", "child", "teen"],
-  "stage_fallback": { "adult": "teen" },
+  "stages": ["baby", "child", "teen", "adult"],
   "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
   "frames": 2,
+  "scale": { "adult": 1.2 },
   "extras": {
     "squint": "child_squint",
     "shiver": "child_shiver",

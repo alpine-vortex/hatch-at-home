@@ -1,10 +1,10 @@
 {
   "name": "Leopard gecko",
   "ready": true,
-  "stages": ["baby", "child", "teen"],
-  "stage_fallback": { "adult": "teen" },
+  "stages": ["baby", "child", "teen", "adult"],
   "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
   "frames": 2,
+  "scale": { "adult": 1.2 },
   "egg": { "idle": ["egg_idle_1", "egg_idle_2"], "wiggle": ["egg_wiggle_1", "egg_wiggle_2"], "crack": ["egg_crack_1", "egg_crack_2"] },
   "extras": {
     "squint": "child_squint",

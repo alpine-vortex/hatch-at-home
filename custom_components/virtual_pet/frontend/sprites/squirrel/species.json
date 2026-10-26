@@ -1,8 +1,7 @@
 {
   "name": "Douglas squirrel",
   "ready": true,
-  "stages": ["baby", "child", "teen"],
-  "stage_fallback": { "adult": "teen" },
+  "stages": ["baby", "child", "teen", "adult"],
   "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
   "frames": 2,
   "extras": {

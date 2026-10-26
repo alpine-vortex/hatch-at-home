@@ -12,6 +12,7 @@ while its adult sprites are being redrawn.
 | --- | --- |
 | `name` | Shown in the setup screen and on the card |
 | `stages` | Stages that have sprites, besides the egg |
+| `scale` | Optional, per stage: how much bigger to draw it, feet fixed. Long adults fit the 256 px frame by coming out shorter than their teen; e.g. `{ "adult": 1.2 }` brings them back up. |
 | `stage_fallback` | Which drawn stage to use for one that has none (e.g. adult → teen until adult forms exist) |
 | `moods`, `frames` | Every stage has `{stage}_{mood}_{1..frames}.png` for each mood. A missing mood falls back to `content`. |
 | `egg` | Optional. Frames for the world's egg: `idle`, `wiggle` (calling), `crack` (about to hatch). Only the first species on a world's roster needs it; the others hatch from that egg. |

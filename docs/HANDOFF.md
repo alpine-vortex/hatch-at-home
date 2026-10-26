@@ -1,7 +1,7 @@
 # Handoff (2026-10-26, third session)
 
 Branch: `ccr-a5f628ca-979gik`, which is also the repo's default branch (all work
-pushed; no PR). Version **0.14.0** (released through Actions → Release). Read the README first, then `docs/design-worlds.md`
+pushed; no PR). Version **0.15.0** (released through Actions → Release). Read the README first, then `docs/design-worlds.md`
 and `docs/audit-2026-10-26.md`. The owner's original brief is not in the repo; its key
 rules are restated across the README and the design doc.
 
@@ -30,7 +30,7 @@ or the owner for such details before committing it.
     `.github/workflows/validate.yml` (HACS action, hassfest, tests; green) and
     `.github/workflows/release.yml`. Actions minutes are free on a public repo.
 - **Worlds:** Woodland (bird ✅, Douglas squirrel ✅) and Terrarium (leopard gecko ✅;
-  tarantula pending). Hearth (tabby kitten ✅, lop bunny ✅) and Tidepool (sea otter ✅, giant Pacific octopus ✅) and Pond (tree frog ✅, axolotl ✅) and Night Sky (bat ✅; luna moth pending). Every
+  tarantula pending). Hearth (tabby kitten ✅, lop bunny ✅) and Tidepool (sea otter ✅, giant Pacific octopus ✅) and Pond (tree frog ✅, axolotl ✅) and Night Sky (bat ✅, luna moth ✅). Every
   world in `frontend/worlds.json` is live now. The beetle is shelved; its partial art is in `art/beetle/`.
 - **Woodland trim:** the smaller, lower garland and the egg's bottom labels were checked
   at 320–900 px and shown to the owner, who was happy with it. More trim is the owner's
@@ -43,7 +43,7 @@ or the owner for such details before committing it.
 1. **Releases work.** The owner published `v0.6.1` by hand on 2026-10-26 (and set
    Workflow permissions to "Read and write"). That tag push registered `release.yml`,
    and its first run passed. This session released 0.7.0 (Hearth) through
-   0.14.0 (Night Sky); the commit log says what each held. Releases go out with Actions → Release → Run workflow, dispatched through the
+   0.15.0 (adults, luna moth); the commit log says what each held. Releases go out with Actions → Release → Run workflow, dispatched through the
    GitHub MCP tool (`actions_run_trigger`, `release.yml`, ref = this branch).
 2. **Hearth is live (kitten ready).** Sol's "Hearth v2" pack fixed the kitten's
    flagged frames and brought Hearth's egg, four rooms, emblem and decorations; review
@@ -87,7 +87,8 @@ or the owner for such details before committing it.
    - BirdNET visits (the owner's entities, the stalled `last_bird` feed and the
      fallback are in the private house notes)
    - a chirp sound on calls (browser autoplay rules apply)
-6. **Adult forms requested from Sol (2026-10-26, one batch):** a 4th stage for the 8 live
+6. **Adult forms: delivered and live for 8 creatures (2026-10-26).** See `art/README.md`
+   "Adult pass" for the scale fix. The original request: a 4th stage for the 8 live
    creatures, 4 sheets each, 160 sprites: `sprites/<species>/adult_<mood>_<1|2>.png`
    for the 10 moods, at the teen's height (teens are already the biggest; adults look
    grown-up through details, not size). The creatures still to come get the same 4
@@ -95,8 +96,9 @@ or the owner for such details before committing it.
    "adult" to each `species.json` `stages`, drop `stage_fallback`, and check an adult in
    the browser. A slim set (content, asleep, sick, calling) was the cheaper option, not
    chosen.
-7. **Art queue:** the luna moth (Night Sky), the deer (Woodland), the tarantula face
-   re-run, and the adult pass. Sol is sending `bg_night`
+7. **Art queue:** the deer (Woodland), the tarantula face re-run, and adults for the
+   creatures drawn after the adult pass (axolotl, bat, luna moth; deer and tarantula
+   get theirs in their own batches). Sol is sending `bg_night`
    replacements for Pond and Tidepool on their day scenes' layouts: drop them into
    `sprites/treefrog/` and `sprites/otter/` after the usual checks.
    Review tip: run a connected-pieces check on every sprite; the leg gap that shipped in

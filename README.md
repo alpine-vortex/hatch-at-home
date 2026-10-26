@@ -16,7 +16,7 @@ leopard gecko, with the red-knee tarantula to come), a little red house for Hear
 (the tabby kitten and the lop bunny), and a riveted porthole for Tidepool (the sea otter and the giant Pacific octopus,
 whose water clouds over instead of collecting poop), a lily pad for Pond (the
 Pacific tree frog and the axolotl), and a crescent moon for Night Sky (the little
-brown bat, with the luna moth to come). The egg decides which of that world's
+brown bat and the luna moth). The egg decides which of that world's
 creatures hatches. See `docs/design-worlds.md`.
 
 ## Install
@@ -33,7 +33,7 @@ creatures hatches. See `docs/design-worlds.md`.
 3. Restart HA: Settings → System → power icon (top right) → Restart Home Assistant.
 4. Settings → Devices & services → Add integration → search **Virtual Pet**,
    then name your pet and pick its world: Woodland (bird, squirrel), Terrarium
-   (leopard gecko), Hearth (kitten, bunny), Tidepool (sea otter, octopus) Pond (tree frog, axolotl) or Night Sky (bat). Add the integration again for each extra pet device.
+   (leopard gecko), Hearth (kitten, bunny), Tidepool (sea otter, octopus) Pond (tree frog, axolotl) or Night Sky (bat, luna moth). Add the integration again for each extra pet device.
 
 ### Updating
 
@@ -325,7 +325,7 @@ HACS's and Home Assistant's checks and the tests on every push.
 1. ✅ Living pet
 2. ✅ The card: device shelf, sprites, speech bubble, poop, attention icon, status screen
 3. ✅ Home awareness: options (entity mapping, bedtime, privacy), weather, light, bedtime, presence, activity, AQI and requests
-4. Life (in progress): ✅ traits, ✅ generations and journal, ✅ moon, ✅ notifications; adult forms, journal, sky events (plus bird visits from BirdNET-Pi), notifications
+4. Life (in progress): ✅ traits, ✅ generations and journal, ✅ moon, ✅ notifications, ✅ adult forms; journal, sky events (plus bird visits from BirdNET-Pi), notifications
 5. ✅ HACS packaging
 6. Chores, minigames, more species
 

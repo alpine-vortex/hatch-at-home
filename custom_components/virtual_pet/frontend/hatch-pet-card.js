@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.14.0";
+const VERSION = "0.15.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -231,7 +231,7 @@ const STYLE = `
   .screen.night .bg { filter: brightness(.85); }
   .screen.dim .bg { filter: brightness(.5) saturate(.75); }
   .screen.dim .pet { filter: brightness(.8); }
-  .pet { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; }
+  .pet { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%; }
   .pet.hop { animation: hop .7s ease-in-out infinite; }
   @keyframes hop { 50% { transform: translateY(-9%); } }
   .poop { bottom: 5%; height: 15%; }
@@ -765,6 +765,10 @@ class HatchPetCard extends HTMLElement {
     }
     s.pet.classList.toggle("hop", mood?.state === "excited");
     s.pet.alt = s.species?.name || "pet";
+    // Some stages are drawn smaller in the frame (long adults fit 256 px wide by
+    // coming out shorter); species.json "scale" sizes them back up, feet fixed.
+    const drawn = sp.stages?.includes(stage) ? stage : sp.stage_fallback?.[stage];
+    s.pet.style.scale = String(sp.scale?.[drawn] || 1);
 
     const poop = away ? 0 : Number(this._state(s, "sensor.poop")?.state || 0);
     // Water worlds cloud over instead of showing poop (worlds.json "mess": "murk").

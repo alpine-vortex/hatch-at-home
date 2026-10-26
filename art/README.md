@@ -120,3 +120,33 @@ mushroom came as `ui/deco_mushroom.png`, which is Woodland's red toadstool, so i
 saved as `deco_glowshroom`, the name `worlds.json` already used for Night Sky. Ask Sol
 to name world decorations uniquely. Night Sky isn't a water world, so poop stays poop.
 Kit prompts are in `art/nightsky/`.
+
+## Luna moth (Night Sky): ready 2026-10-26
+
+72 sprites (sha256 checked); the size, gap and sliver checks came back clean. It has
+two signature poses, not three (glow, with a little lantern flower, and wing_spread),
+hence 72. Baby and child are the green caterpillar; the teen is the winged moth.
+Props: leaves (`feed`) and a flower (`snack`); `play` borrows the bird's ball. It
+hatches from the bat's starry egg and borrows the bat's meadow scenes.
+
+## Matching nights for Tidepool and Pond: 2026-10-26
+
+`otter/bg_night.png` and `treefrog/bg_night.png` replaced (sha256 checked): each is now
+its day scene by moonlight, so the scene no longer changes place at sunset.
+
+## Adult pass: 2026-10-26
+
+Sol's batch (sha256 checked): `adult_<mood>_<1|2>.png` for bird, squirrel, gecko,
+kitten, bunny, otter, octopus and tree frog, 160 sprites. All 256x256 RGBA with the
+feet on y=224, a one-pixel content bob, and no slivers or gaps. Adults look grown up
+through detail: smaller heads, longer bodies, calmer eyes, the squirrel's bushier tail,
+bolder gecko spots and a deeper octopus red.
+
+Long adults fit 256 px wide by coming out shorter than their teen (content height,
+adult vs teen: bird 164/188, kitten 164/188, bunny 148/184, gecko 84/108, octopus
+112/144, tree frog 124/148, otter 148/156; the squirrel is taller). Instead of a
+redraw, `species.json` gets `"scale": {"adult": ...}` (1.15 to 1.2, capped so wide
+adults stay on screen; otter 1.05, squirrel none), which the card applies with the feet
+fixed. Sizes still vary a little between moods (asleep and sick come out bigger), as
+the teens' do. Prompts are in `art/<species>/adult/`, Sol's adult scripts in
+`art/adults/`; the raw sheets aren't committed.
