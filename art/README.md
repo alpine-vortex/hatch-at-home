@@ -55,3 +55,12 @@ The first import (75 sprites) was held back for three things, all fixed in Sol's
   Woodland cabin and was never imported.
 
 Hearth's `emblem_hearth`, `deco_yarn` and `deco_cushion` came in the same pack.
+
+## Lop bunny (Hearth): ready 2026-10-26
+
+74 sprites (sha256 checked), all 256×256 RGBA with the feet on y=224; the hay pile
+(`bowl_food`) and carrot (`snack`) are 128×128. Signature poses: binky, flop, thump.
+Its `content_1` frames are `content_2` raised one art pixel, a fix Sol's cutter
+(`art/bunny/cut_creature.py`) now applies to every creature. The bunny is second on
+Hearth's roster, so it hatches from the kitten's egg and borrows the kitten's rooms;
+`play` borrows the bird's ball.

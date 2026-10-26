@@ -1,0 +1,10 @@
+Use your image generation tool to draw ONE square image and save it as child_3.png in the current directory.
+
+A sheet of 2 rows x 2 columns of equal square cells, each cell one pose of the same original cute lop-eared bunny as in the attached probe sheet: soft grey-brown fur, cream muzzle and chest, long floppy ears hanging beside the face, round white cotton tail, four paws. Faces three-quarters to the right. BODY COLOURS stay identical in every cell and every mood (same fur/skin colours as the reference); moods show through face, pose and small props only, never by recolouring the body.
+CHILD: the round young bunny (row 1 middle).
+- Row 1: mood 'asleep': eyes closed, resting curled up, a small 'z'. Left = frame 1; right = frame 2 = same, a second small 'z' higher up.
+- Row 2: mood 'sick': droopy sad eyes, a small thermometer in its mouth (NO colour tint on the body). Left = frame 1; right = frame 2 = same, a small wobble lean.
+In every cell the creature is the same size and rests on the same height, low in the cell.
+
+Art style: chunky retro pixel art exactly like the attached reference sheet: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark pixel outline. Keep the reference's pixel size relative to the subject, so the pixels are large and clearly visible
+Background: one flat even mid-grey everywhere (no gradient, no texture, no floor, no shadows on it). Every subject is drawn whole inside its own cell with a generous empty margin; nothing crosses a cell edge. No text labels, no titles, no cell borders, no grid lines.

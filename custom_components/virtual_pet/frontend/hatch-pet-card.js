@@ -518,6 +518,7 @@ class HatchPetCard extends HTMLElement {
         s.speciesId = speciesId;
         s.species = null;
         loadJson(`sprites/${speciesId}/species.json`).then((data) => {
+          if (s.speciesId !== speciesId) return; // the slide moved on while this loaded
           s.species = data;
           this._sig = null;
           this._update();
