@@ -14,6 +14,7 @@ from homeassistant.core import (
     Event,
     EventStateChangedData,
     HomeAssistant,
+    State,
     callback,
 )
 from homeassistant.helpers import device_registry as dr
@@ -27,6 +28,7 @@ from . import model, notify, rates as R
 from .const import (
     CONF_AWAY_AFTER,
     CONF_BEDTIME,
+    CONF_CHORES,
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
     CONF_PRIVACY,
@@ -100,6 +102,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
         self.watcher = Watcher(hass, entry.options)
         self._home_started = False
+        # Completed to-do items per list, to spot newly done chores.
+        self._chores_done: dict[str, set[str]] = {}
         self._home_debouncer = Debouncer(
             hass,
             LOGGER,
@@ -201,6 +205,60 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
         self.config_entry.async_on_unload(self._home_debouncer.async_shutdown)
         self.hass.async_create_task(self._async_home_changed())
+
+        chores = self.config_entry.options.get(CONF_CHORES) or []
+        if chores:
+
+            @callback
+            def chore_list_changed(event: Event[EventStateChangedData]) -> None:
+                self.config_entry.async_create_background_task(
+                    self.hass,
+                    self._async_chores_changed(event.data["entity_id"]),
+                    f"{DOMAIN} chores",
+                )
+
+            self.config_entry.async_on_unload(
+                async_track_state_change_event(self.hass, chores, chore_list_changed)
+            )
+            for entity_id in chores:  # what's already done earns nothing
+                self.config_entry.async_create_background_task(
+                    self.hass, self._async_chores_changed(entity_id), f"{DOMAIN} chores"
+                )
+
+    async def _completed_chores(self, entity_id: str) -> set[str] | None:
+        """IDs of the list's completed items, or None if it can't be read."""
+        state: State | None = self.hass.states.get(entity_id)
+        if state is None or state.state in ("unavailable", "unknown"):
+            return None
+        try:
+            response = await self.hass.services.async_call(
+                "todo",
+                "get_items",
+                {"entity_id": entity_id, "status": ["completed"]},
+                blocking=True,
+                return_response=True,
+            )
+        except Exception:  # noqa: BLE001 - a broken list must not break the pet
+            LOGGER.debug("Couldn't read the chores on %s", entity_id, exc_info=True)
+            return None
+        items = (response or {}).get(entity_id, {}).get("items", [])
+        return {str(i.get("uid") or i.get("summary")) for i in items}
+
+    async def _async_chores_changed(self, entity_id: str) -> None:
+        """A to-do list changed: newly completed items earn treats."""
+        done = await self._completed_chores(entity_id)
+        if done is None or self.state is None:
+            return
+        known = self._chores_done.get(entity_id)
+        self._chores_done[entity_id] = done
+        if known is None or not (new := len(done - known)):
+            return
+        now = self._now()
+        self._advance(now)
+        if model.chores_done(self.state, new, now):
+            self._fire(model.give_treats(self.state, now))
+            self._save()
+            self._publish()
 
     async def _async_home_changed(self) -> None:
         assert self.state is not None
@@ -337,6 +395,24 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._save()
         self._publish()
         return result
+
+    async def async_play_game(
+        self, guess: str, context: Context | None
+    ) -> dict[str, Any]:
+        """One round of the left/right game."""
+        assert self.state is not None
+        now = self._now()
+        self._advance(now)
+        by = await self._who(context)
+        info, events = model.play_game(self.state, guess, now, self.rng, by)
+        if info["result"] == "away" and self.privacy:
+            info["result"] = self.state.care_log[0]["result"] = "asleep"
+            for event in events:
+                event["result"] = "asleep"
+        self._fire(events)
+        self._save()
+        self._publish()
+        return info
 
     async def async_lay_egg(self) -> None:
         """Start the next generation: the adult retires, an egg takes its place."""

@@ -30,7 +30,7 @@ function icon(name, size = 22) {
 const ACTIONS = [
   { key: "feed", label: "feed", wants: "hungry" },
   { key: "snack", label: "snack" },
-  { key: "play", label: "play", wants: "bored" },
+  { key: "play", label: "play", aria: "play: a left or right guessing game", wants: "bored" },
   { key: "clean", label: "clean", wants: "dirty" },
   { key: "medicine", label: "meds", aria: "meds: give medicine", wants: "sick" },
   { key: "scold", label: "scold" },
@@ -51,12 +51,21 @@ const REFUSALS = {
   away: "I'm at the sitter's!",
 };
 
+// Actions that borrow another action's prop sprite.
+const PROP_FOR = { game: "play", chore_treat: "snack" };
+
 // Home flags that swap the pet into a special pose (species.json "extras").
 const POSES = {
   too_bright: "squint", chilly: "shiver", warm: "sweat", masked: "mask",
   dancing: "dance", watching_tv: "watch_tv",
 };
 const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
+
+// The same bands as rates.py (WEIGHT_LIGHT_BELOW, WEIGHT_HEAVY_ABOVE).
+function weightLabel(v) {
+  if (v === null) return "–";
+  return `${Math.round(v)} · ${v < 25 ? "a bit light" : v > 75 ? "a bit heavy" : "just right"}`;
+}
 
 const REQUEST_LABELS = { blanket: "blanket?", fan: "fan?", lay_egg: "lay an egg?" };
 const REQUEST_ARIA = {
@@ -248,6 +257,24 @@ const STYLE = `
     background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a; border-radius: 8px;
     font-size: 14px; line-height: 1.2; box-shadow: 3px 3px 0 #3a2a1a; }
   .bubble:empty { display: none; }
+  /* The left/right game: two big guess buttons and a score over the scene. */
+  .game { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+  .game[hidden] { display: none; }
+  .game button { pointer-events: auto; position: absolute; display: grid; place-items: center;
+    min-width: 44px; min-height: 44px; border-radius: 50%; border: 2px solid #3a2a1a;
+    background: #fffdf5; color: #3a2a1a; box-shadow: 2px 2px 0 #3a2a1a; cursor: pointer; padding: 0; }
+  .game button:disabled { opacity: .5; cursor: default; }
+  .game button:focus-visible { outline: 3px solid #fffdf5; outline-offset: 2px; }
+  .game .gl { left: 4%; bottom: 8%; }
+  .game .gr { right: 4%; bottom: 8%; }
+  .game .gx { right: 4%; top: 6%; min-width: 32px; min-height: 32px; font: inherit; font-size: 14px; }
+  .game .gscore { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
+    padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
+    border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
+  .screen.show-status .game { display: none; }
+  .pet { transition: translate .25s ease-out; }
+  .pet.go-left { translate: -60% 0; }
+  .pet.go-right { translate: 60% 0; }
   .status { position: absolute; inset: 0; background: #e9e2c6; color: #2f3a24; padding: 9px 12px;
     display: none; flex-direction: column; gap: 4px; font-size: 13px; overflow: auto; }
   .screen.show-status .status { display: flex; }
@@ -480,6 +507,12 @@ class HatchPetCard extends HTMLElement {
             <img class="murk" alt="">
             <img class="attention" alt="">
             <div class="bubble"></div>
+            <div class="game" hidden>
+              <button class="gl" aria-label="Guess left">${icon("prev", 22)}</button>
+              <span class="gscore" aria-live="polite"></span>
+              <button class="gr" aria-label="Guess right">${icon("next", 22)}</button>
+              <button class="gx" aria-label="Stop the game">✕</button>
+            </div>
             <div class="status"></div>
           </div><button class="request"></button></div>
           <div class="buttons"></div>
@@ -493,8 +526,13 @@ class HatchPetCard extends HTMLElement {
       awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), pet: q(".pet"), prop: q(".prop"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
-      request: q(".request"),
+      request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"),
     };
+    // Taps on the game mustn't reach the screen behind (which opens the status).
+    s.gameBox.addEventListener("click", (e) => e.stopPropagation());
+    q(".gl").addEventListener("click", () => this._guess(s, "left"));
+    q(".gr").addEventListener("click", () => this._guess(s, "right"));
+    q(".gx").addEventListener("click", () => this._endGame(s, "maybe later!"));
     s.request.addEventListener("click", () => {
       const key = s.request.dataset.key;
       if (!key) return;
@@ -527,7 +565,8 @@ class HatchPetCard extends HTMLElement {
       b.className = "toy";
       b.innerHTML = `<span class="cap">${pixelIcon(ACTION_ICONS[action.key])}</span><span>${action.label}</span>`;
       if (action.aria) b.setAttribute("aria-label", action.aria);
-      b.addEventListener("click", () => this._press(s, action.key));
+      b.addEventListener("click", () =>
+        action.key === "play" ? this._startGame(s, b) : this._press(s, action.key));
       box.append(b);
       s.buttons[action.key] = b;
     }
@@ -788,6 +827,7 @@ class HatchPetCard extends HTMLElement {
       s.lastLogAt = latestAt;
     }
     const egg = stage === "egg";
+    if (s.game && (asleep || away || egg)) this._endGame(s, null);
     s.hatchesAt = egg ? stageState?.attributes.hatches_at : null;
     if (!s.sayUntil || Date.now() > s.sayUntil) s.bubble.textContent = this._say(s, mood, away);
 
@@ -885,8 +925,12 @@ class HatchPetCard extends HTMLElement {
   }
 
   _react(s, entry) {
-    if (entry.result === "ok") {
-      const prop = s.species?.props?.[entry.action];
+    if (entry.action === "chore_treat") {
+      s.bubble.textContent = "a treat! someone did a chore ♪";
+      s.sayUntil = Date.now() + 3500;
+    }
+    if (["ok", "won", "lost"].includes(entry.result)) {
+      const prop = s.species?.props?.[PROP_FOR[entry.action] || entry.action];
       if (prop) {
         this._show(s, s.prop, prop);
         s.propUntil = Date.now() + 2500;
@@ -928,14 +972,15 @@ class HatchPetCard extends HTMLElement {
     const ic = (n) => pixelIcon(n, 18);
     const bar = (v) => v === null ? "–" : `<div class="bar"><div style="width:${v}%"></div></div>`;
     const lines = log.slice(0, 3).map((e) =>
-      `<div>${escape(e.action)}${e.by ? ` by ${escape(e.by)}` : ""} · ${timeAgo(e.at)}` +
-      `${e.result && e.result !== "ok" ? ` (${escape(e.result.replace("_", " "))})` : ""}</div>`);
+      `<div>${escape(e.action.replace("_", " "))}${e.by ? ` by ${escape(e.by)}` : ""} · ${timeAgo(e.at)}` +
+      `${e.result && e.result !== "ok" ? ` (${escape(e.result.replace("_", " "))}${e.score ? ` ${escape(e.score)}` : ""})` : ""}</div>`);
     s.status.innerHTML = `
       <div class="row icons">${ic("icon_feed")}<span>hunger</span>${hearts(value("hunger"))}</div>
       <div class="row icons">${ic("icon_play")}<span>happy</span>${hearts(value("happiness"))}</div>
       <div class="row icons">${ic("stat_energy")}<span>energy</span>${bar(value("energy"))}</div>
       <div class="row icons">${ic("stat_health")}<span>health</span>${bar(value("health"))}</div>
       <div class="row icons">${ic("stat_discipline")}<span>discipline</span>${bar(value("discipline"))}</div>
+      <div class="row traits"><span>weight</span><span>${weightLabel(value("weight"))}</span></div>
       <div class="row icons">${ic("stat_care_miss")}<span>misses</span><span>${value("care_misses") ?? "–"}</span></div>
       <div class="row traits"><span>traits</span><span>${traits.length ? traits.join(" · ") : "none yet"}</span></div>
       ${stageAttrs.upbringing ? `<div class="row traits"><span>${this._state(s, "sensor.life_stage")?.state === "adult" ? "raised" : "growing up"}</span><span>${escape(stageAttrs.upbringing)}</span></div>` : ""}
@@ -1061,6 +1106,77 @@ class HatchPetCard extends HTMLElement {
     const id = s.ids?.[`button.${action}`];
     const button = action in s.buttons ? s.buttons[action] : s.request;
     if (id) this._call(button, s, "button", "press", id);
+  }
+
+  // --- The left/right game --------------------------------------------------
+  // The server hides the pet and keeps score (virtual_pet.play_game); the card
+  // only asks, and shows where the pet went.
+
+  _startGame(s, button) {
+    this._tapped(button, s);
+    const energy = Number.parseFloat(this._state(s, "sensor.energy")?.state);
+    const refusal = s.asleep ? REFUSALS.asleep : energy < 15 ? REFUSALS.too_tired : null;
+    if (refusal) {
+      s.bubble.textContent = refusal;
+      s.sayUntil = Date.now() + 3500;
+      return;
+    }
+    if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
+    s.game = { round: 0, wins: 0, busy: false };
+    s.gameBox.hidden = false;
+    s.gameScore.textContent = `round 1/5`;
+    s.bubble.textContent = "left or right? guess where I'll go!";
+    s.sayUntil = Date.now() + 60000;
+    s.gameBox.querySelector(".gl").focus({ preventScroll: true });
+  }
+
+  async _guess(s, side) {
+    const id = s.ids?.["sensor.mood"];
+    if (!s.game || s.game.busy || !id) return;
+    s.game.busy = true;
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = true; });
+    let info;
+    try {
+      const res = await this._hass.callService(
+        "virtual_pet", "play_game", { entity_id: id, guess: side }, undefined, false, true);
+      info = res?.response;
+    } catch (err) {
+      this._endGame(s, "hmm, that didn't work");
+      return;
+    }
+    if (!s.game) return; // stopped while waiting
+    if (!info || info.result !== "ok") {
+      this._endGame(s, REFUSALS[info?.result] || "not now");
+      return;
+    }
+    s.game.round = info.round;
+    s.game.wins = info.wins;
+    s.pet.classList.add(`go-${info.went}`);
+    s.bubble.textContent = info.correct ? "yes! you found me" : `nope, I went ${info.went}!`;
+    s.gameScore.textContent = `round ${info.round}/${info.rounds} · ${info.wins} right`;
+    if (navigator.vibrate && info.correct) navigator.vibrate([12, 40, 12]);
+    setTimeout(() => {
+      s.pet.classList.remove("go-left", "go-right");
+      if (!s.game) return;
+      if (info.done) {
+        this._endGame(s, info.won ? `${info.wins}/${info.rounds}! you win ♪` :
+          `${info.wins}/${info.rounds}... again sometime?`);
+        return;
+      }
+      s.game.busy = false;
+      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });
+      s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
+      s.bubble.textContent = "again! left or right?";
+    }, 900);
+  }
+
+  _endGame(s, line) {
+    s.game = null;
+    s.gameBox.hidden = true;
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });
+    s.pet.classList.remove("go-left", "go-right");
+    if (line) s.bubble.textContent = line;
+    s.sayUntil = line ? Date.now() + 4000 : 0;
   }
 
   _toggleLights(s) {

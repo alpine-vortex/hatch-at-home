@@ -37,6 +37,7 @@ from .const import (
     CONF_AWAY_AFTER,
     CONF_BEDTIME,
     CONF_BEDTIME_LIGHTS,
+    CONF_CHORES,
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
     CONF_FIREPLACE,
@@ -206,6 +207,7 @@ class PetOptionsFlow(OptionsFlowWithReload):
                 (CONF_SITTER_SETTLES, BooleanSelector(), True),
                 (CONF_TV, _entities("media_player", True), None),
                 (CONF_MUSIC, _entities("media_player", True), None),
+                (CONF_CHORES, _entities("todo", True), None),
             ],
             "sky": [
                 (CONF_MOON_PHASE, _entities("sensor"), None),

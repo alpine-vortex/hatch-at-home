@@ -26,3 +26,18 @@ notify_me:
       example: true
       selector:
         boolean:
+play_game:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: virtual_pet
+    guess:
+      required: true
+      example: left
+      selector:
+        select:
+          options:
+            - left
+            - right

@@ -780,3 +780,144 @@ def test_notification_wording(event, text):
 
     names = {"axolotl": "Axolotl", "bird": "Bird"}
     assert notify.message(event, "Pip", names) == text
+
+
+class Lucky(NoLuck):
+    """Every chance fires."""
+
+    def random(self) -> float:
+        return 0.0
+
+
+def test_weight_burns_while_awake_and_care_moves_it():
+    start = at(9)
+    pet = hatched(start, hunger=50.0)
+    run(pet, start + 2 * HOUR)
+    assert pet.weight == pytest.approx(R.WEIGHT_START - 2 * R.WEIGHT_BURN)
+    before = pet.weight
+    model.apply_action(pet, "feed", start + 2 * HOUR, NoLuck())
+    model.apply_action(pet, "snack", start + 2 * HOUR, NoLuck())
+    model.apply_action(pet, "play", start + 2 * HOUR, NoLuck())
+    assert pet.weight == pytest.approx(
+        before + R.WEIGHT_FEED + R.WEIGHT_SNACK + R.WEIGHT_PLAY
+    )
+
+
+def test_a_heavy_pet_stops_healing_and_can_get_sick():
+    start = at(9)
+    heavy = hatched(start, health=50.0, weight=90.0)
+    run(heavy, start + HOUR)
+    assert heavy.health == 50.0  # no regen
+    assert "heavy" in model.mood(heavy, start + HOUR, SETTINGS)[1]
+    sick = hatched(start, weight=90.0)
+    events = model.advance(sick, start + 10 * MIN, SETTINGS, Lucky(), max_gap=None)
+    assert {"type": "became_sick", "cause": "weight"} in events
+
+
+def test_a_light_pet_stops_healing():
+    start = at(9)
+    pet = hatched(start, health=50.0, weight=10.0)
+    run(pet, start + HOUR)
+    assert pet.health == 50.0
+    assert "light" in model.mood(pet, start + HOUR, SETTINGS)[1]
+
+
+def play_rounds(pet, guesses, t, rng):
+    results = []
+    for i, guess in enumerate(guesses):
+        info, events = model.play_game(pet, guess, t + i * 10, rng)
+        results.append((info, events))
+    return results
+
+
+class Always(random.Random):
+    """The pet always hides on one side."""
+
+    def __init__(self, side: str) -> None:
+        super().__init__(0)
+        self.side = side
+
+    def choice(self, seq):
+        return self.side
+
+
+def test_winning_the_game_cheers_it_up_more_than_losing():
+    start = at(9)
+    winner = hatched(start, happiness=50.0)
+    rounds = play_rounds(winner, ["left"] * 5, start, Always("left"))
+    assert [r[0]["round"] for r in rounds] == [1, 2, 3, 4, 5]
+    last, events = rounds[-1]
+    assert last["done"] and last["won"] and last["wins"] == 5
+    assert winner.happiness == 50.0 + R.GAME_WIN_HAPPINESS
+    assert winner.weight == R.WEIGHT_START + R.WEIGHT_GAME
+    assert winner.game is None
+    assert winner.care_log[0]["result"] == "won"
+    assert {"type": "game_finished", "won": True, "wins": 5} in events
+
+    loser = hatched(start, happiness=50.0)
+    rounds = play_rounds(loser, ["right"] * 5, start, Always("left"))
+    assert rounds[-1][0]["won"] is False
+    assert loser.happiness == 50.0 + R.GAME_LOSE_HAPPINESS
+    assert loser.care_log[0] == {
+        "at": start + 40,
+        "action": "game",
+        "by": None,
+        "result": "lost",
+        "score": "0/5",
+    }
+
+
+def test_the_game_is_refused_when_it_cant_play():
+    pet = hatched(at(9), energy=5.0)
+    info, events = model.play_game(pet, "left", at(9), NoLuck())
+    assert info == {"result": "too_tired"}
+    assert pet.game is None and pet.care_log[0]["result"] == "too_tired"
+    asleep = hatched(at(9))
+    asleep.asleep = True
+    assert model.play_game(asleep, "left", at(9), NoLuck())[0]["result"] == "asleep"
+
+
+def test_an_unfinished_game_is_dropped():
+    start = at(9)
+    pet = hatched(start)
+    model.play_game(pet, "left", start, NoLuck())
+    assert pet.game is not None
+    run(pet, start + (R.GAME_IDLE_MINUTES + 1) * MIN)
+    assert pet.game is None
+    info, _ = model.play_game(pet, "left", start + HOUR, NoLuck())
+    assert info["round"] == 1  # a fresh game
+
+
+def test_chores_earn_treats_up_to_a_daily_limit():
+    start = at(9)
+    pet = hatched(start, hunger=50.0, happiness=50.0)
+    assert model.chores_done(pet, 2, start) == 2
+    events = model.give_treats(pet, start)
+    assert types(events) == ["chore_treat", "chore_treat"]
+    assert pet.hunger == 50.0 + 2 * R.CHORE_TREAT_HUNGER
+    assert pet.care_log[0]["action"] == "chore_treat"
+    assert model.chores_done(pet, 10, start + HOUR) == R.CHORE_TREATS_PER_DAY - 2
+    assert pet.treats_waiting == R.CHORE_TREATS_WAITING  # the rest are capped
+    model.give_treats(pet, start + HOUR)
+    assert model.chores_done(pet, 1, start + 2 * HOUR) == 0  # the day's limit
+    assert model.chores_done(pet, 1, start + 25 * HOUR) == 1  # a new day
+
+
+def test_chore_treats_wait_for_it_to_wake_up():
+    pet = hatched(at(23, 30))
+    pet.asleep = True
+    pet.wake_at = at(7, day=2)
+    model.chores_done(pet, 1, at(23, 40))
+    assert model.give_treats(pet, at(23, 40)) == []
+    events = model.advance(pet, at(7, 10, day=2), SETTINGS, NoLuck(), max_gap=None)
+    assert "chore_treat" in types(events)
+    assert pet.treats_waiting == 0
+
+
+def test_old_saves_without_weight_start_in_the_middle():
+    data = hatched(at(9)).to_dict()
+    del data["weight"], data["game"]
+    pet = model.PetState.from_dict(data)
+    assert pet.weight == R.WEIGHT_START and pet.game is None
+    data["game"] = {"started": 1.0, "last_at": 2.0, "rounds": 2, "wins": 1, "x": 0}
+    assert model.PetState.from_dict(data).game == model.Game(1.0, 2.0, 2, 1)

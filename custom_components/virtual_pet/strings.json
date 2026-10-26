@@ -78,20 +78,22 @@
           },
           "activity": {
             "name": "People and activity",
-            "description": "Someone arriving gets an excited greeting, at most once every 30 minutes. When nobody is home for a while, the pet goes to the sitter's and time stops for it, so it never gets lonely or hungry. Music makes it dance and the TV makes it watch along, each with a small happiness bonus.",
+            "description": "Someone arriving gets an excited greeting, at most once every 30 minutes. When nobody is home for a while, the pet goes to the sitter's and time stops for it, so it never gets lonely or hungry. Music makes it dance and the TV makes it watch along, each with a small happiness bonus. Ticking off chores on a to-do list earns the pet treats.",
             "data": {
               "zone": "Home zone",
               "away_after": "Go to the sitter's after",
               "sitter_settles": "The sitter settles whining",
               "tv": "TVs",
-              "music": "Music players"
+              "music": "Music players",
+              "chores": "Chore lists"
             },
             "data_description": {
               "zone": "The pet counts the people in this zone. Only people tracked in Home Assistant count.",
               "away_after": "How long the house has to be empty first.",
               "sitter_settles": "On: if the pet was whining for attention when it left (a fake call), the sitter settles it, so it comes home happy. Off: the whine waits for you. Real needs, like hunger, always wait.",
               "tv": "Media players that are TVs. On or playing counts as watching.",
-              "music": "Speakers and displays. Playing anything that isn't video counts as music."
+              "music": "Speakers and displays. Playing anything that isn't video counts as music.",
+              "chores": "To-do lists. Each item someone ticks off earns the pet a treat (up to 5 a day); it waits if the pet is asleep or away."
             }
           },
           "sky": {
@@ -225,6 +227,9 @@
       },
       "debug": {
         "name": "Debug"
+      },
+      "weight": {
+        "name": "Weight"
       }
     },
     "switch": {
@@ -264,6 +269,20 @@
         "enabled": {
           "name": "Enabled",
           "description": "On to get notifications, off to stop."
+        }
+      }
+    },
+    "play_game": {
+      "name": "Play the left/right game",
+      "description": "One round of the guessing game the card's play button starts: the pet hides left or right and you guess. Five rounds make a game; three right guesses win it, and a win cheers the pet up more than plain play.",
+      "fields": {
+        "entity_id": {
+          "name": "Pet",
+          "description": "Any entity of the pet."
+        },
+        "guess": {
+          "name": "Guess",
+          "description": "Left or right."
         }
       }
     }

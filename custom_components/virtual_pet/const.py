@@ -19,6 +19,8 @@ STORE_MINOR_VERSION = 1
 SERVICE_NOTIFY_ME = "notify_me"
 ATTR_ENABLED = "enabled"
 SERVICE_FAST_FORWARD = "fast_forward"
+SERVICE_PLAY_GAME = "play_game"
+ATTR_GUESS = "guess"
 ATTR_HOURS = "hours"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 
@@ -54,3 +56,4 @@ CONF_SITTER_SETTLES = "sitter_settles"  # the sitter answers a whine
 CONF_MOON_PHASE = "moon_phase"
 CONF_MOON_ILLUMINATION = "moon_illumination"  # 0-1 or %
 CONF_MOON_ALTITUDE = "moon_altitude"  # degrees; above 0 means up
+CONF_CHORES = "chores"  # to-do lists; a done item earns the pet a treat

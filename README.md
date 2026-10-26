@@ -71,6 +71,10 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   swipe to move to the next device.
 - The screen shows the pet, its scene and a speech bubble. The bubble says what's on
   its mind, or why it refused something ("I'm full!").
+- **Play** starts the left/right game: the pet hides on one side and you guess with the
+  arrows. Five rounds; three right guesses win, and a win cheers it up more than plain
+  play. ✕ stops the game. (The `play` button entity is still plain play, for
+  automations and voice.)
 - Tap the screen for the status page: hearts, meters, care misses and who did what
   recently. Tap again to go back.
 - Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
@@ -93,7 +97,7 @@ notifications and journal follow), with:
 
 | Entity | What it is |
 | --- | --- |
-| `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. |
+| `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline`, `_weight` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. Weight is healthy between 25 and 75. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `call_deadline`. |
 | `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `generation`, `upbringing` (final once adult, what it's on track for before) and `journal` (the device's retired pets). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far. |
@@ -187,6 +191,7 @@ the pet comes home.
 | The sitter settles whining | on | If the pet was whining for attention (a fake call) when it left, the sitter settles it and it comes home happy. Off: the whine waits for you. Real needs always wait. | on |
 | TVs | none | On or playing: watches along (small bonus). | `media_player.tv` |
 | Music players | none | Playing anything but video: dances (small bonus). | your speakers |
+| Chore lists | none | To-do lists. Each item someone ticks off earns the pet a treat (a little food and happiness, up to 5 a day). Treats wait if it's asleep or away. | your chores list |
 
 ### Sky
 
@@ -230,7 +235,15 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   to bed; outside sleep hours that's a nap that ends when it's rested. Left up
   past bedtime, it dozes off on its own after an hour with no penalty. Turning
   lights-out off during sleep hours costs a little happiness. No calls while asleep.
-- **Sickness:** health below 25, four care misses in a day, or old poop.
+- **Weight:** 0–100, healthy between 25 and 75. Meals (+4) and snacks (+6) add to it;
+  being awake (−0.7 an hour), play (−3) and the game (−4) burn it off. Three meals a
+  day roughly balance out, so snacks are what tip it. Too heavy or too light, it
+  stops healing; too heavy, it can also get sick. Starving loses weight.
+- **The game:** five rounds of left or right from the card (or `virtual_pet.play_game`,
+  which answers with where the pet went). It costs energy like play, and an
+  unfinished game is dropped after 3 minutes.
+- **Chores:** map a to-do list in the options, and every item ticked off earns a treat.
+- **Sickness:** health below 25, four care misses in a day, old poop, or being too heavy.
   Medicine cures it. **It never dies.**
 - **Upbringing:** on reaching adulthood, how it was raised sets its upbringing for
   life. Each care miss while growing up costs 10 of 100 care points; the score is
@@ -290,6 +303,7 @@ names are included.
 `virtual_pet_recovered`, `virtual_pet_fell_asleep`, `virtual_pet_woke_up`,
 `virtual_pet_stage_changed` (with `upbringing` on reaching adulthood), `virtual_pet_care`, `virtual_pet_hatched`,
 `virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`,
+`virtual_pet_game_finished` (with `won`, `wins`), `virtual_pet_chore_treat`,
 `virtual_pet_trait_learned` and `virtual_pet_trait_deepened` (with `trait`, `level`), `virtual_pet_egg_laid` (with `generation`,
 `parent_species`, `inherited_trait`).
 

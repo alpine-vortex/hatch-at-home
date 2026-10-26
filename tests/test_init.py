@@ -789,3 +789,94 @@ async def test_busy_attributes_stay_out_of_history(
         assert key in attrs
         assert key in LifeStageSensor._unrecorded_attributes, key
     assert attrs["upbringing"] == "steady"  # on track: no misses, no discipline
+
+
+async def test_play_game_service_plays_five_rounds(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0)
+    await setup(hass)
+    responses = []
+    for _ in range(5):
+        responses.append(
+            await hass.services.async_call(
+                DOMAIN,
+                "play_game",
+                {"entity_id": "button.pip_feed", "guess": "left"},
+                blocking=True,
+                return_response=True,
+            )
+        )
+    assert [r["round"] for r in responses] == [1, 2, 3, 4, 5]
+    assert responses[-1]["done"] is True
+    log = hass.states.get("sensor.pip_last_care").attributes["log"]
+    assert log[0]["action"] == "game"
+    assert log[0]["result"] in ("won", "lost")
+    assert int(hass.states.get("sensor.pip_happiness").state) > 50
+    assert hass.states.get("sensor.pip_weight") is not None
+
+
+async def test_ticking_off_a_chore_gives_the_pet_a_treat(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    from homeassistant.core import ServiceResponse, SupportsResponse
+
+    done = [{"uid": "1", "summary": "Dishes", "status": "completed"}]
+
+    async def get_items(call) -> ServiceResponse:
+        return {"todo.chores": {"items": list(done)}}
+
+    hass.services.async_register(
+        "todo", "get_items", get_items, supports_response=SupportsResponse.ONLY
+    )
+    hass.states.async_set("todo.chores", "2")
+    hass_storage[STORE_KEY] = hatched_pet(now, hunger=50.0)
+    treats = async_capture_events(hass, f"{DOMAIN}_chore_treat")
+    await setup_with_house(hass, chores=["todo.chores"])
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert treats == []  # already done before: nothing
+
+    done.append({"uid": "2", "summary": "Bins", "status": "completed"})
+    hass.states.async_set("todo.chores", "1")
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(treats) == 1
+    log = hass.states.get("sensor.pip_last_care").attributes["log"]
+    assert log[0]["action"] == "chore_treat"
+    assert int(hass.states.get("sensor.pip_hunger").state) >= 59
+
+
+async def test_chores_from_a_real_todo_list(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any], tmp_path
+) -> None:
+    from homeassistant.setup import async_setup_component
+
+    hass.config.config_dir = str(tmp_path)  # the shopping list saves a file there
+    assert await async_setup_component(hass, "shopping_list", {})
+    shopping = MockConfigEntry(domain="shopping_list")
+    shopping.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(shopping.entry_id)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    todo = next(s.entity_id for s in hass.states.async_all("todo"))
+    await hass.services.async_call(
+        "todo",
+        "add_item",
+        {"item": "Dishes"},
+        target={"entity_id": todo},
+        blocking=True,
+    )
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    treats = async_capture_events(hass, f"{DOMAIN}_chore_treat")
+    await setup_with_house(hass, chores=[todo])
+    await hass.async_block_till_done(wait_background_tasks=True)
+    await hass.services.async_call(
+        "todo",
+        "update_item",
+        {"item": "Dishes", "status": "completed"},
+        target={"entity_id": todo},
+        blocking=True,
+    )
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(treats) == 1

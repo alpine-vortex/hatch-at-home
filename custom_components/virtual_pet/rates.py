@@ -63,6 +63,37 @@ SCOLD_UNFAIR_HAPPINESS = -10.0  # scolding for nothing
 PRAISE_WHINING_DISCIPLINE = -10.0  # praising a fake call
 WAKE_IN_NIGHT_HAPPINESS = -5.0  # turning lights-out off during sleep hours
 
+# --- Weight (0-100; a healthy pet stays in the middle band) ----------------
+# Three meals a day roughly balance a day's burn; snacks tip it up, play and
+# games bring it down.
+
+WEIGHT_START = 50.0
+WEIGHT_FEED = 4.0
+WEIGHT_SNACK = 6.0
+WEIGHT_PLAY = -3.0
+WEIGHT_GAME = -4.0
+WEIGHT_CHORE_TREAT = 2.0
+WEIGHT_BURN = 0.7  # per awake hour
+WEIGHT_STARVING = -1.0  # per hour while hunger is 0
+WEIGHT_HEAVY_ABOVE = 75.0  # heavy: no health regen, and a risk of getting sick
+WEIGHT_LIGHT_BELOW = 25.0  # light: no health regen until it's fed up again
+WEIGHT_HEAVY_SICK_HAZARD = 0.02  # chance per hour of getting sick while heavy
+
+# --- The left/right game (the card's play button) ----------------------------
+
+GAME_ROUNDS = 5
+GAME_WIN_AT = 3  # right guesses out of GAME_ROUNDS
+GAME_WIN_HAPPINESS = 25.0  # more than plain play
+GAME_LOSE_HAPPINESS = 10.0
+GAME_IDLE_MINUTES = 3  # an unfinished game is dropped after this
+
+# --- Chores: a done to-do item earns the pet a treat --------------------------
+
+CHORE_TREAT_HUNGER = 10.0
+CHORE_TREAT_HAPPINESS = 10.0
+CHORE_TREATS_PER_DAY = 5
+CHORE_TREATS_WAITING = 3  # kept for it while it sleeps or is away
+
 # --- Poop -------------------------------------------------------------------
 
 DIGEST_MINUTES = 120  # a meal comes out about this long after eating

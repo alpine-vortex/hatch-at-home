@@ -17,7 +17,7 @@ from typing import Any
 from . import rates as R
 from .home import COZY_FLAGS, EXCITED_FLAGS, HomeEffect
 
-STATS = ("hunger", "happiness", "energy", "health", "discipline")
+STATS = ("hunger", "happiness", "energy", "health", "discipline", "weight")
 
 ACTIONS = ("feed", "snack", "play", "clean", "medicine", "scold", "praise")
 # Answers to what the house makes the pet ask for (see home.py).
@@ -59,6 +59,16 @@ class Call:
 
 
 @dataclass
+class Game:
+    """A left/right guessing game in progress (the card's play button)."""
+
+    started: float
+    last_at: float  # the last guess; an idle game is dropped
+    rounds: int = 0
+    wins: int = 0
+
+
+@dataclass
 class PetState:
     """Everything that is saved to the Store."""
 
@@ -71,6 +81,7 @@ class PetState:
     energy: float = 80.0
     health: float = 100.0
     discipline: float = 0.0
+    weight: float = R.WEIGHT_START
     poops: list[float] = field(default_factory=list)  # when each one appeared
     digesting: list[float] = field(default_factory=list)  # when each is due
     sick: bool = False
@@ -103,6 +114,9 @@ class PetState:
     notify_users: list[str] = field(default_factory=list)  # HA user IDs, opted in
     trait_hours: dict[str, float] = field(default_factory=dict)  # exposure, awake
     upbringing: str | None = None  # decided on reaching adulthood (UPBRINGINGS)
+    game: Game | None = None
+    treats_waiting: int = 0  # chore treats it gets when it's next awake and home
+    chore_treats: list[float] = field(default_factory=list)  # when each was earned
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store."""
@@ -125,6 +139,15 @@ class PetState:
             call_keys = {f.name for f in fields(Call)}
             call = {k: v for k, v in call.items() if k in call_keys}
             kwargs["call"] = Call(**call) if call.get("reason") in reasons else None
+        game = kwargs.get("game")
+        if game is not None:
+            game_keys = {f.name for f in fields(Game)}
+            try:
+                kwargs["game"] = Game(
+                    **{k: v for k, v in game.items() if k in game_keys}
+                )
+            except TypeError:
+                kwargs["game"] = None
         if kwargs.get("upbringing") not in UPBRINGINGS:
             kwargs["upbringing"] = None
         state = cls(**kwargs)
@@ -207,6 +230,10 @@ def shift_times(state: PetState, delta: float) -> None:
     state.poops = [t + delta for t in state.poops]
     state.digesting = [t + delta for t in state.digesting]
     state.recent_misses = [t + delta for t in state.recent_misses]
+    state.chore_treats = [t + delta for t in state.chore_treats]
+    if state.game is not None:
+        state.game.started += delta
+        state.game.last_at += delta
     if state.call is not None:
         state.call.started += delta
         state.call.deadline += delta
@@ -308,7 +335,10 @@ def _step(
     if stage == "egg":
         return
 
+    if state.game and t1 - state.game.last_at >= R.GAME_IDLE_MINUTES * 60:
+        state.game = None  # nobody finished it
     _sleep(state, t1, settings, events)
+    _give_treats(state, t1, events)
     _learn(state, hours, t1, settings, events)
     _decay(state, hours, t1, settings)
     _digest(state, t1, events)
@@ -388,6 +418,7 @@ def _fall_asleep(
 ) -> None:
     state.asleep = True
     state.napping = napping
+    state.game = None
     state.stayed_up_since = None
     state.wake_at = None if napping else next_wake(t, settings)
     if state.call is not None:
@@ -420,6 +451,7 @@ def _decay(state: PetState, hours: float, t: float, settings: Settings) -> None:
         state.happiness -= R.HAPPINESS_DECAY * easy * hours
         state.energy -= R.ENERGY_DECAY * hours
         state.discipline -= R.DISCIPLINE_DECAY * hours
+        state.weight -= R.WEIGHT_BURN * hours
 
     # The house only ever adds, and never more than the cap per stat.
     if not state.asleep:
@@ -440,14 +472,29 @@ def _decay(state: PetState, hours: float, t: float, settings: Settings) -> None:
         state.happiness += R.HAPPINESS_SICK * hours
     if state.hunger <= 0:
         health_rate += R.HEALTH_STARVING
+        state.weight += R.WEIGHT_STARVING * hours
     health_rate += R.HEALTH_PER_OLD_POOP * old_poops
-    if not state.sick and not state.poops and state.hunger >= R.HEALTHY_HUNGER_MIN:
+    if (
+        not state.sick
+        and not state.poops
+        and state.hunger >= R.HEALTHY_HUNGER_MIN
+        and weight_band(state) == "healthy"
+    ):
         health_rate += R.HEALTH_REGEN
     state.health += health_rate * hours
 
     for stat in STATS:
         setattr(state, stat, _clamp(getattr(state, stat)))
     state.health = max(state.health, R.HEALTH_FLOOR)
+
+
+def weight_band(state: PetState) -> str:
+    """'light', 'healthy' or 'heavy'."""
+    if state.weight > R.WEIGHT_HEAVY_ABOVE:
+        return "heavy"
+    if state.weight < R.WEIGHT_LIGHT_BELOW:
+        return "light"
+    return "healthy"
 
 
 def _old_poops(state: PetState, t: float) -> int:
@@ -485,6 +532,10 @@ def _sickness(
         old = _old_poops(state, t)
         if old and rng.random() < 1 - math.exp(-R.POOP_SICK_HAZARD * old * hours):
             cause = "poop"
+        elif weight_band(state) == "heavy" and rng.random() < 1 - math.exp(
+            -R.WEIGHT_HEAVY_SICK_HAZARD * hours
+        ):
+            cause = "weight"
     if cause:
         state.sick = True
         events.append({"type": "became_sick", "cause": cause})
@@ -831,8 +882,7 @@ def apply_action(
         result = _answer_request(state, action, now, settings, events)
     else:
         result = _do_action(state, action, now, rng, events)
-    state.care_log.insert(0, {"at": now, "action": action, "by": by, "result": result})
-    del state.care_log[R.CARE_LOG_SIZE :]
+    _log(state, {"at": now, "action": action, "by": by, "result": result})
     events.append({"type": "care", "action": action, "result": result})
     if result == OK:
         _resolve_call(state, now, events)
@@ -877,6 +927,7 @@ def _do_action(
         if state.hunger >= R.FEED_FULL_AT:
             return "full"
         state.hunger = _clamp(state.hunger + R.FEED_HUNGER)
+        state.weight = _clamp(state.weight + R.WEIGHT_FEED)
         jitter = rng.uniform(-R.DIGEST_JITTER_MINUTES, R.DIGEST_JITTER_MINUTES)
         state.digesting.append(now + (R.DIGEST_MINUTES + jitter) * 60)
         return OK
@@ -884,6 +935,7 @@ def _do_action(
     if action == "snack":
         state.hunger = _clamp(state.hunger + R.SNACK_HUNGER)
         state.happiness = _clamp(state.happiness + R.SNACK_HAPPINESS)
+        state.weight = _clamp(state.weight + R.WEIGHT_SNACK)
         state.health = max(_clamp(state.health + R.SNACK_HEALTH), R.HEALTH_FLOOR)
         state.last_excite = now
         if rng.random() < R.SNACK_POOP_CHANCE:
@@ -896,6 +948,7 @@ def _do_action(
         state.happiness = _clamp(state.happiness + R.PLAY_HAPPINESS)
         state.energy = _clamp(state.energy + R.PLAY_ENERGY)
         state.hunger = _clamp(state.hunger + R.PLAY_HUNGER)
+        state.weight = _clamp(state.weight + R.WEIGHT_PLAY)
         state.last_excite = now
         return OK
 
@@ -939,6 +992,126 @@ def _do_action(
         return OK
 
     raise ValueError(f"unknown action {action}")
+
+
+def _log(state: PetState, entry: dict[str, Any]) -> None:
+    state.care_log.insert(0, entry)
+    del state.care_log[R.CARE_LOG_SIZE :]
+
+
+# --- The left/right game ------------------------------------------------------
+
+SIDES = ("left", "right")
+
+
+def play_game(
+    state: PetState,
+    guess: str,
+    now: float,
+    rng: random.Random,
+    by: str | None = None,
+) -> tuple[dict[str, Any], list[Event]]:
+    """One round: the pet hides left or right, the player guesses.
+
+    The first guess starts a game of GAME_ROUNDS rounds; the last one settles it.
+    The caller advances the pet to now first. Returns what the card needs to
+    draw the round, and events.
+    """
+    if guess not in SIDES:
+        raise ValueError(f"unknown side {guess}")
+    events: list[Event] = []
+    game = state.game
+    if game is None:
+        refusal = _refuse_play(state)
+        if refusal:
+            _log(state, {"at": now, "action": "game", "by": by, "result": refusal})
+            events.append({"type": "care", "action": "game", "result": refusal})
+            return {"result": refusal}, events
+        game = state.game = Game(started=now, last_at=now)
+    went = rng.choice(SIDES)
+    game.rounds += 1
+    game.wins += went == guess
+    game.last_at = now
+    info: dict[str, Any] = {
+        "result": OK,
+        "round": game.rounds,
+        "rounds": R.GAME_ROUNDS,
+        "wins": game.wins,
+        "went": went,
+        "correct": went == guess,
+        "done": game.rounds >= R.GAME_ROUNDS,
+    }
+    if not info["done"]:
+        return info, events
+    state.game = None
+    won = game.wins >= R.GAME_WIN_AT
+    happiness = R.GAME_WIN_HAPPINESS if won else R.GAME_LOSE_HAPPINESS
+    state.happiness = _clamp(state.happiness + happiness)
+    state.energy = _clamp(state.energy + R.PLAY_ENERGY)
+    state.hunger = _clamp(state.hunger + R.PLAY_HUNGER)
+    state.weight = _clamp(state.weight + R.WEIGHT_GAME)
+    state.last_excite = now
+    result = "won" if won else "lost"
+    info["won"] = won
+    score = f"{game.wins}/{game.rounds}"
+    _log(
+        state, {"at": now, "action": "game", "by": by, "result": result, "score": score}
+    )
+    events.append({"type": "care", "action": "game", "result": result})
+    events.append({"type": "game_finished", "won": won, "wins": game.wins})
+    _resolve_call(state, now, events)
+    return info, events
+
+
+def _refuse_play(state: PetState) -> str | None:
+    if state.away:
+        return "away"
+    if life_stage(state) == "egg":
+        return "egg"
+    if state.asleep:
+        return "asleep"
+    if state.energy < R.PLAY_MIN_ENERGY:
+        return "too_tired"
+    return None
+
+
+# --- Chores -------------------------------------------------------------------
+
+
+def chores_done(state: PetState, count: int, now: float) -> int:
+    """Someone finished to-do items: earn treats, up to the daily limit.
+
+    They wait until the pet is awake and home (see _give_treats). Returns how
+    many were earned.
+    """
+    day = 24 * 3600
+    state.chore_treats = [t for t in state.chore_treats if now - t < day]
+    earned = max(0, min(count, R.CHORE_TREATS_PER_DAY - len(state.chore_treats)))
+    state.chore_treats += [now] * earned
+    state.treats_waiting = min(state.treats_waiting + earned, R.CHORE_TREATS_WAITING)
+    return earned
+
+
+def give_treats(state: PetState, now: float) -> list[Event]:
+    """Hand over waiting chore treats now, if the pet can take them."""
+    events: list[Event] = []
+    if not state.away and life_stage(state) != "egg":
+        _give_treats(state, now, events)
+    return events
+
+
+def _give_treats(state: PetState, t: float, events: list[Event]) -> None:
+    if state.asleep or not state.treats_waiting:
+        return
+    for _ in range(state.treats_waiting):
+        state.hunger = _clamp(state.hunger + R.CHORE_TREAT_HUNGER)
+        state.happiness = _clamp(state.happiness + R.CHORE_TREAT_HAPPINESS)
+        state.weight = _clamp(state.weight + R.WEIGHT_CHORE_TREAT)
+        _log(state, {"at": t, "action": "chore_treat", "by": None, "result": OK})
+        events.append({"type": "chore_treat"})
+    state.treats_waiting = 0
+    state.last_excite = t
+    _resolve_call(state, t, events)
 
 
 def _resolve_call(state: PetState, now: float, events: list[Event]) -> None:
@@ -1024,6 +1197,8 @@ def mood(state: PetState, now: float, settings: Settings) -> tuple[str, list[str
         flags.append("sleepy")
     if state.happiness < R.BORED_BELOW:
         flags.append("bored")
+    if (band := weight_band(state)) != "healthy":
+        flags.append(band)
     home = [f for f in settings.home.flags if f not in flags]
     if now < state.cozy_until:
         home.append("cozy")

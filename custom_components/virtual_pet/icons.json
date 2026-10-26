@@ -79,6 +79,9 @@
       },
       "debug": {
         "default": "mdi:bug"
+      },
+      "weight": {
+        "default": "mdi:scale-bathroom"
       }
     },
     "switch": {
@@ -93,6 +96,9 @@
   "services": {
     "fast_forward": {
       "service": "mdi:fast-forward"
+    },
+    "play_game": {
+      "service": "mdi:gamepad-variant"
     }
   }
 }
