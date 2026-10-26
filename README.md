@@ -11,8 +11,9 @@ poop, sleep, care buttons, restart catch-up, fast-forward), sits on a pixel-art
 lights, bedtime, people coming and going, and the TV and music.
 
 Each pet lives in a **device** themed for its **world**: an orange egg-shaped toy for
-Woodland (the bird and the Douglas squirrel), and a sandstone tank for Terrarium (the
-leopard gecko, with the red-knee tarantula to come). The egg decides which of that world's
+Woodland (the bird and the Douglas squirrel), a sandstone tank for Terrarium (the
+leopard gecko, with the red-knee tarantula to come), and a little red house for Hearth
+(the tabby kitten and the lop bunny). The egg decides which of that world's
 creatures hatches. See `docs/design-worlds.md`.
 
 ## Install
@@ -28,8 +29,8 @@ creatures hatches. See `docs/design-worlds.md`.
      SSH add-on or the Studio Code Server add-on all work.
 3. Restart HA: Settings → System → power icon (top right) → Restart Home Assistant.
 4. Settings → Devices & services → Add integration → search **Virtual Pet**,
-   then name your pet and pick its world: Woodland (bird) or Terrarium (leopard
-   gecko). Add the integration again for each extra pet device.
+   then name your pet and pick its world: Woodland (bird, squirrel), Terrarium
+   (leopard gecko) or Hearth (kitten, bunny). Add the integration again for each extra pet device.
 
 ### Updating
 
