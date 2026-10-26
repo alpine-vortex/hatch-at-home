@@ -143,5 +143,5 @@ phases.
 1. ✅ Living pet
 2. The card: sprites, speech bubble, poop, attention icon, status screen
 3. Home awareness: options flow (entity mapping, bedtime, privacy), weather, light, bedtime, presence, then activity, AQI and requests
-4. Life: adult forms, traits, generations, journal, sky events, notifications
+4. Life: adult forms, traits, generations, journal, sky events (plus bird visits from BirdNET-Pi), notifications
 5. HACS packaging, chores, minigames, more species
