@@ -430,7 +430,9 @@ async def test_empty_house_goes_to_the_sitter_privately(
     hass_storage: dict[str, Any],
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    hass_storage[STORE_KEY] = hatched_pet(now)
+    # Full discipline: no fake call while the house is empty, which would
+    # outrank the greeting when the owner gets back.
+    hass_storage[STORE_KEY] = hatched_pet(now, discipline=100.0)
     hass.states.async_set("zone.home", "1")
     await setup_with_house(hass)
     hass.states.async_set("zone.home", "0")

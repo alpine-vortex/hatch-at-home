@@ -59,10 +59,17 @@ or the owner for such details before committing it.
    the repo yet; the owner decides between shipping as-is and waiting for that re-run.
    Its props: only `web_mat`; borrow `gecko/cricket` for feed and the gecko's other props
    for the rest, and the gecko's `bg_vivarium`.
-4. **The flaky test is not pinned down.** About 2 failures in about 25 runs were seen
-   in the first session. A sweep of seeds 0–60 passed every time, which argues against
-   the rng being the cause. If it flakes again, save the full failure output; the next
-   suspects are wall-clock time and task timing.
+4. **The flaky test is fixed.** It was `test_empty_house_goes_to_the_sitter_privately`,
+   and it depended on the seed, not on timing (seeds 16619 and 19214 failed every time).
+   In the two hours the house sat empty before the sitter took over, the pet could start
+   a random "play with me?" call. The call was frozen at the sitter's and outranked the
+   greeting on return. The test pet now has full discipline, so it never fake-calls;
+   that test passes on 153 seeds and the whole suite on 60 random seeds (4 in parallel).
+   Open design question for the owner: should going to the sitter's settle a pending
+   fake call?
+   Also seen once: during a dev-HA test the card jumped back to the first pet. An
+   85-second probe of the same steps didn't reproduce it, so it was most likely the
+   test page reloading; watch for it.
 5. **Phase 4 (not started):**
    - adult forms per species
    - traits learned from the house (night owl, music lover, homebody)
@@ -70,8 +77,8 @@ or the owner for such details before committing it.
    - sky events: moon and BirdNET visits (the owner's entities, the stalled
      `last_bird` feed and the fallback are in the private house notes)
    - optional notifications and a chirp sound
-6. **Art queue:** Pond and Night Sky (each needs its shell
-   shape, `pad` and `moon`). Asked of Sol: Tidepool's `bg_night` redrawn on the day
+6. **Art queue:** Pond and Night Sky (shells are drawn; each still needs its creatures,
+   egg, scenes, emblem and decorations). Asked of Sol: Tidepool's `bg_night` redrawn on the day
    scene's layout (the current one is a different stretch of coast).
    Review tip: run a connected-pieces check on every sprite; the leg gap that shipped in
    0.7.0 was a 4 px transparent band only that check caught.
