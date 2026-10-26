@@ -64,3 +64,9 @@ Its `content_1` frames are `content_2` raised one art pixel, a fix Sol's cutter
 (`art/bunny/cut_creature.py`) now applies to every creature. The bunny is second on
 Hearth's roster, so it hatches from the kitten's egg and borrows the kitten's rooms;
 `play` borrows the bird's ball.
+
+**2026-10-26, v0.7.1:** the cut that raised `content_1` one art pixel left a 4 px
+transparent band across the legs (`baby`, `child` and `teen_content_1` of both
+the kitten and the bunny). Sol's Hearth v3 and bunny v2 packs (sha256 checked) close it. The
+review now also runs a connected-pieces check, which catches a band like that; the
+floating "z", bowls and TVs are the expected extra pieces.

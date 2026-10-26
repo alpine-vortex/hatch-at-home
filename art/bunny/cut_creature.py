@@ -57,5 +57,15 @@ for st in ("baby", "child", "teen"):
     p2 = out/f"{st}_content_2.png"
     if not p2.exists(): continue
     f2 = Image.open(p2); a = np.asarray(f2)[..., 3]; ys = np.nonzero(a.any(1))[0]; feet = ys.max() + 1 - 16
-    f1 = Image.new("RGBA", (256, 256)); f1.alpha_composite(f2.crop((0, feet, 256, 256)), (0, feet)); f1.alpha_composite(f2.crop((0, 0, 256, feet)), (0, -4))
+    f1 = Image.new("RGBA", (256, 256))
+    f1.alpha_composite(f2.crop((0, feet, 256, feet + 4)), (0, feet - 4))   # legs one art pixel longer: no gap
+    f1.alpha_composite(f2.crop((0, feet, 256, 256)), (0, feet)); f1.alpha_composite(f2.crop((0, 0, 256, feet)), (0, -4))
     f1.save(out/f"{st}_content_1.png")
+
+# Optional per-creature: shrink an over-tall pose pair to the stage's typical height (kitten teen_sick, Hatch review)
+for k, target in c.get("fit_height", {}).items():
+    for f in (1, 2):
+        p = out/f"{k}_{f}.png"; im = Image.open(p); a = np.asarray(im)[..., 3]; ys = np.nonzero(a.any(1))[0]; xs = np.nonzero(a.any(0))[0]
+        spr = im.crop((xs.min(), ys.min(), xs.max()+1, ys.max()+1)); s_ = target / spr.height
+        sm = spr.resize((max(1, round(spr.width*s_/4)), max(1, round(spr.height*s_/4))), Image.NEAREST); sm = sm.resize((sm.width*4, sm.height*4), Image.NEAREST)
+        cv = Image.new("RGBA", (256, 256)); cv.alpha_composite(sm, (((256-sm.width)//2)//4*4, 224-sm.height)); cv.save(p)

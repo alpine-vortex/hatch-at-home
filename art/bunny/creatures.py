@@ -103,3 +103,5 @@ C["lunamoth"] = dict(ref="probes3/lunamoth_probe_v2.png", measure="w", target=(1
    sigs=[("glow", "gazing happily up at a small warm glowing lamp beside it, drifting toward it", "frame 2 = a little closer, glow sparkles"),
          ("wing_spread", "proudly spreading out wide (as a caterpillar: stretching up tall and proud)", "frame 2 = settling back down, happy")],
    props=[("bowl_food", "a small pile of fresh green leaves"), ("snack", "a single small pink flower")])
+
+C["kitten"]["fit_height"] = {"teen_sick": 196}
