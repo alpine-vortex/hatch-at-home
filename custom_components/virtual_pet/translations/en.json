@@ -1,0 +1,89 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Hatch a new pet",
+        "description": "Give your pet a name. Bedtime and home sensors are set later in its options.",
+        "data": {
+          "name": "Name"
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "asleep": { "name": "Asleep" },
+      "calling": { "name": "Calling" },
+      "sick": { "name": "Sick" }
+    },
+    "button": {
+      "feed": { "name": "Feed" },
+      "snack": { "name": "Snack" },
+      "play": { "name": "Play" },
+      "clean": { "name": "Clean" },
+      "medicine": { "name": "Medicine" },
+      "scold": { "name": "Scold" },
+      "praise": { "name": "Praise" }
+    },
+    "sensor": {
+      "hunger": { "name": "Hunger" },
+      "happiness": { "name": "Happiness" },
+      "energy": { "name": "Energy" },
+      "health": { "name": "Health" },
+      "discipline": { "name": "Discipline" },
+      "poop": { "name": "Poop" },
+      "care_misses": { "name": "Care misses" },
+      "mood": {
+        "name": "Mood",
+        "state": {
+          "away": "At the sitter's",
+          "egg": "Egg",
+          "sick": "Sick",
+          "asleep": "Asleep",
+          "calling": "Calling",
+          "hungry": "Hungry",
+          "dirty": "Dirty",
+          "sleepy": "Sleepy",
+          "bored": "Bored",
+          "excited": "Excited",
+          "cozy": "Cozy",
+          "content": "Content"
+        }
+      },
+      "life_stage": {
+        "name": "Life stage",
+        "state": {
+          "egg": "Egg",
+          "baby": "Baby",
+          "child": "Child",
+          "teen": "Teen",
+          "adult": "Adult"
+        }
+      },
+      "last_care": { "name": "Last care" },
+      "debug": { "name": "Debug" }
+    },
+    "switch": {
+      "lights_out": { "name": "Lights out" }
+    }
+  },
+  "exceptions": {
+    "no_pet": { "message": "No virtual pet matches that config entry." }
+  },
+  "services": {
+    "fast_forward": {
+      "name": "Fast forward",
+      "description": "Debug tool: lives through the given number of hours right now, at normal rates. Calls left unanswered in that time count as care misses.",
+      "fields": {
+        "hours": {
+          "name": "Hours",
+          "description": "How many hours to advance."
+        },
+        "config_entry_id": {
+          "name": "Pet",
+          "description": "Which pet. Leave empty for all pets."
+        }
+      }
+    }
+  }
+}

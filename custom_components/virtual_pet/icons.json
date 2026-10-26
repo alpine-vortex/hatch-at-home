@@ -1,0 +1,37 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "asleep": { "default": "mdi:sleep" },
+      "calling": { "default": "mdi:bell-outline", "state": { "on": "mdi:bell-ring" } },
+      "sick": { "default": "mdi:emoticon-sick-outline" }
+    },
+    "button": {
+      "feed": { "default": "mdi:food-drumstick" },
+      "snack": { "default": "mdi:candy" },
+      "play": { "default": "mdi:tennis-ball" },
+      "clean": { "default": "mdi:broom" },
+      "medicine": { "default": "mdi:pill" },
+      "scold": { "default": "mdi:hand-back-left" },
+      "praise": { "default": "mdi:star-face" }
+    },
+    "sensor": {
+      "hunger": { "default": "mdi:food-apple" },
+      "happiness": { "default": "mdi:heart" },
+      "energy": { "default": "mdi:lightning-bolt" },
+      "health": { "default": "mdi:medical-bag" },
+      "discipline": { "default": "mdi:school" },
+      "poop": { "default": "mdi:emoticon-poop" },
+      "care_misses": { "default": "mdi:alert-circle-outline" },
+      "mood": { "default": "mdi:bird" },
+      "life_stage": { "default": "mdi:egg-outline" },
+      "last_care": { "default": "mdi:history" },
+      "debug": { "default": "mdi:bug" }
+    },
+    "switch": {
+      "lights_out": { "default": "mdi:lightbulb-on", "state": { "on": "mdi:lightbulb-night" } }
+    }
+  },
+  "services": {
+    "fast_forward": { "service": "mdi:fast-forward" }
+  }
+}

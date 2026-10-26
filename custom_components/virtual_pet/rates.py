@@ -1,0 +1,115 @@
+"""Every tunable number for the pet, in one place.
+
+Rates are *per hour* and are applied over the real time that has passed, so
+changing the tick interval never changes how fast the pet lives. Stats run
+0-100. Hunger is a fullness meter: 100 is stuffed, 0 is starving.
+"""
+
+from __future__ import annotations
+
+# --- Clock -----------------------------------------------------------------
+
+TICK_MINUTES = 5  # how often the coordinator advances the pet
+MAX_STEP_SECONDS = 300  # the simulation never takes a bigger bite than this
+CATCH_UP_CAP_HOURS = 24  # restart catch-up never covers more than this
+
+# --- Decay while awake (per hour) ----------------------------------------
+
+HUNGER_DECAY = 5.0  # full to calling in ~15 h: three or four meals a day
+HAPPINESS_DECAY = 4.0
+ENERGY_DECAY = 5.0
+DISCIPLINE_DECAY = 0.0
+
+# --- While asleep (per hour) ----------------------------------------------
+
+ASLEEP_HUNGER_FACTOR = 0.4  # hunger drains at 40% speed overnight
+ASLEEP_HAPPINESS_FACTOR = 0.0  # dreams are neutral
+ENERGY_REGEN_ASLEEP = 12.0  # an 8 h night refills ~96 energy
+NAP_WAKE_ENERGY = 95.0  # a daytime nap ends here
+
+# --- Health (per hour) ----------------------------------------------------
+
+HEALTH_REGEN = 1.0  # when fed, clean and well
+HEALTH_STARVING = -3.0  # while hunger is 0
+HEALTH_PER_OLD_POOP = -1.0  # each poop older than POOP_OLD_MINUTES
+HEALTH_SICK = -2.0
+HAPPINESS_SICK = -1.0
+HEALTH_FLOOR = 1.0  # the pet never dies by default
+HEALTHY_HUNGER_MIN = 30.0  # regen needs at least this much in the tummy
+
+# --- Care actions -----------------------------------------------------------
+
+FEED_HUNGER = 35.0
+FEED_FULL_AT = 95.0  # refuses a meal above this
+SNACK_HUNGER = 10.0
+SNACK_HAPPINESS = 15.0
+SNACK_HEALTH = -2.0
+SNACK_POOP_CHANCE = 0.3
+PLAY_HAPPINESS = 20.0
+PLAY_ENERGY = -10.0
+PLAY_HUNGER = -5.0
+PLAY_MIN_ENERGY = 15.0
+MEDICINE_HEALTH = 25.0
+MEDICINE_HAPPINESS = -5.0  # it tastes bad
+PRAISE_HAPPINESS = 8.0
+PRAISE_DISCIPLINE = 2.0
+PRAISE_COOLDOWN_MINUTES = 30  # discipline from praise only once per window
+SCOLD_DISCIPLINE = 25.0  # scolding a fake call
+SCOLD_UNFAIR_HAPPINESS = -10.0  # scolding for nothing
+PRAISE_WHINING_DISCIPLINE = -10.0  # praising a fake call
+WAKE_IN_NIGHT_HAPPINESS = -5.0  # turning lights-out off during sleep hours
+
+# --- Poop -------------------------------------------------------------------
+
+DIGEST_MINUTES = 120  # a meal comes out about this long after eating
+DIGEST_JITTER_MINUTES = 30
+MAX_POOPS = 3
+POOP_CALL_MINUTES = 30  # the pet complains once a poop has sat this long
+POOP_OLD_MINUTES = 60  # older poop hurts health and risks sickness
+POOP_SICK_HAZARD = 0.08  # chance per hour, per old poop, of getting sick
+
+# --- Calls ------------------------------------------------------------------
+
+CALL_WINDOW_MINUTES = 20
+# reason: (calls below, re-arms above)
+CALL_THRESHOLDS: dict[str, tuple[float, float]] = {
+    "hunger": (25.0, 40.0),
+    "happiness": (25.0, 40.0),
+    "energy": (20.0, 40.0),
+}
+FAKE_CALL_RATE = 0.12  # fake calls per awake hour while everything is fine
+FAKE_CALL_MIN_STATS = 50.0  # only whines when all core stats are above this
+
+# --- Sickness ---------------------------------------------------------------
+
+SICK_BELOW_HEALTH = 25.0
+SICK_MISSES = 4  # this many care misses in a day makes the pet sick
+SICK_MISS_WINDOW_HOURS = 24
+
+# --- Sleep ------------------------------------------------------------------
+
+DEFAULT_BEDTIME = "23:00"
+DEFAULT_WAKE_TIME = "07:00"
+DROWSY_BEFORE_BED_MINUTES = 30
+FALL_ASLEEP_ANYWAY_MINUTES = 60  # left up past bedtime, it dozes off itself
+
+# --- Mood -------------------------------------------------------------------
+
+HUNGRY_BELOW = 35.0
+SLEEPY_BELOW = 30.0
+BORED_BELOW = 35.0
+EXCITED_MINUTES = 15  # play, praise or a snack keeps it excited this long
+
+# --- Life stages (hours of age, aging pauses while away) --------------------
+
+STAGE_STARTS: list[tuple[str, float]] = [
+    ("egg", 0.0),
+    ("baby", 0.5),
+    ("child", 24.0),
+    ("teen", 120.0),
+    ("adult", 336.0),  # about two weeks
+]
+
+# --- Log --------------------------------------------------------------------
+
+CARE_LOG_SIZE = 20

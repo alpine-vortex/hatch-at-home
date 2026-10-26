@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Lint and run the tests.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+.venv/bin/ruff check .
+.venv/bin/ruff format --check .
+.venv/bin/pytest "$@"

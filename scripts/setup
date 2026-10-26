@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Create .venv with Home Assistant and the test tools. Needs uv and Python 3.14.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+uv venv .venv -p 3.14
+uv pip install --python .venv -r requirements_test.txt

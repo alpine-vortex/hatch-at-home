@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Start a throwaway Home Assistant with this integration linked in.
+# Needs the venv from scripts/setup. Open http://localhost:8123.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+mkdir -p dev/config/custom_components
+ln -sfn ../../../custom_components/virtual_pet dev/config/custom_components/virtual_pet
+exec .venv/bin/hass --config dev/config "$@"

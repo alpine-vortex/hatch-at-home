@@ -1,0 +1,88 @@
+# Throwaway Home Assistant for developing the pet. Never point this at
+# real devices. Run it with scripts/develop, then open http://localhost:8123.
+homeassistant:
+  name: Pet test bench
+  time_zone: America/Los_Angeles
+  unit_system: us_customary
+
+frontend:
+config:
+history:
+logbook:
+logger:
+  default: warning
+  logs:
+    custom_components.virtual_pet: debug
+
+# --- Stand-ins for the real house (used from phase 3) ---------------------
+
+input_select:
+  fake_weather:
+    name: Fake weather
+    options: [sunny, partlycloudy, cloudy, rainy, pouring, snowy, fog, clear-night]
+    initial: rainy
+
+input_number:
+  fake_indoor_temp:
+    name: Fake indoor temperature
+    min: 50
+    max: 90
+    step: 0.5
+    unit_of_measurement: "°F"
+    initial: 71
+  fake_lux:
+    name: Fake lux
+    min: 0
+    max: 3000
+    step: 10
+    unit_of_measurement: lx
+    initial: 60
+  fake_aqi:
+    name: Fake AQI
+    min: 0
+    max: 300
+    step: 1
+    initial: 40
+
+input_boolean:
+  fake_someone_home:
+    name: Fake someone home
+    initial: true
+  fake_motion:
+    name: Fake motion
+  fake_music:
+    name: Fake music playing
+  fake_lamp:
+    name: Fake living room lamp
+
+template:
+  - sensor:
+      - name: Fake indoor temperature sensor
+        unique_id: fake_indoor_temperature_sensor
+        device_class: temperature
+        unit_of_measurement: "°F"
+        state: "{{ states('input_number.fake_indoor_temp') }}"
+      - name: Fake illuminance
+        unique_id: fake_illuminance
+        device_class: illuminance
+        unit_of_measurement: lx
+        state: "{{ states('input_number.fake_lux') }}"
+      - name: Fake air quality index
+        unique_id: fake_aqi
+        device_class: aqi
+        state: "{{ states('input_number.fake_aqi') | int }}"
+      - name: Fake people home
+        unique_id: fake_people_home
+        state: "{{ 1 if is_state('input_boolean.fake_someone_home', 'on') else 0 }}"
+  - binary_sensor:
+      - name: Fake motion sensor
+        unique_id: fake_motion_sensor
+        device_class: occupancy
+        state: "{{ is_state('input_boolean.fake_motion', 'on') }}"
+  - weather:
+      - name: Fake weather
+        unique_id: fake_weather
+        condition_template: "{{ states('input_select.fake_weather') }}"
+        temperature_template: "52"
+        humidity_template: "85"
+        temperature_unit: "°F"
