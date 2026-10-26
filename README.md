@@ -127,6 +127,7 @@ optional; anything you leave empty is ignored. Changes apply straight away.
 | | Air quality | `sensor.air_quality_index` |
 | The pet's room | Room lights | the **living room** lights |
 | | Light sensors | optional |
+| | Fireplace | your fireplace entity: when it's lit, the pet curls up by it |
 | People and activity | Home zone | `zone.home` |
 | | Music players | your speakers and displays |
 | | TVs | `media_player.tv` |

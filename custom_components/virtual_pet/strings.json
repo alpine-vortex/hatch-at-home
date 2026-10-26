@@ -179,7 +179,11 @@
             "description": "Bright light late at night makes the pet squint; dim evening light makes it cozy. Daylight is never too bright.",
             "data": {
               "room_lights": "Room lights",
-              "lux": "Light sensors"
+              "lux": "Light sensors",
+              "fireplace": "Fireplace"
+            },
+            "data_description": {
+              "fireplace": "Any entity that's on (or heating, or above 0) when the fire is lit. The pet curls up by it, and it never asks for a blanket next to a lit fire."
             }
           },
           "activity": {

@@ -32,6 +32,7 @@ from .const import (
     CONF_AQI,
     CONF_BEDTIME,
     CONF_BEDTIME_LIGHTS,
+    CONF_FIREPLACE,
     CONF_INDOOR_TEMP,
     CONF_LUX,
     CONF_MOTION,
@@ -132,6 +133,7 @@ SECTIONS: dict[str, list[tuple[str, Any, Any]]] = {
     "room": [
         (CONF_ROOM_LIGHTS, _entities("light", True), None),
         (CONF_LUX, _entities("sensor", True, "illuminance"), None),
+        (CONF_FIREPLACE, EntitySelector(EntitySelectorConfig()), None),
     ],
     "activity": [
         (CONF_ZONE, _entities("zone"), DEFAULT_ZONE),

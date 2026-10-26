@@ -26,6 +26,7 @@ REASONS: dict[str, str] = {
     "masked": "air's yucky today, staying in",
     "dancing": "♪ dancing ♪",
     "watching_tv": "ooh, what's on?",
+    "fireside": "toasty by the fire~",
     "cozy": "nice and cozy",
     "cool": "ahh, that breeze",
     "sunny": "sunny day!",
@@ -35,7 +36,7 @@ REASONS: dict[str, str] = {
 
 # Flags that mean the pet is excited or cozy, for the mood sensor.
 EXCITED_FLAGS = {"greeting", "snowy", "dancing"}
-COZY_FLAGS = {"cozy", "dim"}
+COZY_FLAGS = {"cozy", "dim", "fireside"}
 
 
 @dataclass
@@ -54,6 +55,7 @@ class Readings:
     lux: float | None = None
     bedtime_lights_on: bool | None = None
     motion_recent: bool | None = None
+    fireplace: bool = False  # lit
     music: bool = False
     tv: bool = False
     aqi: float | None = None
@@ -108,9 +110,14 @@ def evaluate(r: Readings) -> HomeEffect:
         elif r.condition in FOGGY:
             e.flags.append("foggy")
 
+    # A lit fireplace: cozy, and nobody shivers next to it.
+    if r.fireplace:
+        e.flags.append("fireside")
+        add("happiness", R.HOME_FIRE_HAPPINESS)
+
     # Indoor temperature: a request, never a drain.
     if r.indoor_c is not None:
-        if r.indoor_c < R.HOME_COMFORT_LOW_C:
+        if r.indoor_c < R.HOME_COMFORT_LOW_C and not r.fireplace:
             e.flags.append("chilly")
             if "blanket" not in e.requests:
                 e.requests.append("blanket")

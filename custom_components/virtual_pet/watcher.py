@@ -23,6 +23,7 @@ from . import rates as R
 from .const import (
     CONF_AQI,
     CONF_BEDTIME_LIGHTS,
+    CONF_FIREPLACE,
     CONF_INDOOR_TEMP,
     CONF_LUX,
     CONF_MOTION,
@@ -48,7 +49,16 @@ MULTI = (
     CONF_MUSIC,
     CONF_TV,
 )
-SINGLE = (CONF_WEATHER, CONF_RAIN, CONF_SOLAR, CONF_INDOOR_TEMP, CONF_AQI)
+SINGLE = (
+    CONF_WEATHER,
+    CONF_RAIN,
+    CONF_SOLAR,
+    CONF_INDOOR_TEMP,
+    CONF_AQI,
+    CONF_FIREPLACE,
+)
+# A fireplace can be a switch, light, climate, fan or sensor: these mean lit.
+LIT = {"on", "heat", "heating", "burning", "playing"}
 
 
 def _float(state: State | None) -> float | None:
@@ -128,7 +138,15 @@ class Watcher:
             ),
             tv=any(s.state in ("on", "playing") for s in self._all(CONF_TV, now)),
             aqi=_float(self._one(CONF_AQI, now)),
+            fireplace=self._lit(self._one(CONF_FIREPLACE, now)),
         )
+
+    @staticmethod
+    def _lit(state: State | None) -> bool:
+        if state is None:
+            return False
+        value = _float(state)
+        return value > 0 if value is not None else state.state in LIT
 
     @staticmethod
     def _celsius(state: State | None) -> float | None:

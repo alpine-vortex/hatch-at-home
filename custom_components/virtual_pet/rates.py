@@ -145,3 +145,4 @@ BLANKET_HAPPINESS = 10.0
 FAN_HAPPINESS = 8.0
 COMFORT_MINUTES = 120  # cozy (blanket) or cool (fan) lasts this long
 COMFORT_HAPPINESS = 1.0  # per hour while cozy or cool
+HOME_FIRE_HAPPINESS = 1.0  # a lit fireplace (counts toward the cap)

@@ -169,3 +169,10 @@ def test_home_bonus_applied_while_awake_only():
     pet = hatched(at(12), happiness=50.0)
     model.advance(pet, at(14), sunny, NoLuck(), max_gap=None)
     assert pet.happiness == pytest.approx(50 - 2 * (R.HAPPINESS_DECAY - 1.0))
+
+
+def test_lit_fireplace_is_cozy_and_beats_the_chill():
+    e = evaluate(Readings(night=False, fireplace=True, indoor_c=15))
+    assert "fireside" in e.flags
+    assert "chilly" not in e.flags and e.requests == []
+    assert e.bonus["happiness"] == R.HOME_FIRE_HAPPINESS
