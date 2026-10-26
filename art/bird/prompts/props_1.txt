@@ -1,0 +1,10 @@
+Use your image generation tool to draw ONE square image and save it as props_1.png in the current directory.
+
+A 2 x 2 grid of equal square cells, each holding one small game prop object drawn as chunky pixel art (props about 24 art pixels wide) in the same art style, palette and outline as the attached reference bird (the bird itself does NOT appear). Each object centred, filling about 60% of its cell.
+- top-left: a cute stylised little swirl poop with a tiny shine.
+- top-right: the same poop, slightly squatter swirl.
+- bottom-left: the same poop, a little leaning swirl.
+- bottom-right: a call icon: a round speech bubble with a bold '!'.
+
+Art style: chunky retro pixel art exactly like the attached reference bird: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark-brown pixel outline. Keep the reference's pixel size relative to the subject: a bird is only about 40 art pixels wide, so the pixels are large and clearly visible
+Background: one flat even mid-grey everywhere (no gradient, no texture, no floor, no shadows on it). Every subject is drawn whole inside its own cell with a generous empty margin; nothing crosses a cell edge. No text labels, no titles, no cell borders, no grid lines.

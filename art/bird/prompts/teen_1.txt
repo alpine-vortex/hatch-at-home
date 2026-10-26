@@ -1,0 +1,11 @@
+Use your image generation tool to draw ONE square image and save it as teen_1.png in the current directory.
+
+A sheet of 3 rows x 2 columns of equal square cells, each cell one pose of the same original cute round woodland bird as in the attached reference image: identical palette, markings, outline weight and proportions. Pacific Northwest cozy rainy-forest feel, little kaomoji-like charm in the face. Thin dark outline. Faces three-quarters to the right.
+TEEN stage: a juvenile, a bit taller and gangly, longer legs and tail, slightly scruffy half-grown feathers, same colours.
+- Row 1: mood 'content': happy idle, soft smile, eyes as gentle arcs. Left = frame 1; right = frame 2 = same pose, body bobbed down slightly.
+- Row 2: mood 'excited': hopping in the air, wings up, small sparkles around it. Left = frame 1; right = frame 2 = landed low, sparkles in different spots.
+- Row 3: mood 'cozy': wrapped snugly in a small knitted blanket, content face. Left = frame 1; right = frame 2 = same, eyes blinking closed.
+In every cell the bird stands at the same size with its feet on the same height, low in the cell.
+
+Art style: chunky retro pixel art exactly like the attached reference bird: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark-brown pixel outline. Keep the reference's pixel size relative to the subject: a bird is only about 40 art pixels wide, so the pixels are large and clearly visible
+Background: one flat even mid-grey everywhere (no gradient, no texture, no floor, no shadows on it). Every subject is drawn whole inside its own cell with a generous empty margin; nothing crosses a cell edge. No text labels, no titles, no cell borders, no grid lines.

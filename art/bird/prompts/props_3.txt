@@ -1,0 +1,10 @@
+Use your image generation tool to draw ONE square image and save it as props_3.png in the current directory.
+
+A 2 x 2 grid of equal square cells, each holding one small game prop object drawn as chunky pixel art (props about 24 art pixels wide) in the same art style, palette and outline as the attached reference bird (the bird itself does NOT appear). Each object centred, filling about 60% of its cell.
+- top-left: a cluster of clean sparkles with a bubble or two.
+- top-right: a small folded knitted blanket.
+- bottom-left: a small wooden sign on a post reading 'At the sitter's'.
+- bottom-right: leave empty grey.
+
+Art style: chunky retro pixel art exactly like the attached reference bird: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark-brown pixel outline. Keep the reference's pixel size relative to the subject: a bird is only about 40 art pixels wide, so the pixels are large and clearly visible
+Background: one flat even mid-grey everywhere (no gradient, no texture, no floor, no shadows on it). Every subject is drawn whole inside its own cell with a generous empty margin; nothing crosses a cell edge. No text labels, no titles, no cell borders, no grid lines.

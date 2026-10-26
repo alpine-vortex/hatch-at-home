@@ -1,0 +1,11 @@
+Use your image generation tool to draw ONE square image and save it as teen_2.png in the current directory.
+
+A sheet of 3 rows x 2 columns of equal square cells, each cell one pose of the same original cute blue death-feigning beetle as in the attached reference sheet: identical palette, markings, outline and proportions, same cute kaomoji-like face. Faces three-quarters to the right.
+TEEN stage: the bigger chunkier adult beetle from the reference sheet (bottom-right).
+- Row 1: mood 'bored': flattened low, half-lidded flat eyes, antennae drooping. Left = frame 1; right = frame 2 = same, a small sigh puff.
+- Row 2: mood 'hungry': looking at an empty little dish beside it, mouth open. Left = frame 1; right = frame 2 = same, mouth closed, glancing at the dish.
+- Row 3: mood 'sleepy': droopy half-closed eyes, antennae sagging. Left = frame 1; right = frame 2 = head lower, eyes nearly shut.
+In every cell the creature is the same size and rests on the same height, low in the cell.
+
+Art style: chunky retro pixel art exactly like the attached reference sheet: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark pixel outline. Keep the reference's pixel size relative to the subject, so the pixels are large and clearly visible
+Background: one flat even mid-grey everywhere (no gradient, no texture, no floor, no shadows on it). Every subject is drawn whole inside its own cell with a generous empty margin; nothing crosses a cell edge. No text labels, no titles, no cell borders, no grid lines.

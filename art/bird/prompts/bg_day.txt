@@ -1,0 +1,4 @@
+Use your image generation tool to draw ONE landscape image (4:3, wide) and save it as bg_day.png in the current directory.
+
+A background scene for a virtual-pet game, no creature in it: a cozy wooden-cabin living room nook by day: a window showing Pacific Northwest firs and soft daylight, a rug, a houseplant. Same art style, palette and outline as the attached reference. Leave the lower-middle floor area open and uncluttered where the pet will stand. No text.
+Art style: chunky retro pixel art exactly like the attached reference bird: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark-brown pixel outline. Keep the reference's pixel size relative to the subject: a bird is only about 40 art pixels wide, so the pixels are large and clearly visible

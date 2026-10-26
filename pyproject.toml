@@ -5,6 +5,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py313"
+extend-exclude = ["art"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]

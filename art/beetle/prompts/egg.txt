@@ -1,0 +1,9 @@
+Use your image generation tool to draw ONE square image and save it as egg.png in the current directory.
+
+A sheet of 3 rows x 2 columns of equal square cells. Each cell shows the beetle's tiny pale cream oval egg from the reference sheet (top-left), drawn larger here so it fills about a third of the cell, resting on the same height.
+- Row 1 'idle': left = egg still; right = egg with a tiny shine shift.
+- Row 2 'wiggle': left = tilted left with small motion marks; right = tilted right.
+- Row 3 'crack': left = a small zigzag crack on top; right = bigger crack with a peeking eye in the gap.
+
+Art style: chunky retro pixel art exactly like the attached reference sheet: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark pixel outline. Keep the reference's pixel size relative to the subject, so the pixels are large and clearly visible
+Background: one flat even mid-grey everywhere (no gradient, no texture, no floor, no shadows on it). Every subject is drawn whole inside its own cell with a generous empty margin; nothing crosses a cell edge. No text labels, no titles, no cell borders, no grid lines.

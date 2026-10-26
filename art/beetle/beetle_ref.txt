@@ -1,0 +1,11 @@
+Use your image generation tool to draw ONE square image and save it as beetle_ref.png in the current directory.
+
+A character reference sheet for a second virtual-pet creature in EXACTLY the same chunky retro pixel art style as the attached bird (same big hard square pixels, same dark-brown pixel outline, same cute kaomoji-like face charm: small shiny dot eyes, blush, tiny smile; same cute chunky proportions), so the two feel like one set. The bird itself does NOT appear.
+
+The creature: an original cute blue death-feigning beetle, a chunky rounded flightless desert darkling beetle. Bumpy chalky powder-blue shell covered in small dark speckles and little warts, black legs and black antennae, a small cute face on the front of its head.
+
+Layout: a 2 x 2 grid of equal square cells on one flat even mid-grey background, one subject per cell, each drawn whole with a generous margin, all resting on the same height low in their cells, facing three-quarters to the right. No text, no borders.
+- top-left: its egg, a tiny pale cream oval (draw it small).
+- top-right: BABY stage, a small pale cream mealworm-like segmented larva with a cute face, tiny legs at the front.
+- bottom-left: CHILD stage, a small young adult beetle, the powder-blue speckled shell, round and cute, about 40 art pixels wide.
+- bottom-right: TEEN stage, the same beetle a bit bigger and chunkier with more pronounced warts and longer antennae.

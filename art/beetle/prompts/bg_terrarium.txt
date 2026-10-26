@@ -1,0 +1,4 @@
+Use your image generation tool to draw ONE landscape image (4:3, wide) and save it as bg_terrarium.png in the current directory.
+
+A background scene for a virtual-pet game, no creature in it: a cozy desert terrarium interior seen from the front, warm sand floor, a piece of cork bark, a small rock and a little succulent, soft warm lamp light. Leave the lower-middle sand open where the pet will rest. No text.
+Art style: chunky retro pixel art exactly like the attached reference sheet: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark pixel outline. Keep the reference's pixel size relative to the subject, so the pixels are large and clearly visible
