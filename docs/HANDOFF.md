@@ -49,8 +49,9 @@ or the owner for such details before committing it.
 2. **Hearth is live (kitten ready).** Sol's "Hearth v2" pack fixed the kitten's
    flagged frames and brought Hearth's egg, four rooms, emblem and decorations; review
    notes are in `art/README.md`. Checked in the dev HA: egg, baby, child and teen inside
-   the card's new `house` shell. The card now draws `egg`, `tank`, `house` and `porthole`;
-   `pad` and `moon` still fall back to the egg. Draw each before its world goes live.
+   the card's new `house` shell. The card draws every shell in `worlds.json`: `egg`, `tank`,
+   `house`, `porthole`, `pad` (lily pad) and `moon` (crescent on top). Pad and moon were
+   checked with throwaway stand-in species, since Pond and Night Sky have no creatures yet.
 3. **Tarantula set held back for the owner's call.** Sol's set (`hatch-4664de9c`,
    sha256 `b5076cd8…`, 73 sprites) passes the size and feet checks, but its faces are
    dark lines on a dark body and mostly vanish, so moods don't read. Sol offered a cheap

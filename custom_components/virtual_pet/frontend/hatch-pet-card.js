@@ -167,6 +167,25 @@ const STYLE = `
   .porthole .bubble { left: 13%; top: 10%; }
   .porthole .attention { right: 13%; top: 9%; }
   .porthole .toy .cap { border-radius: 50%; box-shadow: 0 5px 0 var(--d-btn-shadow), inset 0 0 0 3px var(--d-bezel); }
+  /* Pad: a lily pad, veins fanning from the notch at the top. */
+  .pad .body { border-radius: 50% / 30%; padding: 40px 22px 40px;
+    background-image: repeating-conic-gradient(from 90deg at 50% 0, transparent 0 13deg,
+      rgba(0,0,0,.08) 13deg 14.5deg); }
+  .pad .body::before { content: ""; position: absolute; top: -1px; left: 50%; width: 46px;
+    height: 34px; margin-left: -23px; background: var(--hp-backdrop);
+    clip-path: polygon(0 0, 100% 0, 50% 100%); }
+  .pad .toy .cap { border-radius: 50%; }
+  /* Moon: a crescent riding on top of a rounded body sprinkled with stars. */
+  .crescent { width: 64px; height: 64px; border-radius: 50%; margin: 0 0 -26px 26px;
+    box-shadow: inset -15px 7px 0 0 var(--d-bezel); transform: rotate(-20deg); position: relative; z-index: 1; }
+  .moon .body { border-radius: 34px; padding: 30px 18px 24px;
+    background-image: radial-gradient(circle at 12% 20%, rgba(255,255,255,.55) 0 1.5px, transparent 2.5px),
+      radial-gradient(circle at 88% 14%, rgba(255,255,255,.45) 0 1.5px, transparent 2.5px),
+      radial-gradient(circle at 6% 62%, rgba(255,255,255,.4) 0 1.5px, transparent 2.5px),
+      radial-gradient(circle at 94% 56%, rgba(255,255,255,.5) 0 1.5px, transparent 2.5px),
+      radial-gradient(circle at 20% 94%, rgba(255,255,255,.35) 0 1.5px, transparent 2.5px),
+      radial-gradient(circle at 80% 95%, rgba(255,255,255,.45) 0 1.5px, transparent 2.5px); }
+  .moon .toy .cap { border-radius: 50%; }
   .murk { inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .8s; }
   .body { width: 100%; box-sizing: border-box; background: var(--d-shell);
     box-shadow: inset 0 -9px 0 var(--d-dark), inset 0 5px 0 rgba(255,255,255,.28), 0 16px 34px rgba(20,15,5,.32);
@@ -423,7 +442,7 @@ class HatchPetCard extends HTMLElement {
     slide.className = "slide";
     slide.innerHTML = `
       <div class="device">
-        <div class="roof"></div><div class="loop"></div><div class="lid"><span></span><span></span><span></span></div>
+        <div class="roof"></div><div class="crescent"></div><div class="loop"></div><div class="lid"><span></span><span></span><span></span></div>
         <div class="body">
           <img class="trim-top" alt="">
           <span class="label"></span>
@@ -654,10 +673,10 @@ class HatchPetCard extends HTMLElement {
     const shell = world.shell || {};
     const color = shell.color || "#e8834a";
     const dev = s.device;
-    // Shapes the card can't draw yet (pad, moon) fall back to the egg.
-    const shape = ["tank", "house", "porthole"].includes(shell.shape) ? shell.shape : "egg";
+    const shape = ["tank", "house", "porthole", "pad", "moon"].includes(shell.shape) ? shell.shape : "egg";
     dev.className = `device ${shape}`;
     dev.querySelector(".roof").style.display = shape === "house" ? "" : "none";
+    dev.querySelector(".crescent").style.display = shape === "moon" ? "" : "none";
     dev.querySelector(".loop").style.display = shape === "egg" ? "" : "none";
     dev.querySelector(".lid").style.display = shape === "tank" ? "" : "none";
     dev.querySelector(".feet").style.display = shape === "tank" ? "" : "none";
