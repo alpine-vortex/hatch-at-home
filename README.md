@@ -112,46 +112,67 @@ entities:
 
 ## Connect it to your house (options)
 
-Settings → Devices & services → Virtual Pet → **Configure** on your pet. Every field is
-optional; anything you leave empty is ignored. Changes apply straight away.
+Settings → Devices & services → **Virtual Pet** → the gear (⚙) next to your pet. The
+dialog is titled **"What <name> notices"**. Every field is optional except the ones
+with defaults, and anything left empty is ignored. Saving applies the changes straight
+away. Each pet has its own settings.
 
-| Section | Field | Suggested for this house |
+The house never hurts the pet. It changes its mood, its scene and what it asks for,
+and it adds at most +3 happiness an hour.
+
+### Sleep
+
+| Field | Default | What it does | This house |
+| --- | --- | --- | --- |
+| Bedtime | 23:00 | Drowsy 30 minutes before. If nobody puts it to bed, it dozes off an hour after. Turning lights-out off after bedtime costs a little happiness. | 23:00 |
+| Wake time | 07:00 | It wakes up on its own. | 07:00 |
+| Bedtime lights | none | All off (from an hour before bedtime) plus a quiet house means bed. A light left on late doesn't keep it up past its bedtime. | bedroom lights |
+| Motion sensors | none | Movement in the last 10 minutes means the house isn't quiet yet. | indoor occupancy sensors |
+
+Lights-out (the switch, or the sleep button on the card) always wins, and the house
+never wakes the pet.
+
+### Weather and air
+
+| Field | Default | What it does | This house |
+| --- | --- | --- | --- |
+| Rain sensor | none | On/off "it's raining", or a rain rate where anything above 0 means rain. Beats the forecast. Rain brings a rainy scene and a **blanket?** request. | `input_boolean.raining` |
+| Weather forecast | none | Sunny, snow and fog, and rain when there's no rain sensor. | `weather.forecast_home` |
+| Indoor temperature | none | Outside the comfort range: shivers or sweats and asks for a **blanket** or a **fan**. | `sensor.indoor_temperature` |
+| Too cold below | 18 °C / 64.5 °F | Shown in your unit system. No blanket request while the fireplace is lit. | default |
+| Too warm above | 26.5 °C / 79.5 °F | | default |
+| Air quality index | none | Above 100: a little mask, staying in. Cosmetic only. | `sensor.air_quality_index` |
+| Solar radiation | none | Only if your weather station reports W/m². 300 or more counts as sunny. | leave empty |
+
+### The pet's room
+
+| Field | Default | What it does | This house |
+| --- | --- | --- | --- |
+| Room lights | none | At half brightness or more, from an hour before bedtime: squints, "too bright, it's late!". Dim evening light makes it cozy. Daylight never counts. | living room lights |
+| Fireplace | none | Any entity that's on, heating or above 0 when lit. Curls up by it and gets a little happier. | `switch.fireplace` |
+| Light sensors | none | 100 lx or more at night also counts as too bright. | optional |
+
+### People and activity
+
+| Field | Default | What it does | This house |
+| --- | --- | --- | --- |
+| Home zone | `zone.home` | Counts the people in it. Someone arriving gets an excited greeting, at most once every 30 minutes. | `zone.home` |
+| Go to the sitter's after | 2 h | With nobody home this long, the pet is frozen: no hunger, no aging, no calls. | 2 h |
+| TVs | none | On or playing: watches along (small bonus). | `media_player.tv` |
+| Music players | none | Playing anything but video: dances (small bonus). | your speakers |
+
+### Privacy
+
+| Field | Default | What it does |
 | --- | --- | --- |
-| Sleep | Bedtime / wake time | 23:00 / 07:00 |
-| | Bedtime lights | the **bedroom** lights: when they're all off at bedtime and the house is quiet, the pet goes to bed |
-| | Motion sensors | indoor occupancy sensors (living room, office, dining room, kitchen) |
-| Weather | Rain sensor | `input_boolean.raining` (your rain automations), or the Ambient station's `sensor.weather_hourly_rain`, which lingers about an hour after rain stops |
-| | Solar radiation sensor | leave empty: this station doesn't report it, so sunny comes from the forecast |
-| | Weather entity | `weather.forecast_home` (sunny, snow and fog) |
-| | Indoor temperature | `sensor.indoor_temperature` |
-| | Air quality | `sensor.air_quality_index` |
-| The pet's room | Room lights | the **living room** lights |
-| | Light sensors | optional |
-| | Fireplace | `switch.fireplace` (your "Fireplace"): when it's on, the pet curls up by it |
-| People and activity | Home zone | `zone.home` |
-| | Music players | your speakers and displays |
-| | TVs | `media_player.tv` |
-| Privacy | Keep presence private | on |
+| Keep presence private | on | An empty house shows the pet napping, never at the sitter's, and the pet never names anyone. Turn it off to see "at the sitter's". |
 
-**What the house does (it never hurts the pet):**
-- **Rain** (rain gauge above 0): rainy scene and a **"blanket?"** request. **Too cold or
-  warm indoors:** shivers or sweats and asks for a **blanket** or a **fan**. Tap the
-  request bubble on the card, or press the Blanket or Fan button, for a happiness boost
-  and a couple of cozy hours.
-- **Sun** (solar radiation 300 W/m² or more), **music** and **TV**: small happiness
-  bonuses. Sunny, music and TV can't add up to more than +3 an hour.
-- **Bright living-room light late at night:** it squints and says so. Dim evening light
-  makes it cozy. Daylight is never too bright.
-- **Bedtime:** lights-out still wins. Otherwise, within an hour of bedtime, bedroom lights
-  off and 10 quiet minutes put it to bed. A bedroom light left on late doesn't keep it
-  up past its own bedtime, and the house never wakes it.
-- **Arriving home:** an excited greeting (once per 30 minutes, so GPS jitter doesn't
-  repeat it). **Nobody home for 2 hours:** it goes to the sitter's and time stops for it.
-  With privacy on, dashboards show it napping, never an empty house.
-- **Sensors dropping out:** a sensor that goes unavailable keeps its last value for 10
-  minutes, then counts as unmapped. It never reads as dark or empty.
-- After an HA restart, motion sensors all look freshly changed, so bedtime-by-darkness
-  waits 10 minutes.
+### Fixed rules (not settings)
+
+- **Sensor dropouts:** a sensor that goes unavailable keeps its last value for 10 minutes, then counts as unmapped. It never reads as dark or empty.
+- **After a restart:** motion sensors all look freshly changed, so bedtime-by-darkness waits 10 minutes.
+- **Requests:** the blanket and fan buttons are unavailable unless the pet is asking. Answering gives a happiness boost and two cozy (or cool) hours.
+- **The numbers:** every one of them is in `custom_components/virtual_pet/rates.py`.
 
 ## How the pet works
 

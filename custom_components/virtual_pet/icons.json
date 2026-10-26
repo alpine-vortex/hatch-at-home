@@ -37,7 +37,7 @@
         "default": "mdi:star-face"
       },
       "blanket": {
-        "default": "mdi:blanket"
+        "default": "mdi:bed-outline"
       },
       "fan": {
         "default": "mdi:fan"

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 DOMAIN = "virtual_pet"
-VERSION = "0.5.0"  # keep in step with manifest.json (a test checks)
+VERSION = "0.5.1"  # keep in step with manifest.json (a test checks)
 LOGGER = logging.getLogger(__package__)
 
 CONF_BEDTIME = "bedtime"
@@ -45,3 +45,6 @@ CONF_ZONE = "zone"
 CONF_PRIVACY = "privacy"
 DEFAULT_ZONE = "zone.home"
 CONF_FIREPLACE = "fireplace"
+CONF_COMFORT_LOW = "comfort_low"  # stored in °C, shown in the owner's unit
+CONF_COMFORT_HIGH = "comfort_high"
+CONF_AWAY_AFTER = "away_after"  # hours

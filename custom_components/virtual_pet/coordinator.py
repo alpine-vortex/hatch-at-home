@@ -24,7 +24,10 @@ from homeassistant.util import dt as dt_util
 
 from . import model, rates as R
 from .const import (
+    CONF_AWAY_AFTER,
     CONF_BEDTIME,
+    CONF_COMFORT_HIGH,
+    CONF_COMFORT_LOW,
     CONF_PRIVACY,
     CONF_SPECIES,
     CONF_WAKE_TIME,
@@ -89,7 +92,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.debug: dict[str, Any] = {}
         # The house: nothing is read until HA has fully started.
         self.home = HomeEffect()
-        self.presence = Presence()
+        self.presence = Presence(
+            entry.options.get(CONF_AWAY_AFTER, R.HOME_AWAY_AFTER_HOURS)
+        )
         self.watcher = Watcher(hass, entry.options)
         self._home_started = False
         self._home_debouncer = Debouncer(
@@ -212,7 +217,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             or model.minutes_to_bedtime(now, settings) <= R.HOME_BEDTIME_WINDOW_MINUTES
         )
         readings = self.watcher.read(now, night)
-        effect = evaluate(readings)
+        options = self.config_entry.options
+        effect = evaluate(
+            readings,
+            options.get(CONF_COMFORT_LOW, R.HOME_COMFORT_LOW_C),
+            options.get(CONF_COMFORT_HIGH, R.HOME_COMFORT_HIGH_C),
+        )
         if self.presence.greeting(now):
             effect.flags.insert(0, "greeting")
         self.home = effect

@@ -2,16 +2,111 @@
   "config": {
     "step": {
       "user": {
-        "title": "Add a pet device",
-        "description": "Name your pet and pick its world. The egg decides which of that world's creatures hatches.",
+        "title": "Add a pet",
+        "description": "Each pet lives in its own handheld device on the dashboard's pet shelf. Add the integration again for every extra pet.",
         "data": {
           "name": "Name",
           "world": "World"
+        },
+        "data_description": {
+          "name": "Shown on the card and used in entity IDs, for example button.pip_feed. Voice commands use it too.",
+          "world": "Sets the device's look and which creatures can hatch. The egg picks one by surprise."
         }
       }
     },
     "abort": {
       "no_worlds": "No pet worlds are ready yet. Reinstall the integration files and try again."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "What {name} notices",
+        "description": "Connect parts of your home to the pet. Every field is optional, and anything you leave empty is ignored. The house never hurts the pet: it only changes its mood, its scene and what it asks for.",
+        "sections": {
+          "sleep": {
+            "name": "Sleep",
+            "description": "Lights-out always wins. Otherwise the pet goes to bed when the bedtime lights are off and the house is quiet, from an hour before bedtime. If nobody does either, it dozes off on its own an hour after bedtime. The house never wakes it; it wakes at wake time.",
+            "data": {
+              "bedtime": "Bedtime",
+              "wake_time": "Wake time",
+              "bedtime_lights": "Bedtime lights",
+              "motion": "Motion sensors"
+            },
+            "data_description": {
+              "bedtime": "It gets drowsy 30 minutes before. Turning lights-out off after bedtime costs a little happiness.",
+              "wake_time": "It wakes up on its own at this time.",
+              "bedtime_lights": "When all of these are off, it's time for bed. Bedroom lights work well. A light left on late doesn't keep the pet up past its own bedtime.",
+              "motion": "Indoor motion, occupancy or presence sensors. Movement in the last 10 minutes means the house isn't quiet yet."
+            }
+          },
+          "weather": {
+            "name": "Weather and air",
+            "description": "Rain brings a rainy scene and a blanket request. Sun, snow and fog change its mood. Indoor temperature outside your comfort range makes it shiver or sweat and ask for a blanket or a fan.",
+            "data": {
+              "rain": "Rain sensor",
+              "weather": "Weather forecast",
+              "indoor_temperature": "Indoor temperature",
+              "comfort_low": "Too cold below",
+              "comfort_high": "Too warm above",
+              "aqi": "Air quality index",
+              "solar": "Solar radiation (optional)"
+            },
+            "data_description": {
+              "rain": "An on/off \"it's raining\" entity, or a rain rate where anything above 0 means rain. This beats the forecast, which only says what's likely.",
+              "weather": "A weather entity. Used for sunny, snow and fog, and for rain when there's no rain sensor.",
+              "indoor_temperature": "One temperature sensor in the main living space.",
+              "comfort_low": "Below this the pet shivers and asks for a blanket. Never when the fireplace is lit.",
+              "comfort_high": "Above this the pet sweats and asks for a fan.",
+              "aqi": "An air quality index sensor. Above 100 the pet wears a little mask and stays in. Cosmetic only.",
+              "solar": "Only if your weather station reports solar radiation in W/m². 300 or more counts as sunny, more precise than the forecast."
+            }
+          },
+          "room": {
+            "name": "The pet's room",
+            "description": "The room the pet lives in. Bright light late at night makes it squint; dim evening light makes it cozy. Daylight is never too bright.",
+            "data": {
+              "room_lights": "Room lights",
+              "fireplace": "Fireplace",
+              "lux": "Light sensors"
+            },
+            "data_description": {
+              "room_lights": "Lights in that room, for example the living room. Half brightness or more, from an hour before bedtime, counts as too bright.",
+              "fireplace": "Any entity that's on, heating or above 0 when the fire is lit. The pet curls up by it, gets a little happier, and won't ask for a blanket.",
+              "lux": "Optional. 100 lx or more at night also counts as too bright."
+            }
+          },
+          "activity": {
+            "name": "People and activity",
+            "description": "Someone arriving gets an excited greeting, at most once every 30 minutes. When nobody is home for a while, the pet goes to the sitter's and time stops for it, so it never gets lonely or hungry. Music makes it dance and the TV makes it watch along, each with a small happiness bonus.",
+            "data": {
+              "zone": "Home zone",
+              "away_after": "Go to the sitter's after",
+              "tv": "TVs",
+              "music": "Music players"
+            },
+            "data_description": {
+              "zone": "The pet counts the people in this zone. Only people tracked in Home Assistant count.",
+              "away_after": "How long the house has to be empty first.",
+              "tv": "Media players that are TVs. On or playing counts as watching.",
+              "music": "Speakers and displays. Playing anything that isn't video counts as music."
+            }
+          },
+          "privacy": {
+            "name": "Privacy",
+            "description": "For wall tablets and shared dashboards.",
+            "data": {
+              "privacy": "Keep presence private"
+            },
+            "data_description": {
+              "privacy": "On: an empty house shows the pet napping, never at the sitter's, and the pet never names anyone. Off: dashboards show \"at the sitter's\"."
+            }
+          }
+        }
+      }
+    },
+    "error": {
+      "comfort_range": "\"Too cold below\" must be lower than \"Too warm above\"."
     }
   },
   "entity": {
@@ -134,76 +229,6 @@
         "config_entry_id": {
           "name": "Pet",
           "description": "Which pet. Leave empty for all pets."
-        }
-      }
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "What the pet notices",
-        "description": "Map parts of your home to the pet. Everything is optional: unmapped things are simply ignored. The house never hurts the pet; it only changes its mood, its scene and what it asks for.",
-        "sections": {
-          "sleep": {
-            "name": "Sleep",
-            "description": "The pet gets drowsy near bedtime and falls asleep when lights-out is on, or when the bedtime lights are off and the house is quiet. Home signals never wake it.",
-            "data": {
-              "bedtime": "Bedtime",
-              "wake_time": "Wake time",
-              "bedtime_lights": "Bedtime lights",
-              "motion": "Motion or presence sensors"
-            },
-            "data_description": {
-              "bedtime_lights": "When all of these are off at bedtime (and no motion for 10 minutes), the pet goes to bed. Bedroom lights work well.",
-              "motion": "Indoor sensors only. Recent motion keeps the house from counting as quiet."
-            }
-          },
-          "weather": {
-            "name": "Weather and air",
-            "description": "A local weather station beats a forecast: a rain sensor decides rainy days, and a solar radiation sensor decides sunny ones. The weather entity fills in the rest (snow, fog).",
-            "data": {
-              "weather": "Weather entity",
-              "rain": "Rain sensor",
-              "solar": "Solar radiation sensor",
-              "indoor_temperature": "Indoor temperature",
-              "aqi": "Air quality index"
-            },
-            "data_description": {
-              "rain": "A rain rate (any value above 0 means raining) or an on/off \"it's raining\" entity.",
-              "solar": "Watts per square metre. 300 or more counts as sunny.",
-              "indoor_temperature": "Too cold or warm makes the pet ask for a blanket or a fan. It never makes it sick."
-            }
-          },
-          "room": {
-            "name": "The pet's room",
-            "description": "Bright light late at night makes the pet squint; dim evening light makes it cozy. Daylight is never too bright.",
-            "data": {
-              "room_lights": "Room lights",
-              "lux": "Light sensors",
-              "fireplace": "Fireplace"
-            },
-            "data_description": {
-              "fireplace": "Any entity that's on (or heating, or above 0) when the fire is lit. The pet curls up by it, and it never asks for a blanket next to a lit fire."
-            }
-          },
-          "activity": {
-            "name": "People and activity",
-            "description": "Someone arriving gets an excited greeting. After 2 hours with nobody home the pet goes to the sitter's and time stops for it.",
-            "data": {
-              "zone": "Home zone",
-              "music": "Music players",
-              "tv": "TVs"
-            }
-          },
-          "privacy": {
-            "name": "Privacy",
-            "data": {
-              "privacy": "Keep presence private"
-            },
-            "data_description": {
-              "privacy": "On: dashboards never show that the house is empty (the pet just looks asleep) and the pet never names anyone."
-            }
-          }
         }
       }
     }

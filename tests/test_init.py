@@ -374,6 +374,9 @@ async def test_options_flow_saves_a_flat_mapping(
         "zone": "zone.home",
         "tv": ["media_player.tv"],
         "privacy": True,
+        "comfort_low": 18.0,
+        "comfort_high": 26.5,
+        "away_after": 2.0,
     }
 
 
@@ -477,3 +480,49 @@ async def test_dark_bedroom_puts_pet_to_bed_promptly(
     hass.states.async_set("light.bed", "on")
     await settle(hass, freezer)
     assert hass.states.get("binary_sensor.pip_asleep").state == STATE_ON  # never woken
+
+
+async def test_options_show_fahrenheit_and_store_celsius(
+    hass: HomeAssistant, now: float
+) -> None:
+    from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
+
+    hass.config.units = US_CUSTOMARY_SYSTEM
+    config = await setup_with_house(hass)
+    result = await hass.config_entries.options.async_init(config.entry_id)
+    weather = result["data_schema"].schema["weather"].schema.schema
+    defaults = {
+        str(k): k.default()
+        for k in weather
+        if hasattr(k, "default") and callable(k.default)
+    }
+    assert defaults["comfort_low"] == 64.5  # 18 °C, to the nearest half degree
+    sections = {
+        "sleep": {"bedtime": "23:00:00", "wake_time": "07:00:00"},
+        "weather": {"comfort_low": 80, "comfort_high": 70},
+        "room": {},
+        "activity": {"zone": "zone.home", "away_after": 2},
+        "privacy": {"privacy": True},
+    }
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], sections
+    )
+    assert result["errors"] == {"weather": "comfort_range"}
+    sections["weather"] = {"comfort_low": 64, "comfort_high": 80}
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], sections
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert config.options["comfort_low"] == pytest.approx(17.78, abs=0.01)
+    assert config.options["comfort_high"] == pytest.approx(26.67, abs=0.01)
+
+
+async def test_new_pet_gets_a_free_default_name(
+    hass: HomeAssistant, now: float
+) -> None:
+    await setup(hass)  # "Pip" exists
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    name_key = next(k for k in result["data_schema"].schema if str(k) == "name")
+    assert name_key.default() == "Fern"

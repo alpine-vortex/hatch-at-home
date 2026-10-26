@@ -81,7 +81,11 @@ SUNNY = {"sunny"}
 FOGGY = {"fog"}
 
 
-def evaluate(r: Readings) -> HomeEffect:
+def evaluate(
+    r: Readings,
+    comfort_low_c: float = R.HOME_COMFORT_LOW_C,
+    comfort_high_c: float = R.HOME_COMFORT_HIGH_C,
+) -> HomeEffect:
     """Turn a snapshot of the house into flags, requests and bonuses."""
     e = HomeEffect()
     bonus: dict[str, float] = {}
@@ -117,11 +121,11 @@ def evaluate(r: Readings) -> HomeEffect:
 
     # Indoor temperature: a request, never a drain.
     if r.indoor_c is not None:
-        if r.indoor_c < R.HOME_COMFORT_LOW_C and not r.fireplace:
+        if r.indoor_c < comfort_low_c and not r.fireplace:
             e.flags.append("chilly")
             if "blanket" not in e.requests:
                 e.requests.append("blanket")
-        elif r.indoor_c > R.HOME_COMFORT_HIGH_C:
+        elif r.indoor_c > comfort_high_c:
             e.flags.append("warm")
             e.requests.append("fan")
 
@@ -166,7 +170,8 @@ class Presence:
     restart starts the empty timer over, which only delays away mode.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, away_after_hours: float = R.HOME_AWAY_AFTER_HOURS) -> None:
+        self.away_after = away_after_hours * 3600
         self.count: int | None = None
         self.empty_since: float | None = None
         self.last_greeting = -1e12
@@ -194,7 +199,7 @@ class Presence:
             return False
         if self.empty_since is None:
             self.empty_since = now
-        return away or now - self.empty_since >= R.HOME_AWAY_AFTER_HOURS * 3600
+        return away or now - self.empty_since >= self.away_after
 
     def greeting(self, now: float) -> bool:
         """Whether the pet is still excited about someone arriving."""
