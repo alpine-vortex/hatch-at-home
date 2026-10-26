@@ -29,6 +29,7 @@ from .const import (
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
     CONF_PRIVACY,
+    CONF_SITTER_SETTLES,
     CONF_SPECIES,
     CONF_WAKE_TIME,
     CONF_WORLD,
@@ -230,6 +231,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         away = self.presence.update(self.watcher.people_home(now), now, self.state.away)
         if away != self.state.away:
             self.state.away = away
+            if away and self.config_entry.options.get(CONF_SITTER_SETTLES, True):
+                model.sitter_settles(self.state)
             self._fire([{"type": "went_away" if away else "came_home"}])
             if not away:
                 self.home.flags.insert(0, "greeting")

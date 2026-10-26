@@ -82,12 +82,14 @@
             "data": {
               "zone": "Home zone",
               "away_after": "Go to the sitter's after",
+              "sitter_settles": "The sitter settles whining",
               "tv": "TVs",
               "music": "Music players"
             },
             "data_description": {
               "zone": "The pet counts the people in this zone. Only people tracked in Home Assistant count.",
               "away_after": "How long the house has to be empty first.",
+              "sitter_settles": "On: if the pet was whining for attention when it left (a fake call), the sitter settles it, so it comes home happy. Off: the whine waits for you. Real needs, like hunger, always wait.",
               "tv": "Media players that are TVs. On or playing counts as watching.",
               "music": "Speakers and displays. Playing anything that isn't video counts as music."
             }

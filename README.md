@@ -179,6 +179,7 @@ never wakes the pet.
 | --- | --- | --- | --- |
 | Home zone | `zone.home` | Counts the people in it. Someone arriving gets an excited greeting, at most once every 30 minutes. | `zone.home` |
 | Go to the sitter's after | 2 h | With nobody home this long, the pet is frozen: no hunger, no aging, no calls. | 2 h |
+| The sitter settles whining | on | If the pet was whining for attention (a fake call) when it left, the sitter settles it and it comes home happy. Off: the whine waits for you. Real needs always wait. | on |
 | TVs | none | On or playing: watches along (small bonus). | `media_player.tv` |
 | Music players | none | Playing anything but video: dances (small bonus). | your speakers |
 

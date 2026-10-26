@@ -48,3 +48,4 @@ CONF_FIREPLACE = "fireplace"
 CONF_COMFORT_LOW = "comfort_low"  # stored in °C, shown in the owner's unit
 CONF_COMFORT_HIGH = "comfort_high"
 CONF_AWAY_AFTER = "away_after"  # hours
+CONF_SITTER_SETTLES = "sitter_settles"  # the sitter answers a whine

@@ -65,8 +65,8 @@ or the owner for such details before committing it.
    a random "play with me?" call. The call was frozen at the sitter's and outranked the
    greeting on return. The test pet now has full discipline, so it never fake-calls;
    that test passes on 153 seeds and the whole suite on 60 random seeds (4 in parallel).
-   Open design question for the owner: should going to the sitter's settle a pending
-   fake call?
+   The owner then decided: going to the sitter's settles a pending fake call by default
+   (option "The sitter settles whining", `sitter_settles`); real needs still wait.
    Also seen once: during a dev-HA test the card jumped back to the first pet. An
    85-second probe of the same steps didn't reproduce it, so it was most likely the
    test page reloading; watch for it.

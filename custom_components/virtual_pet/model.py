@@ -547,6 +547,14 @@ def _wants_to_whine(state: PetState) -> bool:
     )
 
 
+def sitter_settles(state: PetState) -> bool:
+    """The sitter answers a whine (fake call) the pet left with; real needs stay."""
+    if state.call is not None and state.call.reason == "fake":
+        state.call = None
+        return True
+    return False
+
+
 def _start_call(state: PetState, reason: str, t: float, events: list[Event]) -> None:
     state.call = Call(reason, t, t + R.CALL_WINDOW_MINUTES * 60)
     # A fake call looks like a plea to play from outside; the status screen

@@ -383,6 +383,7 @@ async def test_options_flow_saves_a_flat_mapping(
         "comfort_low": 18.0,
         "comfort_high": 26.5,
         "away_after": 2.0,
+        "sitter_settles": True,
     }
 
 
@@ -451,6 +452,51 @@ async def test_empty_house_goes_to_the_sitter_privately(
     mood = hass.states.get("sensor.pip_mood")
     assert mood.state == "excited"
     assert mood.attributes["reason"] == "you're back!!"
+
+
+async def away_and_back(hass: HomeAssistant, freezer: FrozenDateTimeFactory) -> None:
+    hass.states.async_set("zone.home", "0")
+    await settle(hass, freezer)
+    for _ in range(26):  # a bit over two hours: off to the sitter's
+        await settle(hass, freezer, 5 * 60)
+    hass.states.async_set("zone.home", "1")
+    await settle(hass, freezer)
+
+
+def whining_pet(now: float) -> dict[str, Any]:
+    # Full discipline, so no new fake call starts; this one is already going.
+    call = {"reason": "fake", "started": now, "deadline": now + 10 * 3600}
+    return hatched_pet(now, discipline=100.0, call=call)
+
+
+async def test_sitter_settles_a_whine_by_default(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = whining_pet(now)
+    hass.states.async_set("zone.home", "1")
+    await setup_with_house(hass)
+    assert hass.states.get("binary_sensor.pip_calling").state == STATE_ON
+    await away_and_back(hass, freezer)
+    assert hass.states.get("sensor.pip_mood").state == "excited"
+    assert hass.states.get("binary_sensor.pip_calling").state == STATE_OFF
+
+
+async def test_whine_can_wait_for_the_owner(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = whining_pet(now)
+    hass.states.async_set("zone.home", "1")
+    await setup_with_house(hass, sitter_settles=False)
+    await away_and_back(hass, freezer)
+    mood = hass.states.get("sensor.pip_mood")
+    assert mood.state == "calling"
+    assert mood.attributes["reason"] == "play with me?"
 
 
 async def test_on_off_rain_entity(

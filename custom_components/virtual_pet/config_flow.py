@@ -47,6 +47,7 @@ from .const import (
     CONF_PRIVACY,
     CONF_RAIN,
     CONF_ROOM_LIGHTS,
+    CONF_SITTER_SETTLES,
     CONF_SOLAR,
     CONF_TV,
     CONF_WAKE_TIME,
@@ -197,6 +198,7 @@ class PetOptionsFlow(OptionsFlowWithReload):
             "activity": [
                 (CONF_ZONE, _entities("zone"), DEFAULT_ZONE),
                 (CONF_AWAY_AFTER, _number(0.5, 24, 0.5, "h"), R.HOME_AWAY_AFTER_HOURS),
+                (CONF_SITTER_SETTLES, BooleanSelector(), True),
                 (CONF_TV, _entities("media_player", True), None),
                 (CONF_MUSIC, _entities("media_player", True), None),
             ],
