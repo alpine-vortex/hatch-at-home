@@ -1,7 +1,7 @@
 {
   "woodland": {
     "name": "Woodland",
-    "label": "HATCH · WOODS",
+    "label": "hatch · woods",
     "roster": ["bird", "squirrel", "deer"],
     "shell": { "shape": "egg", "color": "#e8834a", "bezel": "#f3ead7" },
     "backdrop": "#2f4a3a",
@@ -11,12 +11,12 @@
   },
   "terrarium": {
     "name": "Terrarium",
-    "label": "HATCH · TERRA",
+    "label": "hatch · terra",
     "roster": ["gecko", "beetle"],
     "shell": { "shape": "tank", "color": "#d8b07a", "bezel": "#5b4632" },
     "backdrop": "#ead6b0",
     "ground": "#dcc192",
     "ink": "#4a3520",
-    "subink": "#7a6248"
+    "subink": "#6a523a"
   }
 }

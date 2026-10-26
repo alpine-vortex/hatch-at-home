@@ -9,8 +9,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
+import logging
 from pathlib import Path
 from typing import Any
+
+_LOGGER = logging.getLogger(__package__)
+
+REQUIRED = {"name": str, "stages": list, "moods": list, "egg": dict}
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
 
@@ -40,7 +45,19 @@ def load_catalog() -> Catalog:
     """Read every world and ready species. Blocking: run in the executor."""
     species: dict[str, dict[str, Any]] = {}
     for path in sorted((FRONTEND_DIR / "sprites").glob("*/species.json")):
-        data = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except ValueError as err:
+            _LOGGER.warning("Skipping %s: not valid JSON (%s)", path, err)
+            continue
+        missing = [
+            k for k, kind in REQUIRED.items() if not isinstance(data.get(k), kind)
+        ]
+        if missing or not data["stages"] or not data["moods"]:
+            _LOGGER.warning(
+                "Skipping %s: missing %s", path, ", ".join(missing) or "stages/moods"
+            )
+            continue
         if data.get("ready", True):
             species[path.parent.name] = data
     all_worlds = json.loads((FRONTEND_DIR / "worlds.json").read_text(encoding="utf-8"))

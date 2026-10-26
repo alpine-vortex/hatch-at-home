@@ -122,6 +122,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
 
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = list(model.LIFE_STAGES)
+    _unrecorded_attributes = frozenset({"raised", "roster", "hatches_at"})
 
     def __init__(self, coordinator: PetCoordinator) -> None:
         super().__init__(coordinator, "life_stage")
@@ -138,7 +139,18 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "world": self.coordinator.world,
             "raised": self.pet.raised,
             "roster": list(self.coordinator.roster),
+            "hatches_at": self._hatches_at(),
         }
+
+    def _hatches_at(self) -> str | None:
+        """When the egg hatches at the current pace (aging pauses while away)."""
+        pet = self.pet
+        if model.life_stage(pet) != "egg" or not self.coordinator.roster:
+            return None
+        left = model.R.STAGE_STARTS[1][1] - pet.age_hours
+        return dt_util.utc_from_timestamp(
+            round(pet.last_updated + left * 3600)
+        ).isoformat()
 
 
 class LastCareSensor(PetEntity, SensorEntity):

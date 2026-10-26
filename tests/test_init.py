@@ -234,7 +234,7 @@ async def test_card_and_sprites_are_served(
     for path in (
         "worlds.json",
         "sprites/bird/species.json",
-        "fonts/PixelifySans.woff2",
+        "fonts/Tiny5.woff2",
     ):
         resp = await client.get(f"/virtual_pet/frontend/{path}")
         assert resp.status == 200, path
@@ -270,3 +270,29 @@ async def test_phase2_pet_becomes_a_woodland_bird(
     attrs = hass.states.get("sensor.pip_life_stage").attributes
     assert attrs["world"] == "woodland"
     assert attrs["species"] == "bird"
+
+
+async def test_egg_reports_when_it_hatches(hass: HomeAssistant, now: float) -> None:
+    await setup(hass)
+    hatches = hass.states.get("sensor.pip_life_stage").attributes["hatches_at"]
+    assert dt_util.parse_datetime(hatches).timestamp() == pytest.approx(
+        now + 1800, abs=2
+    )
+
+
+def test_broken_species_files_are_skipped(tmp_path, monkeypatch) -> None:
+    from custom_components.virtual_pet import species
+
+    (tmp_path / "sprites" / "good").mkdir(parents=True)
+    (tmp_path / "sprites" / "bad").mkdir()
+    (tmp_path / "sprites" / "good" / "species.json").write_text(
+        '{"name": "Good", "stages": ["baby"], "moods": ["content"], "egg": {}}'
+    )
+    (tmp_path / "sprites" / "bad" / "species.json").write_text('{"name": "Bad"}')
+    (tmp_path / "worlds.json").write_text(
+        '{"w": {"name": "W", "roster": ["bad", "good"]}}'
+    )
+    monkeypatch.setattr(species, "FRONTEND_DIR", tmp_path)
+    catalog = species.load_catalog()
+    assert list(catalog.species) == ["good"]
+    assert catalog.roster("w") == ["good"]

@@ -34,5 +34,5 @@
 
 Mock-up C in the "Hatch pet card mockup" artifact: chunky toy buttons that press down
 and glow when the pet needs them, a cream screen bezel, a pixel speech bubble and the
-Pixelify Sans font. The shells are drawn in CSS so they stay crisp at any size. Sol
+Tiny5 pixel font (chosen over Pixelify Sans, whose "c" closes up at label sizes). The shells are drawn in CSS so they stay crisp at any size. Sol
 supplies the pixel icons and small world emblems.

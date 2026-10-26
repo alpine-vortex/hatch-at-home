@@ -30,7 +30,7 @@ The integration serves the card itself; you only tell the dashboard about it.
 
 1. Turn on Advanced mode: click your name (bottom left) → Advanced mode.
 2. Settings → Dashboards → ⋮ (top right) → Resources → Add resource:
-   - URL: `/virtual_pet/frontend/hatch-pet-card.js?v=0.3.0`
+   - URL: `/virtual_pet/frontend/hatch-pet-card.js?v=0.3.1`
    - Type: JavaScript module
 3. Reload the browser page. On a phone or wall tablet, pull to refresh, or
    clear the app's frontend cache if the card doesn't appear.
