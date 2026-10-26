@@ -1,0 +1,10 @@
+Use your image generation tool to draw ONE square image and save it as props_1.png in the current directory.
+
+A 2 x 2 grid of equal square cells, each holding one small game prop drawn as chunky pixel art (props about 24 art pixels wide) in the same style and outline as the reference (the creature does NOT appear). Each object centred, filling about 60% of its cell.
+- top-left: a small dish with a few little flies.
+- top-right: a small cute cricket.
+- bottom-left: leave empty grey.
+- bottom-right: leave empty grey.
+
+Art style: chunky retro pixel art exactly like the attached reference sheet: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark pixel outline. Keep the reference's pixel size relative to the subject, so the pixels are large and clearly visible
+Background: one flat even mid-grey everywhere (no gradient, no texture, no floor, no shadows on it). Every subject is drawn whole inside its own cell with a generous empty margin; nothing crosses a cell edge. No text labels, no titles, no cell borders, no grid lines.

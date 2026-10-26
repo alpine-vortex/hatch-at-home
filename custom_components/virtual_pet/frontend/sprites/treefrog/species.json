@@ -1,0 +1,34 @@
+{
+  "name": "Pacific tree frog",
+  "ready": true,
+  "stages": ["baby", "child", "teen"],
+  "stage_fallback": { "adult": "teen" },
+  "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
+  "frames": 2,
+  "egg": { "idle": ["egg_idle_1", "egg_idle_2"], "wiggle": ["egg_wiggle_1", "egg_wiggle_2"], "crack": ["egg_crack_1", "egg_crack_2"] },
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "croak": ["child_croak_1", "child_croak_2"],
+    "lily_sit": ["child_lily_sit_1", "child_lily_sit_2"],
+    "tongue": ["child_tongue_1", "child_tongue_2"]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "bird/ball",
+    "clean": "bubbles",
+    "medicine": "bird/medicine",
+    "blanket": "bird/blanket",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
+  },
+  "murk": "murk",
+  "backgrounds": { "day": "bg_day", "night": "bg_night", "dim": "bg_night" },
+  "words": { "food": "flies", "home": "lily pad" }
+}

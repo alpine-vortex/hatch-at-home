@@ -1,0 +1,4 @@
+Use your image generation tool to draw ONE landscape image (4:3, wide) and save it as pond_bg_night.png in the current directory.
+
+A background scene for a virtual-pet game, no creature in it: the same pond at night: moon reflected in the water, fireflies, dark reeds. Leave the lower-middle area open and uncluttered where the pet will be. No text.
+Chunky retro pixel art exactly like the attached reference: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark brown pixel outline.

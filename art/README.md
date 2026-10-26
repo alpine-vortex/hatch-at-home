@@ -90,3 +90,14 @@ otter's scenes, murk and bubbles. Six frames (`child_excited_1/2`, `teen_excited
 of the sheet row above, caught by the crop. They were erased here with
 `art/octopus/erase_slivers.py` (dark, flat pieces wholly above the body); the
 sparkles and bubbles were kept. Sol was told so the cutter can trim them.
+
+## Pacific tree frog and the Pond kit: ready 2026-10-26
+
+74 frog sprites (sha256 checked), cut with Sol's sliver fix; the sliver and gap checks
+came back clean. Signature poses: croak, lily_sit, tongue. Props: a dish of flies
+(`feed`) and a bug (`snack`; hard to read at sprite size, a nit); `play` borrows the
+bird's ball. The Pond kit (sha256 checked) brings the frog-spawn egg, `bg_day`,
+`bg_night`, the `murk` overlay, the emblem and the cattail and lily-pad decorations;
+its bubbles became the frog's `clean` prop. The day scene puts the pet on open water.
+The night scene is not the day's layout; Sol is sending matching nights for Pond and
+Tidepool. Kit prompts are in `art/pond/`.

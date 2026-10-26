@@ -78,6 +78,7 @@ async def test_config_flow_names_the_pet(hass: HomeAssistant) -> None:
         "terrarium",
         "hearth",
         "tidepool",
+        "pond",
     ]
     # The beetle isn't ready yet, so the terrarium lists only the gecko.
     assert worlds[1]["label"] == "Terrarium: Leopard gecko"
