@@ -890,9 +890,14 @@ class HatchPetCard extends HTMLElement {
 
 // The integration loads this file on every dashboard. If an old manual
 // resource also loads it, keep the first definition instead of erroring.
-if (!customElements.get("hatch-pet-card")) {
-  customElements.define("hatch-pet-card", HatchPetCard);
-}
+// Wait for <home-assistant> first: once the service worker caches this file
+// it can run before the frontend swaps in its own custom element registry,
+// and a card defined in the old one is never found ("Configuration error").
+customElements.whenDefined("home-assistant").then(() => {
+  if (!window.customElements.get("hatch-pet-card")) {
+    window.customElements.define("hatch-pet-card", HatchPetCard);
+  }
+});
 
 window.customCards = window.customCards || [];
 if (!window.customCards.some((c) => c.type === "hatch-pet-card")) window.customCards.push({
