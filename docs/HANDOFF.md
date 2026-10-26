@@ -51,6 +51,9 @@ and recreated so the old commits are gone too; don't reintroduce them.
      `last_bird` feed and the fallback are in the private house notes)
    - optional notifications and a chirp sound
 5. **Art queue with Sol** (an image agent in another session, which can't reply here):
+   - **Kitten (Hearth):** imported with `"ready": false`. Asked Sol (2026-10-26) for a
+     `teen_content_1` redraw, Hearth's egg and backgrounds; see `art/README.md`. The card
+     also needs a `house` shell shape for Hearth.
    - tarantula probe, then the four new worlds (probe, review, batch)
    - more trim if the owner likes the woodland test
    - The owner forwards share links from their file share (host in the private notes).
