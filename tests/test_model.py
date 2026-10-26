@@ -8,6 +8,7 @@ import random
 import pytest
 
 from custom_components.virtual_pet import model, rates as R
+from custom_components.virtual_pet.home import HomeEffect
 
 HOUR = 3600.0
 MIN = 60.0
@@ -424,3 +425,93 @@ def test_fake_call_looks_like_a_plea_to_play():
     assert pet.call and pet.call.reason == "fake"
     assert {"type": "call_started", "reason": "happiness"} in events
     assert model.mood(pet, start + 5 * MIN, SETTINGS)[2] == "play with me?"
+
+
+# --- Traits ------------------------------------------------------------------
+
+
+def house(*flags: str, company: bool = False) -> model.Settings:
+    return model.Settings(tz=UTC, home=HomeEffect(flags=list(flags), company=company))
+
+
+def live(pet: model.PetState, until: float, settings: model.Settings) -> list:
+    return model.advance(pet, until, settings, NoLuck(), max_gap=None)
+
+
+def test_music_lover_is_learned_from_music():
+    pet = hatched(at(12))
+    pet.trait_hours = {"awake": 20.0, "music": R.TRAIT_MUSIC_LOVER_HOURS - 0.25}
+    events = live(pet, at(12, 10), house("dancing"))
+    assert "trait_learned" not in types(events)
+    events = live(pet, at(12, 30), house("dancing"))
+    assert [e for e in events if e["type"] == "trait_learned"] == [
+        {"type": "trait_learned", "trait": "music_lover"}
+    ]
+    assert pet.traits == ["music_lover"]
+    assert live(pet, at(13), house("dancing")) == []  # learned once
+
+
+def test_quiet_hours_teach_nothing():
+    pet = hatched(at(12))
+    live(pet, at(14), house())
+    assert pet.trait_hours.get("music", 0.0) == 0.0
+    assert pet.trait_hours["awake"] == pytest.approx(2.0)
+    assert model.trait_progress(pet) == {
+        "night_owl": 0.0,
+        "music_lover": 0.0,
+        "homebody": 0.0,
+    }
+
+
+def test_sleeping_through_music_teaches_nothing():
+    pet = hatched(at(12), asleep=True, napping=True, energy=10.0)
+    live(pet, at(12, 30), house("dancing"))
+    assert pet.trait_hours == {}
+
+
+def test_music_lover_enjoys_music_more():
+    fan, other = hatched(at(12), happiness=50.0), hatched(at(12), happiness=50.0)
+    fan.traits = ["music_lover"]
+    live(fan, at(13), house("dancing"))
+    live(other, at(13), house("dancing"))
+    assert fan.happiness - other.happiness == pytest.approx(R.HOME_MUSIC_HAPPINESS)
+
+
+def test_homebody_needs_company_most_of_the_time():
+    pet = hatched(at(12))
+    pet.trait_hours = {"awake": 60.0, "company": 30.0}  # half the time: not yet
+    live(pet, at(13), house(company=True))
+    assert pet.traits == []
+    pet.trait_hours = {"awake": 47.5, "company": 47.5}  # not long enough yet
+    live(pet, at(13, 10), house(company=True))
+    assert pet.traits == []
+    live(pet, at(14), house(company=True))
+    assert pet.traits == ["homebody"]
+    before = pet.happiness
+    alone = hatched(at(14), happiness=before)
+    live(pet, at(15), house(company=True))
+    live(alone, at(15), house(company=True))
+    assert pet.happiness - alone.happiness == pytest.approx(R.TRAIT_HAPPINESS)
+
+
+def test_night_owl_stays_up_longer():
+    pet = hatched(at(22, 50), energy=100.0)
+    pet.trait_hours = {"awake": 30.0, "night": R.TRAIT_NIGHT_OWL_HOURS - 0.1}
+    live(pet, at(23, 30), house())
+    assert pet.traits == ["night_owl"]
+    assert not pet.asleep
+    # An ordinary pet dozes off after FALL_ASLEEP_ANYWAY_MINUTES; the owl lasts twice that.
+    normal = hatched(at(23), energy=100.0)
+    end = at(23) + R.FALL_ASLEEP_ANYWAY_MINUTES * 1.5 * MIN
+    live(normal, end, house())
+    live(pet, end, house())
+    assert normal.asleep and not pet.asleep
+
+
+def test_traits_survive_a_save():
+    pet = hatched(at(12))
+    pet.traits = ["homebody"]
+    pet.trait_hours = {"awake": 50.0, "company": 45.0}
+    again = model.PetState.from_dict(pet.to_dict())
+    assert again.traits == ["homebody"]
+    assert again.trait_hours == {"awake": 50.0, "company": 45.0}

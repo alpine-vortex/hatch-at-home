@@ -139,6 +139,7 @@ class Watcher:
             tv=any(s.state in ("on", "playing") for s in self._all(CONF_TV, now)),
             aqi=_float(self._one(CONF_AQI, now)),
             fireplace=self._lit(self._one(CONF_FIREPLACE, now)),
+            company=None if (people := self.people_home(now)) is None else people > 0,
         )
 
     @staticmethod

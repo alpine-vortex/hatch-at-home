@@ -59,6 +59,7 @@ class Readings:
     music: bool = False
     tv: bool = False
     aqi: float | None = None
+    company: bool | None = None  # someone is home
 
 
 @dataclass
@@ -69,6 +70,7 @@ class HomeEffect:
     requests: list[str] = field(default_factory=list)  # "blanket", "fan"
     bonus: dict[str, float] = field(default_factory=dict)  # per hour, positive
     dark_and_quiet: bool = False
+    company: bool = False  # someone is home (not shown; traits learn from it)
 
     def reason(self) -> str | None:
         """The highest-priority thing the pet would say about the house."""
@@ -157,6 +159,8 @@ def evaluate(
     # Air quality is cosmetic only.
     if r.aqi is not None and r.aqi > R.HOME_BAD_AQI:
         e.flags.append("masked")
+
+    e.company = r.company is True
 
     # Signals pointing the same way never add up past the cap.
     e.bonus = {s: min(v, R.HOME_BONUS_CAP) for s, v in bonus.items()}

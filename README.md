@@ -92,7 +92,7 @@ One device named after your pet, with:
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `call_deadline`. |
-| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). |
+| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits` and `trait_progress` (0–1 per trait). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far. |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
@@ -216,6 +216,13 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   lights-out off during sleep hours costs a little happiness. No calls while asleep.
 - **Sickness:** health below 25, four care misses in a day, or old poop.
   Medicine cures it. **It never dies.**
+- **Traits:** the pet picks up habits from your house and keeps them for life.
+  Only hours it spends awake count, and a trait only ever adds a little.
+  - *Night owl*, after 10 hours awake during sleep hours: stays up twice as long
+    before dozing off, and enjoys being up late (+0.5 happiness an hour).
+  - *Music lover*, after 12 hours of music: music makes it twice as happy.
+  - *Homebody*, when someone was home for at least 75% of 48 or more awake
+    hours (needs the home zone): +0.5 happiness an hour while someone's home.
 - **Restarts never hurt it.** HA downtime freezes the pet: nothing decays,
   ages or expires while HA is off.
 
@@ -228,7 +235,8 @@ names are included.
 `virtual_pet_discipline_miss`, `virtual_pet_pooped`, `virtual_pet_became_sick`,
 `virtual_pet_recovered`, `virtual_pet_fell_asleep`, `virtual_pet_woke_up`,
 `virtual_pet_stage_changed`, `virtual_pet_care`, `virtual_pet_hatched`,
-`virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`.
+`virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`,
+`virtual_pet_trait_learned` (with `trait`).
 
 Events fired during a fast-forward carry `simulated: true`.
 
@@ -278,6 +286,6 @@ HACS's and Home Assistant's checks and the tests on every push.
 1. ✅ Living pet
 2. ✅ The card: device shelf, sprites, speech bubble, poop, attention icon, status screen
 3. ✅ Home awareness: options (entity mapping, bedtime, privacy), weather, light, bedtime, presence, activity, AQI and requests
-4. Life: adult forms, traits, generations, journal, sky events (plus bird visits from BirdNET-Pi), notifications
+4. Life (in progress): ✅ traits; adult forms, generations, journal, sky events (plus bird visits from BirdNET-Pi), notifications
 5. ✅ HACS packaging
 6. Chores, minigames, more species

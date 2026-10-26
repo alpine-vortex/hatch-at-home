@@ -91,6 +91,8 @@ class PetState:
     care_log: list[dict[str, Any]] = field(default_factory=list)
     species: str | None = None  # decided when the egg hatches
     raised: list[str] = field(default_factory=list)  # species this device has hatched
+    traits: list[str] = field(default_factory=list)  # learned, in order (TRAITS)
+    trait_hours: dict[str, float] = field(default_factory=dict)  # exposure, awake
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store."""
@@ -283,6 +285,7 @@ def _step(
         return
 
     _sleep(state, t1, settings, events)
+    _learn(state, hours, t1, settings, events)
     _decay(state, hours, t1, settings)
     _digest(state, t1, events)
     _sickness(state, hours, t1, rng, events)
@@ -351,7 +354,7 @@ def _sleep(state: PetState, t: float, settings: Settings, events: list[Event]) -
         return
     if state.stayed_up_since is None:
         state.stayed_up_since = t
-    elif t - state.stayed_up_since >= R.FALL_ASLEEP_ANYWAY_MINUTES * 60:
+    elif t - state.stayed_up_since >= _stay_up_minutes(state) * 60:
         # Nobody turned the lights out; it dozes off anyway. No penalty.
         _fall_asleep(state, False, events, t, settings)
 
@@ -397,6 +400,8 @@ def _decay(state: PetState, hours: float, t: float, settings: Settings) -> None:
         bonus = dict(settings.home.bonus)
         if t < state.cozy_until or t < state.cool_until:
             bonus["happiness"] = bonus.get("happiness", 0.0) + R.COMFORT_HAPPINESS
+        for stat, rate in _trait_bonus(state, t, settings).items():
+            bonus[stat] = bonus.get(stat, 0.0) + rate
         for stat, rate in bonus.items():
             setattr(
                 state, stat, getattr(state, stat) + min(rate, R.HOME_BONUS_CAP) * hours
@@ -545,6 +550,66 @@ def _wants_to_whine(state: PetState) -> bool:
             for s in ("hunger", "happiness", "energy", "health")
         )
     )
+
+
+# --- Traits -----------------------------------------------------------------
+
+TRAITS = ("night_owl", "music_lover", "homebody")
+
+
+def _learn(
+    state: PetState, hours: float, t: float, settings: Settings, events: list[Event]
+) -> None:
+    """Count what the pet lives through while awake; past a threshold it's a trait."""
+    if state.asleep:
+        return
+    seen = state.trait_hours
+    seen["awake"] = seen.get("awake", 0.0) + hours
+    if in_sleep_hours(t, settings):
+        seen["night"] = seen.get("night", 0.0) + hours
+    if "dancing" in settings.home.flags:
+        seen["music"] = seen.get("music", 0.0) + hours
+    if settings.home.company:
+        seen["company"] = seen.get("company", 0.0) + hours
+    for trait, progress in trait_progress(state).items():
+        if progress >= 1.0 and trait not in state.traits:
+            state.traits.append(trait)
+            events.append({"type": "trait_learned", "trait": trait})
+
+
+def trait_progress(state: PetState) -> dict[str, float]:
+    """How close each trait is, 0 to 1 (1 = learned)."""
+    seen = state.trait_hours
+    awake = seen.get("awake", 0.0)
+    share = seen.get("company", 0.0) / awake if awake else 0.0
+    progress = {
+        "night_owl": seen.get("night", 0.0) / R.TRAIT_NIGHT_OWL_HOURS,
+        "music_lover": seen.get("music", 0.0) / R.TRAIT_MUSIC_LOVER_HOURS,
+        "homebody": min(
+            share / R.TRAIT_HOMEBODY_SHARE, awake / R.TRAIT_HOMEBODY_MIN_AWAKE_HOURS
+        ),
+    }
+    return {
+        t: 1.0 if t in state.traits else round(min(p, 1.0), 3)
+        for t, p in progress.items()
+    }
+
+
+def _trait_bonus(state: PetState, t: float, settings: Settings) -> dict[str, float]:
+    """Small extra happiness per hour from what the pet has come to love."""
+    happiness = 0.0
+    if "night_owl" in state.traits and in_sleep_hours(t, settings):
+        happiness += R.TRAIT_HAPPINESS
+    if "music_lover" in state.traits and "dancing" in settings.home.flags:
+        happiness += R.HOME_MUSIC_HAPPINESS
+    if "homebody" in state.traits and settings.home.company:
+        happiness += R.TRAIT_HAPPINESS
+    return {"happiness": happiness} if happiness else {}
+
+
+def _stay_up_minutes(state: PetState) -> float:
+    factor = R.NIGHT_OWL_STAY_UP_FACTOR if "night_owl" in state.traits else 1.0
+    return R.FALL_ASLEEP_ANYWAY_MINUTES * factor
 
 
 def sitter_settles(state: PetState) -> bool:

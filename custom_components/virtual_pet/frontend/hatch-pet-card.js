@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.8.1";
+const VERSION = "0.9.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -247,6 +247,7 @@ const STYLE = `
   .bar div { height: 100%; background: #2f3a24; }
   .hearts { letter-spacing: 2px; }
   .hearts .off { opacity: .25; }
+  .row.traits { grid-template-columns: 100px minmax(0, 1fr); }
   .log { margin-top: 3px; font-size: 12px; opacity: .85; }
   .buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 6px; width: 100%; }
   .toy { display: flex; flex-direction: column; align-items: center; gap: 5px; border: none;
@@ -876,6 +877,7 @@ class HatchPetCard extends HTMLElement {
       }
       return `<span class="hearts" role="img" aria-label="${Math.round(v)} of 100">${out}</span>`;
     };
+    const traits = this._state(s, "sensor.life_stage")?.attributes.traits || [];
     const ic = (n) => pixelIcon(n, 18);
     const bar = (v) => v === null ? "–" : `<div class="bar"><div style="width:${v}%"></div></div>`;
     const lines = log.slice(0, 3).map((e) =>
@@ -888,6 +890,7 @@ class HatchPetCard extends HTMLElement {
       <div class="row icons">${ic("stat_health")}<span>health</span>${bar(value("health"))}</div>
       <div class="row icons">${ic("stat_discipline")}<span>discipline</span>${bar(value("discipline"))}</div>
       <div class="row icons">${ic("stat_care_miss")}<span>misses</span><span>${value("care_misses") ?? "–"}</span></div>
+      <div class="row traits"><span>traits</span><span>${traits.length ? traits.map((t) => escape(t.replace("_", " "))).join(" · ") : "none yet"}</span></div>
       <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>`;
   }
 

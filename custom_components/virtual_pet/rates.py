@@ -132,6 +132,15 @@ HOME_BRIGHT_LEVEL = 0.5  # a room light at half brightness or more, at night
 HOME_BRIGHT_LUX_AT_NIGHT = 100.0
 HOME_DIM_LEVEL = 0.35  # evening lights this low feel cozy
 HOME_BAD_AQI = 100.0
+# --- Traits (phase 4): learned from the house, kept for life. Bonuses only. ---
+
+TRAIT_NIGHT_OWL_HOURS = 10.0  # awake inside sleep hours
+TRAIT_MUSIC_LOVER_HOURS = 12.0  # awake with music playing
+TRAIT_HOMEBODY_SHARE = 0.75  # of awake time with someone home...
+TRAIT_HOMEBODY_MIN_AWAKE_HOURS = 48.0  # ...over at least this much awake time
+TRAIT_HAPPINESS = 0.5  # per hour: a night owl up late, a homebody with company
+NIGHT_OWL_STAY_UP_FACTOR = 2.0  # stays up this much longer before dozing off
+
 HOME_BEDTIME_WINDOW_MINUTES = 60  # dark-and-quiet works this long before bedtime
 HOME_QUIET_MINUTES = 10  # no motion for this long counts as quiet
 HOME_HOLD_MINUTES = 10  # an unavailable sensor keeps its last value this long
