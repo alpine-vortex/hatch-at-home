@@ -325,7 +325,7 @@ HACS's and Home Assistant's checks and the tests on every push.
 1. ✅ Living pet
 2. ✅ The card: device shelf, sprites, speech bubble, poop, attention icon, status screen
 3. ✅ Home awareness: options (entity mapping, bedtime, privacy), weather, light, bedtime, presence, activity, AQI and requests
-4. Life (in progress): ✅ traits, ✅ generations and journal, ✅ moon, ✅ notifications, ✅ adult forms; journal, sky events (plus bird visits from BirdNET-Pi), notifications
+4. Life (in progress): ✅ traits, ✅ generations and journal, ✅ moon, ✅ notifications, ✅ adult forms; still to come: bird visits from BirdNET-Pi
 5. ✅ HACS packaging
 6. Chores, minigames, more species
 
