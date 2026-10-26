@@ -1,14 +1,16 @@
 # Species
 
-Each folder here is one species the pet can be. A folder only shows up in the
-setup screen once it has a `species.json` with `"ready": true` (the beetle has
-none yet while its adult sprites are redrawn).
+Each folder here is one species a pet can hatch into. Species belong to worlds
+through the rosters in `../worlds.json`. A species only counts once it has a
+`species.json` with `"ready": true`, and a world shows up in the setup screen once
+at least one species on its roster is ready. The beetle has no `species.json` yet,
+while its adult sprites are being redrawn.
 
 `species.json`:
 
 | Key | Meaning |
 | --- | --- |
-| `name` | Shown in the setup screen and as the device model |
+| `name` | Shown in the setup screen and on the card |
 | `stages` | Stages that have sprites, besides the egg |
 | `stage_fallback` | Which drawn stage to use for one that has none (e.g. adult → teen until adult forms exist) |
 | `moods`, `frames` | Every stage has `{stage}_{mood}_{1..frames}.png` for each mood. A missing mood falls back to `content`. |

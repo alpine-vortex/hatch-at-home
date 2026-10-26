@@ -231,8 +231,13 @@ async def test_card_and_sprites_are_served(
     resp = await client.get("/virtual_pet/frontend/hatch-pet-card.js")
     assert resp.status == 200
     assert "hatch-pet-card" in await resp.text()
-    resp = await client.get("/virtual_pet/frontend/sprites/bird/species.json")
-    assert resp.status == 200
+    for path in (
+        "worlds.json",
+        "sprites/bird/species.json",
+        "fonts/PixelifySans.woff2",
+    ):
+        resp = await client.get(f"/virtual_pet/frontend/{path}")
+        assert resp.status == 200, path
     resp = await client.get("/virtual_pet/frontend/sprites/bird/child_content_1.png")
     assert resp.status == 200
 

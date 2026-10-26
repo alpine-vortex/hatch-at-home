@@ -96,7 +96,7 @@ template:
 lovelace:
   resource_mode: yaml
   resources:
-    - url: /virtual_pet/frontend/hatch-pet-card.js?v=0.2.0
+    - url: /virtual_pet/frontend/hatch-pet-card.js?v=0.3.0
       type: module
   dashboards:
     pet-bench:

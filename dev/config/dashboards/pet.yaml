@@ -4,7 +4,6 @@ views:
     path: pet
     cards:
       - type: custom:hatch-pet-card
-        entity: sensor.pip_mood
       - type: entities
         title: Stand-ins
         entities:

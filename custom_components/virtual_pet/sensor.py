@@ -137,6 +137,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "species": self.pet.species,
             "world": self.coordinator.world,
             "raised": self.pet.raised,
+            "roster": list(self.coordinator.roster),
         }
 
 

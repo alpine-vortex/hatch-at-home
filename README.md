@@ -6,8 +6,12 @@ scenery. **The house can never hurt the pet**; it only changes how the pet
 looks, what it says and what it asks for.
 
 Status: **phase 2, the card**. The pet lives in HA (stats, calls, care misses,
-poop, sleep, care buttons, restart catch-up, fast-forward) and has a pixel-art
-dashboard card. Home awareness comes in phase 3.
+poop, sleep, care buttons, restart catch-up, fast-forward), and every pet sits on
+a pixel-art **device shelf** card. Home awareness comes in phase 3.
+
+Each pet lives in a **device** themed for its **world**: an orange egg-shaped toy for
+Woodland, and a sandstone tank for Terrarium. The egg decides which of that world's
+creatures hatches. See `docs/design-worlds.md`.
 
 ## Install (phases 1–3: manual copy)
 
@@ -17,7 +21,8 @@ dashboard card. Home awareness comes in phase 3.
    The Samba share, the SSH add-on or the Studio Code Server add-on all work.
 3. Restart HA: Settings → System → power icon (top right) → Restart Home Assistant.
 4. Settings → Devices & services → Add integration → search **Virtual Pet**,
-   then name your pet and pick its species (only the woodland bird for now).
+   then name your pet and pick its world (only Woodland, with the bird, is ready so
+   far). Add the integration again for each extra pet device.
 
 ### Add the card (once)
 
@@ -25,16 +30,19 @@ The integration serves the card itself; you only tell the dashboard about it.
 
 1. Turn on Advanced mode: click your name (bottom left) → Advanced mode.
 2. Settings → Dashboards → ⋮ (top right) → Resources → Add resource:
-   - URL: `/virtual_pet/frontend/hatch-pet-card.js?v=0.2.0`
+   - URL: `/virtual_pet/frontend/hatch-pet-card.js?v=0.3.0`
    - Type: JavaScript module
 3. Reload the browser page. On a phone or wall tablet, pull to refresh, or
    clear the app's frontend cache if the card doesn't appear.
-4. Edit a dashboard → Add card → search **Hatch at Home pet** → pick any of
-   your pet's entities. Or in YAML:
+4. Edit a dashboard → Add card → search **Hatch at Home pet shelf**. With no
+   settings it shows every pet. To show only some, pick any one entity of each.
+   In YAML:
 
    ```yaml
    type: custom:hatch-pet-card
-   entity: sensor.pip_mood
+   # optional:
+   entities:
+     - sensor.pip_mood
    ```
 
 **After each update**, bump the `?v=` number in the resource URL to the new
@@ -43,12 +51,15 @@ a cached one.
 
 ### Using the card
 
-- The pet, its scene and a speech bubble. The bubble says what's on its mind,
-  or why it refused something ("I'm full!").
-- Tap the screen for the status page: hearts, meters, care misses and who
-  did what recently. Tap again to go back.
-- The buttons press the pet's button entities, so anything you do here works
-  from automations and voice too. Medicine is greyed out unless it's sick.
+- Each pet stands in its device on its world's backdrop. Use the arrows, the dots or a
+  swipe to move to the next device.
+- The screen shows the pet, its scene and a speech bubble. The bubble says what's on
+  its mind, or why it refused something ("I'm full!").
+- Tap the screen for the status page: hearts, meters, care misses and who did what
+  recently. Tap again to go back.
+- The toy buttons press the pet's button entities, so anything you do here works
+  from automations and voice too. A button glows when the pet needs it, for example
+  Feed when it's hungry. Medicine is greyed out unless it's sick.
 - The scene follows the sun (`sun.sun`), and dims when the lights are out.
 
 **Updating:** replace the folder with the new copy and restart. The pet's
@@ -173,7 +184,7 @@ phases.
 
 0. ✅ Test bench
 1. ✅ Living pet
-2. ✅ The card: sprites, speech bubble, poop, attention icon, status screen
+2. ✅ The card: device shelf, sprites, speech bubble, poop, attention icon, status screen
 3. Home awareness: options flow (entity mapping, bedtime, privacy), weather, light, bedtime, presence, then activity, AQI and requests
 4. Life: adult forms, traits, generations, journal, sky events (plus bird visits from BirdNET-Pi), notifications
 5. HACS packaging, chores, minigames, more species
