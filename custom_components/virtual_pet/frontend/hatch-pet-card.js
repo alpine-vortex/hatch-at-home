@@ -149,17 +149,18 @@ const STYLE = `
     box-shadow: inset 0 -9px 0 var(--d-dark), inset 0 5px 0 rgba(255,255,255,.28), 0 16px 34px rgba(20,15,5,.32);
     display: flex; flex-direction: column; align-items: center; gap: 12px; }
   .body { position: relative; }
-  .trim-top { position: absolute; top: -30px; left: 50%; width: 256px; height: 76px;
-    margin-left: -128px; pointer-events: none; image-rendering: pixelated; }
+  .trim-top { position: absolute; top: -12px; left: 50%; width: 192px; height: 57px;
+    margin-left: -96px; pointer-events: none; image-rendering: pixelated; }
   .trim-corner { position: absolute; bottom: -18px; width: 64px; height: 44px;
     pointer-events: none; image-rendering: pixelated; }
   .trim-corner.left { left: 14%; } .trim-corner.right { right: 14%; transform: scaleX(-1); }
   .label.plate { width: 192px; height: 44px; display: flex; align-items: center;
     justify-content: center; background-size: 100% 100%; image-rendering: pixelated;
     color: #fff4dc; text-shadow: 0 2px 0 #3a1e0c; margin-top: 10px; letter-spacing: .08em; }
-  .compact .trim-top { transform: scale(.75); }
+  .compact .trim-top { width: 128px; height: 38px; margin-left: -64px; top: -8px; }
   .compact .trim-corner { display: none; }
-  .egg .body { border-radius: 50% 50% 46% 46% / 30% 30% 18% 18%; padding: 36px 20px 30px; }
+  .egg .body { border-radius: 50% 50% 46% 46% / 30% 30% 18% 18%; padding: 36px 20px 40px; }
+  .egg .buttons { width: 88%; }
   .tank .body { border-radius: 18px; padding: 16px 18px 22px; }
   .label { font-size: 14px; letter-spacing: .12em; color: var(--d-ink); }
   .request { position: absolute; right: 14px; bottom: 14px; z-index: 2; min-height: 44px;
@@ -247,7 +248,7 @@ const STYLE = `
   .toy[disabled] { opacity: .45; cursor: default; }
   .compact .toy .cap { width: 38px; height: 38px; }
   .compact .toy { font-size: 12px; }
-  .compact .egg .body { padding: 28px 14px 24px; }
+  .compact .egg .body { padding: 28px 14px 32px; }
   .warn { padding: 16px; color: var(--error-color, #c00); background: var(--card-background-color); }
 `;
 
