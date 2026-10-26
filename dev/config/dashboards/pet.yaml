@@ -13,3 +13,7 @@ views:
           - input_boolean.fake_someone_home
           - input_boolean.fake_motion
           - input_boolean.fake_music
+          - input_boolean.fake_tv
+          - input_number.fake_lamp_level
+          - input_number.fake_bedroom_level
+          - input_number.fake_rain_rate

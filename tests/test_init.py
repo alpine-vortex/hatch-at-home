@@ -317,3 +317,126 @@ async def test_card_is_loaded_on_every_dashboard(
         f"/virtual_pet/frontend/hatch-pet-card.js?v={VERSION}"
         in hass.data[DATA_EXTRA_MODULE_URL].urls
     )
+
+
+# --- Phase 3: the house -----------------------------------------------------
+
+
+async def setup_with_house(hass: HomeAssistant, **options: Any) -> MockConfigEntry:
+    await hass.config.async_set_time_zone("UTC")
+    config = MockConfigEntry(
+        domain=DOMAIN,
+        title="Pip",
+        data={CONF_NAME: "Pip", "world": "woodland"},
+        entry_id="test_pet",
+        options=options,
+    )
+    config.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(config.entry_id)
+    await hass.async_block_till_done()
+    return config
+
+
+async def settle(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, seconds: float = 11
+) -> None:
+    freezer.tick(timedelta(seconds=seconds))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+
+
+async def test_options_flow_saves_a_flat_mapping(
+    hass: HomeAssistant, now: float
+) -> None:
+    config = await setup_with_house(hass)
+    result = await hass.config_entries.options.async_init(config.entry_id)
+    assert result["type"] is FlowResultType.FORM
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "sleep": {
+                "bedtime": "22:30:00",
+                "wake_time": "06:45:00",
+                "bedtime_lights": ["light.bed"],
+            },
+            "weather": {"weather": "weather.home"},
+            "room": {},
+            "activity": {"zone": "zone.home", "tv": ["media_player.tv"]},
+            "privacy": {"privacy": True},
+        },
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert config.options == {
+        "bedtime": "22:30:00",
+        "wake_time": "06:45:00",
+        "bedtime_lights": ["light.bed"],
+        "weather": "weather.home",
+        "zone": "zone.home",
+        "tv": ["media_player.tv"],
+        "privacy": True,
+    }
+
+
+async def test_rain_makes_a_blanket_request(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("weather.home", "sunny")
+    await setup_with_house(hass, weather="weather.home")
+    assert hass.states.get("button.pip_blanket").state == STATE_UNAVAILABLE
+
+    hass.states.async_set("weather.home", "rainy")
+    await settle(hass, freezer)
+    mood = hass.states.get("sensor.pip_mood")
+    assert mood.attributes["reason"] == "rainy day, blanket please?"
+    assert mood.attributes["requests"] == ["blanket"]
+    assert hass.states.get("button.pip_blanket").state != STATE_UNAVAILABLE
+
+    await press(hass, "button.pip_blanket")
+    assert hass.states.get("sensor.pip_mood").state == "cozy"
+
+
+async def test_dropout_holds_then_counts_as_no_signal(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("weather.home", "rainy")
+    await setup_with_house(hass, weather="weather.home")
+    hass.states.async_set("weather.home", "unavailable")
+    await settle(hass, freezer, 5 * 60)
+    assert "rainy" in hass.states.get("sensor.pip_mood").attributes["flags"]
+    await settle(hass, freezer, 6 * 60)
+    assert "rainy" not in hass.states.get("sensor.pip_mood").attributes["flags"]
+
+
+async def test_empty_house_goes_to_the_sitter_privately(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("zone.home", "1")
+    await setup_with_house(hass)
+    hass.states.async_set("zone.home", "0")
+    await settle(hass, freezer)
+    for _ in range(26):  # a bit over two hours of ticks
+        await settle(hass, freezer, 5 * 60)
+    # Privacy on: dashboards see a nap, not an empty house.
+    assert hass.states.get("sensor.pip_mood").state == "asleep"
+    hunger = hass.states.get("sensor.pip_hunger").state
+    for _ in range(12):
+        await settle(hass, freezer, 5 * 60)
+    assert hass.states.get("sensor.pip_hunger").state == hunger  # frozen
+
+    hass.states.async_set("zone.home", "1")
+    await settle(hass, freezer)
+    mood = hass.states.get("sensor.pip_mood")
+    assert mood.state == "excited"
+    assert mood.attributes["reason"] == "you're back!!"

@@ -7,7 +7,17 @@ import random
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import Context, HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.core import (
+    Context,
+    CoreState,
+    Event,
+    EventStateChangedData,
+    HomeAssistant,
+    callback,
+)
+from homeassistant.helpers.debounce import Debouncer
+from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -15,6 +25,7 @@ from homeassistant.util import dt as dt_util
 from . import model, rates as R
 from .const import (
     CONF_BEDTIME,
+    CONF_PRIVACY,
     CONF_SPECIES,
     CONF_WAKE_TIME,
     CONF_WORLD,
@@ -24,7 +35,9 @@ from .const import (
     STORE_MINOR_VERSION,
     STORE_VERSION,
 )
+from .home import HomeEffect, Presence, evaluate
 from .species import load_catalog
+from .watcher import Watcher
 
 type PetConfigEntry = ConfigEntry[PetCoordinator]
 
@@ -74,6 +87,18 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.state: model.PetState | None = None
         # Last calculation, for the diagnostic sensor.
         self.debug: dict[str, Any] = {}
+        # The house: nothing is read until HA has fully started.
+        self.home = HomeEffect()
+        self.presence = Presence()
+        self.watcher = Watcher(hass, entry.options)
+        self._home_started = False
+        self._home_debouncer = Debouncer(
+            hass,
+            LOGGER,
+            cooldown=R.HOME_DEBOUNCE_SECONDS,
+            immediate=False,
+            function=self._async_home_changed,
+        )
 
     @property
     def settings(self) -> model.Settings:
@@ -82,11 +107,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         return model.Settings(
             tz=dt_util.get_default_time_zone(),
             roster=self.roster,
+            home=self.home,
             bedtime=model.parse_hhmm(options.get(CONF_BEDTIME, R.DEFAULT_BEDTIME)),
             wake_time=model.parse_hhmm(
                 options.get(CONF_WAKE_TIME, R.DEFAULT_WAKE_TIME)
             ),
         )
+
+    @property
+    def privacy(self) -> bool:
+        """Keep presence out of what the pet shows (default on)."""
+        return self.config_entry.options.get(CONF_PRIVACY, True)
 
     @staticmethod
     def _now() -> float:
@@ -128,8 +159,76 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     async def _async_update_data(self) -> model.PetState:
         """The regular tick."""
         assert self.state is not None
-        self._advance(self._now())
+        now = self._now()
+        self._advance(now)
+        self._sense_home(now)  # time-based signals: motion going quiet, away
         return self.state
+
+    # --- The house ----------------------------------------------------------
+
+    def async_start_home(self) -> None:
+        """Start listening to the house once HA is fully up."""
+        if self.hass.state is CoreState.running:
+            self._listen()
+            return
+
+        async def started(_: Event) -> None:
+            self._listen()
+
+        self.config_entry.async_on_unload(
+            self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, started)
+        )
+
+    def _listen(self) -> None:
+        self._home_started = True
+        ids = self.watcher.entity_ids()
+
+        @callback
+        def changed(_: Event[EventStateChangedData]) -> None:
+            self._home_debouncer.async_schedule_call()
+
+        self.config_entry.async_on_unload(
+            async_track_state_change_event(self.hass, ids, changed)
+        )
+        self.config_entry.async_on_unload(self._home_debouncer.async_shutdown)
+        self.hass.async_create_task(self._async_home_changed())
+
+    async def _async_home_changed(self) -> None:
+        assert self.state is not None
+        now = self._now()
+        self._advance(now)  # the past was lived under the old house state
+        self._sense_home(now)
+        self._save()
+        self._publish()
+
+    def _sense_home(self, now: float) -> None:
+        """Re-read the house and apply presence (away mode)."""
+        if not self._home_started or self.state is None:
+            return
+        settings = self.settings
+        night = (
+            model.in_sleep_hours(now, settings)
+            or model.minutes_to_bedtime(now, settings) <= R.HOME_BEDTIME_WINDOW_MINUTES
+        )
+        readings = self.watcher.read(now, night)
+        effect = evaluate(readings)
+        if self.presence.greeting(now):
+            effect.flags.insert(0, "greeting")
+        self.home = effect
+
+        away = self.presence.update(self.watcher.people_home(now), now, self.state.away)
+        if away != self.state.away:
+            self.state.away = away
+            self._fire([{"type": "went_away" if away else "came_home"}])
+            if not away:
+                self.home.flags.insert(0, "greeting")
+        self.debug["home"] = {
+            "readings": {k: v for k, v in vars(readings).items() if v is not None},
+            "flags": effect.flags,
+            "requests": effect.requests,
+            "bonus": effect.bonus,
+            "dark_and_quiet": effect.dark_and_quiet,
+        }
 
     def _advance(self, now: float, simulated: bool = False) -> None:
         assert self.state is not None
@@ -165,7 +264,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         now = self._now()
         self._advance(now)
         by = await self._who(context)
-        result, events = model.apply_action(self.state, action, now, self.rng, by)
+        result, events = model.apply_action(
+            self.state, action, now, self.rng, by, self.settings
+        )
         self._fire(events)
         self._save()
         self._publish()

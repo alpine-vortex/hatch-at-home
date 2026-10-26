@@ -15,10 +15,13 @@ import random
 from typing import Any
 
 from . import rates as R
+from .home import COZY_FLAGS, EXCITED_FLAGS, HomeEffect
 
 STATS = ("hunger", "happiness", "energy", "health", "discipline")
 
 ACTIONS = ("feed", "snack", "play", "clean", "medicine", "scold", "praise")
+# Answers to what the house makes the pet ask for (see home.py).
+REQUEST_ACTIONS = ("blanket", "fan")
 
 # Highest priority first. The mood sensor is the first of these that applies.
 MOODS = (
@@ -74,6 +77,9 @@ class PetState:
     lights_out: bool = False
     stayed_up_since: float | None = None  # awake inside sleep hours since
     wake_at: float | None = None  # when the night's sleep ends (fixed at bedtime)
+    kept_up_until: float = 0.0  # woken by hand: the house can't put it back to bed yet
+    cozy_until: float = 0.0  # tucked in with a blanket
+    cool_until: float = 0.0  # enjoying the fan
     call: Call | None = None
     latched: list[str] = field(default_factory=list)  # called, not re-armed
     care_misses: int = 0
@@ -119,6 +125,7 @@ class Settings:
     roster: tuple[str, ...] = ("bird",)  # what this device's eggs can hatch into
     bedtime: time = field(default_factory=lambda: parse_hhmm(R.DEFAULT_BEDTIME))
     wake_time: time = field(default_factory=lambda: parse_hhmm(R.DEFAULT_WAKE_TIME))
+    home: HomeEffect = field(default_factory=HomeEffect)  # what the house is doing
 
 
 def parse_hhmm(value: str) -> time:
@@ -187,6 +194,9 @@ def shift_times(state: PetState, delta: float) -> None:
         state.wake_at += delta
     state.last_praise += delta
     state.last_excite += delta
+    state.kept_up_until += delta
+    state.cozy_until += delta
+    state.cool_until += delta
     state.last_updated += delta
 
 
@@ -262,7 +272,7 @@ def _step(
         return
 
     _sleep(state, t1, settings, events)
-    _decay(state, hours, t1)
+    _decay(state, hours, t1, settings)
     _digest(state, t1, events)
     _sickness(state, hours, t1, rng, events)
     _calls(state, t1, hours, rng, events)
@@ -316,6 +326,15 @@ def _sleep(state: PetState, t: float, settings: Settings, events: list[Event]) -
         if t >= state.wake_at:
             _wake(state, events)
         return
+    if (
+        settings.home.dark_and_quiet
+        and t >= state.kept_up_until
+        and (night or minutes_to_bedtime(t, settings) <= R.HOME_BEDTIME_WINDOW_MINUTES)
+    ):
+        # Bedtime lights off and the house quiet: off to bed. (The house can put
+        # the pet to sleep, never wake it.)
+        _fall_asleep(state, False, events, t, settings)
+        return
     if not night:
         state.stayed_up_since = None
         return
@@ -351,7 +370,7 @@ def _wake(state: PetState, events: list[Event]) -> None:
     events.append({"type": "woke_up"})
 
 
-def _decay(state: PetState, hours: float, t: float) -> None:
+def _decay(state: PetState, hours: float, t: float, settings: Settings) -> None:
     if state.asleep:
         state.hunger -= R.HUNGER_DECAY * R.ASLEEP_HUNGER_FACTOR * hours
         state.happiness -= R.HAPPINESS_DECAY * R.ASLEEP_HAPPINESS_FACTOR * hours
@@ -361,6 +380,16 @@ def _decay(state: PetState, hours: float, t: float) -> None:
         state.happiness -= R.HAPPINESS_DECAY * hours
         state.energy -= R.ENERGY_DECAY * hours
     state.discipline -= R.DISCIPLINE_DECAY * hours
+
+    # The house only ever adds, and never more than the cap per stat.
+    if not state.asleep:
+        bonus = dict(settings.home.bonus)
+        if t < state.cozy_until or t < state.cool_until:
+            bonus["happiness"] = bonus.get("happiness", 0.0) + R.COMFORT_HAPPINESS
+        for stat, rate in bonus.items():
+            setattr(
+                state, stat, getattr(state, stat) + min(rate, R.HOME_BONUS_CAP) * hours
+            )
 
     health_rate = 0.0
     old_poops = _old_poops(state, t)
@@ -519,10 +548,22 @@ def _start_call(state: PetState, reason: str, t: float, events: list[Event]) -> 
 # --- Care actions -----------------------------------------------------------
 
 
-def action_available(state: PetState, action: str) -> bool:
+def requests(state: PetState, now: float, settings: Settings) -> list[str]:
+    """What the pet is asking for because of the house, minus what it got."""
+    satisfied = {"blanket": now < state.cozy_until, "fan": now < state.cool_until}
+    if state.asleep or state.away or life_stage(state) == "egg":
+        return []
+    return [r for r in settings.home.requests if not satisfied.get(r)]
+
+
+def action_available(
+    state: PetState, action: str, now: float = 0.0, settings: Settings | None = None
+) -> bool:
     """Whether the button for an action should be available."""
     if action == "medicine":
         return state.sick
+    if action in REQUEST_ACTIONS:
+        return settings is not None and action in requests(state, now, settings)
     return True
 
 
@@ -532,19 +573,43 @@ def apply_action(
     now: float,
     rng: random.Random,
     by: str | None = None,
+    settings: Settings | None = None,
 ) -> tuple[str, list[Event]]:
     """Apply a care action. The caller advances the pet to now first.
 
     Returns a result code ("ok", or why nothing happened) and events.
     """
     events: list[Event] = []
-    result = _do_action(state, action, now, rng, events)
+    if action in REQUEST_ACTIONS:
+        result = _answer_request(state, action, now, settings, events)
+    else:
+        result = _do_action(state, action, now, rng, events)
     state.care_log.insert(0, {"at": now, "action": action, "by": by, "result": result})
     del state.care_log[R.CARE_LOG_SIZE :]
     events.append({"type": "care", "action": action, "result": result})
     if result == OK:
         _resolve_call(state, now, events)
     return result, events
+
+
+def _answer_request(
+    state: PetState,
+    action: str,
+    now: float,
+    settings: Settings | None,
+    events: list[Event],
+) -> str:
+    if settings is None or action not in requests(state, now, settings):
+        return "not_needed"
+    until = now + R.COMFORT_MINUTES * 60
+    if action == "blanket":
+        state.happiness = _clamp(state.happiness + R.BLANKET_HAPPINESS)
+        state.cozy_until = until
+    else:
+        state.happiness = _clamp(state.happiness + R.FAN_HAPPINESS)
+        state.cool_until = until
+    events.append({"type": "request_answered", "request": action})
+    return OK
 
 
 def _do_action(
@@ -660,6 +725,7 @@ def set_lights_out(
         if night:
             state.happiness = _clamp(state.happiness + R.WAKE_IN_NIGHT_HAPPINESS)
             state.stayed_up_since = now
+            state.kept_up_until = now + R.FALL_ASLEEP_ANYWAY_MINUTES * 60
         _wake(state, events)
     return events
 
@@ -692,11 +758,31 @@ def mood(state: PetState, now: float, settings: Settings) -> tuple[str, list[str
         flags.append("sleepy")
     if state.happiness < R.BORED_BELOW:
         flags.append("bored")
-    if now - state.last_excite < R.EXCITED_MINUTES * 60:
+    home = [f for f in settings.home.flags if f not in flags]
+    if now < state.cozy_until:
+        home.append("cozy")
+    if now < state.cool_until:
+        home.append("cool")
+    if state.cozy_until > now:
+        home = [f for f in home if f not in ("rainy", "chilly")]  # tucked in now
+    if state.cool_until > now:
+        home = [f for f in home if f != "warm"]
+    if not state.asleep:
+        flags += [f for f in home if f not in flags]
+    if now - state.last_excite < R.EXCITED_MINUTES * 60 or EXCITED_FLAGS & set(flags):
         flags.append("excited")
+    if COZY_FLAGS & set(flags):
+        flags.append("cozy")
 
     current = next((m for m in MOODS if m in flags), "content")
-    return current, flags, _reason(state, current, drowsy)
+    reason = _reason(state, current, drowsy)
+    if current in ("content", "cozy", "excited", "sleepy", "bored") and not (
+        now - state.last_excite < R.EXCITED_MINUTES * 60
+    ):
+        # Say what the house is doing, so the connection is visible.
+        effect = HomeEffect(flags=[f for f in flags if f in home])
+        reason = effect.reason() or reason
+    return current, flags, reason
 
 
 _CALL_REASONS = {

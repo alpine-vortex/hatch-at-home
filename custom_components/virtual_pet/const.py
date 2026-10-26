@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 DOMAIN = "virtual_pet"
-VERSION = "0.4.0"  # keep in step with manifest.json (a test checks)
+VERSION = "0.5.0"  # keep in step with manifest.json (a test checks)
 LOGGER = logging.getLogger(__package__)
 
 CONF_BEDTIME = "bedtime"
@@ -28,3 +28,19 @@ CONF_SPECIES = "species"
 # The card and sprites are served from here, see frontend/.
 FRONTEND_URL = "/virtual_pet/frontend"
 CARD_FILENAME = "hatch-pet-card.js"
+
+# Options (phase 3): what in the house the pet listens to.
+CONF_BEDTIME_LIGHTS = "bedtime_lights"
+CONF_MOTION = "motion"
+CONF_WEATHER = "weather"
+CONF_RAIN = "rain"
+CONF_SOLAR = "solar"
+CONF_INDOOR_TEMP = "indoor_temperature"
+CONF_AQI = "aqi"
+CONF_ROOM_LIGHTS = "room_lights"
+CONF_LUX = "lux"
+CONF_MUSIC = "music"
+CONF_TV = "tv"
+CONF_ZONE = "zone"
+CONF_PRIVACY = "privacy"
+DEFAULT_ZONE = "zone.home"

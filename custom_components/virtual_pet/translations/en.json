@@ -47,6 +47,12 @@
       },
       "praise": {
         "name": "Praise"
+      },
+      "blanket": {
+        "name": "Blanket"
+      },
+      "fan": {
+        "name": "Fan"
       }
     },
     "sensor": {
@@ -128,6 +134,72 @@
         "config_entry_id": {
           "name": "Pet",
           "description": "Which pet. Leave empty for all pets."
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "What the pet notices",
+        "description": "Map parts of your home to the pet. Everything is optional: unmapped things are simply ignored. The house never hurts the pet; it only changes its mood, its scene and what it asks for.",
+        "sections": {
+          "sleep": {
+            "name": "Sleep",
+            "description": "The pet gets drowsy near bedtime and falls asleep when lights-out is on, or when the bedtime lights are off and the house is quiet. Home signals never wake it.",
+            "data": {
+              "bedtime": "Bedtime",
+              "wake_time": "Wake time",
+              "bedtime_lights": "Bedtime lights",
+              "motion": "Motion or presence sensors"
+            },
+            "data_description": {
+              "bedtime_lights": "When all of these are off at bedtime (and no motion for 10 minutes), the pet goes to bed. Bedroom lights work well.",
+              "motion": "Indoor sensors only. Recent motion keeps the house from counting as quiet."
+            }
+          },
+          "weather": {
+            "name": "Weather and air",
+            "description": "A local weather station beats a forecast: a rain sensor decides rainy days, and a solar radiation sensor decides sunny ones. The weather entity fills in the rest (snow, fog).",
+            "data": {
+              "weather": "Weather entity",
+              "rain": "Rain rate sensor",
+              "solar": "Solar radiation sensor",
+              "indoor_temperature": "Indoor temperature",
+              "aqi": "Air quality index"
+            },
+            "data_description": {
+              "rain": "Any value above 0 means it's raining.",
+              "solar": "Watts per square metre. 300 or more counts as sunny.",
+              "indoor_temperature": "Too cold or warm makes the pet ask for a blanket or a fan. It never makes it sick."
+            }
+          },
+          "room": {
+            "name": "The pet's room",
+            "description": "Bright light late at night makes the pet squint; dim evening light makes it cozy. Daylight is never too bright.",
+            "data": {
+              "room_lights": "Room lights",
+              "lux": "Light sensors"
+            }
+          },
+          "activity": {
+            "name": "People and activity",
+            "description": "Someone arriving gets an excited greeting. After 2 hours with nobody home the pet goes to the sitter's and time stops for it.",
+            "data": {
+              "zone": "Home zone",
+              "music": "Music players",
+              "tv": "TVs"
+            }
+          },
+          "privacy": {
+            "name": "Privacy",
+            "data": {
+              "privacy": "Keep presence private"
+            },
+            "data_description": {
+              "privacy": "On: dashboards never show that the house is empty (the pet just looks asleep) and the pet never names anyone."
+            }
+          }
         }
       }
     }

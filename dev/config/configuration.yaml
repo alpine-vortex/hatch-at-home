@@ -41,6 +41,25 @@ input_number:
     step: 10
     unit_of_measurement: lx
     initial: 60
+  fake_lamp_level:
+    name: Fake living room lamp brightness
+    min: 0
+    max: 255
+    step: 5
+    initial: 0
+  fake_bedroom_level:
+    name: Fake bedroom light brightness
+    min: 0
+    max: 255
+    step: 5
+    initial: 200
+  fake_rain_rate:
+    name: Fake rain rate
+    min: 0
+    max: 2
+    step: 0.01
+    unit_of_measurement: in/h
+    initial: 0
   fake_aqi:
     name: Fake AQI
     min: 0
@@ -56,8 +75,8 @@ input_boolean:
     name: Fake motion
   fake_music:
     name: Fake music playing
-  fake_lamp:
-    name: Fake living room lamp
+  fake_tv:
+    name: Fake TV on
 
 template:
   - sensor:
@@ -76,8 +95,46 @@ template:
         device_class: aqi
         state: "{{ states('input_number.fake_aqi') | int }}"
       - name: Fake people home
-        unique_id: fake_people_home
+        unique_id: fake_people_home_count
         state: "{{ 1 if is_state('input_boolean.fake_someone_home', 'on') else 0 }}"
+  - light:
+      - name: Fake living room lamp
+        unique_id: fake_living_room_lamp
+        state: "{{ states('input_number.fake_lamp_level') | int > 0 }}"
+        level: "{{ states('input_number.fake_lamp_level') | int }}"
+        turn_on:
+          action: input_number.set_value
+          target: { entity_id: input_number.fake_lamp_level }
+          data: { value: 200 }
+        turn_off:
+          action: input_number.set_value
+          target: { entity_id: input_number.fake_lamp_level }
+          data: { value: 0 }
+        set_level:
+          action: input_number.set_value
+          target: { entity_id: input_number.fake_lamp_level }
+          data: { value: "{{ brightness }}" }
+      - name: Fake bedroom light
+        unique_id: fake_bedroom_light
+        state: "{{ states('input_number.fake_bedroom_level') | int > 0 }}"
+        level: "{{ states('input_number.fake_bedroom_level') | int }}"
+        turn_on:
+          action: input_number.set_value
+          target: { entity_id: input_number.fake_bedroom_level }
+          data: { value: 200 }
+        turn_off:
+          action: input_number.set_value
+          target: { entity_id: input_number.fake_bedroom_level }
+          data: { value: 0 }
+        set_level:
+          action: input_number.set_value
+          target: { entity_id: input_number.fake_bedroom_level }
+          data: { value: "{{ brightness }}" }
+  - sensor:
+      - name: Fake rain rate
+        unique_id: fake_rain_rate_sensor
+        unit_of_measurement: in/h
+        state: "{{ states('input_number.fake_rain_rate') }}"
   - binary_sensor:
       - name: Fake motion sensor
         unique_id: fake_motion_sensor

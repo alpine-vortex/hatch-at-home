@@ -90,15 +90,19 @@ class MoodSensor(PetEntity, SensorEntity):
 
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = list(model.MOODS)
-    _unrecorded_attributes = frozenset({"flags", "reason", "call_deadline"})
+    _unrecorded_attributes = frozenset({"flags", "reason", "call_deadline", "requests"})
 
     def __init__(self, coordinator: PetCoordinator) -> None:
         super().__init__(coordinator, "mood")
 
     def _resolve(self) -> tuple[str, list[str], str]:
-        return model.mood(
+        mood, flags, reason = model.mood(
             self.pet, dt_util.utcnow().timestamp(), self.coordinator.settings
         )
+        if mood == "away" and self.coordinator.privacy:
+            # Privacy: an empty house looks like a nap on any dashboard.
+            return "asleep", ["asleep"], "zzz"
+        return mood, flags, reason
 
     @property
     def native_value(self) -> str:
@@ -111,6 +115,9 @@ class MoodSensor(PetEntity, SensorEntity):
         return {
             "flags": flags,
             "reason": reason,
+            "requests": model.requests(
+                self.pet, dt_util.utcnow().timestamp(), self.coordinator.settings
+            ),
             "call_deadline": (
                 dt_util.utc_from_timestamp(call.deadline).isoformat() if call else None
             ),

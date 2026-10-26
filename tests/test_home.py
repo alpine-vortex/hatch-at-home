@@ -1,0 +1,171 @@
+"""The house's influence on the pet, without Home Assistant."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+import pytest
+
+from custom_components.virtual_pet import home, model, rates as R
+from custom_components.virtual_pet.home import Presence, Readings, evaluate
+
+HOUR = 3600.0
+MIN = 60.0
+
+
+def at(hour: int, minute: int = 0, day: int = 1) -> float:
+    return datetime(2026, 10, day, hour, minute, tzinfo=UTC).timestamp()
+
+
+def test_rain_gauge_beats_the_forecast():
+    assert (
+        "rainy"
+        in evaluate(Readings(night=False, condition="sunny", rain_rate=0.1)).flags
+    )
+    dry = evaluate(Readings(night=False, condition="rainy", rain_rate=0.0, sun_up=True))
+    assert "rainy" not in dry.flags
+
+
+def test_rain_asks_for_a_blanket():
+    e = evaluate(Readings(night=False, condition="rainy"))
+    assert e.requests == ["blanket"]
+    assert e.reason() == "rainy day, blanket please?"
+
+
+def test_bonuses_never_exceed_the_cap_and_never_drain():
+    e = evaluate(Readings(night=False, solar=900, music=True, tv=True))
+    assert e.bonus["happiness"] <= R.HOME_BONUS_CAP
+    for r in [
+        Readings(
+            night=True, condition="rainy", indoor_c=5, aqi=300, room_light_level=1.0
+        ),
+        Readings(night=False, condition="pouring", indoor_c=40),
+    ]:
+        assert all(v >= 0 for v in evaluate(r).bonus.values())
+
+
+def test_daylight_is_never_too_bright():
+    assert (
+        "too_bright"
+        not in evaluate(Readings(night=False, lux=5000, room_light_level=1)).flags
+    )
+    assert "too_bright" in evaluate(Readings(night=True, room_light_level=0.8)).flags
+    assert (
+        "too_bright" not in evaluate(Readings(night=True, room_light_level=0.2)).flags
+    )
+
+
+def test_cold_and_warm_make_requests():
+    assert evaluate(Readings(night=False, indoor_c=15)).requests == ["blanket"]
+    assert evaluate(Readings(night=False, indoor_c=29)).requests == ["fan"]
+    assert evaluate(Readings(night=False, indoor_c=21)).requests == []
+
+
+def test_dark_and_quiet_needs_lights_known_off():
+    off = Readings(night=True, bedtime_lights_on=False, motion_recent=False)
+    assert evaluate(off).dark_and_quiet
+    # A dropped-out light sensor (None) is not "off".
+    assert not evaluate(Readings(night=True, bedtime_lights_on=None)).dark_and_quiet
+    assert not evaluate(
+        Readings(night=True, bedtime_lights_on=False, motion_recent=True)
+    ).dark_and_quiet
+    assert not evaluate(Readings(night=False, bedtime_lights_on=False)).dark_and_quiet
+
+
+def test_greeting_with_cooldown():
+    p = Presence()
+    t = at(9)
+    p.update(1, t, False)
+    p.update(0, t + MIN, False)
+    p.update(1, t + 2 * MIN, False)
+    assert p.greeting(t + 3 * MIN)
+    # GPS jitter: gone and back again within the cooldown, no new greeting.
+    p.update(0, t + 15 * MIN, False)
+    p.update(1, t + 16 * MIN, False)
+    assert not p.greeting(t + 16 * MIN + R.HOME_GREETING_MINUTES * MIN)
+
+
+def test_away_after_two_empty_hours_and_back():
+    p = Presence()
+    t = at(9)
+    assert p.update(0, t, False) is False
+    assert p.update(0, t + 1.9 * HOUR, False) is False
+    assert p.update(0, t + 2.1 * HOUR, False) is True
+    assert p.update(None, t + 3 * HOUR, True) is True  # no signal: no change
+    assert p.update(1, t + 4 * HOUR, True) is False
+    assert p.greeting(t + 4 * HOUR)
+
+
+def settings_with(effect: home.HomeEffect) -> model.Settings:
+    return model.Settings(tz=UTC, home=effect)
+
+
+def hatched(now: float, **stats: float) -> model.PetState:
+    pet = model.PetState.new("Pip", now)
+    pet.age_hours = 30.0
+    pet.hunger = pet.happiness = pet.energy = 90.0
+    for key, value in stats.items():
+        setattr(pet, key, value)
+    return pet
+
+
+class NoLuck:
+    def random(self) -> float:
+        return 0.999999
+
+    def uniform(self, a: float, b: float) -> float:
+        return (a + b) / 2
+
+    def choice(self, seq):
+        return seq[0]
+
+
+def test_house_puts_pet_to_bed_but_never_wakes_it():
+    quiet = settings_with(home.HomeEffect(dark_and_quiet=True))
+    pet = hatched(at(22, 30))
+    events = model.advance(pet, at(22, 40), quiet, NoLuck(), max_gap=None)
+    assert pet.asleep and "fell_asleep" in [e["type"] for e in events]
+    # Lights back on at 6 am: the house can't wake it; wake time does.
+    loud = settings_with(home.HomeEffect(dark_and_quiet=False))
+    model.advance(pet, at(6, 0, day=2), loud, NoLuck(), max_gap=None)
+    assert pet.asleep
+
+
+def test_waking_by_hand_beats_the_dark_house():
+    quiet = settings_with(home.HomeEffect(dark_and_quiet=True))
+    pet = hatched(at(23, 30))
+    model.set_lights_out(pet, True, at(23, 30), quiet)
+    model.set_lights_out(pet, False, at(23, 40), quiet)
+    model.advance(pet, at(23, 55), quiet, NoLuck(), max_gap=None)
+    assert not pet.asleep  # the switch is the top authority for a while
+
+
+def test_blanket_request_answered():
+    rainy = settings_with(home.HomeEffect(flags=["rainy"], requests=["blanket"]))
+    now = at(14)
+    pet = hatched(now, happiness=50.0)
+    assert model.action_available(pet, "blanket", now, rainy)
+    assert model.mood(pet, now, rainy)[2] == "rainy day, blanket please?"
+    result, _ = model.apply_action(pet, "blanket", now, NoLuck(), settings=rainy)
+    assert result == model.OK
+    assert pet.happiness == pytest.approx(50 + R.BLANKET_HAPPINESS)
+    assert not model.action_available(pet, "blanket", now, rainy)
+    mood, flags, reason = model.mood(pet, now + MIN, rainy)
+    assert mood == "cozy" and reason == "nice and cozy"
+
+
+def test_unneeded_request_does_nothing():
+    pet = hatched(at(14))
+    assert (
+        model.apply_action(
+            pet, "fan", at(14), NoLuck(), settings=settings_with(home.HomeEffect())
+        )[0]
+        == "not_needed"
+    )
+
+
+def test_home_bonus_applied_while_awake_only():
+    sunny = settings_with(home.HomeEffect(flags=["sunny"], bonus={"happiness": 1.0}))
+    pet = hatched(at(12), happiness=50.0)
+    model.advance(pet, at(14), sunny, NoLuck(), max_gap=None)
+    assert pet.happiness == pytest.approx(50 - 2 * (R.HAPPINESS_DECAY - 1.0))

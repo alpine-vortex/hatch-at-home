@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -40,6 +40,7 @@ const ACTIONS = [
 // What the pet says back when a care action did nothing.
 const REFUSALS = {
   full: "I'm full!",
+  not_needed: "I'm fine, thanks!",
   asleep: "shh... sleeping",
   too_tired: "too tired to play",
   already_clean: "it's already clean!",
@@ -48,6 +49,15 @@ const REFUSALS = {
   spoiled: "hehe, whining works",
   egg: "...",
 };
+
+// Home flags that swap the pet into a special pose (species.json "extras").
+const POSES = {
+  too_bright: "squint", chilly: "shiver", warm: "sweat", masked: "mask",
+  dancing: "dance", watching_tv: "watch_tv",
+};
+const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
+
+const REQUEST_LABELS = { blanket: "blanket?", fan: "fan?" };
 
 const STAGE_LABELS = { egg: "Egg", baby: "Baby", child: "Child", teen: "Teen", adult: "Adult" };
 
@@ -141,7 +151,13 @@ const STYLE = `
   .egg .body { border-radius: 50% 50% 46% 46% / 30% 30% 18% 18%; padding: 36px 20px 30px; }
   .tank .body { border-radius: 18px; padding: 16px 18px 22px; }
   .label { font-size: 14px; letter-spacing: .12em; color: var(--d-ink); }
-  .bezel { width: 100%; box-sizing: border-box; background: var(--d-bezel); border-radius: 20px;
+  .request { position: absolute; right: 14px; bottom: 14px; z-index: 2; min-height: 44px;
+    display: none; align-items: center; gap: 6px; padding: 0 14px; border: 2px solid #3a2a1a;
+    border-radius: 22px; background: #ffe9a8; color: #3a2a1a; cursor: pointer;
+    font: 400 14px 'Tiny5', monospace; box-shadow: 3px 3px 0 #3a2a1a;
+    animation: pulse 1.6s ease-in-out infinite; }
+  .request.show { display: flex; }
+  .bezel { position: relative; width: 100%; box-sizing: border-box; background: var(--d-bezel); border-radius: 20px;
     padding: 9px; box-shadow: inset 0 3px 0 rgba(0,0,0,.12); }
   .screen { position: relative; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden;
     background: #2b2f3a; box-shadow: inset 0 0 0 3px rgba(0,0,0,.35); cursor: pointer; }
@@ -369,7 +385,7 @@ class HatchPetCard extends HTMLElement {
             <img class="attention" alt="">
             <div class="bubble"></div>
             <div class="status"></div>
-          </div></div>
+          </div><button class="request"></button></div>
           <div class="buttons"></div>
         </div>
         <div class="feet"><span></span><span></span></div>
@@ -380,7 +396,11 @@ class HatchPetCard extends HTMLElement {
       awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), pet: q(".pet"), prop: q(".prop"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], buttons: {}, frame: 0,
+      request: q(".request"),
     };
+    s.request.addEventListener("click", () => {
+      if (s.request.dataset.key) this._press(s, s.request.dataset.key);
+    });
     s.screen.addEventListener("click", () => {
       if (!this._swiped) this._toggleStatus(s);
     });
@@ -620,7 +640,7 @@ class HatchPetCard extends HTMLElement {
     } else {
       this._show(s, s.awaysign, null);
       s.awaylabel.textContent = "";
-      s.frames = this._petFrames(sp, stage, mood?.state, calling, stageState?.attributes.age_days);
+      s.frames = this._petFrames(sp, stage, mood?.state, calling, stageState?.attributes.age_days, flags);
       this._show(s, s.pet, s.frames[s.frame % s.frames.length]);
     }
     s.pet.classList.toggle("hop", mood?.state === "excited");
@@ -648,6 +668,14 @@ class HatchPetCard extends HTMLElement {
       b.disabled = !ent || ent.state === "unavailable" || egg || away;
       b.classList.toggle("wanted", !b.disabled && !asleep && !!action.wants && flags.includes(action.wants));
     }
+    const wanted = (mood?.attributes.requests || []).find((r) => this._state(s, `button.${r}`));
+    s.request.classList.toggle("show", !!wanted && !away && !asleep);
+    if (wanted) {
+      s.request.dataset.key = wanted;
+      s.request.textContent = REQUEST_LABELS[wanted] || `${wanted}?`;
+      s.request.setAttribute("aria-label", `Give the pet a ${wanted}`);
+    }
+
     const lights = s.buttons.lights;
     const lightsEnt = this._state(s, "switch.lights_out");
     lights.disabled = !lightsEnt || lightsEnt.state === "unavailable" || away;
@@ -683,7 +711,7 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
-  _petFrames(sp, stage, mood, calling, days) {
+  _petFrames(sp, stage, mood, calling, days, flags = []) {
     if (stage === "egg") {
       if (!sp.egg) return [];
       if (days != null && days * 24 >= 0.4) return sp.egg.crack;
@@ -691,6 +719,14 @@ class HatchPetCard extends HTMLElement {
     }
     let drawn = stage;
     if (!sp.stages.includes(drawn)) drawn = sp.stage_fallback?.[stage] || sp.stages[sp.stages.length - 1];
+    // Special poses are drawn for the child; other stages would change size.
+    if (drawn === "child" && POSE_MOODS.has(mood)) {
+      const flag = flags.find((f) => POSES[f] && sp.extras?.[POSES[f]]);
+      if (flag) {
+        const pose = sp.extras[POSES[flag]];
+        return Array.isArray(pose) ? pose : [pose];
+      }
+    }
     const m = sp.moods.includes(mood) ? mood : "content";
     const frames = [];
     for (let i = 1; i <= (sp.frames || 1); i++) frames.push(`${drawn}_${m}_${i}`);

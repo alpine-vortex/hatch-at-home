@@ -117,3 +117,31 @@ STAGE_STARTS: list[tuple[str, float]] = [
 # --- Log --------------------------------------------------------------------
 
 CARE_LOG_SIZE = 20
+
+# --- Home influences (phase 3). Bonuses only; the house never drains. -------
+
+HOME_BONUS_CAP = 3.0  # per hour, per stat, all home signals combined
+HOME_SUN_HAPPINESS = 1.0
+HOME_SNOW_HAPPINESS = 1.5
+HOME_MUSIC_HAPPINESS = 1.5
+HOME_TV_HAPPINESS = 0.5
+HOME_SUNNY_SOLAR = 300.0  # W/m² from a weather station means proper sun
+HOME_COMFORT_LOW_C = 18.0  # below: shivers, asks for a blanket
+HOME_COMFORT_HIGH_C = 26.5  # above: sweats, asks for a fan
+HOME_BRIGHT_LEVEL = 0.5  # a room light at half brightness or more, at night
+HOME_BRIGHT_LUX_AT_NIGHT = 100.0
+HOME_DIM_LEVEL = 0.35  # evening lights this low feel cozy
+HOME_BAD_AQI = 100.0
+HOME_BEDTIME_WINDOW_MINUTES = 60  # dark-and-quiet works this long before bedtime
+HOME_QUIET_MINUTES = 10  # no motion for this long counts as quiet
+HOME_HOLD_MINUTES = 10  # an unavailable sensor keeps its last value this long
+HOME_DEBOUNCE_SECONDS = 10.0
+HOME_GREETING_MINUTES = 10
+HOME_GREETING_COOLDOWN_MINUTES = 30  # GPS jitter shouldn't cause repeat greetings
+HOME_AWAY_AFTER_HOURS = 2.0  # empty this long: off to the sitter's
+
+# Answering a request
+BLANKET_HAPPINESS = 10.0
+FAN_HAPPINESS = 8.0
+COMFORT_MINUTES = 120  # cozy (blanket) or cool (fan) lasts this long
+COMFORT_HAPPINESS = 1.0  # per hour while cozy or cool

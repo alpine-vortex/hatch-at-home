@@ -5,16 +5,17 @@ let the real house (weather, light, bedtime, who's home) shape its mood and
 scenery. **The house can never hurt the pet**; it only changes how the pet
 looks, what it says and what it asks for.
 
-Status: **phase 2, the card**. The pet lives in HA (stats, calls, care misses,
-poop, sleep, care buttons, restart catch-up, fast-forward), and every pet sits on
-a pixel-art **device shelf** card. Home awareness comes in phase 3.
+Status: **phase 3, home awareness**. The pet lives in HA (stats, calls, care misses,
+poop, sleep, care buttons, restart catch-up, fast-forward), sits on a pixel-art
+**device shelf** card, and now reacts to your house: weather, indoor temperature,
+lights, bedtime, people coming and going, and the TV and music.
 
 Each pet lives in a **device** themed for its **world**: an orange egg-shaped toy for
 Woodland (the bird), and a sandstone tank for Terrarium (the leopard gecko, with the
 blue death-feigning beetle to come). The egg decides which of that world's
 creatures hatches. See `docs/design-worlds.md`.
 
-## Install (phases 1–3: manual copy)
+## Install (manual copy until HACS packaging)
 
 1. **Take a backup first**: Settings → System → Backups → Back up now.
 2. Copy `custom_components/virtual_pet/` from this repo into your HA config
@@ -76,6 +77,7 @@ One device named after your pet, with:
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
 | `switch.<pet>_lights_out` | On puts it to bed, off wakes it. |
 | `button.<pet>_feed`, `_snack`, `_play`, `_clean`, `_medicine`, `_scold`, `_praise` | Care. Medicine is unavailable unless the pet is sick. |
+| `button.<pet>_blanket`, `_fan` | Answers to what the house makes the pet ask for. Unavailable unless it's asking. |
 | `sensor.<pet>_debug` | Diagnostic, **disabled by default**. Enable it on the entity's settings page to see the raw numbers. |
 
 ### Quick dashboard card
@@ -108,6 +110,48 @@ entities:
   - button.pip_praise
 ```
 
+## Connect it to your house (options)
+
+Settings → Devices & services → Virtual Pet → **Configure** on your pet. Every field is
+optional; anything you leave empty is ignored. Changes apply straight away.
+
+| Section | Field | Suggested for this house |
+| --- | --- | --- |
+| Sleep | Bedtime / wake time | 23:00 / 07:00 |
+| | Bedtime lights | the **bedroom** lights: when they're all off at bedtime and the house is quiet, the pet goes to bed |
+| | Motion sensors | indoor occupancy sensors (living room, office, dining room, kitchen) |
+| Weather | Rain rate sensor | your **Ambient Weather** station's hourly rain rate |
+| | Solar radiation sensor | the Ambient station's solar radiation |
+| | Weather entity | `weather.forecast_home` (only used for snow and fog) |
+| | Indoor temperature | `sensor.indoor_temperature` |
+| | Air quality | `sensor.air_quality_index` |
+| The pet's room | Room lights | the **living room** lights |
+| | Light sensors | optional |
+| People and activity | Home zone | `zone.home` |
+| | Music players | your speakers and displays |
+| | TVs | `media_player.tv` |
+| Privacy | Keep presence private | on |
+
+**What the house does (it never hurts the pet):**
+- **Rain** (rain gauge above 0): rainy scene and a **"blanket?"** request. **Too cold or
+  warm indoors:** shivers or sweats and asks for a **blanket** or a **fan**. Tap the
+  request bubble on the card, or press the Blanket or Fan button, for a happiness boost
+  and a couple of cozy hours.
+- **Sun** (solar radiation 300 W/m² or more), **music** and **TV**: small happiness
+  bonuses. Sunny, music and TV can't add up to more than +3 an hour.
+- **Bright living-room light late at night:** it squints and says so. Dim evening light
+  makes it cozy. Daylight is never too bright.
+- **Bedtime:** lights-out still wins. Otherwise, within an hour of bedtime, bedroom lights
+  off and 10 quiet minutes put it to bed. A bedroom light left on late doesn't keep it
+  up past its own bedtime, and the house never wakes it.
+- **Arriving home:** an excited greeting (once per 30 minutes, so GPS jitter doesn't
+  repeat it). **Nobody home for 2 hours:** it goes to the sitter's and time stops for it.
+  With privacy on, dashboards show it napping, never an empty house.
+- **Sensors dropping out:** a sensor that goes unavailable keeps its last value for 10
+  minutes, then counts as unmapped. It never reads as dark or empty.
+- After an HA restart, motion sensors all look freshly changed, so bedtime-by-darkness
+  waits 10 minutes.
+
 ## How the pet works
 
 All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
@@ -139,7 +183,8 @@ names are included.
 `virtual_pet_call_started`, `virtual_pet_call_answered`, `virtual_pet_care_miss`,
 `virtual_pet_discipline_miss`, `virtual_pet_pooped`, `virtual_pet_became_sick`,
 `virtual_pet_recovered`, `virtual_pet_fell_asleep`, `virtual_pet_woke_up`,
-`virtual_pet_stage_changed`, `virtual_pet_care`.
+`virtual_pet_stage_changed`, `virtual_pet_care`, `virtual_pet_hatched`,
+`virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`.
 
 Events fired during a fast-forward carry `simulated: true`.
 
@@ -181,6 +226,6 @@ phases.
 0. ✅ Test bench
 1. ✅ Living pet
 2. ✅ The card: device shelf, sprites, speech bubble, poop, attention icon, status screen
-3. Home awareness: options flow (entity mapping, bedtime, privacy), weather, light, bedtime, presence, then activity, AQI and requests
+3. ✅ Home awareness: options (entity mapping, bedtime, privacy), weather, light, bedtime, presence, activity, AQI and requests
 4. Life: adult forms, traits, generations, journal, sky events (plus bird visits from BirdNET-Pi), notifications
 5. HACS packaging, chores, minigames, more species
