@@ -12,3 +12,14 @@ original share zips.
 
 Every sprite: transparent PNG, 256×256 (props 128×128, backgrounds 512×384),
 named `{stage}_{mood}_{frame}.png`.
+
+## Notes from Sol for the card (phase 2)
+
+- `sitter_sign.png`: the text is unreadable at prop size, so the card adds its own label.
+- `*_sick_*`: the green tint is faint; the thermometer is what says "sick".
+- `bg_day`, `bg_night`, `bg_rain`, `bg_dim` are four different rooms, not one room
+  in four lights, so cross-fading between them won't look like a light change.
+- Hop poses (`excited`) keep the feet on the baseline. If the card wants a
+  visible hop, it can add a small CSS bounce.
+- Beetle stages (the owner's choice): egg → baby (pale larva) → child (small blue
+  adult) → teen (bigger blue adult). No pupa.
