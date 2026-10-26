@@ -1,0 +1,33 @@
+{
+  "name": "Axolotl",
+  "ready": true,
+  "stages": ["baby", "child", "teen"],
+  "stage_fallback": { "adult": "teen" },
+  "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
+  "frames": 2,
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "float": ["child_float_1", "child_float_2"],
+    "gill_flutter": ["child_gill_flutter_1", "child_gill_flutter_2"],
+    "smile": ["child_smile_1", "child_smile_2"]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "bird/ball",
+    "clean": "treefrog/bubbles",
+    "medicine": "bird/medicine",
+    "blanket": "bird/blanket",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
+  },
+  "murk": "treefrog/murk",
+  "backgrounds": { "day": "treefrog/bg_day", "night": "treefrog/bg_night", "dim": "treefrog/bg_night" },
+  "words": { "food": "bloodworms", "home": "pond" }
+}

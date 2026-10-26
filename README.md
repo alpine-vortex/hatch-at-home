@@ -15,7 +15,7 @@ Woodland (the bird and the Douglas squirrel), a sandstone tank for Terrarium (th
 leopard gecko, with the red-knee tarantula to come), a little red house for Hearth
 (the tabby kitten and the lop bunny), and a riveted porthole for Tidepool (the sea otter and the giant Pacific octopus,
 whose water clouds over instead of collecting poop), and a lily pad for Pond (the
-Pacific tree frog, with the axolotl to come). The egg decides which of that world's
+Pacific tree frog and the axolotl). The egg decides which of that world's
 creatures hatches. See `docs/design-worlds.md`.
 
 ## Install
@@ -32,7 +32,7 @@ creatures hatches. See `docs/design-worlds.md`.
 3. Restart HA: Settings → System → power icon (top right) → Restart Home Assistant.
 4. Settings → Devices & services → Add integration → search **Virtual Pet**,
    then name your pet and pick its world: Woodland (bird, squirrel), Terrarium
-   (leopard gecko), Hearth (kitten, bunny) Tidepool (sea otter, octopus) or Pond (tree frog). Add the integration again for each extra pet device.
+   (leopard gecko), Hearth (kitten, bunny) Tidepool (sea otter, octopus) or Pond (tree frog, axolotl). Add the integration again for each extra pet device.
 
 ### Updating
 

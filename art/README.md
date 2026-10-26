@@ -101,3 +101,10 @@ bird's ball. The Pond kit (sha256 checked) brings the frog-spawn egg, `bg_day`,
 its bubbles became the frog's `clean` prop. The day scene puts the pet on open water.
 The night scene is not the day's layout; Sol is sending matching nights for Pond and
 Tidepool. Kit prompts are in `art/pond/`.
+
+## Axolotl (Pond): ready 2026-10-26
+
+74 sprites (sha256 checked); the size, gap and sliver checks came back clean. Signature
+poses: float, gill_flutter, smile. Props: a bowl of bloodworms (`feed`) and a shrimp
+(`snack`); `play` borrows the bird's ball. Second on Pond's roster, it hatches from
+the frog-spawn egg and borrows the frog's scenes, murk and bubbles.

@@ -1,0 +1,11 @@
+Use your image generation tool to draw ONE square image and save it as teen_1.png in the current directory.
+
+A sheet of 3 rows x 2 columns of equal square cells, each cell one pose of the same original cute pink leucistic axolotl as in the attached probe sheet: soft pink body, dark round eyes, wide constant smile, finned tail, four little legs. ANATOMY: exactly 3 feathery dark-pink gill stalks on EACH side of the head (6 total). Faces three-quarters to the right. BODY COLOURS stay identical in every cell and every mood (same fur/skin colours as the reference); moods show through face, pose and small props only, never by recolouring the body.
+TEEN: the adult (row 1 right), the biggest.
+- Row 1: mood 'content': happy idle, soft smile, eyes as gentle arcs. Left = frame 1; right = frame 2 = same pose, body bobbed down slightly.
+- Row 2: mood 'excited': bouncing with joy, small sparkles around it. Left = frame 1; right = frame 2 = landed, sparkles in different spots.
+- Row 3: mood 'cozy': tucked snugly under a small knitted blanket, content face. Left = frame 1; right = frame 2 = same, eyes blinking closed.
+In every cell the creature is the same size and rests on the same height, low in the cell.
+
+Art style: chunky retro pixel art exactly like the attached reference sheet: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark pixel outline. Keep the reference's pixel size relative to the subject, so the pixels are large and clearly visible
+Background: one flat even mid-grey everywhere (no gradient, no texture, no floor, no shadows on it). Every subject is drawn whole inside its own cell with a generous empty margin; nothing crosses a cell edge. No text labels, no titles, no cell borders, no grid lines.
