@@ -75,5 +75,6 @@ are restated across the README and the design doc.
 - Verify UI changes in the browser (Playwright plus Chromium are preinstalled), and
   send screenshots.
 - Commit attribution: no `Co-Authored-By` trailer; keep the `Claude-Session:` line.
-- Messages to Sol go through `send_message` to Sol's session (the ID is in the earlier
-  conversation). This session was granted access to the owner's other sessions.
+- Messages to Sol go through `send_message` to `(Sol's session ID: ask the owner)` (this
+  session was granted access to the owner's other sessions; a new one may need the owner's
+  approval again). Sol can't reply here; the owner relays share links.
