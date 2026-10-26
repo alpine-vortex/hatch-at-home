@@ -528,6 +528,9 @@ def test_lay_egg_waits_a_week_into_adulthood():
     assert "lay_egg" in model.requests(pet, at(12), SETTINGS)
     pet.away = True
     assert not model.can_lay_egg(pet)
+    pet.away, pet.sick = False, True  # get well first
+    assert not model.can_lay_egg(pet)
+    assert model.lay_egg(pet, at(12), random.Random(1)) == (pet, [])
 
 
 def test_laying_an_egg_retires_the_parent_to_the_journal():

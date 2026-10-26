@@ -702,9 +702,14 @@ def requests(state: PetState, now: float, settings: Settings) -> list[str]:
 
 
 def can_lay_egg(state: PetState) -> bool:
-    """A week into adulthood the owner may start the next generation."""
+    """A week into adulthood the owner may start the next generation, unless the
+    pet is sick or away."""
     adult = dict(R.STAGE_STARTS)["adult"]
-    return not state.away and state.age_hours >= adult + R.LAY_EGG_AFTER_ADULT_HOURS
+    return (
+        not state.away
+        and not state.sick
+        and state.age_hours >= adult + R.LAY_EGG_AFTER_ADULT_HOURS
+    )
 
 
 def lay_egg(

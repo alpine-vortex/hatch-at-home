@@ -99,7 +99,7 @@ One device named after your pet, with:
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
 | `switch.<pet>_lights_out` | On puts it to bed, off wakes it. |
 | `button.<pet>_feed`, `_snack`, `_play`, `_clean`, `_medicine`, `_scold`, `_praise` | Care. Medicine is unavailable unless the pet is sick. |
-| `button.<pet>_lay_egg` | Starts the next generation. Available from a week into adulthood (day 21). |
+| `button.<pet>_lay_egg` | Starts the next generation. Available from a week into adulthood (day 21), while the pet is well and home. |
 | `button.<pet>_blanket`, `_fan` | Answers to what the house makes the pet ask for. Unavailable unless it's asking. |
 | `sensor.<pet>_debug` | Diagnostic, **disabled by default**. Enable it on the entity's settings page to see the raw numbers. |
 
@@ -248,7 +248,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   family deepens over the generations. Seasonal traits (sun lover, fireside) carry
   through the seasons this way.
 - **Generations:** a week into adulthood the card offers "lay an egg?" (two taps,
-  so it can't happen by accident). Nothing ends until you choose it, so a favourite
+  so it can't happen by accident), as long as the pet isn't sick. Nothing ends until you choose it, so a favourite
   pet can stay forever. The adult retires to the journal and a new egg takes its
   place; it inherits one of the parent's traits and, as always, prefers a creature
   this device hasn't raised yet.
@@ -327,3 +327,8 @@ HACS's and Home Assistant's checks and the tests on every push.
 4. Life (in progress): ✅ traits, ✅ generations and journal, ✅ moon, ✅ notifications; adult forms, journal, sky events (plus bird visits from BirdNET-Pi), notifications
 5. ✅ HACS packaging
 6. Chores, minigames, more species
+
+## License
+
+MIT, see `LICENSE`. The bundled Tiny5 font is under the SIL Open Font License
+(`custom_components/virtual_pet/frontend/fonts/OFL.txt`).
