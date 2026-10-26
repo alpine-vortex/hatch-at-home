@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 DOMAIN = "virtual_pet"
-VERSION = "0.10.0"  # keep in step with manifest.json (a test checks)
+VERSION = "0.11.0"  # keep in step with manifest.json (a test checks)
 LOGGER = logging.getLogger(__package__)
 
 CONF_BEDTIME = "bedtime"
@@ -16,6 +16,8 @@ DEFAULT_NAME = "Pip"
 STORE_VERSION = 1
 STORE_MINOR_VERSION = 1
 
+SERVICE_NOTIFY_ME = "notify_me"
+ATTR_ENABLED = "enabled"
 SERVICE_FAST_FORWARD = "fast_forward"
 ATTR_HOURS = "hours"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
@@ -49,3 +51,6 @@ CONF_COMFORT_LOW = "comfort_low"  # stored in °C, shown in the owner's unit
 CONF_COMFORT_HIGH = "comfort_high"
 CONF_AWAY_AFTER = "away_after"  # hours
 CONF_SITTER_SETTLES = "sitter_settles"  # the sitter answers a whine
+CONF_MOON_PHASE = "moon_phase"
+CONF_MOON_ILLUMINATION = "moon_illumination"  # 0-1 or %
+CONF_MOON_ALTITUDE = "moon_altitude"  # degrees; above 0 means up

@@ -14,3 +14,15 @@ fast_forward:
       selector:
         config_entry:
           integration: virtual_pet
+notify_me:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: virtual_pet
+    enabled:
+      required: true
+      example: true
+      selector:
+        boolean:

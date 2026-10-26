@@ -184,6 +184,14 @@ never wakes the pet.
 | TVs | none | On or playing: watches along (small bonus). | `media_player.tv` |
 | Music players | none | Playing anything but video: dances (small bonus). | your speakers |
 
+### Sky
+
+| Field | Default | What it does |
+| --- | --- | --- |
+| Moon phase | none | Any phase sensor, such as `sensor.moon_phase` from HA's Moon integration. Full moon at night: "the moon is so big tonight!" and a little happiness (+1 an hour) if it's awake. New moon: a starry night, cosmetic only. |
+| Moon illumination | none | Optional, the lit fraction (0–1 or %). Used when there's no phase sensor: 97% or more is full, 3% or less is new. |
+| Moon altitude | none | Optional, degrees. The moon only counts while it's above the horizon. |
+
 ### Privacy
 
 | Field | Default | What it does |
@@ -232,6 +240,11 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 - **The journal:** on the status screen, tap "journal". It shows the world's
   creatures (ones nobody on this home has raised yet are silhouettes) and this
   device's past pets.
+- **Notifications:** opt in per person. On the status screen, tap "notify me" to get
+  this pet's calls, sickness, hatching, new traits and eggs on your phone, through
+  the Home Assistant app. It only changes them for whoever is signed in; each person
+  chooses for themselves. Automations can use `virtual_pet.notify_me` the same way.
+  Fast-forward never notifies.
 - **Restarts never hurt it.** HA downtime freezes the pet: nothing decays,
   ages or expires while HA is off.
 
@@ -296,6 +309,6 @@ HACS's and Home Assistant's checks and the tests on every push.
 1. ✅ Living pet
 2. ✅ The card: device shelf, sprites, speech bubble, poop, attention icon, status screen
 3. ✅ Home awareness: options (entity mapping, bedtime, privacy), weather, light, bedtime, presence, activity, AQI and requests
-4. Life (in progress): ✅ traits, ✅ generations and journal; adult forms, journal, sky events (plus bird visits from BirdNET-Pi), notifications
+4. Life (in progress): ✅ traits, ✅ generations and journal, ✅ moon, ✅ notifications; adult forms, journal, sky events (plus bird visits from BirdNET-Pi), notifications
 5. ✅ HACS packaging
 6. Chores, minigames, more species

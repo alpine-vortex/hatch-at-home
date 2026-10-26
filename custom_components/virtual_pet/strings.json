@@ -94,6 +94,20 @@
               "music": "Speakers and displays. Playing anything that isn't video counts as music."
             }
           },
+          "sky": {
+            "name": "Sky",
+            "description": "The full moon makes the pet happy if it's up late, and a new moon is a starry night. Any moon phase sensor works, such as the Moon integration's; or give the lit fraction instead.",
+            "data": {
+              "moon_phase": "Moon phase",
+              "moon_illumination": "Moon illumination",
+              "moon_altitude": "Moon altitude"
+            },
+            "data_description": {
+              "moon_phase": "A sensor whose state is the phase, like \"full_moon\" or \"Full Moon\".",
+              "moon_illumination": "Optional. The lit fraction, 0–1 or a percentage; 97% or more counts as full.",
+              "moon_altitude": "Optional. Degrees above the horizon; the moon only counts while it's up."
+            }
+          },
           "privacy": {
             "name": "Privacy",
             "description": "For wall tablets and shared dashboards.",
@@ -234,6 +248,20 @@
         "config_entry_id": {
           "name": "Pet",
           "description": "Which pet. Leave empty for all pets."
+        }
+      }
+    },
+    "notify_me": {
+      "name": "Notify me",
+      "description": "Turns this pet's phone notifications on or off for you, the user calling it. They go to your phones through the Home Assistant app: calls, sickness, hatching, traits and new eggs.",
+      "fields": {
+        "entity_id": {
+          "name": "Pet",
+          "description": "Any entity of the pet."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "On to get notifications, off to stop."
         }
       }
     }

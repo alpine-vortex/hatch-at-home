@@ -1,7 +1,7 @@
 # Handoff (2026-10-26, third session)
 
 Branch: `ccr-a5f628ca-979gik`, which is also the repo's default branch (all work
-pushed; no PR). Version **0.10.0** (released through Actions → Release). Read the README first, then `docs/design-worlds.md`
+pushed; no PR). Version **0.11.0** (released through Actions → Release). Read the README first, then `docs/design-worlds.md`
 and `docs/audit-2026-10-26.md`. The owner's original brief is not in the repo; its key
 rules are restated across the README and the design doc.
 
@@ -44,7 +44,7 @@ or the owner for such details before committing it.
 1. **Releases work.** The owner published `v0.6.1` by hand on 2026-10-26 (and set
    Workflow permissions to "Read and write"). That tag push registered `release.yml`,
    and its first run passed. This session released 0.7.0 (Hearth), 0.7.1 (leg-gap fix)
-   0.8.0 (Tidepool), 0.8.1 (octopus) 0.9.0 (traits, sitter option) and 0.10.0 (generations, journal) with Actions → Release → Run workflow, dispatched through the
+   0.8.0 (Tidepool), 0.8.1 (octopus) 0.9.0 (traits, sitter option) 0.10.0 (generations, journal) and 0.11.0 (moon, notifications) with Actions → Release → Run workflow, dispatched through the
    GitHub MCP tool (`actions_run_trigger`, `release.yml`, ref = this branch).
 2. **Hearth is live (kitten ready).** Sol's "Hearth v2" pack fixed the kitten's
    flagged frames and brought Hearth's egg, four rooms, emblem and decorations; review
@@ -74,11 +74,15 @@ or the owner for such details before committing it.
    `_trait_bonus`), and so are generations (`model.lay_egg`, `button.<pet>_lay_egg`,
    the card's two-tap "lay an egg?" pill; the owner chose: offered from a week into
    adulthood, never automatic, the egg inherits one trait) and the journal (status
-   screen → "journal"). README "How the pet works" covers all three. Still to do:
+   screen → "journal"). Also done: the moon (options section Sky; `home.moon_phase`,
+   flags `full_moon`/`new_moon`; the owner's moon entities are in the private notes)
+   and per-user phone notifications (`notify.py`, service `notify_me`, the card's
+   "notify me" toggle; PetState.notify_users). README "How the pet works" covers
+   them. Still to do:
    - adult forms per species
-   - sky events: moon and BirdNET visits (the owner's entities, the stalled
-     `last_bird` feed and the fallback are in the private house notes)
-   - optional notifications and a chirp sound
+   - BirdNET visits (the owner's entities, the stalled `last_bird` feed and the
+     fallback are in the private house notes)
+   - a chirp sound on calls (browser autoplay rules apply)
 6. **Art queue:** Pond and Night Sky (shells are drawn; each still needs its creatures,
    egg, scenes, emblem and decorations). Asked of Sol: Tidepool's `bg_night` redrawn on the day
    scene's layout (the current one is a different stretch of coast).

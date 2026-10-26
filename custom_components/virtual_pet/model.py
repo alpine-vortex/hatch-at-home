@@ -94,6 +94,7 @@ class PetState:
     traits: list[str] = field(default_factory=list)  # learned, in order (TRAITS)
     generation: int = 1  # the device's first pet is generation 1
     journal: list[dict[str, Any]] = field(default_factory=list)  # retired parents
+    notify_users: list[str] = field(default_factory=list)  # HA user IDs, opted in
     trait_hours: dict[str, float] = field(default_factory=dict)  # exposure, awake
 
     def to_dict(self) -> dict[str, Any]:
@@ -675,6 +676,7 @@ def lay_egg(
     egg.generation = state.generation + 1
     egg.raised = list(state.raised)
     egg.journal = [*state.journal, record]
+    egg.notify_users = list(state.notify_users)
     inherited = rng.choice(state.traits) if state.traits else None
     if inherited:
         egg.traits = [inherited]

@@ -26,6 +26,9 @@ from .const import (
     CONF_FIREPLACE,
     CONF_INDOOR_TEMP,
     CONF_LUX,
+    CONF_MOON_ALTITUDE,
+    CONF_MOON_ILLUMINATION,
+    CONF_MOON_PHASE,
     CONF_MOTION,
     CONF_MUSIC,
     CONF_RAIN,
@@ -56,6 +59,9 @@ SINGLE = (
     CONF_INDOOR_TEMP,
     CONF_AQI,
     CONF_FIREPLACE,
+    CONF_MOON_PHASE,
+    CONF_MOON_ILLUMINATION,
+    CONF_MOON_ALTITUDE,
 )
 # A fireplace can be a switch, light, climate, fan or sensor: these mean lit.
 LIT = {"on", "heat", "heating", "burning", "playing"}
@@ -140,7 +146,24 @@ class Watcher:
             aqi=_float(self._one(CONF_AQI, now)),
             fireplace=self._lit(self._one(CONF_FIREPLACE, now)),
             company=None if (people := self.people_home(now)) is None else people > 0,
+            moon_phase=(
+                moon.state if (moon := self._one(CONF_MOON_PHASE, now)) else None
+            ),
+            moon_illumination=self._fraction(self._one(CONF_MOON_ILLUMINATION, now)),
+            moon_up=(
+                None
+                if (alt := _float(self._one(CONF_MOON_ALTITUDE, now))) is None
+                else alt > 0
+            ),
         )
+
+    @staticmethod
+    def _fraction(state: State | None) -> float | None:
+        """0-1 from a fraction or a percentage."""
+        value = _float(state)
+        if value is None:
+            return None
+        return value / 100 if value > 1 else value
 
     @staticmethod
     def _rain(state: State | None) -> float | None:

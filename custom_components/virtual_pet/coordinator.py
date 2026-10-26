@@ -22,7 +22,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
-from . import model, rates as R
+from . import model, notify, rates as R
 from .const import (
     CONF_AWAY_AFTER,
     CONF_BEDTIME,
@@ -87,6 +87,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.world: str = entry.data.get(CONF_WORLD, DEFAULT_WORLD)
         self.world_name = self.world
         self.roster: tuple[str, ...] = ()
+        self.species_names: dict[str, str] = {}
         self.rng = random.Random()
         self.state: model.PetState | None = None
         # Last calculation, for the diagnostic sensor.
@@ -137,6 +138,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.world = catalog.world_of(old_species) or DEFAULT_WORLD
         self.world_name = catalog.worlds.get(self.world, {}).get("name", self.world)
         self.roster = tuple(catalog.roster(self.world))
+        self.species_names = {s: catalog.species[s].get("name", s) for s in self.roster}
         if not self.roster:
             LOGGER.warning(
                 "World %s has no ready species yet; %s stays an egg until it does",
@@ -260,8 +262,37 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             if simulated:
                 data["simulated"] = True
             self.hass.bus.async_fire(f"{DOMAIN}_{event['type']}", data)
+            self._notify(event, simulated)
         if events:
             self.debug["last_events"] = [e["type"] for e in events][-10:]
+
+    def _notify(self, event: model.Event, simulated: bool) -> None:
+        """Tell the users who opted in, on their phones. Never for fast-forward."""
+        if simulated or self.state is None or not self.state.notify_users:
+            return
+        text = notify.message(event, self.state.name, self.species_names)
+        if text is None:
+            return
+        self.config_entry.async_create_background_task(
+            self.hass,
+            notify.send(
+                self.hass,
+                list(self.state.notify_users),
+                text,
+                f"{DOMAIN}_{self.pet_id}_{event['type']}",
+            ),
+            f"{DOMAIN} notify",
+        )
+
+    async def async_set_notify(self, user_id: str, enabled: bool) -> None:
+        """Opt a user in or out of this pet's notifications."""
+        assert self.state is not None
+        users = [u for u in self.state.notify_users if u != user_id]
+        if enabled:
+            users.append(user_id)
+        self.state.notify_users = users
+        self._save()
+        self._publish()
 
     def _save(self) -> None:
         state = self.state

@@ -132,6 +132,9 @@ HOME_BRIGHT_LEVEL = 0.5  # a room light at half brightness or more, at night
 HOME_BRIGHT_LUX_AT_NIGHT = 100.0
 HOME_DIM_LEVEL = 0.35  # evening lights this low feel cozy
 HOME_BAD_AQI = 100.0
+HOME_MOON_HAPPINESS = 1.0  # awake under a full moon
+HOME_FULL_MOON_ILLUMINATION = 0.97  # lit fraction that counts as full
+HOME_NEW_MOON_ILLUMINATION = 0.03
 # --- Generations (phase 4) ---------------------------------------------------
 
 LAY_EGG_AFTER_ADULT_HOURS = 7 * 24.0  # the owner may let it lay an egg after this

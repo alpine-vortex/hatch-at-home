@@ -176,3 +176,43 @@ def test_lit_fireplace_is_cozy_and_beats_the_chill():
     assert "fireside" in e.flags
     assert "chilly" not in e.flags and e.requests == []
     assert e.bonus["happiness"] == R.HOME_FIRE_HAPPINESS
+
+
+@pytest.mark.parametrize(
+    ("phase", "illumination", "expected"),
+    [
+        ("full_moon", None, "full_moon"),
+        ("Full Moon", None, "full_moon"),
+        ("full", None, "full_moon"),
+        ("New Moon", None, "new_moon"),
+        ("waxing_gibbous", 0.99, "waxing_gibbous"),  # the phase name wins
+        (None, 0.98, "full_moon"),
+        (None, 0.01, "new_moon"),
+        (None, 0.5, None),
+        (None, None, None),
+    ],
+)
+def test_moon_phase_from_a_name_or_the_lit_fraction(phase, illumination, expected):
+    assert home.moon_phase(phase, illumination) == expected
+
+
+def test_full_moon_at_night_makes_it_happy():
+    e = evaluate(Readings(night=True, sun_up=False, moon_phase="full_moon"))
+    assert "full_moon" in e.flags
+    assert e.bonus["happiness"] == R.HOME_MOON_HAPPINESS
+    assert e.reason() == home.REASONS["full_moon"]
+
+
+def test_the_moon_only_counts_at_night_while_it_is_up():
+    day = evaluate(Readings(night=False, sun_up=True, moon_phase="full_moon"))
+    assert "full_moon" not in day.flags and "happiness" not in day.bonus
+    below = evaluate(
+        Readings(night=True, sun_up=False, moon_phase="full_moon", moon_up=False)
+    )
+    assert "full_moon" not in below.flags
+
+
+def test_new_moon_is_a_starry_night_without_a_bonus():
+    e = evaluate(Readings(night=True, sun_up=False, moon_illumination=0.0))
+    assert "new_moon" in e.flags
+    assert e.bonus == {}

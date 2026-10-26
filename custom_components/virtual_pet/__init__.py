@@ -6,7 +6,7 @@ from pathlib import Path
 
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
-from homeassistant.const import Platform
+from homeassistant.const import ATTR_ENTITY_ID, Platform
 from homeassistant.core import (
     HomeAssistant,
     ServiceCall,
@@ -14,18 +14,20 @@ from homeassistant.core import (
     SupportsResponse,
 )
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import config_validation as cv, entity_registry as er
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
+    ATTR_ENABLED,
     ATTR_HOURS,
     CARD_FILENAME,
     DOMAIN,
     FRONTEND_URL,
     SERVICE_FAST_FORWARD,
+    SERVICE_NOTIFY_ME,
     STORE_VERSION,
     VERSION,
 )
@@ -35,6 +37,12 @@ PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON, Platform.SENSOR, Platform.
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
+NOTIFY_ME_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        vol.Required(ATTR_ENABLED): cv.boolean,
+    }
+)
 FAST_FORWARD_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_HOURS): vol.All(
@@ -67,6 +75,25 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 call.data[ATTR_HOURS]
             )
         return results
+
+    async def notify_me(call: ServiceCall) -> None:
+        # Anyone signed in may opt themselves in or out; nobody else.
+        user_id = call.context.user_id
+        entity = er.async_get(hass).async_get(call.data[ATTR_ENTITY_ID])
+        entry = (
+            hass.config_entries.async_get_entry(entity.config_entry_id)
+            if entity and entity.config_entry_id
+            else None
+        )
+        if user_id is None or entry is None or entry.domain != DOMAIN:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="no_pet"
+            )
+        await entry.runtime_data.async_set_notify(user_id, call.data[ATTR_ENABLED])
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_NOTIFY_ME, notify_me, schema=NOTIFY_ME_SCHEMA
+    )
 
     async_register_admin_service(
         hass,

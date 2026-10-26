@@ -17,6 +17,7 @@ from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_capture_events,
     async_fire_time_changed,
+    async_mock_service,
 )
 
 from custom_components.virtual_pet.const import DOMAIN
@@ -368,6 +369,7 @@ async def test_options_flow_saves_a_flat_mapping(
             "weather": {"weather": "weather.home"},
             "room": {},
             "activity": {"zone": "zone.home", "tv": ["media_player.tv"]},
+            "sky": {},
             "privacy": {"privacy": True},
         },
     )
@@ -554,6 +556,7 @@ async def test_options_show_fahrenheit_and_store_celsius(
         "weather": {"comfort_low": 80, "comfort_high": 70},
         "room": {},
         "activity": {"zone": "zone.home", "away_after": 2},
+        "sky": {},
         "privacy": {"privacy": True},
     }
     result = await hass.config_entries.options.async_configure(
@@ -612,3 +615,69 @@ async def test_lay_egg_button_is_unavailable_before_then(
     hass_storage[STORE_KEY] = hatched_pet(now)
     await setup(hass)
     assert hass.states.get("button.pip_lay_egg").state == STATE_UNAVAILABLE
+
+
+async def test_notifications_go_to_the_users_who_opted_in(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, hunger=26.0)
+    await setup(hass)
+    me = await hass.auth.async_create_user("Me")
+    other = await hass.auth.async_create_user("Other")
+    for user, phone in ((me, "My Phone"), (other, "Their Phone")):
+        MockConfigEntry(
+            domain="mobile_app", data={"user_id": user.id, "device_name": phone}
+        ).add_to_hass(hass)
+    mine = async_mock_service(hass, "notify", "mobile_app_my_phone")
+    theirs = async_mock_service(hass, "notify", "mobile_app_their_phone")
+
+    await hass.services.async_call(
+        DOMAIN,
+        "notify_me",
+        {"entity_id": "sensor.pip_mood", "enabled": True},
+        blocking=True,
+        context=Context(user_id=me.id),
+    )
+    assert hass.states.get("sensor.pip_life_stage").attributes["notify_users"] == [
+        me.id
+    ]
+    for _ in range(6):  # half an hour: hunger drops below 25 and it calls
+        await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert [c.data["message"] for c in mine] == ["Pip is hungry!"]
+    assert mine[0].data["data"]["tag"].endswith("call_started")
+    assert theirs == []
+
+    await hass.services.async_call(
+        DOMAIN,
+        "notify_me",
+        {"entity_id": "sensor.pip_mood", "enabled": False},
+        blocking=True,
+        context=Context(user_id=me.id),
+    )
+    assert hass.states.get("sensor.pip_life_stage").attributes["notify_users"] == []
+
+
+async def test_fast_forward_never_notifies(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, hunger=26.0)
+    await setup(hass)
+    me = await hass.auth.async_create_user("Me")
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": me.id, "device_name": "My Phone"}
+    ).add_to_hass(hass)
+    mine = async_mock_service(hass, "notify", "mobile_app_my_phone")
+    await hass.services.async_call(
+        DOMAIN,
+        "notify_me",
+        {"entity_id": "sensor.pip_mood", "enabled": True},
+        blocking=True,
+        context=Context(user_id=me.id),
+    )
+    await hass.services.async_call(DOMAIN, "fast_forward", {"hours": 3}, blocking=True)
+    await hass.async_block_till_done()
+    assert mine == []

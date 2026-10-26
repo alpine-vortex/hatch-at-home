@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.10.0";
+const VERSION = "0.11.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -254,6 +254,9 @@ const STYLE = `
   .row.traits { grid-template-columns: 100px minmax(0, 1fr); }
   .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 2px 0;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
+  .bell { border: 2px solid #2f3a24; border-radius: 10px; background: none; color: inherit;
+    font: 400 12px 'Tiny5', monospace; padding: 1px 10px; min-width: 44px; cursor: pointer; }
+  .bell[aria-pressed="true"] { background: #2f3a24; color: #e9e2c6; }
   .jhead { display: flex; justify-content: space-between; align-items: baseline; }
   .jgrid { display: flex; flex-wrap: wrap; gap: 6px 10px; }
   .jtile { display: flex; flex-direction: column; align-items: center; width: 64px; font-size: 11px;
@@ -906,6 +909,8 @@ class HatchPetCard extends HTMLElement {
       return `<span class="hearts" role="img" aria-label="${Math.round(v)} of 100">${out}</span>`;
     };
     const traits = this._state(s, "sensor.life_stage")?.attributes.traits || [];
+    const notifying = (this._state(s, "sensor.life_stage")?.attributes.notify_users || [])
+      .includes(this._hass.user?.id);
     const ic = (n) => pixelIcon(n, 18);
     const bar = (v) => v === null ? "–" : `<div class="bar"><div style="width:${v}%"></div></div>`;
     const lines = log.slice(0, 3).map((e) =>
@@ -919,9 +924,27 @@ class HatchPetCard extends HTMLElement {
       <div class="row icons">${ic("stat_discipline")}<span>discipline</span>${bar(value("discipline"))}</div>
       <div class="row icons">${ic("stat_care_miss")}<span>misses</span><span>${value("care_misses") ?? "–"}</span></div>
       <div class="row traits"><span>traits</span><span>${traits.length ? traits.map((t) => escape(t.replace("_", " "))).join(" · ") : "none yet"}</span></div>
+      <div class="row traits"><span>notify me</span><span><button class="bell" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span></div>
       <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>
       <button class="jlink">journal ›</button>`;
     this._journalLink(s, true);
+    s.status.querySelector(".bell").addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      this._setNotify(s, !notifying);
+    });
+  }
+
+  // Phone notifications are per user: this only changes them for whoever is signed in.
+  async _setNotify(s, enabled) {
+    const id = s.ids?.["sensor.life_stage"];
+    if (!id) return;
+    try {
+      await this._hass.callService("virtual_pet", "notify_me", { entity_id: id, enabled });
+      s.bubble.textContent = enabled ? "I'll ping your phone!" : "ok, no more pings";
+    } catch (err) {
+      s.bubble.textContent = "hmm, that didn't work";
+    }
+    s.sayUntil = Date.now() + 3500;
   }
 
   _journalLink(s, open) {

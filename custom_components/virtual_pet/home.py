@@ -31,6 +31,8 @@ REASONS: dict[str, str] = {
     "cool": "ahh, that breeze",
     "sunny": "sunny day!",
     "foggy": "all misty out there",
+    "full_moon": "the moon is so big tonight!",
+    "new_moon": "so many stars without the moon...",
     "dim": "nice and dim in here...",
 }
 
@@ -60,6 +62,9 @@ class Readings:
     tv: bool = False
     aqi: float | None = None
     company: bool | None = None  # someone is home
+    moon_phase: str | None = None  # normalized: "full_moon", "new_moon", ...
+    moon_illumination: float | None = None  # lit fraction, 0-1
+    moon_up: bool | None = None
 
 
 @dataclass
@@ -81,6 +86,24 @@ RAINY = {"rainy", "pouring", "lightning-rainy", "hail"}
 SNOWY = {"snowy", "snowy-rainy"}
 SUNNY = {"sunny"}
 FOGGY = {"fog"}
+
+
+def moon_phase(phase: str | None, illumination: float | None) -> str | None:
+    """Full or new from a phase name ("Full Moon", "full_moon", "full") or the lit
+    fraction; any other phase is passed through, normalized."""
+    if phase:
+        name = phase.strip().lower().replace(" ", "_").replace("-", "_")
+        if name.startswith("full"):
+            return "full_moon"
+        if name.startswith("new"):
+            return "new_moon"
+        return name
+    if illumination is not None:
+        if illumination >= R.HOME_FULL_MOON_ILLUMINATION:
+            return "full_moon"
+        if illumination <= R.HOME_NEW_MOON_ILLUMINATION:
+            return "new_moon"
+    return None
 
 
 def evaluate(
@@ -161,6 +184,15 @@ def evaluate(
         e.flags.append("masked")
 
     e.company = r.company is True
+
+    # The moon, at night while it's up (unknown altitude counts as up).
+    phase = moon_phase(r.moon_phase, r.moon_illumination)
+    if r.night and r.sun_up is not True and r.moon_up is not False:
+        if phase == "full_moon":
+            e.flags.append("full_moon")
+            add("happiness", R.HOME_MOON_HAPPINESS)
+        elif phase == "new_moon":
+            e.flags.append("new_moon")
 
     # Signals pointing the same way never add up past the cap.
     e.bonus = {s: min(v, R.HOME_BONUS_CAP) for s, v in bonus.items()}

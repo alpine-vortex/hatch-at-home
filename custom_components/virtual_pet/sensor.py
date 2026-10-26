@@ -148,6 +148,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "traits": self.pet.traits,
             "generation": self.pet.generation,
             "journal": self.pet.journal,
+            "notify_users": self.pet.notify_users,
             "trait_progress": model.trait_progress(self.pet),
             "roster": list(self.coordinator.roster),
             "hatches_at": self._hatches_at(),

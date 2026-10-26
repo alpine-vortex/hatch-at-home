@@ -42,6 +42,9 @@ from .const import (
     CONF_FIREPLACE,
     CONF_INDOOR_TEMP,
     CONF_LUX,
+    CONF_MOON_ALTITUDE,
+    CONF_MOON_ILLUMINATION,
+    CONF_MOON_PHASE,
     CONF_MOTION,
     CONF_MUSIC,
     CONF_PRIVACY,
@@ -201,6 +204,11 @@ class PetOptionsFlow(OptionsFlowWithReload):
                 (CONF_SITTER_SETTLES, BooleanSelector(), True),
                 (CONF_TV, _entities("media_player", True), None),
                 (CONF_MUSIC, _entities("media_player", True), None),
+            ],
+            "sky": [
+                (CONF_MOON_PHASE, _entities("sensor"), None),
+                (CONF_MOON_ILLUMINATION, _entities("sensor"), None),
+                (CONF_MOON_ALTITUDE, _entities("sensor"), None),
             ],
             "privacy": [
                 (CONF_PRIVACY, BooleanSelector(), True),
