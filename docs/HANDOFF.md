@@ -108,6 +108,7 @@ or the owner for such details before committing it.
    refresh / "Reset frontend cache" in the companion app before it appeared in the card
    picker. Next: ask the owner to enable the pet's diagnostic sensor ("debug", off by
    default) and read it to see what the pet actually senses in their house.
+
 ## How to
 
 - **Get art from Sol:** the owner forwards a share link.
