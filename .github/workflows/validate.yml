@@ -16,7 +16,8 @@ jobs:
           category: integration
           # Not in home-assistant/brands (the icon ships in brand/), and the repo
           # description and topics only matter for HACS's default store.
-          ignore: brands description topics
+          # license: skipped until the owner picks one.
+          ignore: brands description topics license
 
   hassfest:
     runs-on: ubuntu-latest

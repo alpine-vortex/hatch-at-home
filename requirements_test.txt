@@ -1,3 +1,5 @@
 # Pins Home Assistant too. Needs Python 3.14 for HA 2026.10.
 pytest-homeassistant-custom-component==0.13.375
+# The integration depends on frontend; keep in step with HA's frontend manifest.
+home-assistant-frontend==20260930.5
 ruff
