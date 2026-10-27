@@ -36,11 +36,9 @@ set up by the owner. The integration doesn't change.
   blueprint is imported from its GitHub URL. The README gets a section with a
   "My Home Assistant" import button. No version bump: it goes live when it's
   merged. The README change reaches HACS users with the next release.
-- **A stable URL first.** The import button and the blueprint's `source_url`
-  name a branch. The default branch is a session branch
-  (`ccr-a5f628ca-979gik`), so a rename would break both. Before publishing the
-  URL, ask the owner to settle on a lasting default branch (for example
-  `main`), or point the URL at a tag.
+- **The URL names `main`.** The repo's default branch was renamed to `main` on
+  2026-10-27 so the URL stays valid. The README button and `source_url` point
+  at `…/blob/main/blueprints/automation/virtual_pet/call_response.yaml`.
 - Trigger: the `virtual_pet_call_started` event, filtered by `pet_id` (a
   `config_entry` selector limited to `virtual_pet`; `pet_id` is the config
   entry ID).
@@ -340,8 +338,6 @@ helps.
 
 ## Order and releases
 
-0. **Before A ships:** settle the default branch, since A needs a stable URL.
-   (HANDOFF's version line was brought up to date along with this plan.)
 1. **A** (blueprint): merged on its own, no release.
 2. **B** (next egg): 0.23.0.
 3. **D's decision and art request**: pick the species and trait from the owner's
