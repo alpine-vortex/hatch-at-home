@@ -378,11 +378,16 @@ async function main() {
 
   // Trait flair: one trait per place (head, air, ground), placed from the pet's
   // head point and feet line, and gone again after the moment.
-  await inject(pet["sensor.life_stage"], { attributes: {
-    traits: ["storm_watcher", "social_butterfly", "fireside"], trait_levels: {} } });
-  await page.waitForTimeout(800);
-  const flair = await page.locator("hatch-pet-card").evaluate(async (el) => {
+  // Inject and show in one go: a pet update in between would replace the traits.
+  const flair = await page.locator("hatch-pet-card").evaluate(async (el, entity) => {
     const s = el._slides[el._index];
+    const traits = ["storm_watcher", "social_butterfly", "fireside"];
+    const st = el._hass.states[entity];
+    await el._hass.callApi("POST", `states/${entity}`,
+      { state: st.state, attributes: { ...st.attributes, traits, trait_levels: {} } });
+    for (let i = 0; i < 40 && el._hass.states[entity].attributes.traits?.join() !== traits.join(); i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
     const at = el._flairAnchors(s);
     const shown = el._flair(s);
     await new Promise((r) => setTimeout(r, 1500));
@@ -394,7 +399,7 @@ async function main() {
     });
     await new Promise((r) => setTimeout(r, 3200));
     return { shown, at, pieces, after: s.screen.querySelectorAll(".flair").length };
-  });
+  }, pet["sensor.life_stage"]);
   const piece = (name) => flair.pieces.filter((p) => p.src.startsWith(name));
   const cloud = piece("flair_storm_watcher")[0];
   const embers = piece("flair_fireside");
@@ -409,7 +414,11 @@ async function main() {
   check("a flair moment clears itself", flair.after === 0);
   await inject(pet["sensor.life_stage"], { attributes: { traits: [], trait_levels: {} } });
 
-  // Excitement bounces briefly, not for the whole 15 minutes it lasts.
+  // Excitement bounces briefly, not for the whole 15 minutes it lasts. The
+  // bounce starts on becoming excited, and the games above may have excited the
+  // pet already, so calm it first.
+  await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [] } });
+  await page.waitForTimeout(600);
   await inject(pet["sensor.mood"], { state: "excited", attributes: { flags: ["excited"] } });
   await page.waitForTimeout(800);
   const hopsAtFirst = await cur().locator(".pet.hop").count();
