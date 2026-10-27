@@ -7,7 +7,7 @@ looks, what it says and what it asks for.
 
 Status: **phase 4, life**, nearly done (bird visits from BirdNET-Pi are still to
 come). The pet lives in HA: stats, calls, care misses, poop, sleep, weight,
-discipline, two games (left/right, higher or lower) and chore treats. It sits on a pixel-art **device
+discipline, two games (left or right, higher or lower) and chore treats. It sits on a pixel-art **device
 shelf** card and reacts to your house: weather, indoor temperature, lights,
 bedtime, people coming and going, the TV and music, and the moon. It learns traits,
 grows up with an upbringing, and starts new generations that you can follow in its
@@ -16,7 +16,7 @@ journal.
 Each pet lives in a **device** themed for its **world**: an orange egg-shaped toy for
 Woodland (the bird, the Douglas squirrel and the black-tailed deer), a sandstone tank for Terrarium (the
 leopard gecko and the Mexican red-knee tarantula), a little red house for Hearth
-(the tabby kitten and the lop bunny), and a riveted porthole for Tidepool (the sea otter and the giant Pacific octopus,
+(the tabby kitten and the lop bunny), a riveted porthole for Tidepool (the sea otter and the giant Pacific octopus,
 whose water clouds over instead of collecting poop), a lily pad for Pond (the
 Pacific tree frog and the axolotl), and a crescent moon for Night Sky (the little
 brown bat and the luna moth). The egg decides which of that world's
@@ -66,6 +66,7 @@ devices:
 # or, as before, any one entity of each pet:
 entities:
   - sensor.pip_mood
+experimental_catch: true  # optional prototype: adds Catch to the game picker
 ```
 
 **Upgrading from 0.3.x:** you added the card as a dashboard resource back then.
@@ -78,14 +79,21 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   swipe to move to the next device.
 - The screen shows the pet, its scene and a speech bubble. The bubble says what's on
   its mind, or why it refused something ("I'm full!").
-- **Play** offers two games (it remembers the last one you picked). **Left or right:**
+- **Play** offers two games (three with Catch). It opens a picker that starts on the
+  last game you picked. **Left or right:**
   the pet hides on one side and you guess with the arrows; a win cheers it up more than
   plain play. **Higher or lower:** the pet shows a number from 1 to 9 and you guess
   whether the next is lower (lo) or higher (hi); it's mostly skill, so a win pays like
   plain play. Five rounds each; three right guesses win. ✕ stops a game. (The `play`
   button entity is still plain play, for automations and voice.)
-- Tap the screen for the status page: hearts, meters, care misses and who did what
-  recently. Tap again to go back.
+- **Catch** (prototype, card option `experimental_catch: true`): a toy rolls in from
+  one side; tap that side as it reaches the pet, but let the bee go by. Five rounds,
+  three catches win; the best score stays in this browser. No reward, nothing is sent
+  to Home Assistant.
+- Tap the screen for the status page: hearts and meters, weight, care misses and
+  ignored whines, traits (n/4) and the one it's learning next, upbringing, the next
+  egg, the notify-me and sounds switches, recent care, and a link to the journal. Tap
+  again to go back.
 - Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
   and phones give a tiny vibration. Then the real reaction follows (a food bowl, a
   sparkle, or a refusal like "I'm full!"). If HA rejects the press, the button shakes
@@ -121,7 +129,7 @@ lay the egg, then rename it.
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline`, `_weight` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. Weight is healthy between 25 and 75. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `call_deadline`. |
-| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `generation`, `upbringing` (final once adult, what it's on track for before) and `journal` (the device's retired pets). |
+| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `games` (played and won per game), `memories` (first snow and frost), `hatches_at` (while an egg), `next_world`, `next_egg` and `journal` (the device's retired pets). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far (attribute `discipline_misses`: fake calls nobody answered). |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them; `moments`: the last 10 things that happened to it, for the card to react to. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
@@ -228,7 +236,7 @@ the pet comes home.
 
 | Field | Default | What it does |
 | --- | --- | --- |
-| Keep presence private | on | An empty house shows the pet napping, never at the sitter's (care while it's away is refused as "asleep"), and the pet never names anyone. Turn it off to see "at the sitter's". |
+| Keep presence private | on | An empty house shows the pet napping, never at the sitter's (care while it's away is refused as "asleep"), and the pet never says who came or went. Turn it off to see "at the sitter's". |
 
 If an entity named in these settings is later renamed or removed, Settings →
 **Repairs** says which ones, so you can pick the new ones here.
@@ -264,7 +272,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   If its energy runs out, it falls asleep where it is (no penalty: the energy call
   before that was the warning).
 - **Weight:** 0–100, healthy between 25 and 75. Meals (+4) and snacks (+6) add to it;
-  being awake (−0.7 an hour), play (−3) and the game (−4) burn it off. Three meals a
+  being awake (−0.7 an hour), play (−3) and a game (−4) burn it off. Three meals a
   day roughly balance out, so snacks are what tip it. Too heavy or too light, it
   stops healing; too heavy, it can also get sick. Starving loses weight.
 - **The games:** five rounds from the card, or `virtual_pet.play_game`: `guess`
@@ -272,7 +280,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   the pet went). For higher or lower, call it with `game: higher_lower` and no guess to
   start and see the first number, then `guess` `lower`/`higher`. A game costs energy
   like play, and an unfinished one is dropped after 3 minutes. Each pet counts games
-  played and won per game (debug sensor `games`, diagnostics, and the journal).
+  played and won per game (attribute `games` on the life stage and debug sensors,
+  diagnostics, and the journal).
 - **Chores:** map a to-do list in the options, and every item ticked off earns a treat.
 - **Passing moments** (cosmetic, while it's awake and home):
   - It watches the sunset, greets the sunrise, and says good morning at the first
@@ -353,7 +362,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   creatures (ones nobody in this home has raised yet are silhouettes) and this
   device's family line: each generation with its traits, stars and upbringing.
 - **Notifications:** opt in per person. On the status screen, tap "notify me" to get
-  this pet's calls, sickness, hatching, growing up, new traits and eggs on your phone, through
+  this pet's calls, sickness, hatching, growing up, new or deeper traits, the season's
+  first snow and frost, and new eggs on your phone, through
   the Home Assistant app. It only changes them for whoever is signed in; each person
   chooses for themselves. Automations can use `virtual_pet.notify_me` the same way.
   A call's notification has buttons that answer it (Feed, Clean, Medicine, Lights
@@ -388,7 +398,7 @@ your name.
   to `<config>/custom_sentences/en/`, put your pets' names in its list, and restart.
   It covers "how's Pip doing", "feed Pip", "give Pip a treat", "play with Pip",
   "clean up after Pip", "give Pip medicine", "scold Pip", "praise Pip", "tuck Pip in",
-  "lights out, Pip" and, with one pet, "how's my pet" and "feed my pet". English only.
+  "give Pip a fan", "lights out, Pip" and, with one pet, "how's my pet" and "feed my pet". English only.
 - A pet answers only if at least one of its entities is exposed to that assistant
   (Settings → Voice assistants → Expose). Its lights-out switch is exposed by default.
 - The intents are `VirtualPetStatus` (slot `pet`, optional with one pet) and
@@ -526,7 +536,7 @@ HACS's and Home Assistant's checks and the tests on every push.
 3. ✅ Home awareness: options (entity mapping, bedtime, privacy), weather, light, bedtime, presence, activity, AQI and requests
 4. Life (in progress): ✅ traits, ✅ generations and journal, ✅ moon, ✅ notifications, ✅ adult forms, ✅ upbringing, ✅ weight; still to come: bird visits from BirdNET-Pi
 5. ✅ HACS packaging
-6. Play (in progress): ✅ chore treats, ✅ the left/right game, ✅ higher or lower, ✅ talking to it through Assist; still to come: more species
+6. Play (in progress): ✅ chore treats, ✅ the left or right game, ✅ higher or lower, ✅ talking to it through Assist; still to come: more species
 
 ## License
 

@@ -3,8 +3,9 @@
 Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's branch
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
-a session may push to `main` (the fifth session may: owner, 2026-10-27). Version
-**0.24.1**, released. **The owner runs it on
+a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
+release **0.25.1**; current beta **0.26.0b3** from PR #7's branch (b4 coming with the
+polish pass). **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read the README first, then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and
@@ -67,9 +68,8 @@ details before committing it.
   pet's notifications opens (`url` and `clickAction`); `notify.dashboard_path`
   normalises it. The dashboard list reads `hass.data["lovelace"]` without importing
   it; custom paths are allowed.
-- **News** (0.25.0): `virtual_pet.share_news`.
-  (`entity_id` one or a list, `headline`, optional `topic`)
-  makes a `news` moment the card says in the bubble ("did you hear? …", "guess
+- **News** (0.25.0): `virtual_pet.share_news` (`entity_id` one or a list,
+  `headline`, optional `topic`) makes a `news` moment the card says in the bubble ("did you hear? …", "guess
   what? …", "ooh, news! …", "<topic> news! …"), with the short `perk`. Cosmetic: no
   save, no stat or mood change (a test compares the whole state); since 0.25.1 it
   catches the pet up first (`_advance`), so news never reaches a pet that just fell
@@ -88,6 +88,16 @@ details before committing it.
   purpose: house and trait bonuses share `HOME_BONUS_CAP` (a tuning question for the
   review), motion after a sensor dropout (needs HA's change events to tell apart),
   and the debug sensor showing "away" (it's off by default and for debugging).
+- **Polish pass (2026-10-27, for 0.26.0b4):** sprites stored as exact palettes
+  (10.7 MB → 7.3 MB, same pixels, `scripts/art/palette.py`; backgrounds untouched
+  until the owner decides on 256-colour versions). Card speed: loops pause off screen,
+  redraws per slide, cache headers. Accessibility: a live region, focus, contrast ink
+  per shell (`deviceInk`), names. Storage: `trait_progress` in whole percents, no
+  frozen deadline while away, `SAVE_DELAY` 60. Privacy: diagnostics and the debug
+  sensor redact what the house was doing; the dev bench uses HA's demo location. Left
+  as is, on purpose: the journal and memories stay on the life stage sensor (moving
+  them breaks anyone reading them there), and the six stat sensors keep long-term
+  statistics.
 - **Worlds, all six live:**
   - Woodland: bird, Douglas squirrel, Columbia black-tailed deer (0.22.0). Egg shell.
   - Terrarium: leopard gecko, Mexican red-knee tarantula (0.21.0, Sol's v2 at 2 px art
@@ -100,7 +110,7 @@ details before committing it.
 - **Adults** exist for every creature (the last four arrived in 0.21.0). Long adults
   are drawn back up with `species.json` `"scale": {"adult": …}` (1.05–1.2; the bat
   needs none).
-- **Tests:** 263, run with `scripts/test` (ruff, format check, pytest).
+- **Tests:** 273, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
   `scripts/card-check` (Playwright, 32 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
