@@ -30,5 +30,6 @@
   },
   "backgrounds": { "day": "bg_day", "night": "bg_night", "rain": "bg_rain", "dim": "bg_dim" },
   "words": { "food": "kibble", "home": "basket" },
-  "reactions": { "play": "zoomies", "won": "zoomies", "praise": "knead", "blanket": "loaf" }
+  "reactions": { "play": "zoomies", "won": "zoomies", "praise": "knead", "blanket": "loaf" },
+  "head": { "baby": [156, 72], "child": [176, 48], "teen": [176, 32], "adult": [184, 56] }
 }

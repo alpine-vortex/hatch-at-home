@@ -1,0 +1,8 @@
+Use your image generation tool to draw ONE image (portrait 2:3) and save it as flair_probe.png in the current directory.
+
+A sheet of 4 rows x 2 columns of equal square cells: tiny decorative "flair" sprites for a virtual pet, in EXACTLY the chunky pixel style of the attached reference icons (big hard square pixels, a 1-art-pixel DARK outline, limited palette, no anti-aliasing, no gradients). Each sprite is SMALL and simple, about 16 art pixels across, centred in its cell with lots of empty space. They must read on both dark night scenes and bright green scenes, so give every one a light, saturated fill with a dark outline.
+- Row 1: a little fluffy rain cloud. Left = with three small blue rain drops falling below it; right = the same cloud without drops.
+- Row 2: an ember spark (glowing orange-yellow with a bright core). Left = a larger spark; right = a smaller spark.
+- Row 3: musical notes with a light cream-white fill and dark outline. Left = a single eighth note; right = two beamed eighth notes.
+- Row 4: a small colourful butterfly. Left = wings open; right = wings closed (folded up).
+Background: one flat even mid-grey everywhere. No text, no labels, no borders.

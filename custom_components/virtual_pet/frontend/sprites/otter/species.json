@@ -31,5 +31,6 @@
   "murk": "murk",
   "backgrounds": { "day": "bg_day", "night": "bg_night", "rain": "bg_rain", "dim": "bg_night" },
   "words": { "food": "clams", "home": "kelp bed" },
-  "reactions": { "feed": "rock", "snack": "rock", "praise": "hold_paws", "blanket": "kelp_wrap" }
+  "reactions": { "feed": "rock", "snack": "rock", "praise": "hold_paws", "blanket": "kelp_wrap" },
+  "head": { "baby": [150, 116], "child": [164, 104], "teen": [180, 68], "adult": [184, 72] }
 }

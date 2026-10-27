@@ -1,0 +1,7 @@
+Use your image generation tool to draw ONE square image and save it as cloud.png in the current directory.
+
+A 2 x 2 grid of equal square cells, tiny pixel sprites in EXACTLY the style of the attached reference sheet (big hard square pixels, 1-art-pixel dark outline, limited palette). Each sprite small (about 16 art pixels wide) and centred in its cell, with a WIDE empty margin on every side: nothing may come near a cell edge.
+- top-left: a little soft grey-white rain cloud with three small bright blue rain drops falling just below it (the drops close under the cloud, well inside the cell).
+- top-right: the same cloud with no drops.
+- bottom row: leave both cells empty grey.
+Background: one flat even mid-grey everywhere. No text, no labels, no borders.

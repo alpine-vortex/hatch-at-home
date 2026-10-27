@@ -30,5 +30,6 @@
   },
   "backgrounds": { "day": "gecko/bg_vivarium", "night": "gecko/bg_night", "rain": "gecko/bg_rain", "dim": "gecko/bg_dim" },
   "words": { "food": "crickets", "home": "burrow" },
-  "reactions": { "won": "wave", "praise": "wave", "scold": "hair_flick" }
+  "reactions": { "won": "wave", "praise": "wave", "scold": "hair_flick" },
+  "head": { "baby": [101, 130], "child": [96, 116], "teen": [90, 88], "adult": [80, 96] }
 }

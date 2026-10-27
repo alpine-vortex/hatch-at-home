@@ -29,5 +29,6 @@
   },
   "backgrounds": { "day": "kitten/bg_day", "night": "kitten/bg_night", "rain": "kitten/bg_rain", "dim": "kitten/bg_dim" },
   "words": { "food": "hay", "home": "hutch" },
-  "reactions": { "play": "binky", "won": "binky", "praise": "flop", "scold": "thump" }
+  "reactions": { "play": "binky", "won": "binky", "praise": "flop", "scold": "thump" },
+  "head": { "baby": [148, 84], "child": [148, 76], "teen": [152, 36], "adult": [158, 72] }
 }

@@ -1,0 +1,8 @@
+Use your image generation tool to draw ONE image (portrait 2:3) and save it as sheet_b.png in the current directory.
+
+A sheet of 4 rows x 2 columns of equal square cells: tiny decorative flair sprites for a virtual pet, in EXACTLY the chunky pixel style of the attached probe sheet (big hard square pixels, 1-art-pixel DARK outline, limited palette, no anti-aliasing). Each sprite SMALL and simple (about 16 art pixels across unless said), centred with a WIDE empty margin on every side; nothing near a cell edge. Light, saturated fills with a dark outline so each reads on both dark night scenes and bright green scenes.
+- Row 1: a firefly with a glowing yellow-green tail. Left = glow ON (bright halo pixels); right = glow OFF (tail dim, no halo).
+- Row 2: Left = a small rising sun: a half-disc on a short horizon line with rays; right = a bright golden sun glint / sparkle.
+- Row 3: Left = a tiny broom with a small sparkle beside it; right = a small striped ball.
+- Row 4: Left = a small plump floor cushion with a button; right = a few fluffy popcorn pieces in a little pile.
+Background: one flat even mid-grey everywhere. No text, no labels, no borders.

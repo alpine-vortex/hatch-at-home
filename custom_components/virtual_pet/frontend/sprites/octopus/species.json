@@ -30,5 +30,6 @@
   "murk": "otter/murk",
   "backgrounds": { "day": "otter/bg_day", "night": "otter/bg_night", "rain": "otter/bg_rain", "dim": "otter/bg_night" },
   "words": { "food": "shrimp", "home": "den" },
-  "reactions": { "play": "jar", "won": "colour_shift", "praise": "colour_shift", "scold": "ink" }
+  "reactions": { "play": "jar", "won": "colour_shift", "praise": "colour_shift", "scold": "ink" },
+  "head": { "baby": [130, 116], "child": [130, 100], "teen": [122, 76], "adult": [122, 108] }
 }

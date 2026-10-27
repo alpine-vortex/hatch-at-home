@@ -1,0 +1,8 @@
+Use your image generation tool to draw ONE image (portrait 2:3) and save it as sheet_a.png in the current directory.
+
+A sheet of 4 rows x 2 columns of equal square cells: tiny decorative flair sprites for a virtual pet, in EXACTLY the chunky pixel style of the attached probe sheet (big hard square pixels, 1-art-pixel DARK outline, limited palette, no anti-aliasing). Each sprite SMALL and simple (about 16 art pixels across unless said), centred with a WIDE empty margin on every side; nothing near a cell edge. Light, saturated fills with a dark outline so each reads on both dark night scenes and bright green scenes.
+- Row 1: a tiny zigzag lightning bolt. Left = bright yellow with a white core; right = the same bolt dim (muted yellow).
+- Row 2: Left = a pale yellow crescent moon; right = a tiny four-point twinkle star (about 7 art pixels).
+- Row 3: Left = a white-and-icy-blue snowflake; right = a smaller snowflake (about 9 art pixels).
+- Row 4: a falling autumn leaf (orange-red). Left = tilted one way; right = tumbled the other way, flipped.
+Background: one flat even mid-grey everywhere. No text, no labels, no borders.
