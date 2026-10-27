@@ -247,7 +247,10 @@ async function main() {
   });
   const quietBubble = await bubble();
   let idle = "";
-  for (let i = 0; i < 140 && !idle; i++) {
+  // The first idle move is due 10-35 s in, but it's skipped if the pet is busy
+  // then (the greeting's bubble, a call), and the next is 20-45 s later: allow
+  // 90 s rather than the 56 s that a skipped first move could overrun.
+  for (let i = 0; i < 225 && !idle; i++) {
     await page.waitForTimeout(400);
     idle = await idleSign();
     const said = await bubble();
@@ -298,9 +301,15 @@ async function main() {
   await page.waitForTimeout(800);
   const hopsAtFirst = await cur().locator(".pet.hop").count();
   await page.waitForTimeout(11000);
-  const hopsLater = await cur().locator(".pet.hop").count();
-  check("an excited bounce stops by itself", hopsAtFirst === 1 && hopsLater === 0,
-    `bouncing at first: ${hopsAtFirst === 1}, after 11 s: ${hopsLater === 1}`);
+  // Idle life also hops now and then while excited (1.4 s, at most every 20 s),
+  // so look for a moment without a hop over the next 3 s, not at one instant.
+  let stopped = false;
+  for (let i = 0; i < 8 && !stopped; i++) {
+    stopped = (await cur().locator(".pet.hop").count()) === 0;
+    if (!stopped) await page.waitForTimeout(400);
+  }
+  check("an excited bounce stops by itself", hopsAtFirst === 1 && stopped,
+    `bouncing at first: ${hopsAtFirst === 1}, stopped after 11 s: ${stopped}`);
 
   // Weather on screen: thunder flashes, wind blows.
   await inject(pet["sensor.mood"], { state: "content", attributes: { flags: ["storm", "windy"] } });
