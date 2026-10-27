@@ -359,6 +359,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   A call's notification has buttons that answer it (Feed, Clean, Medicine, Lights
   out; Play or Scold for a plea to play), and it clears itself once the call is
   answered or missed. Fast-forward never notifies.
+- **Sounds:** off until you turn them on. On the status screen, tap "sounds here"
+  for little chirps when the pet calls, hatches, learns a trait or wins a game. It
+  only changes this browser, and the pet stays quiet while it sleeps and from 21:00
+  to 08:00.
 - **A welcome for every new pet.** Adding a pet through the integration tells the
   whole house: "Pip has been welcomed into the home." It goes to every phone with
   the Home Assistant app, whether or not anyone tapped "notify me", and to the
@@ -373,7 +377,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 ## Talking to it through Assist
 
 Ask "how's Pip?" and the pet answers in its own words ("Pip is hungry: a little
-peckish."). Ask "feed Pip" and it's the same as pressing the button, logged under
+peckish."), and names its traits if it has learned any. Ask "feed Pip" and it's the same as pressing the button, logged under
 your name.
 
 - **LLM agents** (Claude, OpenAI, Ollama and others set to control Home Assistant)
