@@ -292,7 +292,7 @@ async function main() {
   let hlRounds = 0;
   const numbers = [];
   for (let r = 0; r < 5 && !(await cur().locator(".game").isHidden()); r++) {
-    const shown = Number(await cur().locator(".gnum").innerText());
+    const shown = Number(await cur().locator(".gnum").getAttribute("data-n"));
     numbers.push(shown);
     if (r === 2) await shot("04c-higher-lower");
     await cur().locator(shown > 5 ? ".gl" : ".gr").click();

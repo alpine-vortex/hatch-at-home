@@ -144,6 +144,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "memories",
             "notify_users",
             "upbringing_score",
+            "games",
         }
     )
 
@@ -181,6 +182,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
                 self.pet.egg_choice or ""
             ),
             "memories": [dict(m) for m in self.pet.memories],
+            "games": {kind: dict(counts) for kind, counts in self.pet.games.items()},
             # Final once adult; before that, what it's on track for.
             "upbringing": (
                 model.upbringing(self.pet)
