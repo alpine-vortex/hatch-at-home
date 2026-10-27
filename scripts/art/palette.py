@@ -1,10 +1,16 @@
 """Store PNGs with an exact colour palette, losslessly (smaller downloads).
 
 Usage: palette.py <folder> [...]   (recursive; --check only reports)
+       palette.py --lossy <file.png> [...]   (backgrounds: 256 colours)
 Pixel art uses few colours but arrives as full-colour RGBA. A file with 256
 colours or fewer is rewritten as a palette PNG with per-colour alpha, and kept
 only if it decodes to exactly the same pixels (fully clear pixels count as
 equal whatever their hidden colour) and is smaller. Anything else is left as is.
+
+--lossy is for the painted backgrounds (thousands of colours): it reduces each
+named file to its 256 best colours, without dithering (dither speckles pixel
+art). The owner approved this for the backgrounds on 2026-10-27 after a
+side-by-side; a new background should get the same look before it's reduced.
 """
 
 import io
@@ -42,7 +48,29 @@ def palette_png(path: str) -> bytes | None:
     return data
 
 
+def lossy_png(path: str) -> bytes:
+    img = Image.open(path).convert("RGB")
+    out = img.quantize(
+        colors=256, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE
+    )
+    buf = io.BytesIO()
+    out.save(buf, "PNG", optimize=True)
+    return buf.getvalue()
+
+
 def main() -> None:
+    if "--lossy" in sys.argv:
+        before = after = 0
+        for path in (a for a in sys.argv[1:] if a != "--lossy"):
+            data, size = lossy_png(path), os.path.getsize(path)
+            before += size
+            if len(data) < size:
+                with open(path, "wb") as f:
+                    f.write(data)
+                size = len(data)
+            after += size
+        print(f"backgrounds: {before / 1048576:.2f} MB -> {after / 1048576:.2f} MB")
+        return
     check = "--check" in sys.argv
     folders = [a for a in sys.argv[1:] if a != "--check"]
     before = after = done = 0
