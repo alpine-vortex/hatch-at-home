@@ -307,6 +307,46 @@ async function main() {
   check("the picker remembers the last game",
     await evaluate(() => localStorage.getItem("hatch-last-game")) === "higher_lower");
 
+  // Catch (prototype, behind experimental_catch): the card times the taps, so
+  // play it from inside the page: tap mid-window on the right side, leave the
+  // bees alone, and tap one round too soon on purpose (so 4 of 5).
+  await page.waitForTimeout(3500);
+  await page.locator("hatch-pet-card").evaluate((el) => el.setConfig({ ...el._config, experimental_catch: true }));
+  await inject(pet["sensor.energy"], { state: "80" }); // the card turns play down when tired
+  await page.waitForTimeout(800);
+  await button(2).click();
+  await page.waitForTimeout(600);
+  check("catch joins the picker with the option",
+    (await cur().locator(".gpick button").count()) === 3);
+  await cur().locator('.gpick [data-game="catch"]').click();
+  const catchShot = page.waitForTimeout(2600).then(() => shot("04d-catch"));
+  const catchRounds = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const out = [];
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    for (let i = 0; i < 5; i++) {
+      let c;
+      for (let w = 0; w < 600 && !((c = s.game?.cur) && !c.done && s.game.round === i); w++) await frame();
+      if (!c) return out;
+      const early = i === 2 && !c.decoy;
+      const due = early ? 0.05 : c.travel - c.window / 2;
+      while (!c.done && (performance.now() - c.start) / 1000 < due) await frame();
+      if (!c.decoy && !c.done) s.gameBox.querySelector(c.side === "left" ? ".gl" : ".gr").click();
+      while (!c.done) await frame();
+      out.push({ decoy: c.decoy, early, wins: s.game?.wins });
+      for (let w = 0; w < 200 && s.game && s.game.round === i + 1 && s.game.cur === c; w++) await frame();
+    }
+    return out;
+  });
+  await catchShot;
+  await page.waitForTimeout(1500);
+  const catchLine = await bubble();
+  const expected = 5 - catchRounds.filter((r) => r.early).length;
+  check("catch plays five timed rounds", catchRounds.length === 5 && catchLine.startsWith(`${expected}/5 caught`),
+    `${catchRounds.map((r) => (r.decoy ? "bee" : r.early ? "early" : "catch")).join(" ")} -> ${catchLine}`);
+  check("catch keeps a best score",
+    Number(await evaluate(() => localStorage.getItem("hatch-best-catch"))) >= expected);
+
   // 4. Moments make the pet react.
   for (const [type, extra, expect] of [
     ["care_miss", { reason: "hunger" }, "nobody came"],
