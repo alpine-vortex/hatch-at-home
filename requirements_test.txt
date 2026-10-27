@@ -3,3 +3,7 @@ pytest-homeassistant-custom-component==0.13.375
 # The integration depends on frontend; keep in step with HA's frontend manifest.
 home-assistant-frontend==20260930.5
 ruff
+# The conversation agent, for the Assist tests; keep in step with HA's conversation manifest.
+gazetteer-matcher==1.1.0
+hassil==3.12.1
+home-assistant-intents==2026.10.6
