@@ -102,8 +102,10 @@ FAST_FORWARD_SCHEMA = vol.Schema(
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Serve the card, load it on every dashboard, register the debug service."""
+    # Long cache headers: every URL the card asks for carries ?v=VERSION, so an
+    # update fetches new files and a reload doesn't re-ask for 1,400 sprites.
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(FRONTEND_URL, str(Path(__file__).parent / "frontend"), False)]
+        [StaticPathConfig(FRONTEND_URL, str(Path(__file__).parent / "frontend"), True)]
     )
     # The version in the URL makes browsers fetch the new card after an update.
     add_extra_js_url(hass, f"{FRONTEND_URL}/{CARD_FILENAME}?v={VERSION}")

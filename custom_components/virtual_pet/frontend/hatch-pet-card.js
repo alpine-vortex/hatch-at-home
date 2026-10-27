@@ -237,6 +237,22 @@ function shade(hex, amount) {
   return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
 }
 
+// The caption ink for a shell: its own colour, darker, and on a dark shell a
+// light tint, whichever first reads at 4.5:1 (WCAG AA for small text).
+function deviceInk(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const rgb = [n >> 16, (n >> 8) & 255, n & 255];
+  const lum = (c) => c.reduce((s, v, i) => {
+    const x = v / 255;
+    return s + [0.2126, 0.7152, 0.0722][i] * (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4);
+  }, 0);
+  const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  const options = [0.28, 0.12, 0].map((k) => rgb.map((v) => Math.round(v * k)))
+    .concat([0.92, 1].map((k) => rgb.map((v) => Math.round(v + (255 - v) * k))));
+  const ink = options.find((c) => ratio(c, rgb) >= 4.5) || options[2];
+  return `rgb(${ink.join(",")})`;
+}
+
 // A trait's flair sprite as a small icon (its first frame or big variant).
 function traitIcon(trait) {
   const f = FLAIR[trait];
@@ -246,7 +262,7 @@ function traitIcon(trait) {
 // Icon and "night owl ★★", with "↓" when it was handed down from the parent.
 function traitLabel(trait, level, inherited) {
   return `${traitIcon(trait)}${inherited ? "↓" : ""}${escape(trait.replaceAll("_", " "))} ` +
-    `${"★".repeat(level || 1)}`;
+    `<span role="img" aria-label="level ${level || 1}">${"★".repeat(level || 1)}</span>`;
 }
 
 // Games finished, all kinds together (the journal's game counts).
@@ -288,6 +304,8 @@ const STYLE = `
     transition: transform .5s cubic-bezier(.2,.8,.2,1); }
   .slide { flex-shrink: 0; transition: opacity .5s, transform .5s; transform-origin: 50% 100%; }
   .slide.away-slide { opacity: .5; transform: scale(.94); }
+  /* Loops pause where nobody watches: the neighbours, or the card scrolled away. */
+  .slide.away-slide .screen *, ha-card.offscreen .screen * { animation-play-state: paused !important; }
   .foot { display: flex; align-items: center; justify-content: space-between; padding: 0 14px 14px; }
   .nav { width: 44px; height: 44px; border: none; border-radius: 22px; cursor: pointer;
     display: flex; align-items: center; justify-content: center; color: var(--hp-ink);
@@ -296,7 +314,7 @@ const STYLE = `
   .foot { gap: 8px; }
   .nav { flex-shrink: 0; }
   .dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 4px; min-width: 0; }
-  .dot { width: 22px; height: 24px; border: none; padding: 0; cursor: pointer;
+  .dot { width: 24px; height: 24px; border: none; padding: 0; cursor: pointer;
     background: none; display: flex; align-items: center; justify-content: center; }
   .dot::before { content: ""; width: 10px; height: 10px; border-radius: 5px;
     background: color-mix(in srgb, var(--hp-ink) 55%, transparent); transition: width .3s; }
@@ -432,17 +450,20 @@ const STYLE = `
     background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a; border-radius: 8px;
     font-size: 14px; line-height: 1.2; box-shadow: 3px 3px 0 #3a2a1a; }
   .bubble:empty { display: none; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
+    white-space: nowrap; }
   /* The left/right game: two big guess buttons and a score over the scene. */
   .game { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
   .game[hidden] { display: none; }
   .game button { pointer-events: auto; position: absolute; display: grid; place-items: center;
     min-width: 44px; min-height: 44px; border-radius: 50%; border: 2px solid #3a2a1a;
     background: #fffdf5; color: #3a2a1a; box-shadow: 2px 2px 0 #3a2a1a; cursor: pointer; padding: 0; }
-  .game button:disabled { opacity: .5; cursor: default; }
-  .game button:focus-visible { outline: 3px solid #fffdf5; outline-offset: 2px; }
+  .game button[aria-disabled="true"] { opacity: .5; cursor: default; }
+  .game button:focus-visible { outline: 3px solid #fffdf5; outline-offset: 2px;
+    box-shadow: 0 0 0 6px #1d2a22; }
   .game .gl { left: 4%; bottom: 8%; }
   .game .gr { right: 4%; bottom: 8%; }
-  .game .gx { right: 4%; top: 6%; min-width: 32px; min-height: 32px; font: inherit; font-size: 14px; }
+  .game .gx { right: 4%; top: 6%; min-width: 44px; min-height: 44px; font: inherit; font-size: 14px; }
   .game .gpick { position: absolute; inset: 22% 0 0; display: flex; flex-direction: column; gap: 8px;
     align-items: center; justify-content: center; }
   .game .gpick[hidden], .game .gnum[hidden], .game .gl[hidden], .game .gr[hidden] { display: none; }
@@ -525,13 +546,13 @@ const STYLE = `
   /* The fan: wind lines cross the scene and the pet sways. */
   .breeze { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1; }
   .screen.breezy .breeze, .screen.windy .breeze { display: block; }
-  .breeze span { position: absolute; left: -40%; height: 2px; width: 34%; border-radius: 1px;
+  .breeze span { position: absolute; left: 0; height: 2px; width: 34%; border-radius: 1px;
     background: linear-gradient(90deg, transparent, rgba(255,255,255,.85) 45%, rgba(255,255,255,.6) 80%, transparent);
     animation: wind 1.1s linear infinite; }
   .breeze span:nth-child(1) { top: 30%; }
   .breeze span:nth-child(2) { top: 48%; width: 24%; animation-delay: .35s; }
   .breeze span:nth-child(3) { top: 64%; animation-delay: .7s; }
-  @keyframes wind { to { left: 110%; } }
+  @keyframes wind { from { transform: translateX(-120%); } to { transform: translateX(330%); } }
   .screen.breezy .pet { animation: sway .7s ease-in-out infinite; }
   @keyframes sway { 50% { transform: rotate(-4deg); } }
   /* Thunder: now and then the scene flashes. */
@@ -582,10 +603,12 @@ const STYLE = `
   .bar div { height: 100%; background: #2f3a24; }
   .hearts { letter-spacing: 2px; }
   .hearts .off { opacity: .25; }
-  .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 2px 0;
+  .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 6px 0;
+    min-height: 28px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
   .bell { border: 2px solid #2f3a24; border-radius: 10px; background: none; color: inherit;
-    font: 400 12px 'Tiny5', monospace; padding: 1px 10px; min-width: 44px; cursor: pointer; }
+    font: 400 12px 'Tiny5', monospace; padding: 3px 10px; min-width: 44px; min-height: 26px;
+    cursor: pointer; }
   .bell[aria-pressed="true"] { background: #2f3a24; color: #e9e2c6; }
   .jhead { display: flex; justify-content: space-between; align-items: baseline; }
   .jgrid { display: flex; flex-wrap: wrap; gap: 6px 10px; }
@@ -594,7 +617,7 @@ const STYLE = `
   .jtile img { width: 48px; height: 48px; image-rendering: pixelated; }
   .jtile.locked img { filter: brightness(0); opacity: .3; }
   .jlist { font-size: 12px; opacity: .9; display: flex; flex-direction: column; gap: 3px; }
-  .jlist .gt { opacity: .8; padding-left: 10px; }
+  .jlist .gt { padding-left: 10px; }
   .ticon { width: 14px; height: 14px; object-fit: contain; vertical-align: -3px; margin-right: 2px;
     image-rendering: pixelated; }
   .tnext { display: flex; align-items: center; gap: 4px; min-width: 0; }
@@ -660,6 +683,7 @@ class HatchPetCard extends HTMLElement {
   setConfig(config) {
     this._config = config || {};
     this._sig = null;
+    this._epoch = (this._epoch || 0) + 1; // every slide draws again
     this._index = this._index || 0;
   }
 
@@ -693,6 +717,8 @@ class HatchPetCard extends HTMLElement {
   disconnectedCallback() {
     clearInterval(this._timer);
     this._resize?.disconnect();
+    // A game (Catch's animation loop above all) stops with the card.
+    for (const s of this._slides || []) if (s.game) this._endGame(s, null);
   }
 
   // --- Finding the pets --------------------------------------------------------
@@ -788,6 +814,8 @@ class HatchPetCard extends HTMLElement {
     this._visible = true;
     new IntersectionObserver((entries) => {
       this._visible = entries.some((e) => e.isIntersecting);
+      this._card.classList.toggle("offscreen", !this._visible); // pauses the loops
+      if (this._visible && this._dirty) this._update(); // catch up on what was skipped
     }).observe(this._card);
     this._slides = [];
   }
@@ -804,7 +832,7 @@ class HatchPetCard extends HTMLElement {
           <div class="bezel"><div class="screen">
             <img class="bg" alt="">
             <img class="awaysign" alt=""><div class="awaylabel"></div>
-            <img class="poop p0" alt=""><img class="poop p1" alt=""><img class="poop p2" alt="">
+            <img class="poop p0" alt="mess"><img class="poop p1" alt="mess"><img class="poop p2" alt="mess">
             <img class="perch" alt="">
             <img class="pet" alt="">
             <img class="prop" alt="">
@@ -812,8 +840,9 @@ class HatchPetCard extends HTMLElement {
             <div class="rain"></div>
             <div class="flash"></div>
             <div class="breeze"><span></span><span></span><span></span></div>
-            <img class="attention" alt="">
+            <img class="attention" alt="wants attention">
             <div class="bubble"></div>
+            <div class="sr" role="status"></div>
             <div class="game" hidden>
               <div class="gpick" role="group" aria-label="Pick a game">${this._games().map((g) =>
                 `<button data-game="${g.key}">${g.label}</button>`).join("")}</div>
@@ -839,7 +868,7 @@ class HatchPetCard extends HTMLElement {
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
-      catchEl: q(".gcatch"),
+      catchEl: q(".gcatch"), live: q(".sr[role=status]"),
     };
     slide.querySelectorAll("img").forEach((img) => img.addEventListener("error", () => {
       const src = img.getAttribute("src");
@@ -854,8 +883,19 @@ class HatchPetCard extends HTMLElement {
       for (const c of PERCH_MOVES) s.perch.classList.toggle(c, s.pet.classList.contains(c));
       s.perch.style.scale = s.pet.style.scale;
     }).observe(s.pet, { attributes: true, attributeFilter: ["class", "style"] });
+    // What the pet says to someone (a refusal, a game's result, a moment) is read
+    // out by screen readers; its idle chatter isn't. Only the pet on show.
+    new MutationObserver(() => {
+      const text = s.bubble.textContent;
+      if (s.sayUntil && s === this._slides[this._index] && s.live.textContent !== text) {
+        s.live.textContent = text;
+      }
+    }).observe(s.bubble, { childList: true, characterData: true, subtree: true });
     // Taps on the game mustn't reach the screen behind (which opens the status).
     s.gameBox.addEventListener("click", (e) => e.stopPropagation());
+    s.gameBox.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && s.game) this._endGame(s, "maybe later!");
+    });
     q(".gl").addEventListener("click", () => this._guess(s, "left"));
     q(".gr").addEventListener("click", () => this._guess(s, "right"));
     q(".gx").addEventListener("click", () => this._endGame(s, "maybe later!"));
@@ -869,7 +909,8 @@ class HatchPetCard extends HTMLElement {
       if (key === "lay_egg" && !(Date.now() < s.confirmUntil)) {
         s.confirmUntil = Date.now() + CONFIRM_MS;
         s.request.textContent = "sure? tap again";
-        setTimeout(() => { this._sig = null; this._update(); }, CONFIRM_MS + 50);
+        s.request.setAttribute("aria-label", "Sure? Press again to lay an egg");
+        setTimeout(() => this._redraw(s), CONFIRM_MS + 50);
         return;
       }
       s.confirmUntil = 0;
@@ -918,6 +959,11 @@ class HatchPetCard extends HTMLElement {
         : this._hass.states[ids[k]]?.last_updated))) +
       (this._hass.states["sun.sun"]?.state || "");
     if (sig === this._sig) return;
+    if (this._visible === false) {
+      this._dirty = true; // scrolled away: draw when it's back (the observer calls)
+      return;
+    }
+    this._dirty = false;
     this._sig = sig;
 
     if (!devices.length) {
@@ -966,7 +1012,12 @@ class HatchPetCard extends HTMLElement {
           if (s.speciesId === speciesId) s.speciesId = null; // try again on the next update
         });
       }
-      if (s.species) {
+      // Only a slide whose own pet (or the sun) changed is drawn again.
+      const own = Object.values(devices[i]).map((id) => this._hass.states[id]?.last_updated).join() +
+        `|${this._hass.states["sun.sun"]?.state}|${s.species ? s.speciesId : ""}|${this._epoch || 0}` +
+        `|${this._hass.devices?.[devices[i].device]?.name_by_user}`;
+      if (s.species && own !== s.drawnSig) {
+        s.drawnSig = own;
         try {
           this._renderSlide(s);
         } catch (err) {
@@ -976,6 +1027,14 @@ class HatchPetCard extends HTMLElement {
     }
     this._card.classList.toggle("single", devices.length < 2);
     this._renderShelf();
+  }
+
+  // Draw again now, though nothing in HA changed: one slide, or all of them.
+  _redraw(s = null) {
+    if (s) s.drawnSig = null;
+    else this._epoch = (this._epoch || 0) + 1;
+    this._sig = null;
+    this._update();
   }
 
   // A slide that now shows another pet starts fresh: nothing of the last
@@ -989,6 +1048,7 @@ class HatchPetCard extends HTMLElement {
     s.wasCalling = undefined; // a call already on doesn't chirp
     s.journal = false;
     s.statusHtml = null;
+    s.drawnSig = null;
   }
 
   _state(s, key) {
@@ -1010,8 +1070,7 @@ class HatchPetCard extends HTMLElement {
     const compact = this._slideW < 280;
     if (compact !== this._card.classList.contains("compact")) {
       this._card.classList.toggle("compact", compact);
-      this._sig = null; // the trim is sized for the layout: draw again
-      this._update();
+      this._redraw(); // the trim is sized for the layout: draw every slide again
     }
     for (const s of this._slides) s.el.style.width = `${this._slideW}px`;
     this._renderShelf();
@@ -1043,7 +1102,8 @@ class HatchPetCard extends HTMLElement {
     this._card.querySelector(".title").textContent = device?.name_by_user || device?.name || "Pet";
     const emblem = this._card.querySelector(".emblem");
     if (world.emblem) {
-      emblem.src = `${BASE}/ui/${world.emblem}.png?v=${VERSION}`;
+      const src = `${BASE}/ui/${world.emblem}.png?v=${VERSION}`;
+      if (emblem.getAttribute("src") !== src) emblem.src = src;
       emblem.style.display = "";
     } else {
       emblem.style.display = "none";
@@ -1051,7 +1111,8 @@ class HatchPetCard extends HTMLElement {
     this._card.querySelectorAll(".deco").forEach((img, i) => {
       const name = world.deco?.[i];
       img.style.display = name ? "" : "none";
-      if (name) img.src = `${BASE}/ui/${name}.png?v=${VERSION}`;
+      const src = name && `${BASE}/ui/${name}.png?v=${VERSION}`;
+      if (src && img.getAttribute("src") !== src) img.src = src;
     });
     // The world is on the device's plate and the emblem, so the line stays short.
     this._card.querySelector(".sub").textContent = [kind,
@@ -1134,7 +1195,7 @@ class HatchPetCard extends HTMLElement {
     dev.querySelector(".feet").style.display = shape === "tank" ? "" : "none";
     dev.style.setProperty("--d-shell", color);
     dev.style.setProperty("--d-dark", shade(color, 0.72));
-    dev.style.setProperty("--d-ink", shade(color, 0.28));
+    dev.style.setProperty("--d-ink", deviceInk(color));
     dev.style.setProperty("--d-btn-shadow", shade(color, 0.6));
     dev.style.setProperty("--d-bezel", shell.bezel || "#f3ead7");
     s.label.textContent = world.label || world.name;
@@ -1191,7 +1252,7 @@ class HatchPetCard extends HTMLElement {
       s.frames = [];
       this._show(s, s.pet, null);
       this._show(s, s.awaysign, sp.props?.away);
-      s.awaylabel.textContent = "At the sitter's";
+      s.awaylabel.textContent = "at the sitter's";
     } else {
       this._show(s, s.awaysign, null);
       s.awaylabel.textContent = "";
@@ -1265,7 +1326,10 @@ class HatchPetCard extends HTMLElement {
       const b = s.buttons[action.key];
       const ent = this._state(s, `button.${action.key}`);
       b.disabled = !ent || ent.state === "unavailable" || egg || away;
-      b.classList.toggle("wanted", !b.disabled && !asleep && !!action.wants && flags.includes(action.wants));
+      const wanted = !b.disabled && !asleep && !!action.wants && flags.includes(action.wants);
+      b.classList.toggle("wanted", wanted);
+      if (wanted) b.setAttribute("aria-description", "wanted now");
+      else b.removeAttribute("aria-description");
     }
     const wanted = (mood?.attributes.requests || []).find((r) => this._state(s, `button.${r}`));
     s.request.classList.toggle("show", !!wanted && !away && !asleep);
@@ -1273,7 +1337,8 @@ class HatchPetCard extends HTMLElement {
       s.request.dataset.key = wanted;
       const confirming = wanted === "lay_egg" && Date.now() < s.confirmUntil;
       s.request.textContent = confirming ? "sure? tap again" : REQUEST_LABELS[wanted] || `${wanted}?`;
-      s.request.setAttribute("aria-label", REQUEST_ARIA[wanted] || `Give the pet a ${wanted}`);
+      s.request.setAttribute("aria-label", confirming ? "Sure? Press again to lay an egg"
+        : REQUEST_ARIA[wanted] || `Give the pet a ${wanted}`);
     }
 
     const lights = s.buttons.lights;
@@ -1346,11 +1411,12 @@ class HatchPetCard extends HTMLElement {
   _tick() {
     if (!this._slides || !this._visible || document.hidden) return;
     this._ticks = (this._ticks || 0) + 1;
-    for (const s of this._slides) {
+    this._slides.forEach((s, i) => {
       if (s.poseUntil && Date.now() > s.poseUntil) s.poseUntil = 0;
       if (s.excitedSince && Date.now() - s.excitedSince >= BOUNCE_MS) s.pet.classList.remove("hop");
       const frames = this._frames(s);
-      if (frames.length && !(s.asleep && this._ticks % 2)) {
+      const seen = Math.abs(i - this._index) <= 1; // the pet on show and the peeking ones
+      if (seen && frames.length && !(s.asleep && this._ticks % 2)) {
         s.frame = (s.frame + 1) % frames.length;
         this._show(s, s.pet, frames[s.frame]);
       }
@@ -1366,9 +1432,10 @@ class HatchPetCard extends HTMLElement {
       }
       if (!s.sayUntil && s.species) {
         const mood = this._state(s, "sensor.mood");
-        s.bubble.textContent = this._say(s, mood, mood?.state === "away");
+        const text = this._say(s, mood, mood?.state === "away");
+        if (s.bubble.textContent !== text) s.bubble.textContent = text;
       }
-    }
+    });
   }
 
   // Nothing else is going on: is the pet free for a small idle behaviour?
@@ -1525,7 +1592,7 @@ class HatchPetCard extends HTMLElement {
         break;
       case "trait_learned":
       case "trait_deepened":
-        say(`${m.type === "trait_learned" ? "new trait" : "deeper"}: ` +
+        say(`${m.type === "trait_learned" ? "new trait" : "deeper trait"}: ` +
           `${String(m.trait).replaceAll("_", " ")} ${"★".repeat(m.level || 1)}`);
         this._sparkle(s);
         this._chirp(s, "trait");
@@ -1566,7 +1633,9 @@ class HatchPetCard extends HTMLElement {
         this._look(s, 2500);
         break;
       case "watching":
-        say(pick([`ooh, ${m.title}!`, `is this ${m.title}?`, `${m.title}! I love this one`]));
+        // A long title gets the short lines, so the bubble leaves the pet in view.
+        say(pick([`ooh, ${m.title}!`, `is this ${m.title}?`,
+          m.title.length <= 40 ? `${m.title}! I love this one` : `ooh, ${m.title}!`]));
         this._animate(s, s.pet, "perk", 320);
         break;
       case "listening":
@@ -1577,11 +1646,14 @@ class HatchPetCard extends HTMLElement {
       case "news": { // virtual_pet.share_news: a passing moment, like a TV title
         const h = String(m.headline || "");
         if (!h || s.game) break; // a game's prompt owns the bubble: dropped, like asleep
-        const lines = [`did you hear? ${h}`, `did you hear? ${h}`, `guess what? ${h}`,
-          `ooh, news! ${h}`];
+        // A long headline gets only the shortest lead-in (the bubble holds ~60).
+        const lines = h.length > 45 ? [`news! ${h}`]
+          : [`did you hear? ${h}`, `did you hear? ${h}`, `guess what? ${h}`, `ooh, news! ${h}`];
         // A short topic only, so the bubble stays small ("World News news!" never).
         const topic = String(m.topic || "");
-        if (topic && topic.length <= 12 && !/news$/i.test(topic)) lines.push(`${topic} news! ${h}`);
+        if (topic && topic.length <= 12 && h.length <= 45 && !/news$/i.test(topic)) {
+          lines.push(`${topic} news! ${h}`);
+        }
         const line = pick(lines);
         say(line, 4000 + line.length * 50); // long enough to read, never long
         this._animate(s, s.pet, "perk", 320);
@@ -1685,7 +1757,8 @@ class HatchPetCard extends HTMLElement {
     const notifying = (this._state(s, "sensor.life_stage")?.attributes.notify_users || [])
       .includes(this._hass.user?.id);
     const ic = (n) => pixelIcon(n, 18);
-    const bar = (v) => v === null ? "–" : `<div class="bar"><div style="width:${v}%"></div></div>`;
+    const bar = (v) => v === null ? "–"
+      : `<div class="bar" role="img" aria-label="${Math.round(v)} of 100"><div style="width:${v}%"></div></div>`;
     const lines = log.slice(0, 3).map((e) =>
       `<div>${escape(e.action.replace("_", " "))}${e.by ? ` by ${escape(e.by)}` : ""} · ${timeAgo(e.at)}` +
       `${e.result && e.result !== "ok" ? ` (${escape(e.result.replace("_", " "))}${e.score ? ` ${escape(e.score)}` : ""})` : ""}</div>`);
@@ -1711,9 +1784,9 @@ class HatchPetCard extends HTMLElement {
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
-      ${row(null, "notify me", `<span><button class="bell" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
-      ${row(null, "sounds here", `<span><button class="bell sound" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
-      <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>
+      ${row(null, "notify me", `<span><button class="bell" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
+      ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
+      <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>`;
     if (!this._setStatus(s, html)) return;
     this._journalLink(s, true);
@@ -1755,8 +1828,13 @@ class HatchPetCard extends HTMLElement {
   // its scroll position and focus survive the update).
   _setStatus(s, html) {
     if (s.statusHtml === html) return false;
+    // Keep focus on the same control (a toggle, the journal link) across the redraw.
+    const active = this.shadowRoot?.activeElement;
+    const keep = s.status.contains(active) && active.className
+      ? `.${active.className.trim().split(/\s+/).join(".")}` : null;
     s.statusHtml = html;
     s.status.innerHTML = html;
+    if (keep) s.status.querySelector(keep)?.focus({ preventScroll: true });
     return true;
   }
 
@@ -1811,7 +1889,7 @@ class HatchPetCard extends HTMLElement {
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
       <div class="jgrid">${tiles.join("")}</div>
-      <div class="jlist">${lines.join("")}${past.length < 2 ? "<div class=\"gt\">A week into adulthood, a pet can lay an egg.</div>" : ""}${this._memories(stage.memories)}</div>
+      <div class="jlist">${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
       <button class="jlink">‹ status</button>`;
     if (this._setStatus(s, html)) this._journalLink(s, false);
   }
@@ -1932,7 +2010,7 @@ class HatchPetCard extends HTMLElement {
     const katch = view === "catch";
     gl.setAttribute("aria-label", hl ? "Guess lower" : katch ? "Catch it on the left" : "Guess left");
     gr.setAttribute("aria-label", hl ? "Guess higher" : katch ? "Catch it on the right" : "Guess right");
-    box.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });
+    box.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
   }
 
   async _pickGame(s, kind) {
@@ -1948,6 +2026,7 @@ class HatchPetCard extends HTMLElement {
     if (kind === "catch") {
       s.bubble.textContent = "catch it! tap its side as it reaches me";
       s.sayUntil = Date.now() + 60000;
+      s.gameBox.querySelector(".gl").focus({ preventScroll: true });
       setTimeout(() => this._catchRound(s), 900);
       return;
     }
@@ -1956,11 +2035,11 @@ class HatchPetCard extends HTMLElement {
     } else {
       // Higher or Lower shows its first number before the first guess.
       s.game.busy = true;
-      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = true; });
+      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
       const info = await this._playCall(s, { game: kind });
       if (!info) return;
       s.game.busy = false;
-      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });
+      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
       this._showNumber(s, info.number);
       s.bubble.textContent = "will the next one be higher or lower?";
     }
@@ -2006,7 +2085,7 @@ class HatchPetCard extends HTMLElement {
     const game = GAMES.find((g) => g.key === kind);
     const guess = game.guesses[side === "left" ? 0 : 1];
     s.game.busy = true;
-    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = true; });
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
     const info = await this._playCall(s, { game: kind, guess });
     if (!info) return;
     s.game.round = info.round;
@@ -2032,7 +2111,7 @@ class HatchPetCard extends HTMLElement {
         return;
       }
       s.game.busy = false;
-      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });
+      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
       s.bubble.textContent = kind === "higher_lower" ? "higher or lower?" : "again! left or right?";
     }, 900);
@@ -2221,7 +2300,7 @@ class HatchPetCard extends HTMLElement {
     const motion = /cricket/.test(prop) ? "hop" : "roll";
     g.cur = {
       side, decoy, motion, done: false, start: performance.now(),
-      travel: lerp(CATCH.travel) * (calm ? 1.6 : 1),
+      calm, travel: lerp(CATCH.travel) * (calm ? 1.6 : 1),
       window: lerp(CATCH.window) * (calm ? 2 : 1),
     };
     const el = s.catchEl;
@@ -2238,7 +2317,9 @@ class HatchPetCard extends HTMLElement {
       const from = c.side === "left" ? -16 : 100;
       const to = c.side === "left" ? 28 : 56;
       el.style.left = `${from + (to - from) * p}%`;
-      if (c.decoy) { // a bee flies: flapping, bobbing, facing where it goes
+      if (c.calm) { // reduced motion: it only slides along (the bee still faces its way)
+        el.style.transform = c.decoy && c.side === "left" ? "scaleX(-1)" : "";
+      } else if (c.decoy) { // a bee flies: flapping, bobbing, facing where it goes
         // (rAF's first timestamp can come just before c.start)
         const flap = Math.floor(Math.max(now - c.start, 0) / BEE_FLAP_MS) % 2;
         if (c.flap !== flap) el.src = BEE_FRAMES[(c.flap = flap)];
@@ -2301,7 +2382,7 @@ class HatchPetCard extends HTMLElement {
         // no storage: no best score
       }
       if (g.wins >= CATCH.winAt) this._chirp(s, "win");
-      this._endGame(s, `${g.wins}/${CATCH.rounds} caught${g.wins >= CATCH.winAt ? "! ♪" : "..."} best ${best}/${CATCH.rounds}`);
+      this._endGame(s, `${g.wins}/${CATCH.rounds} caught${g.wins >= CATCH.winAt ? "! ♪" : "..."} · best ${best}/${CATCH.rounds}`);
     }, 1000);
   }
 
@@ -2322,8 +2403,11 @@ class HatchPetCard extends HTMLElement {
     cancelAnimationFrame(s.game?.cur?.raf);
     s.catchEl.hidden = true;
     s.game = null;
+    // Focus inside the game goes back to the play button, not the page's start.
+    const focused = s.gameBox.contains(this.shadowRoot?.activeElement);
     s.gameBox.hidden = true;
-    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });
+    if (focused) s.buttons.play?.focus({ preventScroll: true });
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
     s.pet.classList.remove("go-left", "go-right");
     if (line) s.bubble.textContent = line;
     s.sayUntil = line ? Date.now() + 4000 : 0;
