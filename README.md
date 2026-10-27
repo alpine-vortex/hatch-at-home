@@ -325,6 +325,14 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   | Helper | 10 chore treats | +4 more happiness per chore treat |
   | Player | 15 games finished | +4 more happiness per game won |
 
+  **On the card**, a pet's traits show as little flair around it (never drawn on it)
+  about once a minute: above its head (a rain cloud, a thunder flicker, a sunrise,
+  the moon), in the air around it (notes, a butterfly, snowflakes, leaves,
+  fireflies, sun glints) or at its feet (embers, mist, a broom, a ball, a cushion,
+  popcorn). One trait per place at a time, so a pet's mix shows as one picture;
+  deeper traits show a little more. Not during games, sleep or the status screen;
+  with reduced motion it stands still.
+
   Traits have levels, ★ to ★★★: effects are ×1, ×1.5 and ×2. A new egg
   inherits one of its parent's traits at the parent's level (shown with ↓). If
   the child also learns it for itself, it goes up a level, so a trait kept in the

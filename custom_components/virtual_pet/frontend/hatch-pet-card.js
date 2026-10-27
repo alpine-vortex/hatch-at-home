@@ -55,6 +55,32 @@ const CATCH = {
   decoyChance: 0.25, // from round 2
 };
 const BEST_CATCH_KEY = "hatch-best-catch";
+
+// Trait flair (Sol's ui/flair_*): every so often each trait the pet has shows as
+// a little flair around it, never on it: above its head, in the air around it,
+// or on the ground at its feet. One trait per place per moment; traits sharing a
+// place take turns. "frames": a 2-frame animation (_1, _2); "pair": two
+// variants (_1 big, _2 small); otherwise one image.
+const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
+const FLAIR_MS = 4200; // how long a moment lasts
+const FLAIR = {
+  storm_watcher: { place: "head", art: "frames" },
+  thunder_heart: { place: "head", art: "frames" },
+  early_bird: { place: "head" },
+  moon_child: { place: "head", art: "pair" },
+  music_lover: { place: "air", art: "pair" },
+  social_butterfly: { place: "air", art: "frames" },
+  snow_child: { place: "air", art: "pair" },
+  breeze_rider: { place: "air", art: "frames" },
+  night_owl: { place: "air", art: "frames" },
+  sun_lover: { place: "air" },
+  fireside: { place: "ground", art: "pair" },
+  fog_wanderer: { place: "ground" },
+  helper: { place: "ground" },
+  player: { place: "ground" },
+  homebody: { place: "ground" },
+  couch_potato: { place: "ground" },
+};
 // A stand-in bee for decoy rounds (pixel art, one char per pixel).
 const BEE_ROWS = [".kk.kk.", ".kwkwk.", "kyykyyk", "kykykyk", ".kyyyk.", "..k.k.."];
 const BEE_SVG = (() => {
@@ -352,6 +378,48 @@ const STYLE = `
     line-height: 1.1; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
     box-shadow: 2px 2px 0 #3a2a1a; }
   .game .gnum.flip { animation: perk .3s ease-out; }
+  /* Trait flair: placed in JS from the head point and the feet line. Every piece
+     must read standing still too (reduced motion turns all animation off). */
+  .flair { position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    animation: fl-moment var(--fl-ms) ease-in-out both; }
+  @keyframes fl-moment { 0% { opacity: 0; } 12%, 85% { opacity: 1; } 100% { opacity: 0; } }
+  .flair .fx { position: absolute; transform: translate(-50%, -100%); image-rendering: pixelated;
+    animation-duration: var(--d, 2.4s); animation-delay: var(--delay, 0s);
+    animation-iteration-count: infinite; animation-fill-mode: both; }
+  /* .screen img is absolute; flair images stay in flow so the piece has a height
+     and translate(-50%, -100%) stands it on its anchor point. */
+  .flair .fx img { position: static; display: block; width: 100%; image-rendering: pixelated; }
+  .flair .fx.frames img + img { position: absolute; inset: 0; }
+  .flair .fx.frames img { animation: fl-frame-a .6s steps(1) infinite; }
+  .flair .fx.frames img + img { animation-name: fl-frame-b; }
+  @keyframes fl-frame-a { 50% { opacity: 0; } }
+  @keyframes fl-frame-b { 0% { opacity: 0; } 50% { opacity: 1; } }
+  .fx.bob { animation-name: fl-bob; animation-timing-function: ease-in-out; animation-direction: alternate; }
+  @keyframes fl-bob { from { transform: translate(-50%, -100%); } to { transform: translate(-50%, -112%); } }
+  .fx.float { animation-name: fl-float; animation-timing-function: ease-out; }
+  @keyframes fl-float { 0% { opacity: 0; transform: translate(-50%, -100%); } 20% { opacity: 1; }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-100% - var(--rise, 40px))); } }
+  .fx.fall { animation-name: fl-fall; animation-timing-function: linear; }
+  @keyframes fl-fall { 0% { opacity: 0; transform: translate(-50%, -100%); } 15% { opacity: 1; }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-100% + var(--rise, 40px))); } }
+  .fx.drift { animation-name: fl-drift; animation-timing-function: ease-in-out; }
+  @keyframes fl-drift { 0% { opacity: 0; transform: translate(-50%, -100%); } 20%, 80% { opacity: 1; }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 40px)), calc(-100% + var(--rise, 0px))); } }
+  .fx.twinkle { animation-name: fl-twinkle; animation-timing-function: ease-in-out; }
+  @keyframes fl-twinkle { 0%, 100% { opacity: .2; transform: translate(-50%, -100%) scale(.7); }
+    50% { opacity: 1; transform: translate(-50%, -100%) scale(1); } }
+  .fx.bounce { animation-name: fl-bounce; animation-timing-function: ease-in; animation-direction: alternate; }
+  @keyframes fl-bounce { from { transform: translate(-50%, -100%); } to { transform: translate(-50%, -150%); } }
+  .fx.pop { animation-name: fl-pop; animation-iteration-count: 1; }
+  @keyframes fl-pop { 0% { transform: translate(-50%, -100%) scale(.4); } 60% { transform: translate(-50%, -100%) scale(1.1); }
+    100% { transform: translate(-50%, -100%) scale(1); } }
+  .fx.loop { offset-rotate: 0deg; transform: translate(-50%, -50%); animation-name: fl-loop;
+    animation-iteration-count: 1; animation-timing-function: ease-in-out; }
+  @keyframes fl-loop { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+  .fx.glow { border-radius: 50%; transform: translate(-50%, -50%);
+    background: radial-gradient(closest-side, rgba(255, 160, 70, .7), rgba(255, 160, 70, 0));
+    animation-name: fl-glow; animation-direction: alternate; }
+  @keyframes fl-glow { to { opacity: .55; } }
   .game .gcatch { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
     pointer-events: none; will-change: left, transform; }
   .game .gcatch[hidden] { display: none; }
@@ -359,7 +427,7 @@ const STYLE = `
   .game .gscore { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
-  .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
+  .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
   .screen.show-status .flash, .screen.show-status .speck { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
@@ -1184,6 +1252,7 @@ class HatchPetCard extends HTMLElement {
       if (s === this._slides[this._index]) {
         this._greet(s);
         this._idle(s);
+        this._flairTick(s);
       }
       if (!s.sayUntil && s.species) {
         const mood = this._state(s, "sensor.mood");
@@ -1197,7 +1266,8 @@ class HatchPetCard extends HTMLElement {
     const now = Date.now();
     return s.species && !s.asleep && !s.calling && !s.game && IDLE_MOODS.has(s.moodState) &&
       !s.screen.classList.contains("show-status") &&
-      !(s.sayUntil > now) && !(s.poseUntil > now) && !(s.propUntil > now);
+      !(s.sayUntil > now) && !(s.poseUntil > now) && !(s.propUntil > now) &&
+      !(s.flairUntil > now);
   }
 
   _look(s, ms) {
@@ -1632,6 +1702,7 @@ class HatchPetCard extends HTMLElement {
       return;
     }
     if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
+    s.screen.querySelector(".flair")?.remove();
     const games = this._games();
     if (games.length === 1) {
       this._pickGame(s, games[0].key);
@@ -1771,6 +1842,173 @@ class HatchPetCard extends HTMLElement {
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
       s.bubble.textContent = kind === "higher_lower" ? "higher or lower?" : "again! left or right?";
     }, 900);
+  }
+
+  // --- Trait flair ----------------------------------------------------------
+
+  _flairTick(s) {
+    const now = Date.now();
+    if (!s.nextFlair) s.nextFlair = now + 8000 + Math.random() * 12000;
+    if (now < s.nextFlair) return;
+    const [lo, hi] = FLAIR_EVERY_MS;
+    s.nextFlair = now + lo + Math.random() * (hi - lo);
+    if (this._free(s)) this._flair(s);
+  }
+
+  // One flair moment: each place shows one of the pet's traits there.
+  // Returns the traits shown (card-check calls it directly).
+  _flair(s) {
+    const stage = this._state(s, "sensor.life_stage");
+    const traits = (stage?.attributes.traits || []).filter((t) => FLAIR[t]);
+    if (!traits.length || !s.species || stage?.state === "egg") return [];
+    const levels = stage.attributes.trait_levels || {};
+    s.flairTurn = (s.flairTurn || 0) + 1;
+    const shown = [];
+    for (const place of ["head", "air", "ground"]) {
+      const here = traits.filter((t) => FLAIR[t].place === place);
+      if (here.length) shown.push(here[s.flairTurn % here.length]);
+    }
+    s.screen.querySelector(".flair")?.remove();
+    const box = document.createElement("div");
+    box.className = "flair";
+    box.style.setProperty("--fl-ms", `${FLAIR_MS}ms`);
+    const at = this._flairAnchors(s);
+    for (const trait of shown) this._flairPieces(trait, levels[trait] || 1, at, box);
+    s.screen.appendChild(box);
+    s.flairUntil = Date.now() + FLAIR_MS;
+    clearTimeout(s.flairTimer);
+    s.flairTimer = setTimeout(() => box.remove(), FLAIR_MS);
+    return shown;
+  }
+
+  // Where the pet is on screen: its head point (species.json "head", per drawn
+  // stage), the feet line (y=224 of every 256 px frame), and the scene's scale.
+  _flairAnchors(s) {
+    const r = s.pet.getBoundingClientRect();
+    const sr = s.screen.getBoundingClientRect();
+    const k = r.height / 256;
+    const [hx, hy] = s.species.head?.[s.drawn] || [128, 96];
+    return {
+      hx: r.left - sr.left + hx * k, hy: r.top - sr.top + hy * k,
+      cx: r.left - sr.left + 128 * k, fy: r.top - sr.top + 224 * k,
+      half: r.width * 0.32, ks: sr.width / 512, width: sr.width,
+    };
+  }
+
+  _flairPieces(trait, level, at, box) {
+    const { hx, hy, cx, fy, half, ks } = at;
+    const url = (n) => `${BASE}/ui/flair_${n}.png?v=${VERSION}`;
+    const art = FLAIR[trait].art;
+    const img = (variant) => art === "frames"
+      ? `<img src="${url(`${trait}_1`)}" alt=""><img src="${url(`${trait}_2`)}" alt="">`
+      : `<img src="${url(art === "pair" ? `${trait}_${variant}` : trait)}" alt="">`;
+    const put = (x, y, cls, vars = {}, variant = 1) => {
+      const el = document.createElement("div");
+      el.className = `fx ${art === "frames" ? "frames " : ""}${cls}`;
+      el.innerHTML = img(variant);
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      for (const [k, v] of Object.entries(vars)) el.style.setProperty(k, v);
+      const first = el.querySelector("img");
+      // Drawn at the scene's scale, like the props.
+      first.addEventListener("load", () => { el.style.width = `${first.naturalWidth * ks}px`; });
+      if (first.complete && first.naturalWidth) el.style.width = `${first.naturalWidth * ks}px`;
+      box.appendChild(el);
+      return el;
+    };
+    const n = (base) => base + level - 1; // deeper traits show a little more
+    const px = (v) => `${Math.round(v)}px`;
+    switch (trait) {
+      case "storm_watcher":
+      case "thunder_heart":
+      case "early_bird":
+        put(hx + (trait === "thunder_heart" ? 6 : 0), hy - 6 * ks, "bob", { "--d": "1.4s" });
+        break;
+      case "moon_child":
+        put(hx, hy - 6 * ks, "bob", { "--d": "1.6s" }, 1);
+        for (let i = 0; i < n(2); i++) {
+          put(hx + (i % 2 ? 1 : -1) * (24 + i * 8) * ks, hy - (4 + (i % 3) * 14) * ks, "twinkle",
+            { "--d": "1.3s", "--delay": `${-i * 0.4}s` }, 2);
+        }
+        break;
+      case "music_lover":
+        for (let i = 0; i < n(3); i++) {
+          put(hx + (i % 2 ? 1 : -1) * (14 + i * 6) * ks, hy + 6 * ks, "float",
+            { "--d": "2.6s", "--delay": `${-i * 0.8}s`, "--dx": px((i % 2 ? 16 : -14) * ks), "--rise": px(70 * ks) },
+            (i % 2) + 1);
+        }
+        break;
+      case "social_butterfly": {
+        for (let i = 0; i < n(1); i++) {
+          // Round one side of the pet and down to its feet; never over its
+          // head, which is the head place's (a storm cloud, a moon...).
+          const side = i % 2 ? -1 : 1;
+          const mid = (hy + fy) / 2;
+          const path = `path("M ${cx + side * half * 2.4} ${hy + 4 * ks} ` +
+            `C ${cx + side * half * 1.5} ${hy - 26 * ks}, ${cx + side * half * 2.6} ${mid - 30 * ks}, ` +
+            `${cx + side * half * 1.9} ${mid} S ${cx + side * half * 1.5} ${fy - 34 * ks}, ` +
+            `${cx + side * half * 1.3} ${fy - 12 * ks}")`;
+          put(0, 0, "loop", { "--d": `${FLAIR_MS - 400}ms`, "--delay": `${i * 0.5}s` }).style.offsetPath = path;
+        }
+        break;
+      }
+      case "snow_child":
+        for (let i = 0; i < n(4); i++) {
+          put(cx + (-1.6 + (i * 3.2) / Math.max(1, n(4) - 1)) * half, hy - 30 * ks, "fall",
+            { "--d": "2.8s", "--delay": `${-i * 0.7}s`, "--dx": px((i % 2 ? 10 : -8) * ks), "--rise": px((fy - hy) + 20 * ks) },
+            (i % 2) + 1);
+        }
+        break;
+      case "breeze_rider":
+        for (let i = 0; i < n(2); i++) {
+          put(cx - half * 2, hy + (i * 22 - 10) * ks, "drift",
+            { "--d": "2.4s", "--delay": `${-i * 1.1}s`, "--dx": px(half * 4), "--rise": px(18 * ks) });
+        }
+        break;
+      case "night_owl":
+        for (let i = 0; i < n(3); i++) {
+          const a = (i / n(3)) * Math.PI * 2;
+          put(cx + Math.cos(a) * half * 1.4, (hy + fy) / 2 + Math.sin(a) * 30 * ks, "twinkle",
+            { "--d": "1.8s", "--delay": `${-i * 0.6}s` });
+        }
+        break;
+      case "sun_lover":
+        for (let i = 0; i < n(3); i++) {
+          put(cx + (i % 2 ? 1 : -1) * half * (0.9 + i * 0.25), hy + (i * 18) * ks, "twinkle",
+            { "--d": "1.2s", "--delay": `${-i * 0.4}s` });
+        }
+        break;
+      case "fireside": {
+        const glow = document.createElement("div");
+        glow.className = "fx glow";
+        Object.assign(glow.style, { left: px(cx), top: px(fy - 2 * ks), width: px(half * 3.2), height: px(30 * ks) });
+        box.appendChild(glow);
+        for (let i = 0; i < n(4); i++) {
+          const side = i % 2 ? 1 : -1;
+          put(cx + side * (half + (6 + (i % 3) * 8) * ks), fy - (i % 3) * 6 * ks, "float",
+            { "--d": "2.4s", "--delay": `${-i * 0.5}s`, "--dx": px(side * (6 + i * 2) * ks), "--rise": px(80 * ks) },
+            (i % 2) + 1);
+        }
+        break;
+      }
+      case "fog_wanderer":
+        put(cx - half * 0.6, fy + 4 * ks, "drift", { "--d": "4.2s", "--dx": px(half * 1.2) });
+        break;
+      case "helper":
+        put(cx + half * 1.35, fy + 2 * ks, "pop", { "--d": ".5s" });
+        break;
+      case "player":
+        put(cx - half * 1.35, fy, "bounce", { "--d": ".45s" });
+        break;
+      case "homebody":
+        put(cx - half * 1.3, fy + 4 * ks, "pop", { "--d": ".5s" });
+        break;
+      case "couch_potato":
+        put(cx + half * 1.35, fy + 2 * ks, "pop", { "--d": ".5s" });
+        break;
+      default:
+        break;
+    }
   }
 
   // --- Catch (prototype) -----------------------------------------------------
