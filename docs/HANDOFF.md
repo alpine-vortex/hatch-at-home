@@ -4,7 +4,8 @@ Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's bran
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
-release **0.25.1**; current beta **0.26.0b4** from PR #7's branch (the polish pass).
+release **0.25.1**; current beta **0.26.0b5** from PR #7's branch (the polish pass,
+then the backgrounds in 256 colours).
 **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read the README first, then `docs/design-worlds.md`, `art/README.md`,
@@ -98,6 +99,14 @@ details before committing it.
   as is, on purpose: the journal and memories stay on the life stage sensor (moving
   them breaks anyone reading them there), and the six stat sensors keep long-term
   statistics.
+- **History rewrite, 2026-10-27 (owner's request):** the 0.25.0 commit carried a
+  local username as its author; `main` and PR #7's branch were rewritten from that
+  commit on (author renamed, same files and dates, older history untouched). The
+  session's proxy refused tag pushes, so the v0.25.0 to v0.26.0b4 tags were left
+  for the owner to move; the old commits also stay reachable through the art
+  session's branch `ccr-7ac3cdae-vv7jj5` (its work is already in PR #7), the merged
+  `ccr-a828d8c1-review` branch and GitHub's PR refs. Anyone with an older clone:
+  `git fetch && git reset --hard origin/<branch>` before working on it.
 - **Worlds, all six live:**
   - Woodland: bird, Douglas squirrel, Columbia black-tailed deer (0.22.0). Egg shell.
   - Terrarium: leopard gecko, Mexican red-knee tarantula (0.21.0, Sol's v2 at 2 px art
