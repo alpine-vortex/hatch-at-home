@@ -240,7 +240,10 @@ async function main() {
   });
   const quietBubble = await bubble();
   let idle = "";
-  for (let i = 0; i < 140 && !idle; i++) {
+  // The first idle move is due 10-35 s in, but it's skipped if the pet is busy
+  // then (the greeting's bubble, a call), and the next is 20-45 s later: allow
+  // 90 s rather than the 56 s that a skipped first move could overrun.
+  for (let i = 0; i < 225 && !idle; i++) {
     await page.waitForTimeout(400);
     idle = await idleSign();
     const said = await bubble();
