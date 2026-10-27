@@ -298,9 +298,13 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 
   A pet with no care misses and a little discipline (35 or more) grows up devoted;
   it takes about five misses, with no scolding, to grow up scrappy.
-- **Traits:** the pet picks up habits from your house and keeps them for life.
-  Only hours it spends awake count, and traits only ever add a little happiness
-  (all house bonuses together stay under the cap of +3 an hour).
+- **Traits:** the pet picks up habits from your house and keeps them for life, up
+  to **four** (an inherited one counts; once it has four it learns no more). Only
+  time it spends awake counts, and traits only ever add a little happiness (all
+  house bonuses together stay under the cap of +3 an hour). Each pet has its own
+  **temperament**, rolled when it hatches: it takes to some things sooner than
+  others (each threshold below ×0.6 to ×1.6), so pets raised in the same house
+  can still turn out differently.
 
   | Trait | Learned from | While it happens |
   | --- | --- | --- |
@@ -313,6 +317,13 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   | Storm watcher | 15 h of rain | +0.5 an hour while it rains |
   | Couch potato | 12 h of TV | +0.5 an hour watching TV |
   | Social butterfly | 2.5 h of greetings (about 15 arrivals) | +1 an hour while greeting |
+  | Snow child | 6 h of snow | +0.5 an hour while it snows |
+  | Breeze rider | 10 h of wind | +0.5 an hour while it's windy |
+  | Fog wanderer | 8 h of fog | +0.5 an hour while it's foggy |
+  | Thunder heart | 2 h of thunderstorms | +0.5 an hour during a storm |
+  | Early bird | 7 mornings the house stirred within an hour of wake time (needs motion sensors) | +0.5 an hour for two hours after wake time |
+  | Helper | 10 chore treats | +4 more happiness per chore treat |
+  | Player | 15 games finished | +4 more happiness per game won |
 
   Traits have levels, ★ to ★★★: effects are ×1, ×1.5 and ×2. A new egg
   inherits one of its parent's traits at the parent's level (shown with ↓). If

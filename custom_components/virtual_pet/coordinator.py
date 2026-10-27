@@ -444,6 +444,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             morning=wake <= minute < 12 * 60,
             today=local.date().isoformat(),
         )
+        if any(e["type"] == "good_morning" for e in events):
+            model.morning_stir(state, now, settings)
         if awake and readings.condition in SNOWY:
             events += model.season_first(state, "snow", now, settings.tz)
         if awake and readings.outdoor_c is not None and readings.outdoor_c <= 0:

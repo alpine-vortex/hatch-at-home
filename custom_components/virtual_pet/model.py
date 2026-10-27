@@ -116,6 +116,7 @@ class PetState:
     journal: list[dict[str, Any]] = field(default_factory=list)  # retired parents
     notify_users: list[str] = field(default_factory=list)  # HA user IDs, opted in
     trait_hours: dict[str, float] = field(default_factory=dict)  # exposure, awake
+    temperament: dict[str, float] = field(default_factory=dict)  # trait -> factor
     upbringing: str | None = None  # decided on reaching adulthood (UPBRINGINGS)
     game: Game | None = None
     games: dict[str, dict[str, int]] = field(default_factory=dict)  # kind -> counts
@@ -160,6 +161,11 @@ class PetState:
             kind: {k: int(n) for k, n in counts.items() if k in ("played", "won")}
             for kind, counts in (kwargs.get("games") or {}).items()
             if isinstance(counts, dict)
+        }
+        kwargs["temperament"] = {
+            t: float(f)
+            for t, f in (kwargs.get("temperament") or {}).items()
+            if t in TRAITS and isinstance(f, int | float)
         }
         if not isinstance(kwargs.get("egg_choice"), str):
             kwargs["egg_choice"] = None
@@ -377,6 +383,9 @@ def _hatch(
             fresh = [s for s in settings.roster if s not in state.raised]
             state.species = rng.choice(fresh or list(settings.roster))
     state.egg_choice = None  # each choice is for one egg
+    if not state.temperament:
+        low, high = R.TEMPERAMENT_RANGE
+        state.temperament = {t: round(rng.uniform(low, high), 2) for t in TRAITS}
     if state.species not in state.raised:
         state.raised.append(state.species)
     events.append({"type": "hatched", "species": state.species})
@@ -679,6 +688,9 @@ TRAITS = (
     "night_owl",
     "music_lover",
     "homebody",
+    "early_bird",
+    "helper",
+    "player",
     *R.TRAIT_FLAG_HOURS,
 )
 # While its flag is up, each flag trait adds this much happiness per hour (at ★).
@@ -690,6 +702,10 @@ _FLAG_TRAIT_HAPPINESS = {
     "storm_watcher": ("rainy", R.TRAIT_HAPPINESS),
     "couch_potato": ("watching_tv", R.TRAIT_HAPPINESS),
     "social_butterfly": ("greeting", 2 * R.TRAIT_HAPPINESS),
+    "snow_child": ("snowy", R.TRAIT_HAPPINESS),
+    "breeze_rider": ("windy", R.TRAIT_HAPPINESS),
+    "fog_wanderer": ("foggy", R.TRAIT_HAPPINESS),
+    "thunder_heart": ("storm", R.TRAIT_HAPPINESS),
 }
 
 
@@ -727,7 +743,7 @@ def _learn(
             level = min(state.inherited.pop(trait) + 1, R.TRAIT_MAX_LEVEL)
             state.trait_levels[trait] = level
             events.append({"type": "trait_deepened", "trait": trait, "level": level})
-        elif trait not in state.traits:
+        elif trait not in state.traits and len(state.traits) < R.TRAIT_CAP:
             state.traits.append(trait)
             state.trait_levels[trait] = 1
             events.append({"type": "trait_learned", "trait": trait, "level": 1})
@@ -748,8 +764,15 @@ def trait_progress(state: PetState) -> dict[str, float]:
             share / R.TRAIT_HOMEBODY_SHARE, awake / R.TRAIT_HOMEBODY_MIN_AWAKE_HOURS
         ),
     }
+    progress["early_bird"] = (
+        seen.get("early_mornings", 0.0) / R.TRAIT_EARLY_BIRD_MORNINGS
+    )
+    progress["helper"] = seen.get("chores", 0.0) / R.TRAIT_HELPER_CHORES
+    progress["player"] = seen.get("games", 0.0) / R.TRAIT_PLAYER_GAMES
     for trait, (flag, needed) in R.TRAIT_FLAG_HOURS.items():
         progress[trait] = seen.get(flag, 0.0) / needed
+    # Temperament: a factor on each threshold (pets from before it have none).
+    progress = {t: p / state.temperament.get(t, 1.0) for t, p in progress.items()}
     return {
         t: 1.0
         if t in state.traits and t not in state.inherited
@@ -765,10 +788,27 @@ def _trait_bonus(state: PetState, t: float, settings: Settings) -> dict[str, flo
         happiness += R.TRAIT_HAPPINESS * _scale(state, "night_owl")
     if settings.home.company:
         happiness += R.TRAIT_HAPPINESS * _scale(state, "homebody")
+    if 0 <= _minutes_since_wake(t, settings) < R.EARLY_BIRD_MORNING_MINUTES:
+        happiness += R.TRAIT_HAPPINESS * _scale(state, "early_bird")
     for trait, (flag, rate) in _FLAG_TRAIT_HAPPINESS.items():
         if flag in settings.home.flags:
             happiness += rate * _scale(state, trait)
     return {"happiness": happiness} if happiness else {}
+
+
+def _minutes_since_wake(ts: float, settings: Settings) -> int:
+    """Minutes since today's wake time (local), 0-1439."""
+    now = _minutes_of_day(ts, settings.tz)
+    wake = settings.wake_time.hour * 60 + settings.wake_time.minute
+    return (now - wake) % (24 * 60)
+
+
+def morning_stir(state: PetState, now: float, settings: Settings) -> None:
+    """The house's first stir of the morning (the good_morning moment): soon
+    after wake time, it counts toward early bird."""
+    if _minutes_since_wake(now, settings) < R.TRAIT_EARLY_BIRD_WINDOW_MINUTES:
+        seen = state.trait_hours
+        seen["early_mornings"] = seen.get("early_mornings", 0.0) + 1
 
 
 def _stay_up_minutes(state: PetState) -> float:
@@ -1124,7 +1164,10 @@ def play_game(
         happiness = R.GAME_WIN_HAPPINESS
     else:
         happiness = R.SKILL_GAME_WIN_HAPPINESS
+    if won:
+        happiness += R.PLAYER_WIN_HAPPINESS * _scale(state, "player")
     state.happiness = _clamp(state.happiness + happiness)
+    state.trait_hours["games"] = state.trait_hours.get("games", 0.0) + 1
     state.energy = _clamp(state.energy + R.PLAY_ENERGY)
     state.hunger = _clamp(state.hunger + R.PLAY_HUNGER)
     state.weight = _clamp(state.weight + R.WEIGHT_GAME)
@@ -1229,7 +1272,12 @@ def _give_treats(state: PetState, t: float, events: list[Event]) -> None:
         return
     for _ in range(state.treats_waiting):
         state.hunger = _clamp(state.hunger + R.CHORE_TREAT_HUNGER)
-        state.happiness = _clamp(state.happiness + R.CHORE_TREAT_HAPPINESS)
+        state.happiness = _clamp(
+            state.happiness
+            + R.CHORE_TREAT_HAPPINESS
+            + R.HELPER_TREAT_HAPPINESS * _scale(state, "helper")
+        )
+        state.trait_hours["chores"] = state.trait_hours.get("chores", 0.0) + 1
         state.weight = _clamp(state.weight + R.WEIGHT_CHORE_TREAT)
         _log(state, {"at": t, "action": "chore_treat", "by": None, "result": OK})
         events.append({"type": "chore_treat"})
