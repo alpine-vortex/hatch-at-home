@@ -83,6 +83,11 @@ set up by the owner. The integration doesn't change.
 
 ## B. Choose the next egg (M)
 
+**Built** (2026-10-27): `select.py` (`select.<pet>_next_egg`, config category),
+`egg_choice` in the model, the coordinator's `egg_roster`, `next_egg` on the life
+stage sensor, a "next egg" / "hatching" row on the status screen, 8 tests and a
+`card-check` step. Options are creature names; the state keeps the species ID.
+
 `design-worlds.md` already lists this as a later option. A **select entity**,
 `select.<pet>_next_egg`, with "Surprise me" (the default) plus **every ready
 species in the egg's world**. It's stored on the state and used when the egg

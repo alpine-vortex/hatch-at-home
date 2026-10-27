@@ -327,6 +327,43 @@ def test_hatching_prefers_a_species_not_raised_yet():
     assert {"type": "hatched", "species": "squirrel"} in events
 
 
+def test_the_owners_choice_decides_the_hatch_then_clears():
+    start = at(9)
+    settings = model.Settings(tz=UTC, roster=("bird", "squirrel"))
+    pet = model.PetState.new("Pip", start)
+    pet.egg_choice = "bird"  # already raised: a choice beats the fresh-first rule
+    pet.raised = ["bird"]
+    model.advance(pet, start + HOUR, settings, random.Random(1), max_gap=None)
+    assert pet.species == "bird"
+    assert pet.egg_choice is None
+
+
+def test_a_choice_off_the_roster_is_a_surprise():
+    start = at(9)
+    settings = model.Settings(tz=UTC, roster=("bird", "squirrel"))
+    pet = model.PetState.new("Pip", start)
+    pet.egg_choice, pet.raised = "gecko", ["bird"]  # another world's creature
+    model.advance(pet, start + HOUR, settings, random.Random(1), max_gap=None)
+    assert pet.species == "squirrel"  # the usual surprise: not raised yet
+    assert pet.egg_choice is None
+
+
+def test_a_choice_made_before_laying_goes_with_the_egg():
+    pet = hatched(at(12), age_hours=ADULT + R.LAY_EGG_AFTER_ADULT_HOURS + 5)
+    pet.species, pet.raised, pet.egg_choice = "bird", ["bird"], "bird"
+    egg, _ = model.lay_egg(pet, at(12), random.Random(1))
+    assert egg.egg_choice == "bird"
+
+
+def test_older_saves_have_no_choice():
+    pet = model.PetState.new("Pip", at(9))
+    data = pet.to_dict()
+    del data["egg_choice"]
+    assert model.PetState.from_dict(data).egg_choice is None
+    data["egg_choice"] = 3  # nonsense from a broken file
+    assert model.PetState.from_dict(data).egg_choice is None
+
+
 # --- Regressions from the 2026-10-26 audit ---------------------------------
 
 

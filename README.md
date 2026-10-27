@@ -125,6 +125,7 @@ lay the egg, then rename it.
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
 | `switch.<pet>_lights_out` | On puts it to bed, off wakes it. |
 | `button.<pet>_feed`, `_snack`, `_play`, `_clean`, `_medicine`, `_scold`, `_praise` | Care. Medicine is unavailable unless the pet is sick. |
+| `select.<pet>_next_egg` | `Surprise me` (the default) or a creature of the egg's world, for the next hatch only. Attribute `next_egg` on the life stage sensor shows the choice too. |
 | `button.<pet>_lay_egg` | Starts the next generation. Available from a week into adulthood (day 21), while the pet is well and home. |
 | `button.<pet>_blanket`, `_fan` | Answers to what the house makes the pet ask for. Unavailable unless it's asking. |
 | `sensor.<pet>_debug` | Diagnostic, **disabled by default**. Enable it on the entity's settings page to see the raw numbers. For a file to share, use **Download diagnostics** on the pet's device page instead: it leaves out your entity IDs and people's names. |
@@ -318,6 +319,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   pet can stay forever. The adult retires to the journal and a new egg takes its
   place; it inherits one of the parent's traits and, as always, prefers a creature
   this device hasn't raised yet.
+- **Choosing the next egg:** to pick the creature instead of a surprise, set
+  `select.<pet>_next_egg` (on the pet's device page, under Configuration) before the
+  egg hatches, for example before laying it. It lists the egg's world, the new one if
+  a world change is waiting. The choice is for one egg; the next is a surprise again.
 - **The journal:** on the status screen, tap "journal". It shows the world's
   creatures (ones nobody in this home has raised yet are silhouettes) and this
   device's family line: each generation with its traits, stars and upbringing.

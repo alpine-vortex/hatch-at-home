@@ -10,6 +10,7 @@ from homeassistant import config_entries
 from homeassistant.const import CONF_NAME, STATE_OFF, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.core import Context, HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
 import pytest
@@ -1078,3 +1079,98 @@ async def test_the_pet_comments_on_whats_on_tv(
     await settle(hass, freezer)
     moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
     assert moments[0]["type"] == "watching" and moments[0]["title"] == "Bluey"
+
+
+async def pick(hass: HomeAssistant, option: str) -> None:
+    await hass.services.async_call(
+        "select",
+        "select_option",
+        {"entity_id": "select.pip_next_egg", "option": option},
+        blocking=True,
+    )
+
+
+async def test_next_egg_choice_decides_the_hatch(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    config = await setup(hass)
+    choice = hass.states.get("select.pip_next_egg")
+    assert choice.state == "Surprise me"
+    assert choice.attributes["options"] == [
+        "Surprise me",
+        "Bird",
+        "Douglas squirrel",
+        "Black-tailed deer",
+    ]
+    entry = er.async_get(hass).async_get("select.pip_next_egg")
+    assert entry.entity_category is er.EntityCategory.CONFIG
+    await pick(hass, "Black-tailed deer")
+    assert hass.states.get("sensor.pip_life_stage").attributes["next_egg"] == (
+        "Black-tailed deer"
+    )
+    # The choice is saved with the pet.
+    assert await hass.config_entries.async_unload(config.entry_id)
+    await hass.async_block_till_done()
+    assert hass_storage[STORE_KEY]["data"]["egg_choice"] == "deer"
+    assert await hass.config_entries.async_setup(config.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get("select.pip_next_egg").state == "Black-tailed deer"
+
+    hatched = async_capture_events(hass, f"{DOMAIN}_hatched")
+    await hass.services.async_call(DOMAIN, "fast_forward", {"hours": 1}, blocking=True)
+    assert hatched[0].data["species"] == "deer"
+    # One choice, one egg: the next one is a surprise again.
+    assert hass.states.get("select.pip_next_egg").state == "Surprise me"
+    assert hass.states.get("sensor.pip_life_stage").attributes["next_egg"] is None
+
+
+async def test_next_egg_offers_the_new_world_while_a_move_waits(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    age = 14 * 24 + 7 * 24 + 1.0
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, age_hours=age, born=now - age * 3600, species="bird", raised=["bird"]
+    )
+    config = await setup(hass)
+    result = await config.start_reconfigure_flow(hass)
+    await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Pip", "world": "pond"}
+    )
+    await hass.async_block_till_done()
+    choice = hass.states.get("select.pip_next_egg")
+    assert choice.attributes["options"] == [
+        "Surprise me",
+        "Pacific tree frog",
+        "Axolotl",
+    ]
+    await pick(hass, "Axolotl")
+    await press(hass, "button.pip_lay_egg")
+    await hass.async_block_till_done()
+    assert config.data["world"] == "pond"
+    assert hass.states.get("select.pip_next_egg").state == "Axolotl"
+    hatched = async_capture_events(hass, f"{DOMAIN}_hatched")
+    await hass.services.async_call(DOMAIN, "fast_forward", {"hours": 1}, blocking=True)
+    assert hatched[0].data["species"] == "axolotl"
+
+
+async def test_a_world_change_drops_a_choice_from_the_old_world(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, species="bird", raised=["bird"])
+    config = await setup(hass)
+    await pick(hass, "Douglas squirrel")
+    result = await config.start_reconfigure_flow(hass)
+    await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Pip", "world": "pond"}
+    )
+    await hass.async_block_till_done()
+    assert hass.states.get("select.pip_next_egg").state == "Surprise me"
+
+
+async def test_next_egg_rejects_a_creature_it_cannot_hatch(
+    hass: HomeAssistant, now: float
+) -> None:
+    await setup(hass)
+    with pytest.raises(ServiceValidationError):
+        await pick(hass, "Axolotl")  # another world's creature
+    assert hass.states.get("select.pip_next_egg").state == "Surprise me"

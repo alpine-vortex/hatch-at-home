@@ -168,6 +168,21 @@ async function main() {
   const status = await cur().locator(".status").innerText();
   check("status screen opens", /weight/.test(status) && /whines/.test(status));
   await shot("02-status");
+  // The next egg's creature, picked through its select, shows on the status screen.
+  const eggChoice = (await ids())["select.next_egg"];
+  const options = await evaluate((e) =>
+    document.querySelector("home-assistant").hass.states[e].attributes.options, eggChoice);
+  const pickEgg = (option) => evaluate(({ e, option }) => document.querySelector("home-assistant").hass
+    .callService("select", "select_option", { entity_id: e, option }), { e: eggChoice, option });
+  await pickEgg(options[1]);
+  await page.waitForTimeout(800);
+  check("the next egg's creature shows",
+    (await cur().locator(".status").innerText()).toLowerCase().includes(options[1].toLowerCase()),
+    options[1]);
+  await cur().locator(".status .row", { hasText: /next egg|hatching/ }).scrollIntoViewIfNeeded();
+  await shot("02b-next-egg");
+  await pickEgg(options[0]); // back to a surprise
+  await page.waitForTimeout(400);
   await cur().locator(".jlink").click();
   await page.waitForTimeout(1200);
   check("journal opens", /journal/.test(await cur().locator(".status").innerText()));

@@ -104,6 +104,7 @@ class PetState:
     away: bool = False
     care_log: list[dict[str, Any]] = field(default_factory=list)
     species: str | None = None  # decided when the egg hatches
+    egg_choice: str | None = None  # the species the next hatch takes; None: a surprise
     raised: list[str] = field(default_factory=list)  # species this device has hatched
     traits: list[str] = field(default_factory=list)  # learned, in order (TRAITS)
     trait_levels: dict[str, int] = field(default_factory=dict)  # 1-3 per trait
@@ -150,6 +151,8 @@ class PetState:
                 )
             except TypeError:
                 kwargs["game"] = None
+        if not isinstance(kwargs.get("egg_choice"), str):
+            kwargs["egg_choice"] = None
         if kwargs.get("upbringing") not in UPBRINGINGS:
             kwargs["upbringing"] = None
         state = cls(**kwargs)
@@ -355,10 +358,15 @@ def _hatch(
     events: list[Event],
     t: float,
 ) -> None:
-    """The egg decides: a surprise, preferring species not raised here yet."""
+    """The egg decides: the owner's choice if it's on the roster, otherwise a
+    surprise, preferring species not raised here yet."""
     if state.species is None:
-        fresh = [s for s in settings.roster if s not in state.raised]
-        state.species = rng.choice(fresh or list(settings.roster))
+        if state.egg_choice in settings.roster:
+            state.species = state.egg_choice
+        else:
+            fresh = [s for s in settings.roster if s not in state.raised]
+            state.species = rng.choice(fresh or list(settings.roster))
+    state.egg_choice = None  # each choice is for one egg
     if state.species not in state.raised:
         state.raised.append(state.species)
     events.append({"type": "hatched", "species": state.species})
@@ -845,6 +853,7 @@ def lay_egg(
     egg = PetState.new(state.name, now)
     egg.generation = state.generation + 1
     egg.raised = list(state.raised)
+    egg.egg_choice = state.egg_choice  # chosen before laying: for this egg
     egg.journal = [*state.journal, record]
     egg.notify_users = list(state.notify_users)
     egg.firsts = dict(state.firsts)  # the household's season, not the pet's

@@ -176,6 +176,10 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "roster": list(self.coordinator.roster),
             "hatches_at": self._hatches_at(),
             "next_world": self.coordinator.next_world_name,
+            # The creature picked for the next hatch, by name; None: a surprise.
+            "next_egg": self.coordinator.egg_species_names.get(
+                self.pet.egg_choice or ""
+            ),
             "memories": [dict(m) for m in self.pet.memories],
             # Final once adult; before that, what it's on track for.
             "upbringing": (
