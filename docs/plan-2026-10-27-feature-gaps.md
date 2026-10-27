@@ -13,7 +13,7 @@ classic Tamagotchi games. The open decisions left are listed with each item.
 | Daily diary in the journal | Not doing (owner's call). |
 | Pet reaches back into the house on calls | **Planned (A):** a blueprint, no integration code. |
 | Care-shaped evolution / guide the next egg | **Planned (B) and (D):** choose the next egg; a one-species alternate adult, shaped by the house (a trait) rather than by care quality. |
-| More minigames | **Planned (C1, C2):** Higher or Lower (the 1997 second-generation Tamagotchi's game) and copy me. |
+| More minigames | **Planned (C1–C3):** Higher or Lower (the 1997 second-generation Tamagotchi's game); Catch (the Giga Pets game), as a prototype first; copy me only with a twist. |
 | Trained tricks | Not now. Signature poses are drawn for the child only, so other stages would need stand-ins or new art. |
 | Pets on the shelf noticing each other | Not now. |
 | Birthdays / calendar celebrations | Not now. A generation lasts 3–5 weeks (adult at 14 days, egg a week later), so a yearly birthday never arrives. A calendar "big day" was offered and not chosen. |
@@ -81,12 +81,32 @@ species). After hatching it resets to "Surprise me".
   from another world is ignored; the choice survives a restart and a world
   change.
 
-## C. Two more minigames (M each)
+## C. More minigames (M each)
 
-The pet has the first-generation Tamagotchi's left/right game. Two more come in
+The pet has the first-generation Tamagotchi's left/right game. More come in
 turn, after the 2026-11-03 tuning review, so the game-use numbers from that
-review give a baseline. Both reuse the left and right buttons, need no new art,
-and are checked on the server like the current game.
+review give a baseline.
+
+**The fun test.** Skill games pay a win like plain play (below), so nobody plays a
+game for its reward. It gets played only if it's fun on its own. An
+adversarial review of the games found:
+- **Higher or Lower is close to solved:** the right guess is obvious except on a
+  5. Keep it for nostalgia and because it's cheap, but don't count on it to
+  carry the fun.
+- **Copy me as first drafted is too easy:** three to five lefts and rights are
+  trivial to remember. It's built only with a twist (C2).
+- **Catch's original wasn't hard either:** Giga Pets players called it "almost
+  impossible to lose". Its appeal is watching your own creature pounce, so it
+  needs decoys, speed-up and per-creature motion to stay fun, and it's tried out
+  as a prototype before any server work (C3).
+- Several thin games are worth less than one good one. Each game must earn the
+  next one: watch the play counts (`game_finished` with `game`) and the owner's
+  feedback before building the next.
+
+Order: C1, then C3 (the prototype, then the full version if it's kept), then C2
+only if a twist makes it worth having. C1 and C2 reuse the left and right
+buttons, need no new art, and are checked on the server like the current game.
+C3 is timed by the card (see C3).
 
 **Shared changes (done with C1):**
 - `Game` gains a `kind`, and `virtual_pet.play_game` gets an optional `game`
@@ -122,11 +142,18 @@ Five rounds; three right wins, the same as the existing game.
 - Tests: no ties; the score and win line; the idle drop; the rewards; one
   `card-check` step that plays a game through.
 
-### C2. Copy me
+### C2. Copy me (only with a twist)
 
-The pet shows a short sequence of lefts and rights (3, then 4, then 5 steps) and
-the player repeats it. The pet hops to each side as it shows the steps. A wrong
-step ends that round; two rounds right out of three wins.
+The pet shows a short sequence and the player repeats it. A wrong step ends that
+round; two rounds right out of three wins. **As first drafted (3–5 lefts and
+rights), it's too easy to be worth building.** It's built only with a twist
+that makes it a real memory test, for example:
+- four directions (adding up and down, with two more buttons on the game
+  overlay), with longer sequences (4, 6, then 8 steps);
+- or the pet shows the sequence once, quickly, and then the pet itself acts as
+  a distraction (wandering, a bubble) while the player answers.
+Choose the twist when C2 comes up, by playing a card prototype as for C3. If no
+twist feels good, drop C2.
 
 - **A separate start call.** Today the first guess starts a game, and `guess` is
   required. Copy me needs a call that starts the game and returns the first
@@ -139,6 +166,75 @@ step ends that round; two rounds right out of three wins.
 - Each step shows for about 600 ms, and there's no time limit on the answer.
 - Tests: the sequence lengths; a wrong answer; a malformed answer is rejected;
   the idle drop; the rewards; one `card-check` step.
+
+### C3. Catch (the Giga Pets game; prototype first)
+
+From the 1997 Tiger Giga Pets ([Compu Kitty
+manual](https://www.hasbro.com/common/instruct/kitty-in.pdf): "press the LEFT or
+RIGHT key to make your pet react … at the correct time"). Something drifts in
+from one side, and you tap that side while it's in reach, so the pet pounces.
+It's the only reflex game in the set: left/right is luck, Higher or Lower is
+odds, and copy me is memory.
+
+**How it plays:** five rounds, catch three to win.
+- Each round, the creature's own play prop drifts in from the left or right:
+  the ball, the gecko's cricket, the squirrel's pine cone (every species has a
+  `play` prop already).
+- Tap that side while the prop is in the catch zone, and the pet turns toward
+  it (the sprite mirrored in CSS) and pounces (the existing `hop`). A catch
+  shows the species' `reactions.won` pose briefly, which is the Giga Pets "trick";
+  that pose exists for the child stage only, so other stages hop.
+- Tap too early, too late or on the wrong side, and it gets away.
+
+**What keeps it fun** (from the fun review):
+- **Decoys.** Now and then something drifts in that the pet mustn't catch (a
+  bee, a wasp); tapping it loses the round. That turns "tap when it arrives"
+  into "tap or don't?". Biggest win for the least work. The prototype uses a
+  recoloured existing prop; one shared `decoy` prop from Sol replaces it if
+  Catch is kept.
+- **Speed-up within a game.** Round 1 is slow and forgiving; round 5 is quick.
+  Every game builds to a tense last round.
+- **Per-creature motion.** The cricket hops, the moth zigzags, the ball rolls,
+  the fish swims a wave: a few CSS motion types, picked by a `catch_motion`
+  key in `species.json` (default: roll).
+- **Best score.** "best catch: 5/5" on the status screen, kept per pet.
+- No stage-based difficulty: more rules for little gain.
+
+**Fairness and access:**
+- The catch window starts at about 1.2 s in round 1 (Giga Pets: about 1 s)
+  and narrows to about 0.6 s by round 5. Prototype numbers; tune by playing.
+- With `prefers-reduced-motion`, props move more slowly and every window is
+  doubled.
+- It's the only planned game that needs quick hands, and the others stay
+  available, so play itself is never gated behind reflexes.
+
+**Who judges the taps: the card.** A round trip to the server can take
+longer than the catch window, so the server can't time the taps.
+- The start call (`game: catch`) returns all five rounds: the side, and
+  whether it's a decoy. The card runs the rounds locally and times the taps in
+  the browser, where network lag can't matter.
+- One finish call reports the catches (`caught: n`). The server checks the game
+  exists and hasn't timed out and that `n` is between 0 and 5, then applies the
+  reward and the best score.
+- The card is trusted, and nothing here needs guarding: anyone who can call
+  `play_game` can already press "play" as often as they like, and happiness is
+  capped.
+- Assist can't play it; it doesn't offer any game today.
+
+**Prototype first (card only).**
+- The card runs Catch entirely locally, behind a hidden card option
+  (`experimental_catch: true` in the card's YAML), reward-free, with no server
+  changes.
+- It goes out in a normal release, with the option off by default and
+  undocumented.
+- The owner plays it on the phone and the wall dashboard for a few days.
+- **Keep it** only if they find themselves coming back to it. Then build the
+  server side above, ask Sol for the decoy prop, and ship it in the picker.
+- **Drop it** otherwise, with only the card code to remove.
+
+Tests (full version): the finish call's checks; the idle drop; the rewards; the
+best score survives a restart. `card-check` drives one game with the card's
+clock stubbed (a test hook for the timer), so its taps land deterministically.
 
 ## D. An alternate adult form: one-species pilot (M, art-bound)
 
@@ -185,8 +281,12 @@ Decisions (to settle when D starts):
    pets, then send the brief to Sol. The code comes when the art arrives.
 4. **C1** (Higher or Lower, with the shared game changes): 0.23.0, after the
    2026-11-03 tuning review.
-5. **C2** (copy me): 0.24.0, once C1 has been in use for a while.
-6. **D's code**, once the art is in.
+5. **C3 prototype** (Catch, card only, hidden option): it can ride along in
+   0.23.0 or come in a patch release. The owner plays it for a few days.
+6. **C3 full** (server side, decoy prop, in the picker): 0.24.0, only if the
+   owner keeps it.
+7. **C2** (copy me), only if a twist proves itself in a prototype.
+8. **D's code**, once the art is in.
 
 Each release: `scripts/test`, `scripts/card-check` where the card changes,
 screenshots to the owner, and then the release workflow as in the HANDOFF.

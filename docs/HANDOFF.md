@@ -92,8 +92,9 @@ details before committing it.
    changing them.
 5. **Unconfirmed on a real phone:** the notification buttons. Ask the owner.
 6. **Feature-gap plan** (`docs/plan-2026-10-27-feature-gaps.md`): the owner chose
-   a call-response blueprint, choosing the next egg, two more minigames (Higher or
-   Lower, then copy me) and a one-species alternate adult chosen by a trait. The
+   a call-response blueprint, choosing the next egg, more minigames (Higher or
+   Lower; Catch from Giga Pets as a card-only prototype first; copy me only with a
+   twist) and a one-species alternate adult chosen by a trait. The
    plan has been reviewed and the owner has approved it; D still needs a species
    and a trait picked from the owner's pets. Not chosen (don't start unasked): learning household
    routines, a daily diary in the journal (declined), pets on the shelf noticing
