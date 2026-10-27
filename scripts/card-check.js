@@ -459,12 +459,16 @@ async function main() {
   await page.waitForTimeout(400);
 
   // 5. The egg wiggles, then cracks, before it hatches.
+  // A pet update can replace the injected egg, so inject until it shows (or 3 tries).
   for (const [minutes, frames] of [[12, "egg_wiggle"], [4, "egg_crack"]]) {
-    await inject(pet["sensor.life_stage"], {
-      state: "egg", attributes: { hatches_at: new Date(Date.now() + minutes * 60000).toISOString() },
-    });
-    await page.waitForTimeout(1200);
-    const src = (await cur().locator(".pet").getAttribute("src")) || "";
+    let src = "";
+    for (let i = 0; i < 3 && !src.includes(frames); i++) {
+      await inject(pet["sensor.life_stage"], {
+        state: "egg", attributes: { hatches_at: new Date(Date.now() + minutes * 60000).toISOString() },
+      });
+      await page.waitForTimeout(1200);
+      src = (await cur().locator(".pet").getAttribute("src")) || "";
+    }
     check(`egg shows ${frames}`, src.includes(frames), src.split("/").slice(-1)[0]);
   }
 
