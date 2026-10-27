@@ -81,8 +81,8 @@ async def test_config_flow_names_the_pet(hass: HomeAssistant) -> None:
         "pond",
         "nightsky",
     ]
-    # The beetle isn't ready yet, so the terrarium lists only the gecko.
-    assert worlds[1]["label"] == "Terrarium: Leopard gecko"
+    # The beetle isn't ready yet, so the terrarium lists the gecko and tarantula.
+    assert worlds[1]["label"] == "Terrarium: Leopard gecko, Mexican red-knee tarantula"
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_NAME: "Juniper", "world": "woodland"}
     )

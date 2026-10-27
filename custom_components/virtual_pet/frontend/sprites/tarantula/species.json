@@ -1,0 +1,34 @@
+{
+  "name": "Mexican red-knee tarantula",
+  "ready": true,
+  "stages": ["baby", "child", "teen", "adult"],
+  "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
+  "frames": 2,
+  "scale": { "adult": 1.1 },
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "wave": ["child_wave_1", "child_wave_2"],
+    "hair_flick": ["child_hair_flick_1", "child_hair_flick_2"],
+    "molt": ["child_molt_1", "child_molt_2"]
+  },
+  "props": {
+    "feed": "gecko/cricket",
+    "snack": "gecko/snack",
+    "play": "bird/ball",
+    "clean": "bird/sparkle_clean",
+    "medicine": "bird/medicine",
+    "blanket": "web_mat",
+    "heat": "gecko/heat_glow",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
+  },
+  "backgrounds": { "day": "gecko/bg_vivarium" },
+  "words": { "food": "crickets", "home": "burrow" },
+  "reactions": { "won": "wave", "praise": "wave", "scold": "hair_flick" }
+}

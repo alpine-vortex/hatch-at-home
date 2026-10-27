@@ -52,16 +52,17 @@ details before committing it.
   tree frog stands on a lily pad (`perch_lilypad`, drawn by `art/treefrog/make_perch.py`).
 - **Worlds, all six live:**
   - Woodland: bird, Douglas squirrel (deer to come). Egg shell.
-  - Terrarium: leopard gecko (tarantula held back). Tank shell.
+  - Terrarium: leopard gecko, Mexican red-knee tarantula (0.21.0, Sol's v2 at 2 px art
+    pixels so its faces read; borrows the gecko's scene and cricket). Tank shell.
   - Hearth: tabby kitten, lop bunny. House shell.
   - Tidepool: sea otter, giant Pacific octopus. Porthole shell; water world (murk).
   - Pond: Pacific tree frog, axolotl. Lily-pad shell; water world.
   - Night Sky: little brown bat, luna moth. Moon shell.
   - The beetle is shelved (`art/beetle/`).
-- **Adults** exist for every creature except the axolotl, bat and luna moth, which still
-  fall back to their teen sprites (`stage_fallback`). Long adults are drawn back up with
-  `species.json` `"scale": {"adult": …}` (1.05–1.2).
-- **Tests:** 194, run with `scripts/test` (ruff, format check, pytest).
+- **Adults** exist for every creature (the last four arrived in 0.21.0). Long adults
+  are drawn back up with `species.json` `"scale": {"adult": …}` (1.05–1.2; the bat
+  needs none).
+- **Tests:** 196, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
   `scripts/card-check` (Playwright, 22 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
@@ -72,24 +73,19 @@ details before committing it.
 
 1. **Assist on the owner's HA:** ask them to try it (an LLM agent, and the sentences
    file) and report what it says; tune the wording from that.
-2. **Sol's batch "hatch-batch-feedback".** A scheduled task named "Send Sol the Hatch
-   art batch" was set to send the request at 2026-10-27 02:24 UTC (it fires into the
-   fourth session with the full text). Check that it went out; if not, send it (the text
-   is in that task, and the contents are in item 3 below). Then tell the owner.
-3. **Art still coming from Sol** (the owner relays share links):
-   - the deer (Woodland's third creature), with adult sheets in the same batch;
-   - the tarantula face re-run (the owner chose to wait for it rather than ship the
-     first set, `hatch-4664de9c`, whose dark faces vanish), with adults. Its only prop
-     was `web_mat`: borrow the gecko's cricket for feed and its other props, and the
-     gecko's `bg_vivarium`;
-   - the batch above: adults for axolotl, bat and luna moth; `bg_rain` for Terrarium,
-     Tidepool, Pond and Night Sky; the gecko's `bg_night` and `bg_dim`; one shared
-     `prop_fan`, `prop_scold`, `prop_praise` set. The shared props replace the card's
-     `FALLBACK_PROPS` (scold, praise) and the CSS breeze (fan): put them in each world's
-     first species' `props` (others borrow with `other/name` paths). A species with its
-     own `bg_rain` no longer gets the drawn rain.
-   When adults arrive: add "adult" to `stages`, drop `stage_fallback`, measure adult vs
-   teen content height and set `scale.adult` (cap 1.2), check in the browser.
+2. *(merged into 3: the scheduled send failed with access denied on 2026-10-27, so
+   the batch went out by hand at 03:07 UTC, together with the deer brief.)*
+3. **Art still coming from Sol** (asked 2026-10-27 03:07 UTC; the owner relays links):
+   - the deer (Woodland's third creature): Columbia black-tailed deer, brief sent; Sol
+     probes it first, then all four stages. Species folder `deer`;
+   - batch "hatch-batch-feedback": `bg_rain` for Terrarium, Tidepool, Pond and Night
+     Sky; the gecko's `bg_night` and `bg_dim`; one shared `prop_fan`, `prop_scold`,
+     `prop_praise` set. The shared props replace the card's `FALLBACK_PROPS` (scold,
+     praise) and the CSS breeze (fan): put them in each world's first species' `props`
+     (others borrow with `other/name` paths). A species with its own `bg_rain` no
+     longer gets the drawn rain.
+   When adults arrive: add "adult" to `stages`, measure adult vs teen content height
+   and set `scale.adult` (cap 1.2), check in the browser.
 4. **Tuning review, about 2026-11-03.** A scheduled reminder fires then. Ask the owner
    for each pet's diagnostics download, then check care misses per day, weight drift,
    whine rate, and game and chore use against `rates.py`. Propose numbers before

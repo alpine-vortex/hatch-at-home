@@ -12,7 +12,7 @@
   | World | Creatures | Device shell | Notes |
   | --- | --- | --- | --- |
   | Woodland | bird ✅, Douglas squirrel | egg with keychain loop | |
-  | Terrarium | leopard gecko ✅, red-knee tarantula | tank with lid and feet | beetle shelved |
+  | Terrarium | leopard gecko ✅, red-knee tarantula ✅ | tank with lid and feet | beetle shelved |
   | Hearth | kitten, lop bunny | little house (roof and chimney) | cozy living room |
   | Tidepool | sea otter, giant Pacific octopus | round porthole with rivets | water world |
   | Pond | Pacific tree frog, axolotl | lily-pad rounded body | water world |
