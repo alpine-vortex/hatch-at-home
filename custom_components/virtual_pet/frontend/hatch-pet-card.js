@@ -450,18 +450,6 @@ const STYLE = `
 `;
 
 class HatchPetCard extends HTMLElement {
-  static getConfigForm() {
-    return {
-      schema: [
-        {
-          name: "entities",
-          selector: { entity: { multiple: true, filter: { integration: "virtual_pet" } } },
-        },
-      ],
-      computeLabel: () => "Pets to show (any entity of each; empty shows all)",
-    };
-  }
-
   static getStubConfig() {
     return {};
   }
@@ -510,7 +498,21 @@ class HatchPetCard extends HTMLElement {
 
   // --- Finding the pets --------------------------------------------------------
 
+  // HA hands the card a new hass on every state change in the house, but the
+  // registries only change when entities do: the pets' entities are worked out
+  // once per registry (and config), not on every update.
   _devices() {
+    const hass = this._hass;
+    const c = this._devCache;
+    if (c && c.entities === hass.entities && c.devices === hass.devices && c.config === this._config) {
+      return c.list;
+    }
+    const list = this._findDevices();
+    this._devCache = { entities: hass.entities, devices: hass.devices, config: this._config, list };
+    return list;
+  }
+
+  _findDevices() {
     const hass = this._hass;
     // Pets picked in the editor (devices), or by any one entity of each (YAML).
     const wanted = [].concat(this._config.entities || [], this._config.entity || []);
@@ -527,15 +529,12 @@ class HatchPetCard extends HTMLElement {
         }
       }
     }
-    return deviceIds.map((device) => {
-      const ids = { device };
-      for (const e of Object.values(hass.entities)) {
-        if (e.device_id === device && e.platform === "virtual_pet") {
-          ids[`${e.entity_id.split(".")[0]}.${e.translation_key}`] = e.entity_id;
-        }
-      }
-      return ids;
-    });
+    const byDevice = Object.fromEntries(deviceIds.map((device) => [device, { device }]));
+    for (const e of Object.values(hass.entities || {})) {
+      const ids = e.platform === "virtual_pet" && byDevice[e.device_id];
+      if (ids) ids[`${e.entity_id.split(".")[0]}.${e.translation_key}`] = e.entity_id;
+    }
+    return deviceIds.map((device) => byDevice[device]);
   }
 
   // --- Building --------------------------------------------------------------
@@ -730,6 +729,7 @@ class HatchPetCard extends HTMLElement {
     try {
       worlds = await loadJson("worlds.json");
     } catch (err) {
+      this._sig = null; // try again on the next update
       return;
     }
     while (this._slides.length < devices.length) this._slides.push(this._buildSlide());
@@ -738,6 +738,7 @@ class HatchPetCard extends HTMLElement {
 
     for (let i = 0; i < devices.length; i++) {
       const s = this._slides[i];
+      if (s.ids && s.ids.device !== devices[i].device) this._forget(s); // another pet now
       s.ids = devices[i];
       const stage = this._state(s, "sensor.life_stage");
       s.world = worlds[stage?.attributes.world] || Object.values(worlds)[0];
@@ -754,6 +755,7 @@ class HatchPetCard extends HTMLElement {
           this._update();
         }).catch(() => {
           s.bubble.textContent = `missing sprites for ${speciesId}`;
+          if (s.speciesId === speciesId) s.speciesId = null; // try again on the next update
         });
       }
       if (s.species) {
@@ -766,6 +768,18 @@ class HatchPetCard extends HTMLElement {
     }
     this._card.classList.toggle("single", devices.length < 2);
     this._renderShelf();
+  }
+
+  // A slide that now shows another pet starts fresh: nothing of the last
+  // pet's (a game, an armed "sure?", the moments already seen) carries over.
+  _forget(s) {
+    if (s.game) this._endGame(s, null);
+    s.confirmUntil = 0;
+    s.lastMoment = s.lastLogAt = undefined;
+    s.greeted = false;
+    s.excitedSince = 0;
+    s.journal = false;
+    s.statusHtml = null;
   }
 
   _state(s, key) {
@@ -1005,14 +1019,18 @@ class HatchPetCard extends HTMLElement {
     this._show(s, s.attention, calling && !away ? sp.props?.attention : null);
     if (!s.propUntil || Date.now() > s.propUntil) this._show(s, s.prop, null);
 
-    const log = this._state(s, "sensor.last_care")?.attributes.log || [];
+    const lastCare = this._state(s, "sensor.last_care");
+    const log = lastCare?.attributes.log || [];
+    // "Just happened" is judged on the server's clock (the sensor's last update),
+    // so a device whose own clock is off still shows care and moments.
+    const recent = (at) => new Date(lastCare?.last_updated) - new Date(at) < 15000;
     const latestAt = log[0]?.at ?? null;
     if (s.lastLogAt === undefined) s.lastLogAt = latestAt; // don't react to old care
     if (latestAt !== s.lastLogAt) {
-      if (Date.now() - new Date(latestAt) < 15000) this._react(s, log[0]);
+      if (recent(latestAt)) this._react(s, log[0]);
       s.lastLogAt = latestAt;
     }
-    const moments = this._state(s, "sensor.last_care")?.attributes.moments || [];
+    const moments = lastCare?.attributes.moments || [];
     const momentKey = (m) => m && `${m.at}|${m.type}`;
     if (s.lastMoment === undefined) s.lastMoment = momentKey(moments[0]) ?? null; // not old ones
     if (moments.length && momentKey(moments[0]) !== s.lastMoment) {
@@ -1022,7 +1040,7 @@ class HatchPetCard extends HTMLElement {
         fresh.push(m);
       }
       s.lastMoment = momentKey(moments[0]);
-      fresh.reverse().filter((m) => Date.now() - new Date(m.at) < 15000)
+      fresh.reverse().filter((m) => recent(m.at))
         .forEach((m) => this._moment(s, m));
     }
     const egg = stage === "egg";
@@ -1060,7 +1078,7 @@ class HatchPetCard extends HTMLElement {
     lights.querySelector(".lbl").textContent = sleeping ? "wake" : "sleep";
     lights.title = sleeping ? "Lights on: wake the pet" : "Lights out: put the pet to bed";
 
-    this._renderStatus(s, log);
+    if (s.screen.classList.contains("show-status")) this._renderStatus(s, log);
   }
 
   _say(s, mood, away) {
@@ -1325,12 +1343,14 @@ class HatchPetCard extends HTMLElement {
         break;
       case "news": { // virtual_pet.share_news: a passing moment, like a TV title
         const h = String(m.headline || "");
-        if (!h) break;
+        if (!h || s.game) break; // a game's prompt owns the bubble: dropped, like asleep
         const lines = [`did you hear? ${h}`, `did you hear? ${h}`, `guess what? ${h}`,
           `ooh, news! ${h}`];
-        if (m.topic) lines.push(`${m.topic} news! ${h}`);
-        // Long enough to read a headline, never long.
-        say(pick(lines), Math.min(9000, 4000 + h.length * 60));
+        // A short topic only, so the bubble stays small ("World News news!" never).
+        const topic = String(m.topic || "");
+        if (topic && topic.length <= 12 && !/news$/i.test(topic)) lines.push(`${topic} news! ${h}`);
+        const line = pick(lines);
+        say(line, 4000 + line.length * 50); // long enough to read, never long
         this._animate(s, s.pet, "perk", 320);
         break;
       }
@@ -1429,7 +1449,7 @@ class HatchPetCard extends HTMLElement {
     // The creature picked for the next egg (if any), and its world if that changes.
     const nextEgg = [stageAttrs.next_egg?.toLowerCase(), stageAttrs.next_world && `in ${stageAttrs.next_world}`]
       .filter(Boolean).join(" ");
-    s.status.innerHTML = `
+    const html = `
       ${row("icon_feed", "hunger", hearts(value("hunger")))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}
@@ -1444,6 +1464,7 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "notify me", `<span><button class="bell" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>
       <button class="jlink">journal ›</button>`;
+    if (!this._setStatus(s, html)) return;
     this._journalLink(s, true);
     s.status.querySelector(".bell").addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
@@ -1462,6 +1483,15 @@ class HatchPetCard extends HTMLElement {
       s.bubble.textContent = "hmm, that didn't work";
     }
     s.sayUntil = Date.now() + 3500;
+  }
+
+  // Fill the status screen; false if it already shows this (kept as is, so
+  // its scroll position and focus survive the update).
+  _setStatus(s, html) {
+    if (s.statusHtml === html) return false;
+    s.statusHtml = html;
+    s.status.innerHTML = html;
+    return true;
   }
 
   _journalLink(s, open) {
@@ -1509,14 +1539,13 @@ class HatchPetCard extends HTMLElement {
       `${p.upbringing ? ` · ${escape(p.upbringing)}` : ""}` +
       `${p.traits?.length ? `<br><span class="gt">${p.traits.map((t) =>
         traitLabel(t, p.levels?.[t], t === p.inherited)).join(", ")}</span>` : ""}</div>`);
-    s.status.innerHTML = `
+    const html = `
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
       <div class="jgrid">${tiles.join("")}</div>
       <div class="jlist">${lines.join("")}${past.length < 2 ? "<div class=\"gt\">A week into adulthood, a pet can lay an egg.</div>" : ""}${this._memories(stage.memories)}</div>
       <button class="jlink">‹ status</button>`;
-    s.status.scrollTop = 0;
-    this._journalLink(s, false);
+    if (this._setStatus(s, html)) this._journalLink(s, false);
   }
 
   // Seasonal firsts and other moments the family remembers, newest first.
