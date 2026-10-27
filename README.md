@@ -56,11 +56,14 @@ to add and no Advanced mode needed. After installing or updating, restart HA and
 reload the browser page. On a phone or wall tablet, pull to refresh.
 
 Edit a dashboard → Add card → search **Hatch at Home pet shelf**. With no settings
-it shows every pet. To show only some, pick any one entity of each. In YAML:
+it shows every pet. To show only some, pick them in the card's editor. In YAML:
 
 ```yaml
 type: custom:hatch-pet-card
-# optional:
+# optional: the pets' device IDs (the editor fills these in)
+devices:
+  - 0123456789abcdef0123456789abcdef
+# or, as before, any one entity of each pet:
 entities:
   - sensor.pip_mood
 ```
@@ -100,8 +103,12 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 
 ## What you get
 
-One device named after your pet (rename the device to rename the pet; its
-notifications and journal follow), with:
+One device named after your pet, with the entities below. To rename the pet or move
+it to another world, open Settings → Devices & services → Virtual Pet → ⋮ next to the
+pet → **Reconfigure**. Entity IDs stay the same, and notifications and the journal
+follow the new name. A pet that has hatched stays in its world; its next egg starts
+in the new one (the status screen says "next egg in …"). To name a new generation,
+lay the egg, then rename it.
 
 | Entity | What it is |
 | --- | --- |
@@ -215,6 +222,9 @@ the pet comes home.
 | --- | --- | --- |
 | Keep presence private | on | An empty house shows the pet napping, never at the sitter's (care while it's away is refused as "asleep"), and the pet never names anyone. Turn it off to see "at the sitter's". |
 
+If an entity named in these settings is later renamed or removed, Settings →
+**Repairs** says which ones, so you can pick the new ones here.
+
 ### Fixed rules (not settings)
 
 - **Sensor dropouts:** a sensor that goes unavailable keeps its last value for 10 minutes, then counts as unmapped. It never reads as dark or empty.
@@ -243,6 +253,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   to bed; outside sleep hours that's a nap that ends when it's rested. Left up
   past bedtime, it dozes off on its own after an hour with no penalty. Turning
   lights-out off during sleep hours costs a little happiness. No calls while asleep.
+  If its energy runs out, it falls asleep where it is (no penalty: the energy call
+  before that was the warning).
 - **Weight:** 0–100, healthy between 25 and 75. Meals (+4) and snacks (+6) add to it;
   being awake (−0.7 an hour), play (−3) and the game (−4) burn it off. Three meals a
   day roughly balance out, so snacks are what tip it. Too heavy or too light, it

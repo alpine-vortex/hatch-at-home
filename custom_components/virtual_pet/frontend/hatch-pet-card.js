@@ -405,6 +405,10 @@ class HatchPetCard extends HTMLElement {
     return {};
   }
 
+  static getConfigElement() {
+    return document.createElement("hatch-pet-card-editor");
+  }
+
   setConfig(config) {
     this._config = config || {};
     this._sig = null;
@@ -447,9 +451,10 @@ class HatchPetCard extends HTMLElement {
 
   _devices() {
     const hass = this._hass;
+    // Pets picked in the editor (devices), or by any one entity of each (YAML).
     const wanted = [].concat(this._config.entities || [], this._config.entity || []);
-    const deviceIds = [];
-    if (wanted.length) {
+    const deviceIds = [...(this._config.devices || [])].filter((d) => hass.devices?.[d]);
+    if (wanted.length || this._config.devices?.length) {
       for (const id of wanted) {
         const d = hass.entities?.[id]?.device_id;
         if (d && !deviceIds.includes(d)) deviceIds.push(d);
@@ -647,7 +652,8 @@ class HatchPetCard extends HTMLElement {
       while (this._slides.length) this._slides.pop().el.remove();
       this._card.classList.add("single");
       this._card.querySelector(".chips").style.display = "none";
-      const configured = [].concat(this._config.entities || [], this._config.entity || []).length;
+      const configured = [].concat(
+        this._config.entities || [], this._config.entity || [], this._config.devices || []).length;
       this._card.querySelector(".title").textContent = configured ? "Pet not found" : "No pets yet";
       this._card.querySelector(".sub").textContent = configured
         ? "None of this card's entities belong to a virtual pet. Edit the card to pick them again."
@@ -1172,6 +1178,7 @@ class HatchPetCard extends HTMLElement {
       <div class="row traits"><span>whines</span><span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0} ignored</span></div>
       <div class="row traits"><span>traits</span><span>${traits.length ? traits.join(" · ") : "none yet"}</span></div>
       ${stageAttrs.upbringing ? `<div class="row traits"><span>${this._state(s, "sensor.life_stage")?.state === "adult" ? "raised" : "growing up"}</span><span>${escape(stageAttrs.upbringing)}</span></div>` : ""}
+      ${stageAttrs.next_world ? `<div class="row traits"><span>next egg</span><span>in ${escape(stageAttrs.next_world)}</span></div>` : ""}
       <div class="row traits"><span>notify me</span><span><button class="bell" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span></div>
       <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>
       <button class="jlink">journal ›</button>`;
@@ -1376,6 +1383,62 @@ class HatchPetCard extends HTMLElement {
   }
 }
 
+// The card editor: pick which pets the shelf shows (none picked shows all).
+class HatchPetCardEditor extends HTMLElement {
+  set hass(hass) {
+    this._hass = hass;
+    if (this._form) this._form.hass = hass;
+  }
+
+  setConfig(config) {
+    this._config = { ...(config || {}) };
+    this._render();
+  }
+
+  // Older cards name one entity per pet; show those as their devices.
+  _devicesOf(config) {
+    if (config.devices) return config.devices;
+    const ids = [].concat(config.entities || [], config.entity || []);
+    const devices = ids.map((id) => this._hass?.entities?.[id]?.device_id).filter(Boolean);
+    return [...new Set(devices)];
+  }
+
+  async _render() {
+    if (!this._form) {
+      // ha-form loads with the frontend's own card editors; make sure it's there.
+      if (!customElements.get("ha-form")) {
+        const helpers = await window.loadCardHelpers?.();
+        const entities = await helpers?.createCardElement({ type: "entities", entities: [] });
+        await entities?.constructor?.getConfigElement?.();
+      }
+      this._form = document.createElement("ha-form");
+      this._form.computeLabel = () => "Pets on this shelf";
+      this._form.computeHelper = () =>
+        "Leave empty to show every pet. The shelf shows them in this order.";
+      this._form.schema = [{
+        name: "devices",
+        selector: { device: { multiple: true, filter: { integration: "virtual_pet" } } },
+      }];
+      this._form.addEventListener("value-changed", (e) => this._changed(e.detail.value));
+      this.append(this._form);
+    }
+    this._form.hass = this._hass;
+    this._form.data = { devices: this._devicesOf(this._config) };
+  }
+
+  _changed(value) {
+    const config = { ...this._config };
+    delete config.entities;
+    delete config.entity;
+    if (value.devices?.length) config.devices = value.devices;
+    else delete config.devices;
+    this._config = config;
+    this.dispatchEvent(new CustomEvent("config-changed", {
+      detail: { config }, bubbles: true, composed: true,
+    }));
+  }
+}
+
 // The integration loads this file on every dashboard. If an old manual
 // resource also loads it, keep the first definition instead of erroring.
 // Wait for <home-assistant> first: once the service worker caches this file
@@ -1384,6 +1447,9 @@ class HatchPetCard extends HTMLElement {
 customElements.whenDefined("home-assistant").then(() => {
   if (!window.customElements.get("hatch-pet-card")) {
     window.customElements.define("hatch-pet-card", HatchPetCard);
+  }
+  if (!window.customElements.get("hatch-pet-card-editor")) {
+    window.customElements.define("hatch-pet-card-editor", HatchPetCardEditor);
   }
 });
 

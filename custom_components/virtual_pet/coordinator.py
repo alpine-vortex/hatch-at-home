@@ -35,6 +35,7 @@ from .const import (
     CONF_CHORES,
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
+    CONF_NEXT_WORLD,
     CONF_PRIVACY,
     CONF_SITTER_SETTLES,
     CONF_SPECIES,
@@ -168,6 +169,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if CONF_WORLD not in self.config_entry.data and old_species:
             self.world = catalog.world_of(old_species) or DEFAULT_WORLD
         self.world_name = catalog.worlds.get(self.world, {}).get("name", self.world)
+        next_world = self.config_entry.data.get(CONF_NEXT_WORLD)
+        self.next_world_name: str | None = (
+            catalog.worlds.get(next_world, {}).get("name", next_world)
+            if next_world
+            else None
+        )
         self.roster = tuple(catalog.roster(self.world))
         self.species_names = {s: catalog.species[s].get("name", s) for s in self.roster}
         if not self.roster:
@@ -519,6 +526,15 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._fire(events)
         self._save()
         self._publish()
+        if events and (next_world := self.config_entry.data.get(CONF_NEXT_WORLD)):
+            # The owner chose a new world for the next egg: this is that egg.
+            data = dict(self.config_entry.data)
+            data[CONF_WORLD] = data.pop(CONF_NEXT_WORLD)
+            LOGGER.debug(
+                "%s's new egg moves to %s", self.config_entry.title, next_world
+            )
+            self.hass.config_entries.async_update_entry(self.config_entry, data=data)
+            self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
 
     async def async_set_lights_out(self, on: bool) -> None:
         """Flip the lights-out switch."""

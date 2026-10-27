@@ -1015,3 +1015,48 @@ async def test_repairs_warn_about_a_world_without_creatures(
     assert ir.async_get(hass).async_get_issue(DOMAIN, "world_not_ready_test_pet")
     await hass.config_entries.async_remove(config.entry_id)
     assert not ir.async_get(hass).async_get_issue(DOMAIN, "world_not_ready_test_pet")
+
+
+async def test_reconfigure_renames_and_moves_an_egg_now(
+    hass: HomeAssistant, now: float
+) -> None:
+    config = await setup(hass)  # a fresh egg
+    result = await config.start_reconfigure_flow(hass)
+    assert result["type"] is FlowResultType.FORM
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Fern", "world": "tidepool"}
+    )
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+    assert config.title == "Fern"
+    assert config.data["world"] == "tidepool" and "next_world" not in config.data
+    # Entity IDs stay; the pet answers to its new name.
+    assert hass.states.get("sensor.pip_life_stage").attributes["world"] == "tidepool"
+
+
+async def test_reconfigure_moves_a_hatched_pet_with_its_next_egg(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    age = 14 * 24 + 7 * 24 + 1.0
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, age_hours=age, born=now - age * 3600, species="bird", raised=["bird"]
+    )
+    config = await setup(hass)
+    result = await config.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Pip", "world": "pond"}
+    )
+    await hass.async_block_till_done()
+    assert config.data["world"] == "woodland" and config.data["next_world"] == "pond"
+    stage = hass.states.get("sensor.pip_life_stage")
+    assert stage.attributes["world"] == "woodland"
+    assert stage.attributes["next_world"] == "Pond"
+
+    await press(hass, "button.pip_lay_egg")
+    await hass.async_block_till_done()
+    assert config.data["world"] == "pond" and "next_world" not in config.data
+    stage = hass.states.get("sensor.pip_life_stage")
+    assert stage.state == "egg"
+    assert stage.attributes["world"] == "pond"
+    assert stage.attributes["next_world"] is None
+    assert stage.attributes["generation"] == 2

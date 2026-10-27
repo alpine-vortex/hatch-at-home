@@ -25,6 +25,7 @@ ATTR_HOURS = "hours"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 
 CONF_WORLD = "world"
+CONF_NEXT_WORLD = "next_world"  # chosen after hatching: the next egg's world
 DEFAULT_WORLD = "woodland"
 # Phase 2 entries stored a species instead of a world.
 CONF_SPECIES = "species"

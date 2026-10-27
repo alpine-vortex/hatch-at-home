@@ -12,10 +12,19 @@
           "name": "Shown on the card and used in entity IDs, for example button.pip_feed. Voice commands use it too.",
           "world": "Sets the device's look and which creatures can hatch. The egg picks one by surprise."
         }
+      },
+      "reconfigure": {
+        "title": "Rename or move {name}",
+        "description": "A new name shows on the card and in notifications; entity IDs stay the same. To name a new generation, lay the egg first, then rename it here. A new world changes the device and which creatures hatch. A pet that has already hatched stays where it is, and its next egg starts in the new world.",
+        "data": {
+          "name": "Name",
+          "world": "World"
+        }
       }
     },
     "abort": {
-      "no_worlds": "No pet worlds are ready yet. Reinstall the integration files and try again."
+      "no_worlds": "No pet worlds are ready yet. Reinstall the integration files and try again.",
+      "reconfigure_successful": "Saved."
     }
   },
   "options": {

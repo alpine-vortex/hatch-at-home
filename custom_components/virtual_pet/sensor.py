@@ -180,6 +180,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "trait_progress": model.trait_progress(self.pet),
             "roster": list(self.coordinator.roster),
             "hatches_at": self._hatches_at(),
+            "next_world": self.coordinator.next_world_name,
             # Final once adult; before that, what it's on track for.
             "upbringing": (
                 model.upbringing(self.pet)

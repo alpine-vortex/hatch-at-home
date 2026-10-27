@@ -48,6 +48,7 @@ from .const import (
     CONF_MOON_PHASE,
     CONF_MOTION,
     CONF_MUSIC,
+    CONF_NEXT_WORLD,
     CONF_PRIVACY,
     CONF_RAIN,
     CONF_ROOM_LIGHTS,
@@ -86,6 +87,69 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
         taken = {e.title.casefold() for e in self._async_current_entries()}
         return next((n for n in PET_NAMES if n.casefold() not in taken), DEFAULT_NAME)
 
+    async def _world_options(self) -> list[SelectOptionDict] | None:
+        catalog = await self.hass.async_add_executor_job(load_catalog)
+        if not catalog.worlds:
+            return None
+        return [
+            SelectOptionDict(
+                value=key,
+                label=f"{world['name']}: "
+                + ", ".join(catalog.species[s]["name"] for s in catalog.roster(key)),
+            )
+            for key, world in catalog.worlds.items()
+        ]
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Rename the pet, or move it to another world.
+
+        A pet that has hatched stays a creature of its world; the move applies
+        to its next egg.
+        """
+        entry = self._get_reconfigure_entry()
+        current = entry.data.get(CONF_NEXT_WORLD) or entry.data.get(
+            CONF_WORLD, DEFAULT_WORLD
+        )
+        if user_input is not None:
+            name = user_input[CONF_NAME].strip() or entry.title
+            world = user_input[CONF_WORLD]
+            data = {k: v for k, v in entry.data.items() if k != CONF_NEXT_WORLD}
+            coordinator = getattr(entry, "runtime_data", None)
+            unhatched = coordinator is None or (
+                coordinator.state is not None and coordinator.state.species is None
+            )
+            # Entries from before worlds existed keep theirs only in the coordinator.
+            data[CONF_WORLD] = (
+                coordinator.world
+                if coordinator is not None
+                else data.get(CONF_WORLD, DEFAULT_WORLD)
+            )
+            if world != data[CONF_WORLD]:
+                if unhatched:
+                    data[CONF_WORLD] = world  # still an egg: it moves now
+                else:
+                    data[CONF_NEXT_WORLD] = world
+            return self.async_update_reload_and_abort(
+                entry, title=name, data={**data, CONF_NAME: name}
+            )
+        options = await self._world_options()
+        if options is None:
+            return self.async_abort(reason="no_worlds")
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_NAME, default=entry.title): str,
+                    vol.Required(CONF_WORLD, default=current): SelectSelector(
+                        SelectSelectorConfig(options=options)
+                    ),
+                }
+            ),
+            description_placeholders={"name": entry.title},
+        )
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -96,20 +160,11 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
                 title=name,
                 data={CONF_NAME: name, CONF_WORLD: user_input[CONF_WORLD]},
             )
-        catalog = await self.hass.async_add_executor_job(load_catalog)
-        if not catalog.worlds:
+        options = await self._world_options()
+        if options is None:
             return self.async_abort(reason="no_worlds")
-        options = [
-            SelectOptionDict(
-                value=key,
-                label=f"{world['name']}: "
-                + ", ".join(catalog.species[s]["name"] for s in catalog.roster(key)),
-            )
-            for key, world in catalog.worlds.items()
-        ]
-        default = (
-            DEFAULT_WORLD if DEFAULT_WORLD in catalog.worlds else options[0]["value"]
-        )
+        keys = [o["value"] for o in options]
+        default = DEFAULT_WORLD if DEFAULT_WORLD in keys else keys[0]
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
