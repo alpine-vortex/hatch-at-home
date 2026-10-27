@@ -4,8 +4,8 @@ Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's bran
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
-release **0.25.1**; current beta **0.26.0b3** from PR #7's branch (b4 coming with the
-polish pass). **The owner runs it on
+release **0.25.1**; current beta **0.26.0b4** from PR #7's branch (the polish pass).
+**The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read the README first, then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and
