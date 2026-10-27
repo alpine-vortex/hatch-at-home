@@ -209,10 +209,17 @@ async function main() {
   const pet = await ids();
   const petName = (await page.locator("hatch-pet-card .title").innerText()).trim();
 
+  // A content pet that isn't calling: a calling pet is never greeted and has no
+  // idle life, and a freshly hatched one may well be calling.
+  const calm = async () => {
+    await inject(pet["binary_sensor.calling"], { state: "off" });
+    await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [], requests: [] } });
+  };
+
   // Greeted by first name: forget past greetings, reload, come back to this pet.
   await evaluate(() => Object.keys(localStorage)
     .filter((k) => k.startsWith("hatch-greet-")).forEach((k) => localStorage.removeItem(k)));
-  await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [], requests: [] } });
+  await calm();
   await page.reload();
   await signedIn();
   await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
@@ -221,7 +228,7 @@ async function main() {
     await page.locator("hatch-pet-card .nav.next").click();
     await page.waitForTimeout(700);
   }
-  await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [], requests: [] } });
+  await calm();
   let greeting = "";
   for (let i = 0; i < 30 && !greeting.includes(USER.name); i++) {
     await page.waitForTimeout(500);
