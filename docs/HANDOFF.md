@@ -1,8 +1,10 @@
-# Handoff (2026-10-27, end of the fourth session)
+# Handoff (2026-10-27, fifth session)
 
-Branch: `ccr-a5f628ca-979gik`, which is also the repo's default branch (all work
-pushed; no PR). Version **0.20.0**, released. **The owner runs it on their live HA**
-(they were on 0.18.0 at the end of the fourth session).
+Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's branch
+`ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
+work on their own branch and land work in `main` through a PR, unless the owner says
+a session may push to `main`. Version **0.22.0**, released. **The owner runs it on
+their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read the README first, then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and
 `docs/assist-scoping.md`. The owner's original brief is not in the repo; its key rules
@@ -128,7 +130,7 @@ details before committing it.
 - **Release:** bump the version in `const.py`, `manifest.json` and
   `frontend/hatch-pet-card.js` (the card URL's `?v=` busts the service-worker cache),
   push, wait for Validate to go green, then run the Release workflow: the GitHub MCP
-  tool `actions_run_trigger` with `release.yml` and ref = this branch.
+  tool `actions_run_trigger` with `release.yml` and ref = `main`.
 - **Message Sol:** `send_message` to Sol's session (ID in the private notes). Sol can't
   reply; the owner relays links. Ask for batch jobs (cheaper).
 - **Card not showing after an update:** a hard refresh, or in the companion app,
