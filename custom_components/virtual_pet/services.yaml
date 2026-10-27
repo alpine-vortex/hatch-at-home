@@ -52,3 +52,20 @@ play_game:
             - right
             - lower
             - higher
+share_news:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: virtual_pet
+          multiple: true
+    headline:
+      required: true
+      example: "Tamagotchi turns 30!"
+      selector:
+        text:
+    topic:
+      example: Tamagotchi
+      selector:
+        text:

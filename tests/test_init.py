@@ -1229,3 +1229,109 @@ async def test_next_egg_rejects_a_creature_it_cannot_hatch(
     with pytest.raises(ServiceValidationError):
         await pick(hass, "Axolotl")  # another world's creature
     assert hass.states.get("select.pip_next_egg").state == "Surprise me"
+
+
+async def share_news(
+    hass: HomeAssistant, headline: str, **fields: Any
+) -> dict[str, Any]:
+    return await hass.services.async_call(
+        DOMAIN,
+        "share_news",
+        {"entity_id": "button.pip_feed", "headline": headline, **fields},
+        blocking=True,
+        return_response=True,
+    )
+
+
+def news_moments(hass: HomeAssistant) -> list[dict[str, Any]]:
+    moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
+    return [m for m in moments if m["type"] == "news"]
+
+
+async def test_news_is_a_passing_moment_that_changes_nothing(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0)
+    config = await setup(hass)
+    assert hass.services.has_service(DOMAIN, "share_news")
+    events = async_capture_events(hass, f"{DOMAIN}_news")
+    before = config.runtime_data.state.to_dict()
+
+    response = await share_news(hass, "  Tamagotchi\nturns 30! ", topic="Tamagotchi")
+    assert response == {"test_pet": "shared"}
+    [moment] = news_moments(hass)
+    assert moment["headline"] == "Tamagotchi turns 30!"
+    assert moment["topic"] == "Tamagotchi"
+    assert events[0].data["headline"] == "Tamagotchi turns 30!"
+    # The house never hurts the pet, and news doesn't help it either.
+    assert config.runtime_data.state.to_dict() == before
+    assert hass.states.get("sensor.pip_mood").state != "excited"
+
+
+async def test_news_waits_its_turn(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    from custom_components.virtual_pet import rates as R
+
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    assert await share_news(hass, "Neopets is back") == {"test_pet": "shared"}
+    assert await share_news(hass, "Digimon news") == {"test_pet": "too_soon"}
+    freezer.tick(timedelta(minutes=R.NEWS_COOLDOWN_MINUTES - 1))
+    assert await share_news(hass, "Digimon news") == {"test_pet": "too_soon"}
+    freezer.tick(timedelta(minutes=2))
+    assert await share_news(hass, "Digimon news") == {"test_pet": "shared"}
+    assert [m["headline"] for m in news_moments(hass)] == [
+        "Digimon news",
+        "Neopets is back",
+    ]
+
+
+async def test_news_never_wakes_the_pet(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, asleep=True)
+    config = await setup(hass)
+    before = config.runtime_data.state.to_dict()
+    assert await share_news(hass, "Tamagotchi turns 30!") == {"test_pet": "asleep"}
+    assert news_moments(hass) == []
+    assert config.runtime_data.state.to_dict() == before
+    assert hass.states.get("binary_sensor.pip_asleep").state == STATE_ON
+    # Dropped, not queued, and it doesn't use up the cooldown either.
+    config.runtime_data.state.asleep = False
+    assert await share_news(hass, "Later news") == {"test_pet": "shared"}
+    assert [m["headline"] for m in news_moments(hass)] == ["Later news"]
+
+
+async def test_news_skips_eggs_and_keeps_away_private(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, away=True)
+    config = await setup(hass)
+    assert await share_news(hass, "News") == {"test_pet": "asleep"}  # privacy
+    config.runtime_data.state.away = False
+    config.runtime_data.state.age_hours = 0.0
+    assert await share_news(hass, "News") == {"test_pet": "egg"}
+    assert news_moments(hass) == []
+
+
+async def test_news_headline_is_capped_and_required(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    from homeassistant.exceptions import HomeAssistantError
+    import voluptuous as vol
+
+    from custom_components.virtual_pet import rates as R
+
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    await share_news(hass, "Tamagotchi " * 30, topic="Virtual pets everywhere")
+    [moment] = news_moments(hass)
+    assert len(moment["headline"]) <= R.NEWS_HEADLINE_MAX
+    assert moment["headline"].endswith("…")
+    assert len(moment["topic"]) <= R.NEWS_TOPIC_MAX
+    with pytest.raises((vol.Invalid, HomeAssistantError)):
+        await share_news(hass, "   ")

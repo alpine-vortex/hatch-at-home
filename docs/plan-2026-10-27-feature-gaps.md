@@ -191,7 +191,7 @@ Order: C1, then the C2 prototype, then the full C2 if it's kept.
 ### C1. Higher or Lower (first)
 
 **Built** (2026-10-27), release held until after the 2026-11-03 tuning review (then
-0.25.0; the other session released 0.23.1 and 0.24.0 meanwhile). Everything under
+0.26.0 or later; the other session released 0.23.1, 0.24.0 and 0.25.0 meanwhile). Everything under
 "Shared changes" is in except `caught` (Catch's finish field), which comes with C2:
 adding an optional field later doesn't break callers. The number sits at 30% from the
 top of the screen, clear of the speech bubble. Checked with `scripts/card-check`
@@ -428,7 +428,7 @@ look good, or wait for Sol's art (the owner's call at the time).
    model (cap, temperament, 7 new traits) and the card's flair layer are built after
    the Catch prototype, with stand-in art until Sol's arrives.
 4. **C1** (Higher or Lower, with every shared game change): built, in a PR held
-   until after the 2026-11-03 tuning review; then the next free version (0.25.0 as
+   until after the 2026-11-03 tuning review; then the next free version (0.26.0 as
    of now).
 5. **C2 prototype** (Catch, card only, hidden option): next to build; it can ride
    along with C1 or come in a patch release. The owner plays it for a few days.

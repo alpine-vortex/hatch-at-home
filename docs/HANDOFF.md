@@ -67,6 +67,15 @@ details before committing it.
   pet's notifications opens (`url` and `clickAction`); `notify.dashboard_path`
   normalises it. The dashboard list reads `hass.data["lovelace"]` without importing
   it; custom paths are allowed.
+- **News** (0.25.0): `virtual_pet.share_news`.
+  (`entity_id` one or a list, `headline`, optional `topic`)
+  makes a `news` moment the card says in the bubble ("did you hear? …", "guess
+  what? …", "ooh, news! …", "<topic> news! …"), with the short `perk`. Cosmetic: no
+  `_advance`, no save, no stat or mood change (a test compares the whole state).
+  Dropped, not queued, while asleep, away or an egg; at most one per
+  `NEWS_COOLDOWN_MINUTES` (30) per pet, in memory, set only when news shows. The
+  headline is cut at 60 characters (`home.news_text`): at 80 the bubble buried the pet
+  on a 330 px card. Checked in the browser at 420 and 330 px.
 - **Worlds, all six live:**
   - Woodland: bird, Douglas squirrel, Columbia black-tailed deer (0.22.0). Egg shell.
   - Terrarium: leopard gecko, Mexican red-knee tarantula (0.21.0, Sol's v2 at 2 px art
@@ -79,7 +88,7 @@ details before committing it.
 - **Adults** exist for every creature (the last four arrived in 0.21.0). Long adults
   are drawn back up with `species.json` `"scale": {"adult": …}` (1.05–1.2; the bat
   needs none).
-- **Tests:** 198, run with `scripts/test` (ruff, format check, pytest).
+- **Tests:** 227, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
   `scripts/card-check` (Playwright, 22 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
@@ -105,10 +114,12 @@ details before committing it.
 6. **Feature-gap plan** (`docs/plan-2026-10-27-feature-gaps.md`): the owner chose
    a call-response blueprint, choosing the next egg, more minigames (Higher or
    Lower; then Catch from Giga Pets, as a card-only prototype first; copy me was
-   cut) and a one-species alternate adult chosen by a trait. A (the blueprint) and B (the next egg, 0.23.0) are released; C1 (Higher or
-   Lower) is built and waits in a PR until after the 2026-11-03 tuning review; the
-   Catch prototype is next. D became trait flair (flair around the pet for every trait, a cap of 4 traits,
-   per-pet temperament, 7 new traits); Sol has the brief for 16 flair sprites.
+   cut) and trait flair. A (the blueprint) and B (the next egg, 0.23.0) are
+   released. Built and waiting in draft PR #7 until after the 2026-11-03 tuning
+   review: C1 (Higher or Lower), the Catch prototype (card option
+   `experimental_catch: true`, for the owner to try), and D, trait flair (Sol's 16
+   sprites around the pet, a cap of 4 traits, per-pet temperament, 7 new traits,
+   head points in `species.json`).
    **Two sessions work on this repo at once** (this plan's, and the one doing art
    and releases). Both land work in `main` through PRs; whoever releases takes the
    next free version from `main` then, and never releases the other's unmerged work.
