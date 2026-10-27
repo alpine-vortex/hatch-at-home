@@ -119,7 +119,8 @@ details before committing it.
    review: C1 (Higher or Lower), the Catch prototype (card option
    `experimental_catch: true`, for the owner to try), and D, trait flair (Sol's 16
    sprites around the pet, a cap of 4 traits, per-pet temperament, 7 new traits,
-   head points in `species.json`).
+   head points in `species.json`). The owner tries it first as the beta
+   0.26.0b1, released from that branch on 2026-10-27.
    **Two sessions work on this repo at once** (this plan's, and the one doing art
    and releases). Both land work in `main` through PRs; whoever releases takes the
    next free version from `main` then, and never releases the other's unmerged work.
@@ -167,6 +168,10 @@ details before committing it.
   `frontend/hatch-pet-card.js` (the card URL's `?v=` busts the service-worker cache),
   push, wait for Validate to go green, then run the Release workflow: the GitHub MCP
   tool `actions_run_trigger` with `release.yml` and ref = `main`.
+  **Betas:** a version like `0.26.0b1` (or `rc1`) is published as a GitHub
+  pre-release, which HACS offers only to someone who turned on "show beta
+  versions" for the integration. Run the workflow with ref = the PR's branch to
+  let the owner try unmerged work; the final release later drops the suffix.
 - **Message Sol:** `send_message` to Sol's session (ID in the private notes). Sol can't
   reply; the owner relays links. Ask for batch jobs (cheaper).
 - **Card not showing after an update:** a hard refresh, or in the companion app,
