@@ -81,17 +81,9 @@ const FLAIR = {
   homebody: { place: "ground" },
   couch_potato: { place: "ground" },
 };
-// A stand-in bee for decoy rounds (pixel art, one char per pixel).
-const BEE_ROWS = [".kk.kk.", ".kwkwk.", "kyykyyk", "kykykyk", ".kyyyk.", "..k.k.."];
-const BEE_SVG = (() => {
-  const colors = { k: "#3a2a1a", y: "#ffd23f", w: "#e8f4ff" };
-  let rects = "";
-  BEE_ROWS.forEach((row, y) => [...row].forEach((c, x) => {
-    if (c !== ".") rects += `<rect x="${x}" y="${y}" width="1" height="1" fill="${colors[c]}"/>`;
-  }));
-  return "data:image/svg+xml," + encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 6" shape-rendering="crispEdges">${rects}</svg>`);
-})();
+// Sol's bee for decoy rounds: two frames, wings up and down. It faces left.
+const BEE_FRAMES = [1, 2].map((n) => `${BASE}/ui/catch_decoy_${n}.png?v=${VERSION}`);
+const BEE_FLAP_MS = 110;
 
 const REFUSALS = {
   full: "I'm full!",
@@ -2035,14 +2027,16 @@ class HatchPetCard extends HTMLElement {
     const side = Math.random() < 0.5 ? "left" : "right";
     const decoy = g.round > 0 && Math.random() < CATCH.decoyChance;
     const prop = s.species?.props?.play || "";
-    const motion = /cricket/.test(prop) ? "hop" : "roll";
+    const motion = decoy ? "fly" : /cricket/.test(prop) ? "hop" : "roll";
     g.cur = {
       side, decoy, motion, done: false, start: performance.now(),
       travel: lerp(CATCH.travel) * (calm ? 1.6 : 1),
       window: lerp(CATCH.window) * (calm ? 2 : 1),
     };
     const el = s.catchEl;
-    if (decoy) el.src = BEE_SVG;
+    // Fetch both bee frames early, so the first flap doesn't blink.
+    if (g.round === 0) BEE_FRAMES.forEach((u) => { new Image().src = u; });
+    if (decoy) el.src = BEE_FRAMES[0];
     else this._show(s, el, prop);
     el.hidden = false;
     el.style.display = "";
@@ -2055,9 +2049,17 @@ class HatchPetCard extends HTMLElement {
       const from = c.side === "left" ? -16 : 100;
       const to = c.side === "left" ? 28 : 56;
       el.style.left = `${from + (to - from) * p}%`;
-      el.style.transform = c.motion === "hop"
-        ? `translateY(${-Math.abs(Math.sin(p * Math.PI * 4)) * 40}%)`
-        : `rotate(${(c.side === "left" ? 1 : -1) * p * 540}deg)`;
+      if (c.motion === "fly") {
+        // Flies in facing its way, bobbing and flapping.
+        const frame = BEE_FRAMES[Math.floor((now - c.start) / BEE_FLAP_MS) % 2];
+        if (el.getAttribute("src") !== frame) el.src = frame;
+        el.style.transform = `translateY(${Math.sin(p * Math.PI * 6) * 15}%)`
+          + (c.side === "left" ? " scaleX(-1)" : "");
+      } else {
+        el.style.transform = c.motion === "hop"
+          ? `translateY(${-Math.abs(Math.sin(p * Math.PI * 4)) * 40}%)`
+          : `rotate(${(c.side === "left" ? 1 : -1) * p * 540}deg)`;
+      }
       if (p >= 1) {
         // It reached the pet untouched: a real one got away, a decoy was dodged.
         this._catchResolve(s, c.decoy, c.decoy ? "phew, let the bee go!" : "it got away...");

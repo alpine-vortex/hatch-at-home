@@ -150,3 +150,17 @@ adults stay on screen; otter 1.05, squirrel none), which the card applies with t
 fixed. Sizes still vary a little between moods (asleep and sick come out bigger), as
 the teens' do. Prompts are in `art/<species>/adult/`, Sol's adult scripts in
 `art/adults/`; the raw sheets aren't committed.
+
+## Trait flair and the Catch bee: 2026-10-27
+
+Sol's flair pack (sha256 checked) is in `frontend/ui/flair_*`; the card uses the
+`_1`/`_2` singles and pairs, not the strips. Prompts are in `art/flair/`. A follow-up
+(sha256 checked, prompt `art/flair/followup.txt`) brought two things:
+
+- `flair_night_owl_1/_2`: the first pack's two frames looked almost the same. Now
+  `_1` is the unlit firefly and `_2` is newly drawn, its tail clearly lit with a
+  1-art-pixel halo.
+- `catch_decoy_1/_2`: a round, friendly bee, wings up and wings down, 160×144
+  (4 px art pixels), facing left. Catch's decoy rounds fly it in, flapping and
+  bobbing, mirrored when it comes from the left. It replaces the card's drawn
+  stand-in bee.

@@ -1,0 +1,9 @@
+Use your image generation tool to draw ONE square image and save it as followup.png in the current directory.
+
+A 2 x 2 grid of equal square cells, tiny pixel sprites in EXACTLY the style of the attached flair sheet (big hard square pixels, 1-art-pixel dark outline, limited palette, no anti-aliasing). Each centred with a WIDE empty margin; nothing near a cell edge.
+- top-left: the same little firefly as the attached sheet's row 1, but CLEARLY LIT: its tail end glowing bright yellow-green with a soft 1-art-pixel halo of pale glow pixels around the tail. About 14 art pixels across.
+- top-right: leave empty grey.
+- bottom-left: a small friendly cute cartoon bee, about 10 art pixels wide: round yellow body with black stripes, small pale-blue see-through wings, big friendly eyes, a tiny stinger; wings UP.
+- bottom-right: the same bee, wings DOWN.
+Bright yellow and dark outline so it reads on dark wood, night sky, pond green and sandy scenes.
+Background: one flat even mid-grey everywhere. No text, no labels, no borders.
