@@ -440,15 +440,20 @@ async function main() {
   check("thunder and wind show on screen", /stormy/.test(screen) && /windy/.test(screen), screen);
   await shot("05-storm");
 
-  // The journal keeps the season's firsts.
-  await inject(pet["sensor.life_stage"], {
-    attributes: { memories: [{ kind: "first_snow", at: Date.now() / 1000 }] },
-  });
+  // The journal keeps the season's firsts. A pet update can replace the injected
+  // memory (and the journal redraws with it), so inject until it shows.
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(500);
   await cur().locator(".jlink").click();
-  await page.waitForTimeout(1200);
-  check("the journal shows memories", /first snow/.test(await cur().locator(".status").innerText()));
+  let memory = false;
+  for (let i = 0; i < 3 && !memory; i++) {
+    await inject(pet["sensor.life_stage"], {
+      attributes: { memories: [{ kind: "first_snow", at: Date.now() / 1000 }] },
+    });
+    await page.waitForTimeout(1000);
+    memory = /first snow/.test(await cur().locator(".status").innerText());
+  }
+  check("the journal shows memories", memory);
   await shot("05-memories");
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
