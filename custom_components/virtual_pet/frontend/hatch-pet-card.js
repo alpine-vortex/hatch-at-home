@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.25.1";
+const VERSION = "0.27.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -23,6 +23,36 @@ const ACTION_ICONS = {
   medicine: "icon_medicine", scold: "icon_scold", praise: "icon_praise",
 };
 
+// Higher or Lower's numbers: a 5×7 pixel font drawn at whole screen pixels per
+// art pixel, so they stay crisp (Tiny5's 3-wide digits make an 8 hard to read).
+const DIGITS = {
+  1: ["..X..", ".XX..", "..X..", "..X..", "..X..", "..X..", ".XXX."],
+  2: [".XXX.", "X...X", "....X", "...X.", "..X..", ".X...", "XXXXX"],
+  3: ["XXXX.", "....X", "....X", ".XXX.", "....X", "....X", "XXXX."],
+  4: ["...X.", "..XX.", ".X.X.", "X..X.", "XXXXX", "...X.", "...X."],
+  5: ["XXXXX", "X....", "XXXX.", "....X", "....X", "X...X", ".XXX."],
+  6: ["..XX.", ".X...", "X....", "XXXX.", "X...X", "X...X", ".XXX."],
+  7: ["XXXXX", "....X", "...X.", "..X..", ".X...", ".X...", ".X..."],
+  8: [".XXX.", "X...X", "X...X", ".XXX.", "X...X", "X...X", ".XXX."],
+  9: [".XXX.", "X...X", "X...X", ".XXXX", "....X", "...X.", ".XX.."],
+};
+function digit(n, px = 6) {
+  const rows = DIGITS[n] || DIGITS[8];
+  let rects = "";
+  rows.forEach((row, y) => [...row].forEach((c, x) => {
+    if (c === "X") rects += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+  }));
+  return `<svg width="${5 * px}" height="${7 * px}" viewBox="0 0 5 7" fill="currentColor" ` +
+    `shape-rendering="crispEdges" role="img" aria-label="${n}">${rects}</svg>`;
+}
+
+// Icons for the game picker.
+function gameIcon(key) {
+  if (key === "left_right") return `${icon("prev", 16)}${icon("next", 16)}`;
+  if (key === "higher_lower") return `${digit(1, 2)}<span class="gi-arrow">↕</span>${digit(9, 2)}`;
+  return `<img src="${BASE}/ui/flair_player.png?v=${VERSION}" width="20" height="20" alt="">`;
+}
+
 function icon(name, size = 22) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name]}</svg>`;
 }
@@ -30,7 +60,7 @@ function icon(name, size = 22) {
 const ACTIONS = [
   { key: "feed", label: "feed", wants: "hungry" },
   { key: "snack", label: "snack" },
-  { key: "play", label: "play", aria: "play: a left or right guessing game", wants: "bored" },
+  { key: "play", label: "play", aria: "play a game", wants: "bored" },
   { key: "clean", label: "clean", wants: "dirty" },
   { key: "medicine", label: "meds", aria: "meds: give medicine", wants: "sick" },
   { key: "scold", label: "scold" },
@@ -38,6 +68,96 @@ const ACTIONS = [
 ];
 
 // What the pet says back when a care action did nothing.
+// The games the play button offers (virtual_pet.play_game), in picker order.
+const GAMES = [
+  { key: "left_right", label: "left or right", guesses: ["left", "right"] },
+  { key: "higher_lower", label: "higher or lower", guesses: ["lower", "higher"] },
+];
+const LAST_GAME_KEY = "hatch-last-game";
+// Catch, the Giga Pets reflex game: a prototype, offered only with the card
+// option experimental_catch: true. The card times the taps; nothing goes to the
+// server and it gives no reward.
+const CATCH_GAME = { key: "catch", label: "catch!", guesses: ["left", "right"] };
+const CATCH = {
+  rounds: 5, winAt: 3,
+  travel: [1.9, 1.0], // seconds for the prop to reach the pet, round 1 to round 5
+  window: [1.2, 0.6], // the last part of its trip in which a tap catches it
+  decoyChance: 0.25, // from round 2
+};
+const BEST_CATCH_KEY = "hatch-best-catch";
+
+// Sounds: little square-wave chirps, off until someone turns them on for this
+// device (status screen). Never while the pet sleeps, nor late at night.
+const SOUND_KEY = "hatch-sounds";
+const QUIET_HOURS = [21, 8]; // from 21:00 to 08:00 local time
+const CHIRPS = { // [frequency Hz, length s] notes, played one after another
+  call: [[880, 0.08], [0, 0.05], [880, 0.08]],
+  hatch: [[523, 0.09], [659, 0.09], [784, 0.09], [1047, 0.16]],
+  win: [[784, 0.08], [988, 0.08], [1319, 0.18]],
+  trait: [[1047, 0.07], [1319, 0.07], [1568, 0.07], [2093, 0.14]],
+};
+let audio = null; // one AudioContext for every card on the page
+
+function soundsOn() {
+  try {
+    return localStorage.getItem(SOUND_KEY) === "on";
+  } catch (err) {
+    return false;
+  }
+}
+
+function playChirp(name) {
+  const notes = CHIRPS[name];
+  if (!notes) return;
+  audio ||= new (window.AudioContext || window.webkitAudioContext)();
+  if (audio.state === "suspended") audio.resume();
+  let t = audio.currentTime + 0.01;
+  for (const [freq, len] of notes) {
+    if (freq) {
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.type = "square";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.06, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + len);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(t);
+      osc.stop(t + len);
+    }
+    t += len;
+  }
+}
+
+// Trait flair (Sol's ui/flair_*): every so often each trait the pet has shows as
+// a little flair around it, never on it: above its head, in the air around it,
+// or on the ground at its feet. One trait per place per moment; traits sharing a
+// place take turns. "frames": a 2-frame animation (_1, _2); "pair": two
+// variants (_1 big, _2 small); otherwise one image.
+const TRAIT_CAP = 4; // rates.py TRAIT_CAP, until the server says (life_stage trait_cap)
+const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
+const FLAIR_MS = 4200; // how long a moment lasts
+const FLAIR = {
+  storm_watcher: { place: "head", art: "frames" },
+  thunder_heart: { place: "head", art: "frames" },
+  early_bird: { place: "head" },
+  moon_child: { place: "head", art: "pair" },
+  music_lover: { place: "air", art: "pair" },
+  social_butterfly: { place: "air", art: "frames" },
+  snow_child: { place: "air", art: "pair" },
+  breeze_rider: { place: "air", art: "frames" },
+  night_owl: { place: "air", art: "frames" },
+  sun_lover: { place: "air" },
+  fireside: { place: "ground", art: "pair" },
+  fog_wanderer: { place: "ground" },
+  helper: { place: "ground" },
+  player: { place: "ground" },
+  homebody: { place: "ground" },
+  couch_potato: { place: "ground" },
+};
+// Catch's decoy: Sol's bee (ui/catch_decoy_1, _2: wings up, down), facing left.
+const BEE_FRAMES = [1, 2].map((n) => `${BASE}/ui/catch_decoy_${n}.png?v=${VERSION}`);
+const BEE_FLAP_MS = 120;
+
 const REFUSALS = {
   full: "I'm full!",
   not_needed: "I'm fine, thanks!",
@@ -47,6 +167,7 @@ const REFUSALS = {
   not_sick: "I'm not sick!",
   unfair: "hey, I didn't do anything!",
   spoiled: "hehe, whining works",
+  no_game: "let's start over",
   egg: "...",
   away: "I'm at the sitter's!",
 };
@@ -116,10 +237,36 @@ function shade(hex, amount) {
   return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
 }
 
-// "night owl ★★", with "↓" when it was handed down from the parent.
-function traitLabel(trait, level, inherited) {
-  return `${inherited ? "↓" : ""}${escape(trait.replace("_", " "))} ${"★".repeat(level || 1)}`;
+// The caption ink for a shell: its own colour, darker, and on a dark shell a
+// light tint, whichever first reads at 4.5:1 (WCAG AA for small text).
+function deviceInk(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const rgb = [n >> 16, (n >> 8) & 255, n & 255];
+  const lum = (c) => c.reduce((s, v, i) => {
+    const x = v / 255;
+    return s + [0.2126, 0.7152, 0.0722][i] * (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4);
+  }, 0);
+  const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
+  const options = [0.28, 0.12, 0].map((k) => rgb.map((v) => Math.round(v * k)))
+    .concat([0.92, 1].map((k) => rgb.map((v) => Math.round(v + (255 - v) * k))));
+  const ink = options.find((c) => ratio(c, rgb) >= 4.5) || options[2];
+  return `rgb(${ink.join(",")})`;
 }
+
+// A trait's flair sprite as a small icon (its first frame or big variant).
+function traitIcon(trait) {
+  const f = FLAIR[trait];
+  return f ? `<img class="ticon" src="${BASE}/ui/flair_${trait}${f.art ? "_1" : ""}.png?v=${VERSION}" alt="">` : "";
+}
+
+// Icon and "night owl ★★", with "↓" when it was handed down from the parent.
+function traitLabel(trait, level, inherited) {
+  return `${traitIcon(trait)}${inherited ? "↓" : ""}${escape(trait.replaceAll("_", " "))} ` +
+    `<span role="img" aria-label="level ${level || 1}">${"★".repeat(level || 1)}</span>`;
+}
+
+// Games finished, all kinds together (the journal's game counts).
+const gamesPlayed = (games) => Object.values(games || {}).reduce((n, c) => n + (c.played || 0), 0);
 
 function timeAgo(iso) {
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -144,6 +291,7 @@ const STYLE = `
   .head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
     padding: 14px 18px 4px; }
   .title { font: 400 22px 'Tiny5', monospace; color: var(--hp-ink); }
+  .title.long { font-size: 17px; } /* a long name keeps to two lines */
   .sub { font-size: 13px; color: var(--hp-subink); margin-top: 2px; }
   .chips { display: flex; gap: 6px; align-items: center; }
   .statusbtn { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px;
@@ -157,6 +305,8 @@ const STYLE = `
     transition: transform .5s cubic-bezier(.2,.8,.2,1); }
   .slide { flex-shrink: 0; transition: opacity .5s, transform .5s; transform-origin: 50% 100%; }
   .slide.away-slide { opacity: .5; transform: scale(.94); }
+  /* Loops pause where nobody watches: the neighbours, or the card scrolled away. */
+  .slide.away-slide .screen *, ha-card.offscreen .screen * { animation-play-state: paused !important; }
   .foot { display: flex; align-items: center; justify-content: space-between; padding: 0 14px 14px; }
   .nav { width: 44px; height: 44px; border: none; border-radius: 22px; cursor: pointer;
     display: flex; align-items: center; justify-content: center; color: var(--hp-ink);
@@ -165,7 +315,7 @@ const STYLE = `
   .foot { gap: 8px; }
   .nav { flex-shrink: 0; }
   .dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 4px; min-width: 0; }
-  .dot { width: 22px; height: 24px; border: none; padding: 0; cursor: pointer;
+  .dot { width: 24px; height: 24px; border: none; padding: 0; cursor: pointer;
     background: none; display: flex; align-items: center; justify-content: center; }
   .dot::before { content: ""; width: 10px; height: 10px; border-radius: 5px;
     background: color-mix(in srgb, var(--hp-ink) 55%, transparent); transition: width .3s; }
@@ -301,21 +451,88 @@ const STYLE = `
     background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a; border-radius: 8px;
     font-size: 14px; line-height: 1.2; box-shadow: 3px 3px 0 #3a2a1a; }
   .bubble:empty { display: none; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
+    white-space: nowrap; }
   /* The left/right game: two big guess buttons and a score over the scene. */
   .game { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
   .game[hidden] { display: none; }
   .game button { pointer-events: auto; position: absolute; display: grid; place-items: center;
     min-width: 44px; min-height: 44px; border-radius: 50%; border: 2px solid #3a2a1a;
     background: #fffdf5; color: #3a2a1a; box-shadow: 2px 2px 0 #3a2a1a; cursor: pointer; padding: 0; }
-  .game button:disabled { opacity: .5; cursor: default; }
-  .game button:focus-visible { outline: 3px solid #fffdf5; outline-offset: 2px; }
+  .game button[aria-disabled="true"] { opacity: .5; cursor: default; }
+  .game button:focus-visible { outline: 3px solid #fffdf5; outline-offset: 2px;
+    box-shadow: 0 0 0 6px #1d2a22; }
   .game .gl { left: 4%; bottom: 8%; }
   .game .gr { right: 4%; bottom: 8%; }
-  .game .gx { right: 4%; top: 6%; min-width: 32px; min-height: 32px; font: inherit; font-size: 14px; }
+  .game .gx { right: 4%; top: 6%; min-width: 44px; min-height: 44px; font: inherit; font-size: 14px; }
+  .game .gpick { position: absolute; inset: 22% 0 0; display: flex; flex-direction: column; gap: 8px;
+    align-items: center; justify-content: center; }
+  .game .gpick[hidden], .game .gnum[hidden], .game .gl[hidden], .game .gr[hidden] { display: none; }
+  /* The picker: chunky toy buttons like the device's own (cream, inked, pressing down). */
+  .game .gpick button { position: static; display: flex; align-items: center; gap: 8px;
+    border-radius: 14px; padding: 4px 14px 4px 10px; font: inherit; font-size: 14px; min-height: 44px;
+    min-width: 168px; border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a;
+    box-shadow: 0 4px 0 #3a2a1a; transition: transform .08s, box-shadow .08s; }
+  .game .gpick button:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
+  .game .gpick .gi { display: inline-flex; align-items: center; justify-content: center; gap: 1px;
+    width: 40px; height: 28px; border-radius: 8px; background: var(--hp-screen-tint, #f3e7c9); }
+  .game .gpick .gi img { image-rendering: pixelated; }
+  .game .gpick .gi-arrow { font-size: 12px; margin: 0 1px; }
+  .game .gnum { position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
+    display: grid; place-items: center; min-width: 52px; min-height: 56px; padding: 6px 10px;
+    border-radius: 10px; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
+    box-shadow: 2px 2px 0 #3a2a1a; }
+  .game .gnum.flip { animation: perk .3s ease-out; }
+  /* Trait flair: placed in JS from the head point and the feet line. Every piece
+     must read standing still too (reduced motion turns all animation off). */
+  .flair { position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    animation: fl-moment var(--fl-ms) ease-in-out both; }
+  @keyframes fl-moment { 0% { opacity: 0; } 12%, 85% { opacity: 1; } 100% { opacity: 0; } }
+  .flair .fx { position: absolute; transform: translate(-50%, -100%); image-rendering: pixelated;
+    animation-duration: var(--d, 2.4s); animation-delay: var(--delay, 0s);
+    animation-iteration-count: infinite; animation-fill-mode: both; }
+  /* .screen img is absolute; flair images stay in flow so the piece has a height
+     and translate(-50%, -100%) stands it on its anchor point. */
+  .flair .fx img { position: static; display: block; width: 100%; image-rendering: pixelated; }
+  .flair .fx.frames img + img { position: absolute; inset: 0; }
+  .flair .fx.frames img { animation: fl-frame-a .6s steps(1) infinite; }
+  .flair .fx.frames img + img { animation-name: fl-frame-b; }
+  @keyframes fl-frame-a { 50% { opacity: 0; } }
+  @keyframes fl-frame-b { 0% { opacity: 0; } 50% { opacity: 1; } }
+  .fx.bob { animation-name: fl-bob; animation-timing-function: ease-in-out; animation-direction: alternate; }
+  @keyframes fl-bob { from { transform: translate(-50%, -100%); } to { transform: translate(-50%, -112%); } }
+  .fx.float { animation-name: fl-float; animation-timing-function: ease-out; }
+  @keyframes fl-float { 0% { opacity: 0; transform: translate(-50%, -100%); } 20% { opacity: 1; }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-100% - var(--rise, 40px))); } }
+  .fx.fall { animation-name: fl-fall; animation-timing-function: linear; }
+  @keyframes fl-fall { 0% { opacity: 0; transform: translate(-50%, -100%); } 15% { opacity: 1; }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-100% + var(--rise, 40px))); } }
+  .fx.drift { animation-name: fl-drift; animation-timing-function: ease-in-out; }
+  @keyframes fl-drift { 0% { opacity: 0; transform: translate(-50%, -100%); } 20%, 80% { opacity: 1; }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 40px)), calc(-100% + var(--rise, 0px))); } }
+  .fx.twinkle { animation-name: fl-twinkle; animation-timing-function: ease-in-out; }
+  @keyframes fl-twinkle { 0%, 100% { opacity: .2; transform: translate(-50%, -100%) scale(.7); }
+    50% { opacity: 1; transform: translate(-50%, -100%) scale(1); } }
+  .fx.bounce { animation-name: fl-bounce; animation-timing-function: ease-in; animation-direction: alternate; }
+  @keyframes fl-bounce { from { transform: translate(-50%, -100%); } to { transform: translate(-50%, -150%); } }
+  .fx.pop { animation-name: fl-pop; animation-iteration-count: 1; }
+  @keyframes fl-pop { 0% { transform: translate(-50%, -100%) scale(.4); } 60% { transform: translate(-50%, -100%) scale(1.1); }
+    100% { transform: translate(-50%, -100%) scale(1); } }
+  .fx.loop { offset-rotate: 0deg; transform: translate(-50%, -50%); animation-name: fl-loop;
+    animation-iteration-count: 1; animation-timing-function: ease-in-out; }
+  @keyframes fl-loop { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+  .fx.glow { border-radius: 50%; transform: translate(-50%, -50%);
+    background: radial-gradient(closest-side, rgba(255, 160, 70, .7), rgba(255, 160, 70, 0));
+    animation-name: fl-glow; animation-direction: alternate; }
+  @keyframes fl-glow { to { opacity: .55; } }
+  .game .gcatch { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
+    pointer-events: none; will-change: left, transform; }
+  .game .gcatch[hidden] { display: none; }
+  .game .hl { font: inherit; font-size: 14px; }
   .game .gscore { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
-  .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
+  .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
   .screen.show-status .flash, .screen.show-status .speck { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
@@ -330,13 +547,13 @@ const STYLE = `
   /* The fan: wind lines cross the scene and the pet sways. */
   .breeze { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1; }
   .screen.breezy .breeze, .screen.windy .breeze { display: block; }
-  .breeze span { position: absolute; left: -40%; height: 2px; width: 34%; border-radius: 1px;
+  .breeze span { position: absolute; left: 0; height: 2px; width: 34%; border-radius: 1px;
     background: linear-gradient(90deg, transparent, rgba(255,255,255,.85) 45%, rgba(255,255,255,.6) 80%, transparent);
     animation: wind 1.1s linear infinite; }
   .breeze span:nth-child(1) { top: 30%; }
   .breeze span:nth-child(2) { top: 48%; width: 24%; animation-delay: .35s; }
   .breeze span:nth-child(3) { top: 64%; animation-delay: .7s; }
-  @keyframes wind { to { left: 110%; } }
+  @keyframes wind { from { transform: translateX(-120%); } to { transform: translateX(330%); } }
   .screen.breezy .pet { animation: sway .7s ease-in-out infinite; }
   @keyframes sway { 50% { transform: rotate(-4deg); } }
   /* Thunder: now and then the scene flashes. */
@@ -381,16 +598,25 @@ const STYLE = `
     display: none; flex-direction: column; gap: 4px; font-size: 13px; overflow: auto; }
   .screen.show-status .status { display: flex; }
   .screen.show-status .bubble { display: none; }
+  /* The pet's request waits while the status screen or a game is up (it covered them). */
+  .screen.show-status + .request, .screen:has(> .game:not([hidden])) + .request { display: none !important; }
+  /* With a game up, the bubble leaves room for its close button. */
+  .screen:has(> .game:not([hidden])) .bubble { max-width: 54%; }
+  /* A narrow card: status rows fit four hearts. */
+  .compact .row { grid-template-columns: 16px 70px minmax(0, 1fr); gap: 5px; }
+  .compact .hearts img { width: 14px; height: 14px; }
   /* Every row: an icon slot (maybe empty), the label, the value; all on one grid. */
   .row { display: grid; grid-template-columns: 18px 84px minmax(0, 1fr); align-items: center; gap: 6px; }
   .bar { height: 9px; border: 2px solid #2f3a24; padding: 1px; }
   .bar div { height: 100%; background: #2f3a24; }
   .hearts { letter-spacing: 2px; }
   .hearts .off { opacity: .25; }
-  .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 2px 0;
+  .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 6px 0;
+    min-height: 28px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
   .bell { border: 2px solid #2f3a24; border-radius: 10px; background: none; color: inherit;
-    font: 400 12px 'Tiny5', monospace; padding: 1px 10px; min-width: 44px; cursor: pointer; }
+    font: 400 12px 'Tiny5', monospace; padding: 3px 10px; min-width: 44px; min-height: 26px;
+    cursor: pointer; }
   .bell[aria-pressed="true"] { background: #2f3a24; color: #e9e2c6; }
   .jhead { display: flex; justify-content: space-between; align-items: baseline; }
   .jgrid { display: flex; flex-wrap: wrap; gap: 6px 10px; }
@@ -399,7 +625,11 @@ const STYLE = `
   .jtile img { width: 48px; height: 48px; image-rendering: pixelated; }
   .jtile.locked img { filter: brightness(0); opacity: .3; }
   .jlist { font-size: 12px; opacity: .9; display: flex; flex-direction: column; gap: 3px; }
-  .jlist .gt { opacity: .8; padding-left: 10px; }
+  .jlist .gt { padding-left: 10px; }
+  .ticon { width: 14px; height: 14px; object-fit: contain; vertical-align: -3px; margin-right: 2px;
+    image-rendering: pixelated; }
+  .tnext { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .tnext .bar { flex: 1; min-width: 30px; }
   .jlist .gen.now { font-weight: 700; }
   .log { margin-top: 3px; font-size: 12px; opacity: .85; }
   .buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 6px; width: 100%; }
@@ -461,6 +691,7 @@ class HatchPetCard extends HTMLElement {
   setConfig(config) {
     this._config = config || {};
     this._sig = null;
+    this._epoch = (this._epoch || 0) + 1; // every slide draws again
     this._index = this._index || 0;
   }
 
@@ -494,6 +725,8 @@ class HatchPetCard extends HTMLElement {
   disconnectedCallback() {
     clearInterval(this._timer);
     this._resize?.disconnect();
+    // A game (Catch's animation loop above all) stops with the card.
+    for (const s of this._slides || []) if (s.game) this._endGame(s, null);
   }
 
   // --- Finding the pets --------------------------------------------------------
@@ -589,6 +822,8 @@ class HatchPetCard extends HTMLElement {
     this._visible = true;
     new IntersectionObserver((entries) => {
       this._visible = entries.some((e) => e.isIntersecting);
+      this._card.classList.toggle("offscreen", !this._visible); // pauses the loops
+      if (this._visible && this._dirty) this._update(); // catch up on what was skipped
     }).observe(this._card);
     this._slides = [];
   }
@@ -605,7 +840,7 @@ class HatchPetCard extends HTMLElement {
           <div class="bezel"><div class="screen">
             <img class="bg" alt="">
             <img class="awaysign" alt=""><div class="awaylabel"></div>
-            <img class="poop p0" alt=""><img class="poop p1" alt=""><img class="poop p2" alt="">
+            <img class="poop p0" alt="mess"><img class="poop p1" alt="mess"><img class="poop p2" alt="mess">
             <img class="perch" alt="">
             <img class="pet" alt="">
             <img class="prop" alt="">
@@ -613,9 +848,14 @@ class HatchPetCard extends HTMLElement {
             <div class="rain"></div>
             <div class="flash"></div>
             <div class="breeze"><span></span><span></span><span></span></div>
-            <img class="attention" alt="">
+            <img class="attention" alt="wants attention">
             <div class="bubble"></div>
+            <div class="sr" role="status"></div>
             <div class="game" hidden>
+              <div class="gpick" role="group" aria-label="Pick a game">${this._games().map((g) =>
+                `<button data-game="${g.key}">${g.label}</button>`).join("")}</div>
+              <img class="gcatch" alt="" hidden>
+              <span class="gnum" aria-live="polite" hidden></span>
               <button class="gl" aria-label="Guess left">${icon("prev", 22)}</button>
               <span class="gscore" aria-live="polite"></span>
               <button class="gr" aria-label="Guess right">${icon("next", 22)}</button>
@@ -635,7 +875,8 @@ class HatchPetCard extends HTMLElement {
       perch: q(".perch"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
-      request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"),
+      request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
+      catchEl: q(".gcatch"), live: q(".sr[role=status]"),
     };
     slide.querySelectorAll("img").forEach((img) => img.addEventListener("error", () => {
       const src = img.getAttribute("src");
@@ -650,18 +891,34 @@ class HatchPetCard extends HTMLElement {
       for (const c of PERCH_MOVES) s.perch.classList.toggle(c, s.pet.classList.contains(c));
       s.perch.style.scale = s.pet.style.scale;
     }).observe(s.pet, { attributes: true, attributeFilter: ["class", "style"] });
+    // What the pet says to someone (a refusal, a game's result, a moment) is read
+    // out by screen readers; its idle chatter isn't. Only the pet on show.
+    new MutationObserver(() => {
+      const text = s.bubble.textContent;
+      if (s.sayUntil && s === this._slides[this._index] && s.live.textContent !== text) {
+        s.live.textContent = text;
+      }
+    }).observe(s.bubble, { childList: true, characterData: true, subtree: true });
     // Taps on the game mustn't reach the screen behind (which opens the status).
     s.gameBox.addEventListener("click", (e) => e.stopPropagation());
+    s.gameBox.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && s.game) this._endGame(s, "maybe later!");
+    });
     q(".gl").addEventListener("click", () => this._guess(s, "left"));
     q(".gr").addEventListener("click", () => this._guess(s, "right"));
     q(".gx").addEventListener("click", () => this._endGame(s, "maybe later!"));
+    q(".gpick").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-game]");
+      if (b) this._pickGame(s, b.dataset.game);
+    });
     s.request.addEventListener("click", () => {
       const key = s.request.dataset.key;
       if (!key) return;
       if (key === "lay_egg" && !(Date.now() < s.confirmUntil)) {
         s.confirmUntil = Date.now() + CONFIRM_MS;
         s.request.textContent = "sure? tap again";
-        setTimeout(() => { this._sig = null; this._update(); }, CONFIRM_MS + 50);
+        s.request.setAttribute("aria-label", "Sure? Press again to lay an egg");
+        setTimeout(() => this._redraw(s), CONFIRM_MS + 50);
         return;
       }
       s.confirmUntil = 0;
@@ -710,6 +967,11 @@ class HatchPetCard extends HTMLElement {
         : this._hass.states[ids[k]]?.last_updated))) +
       (this._hass.states["sun.sun"]?.state || "");
     if (sig === this._sig) return;
+    if (this._visible === false) {
+      this._dirty = true; // scrolled away: draw when it's back (the observer calls)
+      return;
+    }
+    this._dirty = false;
     this._sig = sig;
 
     if (!devices.length) {
@@ -758,7 +1020,12 @@ class HatchPetCard extends HTMLElement {
           if (s.speciesId === speciesId) s.speciesId = null; // try again on the next update
         });
       }
-      if (s.species) {
+      // Only a slide whose own pet (or the sun) changed is drawn again.
+      const own = Object.values(devices[i]).map((id) => this._hass.states[id]?.last_updated).join() +
+        `|${this._hass.states["sun.sun"]?.state}|${s.species ? s.speciesId : ""}|${this._epoch || 0}` +
+        `|${this._hass.devices?.[devices[i].device]?.name_by_user}`;
+      if (s.species && own !== s.drawnSig) {
+        s.drawnSig = own;
         try {
           this._renderSlide(s);
         } catch (err) {
@@ -770,6 +1037,14 @@ class HatchPetCard extends HTMLElement {
     this._renderShelf();
   }
 
+  // Draw again now, though nothing in HA changed: one slide, or all of them.
+  _redraw(s = null) {
+    if (s) s.drawnSig = null;
+    else this._epoch = (this._epoch || 0) + 1;
+    this._sig = null;
+    this._update();
+  }
+
   // A slide that now shows another pet starts fresh: nothing of the last
   // pet's (a game, an armed "sure?", the moments already seen) carries over.
   _forget(s) {
@@ -778,8 +1053,10 @@ class HatchPetCard extends HTMLElement {
     s.lastMoment = s.lastLogAt = undefined;
     s.greeted = false;
     s.excitedSince = 0;
+    s.wasCalling = undefined; // a call already on doesn't chirp
     s.journal = false;
     s.statusHtml = null;
+    s.drawnSig = null;
   }
 
   _state(s, key) {
@@ -801,8 +1078,7 @@ class HatchPetCard extends HTMLElement {
     const compact = this._slideW < 280;
     if (compact !== this._card.classList.contains("compact")) {
       this._card.classList.toggle("compact", compact);
-      this._sig = null; // the trim is sized for the layout: draw again
-      this._update();
+      this._redraw(); // the trim is sized for the layout: draw every slide again
     }
     for (const s of this._slides) s.el.style.width = `${this._slideW}px`;
     this._renderShelf();
@@ -831,10 +1107,13 @@ class HatchPetCard extends HTMLElement {
     const stage = this._state(s, "sensor.life_stage");
     const days = stage?.attributes.age_days;
     const kind = stage?.state === "egg" ? "Egg" : s.species?.name || "";
-    this._card.querySelector(".title").textContent = device?.name_by_user || device?.name || "Pet";
+    const title = this._card.querySelector(".title");
+    title.textContent = device?.name_by_user || device?.name || "Pet";
+    title.classList.toggle("long", title.textContent.length > 14);
     const emblem = this._card.querySelector(".emblem");
     if (world.emblem) {
-      emblem.src = `${BASE}/ui/${world.emblem}.png?v=${VERSION}`;
+      const src = `${BASE}/ui/${world.emblem}.png?v=${VERSION}`;
+      if (emblem.getAttribute("src") !== src) emblem.src = src;
       emblem.style.display = "";
     } else {
       emblem.style.display = "none";
@@ -842,7 +1121,8 @@ class HatchPetCard extends HTMLElement {
     this._card.querySelectorAll(".deco").forEach((img, i) => {
       const name = world.deco?.[i];
       img.style.display = name ? "" : "none";
-      if (name) img.src = `${BASE}/ui/${name}.png?v=${VERSION}`;
+      const src = name && `${BASE}/ui/${name}.png?v=${VERSION}`;
+      if (src && img.getAttribute("src") !== src) img.src = src;
     });
     // The world is on the device's plate and the emblem, so the line stays short.
     this._card.querySelector(".sub").textContent = [kind,
@@ -925,7 +1205,7 @@ class HatchPetCard extends HTMLElement {
     dev.querySelector(".feet").style.display = shape === "tank" ? "" : "none";
     dev.style.setProperty("--d-shell", color);
     dev.style.setProperty("--d-dark", shade(color, 0.72));
-    dev.style.setProperty("--d-ink", shade(color, 0.28));
+    dev.style.setProperty("--d-ink", deviceInk(color));
     dev.style.setProperty("--d-btn-shadow", shade(color, 0.6));
     dev.style.setProperty("--d-bezel", shell.bezel || "#f3ead7");
     s.label.textContent = world.label || world.name;
@@ -961,6 +1241,10 @@ class HatchPetCard extends HTMLElement {
     const asleep = this._state(s, "binary_sensor.asleep")?.state === "on";
     const away = mood?.state === "away";
     s.asleep = asleep;
+    s.lightsOut = lightsOut;
+    // A new call chirps once (not on load: wasCalling starts undefined).
+    if (calling && s.wasCalling === false && !away) this._chirp(s, "call");
+    s.wasCalling = calling;
 
     let scene = "day";
     if (flags.includes("rainy")) scene = "rain";
@@ -978,7 +1262,7 @@ class HatchPetCard extends HTMLElement {
       s.frames = [];
       this._show(s, s.pet, null);
       this._show(s, s.awaysign, sp.props?.away);
-      s.awaylabel.textContent = "At the sitter's";
+      s.awaylabel.textContent = "at the sitter's";
     } else {
       this._show(s, s.awaysign, null);
       s.awaylabel.textContent = "";
@@ -1052,7 +1336,10 @@ class HatchPetCard extends HTMLElement {
       const b = s.buttons[action.key];
       const ent = this._state(s, `button.${action.key}`);
       b.disabled = !ent || ent.state === "unavailable" || egg || away;
-      b.classList.toggle("wanted", !b.disabled && !asleep && !!action.wants && flags.includes(action.wants));
+      const wanted = !b.disabled && !asleep && !!action.wants && flags.includes(action.wants);
+      b.classList.toggle("wanted", wanted);
+      if (wanted) b.setAttribute("aria-description", "wanted now");
+      else b.removeAttribute("aria-description");
     }
     const wanted = (mood?.attributes.requests || []).find((r) => this._state(s, `button.${r}`));
     s.request.classList.toggle("show", !!wanted && !away && !asleep);
@@ -1060,7 +1347,8 @@ class HatchPetCard extends HTMLElement {
       s.request.dataset.key = wanted;
       const confirming = wanted === "lay_egg" && Date.now() < s.confirmUntil;
       s.request.textContent = confirming ? "sure? tap again" : REQUEST_LABELS[wanted] || `${wanted}?`;
-      s.request.setAttribute("aria-label", REQUEST_ARIA[wanted] || `Give the pet a ${wanted}`);
+      s.request.setAttribute("aria-label", confirming ? "Sure? Press again to lay an egg"
+        : REQUEST_ARIA[wanted] || `Give the pet a ${wanted}`);
     }
 
     const lights = s.buttons.lights;
@@ -1133,11 +1421,12 @@ class HatchPetCard extends HTMLElement {
   _tick() {
     if (!this._slides || !this._visible || document.hidden) return;
     this._ticks = (this._ticks || 0) + 1;
-    for (const s of this._slides) {
+    this._slides.forEach((s, i) => {
       if (s.poseUntil && Date.now() > s.poseUntil) s.poseUntil = 0;
       if (s.excitedSince && Date.now() - s.excitedSince >= BOUNCE_MS) s.pet.classList.remove("hop");
       const frames = this._frames(s);
-      if (frames.length && !(s.asleep && this._ticks % 2)) {
+      const seen = Math.abs(i - this._index) <= 1; // the pet on show and the peeking ones
+      if (seen && frames.length && !(s.asleep && this._ticks % 2)) {
         s.frame = (s.frame + 1) % frames.length;
         this._show(s, s.pet, frames[s.frame]);
       }
@@ -1149,12 +1438,14 @@ class HatchPetCard extends HTMLElement {
       if (s === this._slides[this._index]) {
         this._greet(s);
         this._idle(s);
+        this._flairTick(s);
       }
       if (!s.sayUntil && s.species) {
         const mood = this._state(s, "sensor.mood");
-        s.bubble.textContent = this._say(s, mood, mood?.state === "away");
+        const text = this._say(s, mood, mood?.state === "away");
+        if (s.bubble.textContent !== text) s.bubble.textContent = text;
       }
-    }
+    });
   }
 
   // Nothing else is going on: is the pet free for a small idle behaviour?
@@ -1162,7 +1453,8 @@ class HatchPetCard extends HTMLElement {
     const now = Date.now();
     return s.species && !s.asleep && !s.calling && !s.game && IDLE_MOODS.has(s.moodState) &&
       !s.screen.classList.contains("show-status") &&
-      !(s.sayUntil > now) && !(s.poseUntil > now) && !(s.propUntil > now);
+      !(s.sayUntil > now) && !(s.poseUntil > now) && !(s.propUntil > now) &&
+      !(s.flairUntil > now);
   }
 
   _look(s, ms) {
@@ -1253,6 +1545,20 @@ class HatchPetCard extends HTMLElement {
     setTimeout(() => el.classList.remove(cls), ms);
   }
 
+  // A chirp, if this device turned sounds on and the pet is up at a sane hour.
+  // Only the pet on show chirps: the shelf's other slides update too.
+  _chirp(s, name) {
+    if (s !== this._slides[this._index]) return;
+    const hour = new Date().getHours();
+    const late = hour >= QUIET_HOURS[0] || hour < QUIET_HOURS[1];
+    if (!soundsOn() || s.asleep || s.lightsOut || late || document.visibilityState !== "visible") return;
+    try {
+      playChirp(name);
+    } catch (err) {
+      // no WebAudio: stay quiet
+    }
+  }
+
   _sparkle(s) {
     const ring = document.createElement("span");
     ring.className = "burst big";
@@ -1282,6 +1588,7 @@ class HatchPetCard extends HTMLElement {
         break;
       case "hatched":
         say("hello!");
+        this._chirp(s, "hatch");
         this._animate(s, s.pet, "born", 500);
         this._sparkle(s);
         break;
@@ -1295,9 +1602,12 @@ class HatchPetCard extends HTMLElement {
         break;
       case "trait_learned":
       case "trait_deepened":
-        say(`${m.type === "trait_learned" ? "new trait" : "deeper"}: ` +
-          `${String(m.trait).replace("_", " ")} ${"★".repeat(m.level || 1)}`);
+        say(`${m.type === "trait_learned" ? "new trait" : "deeper trait"}: ` +
+          `${String(m.trait).replaceAll("_", " ")} ${"★".repeat(m.level || 1)}`);
         this._sparkle(s);
+        this._chirp(s, "trait");
+        // Show what the new trait looks like, so its flair means something later.
+        setTimeout(() => this._flair(s, m.trait), 700);
         break;
       case "egg_laid":
         say("see you in the journal!");
@@ -1333,7 +1643,9 @@ class HatchPetCard extends HTMLElement {
         this._look(s, 2500);
         break;
       case "watching":
-        say(pick([`ooh, ${m.title}!`, `is this ${m.title}?`, `${m.title}! I love this one`]));
+        // A long title gets the short lines, so the bubble leaves the pet in view.
+        say(pick([`ooh, ${m.title}!`, `is this ${m.title}?`,
+          m.title.length <= 40 ? `${m.title}! I love this one` : `ooh, ${m.title}!`]));
         this._animate(s, s.pet, "perk", 320);
         break;
       case "listening":
@@ -1344,11 +1656,14 @@ class HatchPetCard extends HTMLElement {
       case "news": { // virtual_pet.share_news: a passing moment, like a TV title
         const h = String(m.headline || "");
         if (!h || s.game) break; // a game's prompt owns the bubble: dropped, like asleep
-        const lines = [`did you hear? ${h}`, `did you hear? ${h}`, `guess what? ${h}`,
-          `ooh, news! ${h}`];
+        // A long headline gets only the shortest lead-in (the bubble holds ~60).
+        const lines = h.length > 45 ? [`news! ${h}`]
+          : [`did you hear? ${h}`, `did you hear? ${h}`, `guess what? ${h}`, `ooh, news! ${h}`];
         // A short topic only, so the bubble stays small ("World News news!" never).
         const topic = String(m.topic || "");
-        if (topic && topic.length <= 12 && !/news$/i.test(topic)) lines.push(`${topic} news! ${h}`);
+        if (topic && topic.length <= 12 && h.length <= 45 && !/news$/i.test(topic)) {
+          lines.push(`${topic} news! ${h}`);
+        }
         const line = pick(lines);
         say(line, 4000 + line.length * 50); // long enough to read, never long
         this._animate(s, s.pet, "perk", 320);
@@ -1435,10 +1750,25 @@ class HatchPetCard extends HTMLElement {
     const stageAttrs = this._state(s, "sensor.life_stage")?.attributes || {};
     const traits = (stageAttrs.traits || []).map((t) => traitLabel(t, stageAttrs.trait_levels?.[t],
       t === stageAttrs.inherited_trait));
+    // The trait it's closest to learning, while it has room for another.
+    const held = new Set(stageAttrs.traits || []);
+    const cap = stageAttrs.trait_cap ?? TRAIT_CAP;
+    const nextTrait = held.size < cap
+      ? Object.entries(stageAttrs.trait_progress || {})
+        .filter(([t, p]) => !held.has(t) && FLAIR[t] && p > 0.05 && p < 1)
+        .sort((a, b) => b[1] - a[1])[0]
+      : null;
+    let bestCatch = 0;
+    try {
+      bestCatch = this._config?.experimental_catch ? Number(localStorage.getItem(BEST_CATCH_KEY) || 0) : 0;
+    } catch (err) {
+      // no storage: no best score to show
+    }
     const notifying = (this._state(s, "sensor.life_stage")?.attributes.notify_users || [])
       .includes(this._hass.user?.id);
     const ic = (n) => pixelIcon(n, 18);
-    const bar = (v) => v === null ? "–" : `<div class="bar"><div style="width:${v}%"></div></div>`;
+    const bar = (v) => v === null ? "–"
+      : `<div class="bar" role="img" aria-label="${Math.round(v)} of 100"><div style="width:${v}%"></div></div>`;
     const lines = log.slice(0, 3).map((e) =>
       `<div>${escape(e.action.replace("_", " "))}${e.by ? ` by ${escape(e.by)}` : ""} · ${timeAgo(e.at)}` +
       `${e.result && e.result !== "ok" ? ` (${escape(e.result.replace("_", " "))}${e.score ? ` ${escape(e.score)}` : ""})` : ""}</div>`);
@@ -1458,17 +1788,36 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "weight", `<span>${weightLabel(value("weight"))}</span>`)}
       ${row("stat_care_miss", "misses", `<span>${value("care_misses") ?? "–"}</span>`)}
       ${row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0} ignored</span>`)}
-      ${row(null, "traits", `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
+      ${row(null, traits.length > cap ? "traits" : `traits ${traits.length}/${cap}`, `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
+      ${bestCatch ? row(null, "best catch", `<span>${bestCatch}/${CATCH.rounds}</span>`) : ""}
+      ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
+        `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
-      ${row(null, "notify me", `<span><button class="bell" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
-      <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>
+      ${row(null, "notify me", `<span><button class="bell" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
+      ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
+      <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>`;
     if (!this._setStatus(s, html)) return;
     this._journalLink(s, true);
-    s.status.querySelector(".bell").addEventListener("click", (e) => {
+    s.status.querySelector(".bell:not(.sound)").addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
       this._setNotify(s, !notifying);
+    });
+    s.status.querySelector(".bell.sound").addEventListener("click", (e) => {
+      e.stopPropagation();
+      const on = !soundsOn();
+      try {
+        localStorage.setItem(SOUND_KEY, on ? "on" : "off");
+      } catch (err) {
+        return; // no storage: sounds stay off
+      }
+      try {
+        if (on) playChirp("win"); // a sample; this tap also unlocks audio on phones
+      } catch (err) {
+        // no WebAudio: the setting stays, and stays quiet
+      }
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
   }
 
@@ -1489,8 +1838,13 @@ class HatchPetCard extends HTMLElement {
   // its scroll position and focus survive the update).
   _setStatus(s, html) {
     if (s.statusHtml === html) return false;
+    // Keep focus on the same control (a toggle, the journal link) across the redraw.
+    const active = this.shadowRoot?.activeElement;
+    const keep = s.status.contains(active) && active.className
+      ? `.${active.className.trim().split(/\s+/).join(".")}` : null;
     s.statusHtml = html;
     s.status.innerHTML = html;
+    if (keep) s.status.querySelector(keep)?.focus({ preventScroll: true });
     return true;
   }
 
@@ -1516,6 +1870,7 @@ class HatchPetCard extends HTMLElement {
       generation: stage.generation || 1, name: this._hass.devices?.[s.ids?.device]?.name_by_user
         || this._hass.devices?.[s.ids?.device]?.name || "", species: stage.species,
       traits: stage.traits || [], levels: stage.trait_levels || {}, inherited: stage.inherited_trait,
+      games: stage.games || {},
       upbringing: this._state(s, "sensor.life_stage")?.state === "adult" ? stage.upbringing : null,
       current: true,
     };
@@ -1537,13 +1892,14 @@ class HatchPetCard extends HTMLElement {
       `${escape(p.name)} · ${escape((names[p.species] || "egg").toLowerCase())}` +
       `${p.age_days != null ? ` · ${Math.round(p.age_days)} d` : ""}` +
       `${p.upbringing ? ` · ${escape(p.upbringing)}` : ""}` +
+      `${gamesPlayed(p.games) ? ` · ${gamesPlayed(p.games)} games` : ""}` +
       `${p.traits?.length ? `<br><span class="gt">${p.traits.map((t) =>
-        traitLabel(t, p.levels?.[t], t === p.inherited)).join(", ")}</span>` : ""}</div>`);
+        traitLabel(t, p.levels?.[t], t === p.inherited)).join(" ")}</span>` : ""}</div>`);
     const html = `
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
       <div class="jgrid">${tiles.join("")}</div>
-      <div class="jlist">${lines.join("")}${past.length < 2 ? "<div class=\"gt\">A week into adulthood, a pet can lay an egg.</div>" : ""}${this._memories(stage.memories)}</div>
+      <div class="jlist">${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
       <button class="jlink">‹ status</button>`;
     if (this._setStatus(s, html)) this._journalLink(s, false);
   }
@@ -1605,9 +1961,9 @@ class HatchPetCard extends HTMLElement {
     if (id) this._call(button, s, "button", "press", id);
   }
 
-  // --- The left/right game --------------------------------------------------
-  // The server hides the pet and keeps score (virtual_pet.play_game); the card
-  // only asks, and shows where the pet went.
+  // --- Games ----------------------------------------------------------------
+  // The server keeps the game and the score (virtual_pet.play_game); the card
+  // only asks, and shows what happened.
 
   _startGame(s, button) {
     this._tapped(button, s);
@@ -1619,58 +1975,450 @@ class HatchPetCard extends HTMLElement {
       return;
     }
     if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
-    s.game = { round: 0, wins: 0, busy: false };
-    s.gameBox.hidden = false;
-    s.gameScore.textContent = `round 1/5`;
-    s.bubble.textContent = "left or right? guess where I'll go!";
+    s.screen.querySelector(".flair")?.remove();
+    const games = this._games();
+    if (games.length === 1) {
+      this._pickGame(s, games[0].key);
+      return;
+    }
+    s.game = { picking: true };
+    // Built each time: the card's options decide which games are offered.
+    s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
+      `<button data-game="${g.key}"><span class="gi" aria-hidden="true">${gameIcon(g.key)}</span>` +
+      `${g.label}</button>`).join("");
+    this._gameView(s, "pick");
+    // A narrow card has room for one short line beside the close button.
+    s.bubble.textContent = this._card.classList.contains("compact") ? "pick a game!" : "what shall we play?";
+    s.sayUntil = Date.now() + 60000;
+    let last = null;
+    try {
+      last = localStorage.getItem(LAST_GAME_KEY);
+    } catch (err) {
+      // no storage here (a private window): start from the first game
+    }
+    const pick = s.gameBox.querySelector(`.gpick [data-game="${last}"]`) ||
+      s.gameBox.querySelector(".gpick button");
+    pick.focus({ preventScroll: true });
+  }
+
+  // The games the play button offers: Catch only with experimental_catch.
+  _games() {
+    return this._config?.experimental_catch ? [...GAMES, CATCH_GAME] : GAMES;
+  }
+
+  // Show the picker ("pick") or a game's buttons (its key) in the game overlay.
+  _gameView(s, view) {
+    const box = s.gameBox;
+    box.hidden = false;
+    box.querySelector(".gpick").hidden = view !== "pick";
+    s.gameNum.hidden = view !== "higher_lower";
+    const [gl, gr] = [box.querySelector(".gl"), box.querySelector(".gr")];
+    gl.hidden = gr.hidden = view === "pick";
+    s.gameScore.hidden = view === "pick";
+    const hl = view === "higher_lower";
+    gl.innerHTML = hl ? '<span class="hl">lo</span>' : icon("prev", 22);
+    gr.innerHTML = hl ? '<span class="hl">hi</span>' : icon("next", 22);
+    const katch = view === "catch";
+    gl.setAttribute("aria-label", hl ? "Guess lower" : katch ? "Catch it on the left" : "Guess left");
+    gr.setAttribute("aria-label", hl ? "Guess higher" : katch ? "Catch it on the right" : "Guess right");
+    box.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
+  }
+
+  async _pickGame(s, kind) {
+    if (!s.game) return;
+    try {
+      localStorage.setItem(LAST_GAME_KEY, kind);
+    } catch (err) {
+      // no storage: the picker just won't remember
+    }
+    s.game = { kind, round: 0, wins: 0, busy: false };
+    this._gameView(s, kind);
+    s.gameScore.textContent = "round 1/5";
+    if (kind === "catch") {
+      s.bubble.textContent = "catch it! tap its side as it reaches me";
+      s.sayUntil = Date.now() + 60000;
+      s.gameBox.querySelector(".gl").focus({ preventScroll: true });
+      setTimeout(() => this._catchRound(s), 900);
+      return;
+    }
+    if (kind === "left_right") {
+      s.bubble.textContent = "left or right? guess where I'll go!";
+    } else {
+      // Higher or Lower shows its first number before the first guess.
+      s.game.busy = true;
+      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+      const info = await this._playCall(s, { game: kind });
+      if (!info) return;
+      s.game.busy = false;
+      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
+      this._showNumber(s, info.number);
+      s.bubble.textContent = "will the next one be higher or lower?";
+    }
     s.sayUntil = Date.now() + 60000;
     s.gameBox.querySelector(".gl").focus({ preventScroll: true });
   }
 
-  async _guess(s, side) {
+  _showNumber(s, n) {
+    s.gameNum.innerHTML = digit(n);
+    s.gameNum.dataset.n = String(n);
+  }
+
+  // One play_game call; ends the game (with a line) on a failure or refusal.
+  // A reply for a game that was stopped (or replaced) meanwhile is dropped.
+  async _playCall(s, data) {
     const id = s.ids?.["sensor.mood"];
-    if (!s.game || s.game.busy || !id) return;
-    s.game.busy = true;
-    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = true; });
+    if (!id) return null;
+    const game = s.game;
     let info;
     try {
       const res = await this._hass.callService(
-        "virtual_pet", "play_game", { entity_id: id, guess: side }, undefined, false, true);
+        "virtual_pet", "play_game", { entity_id: id, ...data }, undefined, false, true);
       info = res?.response;
     } catch (err) {
-      this._endGame(s, "hmm, that didn't work");
-      return;
+      if (s.game === game) this._endGame(s, "hmm, that didn't work");
+      return null;
     }
-    if (!s.game) return; // stopped while waiting
+    if (s.game !== game) return null; // stopped while waiting
     if (!info || info.result !== "ok") {
       this._endGame(s, REFUSALS[info?.result] || "not now");
+      return null;
+    }
+    return info;
+  }
+
+  async _guess(s, side) {
+    if (!s.game || s.game.busy || !s.game.kind) return;
+    const kind = s.game.kind;
+    if (kind === "catch") {
+      this._catchTap(s, side);
       return;
     }
+    const game = GAMES.find((g) => g.key === kind);
+    const guess = game.guesses[side === "left" ? 0 : 1];
+    s.game.busy = true;
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+    const info = await this._playCall(s, { game: kind, guess });
+    if (!info) return;
     s.game.round = info.round;
     s.game.wins = info.wins;
-    s.pet.classList.add(`go-${info.went}`);
-    s.bubble.textContent = info.correct ? "yes! you found me" : `nope, I went ${info.went}!`;
+    if (kind === "higher_lower") {
+      this._showNumber(s, info.number);
+      this._animate(s, s.gameNum, "flip", 300);
+      this._animate(s, s.pet, "perk", 300);
+      s.bubble.textContent = info.correct ? `yes! ${info.number}` : `nope, ${info.number}!`;
+    } else {
+      s.pet.classList.add(`go-${info.went}`);
+      s.bubble.textContent = info.correct ? "yes! you found me" : `nope, I went ${info.went}!`;
+    }
     s.gameScore.textContent = `round ${info.round}/${info.rounds} · ${info.wins} right`;
     if (navigator.vibrate && info.correct) navigator.vibrate([12, 40, 12]);
     setTimeout(() => {
       s.pet.classList.remove("go-left", "go-right");
       if (!s.game) return;
       if (info.done) {
+        if (info.won) this._chirp(s, "win");
         this._endGame(s, info.won ? `${info.wins}/${info.rounds}! you win ♪` :
           `${info.wins}/${info.rounds}... again sometime?`);
         return;
       }
       s.game.busy = false;
-      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });
+      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
-      s.bubble.textContent = "again! left or right?";
+      s.bubble.textContent = kind === "higher_lower" ? "higher or lower?" : "again! left or right?";
     }, 900);
   }
 
+  // --- Trait flair ----------------------------------------------------------
+
+  _flairTick(s) {
+    const now = Date.now();
+    if (!s.nextFlair) s.nextFlair = now + 8000 + Math.random() * 12000;
+    if (now < s.nextFlair) return;
+    const [lo, hi] = FLAIR_EVERY_MS;
+    s.nextFlair = now + lo + Math.random() * (hi - lo);
+    if (this._free(s)) this._flair(s);
+  }
+
+  // One flair moment: each place shows one of the pet's traits there.
+  // Returns the traits shown (card-check calls it directly).
+  _flair(s, only = null) {
+    const stage = this._state(s, "sensor.life_stage");
+    const traits = (only ? [only] : stage?.attributes.traits || []).filter((t) => FLAIR[t]);
+    if (!traits.length || !s.species || stage?.state === "egg") return [];
+    const levels = stage.attributes.trait_levels || {};
+    s.flairTurn = (s.flairTurn || 0) + 1;
+    const shown = [];
+    for (const place of ["head", "air", "ground"]) {
+      const here = traits.filter((t) => FLAIR[t].place === place);
+      if (here.length) shown.push(here[s.flairTurn % here.length]);
+    }
+    s.screen.querySelector(".flair")?.remove();
+    const box = document.createElement("div");
+    box.className = "flair";
+    box.style.setProperty("--fl-ms", `${FLAIR_MS}ms`);
+    const at = this._flairAnchors(s);
+    for (const trait of shown) this._flairPieces(trait, levels[trait] || 1, at, box);
+    s.screen.appendChild(box);
+    s.flairUntil = Date.now() + FLAIR_MS;
+    clearTimeout(s.flairTimer);
+    s.flairTimer = setTimeout(() => box.remove(), FLAIR_MS);
+    return shown;
+  }
+
+  // Where the pet is on screen: its head point (species.json "head", per drawn
+  // stage), the feet line (y=224 of every 256 px frame), and the scene's scale.
+  _flairAnchors(s) {
+    const r = s.pet.getBoundingClientRect();
+    const sr = s.screen.getBoundingClientRect();
+    const k = r.height / 256;
+    const [hx, hy] = s.species.head?.[s.drawn] || [128, 96];
+    return {
+      hx: r.left - sr.left + hx * k, hy: r.top - sr.top + hy * k,
+      cx: r.left - sr.left + 128 * k, fy: r.top - sr.top + 224 * k,
+      half: r.width * 0.32, ks: sr.width / 512, width: sr.width,
+    };
+  }
+
+  _flairPieces(trait, level, at, box) {
+    const { hx, hy, cx, fy, half, ks } = at;
+    const url = (n) => `${BASE}/ui/flair_${n}.png?v=${VERSION}`;
+    const art = FLAIR[trait].art;
+    const img = (variant) => art === "frames"
+      ? `<img src="${url(`${trait}_1`)}" alt=""><img src="${url(`${trait}_2`)}" alt="">`
+      : `<img src="${url(art === "pair" ? `${trait}_${variant}` : trait)}" alt="">`;
+    const put = (x, y, cls, vars = {}, variant = 1) => {
+      const el = document.createElement("div");
+      el.className = `fx ${art === "frames" ? "frames " : ""}${cls}`;
+      el.innerHTML = img(variant);
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      for (const [k, v] of Object.entries(vars)) el.style.setProperty(k, v);
+      const first = el.querySelector("img");
+      // Drawn at the scene's scale, like the props.
+      first.addEventListener("load", () => { el.style.width = `${first.naturalWidth * ks}px`; });
+      if (first.complete && first.naturalWidth) el.style.width = `${first.naturalWidth * ks}px`;
+      box.appendChild(el);
+      return el;
+    };
+    const n = (base) => base + level - 1; // deeper traits show a little more
+    const px = (v) => `${Math.round(v)}px`;
+    switch (trait) {
+      case "storm_watcher":
+      case "thunder_heart":
+      case "early_bird":
+        put(hx + (trait === "thunder_heart" ? 6 : 0), hy - 6 * ks, "bob", { "--d": "1.4s" });
+        break;
+      case "moon_child":
+        put(hx, hy - 6 * ks, "bob", { "--d": "1.6s" }, 1);
+        for (let i = 0; i < n(2); i++) {
+          put(hx + (i % 2 ? 1 : -1) * (24 + i * 8) * ks, hy - (4 + (i % 3) * 14) * ks, "twinkle",
+            { "--d": "1.3s", "--delay": `${-i * 0.4}s` }, 2);
+        }
+        break;
+      case "music_lover":
+        for (let i = 0; i < n(3); i++) {
+          put(hx + (i % 2 ? 1 : -1) * (14 + i * 6) * ks, hy + 6 * ks, "float",
+            { "--d": "2.6s", "--delay": `${-i * 0.8}s`, "--dx": px((i % 2 ? 16 : -14) * ks), "--rise": px(70 * ks) },
+            (i % 2) + 1);
+        }
+        break;
+      case "social_butterfly": {
+        for (let i = 0; i < n(1); i++) {
+          // Round one side of the pet and down to its feet; never over its
+          // head, which is the head place's (a storm cloud, a moon...).
+          const side = i % 2 ? -1 : 1;
+          const mid = (hy + fy) / 2;
+          const path = `path("M ${cx + side * half * 2.4} ${hy + 4 * ks} ` +
+            `C ${cx + side * half * 1.5} ${hy - 26 * ks}, ${cx + side * half * 2.6} ${mid - 30 * ks}, ` +
+            `${cx + side * half * 1.9} ${mid} S ${cx + side * half * 1.5} ${fy - 34 * ks}, ` +
+            `${cx + side * half * 1.3} ${fy - 12 * ks}")`;
+          put(0, 0, "loop", { "--d": `${FLAIR_MS - 400}ms`, "--delay": `${i * 0.5}s` }).style.offsetPath = path;
+        }
+        break;
+      }
+      case "snow_child":
+        for (let i = 0; i < n(4); i++) {
+          put(cx + (-1.6 + (i * 3.2) / Math.max(1, n(4) - 1)) * half, hy - 30 * ks, "fall",
+            { "--d": "2.8s", "--delay": `${-i * 0.7}s`, "--dx": px((i % 2 ? 10 : -8) * ks), "--rise": px((fy - hy) + 20 * ks) },
+            (i % 2) + 1);
+        }
+        break;
+      case "breeze_rider":
+        for (let i = 0; i < n(2); i++) {
+          put(cx - half * 2, hy + (i * 22 - 10) * ks, "drift",
+            { "--d": "2.4s", "--delay": `${-i * 1.1}s`, "--dx": px(half * 4), "--rise": px(18 * ks) });
+        }
+        break;
+      case "night_owl":
+        for (let i = 0; i < n(3); i++) {
+          const a = (i / n(3)) * Math.PI * 2;
+          put(cx + Math.cos(a) * half * 1.4, (hy + fy) / 2 + Math.sin(a) * 30 * ks, "twinkle",
+            { "--d": "1.8s", "--delay": `${-i * 0.6}s` });
+        }
+        break;
+      case "sun_lover":
+        for (let i = 0; i < n(3); i++) {
+          put(cx + (i % 2 ? 1 : -1) * half * (0.9 + i * 0.25), hy + (i * 18) * ks, "twinkle",
+            { "--d": "1.2s", "--delay": `${-i * 0.4}s` });
+        }
+        break;
+      case "fireside": {
+        const glow = document.createElement("div");
+        glow.className = "fx glow";
+        Object.assign(glow.style, { left: px(cx), top: px(fy - 2 * ks), width: px(half * 3.2), height: px(30 * ks) });
+        box.appendChild(glow);
+        for (let i = 0; i < n(4); i++) {
+          const side = i % 2 ? 1 : -1;
+          put(cx + side * (half + (6 + (i % 3) * 8) * ks), fy - (i % 3) * 6 * ks, "float",
+            { "--d": "2.4s", "--delay": `${-i * 0.5}s`, "--dx": px(side * (6 + i * 2) * ks), "--rise": px(80 * ks) },
+            (i % 2) + 1);
+        }
+        break;
+      }
+      case "fog_wanderer":
+        put(cx - half * 0.6, fy + 4 * ks, "drift", { "--d": "4.2s", "--dx": px(half * 1.2) });
+        break;
+      case "helper":
+        put(cx + half * 1.35, fy + 2 * ks, "pop", { "--d": ".5s" });
+        break;
+      case "player":
+        put(cx - half * 1.35, fy, "bounce", { "--d": ".45s" });
+        break;
+      case "homebody":
+        put(cx - half * 1.3, fy + 4 * ks, "pop", { "--d": ".5s" });
+        break;
+      case "couch_potato":
+        put(cx + half * 1.35, fy + 2 * ks, "pop", { "--d": ".5s" });
+        break;
+      default:
+        break;
+    }
+  }
+
+  // --- Catch (prototype) -----------------------------------------------------
+  // Timed in the browser (performance.now, requestAnimationFrame), so network
+  // lag can't matter; the 700 ms tick and hass updates don't touch it.
+
+  _catchRound(s) {
+    const g = s.game;
+    if (!g || g.kind !== "catch") return;
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const f = g.round / (CATCH.rounds - 1);
+    const lerp = ([a, b]) => a + (b - a) * f;
+    const side = Math.random() < 0.5 ? "left" : "right";
+    const decoy = g.round > 0 && Math.random() < CATCH.decoyChance;
+    const prop = s.species?.props?.play || "";
+    const motion = /cricket/.test(prop) ? "hop" : "roll";
+    g.cur = {
+      side, decoy, motion, done: false, start: performance.now(),
+      calm, travel: lerp(CATCH.travel) * (calm ? 1.6 : 1),
+      window: lerp(CATCH.window) * (calm ? 2 : 1),
+    };
+    const el = s.catchEl;
+    if (decoy) el.src = BEE_FRAMES[0];
+    else this._show(s, el, prop);
+    el.hidden = false;
+    el.style.display = "";
+    s.gameScore.textContent = `round ${g.round + 1}/${CATCH.rounds} · ${g.wins} caught`;
+    const step = (now) => {
+      const c = s.game?.cur;
+      if (!c || c !== g.cur || c.done) return;
+      const p = Math.min(Math.max(now - c.start, 0) / 1000 / c.travel, 1);
+      // From off the edge to just beside the pet (which stands at 50%).
+      const from = c.side === "left" ? -16 : 100;
+      const to = c.side === "left" ? 28 : 56;
+      el.style.left = `${from + (to - from) * p}%`;
+      if (c.calm) { // reduced motion: it only slides along (the bee still faces its way)
+        el.style.transform = c.decoy && c.side === "left" ? "scaleX(-1)" : "";
+      } else if (c.decoy) { // a bee flies: flapping, bobbing, facing where it goes
+        // (rAF's first timestamp can come just before c.start)
+        const flap = Math.floor(Math.max(now - c.start, 0) / BEE_FLAP_MS) % 2;
+        if (c.flap !== flap) el.src = BEE_FRAMES[(c.flap = flap)];
+        el.style.transform = `translateY(${Math.sin(p * Math.PI * 6) * 12}%)` +
+          (c.side === "left" ? " scaleX(-1)" : "");
+      } else el.style.transform = c.motion === "hop"
+        ? `translateY(${-Math.abs(Math.sin(p * Math.PI * 4)) * 40}%)`
+        : `rotate(${(c.side === "left" ? 1 : -1) * p * 540}deg)`;
+      if (p >= 1) {
+        // It reached the pet untouched: a real one got away, a decoy was dodged.
+        this._catchResolve(s, c.decoy, c.decoy ? "phew, let the bee go!" : "it got away...");
+        return;
+      }
+      c.raf = requestAnimationFrame(step);
+    };
+    g.cur.raf = requestAnimationFrame(step);
+  }
+
+  _catchTap(s, side) {
+    const c = s.game?.cur;
+    if (!c || c.done) return;
+    const t = (performance.now() - c.start) / 1000;
+    if (c.decoy) {
+      this._catchResolve(s, false, "bzz! not the bee!");
+    } else if (side !== c.side) {
+      this._catchResolve(s, false, "other side!");
+    } else if (t < c.travel - c.window) {
+      this._catchResolve(s, false, "too soon!");
+    } else {
+      s.pet.classList.add(`go-${side}`);
+      this._catchResolve(s, true, "got it!");
+    }
+  }
+
+  _catchResolve(s, ok, line) {
+    const g = s.game;
+    const c = g?.cur;
+    if (!c || c.done) return;
+    c.done = true;
+    cancelAnimationFrame(c.raf);
+    s.catchEl.hidden = true;
+    g.round += 1;
+    g.wins += ok ? 1 : 0;
+    s.bubble.textContent = line;
+    if (ok) this._pounce(s);
+    if (navigator.vibrate && ok) navigator.vibrate([12, 40, 12]);
+    s.gameScore.textContent = `round ${g.round}/${CATCH.rounds} · ${g.wins} caught`;
+    setTimeout(() => {
+      s.pet.classList.remove("go-left", "go-right");
+      if (s.game !== g) return;
+      if (g.round < CATCH.rounds) {
+        this._catchRound(s);
+        return;
+      }
+      let best = g.wins;
+      try {
+        best = Math.max(best, Number(localStorage.getItem(BEST_CATCH_KEY) || 0));
+        localStorage.setItem(BEST_CATCH_KEY, String(best));
+      } catch (err) {
+        // no storage: no best score
+      }
+      if (g.wins >= CATCH.winAt) this._chirp(s, "win");
+      this._endGame(s, `${g.wins}/${CATCH.rounds} caught${g.wins >= CATCH.winAt ? "! ♪" : "..."} · best ${best}/${CATCH.rounds}`);
+    }, 1000);
+  }
+
+  // A catch: the species' own "won" pose where one is drawn (child), else a hop.
+  _pounce(s) {
+    const pose = s.species?.reactions?.won;
+    const frames = s.drawn === "child" && s.species?.extras?.[pose];
+    if (frames) {
+      s.poseFrames = Array.isArray(frames) ? frames : [frames];
+      s.poseUntil = Date.now() + 900;
+      this._show(s, s.pet, s.poseFrames[0]);
+    } else {
+      this._animate(s, s.pet, "hop", 700);
+    }
+  }
+
   _endGame(s, line) {
+    cancelAnimationFrame(s.game?.cur?.raf);
+    s.catchEl.hidden = true;
     s.game = null;
+    // Focus inside the game goes back to the play button, not the page's start.
+    const focused = s.gameBox.contains(this.shadowRoot?.activeElement);
     s.gameBox.hidden = true;
-    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });
+    if (focused) s.buttons.play?.focus({ preventScroll: true });
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
     s.pet.classList.remove("go-left", "go-right");
     if (line) s.bubble.textContent = line;
     s.sayUntil = line ? Date.now() + 4000 : 0;

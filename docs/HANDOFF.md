@@ -3,8 +3,10 @@
 Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's branch
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
-a session may push to `main` (the fifth session may: owner, 2026-10-27). Version
-**0.24.1**, released. **The owner runs it on
+a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
+release **0.27.0** (PR #7 merged: the games, trait flair, the polish pass and the
+256-colour backgrounds; the owner chose to release it before the tuning review).
+**The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read the README first, then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and
@@ -67,9 +69,8 @@ details before committing it.
   pet's notifications opens (`url` and `clickAction`); `notify.dashboard_path`
   normalises it. The dashboard list reads `hass.data["lovelace"]` without importing
   it; custom paths are allowed.
-- **News** (0.25.0): `virtual_pet.share_news`.
-  (`entity_id` one or a list, `headline`, optional `topic`)
-  makes a `news` moment the card says in the bubble ("did you hear? …", "guess
+- **News** (0.25.0): `virtual_pet.share_news` (`entity_id` one or a list,
+  `headline`, optional `topic`) makes a `news` moment the card says in the bubble ("did you hear? …", "guess
   what? …", "ooh, news! …", "<topic> news! …"), with the short `perk`. Cosmetic: no
   save, no stat or mood change (a test compares the whole state); since 0.25.1 it
   catches the pet up first (`_advance`), so news never reaches a pet that just fell
@@ -88,6 +89,25 @@ details before committing it.
   purpose: house and trait bonuses share `HOME_BONUS_CAP` (a tuning question for the
   review), motion after a sensor dropout (needs HA's change events to tell apart),
   and the debug sensor showing "away" (it's off by default and for debugging).
+- **Polish pass (2026-10-27, for 0.26.0b4):** sprites stored as exact palettes
+  (10.7 MB → 7.3 MB, same pixels, `scripts/art/palette.py`; backgrounds untouched
+  until the owner decides on 256-colour versions). Card speed: loops pause off screen,
+  redraws per slide, cache headers. Accessibility: a live region, focus, contrast ink
+  per shell (`deviceInk`), names. Storage: `trait_progress` in whole percents, no
+  frozen deadline while away, `SAVE_DELAY` 60. Privacy: diagnostics and the debug
+  sensor redact what the house was doing; the dev bench uses HA's demo location. Left
+  as is, on purpose: the journal and memories stay on the life stage sensor (moving
+  them breaks anyone reading them there), and the six stat sensors keep long-term
+  statistics.
+- **History rewrite, 2026-10-27 (owner's request):** the 0.25.0 commit carried a
+  local username as its author; `main` and PR #7's branch were rewritten from that
+  commit on (author renamed, same files and dates, older history untouched). The
+  session's proxy refused tag pushes and branch deletes. v0.25.1 was rebuilt on the
+  rewritten main by the release workflow (`replace`); the v0.25.0 and v0.26.0b1-b4
+  tags were left for the owner to move; the old commits also stay reachable through the art
+  session's branch `ccr-7ac3cdae-vv7jj5` (its work is already in PR #7), the merged
+  `ccr-a828d8c1-review` branch and GitHub's PR refs. Anyone with an older clone:
+  `git fetch && git reset --hard origin/<branch>` before working on it.
 - **Worlds, all six live:**
   - Woodland: bird, Douglas squirrel, Columbia black-tailed deer (0.22.0). Egg shell.
   - Terrarium: leopard gecko, Mexican red-knee tarantula (0.21.0, Sol's v2 at 2 px art
@@ -100,9 +120,9 @@ details before committing it.
 - **Adults** exist for every creature (the last four arrived in 0.21.0). Long adults
   are drawn back up with `species.json` `"scale": {"adult": …}` (1.05–1.2; the bat
   needs none).
-- **Tests:** 227, run with `scripts/test` (ruff, format check, pytest).
+- **Tests:** 273, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
-  `scripts/card-check` (Playwright, 22 checks) drives the card against
+  `scripts/card-check` (Playwright, 32 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
 - **CI:** `.github/workflows/validate.yml` (HACS action, hassfest, tests) is green.
   License MIT; Tiny5 keeps its OFL.
@@ -126,9 +146,24 @@ details before committing it.
 6. **Feature-gap plan** (`docs/plan-2026-10-27-feature-gaps.md`): the owner chose
    a call-response blueprint, choosing the next egg, more minigames (Higher or
    Lower; then Catch from Giga Pets, as a card-only prototype first; copy me was
-   cut) and a one-species alternate adult chosen by a trait. A (the blueprint, merged) and B (the next egg) are built; next is D's choice, then C1 after the 2026-11-03 tuning review. The
-   plan has been reviewed and the owner has approved it; D still needs a species
-   and a trait picked from the owner's pets. Not chosen (don't start unasked): learning household
+   cut) and trait flair. A (the blueprint) and B (the next egg, 0.23.0) are
+   released. Released in 0.27.0 (PR #7, merged on 2026-10-27 at the owner's word,
+   ahead of the 2026-11-03 tuning review, which now tunes the released game):
+   C1 (Higher or Lower), the Catch prototype (card option
+   `experimental_catch: true`, for the owner to try), and D, trait flair (Sol's 16
+   sprites around the pet, a cap of 4 traits, per-pet temperament, 7 new traits,
+   head points in `species.json`). The owner tries it first as the beta
+   0.26.0b1, released from that branch on 2026-10-27. 0.26.0b2 added polish: trait
+   icons, cap and progress on the status screen, flair when a trait is learned,
+   game counts in the journal, toy-style game picker, pixel digits, Catch's pounce
+   and best score, opt-in chirps per device, and traits in Assist's status.
+   0.26.0b3 (the owner asked the art session to release it, 2026-10-27): Sol's lit
+   `flair_night_owl_2` and the Catch decoy bee (`ui/catch_decoy_*`).
+   **Two sessions work on this repo at once** (this plan's, and the one doing art
+   and releases). Both land work in `main` through PRs; whoever releases takes the
+   next free version from `main` then, and never releases the other's unmerged work.
+   Merge `main` into your branch before pushing, and say in the PR when you touch
+   shared files (`scripts/card-check.js`, the card's game overlay, `play_game`). Not chosen (don't start unasked): learning household
    routines, a daily diary in the journal (declined), pets on the shelf noticing
    each other, chore streaks, trained tricks, items, calendar celebrations.
 7. **BirdNET bird visits:** the owner deferred this ("will be reset at a later time");
@@ -171,6 +206,10 @@ details before committing it.
   `frontend/hatch-pet-card.js` (the card URL's `?v=` busts the service-worker cache),
   push, wait for Validate to go green, then run the Release workflow: the GitHub MCP
   tool `actions_run_trigger` with `release.yml` and ref = `main`.
+  **Betas:** a version like `0.26.0b1` (or `rc1`) is published as a GitHub
+  pre-release, which HACS offers only to someone who turned on "show beta
+  versions" for the integration. Run the workflow with ref = the PR's branch to
+  let the owner try unmerged work; the final release later drops the suffix.
 - **Message Sol:** `send_message` to Sol's session (ID in the private notes). Sol can't
   reply; the owner relays links. Ask for batch jobs (cheaper).
 - **Card not showing after an update:** a hard refresh, or in the companion app,

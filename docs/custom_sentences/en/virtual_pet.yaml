@@ -57,6 +57,11 @@ intents:
         slots:
           action: blanket
       - sentences:
+          - "give {pet} a fan"
+          - "cool {pet} down"
+        slots:
+          action: fan
+      - sentences:
           - "(put|send) {pet} to bed"
           - "lights out[,] {pet}"
         slots:

@@ -1,11 +1,13 @@
 # Feature-gap plan, 2026-10-27 (written after 0.21.0; releases renumbered after 0.22.0)
 
-**Status:** planned, nothing started. The owner chose these items from an outside
-feature-gap audit, which compared Hatch at Home with Tamagotchi and Giga Pets.
-Three adversarial reviews followed: of the first draft, of how fun the games
-are, and of the whole plan against the code. The owner accepted their
-recommendations; this version includes them. The only decision still open is
-D's species and trait.
+**Status (2026-10-27):** everything chosen is built. A and B are released (B in
+0.23.0); C1, the C2 prototype and D, with Sol's art and a polish pass, are released
+in 0.27.0 (PR #7, merged on 2026-10-27 at the owner's word, ahead of the tuning
+review). What's left is the owner's: play it, and decide whether Catch stays (C2 full).
+The owner chose these items from an outside feature-gap audit, which compared
+Hatch at Home with Tamagotchi and Giga Pets. Three adversarial reviews followed: of
+the first draft, of how fun the games are, and of the whole plan against the code.
+The owner accepted their recommendations; this version includes them.
 
 ## What the audit said and what came of it
 
@@ -13,7 +15,7 @@ D's species and trait.
 | --- | --- |
 | Daily diary in the journal | Not doing (owner's call). |
 | Pet reaches back into the house on calls | **Planned (A):** a blueprint, no integration code. |
-| Care-shaped evolution / guide the next egg | **Planned (B) and (D):** choose the next egg; a one-species alternate adult, shaped by the house (a trait) rather than by care quality. |
+| Care-shaped evolution / guide the next egg | **Planned (B) and (D):** choose the next egg; and, instead of an evolution, visible flair for every trait, with a cap of 4 traits, per-pet temperament and seven new traits. |
 | More minigames | **Planned (C):** Higher or Lower (the 1997 second-generation Tamagotchi's game), then Catch (the Giga Pets game), as a prototype first. Copy me was cut: too easy as drafted, and it needed its own buttons and service shape. |
 | Trained tricks | Not now. Signature poses are drawn for the child only, so other stages would need stand-ins or new art. |
 | Pets on the shelf noticing each other | Not now. |
@@ -190,6 +192,13 @@ Order: C1, then the C2 prototype, then the full C2 if it's kept.
 
 ### C1. Higher or Lower (first)
 
+**Built** (2026-10-27), release held until after the 2026-11-03 tuning review (then
+0.26.0 or later; the other session released 0.23.1, 0.24.0 and 0.25.0 meanwhile). Everything under
+"Shared changes" is in except `caught` (Catch's finish field), which comes with C2:
+adding an optional field later doesn't break callers. The number sits at 30% from the
+top of the screen, clear of the speech bubble. Checked with `scripts/card-check`
+(25/25 at 420 px), 232 tests.
+
 The game from the 1997 second-generation Tamagotchi: the pet shows a number from
 1 to 9, and the player guesses whether the next number will be higher or lower.
 Five rounds; three right wins, the same as the existing game.
@@ -213,6 +222,14 @@ Five rounds; three right wins, the same as the existing game.
   - one `card-check` step that plays a game through.
 
 ### C2. Catch (the Giga Pets game; prototype first)
+
+**Prototype built** (2026-10-27): card only, offered in the picker when the card's
+YAML has `experimental_catch: true`. Five rounds; the species' `play` prop rolls
+in (a cricket hops) and a tap on its side in the window catches it; a stand-in
+pixel bee is the decoy from round 2; the window narrows 1.2 s → 0.6 s and the
+trip 1.9 s → 1.0 s; reduced motion slows the trip ×1.6 and doubles the window; a
+local best score. No reward and nothing sent to the server. `card-check` plays it
+from inside the page (one tap too soon on purpose: 4/5). The owner tries it next.
 
 From the 1997 Tiger Giga Pets ([Compu Kitty
 manual](https://www.hasbro.com/common/instruct/kitty-in.pdf): "press the LEFT or
@@ -298,69 +315,127 @@ Tests (full version):
   frontend's own reload, about 10–15 s after the first page load (see HANDOFF),
   so HA's timers aren't frozen while it boots.
 
-## D. An alternate adult form: one-species pilot (M, art-bound)
+## D. Trait flair, a trait cap and seven new traits (L, art-bound)
 
-**Shaped by the house, not by care quality.** The first draft tied the alternate
-look to upbringing. Scrappy needs about 9 or more missed calls before adulthood,
-so a caring owner would never see that look, and getting it would mean
-neglecting the pet. Tying it to devoted instead turns the plain adult into the
-"did worse" look. Traits come from the house (the sun, the fire, music,
-company…), so neither form is a grade.
+**Replaces the one-species alternate adult.** That pilot changed the pet once, at
+day 14, for one species. The owner preferred visible flair for every trait the pet
+picks up: it grows with the pet, works for every species and stage, and shows the
+house in the pet. A mockup (stand-in pixel art on the real card: a rain cloud over
+the head, embers and a glow at the feet, rising notes, a butterfly) was approved on
+2026-10-27.
 
-- **One alternate look for one species, for one trait.** At adulthood, a pet
-  that has that trait (learned or inherited) takes the alternate look. It's
-  decided once, at the moment the pet becomes an adult, and stored
-  (`adult_form` on the state), so a trait learned later doesn't flip it.
-  Because traits pass down the line, a family can keep its look across
-  generations.
-- **Pets that are already adults when it ships keep the plain look.** Unlike
-  `upbringing`, which `from_dict` fills in for stored adults, `adult_form` is
-  filled in as None, so nobody's adult changes look at an update. A world
-  change doesn't touch it: it applies to the next egg only.
-- **The species comes from a world the owner actually runs** (which worlds are in
-  the private notes). Otherwise the pilot is never seen. B lets the owner pick
-  the creature for the next egg.
-- **The trait should be one the house reliably teaches.** Check the owner's
-  current pets' traits through the debug sensor or diagnostics before choosing.
-- **Keep the house out of the repo.** The species and trait together hint at the
-  owner's world and house (a fireplace, say). Commit messages, docs and the art
-  brief describe the feature in general terms ("an alternate adult for one
-  species, chosen by a trait"), never as "the owner's house has…". The
-  `species.json` entry itself is unavoidable and reads as an ordinary design
-  choice. The reason for the pick lives in the private notes.
-- `species.json`: an optional `adult_forms` map, trait → sprite prefix, e.g.
-  `{"<trait>": "adult_<name>"}`. A pet without a mapped trait uses the plain
-  adult. The sprites README documents it.
-- The card reads the form from the life-stage sensor's attributes (a new
-  `adult_form` next to `upbringing`). The journal records each generation's
-  form, and the "all grown up" line can name it.
-- **Art request to Sol** (a full adult sheet, the same size as the plain adult:
-  10 moods × 2 frames). Probe first, as for new creatures. It's sent only once
-  the species and trait are chosen, since both shape the brief.
-- Tests:
-  - `tests/test_species.py` checks that every mapped prefix has a full set of
-    sprites;
-  - the form is decided once at adulthood and survives a restart;
-  - a stored adult from before the change loads with no form;
-  - Playwright screenshots of both forms.
+### Flair
 
-Decision (to settle when D starts): which species and trait. The rule is a
-species from a world the owner runs and a trait the house teaches; a visual fit
-helps.
+- **Around the pet, never on it.** Something drawn on the body (a scarf, drops on
+  feathers) would have to fit 12 species × 4 stages × 10 moods × 2 frames. Flair
+  sits in the scene, placed from two anchors:
+  - **feet:** y=224 in every 256 px frame (already true of all sprites);
+  - **head:** a hand-set point per species and stage, `"head": {"baby": [x, y], …}`
+    in `species.json` (48 points, measured once with a helper in `scripts/art/`).
+    Reading the head from the image's alpha is the fallback, but it's only rough:
+    in the mockup the kitten's tail rose as high as its ears and pulled the guess
+    sideways, and the squirrel's tail is higher than its head.
+- **Three places**, one flair each at a time: **head** (just above it), **air**
+  (around it), **ground** (at its feet). Each trait has a place (table below).
+- **Layering.** In a flair moment every trait the pet has shows at once, one per
+  place, so its combination reads as one picture (a cloud above, butterflies
+  around, embers below). Traits sharing a place take turns between moments.
+- **Rhythm.** About once a minute (with jitter), for about 4 s. A deeper trait
+  (★★, ★★★) shows a little more (more particles, a brighter glow). Never during a
+  game, sleep, away, the status screen or a reaction pose. With
+  `prefers-reduced-motion`, a still frame fades in and out instead.
+- **Art.** One small pixel sprite (or a 2-frame strip) per trait from Sol, shared
+  by every species: 16 in all. Placement and motion are CSS in the card, like the
+  rain, breeze and lightning.
+
+### The cap and temperament
+
+- **A pet keeps at most 4 traits** for life; an inherited trait counts toward the
+  4. Once full it learns no new trait (trait progress stops counting new ones);
+  levels still deepen as today (relearning an inherited trait).
+- **Temperament, so pets in one house differ.** With a cap and one fixed set of
+  thresholds, every pet in the same house would learn the same four fastest
+  traits. So at hatching each pet rolls a sensitivity per trait (a factor of about
+  0.6–1.6 on its threshold), stored as `temperament` and kept for life. The
+  inherited trait and which experiences come first then shape who it becomes.
+- Saved pets that already have more than 4 traits keep them (nothing is taken
+  away); they just learn no more.
+
+### Traits and their places
+
+| Trait | Learned from (awake, at ★, before temperament) | Place | Flair |
+| --- | --- | --- | --- |
+| storm watcher | 15 h of rain | head | a little rain cloud, dripping |
+| thunder heart (new) | 2 h of thunderstorms | head | a tiny lightning flicker |
+| early bird (new) | up in the hour after wake time on 7 mornings | head | a small sunrise glow |
+| moon child | 3 h of full moon | head | a crescent and a few twinkles |
+| music lover | 12 h of music | air | notes floating up |
+| social butterfly | about 15 arrivals home | air | a butterfly looping, landing by it |
+| snow child (new) | 6 h of snow | air | drifting snowflakes |
+| breeze rider (new) | 10 h of wind | air | a swirl of leaves |
+| night owl | 10 h awake in sleep hours | air | a few fireflies |
+| sun lover | 20 h of sun | air | sun glints |
+| fireside | 10 h of fire | ground | embers rising, a warm glow |
+| fog wanderer (new) | 8 h of fog | ground | a low curl of mist |
+| helper (new) | 10 chore treats | ground | a sparkle and a tiny broom |
+| player (new) | 15 games played | ground | a little ball bouncing |
+| homebody | 75% of 48+ h with company | ground | a small cushion |
+| couch potato | 12 h of TV | ground | a few popcorn bits |
+
+- The new weather traits use flags the house already senses (`snowy`, `windy`,
+  `foggy`, `storm`); early bird counts mornings from the existing good-morning
+  logic; helper and player count chore treats and finished games (C1's `games`).
+- New traits add a small happiness bonus while their flag is up, like the existing
+  flag traits (`TRAIT_HAPPINESS`); helper and player give a little more for a
+  chore treat or a won game. Numbers go to the owner with the tuning review.
+- The mockup's notes (cream on a dark wall) were the weakest; Sol's brief asks for
+  outlines and colours that read on both day and night scenes of every world.
+
+**Model built** (2026-10-27): the 7 traits, the cap (`TRAIT_CAP`), temperament
+(`TEMPERAMENT_RANGE`, rolled in `_hatch`), early bird counted by
+`model.morning_stir` from the good_morning moment, helper and player counted when
+a chore treat is handed over and a game finishes. Pets from before keep every
+trait they have and learn as before (no temperament).
+
+**Card built** (2026-10-27) with Sol's art, which arrived the same day (16
+sprites, 25 files in `ui/`; no stand-ins were needed). Head points for all 13
+creatures × 4 stages in `species.json`. Checked on real pets in every world (bird,
+kitten, otter, tree frog, luna moth, gecko; day and night) at 420 and 330 px, and
+with reduced motion; `card-check` forces a moment and checks the cloud stands on
+the head point and the embers by the feet line. Two fixes found in the browser:
+the card's `.screen img { position: absolute }` left flair pieces with no height
+(so they hung over the face), and the butterfly's loop crossed the head place and
+covered the cloud; it now goes round the pet's side.
+
+### Build order
+
+1. **Model:** the 7 traits, the cap, temperament (with a save from before it),
+   tests. The card shows nothing new yet.
+2. **Head points:** the measuring helper and the 48 points in `species.json`, with
+   a test that every ready species has them.
+3. **Card:** the flair layer with stand-in art (the mockup's), checked in the
+   browser on every world, day and night, at 420 and 330 px; `card-check` forces a
+   flair moment and checks each place is drawn.
+4. **Art:** Sol's 16 sprites replace the stand-ins (probe first: 4 of them on two
+   worlds, day and night).
+
+Release: the model and the card can ship together with stand-ins as soon as they
+look good, or wait for Sol's art (the owner's call at the time).
 
 ## Order and releases
 
 1. **A** (blueprint): built; lands with the plan's PR, no release.
 2. **B** (next egg): 0.23.0.
-3. **D's decision and art request**: pick the species and trait from the owner's
-   pets, then send the brief to Sol. The code comes when the art arrives.
-4. **C1** (Higher or Lower, with every shared game change): 0.24.0, after the
-   2026-11-03 tuning review.
-5. **C2 prototype** (Catch, card only, hidden option): it can ride along in
-   0.24.0 or come in a patch release. The owner plays it for a few days.
-6. **C2 full** (server side, decoy prop, in the picker): 0.25.0, only if the
-   owner keeps it.
-7. **D's code**, once the art is in.
+3. **D (trait flair):** built, in PR #7: the model (cap, temperament, 7 new
+   traits) and the card's flair layer with Sol's sprites.
+4. **C1** (Higher or Lower, with every shared game change): built, in a PR held
+   until after the 2026-11-03 tuning review; then the next free version (0.26.0 as
+   of now).
+5. **C2 prototype** (Catch, card only, hidden option): built, in PR #7 with C1;
+   the owner plays it for a few days (betas 0.26.0b1 to b3).
+6. **C2 full** (server side, decoy prop, in the picker): the release after, only if
+   the owner keeps it.
+7. **D's art:** in (Sol's flair sprites, the lit night-owl frame, the decoy bee).
 
 Each release: `scripts/test`, `scripts/card-check` where the card changes,
 screenshots to the owner, and then the release workflow as in the HANDOFF.

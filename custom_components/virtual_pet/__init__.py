@@ -29,6 +29,7 @@ from . import notify, rates as R
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_ENABLED,
+    ATTR_GAME,
     ATTR_GUESS,
     ATTR_HEADLINE,
     ATTR_HOURS,
@@ -45,7 +46,7 @@ from .const import (
 )
 from .coordinator import PetConfigEntry, PetCoordinator, PetStore
 from .home import news_text
-from .model import SIDES
+from .model import GAMES
 
 PLATFORMS = [
     Platform.BINARY_SENSOR,
@@ -69,7 +70,11 @@ NOTIFY_ME_SCHEMA = vol.Schema(
 PLAY_GAME_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-        vol.Required(ATTR_GUESS): vol.In(SIDES),
+        vol.Optional(ATTR_GAME, default="left_right"): vol.In(list(GAMES)),
+        # Without a guess, the call starts a game and returns its opening.
+        vol.Optional(ATTR_GUESS): vol.In(
+            sorted({g for gs in GAMES.values() for g in gs})
+        ),
     }
 )
 SHARE_NEWS_SCHEMA = vol.Schema(
@@ -97,8 +102,10 @@ FAST_FORWARD_SCHEMA = vol.Schema(
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Serve the card, load it on every dashboard, register the debug service."""
+    # Long cache headers: every URL the card asks for carries ?v=VERSION, so an
+    # update fetches new files and a reload doesn't re-ask for 1,400 sprites.
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(FRONTEND_URL, str(Path(__file__).parent / "frontend"), False)]
+        [StaticPathConfig(FRONTEND_URL, str(Path(__file__).parent / "frontend"), True)]
     )
     # The version in the URL makes browsers fetch the new card after an update.
     add_extra_js_url(hass, f"{FRONTEND_URL}/{CARD_FILENAME}?v={VERSION}")
@@ -150,7 +157,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         await pet_of(call).async_set_notify(user_id, call.data[ATTR_ENABLED])
 
     async def play_game(call: ServiceCall) -> ServiceResponse:
-        return await pet_of(call).async_play_game(call.data[ATTR_GUESS], call.context)
+        kind = call.data[ATTR_GAME]
+        guess = call.data.get(ATTR_GUESS)
+        if guess is not None and guess not in GAMES[kind]:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="wrong_guess",
+                translation_placeholders={
+                    "guess": guess,
+                    "guesses": " or ".join(GAMES[kind]),
+                },
+            )
+        return await pet_of(call).async_play_game(guess, call.context, kind)
 
     async def share_news(call: ServiceCall) -> ServiceResponse:
         # One pet that isn't loaded doesn't keep the news from the others.

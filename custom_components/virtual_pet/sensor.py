@@ -5,8 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+import math
 from typing import Any
 
+from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
@@ -18,7 +20,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from . import model
+from . import model, rates as R
+from .const import PRIVATE_READINGS
 from .coordinator import PetConfigEntry, PetCoordinator
 from .entity import PetEntity
 
@@ -119,8 +122,11 @@ class MoodSensor(PetEntity, SensorEntity):
             "requests": model.requests(
                 self.pet, dt_util.utcnow().timestamp(), self.coordinator.settings
             ),
+            # Not while away: frozen, it would move on every tick.
             "call_deadline": (
-                dt_util.utc_from_timestamp(call.deadline).isoformat() if call else None
+                dt_util.utc_from_timestamp(call.deadline).isoformat()
+                if call and not self.pet.away
+                else None
             ),
         }
 
@@ -144,6 +150,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "memories",
             "notify_users",
             "upbringing_score",
+            "games",
         }
     )
 
@@ -169,10 +176,16 @@ class LifeStageSensor(PetEntity, SensorEntity):
                 t: model.trait_level(self.pet, t) for t in self.pet.traits
             },
             "inherited_trait": self.pet.inherited_from,
+            "trait_cap": R.TRAIT_CAP,  # new learning stops here
             "generation": self.pet.generation,
             "journal": [dict(r) for r in self.pet.journal],
             "notify_users": list(self.pet.notify_users),
-            "trait_progress": model.trait_progress(self.pet),
+            # Whole percents, rounded down: a finer value changed on every tick,
+            # and each change is a new database row.
+            "trait_progress": {
+                t: math.floor(p * 100) / 100
+                for t, p in model.trait_progress(self.pet).items()
+            },
             "roster": list(self.coordinator.roster),
             "hatches_at": self._hatches_at(),
             "next_world": self.coordinator.next_world_name,
@@ -181,6 +194,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
                 self.pet.egg_choice or ""
             ),
             "memories": [dict(m) for m in self.pet.memories],
+            "games": model.game_counts(self.pet),
             # Final once adult; before that, what it's on track for.
             "upbringing": (
                 model.upbringing(self.pet)
@@ -237,7 +251,7 @@ class DebugSensor(PetEntity, SensorEntity):
     _attr_entity_registry_enabled_default = False
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _unrecorded_attributes = frozenset(
-        {"flags", "state", "calculation", "latched", "digesting", "poops"}
+        {"flags", "state", "calculation", "latched", "digesting", "poops", "games"}
     )
 
     def __init__(self, coordinator: PetCoordinator) -> None:
@@ -250,8 +264,11 @@ class DebugSensor(PetEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         pet = self.pet
-        now = dt_util.utcnow().timestamp()
-        _, flags, _ = model.mood(pet, now, self.coordinator.settings)
+        # As private as the mood sensor: no "away", nor what the house was up to.
+        _, flags, _ = self.coordinator.current_mood()
+        calculation = dict(self.coordinator.debug)
+        if self.coordinator.privacy:
+            calculation = async_redact_data(calculation, PRIVATE_READINGS)
         stamp = dt_util.utc_from_timestamp
         return {
             "flags": flags,
@@ -259,5 +276,6 @@ class DebugSensor(PetEntity, SensorEntity):
             "poops": [stamp(t).isoformat() for t in pet.poops],
             "digesting": [stamp(t).isoformat() for t in pet.digesting],
             "latched": list(pet.latched),
-            "calculation": dict(self.coordinator.debug),
+            "games": model.game_counts(pet),
+            "calculation": calculation,
         }

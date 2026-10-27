@@ -74,7 +74,11 @@ class PetBinarySensor(PetEntity, BinarySensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        if self.entity_description.key != "calling" or self.pet.call is None:
+        if (
+            self.entity_description.key != "calling"
+            or self.pet.call is None
+            or self.pet.away  # frozen while away: it would move on every tick
+        ):
             return None
         # The reason stays off this sensor so a fake call looks real here.
         return {

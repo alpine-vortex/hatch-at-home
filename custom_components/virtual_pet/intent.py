@@ -149,7 +149,13 @@ class StatusIntent(intent.IntentHandler):
         name = pet_name(pet)
         response = intent_obj.create_response()
         response.response_type = intent.IntentResponseType.QUERY_ANSWER
-        response.async_set_speech(f"{name} is {MOOD_WORDS[mood]}: {reason}.")
+        traits = [t.replace("_", " ") for t in state.traits]
+        # Most reasons end in their own punctuation ("play with me?").
+        end = "" if reason.endswith((".", "!", "?", "~", "…")) else "."
+        speech = f"{name} is {MOOD_WORDS[mood]}: {reason}{end}"
+        if traits:
+            speech += f" Traits: {', '.join(traits)}."
+        response.async_set_speech(speech)
         response.async_set_speech_slots(
             {
                 "pet": name,
@@ -159,6 +165,8 @@ class StatusIntent(intent.IntentHandler):
                 "stage": model.life_stage(state),
                 "species": pet.species_names.get(state.species or "", state.species),
                 **{stat: round(getattr(state, stat)) for stat in model.STATS},
+                # Learned habits, 1-3 stars each, in the order it learned them.
+                "traits": {t: model.trait_level(state, t) for t in state.traits},
                 "requests": model.requests(
                     state, dt_util.utcnow().timestamp(), pet.settings
                 ),

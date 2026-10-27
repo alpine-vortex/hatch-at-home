@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 DOMAIN = "virtual_pet"
-VERSION = "0.25.1"  # keep in step with manifest.json (a test checks)
+VERSION = "0.27.0"  # keep in step with manifest.json (a test checks)
 LOGGER = logging.getLogger(__package__)
 
 CONF_BEDTIME = "bedtime"
@@ -21,6 +21,7 @@ ATTR_ENABLED = "enabled"
 SERVICE_FAST_FORWARD = "fast_forward"
 SERVICE_PLAY_GAME = "play_game"
 ATTR_GUESS = "guess"
+ATTR_GAME = "game"
 SERVICE_SHARE_NEWS = "share_news"
 ATTR_HEADLINE = "headline"
 ATTR_TOPIC = "topic"
@@ -51,6 +52,17 @@ CONF_MUSIC = "music"
 CONF_TV = "tv"
 CONF_ZONE = "zone"
 CONF_PRIVACY = "privacy"
+# What the house was doing, not how the pet is: what's on and who's home.
+PRIVATE_READINGS = {
+    "company",
+    "motion_recent",
+    "tv_title",
+    "music_title",
+    "music_artist",
+    "title",
+    "artist",
+    "headline",
+}
 DEFAULT_ZONE = "zone.home"
 CONF_FIREPLACE = "fireplace"
 CONF_COMFORT_LOW = "comfort_low"  # stored in °C, shown in the owner's unit

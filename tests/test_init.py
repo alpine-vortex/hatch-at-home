@@ -471,6 +471,10 @@ async def test_empty_house_goes_to_the_sitter_privately(
     for _ in range(12):
         await settle(hass, freezer, 5 * 60)
     assert hass.states.get("sensor.pip_hunger").state == hunger  # frozen
+    # Nothing ticks along while away (a frozen deadline moved every tick).
+    assert hass.states.get("sensor.pip_mood").attributes["call_deadline"] is None
+    calling = hass.states.get("binary_sensor.pip_calling")
+    assert "deadline" not in calling.attributes
 
     hass.states.async_set("zone.home", "1")
     await settle(hass, freezer)
@@ -846,6 +850,63 @@ async def test_play_game_service_plays_five_rounds(
     assert hass.states.get("sensor.pip_weight") is not None
 
 
+async def game(hass: HomeAssistant, **data: Any) -> dict[str, Any]:
+    return await hass.services.async_call(
+        DOMAIN,
+        "play_game",
+        {"entity_id": "button.pip_feed", **data},
+        blocking=True,
+        return_response=True,
+    )
+
+
+async def test_higher_or_lower_through_the_service(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0)
+    await setup(hass)
+    finished = async_capture_events(hass, f"{DOMAIN}_game_finished")
+    # A guess before the game starts has nothing to go on.
+    early = await game(hass, game="higher_lower", guess="higher")
+    assert early == {"result": "no_game"}
+    opening = await game(hass, game="higher_lower")
+    assert opening["round"] == 0 and opening["number"] in range(1, 10)
+    shown = opening["number"]
+    for _ in range(5):
+        info = await game(
+            hass, game="higher_lower", guess="higher" if shown < 5 else "lower"
+        )
+        assert info["shown"] == shown and info["number"] != shown
+        shown = info["number"]
+    assert info["done"] is True
+    assert finished[0].data["game"] == "higher_lower"
+    log = hass.states.get("sensor.pip_last_care").attributes["log"]
+    assert log[0]["game"] == "higher_lower"
+    stage = hass.states.get("sensor.pip_life_stage").attributes
+    assert stage["games"]["higher_lower"]["played"] == 1  # the card's journal
+    assert stage["trait_cap"] == 4  # the card's "traits n/4"
+    # Whole percents: a finer value changed (and hit the database) every tick.
+    assert all(p == round(p, 2) for p in stage["trait_progress"].values())
+    counts = {"higher_lower": {"played": 1, "won": int(info["won"])}}
+    registry = er.async_get(hass)
+    registry.async_update_entity("sensor.pip_debug", disabled_by=None)
+    await hass.config_entries.async_reload("test_pet")
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.pip_debug").attributes["games"] == counts
+
+
+async def test_a_guess_from_another_game_is_refused(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    with pytest.raises(ServiceValidationError):
+        await game(hass, game="higher_lower", guess="left")
+    # Left/right still starts on its first guess, with or without game set.
+    assert (await game(hass, guess="left"))["round"] == 1
+    assert (await game(hass, game="left_right", guess="right"))["round"] == 2
+
+
 async def test_ticking_off_a_chore_gives_the_pet_a_treat(
     hass: HomeAssistant,
     now: float,
@@ -1008,6 +1069,15 @@ async def test_diagnostics_hide_the_house_and_the_people(
     assert diag["pet"]["care_log"][0]["by"] == "**REDACTED**"
     assert diag["now"]["stage"] == "child"
     assert "Alex" not in str(diag) and "user-1" not in str(diag)
+
+    # Nor what the house was doing: what's on, the news, who's home.
+    pet = config.runtime_data
+    pet.debug["home"] = {"readings": {"tv_title": "Secret Show", "company": 2}}
+    pet.moments.append({"type": "watching", "title": "Secret Show", "at": now})
+    pet.moments.append({"type": "news", "headline": "Local news", "at": now})
+    diag = await async_get_config_entry_diagnostics(hass, config)
+    assert "Secret Show" not in str(diag) and "Local news" not in str(diag)
+    assert diag["calculation"]["home"]["readings"]["company"] == "**REDACTED**"
 
 
 async def test_repairs_warn_about_entities_that_are_gone(

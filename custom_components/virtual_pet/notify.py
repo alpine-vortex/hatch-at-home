@@ -19,9 +19,9 @@ from .const import LOGGER
 CALLS = {
     "hunger": "is hungry",
     "happiness": "wants to play",
-    "energy": "is sleepy, lights out?",
+    "energy": "is sleepy. Lights out?",
     "dirty": "needs a clean",
-    "sick": "is calling, it feels sick",
+    "sick": "feels sick and is calling",
 }
 
 
@@ -32,10 +32,17 @@ TRAITS = {
     "homebody": ("is a homebody", "homebody heart"),
     "sun_lover": ("is a sun lover", "love of the sun"),
     "fireside": ("loves the fireside", "love of the fire"),
-    "moon_child": ("is a moon child", "moonchild soul"),
+    "moon_child": ("is a moon child", "moon-child soul"),
     "storm_watcher": ("is a storm watcher", "love of storms"),
     "couch_potato": ("is a couch potato", "couch-potato streak"),
     "social_butterfly": ("is a social butterfly", "social streak"),
+    "early_bird": ("is an early bird", "early-bird streak"),
+    "helper": ("is a little helper", "helpful streak"),
+    "player": ("loves a game", "love of games"),
+    "snow_child": ("is a snow child", "love of snow"),
+    "breeze_rider": ("rides the breeze", "love of the wind"),
+    "fog_wanderer": ("is a fog wanderer", "love of the fog"),
+    "thunder_heart": ("has a thunder heart", "thunder heart"),
 }
 
 
@@ -101,7 +108,8 @@ def message(event: dict[str, Any], name: str, species: dict[str, str]) -> str | 
     """The notification for a pet event, or None for events that don't notify."""
     kind = event["type"]
     if kind == "call_started":
-        return f"{name} {CALLS.get(event.get('reason', ''), 'is calling')}!"
+        text = f"{name} {CALLS.get(event.get('reason', ''), 'is calling')}"
+        return text if text.endswith("?") else f"{text}!"
     if kind == "became_sick":
         return f"{name} is feeling sick. Medicine?"
     if kind == "hatched":
@@ -182,7 +190,9 @@ async def send(
                 blocking=True,
             )
         except Exception:  # noqa: BLE001 - a phone being gone must not break the pet
-            LOGGER.warning("Couldn't notify %s", service, exc_info=True)
+            # The service is named after the phone (often its owner): debug only.
+            LOGGER.warning("Couldn't send a pet notification to a phone")
+            LOGGER.debug("Couldn't notify %s", service, exc_info=True)
 
     # All phones at once: a slow push doesn't hold up the others.
     await asyncio.gather(*(one(service) for service in services))

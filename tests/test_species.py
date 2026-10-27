@@ -71,3 +71,33 @@ def test_reactions_point_at_poses_the_species_has(species: str) -> None:
     sp = json.loads((SPRITES / species / "species.json").read_text())
     for action, pose in (sp.get("reactions") or {}).items():
         assert pose in (sp.get("extras") or {}), f"{species} {action} -> {pose}"
+
+
+@pytest.mark.parametrize("species", READY)
+def test_every_stage_has_a_head_point_on_the_creature(species: str) -> None:
+    """Trait flair over the head needs it; a point must sit on the drawn pet."""
+    sp = json.loads((SPRITES / species / "species.json").read_text())
+    for stage in sp["stages"]:
+        x, y = sp["head"][stage]
+        assert 0 <= x < 256 and 0 <= y < 224, f"{species} {stage}"
+        alpha = (
+            Image.open(SPRITES / species / f"{stage}_content_1.png")
+            .convert("RGBA")
+            .getchannel("A")
+        )
+        # Something of the pet within a few art pixels below the point.
+        assert any(
+            alpha.getpixel((min(255, max(0, x + dx)), y + dy)) > 40
+            for dx in range(-24, 25, 4)
+            for dy in range(0, 33, 4)
+        ), f"{species} {stage} {x},{y} isn't on the creature"
+
+
+def test_every_trait_has_flair_art() -> None:
+    from custom_components.virtual_pet.model import TRAITS
+
+    ui = SPRITES.parent / "ui"
+    for trait in TRAITS:
+        assert (ui / f"flair_{trait}.png").exists() or (
+            ui / f"flair_{trait}_1.png"
+        ).exists(), trait

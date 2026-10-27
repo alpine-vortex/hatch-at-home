@@ -79,11 +79,14 @@ WEIGHT_HEAVY_ABOVE = 75.0  # heavy: no health regen, and a risk of getting sick
 WEIGHT_LIGHT_BELOW = 25.0  # light: no health regen until it's fed up again
 WEIGHT_HEAVY_SICK_HAZARD = 0.02  # chance per hour of getting sick while heavy
 
-# --- The left/right game (the card's play button) ----------------------------
+# --- Games (the card's play button) -------------------------------------------
 
 GAME_ROUNDS = 5
 GAME_WIN_AT = 3  # right guesses out of GAME_ROUNDS
-GAME_WIN_HAPPINESS = 25.0  # more than plain play
+GAME_WIN_HAPPINESS = 25.0  # left/right is luck: a win pays more than plain play
+# Higher or Lower is mostly skill (a good player wins ~92% of games), so a win
+# pays like plain play; at 25 it would be the best happiness button there is.
+SKILL_GAME_WIN_HAPPINESS = PLAY_HAPPINESS
 GAME_LOSE_HAPPINESS = 10.0
 GAME_IDLE_MINUTES = 3  # an unfinished game is dropped after this
 
@@ -202,7 +205,24 @@ TRAIT_FLAG_HOURS: dict[str, tuple[str, float]] = {
     "storm_watcher": ("rainy", 15.0),
     "couch_potato": ("watching_tv", 12.0),
     "social_butterfly": ("greeting", 2.5),  # about 15 arrivals of 10 minutes
+    "snow_child": ("snowy", 6.0),
+    "breeze_rider": ("windy", 10.0),
+    "fog_wanderer": ("foggy", 8.0),
+    "thunder_heart": ("storm", 2.0),  # thunder is rare: a couple of hours of it
 }
+# Traits counted in events rather than hours.
+TRAIT_EARLY_BIRD_MORNINGS = 7  # mornings the house stirred soon after wake time
+TRAIT_EARLY_BIRD_WINDOW_MINUTES = 60  # "soon": the first stir within this of wake time
+TRAIT_HELPER_CHORES = 10  # chore treats handed over
+TRAIT_PLAYER_GAMES = 15  # games finished
+EARLY_BIRD_MORNING_MINUTES = 120  # an early bird is happier this long after wake time
+HELPER_TREAT_HAPPINESS = 4.0  # a helper's extra per chore treat (at ★)
+PLAYER_WIN_HAPPINESS = 4.0  # a player's extra per won game (at ★)
+# A pet keeps at most this many traits for life; an inherited one counts.
+TRAIT_CAP = 4
+# Temperament: rolled at hatching, a factor on each trait's threshold, so pets in
+# the same house don't all learn the same traits first.
+TEMPERAMENT_RANGE = (0.6, 1.6)
 # Effects grow with the level (★ to ★★★): an inherited trait the pet also learns
 # for itself goes up one level.
 TRAIT_MAX_LEVEL = 3

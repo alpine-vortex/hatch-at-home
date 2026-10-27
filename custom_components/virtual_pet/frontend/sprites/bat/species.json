@@ -29,5 +29,6 @@
   },
   "backgrounds": { "day": "bg_day", "night": "bg_night", "rain": "bg_rain", "dim": "bg_night" },
   "words": { "food": "bugs", "home": "roost" },
-  "reactions": { "play": "echo", "won": "echo", "praise": "hang", "blanket": "wing_wrap" }
+  "reactions": { "play": "echo", "won": "echo", "praise": "hang", "blanket": "wing_wrap" },
+  "head": { "baby": [136, 84], "child": [136, 60], "teen": [140, 32], "adult": [140, 32] }
 }

@@ -631,6 +631,7 @@ def test_laying_an_egg_retires_the_parent_to_the_journal():
             "age_days": round(pet.age_hours / 24, 1),
             "care_misses": 3,
             "upbringing": "steady",  # 3 misses and no discipline
+            "games": {},
         }
     ]
     assert events == [
@@ -671,6 +672,137 @@ def test_new_flag_traits_are_learned_from_their_flags():
         events = live(pet, at(12, 10), house(flag))
         assert pet.traits == [trait], trait
         assert {"type": "trait_learned", "trait": trait, "level": 1} in events
+
+
+def test_a_pet_keeps_at_most_four_traits():
+    pet = hatched(at(12))
+    pet.traits = ["sun_lover", "fireside", "moon_child", "couch_potato"]
+    pet.trait_hours = {"awake": 50.0, "snowy": R.TRAIT_FLAG_HOURS["snow_child"][1]}
+    events = live(pet, at(12, 10), house("snowy"))
+    assert len(pet.traits) == R.TRAIT_CAP and "snow_child" not in pet.traits
+    assert "trait_learned" not in types(events)
+
+
+def test_an_inherited_trait_counts_toward_the_cap():
+    pet = hatched(at(12))
+    pet.traits, pet.inherited = (
+        ["sun_lover", "fireside", "moon_child"],
+        {"sun_lover": 1},
+    )
+    flag, needed = R.TRAIT_FLAG_HOURS["snow_child"]
+    pet.trait_hours = {"awake": 50.0, flag: needed, "windy": 20.0}
+    live(pet, at(12, 10), house(flag, "windy"))
+    assert len(pet.traits) == 4  # one of the two: dict order picks it, then it's full
+
+
+def test_pets_from_before_the_cap_keep_their_traits():
+    pet = hatched(at(12))
+    pet.traits = ["sun_lover", "fireside", "moon_child", "couch_potato", "homebody"]
+    again = model.PetState.from_dict(pet.to_dict())
+    assert again.traits == pet.traits
+
+
+def test_temperament_is_rolled_at_hatching_and_kept():
+    start = at(9)
+    pet = model.PetState.new("Pip", start)
+    model.advance(
+        pet,
+        start + HOUR,
+        model.Settings(tz=UTC, roster=("bird",)),
+        random.Random(3),
+        max_gap=None,
+    )
+    low, high = R.TEMPERAMENT_RANGE
+    assert set(pet.temperament) == set(model.TRAITS)
+    assert all(low <= f <= high for f in pet.temperament.values())
+    assert model.PetState.from_dict(pet.to_dict()).temperament == pet.temperament
+    other = model.PetState.new("Pip", start)
+    model.advance(
+        other,
+        start + HOUR,
+        model.Settings(tz=UTC, roster=("bird",)),
+        random.Random(4),
+        max_gap=None,
+    )
+    assert other.temperament != pet.temperament  # each pet its own
+
+
+def test_temperament_scales_how_soon_a_trait_comes():
+    pet = hatched(at(12))
+    flag, needed = R.TRAIT_FLAG_HOURS["fireside"]
+    pet.trait_hours = {"awake": 50.0, flag: needed}
+    pet.temperament = {"fireside": 1.5}
+    assert model.trait_progress(pet)["fireside"] == pytest.approx(1 / 1.5, abs=0.001)
+    live(pet, at(12, 10), house(flag))
+    assert "fireside" not in pet.traits  # slow to warm to it
+    pet.trait_hours[flag] = needed * 1.5
+    live(pet, at(12, 20), house(flag))
+    assert "fireside" in pet.traits
+
+
+def test_pets_from_before_temperament_learn_as_before():
+    pet = hatched(at(12))
+    data = pet.to_dict()
+    del data["temperament"]
+    again = model.PetState.from_dict(data)
+    assert again.temperament == {}
+    assert model.trait_progress(again) == dict.fromkeys(model.TRAITS, 0.0)
+
+
+def test_an_early_rising_house_makes_an_early_bird():
+    settings = model.Settings(tz=UTC)  # wake 07:00
+    pet = hatched(at(12))
+    model.morning_stir(pet, at(9), settings)  # two hours in: not early
+    assert pet.trait_hours.get("early_mornings", 0.0) == 0.0
+    # Once a day, even if the moment comes again (after a restart, say).
+    model.morning_stir(pet, at(7, 10, day=20), settings)
+    model.morning_stir(
+        model.PetState.from_dict(pet.to_dict()), at(7, 30, day=20), settings
+    )
+    pet = model.PetState.from_dict(pet.to_dict())
+    model.morning_stir(pet, at(7, 40, day=20), settings)
+    assert pet.trait_hours["early_mornings"] == 1.0
+    pet.trait_hours.clear()
+    for day in range(R.TRAIT_EARLY_BIRD_MORNINGS):
+        model.morning_stir(pet, at(7, 20, day=day + 1), settings)
+    assert model.trait_progress(pet)["early_bird"] == 1.0
+    events = live(pet, at(12, 10), house())
+    assert {"type": "trait_learned", "trait": "early_bird", "level": 1} in events
+
+
+def test_chores_make_a_helper_who_enjoys_treats_more():
+    pet = hatched(at(12), happiness=10.0, hunger=10.0)
+    for i in range(R.TRAIT_HELPER_CHORES):
+        model.chores_done(pet, 1, at(12) + i)
+        model.give_treats(pet, at(12) + i)
+        pet.chore_treats = []  # past the daily limit: a test of counting only
+    assert pet.trait_hours["chores"] == R.TRAIT_HELPER_CHORES
+    live(pet, at(12, 10), house())
+    assert "helper" in pet.traits
+    pet.happiness = 10.0
+    model.chores_done(pet, 1, at(12, 20))
+    model.give_treats(pet, at(12, 20))
+    assert pet.happiness == 10.0 + R.CHORE_TREAT_HAPPINESS + R.HELPER_TREAT_HAPPINESS
+
+
+def test_games_make_a_player_who_enjoys_wins_more():
+    start = at(9)
+    pet = hatched(start)
+    for g in range(R.TRAIT_PLAYER_GAMES):
+        pet.energy = 100.0
+        play_rounds(pet, ["left"] * 5, start + g * 60, Always("left"))
+    assert model.games_played(pet) == R.TRAIT_PLAYER_GAMES
+    live(pet, start + R.TRAIT_PLAYER_GAMES * 60 + 600, house())
+    assert "player" in pet.traits
+    pet.energy, pet.happiness = 100.0, 10.0
+    play_rounds(pet, ["left"] * 5, start + 3 * HOUR, Always("left"))
+    assert pet.happiness == 10.0 + R.GAME_WIN_HAPPINESS + R.PLAYER_WIN_HAPPINESS
+
+
+def test_every_trait_has_notification_words():
+    from custom_components.virtual_pet import notify
+
+    assert set(notify.TRAITS) == set(model.TRAITS)
 
 
 def test_relearning_an_inherited_trait_deepens_it_to_at_most_three_stars():
@@ -925,7 +1057,12 @@ def test_winning_the_game_cheers_it_up_more_than_losing():
     assert winner.weight == R.WEIGHT_START + R.WEIGHT_GAME
     assert winner.game is None
     assert winner.care_log[0]["result"] == "won"
-    assert {"type": "game_finished", "won": True, "wins": 5} in events
+    assert {
+        "type": "game_finished",
+        "game": "left_right",
+        "won": True,
+        "wins": 5,
+    } in events
 
     loser = hatched(start, happiness=50.0)
     rounds = play_rounds(loser, ["right"] * 5, start, Always("left"))
@@ -937,7 +1074,155 @@ def test_winning_the_game_cheers_it_up_more_than_losing():
         "by": None,
         "result": "lost",
         "score": "0/5",
+        "game": "left_right",
     }
+
+
+class Deal(random.Random):
+    """Higher or Lower's numbers, dealt in this order."""
+
+    def __init__(self, *numbers: int) -> None:
+        super().__init__(0)
+        self.numbers = list(numbers)
+
+    def choice(self, seq):
+        n = self.numbers.pop(0)
+        assert n in seq, f"{n} can't come up from {list(seq)}"
+        return n
+
+
+def test_higher_or_lower_starts_with_a_number_then_plays_five_rounds():
+    start = at(9)
+    pet = hatched(start, happiness=50.0)
+    rng = Deal(5, 7, 2, 9, 1, 3)
+    info, events = model.start_game(pet, "higher_lower", start, rng)
+    assert info == {
+        "result": "ok",
+        "game": "higher_lower",
+        "round": 0,
+        "rounds": R.GAME_ROUNDS,
+        "wins": 0,
+        "done": False,
+        "number": 5,
+    }
+    assert events == []
+    guesses = ["higher", "lower", "higher", "lower", "higher"]
+    for i, guess in enumerate(guesses):
+        info, events = model.play_game(
+            pet, guess, start + 10 * (i + 1), rng, kind="higher_lower"
+        )
+        assert info["correct"]
+    assert (info["shown"], info["number"]) == (1, 3)
+    assert info["done"] and info["won"] and info["wins"] == 5
+    assert pet.happiness == 50.0 + R.SKILL_GAME_WIN_HAPPINESS
+    assert pet.games == {"higher_lower": {"played": 1, "won": 1}}
+    assert pet.care_log[0]["game"] == "higher_lower"
+    assert {
+        "type": "game_finished",
+        "game": "higher_lower",
+        "won": True,
+        "wins": 5,
+    } in events
+
+
+def test_a_skill_win_pays_like_plain_play_and_less_than_luck():
+    assert R.SKILL_GAME_WIN_HAPPINESS == R.PLAY_HAPPINESS < R.GAME_WIN_HAPPINESS
+
+
+def test_losing_higher_or_lower_still_counts():
+    start = at(9)
+    pet = hatched(start, happiness=50.0)
+    rng = Deal(5, 7, 2, 9, 1, 3)
+    model.start_game(pet, "higher_lower", start, rng)
+    for i, guess in enumerate(["lower", "higher", "lower", "higher", "lower"]):
+        info, _ = model.play_game(pet, guess, start + 10 * i, rng, kind="higher_lower")
+    assert info["wins"] == 0 and info["won"] is False
+    assert pet.happiness == 50.0 + R.GAME_LOSE_HAPPINESS
+    assert pet.games == {"higher_lower": {"played": 1, "won": 0}}
+
+
+def test_higher_or_lower_never_shows_the_same_number_twice():
+    pet = hatched(at(9))
+    rng = random.Random(7)
+    for g in range(100):
+        pet.energy = 100.0
+        info, _ = model.start_game(pet, "higher_lower", at(9) + g, rng)
+        shown = info["number"]
+        for _ in range(R.GAME_ROUNDS):
+            info, _ = model.play_game(
+                pet, "higher", at(9) + g, rng, kind="higher_lower"
+            )
+            assert info["number"] != shown and info["number"] in model.NUMBERS
+            shown = info["number"]
+
+
+def test_higher_or_lower_needs_starting_first():
+    pet = hatched(at(9))
+    info, events = model.play_game(pet, "higher", at(9), Deal(), kind="higher_lower")
+    assert info == {"result": "no_game"} and events == []
+    assert pet.game is None
+
+
+def test_starting_over_before_a_guess_keeps_the_number():
+    pet = hatched(at(9))
+    deal = Deal(5, 1, 7)
+    info, _ = model.start_game(pet, "higher_lower", at(9), deal)
+    assert info["number"] == 5
+    # Starting again can't fish for an easy first number (1 or 9)...
+    again, _ = model.start_game(pet, "higher_lower", at(9, 1), deal)
+    assert again["number"] == 5 and pet.game.last_at == at(9, 1)
+    # ...but after a guess, or from another game, it's a new game.
+    model.play_game(pet, "higher", at(9, 2), deal, kind="higher_lower")
+    fresh, _ = model.start_game(pet, "higher_lower", at(9, 3), deal)
+    assert fresh["number"] == 7 and pet.game.rounds == 0
+
+
+def test_a_guess_from_the_other_game_is_an_error():
+    pet = hatched(at(9))
+    with pytest.raises(ValueError):
+        model.play_game(pet, "left", at(9), Deal(), kind="higher_lower")
+    with pytest.raises(ValueError):
+        model.start_game(pet, "catch", at(9), Deal())
+
+
+def test_switching_games_drops_the_old_one():
+    pet = hatched(at(9))
+    model.start_game(pet, "higher_lower", at(9), Deal(5))
+    info, _ = model.play_game(pet, "left", at(9) + 10, Always("left"))
+    assert info["game"] == "left_right" and info["round"] == 1
+    assert pet.game is not None and pet.game.kind == "left_right"
+
+
+def test_an_idle_higher_or_lower_game_is_dropped():
+    start = at(9)
+    pet = hatched(start)
+    model.start_game(pet, "higher_lower", start, Deal(5))
+    model.advance(pet, start + (R.GAME_IDLE_MINUTES + 1) * MIN, SETTINGS, NoLuck())
+    assert pet.game is None and pet.games == {}
+
+
+def test_saved_games_load_from_older_and_newer_versions():
+    pet = hatched(at(9))
+    data = pet.to_dict()
+    data["game"] = {"started": at(9), "last_at": at(9), "rounds": 2, "wins": 1}
+    loaded = model.PetState.from_dict(data)
+    assert loaded.game is not None and loaded.game.kind == "left_right"
+    data["game"] = {"started": at(9), "last_at": at(9), "kind": "catch"}
+    assert model.PetState.from_dict(data).game is None  # not this version's
+    data["games"] = {"higher_lower": {"played": 3, "won": 2, "best": 5}, "x": 1}
+    assert model.PetState.from_dict(data).games == {
+        "higher_lower": {"played": 3, "won": 2}
+    }
+    # A damaged entry still loads, with what's missing counted as 0.
+    data["games"] = {"left_right": {"won": 2}, "higher_lower": {"played": "x"}}
+    damaged = model.PetState.from_dict(data)
+    assert damaged.games == {
+        "left_right": {"played": 0, "won": 2},
+        "higher_lower": {"played": 0, "won": 0},
+    }
+    assert model.games_played(damaged) == 0
+    del data["games"]
+    assert model.PetState.from_dict(data).games == {}
 
 
 def test_the_game_is_refused_when_it_cant_play():

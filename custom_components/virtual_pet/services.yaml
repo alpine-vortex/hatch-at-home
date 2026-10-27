@@ -33,14 +33,25 @@ play_game:
       selector:
         entity:
           integration: virtual_pet
+    game:
+      required: false
+      default: left_right
+      example: higher_lower
+      selector:
+        select:
+          options:
+            - left_right
+            - higher_lower
     guess:
-      required: true
+      required: false
       example: left
       selector:
         select:
           options:
             - left
             - right
+            - lower
+            - higher
 share_news:
   fields:
     entity_id:

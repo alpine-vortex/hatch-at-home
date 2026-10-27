@@ -57,7 +57,9 @@ from .watcher import Watcher
 
 type PetConfigEntry = ConfigEntry[PetCoordinator]
 
-SAVE_DELAY = 10  # seconds; the Store also writes once more on shutdown
+# Seconds; the Store also writes once more on shutdown, so only a crash loses
+# up to this much. Every tick and house change saves, so this also caps writes.
+SAVE_DELAY = 60
 
 # Events the card reacts to on screen. The card only sees state, so these are
 # published as a short list (the last_care sensor's "moments").
@@ -459,6 +461,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             morning=wake <= minute < 12 * 60,
             today=local.date().isoformat(),
         )
+        if any(e["type"] == "good_morning" for e in events):
+            model.morning_stir(state, now, settings)
         if awake and readings.condition in SNOWY:
             events += model.season_first(state, "snow", now, settings.tz)
         if awake and readings.outdoor_c is not None and readings.outdoor_c <= 0:
@@ -596,14 +600,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         return result
 
     async def async_play_game(
-        self, guess: str, context: Context | None
+        self, guess: str | None, context: Context | None, kind: str = "left_right"
     ) -> dict[str, Any]:
-        """One round of the left/right game."""
+        """One round of a game, or with no guess, the start of one."""
         assert self.state is not None
         now = self._now()
         self._advance(now)
         by = await self._who(context)
-        info, events = model.play_game(self.state, guess, now, self.rng, by)
+        if guess is None:
+            info, events = model.start_game(self.state, kind, now, self.rng, by)
+        else:
+            info, events = model.play_game(
+                self.state, guess, now, self.rng, by, kind=kind
+            )
         if info["result"] == "away" and self.privacy:
             info["result"] = self.state.care_log[0]["result"] = "asleep"
             for event in events:

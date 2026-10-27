@@ -183,6 +183,16 @@ async function main() {
   await shot("02b-next-egg");
   await pickEgg(options[0]); // back to a surprise
   await page.waitForTimeout(400);
+  // Sounds start off and turn on for this browser only.
+  const sound = cur().locator(".bell.sound");
+  const soundBefore = await sound.getAttribute("aria-pressed");
+  await sound.click();
+  await page.waitForTimeout(300);
+  check("sounds start off and turn on here",
+    soundBefore === "false" && await cur().locator(".bell.sound").getAttribute("aria-pressed") === "true" &&
+    await evaluate(() => localStorage.getItem("hatch-sounds")) === "on");
+  await cur().locator(".bell.sound").click(); // off again for the rest of the run
+  await page.waitForTimeout(300);
   await cur().locator(".jlink").click();
   await page.waitForTimeout(1200);
   check("journal opens", /journal/.test(await cur().locator(".status").innerText()));
@@ -196,11 +206,12 @@ async function main() {
     const id = (await ids())["sensor.energy"];
     return Number(await evaluate((e) => document.querySelector("home-assistant").hass.states[e].state, id));
   };
-  for (let i = 0; i < slides && (await energyOf()) < 20; i++) {
+  // Two games ahead, each costing 10 energy and needing 15 to start.
+  for (let i = 0; i < slides && (await energyOf()) < 30; i++) {
     await page.locator("hatch-pet-card .nav.next").click();
     await page.waitForTimeout(700);
   }
-  if ((await energyOf()) < 20) console.log("note: no pet has energy to play; let them rest or nap");
+  if ((await energyOf()) < 30) console.log("note: no pet has energy to play; let them rest or nap");
   if ((await button(7).innerText()).includes("wake")) {
     await button(7).click();
     await page.waitForTimeout(1500);
@@ -265,6 +276,11 @@ async function main() {
   await shot("04b-idle");
   await button(2).click();
   await page.waitForTimeout(600);
+  check("play offers a choice of games",
+    (await cur().locator(".gpick button").count()) === 2 && await cur().locator(".gpick").isVisible());
+  await shot("04a-pick");
+  await cur().locator('.gpick [data-game="left_right"]').click();
+  await page.waitForTimeout(400);
   let rounds = 0;
   for (let r = 0; r < 5 && !(await cur().locator(".game").isHidden()); r++) {
     await cur().locator(r % 2 ? ".gr" : ".gl").click();
@@ -276,6 +292,70 @@ async function main() {
   check("the game plays five rounds", rounds === 5 && log?.[0]?.action === "game",
     `${rounds} rounds, last care ${log?.[0]?.action}/${log?.[0]?.result}`);
   await shot("04-game-over");
+
+  // Higher or Lower: guess from the number on show, the odds way round.
+  await page.waitForTimeout(3500); // let the last game's line clear
+  await button(2).click();
+  await page.waitForTimeout(600);
+  await cur().locator('.gpick [data-game="higher_lower"]').click();
+  await page.waitForTimeout(1200);
+  let hlRounds = 0;
+  const numbers = [];
+  for (let r = 0; r < 5 && !(await cur().locator(".game").isHidden()); r++) {
+    const shown = Number(await cur().locator(".gnum").getAttribute("data-n"));
+    numbers.push(shown);
+    if (r === 2) await shot("04c-higher-lower");
+    await cur().locator(shown > 5 ? ".gl" : ".gr").click();
+    await page.waitForTimeout(1400);
+    hlRounds++;
+  }
+  await page.waitForTimeout(800);
+  const hlLog = await evaluate((id) => document.querySelector("home-assistant").hass.states[id].attributes.log, pet["sensor.last_care"]);
+  check("higher or lower plays five rounds from a number",
+    hlRounds === 5 && numbers.every((n) => n >= 1 && n <= 9) && hlLog?.[0]?.game === "higher_lower",
+    `${hlRounds} rounds, numbers ${numbers.join(" ")}, last care ${hlLog?.[0]?.game}/${hlLog?.[0]?.result} ${hlLog?.[0]?.score}`);
+  check("the picker remembers the last game",
+    await evaluate(() => localStorage.getItem("hatch-last-game")) === "higher_lower");
+
+  // Catch (prototype, behind experimental_catch): the card times the taps, so
+  // play it from inside the page: tap mid-window on the right side, leave the
+  // bees alone, and tap one round too soon on purpose (so 4 of 5).
+  await page.waitForTimeout(3500);
+  await page.locator("hatch-pet-card").evaluate((el) => el.setConfig({ ...el._config, experimental_catch: true }));
+  await inject(pet["sensor.energy"], { state: "80" }); // the card turns play down when tired
+  await page.waitForTimeout(800);
+  await button(2).click();
+  await page.waitForTimeout(600);
+  check("catch joins the picker with the option",
+    (await cur().locator(".gpick button").count()) === 3);
+  await cur().locator('.gpick [data-game="catch"]').click();
+  const catchShot = page.waitForTimeout(2600).then(() => shot("04d-catch"));
+  const catchRounds = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const out = [];
+    const frame = () => new Promise((r) => requestAnimationFrame(r));
+    for (let i = 0; i < 5; i++) {
+      let c;
+      for (let w = 0; w < 600 && !((c = s.game?.cur) && !c.done && s.game.round === i); w++) await frame();
+      if (!c) return out;
+      const early = i === 2 && !c.decoy;
+      const due = early ? 0.05 : c.travel - c.window / 2;
+      while (!c.done && (performance.now() - c.start) / 1000 < due) await frame();
+      if (!c.decoy && !c.done) s.gameBox.querySelector(c.side === "left" ? ".gl" : ".gr").click();
+      while (!c.done) await frame();
+      out.push({ decoy: c.decoy, early, wins: s.game?.wins });
+      for (let w = 0; w < 200 && s.game && s.game.round === i + 1 && s.game.cur === c; w++) await frame();
+    }
+    return out;
+  });
+  await catchShot;
+  await page.waitForTimeout(1500);
+  const catchLine = await bubble();
+  const expected = 5 - catchRounds.filter((r) => r.early).length;
+  check("catch plays five timed rounds", catchRounds.length === 5 && catchLine.startsWith(`${expected}/5 caught`),
+    `${catchRounds.map((r) => (r.decoy ? "bee" : r.early ? "early" : "catch")).join(" ")} -> ${catchLine}`);
+  check("catch keeps a best score",
+    Number(await evaluate(() => localStorage.getItem("hatch-best-catch"))) >= expected);
 
   // 4. Moments make the pet react.
   for (const [type, extra, expect] of [
@@ -296,7 +376,49 @@ async function main() {
     await page.waitForTimeout(500);
   }
 
-  // Excitement bounces briefly, not for the whole 15 minutes it lasts.
+  // Trait flair: one trait per place (head, air, ground), placed from the pet's
+  // head point and feet line, and gone again after the moment.
+  // Inject and show in one go: a pet update in between would replace the traits.
+  const flair = await page.locator("hatch-pet-card").evaluate(async (el, entity) => {
+    const s = el._slides[el._index];
+    const traits = ["storm_watcher", "social_butterfly", "fireside"];
+    const st = el._hass.states[entity];
+    await el._hass.callApi("POST", `states/${entity}`,
+      { state: st.state, attributes: { ...st.attributes, traits, trait_levels: {} } });
+    for (let i = 0; i < 40 && el._hass.states[entity].attributes.traits?.join() !== traits.join(); i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    const at = el._flairAnchors(s);
+    const shown = el._flair(s);
+    await new Promise((r) => setTimeout(r, 1500));
+    const sr = s.screen.getBoundingClientRect();
+    const pieces = [...s.screen.querySelectorAll(".flair .fx")].map((f) => {
+      const r = f.getBoundingClientRect();
+      return { src: (f.querySelector("img")?.src || "glow").split("/").pop().split("?")[0],
+        bottom: r.bottom - sr.top, h: r.height };
+    });
+    await new Promise((r) => setTimeout(r, 3200));
+    return { shown, at, pieces, after: s.screen.querySelectorAll(".flair").length };
+  }, pet["sensor.life_stage"]);
+  const piece = (name) => flair.pieces.filter((p) => p.src.startsWith(name));
+  const cloud = piece("flair_storm_watcher")[0];
+  const embers = piece("flair_fireside");
+  check("trait flair shows one trait in each place",
+    flair.shown.join() === "storm_watcher,social_butterfly,fireside" &&
+      piece("flair_social_butterfly").length > 0 && embers.length > 0,
+    flair.shown.join(" "));
+  check("flair stands on the pet's head point and feet line",
+    cloud && cloud.h > 0 && cloud.bottom <= flair.at.hy + 2 && cloud.bottom > flair.at.hy - 40 &&
+      embers.every((e) => e.bottom < flair.at.fy + 8),
+    `cloud bottom ${Math.round(cloud?.bottom)} vs head ${Math.round(flair.at.hy)}`);
+  check("a flair moment clears itself", flair.after === 0);
+  await inject(pet["sensor.life_stage"], { attributes: { traits: [], trait_levels: {} } });
+
+  // Excitement bounces briefly, not for the whole 15 minutes it lasts. The
+  // bounce starts on becoming excited, and the games above may have excited the
+  // pet already, so calm it first.
+  await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [] } });
+  await page.waitForTimeout(600);
   await inject(pet["sensor.mood"], { state: "excited", attributes: { flags: ["excited"] } });
   await page.waitForTimeout(800);
   const hopsAtFirst = await cur().locator(".pet.hop").count();
@@ -312,32 +434,45 @@ async function main() {
     `bouncing at first: ${hopsAtFirst === 1}, stopped after 11 s: ${stopped}`);
 
   // Weather on screen: thunder flashes, wind blows.
-  await inject(pet["sensor.mood"], { state: "content", attributes: { flags: ["storm", "windy"] } });
-  await page.waitForTimeout(800);
-  const screen = (await cur().locator(".screen").getAttribute("class")) || "";
+  // A pet update can replace the injected mood, so inject until it shows.
+  let screen = "";
+  for (let i = 0; i < 3 && !(/stormy/.test(screen) && /windy/.test(screen)); i++) {
+    await inject(pet["sensor.mood"], { state: "content", attributes: { flags: ["storm", "windy"] } });
+    await page.waitForTimeout(800);
+    screen = (await cur().locator(".screen").getAttribute("class")) || "";
+  }
   check("thunder and wind show on screen", /stormy/.test(screen) && /windy/.test(screen), screen);
   await shot("05-storm");
 
-  // The journal keeps the season's firsts.
-  await inject(pet["sensor.life_stage"], {
-    attributes: { memories: [{ kind: "first_snow", at: Date.now() / 1000 }] },
-  });
+  // The journal keeps the season's firsts. A pet update can replace the injected
+  // memory (and the journal redraws with it), so inject until it shows.
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(500);
   await cur().locator(".jlink").click();
-  await page.waitForTimeout(1200);
-  check("the journal shows memories", /first snow/.test(await cur().locator(".status").innerText()));
+  let memory = false;
+  for (let i = 0; i < 3 && !memory; i++) {
+    await inject(pet["sensor.life_stage"], {
+      attributes: { memories: [{ kind: "first_snow", at: Date.now() / 1000 }] },
+    });
+    await page.waitForTimeout(1000);
+    memory = /first snow/.test(await cur().locator(".status").innerText());
+  }
+  check("the journal shows memories", memory);
   await shot("05-memories");
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
 
   // 5. The egg wiggles, then cracks, before it hatches.
+  // A pet update can replace the injected egg, so inject until it shows (or 3 tries).
   for (const [minutes, frames] of [[12, "egg_wiggle"], [4, "egg_crack"]]) {
-    await inject(pet["sensor.life_stage"], {
-      state: "egg", attributes: { hatches_at: new Date(Date.now() + minutes * 60000).toISOString() },
-    });
-    await page.waitForTimeout(1200);
-    const src = (await cur().locator(".pet").getAttribute("src")) || "";
+    let src = "";
+    for (let i = 0; i < 3 && !src.includes(frames); i++) {
+      await inject(pet["sensor.life_stage"], {
+        state: "egg", attributes: { hatches_at: new Date(Date.now() + minutes * 60000).toISOString() },
+      });
+      await page.waitForTimeout(1200);
+      src = (await cur().locator(".pet").getAttribute("src")) || "";
+    }
     check(`egg shows ${frames}`, src.includes(frames), src.split("/").slice(-1)[0]);
   }
 
