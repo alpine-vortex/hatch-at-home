@@ -267,6 +267,9 @@
   "exceptions": {
     "no_pet": {
       "message": "No virtual pet matches that config entry."
+    },
+    "not_signed_in": {
+      "message": "Only someone signed in can turn their own pet notifications on or off."
     }
   },
   "services": {
