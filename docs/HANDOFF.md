@@ -91,10 +91,12 @@ details before committing it.
    whine rate, and game and chore use against `rates.py`. Propose numbers before
    changing them.
 5. **Unconfirmed on a real phone:** the notification buttons. Ask the owner.
-6. **Ideas offered but not chosen yet** (don't start unasked): learning household
-   routines (waiting by the door), the pet reaching into the house (a lamp pulse or
-   speaker chirp on calls, opt-in), a daily diary in the journal, pets on the shelf
-   noticing each other, chore streaks that build discipline, a second minigame.
+6. **Feature-gap plan** (`docs/plan-2026-10-27-feature-gaps.md`): the owner chose
+   a call-response blueprint, choosing the next egg, a second minigame and a
+   one-species care-shaped adult pilot. Each has open decisions to settle with the
+   owner before starting. Not chosen (don't start unasked): learning household
+   routines, a daily diary in the journal (declined), pets on the shelf noticing
+   each other, chore streaks, trained tricks, items, calendar celebrations.
 7. **BirdNET bird visits:** the owner deferred this ("will be reset at a later time");
    don't start it unasked. The design and the stalled-feed workaround are in the
    private notes.
