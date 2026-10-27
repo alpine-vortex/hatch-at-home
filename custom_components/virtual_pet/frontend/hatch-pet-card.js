@@ -291,6 +291,7 @@ const STYLE = `
   .head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
     padding: 14px 18px 4px; }
   .title { font: 400 22px 'Tiny5', monospace; color: var(--hp-ink); }
+  .title.long { font-size: 17px; } /* a long name keeps to two lines */
   .sub { font-size: 13px; color: var(--hp-subink); margin-top: 2px; }
   .chips { display: flex; gap: 6px; align-items: center; }
   .statusbtn { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px;
@@ -597,6 +598,13 @@ const STYLE = `
     display: none; flex-direction: column; gap: 4px; font-size: 13px; overflow: auto; }
   .screen.show-status .status { display: flex; }
   .screen.show-status .bubble { display: none; }
+  /* The pet's request waits while the status screen or a game is up (it covered them). */
+  .screen.show-status + .request, .screen:has(> .game:not([hidden])) + .request { display: none !important; }
+  /* With a game up, the bubble leaves room for its close button. */
+  .screen:has(> .game:not([hidden])) .bubble { max-width: 54%; }
+  /* A narrow card: status rows fit four hearts. */
+  .compact .row { grid-template-columns: 16px 70px minmax(0, 1fr); gap: 5px; }
+  .compact .hearts img { width: 14px; height: 14px; }
   /* Every row: an icon slot (maybe empty), the label, the value; all on one grid. */
   .row { display: grid; grid-template-columns: 18px 84px minmax(0, 1fr); align-items: center; gap: 6px; }
   .bar { height: 9px; border: 2px solid #2f3a24; padding: 1px; }
@@ -1099,7 +1107,9 @@ class HatchPetCard extends HTMLElement {
     const stage = this._state(s, "sensor.life_stage");
     const days = stage?.attributes.age_days;
     const kind = stage?.state === "egg" ? "Egg" : s.species?.name || "";
-    this._card.querySelector(".title").textContent = device?.name_by_user || device?.name || "Pet";
+    const title = this._card.querySelector(".title");
+    title.textContent = device?.name_by_user || device?.name || "Pet";
+    title.classList.toggle("long", title.textContent.length > 14);
     const emblem = this._card.querySelector(".emblem");
     if (world.emblem) {
       const src = `${BASE}/ui/${world.emblem}.png?v=${VERSION}`;
@@ -1977,7 +1987,8 @@ class HatchPetCard extends HTMLElement {
       `<button data-game="${g.key}"><span class="gi" aria-hidden="true">${gameIcon(g.key)}</span>` +
       `${g.label}</button>`).join("");
     this._gameView(s, "pick");
-    s.bubble.textContent = "what shall we play?";
+    // A narrow card has room for one short line beside the close button.
+    s.bubble.textContent = this._card.classList.contains("compact") ? "pick a game!" : "what shall we play?";
     s.sayUntil = Date.now() + 60000;
     let last = null;
     try {

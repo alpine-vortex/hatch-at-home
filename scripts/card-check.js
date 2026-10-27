@@ -434,9 +434,13 @@ async function main() {
     `bouncing at first: ${hopsAtFirst === 1}, stopped after 11 s: ${stopped}`);
 
   // Weather on screen: thunder flashes, wind blows.
-  await inject(pet["sensor.mood"], { state: "content", attributes: { flags: ["storm", "windy"] } });
-  await page.waitForTimeout(800);
-  const screen = (await cur().locator(".screen").getAttribute("class")) || "";
+  // A pet update can replace the injected mood, so inject until it shows.
+  let screen = "";
+  for (let i = 0; i < 3 && !(/stormy/.test(screen) && /windy/.test(screen)); i++) {
+    await inject(pet["sensor.mood"], { state: "content", attributes: { flags: ["storm", "windy"] } });
+    await page.waitForTimeout(800);
+    screen = (await cur().locator(".screen").getAttribute("class")) || "";
+  }
   check("thunder and wind show on screen", /stormy/.test(screen) && /windy/.test(screen), screen);
   await shot("05-storm");
 
