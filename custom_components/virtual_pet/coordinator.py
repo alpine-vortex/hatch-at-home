@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 import random
 from typing import Any
@@ -149,6 +150,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._home_started = False
         # Completed to-do items per list, to spot newly done chores.
         self._chores_done: dict[str, set[str]] = {}
+        self._chores_locks: dict[str, asyncio.Lock] = {}
         self._home_debouncer = Debouncer(
             hass,
             LOGGER,
@@ -369,6 +371,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     async def _async_chores_changed(self, entity_id: str) -> None:
         """A to-do list changed: newly completed items earn treats."""
+        # One read at a time per list: an older read finishing last would
+        # forget items and count them again.
+        async with self._chores_locks.setdefault(entity_id, asyncio.Lock()):
+            await self._async_chores_read(entity_id)
+
+    async def _async_chores_read(self, entity_id: str) -> None:
         done = await self._completed_chores(entity_id)
         if done is None or self.state is None:
             return
@@ -409,19 +417,23 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             options.get(CONF_COMFORT_LOW, R.HOME_COMFORT_LOW_C),
             options.get(CONF_COMFORT_HIGH, R.HOME_COMFORT_HIGH_C),
         )
-        if self.presence.greeting(now):
-            effect.flags.insert(0, "greeting")
         self.home = effect
 
         away = self.presence.update(self.watcher.people_home(now), now, self.state.away)
         if away != self.state.away:
             self.state.away = away
-            if away and self.config_entry.options.get(CONF_SITTER_SETTLES, True):
-                model.sitter_settles(self.state)
+            if (
+                away
+                and self.config_entry.options.get(CONF_SITTER_SETTLES, True)
+                and model.sitter_settles(self.state)
+            ):
+                self._fire([{"type": "call_settled"}])
             self._fire([{"type": "went_away" if away else "came_home"}])
             if not away:
-                self.home.flags.insert(0, "greeting")
                 self._fire(model.come_home(self.state, now, settings))
+        # After the update: an arrival just now starts the greeting.
+        if self.presence.greeting(now):
+            effect.flags.insert(0, "greeting")
         self._fire(self._passing_moments(readings, now))
         self.debug["home"] = {
             "readings": {k: v for k, v in vars(readings).items() if v is not None},
@@ -535,6 +547,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     async def async_notification_button(self, key: str, context: Context) -> None:
         """Someone pressed a button on one of this pet's notifications."""
+        state = self.state
+        if state is None or (state.call is None and not state.sick):
+            return  # a stale notification: the call is over (a scold would be unfair)
         if key == "lights_out":
             await self.async_set_lights_out(True)
         elif key in model.ACTIONS:
@@ -608,6 +623,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         "too_soon"."""
         assert self.state is not None
         now = self._now()
+        self._advance(now)  # bedtime or hatching may have come since the last tick
         if model.life_stage(self.state) == "egg":
             result = "egg"
         elif self.state.away:
@@ -619,6 +635,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         else:
             result = "shared"
         if result != "shared":
+            self._publish()
             return result
         self.next_news = now + R.NEWS_COOLDOWN_MINUTES * 60
         event: model.Event = {"type": "news", "headline": headline}

@@ -431,6 +431,25 @@ async def test_dropout_holds_then_counts_as_no_signal(
     assert "rainy" not in hass.states.get("sensor.pip_mood").attributes["flags"]
 
 
+async def test_someone_coming_home_is_greeted_at_once(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    # A short absence (not away mode): the greeting shows on the arrival itself.
+    hass_storage[STORE_KEY] = hatched_pet(now, discipline=100.0)
+    hass.states.async_set("zone.home", "1")
+    await setup_with_house(hass)
+    hass.states.async_set("zone.home", "0")
+    await settle(hass, freezer)
+    for _ in range(12):  # an hour out
+        await settle(hass, freezer, 5 * 60)
+    hass.states.async_set("zone.home", "1")
+    await settle(hass, freezer)
+    assert hass.states.get("sensor.pip_mood").attributes["reason"] == "you're back!!"
+
+
 async def test_empty_house_goes_to_the_sitter_privately(
     hass: HomeAssistant,
     now: float,
@@ -568,6 +587,10 @@ async def test_options_show_fahrenheit_and_store_celsius(
         result["flow_id"], sections
     )
     assert result["errors"] == {"weather": "comfort_range"}
+    # The form comes back with what was entered (in °F), not the saved options.
+    weather = result["data_schema"].schema["weather"].schema.schema
+    shown = {str(k): k.default() for k in weather if callable(getattr(k, "default", 0))}
+    assert shown["comfort_low"] == 80 and shown["comfort_high"] == 70
     sections["weather"] = {"comfort_low": 64, "comfort_high": 80}
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], sections
@@ -944,6 +967,17 @@ async def test_notification_buttons_care_for_the_pet_and_clear_the_call(
     assert phone[-1].data["message"] == "clear_notification"
     assert phone[-1].data["data"]["tag"] == "virtual_pet_test_pet_call"
 
+    # A button on a notification left over from the call does nothing now
+    # (a scold with nothing to scold would be unfair).
+    hass.bus.async_fire(
+        "mobile_app_notification_action",
+        {"action": "VIRTUAL_PET:test_pet:scold"},
+        context=Context(user_id=me.id),
+    )
+    await hass.async_block_till_done()
+    log = hass.states.get("sensor.pip_last_care").attributes["log"]
+    assert log[0]["action"] == "feed"
+
     # Someone else's button, or a malformed one, does nothing.
     hass.bus.async_fire("mobile_app_notification_action", {"action": "OTHER"})
     hass.bus.async_fire(
@@ -1064,6 +1098,30 @@ async def test_reconfigure_moves_a_hatched_pet_with_its_next_egg(
     assert stage.attributes["world"] == "pond"
     assert stage.attributes["next_world"] is None
     assert stage.attributes["generation"] == 2
+
+
+async def test_renaming_a_pet_from_before_worlds_keeps_its_world(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, species="treefrog", raised=["treefrog"])
+    await hass.config.async_set_time_zone("UTC")
+    config = MockConfigEntry(
+        domain=DOMAIN,
+        title="Pip",
+        data={CONF_NAME: "Pip", "species": "treefrog"},  # no world stored
+        entry_id="test_pet",
+    )
+    config.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(config.entry_id)
+    await hass.async_block_till_done()
+    result = await config.start_reconfigure_flow(hass)
+    shown = {str(k): k.default() for k in result["data_schema"].schema}
+    assert shown["world"] == "pond"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Fern", "world": shown["world"]}
+    )
+    await hass.async_block_till_done()
+    assert config.title == "Fern" and "next_world" not in config.data
 
 
 async def test_the_pet_comments_on_whats_on_tv(
@@ -1252,6 +1310,44 @@ async def test_news_never_wakes_the_pet(
     config.runtime_data.state.asleep = False
     assert await share_news(hass, "Later news") == {"test_pet": "shared"}
     assert [m["headline"] for m in news_moments(hass)] == ["Later news"]
+
+
+async def test_news_sees_sleep_that_came_since_the_last_tick(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    # It drops off between ticks: news a few minutes later finds it asleep,
+    # even before the next tick has run.
+    hass_storage[STORE_KEY] = hatched_pet(now, energy=0.1)
+    await setup(hass)
+    freezer.tick(timedelta(minutes=7))  # worn out, it drops off (no tick yet)
+    assert await share_news(hass, "Late news") == {"test_pet": "asleep"}
+    assert news_moments(hass) == []
+
+
+async def test_news_reaches_the_pets_that_are_there(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    response = await hass.services.async_call(
+        DOMAIN,
+        "share_news",
+        {"entity_id": ["sensor.gone", "button.pip_feed"], "headline": "Hi"},
+        blocking=True,
+        return_response=True,
+    )
+    assert response == {"test_pet": "shared"}
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN,
+            "share_news",
+            {"entity_id": ["sensor.gone"], "headline": "Hi"},
+            blocking=True,
+            return_response=True,
+        )
 
 
 async def test_news_skips_eggs_and_keeps_away_private(

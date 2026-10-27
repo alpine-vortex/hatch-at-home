@@ -274,3 +274,18 @@ def test_news_text_tidies_and_cuts_at_a_word():
     assert cut.endswith("Digimon…")
     # One very long word is cut where it has to be.
     assert home.news_text("x" * 100, 10) == "x" * 9 + "…"
+
+
+def test_moon_illumination_in_percent_is_read_by_its_unit():
+    from homeassistant.core import State
+
+    from custom_components.virtual_pet.watcher import Watcher
+
+    def lit(value: str, unit: str | None) -> float | None:
+        attrs = {"unit_of_measurement": unit} if unit else {}
+        return Watcher._fraction(State("sensor.moon", value, attrs))
+
+    assert lit("1", "%") == 0.01  # almost new, not full
+    assert lit("0.5", "%") == 0.005
+    assert lit("50", None) == 0.5
+    assert lit("0.5", None) == 0.5

@@ -71,11 +71,23 @@ details before committing it.
   (`entity_id` one or a list, `headline`, optional `topic`)
   makes a `news` moment the card says in the bubble ("did you hear? …", "guess
   what? …", "ooh, news! …", "<topic> news! …"), with the short `perk`. Cosmetic: no
-  `_advance`, no save, no stat or mood change (a test compares the whole state).
+  save, no stat or mood change (a test compares the whole state); since 0.25.1 it
+  catches the pet up first (`_advance`), so news never reaches a pet that just fell
+  asleep, and it's dropped mid-game. The topic line is used only for topics of 12
+  characters or fewer that don't already end in "news".
   Dropped, not queued, while asleep, away or an egg; at most one per
   `NEWS_COOLDOWN_MINUTES` (30) per pet, in memory, set only when news shows. The
   headline is cut at 60 characters (`home.news_text`): at 80 the bubble buried the pet
   on a 330 px card. Checked in the browser at 420 and 330 px.
+- **Whole-app review** (0.25.1, 2026-10-27): three reviews (pet logic, the HA side,
+  the card) and fixes, each checked against the code first. Among them: a freeze no
+  longer moves the morning's wake time; a call's phone notification clears on every
+  way a call can end, and a stale button does nothing; Reconfigure keeps a pre-worlds
+  pet's world; moments are judged on the server's clock; the card retries a failed
+  species or worlds file and caches the pets' entities per registry. Left as is, on
+  purpose: house and trait bonuses share `HOME_BONUS_CAP` (a tuning question for the
+  review), motion after a sensor dropout (needs HA's change events to tell apart),
+  and the debug sensor showing "away" (it's off by default and for debugging).
 - **Worlds, all six live:**
   - Woodland: bird, Douglas squirrel, Columbia black-tailed deer (0.22.0). Egg shell.
   - Terrarium: leopard gecko, Mexican red-knee tarantula (0.21.0, Sol's v2 at 2 px art

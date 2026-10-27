@@ -132,7 +132,8 @@ class PetState:
         kwargs = {k: v for k, v in data.items() if k in known}
         # Drop anything a newer or older version knew about and this one doesn't.
         reasons = set(CALL_PRIORITY) | {"fake"}
-        kwargs["latched"] = [r for r in kwargs.get("latched", []) if r in reasons]
+        # A whine never latches (only real needs do).
+        kwargs["latched"] = [r for r in kwargs.get("latched", []) if r in CALL_PRIORITY]
         seen = dict(kwargs.get("trait_hours") or {})
         if "music" in seen:  # 0.9-0.11 counted music hours under this name
             seen["dancing"] = seen.get("dancing", 0.0) + seen.pop("music")
@@ -141,7 +142,10 @@ class PetState:
         if call is not None:
             call_keys = {f.name for f in fields(Call)}
             call = {k: v for k, v in call.items() if k in call_keys}
-            kwargs["call"] = Call(**call) if call.get("reason") in reasons else None
+            try:
+                kwargs["call"] = Call(**call) if call.get("reason") in reasons else None
+            except TypeError:
+                kwargs["call"] = None  # incomplete: the next tick calls again
         game = kwargs.get("game")
         if game is not None:
             game_keys = {f.name for f in fields(Game)}
@@ -231,6 +235,9 @@ def shift_times(state: PetState, delta: float) -> None:
 
     Used to freeze the pet: while away, or across HA downtime, the world
     stops for the pet, so deadlines and schedules slide along with the clock.
+    wake_at stays: it's the morning's wake time on the wall clock, so a pet
+    asleep across the freeze still wakes in the morning (or at once if the
+    morning has passed), not hours late.
     """
     state.poops = [t + delta for t in state.poops]
     state.digesting = [t + delta for t in state.digesting]
@@ -244,8 +251,6 @@ def shift_times(state: PetState, delta: float) -> None:
         state.call.deadline += delta
     if state.stayed_up_since is not None:
         state.stayed_up_since += delta
-    if state.wake_at is not None:
-        state.wake_at += delta
     state.last_praise += delta
     state.last_excite += delta
     state.kept_up_until += delta
@@ -858,6 +863,9 @@ def lay_egg(
     egg.notify_users = list(state.notify_users)
     egg.firsts = dict(state.firsts)  # the household's season, not the pet's
     egg.memories = list(state.memories)
+    # Chore treats earned today wait for the hatchling, and count toward today's limit.
+    egg.chore_treats = list(state.chore_treats)
+    egg.treats_waiting = state.treats_waiting
     inherited = rng.choice(state.traits) if state.traits else None
     if inherited:
         level = trait_level(state, inherited)
@@ -1048,6 +1056,8 @@ def play_game(
         raise ValueError(f"unknown side {guess}")
     events: list[Event] = []
     game = state.game
+    if game is not None and (state.away or state.asleep):
+        state.game = game = None  # left unfinished when it went away or to sleep
     if game is None:
         refusal = _refuse_play(state)
         if refusal:
