@@ -389,6 +389,12 @@ the head, embers and a glow at the feet, rising notes, a butterfly) was approved
 - The mockup's notes (cream on a dark wall) were the weakest; Sol's brief asks for
   outlines and colours that read on both day and night scenes of every world.
 
+**Model built** (2026-10-27): the 7 traits, the cap (`TRAIT_CAP`), temperament
+(`TEMPERAMENT_RANGE`, rolled in `_hatch`), early bird counted by
+`model.morning_stir` from the good_morning moment, helper and player counted when
+a chore treat is handed over and a game finishes. Pets from before keep every
+trait they have and learn as before (no temperament).
+
 ### Build order
 
 1. **Model:** the 7 traits, the cap, temperament (with a save from before it),

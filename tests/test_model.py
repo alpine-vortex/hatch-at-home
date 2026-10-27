@@ -638,6 +638,128 @@ def test_new_flag_traits_are_learned_from_their_flags():
         assert {"type": "trait_learned", "trait": trait, "level": 1} in events
 
 
+def test_a_pet_keeps_at_most_four_traits():
+    pet = hatched(at(12))
+    pet.traits = ["sun_lover", "fireside", "moon_child", "couch_potato"]
+    pet.trait_hours = {"awake": 50.0, "snowy": R.TRAIT_FLAG_HOURS["snow_child"][1]}
+    events = live(pet, at(12, 10), house("snowy"))
+    assert len(pet.traits) == R.TRAIT_CAP and "snow_child" not in pet.traits
+    assert "trait_learned" not in types(events)
+
+
+def test_an_inherited_trait_counts_toward_the_cap():
+    pet = hatched(at(12))
+    pet.traits, pet.inherited = (
+        ["sun_lover", "fireside", "moon_child"],
+        {"sun_lover": 1},
+    )
+    flag, needed = R.TRAIT_FLAG_HOURS["snow_child"]
+    pet.trait_hours = {"awake": 50.0, flag: needed, "windy": 20.0}
+    live(pet, at(12, 10), house(flag, "windy"))
+    assert len(pet.traits) == 4  # one of the two: dict order picks it, then it's full
+
+
+def test_pets_from_before_the_cap_keep_their_traits():
+    pet = hatched(at(12))
+    pet.traits = ["sun_lover", "fireside", "moon_child", "couch_potato", "homebody"]
+    again = model.PetState.from_dict(pet.to_dict())
+    assert again.traits == pet.traits
+
+
+def test_temperament_is_rolled_at_hatching_and_kept():
+    start = at(9)
+    pet = model.PetState.new("Pip", start)
+    model.advance(
+        pet,
+        start + HOUR,
+        model.Settings(tz=UTC, roster=("bird",)),
+        random.Random(3),
+        max_gap=None,
+    )
+    low, high = R.TEMPERAMENT_RANGE
+    assert set(pet.temperament) == set(model.TRAITS)
+    assert all(low <= f <= high for f in pet.temperament.values())
+    assert model.PetState.from_dict(pet.to_dict()).temperament == pet.temperament
+    other = model.PetState.new("Pip", start)
+    model.advance(
+        other,
+        start + HOUR,
+        model.Settings(tz=UTC, roster=("bird",)),
+        random.Random(4),
+        max_gap=None,
+    )
+    assert other.temperament != pet.temperament  # each pet its own
+
+
+def test_temperament_scales_how_soon_a_trait_comes():
+    pet = hatched(at(12))
+    flag, needed = R.TRAIT_FLAG_HOURS["fireside"]
+    pet.trait_hours = {"awake": 50.0, flag: needed}
+    pet.temperament = {"fireside": 1.5}
+    assert model.trait_progress(pet)["fireside"] == pytest.approx(1 / 1.5, abs=0.001)
+    live(pet, at(12, 10), house(flag))
+    assert "fireside" not in pet.traits  # slow to warm to it
+    pet.trait_hours[flag] = needed * 1.5
+    live(pet, at(12, 20), house(flag))
+    assert "fireside" in pet.traits
+
+
+def test_pets_from_before_temperament_learn_as_before():
+    pet = hatched(at(12))
+    data = pet.to_dict()
+    del data["temperament"]
+    again = model.PetState.from_dict(data)
+    assert again.temperament == {}
+    assert model.trait_progress(again) == dict.fromkeys(model.TRAITS, 0.0)
+
+
+def test_an_early_rising_house_makes_an_early_bird():
+    settings = model.Settings(tz=UTC)  # wake 07:00
+    pet = hatched(at(12))
+    model.morning_stir(pet, at(9), settings)  # two hours in: not early
+    assert pet.trait_hours.get("early_mornings", 0.0) == 0.0
+    for day in range(R.TRAIT_EARLY_BIRD_MORNINGS):
+        model.morning_stir(pet, at(7, 20, day=day + 1), settings)
+    assert model.trait_progress(pet)["early_bird"] == 1.0
+    events = live(pet, at(12, 10), house())
+    assert {"type": "trait_learned", "trait": "early_bird", "level": 1} in events
+
+
+def test_chores_make_a_helper_who_enjoys_treats_more():
+    pet = hatched(at(12), happiness=10.0, hunger=10.0)
+    for i in range(R.TRAIT_HELPER_CHORES):
+        model.chores_done(pet, 1, at(12) + i)
+        model.give_treats(pet, at(12) + i)
+        pet.chore_treats = []  # past the daily limit: a test of counting only
+    assert pet.trait_hours["chores"] == R.TRAIT_HELPER_CHORES
+    live(pet, at(12, 10), house())
+    assert "helper" in pet.traits
+    pet.happiness = 10.0
+    model.chores_done(pet, 1, at(12, 20))
+    model.give_treats(pet, at(12, 20))
+    assert pet.happiness == 10.0 + R.CHORE_TREAT_HAPPINESS + R.HELPER_TREAT_HAPPINESS
+
+
+def test_games_make_a_player_who_enjoys_wins_more():
+    start = at(9)
+    pet = hatched(start)
+    for g in range(R.TRAIT_PLAYER_GAMES):
+        pet.energy = 100.0
+        play_rounds(pet, ["left"] * 5, start + g * 60, Always("left"))
+    assert pet.trait_hours["games"] == R.TRAIT_PLAYER_GAMES
+    live(pet, start + R.TRAIT_PLAYER_GAMES * 60 + 600, house())
+    assert "player" in pet.traits
+    pet.energy, pet.happiness = 100.0, 10.0
+    play_rounds(pet, ["left"] * 5, start + 3 * HOUR, Always("left"))
+    assert pet.happiness == 10.0 + R.GAME_WIN_HAPPINESS + R.PLAYER_WIN_HAPPINESS
+
+
+def test_every_trait_has_notification_words():
+    from custom_components.virtual_pet import notify
+
+    assert set(notify.TRAITS) == set(model.TRAITS)
+
+
 def test_relearning_an_inherited_trait_deepens_it_to_at_most_three_stars():
     pet = hatched(at(12))
     pet.traits, pet.trait_levels, pet.inherited = (

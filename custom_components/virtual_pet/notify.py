@@ -35,6 +35,13 @@ TRAITS = {
     "storm_watcher": ("is a storm watcher", "love of storms"),
     "couch_potato": ("is a couch potato", "couch-potato streak"),
     "social_butterfly": ("is a social butterfly", "social streak"),
+    "early_bird": ("is an early bird", "early-bird streak"),
+    "helper": ("is a little helper", "helpful streak"),
+    "player": ("loves a game", "love of games"),
+    "snow_child": ("is a snow child", "love of snow"),
+    "breeze_rider": ("rides the breeze", "love of the wind"),
+    "fog_wanderer": ("is a fog wanderer", "love of the fog"),
+    "thunder_heart": ("has a thunder heart", "thunder heart"),
 }
 
 
