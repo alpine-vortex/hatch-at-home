@@ -366,6 +366,39 @@ async function main() {
     await page.waitForTimeout(500);
   }
 
+  // Trait flair: one trait per place (head, air, ground), placed from the pet's
+  // head point and feet line, and gone again after the moment.
+  await inject(pet["sensor.life_stage"], { attributes: {
+    traits: ["storm_watcher", "social_butterfly", "fireside"], trait_levels: {} } });
+  await page.waitForTimeout(800);
+  const flair = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const at = el._flairAnchors(s);
+    const shown = el._flair(s);
+    await new Promise((r) => setTimeout(r, 1500));
+    const sr = s.screen.getBoundingClientRect();
+    const pieces = [...s.screen.querySelectorAll(".flair .fx")].map((f) => {
+      const r = f.getBoundingClientRect();
+      return { src: (f.querySelector("img")?.src || "glow").split("/").pop().split("?")[0],
+        bottom: r.bottom - sr.top, h: r.height };
+    });
+    await new Promise((r) => setTimeout(r, 3200));
+    return { shown, at, pieces, after: s.screen.querySelectorAll(".flair").length };
+  });
+  const piece = (name) => flair.pieces.filter((p) => p.src.startsWith(name));
+  const cloud = piece("flair_storm_watcher")[0];
+  const embers = piece("flair_fireside");
+  check("trait flair shows one trait in each place",
+    flair.shown.join() === "storm_watcher,social_butterfly,fireside" &&
+      piece("flair_social_butterfly").length > 0 && embers.length > 0,
+    flair.shown.join(" "));
+  check("flair stands on the pet's head point and feet line",
+    cloud && cloud.h > 0 && cloud.bottom <= flair.at.hy + 2 && cloud.bottom > flair.at.hy - 40 &&
+      embers.every((e) => e.bottom < flair.at.fy + 8),
+    `cloud bottom ${Math.round(cloud?.bottom)} vs head ${Math.round(flair.at.hy)}`);
+  check("a flair moment clears itself", flair.after === 0);
+  await inject(pet["sensor.life_stage"], { attributes: { traits: [], trait_levels: {} } });
+
   // Excitement bounces briefly, not for the whole 15 minutes it lasts.
   await inject(pet["sensor.mood"], { state: "excited", attributes: { flags: ["excited"] } });
   await page.waitForTimeout(800);

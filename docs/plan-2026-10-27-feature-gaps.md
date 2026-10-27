@@ -395,6 +395,16 @@ the head, embers and a glow at the feet, rising notes, a butterfly) was approved
 a chore treat is handed over and a game finishes. Pets from before keep every
 trait they have and learn as before (no temperament).
 
+**Card built** (2026-10-27) with Sol's art, which arrived the same day (16
+sprites, 25 files in `ui/`; no stand-ins were needed). Head points for all 13
+creatures × 4 stages in `species.json`. Checked on real pets in every world (bird,
+kitten, otter, tree frog, luna moth, gecko; day and night) at 420 and 330 px, and
+with reduced motion; `card-check` forces a moment and checks the cloud stands on
+the head point and the embers by the feet line. Two fixes found in the browser:
+the card's `.screen img { position: absolute }` left flair pieces with no height
+(so they hung over the face), and the butterfly's loop crossed the head place and
+covered the cloud; it now goes round the pet's side.
+
 ### Build order
 
 1. **Model:** the 7 traits, the cap, temperament (with a save from before it),
