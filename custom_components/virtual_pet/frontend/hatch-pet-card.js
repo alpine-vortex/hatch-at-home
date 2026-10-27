@@ -44,6 +44,28 @@ const GAMES = [
   { key: "higher_lower", label: "higher or lower", guesses: ["lower", "higher"] },
 ];
 const LAST_GAME_KEY = "hatch-last-game";
+// Catch, the Giga Pets reflex game: a prototype, offered only with the card
+// option experimental_catch: true. The card times the taps; nothing goes to the
+// server and it gives no reward.
+const CATCH_GAME = { key: "catch", label: "catch!", guesses: ["left", "right"] };
+const CATCH = {
+  rounds: 5, winAt: 3,
+  travel: [1.9, 1.0], // seconds for the prop to reach the pet, round 1 to round 5
+  window: [1.2, 0.6], // the last part of its trip in which a tap catches it
+  decoyChance: 0.25, // from round 2
+};
+const BEST_CATCH_KEY = "hatch-best-catch";
+// A stand-in bee for decoy rounds (pixel art, one char per pixel).
+const BEE_ROWS = [".kk.kk.", ".kwkwk.", "kyykyyk", "kykykyk", ".kyyyk.", "..k.k.."];
+const BEE_SVG = (() => {
+  const colors = { k: "#3a2a1a", y: "#ffd23f", w: "#e8f4ff" };
+  let rects = "";
+  BEE_ROWS.forEach((row, y) => [...row].forEach((c, x) => {
+    if (c !== ".") rects += `<rect x="${x}" y="${y}" width="1" height="1" fill="${colors[c]}"/>`;
+  }));
+  return "data:image/svg+xml," + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 6" shape-rendering="crispEdges">${rects}</svg>`);
+})();
 
 const REFUSALS = {
   full: "I'm full!",
@@ -330,6 +352,9 @@ const STYLE = `
     line-height: 1.1; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
     box-shadow: 2px 2px 0 #3a2a1a; }
   .game .gnum.flip { animation: perk .3s ease-out; }
+  .game .gcatch { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
+    pointer-events: none; will-change: left, transform; }
+  .game .gcatch[hidden] { display: none; }
   .game .hl { font: inherit; font-size: 14px; }
   .game .gscore { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
@@ -636,8 +661,9 @@ class HatchPetCard extends HTMLElement {
             <img class="attention" alt="">
             <div class="bubble"></div>
             <div class="game" hidden>
-              <div class="gpick" role="group" aria-label="Pick a game">${GAMES.map((g) =>
+              <div class="gpick" role="group" aria-label="Pick a game">${this._games().map((g) =>
                 `<button data-game="${g.key}">${g.label}</button>`).join("")}</div>
+              <img class="gcatch" alt="" hidden>
               <span class="gnum" aria-live="polite" hidden></span>
               <button class="gl" aria-label="Guess left">${icon("prev", 22)}</button>
               <span class="gscore" aria-live="polite"></span>
@@ -659,6 +685,7 @@ class HatchPetCard extends HTMLElement {
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
+      catchEl: q(".gcatch"),
     };
     slide.querySelectorAll("img").forEach((img) => img.addEventListener("error", () => {
       const src = img.getAttribute("src");
@@ -678,8 +705,10 @@ class HatchPetCard extends HTMLElement {
     q(".gl").addEventListener("click", () => this._guess(s, "left"));
     q(".gr").addEventListener("click", () => this._guess(s, "right"));
     q(".gx").addEventListener("click", () => this._endGame(s, "maybe later!"));
-    s.gameBox.querySelectorAll(".gpick button").forEach((b) =>
-      b.addEventListener("click", () => this._pickGame(s, b.dataset.game)));
+    q(".gpick").addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-game]");
+      if (b) this._pickGame(s, b.dataset.game);
+    });
     s.request.addEventListener("click", () => {
       const key = s.request.dataset.key;
       if (!key) return;
@@ -1603,11 +1632,15 @@ class HatchPetCard extends HTMLElement {
       return;
     }
     if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
-    if (GAMES.length === 1) {
-      this._pickGame(s, GAMES[0].key);
+    const games = this._games();
+    if (games.length === 1) {
+      this._pickGame(s, games[0].key);
       return;
     }
     s.game = { picking: true };
+    // Built each time: the card's options decide which games are offered.
+    s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
+      `<button data-game="${g.key}">${g.label}</button>`).join("");
     this._gameView(s, "pick");
     s.bubble.textContent = "what shall we play?";
     s.sayUntil = Date.now() + 60000;
@@ -1622,6 +1655,11 @@ class HatchPetCard extends HTMLElement {
     pick.focus({ preventScroll: true });
   }
 
+  // The games the play button offers: Catch only with experimental_catch.
+  _games() {
+    return this._config?.experimental_catch ? [...GAMES, CATCH_GAME] : GAMES;
+  }
+
   // Show the picker ("pick") or a game's buttons (its key) in the game overlay.
   _gameView(s, view) {
     const box = s.gameBox;
@@ -1634,8 +1672,9 @@ class HatchPetCard extends HTMLElement {
     const hl = view === "higher_lower";
     gl.innerHTML = hl ? '<span class="hl">lo</span>' : icon("prev", 22);
     gr.innerHTML = hl ? '<span class="hl">hi</span>' : icon("next", 22);
-    gl.setAttribute("aria-label", hl ? "Guess lower" : "Guess left");
-    gr.setAttribute("aria-label", hl ? "Guess higher" : "Guess right");
+    const katch = view === "catch";
+    gl.setAttribute("aria-label", hl ? "Guess lower" : katch ? "Catch it on the left" : "Guess left");
+    gr.setAttribute("aria-label", hl ? "Guess higher" : katch ? "Catch it on the right" : "Guess right");
     box.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });
   }
 
@@ -1649,6 +1688,12 @@ class HatchPetCard extends HTMLElement {
     s.game = { kind, round: 0, wins: 0, busy: false };
     this._gameView(s, kind);
     s.gameScore.textContent = "round 1/5";
+    if (kind === "catch") {
+      s.bubble.textContent = "catch it! tap its side as it reaches me";
+      s.sayUntil = Date.now() + 60000;
+      setTimeout(() => this._catchRound(s), 900);
+      return;
+    }
     if (kind === "left_right") {
       s.bubble.textContent = "left or right? guess where I'll go!";
     } else {
@@ -1690,6 +1735,10 @@ class HatchPetCard extends HTMLElement {
   async _guess(s, side) {
     if (!s.game || s.game.busy || !s.game.kind) return;
     const kind = s.game.kind;
+    if (kind === "catch") {
+      this._catchTap(s, side);
+      return;
+    }
     const game = GAMES.find((g) => g.key === kind);
     const guess = game.guesses[side === "left" ? 0 : 1];
     s.game.busy = true;
@@ -1724,7 +1773,102 @@ class HatchPetCard extends HTMLElement {
     }, 900);
   }
 
+  // --- Catch (prototype) -----------------------------------------------------
+  // Timed in the browser (performance.now, requestAnimationFrame), so network
+  // lag can't matter; the 700 ms tick and hass updates don't touch it.
+
+  _catchRound(s) {
+    const g = s.game;
+    if (!g || g.kind !== "catch") return;
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const f = g.round / (CATCH.rounds - 1);
+    const lerp = ([a, b]) => a + (b - a) * f;
+    const side = Math.random() < 0.5 ? "left" : "right";
+    const decoy = g.round > 0 && Math.random() < CATCH.decoyChance;
+    const prop = s.species?.props?.play || "";
+    const motion = /cricket/.test(prop) ? "hop" : "roll";
+    g.cur = {
+      side, decoy, motion, done: false, start: performance.now(),
+      travel: lerp(CATCH.travel) * (calm ? 1.6 : 1),
+      window: lerp(CATCH.window) * (calm ? 2 : 1),
+    };
+    const el = s.catchEl;
+    if (decoy) el.src = BEE_SVG;
+    else this._show(s, el, prop);
+    el.hidden = false;
+    el.style.display = "";
+    s.gameScore.textContent = `round ${g.round + 1}/${CATCH.rounds} · ${g.wins} caught`;
+    const step = (now) => {
+      const c = s.game?.cur;
+      if (!c || c !== g.cur || c.done) return;
+      const p = Math.min((now - c.start) / 1000 / c.travel, 1);
+      // From off the edge to just beside the pet (which stands at 50%).
+      const from = c.side === "left" ? -16 : 100;
+      const to = c.side === "left" ? 28 : 56;
+      el.style.left = `${from + (to - from) * p}%`;
+      el.style.transform = c.motion === "hop"
+        ? `translateY(${-Math.abs(Math.sin(p * Math.PI * 4)) * 40}%)`
+        : `rotate(${(c.side === "left" ? 1 : -1) * p * 540}deg)`;
+      if (p >= 1) {
+        // It reached the pet untouched: a real one got away, a decoy was dodged.
+        this._catchResolve(s, c.decoy, c.decoy ? "phew, let the bee go!" : "it got away...");
+        return;
+      }
+      c.raf = requestAnimationFrame(step);
+    };
+    g.cur.raf = requestAnimationFrame(step);
+  }
+
+  _catchTap(s, side) {
+    const c = s.game?.cur;
+    if (!c || c.done) return;
+    const t = (performance.now() - c.start) / 1000;
+    if (c.decoy) {
+      this._catchResolve(s, false, "bzz! not the bee!");
+    } else if (side !== c.side) {
+      this._catchResolve(s, false, "other side!");
+    } else if (t < c.travel - c.window) {
+      this._catchResolve(s, false, "too soon!");
+    } else {
+      s.pet.classList.add(`go-${side}`);
+      this._catchResolve(s, true, "got it!");
+    }
+  }
+
+  _catchResolve(s, ok, line) {
+    const g = s.game;
+    const c = g?.cur;
+    if (!c || c.done) return;
+    c.done = true;
+    cancelAnimationFrame(c.raf);
+    s.catchEl.hidden = true;
+    g.round += 1;
+    g.wins += ok ? 1 : 0;
+    s.bubble.textContent = line;
+    if (ok) this._animate(s, s.pet, "perk", 300);
+    if (navigator.vibrate && ok) navigator.vibrate([12, 40, 12]);
+    s.gameScore.textContent = `round ${g.round}/${CATCH.rounds} · ${g.wins} caught`;
+    setTimeout(() => {
+      s.pet.classList.remove("go-left", "go-right");
+      if (s.game !== g) return;
+      if (g.round < CATCH.rounds) {
+        this._catchRound(s);
+        return;
+      }
+      let best = g.wins;
+      try {
+        best = Math.max(best, Number(localStorage.getItem(BEST_CATCH_KEY) || 0));
+        localStorage.setItem(BEST_CATCH_KEY, String(best));
+      } catch (err) {
+        // no storage: no best score
+      }
+      this._endGame(s, `${g.wins}/${CATCH.rounds} caught${g.wins >= CATCH.winAt ? "! ♪" : "..."} best ${best}/${CATCH.rounds}`);
+    }, 1000);
+  }
+
   _endGame(s, line) {
+    cancelAnimationFrame(s.game?.cur?.raf);
+    s.catchEl.hidden = true;
     s.game = null;
     s.gameBox.hidden = true;
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });

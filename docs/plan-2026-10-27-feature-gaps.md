@@ -221,6 +221,14 @@ Five rounds; three right wins, the same as the existing game.
 
 ### C2. Catch (the Giga Pets game; prototype first)
 
+**Prototype built** (2026-10-27): card only, offered in the picker when the card's
+YAML has `experimental_catch: true`. Five rounds; the species' `play` prop rolls
+in (a cricket hops) and a tap on its side in the window catches it; a stand-in
+pixel bee is the decoy from round 2; the window narrows 1.2 s → 0.6 s and the
+trip 1.9 s → 1.0 s; reduced motion slows the trip ×1.6 and doubles the window; a
+local best score. No reward and nothing sent to the server. `card-check` plays it
+from inside the page (one tap too soon on purpose: 4/5). The owner tries it next.
+
 From the 1997 Tiger Giga Pets ([Compu Kitty
 manual](https://www.hasbro.com/common/instruct/kitty-in.pdf): "press the LEFT or
 RIGHT key to make your pet react … at the correct time"). Something drifts in
