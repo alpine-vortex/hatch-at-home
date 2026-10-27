@@ -186,9 +186,9 @@ the pet comes home.
 
 | Field | Default | What it does | Example |
 | --- | --- | --- | --- |
-| Room lights | none | At half brightness or more, from an hour before bedtime: squints, "too bright, it's late!". Dim evening light makes it cozy. Daylight never counts. | living room lights |
+| Room lights | none | Still on at half brightness or more after bedtime: squints, "too bright, it's late!". Dim evening light makes it cozy. Daylight and the evening before bedtime never count, so lights kept at full until bed are fine. | living room lights |
 | Fireplace | none | Any entity that's on, heating or above 0 when lit (not a thermometer: that's always above 0). Curls up by it and gets a little happier. | `switch.fireplace` |
-| Light sensors | none | 100 lx or more at night also counts as too bright. | optional |
+| Light sensors | none | 100 lx or more after bedtime also counts as too bright. | optional |
 
 ### People and activity
 

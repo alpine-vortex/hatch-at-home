@@ -64,16 +64,16 @@
           },
           "room": {
             "name": "The pet's room",
-            "description": "The room the pet lives in. Bright light late at night makes it squint; dim evening light makes it cozy. Daylight is never too bright.",
+            "description": "The room the pet lives in. Lights still bright after bedtime make it squint; dim evening light makes it cozy. Daylight is never too bright.",
             "data": {
               "room_lights": "Room lights",
               "fireplace": "Fireplace",
               "lux": "Light sensors"
             },
             "data_description": {
-              "room_lights": "Lights in that room, for example the living room. Half brightness or more, from an hour before bedtime, counts as too bright.",
+              "room_lights": "Lights in that room, for example the living room. Still on at half brightness or more after bedtime counts as too bright; before bedtime they never do.",
               "fireplace": "Any entity that's on, heating or above 0 when the fire is lit. The pet curls up by it, gets a little happier, and won't ask for a blanket.",
-              "lux": "Optional. 100 lx or more at night also counts as too bright."
+              "lux": "Optional. 100 lx or more after bedtime also counts as too bright."
             }
           },
           "activity": {

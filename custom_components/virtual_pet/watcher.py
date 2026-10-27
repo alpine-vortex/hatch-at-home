@@ -128,12 +128,13 @@ class Watcher:
         value = _float(self._get(self.zone, now))
         return None if value is None else int(value)
 
-    def read(self, now: float, night: bool) -> Readings:
+    def read(self, now: float, night: bool, late: bool = False) -> Readings:
         """A snapshot of the house."""
         sun = self._get("sun.sun", now)
         weather = self._one(CONF_WEATHER, now)
         return Readings(
             night=night,
+            late=late,
             sun_up=None if sun is None else sun.state == "above_horizon",
             condition=weather.state if weather else None,
             rain_rate=self._rain(self._one(CONF_RAIN, now)),

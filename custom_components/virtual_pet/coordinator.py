@@ -295,11 +295,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if not self._home_started or self.state is None:
             return
         settings = self.settings
+        late = model.in_sleep_hours(now, settings)
         night = (
-            model.in_sleep_hours(now, settings)
+            late
             or model.minutes_to_bedtime(now, settings) <= R.HOME_BEDTIME_WINDOW_MINUTES
         )
-        readings = self.watcher.read(now, night)
+        readings = self.watcher.read(now, night, late)
         options = self.config_entry.options
         effect = evaluate(
             readings,

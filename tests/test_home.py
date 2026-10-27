@@ -49,7 +49,14 @@ def test_daylight_is_never_too_bright():
         "too_bright"
         not in evaluate(Readings(night=False, lux=5000, room_light_level=1)).flags
     )
-    assert "too_bright" in evaluate(Readings(night=True, room_light_level=0.8)).flags
+    assert (
+        "too_bright"
+        in evaluate(Readings(night=True, late=True, room_light_level=0.8)).flags
+    )
+    # The hour before bedtime: lights at full are normal in many homes.
+    assert (
+        "too_bright" not in evaluate(Readings(night=True, room_light_level=1.0)).flags
+    )
     assert (
         "too_bright" not in evaluate(Readings(night=True, room_light_level=0.2)).flags
     )

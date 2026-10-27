@@ -46,6 +46,7 @@ class Readings:
     """Clean inputs from the house. None means no signal."""
 
     night: bool  # sleep hours, or within an hour of bedtime
+    late: bool = False  # sleep hours: past bedtime
     sun_up: bool | None = None
     condition: str | None = None  # a weather entity's state, e.g. "rainy"
     rain_rate: float | None = None  # rain sensor, any unit: above 0 means raining
@@ -154,9 +155,11 @@ def evaluate(
             e.flags.append("warm")
             e.requests.append("fan")
 
-    # Light, read against the clock: daylight is never "too bright".
+    # Light, read against the clock: only past bedtime is a light "too bright".
+    # (Many homes keep lights at full or off, so brightness alone in the evening
+    # says nothing; still being on after bedtime does.)
     level = r.room_light_level
-    if r.night:
+    if r.late:
         bright = (level is not None and level >= R.HOME_BRIGHT_LEVEL) or (
             r.lux is not None and r.lux >= R.HOME_BRIGHT_LUX_AT_NIGHT
         )
