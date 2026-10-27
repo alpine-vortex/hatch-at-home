@@ -183,6 +183,16 @@ async function main() {
   await shot("02b-next-egg");
   await pickEgg(options[0]); // back to a surprise
   await page.waitForTimeout(400);
+  // Sounds start off and turn on for this browser only.
+  const sound = cur().locator(".bell.sound");
+  const soundBefore = await sound.getAttribute("aria-pressed");
+  await sound.click();
+  await page.waitForTimeout(300);
+  check("sounds start off and turn on here",
+    soundBefore === "false" && await cur().locator(".bell.sound").getAttribute("aria-pressed") === "true" &&
+    await evaluate(() => localStorage.getItem("hatch-sounds")) === "on");
+  await cur().locator(".bell.sound").click(); // off again for the rest of the run
+  await page.waitForTimeout(300);
   await cur().locator(".jlink").click();
   await page.waitForTimeout(1200);
   check("journal opens", /journal/.test(await cur().locator(".status").innerText()));

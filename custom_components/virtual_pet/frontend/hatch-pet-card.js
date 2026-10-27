@@ -86,6 +86,48 @@ const CATCH = {
 };
 const BEST_CATCH_KEY = "hatch-best-catch";
 
+// Sounds: little square-wave chirps, off until someone turns them on for this
+// device (status screen). Never while the pet sleeps, nor late at night.
+const SOUND_KEY = "hatch-sounds";
+const QUIET_HOURS = [21, 8]; // from 21:00 to 08:00 local time
+const CHIRPS = { // [frequency Hz, length s] notes, played one after another
+  call: [[880, 0.08], [0, 0.05], [880, 0.08]],
+  hatch: [[523, 0.09], [659, 0.09], [784, 0.09], [1047, 0.16]],
+  win: [[784, 0.08], [988, 0.08], [1319, 0.18]],
+  trait: [[1047, 0.07], [1319, 0.07], [1568, 0.07], [2093, 0.14]],
+};
+let audio = null; // one AudioContext for every card on the page
+
+function soundsOn() {
+  try {
+    return localStorage.getItem(SOUND_KEY) === "on";
+  } catch (err) {
+    return false;
+  }
+}
+
+function playChirp(name) {
+  const notes = CHIRPS[name];
+  if (!notes) return;
+  audio ||= new (window.AudioContext || window.webkitAudioContext)();
+  if (audio.state === "suspended") audio.resume();
+  let t = audio.currentTime + 0.01;
+  for (const [freq, len] of notes) {
+    if (freq) {
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.type = "square";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.06, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + len);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(t);
+      osc.stop(t + len);
+    }
+    t += len;
+  }
+}
+
 // Trait flair (Sol's ui/flair_*): every so often each trait the pet has shows as
 // a little flair around it, never on it: above its head, in the air around it,
 // or on the ground at its feet. One trait per place per moment; traits sharing a
@@ -1121,6 +1163,10 @@ class HatchPetCard extends HTMLElement {
     const asleep = this._state(s, "binary_sensor.asleep")?.state === "on";
     const away = mood?.state === "away";
     s.asleep = asleep;
+    s.lightsOut = lightsOut;
+    // A new call chirps once (not on load: wasCalling starts undefined).
+    if (calling && s.wasCalling === false && !away) this._chirp(s, "call");
+    s.wasCalling = calling;
 
     let scene = "day";
     if (flags.includes("rainy")) scene = "rain";
@@ -1411,6 +1457,18 @@ class HatchPetCard extends HTMLElement {
     setTimeout(() => el.classList.remove(cls), ms);
   }
 
+  // A chirp, if this device turned sounds on and the pet is up at a sane hour.
+  _chirp(s, name) {
+    const hour = new Date().getHours();
+    const late = hour >= QUIET_HOURS[0] || hour < QUIET_HOURS[1];
+    if (!soundsOn() || s.asleep || s.lightsOut || late || document.visibilityState !== "visible") return;
+    try {
+      playChirp(name);
+    } catch (err) {
+      // no WebAudio: stay quiet
+    }
+  }
+
   _sparkle(s) {
     const ring = document.createElement("span");
     ring.className = "burst big";
@@ -1440,6 +1498,7 @@ class HatchPetCard extends HTMLElement {
         break;
       case "hatched":
         say("hello!");
+        this._chirp(s, "hatch");
         this._animate(s, s.pet, "born", 500);
         this._sparkle(s);
         break;
@@ -1456,6 +1515,7 @@ class HatchPetCard extends HTMLElement {
         say(`${m.type === "trait_learned" ? "new trait" : "deeper"}: ` +
           `${String(m.trait).replaceAll("_", " ")} ${"★".repeat(m.level || 1)}`);
         this._sparkle(s);
+        this._chirp(s, "trait");
         // Show what the new trait looks like, so its flair means something later.
         setTimeout(() => this._flair(s, m.trait), 700);
         break;
@@ -1636,12 +1696,24 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${row(null, "notify me", `<span><button class="bell" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
+      ${row(null, "sounds here", `<span><button class="bell sound" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>
       <button class="jlink">journal ›</button>`;
     this._journalLink(s, true);
-    s.status.querySelector(".bell").addEventListener("click", (e) => {
+    s.status.querySelector(".bell:not(.sound)").addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
       this._setNotify(s, !notifying);
+    });
+    s.status.querySelector(".bell.sound").addEventListener("click", (e) => {
+      e.stopPropagation();
+      const on = !soundsOn();
+      try {
+        localStorage.setItem(SOUND_KEY, on ? "on" : "off");
+      } catch (err) {
+        return; // no storage: sounds stay off
+      }
+      if (on) playChirp("win"); // a sample; this tap also unlocks audio on phones
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
   }
 
@@ -1923,6 +1995,7 @@ class HatchPetCard extends HTMLElement {
       s.pet.classList.remove("go-left", "go-right");
       if (!s.game) return;
       if (info.done) {
+        if (info.won) this._chirp(s, "win");
         this._endGame(s, info.won ? `${info.wins}/${info.rounds}! you win ♪` :
           `${info.wins}/${info.rounds}... again sometime?`);
         return;
@@ -2190,6 +2263,7 @@ class HatchPetCard extends HTMLElement {
       } catch (err) {
         // no storage: no best score
       }
+      if (g.wins >= CATCH.winAt) this._chirp(s, "win");
       this._endGame(s, `${g.wins}/${CATCH.rounds} caught${g.wins >= CATCH.winAt ? "! ♪" : "..."} best ${best}/${CATCH.rounds}`);
     }, 1000);
   }
