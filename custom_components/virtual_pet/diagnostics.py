@@ -17,6 +17,7 @@ from .const import (
     CONF_AQI,
     CONF_BEDTIME_LIGHTS,
     CONF_CHORES,
+    CONF_DASHBOARD,
     CONF_FIREPLACE,
     CONF_INDOOR_TEMP,
     CONF_LUX,
@@ -39,6 +40,7 @@ REDACT_OPTIONS = {
     CONF_AQI,
     CONF_BEDTIME_LIGHTS,
     CONF_CHORES,
+    CONF_DASHBOARD,  # the house's dashboard paths
     CONF_FIREPLACE,
     CONF_INDOOR_TEMP,
     CONF_LUX,

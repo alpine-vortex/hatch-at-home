@@ -8,6 +8,7 @@ Messages never name anyone.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -171,7 +172,8 @@ async def send(
         services = phones(hass, None)
     else:
         services = [s for user_id in user_ids for s in phones(hass, user_id)]
-    for service in services:
+
+    async def one(service: str) -> None:
         try:
             await hass.services.async_call(
                 "notify",
@@ -181,3 +183,6 @@ async def send(
             )
         except Exception:  # noqa: BLE001 - a phone being gone must not break the pet
             LOGGER.warning("Couldn't notify %s", service, exc_info=True)
+
+    # All phones at once: a slow push doesn't hold up the others.
+    await asyncio.gather(*(one(service) for service in services))

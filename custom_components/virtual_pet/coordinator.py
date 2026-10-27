@@ -623,6 +623,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         "too_soon"."""
         assert self.state is not None
         now = self._now()
+        self._advance(now)  # bedtime or hatching may have come since the last tick
         if model.life_stage(self.state) == "egg":
             result = "egg"
         elif self.state.away:
@@ -634,6 +635,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         else:
             result = "shared"
         if result != "shared":
+            self._publish()
             return result
         self.next_news = now + R.NEWS_COOLDOWN_MINUTES * 60
         event: model.Event = {"type": "news", "headline": headline}
