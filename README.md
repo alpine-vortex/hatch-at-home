@@ -7,7 +7,7 @@ looks, what it says and what it asks for.
 
 Status: **phase 4, life**, nearly done (bird visits from BirdNET-Pi are still to
 come). The pet lives in HA: stats, calls, care misses, poop, sleep, weight,
-discipline, a left/right game and chore treats. It sits on a pixel-art **device
+discipline, two games (left/right, higher or lower) and chore treats. It sits on a pixel-art **device
 shelf** card and reacts to your house: weather, indoor temperature, lights,
 bedtime, people coming and going, the TV and music, and the moon. It learns traits,
 grows up with an upbringing, and starts new generations that you can follow in its
@@ -78,10 +78,12 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   swipe to move to the next device.
 - The screen shows the pet, its scene and a speech bubble. The bubble says what's on
   its mind, or why it refused something ("I'm full!").
-- **Play** starts the left/right game: the pet hides on one side and you guess with the
-  arrows. Five rounds; three right guesses win, and a win cheers it up more than plain
-  play. ✕ stops the game. (The `play` button entity is still plain play, for
-  automations and voice.)
+- **Play** offers two games (it remembers the last one you picked). **Left or right:**
+  the pet hides on one side and you guess with the arrows; a win cheers it up more than
+  plain play. **Higher or lower:** the pet shows a number from 1 to 9 and you guess
+  whether the next is lower (lo) or higher (hi); it's mostly skill, so a win pays like
+  plain play. Five rounds each; three right guesses win. ✕ stops a game. (The `play`
+  button entity is still plain play, for automations and voice.)
 - Tap the screen for the status page: hearts, meters, care misses and who did what
   recently. Tap again to go back.
 - Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
@@ -265,9 +267,12 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   being awake (−0.7 an hour), play (−3) and the game (−4) burn it off. Three meals a
   day roughly balance out, so snacks are what tip it. Too heavy or too light, it
   stops healing; too heavy, it can also get sick. Starving loses weight.
-- **The game:** five rounds of left or right from the card (or `virtual_pet.play_game`,
-  which answers with where the pet went). It costs energy like play, and an
-  unfinished game is dropped after 3 minutes.
+- **The games:** five rounds from the card, or `virtual_pet.play_game`: `guess`
+  `left`/`right` plays left or right (the first guess starts it; the answer says where
+  the pet went). For higher or lower, call it with `game: higher_lower` and no guess to
+  start and see the first number, then `guess` `lower`/`higher`. A game costs energy
+  like play, and an unfinished one is dropped after 3 minutes. Each pet counts games
+  played and won per game (debug sensor `games`, diagnostics, and the journal).
 - **Chores:** map a to-do list in the options, and every item ticked off earns a treat.
 - **Passing moments** (cosmetic, while it's awake and home):
   - It watches the sunset, greets the sunrise, and says good morning at the first
@@ -376,7 +381,7 @@ names are included.
 `virtual_pet_recovered`, `virtual_pet_fell_asleep`, `virtual_pet_woke_up`,
 `virtual_pet_stage_changed` (with `upbringing` on reaching adulthood), `virtual_pet_care`, `virtual_pet_hatched`,
 `virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`,
-`virtual_pet_game_finished` (with `won`, `wins`), `virtual_pet_chore_treat`,
+`virtual_pet_game_finished` (with `game`, `won`, `wins`), `virtual_pet_chore_treat`,
 `virtual_pet_sunrise`, `virtual_pet_sunset`, `virtual_pet_good_morning`,
 `virtual_pet_watching` and `virtual_pet_listening` (with `title`, and `artist` for music),
 `virtual_pet_tv_off_late`, `virtual_pet_first_snow`, `virtual_pet_first_frost`,
@@ -457,7 +462,7 @@ HACS's and Home Assistant's checks and the tests on every push.
 3. ✅ Home awareness: options (entity mapping, bedtime, privacy), weather, light, bedtime, presence, activity, AQI and requests
 4. Life (in progress): ✅ traits, ✅ generations and journal, ✅ moon, ✅ notifications, ✅ adult forms, ✅ upbringing, ✅ weight; still to come: bird visits from BirdNET-Pi
 5. ✅ HACS packaging
-6. Play (in progress): ✅ chore treats, ✅ the left/right game, ✅ talking to it through Assist; still to come: more species
+6. Play (in progress): ✅ chore treats, ✅ the left/right game, ✅ higher or lower, ✅ talking to it through Assist; still to come: more species
 
 ## License
 

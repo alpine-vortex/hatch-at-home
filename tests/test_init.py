@@ -823,6 +823,58 @@ async def test_play_game_service_plays_five_rounds(
     assert hass.states.get("sensor.pip_weight") is not None
 
 
+async def game(hass: HomeAssistant, **data: Any) -> dict[str, Any]:
+    return await hass.services.async_call(
+        DOMAIN,
+        "play_game",
+        {"entity_id": "button.pip_feed", **data},
+        blocking=True,
+        return_response=True,
+    )
+
+
+async def test_higher_or_lower_through_the_service(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0)
+    await setup(hass)
+    finished = async_capture_events(hass, f"{DOMAIN}_game_finished")
+    # A guess before the game starts has nothing to go on.
+    early = await game(hass, game="higher_lower", guess="higher")
+    assert early == {"result": "no_game"}
+    opening = await game(hass, game="higher_lower")
+    assert opening["round"] == 0 and opening["number"] in range(1, 10)
+    shown = opening["number"]
+    for _ in range(5):
+        info = await game(
+            hass, game="higher_lower", guess="higher" if shown < 5 else "lower"
+        )
+        assert info["shown"] == shown and info["number"] != shown
+        shown = info["number"]
+    assert info["done"] is True
+    assert finished[0].data["game"] == "higher_lower"
+    log = hass.states.get("sensor.pip_last_care").attributes["log"]
+    assert log[0]["game"] == "higher_lower"
+    counts = {"higher_lower": {"played": 1, "won": int(info["won"])}}
+    registry = er.async_get(hass)
+    registry.async_update_entity("sensor.pip_debug", disabled_by=None)
+    await hass.config_entries.async_reload("test_pet")
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.pip_debug").attributes["games"] == counts
+
+
+async def test_a_guess_from_another_game_is_refused(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    with pytest.raises(ServiceValidationError):
+        await game(hass, game="higher_lower", guess="left")
+    # Left/right still starts on its first guess, with or without game set.
+    assert (await game(hass, guess="left"))["round"] == 1
+    assert (await game(hass, game="left_right", guess="right"))["round"] == 2
+
+
 async def test_ticking_off_a_chore_gives_the_pet_a_treat(
     hass: HomeAssistant,
     now: float,

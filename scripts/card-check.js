@@ -196,11 +196,12 @@ async function main() {
     const id = (await ids())["sensor.energy"];
     return Number(await evaluate((e) => document.querySelector("home-assistant").hass.states[e].state, id));
   };
-  for (let i = 0; i < slides && (await energyOf()) < 20; i++) {
+  // Two games ahead, each costing 10 energy and needing 15 to start.
+  for (let i = 0; i < slides && (await energyOf()) < 30; i++) {
     await page.locator("hatch-pet-card .nav.next").click();
     await page.waitForTimeout(700);
   }
-  if ((await energyOf()) < 20) console.log("note: no pet has energy to play; let them rest or nap");
+  if ((await energyOf()) < 30) console.log("note: no pet has energy to play; let them rest or nap");
   if ((await button(7).innerText()).includes("wake")) {
     await button(7).click();
     await page.waitForTimeout(1500);
@@ -265,6 +266,11 @@ async function main() {
   await shot("04b-idle");
   await button(2).click();
   await page.waitForTimeout(600);
+  check("play offers a choice of games",
+    (await cur().locator(".gpick button").count()) === 2 && await cur().locator(".gpick").isVisible());
+  await shot("04a-pick");
+  await cur().locator('.gpick [data-game="left_right"]').click();
+  await page.waitForTimeout(400);
   let rounds = 0;
   for (let r = 0; r < 5 && !(await cur().locator(".game").isHidden()); r++) {
     await cur().locator(r % 2 ? ".gr" : ".gl").click();
@@ -276,6 +282,30 @@ async function main() {
   check("the game plays five rounds", rounds === 5 && log?.[0]?.action === "game",
     `${rounds} rounds, last care ${log?.[0]?.action}/${log?.[0]?.result}`);
   await shot("04-game-over");
+
+  // Higher or Lower: guess from the number on show, the odds way round.
+  await page.waitForTimeout(3500); // let the last game's line clear
+  await button(2).click();
+  await page.waitForTimeout(600);
+  await cur().locator('.gpick [data-game="higher_lower"]').click();
+  await page.waitForTimeout(1200);
+  let hlRounds = 0;
+  const numbers = [];
+  for (let r = 0; r < 5 && !(await cur().locator(".game").isHidden()); r++) {
+    const shown = Number(await cur().locator(".gnum").innerText());
+    numbers.push(shown);
+    if (r === 2) await shot("04c-higher-lower");
+    await cur().locator(shown > 5 ? ".gl" : ".gr").click();
+    await page.waitForTimeout(1400);
+    hlRounds++;
+  }
+  await page.waitForTimeout(800);
+  const hlLog = await evaluate((id) => document.querySelector("home-assistant").hass.states[id].attributes.log, pet["sensor.last_care"]);
+  check("higher or lower plays five rounds from a number",
+    hlRounds === 5 && numbers.every((n) => n >= 1 && n <= 9) && hlLog?.[0]?.game === "higher_lower",
+    `${hlRounds} rounds, numbers ${numbers.join(" ")}, last care ${hlLog?.[0]?.game}/${hlLog?.[0]?.result} ${hlLog?.[0]?.score}`);
+  check("the picker remembers the last game",
+    await evaluate(() => localStorage.getItem("hatch-last-game")) === "higher_lower");
 
   // 4. Moments make the pet react.
   for (const [type, extra, expect] of [

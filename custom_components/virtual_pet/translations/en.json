@@ -267,6 +267,9 @@
   "exceptions": {
     "no_pet": {
       "message": "No virtual pet matches that config entry."
+    },
+    "wrong_guess": {
+      "message": "\"{guess}\" isn't a guess in that game; try {guesses}."
     }
   },
   "services": {
@@ -299,16 +302,20 @@
       }
     },
     "play_game": {
-      "name": "Play the left/right game",
-      "description": "One round of the guessing game the card's play button starts: the pet hides left or right and you guess. Five rounds make a game; three right guesses win it, and a win cheers the pet up more than plain play.",
+      "name": "Play a game",
+      "description": "One round of a game the card's play button starts. Five rounds make a game; three right guesses win it. Left/right: the pet hides left or right and you guess; the first guess starts a game. Higher or lower: call once without a guess to start and see the first number (1-9), then guess whether the next is higher or lower.",
       "fields": {
         "entity_id": {
           "name": "Pet",
           "description": "Any entity of the pet."
         },
+        "game": {
+          "name": "Game",
+          "description": "left_right (the default) or higher_lower."
+        },
         "guess": {
           "name": "Guess",
-          "description": "Left or right."
+          "description": "Left or right; lower or higher. Leave it out to start a game."
         }
       }
     }

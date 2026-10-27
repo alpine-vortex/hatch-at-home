@@ -60,12 +60,14 @@ class Call:
 
 @dataclass
 class Game:
-    """A left/right guessing game in progress (the card's play button)."""
+    """A game in progress (the card's play button)."""
 
     started: float
     last_at: float  # the last guess; an idle game is dropped
     rounds: int = 0
     wins: int = 0
+    kind: str = "left_right"  # one of GAMES
+    number: int | None = None  # Higher or Lower: the number on show
 
 
 @dataclass
@@ -116,6 +118,7 @@ class PetState:
     trait_hours: dict[str, float] = field(default_factory=dict)  # exposure, awake
     upbringing: str | None = None  # decided on reaching adulthood (UPBRINGINGS)
     game: Game | None = None
+    games: dict[str, dict[str, int]] = field(default_factory=dict)  # kind -> counts
     treats_waiting: int = 0  # chore treats it gets when it's next awake and home
     chore_treats: list[float] = field(default_factory=list)  # when each was earned
     firsts: dict[str, str] = field(default_factory=dict)  # kind -> season it was seen
@@ -151,6 +154,13 @@ class PetState:
                 )
             except TypeError:
                 kwargs["game"] = None
+            if kwargs["game"] is not None and kwargs["game"].kind not in GAMES:
+                kwargs["game"] = None  # a game this version doesn't know
+        kwargs["games"] = {
+            kind: {k: int(n) for k, n in counts.items() if k in ("played", "won")}
+            for kind, counts in (kwargs.get("games") or {}).items()
+            if isinstance(counts, dict)
+        }
         if not isinstance(kwargs.get("egg_choice"), str):
             kwargs["egg_choice"] = None
         if kwargs.get("upbringing") not in UPBRINGINGS:
@@ -849,6 +859,7 @@ def lay_egg(
         "age_days": round(state.age_hours / 24, 1),
         "care_misses": state.care_misses,
         "upbringing": upbringing(state),
+        "games": {kind: dict(counts) for kind, counts in state.games.items()},
     }
     egg = PetState.new(state.name, now)
     egg.generation = state.generation + 1
@@ -1026,9 +1037,36 @@ def _log(state: PetState, entry: dict[str, Any]) -> None:
     del state.care_log[R.CARE_LOG_SIZE :]
 
 
-# --- The left/right game ------------------------------------------------------
+# --- Games (the card's play button) -------------------------------------------
 
 SIDES = ("left", "right")
+# Each game and the guesses it takes. left_right is luck (the first-generation
+# Tamagotchi's game); higher_lower is odds (the second generation's).
+GAMES: dict[str, tuple[str, ...]] = {
+    "left_right": SIDES,
+    "higher_lower": ("lower", "higher"),
+}
+NUMBERS = range(1, 10)  # Higher or Lower's numbers
+
+
+def start_game(
+    state: PetState, kind: str, now: float, rng: random.Random, by: str | None = None
+) -> tuple[dict[str, Any], list[Event]]:
+    """Start a game of this kind (dropping any game in progress), and return
+    its opening: Higher or Lower's first number. The caller advances the pet
+    to now first."""
+    if kind not in GAMES:
+        raise ValueError(f"unknown game {kind}")
+    events: list[Event] = []
+    refusal = _refuse_play(state)
+    if refusal:
+        _log(state, {"at": now, "action": "game", "by": by, "result": refusal})
+        events.append({"type": "care", "action": "game", "result": refusal})
+        return {"result": refusal}, events
+    game = state.game = Game(started=now, last_at=now, kind=kind)
+    if kind == "higher_lower":
+        game.number = rng.choice(NUMBERS)
+    return _round_info(game), events
 
 
 def play_game(
@@ -1037,57 +1075,98 @@ def play_game(
     now: float,
     rng: random.Random,
     by: str | None = None,
+    kind: str = "left_right",
 ) -> tuple[dict[str, Any], list[Event]]:
-    """One round: the pet hides left or right, the player guesses.
+    """One round of a game; the last one settles it.
 
-    The first guess starts a game of GAME_ROUNDS rounds; the last one settles it.
-    The caller advances the pet to now first. Returns what the card needs to
-    draw the round, and events.
+    left_right: the pet hides left or right and the player guesses; the first
+    guess starts a game. higher_lower: the player guesses whether the next
+    number (1-9, never the same) is higher or lower; start_game shows the
+    first. The caller advances the pet to now first. Returns what the card
+    needs to draw the round, and events.
     """
-    if guess not in SIDES:
-        raise ValueError(f"unknown side {guess}")
+    if guess not in GAMES.get(kind, ()):
+        raise ValueError(f"{guess} is not a guess in {kind}")
     events: list[Event] = []
     game = state.game
+    if game is not None and game.kind != kind:
+        game = state.game = None  # switched games: the old one is dropped
     if game is None:
-        refusal = _refuse_play(state)
-        if refusal:
-            _log(state, {"at": now, "action": "game", "by": by, "result": refusal})
-            events.append({"type": "care", "action": "game", "result": refusal})
-            return {"result": refusal}, events
-        game = state.game = Game(started=now, last_at=now)
-    went = rng.choice(SIDES)
+        if kind != "left_right":
+            # Nothing to guess against yet; the card starts the game first.
+            return {"result": "no_game"}, events
+        info, events = start_game(state, kind, now, rng, by)
+        if info["result"] != OK:
+            return info, events
+        game = state.game
+        assert game is not None
     game.rounds += 1
-    game.wins += went == guess
     game.last_at = now
-    info: dict[str, Any] = {
-        "result": OK,
-        "round": game.rounds,
-        "rounds": R.GAME_ROUNDS,
-        "wins": game.wins,
-        "went": went,
-        "correct": went == guess,
-        "done": game.rounds >= R.GAME_ROUNDS,
-    }
+    if kind == "higher_lower":
+        assert game.number is not None
+        shown = game.number
+        game.number = rng.choice([n for n in NUMBERS if n != shown])
+        correct = (game.number > shown) == (guess == "higher")
+        extra: dict[str, Any] = {"shown": shown, "number": game.number}
+    else:
+        went = rng.choice(SIDES)
+        correct = went == guess
+        extra = {"went": went}
+    game.wins += correct
+    info = {**_round_info(game), **extra, "correct": correct}
     if not info["done"]:
         return info, events
     state.game = None
     won = game.wins >= R.GAME_WIN_AT
-    happiness = R.GAME_WIN_HAPPINESS if won else R.GAME_LOSE_HAPPINESS
+    if not won:
+        happiness = R.GAME_LOSE_HAPPINESS
+    elif kind == "left_right":
+        happiness = R.GAME_WIN_HAPPINESS
+    else:
+        happiness = R.SKILL_GAME_WIN_HAPPINESS
     state.happiness = _clamp(state.happiness + happiness)
     state.energy = _clamp(state.energy + R.PLAY_ENERGY)
     state.hunger = _clamp(state.hunger + R.PLAY_HUNGER)
     state.weight = _clamp(state.weight + R.WEIGHT_GAME)
     state.last_excite = now
+    counts = state.games.setdefault(kind, {"played": 0, "won": 0})
+    counts["played"] += 1
+    counts["won"] += won
     result = "won" if won else "lost"
     info["won"] = won
     score = f"{game.wins}/{game.rounds}"
     _log(
-        state, {"at": now, "action": "game", "by": by, "result": result, "score": score}
+        state,
+        {
+            "at": now,
+            "action": "game",
+            "by": by,
+            "result": result,
+            "score": score,
+            "game": kind,
+        },
     )
     events.append({"type": "care", "action": "game", "result": result})
-    events.append({"type": "game_finished", "won": won, "wins": game.wins})
+    events.append(
+        {"type": "game_finished", "game": kind, "won": won, "wins": game.wins}
+    )
     _resolve_call(state, now, events)
     return info, events
+
+
+def _round_info(game: Game) -> dict[str, Any]:
+    """Where a game stands, for the card."""
+    info: dict[str, Any] = {
+        "result": OK,
+        "game": game.kind,
+        "round": game.rounds,
+        "rounds": R.GAME_ROUNDS,
+        "wins": game.wins,
+        "done": game.rounds >= R.GAME_ROUNDS,
+    }
+    if game.kind == "higher_lower":
+        info["number"] = game.number
+    return info
 
 
 def _refuse_play(state: PetState) -> str | None:

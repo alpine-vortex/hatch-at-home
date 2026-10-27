@@ -21,6 +21,7 @@ ATTR_ENABLED = "enabled"
 SERVICE_FAST_FORWARD = "fast_forward"
 SERVICE_PLAY_GAME = "play_game"
 ATTR_GUESS = "guess"
+ATTR_GAME = "game"
 ATTR_HOURS = "hours"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 

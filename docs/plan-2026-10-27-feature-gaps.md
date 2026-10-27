@@ -190,6 +190,13 @@ Order: C1, then the C2 prototype, then the full C2 if it's kept.
 
 ### C1. Higher or Lower (first)
 
+**Built** (2026-10-27), release held until after the 2026-11-03 tuning review (then
+0.25.0; the other session released 0.23.1 and 0.24.0 meanwhile). Everything under
+"Shared changes" is in except `caught` (Catch's finish field), which comes with C2:
+adding an optional field later doesn't break callers. The number sits at 30% from the
+top of the screen, clear of the speech bubble. Checked with `scripts/card-check`
+(25/25 at 420 px), 232 tests.
+
 The game from the 1997 second-generation Tamagotchi: the pet shows a number from
 1 to 9, and the player guesses whether the next number will be higher or lower.
 Five rounds; three right wins, the same as the existing game.
@@ -352,14 +359,15 @@ helps.
 
 1. **A** (blueprint): built; lands with the plan's PR, no release.
 2. **B** (next egg): 0.23.0.
-3. **D's decision and art request**: pick the species and trait from the owner's
-   pets, then send the brief to Sol. The code comes when the art arrives.
-4. **C1** (Higher or Lower, with every shared game change): 0.24.0, after the
-   2026-11-03 tuning review.
-5. **C2 prototype** (Catch, card only, hidden option): it can ride along in
-   0.24.0 or come in a patch release. The owner plays it for a few days.
-6. **C2 full** (server side, decoy prop, in the picker): 0.25.0, only if the
-   owner keeps it.
+3. **D's decision and art request**: the owner picked the **bird**; the trait is
+   still open. Then send the brief to Sol. The code comes when the art arrives.
+4. **C1** (Higher or Lower, with every shared game change): built, in a PR held
+   until after the 2026-11-03 tuning review; then the next free version (0.25.0 as
+   of now).
+5. **C2 prototype** (Catch, card only, hidden option): next to build; it can ride
+   along with C1 or come in a patch release. The owner plays it for a few days.
+6. **C2 full** (server side, decoy prop, in the picker): the release after, only if
+   the owner keeps it.
 7. **D's code**, once the art is in.
 
 Each release: `scripts/test`, `scripts/card-check` where the card changes,

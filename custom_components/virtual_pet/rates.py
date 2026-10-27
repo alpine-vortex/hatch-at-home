@@ -79,11 +79,14 @@ WEIGHT_HEAVY_ABOVE = 75.0  # heavy: no health regen, and a risk of getting sick
 WEIGHT_LIGHT_BELOW = 25.0  # light: no health regen until it's fed up again
 WEIGHT_HEAVY_SICK_HAZARD = 0.02  # chance per hour of getting sick while heavy
 
-# --- The left/right game (the card's play button) ----------------------------
+# --- Games (the card's play button) -------------------------------------------
 
 GAME_ROUNDS = 5
 GAME_WIN_AT = 3  # right guesses out of GAME_ROUNDS
-GAME_WIN_HAPPINESS = 25.0  # more than plain play
+GAME_WIN_HAPPINESS = 25.0  # left/right is luck: a win pays more than plain play
+# Higher or Lower is mostly skill (a good player wins ~92% of games), so a win
+# pays like plain play; at 25 it would be the best happiness button there is.
+SKILL_GAME_WIN_HAPPINESS = PLAY_HAPPINESS
 GAME_LOSE_HAPPINESS = 10.0
 GAME_IDLE_MINUTES = 3  # an unfinished game is dropped after this
 
