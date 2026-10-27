@@ -15,10 +15,12 @@ from homeassistant.const import (
     PERCENTAGE,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
+    UnitOfSpeed,
     UnitOfTemperature,
 )
 from homeassistant.core import HomeAssistant, State
-from homeassistant.util.unit_conversion import TemperatureConverter
+from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_conversion import SpeedConverter, TemperatureConverter
 
 from . import rates as R
 from .const import (
@@ -40,7 +42,7 @@ from .const import (
     CONF_ZONE,
     DEFAULT_ZONE,
 )
-from .home import Readings
+from .home import DayForecast, Readings
 
 BAD = (STATE_UNAVAILABLE, STATE_UNKNOWN)
 VIDEO = {"movie", "tvshow", "video", "episode", "channel"}
@@ -81,6 +83,54 @@ def _float(state: State | None) -> float | None:
         return float(state.state) if state else None
     except ValueError:
         return None
+
+
+def _to_celsius(value: Any, unit: Any) -> float | None:
+    """A temperature in the weather entity's unit, as °C."""
+    if unit not in (UnitOfTemperature.CELSIUS, UnitOfTemperature.FAHRENHEIT):
+        return None
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return None
+    return TemperatureConverter.convert(value, unit, UnitOfTemperature.CELSIUS)
+
+
+def _kmh(weather: State | None, key: str) -> float | None:
+    """A weather entity's wind (or gust) speed, in km/h."""
+    if weather is None:
+        return None
+    unit = weather.attributes.get("wind_speed_unit", UnitOfSpeed.KILOMETERS_PER_HOUR)
+    if unit not in SpeedConverter.VALID_UNITS:
+        return None
+    try:
+        value = float(weather.attributes[key])
+    except (KeyError, TypeError, ValueError):
+        return None
+    return SpeedConverter.convert(value, unit, UnitOfSpeed.KILOMETERS_PER_HOUR)
+
+
+def daily_forecast(
+    items: list[dict[str, Any]], temperature_unit: str | None
+) -> dict[str, DayForecast]:
+    """weather.get_forecasts' daily list as {local date: DayForecast}. The first
+    entry for a day wins; entries without a readable date are skipped."""
+    unit = temperature_unit or UnitOfTemperature.CELSIUS
+    days: dict[str, DayForecast] = {}
+    for item in items:
+        when = dt_util.parse_datetime(str(item.get("datetime") or ""))
+        if when is None:
+            continue
+        day = dt_util.as_local(when).date().isoformat()
+        if day in days:
+            continue
+        condition = item.get("condition")
+        days[day] = DayForecast(
+            condition=condition if isinstance(condition, str) else None,
+            high_c=_to_celsius(item.get("temperature"), unit),
+            low_c=_to_celsius(item.get("templow"), unit),
+        )
+    return days
 
 
 def is_temperature(state: State | None) -> bool:
@@ -182,6 +232,8 @@ class Watcher:
                 else alt > 0
             ),
             outdoor_c=self._outdoor_c(weather),
+            wind_kmh=_kmh(weather, "wind_speed"),
+            gust_kmh=_kmh(weather, "wind_gust_speed"),
             tv_title=next(
                 (t for s in playing_tv if (t := _title(s, "media_series_title"))),
                 None,
@@ -204,14 +256,10 @@ class Watcher:
         """The weather entity's current temperature, in °C."""
         if weather is None:
             return None
-        try:
-            value = float(weather.attributes["temperature"])
-        except (KeyError, TypeError, ValueError):
-            return None
-        unit = weather.attributes.get("temperature_unit", UnitOfTemperature.CELSIUS)
-        if unit not in (UnitOfTemperature.CELSIUS, UnitOfTemperature.FAHRENHEIT):
-            return None
-        return TemperatureConverter.convert(value, unit, UnitOfTemperature.CELSIUS)
+        return _to_celsius(
+            weather.attributes.get("temperature"),
+            weather.attributes.get("temperature_unit", UnitOfTemperature.CELSIUS),
+        )
 
     @staticmethod
     def _fraction(state: State | None) -> float | None:

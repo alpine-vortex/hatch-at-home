@@ -9,7 +9,7 @@ from typing import Any
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, UnitOfTemperature
 from homeassistant.core import (
     Context,
     CoreState,
@@ -29,6 +29,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_conversion import TemperatureConverter
 
 from . import model, notify, rates as R
 from .const import (
@@ -43,6 +44,7 @@ from .const import (
     CONF_SITTER_SETTLES,
     CONF_SPECIES,
     CONF_WAKE_TIME,
+    CONF_WEATHER,
     CONF_WORLD,
     DEFAULT_WORLD,
     DEFAULT_ZONE,
@@ -51,9 +53,19 @@ from .const import (
     STORE_MINOR_VERSION,
     STORE_VERSION,
 )
-from .home import SNOWY, HomeEffect, HouseMoments, Presence, Readings, evaluate
+from .home import (
+    SNOWY,
+    DayForecast,
+    HomeEffect,
+    HouseMoments,
+    Presence,
+    Readings,
+    evaluate,
+    forecast_moment,
+    is_raining,
+)
 from .species import load_catalog
-from .watcher import Watcher
+from .watcher import Watcher, daily_forecast
 
 type PetConfigEntry = ConfigEntry[PetCoordinator]
 
@@ -84,6 +96,8 @@ MOMENTS = {
     "first_snow",
     "first_frost",
     "news",
+    "weather",
+    "forecast",
 }
 MOMENTS_KEPT = 10
 
@@ -145,6 +159,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.house_moments = HouseMoments()
         # virtual_pet.share_news: no news before this time (in memory only).
         self.next_news = 0.0
+        # The weather entity's daily forecast by local date (in memory only),
+        # and when the pet next talks about it.
+        self.forecast: dict[str, DayForecast] = {}
+        self._forecast_at = -1e12
+        self._forecast_due: float | None = None  # today's, after good morning
+        self._forecast_evening: str | None = None  # the day last talked about
         self.presence = Presence(
             entry.options.get(CONF_AWAY_AFTER, R.HOME_AWAY_AFTER_HOURS)
         )
@@ -262,6 +282,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         now = self._now()
         self._advance(now)
         self._sense_home(now)  # time-based signals: motion going quiet, away
+        self._want_forecast(now)
         return self.state
 
     # --- The house ----------------------------------------------------------
@@ -332,6 +353,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
         self.config_entry.async_on_unload(self._home_debouncer.async_shutdown)
         self.hass.async_create_task(self._async_home_changed())
+        self._want_forecast(self._now())
 
         chores = self.config_entry.options.get(CONF_CHORES) or []
         if chores:
@@ -446,7 +468,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         }
 
     def _passing_moments(self, readings: Readings, now: float) -> list[model.Event]:
-        """Sunsets, the morning stir, the TV, the season's first snow or frost."""
+        """Sunsets, the morning stir, the TV, the weather and its forecast, the
+        season's first snow or frost."""
         assert self.state is not None
         state = self.state
         settings = self.settings
@@ -463,11 +486,108 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
         if any(e["type"] == "good_morning" for e in events):
             model.morning_stir(state, now, settings)
+            self._forecast_due = now + R.HOME_FORECAST_DELAY_MINUTES * 60
         if awake and readings.condition in SNOWY:
-            events += model.season_first(state, "snow", now, settings.tz)
+            first = model.season_first(state, "snow", now, settings.tz)
+            if first:  # the first snow says it all
+                events = [e for e in events if e.get("change") != "snow_started"]
+            events += first
         if awake and readings.outdoor_c is not None and readings.outdoor_c <= 0:
             events += model.season_first(state, "frost", now, settings.tz)
+        events += self._forecast_talk(readings, now, awake, minute >= wake)
+        return [self._degrees(e) for e in events]
+
+    def _forecast_talk(
+        self, readings: Readings, now: float, awake: bool, after_wake: bool
+    ) -> list[model.Event]:
+        """Today's forecast a few minutes after good morning (until noon), and
+        tomorrow's in the evening before bed: only if it's worth a word."""
+        local = dt_util.as_local(dt_util.utc_from_timestamp(now))
+        events: list[model.Event] = []
+        if self._forecast_due is not None and now >= self._forecast_due:
+            self._forecast_due = None
+            today = local.date()
+            talk = forecast_moment(
+                self.forecast.get(today.isoformat()),
+                self.forecast.get((today - timedelta(days=1)).isoformat()),
+                "today",
+            )
+            # Rain already falling needs no forecast.
+            raining = talk and talk["kind"] == "rain" and is_raining(readings)
+            if talk and awake and local.hour < 12 and not raining:
+                events.append(talk)
+        to_bed = model.minutes_to_bedtime(now, self.settings)
+        # Past midnight but before waking, "tomorrow" is the coming day.
+        target = local.date() + timedelta(days=1 if after_wake else 0)
+        key = target.isoformat()
+        if (
+            awake
+            and R.HOME_BEDTIME_WINDOW_MINUTES
+            < to_bed
+            <= R.HOME_FORECAST_EVENING_HOURS * 60
+            and self._forecast_evening != key
+            and key in self.forecast
+        ):
+            self._forecast_evening = key
+            talk = forecast_moment(
+                self.forecast[key],
+                self.forecast.get((target - timedelta(days=1)).isoformat()),
+                "tomorrow",
+            )
+            if talk:
+                events.append(talk)
         return events
+
+    def _degrees(self, event: model.Event) -> model.Event:
+        """Temperatures in the owner's unit, as whole degrees."""
+        unit = self.hass.config.units.temperature_unit
+        for key, name in (
+            ("temp_c", "temperature"),
+            ("high_c", "high"),
+            ("low_c", "low"),
+        ):
+            if key in event:
+                celsius = event.pop(key)
+                event[name] = round(
+                    TemperatureConverter.convert(
+                        celsius, UnitOfTemperature.CELSIUS, unit
+                    )
+                )
+        return event
+
+    def _want_forecast(self, now: float) -> None:
+        """Refresh the daily forecast in the background, at most hourly."""
+        if not self._home_started or not self.config_entry.options.get(CONF_WEATHER):
+            return
+        if now - self._forecast_at < R.HOME_FORECAST_REFRESH_MINUTES * 60:
+            return
+        self._forecast_at = now
+        self.config_entry.async_create_background_task(
+            self.hass, self._async_forecast(), f"{DOMAIN} forecast"
+        )
+
+    async def _async_forecast(self) -> None:
+        entity_id = self.watcher._ids(CONF_WEATHER)[0]
+        try:
+            response = await self.hass.services.async_call(
+                "weather",
+                "get_forecasts",
+                {"entity_id": entity_id, "type": "daily"},
+                blocking=True,
+                return_response=True,
+            )
+        except Exception:  # noqa: BLE001 - no forecast just means no forecast talk
+            LOGGER.debug("No daily forecast from %s", entity_id, exc_info=True)
+            return
+        items = (response or {}).get(entity_id, {}).get("forecast")
+        if not isinstance(items, list):
+            return
+        state = self.hass.states.get(entity_id)
+        unit = state.attributes.get("temperature_unit") if state else None
+        self.forecast.update(daily_forecast(items, unit))
+        # Keep yesterday (today's forecast is compared with it) and later.
+        yesterday = (dt_util.now().date() - timedelta(days=1)).isoformat()
+        self.forecast = {d: f for d, f in self.forecast.items() if d >= yesterday}
 
     def _sync_name(self) -> None:
         """Follow renames: the device's own name if the owner set one, else the

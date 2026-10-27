@@ -198,7 +198,7 @@ the pet comes home.
 | Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Rain sensor | none | On/off "it's raining", or a rain rate where anything above 0 means rain. Beats the forecast. Rain brings a rainy scene and a **blanket?** request. | `input_boolean.raining` |
-| Weather forecast | none | Sunny, snow and fog, and rain when there's no rain sensor. | `weather.forecast_home` |
+| Weather forecast | none | Sunny, snow and fog, and rain when there's no rain sensor. Wind from the condition or the wind speed (30 km/h, or gusts of 50). Its daily forecast, if it has one, gives the pet something to talk about (see Passing moments). | `weather.forecast_home` |
 | Indoor temperature | none | Outside the comfort range: shivers or sweats and asks for a **blanket** or a **fan**. | `sensor.indoor_temperature` |
 | Too cold below | 18 °C / 64.5 °F | Shown in your unit system. No blanket request while the fireplace is lit. | default |
 | Too warm above | 26.5 °C / 79.5 °F | | default |
@@ -291,6 +291,14 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
     and yawns when the TV goes off late.
   - Thunder makes it hide and ask for its blanket, and the screen flashes; wind blows
     across the scene.
+  - It remarks on the weather changing: rain starting or stopping (a rainbow, if the
+    sun is out), snow starting, the sun coming out after two hours of cloud, a hot day
+    (30 °C or more) or a freezing one (−10 °C or less), in your unit. At most one remark
+    every 20 minutes, and the same one not again for 90 minutes.
+  - If the weather entity has a daily forecast, it mentions today's a few minutes after
+    good morning and tomorrow's in the evening, one to three hours before bedtime, but
+    only when the day is worth a word: a storm, snow, a hot or cold day, a jump of 8 °C
+    from the day before, rain, or sun after rain ("snow tomorrow!!").
   - The season's first snow and first frost (from the weather entity's temperature) are
     a moment once each winter, kept as memories in the journal. They notify too.
   - It passes on news an automation tells it ("did you hear? Tamagotchi turns 30!"),

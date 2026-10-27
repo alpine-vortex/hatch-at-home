@@ -80,6 +80,17 @@ details before committing it.
   `NEWS_COOLDOWN_MINUTES` (30) per pet, in memory, set only when news shows. The
   headline is cut at 60 characters (`home.news_text`): at 80 the bubble buried the pet
   on a 330 px card. Checked in the browser at 420 and 330 px.
+- **Weather talk** (Tier 1 of `docs/plan-2026-10-27-real-time-connections.md`,
+  unreleased on branch `ccr-a828d8c1-uv2so3`): `weather` moments (`change`:
+  rain_started, rain_stopped, rainbow, snow_started, sun_out, hot, cold) from
+  `HouseMoments._weather`, one per `HOME_WEATHER_GAP_MINUTES`, each kind once per
+  `HOME_WEATHER_COOLDOWN_MINUTES`; `forecast` moments (`when` today/tomorrow, `kind`)
+  from `weather.get_forecasts` (daily, fetched hourly in the background, in memory)
+  only for notable days. Temperatures go out as `temperature`/`high`/`low` in the
+  owner's unit (`_degrees`). `windy` now also comes from `wind_speed`/
+  `wind_gust_speed`, with any weather, so the breeze rider trait will count more
+  often. Not yet seen on the owner's HA: whether their provider has daily forecasts
+  and wind speed. Tiers 2 and 3 await the owner.
 - **Whole-app review** (0.25.1, 2026-10-27): three reviews (pet logic, the HA side,
   the card) and fixes, each checked against the code first. Among them: a freeze no
   longer moves the morning's wake time; a call's phone notification clears on every

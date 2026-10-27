@@ -238,6 +238,20 @@ NEWS_COOLDOWN_MINUTES = 30  # between bits of news shared with virtual_pet.share
 NEWS_HEADLINE_MAX = 60  # characters, so the bubble leaves the pet in view
 NEWS_TOPIC_MAX = 20
 HOME_GREETING_COOLDOWN_MINUTES = 30  # GPS jitter shouldn't cause repeat greetings
+# Weather the pet remarks on (cosmetic). Wind from the weather entity's speed,
+# for providers that seldom report the "windy" condition.
+HOME_WINDY_KMH = 30.0  # sustained, about Beaufort 5
+HOME_GUSTY_KMH = 50.0
+HOME_WEATHER_GAP_MINUTES = 20  # between any two weather remarks (absorbs showers)
+HOME_WEATHER_COOLDOWN_MINUTES = 90  # before the same remark again
+HOME_SUN_OUT_AFTER_HOURS = 2.0  # of daytime cloud before "the sun came out!"
+HOME_HOT_DAY_C = 30.0  # outdoors, now or the forecast high
+HOME_COLD_SNAP_C = -10.0  # outdoors, now or the forecast low
+HOME_COLD_DAY_HIGH_C = 0.0  # a forecast high this low is a cold day too
+HOME_FORECAST_SWING_C = 8.0  # a high this far from the day before is worth a word
+HOME_FORECAST_REFRESH_MINUTES = 60
+HOME_FORECAST_DELAY_MINUTES = 3  # after good morning, so the two don't collide
+HOME_FORECAST_EVENING_HOURS = 3.0  # tomorrow's forecast, this long before bedtime
 HOME_AWAY_AFTER_HOURS = 2.0  # empty this long: off to the sitter's
 
 # Answering a request

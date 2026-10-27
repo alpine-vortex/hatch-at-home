@@ -70,6 +70,8 @@ class Readings:
     moon_illumination: float | None = None  # lit fraction, 0-1
     moon_up: bool | None = None
     outdoor_c: float | None = None  # from the weather entity
+    wind_kmh: float | None = None  # from the weather entity
+    gust_kmh: float | None = None
     tv_title: str | None = None  # what's on, if the TV says
     music_title: str | None = None
     music_artist: str | None = None
@@ -96,6 +98,27 @@ SUNNY = {"sunny"}
 FOGGY = {"fog"}
 STORMY = {"lightning", "lightning-rainy"}
 WINDY = {"windy", "windy-variant"}
+
+
+def is_raining(r: Readings) -> bool:
+    """A local rain gauge beats the forecast."""
+    return r.rain_rate > 0 if r.rain_rate is not None else r.condition in RAINY
+
+
+def is_sunny(r: Readings) -> bool:
+    """A solar sensor beats the forecast; a sunny night isn't sunny."""
+    if r.solar is not None:
+        return r.solar >= R.HOME_SUNNY_SOLAR
+    return r.condition in SUNNY and r.sun_up is not False
+
+
+def is_windy(r: Readings) -> bool:
+    """The condition says so, or the wind speed does."""
+    return (
+        r.condition in WINDY
+        or (r.wind_kmh is not None and r.wind_kmh >= R.HOME_WINDY_KMH)
+        or (r.gust_kmh is not None and r.gust_kmh >= R.HOME_GUSTY_KMH)
+    )
 
 
 def moon_phase(phase: str | None, illumination: float | None) -> str | None:
@@ -130,7 +153,7 @@ def evaluate(
 
     # Weather. A local rain gauge beats a forecast; a solar sensor beats both
     # for "sunny".
-    raining = r.rain_rate > 0 if r.rain_rate is not None else r.condition in RAINY
+    raining = is_raining(r)
     if r.condition in STORMY:
         # Thunder: it hides and wants its blanket, rain or not.
         e.flags.append("storm")
@@ -142,19 +165,14 @@ def evaluate(
     elif r.condition in SNOWY:
         e.flags.append("snowy")
         add("happiness", R.HOME_SNOW_HAPPINESS)
-    else:
-        sunny = (
-            r.solar >= R.HOME_SUNNY_SOLAR
-            if r.solar is not None
-            else r.condition in SUNNY and r.sun_up is not False
-        )
-        if sunny:
-            e.flags.append("sunny")
-            add("happiness", R.HOME_SUN_HAPPINESS)
-        elif r.condition in FOGGY:
-            e.flags.append("foggy")
-        elif r.condition in WINDY:
-            e.flags.append("windy")
+    elif is_sunny(r):
+        e.flags.append("sunny")
+        add("happiness", R.HOME_SUN_HAPPINESS)
+    elif r.condition in FOGGY:
+        e.flags.append("foggy")
+    # Wind goes with any weather: rain or sun can be windy too.
+    if is_windy(r):
+        e.flags.append("windy")
 
     # A lit fireplace: cozy, and nobody shivers next to it.
     if r.fireplace:
@@ -263,7 +281,8 @@ class Presence:
 
 class HouseMoments:
     """Passing moments in the house the pet comments on: sunrise and sunset, the
-    first stir of the morning, what's on TV or playing, the TV going off late.
+    first stir of the morning, what's on TV or playing, the TV going off late,
+    the weather changing.
 
     Cosmetic only. Keeps what it needs in memory; a restart only means the
     pet may comment on the same show again.
@@ -276,6 +295,13 @@ class HouseMoments:
         self.music_title: str | None = None
         self.tv_on = False
         self.next_media = 0.0
+        # Weather: what it was doing, to remark on changes.
+        self.raining: bool | None = None
+        self.snowing: bool | None = None
+        self.gloom_since: float | None = None  # daytime without sun, since
+        self.next_weather = 0.0
+        self.weather_again: dict[str, float] = {}
+        self.said_on: dict[str, str] = {}  # "hot" / "cold": the day it was said
 
     def update(
         self, r: Readings, now: float, awake: bool, morning: bool, today: str
@@ -314,7 +340,119 @@ class HouseMoments:
         if self.tv_on and not r.tv and r.night and awake:
             events.append({"type": "tv_off_late"})
         self.tv_on = r.tv
+        events += self._weather(r, now, awake, today)
         return events
+
+    def _weather(
+        self, r: Readings, now: float, awake: bool, today: str
+    ) -> list[dict[str, Any]]:
+        """At most one remark on the weather changing: rain starting or
+        stopping (a rainbow, if the sun is out), snow, the sun breaking through,
+        a hot or freezing day. Changes while asleep are noted, not remarked on."""
+        changes: list[str] = []
+        if r.rain_rate is not None or r.condition is not None:
+            raining = is_raining(r)
+            if self.raining is not None and raining != self.raining:
+                if raining:
+                    changes.append("rain_started")
+                elif r.sun_up and is_sunny(r):
+                    changes.append("rainbow")
+                else:
+                    changes.append("rain_stopped")
+            self.raining = raining
+        if r.condition is not None:
+            snowing = r.condition in SNOWY
+            if self.snowing is False and snowing:
+                changes.append("snow_started")
+            self.snowing = snowing
+        if r.solar is not None or r.condition is not None:
+            if r.sun_up is not True or is_raining(r):
+                self.gloom_since = None  # night, or rain: that's not "cloud"
+            elif not is_sunny(r):
+                if self.gloom_since is None:
+                    self.gloom_since = now
+            else:
+                gloom = self.gloom_since
+                self.gloom_since = None
+                if (
+                    gloom is not None
+                    and now - gloom >= R.HOME_SUN_OUT_AFTER_HOURS * 3600
+                ):
+                    changes.append("sun_out")
+        temp_c = r.outdoor_c
+        if temp_c is not None:
+            if temp_c >= R.HOME_HOT_DAY_C and self.said_on.get("hot") != today:
+                changes.append("hot")
+            elif temp_c <= R.HOME_COLD_SNAP_C and self.said_on.get("cold") != today:
+                changes.append("cold")
+
+        if not awake or now < self.next_weather:
+            return []
+        for change in changes:
+            if now < self.weather_again.get(change, 0.0):
+                continue
+            self.next_weather = now + R.HOME_WEATHER_GAP_MINUTES * 60
+            self.weather_again[change] = now + R.HOME_WEATHER_COOLDOWN_MINUTES * 60
+            event: dict[str, Any] = {"type": "weather", "change": change}
+            if change in ("hot", "cold"):
+                self.said_on[change] = today
+                event["temp_c"] = temp_c
+            return [event]
+        return []
+
+
+@dataclass
+class DayForecast:
+    """One day of a weather entity's daily forecast, in °C."""
+
+    condition: str | None = None
+    high_c: float | None = None
+    low_c: float | None = None
+
+
+def forecast_moment(
+    day: DayForecast | None, before: DayForecast | None, when: str
+) -> dict[str, Any] | None:
+    """Something worth saying about a day's forecast, or None for an ordinary
+    day (the pet isn't a weather report). before: the day before it, if known.
+    when: "today" or "tomorrow"."""
+    if day is None:
+        return None
+    high, low = day.high_c, day.low_c
+    kind: str | None = None
+    if day.condition in STORMY:
+        kind = "storm"
+    elif day.condition in SNOWY:
+        kind = "snow"
+    elif high is not None and high >= R.HOME_HOT_DAY_C:
+        kind = "hot"
+    elif (high is not None and high <= R.HOME_COLD_DAY_HIGH_C) or (
+        low is not None and low <= R.HOME_COLD_SNAP_C
+    ):
+        kind = "cold"
+    elif (
+        high is not None
+        and before is not None
+        and before.high_c is not None
+        and abs(high - before.high_c) >= R.HOME_FORECAST_SWING_C
+    ):
+        kind = "warmer" if high > before.high_c else "colder"
+    elif day.condition in RAINY:
+        kind = "rain"
+    elif (
+        day.condition in SUNNY
+        and before is not None
+        and (before.condition in RAINY or before.condition in SNOWY)
+    ):
+        kind = "sunny"
+    if kind is None:
+        return None
+    event: dict[str, Any] = {"type": "forecast", "when": when, "kind": kind}
+    if high is not None:
+        event["high_c"] = high
+    if low is not None:
+        event["low_c"] = low
+    return event
 
 
 def news_text(text: str | None, limit: int) -> str:

@@ -195,6 +195,8 @@ const IDLE_MOODS = new Set(["content", "cozy", "bored", "excited", "sleepy", "hu
 // A viewer is greeted by name at most this often, per pet.
 const GREET_EVERY_MS = 3 * 3600 * 1000;
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
+// Whole degrees in the owner's unit (the server converts), with a real minus.
+const degrees = (n) => (Number.isFinite(n) ? `${n}°`.replace("-", "−") : "");
 // How long the happy bounce lasts when the pet gets excited.
 const BOUNCE_MS = 10000;
 const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
@@ -1667,6 +1669,45 @@ class HatchPetCard extends HTMLElement {
         const line = pick(lines);
         say(line, 4000 + line.length * 50); // long enough to read, never long
         this._animate(s, s.pet, "perk", 320);
+        break;
+      }
+      case "weather": { // the weather just changed (or a hot or freezing day)
+        if (s.game) break; // a game's prompt owns the bubble
+        const t = degrees(m.temperature);
+        const lines = {
+          rain_started: ["ooh, it's raining!", "pitter patter...", "here comes the rain!"],
+          rain_stopped: ["the rain stopped!", "all dry again~"],
+          rainbow: ["the rain stopped... a rainbow?!", "sun after rain... rainbow?"],
+          snow_started: ["it's snowing!! ❄", "snowflakes!! ❄"],
+          sun_out: ["the sun came out!", "ooh, sunshine!"],
+          hot: t ? [`${t} out there! phew`, `so hot out... ${t}!`] : ["so hot out there!"],
+          cold: t ? [`brr, ${t} outside!`, `${t} out there... brr`] : ["brr, so cold out!"],
+        }[m.change];
+        if (!lines) break;
+        say(pick(lines));
+        if (m.change === "rainbow" || m.change === "snow_started") this._sparkle(s);
+        if (m.change === "cold") this._animate(s, s.pet, "sulk", 800);
+        else this._look(s, 2500);
+        break;
+      }
+      case "forecast": { // something worth a word in today's or tomorrow's forecast
+        if (s.game) break;
+        const today = m.when === "today";
+        const hi = degrees(m.high);
+        const lines = {
+          storm: today ? ["thunder later... eek"] : ["storms tomorrow... eek"],
+          snow: today ? ["snow today?!", "it might snow today!!"] : ["snow tomorrow!!", "ooh, snow tomorrow?!"],
+          hot: hi ? [today ? `hot one today: ${hi}!` : `${hi} tomorrow! phew`] : [today ? "hot one today!" : "hot tomorrow, phew"],
+          cold: hi ? [today ? `cold one today: ${hi}, brr` : `brr, only ${hi} tomorrow`] : [today ? "cold one today, brr" : "cold tomorrow, brr"],
+          warmer: hi ? [today ? `warmer today: ${hi}!` : `warmer tomorrow: ${hi}!`] : [today ? "warmer today!" : "warmer tomorrow!"],
+          colder: hi ? [today ? `colder today, only ${hi}` : `colder tomorrow... ${hi}`] : [today ? "colder today..." : "colder tomorrow..."],
+          rain: today ? ["rain later today...", "rain's coming later"] : ["rain tomorrow... blanket day?"],
+          sunny: today ? ["sunny today, finally!"] : ["sun tomorrow, finally!"],
+        }[m.kind];
+        if (!lines) break;
+        say(pick(lines), 5000);
+        if (m.kind === "cold" || m.kind === "colder") this._animate(s, s.pet, "sulk", 800);
+        else this._animate(s, s.pet, "perk", 320);
         break;
       }
       case "tv_off_late":

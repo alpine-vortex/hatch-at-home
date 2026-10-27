@@ -8,11 +8,18 @@ from typing import Any
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant import config_entries
 from homeassistant.const import CONF_NAME, STATE_OFF, STATE_ON, STATE_UNAVAILABLE
-from homeassistant.core import Context, HomeAssistant
+from homeassistant.core import (
+    Context,
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+)
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_system import US_CUSTOMARY_SYSTEM
 import pytest
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
@@ -913,7 +920,7 @@ async def test_ticking_off_a_chore_gives_the_pet_a_treat(
     hass_storage: dict[str, Any],
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    from homeassistant.core import ServiceResponse, SupportsResponse
+    from homeassistant.core import SupportsResponse
 
     done = [{"uid": "1", "summary": "Dishes", "status": "completed"}]
 
@@ -1449,3 +1456,129 @@ async def test_news_headline_is_capped_and_required(
     assert len(moment["topic"]) <= R.NEWS_TOPIC_MAX
     with pytest.raises((vol.Invalid, HomeAssistantError)):
         await share_news(hass, "   ")
+
+
+# --- Weather talk -----------------------------------------------------------
+
+
+def forecast_service(hass: HomeAssistant, days: list[dict[str, Any]]) -> list[Any]:
+    """A stand-in weather.get_forecasts; returns the list of calls."""
+    calls: list[Any] = []
+
+    async def get_forecasts(call: ServiceCall) -> ServiceResponse:
+        calls.append(call)
+        return {"weather.home": {"forecast": days}}
+
+    hass.services.async_register(
+        "weather",
+        "get_forecasts",
+        get_forecasts,
+        supports_response=SupportsResponse.ONLY,
+    )
+    return calls
+
+
+def moments(hass: HomeAssistant) -> list[dict[str, Any]]:
+    return hass.states.get("sensor.pip_last_care").attributes["moments"]
+
+
+async def test_tomorrows_forecast_before_bed_in_the_owners_unit(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-26 19:50:00+00:00")  # just over 3 h before bedtime
+    now = dt_util.utcnow().timestamp()
+    hass.config.units = US_CUSTOMARY_SYSTEM
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("weather.home", "cloudy", {"temperature_unit": "°F"})
+    calls = forecast_service(
+        hass,
+        [
+            {
+                "datetime": "2026-10-26T12:00:00+00:00",
+                "condition": "cloudy",
+                "temperature": 50,
+            },
+            {
+                "datetime": "2026-10-27T12:00:00+00:00",
+                "condition": "snowy",
+                "temperature": 30,
+                "templow": 20,
+            },
+        ],
+    )
+    await setup_with_house(hass, weather="weather.home")
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(calls) == 1
+
+    # Not yet: too early in the evening for tomorrow's forecast.
+    await settle(hass, freezer, 5 * 60)
+    assert not [m for m in moments(hass) if m["type"] == "forecast"]
+    await settle(hass, freezer, 6 * 60)
+    talk = [m for m in moments(hass) if m["type"] == "forecast"]
+    assert len(talk) == 1
+    assert talk[0]["when"] == "tomorrow" and talk[0]["kind"] == "snow"
+    assert talk[0]["high"] == 30 and talk[0]["low"] == 20  # °F, as the owner sees
+    # Once an evening, and the forecast is fetched at most hourly.
+    for _ in range(6):
+        await settle(hass, freezer, 5 * 60)
+    assert len([m for m in moments(hass) if m["type"] == "forecast"]) == 1
+    assert len(calls) == 1
+
+
+async def test_no_forecast_service_means_no_forecast_talk(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-26 21:00:00+00:00")
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    hass.states.async_set("weather.home", "cloudy")
+    await setup_with_house(hass, weather="weather.home")
+    await hass.async_block_till_done(wait_background_tasks=True)
+    await settle(hass, freezer, 5 * 60)
+    assert not [m for m in moments(hass) if m["type"] == "forecast"]
+
+
+async def test_todays_forecast_follows_good_morning(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-26 08:00:00+00:00")
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    hass.states.async_set("weather.home", "cloudy")
+    hass.states.async_set("binary_sensor.hall", "off")
+    forecast_service(
+        hass,
+        [
+            {
+                "datetime": "2026-10-26T12:00:00+00:00",
+                "condition": "sunny",
+                "temperature": 33,
+            }
+        ],
+    )
+    await setup_with_house(hass, weather="weather.home", motion=["binary_sensor.hall"])
+    await hass.async_block_till_done(wait_background_tasks=True)
+    hass.states.async_set("binary_sensor.hall", "on")
+    await settle(hass, freezer)
+    assert [m["type"] for m in moments(hass)][:1] == ["good_morning"]
+    await settle(hass, freezer, 5 * 60)
+    talk = moments(hass)[0]
+    assert talk["type"] == "forecast" and talk["kind"] == "hot"
+    assert talk["when"] == "today" and talk["high"] == 33
+
+
+async def test_wind_speed_reaches_the_mood(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("weather.home", "cloudy", {"wind_speed": 45})
+    await setup_with_house(hass, weather="weather.home")
+    await settle(hass, freezer)
+    assert "windy" in hass.states.get("sensor.pip_mood").attributes["flags"]

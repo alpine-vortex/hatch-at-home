@@ -365,6 +365,9 @@ async function main() {
     ["sunset", {}, "sun|sky"],
     ["watching", { title: "Bluey" }, "Bluey"],
     ["first_snow", {}, "first snow"],
+    ["weather", { change: "cold", temperature: -12 }, "−12°"],
+    ["weather", { change: "rainbow" }, "rainbow"],
+    ["forecast", { when: "tomorrow", kind: "warmer", high: 72 }, "warmer tomorrow: 72°"],
   ]) {
     await inject(pet["sensor.last_care"], {
       attributes: { moments: [{ type, ...extra, at: new Date().toISOString() }] },

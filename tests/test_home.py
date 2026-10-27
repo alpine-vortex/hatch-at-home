@@ -289,3 +289,111 @@ def test_moon_illumination_in_percent_is_read_by_its_unit():
     assert lit("0.5", "%") == 0.005
     assert lit("50", None) == 0.5
     assert lit("0.5", None) == 0.5
+
+
+def test_wind_speed_makes_it_windy_whatever_the_condition():
+    assert "windy" not in evaluate(Readings(night=False, wind_kmh=12)).flags
+    assert "windy" in evaluate(Readings(night=False, wind_kmh=R.HOME_WINDY_KMH)).flags
+    gusts = Readings(night=False, condition="rainy", wind_kmh=20, gust_kmh=60)
+    assert {"rainy", "windy"} <= set(evaluate(gusts).flags)
+
+
+def weather(**kw) -> Readings:
+    return Readings(night=False, sun_up=True, **kw)
+
+
+def test_rain_starting_and_stopping_is_remarked_on_once_in_a_while():
+    m = home.HouseMoments()
+    assert m.update(weather(condition="cloudy"), 0, True, False, "d1") == []
+    rain = weather(condition="rainy")
+    assert m.update(rain, MIN, True, False, "d1") == [
+        {"type": "weather", "change": "rain_started"}
+    ]
+    # A shower stopping soon after: too soon for another remark, and missed.
+    assert m.update(weather(condition="cloudy"), 5 * MIN, True, False, "d1") == []
+    assert m.update(weather(condition="cloudy"), 30 * MIN, True, False, "d1") == []
+    # Rain again within the cooldown for that remark: nothing.
+    assert m.update(rain, 40 * MIN, True, False, "d1") == []
+    # Rain stopping with the sun out: a rainbow.
+    sun = weather(condition="sunny")
+    assert m.update(sun, 60 * MIN, True, False, "d1") == [
+        {"type": "weather", "change": "rainbow"}
+    ]
+
+
+def test_weather_changes_while_asleep_are_noted_not_remarked_on():
+    m = home.HouseMoments()
+    m.update(weather(condition="cloudy"), 0, True, False, "d1")
+    assert m.update(weather(condition="rainy"), MIN, False, False, "d1") == []
+    # Still raining when it wakes: nothing new to say.
+    assert m.update(weather(condition="rainy"), HOUR, True, False, "d1") == []
+    stop = weather(condition="cloudy")
+    assert m.update(stop, 2 * HOUR, True, False, "d1") == [
+        {"type": "weather", "change": "rain_stopped"}
+    ]
+
+
+def test_the_sun_coming_out_needs_a_long_grey_spell():
+    m = home.HouseMoments()
+    grey, sun = weather(condition="cloudy"), weather(condition="sunny")
+    m.update(grey, 0, True, False, "d1")
+    assert m.update(sun, HOUR, True, False, "d1") == []  # a short spell
+    m.update(grey, 2 * HOUR, True, False, "d1")
+    assert m.update(sun, 4 * HOUR + MIN, True, False, "d1") == [
+        {"type": "weather", "change": "sun_out"}
+    ]
+    # Sunrise into sun isn't "the sun came out".
+    m = home.HouseMoments()
+    m.update(
+        Readings(night=True, sun_up=False, condition="cloudy"), 0, True, False, "d1"
+    )
+    assert m.update(sun, 5 * HOUR, True, False, "d1") == [{"type": "sunrise"}]
+
+
+def test_snow_starting():
+    m = home.HouseMoments()
+    m.update(weather(condition="cloudy"), 0, True, False, "d1")
+    assert m.update(weather(condition="snowy"), MIN, True, False, "d1") == [
+        {"type": "weather", "change": "snow_started"}
+    ]
+
+
+def test_a_hot_or_freezing_day_is_said_once_a_day():
+    m = home.HouseMoments()
+    hot = weather(outdoor_c=33.0)
+    assert m.update(hot, 0, True, False, "d1") == [
+        {"type": "weather", "change": "hot", "temp_c": 33.0}
+    ]
+    assert m.update(hot, 3 * HOUR, True, False, "d1") == []
+    assert m.update(hot, 24 * HOUR, True, False, "d2")[0]["change"] == "hot"
+    cold = weather(outdoor_c=-12.0)
+    assert m.update(cold, 48 * HOUR, False, False, "d3") == []  # asleep: later
+    assert m.update(cold, 50 * HOUR, True, False, "d3")[0]["change"] == "cold"
+
+
+def day(condition=None, high=None, low=None) -> home.DayForecast:
+    return home.DayForecast(condition, high, low)
+
+
+@pytest.mark.parametrize(
+    ("today", "before", "kind"),
+    [
+        (day("lightning-rainy", 20), None, "storm"),
+        (day("snowy", -1, -5), None, "snow"),
+        (day("sunny", 32), None, "hot"),
+        (day("cloudy", -2, -6), None, "cold"),
+        (day("cloudy", 3, -11), None, "cold"),
+        (day("cloudy", 22), day("cloudy", 12), "warmer"),
+        (day("cloudy", 8), day("cloudy", 17), "colder"),
+        (day("rainy", 14), day("rainy", 15), "rain"),
+        (day("sunny", 16), day("rainy", 13), "sunny"),
+        (day("sunny", 16), day("sunny", 15), None),  # an ordinary day
+        (day("cloudy"), None, None),
+        (None, None, None),
+    ],
+)
+def test_forecast_talk_only_for_days_worth_a_word(today, before, kind):
+    talk = home.forecast_moment(today, before, "tomorrow")
+    assert (talk and talk["kind"]) == kind
+    if talk:
+        assert talk["type"] == "forecast" and talk["when"] == "tomorrow"

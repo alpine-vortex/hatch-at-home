@@ -1,8 +1,15 @@
-# Real-time connections, 2026-10-27 (a review, nothing built yet)
+# Real-time connections, 2026-10-27
+
+**Status:** the owner chose Tier 1 (2026-10-27), and it's built: `home.py`
+(`HouseMoments._weather`, `forecast_moment`, `is_windy`), `watcher.py` (wind in
+km/h, `daily_forecast`), the coordinator (forecast fetched hourly in the
+background; today's after good morning, tomorrow's before bed; temperatures in the
+owner's unit), the card's `weather` and `forecast` lines, tests, and three
+`card-check` steps (checked at 420 and 330 px). Tiers 2 and 3 are not chosen yet.
 
 The owner liked the pet commenting on news (`virtual_pet.share_news`, 0.25.0) and
 asked what else could connect the pet to the outside world in real time. This is a
-list of options for the owner to choose from. Nothing here is started.
+list of options for the owner to choose from.
 
 The rules stay the same for everything below: **cosmetic only** (no stat or mood
 change, like news), **never hurts the pet**, nothing that feels like surveillance,
