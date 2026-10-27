@@ -284,6 +284,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
     across the scene.
   - The season's first snow and first frost (from the weather entity's temperature) are
     a moment once each winter, kept as memories in the journal. They notify too.
+  - It passes on news an automation tells it ("did you hear? Tamagotchi turns 30!"),
+    at most every 30 minutes. See [Sharing news with the pet](#sharing-news-with-the-pet).
 - **Sickness:** health below 25, four care misses in a day, old poop, or being too heavy.
   Medicine cures it. **It never dies.**
 - **Upbringing:** on reaching adulthood, how it was raised sets its upbringing for
@@ -390,6 +392,44 @@ your name.
   `medicine`, `scold`, `praise`, `blanket`, `fan`, `lights_out`), for your own
   sentences.
 
+## Sharing news with the pet
+
+`virtual_pet.share_news` hands the pet a headline, and it says it in its speech bubble
+on the card for a few seconds, like a TV title: "did you hear? …", "guess what? …",
+"ooh, news! …", or "<topic> news! …" when you give a topic.
+
+| Field | | |
+| --- | --- | --- |
+| `entity_id` | required | Any entity of the pet; a list for several pets. |
+| `headline` | required | What the pet says. Spaces and line breaks are tidied, and anything past 60 characters is cut at a word with "…". |
+| `topic` | optional | A short label such as the feed's name (up to 20 characters). |
+
+- **Cosmetic only.** No stat changes, no excited mood, nothing saved, no notification.
+- **Not while it's asleep, away or still an egg:** the news is dropped, not saved for
+  later, like the other passing moments. It never wakes the pet.
+- **At most one bit of news every 30 minutes per pet.** Anything sooner is dropped, so a
+  burst of stories shows only the first. Dropped news doesn't start the wait.
+- With "return response" it answers per pet (by config entry ID) with `shared`,
+  `asleep`, `away` (only with privacy off; otherwise `asleep`), `egg` or `too_soon`.
+
+For example, when a news sensor's latest headline changes:
+
+```yaml
+triggers:
+  - trigger: state
+    entity_id: sensor.example_pet_news
+    attribute: title
+conditions:
+  - condition: template
+    value_template: "{{ trigger.to_state.attributes.title not in [None, ''] }}"
+actions:
+  - action: virtual_pet.share_news
+    data:
+      entity_id: button.pip_feed
+      headline: "{{ trigger.to_state.attributes.title }}"
+      topic: "{{ trigger.to_state.attributes.source | default('') }}"
+```
+
 ## Events
 
 Fired on the HA event bus, each with `pet_id` (the config entry ID). No person
@@ -403,7 +443,8 @@ names are included.
 `virtual_pet_game_finished` (with `game`, `won`, `wins`), `virtual_pet_chore_treat`,
 `virtual_pet_sunrise`, `virtual_pet_sunset`, `virtual_pet_good_morning`,
 `virtual_pet_watching` and `virtual_pet_listening` (with `title`, and `artist` for music),
-`virtual_pet_tv_off_late`, `virtual_pet_first_snow`, `virtual_pet_first_frost`,
+`virtual_pet_tv_off_late`, `virtual_pet_news` (with `headline`, and `topic` if given),
+`virtual_pet_first_snow`, `virtual_pet_first_frost`,
 `virtual_pet_trait_learned` and `virtual_pet_trait_deepened` (with `trait`, `level`), `virtual_pet_egg_laid` (with `generation`,
 `parent_species`, `inherited_trait`), `virtual_pet_welcomed` (once, when the pet is added).
 

@@ -315,3 +315,16 @@ class HouseMoments:
             events.append({"type": "tv_off_late"})
         self.tv_on = r.tv
         return events
+
+
+def news_text(text: str | None, limit: int) -> str:
+    """A headline or topic tidied for the speech bubble: whitespace collapsed
+    (feed titles often carry newlines) and anything past `limit` characters cut
+    at a word, with an ellipsis."""
+    text = " ".join(str(text or "").split())
+    if len(text) <= limit:
+        return text
+    cut = text[: limit - 1]
+    if " " in cut[limit // 2 :]:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(" ,;:-–—") + "…"
