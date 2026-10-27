@@ -311,6 +311,24 @@
           "description": "Left or right."
         }
       }
+    },
+    "share_news": {
+      "name": "Share news",
+      "description": "Tells the pet a bit of news, and it says it in its speech bubble on the card ('did you hear? ...'). Cosmetic only: no stat changes. Dropped while the pet is asleep, away or still an egg, and at most one bit of news shows every 30 minutes per pet.",
+      "fields": {
+        "entity_id": {
+          "name": "Pet",
+          "description": "Any entity of the pet. Pick several for several pets."
+        },
+        "headline": {
+          "name": "Headline",
+          "description": "What the pet says. Extra spaces are tidied away and anything past 60 characters is cut at a word."
+        },
+        "topic": {
+          "name": "Topic",
+          "description": "Optional short label, such as the feed's name (up to 20 characters)."
+        }
+      }
     }
   },
   "issues": {

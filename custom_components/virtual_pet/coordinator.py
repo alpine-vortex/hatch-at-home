@@ -80,6 +80,7 @@ MOMENTS = {
     "tv_off_late",
     "first_snow",
     "first_frost",
+    "news",
 }
 MOMENTS_KEPT = 10
 
@@ -139,6 +140,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # The house: nothing is read until HA has fully started.
         self.home = HomeEffect()
         self.house_moments = HouseMoments()
+        # virtual_pet.share_news: no news before this time (in memory only).
+        self.next_news = 0.0
         self.presence = Presence(
             entry.options.get(CONF_AWAY_AFTER, R.HOME_AWAY_AFTER_HOURS)
         )
@@ -594,6 +597,36 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._save()
         self._publish()
         return info
+
+    def share_news(self, headline: str, topic: str | None = None) -> str:
+        """An automation brings news: the pet says it in its bubble, a passing
+        moment like a TV title. Cosmetic only: no stat changes, nothing saved.
+
+        Like the house moments it's dropped, not queued, while the pet is
+        asleep, away or still an egg, and at most one bit of news shows every
+        NEWS_COOLDOWN_MINUTES. Returns "shared", "asleep", "away", "egg" or
+        "too_soon"."""
+        assert self.state is not None
+        now = self._now()
+        if model.life_stage(self.state) == "egg":
+            result = "egg"
+        elif self.state.away:
+            result = "asleep" if self.privacy else "away"
+        elif self.state.asleep:
+            result = "asleep"
+        elif now < self.next_news:
+            result = "too_soon"
+        else:
+            result = "shared"
+        if result != "shared":
+            return result
+        self.next_news = now + R.NEWS_COOLDOWN_MINUTES * 60
+        event: model.Event = {"type": "news", "headline": headline}
+        if topic:
+            event["topic"] = topic
+        self._fire([event])
+        self._publish()
+        return result
 
     async def async_lay_egg(self) -> None:
         """Start the next generation: the adult retires, an egg takes its place."""

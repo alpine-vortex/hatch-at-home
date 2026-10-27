@@ -25,22 +25,26 @@ from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
-from . import notify
+from . import notify, rates as R
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_ENABLED,
     ATTR_GUESS,
+    ATTR_HEADLINE,
     ATTR_HOURS,
+    ATTR_TOPIC,
     CARD_FILENAME,
     DOMAIN,
     FRONTEND_URL,
     SERVICE_FAST_FORWARD,
     SERVICE_NOTIFY_ME,
     SERVICE_PLAY_GAME,
+    SERVICE_SHARE_NEWS,
     STORE_VERSION,
     VERSION,
 )
 from .coordinator import PetConfigEntry, PetCoordinator, PetStore
+from .home import news_text
 from .model import SIDES
 
 PLATFORMS = [
@@ -66,6 +70,19 @@ PLAY_GAME_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
         vol.Required(ATTR_GUESS): vol.In(SIDES),
+    }
+)
+SHARE_NEWS_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
+        vol.Required(ATTR_HEADLINE): vol.All(
+            cv.string,
+            lambda v: news_text(v, R.NEWS_HEADLINE_MAX),
+            vol.Length(min=1, msg="the headline is empty"),
+        ),
+        vol.Optional(ATTR_TOPIC): vol.All(
+            cv.string, lambda v: news_text(v, R.NEWS_TOPIC_MAX)
+        ),
     }
 )
 FAST_FORWARD_SCHEMA = vol.Schema(
@@ -103,7 +120,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     def pet_of(call: ServiceCall) -> PetCoordinator:
         """The loaded pet that owns the call's entity."""
-        entity = er.async_get(hass).async_get(call.data[ATTR_ENTITY_ID])
+        return pet_for(call.data[ATTR_ENTITY_ID])
+
+    def pet_for(entity_id: str) -> PetCoordinator:
+        """The loaded pet that owns this entity."""
+        entity = er.async_get(hass).async_get(entity_id)
         entry = (
             hass.config_entries.async_get_entry(entity.config_entry_id)
             if entity and entity.config_entry_id
@@ -131,6 +152,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def play_game(call: ServiceCall) -> ServiceResponse:
         return await pet_of(call).async_play_game(call.data[ATTR_GUESS], call.context)
 
+    async def share_news(call: ServiceCall) -> ServiceResponse:
+        pets = {p.pet_id: p for p in map(pet_for, call.data[ATTR_ENTITY_ID])}
+        return {
+            pet_id: pet.share_news(call.data[ATTR_HEADLINE], call.data.get(ATTR_TOPIC))
+            for pet_id, pet in pets.items()
+        }
+
     hass.services.async_register(
         DOMAIN, SERVICE_NOTIFY_ME, notify_me, schema=NOTIFY_ME_SCHEMA
     )
@@ -140,6 +168,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         SERVICE_PLAY_GAME,
         play_game,
         schema=PLAY_GAME_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_SHARE_NEWS,
+        share_news,
+        schema=SHARE_NEWS_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
 

@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.24.1";
+const VERSION = "0.25.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -1323,6 +1323,17 @@ class HatchPetCard extends HTMLElement {
           ? `♪ is this ${m.artist}? ♪`
           : `♪ ${m.title} ♪`);
         break;
+      case "news": { // virtual_pet.share_news: a passing moment, like a TV title
+        const h = String(m.headline || "");
+        if (!h) break;
+        const lines = [`did you hear? ${h}`, `did you hear? ${h}`, `guess what? ${h}`,
+          `ooh, news! ${h}`];
+        if (m.topic) lines.push(`${m.topic} news! ${h}`);
+        // Long enough to read a headline, never long.
+        say(pick(lines), Math.min(9000, 4000 + h.length * 60));
+        this._animate(s, s.pet, "perk", 320);
+        break;
+      }
       case "tv_off_late":
         say(pick(["*yawn* bedtime?", "all done? sleepy now..."]));
         break;

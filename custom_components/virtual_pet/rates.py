@@ -214,6 +214,9 @@ HOME_HOLD_MINUTES = 10  # an unavailable sensor keeps its last value this long
 HOME_DEBOUNCE_SECONDS = 10.0
 HOME_GREETING_MINUTES = 10
 HOME_MEDIA_COOLDOWN_MINUTES = 20  # between comments on what's on TV or playing
+NEWS_COOLDOWN_MINUTES = 30  # between bits of news shared with virtual_pet.share_news
+NEWS_HEADLINE_MAX = 60  # characters, so the bubble leaves the pet in view
+NEWS_TOPIC_MAX = 20
 HOME_GREETING_COOLDOWN_MINUTES = 30  # GPS jitter shouldn't cause repeat greetings
 HOME_AWAY_AFTER_HOURS = 2.0  # empty this long: off to the sitter's
 
