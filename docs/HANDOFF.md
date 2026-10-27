@@ -1,7 +1,7 @@
 # Handoff (2026-10-27, end of the fourth session)
 
 Branch: `ccr-a5f628ca-979gik`, which is also the repo's default branch (all work
-pushed; no PR). Version **0.21.0**, released. **The owner runs it on their live HA**
+pushed; no PR). Version **0.22.0**, released. **The owner runs it on their live HA**
 (they were on 0.18.0 at the end of the fourth session).
 Read the README first, then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and

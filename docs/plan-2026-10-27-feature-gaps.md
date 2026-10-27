@@ -1,4 +1,4 @@
-# Feature-gap plan, 2026-10-27 (after 0.21.0)
+# Feature-gap plan, 2026-10-27 (written after 0.21.0; releases renumbered after 0.22.0)
 
 **Status:** planned, nothing started. The owner chose these items from an outside
 feature-gap audit, which compared Hatch at Home with Tamagotchi and Giga Pets.
@@ -21,7 +21,7 @@ D's species and trait.
 | Owned items, decorations, shop | Deferred. Needs art and an economy, and could turn gentle care into a grind. |
 | Learning household rhythms | Deferred. Lots of complexity for flavour only, and close to the surveillance feel the audit itself warns about. |
 | Death or old age | No. "It never dies" is a design rule. |
-| Deer, rain scenes, shared props | Already requested from Sol (HANDOFF open item 3). |
+| Deer, rain scenes, shared props | Shipped in 0.22.0. |
 | Assist on a real agent, notification buttons on a real phone | Already open (HANDOFF items 1 and 5). They need the owner. |
 | BirdNET visits | Deferred by the owner. |
 
@@ -341,16 +341,16 @@ helps.
 ## Order and releases
 
 0. **Before A ships:** settle the default branch, since A needs a stable URL.
-   (HANDOFF's stale version line was fixed along with this plan.)
+   (HANDOFF's version line was brought up to date along with this plan.)
 1. **A** (blueprint): merged on its own, no release.
-2. **B** (next egg): 0.22.0.
+2. **B** (next egg): 0.23.0.
 3. **D's decision and art request**: pick the species and trait from the owner's
    pets, then send the brief to Sol. The code comes when the art arrives.
-4. **C1** (Higher or Lower, with every shared game change): 0.23.0, after the
+4. **C1** (Higher or Lower, with every shared game change): 0.24.0, after the
    2026-11-03 tuning review.
 5. **C2 prototype** (Catch, card only, hidden option): it can ride along in
-   0.23.0 or come in a patch release. The owner plays it for a few days.
-6. **C2 full** (server side, decoy prop, in the picker): 0.24.0, only if the
+   0.24.0 or come in a patch release. The owner plays it for a few days.
+6. **C2 full** (server side, decoy prop, in the picker): 0.25.0, only if the
    owner keeps it.
 7. **D's code**, once the art is in.
 
