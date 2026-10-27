@@ -92,9 +92,10 @@ details before committing it.
    changing them.
 5. **Unconfirmed on a real phone:** the notification buttons. Ask the owner.
 6. **Feature-gap plan** (`docs/plan-2026-10-27-feature-gaps.md`): the owner chose
-   a call-response blueprint, choosing the next egg, a second minigame and a
-   one-species care-shaped adult pilot. Each has open decisions to settle with the
-   owner before starting. Not chosen (don't start unasked): learning household
+   a call-response blueprint, choosing the next egg, two more minigames (Higher or
+   Lower, then copy me) and a one-species alternate adult chosen by a trait. The
+   plan has been reviewed and the owner has approved it; D still needs a species
+   and a trait picked from the owner's pets. Not chosen (don't start unasked): learning household
    routines, a daily diary in the journal (declined), pets on the shelf noticing
    each other, chore streaks, trained tricks, items, calendar celebrations.
 7. **BirdNET bird visits:** the owner deferred this ("will be reset at a later time");
