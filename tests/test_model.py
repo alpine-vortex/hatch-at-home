@@ -981,3 +981,18 @@ def test_out_of_energy_it_drops_off_for_a_nap():
     assert asleep == [{"type": "fell_asleep", "napping": True, "how": "collapsed"}]
     assert pet.asleep and pet.napping
     assert pet.happiness == pytest.approx(90 - 0.2 * R.HAPPINESS_DECAY, abs=0.6)
+
+
+def test_the_first_snow_of_the_season_is_a_memory_once_per_winter():
+    pet = hatched(at(9))
+    assert model.season_first(pet, "snow", at(9, day=3), UTC) == [
+        {"type": "first_snow"}
+    ]
+    assert model.season_first(pet, "snow", at(9, day=4), UTC) == []
+    assert [m["kind"] for m in pet.memories] == ["first_snow"]
+    next_winter = datetime(2027, 11, 2, 9, tzinfo=UTC).timestamp()
+    assert model.season_first(pet, "snow", next_winter, UTC) == [{"type": "first_snow"}]
+    # The memories stay with the device's family line.
+    pet.age_hours = 14 * 24 + 7 * 24 + 1.0
+    egg, _ = model.lay_egg(pet, next_winter, random.Random(1))
+    assert len(egg.memories) == 2 and egg.firsts == pet.firsts

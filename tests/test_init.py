@@ -1060,3 +1060,21 @@ async def test_reconfigure_moves_a_hatched_pet_with_its_next_egg(
     assert stage.attributes["world"] == "pond"
     assert stage.attributes["next_world"] is None
     assert stage.attributes["generation"] == 2
+
+
+async def test_the_pet_comments_on_whats_on_tv(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup_with_house(hass, tv=["media_player.tv"])
+    hass.states.async_set(
+        "media_player.tv",
+        "playing",
+        {"media_content_type": "tvshow", "media_series_title": "Bluey"},
+    )
+    await settle(hass, freezer)
+    moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
+    assert moments[0]["type"] == "watching" and moments[0]["title"] == "Bluey"

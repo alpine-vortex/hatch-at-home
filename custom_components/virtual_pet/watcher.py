@@ -67,6 +67,14 @@ SINGLE = (
 LIT = {"on", "heat", "heating", "burning", "playing"}
 
 
+def _title(state: State, *keys: str, fallback: bool = True) -> str | None:
+    """A media player's show or song title (a series beats an episode)."""
+    for key in (*keys, "media_title") if fallback else keys:
+        if isinstance(value := state.attributes.get(key), str) and value.strip():
+            return value.strip()[:60]
+    return None
+
+
 def _float(state: State | None) -> float | None:
     try:
         return float(state.state) if state else None
@@ -132,6 +140,13 @@ class Watcher:
         """A snapshot of the house."""
         sun = self._get("sun.sun", now)
         weather = self._one(CONF_WEATHER, now)
+        playing_tv = [s for s in self._all(CONF_TV, now) if s.state == "playing"]
+        playing_music = [
+            s
+            for s in self._all(CONF_MUSIC, now)
+            if s.state == "playing"
+            and s.attributes.get("media_content_type") not in VIDEO
+        ]
         return Readings(
             night=night,
             late=late,
@@ -165,7 +180,37 @@ class Watcher:
                 if (alt := _float(self._one(CONF_MOON_ALTITUDE, now))) is None
                 else alt > 0
             ),
+            outdoor_c=self._outdoor_c(weather),
+            tv_title=next(
+                (t for s in playing_tv if (t := _title(s, "media_series_title"))),
+                None,
+            ),
+            music_title=next(
+                (t for s in playing_music if (t := _title(s, "media_title"))), None
+            ),
+            music_artist=next(
+                (
+                    t
+                    for s in playing_music
+                    if (t := _title(s, "media_artist", fallback=False))
+                ),
+                None,
+            ),
         )
+
+    @staticmethod
+    def _outdoor_c(weather: State | None) -> float | None:
+        """The weather entity's current temperature, in °C."""
+        if weather is None:
+            return None
+        try:
+            value = float(weather.attributes["temperature"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        unit = weather.attributes.get("temperature_unit", UnitOfTemperature.CELSIUS)
+        if unit not in (UnitOfTemperature.CELSIUS, UnitOfTemperature.FAHRENHEIT):
+            return None
+        return TemperatureConverter.convert(value, unit, UnitOfTemperature.CELSIUS)
 
     @staticmethod
     def _fraction(state: State | None) -> float | None:

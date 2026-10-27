@@ -12,12 +12,14 @@ Rule: the house never hurts the pet. Nothing here lowers a stat.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from . import rates as R
 
 # Home flags, and what the pet says about them, highest priority first.
 REASONS: dict[str, str] = {
     "greeting": "you're back!!",
+    "storm": "eek, thunder!",
     "too_bright": "too bright, it's late!",
     "chilly": "brr... blanket please?",
     "warm": "so warm... a fan?",
@@ -31,6 +33,7 @@ REASONS: dict[str, str] = {
     "cool": "ahh, that breeze",
     "sunny": "sunny day!",
     "foggy": "all misty out there",
+    "windy": "so windy out there!",
     "full_moon": "the moon is so big tonight!",
     "new_moon": "so many stars without the moon...",
     "dim": "nice and dim in here...",
@@ -66,6 +69,10 @@ class Readings:
     moon_phase: str | None = None  # normalized: "full_moon", "new_moon", ...
     moon_illumination: float | None = None  # lit fraction, 0-1
     moon_up: bool | None = None
+    outdoor_c: float | None = None  # from the weather entity
+    tv_title: str | None = None  # what's on, if the TV says
+    music_title: str | None = None
+    music_artist: str | None = None
 
 
 @dataclass
@@ -87,6 +94,8 @@ RAINY = {"rainy", "pouring", "lightning-rainy", "hail"}
 SNOWY = {"snowy", "snowy-rainy"}
 SUNNY = {"sunny"}
 FOGGY = {"fog"}
+STORMY = {"lightning", "lightning-rainy"}
+WINDY = {"windy", "windy-variant"}
 
 
 def moon_phase(phase: str | None, illumination: float | None) -> str | None:
@@ -122,9 +131,14 @@ def evaluate(
     # Weather. A local rain gauge beats a forecast; a solar sensor beats both
     # for "sunny".
     raining = r.rain_rate > 0 if r.rain_rate is not None else r.condition in RAINY
+    if r.condition in STORMY:
+        # Thunder: it hides and wants its blanket, rain or not.
+        e.flags.append("storm")
+        e.requests.append("blanket")
     if raining:
         e.flags.append("rainy")
-        e.requests.append("blanket")
+        if "blanket" not in e.requests:
+            e.requests.append("blanket")
     elif r.condition in SNOWY:
         e.flags.append("snowy")
         add("happiness", R.HOME_SNOW_HAPPINESS)
@@ -139,6 +153,8 @@ def evaluate(
             add("happiness", R.HOME_SUN_HAPPINESS)
         elif r.condition in FOGGY:
             e.flags.append("foggy")
+        elif r.condition in WINDY:
+            e.flags.append("windy")
 
     # A lit fireplace: cozy, and nobody shivers next to it.
     if r.fireplace:
@@ -243,3 +259,59 @@ class Presence:
     def greeting(self, now: float) -> bool:
         """Whether the pet is still excited about someone arriving."""
         return now < self.greeting_until
+
+
+class HouseMoments:
+    """Passing moments in the house the pet comments on: sunrise and sunset, the
+    first stir of the morning, what's on TV or playing, the TV going off late.
+
+    Cosmetic only. Keeps what it needs in memory; a restart only means the
+    pet may comment on the same show again.
+    """
+
+    def __init__(self) -> None:
+        self.sun_up: bool | None = None
+        self.greeted_on: str | None = None
+        self.tv_title: str | None = None
+        self.music_title: str | None = None
+        self.tv_on = False
+        self.next_media = 0.0
+
+    def update(
+        self, r: Readings, now: float, awake: bool, morning: bool, today: str
+    ) -> list[dict[str, Any]]:
+        """Events for what just happened. awake: awake, home and hatched.
+        morning: between wake time and noon, local."""
+        events: list[dict[str, Any]] = []
+        if r.sun_up is not None and self.sun_up is not None and r.sun_up != self.sun_up:
+            if awake:
+                events.append({"type": "sunrise" if r.sun_up else "sunset"})
+        if r.sun_up is not None:
+            self.sun_up = r.sun_up
+
+        if awake and morning and r.motion_recent and self.greeted_on != today:
+            self.greeted_on = today
+            events.append({"type": "good_morning"})
+
+        if r.tv_title and r.tv_title != self.tv_title and now >= self.next_media:
+            if awake:
+                events.append({"type": "watching", "title": r.tv_title})
+                self.next_media = now + R.HOME_MEDIA_COOLDOWN_MINUTES * 60
+        self.tv_title = r.tv_title or self.tv_title if r.tv else None
+        if (
+            r.music_title
+            and r.music_title != self.music_title
+            and now >= self.next_media
+        ):
+            if awake:
+                event = {"type": "listening", "title": r.music_title}
+                if r.music_artist:
+                    event["artist"] = r.music_artist
+                events.append(event)
+                self.next_media = now + R.HOME_MEDIA_COOLDOWN_MINUTES * 60
+        self.music_title = r.music_title
+
+        if self.tv_on and not r.tv and r.night and awake:
+            events.append({"type": "tv_off_late"})
+        self.tv_on = r.tv
+        return events

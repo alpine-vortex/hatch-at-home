@@ -192,6 +192,52 @@ async function main() {
     check("one tap wakes a sleeping pet", (await button(7).innerText()).includes("sleep"));
   }
   const pet = await ids();
+  const petName = (await page.locator("hatch-pet-card .title").innerText()).trim();
+
+  // Greeted by first name: forget past greetings, reload, come back to this pet.
+  await evaluate(() => Object.keys(localStorage)
+    .filter((k) => k.startsWith("hatch-greet-")).forEach((k) => localStorage.removeItem(k)));
+  await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [], requests: [] } });
+  await page.reload();
+  await signedIn();
+  await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+  for (let i = 0; i < slides; i++) {
+    if ((await page.locator("hatch-pet-card .title").innerText()).trim() === petName) break;
+    await page.locator("hatch-pet-card .nav.next").click();
+    await page.waitForTimeout(700);
+  }
+  await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [], requests: [] } });
+  let greeting = "";
+  for (let i = 0; i < 30 && !greeting.includes(USER.name); i++) {
+    await page.waitForTimeout(500);
+    greeting = await bubble();
+  }
+  check("greets the viewer by first name", greeting.includes(USER.name), greeting);
+  await shot("04a-greeting");
+
+  // Idle life: something small happens on its own within a minute.
+  const idleSign = () => cur().evaluate((slide) => {
+    const pet = slide.querySelector(".pet");
+    return ["look", "wander-l", "wander-r", "perk"].find((c) => pet.classList.contains(c)) ||
+      (slide.querySelector(".speck") && "speck") ||
+      (/_(?!content|excited|cozy|bored|sleepy|hungry|dirty|sick|asleep|calling)[a-z_]+_\d\.png/
+        .test(pet.getAttribute("src") || "") && "pose") || "";
+  });
+  const quietBubble = await bubble();
+  let idle = "";
+  for (let i = 0; i < 140 && !idle; i++) {
+    await page.waitForTimeout(400);
+    idle = await idleSign();
+    const said = await bubble();
+    const reason = await evaluate((id) =>
+      document.querySelector("home-assistant").hass.states[id].attributes.reason, pet["sensor.mood"]);
+    // A new line that isn't the greeting or the pet's usual mood line.
+    if (!idle && said && said !== quietBubble && said !== reason && !said.includes(USER.name)) {
+      idle = `says "${said}"`;
+    }
+  }
+  check("idle life happens by itself", !!idle, idle);
+  await shot("04b-idle");
   await button(2).click();
   await page.waitForTimeout(600);
   let rounds = 0;
@@ -211,16 +257,39 @@ async function main() {
     ["care_miss", { reason: "hunger" }, "nobody came"],
     ["stage_changed", { stage: "teen", from: "child" }, "teen now"],
     ["trait_learned", { trait: "music_lover", level: 1 }, "new trait"],
+    ["sunset", {}, "sun|sky"],
+    ["watching", { title: "Bluey" }, "Bluey"],
+    ["first_snow", {}, "first snow"],
   ]) {
     await inject(pet["sensor.last_care"], {
       attributes: { moments: [{ type, ...extra, at: new Date().toISOString() }] },
     });
     await page.waitForTimeout(500);
     const said = await bubble();
-    check(`reacts to ${type}`, said.includes(expect), said);
+    check(`reacts to ${type}`, new RegExp(expect).test(said), said);
     await shot(`05-${type}`);
     await page.waitForTimeout(500);
   }
+
+  // Weather on screen: thunder flashes, wind blows.
+  await inject(pet["sensor.mood"], { state: "content", attributes: { flags: ["storm", "windy"] } });
+  await page.waitForTimeout(800);
+  const screen = (await cur().locator(".screen").getAttribute("class")) || "";
+  check("thunder and wind show on screen", /stormy/.test(screen) && /windy/.test(screen), screen);
+  await shot("05-storm");
+
+  // The journal keeps the season's firsts.
+  await inject(pet["sensor.life_stage"], {
+    attributes: { memories: [{ kind: "first_snow", at: Date.now() / 1000 }] },
+  });
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(500);
+  await cur().locator(".jlink").click();
+  await page.waitForTimeout(1200);
+  check("the journal shows memories", /first snow/.test(await cur().locator(".status").innerText()));
+  await shot("05-memories");
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(400);
 
   // 5. The egg wiggles, then cracks, before it hatches.
   for (const [minutes, frames] of [[12, "egg_wiggle"], [4, "egg_crack"]]) {

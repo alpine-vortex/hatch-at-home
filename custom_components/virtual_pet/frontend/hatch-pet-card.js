@@ -60,9 +60,20 @@ const WARNED = new Set();
 
 // Home flags that swap the pet into a special pose (species.json "extras").
 const POSES = {
-  too_bright: "squint", chilly: "shiver", warm: "sweat", masked: "mask",
+  too_bright: "squint", chilly: "shiver", storm: "shiver", warm: "sweat", masked: "mask",
   dancing: "dance", watching_tv: "watch_tv",
 };
+// Shared house poses; a species' other extras are its own (used for idle life).
+const SHARED_POSES = new Set(Object.values(POSES));
+// What the journal calls a memory.
+const MEMORY_LABELS = { first_snow: "first snow", first_frost: "first frost" };
+// Idle life: something small every so often when nothing else is going on.
+const IDLE_MIN_MS = 20000;
+const IDLE_SPREAD_MS = 25000;
+const IDLE_MOODS = new Set(["content", "cozy", "bored", "excited", "sleepy"]);
+// A viewer is greeted by name at most this often, per pet.
+const GREET_EVERY_MS = 3 * 3600 * 1000;
+const pick = (list) => list[Math.floor(Math.random() * list.length)];
 const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
 
 // The same bands as rates.py (WEIGHT_LIGHT_BELOW, WEIGHT_HEAVY_ABOVE).
@@ -275,7 +286,8 @@ const STYLE = `
   .game .gscore { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
-  .screen.show-status .game { display: none; }
+  .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
+  .screen.show-status .flash, .screen.show-status .speck { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
   .pet.sulk { animation: shake .35s 2; }
@@ -288,7 +300,7 @@ const STYLE = `
   .pet.shiver { animation: shake .25s linear infinite; }
   /* The fan: wind lines cross the scene and the pet sways. */
   .breeze { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1; }
-  .screen.breezy .breeze { display: block; }
+  .screen.breezy .breeze, .screen.windy .breeze { display: block; }
   .breeze span { position: absolute; left: -40%; height: 3px; width: 34%; border-radius: 2px;
     background: rgba(255,255,255,.8); animation: wind 1.1s linear infinite; }
   .breeze span:nth-child(1) { top: 30%; }
@@ -297,6 +309,22 @@ const STYLE = `
   @keyframes wind { to { left: 110%; } }
   .screen.breezy .pet { animation: sway .7s ease-in-out infinite; }
   @keyframes sway { 50% { transform: rotate(-4deg); } }
+  /* Thunder: now and then the scene flashes. */
+  .flash { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 2;
+    background: #fff; opacity: 0; }
+  .screen.stormy .flash { display: block; animation: lightning 9s linear infinite; }
+  @keyframes lightning { 0%, 89%, 92%, 95%, 100% { opacity: 0; } 90% { opacity: .75; } 94% { opacity: .5; } }
+  /* Idle life. */
+  .pet { transition: translate .25s ease-out, rotate .2s ease-out; }
+  .pet.look { rotate: y 180deg; }
+  .pet.wander-l { translate: -16% 0; transition-duration: .9s; }
+  .pet.wander-r { translate: 16% 0; transition-duration: .9s; }
+  .speck { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff6c9;
+    box-shadow: 0 0 6px 2px rgba(255,240,170,.8); top: 45%; z-index: 2; pointer-events: none;
+    animation: speck 2.6s ease-in-out forwards; }
+  .speck.rtl { animation-name: speck-rtl; }
+  @keyframes speck { from { left: 8%; top: 30%; } 50% { top: 55%; } to { left: 88%; top: 38%; opacity: .2; } }
+  @keyframes speck-rtl { from { left: 88%; top: 35%; } 50% { top: 58%; } to { left: 8%; top: 30%; opacity: .2; } }
   /* Rain for species with no rain scene of their own. */
   .rain { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1;
     background: repeating-linear-gradient(105deg, transparent 0 13px, rgba(215,230,255,.5) 13px 15px);
@@ -551,6 +579,7 @@ class HatchPetCard extends HTMLElement {
             <img class="prop" alt="">
             <img class="murk" alt="">
             <div class="rain"></div>
+            <div class="flash"></div>
             <div class="breeze"><span></span><span></span><span></span></div>
             <img class="attention" alt="">
             <div class="bubble"></div>
@@ -870,7 +899,11 @@ class HatchPetCard extends HTMLElement {
     // Baby, teen and adult have no house poses: a hop dances, a shake shivers.
     const standIn = drawn !== "child" && !away && !asleep && POSE_MOODS.has(mood?.state);
     s.pet.classList.toggle("dance", standIn && flags.includes("dancing"));
-    s.pet.classList.toggle("shiver", standIn && flags.includes("chilly"));
+    s.pet.classList.toggle("shiver", standIn && (flags.includes("chilly") || flags.includes("storm")));
+    s.screen.classList.toggle("stormy", flags.includes("storm") && !away);
+    s.screen.classList.toggle("windy", flags.includes("windy") && !away);
+    s.moodState = mood?.state;
+    s.calling = calling;
     const rainScene = scene === "rain" && !!sp.backgrounds?.rain;
     s.screen.classList.toggle("raining", flags.includes("rainy") && !rainScene && !away);
     s.screen.classList.toggle("watery", world.mess === "murk");
@@ -1007,11 +1040,94 @@ class HatchPetCard extends HTMLElement {
         s.propUntil = 0;
       }
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
+      if (s === this._slides[this._index]) {
+        this._greet(s);
+        this._idle(s);
+      }
       if (!s.sayUntil && s.species) {
         const mood = this._state(s, "sensor.mood");
         s.bubble.textContent = this._say(s, mood, mood?.state === "away");
       }
     }
+  }
+
+  // Nothing else is going on: is the pet free for a small idle behaviour?
+  _free(s) {
+    const now = Date.now();
+    return s.species && !s.asleep && !s.calling && !s.game && IDLE_MOODS.has(s.moodState) &&
+      !s.screen.classList.contains("show-status") &&
+      !(s.sayUntil > now) && !(s.poseUntil > now) && !(s.propUntil > now);
+  }
+
+  _look(s, ms) {
+    s.pet.classList.add("look");
+    setTimeout(() => s.pet.classList.remove("look"), ms);
+  }
+
+  // Idle life: every so often, something small. Calm when motion is reduced.
+  _idle(s) {
+    const now = Date.now();
+    if (!s.nextIdle) s.nextIdle = now + IDLE_MIN_MS / 2 + Math.random() * IDLE_SPREAD_MS;
+    if (now < s.nextIdle) return;
+    s.nextIdle = now + IDLE_MIN_MS + Math.random() * IDLE_SPREAD_MS;
+    if (!this._free(s)) return;
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const own = s.drawn === "child"
+      ? Object.keys(s.species.extras || {}).filter((k) => !SHARED_POSES.has(k)) : [];
+    const moves = ["mumble"];
+    if (own.length) moves.push("pose", "pose");
+    if (!calm) moves.push("look", "look", "wander", "perk", "speck");
+    const move = pick(moves);
+    if (move === "pose") {
+      const frames = s.species.extras[pick(own)];
+      s.poseFrames = Array.isArray(frames) ? frames : [frames];
+      s.poseUntil = now + 2500;
+      this._show(s, s.pet, s.poseFrames[0]);
+    } else if (move === "look") {
+      this._look(s, 1800);
+    } else if (move === "wander") {
+      const side = pick(["wander-l", "wander-r"]);
+      s.pet.classList.add(side);
+      setTimeout(() => s.pet.classList.remove(side), 2200);
+    } else if (move === "perk") {
+      this._animate(s, s.pet, "perk", 320);
+    } else if (move === "speck") {
+      const speck = document.createElement("span");
+      const rtl = Math.random() < 0.5;
+      speck.className = `speck${rtl ? " rtl" : ""}`;
+      s.screen.append(speck);
+      setTimeout(() => this._look(s, 1300), rtl ? 1200 : 0); // follows it across
+      setTimeout(() => speck.remove(), 2700);
+    } else {
+      const lines = {
+        sleepy: ["*yawn*", "mm... sleepy"],
+        bored: ["hmm...", "*sigh*", "anyone wanna play?"],
+        excited: ["hehe!", "wheee"],
+      }[s.moodState] || ["♪ hm hm hm ♪", "...", "*looks around*", "la la la"];
+      s.bubble.textContent = pick(lines);
+      s.sayUntil = now + 2500;
+    }
+  }
+
+  // Hello to whoever is looking, by first name, now and then (this browser only).
+  _greet(s) {
+    if (s.greeted || !this._free(s)) return;
+    s.greeted = true;
+    const user = this._hass.user;
+    const first = user?.name?.trim().split(/\s+/)[0];
+    if (!first) return;
+    const key = `hatch-greet-${user.id}-${s.ids?.device}`;
+    try {
+      if (Date.now() - Number(localStorage.getItem(key) || 0) < GREET_EVERY_MS) return;
+      localStorage.setItem(key, String(Date.now()));
+    } catch (err) {
+      // no storage (private window): greet anyway, once per page load
+    }
+    const hour = new Date().getHours();
+    const hello = hour < 12 ? `morning, ${first}!` : hour < 18 ? `hi ${first}!` : `evening, ${first}!`;
+    s.bubble.textContent = pick([hello, `${first}!! hi!`, hello]);
+    s.sayUntil = Date.now() + 4000;
+    this._animate(s, s.pet, "perk", 320);
   }
 
   // The frames to draw now: a reaction pose while one runs, else the mood's.
@@ -1079,7 +1195,7 @@ class HatchPetCard extends HTMLElement {
         break;
       case "woke_up":
         if (m.how === "morning") {
-          say("good morning!");
+          say("*yaaawn*");
           this._animate(s, s.pet, "stretch", 1100);
         } else if (m.how === "night") {
           say("...so sleepy");
@@ -1089,7 +1205,42 @@ class HatchPetCard extends HTMLElement {
         if (m.how === "collapsed") {
           say("so... tired... zzz", 5000);
           this._animate(s, s.pet, "sulk", 800);
+        } else if (m.how === "house" || m.how === "lights") {
+          say(pick(["good night...", "night night...", "sleep tight..."]), 4000);
         }
+        break;
+      case "good_morning":
+        say(pick(["good morning!", "morning!! you're up!", "hi! sleep well?"]));
+        this._animate(s, s.pet, "stretch", 1100);
+        break;
+      case "sunset":
+        say(pick(["ooh, the sunset...", "pretty sky tonight", "the sun's going down"]));
+        this._look(s, 3000);
+        break;
+      case "sunrise":
+        say(pick(["the sun's up!", "good morning, sun!"]));
+        this._look(s, 2500);
+        break;
+      case "watching":
+        say(pick([`ooh, ${m.title}!`, `is this ${m.title}?`, `${m.title}! I love this one`]));
+        this._animate(s, s.pet, "perk", 320);
+        break;
+      case "listening":
+        say(m.artist && Math.random() < 0.5
+          ? `♪ is this ${m.artist}? ♪`
+          : `♪ ${m.title} ♪`);
+        break;
+      case "tv_off_late":
+        say(pick(["*yawn* bedtime?", "all done? sleepy now..."]));
+        break;
+      case "first_snow":
+        say("the first snow!! ❄");
+        this._sparkle(s);
+        this._animate(s, s.pet, "stretch", 1100);
+        break;
+      case "first_frost":
+        say("brr, frost outside!");
+        this._animate(s, s.pet, "sulk", 800);
         break;
       case "pooped": {
         const img = s.poops[(m.count || 1) - 1];
@@ -1251,10 +1402,21 @@ class HatchPetCard extends HTMLElement {
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
       <div class="jgrid">${tiles.join("")}</div>
-      <div class="jlist">${lines.join("")}${past.length < 2 ? "<div class=\"gt\">A week into adulthood, a pet can lay an egg.</div>" : ""}</div>
+      <div class="jlist">${lines.join("")}${past.length < 2 ? "<div class=\"gt\">A week into adulthood, a pet can lay an egg.</div>" : ""}${this._memories(stage.memories)}</div>
       <button class="jlink">‹ status</button>`;
     s.status.scrollTop = 0;
     this._journalLink(s, false);
+  }
+
+  // Seasonal firsts and other moments the family remembers, newest first.
+  _memories(memories) {
+    if (!memories?.length) return "";
+    const items = [...memories].reverse().slice(0, 6).map((m) => {
+      const when = new Date(m.at * 1000).toLocaleDateString(undefined,
+        { month: "short", day: "numeric", year: "numeric" });
+      return `${escape(MEMORY_LABELS[m.kind] || m.kind.replace("_", " "))}, ${escape(when)}`;
+    });
+    return `<div class="gen"><span class="gt">memories: ${items.join(" · ")}</span></div>`;
   }
 
   _worldName(s) {

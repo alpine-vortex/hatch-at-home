@@ -117,6 +117,8 @@ class PetState:
     game: Game | None = None
     treats_waiting: int = 0  # chore treats it gets when it's next awake and home
     chore_treats: list[float] = field(default_factory=list)  # when each was earned
+    firsts: dict[str, str] = field(default_factory=dict)  # kind -> season it was seen
+    memories: list[dict[str, Any]] = field(default_factory=list)  # for the journal
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store."""
@@ -845,6 +847,8 @@ def lay_egg(
     egg.raised = list(state.raised)
     egg.journal = [*state.journal, record]
     egg.notify_users = list(state.notify_users)
+    egg.firsts = dict(state.firsts)  # the household's season, not the pet's
+    egg.memories = list(state.memories)
     inherited = rng.choice(state.traits) if state.traits else None
     if inherited:
         level = trait_level(state, inherited)
@@ -1089,6 +1093,24 @@ def _refuse_play(state: PetState) -> str | None:
     return None
 
 
+# --- Seasonal firsts -----------------------------------------------------------
+
+MEMORIES_KEPT = 30
+
+
+def season_first(state: PetState, kind: str, now: float, tz: tzinfo) -> list[Event]:
+    """The first snow (or frost) of the season: a moment once per winter, kept as
+    a memory in the journal. A winter runs from July to June."""
+    local = datetime.fromtimestamp(now, tz)
+    season = str(local.year if local.month >= 7 else local.year - 1)
+    if state.firsts.get(kind) == season:
+        return []
+    state.firsts[kind] = season
+    state.memories.append({"kind": f"first_{kind}", "at": now})
+    del state.memories[:-MEMORIES_KEPT]
+    return [{"type": f"first_{kind}"}]
+
+
 # --- Chores -------------------------------------------------------------------
 
 
@@ -1219,7 +1241,7 @@ def mood(state: PetState, now: float, settings: Settings) -> tuple[str, list[str
     if now < state.cool_until:
         home.append("cool")
     if state.cozy_until > now:
-        home = [f for f in home if f not in ("rainy", "chilly")]  # tucked in now
+        home = [f for f in home if f not in ("rainy", "chilly", "storm")]  # tucked in
     if state.cool_until > now:
         home = [f for f in home if f != "warm"]
     if not state.asleep:

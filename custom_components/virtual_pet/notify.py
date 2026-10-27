@@ -104,6 +104,10 @@ def message(event: dict[str, Any], name: str, species: dict[str, str]) -> str | 
     if kind == "trait_deepened":
         stars = "★" * event["level"]
         return f"{name}'s {_trait(event['trait'])[1]} runs deep now: {stars}"
+    if kind == "first_snow":
+        return f"{name} saw the first snow of the season!"
+    if kind == "first_frost":
+        return f"{name} noticed the first frost of the season."
     if kind == "egg_laid":
         return f"{name} laid an egg: generation {event['generation']} is on its way."
     return None

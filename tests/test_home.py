@@ -223,3 +223,43 @@ def test_new_moon_is_a_starry_night_without_a_bonus():
     e = evaluate(Readings(night=True, sun_up=False, moon_illumination=0.0))
     assert "new_moon" in e.flags
     assert e.bonus == {}
+
+
+def test_thunder_hides_it_under_a_blanket_and_wind_is_noticed():
+    storm = evaluate(Readings(night=False, condition="lightning"))
+    assert "storm" in storm.flags and storm.requests == ["blanket"]
+    both = evaluate(Readings(night=False, condition="lightning-rainy"))
+    assert {"storm", "rainy"} <= set(both.flags) and both.requests == ["blanket"]
+    assert "windy" in evaluate(Readings(night=False, condition="windy")).flags
+
+
+def test_passing_moments_sunset_morning_and_tv():
+    from custom_components.virtual_pet.home import HouseMoments
+
+    m = HouseMoments()
+    day = Readings(night=False, sun_up=True)
+    assert m.update(day, 0, True, False, "d1") == []  # first look: nothing to compare
+    dusk = Readings(night=False, sun_up=False)
+    assert m.update(dusk, 60, True, False, "d1") == [{"type": "sunset"}]
+    # Asleep through sunrise: no comment, but it's remembered.
+    assert m.update(day, 120, False, False, "d2") == []
+
+    stir = Readings(night=False, sun_up=True, motion_recent=True)
+    assert m.update(stir, 200, True, True, "d2") == [{"type": "good_morning"}]
+    assert m.update(stir, 300, True, True, "d2") == []  # once a day
+
+    show = Readings(night=False, sun_up=True, tv=True, tv_title="Bluey")
+    assert m.update(show, 400, True, False, "d2") == [
+        {"type": "watching", "title": "Bluey"}
+    ]
+    other = Readings(night=False, sun_up=True, tv=True, tv_title="News")
+    assert m.update(other, 500, True, False, "d2") == []  # too soon after the last
+    song = Readings(
+        night=True, sun_up=False, music_title="Clair de lune", music_artist="Debussy"
+    )
+    later = 400 + 21 * 60
+    assert m.update(song, later, True, False, "d2") == [
+        {"type": "sunset"},
+        {"type": "listening", "title": "Clair de lune", "artist": "Debussy"},
+        {"type": "tv_off_late"},
+    ]

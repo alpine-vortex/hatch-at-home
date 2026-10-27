@@ -147,6 +147,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "trait_levels",
             "trait_progress",
             "journal",
+            "memories",
             "notify_users",
             "upbringing_score",
         }
@@ -181,6 +182,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "roster": list(self.coordinator.roster),
             "hatches_at": self._hatches_at(),
             "next_world": self.coordinator.next_world_name,
+            "memories": [dict(m) for m in self.pet.memories],
             # Final once adult; before that, what it's on track for.
             "upbringing": (
                 model.upbringing(self.pet)

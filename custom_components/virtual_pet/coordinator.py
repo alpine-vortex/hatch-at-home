@@ -48,7 +48,7 @@ from .const import (
     STORE_MINOR_VERSION,
     STORE_VERSION,
 )
-from .home import HomeEffect, Presence, evaluate
+from .home import SNOWY, HomeEffect, HouseMoments, Presence, Readings, evaluate
 from .species import load_catalog
 from .watcher import Watcher
 
@@ -70,6 +70,14 @@ MOMENTS = {
     "woke_up",
     "fell_asleep",
     "pooped",
+    "sunrise",
+    "sunset",
+    "good_morning",
+    "watching",
+    "listening",
+    "tv_off_late",
+    "first_snow",
+    "first_frost",
 }
 MOMENTS_KEPT = 10
 
@@ -124,6 +132,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._call_notified = False
         # The house: nothing is read until HA has fully started.
         self.home = HomeEffect()
+        self.house_moments = HouseMoments()
         self.presence = Presence(
             entry.options.get(CONF_AWAY_AFTER, R.HOME_AWAY_AFTER_HOURS)
         )
@@ -377,6 +386,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             if not away:
                 self.home.flags.insert(0, "greeting")
                 self._fire(model.come_home(self.state, now, settings))
+        self._fire(self._passing_moments(readings, now))
         self.debug["home"] = {
             "readings": {k: v for k, v in vars(readings).items() if v is not None},
             "flags": effect.flags,
@@ -384,6 +394,28 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "bonus": effect.bonus,
             "dark_and_quiet": effect.dark_and_quiet,
         }
+
+    def _passing_moments(self, readings: Readings, now: float) -> list[model.Event]:
+        """Sunsets, the morning stir, the TV, the season's first snow or frost."""
+        assert self.state is not None
+        state = self.state
+        settings = self.settings
+        awake = not state.away and not state.asleep and model.life_stage(state) != "egg"
+        local = dt_util.as_local(dt_util.utc_from_timestamp(now))
+        minute = local.hour * 60 + local.minute
+        wake = settings.wake_time.hour * 60 + settings.wake_time.minute
+        events = self.house_moments.update(
+            readings,
+            now,
+            awake,
+            morning=wake <= minute < 12 * 60,
+            today=local.date().isoformat(),
+        )
+        if awake and readings.condition in SNOWY:
+            events += model.season_first(state, "snow", now, settings.tz)
+        if awake and readings.outdoor_c is not None and readings.outdoor_c <= 0:
+            events += model.season_first(state, "frost", now, settings.tz)
+        return events
 
     def _sync_name(self) -> None:
         """Follow renames: the device's own name if the owner set one, else the

@@ -213,6 +213,7 @@ HOME_QUIET_MINUTES = 10  # no motion for this long counts as quiet
 HOME_HOLD_MINUTES = 10  # an unavailable sensor keeps its last value this long
 HOME_DEBOUNCE_SECONDS = 10.0
 HOME_GREETING_MINUTES = 10
+HOME_MEDIA_COOLDOWN_MINUTES = 20  # between comments on what's on TV or playing
 HOME_GREETING_COOLDOWN_MINUTES = 30  # GPS jitter shouldn't cause repeat greetings
 HOME_AWAY_AFTER_HOURS = 2.0  # empty this long: off to the sitter's
 
