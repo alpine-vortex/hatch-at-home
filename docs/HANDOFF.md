@@ -3,7 +3,8 @@
 Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's branch
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
-a session may push to `main`. Version **0.23.0**, released. **The owner runs it on
+a session may push to `main` (the fifth session may: owner, 2026-10-27). Version
+**0.23.1**, released. **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read the README first, then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and
@@ -98,7 +99,7 @@ details before committing it.
 7. **BirdNET bird visits:** the owner deferred this ("will be reset at a later time");
    don't start it unasked. The design and the stalled-feed workaround are in the
    private notes.
-8. **Small known nits:** the tree frog's snack is hard to read. (Pond's open water
+8. **Small known nits:** the tree frog's snack was redrawn as a blue-bottle fly (0.23.1). (Pond's open water
    is solved by the frog's `perch`; mood sizes were measured in 0.20.1 and differ
    under 12% except the child gecko asleep, 17%, from its drawn "zzz".)
 
