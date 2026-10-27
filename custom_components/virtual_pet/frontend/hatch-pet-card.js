@@ -133,7 +133,7 @@ function playChirp(name) {
 // or on the ground at its feet. One trait per place per moment; traits sharing a
 // place take turns. "frames": a 2-frame animation (_1, _2); "pair": two
 // variants (_1 big, _2 small); otherwise one image.
-const TRAIT_CAP = 4; // rates.py TRAIT_CAP
+const TRAIT_CAP = 4; // rates.py TRAIT_CAP, until the server says (life_stage trait_cap)
 const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
 const FLAIR_MS = 4200; // how long a moment lasts
 const FLAIR = {
@@ -1450,7 +1450,9 @@ class HatchPetCard extends HTMLElement {
   }
 
   // A chirp, if this device turned sounds on and the pet is up at a sane hour.
+  // Only the pet on show chirps: the shelf's other slides update too.
   _chirp(s, name) {
+    if (s !== this._slides[this._index]) return;
     const hour = new Date().getHours();
     const late = hour >= QUIET_HOURS[0] || hour < QUIET_HOURS[1];
     if (!soundsOn() || s.asleep || s.lightsOut || late || document.visibilityState !== "visible") return;
@@ -1647,7 +1649,8 @@ class HatchPetCard extends HTMLElement {
       t === stageAttrs.inherited_trait));
     // The trait it's closest to learning, while it has room for another.
     const held = new Set(stageAttrs.traits || []);
-    const nextTrait = held.size < TRAIT_CAP
+    const cap = stageAttrs.trait_cap ?? TRAIT_CAP;
+    const nextTrait = held.size < cap
       ? Object.entries(stageAttrs.trait_progress || {})
         .filter(([t, p]) => !held.has(t) && FLAIR[t] && p > 0.05 && p < 1)
         .sort((a, b) => b[1] - a[1])[0]
@@ -1681,7 +1684,7 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "weight", `<span>${weightLabel(value("weight"))}</span>`)}
       ${row("stat_care_miss", "misses", `<span>${value("care_misses") ?? "–"}</span>`)}
       ${row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0} ignored</span>`)}
-      ${row(null, `traits ${traits.length}/${TRAIT_CAP}`, `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
+      ${row(null, traits.length > cap ? "traits" : `traits ${traits.length}/${cap}`, `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
       ${bestCatch ? row(null, "best catch", `<span>${bestCatch}/${CATCH.rounds}</span>`) : ""}
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
@@ -1704,7 +1707,11 @@ class HatchPetCard extends HTMLElement {
       } catch (err) {
         return; // no storage: sounds stay off
       }
-      if (on) playChirp("win"); // a sample; this tap also unlocks audio on phones
+      try {
+        if (on) playChirp("win"); // a sample; this tap also unlocks audio on phones
+      } catch (err) {
+        // no WebAudio: the setting stays, and stays quiet
+      }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
   }
@@ -1937,19 +1944,21 @@ class HatchPetCard extends HTMLElement {
   }
 
   // One play_game call; ends the game (with a line) on a failure or refusal.
+  // A reply for a game that was stopped (or replaced) meanwhile is dropped.
   async _playCall(s, data) {
     const id = s.ids?.["sensor.mood"];
     if (!id) return null;
+    const game = s.game;
     let info;
     try {
       const res = await this._hass.callService(
         "virtual_pet", "play_game", { entity_id: id, ...data }, undefined, false, true);
       info = res?.response;
     } catch (err) {
-      this._endGame(s, "hmm, that didn't work");
+      if (s.game === game) this._endGame(s, "hmm, that didn't work");
       return null;
     }
-    if (!s.game) return null; // stopped while waiting
+    if (s.game !== game) return null; // stopped while waiting
     if (!info || info.result !== "ok") {
       this._endGame(s, REFUSALS[info?.result] || "not now");
       return null;

@@ -857,6 +857,7 @@ async def test_higher_or_lower_through_the_service(
     assert log[0]["game"] == "higher_lower"
     stage = hass.states.get("sensor.pip_life_stage").attributes
     assert stage["games"]["higher_lower"]["played"] == 1  # the card's journal
+    assert stage["trait_cap"] == 4  # the card's "traits n/4"
     counts = {"higher_lower": {"played": 1, "won": int(info["won"])}}
     registry = er.async_get(hass)
     registry.async_update_entity("sensor.pip_debug", disabled_by=None)

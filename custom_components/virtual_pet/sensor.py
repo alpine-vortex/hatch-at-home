@@ -18,7 +18,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from . import model
+from . import model, rates as R
 from .coordinator import PetConfigEntry, PetCoordinator
 from .entity import PetEntity
 
@@ -170,6 +170,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
                 t: model.trait_level(self.pet, t) for t in self.pet.traits
             },
             "inherited_trait": self.pet.inherited_from,
+            "trait_cap": R.TRAIT_CAP,  # new learning stops here
             "generation": self.pet.generation,
             "journal": [dict(r) for r in self.pet.journal],
             "notify_users": list(self.pet.notify_users),
@@ -182,7 +183,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
                 self.pet.egg_choice or ""
             ),
             "memories": [dict(m) for m in self.pet.memories],
-            "games": {kind: dict(counts) for kind, counts in self.pet.games.items()},
+            "games": model.game_counts(self.pet),
             # Final once adult; before that, what it's on track for.
             "upbringing": (
                 model.upbringing(self.pet)
@@ -261,6 +262,6 @@ class DebugSensor(PetEntity, SensorEntity):
             "poops": [stamp(t).isoformat() for t in pet.poops],
             "digesting": [stamp(t).isoformat() for t in pet.digesting],
             "latched": list(pet.latched),
-            "games": {kind: dict(counts) for kind, counts in pet.games.items()},
+            "games": model.game_counts(pet),
             "calculation": dict(self.coordinator.debug),
         }

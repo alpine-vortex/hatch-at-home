@@ -718,6 +718,15 @@ def test_an_early_rising_house_makes_an_early_bird():
     pet = hatched(at(12))
     model.morning_stir(pet, at(9), settings)  # two hours in: not early
     assert pet.trait_hours.get("early_mornings", 0.0) == 0.0
+    # Once a day, even if the moment comes again (after a restart, say).
+    model.morning_stir(pet, at(7, 10, day=20), settings)
+    model.morning_stir(
+        model.PetState.from_dict(pet.to_dict()), at(7, 30, day=20), settings
+    )
+    pet = model.PetState.from_dict(pet.to_dict())
+    model.morning_stir(pet, at(7, 40, day=20), settings)
+    assert pet.trait_hours["early_mornings"] == 1.0
+    pet.trait_hours.clear()
     for day in range(R.TRAIT_EARLY_BIRD_MORNINGS):
         model.morning_stir(pet, at(7, 20, day=day + 1), settings)
     assert model.trait_progress(pet)["early_bird"] == 1.0
@@ -746,7 +755,7 @@ def test_games_make_a_player_who_enjoys_wins_more():
     for g in range(R.TRAIT_PLAYER_GAMES):
         pet.energy = 100.0
         play_rounds(pet, ["left"] * 5, start + g * 60, Always("left"))
-    assert pet.trait_hours["games"] == R.TRAIT_PLAYER_GAMES
+    assert model.games_played(pet) == R.TRAIT_PLAYER_GAMES
     live(pet, start + R.TRAIT_PLAYER_GAMES * 60 + 600, house())
     assert "player" in pet.traits
     pet.energy, pet.happiness = 100.0, 10.0
@@ -1118,6 +1127,20 @@ def test_higher_or_lower_needs_starting_first():
     assert pet.game is None
 
 
+def test_starting_over_before_a_guess_keeps_the_number():
+    pet = hatched(at(9))
+    deal = Deal(5, 1, 7)
+    info, _ = model.start_game(pet, "higher_lower", at(9), deal)
+    assert info["number"] == 5
+    # Starting again can't fish for an easy first number (1 or 9)...
+    again, _ = model.start_game(pet, "higher_lower", at(9, 1), deal)
+    assert again["number"] == 5 and pet.game.last_at == at(9, 1)
+    # ...but after a guess, or from another game, it's a new game.
+    model.play_game(pet, "higher", at(9, 2), deal, kind="higher_lower")
+    fresh, _ = model.start_game(pet, "higher_lower", at(9, 3), deal)
+    assert fresh["number"] == 7 and pet.game.rounds == 0
+
+
 def test_a_guess_from_the_other_game_is_an_error():
     pet = hatched(at(9))
     with pytest.raises(ValueError):
@@ -1154,6 +1177,14 @@ def test_saved_games_load_from_older_and_newer_versions():
     assert model.PetState.from_dict(data).games == {
         "higher_lower": {"played": 3, "won": 2}
     }
+    # A damaged entry still loads, with what's missing counted as 0.
+    data["games"] = {"left_right": {"won": 2}, "higher_lower": {"played": "x"}}
+    damaged = model.PetState.from_dict(data)
+    assert damaged.games == {
+        "left_right": {"played": 0, "won": 2},
+        "higher_lower": {"played": 0, "won": 0},
+    }
+    assert model.games_played(damaged) == 0
     del data["games"]
     assert model.PetState.from_dict(data).games == {}
 

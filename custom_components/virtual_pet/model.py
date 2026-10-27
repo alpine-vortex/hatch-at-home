@@ -116,6 +116,7 @@ class PetState:
     journal: list[dict[str, Any]] = field(default_factory=list)  # retired parents
     notify_users: list[str] = field(default_factory=list)  # HA user IDs, opted in
     trait_hours: dict[str, float] = field(default_factory=dict)  # exposure, awake
+    early_morning_on: str | None = None  # local date of the last early-bird morning
     temperament: dict[str, float] = field(default_factory=dict)  # trait -> factor
     upbringing: str | None = None  # decided on reaching adulthood (UPBRINGINGS)
     game: Game | None = None
@@ -158,7 +159,11 @@ class PetState:
             if kwargs["game"] is not None and kwargs["game"].kind not in GAMES:
                 kwargs["game"] = None  # a game this version doesn't know
         kwargs["games"] = {
-            kind: {k: int(n) for k, n in counts.items() if k in ("played", "won")}
+            kind: {
+                k: int(n) if isinstance(n, int | float) else 0
+                for k, n in {"played": 0, "won": 0, **counts}.items()
+                if k in ("played", "won")
+            }
             for kind, counts in (kwargs.get("games") or {}).items()
             if isinstance(counts, dict)
         }
@@ -169,6 +174,8 @@ class PetState:
         }
         if not isinstance(kwargs.get("egg_choice"), str):
             kwargs["egg_choice"] = None
+        if not isinstance(kwargs.get("early_morning_on"), str):
+            kwargs["early_morning_on"] = None
         if kwargs.get("upbringing") not in UPBRINGINGS:
             kwargs["upbringing"] = None
         state = cls(**kwargs)
@@ -709,6 +716,16 @@ _FLAG_TRAIT_HAPPINESS = {
 }
 
 
+def game_counts(state: PetState) -> dict[str, dict[str, int]]:
+    """Games played and won, by kind (a copy, for the journal and sensors)."""
+    return {kind: dict(counts) for kind, counts in state.games.items()}
+
+
+def games_played(state: PetState) -> int:
+    """Every game this pet has finished, of any kind."""
+    return sum(counts["played"] for counts in state.games.values())
+
+
 def trait_level(state: PetState, trait: str) -> int:
     """★ to ★★★; 0 if the pet doesn't have the trait."""
     return state.trait_levels.get(trait, 1) if trait in state.traits else 0
@@ -768,7 +785,7 @@ def trait_progress(state: PetState) -> dict[str, float]:
         seen.get("early_mornings", 0.0) / R.TRAIT_EARLY_BIRD_MORNINGS
     )
     progress["helper"] = seen.get("chores", 0.0) / R.TRAIT_HELPER_CHORES
-    progress["player"] = seen.get("games", 0.0) / R.TRAIT_PLAYER_GAMES
+    progress["player"] = games_played(state) / R.TRAIT_PLAYER_GAMES
     for trait, (flag, needed) in R.TRAIT_FLAG_HOURS.items():
         progress[trait] = seen.get(flag, 0.0) / needed
     # Temperament: a factor on each threshold (pets from before it have none).
@@ -805,8 +822,14 @@ def _minutes_since_wake(ts: float, settings: Settings) -> int:
 
 def morning_stir(state: PetState, now: float, settings: Settings) -> None:
     """The house's first stir of the morning (the good_morning moment): soon
-    after wake time, it counts toward early bird."""
-    if _minutes_since_wake(now, settings) < R.TRAIT_EARLY_BIRD_WINDOW_MINUTES:
+    after wake time, it counts toward early bird, once a day (the moment can
+    come again after a restart)."""
+    today = datetime.fromtimestamp(now, settings.tz).date().isoformat()
+    if (
+        state.early_morning_on != today
+        and _minutes_since_wake(now, settings) < R.TRAIT_EARLY_BIRD_WINDOW_MINUTES
+    ):
+        state.early_morning_on = today
         seen = state.trait_hours
         seen["early_mornings"] = seen.get("early_mornings", 0.0) + 1
 
@@ -899,7 +922,7 @@ def lay_egg(
         "age_days": round(state.age_hours / 24, 1),
         "care_misses": state.care_misses,
         "upbringing": upbringing(state),
-        "games": {kind: dict(counts) for kind, counts in state.games.items()},
+        "games": game_counts(state),
     }
     egg = PetState.new(state.name, now)
     egg.generation = state.generation + 1
@@ -1092,9 +1115,9 @@ NUMBERS = range(1, 10)  # Higher or Lower's numbers
 def start_game(
     state: PetState, kind: str, now: float, rng: random.Random, by: str | None = None
 ) -> tuple[dict[str, Any], list[Event]]:
-    """Start a game of this kind (dropping any game in progress), and return
-    its opening: Higher or Lower's first number. The caller advances the pet
-    to now first."""
+    """Start a game of this kind (dropping any game in progress, except one of
+    this kind with no guess yet, which carries on), and return its opening:
+    Higher or Lower's first number. The caller advances the pet to now first."""
     if kind not in GAMES:
         raise ValueError(f"unknown game {kind}")
     events: list[Event] = []
@@ -1103,6 +1126,12 @@ def start_game(
         _log(state, {"at": now, "action": "game", "by": by, "result": refusal})
         events.append({"type": "care", "action": "game", "result": refusal})
         return {"result": refusal}, events
+    game = state.game
+    if game is not None and game.kind == kind and game.rounds == 0:
+        # Not guessed yet: the same opening, so starting over can't fish for
+        # an easy first number.
+        game.last_at = now
+        return _round_info(game), events
     game = state.game = Game(started=now, last_at=now, kind=kind)
     if kind == "higher_lower":
         game.number = rng.choice(NUMBERS)
@@ -1167,7 +1196,6 @@ def play_game(
     if won:
         happiness += R.PLAYER_WIN_HAPPINESS * _scale(state, "player")
     state.happiness = _clamp(state.happiness + happiness)
-    state.trait_hours["games"] = state.trait_hours.get("games", 0.0) + 1
     state.energy = _clamp(state.energy + R.PLAY_ENERGY)
     state.hunger = _clamp(state.hunger + R.PLAY_HUNGER)
     state.weight = _clamp(state.weight + R.WEIGHT_GAME)
