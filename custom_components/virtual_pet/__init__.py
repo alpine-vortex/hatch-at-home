@@ -150,7 +150,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         user_id = call.context.user_id
         if user_id is None:
             raise ServiceValidationError(
-                translation_domain=DOMAIN, translation_key="no_pet"
+                translation_domain=DOMAIN, translation_key="not_signed_in"
             )
         await pet_of(call).async_set_notify(user_id, call.data[ATTR_ENABLED])
 
@@ -169,7 +169,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         return await pet_of(call).async_play_game(guess, call.context, kind)
 
     async def share_news(call: ServiceCall) -> ServiceResponse:
-        pets = {p.pet_id: p for p in map(pet_for, call.data[ATTR_ENTITY_ID])}
+        # One pet that isn't loaded doesn't keep the news from the others.
+        pets: dict[str, PetCoordinator] = {}
+        for entity_id in call.data[ATTR_ENTITY_ID]:
+            try:
+                pet = pet_for(entity_id)
+            except ServiceValidationError:
+                continue
+            pets[pet.pet_id] = pet
+        if not pets:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="no_pet"
+            )
         return {
             pet_id: pet.share_news(call.data[ATTR_HEADLINE], call.data.get(ATTR_TOPIC))
             for pet_id, pet in pets.items()

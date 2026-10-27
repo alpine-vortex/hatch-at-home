@@ -270,6 +270,9 @@
     },
     "wrong_guess": {
       "message": "\"{guess}\" isn't a guess in that game; try {guesses}."
+    },
+    "not_signed_in": {
+      "message": "Only someone signed in can turn their own pet notifications on or off."
     }
   },
   "services": {

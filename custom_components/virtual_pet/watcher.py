@@ -12,6 +12,7 @@ from typing import Any
 
 from homeassistant.const import (
     ATTR_UNIT_OF_MEASUREMENT,
+    PERCENTAGE,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
     UnitOfTemperature,
@@ -214,11 +215,12 @@ class Watcher:
 
     @staticmethod
     def _fraction(state: State | None) -> float | None:
-        """0-1 from a fraction or a percentage."""
+        """0-1 from a fraction or a percentage (by its unit, else by size)."""
         value = _float(state)
-        if value is None:
+        if value is None or state is None:
             return None
-        return value / 100 if value > 1 else value
+        percent = state.attributes.get(ATTR_UNIT_OF_MEASUREMENT) == PERCENTAGE
+        return value / 100 if percent or value > 1 else value
 
     @staticmethod
     def _rain(state: State | None) -> float | None:

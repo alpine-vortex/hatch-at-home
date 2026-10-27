@@ -110,24 +110,30 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
         to its next egg.
         """
         entry = self._get_reconfigure_entry()
-        current = entry.data.get(CONF_NEXT_WORLD) or entry.data.get(
-            CONF_WORLD, DEFAULT_WORLD
+        coordinator = getattr(entry, "runtime_data", None)
+        # Entries from before worlds existed keep theirs only in the coordinator;
+        # with the pet not loaded, such a world is unknown (None).
+        world_now = (
+            coordinator.world if coordinator is not None else entry.data.get(CONF_WORLD)
         )
+        current = entry.data.get(CONF_NEXT_WORLD) or world_now or DEFAULT_WORLD
         if user_input is not None:
             name = user_input[CONF_NAME].strip() or entry.title
             world = user_input[CONF_WORLD]
             data = {k: v for k, v in entry.data.items() if k != CONF_NEXT_WORLD}
-            coordinator = getattr(entry, "runtime_data", None)
-            unhatched = coordinator is None or (
-                coordinator.state is not None and coordinator.state.species is None
+            if world_now is not None:
+                data[CONF_WORLD] = world_now
+            # Unloaded, it may have hatched: a move waits for the next egg.
+            unhatched = (
+                coordinator is not None
+                and coordinator.state is not None
+                and coordinator.state.species is None
             )
-            # Entries from before worlds existed keep theirs only in the coordinator.
-            data[CONF_WORLD] = (
-                coordinator.world
-                if coordinator is not None
-                else data.get(CONF_WORLD, DEFAULT_WORLD)
-            )
-            if world != data[CONF_WORLD]:
+            if world_now is None and world == current:
+                # Unknown world, left as shown: keep things as they were.
+                if CONF_NEXT_WORLD in entry.data:
+                    data[CONF_NEXT_WORLD] = entry.data[CONF_NEXT_WORLD]
+            elif world != world_now:
                 if unhatched:
                     data[CONF_WORLD] = world  # still an egg: it moves now
                 else:
@@ -317,6 +323,7 @@ class PetOptionsFlow(OptionsFlowWithReload):
             flat: dict[str, Any] = {}
             for group in user_input.values():
                 flat.update({k: v for k, v in group.items() if v not in (None, "", [])})
+            entered = dict(flat)  # as typed (the user's units), to show again
             for key in (CONF_COMFORT_LOW, CONF_COMFORT_HIGH):
                 if key in flat:
                     flat[key] = self._to_celsius(flat[key])
@@ -331,10 +338,13 @@ class PetOptionsFlow(OptionsFlowWithReload):
             if not errors:
                 return self.async_create_entry(data=flat)
 
-        current = dict(self.config_entry.options)
-        for key in (CONF_COMFORT_LOW, CONF_COMFORT_HIGH):
-            if key in current:
-                current[key] = self._to_unit(current[key])
+        if user_input is not None:
+            current = entered  # an error: keep what was entered, not the saved options
+        else:
+            current = dict(self.config_entry.options)
+            for key in (CONF_COMFORT_LOW, CONF_COMFORT_HIGH):
+                if key in current:
+                    current[key] = self._to_unit(current[key])
         schema: dict[Any, Any] = {}
         for name, fields in self._sections().items():
             inner: dict[Any, Any] = {}
