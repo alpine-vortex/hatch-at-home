@@ -80,7 +80,11 @@ def test_every_stage_has_a_head_point_on_the_creature(species: str) -> None:
     for stage in sp["stages"]:
         x, y = sp["head"][stage]
         assert 0 <= x < 256 and 0 <= y < 224, f"{species} {stage}"
-        alpha = Image.open(SPRITES / species / f"{stage}_content_1.png").getchannel("A")
+        alpha = (
+            Image.open(SPRITES / species / f"{stage}_content_1.png")
+            .convert("RGBA")
+            .getchannel("A")
+        )
         # Something of the pet within a few art pixels below the point.
         assert any(
             alpha.getpixel((min(255, max(0, x + dx)), y + dy)) > 40

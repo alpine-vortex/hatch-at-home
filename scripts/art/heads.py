@@ -22,7 +22,7 @@ MIN_RUN = 18  # a row needs this many solid pixels in a run to count as body
 
 
 def estimate(im: Image.Image) -> tuple[int, int]:
-    a = im.getchannel("A")
+    a = im.convert("RGBA").getchannel("A")
     w, h = im.size
     for y in range(h):
         runs, run, start = [], 0, 0
