@@ -95,10 +95,13 @@ const STAGE_LABELS = { egg: "Egg", baby: "Baby", child: "Child", teen: "Teen", a
 const cache = new Map();
 function loadJson(path) {
   if (!cache.has(path)) {
-    cache.set(path, fetch(`${BASE}/${path}?v=${VERSION}`).then((r) => {
+    const request = fetch(`${BASE}/${path}?v=${VERSION}`).then((r) => {
       if (!r.ok) throw new Error(`missing ${path}`);
       return r.json();
-    }));
+    });
+    // A failed fetch is forgotten so the next render tries again.
+    request.catch(() => { if (cache.get(path) === request) cache.delete(path); });
+    cache.set(path, request);
   }
   return cache.get(path);
 }
@@ -131,7 +134,7 @@ const STYLE = `
   :host { display: block; --hp-backdrop: var(--card-background-color, #2f4a3a);
     --hp-ground: transparent; --hp-ink: var(--primary-text-color, #222);
     --hp-subink: var(--secondary-text-color, #555); }
-  button:focus-visible, .screen:focus-visible { outline: 3px solid #fff;
+  button:focus-visible { outline: 3px solid #fff;
     outline-offset: 2px; box-shadow: 0 0 0 6px #1d2a22; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -578,7 +581,7 @@ class HatchPetCard extends HTMLElement {
         <div class="body">
           <img class="trim-top" alt="">
           <span class="label"></span>
-          <div class="bezel"><div class="screen" role="button" tabindex="0" aria-label="Show status">
+          <div class="bezel"><div class="screen">
             <img class="bg" alt="">
             <img class="awaysign" alt=""><div class="awaylabel"></div>
             <img class="poop p0" alt=""><img class="poop p1" alt=""><img class="poop p2" alt="">
@@ -643,14 +646,10 @@ class HatchPetCard extends HTMLElement {
       s.confirmUntil = 0;
       this._press(s, key);
     });
+    // A tap on the screen is a shortcut for the Status button; it holds buttons of its
+    // own (the game, the bell, the journal), so it isn't a button itself.
     s.screen.addEventListener("click", () => {
       if (!this._swiped) this._toggleStatus(s);
-    });
-    s.screen.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        this._toggleStatus(s);
-      }
     });
     // The device beside the current one is inert; tapping it brings it forward.
     slide.addEventListener("click", () => {
@@ -1006,7 +1005,6 @@ class HatchPetCard extends HTMLElement {
   _toggleStatus(s) {
     const open = !s.screen.classList.contains("show-status");
     s.screen.classList.toggle("show-status", open);
-    s.screen.setAttribute("aria-label", open ? "Hide status" : "Show status");
     s.journal = false;
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     if (s === this._slides[this._index]) {
