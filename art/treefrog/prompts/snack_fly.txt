@@ -1,0 +1,4 @@
+Use your image generation tool to draw ONE square image and save it as fly.png in the current directory.
+
+A 2 x 2 grid of equal square cells; draw the SAME small game prop in all four cells as four slight variations so the best can be picked: a plump cute blue-bottle fly, metallic blue-black body with a bright blue shine, two clear pale wings with a light outline, big red eyes, seen three-quarters from the side, filling about 60% of its cell. Chunky retro pixel art like the attached reference props (about 24 art pixels wide, big hard square pixels, dark outline, limited palette, no anti-aliasing). It must stand out strongly against a mid-green background.
+Background: one flat even mid-grey everywhere. No text, no labels, no borders.
