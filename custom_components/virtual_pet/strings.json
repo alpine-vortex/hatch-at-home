@@ -286,5 +286,15 @@
         }
       }
     }
+  },
+  "issues": {
+    "missing_entities": {
+      "title": "{pet} is listening for entities that are gone",
+      "description": "{pet}'s settings mention entities that no longer exist in Home Assistant, probably because they were renamed or removed: {entities}.\n\nThe pet ignores them, so nothing breaks, but it misses that part of your house. Open Settings → Devices & services → Virtual Pet → the gear next to {pet}, and pick the new entities or clear those fields. This warning goes away once the settings are saved."
+    },
+    "world_not_ready": {
+      "title": "{pet}'s world has no creatures yet",
+      "description": "{pet} lives in {world}, but none of that world's creatures are installed and ready, so its egg can't hatch. It stays an egg, safe and frozen in place, until they are. Reinstall or update the integration's files; if this keeps happening, please report it."
+    }
   }
 }

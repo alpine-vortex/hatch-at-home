@@ -15,7 +15,11 @@ from homeassistant.core import (
     SupportsResponse,
 )
 from homeassistant.exceptions import ServiceValidationError
-from homeassistant.helpers import config_validation as cv, entity_registry as er
+from homeassistant.helpers import (
+    config_validation as cv,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
@@ -175,4 +179,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool
 
 async def async_remove_entry(hass: HomeAssistant, entry: PetConfigEntry) -> None:
     """Delete the pet's save file when the integration is removed."""
+    for key in ("missing_entities", "world_not_ready"):
+        ir.async_delete_issue(hass, DOMAIN, f"{key}_{entry.entry_id}")
     await PetStore(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}").async_remove()

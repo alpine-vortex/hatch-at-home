@@ -971,3 +971,13 @@ def test_call_notifications_offer_the_answer_as_a_button():
     )
     assert notify.parse_action("VIRTUAL_PET:x_y:feed") == ("x_y", "feed")
     assert notify.parse_action("SOMETHING_ELSE") is None
+
+
+def test_out_of_energy_it_drops_off_for_a_nap():
+    start = at(13)
+    pet = hatched(start, energy=1.0)
+    events = run(pet, start + HOUR)
+    asleep = [e for e in events if e["type"] == "fell_asleep"]
+    assert asleep == [{"type": "fell_asleep", "napping": True, "how": "collapsed"}]
+    assert pet.asleep and pet.napping
+    assert pet.happiness == pytest.approx(90 - 0.2 * R.HAPPINESS_DECAY, abs=0.6)

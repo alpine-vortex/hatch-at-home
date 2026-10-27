@@ -129,6 +129,7 @@ DEFAULT_BEDTIME = "23:00"
 DEFAULT_WAKE_TIME = "07:00"
 DROWSY_BEFORE_BED_MINUTES = 30
 FALL_ASLEEP_ANYWAY_MINUTES = 60  # left up past bedtime, it dozes off itself
+COLLAPSE_ENERGY = 0.0  # at or below this, it falls asleep where it is
 
 # --- Mood -------------------------------------------------------------------
 

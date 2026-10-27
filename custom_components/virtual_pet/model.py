@@ -394,6 +394,11 @@ def _sleep(state: PetState, t: float, settings: Settings, events: list[Event]) -
         if t >= state.wake_at:
             _wake(state, events, "morning")
         return
+    if state.energy <= R.COLLAPSE_ENERGY:
+        # Worn out: it drops off where it stands. A nap by day, the night's
+        # sleep at night. No penalty; the energy call before this was the warning.
+        _fall_asleep(state, not night, events, t, settings, "collapsed")
+        return
     if (
         settings.home.dark_and_quiet
         and t >= state.kept_up_until
@@ -421,8 +426,8 @@ def _fall_asleep(
     settings: Settings,
     how: str = "lights",
 ) -> None:
-    """how: "lights" (put to bed), "house" (dark and quiet) or "dozed" (stayed
-    up too long)."""
+    """how: "lights" (put to bed), "house" (dark and quiet), "dozed" (stayed
+    up too long) or "collapsed" (out of energy)."""
     state.asleep = True
     state.napping = napping
     state.game = None

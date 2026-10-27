@@ -970,3 +970,48 @@ async def test_diagnostics_hide_the_house_and_the_people(
     assert diag["pet"]["care_log"][0]["by"] == "**REDACTED**"
     assert diag["now"]["stage"] == "child"
     assert "Alex" not in str(diag) and "user-1" not in str(diag)
+
+
+async def test_repairs_warn_about_entities_that_are_gone(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    hass.states.async_set("weather.home", "sunny")
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    config = await setup_with_house(
+        hass, weather="weather.home", tv=["media_player.gone"]
+    )
+    issue = ir.async_get(hass).async_get_issue(DOMAIN, "missing_entities_test_pet")
+    assert issue is not None
+    assert issue.translation_placeholders == {
+        "pet": "Pip",
+        "entities": "media_player.gone",
+    }
+    # Fixing the options clears it (the entry reloads).
+    hass.config_entries.async_update_entry(config, options={"weather": "weather.home"})
+    await hass.config_entries.async_reload(config.entry_id)
+    await hass.async_block_till_done()
+    assert (
+        ir.async_get(hass).async_get_issue(DOMAIN, "missing_entities_test_pet") is None
+    )
+
+
+async def test_repairs_warn_about_a_world_without_creatures(
+    hass: HomeAssistant, now: float
+) -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    await hass.config.async_set_time_zone("UTC")
+    config = MockConfigEntry(
+        domain=DOMAIN,
+        title="Pip",
+        data={CONF_NAME: "Pip", "world": "atlantis"},
+        entry_id="test_pet",
+    )
+    config.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(config.entry_id)
+    await hass.async_block_till_done()
+    assert ir.async_get(hass).async_get_issue(DOMAIN, "world_not_ready_test_pet")
+    await hass.config_entries.async_remove(config.entry_id)
+    assert not ir.async_get(hass).async_get_issue(DOMAIN, "world_not_ready_test_pet")

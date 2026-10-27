@@ -1079,6 +1079,12 @@ class HatchPetCard extends HTMLElement {
           say("...so sleepy");
         }
         break;
+      case "fell_asleep":
+        if (m.how === "collapsed") {
+          say("so... tired... zzz", 5000);
+          this._animate(s, s.pet, "sulk", 800);
+        }
+        break;
       case "pooped": {
         const img = s.poops[(m.count || 1) - 1];
         if (img) this._animate(s, img, "born", 450);

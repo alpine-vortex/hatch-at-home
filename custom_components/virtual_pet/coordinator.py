@@ -17,7 +17,11 @@ from homeassistant.core import (
     State,
     callback,
 )
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_registry as er,
+    issue_registry as ir,
+)
 from homeassistant.helpers.debounce import Debouncer
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.storage import Store
@@ -37,6 +41,7 @@ from .const import (
     CONF_WAKE_TIME,
     CONF_WORLD,
     DEFAULT_WORLD,
+    DEFAULT_ZONE,
     DOMAIN,
     LOGGER,
     STORE_MINOR_VERSION,
@@ -171,6 +176,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 self.world,
                 self.config_entry.title,
             )
+        self._issue(
+            "world_not_ready",
+            not self.roster,
+            {"pet": self.config_entry.title, "world": self.world_name},
+        )
         now = self._now()
         data = await self.store.async_load()
         if data is None:
@@ -213,8 +223,48 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, started)
         )
 
+    def _issue(self, key: str, active: bool, placeholders: dict[str, str]) -> None:
+        """Raise or clear one of this pet's repair issues (Settings → Repairs)."""
+        issue_id = f"{key}_{self.pet_id}"
+        if not active:
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+            return
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=key,
+            translation_placeholders=placeholders,
+        )
+
+    def _check_mapped_entities(self) -> None:
+        """Warn about mapped entities that no longer exist (renamed or removed).
+
+        An entity that exists but is unavailable is fine: the watcher holds its
+        last value for a while and then ignores it.
+        """
+        registry = er.async_get(self.hass)
+        # sun.sun and the default zone are always watched, not picked by the owner.
+        mapped = [
+            e for e in self.watcher.entity_ids() if e not in ("sun.sun", DEFAULT_ZONE)
+        ]
+        mapped += self.config_entry.options.get(CONF_CHORES) or []
+        missing = sorted(
+            e
+            for e in set(mapped)
+            if self.hass.states.get(e) is None and registry.async_get(e) is None
+        )
+        self._issue(
+            "missing_entities",
+            bool(missing),
+            {"pet": self.config_entry.title, "entities": ", ".join(missing)},
+        )
+
     def _listen(self) -> None:
         self._home_started = True
+        self._check_mapped_entities()
         ids = self.watcher.entity_ids()
 
         @callback
