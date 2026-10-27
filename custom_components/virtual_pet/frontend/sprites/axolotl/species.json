@@ -30,5 +30,6 @@
   "murk": "treefrog/murk",
   "backgrounds": { "day": "treefrog/bg_day", "night": "treefrog/bg_night", "rain": "treefrog/bg_rain", "dim": "treefrog/bg_night" },
   "words": { "food": "bloodworms", "home": "pond" },
-  "reactions": { "play": "float", "won": "gill_flutter", "praise": "smile", "snack": "smile" }
+  "reactions": { "play": "float", "won": "gill_flutter", "praise": "smile", "snack": "smile" },
+  "head": { "baby": [170, 144], "child": [184, 124], "teen": [192, 104], "adult": [198, 132] }
 }

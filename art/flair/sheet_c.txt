@@ -1,0 +1,6 @@
+Use your image generation tool to draw ONE image (portrait 2:3) and save it as sheet_c.png in the current directory.
+
+A sheet of 4 rows x 2 columns of equal square cells: tiny decorative flair sprites for a virtual pet, in EXACTLY the chunky pixel style of the attached probe sheet (big hard square pixels, 1-art-pixel DARK outline, limited palette, no anti-aliasing). Each sprite SMALL and simple (about 16 art pixels across unless said), centred with a WIDE empty margin on every side; nothing near a cell edge. Light, saturated fills with a dark outline so each reads on both dark night scenes and bright green scenes.
+- Row 1: Left = a low curl of soft white-grey mist, much wider than tall (about 40 x 10 art pixels), curling at one end; right = leave empty grey.
+- Rows 2, 3 and 4: leave all cells empty grey.
+Background: one flat even mid-grey everywhere. No text, no labels, no borders.

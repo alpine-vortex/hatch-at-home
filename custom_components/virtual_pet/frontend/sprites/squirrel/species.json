@@ -28,5 +28,6 @@
   },
   "backgrounds": { "day": "bird/bg_day", "night": "bird/bg_night", "rain": "bird/bg_rain", "dim": "bird/bg_dim" },
   "words": { "food": "hazelnuts", "home": "drey" },
-  "reactions": { "feed": "cache", "snack": "cheeks", "chore_treat": "cheeks", "scold": "chatter" }
+  "reactions": { "feed": "cache", "snack": "cheeks", "chore_treat": "cheeks", "scold": "chatter" },
+  "head": { "baby": [166, 84], "child": [180, 40], "teen": [170, 36], "adult": [180, 52] }
 }
