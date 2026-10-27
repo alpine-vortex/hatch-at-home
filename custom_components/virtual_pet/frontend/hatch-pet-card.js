@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.26.0b1";
+const VERSION = "0.26.0b2";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -22,6 +22,36 @@ const ACTION_ICONS = {
   feed: "icon_feed", snack: "icon_snack", play: "icon_play", clean: "icon_clean",
   medicine: "icon_medicine", scold: "icon_scold", praise: "icon_praise",
 };
+
+// Higher or Lower's numbers: a 5×7 pixel font drawn at whole screen pixels per
+// art pixel, so they stay crisp (Tiny5's 3-wide digits make an 8 hard to read).
+const DIGITS = {
+  1: ["..X..", ".XX..", "..X..", "..X..", "..X..", "..X..", ".XXX."],
+  2: [".XXX.", "X...X", "....X", "...X.", "..X..", ".X...", "XXXXX"],
+  3: ["XXXX.", "....X", "....X", ".XXX.", "....X", "....X", "XXXX."],
+  4: ["...X.", "..XX.", ".X.X.", "X..X.", "XXXXX", "...X.", "...X."],
+  5: ["XXXXX", "X....", "XXXX.", "....X", "....X", "X...X", ".XXX."],
+  6: ["..XX.", ".X...", "X....", "XXXX.", "X...X", "X...X", ".XXX."],
+  7: ["XXXXX", "....X", "...X.", "..X..", ".X...", ".X...", ".X..."],
+  8: [".XXX.", "X...X", "X...X", ".XXX.", "X...X", "X...X", ".XXX."],
+  9: [".XXX.", "X...X", "X...X", ".XXXX", "....X", "...X.", ".XX.."],
+};
+function digit(n, px = 6) {
+  const rows = DIGITS[n] || DIGITS[8];
+  let rects = "";
+  rows.forEach((row, y) => [...row].forEach((c, x) => {
+    if (c === "X") rects += `<rect x="${x}" y="${y}" width="1" height="1"/>`;
+  }));
+  return `<svg width="${5 * px}" height="${7 * px}" viewBox="0 0 5 7" fill="currentColor" ` +
+    `shape-rendering="crispEdges" role="img" aria-label="${n}">${rects}</svg>`;
+}
+
+// Icons for the game picker.
+function gameIcon(key) {
+  if (key === "left_right") return `${icon("prev", 16)}${icon("next", 16)}`;
+  if (key === "higher_lower") return `${digit(1, 2)}<span class="gi-arrow">↕</span>${digit(9, 2)}`;
+  return `<img src="${BASE}/ui/flair_player.png?v=${VERSION}" width="20" height="20" alt="">`;
+}
 
 function icon(name, size = 22) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name]}</svg>`;
@@ -56,11 +86,54 @@ const CATCH = {
 };
 const BEST_CATCH_KEY = "hatch-best-catch";
 
+// Sounds: little square-wave chirps, off until someone turns them on for this
+// device (status screen). Never while the pet sleeps, nor late at night.
+const SOUND_KEY = "hatch-sounds";
+const QUIET_HOURS = [21, 8]; // from 21:00 to 08:00 local time
+const CHIRPS = { // [frequency Hz, length s] notes, played one after another
+  call: [[880, 0.08], [0, 0.05], [880, 0.08]],
+  hatch: [[523, 0.09], [659, 0.09], [784, 0.09], [1047, 0.16]],
+  win: [[784, 0.08], [988, 0.08], [1319, 0.18]],
+  trait: [[1047, 0.07], [1319, 0.07], [1568, 0.07], [2093, 0.14]],
+};
+let audio = null; // one AudioContext for every card on the page
+
+function soundsOn() {
+  try {
+    return localStorage.getItem(SOUND_KEY) === "on";
+  } catch (err) {
+    return false;
+  }
+}
+
+function playChirp(name) {
+  const notes = CHIRPS[name];
+  if (!notes) return;
+  audio ||= new (window.AudioContext || window.webkitAudioContext)();
+  if (audio.state === "suspended") audio.resume();
+  let t = audio.currentTime + 0.01;
+  for (const [freq, len] of notes) {
+    if (freq) {
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.type = "square";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.06, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + len);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(t);
+      osc.stop(t + len);
+    }
+    t += len;
+  }
+}
+
 // Trait flair (Sol's ui/flair_*): every so often each trait the pet has shows as
 // a little flair around it, never on it: above its head, in the air around it,
 // or on the ground at its feet. One trait per place per moment; traits sharing a
 // place take turns. "frames": a 2-frame animation (_1, _2); "pair": two
 // variants (_1 big, _2 small); otherwise one image.
+const TRAIT_CAP = 4; // rates.py TRAIT_CAP
 const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
 const FLAIR_MS = 4200; // how long a moment lasts
 const FLAIR = {
@@ -164,10 +237,20 @@ function shade(hex, amount) {
   return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
 }
 
-// "night owl ★★", with "↓" when it was handed down from the parent.
-function traitLabel(trait, level, inherited) {
-  return `${inherited ? "↓" : ""}${escape(trait.replace("_", " "))} ${"★".repeat(level || 1)}`;
+// A trait's flair sprite as a small icon (its first frame or big variant).
+function traitIcon(trait) {
+  const f = FLAIR[trait];
+  return f ? `<img class="ticon" src="${BASE}/ui/flair_${trait}${f.art ? "_1" : ""}.png?v=${VERSION}" alt="">` : "";
 }
+
+// Icon and "night owl ★★", with "↓" when it was handed down from the parent.
+function traitLabel(trait, level, inherited) {
+  return `${traitIcon(trait)}${inherited ? "↓" : ""}${escape(trait.replaceAll("_", " "))} ` +
+    `${"★".repeat(level || 1)}`;
+}
+
+// Games finished, all kinds together (the journal's game counts).
+const gamesPlayed = (games) => Object.values(games || {}).reduce((n, c) => n + (c.played || 0), 0);
 
 function timeAgo(iso) {
   const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
@@ -360,14 +443,22 @@ const STYLE = `
   .game .gl { left: 4%; bottom: 8%; }
   .game .gr { right: 4%; bottom: 8%; }
   .game .gx { right: 4%; top: 6%; min-width: 32px; min-height: 32px; font: inherit; font-size: 14px; }
-  .game .gpick { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px;
+  .game .gpick { position: absolute; inset: 22% 0 0; display: flex; flex-direction: column; gap: 8px;
     align-items: center; justify-content: center; }
   .game .gpick[hidden], .game .gnum[hidden], .game .gl[hidden], .game .gr[hidden] { display: none; }
-  .game .gpick button { position: static; border-radius: 12px; padding: 6px 14px; font: inherit;
-    font-size: 14px; min-height: 44px; }
+  /* The picker: chunky toy buttons like the device's own (cream, inked, pressing down). */
+  .game .gpick button { position: static; display: flex; align-items: center; gap: 8px;
+    border-radius: 14px; padding: 4px 14px 4px 10px; font: inherit; font-size: 14px; min-height: 44px;
+    min-width: 168px; border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a;
+    box-shadow: 0 4px 0 #3a2a1a; transition: transform .08s, box-shadow .08s; }
+  .game .gpick button:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
+  .game .gpick .gi { display: inline-flex; align-items: center; justify-content: center; gap: 1px;
+    width: 40px; height: 28px; border-radius: 8px; background: var(--hp-screen-tint, #f3e7c9); }
+  .game .gpick .gi img { image-rendering: pixelated; }
+  .game .gpick .gi-arrow { font-size: 12px; margin: 0 1px; }
   .game .gnum { position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
-    min-width: 48px; padding: 2px 10px; border-radius: 10px; text-align: center; font-size: 36px;
-    line-height: 1.1; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
+    display: grid; place-items: center; min-width: 52px; min-height: 56px; padding: 6px 10px;
+    border-radius: 10px; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
     box-shadow: 2px 2px 0 #3a2a1a; }
   .game .gnum.flip { animation: perk .3s ease-out; }
   /* Trait flair: placed in JS from the head point and the feet line. Every piece
@@ -504,6 +595,10 @@ const STYLE = `
   .jtile.locked img { filter: brightness(0); opacity: .3; }
   .jlist { font-size: 12px; opacity: .9; display: flex; flex-direction: column; gap: 3px; }
   .jlist .gt { opacity: .8; padding-left: 10px; }
+  .ticon { width: 14px; height: 14px; object-fit: contain; vertical-align: -3px; margin-right: 2px;
+    image-rendering: pixelated; }
+  .tnext { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .tnext .bar { flex: 1; min-width: 30px; }
   .jlist .gen.now { font-weight: 700; }
   .log { margin-top: 3px; font-size: 12px; opacity: .85; }
   .buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 6px; width: 100%; }
@@ -1060,6 +1155,10 @@ class HatchPetCard extends HTMLElement {
     const asleep = this._state(s, "binary_sensor.asleep")?.state === "on";
     const away = mood?.state === "away";
     s.asleep = asleep;
+    s.lightsOut = lightsOut;
+    // A new call chirps once (not on load: wasCalling starts undefined).
+    if (calling && s.wasCalling === false && !away) this._chirp(s, "call");
+    s.wasCalling = calling;
 
     let scene = "day";
     if (flags.includes("rainy")) scene = "rain";
@@ -1350,6 +1449,18 @@ class HatchPetCard extends HTMLElement {
     setTimeout(() => el.classList.remove(cls), ms);
   }
 
+  // A chirp, if this device turned sounds on and the pet is up at a sane hour.
+  _chirp(s, name) {
+    const hour = new Date().getHours();
+    const late = hour >= QUIET_HOURS[0] || hour < QUIET_HOURS[1];
+    if (!soundsOn() || s.asleep || s.lightsOut || late || document.visibilityState !== "visible") return;
+    try {
+      playChirp(name);
+    } catch (err) {
+      // no WebAudio: stay quiet
+    }
+  }
+
   _sparkle(s) {
     const ring = document.createElement("span");
     ring.className = "burst big";
@@ -1379,6 +1490,7 @@ class HatchPetCard extends HTMLElement {
         break;
       case "hatched":
         say("hello!");
+        this._chirp(s, "hatch");
         this._animate(s, s.pet, "born", 500);
         this._sparkle(s);
         break;
@@ -1393,8 +1505,11 @@ class HatchPetCard extends HTMLElement {
       case "trait_learned":
       case "trait_deepened":
         say(`${m.type === "trait_learned" ? "new trait" : "deeper"}: ` +
-          `${String(m.trait).replace("_", " ")} ${"★".repeat(m.level || 1)}`);
+          `${String(m.trait).replaceAll("_", " ")} ${"★".repeat(m.level || 1)}`);
         this._sparkle(s);
+        this._chirp(s, "trait");
+        // Show what the new trait looks like, so its flair means something later.
+        setTimeout(() => this._flair(s, m.trait), 700);
         break;
       case "egg_laid":
         say("see you in the journal!");
@@ -1530,6 +1645,19 @@ class HatchPetCard extends HTMLElement {
     const stageAttrs = this._state(s, "sensor.life_stage")?.attributes || {};
     const traits = (stageAttrs.traits || []).map((t) => traitLabel(t, stageAttrs.trait_levels?.[t],
       t === stageAttrs.inherited_trait));
+    // The trait it's closest to learning, while it has room for another.
+    const held = new Set(stageAttrs.traits || []);
+    const nextTrait = held.size < TRAIT_CAP
+      ? Object.entries(stageAttrs.trait_progress || {})
+        .filter(([t, p]) => !held.has(t) && FLAIR[t] && p > 0.05 && p < 1)
+        .sort((a, b) => b[1] - a[1])[0]
+      : null;
+    let bestCatch = 0;
+    try {
+      bestCatch = this._config?.experimental_catch ? Number(localStorage.getItem(BEST_CATCH_KEY) || 0) : 0;
+    } catch (err) {
+      // no storage: no best score to show
+    }
     const notifying = (this._state(s, "sensor.life_stage")?.attributes.notify_users || [])
       .includes(this._hass.user?.id);
     const ic = (n) => pixelIcon(n, 18);
@@ -1553,16 +1681,31 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "weight", `<span>${weightLabel(value("weight"))}</span>`)}
       ${row("stat_care_miss", "misses", `<span>${value("care_misses") ?? "–"}</span>`)}
       ${row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0} ignored</span>`)}
-      ${row(null, "traits", `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
+      ${row(null, `traits ${traits.length}/${TRAIT_CAP}`, `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
+      ${bestCatch ? row(null, "best catch", `<span>${bestCatch}/${CATCH.rounds}</span>`) : ""}
+      ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
+        `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${row(null, "notify me", `<span><button class="bell" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
+      ${row(null, "sounds here", `<span><button class="bell sound" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>
       <button class="jlink">journal ›</button>`;
     this._journalLink(s, true);
-    s.status.querySelector(".bell").addEventListener("click", (e) => {
+    s.status.querySelector(".bell:not(.sound)").addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
       this._setNotify(s, !notifying);
+    });
+    s.status.querySelector(".bell.sound").addEventListener("click", (e) => {
+      e.stopPropagation();
+      const on = !soundsOn();
+      try {
+        localStorage.setItem(SOUND_KEY, on ? "on" : "off");
+      } catch (err) {
+        return; // no storage: sounds stay off
+      }
+      if (on) playChirp("win"); // a sample; this tap also unlocks audio on phones
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
   }
 
@@ -1601,6 +1744,7 @@ class HatchPetCard extends HTMLElement {
       generation: stage.generation || 1, name: this._hass.devices?.[s.ids?.device]?.name_by_user
         || this._hass.devices?.[s.ids?.device]?.name || "", species: stage.species,
       traits: stage.traits || [], levels: stage.trait_levels || {}, inherited: stage.inherited_trait,
+      games: stage.games || {},
       upbringing: this._state(s, "sensor.life_stage")?.state === "adult" ? stage.upbringing : null,
       current: true,
     };
@@ -1622,8 +1766,9 @@ class HatchPetCard extends HTMLElement {
       `${escape(p.name)} · ${escape((names[p.species] || "egg").toLowerCase())}` +
       `${p.age_days != null ? ` · ${Math.round(p.age_days)} d` : ""}` +
       `${p.upbringing ? ` · ${escape(p.upbringing)}` : ""}` +
+      `${gamesPlayed(p.games) ? ` · ${gamesPlayed(p.games)} games` : ""}` +
       `${p.traits?.length ? `<br><span class="gt">${p.traits.map((t) =>
-        traitLabel(t, p.levels?.[t], t === p.inherited)).join(", ")}</span>` : ""}</div>`);
+        traitLabel(t, p.levels?.[t], t === p.inherited)).join(" ")}</span>` : ""}</div>`);
     s.status.innerHTML = `
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
@@ -1714,7 +1859,8 @@ class HatchPetCard extends HTMLElement {
     s.game = { picking: true };
     // Built each time: the card's options decide which games are offered.
     s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
-      `<button data-game="${g.key}">${g.label}</button>`).join("");
+      `<button data-game="${g.key}"><span class="gi" aria-hidden="true">${gameIcon(g.key)}</span>` +
+      `${g.label}</button>`).join("");
     this._gameView(s, "pick");
     s.bubble.textContent = "what shall we play?";
     s.sayUntil = Date.now() + 60000;
@@ -1778,11 +1924,16 @@ class HatchPetCard extends HTMLElement {
       if (!info) return;
       s.game.busy = false;
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });
-      s.gameNum.textContent = String(info.number);
+      this._showNumber(s, info.number);
       s.bubble.textContent = "will the next one be higher or lower?";
     }
     s.sayUntil = Date.now() + 60000;
     s.gameBox.querySelector(".gl").focus({ preventScroll: true });
+  }
+
+  _showNumber(s, n) {
+    s.gameNum.innerHTML = digit(n);
+    s.gameNum.dataset.n = String(n);
   }
 
   // One play_game call; ends the game (with a line) on a failure or refusal.
@@ -1822,7 +1973,7 @@ class HatchPetCard extends HTMLElement {
     s.game.round = info.round;
     s.game.wins = info.wins;
     if (kind === "higher_lower") {
-      s.gameNum.textContent = String(info.number);
+      this._showNumber(s, info.number);
       this._animate(s, s.gameNum, "flip", 300);
       this._animate(s, s.pet, "perk", 300);
       s.bubble.textContent = info.correct ? `yes! ${info.number}` : `nope, ${info.number}!`;
@@ -1836,6 +1987,7 @@ class HatchPetCard extends HTMLElement {
       s.pet.classList.remove("go-left", "go-right");
       if (!s.game) return;
       if (info.done) {
+        if (info.won) this._chirp(s, "win");
         this._endGame(s, info.won ? `${info.wins}/${info.rounds}! you win ♪` :
           `${info.wins}/${info.rounds}... again sometime?`);
         return;
@@ -1860,9 +2012,9 @@ class HatchPetCard extends HTMLElement {
 
   // One flair moment: each place shows one of the pet's traits there.
   // Returns the traits shown (card-check calls it directly).
-  _flair(s) {
+  _flair(s, only = null) {
     const stage = this._state(s, "sensor.life_stage");
-    const traits = (stage?.attributes.traits || []).filter((t) => FLAIR[t]);
+    const traits = (only ? [only] : stage?.attributes.traits || []).filter((t) => FLAIR[t]);
     if (!traits.length || !s.species || stage?.state === "egg") return [];
     const levels = stage.attributes.trait_levels || {};
     s.flairTurn = (s.flairTurn || 0) + 1;
@@ -2096,7 +2248,7 @@ class HatchPetCard extends HTMLElement {
     g.round += 1;
     g.wins += ok ? 1 : 0;
     s.bubble.textContent = line;
-    if (ok) this._animate(s, s.pet, "perk", 300);
+    if (ok) this._pounce(s);
     if (navigator.vibrate && ok) navigator.vibrate([12, 40, 12]);
     s.gameScore.textContent = `round ${g.round}/${CATCH.rounds} · ${g.wins} caught`;
     setTimeout(() => {
@@ -2113,8 +2265,22 @@ class HatchPetCard extends HTMLElement {
       } catch (err) {
         // no storage: no best score
       }
+      if (g.wins >= CATCH.winAt) this._chirp(s, "win");
       this._endGame(s, `${g.wins}/${CATCH.rounds} caught${g.wins >= CATCH.winAt ? "! ♪" : "..."} best ${best}/${CATCH.rounds}`);
     }, 1000);
+  }
+
+  // A catch: the species' own "won" pose where one is drawn (child), else a hop.
+  _pounce(s) {
+    const pose = s.species?.reactions?.won;
+    const frames = s.drawn === "child" && s.species?.extras?.[pose];
+    if (frames) {
+      s.poseFrames = Array.isArray(frames) ? frames : [frames];
+      s.poseUntil = Date.now() + 900;
+      this._show(s, s.pet, s.poseFrames[0]);
+    } else {
+      this._animate(s, s.pet, "hop", 700);
+    }
   }
 
   _endGame(s, line) {

@@ -74,8 +74,25 @@ async def test_status_answers_in_the_pets_voice(
     assert slots["mood"] == "hungry"
     assert slots["hunger"] == 30
     assert slots["stage"] == "child"
+    assert slots["traits"] == {}
     # One pet needs no name.
     assert speech(await ask(hass, "VirtualPetStatus")) == speech(response)
+
+
+async def test_status_names_the_pets_traits(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(
+        now,
+        hunger=30.0,
+        traits=["sun_lover", "player"],
+        trait_levels={"sun_lover": 2},
+    )
+    assert await async_setup_component(hass, "intent", {})
+    await setup(hass)
+    response = await ask(hass, "VirtualPetStatus")
+    assert speech(response).endswith(" Traits: sun lover, player.")
+    assert response.speech_slots["traits"] == {"sun_lover": 2, "player": 1}
 
 
 async def test_unknown_and_ambiguous_pets(
