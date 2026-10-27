@@ -409,7 +409,11 @@ async function main() {
   check("a flair moment clears itself", flair.after === 0);
   await inject(pet["sensor.life_stage"], { attributes: { traits: [], trait_levels: {} } });
 
-  // Excitement bounces briefly, not for the whole 15 minutes it lasts.
+  // Excitement bounces briefly, not for the whole 15 minutes it lasts. A game won
+  // earlier may have left the pet excited for longer than the bounce already, so
+  // calm it first: the excitement below must be a fresh start.
+  await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [] } });
+  await page.waitForTimeout(400);
   await inject(pet["sensor.mood"], { state: "excited", attributes: { flags: ["excited"] } });
   await page.waitForTimeout(800);
   const hopsAtFirst = await cur().locator(".pet.hop").count();
