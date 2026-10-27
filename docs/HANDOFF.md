@@ -90,7 +90,7 @@ details before committing it.
 6. **Feature-gap plan** (`docs/plan-2026-10-27-feature-gaps.md`): the owner chose
    a call-response blueprint, choosing the next egg, more minigames (Higher or
    Lower; then Catch from Giga Pets, as a card-only prototype first; copy me was
-   cut) and a one-species alternate adult chosen by a trait. The
+   cut) and a one-species alternate adult chosen by a trait. A (the blueprint) is built; next is B. The
    plan has been reviewed and the owner has approved it; D still needs a species
    and a trait picked from the owner's pets. Not chosen (don't start unasked): learning household
    routines, a daily diary in the journal (declined), pets on the shelf noticing

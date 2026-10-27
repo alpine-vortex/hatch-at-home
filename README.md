@@ -372,6 +372,24 @@ names are included.
 
 Events fired during a fast-forward carry `simulated: true`.
 
+### Let the house answer a call (blueprint)
+
+[![Import the blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Falpine-vortex%2Fhatch-at-home%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fvirtual_pet%2Fcall_response.yaml)
+
+An optional automation blueprint: when the pet calls, lamps you pick blink or glow a
+colour for a moment, and a speaker can play a short sound. Nothing happens until you
+make an automation from it. HACS doesn't install blueprints, so import it with the
+button, or under Settings → Automations & scenes → Blueprints → Import, from
+`https://github.com/alpine-vortex/hatch-at-home/blob/main/blueprints/automation/virtual_pet/call_response.yaml`.
+
+- Only lamps that are already on are touched, and never their brightness, so a dark
+  room stays dark and the pet doesn't sense a brighter room. A colour pulse puts the
+  lamps back as they were.
+- Quiet hours (22:00–07:00 by default) mute the sound, not the lamps.
+- After a response, further calls are ignored for the cooldown (30 minutes by
+  default). Fast-forward calls are ignored.
+- A fake call (see "How the pet works") looks the same as a real one, here too.
+
 ## Testing with fast-forward
 
 Developer Tools → Actions → **Virtual Pet: Fast forward**, with `hours: 6`. The

@@ -27,6 +27,13 @@ D's species and trait.
 
 ## A. Call response blueprint (S–M, no release)
 
+**Built** (2026-10-27): `blueprints/automation/virtual_pet/call_response.yaml`, the
+README section "Let the house answer a call", and `tests/test_blueprint.py` (10
+tests). The default pulse is a flash. Test note: `async_block_till_done` waits for
+the automation's run to end, which includes the cooldown's delay, so the tests let
+the loop run a few steps instead (`settle()`). Not yet tried on a real HA with real
+lamps.
+
 An optional HA automation blueprint: when the pet calls, briefly pulse a lamp of the
 owner's choosing and/or play a short sound on a speaker. Every piece is opt-in and
 set up by the owner. The integration doesn't change.
@@ -338,7 +345,7 @@ helps.
 
 ## Order and releases
 
-1. **A** (blueprint): merged on its own, no release.
+1. **A** (blueprint): built; lands with the plan's PR, no release.
 2. **B** (next egg): 0.23.0.
 3. **D's decision and art request**: pick the species and trait from the owner's
    pets, then send the brief to Sol. The code comes when the art arrives.

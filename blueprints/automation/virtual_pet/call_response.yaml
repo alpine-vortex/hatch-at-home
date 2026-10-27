@@ -1,0 +1,186 @@
+blueprint:
+  name: Virtual pet calls into the house
+  description: >-
+    When the pet calls for attention, briefly pulse lamps that are already on
+    and/or play a short sound. Lamps change colour or flash, never brightness,
+    so the pet doesn't sense a brighter room; lamps that are off stay off. A
+    cooldown drops repeated calls, and quiet hours mute the sound.
+  domain: automation
+  source_url: https://github.com/alpine-vortex/hatch-at-home/blob/main/blueprints/automation/virtual_pet/call_response.yaml
+  homeassistant:
+    min_version: "2026.10.0"
+  input:
+    pet:
+      name: Pet
+      description: The pet (device) whose calls this responds to.
+      selector:
+        config_entry:
+          integration: virtual_pet
+    lights:
+      name: Lamps
+      description: Only the ones that are on when the pet calls are touched.
+      default: []
+      selector:
+        entity:
+          domain: light
+          multiple: true
+    pulse:
+      name: Pulse
+      description: >-
+        Flash: each lamp blinks once (if the lamp supports it). Colour: the lamps
+        take the colour below for a moment, then go back to how they were.
+      default: flash
+      selector:
+        select:
+          options:
+            - label: Flash
+              value: flash
+            - label: Colour
+              value: colour
+    colour:
+      name: Colour
+      default: [255, 170, 60]
+      selector:
+        color_rgb:
+    pulse_seconds:
+      name: Colour pulse length
+      default: 3
+      selector:
+        number:
+          min: 1
+          max: 30
+          unit_of_measurement: s
+    speaker:
+      name: Speaker
+      description: Optional. Leave empty for no sound.
+      default: ""
+      selector:
+        entity:
+          domain: media_player
+    sound:
+      name: Sound
+      description: >-
+        What the speaker plays, as a media content ID (a URL or a
+        media-source:// path).
+      default: ""
+      selector:
+        text:
+    sound_type:
+      name: Sound type
+      default: music
+      selector:
+        select:
+          options:
+            - music
+            - audio/mpeg
+            - audio/wav
+    quiet_hours:
+      name: Quiet hours for the sound
+      description: The pet can be awake and calling late; keep the speaker quiet then.
+      default: true
+      selector:
+        boolean:
+    quiet_start:
+      name: Quiet from
+      default: "22:00:00"
+      selector:
+        time:
+    quiet_end:
+      name: Quiet until
+      default: "07:00:00"
+      selector:
+        time:
+    cooldown:
+      name: Cooldown
+      description: Calls within this long of the last response are ignored.
+      default: 30
+      selector:
+        number:
+          min: 0
+          max: 240
+          unit_of_measurement: min
+
+# One response at a time; calls during it or its cooldown are dropped quietly.
+mode: single
+max_exceeded: silent
+
+triggers:
+  - trigger: event
+    event_type: virtual_pet_call_started
+    event_data:
+      pet_id: !input pet
+
+variables:
+  lights: !input lights
+  pulse: !input pulse
+  colour: !input colour
+  pulse_seconds: !input pulse_seconds
+  speaker: !input speaker
+  sound: !input sound
+  sound_type: !input sound_type
+  quiet_hours: !input quiet_hours
+  quiet_start: !input quiet_start
+  quiet_end: !input quiet_end
+  cooldown: !input cooldown
+  lit: >-
+    {{ (lights if lights is list else [lights])
+       | select('is_state', 'on') | list }}
+  quiet: >-
+    {%- set t = now().strftime('%H:%M:%S') -%}
+    {{ quiet_hours and quiet_start != quiet_end
+       and ((quiet_start <= t < quiet_end) if quiet_start < quiet_end
+            else (t >= quiet_start or t < quiet_end)) }}
+  snapshot: "{{ 'virtual_pet_call_' ~ this.entity_id.split('.')[1] }}"
+
+conditions:
+  # Fast-forward replays events with simulated: true; don't flash for those.
+  - condition: template
+    value_template: "{{ not trigger.event.data.get('simulated', false) }}"
+
+actions:
+  - parallel:
+      - if:
+          - condition: template
+            value_template: "{{ lit | count > 0 }}"
+        then:
+          - if:
+              - condition: template
+                value_template: "{{ pulse == 'colour' }}"
+            then:
+              - action: scene.create
+                continue_on_error: true
+                data:
+                  scene_id: "{{ snapshot }}"
+                  snapshot_entities: "{{ lit }}"
+              - action: light.turn_on
+                continue_on_error: true
+                target:
+                  entity_id: "{{ lit }}"
+                data:
+                  rgb_color: "{{ colour }}"
+              - delay:
+                  seconds: "{{ pulse_seconds | int }}"
+              - action: scene.turn_on
+                continue_on_error: true
+                target:
+                  entity_id: "scene.{{ snapshot }}"
+            else:
+              - action: light.turn_on
+                continue_on_error: true
+                target:
+                  entity_id: "{{ lit }}"
+                data:
+                  flash: short
+      - if:
+          - condition: template
+            value_template: "{{ speaker != '' and sound != '' and not quiet }}"
+        then:
+          - action: media_player.play_media
+            continue_on_error: true
+            target:
+              entity_id: "{{ speaker }}"
+            data:
+              media_content_id: "{{ sound }}"
+              media_content_type: "{{ sound_type }}"
+  - delay:
+      minutes: "{{ cooldown | int }}"
