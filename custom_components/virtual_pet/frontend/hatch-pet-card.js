@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.21.0";
+const VERSION = "0.22.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -53,8 +53,8 @@ const REFUSALS = {
 
 // Actions that borrow another action's prop sprite.
 const PROP_FOR = { game: "play", chore_treat: "snack" };
-// Shared pixel icons for props no species has drawn yet ("../ui/" leaves sprites/).
-const FALLBACK_PROPS = { scold: "../ui/icon_scold", praise: "../ui/icon_praise" };
+// Sol's shared props, for every species that has no own ("../ui/" leaves sprites/).
+const FALLBACK_PROPS = { scold: "../ui/prop_scold", praise: "../ui/prop_praise", fan: "../ui/prop_fan" };
 // Missing sprites are reported once each in the console.
 const WARNED = new Set();
 
@@ -1288,7 +1288,7 @@ class HatchPetCard extends HTMLElement {
         s.poseUntil = Date.now() + 2500;
         this._show(s, s.pet, s.poseFrames[0]);
       }
-      if (entry.action === "fan" && !s.species?.props?.fan) {
+      if (entry.action === "fan") { // the fan stands by, and its breeze crosses the scene
         s.screen.classList.add("breezy");
         clearTimeout(s.breezeTimer);
         s.breezeTimer = setTimeout(() => s.screen.classList.remove("breezy"), 2600);

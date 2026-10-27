@@ -260,7 +260,7 @@ async def test_egg_hatches_into_a_roster_species(
     await hass.services.async_call(DOMAIN, "fast_forward", {"hours": 1}, blocking=True)
     species = hatched[0].data["species"]
     attrs = hass.states.get("sensor.pip_life_stage").attributes
-    assert species in attrs["roster"] == ["bird", "squirrel"]
+    assert species in attrs["roster"] == ["bird", "squirrel", "deer"]
     assert attrs["species"] == species
     assert attrs["raised"] == [species]
 

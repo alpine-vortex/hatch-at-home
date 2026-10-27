@@ -1,0 +1,4 @@
+Use your image generation tool to draw ONE landscape image (4:3, wide) and save it as pond_bg_rain.png in the current directory.
+
+The attached scene redrawn on a RAINY day: EXACTLY the same place, composition and layout, only the weather and light change: grey soft light, rain streaks falling, small ripples or drops on surfaces. No creature, no text.
+Chunky retro pixel art exactly like the attached scene: big hard square pixels, no anti-aliasing, limited palette, dark pixel outline.

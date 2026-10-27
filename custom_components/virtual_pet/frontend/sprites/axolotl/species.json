@@ -28,7 +28,7 @@
     "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
   },
   "murk": "treefrog/murk",
-  "backgrounds": { "day": "treefrog/bg_day", "night": "treefrog/bg_night", "dim": "treefrog/bg_night" },
+  "backgrounds": { "day": "treefrog/bg_day", "night": "treefrog/bg_night", "rain": "treefrog/bg_rain", "dim": "treefrog/bg_night" },
   "words": { "food": "bloodworms", "home": "pond" },
   "reactions": { "play": "float", "won": "gill_flutter", "praise": "smile", "snack": "smile" }
 }

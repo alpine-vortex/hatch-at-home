@@ -26,7 +26,7 @@
     "away": "bird/sitter_sign",
     "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
   },
-  "backgrounds": { "day": "bat/bg_day", "night": "bat/bg_night", "dim": "bat/bg_night" },
+  "backgrounds": { "day": "bat/bg_day", "night": "bat/bg_night", "rain": "bat/bg_rain", "dim": "bat/bg_night" },
   "words": { "food": "leaves", "home": "cocoon" },
   "reactions": { "play": "glow", "won": "wing_spread", "praise": "wing_spread" }
 }

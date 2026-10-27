@@ -1,0 +1,4 @@
+Use your image generation tool to draw ONE landscape image (4:3, wide) and save it as terrarium_bg_dim.png in the current directory.
+
+The attached terrarium scene redrawn DIMMED for the evening: lamp turned low to a soft warm glow, gentle shadows: EXACTLY the same tank, rocks, hide, plant and layout, only the lighting changes. No creature, no text.
+Chunky retro pixel art exactly like the attached scene: big hard square pixels, no anti-aliasing, limited palette, dark pixel outline.

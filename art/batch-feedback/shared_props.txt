@@ -1,0 +1,8 @@
+Use your image generation tool to draw ONE square image and save it as shared_props.png in the current directory.
+
+A 2 x 2 grid of equal square cells, each holding one small game prop drawn as chunky pixel art (props about 24 art pixels wide) in the same style, outline and palette family as the attached reference props; bold, simple, readable at small size. Each object centred, filling about 60% of its cell.
+- top-left: a small desk fan with a round cage.
+- top-right: a wagging pointing finger (hand with index finger raised) with two small motion lines, stern but cute.
+- bottom-left: a bold gold five-point star with two little pink hearts beside it.
+- bottom-right: leave empty grey.
+Background: one flat even mid-grey everywhere. No text, no labels, no borders.
