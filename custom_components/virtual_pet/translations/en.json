@@ -37,7 +37,7 @@
         "sections": {
           "sleep": {
             "name": "Sleep",
-            "description": "Lights-out always wins. Otherwise the pet goes to bed when the bedtime lights are off and the house is quiet, from an hour before bedtime. If nobody does either, it dozes off on its own an hour after bedtime. The house never wakes it; it wakes at wake time.",
+            "description": "Lights out always wins. Otherwise the pet goes to bed when the bedtime lights are off and the house is quiet, from an hour before bedtime. If nobody does either, it dozes off on its own an hour after bedtime. The house never wakes it; it wakes at wake time.",
             "data": {
               "bedtime": "Bedtime",
               "wake_time": "Wake time",
@@ -266,7 +266,7 @@
   },
   "exceptions": {
     "no_pet": {
-      "message": "No virtual pet matches that config entry."
+      "message": "No loaded virtual pet matches that pet or config entry."
     },
     "wrong_guess": {
       "message": "\"{guess}\" isn't a guess in that game; try {guesses}."
@@ -292,7 +292,7 @@
     },
     "notify_me": {
       "name": "Notify me",
-      "description": "Turns this pet's phone notifications on or off for you, the user calling it. They go to your phones through the Home Assistant app: calls, sickness, hatching, traits and new eggs.",
+      "description": "Turns this pet's phone notifications on or off for you, the user calling it. They go to your phones through the Home Assistant app: calls, sickness, hatching, growing up, traits, the season's first snow and frost, and new eggs.",
       "fields": {
         "entity_id": {
           "name": "Pet",
@@ -306,7 +306,7 @@
     },
     "play_game": {
       "name": "Play a game",
-      "description": "One round of a game the card's play button starts. Five rounds make a game; three right guesses win it. Left/right: the pet hides left or right and you guess; the first guess starts a game. Higher or lower: call once without a guess to start and see the first number (1-9), then guess whether the next is higher or lower.",
+      "description": "One round of a game the card's play button starts. Five rounds make a game; three right guesses win it. Left or right: the pet hides left or right and you guess; the first guess starts a game. Higher or lower: call once without a guess to start and see the first number (1-9), then guess whether the next is higher or lower.",
       "fields": {
         "entity_id": {
           "name": "Pet",

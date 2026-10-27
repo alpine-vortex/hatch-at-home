@@ -32,6 +32,7 @@ from .const import (
     CONF_TV,
     CONF_WEATHER,
     CONF_ZONE,
+    PRIVATE_READINGS,
 )
 from .coordinator import PetConfigEntry
 
@@ -87,6 +88,8 @@ async def async_get_config_entry_diagnostics(
             "upbringing_score": round(model.upbringing_score(pet), 1),
             "trait_progress": model.trait_progress(pet),
         },
-        "calculation": async_redact_data(dict(coordinator.debug), REDACT_OPTIONS),
-        "moments": list(coordinator.moments),
+        "calculation": async_redact_data(
+            dict(coordinator.debug), REDACT_OPTIONS | PRIVATE_READINGS
+        ),
+        "moments": async_redact_data(list(coordinator.moments), PRIVATE_READINGS),
     }

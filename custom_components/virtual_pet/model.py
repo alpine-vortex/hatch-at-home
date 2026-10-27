@@ -1448,14 +1448,14 @@ _CALL_REASONS = {
     "sick": "feeling sick, medicine please?",
     "hunger": "tummy rumbling!",
     "dirty": "it's getting stinky in here",
-    "energy": "so tired... lights out?",
+    "energy": "so tired... sleep time?",
     "happiness": "play with me?",
     "fake": "play with me?",
 }
 
 _MOOD_REASONS = {
     "away": "at the sitter's",
-    "egg": "wiggling in its shell",
+    "egg": "*wiggle wiggle*",
     "sick": "feeling sick",
     "asleep": "zzz",
     "hungry": "a little peckish",

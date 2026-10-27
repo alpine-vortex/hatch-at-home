@@ -57,7 +57,9 @@ from .watcher import Watcher
 
 type PetConfigEntry = ConfigEntry[PetCoordinator]
 
-SAVE_DELAY = 10  # seconds; the Store also writes once more on shutdown
+# Seconds; the Store also writes once more on shutdown, so only a crash loses
+# up to this much. Every tick and house change saves, so this also caps writes.
+SAVE_DELAY = 60
 
 # Events the card reacts to on screen. The card only sees state, so these are
 # published as a short list (the last_care sensor's "moments").

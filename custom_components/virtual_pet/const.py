@@ -52,6 +52,17 @@ CONF_MUSIC = "music"
 CONF_TV = "tv"
 CONF_ZONE = "zone"
 CONF_PRIVACY = "privacy"
+# What the house was doing, not how the pet is: what's on and who's home.
+PRIVATE_READINGS = {
+    "company",
+    "motion_recent",
+    "tv_title",
+    "music_title",
+    "music_artist",
+    "title",
+    "artist",
+    "headline",
+}
 DEFAULT_ZONE = "zone.home"
 CONF_FIREPLACE = "fireplace"
 CONF_COMFORT_LOW = "comfort_low"  # stored in °C, shown in the owner's unit

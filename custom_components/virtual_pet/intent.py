@@ -150,7 +150,9 @@ class StatusIntent(intent.IntentHandler):
         response = intent_obj.create_response()
         response.response_type = intent.IntentResponseType.QUERY_ANSWER
         traits = [t.replace("_", " ") for t in state.traits]
-        speech = f"{name} is {MOOD_WORDS[mood]}: {reason}."
+        # Most reasons end in their own punctuation ("play with me?").
+        end = "" if reason.endswith((".", "!", "?", "~", "…")) else "."
+        speech = f"{name} is {MOOD_WORDS[mood]}: {reason}{end}"
         if traits:
             speech += f" Traits: {', '.join(traits)}."
         response.async_set_speech(speech)
