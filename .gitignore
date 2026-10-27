@@ -7,3 +7,4 @@ dev/config/*
 !dev/config/configuration.yaml
 !dev/config/dashboards/
 dev/card-check/
+node_modules/

@@ -1,4 +1,6 @@
-# HACS and Home Assistant's own checks, plus the test suite. Free on a public repo.
+# HACS and Home Assistant's own checks, the test suite, and the card in a real
+# browser. Free on a public repo. Actions are pinned to commits; Dependabot
+# (.github/dependabot.yml) proposes updates.
 name: Validate
 
 on:
@@ -11,7 +13,7 @@ jobs:
   hacs:
     runs-on: ubuntu-latest
     steps:
-      - uses: hacs/action@main
+      - uses: hacs/action@1ebf01c408f29afcb6406bd431bc98fd8cbb15aa # main
         with:
           category: integration
           # Not in home-assistant/brands (the icon ships in brand/), and the repo
@@ -21,13 +23,28 @@ jobs:
   hassfest:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: home-assistant/actions/hassfest@master
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: home-assistant/actions/hassfest@86d4564712fa02543c808e3a693dd04f9d3f8361 # master
 
   tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
       - run: scripts/setup
       - run: scripts/test
+      - run: node --check custom_components/virtual_pet/frontend/hatch-pet-card.js
+
+  # scripts/card-check against a throwaway HA: navigation, the status screen,
+  # action feedback, the editor, and no errors in the browser console.
+  card:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      - run: scripts/setup
+      - run: npm install --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
+      - run: nohup scripts/develop > hass.log 2>&1 &
+      - run: scripts/card-check
+      - if: failure()
+        run: tail -n 200 hass.log
