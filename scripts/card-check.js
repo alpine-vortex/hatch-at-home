@@ -221,6 +221,10 @@ async function main() {
     await page.locator("hatch-pet-card .nav.next").click();
     await page.waitForTimeout(700);
   }
+  // A calling pet neither greets nor idles, and a fresh pet may call (or whine)
+  // at any time; quiet it for these two checks. The next tick (5 min) restores
+  // the real state.
+  await inject(pet["binary_sensor.calling"], { state: "off" });
   await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [], requests: [] } });
   let greeting = "";
   for (let i = 0; i < 30 && !greeting.includes(USER.name); i++) {
