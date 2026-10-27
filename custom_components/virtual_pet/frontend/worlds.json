@@ -48,7 +48,11 @@
     "deco": [
       "deco_pebbles",
       "deco_succulent"
-    ]
+    ],
+    "trim": {
+      "top": "trim_terrarium_top",
+      "plate": "trim_terrarium_plate"
+    }
   },
   "hearth": {
     "name": "Hearth",
@@ -70,7 +74,12 @@
     "deco": [
       "deco_yarn",
       "deco_cushion"
-    ]
+    ],
+    "trim": {
+      "top": "trim_hearth_top",
+      "plate": "trim_hearth_plate",
+      "corner": "trim_hearth_corner"
+    }
   },
   "tidepool": {
     "name": "Tidepool",
@@ -93,7 +102,12 @@
     "deco": [
       "deco_starfish",
       "deco_anemone"
-    ]
+    ],
+    "trim": {
+      "top": "trim_tidepool_top",
+      "plate": "trim_tidepool_plate",
+      "corner": "trim_tidepool_corner"
+    }
   },
   "pond": {
     "name": "Pond",
@@ -116,7 +130,12 @@
     "deco": [
       "deco_cattail",
       "deco_lilypad"
-    ]
+    ],
+    "trim": {
+      "top": "trim_pond_top",
+      "plate": "trim_pond_plate",
+      "corner": "trim_pond_corner"
+    }
   },
   "nightsky": {
     "name": "Night Sky",
@@ -138,6 +157,11 @@
     "deco": [
       "deco_glowshroom",
       "deco_lantern"
-    ]
+    ],
+    "trim": {
+      "top": "trim_nightsky_top",
+      "plate": "trim_nightsky_plate",
+      "corner": "trim_nightsky_corner"
+    }
   }
 }

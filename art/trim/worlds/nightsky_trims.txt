@@ -1,0 +1,7 @@
+Use your image generation tool to draw ONE square image and save it as nightsky_trims.png in the current directory.
+
+Decorative pixel-art trim pieces. Chunky retro pixel art EXACTLY in the style of the attached reference trim sheet: big hard square pixels, a 1-art-pixel dark outline, limited palette, no anti-aliasing, no gradients, no text anywhere. They are decorative stickers for a toy device whose plastic is midnight blue #3d4a8a; choose colours that sit nicely on that colour.
+- TOP third: a string of tiny warm glowing fairy lights and small gold stars, about 64 x 18 art pixels, draping in two shallow swags (two halves), with a clear empty gap of about 26 art pixels in the middle between the halves.
+- MIDDLE third: a blank deep-blue enamel plaque with a thin gold border and a small gold star stud at each end, a horizontal piece about 48 art pixels wide and 12 art pixels tall, a plain flat surface in a mid-to-dark tone; the middle 36 art pixels of it must be plain and free of any detail (text will be written there); small fixings only at the two ends.
+- BOTTOM third, left side: two small softly glowing mushrooms with a tiny firefly, about 16 x 14 art pixels.
+Each piece is a separate object with lots of empty space between them, on one flat even mid-grey background. No labels, no borders, no shadows on the background.

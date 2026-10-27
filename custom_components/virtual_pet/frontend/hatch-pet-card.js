@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.23.1";
+const VERSION = "0.24.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -232,20 +232,42 @@ const STYLE = `
     box-shadow: inset 0 -9px 0 var(--d-dark), inset 0 5px 0 rgba(255,255,255,.28), 0 16px 34px rgba(20,15,5,.32);
     display: flex; flex-direction: column; align-items: center; gap: 12px; }
   .body { position: relative; }
-  .trim-top { position: absolute; top: -12px; left: 50%; width: 192px; height: 57px;
-    margin-left: -96px; pointer-events: none; image-rendering: pixelated; }
-  .trim-corner { position: absolute; bottom: -18px; width: 64px; height: 44px;
-    pointer-events: none; image-rendering: pixelated; }
+  /* Sol's trim (worlds.json "trim"), drawn at each piece's own size (see _trim) and
+     placed to suit each shell: over the top edge, on the plate, at the bottom corners. */
+  .trim-top, .trim-top2, .trim-corner { position: absolute; pointer-events: none;
+    image-rendering: pixelated; z-index: 1; }
+  .trim-top { top: -12px; left: 50%; transform: translateX(-50%); }
+  .trim-top2 { display: none; }
+  .trim-corner { bottom: -18px; }
   .trim-corner.left { left: 14%; } .trim-corner.right { right: 14%; transform: scaleX(-1); }
-  .label.plate { width: 192px; height: 44px; display: flex; align-items: center;
+  /* Tank: a pair standing on the lid's two ends, clear of its grips. */
+  .tank .trim-top, .tank .trim-top2 { top: auto; bottom: calc(100% + 15px); transform: none; }
+  .tank .trim-top { left: 20px; }
+  .tank .trim-top2 { display: block; right: 20px; transform: scaleX(-1); }
+  /* House: the wreath hangs in the middle of the roof's gable. */
+  .house .trim-top { top: -50px; }
+  .house .trim-corner { bottom: -12px; }
+  .house .trim-corner.left { left: 4%; } .house .trim-corner.right { right: 4%; }
+  /* Lily pad: the garland parts at the notch; the corners sit in on the bottom curve. */
+  .pad .trim-top { top: -18px; }
+  .pad .trim-corner { bottom: 2px; }
+  .pad .trim-corner.left { left: 20%; } .pad .trim-corner.right { right: 20%; }
+  /* Moon: the garland's gap sits under the crescent, which rides right of centre. */
+  .moon .trim-top { top: -10px; transform: translateX(calc(-50% + 13px)); }
+  /* Room under the full-width garlands for the plate, and above the bottom edge for the
+     corners, so neither covers the label or the button captions. */
+  .porthole .label.plate { margin-top: 44px; }
+  .pad .label.plate { margin-top: 30px; }
+  .moon .label.plate { margin-top: 30px; }
+  .porthole .body, .moon .body { padding-bottom: 44px; }
+  .label.plate { display: flex; align-items: center; box-sizing: border-box;
     justify-content: center; background-size: 100% 100%; image-rendering: pixelated;
     color: #fff4dc; text-shadow: 0 2px 0 #3a1e0c; margin-top: 10px; letter-spacing: .08em; }
-  .compact .trim-top { width: 128px; height: 38px; margin-left: -64px; top: -8px; }
   .compact .trim-corner { display: none; }
   .egg .body { border-radius: 50% 50% 46% 46% / 30% 30% 18% 18%; padding: 36px 20px 40px; }
   .egg .buttons { width: 88%; }
   .tank .body { border-radius: 18px; padding: 16px 18px 22px; }
-  .house .body { border-radius: 0 0 10px 10px; padding: 18px 18px 24px; }
+  .house .body { border-radius: 0 0 10px 10px; padding: 18px 18px 38px; }
   .label { font-size: 14px; letter-spacing: .12em; color: var(--d-ink); }
   .request { position: absolute; right: 14px; bottom: 14px; z-index: 2; min-height: 44px;
     display: none; align-items: center; gap: 6px; padding: 0 14px; border: 2px solid #3a2a1a;
@@ -579,7 +601,7 @@ class HatchPetCard extends HTMLElement {
       <div class="device">
         <div class="roof"></div><div class="crescent"></div><div class="loop"></div><div class="lid"><span></span><span></span><span></span></div>
         <div class="body">
-          <img class="trim-top" alt="">
+          <img class="trim-top" alt=""><img class="trim-top2" alt="">
           <span class="label"></span>
           <div class="bezel"><div class="screen">
             <img class="bg" alt="">
@@ -762,7 +784,12 @@ class HatchPetCard extends HTMLElement {
     const vw = this._viewport.clientWidth;
     if (!vw) return;
     this._slideW = Math.min(330, vw - 56);
-    this._card.classList.toggle("compact", this._slideW < 280);
+    const compact = this._slideW < 280;
+    if (compact !== this._card.classList.contains("compact")) {
+      this._card.classList.toggle("compact", compact);
+      this._sig = null; // the trim is sized for the layout: draw again
+      this._update();
+    }
     for (const s of this._slides) s.el.style.width = `${this._slideW}px`;
     this._renderShelf();
   }
@@ -825,6 +852,38 @@ class HatchPetCard extends HTMLElement {
       "aria-pressed", s.screen.classList.contains("show-status") ? "true" : "false");
   }
 
+  // Size a trim piece (an <img>, or the label wearing the plate as its background) to
+  // its art. A plate taller than 44 px has strings or hooks above it, so the label's
+  // text keeps to its bottom 44 px.
+  _trim(el, src, scale) {
+    const size = (w, h) => {
+      el.style.width = `${w * scale}px`;
+      el.style.height = `${h * scale}px`;
+      if (el.tagName !== "IMG") el.style.paddingTop = `${Math.max(0, h - 44)}px`;
+    };
+    if (el.tagName === "IMG") {
+      if (el.getAttribute("src") !== src) {
+        el.onload = () => size(el.naturalWidth, el.naturalHeight);
+        el.setAttribute("src", src);
+      } else if (el.naturalWidth) {
+        size(el.naturalWidth, el.naturalHeight);
+      }
+      return;
+    }
+    if (el.dataset.trimSrc === src && el.dataset.trimW) {
+      size(Number(el.dataset.trimW), Number(el.dataset.trimH));
+      return;
+    }
+    el.dataset.trimSrc = src;
+    const probe = new Image();
+    probe.onload = () => {
+      el.dataset.trimW = probe.naturalWidth;
+      el.dataset.trimH = probe.naturalHeight;
+      if (el.dataset.trimSrc === src) size(probe.naturalWidth, probe.naturalHeight);
+    };
+    probe.src = src;
+  }
+
   _show(s, img, sprite) {
     if (!sprite) {
       img.style.display = "none";
@@ -859,14 +918,25 @@ class HatchPetCard extends HTMLElement {
     // Optional pixel-art trim from Sol (worlds.json "trim"), like stickers on the toy.
     const trim = world.trim || {};
     const uiSrc = (name) => `${BASE}/ui/${name}.png?v=${VERSION}`;
-    dev.querySelector(".trim-top").style.display = trim.top ? "" : "none";
-    if (trim.top) dev.querySelector(".trim-top").src = uiSrc(trim.top);
+    // Tops are drawn at 3/4 size on the egg, tank and house, whose tops are small;
+    // the wide flat shells take them full size. A compact card shrinks them again.
+    const topScale = (["egg", "tank", "house"].includes(shape) ? 0.75 : 1) *
+      (this._card.classList.contains("compact") ? 0.7 : 1);
+    dev.querySelectorAll(".trim-top, .trim-top2").forEach((img) => {
+      img.style.visibility = trim.top ? "" : "hidden";
+      if (trim.top) this._trim(img, uiSrc(trim.top), topScale);
+    });
     dev.querySelectorAll(".trim-corner").forEach((img) => {
       img.style.display = trim.corner ? "" : "none";
-      if (trim.corner) img.src = uiSrc(trim.corner);
+      if (trim.corner) this._trim(img, uiSrc(trim.corner), 1);
     });
     s.label.classList.toggle("plate", !!trim.plate);
     s.label.style.backgroundImage = trim.plate ? `url(${uiSrc(trim.plate)})` : "";
+    if (trim.plate) {
+      this._trim(s.label, uiSrc(trim.plate), 1);
+    } else {
+      s.label.style.width = s.label.style.height = s.label.style.paddingTop = "";
+    }
 
     const mood = this._state(s, "sensor.mood");
     const stageState = this._state(s, "sensor.life_stage");
