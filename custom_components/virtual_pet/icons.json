@@ -104,6 +104,9 @@
     },
     "play_game": {
       "service": "mdi:gamepad-variant"
+    },
+    "share_news": {
+      "service": "mdi:newspaper-variant"
     }
   }
 }

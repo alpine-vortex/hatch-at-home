@@ -263,3 +263,14 @@ def test_passing_moments_sunset_morning_and_tv():
         {"type": "listening", "title": "Clair de lune", "artist": "Debussy"},
         {"type": "tv_off_late"},
     ]
+
+
+def test_news_text_tidies_and_cuts_at_a_word():
+    assert home.news_text("  Tamagotchi\n turns   30! ", 80) == "Tamagotchi turns 30!"
+    assert home.news_text(None, 80) == ""
+    long = "Digimon " * 20
+    cut = home.news_text(long, R.NEWS_HEADLINE_MAX)
+    assert len(cut) <= R.NEWS_HEADLINE_MAX
+    assert cut.endswith("Digimon…")
+    # One very long word is cut where it has to be.
+    assert home.news_text("x" * 100, 10) == "x" * 9 + "…"
