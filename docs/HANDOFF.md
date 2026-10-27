@@ -102,8 +102,9 @@ details before committing it.
 - **History rewrite, 2026-10-27 (owner's request):** the 0.25.0 commit carried a
   local username as its author; `main` and PR #7's branch were rewritten from that
   commit on (author renamed, same files and dates, older history untouched). The
-  session's proxy refused tag pushes, so the v0.25.0 to v0.26.0b4 tags were left
-  for the owner to move; the old commits also stay reachable through the art
+  session's proxy refused tag pushes and branch deletes. v0.25.1 was rebuilt on the
+  rewritten main by the release workflow (`replace`); the v0.25.0 and v0.26.0b1-b4
+  tags were left for the owner to move; the old commits also stay reachable through the art
   session's branch `ccr-7ac3cdae-vv7jj5` (its work is already in PR #7), the merged
   `ccr-a828d8c1-review` branch and GitHub's PR refs. Anyone with an older clone:
   `git fetch && git reset --hard origin/<branch>` before working on it.
