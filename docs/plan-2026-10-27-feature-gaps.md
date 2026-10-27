@@ -1,11 +1,13 @@
 # Feature-gap plan, 2026-10-27 (written after 0.21.0; releases renumbered after 0.22.0)
 
-**Status:** planned, nothing started. The owner chose these items from an outside
-feature-gap audit, which compared Hatch at Home with Tamagotchi and Giga Pets.
-Three adversarial reviews followed: of the first draft, of how fun the games
-are, and of the whole plan against the code. The owner accepted their
-recommendations; this version includes them. The only decision still open is
-D's species and trait.
+**Status (2026-10-27):** everything chosen is built. A and B are released (B in
+0.23.0); C1, the C2 prototype and D, with Sol's art and a polish pass, are in draft
+PR #7 and out as the beta 0.26.0b3. What's left is the owner's: try the beta, decide
+whether Catch stays (C2 full), and merge PR #7 after the 2026-11-03 tuning review.
+The owner chose these items from an outside feature-gap audit, which compared
+Hatch at Home with Tamagotchi and Giga Pets. Three adversarial reviews followed: of
+the first draft, of how fun the games are, and of the whole plan against the code.
+The owner accepted their recommendations; this version includes them.
 
 ## What the audit said and what came of it
 
@@ -424,17 +426,16 @@ look good, or wait for Sol's art (the owner's call at the time).
 
 1. **A** (blueprint): built; lands with the plan's PR, no release.
 2. **B** (next egg): 0.23.0.
-3. **D (trait flair):** the brief for Sol's 16 flair sprites goes out now; the
-   model (cap, temperament, 7 new traits) and the card's flair layer are built after
-   the Catch prototype, with stand-in art until Sol's arrives.
+3. **D (trait flair):** built, in PR #7: the model (cap, temperament, 7 new
+   traits) and the card's flair layer with Sol's sprites.
 4. **C1** (Higher or Lower, with every shared game change): built, in a PR held
    until after the 2026-11-03 tuning review; then the next free version (0.26.0 as
    of now).
-5. **C2 prototype** (Catch, card only, hidden option): next to build; it can ride
-   along with C1 or come in a patch release. The owner plays it for a few days.
+5. **C2 prototype** (Catch, card only, hidden option): built, in PR #7 with C1;
+   the owner plays it for a few days (betas 0.26.0b1 to b3).
 6. **C2 full** (server side, decoy prop, in the picker): the release after, only if
    the owner keeps it.
-7. **D's art** swaps in for the stand-ins when it arrives.
+7. **D's art:** in (Sol's flair sprites, the lit night-owl frame, the decoy bee).
 
 Each release: `scripts/test`, `scripts/card-check` where the card changes,
 screenshots to the owner, and then the release workflow as in the HANDOFF.
