@@ -124,7 +124,7 @@ details before committing it.
    icons, cap and progress on the status screen, flair when a trait is learned,
    game counts in the journal, toy-style game picker, pixel digits, Catch's pounce
    and best score, opt-in chirps per device, and traits in Assist's status.
-   Sol still owes a brighter `flair_night_owl_2` and the Catch decoy sprite.
+   Since b2: Sol's lit `flair_night_owl_2` and the Catch decoy bee (`ui/catch_decoy_*`).
    **Two sessions work on this repo at once** (this plan's, and the one doing art
    and releases). Both land work in `main` through PRs; whoever releases takes the
    next free version from `main` then, and never releases the other's unmerged work.
