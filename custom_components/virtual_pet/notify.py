@@ -51,7 +51,15 @@ ANSWERS: dict[str, list[tuple[str, str]]] = {
 # Notifications about a call share one tag, so a newer one replaces the older
 # and answering it clears it from the phone.
 CALL_EVENTS = {"call_started", "became_sick"}
-CALL_OVER_EVENTS = {"call_answered", "care_miss", "fell_asleep"}
+CALL_OVER_EVENTS = {
+    "call_answered",
+    "care_miss",
+    "discipline_miss",  # a whine nobody answered
+    "recovered",  # medicine (sickness notifies like a call)
+    "call_settled",  # the sitter settled a whine
+    "egg_laid",
+    "fell_asleep",
+}
 
 
 def call_tag(pet_id: str) -> str:

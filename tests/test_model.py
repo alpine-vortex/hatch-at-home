@@ -194,6 +194,42 @@ def test_night_sleep_until_wake_time():
     assert not pet.asleep and not pet.lights_out
 
 
+def test_downtime_overnight_still_wakes_it_in_the_morning():
+    pet = hatched(at(22, 55), energy=40.0)
+    model.set_lights_out(pet, True, at(22, 55), SETTINGS)
+    run(pet, at(23, 30))
+    # HA is off from 23:30 to 09:00: the morning's wake time doesn't move.
+    model.catch_up(pet, at(9, day=2))
+    events = run(pet, at(9, 5, day=2))
+    assert "woke_up" in types(events) and not pet.asleep
+
+
+def test_an_unfinished_game_ends_when_it_goes_away_or_to_sleep():
+    pet = hatched(at(9))
+    model.play_game(pet, "left", at(9), NoLuck())
+    pet.away = True
+    info, _ = model.play_game(pet, "left", at(9, 1), NoLuck())
+    assert info == {"result": "away"} and pet.game is None
+
+
+def test_laying_an_egg_keeps_the_days_chore_treats():
+    pet = hatched(at(9))
+    pet.age_hours = 30 * 24.0
+    model.chores_done(pet, 2, at(9))
+    egg, _ = model.lay_egg(pet, at(10), NoLuck())
+    assert egg.treats_waiting == 2 and len(egg.chore_treats) == 2
+
+
+def test_a_damaged_saved_call_is_dropped_not_fatal():
+    pet = hatched(at(9))
+    data = pet.to_dict()
+    data["call"] = {"reason": "hunger", "started": at(9)}  # no deadline
+    data["latched"] = ["fake", "hunger"]
+    loaded = model.PetState.from_dict(data)
+    assert loaded.call is None and loaded.latched == ["hunger"]
+    run(loaded, at(9, 10))  # and it lives on
+
+
 def test_waking_it_at_night_costs_happiness():
     pet = hatched(at(23, 30), happiness=80.0)
     model.set_lights_out(pet, True, at(23, 30), SETTINGS)

@@ -431,6 +431,25 @@ async def test_dropout_holds_then_counts_as_no_signal(
     assert "rainy" not in hass.states.get("sensor.pip_mood").attributes["flags"]
 
 
+async def test_someone_coming_home_is_greeted_at_once(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    # A short absence (not away mode): the greeting shows on the arrival itself.
+    hass_storage[STORE_KEY] = hatched_pet(now, discipline=100.0)
+    hass.states.async_set("zone.home", "1")
+    await setup_with_house(hass)
+    hass.states.async_set("zone.home", "0")
+    await settle(hass, freezer)
+    for _ in range(12):  # an hour out
+        await settle(hass, freezer, 5 * 60)
+    hass.states.async_set("zone.home", "1")
+    await settle(hass, freezer)
+    assert hass.states.get("sensor.pip_mood").attributes["reason"] == "you're back!!"
+
+
 async def test_empty_house_goes_to_the_sitter_privately(
     hass: HomeAssistant,
     now: float,
@@ -943,6 +962,17 @@ async def test_notification_buttons_care_for_the_pet_and_clear_the_call(
     assert log[0]["action"] == "feed" and log[0]["by"] == "Me"
     assert phone[-1].data["message"] == "clear_notification"
     assert phone[-1].data["data"]["tag"] == "virtual_pet_test_pet_call"
+
+    # A button on a notification left over from the call does nothing now
+    # (a scold with nothing to scold would be unfair).
+    hass.bus.async_fire(
+        "mobile_app_notification_action",
+        {"action": "VIRTUAL_PET:test_pet:scold"},
+        context=Context(user_id=me.id),
+    )
+    await hass.async_block_till_done()
+    log = hass.states.get("sensor.pip_last_care").attributes["log"]
+    assert log[0]["action"] == "feed"
 
     # Someone else's button, or a malformed one, does nothing.
     hass.bus.async_fire("mobile_app_notification_action", {"action": "OTHER"})
