@@ -28,7 +28,7 @@
     "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
   },
   "murk": "otter/murk",
-  "backgrounds": { "day": "otter/bg_day", "night": "otter/bg_night", "dim": "otter/bg_night" },
+  "backgrounds": { "day": "otter/bg_day", "night": "otter/bg_night", "rain": "otter/bg_rain", "dim": "otter/bg_night" },
   "words": { "food": "shrimp", "home": "den" },
   "reactions": { "play": "jar", "won": "colour_shift", "praise": "colour_shift", "scold": "ink" }
 }

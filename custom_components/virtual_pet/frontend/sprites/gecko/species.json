@@ -29,7 +29,7 @@
     "away": "bird/sitter_sign",
     "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
   },
-  "backgrounds": { "day": "bg_vivarium" },
+  "backgrounds": { "day": "bg_vivarium", "night": "bg_night", "rain": "bg_rain", "dim": "bg_dim" },
   "words": { "food": "mealworms", "home": "vivarium" },
   "reactions": { "feed": "eye_lick", "snack": "eye_lick", "play": "tail_wiggle", "won": "tail_wiggle" }
 }

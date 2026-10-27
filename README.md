@@ -14,7 +14,7 @@ grows up with an upbringing, and starts new generations that you can follow in i
 journal.
 
 Each pet lives in a **device** themed for its **world**: an orange egg-shaped toy for
-Woodland (the bird and the Douglas squirrel), a sandstone tank for Terrarium (the
+Woodland (the bird, the Douglas squirrel and the black-tailed deer), a sandstone tank for Terrarium (the
 leopard gecko and the Mexican red-knee tarantula), a little red house for Hearth
 (the tabby kitten and the lop bunny), and a riveted porthole for Tidepool (the sea otter and the giant Pacific octopus,
 whose water clouds over instead of collecting poop), a lily pad for Pond (the
@@ -35,7 +35,7 @@ creatures hatches. See `docs/design-worlds.md`.
      SSH add-on or the Studio Code Server add-on all work.
 3. Restart HA: Settings → System → power icon (top right) → Restart Home Assistant.
 4. Settings → Devices & services → Add integration → search **Virtual Pet**,
-   then name your pet and pick its world: Woodland (bird, squirrel), Terrarium
+   then name your pet and pick its world: Woodland (bird, squirrel, deer), Terrarium
    (leopard gecko, tarantula), Hearth (kitten, bunny), Tidepool (sea otter, octopus), Pond (tree frog, axolotl) or Night Sky (bat, luna moth). Add the integration again for each extra pet device.
 
 ### Updating

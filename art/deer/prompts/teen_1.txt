@@ -1,0 +1,11 @@
+Use your image generation tool to draw ONE square image and save it as teen_1.png in the current directory.
+
+A sheet of 3 rows x 2 columns of equal square cells, each cell one pose of the same original cute chibi Columbia black-tailed deer as in the attached probe sheet: big head, big eyes, short legs, compact body; warm tawny-brown coat, cream belly and throat, white chin patch, pale muzzle with a dark nose, big rounded ears with pale insides, a short tail BLACK on top with a white underside, dark hooves. Faces three-quarters to the right. BODY COLOURS stay identical in every cell and every mood (same fur/skin colours as the reference); moods show through face, pose and small props only, never by recolouring the body.
+TEEN: the yearling (row 1 right), only 3-4 faint spots left, tiny velvet antler buds, the biggest.
+- Row 1: mood 'content': happy idle, soft smile, eyes as gentle arcs. Left = frame 1; right = frame 2 = same pose, body bobbed down slightly.
+- Row 2: mood 'excited': a springy hop with small sparkles. Left = frame 1; right = frame 2 = landed, sparkles moved.
+- Row 3: mood 'cozy': lying folded up in a soft nest of green ferns, content face. Left = frame 1; right = frame 2 = same, eyes blinking closed.
+In every cell the creature is the same size and rests on the same height, low in the cell.
+
+Art style: chunky retro pixel art exactly like the attached reference sheet: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark pixel outline. Keep the reference's pixel size relative to the subject, so the pixels are large and clearly visible
+Background: one flat even mid-grey everywhere (no gradient, no texture, no floor, no shadows on it). Every subject is drawn whole inside its own cell with a generous empty margin; nothing crosses a cell edge. No text labels, no titles, no cell borders, no grid lines.

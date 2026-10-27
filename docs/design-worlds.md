@@ -11,7 +11,7 @@
 
   | World | Creatures | Device shell | Notes |
   | --- | --- | --- | --- |
-  | Woodland | bird ✅, Douglas squirrel | egg with keychain loop | |
+  | Woodland | bird ✅, Douglas squirrel ✅, black-tailed deer ✅ | egg with keychain loop | |
   | Terrarium | leopard gecko ✅, red-knee tarantula ✅ | tank with lid and feet | beetle shelved |
   | Hearth | kitten, lop bunny | little house (roof and chimney) | cozy living room |
   | Tidepool | sea otter, giant Pacific octopus | round porthole with rivets | water world |
