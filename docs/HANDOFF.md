@@ -4,8 +4,8 @@ Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's bran
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
-release **0.25.1**; current beta **0.26.0b5** from PR #7's branch (the polish pass,
-then the backgrounds in 256 colours).
+release **0.27.0** (PR #7 merged: the games, trait flair, the polish pass and the
+256-colour backgrounds; the owner chose to release it before the tuning review).
 **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read the README first, then `docs/design-worlds.md`, `art/README.md`,
@@ -147,8 +147,9 @@ details before committing it.
    a call-response blueprint, choosing the next egg, more minigames (Higher or
    Lower; then Catch from Giga Pets, as a card-only prototype first; copy me was
    cut) and trait flair. A (the blueprint) and B (the next egg, 0.23.0) are
-   released. Built and waiting in draft PR #7 until after the 2026-11-03 tuning
-   review: C1 (Higher or Lower), the Catch prototype (card option
+   released. Released in 0.27.0 (PR #7, merged on 2026-10-27 at the owner's word,
+   ahead of the 2026-11-03 tuning review, which now tunes the released game):
+   C1 (Higher or Lower), the Catch prototype (card option
    `experimental_catch: true`, for the owner to try), and D, trait flair (Sol's 16
    sprites around the pet, a cap of 4 traits, per-pet temperament, 7 new traits,
    head points in `species.json`). The owner tries it first as the beta

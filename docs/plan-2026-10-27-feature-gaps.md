@@ -1,9 +1,9 @@
 # Feature-gap plan, 2026-10-27 (written after 0.21.0; releases renumbered after 0.22.0)
 
 **Status (2026-10-27):** everything chosen is built. A and B are released (B in
-0.23.0); C1, the C2 prototype and D, with Sol's art and a polish pass, are in draft
-PR #7 and out as the beta 0.26.0b3. What's left is the owner's: try the beta, decide
-whether Catch stays (C2 full), and merge PR #7 after the 2026-11-03 tuning review.
+0.23.0); C1, the C2 prototype and D, with Sol's art and a polish pass, are released
+in 0.27.0 (PR #7, merged on 2026-10-27 at the owner's word, ahead of the tuning
+review). What's left is the owner's: play it, and decide whether Catch stays (C2 full).
 The owner chose these items from an outside feature-gap audit, which compared
 Hatch at Home with Tamagotchi and Giga Pets. Three adversarial reviews followed: of
 the first draft, of how fun the games are, and of the whole plan against the code.
