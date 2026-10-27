@@ -120,7 +120,11 @@ details before committing it.
    `experimental_catch: true`, for the owner to try), and D, trait flair (Sol's 16
    sprites around the pet, a cap of 4 traits, per-pet temperament, 7 new traits,
    head points in `species.json`). The owner tries it first as the beta
-   0.26.0b1, released from that branch on 2026-10-27.
+   0.26.0b1, released from that branch on 2026-10-27. 0.26.0b2 added polish: trait
+   icons, cap and progress on the status screen, flair when a trait is learned,
+   game counts in the journal, toy-style game picker, pixel digits, Catch's pounce
+   and best score, opt-in chirps per device, and traits in Assist's status.
+   Sol still owes a brighter `flair_night_owl_2` and the Catch decoy sprite.
    **Two sessions work on this repo at once** (this plan's, and the one doing art
    and releases). Both land work in `main` through PRs; whoever releases takes the
    next free version from `main` then, and never releases the other's unmerged work.
