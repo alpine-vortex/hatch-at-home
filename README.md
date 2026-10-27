@@ -100,6 +100,11 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   without their own rain scene get rain drawn over theirs.
 - The sleep button turns into "wake" whenever the pet is asleep, even if it dozed off
   by itself; one tap wakes it.
+- Between events it has a life of its own: it looks around, wanders, chases a speck of
+  light, mutters to itself and, as a child, strikes its own poses. A treat sets it
+  bouncing for a few seconds, then it hops now and then while it's still excited.
+- It says hi to whoever is looking, by first name ("morning, Alex!"), at most every few
+  hours. The name comes from your Home Assistant account and stays in your browser.
 
 ## What you get
 
@@ -263,6 +268,16 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   which answers with where the pet went). It costs energy like play, and an
   unfinished game is dropped after 3 minutes.
 - **Chores:** map a to-do list in the options, and every item ticked off earns a treat.
+- **Passing moments** (cosmetic, while it's awake and home):
+  - It watches the sunset, greets the sunrise, and says good morning at the first
+    movement in the house after wake time. It says good night when it's put to bed or
+    the house goes dark and quiet.
+  - It comments on what's on TV or playing ("ooh, Bluey!"), at most every 20 minutes,
+    and yawns when the TV goes off late.
+  - Thunder makes it hide and ask for its blanket, and the screen flashes; wind blows
+    across the scene.
+  - The season's first snow and first frost (from the weather entity's temperature) are
+    a moment once each winter, kept as memories in the journal. They notify too.
 - **Sickness:** health below 25, four care misses in a day, old poop, or being too heavy.
   Medicine cures it. **It never dies.**
 - **Upbringing:** on reaching adulthood, how it was raised sets its upbringing for
@@ -327,6 +342,9 @@ names are included.
 `virtual_pet_stage_changed` (with `upbringing` on reaching adulthood), `virtual_pet_care`, `virtual_pet_hatched`,
 `virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`,
 `virtual_pet_game_finished` (with `won`, `wins`), `virtual_pet_chore_treat`,
+`virtual_pet_sunrise`, `virtual_pet_sunset`, `virtual_pet_good_morning`,
+`virtual_pet_watching` and `virtual_pet_listening` (with `title`, and `artist` for music),
+`virtual_pet_tv_off_late`, `virtual_pet_first_snow`, `virtual_pet_first_frost`,
 `virtual_pet_trait_learned` and `virtual_pet_trait_deepened` (with `trait`, `level`), `virtual_pet_egg_laid` (with `generation`,
 `parent_species`, `inherited_trait`).
 

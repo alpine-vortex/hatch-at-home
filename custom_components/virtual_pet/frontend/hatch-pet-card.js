@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.18.0";
+const VERSION = "0.19.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -70,10 +70,12 @@ const MEMORY_LABELS = { first_snow: "first snow", first_frost: "first frost" };
 // Idle life: something small every so often when nothing else is going on.
 const IDLE_MIN_MS = 20000;
 const IDLE_SPREAD_MS = 25000;
-const IDLE_MOODS = new Set(["content", "cozy", "bored", "excited", "sleepy"]);
+const IDLE_MOODS = new Set(["content", "cozy", "bored", "excited", "sleepy", "hungry", "dirty"]);
 // A viewer is greeted by name at most this often, per pet.
 const GREET_EVERY_MS = 3 * 3600 * 1000;
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
+// How long the happy bounce lasts when the pet gets excited.
+const BOUNCE_MS = 10000;
 const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
 
 // The same bands as rates.py (WEIGHT_LIGHT_BELOW, WEIGHT_HEAVY_ABOVE).
@@ -889,7 +891,12 @@ class HatchPetCard extends HTMLElement {
       const frames = this._frames(s);
       this._show(s, s.pet, frames[s.frame % frames.length]);
     }
-    s.pet.classList.toggle("hop", mood?.state === "excited");
+    // Excitement lasts a while (rates.py EXCITED_MINUTES), but the bounce only
+    // celebrates its start; after that, idle life adds an occasional hop.
+    const excited = mood?.state === "excited";
+    if (excited && !s.excitedSince) s.excitedSince = Date.now();
+    if (!excited) s.excitedSince = 0;
+    s.pet.classList.toggle("hop", excited && Date.now() - s.excitedSince < BOUNCE_MS);
     s.pet.alt = s.species?.name || "pet";
     // Some stages are drawn smaller in the frame (long adults fit 256 px wide by
     // coming out shorter); species.json "scale" sizes them back up, feet fixed.
@@ -1030,6 +1037,7 @@ class HatchPetCard extends HTMLElement {
     this._ticks = (this._ticks || 0) + 1;
     for (const s of this._slides) {
       if (s.poseUntil && Date.now() > s.poseUntil) s.poseUntil = 0;
+      if (s.excitedSince && Date.now() - s.excitedSince >= BOUNCE_MS) s.pet.classList.remove("hop");
       const frames = this._frames(s);
       if (frames.length && !(s.asleep && this._ticks % 2)) {
         s.frame = (s.frame + 1) % frames.length;
@@ -1077,6 +1085,7 @@ class HatchPetCard extends HTMLElement {
     const moves = ["mumble"];
     if (own.length) moves.push("pose", "pose");
     if (!calm) moves.push("look", "look", "wander", "perk", "speck");
+    if (!calm && s.moodState === "excited") moves.push("hop", "hop");
     const move = pick(moves);
     if (move === "pose") {
       const frames = s.species.extras[pick(own)];
@@ -1091,6 +1100,8 @@ class HatchPetCard extends HTMLElement {
       setTimeout(() => s.pet.classList.remove(side), 2200);
     } else if (move === "perk") {
       this._animate(s, s.pet, "perk", 320);
+    } else if (move === "hop") {
+      this._animate(s, s.pet, "hop", 1400); // two happy bounces
     } else if (move === "speck") {
       const speck = document.createElement("span");
       const rtl = Math.random() < 0.5;
@@ -1103,6 +1114,8 @@ class HatchPetCard extends HTMLElement {
         sleepy: ["*yawn*", "mm... sleepy"],
         bored: ["hmm...", "*sigh*", "anyone wanna play?"],
         excited: ["hehe!", "wheee"],
+        hungry: ["*tummy rumbles*", "is it snack time?"],
+        dirty: ["ew...", "*sniff sniff*"],
       }[s.moodState] || ["♪ hm hm hm ♪", "...", "*looks around*", "la la la"];
       s.bubble.textContent = pick(lines);
       s.sayUntil = now + 2500;

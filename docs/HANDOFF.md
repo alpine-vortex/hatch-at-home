@@ -1,7 +1,7 @@
 # Handoff (2026-10-27, end of the fourth session)
 
 Branch: `ccr-a5f628ca-979gik`, which is also the repo's default branch (all work
-pushed; no PR). Version **0.18.0**, released. **The owner runs it on their live HA.**
+pushed; no PR). Version **0.19.0**, released. **The owner runs it on their live HA.**
 Read the README first, then `docs/design-worlds.md`, `art/README.md` and
 `docs/remediation-plan-2026-10-26.md` (the latest review and what came of it). The owner's original brief is not in the repo; its key
 rules are restated across the README and the design doc.
@@ -28,6 +28,11 @@ anything from Sol or the owner for such details before committing it.
   - HA plumbing: notification buttons that clear themselves, diagnostics, repair
     warnings, and reconfigure (rename; change world, applied to the next egg).
   - The remediation plan's phases 1–3 and 5 are done (translations: not wanted).
+  - 0.19.0, dynamic behaviour: idle life and greetings by first name on the card;
+    passing moments (sunrise/sunset, good morning/night, TV and music titles, thunder,
+    wind, the season's first snow and frost as journal memories). The excited bounce
+    lasts 10 s (the mood still lasts EXCITED_MINUTES).
+  - Talking to the pet through Assist is scoped in `docs/assist-scoping.md`; not built.
 - **Worlds, all six live:**
   - Woodland: bird, Douglas squirrel (deer to come). Egg shell.
   - Terrarium: leopard gecko (tarantula held back). Tank shell.

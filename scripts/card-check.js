@@ -271,6 +271,15 @@ async function main() {
     await page.waitForTimeout(500);
   }
 
+  // Excitement bounces briefly, not for the whole 15 minutes it lasts.
+  await inject(pet["sensor.mood"], { state: "excited", attributes: { flags: ["excited"] } });
+  await page.waitForTimeout(800);
+  const hopsAtFirst = await cur().locator(".pet.hop").count();
+  await page.waitForTimeout(11000);
+  const hopsLater = await cur().locator(".pet.hop").count();
+  check("an excited bounce stops by itself", hopsAtFirst === 1 && hopsLater === 0,
+    `bouncing at first: ${hopsAtFirst === 1}, after 11 s: ${hopsLater === 1}`);
+
   // Weather on screen: thunder flashes, wind blows.
   await inject(pet["sensor.mood"], { state: "content", attributes: { flags: ["storm", "windy"] } });
   await page.waitForTimeout(800);
