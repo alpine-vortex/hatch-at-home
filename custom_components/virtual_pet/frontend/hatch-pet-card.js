@@ -154,17 +154,9 @@ const FLAIR = {
   homebody: { place: "ground" },
   couch_potato: { place: "ground" },
 };
-// A stand-in bee for decoy rounds (pixel art, one char per pixel).
-const BEE_ROWS = [".kk.kk.", ".kwkwk.", "kyykyyk", "kykykyk", ".kyyyk.", "..k.k.."];
-const BEE_SVG = (() => {
-  const colors = { k: "#3a2a1a", y: "#ffd23f", w: "#e8f4ff" };
-  let rects = "";
-  BEE_ROWS.forEach((row, y) => [...row].forEach((c, x) => {
-    if (c !== ".") rects += `<rect x="${x}" y="${y}" width="1" height="1" fill="${colors[c]}"/>`;
-  }));
-  return "data:image/svg+xml," + encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 7 6" shape-rendering="crispEdges">${rects}</svg>`);
-})();
+// Catch's decoy: Sol's bee (ui/catch_decoy_1, _2: wings up, down), facing left.
+const BEE_FRAMES = [1, 2].map((n) => `${BASE}/ui/catch_decoy_${n}.png?v=${VERSION}`);
+const BEE_FLAP_MS = 120;
 
 const REFUSALS = {
   full: "I'm full!",
@@ -2194,7 +2186,7 @@ class HatchPetCard extends HTMLElement {
       window: lerp(CATCH.window) * (calm ? 2 : 1),
     };
     const el = s.catchEl;
-    if (decoy) el.src = BEE_SVG;
+    if (decoy) el.src = BEE_FRAMES[0];
     else this._show(s, el, prop);
     el.hidden = false;
     el.style.display = "";
@@ -2202,12 +2194,18 @@ class HatchPetCard extends HTMLElement {
     const step = (now) => {
       const c = s.game?.cur;
       if (!c || c !== g.cur || c.done) return;
-      const p = Math.min((now - c.start) / 1000 / c.travel, 1);
+      const p = Math.min(Math.max(now - c.start, 0) / 1000 / c.travel, 1);
       // From off the edge to just beside the pet (which stands at 50%).
       const from = c.side === "left" ? -16 : 100;
       const to = c.side === "left" ? 28 : 56;
       el.style.left = `${from + (to - from) * p}%`;
-      el.style.transform = c.motion === "hop"
+      if (c.decoy) { // a bee flies: flapping, bobbing, facing where it goes
+        // (rAF's first timestamp can come just before c.start)
+        const flap = Math.floor(Math.max(now - c.start, 0) / BEE_FLAP_MS) % 2;
+        if (c.flap !== flap) el.src = BEE_FRAMES[(c.flap = flap)];
+        el.style.transform = `translateY(${Math.sin(p * Math.PI * 6) * 12}%)` +
+          (c.side === "left" ? " scaleX(-1)" : "");
+      } else el.style.transform = c.motion === "hop"
         ? `translateY(${-Math.abs(Math.sin(p * Math.PI * 4)) * 40}%)`
         : `rotate(${(c.side === "left" ? 1 : -1) * p * 540}deg)`;
       if (p >= 1) {
