@@ -167,6 +167,15 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """Keep presence out of what the pet shows (default on)."""
         return self.config_entry.options.get(CONF_PRIVACY, True)
 
+    def current_mood(self) -> tuple[str, list[str], str]:
+        """(mood, flags, reason) as shown anywhere outside the pet's own file."""
+        assert self.state is not None
+        mood, flags, reason = model.mood(self.state, self._now(), self.settings)
+        if mood == "away" and self.privacy:
+            # Privacy: an empty house looks like a nap on any dashboard.
+            return "asleep", ["asleep"], "zzz"
+        return mood, flags, reason
+
     @staticmethod
     def _now() -> float:
         return dt_util.utcnow().timestamp()

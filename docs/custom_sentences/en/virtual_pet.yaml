@@ -1,0 +1,86 @@
+# Sentences for talking to your pet through Home Assistant's built-in Assist agent.
+#
+# Copy this file to <config>/custom_sentences/en/virtual_pet.yaml, put your pets'
+# names in the list at the bottom, and restart Home Assistant. LLM agents (Claude,
+# OpenAI, Ollama...) don't need it: they get the pet's tools on their own.
+#
+# A pet answers only if at least one of its entities is exposed to Assist
+# (Settings > Voice assistants > Expose). Its lights-out switch is exposed by default.
+# With a single pet, "how's my pet" and "feed my pet" work without its name.
+language: "en"
+intents:
+  VirtualPetStatus:
+    data:
+      - sentences:
+          - "(how is|how's) {pet} [doing]"
+          - "how are you[,] {pet}"
+          - "(what's up with|check on) {pet}"
+      - sentences:
+          - "(how is|how's) [the|my] pet [doing]"
+          - "check on [the|my] pet"
+  VirtualPetCare:
+    data:
+      - sentences:
+          - "feed {pet}"
+          - "give {pet} (food|dinner|breakfast|lunch)"
+        slots:
+          action: feed
+      - sentences:
+          - "give {pet} a (snack|treat)"
+        slots:
+          action: snack
+      - sentences:
+          - "play with {pet}"
+        slots:
+          action: play
+      - sentences:
+          - "clean [up] [after] {pet}"
+          - "clean {pet}'s (home|tank|room|nest)"
+        slots:
+          action: clean
+      - sentences:
+          - "give {pet} [its|their|some] medicine"
+        slots:
+          action: medicine
+      - sentences:
+          - "scold {pet}"
+        slots:
+          action: scold
+      - sentences:
+          - "praise {pet}"
+          - "good (job|boy|girl|pet)[,] {pet}"
+        slots:
+          action: praise
+      - sentences:
+          - "give {pet} a blanket"
+          - "tuck {pet} in"
+        slots:
+          action: blanket
+      - sentences:
+          - "(put|send) {pet} to bed"
+          - "lights out[,] {pet}"
+        slots:
+          action: lights_out
+      # The same for a single pet, without its name.
+      - sentences:
+          - "feed [the|my] pet"
+        slots:
+          action: feed
+      - sentences:
+          - "give [the|my] pet a (snack|treat)"
+        slots:
+          action: snack
+      - sentences:
+          - "play with [the|my] pet"
+        slots:
+          action: play
+      - sentences:
+          - "clean [up] [after] [the|my] pet"
+        slots:
+          action: clean
+lists:
+  # Your pets' names, as you'd say them. (A catch-all would also grab sentences
+  # like "how is the weather", so the names are listed.)
+  pet:
+    values:
+      - "Pip"

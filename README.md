@@ -331,6 +331,28 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 - **Restarts never hurt it.** HA downtime freezes the pet: nothing decays,
   ages or expires while HA is off.
 
+## Talking to it through Assist
+
+Ask "how's Pip?" and the pet answers in its own words ("Pip is hungry: a little
+peckish."). Ask "feed Pip" and it's the same as pressing the button, logged under
+your name.
+
+- **LLM agents** (Claude, OpenAI, Ollama and others set to control Home Assistant)
+  get two tools, `virtual_pet__status` and `virtual_pet__care`, with nothing to set
+  up. The fast-forward debug action is never offered.
+- **The built-in agent** needs sentences: copy
+  [`docs/custom_sentences/en/virtual_pet.yaml`](docs/custom_sentences/en/virtual_pet.yaml)
+  to `<config>/custom_sentences/en/`, put your pets' names in its list, and restart.
+  It covers "how's Pip doing", "feed Pip", "give Pip a treat", "play with Pip",
+  "clean up after Pip", "give Pip medicine", "scold Pip", "praise Pip", "tuck Pip in",
+  "lights out, Pip" and, with one pet, "how's my pet" and "feed my pet". English only.
+- A pet answers only if at least one of its entities is exposed to that assistant
+  (Settings → Voice assistants → Expose). Its lights-out switch is exposed by default.
+- The intents are `VirtualPetStatus` (slot `pet`, optional with one pet) and
+  `VirtualPetCare` (slots `pet` and `action`: `feed`, `snack`, `play`, `clean`,
+  `medicine`, `scold`, `praise`, `blanket`, `fan`, `lights_out`), for your own
+  sentences.
+
 ## Events
 
 Fired on the HA event bus, each with `pet_id` (the config entry ID). No person
@@ -404,7 +426,7 @@ HACS's and Home Assistant's checks and the tests on every push.
 3. ✅ Home awareness: options (entity mapping, bedtime, privacy), weather, light, bedtime, presence, activity, AQI and requests
 4. Life (in progress): ✅ traits, ✅ generations and journal, ✅ moon, ✅ notifications, ✅ adult forms, ✅ upbringing, ✅ weight; still to come: bird visits from BirdNET-Pi
 5. ✅ HACS packaging
-6. Play (in progress): ✅ chore treats, ✅ the left/right game; still to come: more species
+6. Play (in progress): ✅ chore treats, ✅ the left/right game, ✅ talking to it through Assist; still to come: more species
 
 ## License
 

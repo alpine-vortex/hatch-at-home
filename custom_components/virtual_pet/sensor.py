@@ -103,13 +103,7 @@ class MoodSensor(PetEntity, SensorEntity):
         super().__init__(coordinator, "mood")
 
     def _resolve(self) -> tuple[str, list[str], str]:
-        mood, flags, reason = model.mood(
-            self.pet, dt_util.utcnow().timestamp(), self.coordinator.settings
-        )
-        if mood == "away" and self.coordinator.privacy:
-            # Privacy: an empty house looks like a nap on any dashboard.
-            return "asleep", ["asleep"], "zzz"
-        return mood, flags, reason
+        return self.coordinator.current_mood()
 
     @property
     def native_value(self) -> str:

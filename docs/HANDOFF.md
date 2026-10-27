@@ -1,8 +1,8 @@
 # Handoff (2026-10-27, end of the fourth session)
 
 Branch: `ccr-a5f628ca-979gik`, which is also the repo's default branch (all work
-pushed; no PR). Version **0.19.0**, released. **The owner runs it on their live HA**
-(they were on 0.18.0 when this was written; 0.19.0 was just offered by HACS).
+pushed; no PR). Version **0.20.0**, released. **The owner runs it on their live HA**
+(they were on 0.18.0 at the end of the fourth session).
 Read the README first, then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and
 `docs/assist-scoping.md`. The owner's original brief is not in the repo; its key rules
@@ -36,6 +36,14 @@ details before committing it.
   - **HA plumbing:** notification buttons that clear themselves, diagnostics (redacted),
     repair warnings (gone entities, empty world), reconfigure (rename; change world,
     applied to the next egg), recorder hygiene.
+- **0.20.0** (start of the fifth session): talking to the pet through Assist, as
+  `docs/assist-scoping.md` recommended. `intent.py` (`VirtualPetStatus`,
+  `VirtualPetCare`), `llm.py` (tools `virtual_pet__status`, `virtual_pet__care`), and
+  `docs/custom_sentences/en/virtual_pet.yaml` for the built-in agent (a names list,
+  not a wildcard: a wildcard grabbed "how is the weather"). Only pets with an exposed
+  entity answer. `PetCoordinator.current_mood()` now holds the privacy rule the mood
+  sensor used. Tested end to end through the built-in agent in `tests/test_assist.py`;
+  not yet tried on a real voice assistant or LLM agent.
 - **Worlds, all six live:**
   - Woodland: bird, Douglas squirrel (deer to come). Egg shell.
   - Terrarium: leopard gecko (tarantula held back). Tank shell.
@@ -47,7 +55,7 @@ details before committing it.
 - **Adults** exist for every creature except the axolotl, bat and luna moth, which still
   fall back to their teen sprites (`stage_fallback`). Long adults are drawn back up with
   `species.json` `"scale": {"adult": …}` (1.05–1.2).
-- **Tests:** 187, run with `scripts/test` (ruff, format check, pytest).
+- **Tests:** 194, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
   `scripts/card-check` (Playwright, 22 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
@@ -56,10 +64,8 @@ details before committing it.
 
 ## Open items, in priority order
 
-1. **Talking to the pet through Assist.** Scoped, not built: `docs/assist-scoping.md`
-   recommends two intents (`VirtualPetStatus`, `VirtualPetCare`) plus `llm.py` tools that
-   wrap them, then an example `custom_sentences` YAML. About 350 lines with tests. The
-   owner asked for the scoping; wait for their go before building.
+1. **Assist on the owner's HA:** ask them to try it (an LLM agent, and the sentences
+   file) and report what it says; tune the wording from that.
 2. **Sol's batch "hatch-batch-feedback".** A scheduled task named "Send Sol the Hatch
    art batch" was set to send the request at 2026-10-27 02:24 UTC (it fires into the
    fourth session with the full text). Check that it went out; if not, send it (the text
