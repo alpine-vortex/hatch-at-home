@@ -14,7 +14,7 @@ from homeassistant.config_entries import (
     OptionsFlowWithReload,
 )
 from homeassistant.const import CONF_NAME, UnitOfTemperature
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import section
 from homeassistant.helpers.selector import (
     BooleanSelector,
@@ -31,7 +31,7 @@ from homeassistant.helpers.selector import (
 from homeassistant.util.unit_conversion import TemperatureConverter
 import voluptuous as vol
 
-from . import rates as R
+from . import notify, rates as R
 from .const import (
     CONF_AQI,
     CONF_AWAY_AFTER,
@@ -40,6 +40,7 @@ from .const import (
     CONF_CHORES,
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
+    CONF_DASHBOARD,
     CONF_FIREPLACE,
     CONF_INDOOR_TEMP,
     CONF_LUX,
@@ -156,9 +157,11 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
         """Name the pet and pick a world."""
         if user_input is not None:
             name = user_input[CONF_NAME].strip() or self._free_name()
+            dashboard = notify.dashboard_path(user_input.get(CONF_DASHBOARD))
             return self.async_create_entry(
                 title=name,
                 data={CONF_NAME: name, CONF_WORLD: user_input[CONF_WORLD]},
+                options={CONF_DASHBOARD: dashboard} if dashboard else {},
             )
         options = await self._world_options()
         if options is None:
@@ -173,9 +176,22 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
                     vol.Required(CONF_WORLD, default=default): SelectSelector(
                         SelectSelectorConfig(options=options)
                     ),
+                    vol.Optional(CONF_DASHBOARD): _dashboards(self.hass),
                 }
             ),
         )
+
+
+def _dashboards(hass: HomeAssistant) -> SelectSelector:
+    """The house's dashboards to pick from; any other path can be typed in."""
+    options = [SelectOptionDict(value="/lovelace", label="Overview")]
+    lovelace = hass.data.get("lovelace")  # read only, so no dependency on it
+    for url_path, dashboard in (getattr(lovelace, "dashboards", None) or {}).items():
+        config = getattr(dashboard, "config", None) or {}
+        if url_path and url_path != "map":
+            title = config.get("title") or url_path
+            options.append(SelectOptionDict(value=f"/{url_path}", label=title))
+    return SelectSelector(SelectSelectorConfig(options=options, custom_value=True))
 
 
 def _entities(
@@ -272,6 +288,9 @@ class PetOptionsFlow(OptionsFlowWithReload):
             "privacy": [
                 (CONF_PRIVACY, BooleanSelector(), True),
             ],
+            "notifications": [
+                (CONF_DASHBOARD, _dashboards(self.hass), None),
+            ],
         }
 
     def _to_unit(self, celsius: float) -> float:
@@ -301,6 +320,8 @@ class PetOptionsFlow(OptionsFlowWithReload):
             for key in (CONF_COMFORT_LOW, CONF_COMFORT_HIGH):
                 if key in flat:
                     flat[key] = self._to_celsius(flat[key])
+            if CONF_DASHBOARD in flat:
+                flat[CONF_DASHBOARD] = notify.dashboard_path(flat[CONF_DASHBOARD])
             if flat.get(CONF_COMFORT_LOW, 0) >= flat.get(CONF_COMFORT_HIGH, 1e9):
                 errors["weather"] = "comfort_range"
             if parse_hhmm(flat[CONF_BEDTIME]) == parse_hhmm(flat[CONF_WAKE_TIME]):

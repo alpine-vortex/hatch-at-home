@@ -2,6 +2,7 @@
 
 Each user turns them on for a pet from the card (service virtual_pet.notify_me).
 They go to that user's phones through the Home Assistant app (mobile_app).
+The one exception is the welcome when a pet is added, which goes to every phone.
 Messages never name anyone.
 """
 
@@ -113,11 +114,25 @@ def message(event: dict[str, Any], name: str, species: dict[str, str]) -> str | 
     return None
 
 
-def phones(hass: HomeAssistant, user_id: str) -> list[str]:
-    """notify services of the mobile app devices this user signed in with."""
+def welcome(name: str) -> str:
+    """The message when a pet is added to the house."""
+    return f"{name} has been welcomed into the home."
+
+
+def dashboard_path(value: str | None) -> str | None:
+    """A dashboard path as notifications want it: "/name/view", or None."""
+    value = (value or "").strip().strip("/")
+    return f"/{value}" if value else None
+
+
+def phones(hass: HomeAssistant, user_id: str | None) -> list[str]:
+    """notify services of the mobile app devices this user signed in with.
+
+    With no user, every mobile app device in the house.
+    """
     services = []
     for entry in hass.config_entries.async_entries("mobile_app"):
-        if entry.data.get("user_id") != user_id:
+        if user_id is not None and entry.data.get("user_id") != user_id:
             continue
         service = f"mobile_app_{slugify(entry.data.get('device_name', ''))}"
         if hass.services.has_service("notify", service):
@@ -127,26 +142,34 @@ def phones(hass: HomeAssistant, user_id: str) -> list[str]:
 
 async def send(
     hass: HomeAssistant,
-    user_ids: list[str],
+    user_ids: list[str] | None,
     text: str,
     tag: str,
     buttons: list[dict[str, str]] | None = None,
+    url: str | None = None,
 ) -> None:
-    """Send to every phone of every subscribed user; a failure only logs.
+    """Send to every phone of every subscribed user (None: every phone in the
+    house); a failure only logs. A url is what tapping the notification opens.
 
     The text "clear_notification" removes the tagged notification instead.
     """
     data: dict[str, Any] = {"tag": tag, "group": "virtual_pet"}
     if buttons:
         data["actions"] = buttons
-    for user_id in user_ids:
-        for service in phones(hass, user_id):
-            try:
-                await hass.services.async_call(
-                    "notify",
-                    service,
-                    {"message": text, "data": data},
-                    blocking=True,
-                )
-            except Exception:  # noqa: BLE001 - a phone being gone must not break the pet
-                LOGGER.warning("Couldn't notify %s", service, exc_info=True)
+    if url:
+        data["url"] = url  # iOS
+        data["clickAction"] = url  # Android
+    if user_ids is None:
+        services = phones(hass, None)
+    else:
+        services = [s for user_id in user_ids for s in phones(hass, user_id)]
+    for service in services:
+        try:
+            await hass.services.async_call(
+                "notify",
+                service,
+                {"message": text, "data": data},
+                blocking=True,
+            )
+        except Exception:  # noqa: BLE001 - a phone being gone must not break the pet
+            LOGGER.warning("Couldn't notify %s", service, exc_info=True)

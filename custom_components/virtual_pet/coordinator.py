@@ -6,6 +6,7 @@ from datetime import timedelta
 import random
 from typing import Any
 
+from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import (
@@ -35,6 +36,7 @@ from .const import (
     CONF_CHORES,
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
+    CONF_DASHBOARD,
     CONF_NEXT_WORLD,
     CONF_PRIVACY,
     CONF_SITTER_SETTLES,
@@ -167,6 +169,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
 
     @property
+    def dashboard(self) -> str | None:
+        """The dashboard a tap on this pet's notifications opens, if one is set."""
+        return notify.dashboard_path(self.config_entry.options.get(CONF_DASHBOARD))
+
+    @property
     def privacy(self) -> bool:
         """Keep presence out of what the pet shows (default on)."""
         return self.config_entry.options.get(CONF_PRIVACY, True)
@@ -219,8 +226,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         now = self._now()
         data = await self.store.async_load()
         if data is None:
+            # Only adding the integration makes a save file; laying an egg
+            # reuses this one, so this is a new pet in the house.
             self.state = model.PetState.new(self.config_entry.title, now)
             LOGGER.debug("New egg for %s", self.pet_id)
+            await self.store.async_save(self.state.to_dict())  # welcome once only
+            self._welcome()
         else:
             self.state = model.PetState.from_dict(data)
             downtime = now - self.state.last_updated
@@ -495,16 +506,29 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _send(
         self,
-        users: list[str],
+        users: list[str] | None,
         text: str,
         tag: str,
         buttons: list[dict[str, str]] | None = None,
     ) -> None:
         self.config_entry.async_create_background_task(
             self.hass,
-            notify.send(self.hass, users, text, tag, buttons),
+            notify.send(self.hass, users, text, tag, buttons, self.dashboard),
             f"{DOMAIN} notify",
         )
+
+    def _welcome(self) -> None:
+        """A new pet: tell the whole house, on every phone and in the sidebar."""
+        text = notify.welcome(self.config_entry.title)
+        link = f"\n\n[Open the pet shelf]({self.dashboard})" if self.dashboard else ""
+        persistent_notification.async_create(
+            self.hass,
+            text + link,
+            title="Virtual Pet",
+            notification_id=f"{DOMAIN}_{self.pet_id}_welcome",
+        )
+        self._send(None, text, f"{DOMAIN}_{self.pet_id}_welcome")
+        self.hass.bus.async_fire(f"{DOMAIN}_welcomed", {"pet_id": self.pet_id})
 
     async def async_notification_button(self, key: str, context: Context) -> None:
         """Someone pressed a button on one of this pet's notifications."""

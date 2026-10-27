@@ -4,7 +4,7 @@ Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's bran
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Version
-**0.24.0**, released. **The owner runs it on
+**0.24.1**, released. **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read the README first, then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and
@@ -60,6 +60,13 @@ details before committing it.
   wreath hangs in the gable, the pad's garland parts at the notch, the moon's leaves
   a gap under the crescent. A plate taller than 44 px (the hanging house sign) keeps
   its text in the bottom 44 px.
+- **Welcome and dashboard** (0.24.1): adding a pet (a new save file, so never an
+  egg or a restart) sends "<name> has been welcomed into the home." to every
+  mobile_app phone and the sidebar, and fires `virtual_pet_welcomed`. Option
+  `dashboard` (setup form and options, "Notifications") is the path every one of the
+  pet's notifications opens (`url` and `clickAction`); `notify.dashboard_path`
+  normalises it. The dashboard list reads `hass.data["lovelace"]` without importing
+  it; custom paths are allowed.
 - **Worlds, all six live:**
   - Woodland: bird, Douglas squirrel, Columbia black-tailed deer (0.22.0). Egg shell.
   - Terrarium: leopard gecko, Mexican red-knee tarantula (0.21.0, Sol's v2 at 2 px art

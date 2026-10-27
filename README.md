@@ -333,6 +333,14 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   A call's notification has buttons that answer it (Feed, Clean, Medicine, Lights
   out; Play or Scold for a plea to play), and it clears itself once the call is
   answered or missed. Fast-forward never notifies.
+- **A welcome for every new pet.** Adding a pet through the integration tells the
+  whole house: "Pip has been welcomed into the home." It goes to every phone with
+  the Home Assistant app, whether or not anyone tapped "notify me", and to the
+  notifications in the sidebar. A new generation laid as an egg isn't a new pet,
+  and restarts never welcome again.
+- **Dashboard to open:** when you add a pet (or later, in its options under
+  Notifications), pick the dashboard that tapping its notifications opens, the
+  welcome included, or type a path like `/lovelace/pets`.
 - **Restarts never hurt it.** HA downtime freezes the pet: nothing decays,
   ages or expires while HA is off.
 
@@ -373,7 +381,7 @@ names are included.
 `virtual_pet_watching` and `virtual_pet_listening` (with `title`, and `artist` for music),
 `virtual_pet_tv_off_late`, `virtual_pet_first_snow`, `virtual_pet_first_frost`,
 `virtual_pet_trait_learned` and `virtual_pet_trait_deepened` (with `trait`, `level`), `virtual_pet_egg_laid` (with `generation`,
-`parent_species`, `inherited_trait`).
+`parent_species`, `inherited_trait`), `virtual_pet_welcomed` (once, when the pet is added).
 
 Events fired during a fast-forward carry `simulated: true`.
 

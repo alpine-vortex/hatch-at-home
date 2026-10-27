@@ -6,11 +6,13 @@
         "description": "Each pet lives in its own handheld device on the dashboard's pet shelf. Add the integration again for every extra pet.",
         "data": {
           "name": "Name",
-          "world": "World"
+          "world": "World",
+          "dashboard": "Dashboard to open"
         },
         "data_description": {
           "name": "Shown on the card and used in entity IDs, for example button.pip_feed. Voice commands use it too.",
-          "world": "Sets the device's look and which creatures can hatch. The egg picks one by surprise."
+          "world": "Sets the device's look and which creatures can hatch. The egg picks one by surprise.",
+          "dashboard": "Optional. Tapping this pet's phone notifications opens it, and so does the welcome sent to every phone when the pet is added. Pick a dashboard or type a path, like /lovelace/pets."
         }
       },
       "reconfigure": {
@@ -127,6 +129,16 @@
             },
             "data_description": {
               "privacy": "On: an empty house shows the pet napping, never at the sitter's, and the pet never names anyone. Off: dashboards show \"at the sitter's\"."
+            }
+          },
+          "notifications": {
+            "name": "Notifications",
+            "description": "Phone notifications go to whoever taps \"notify me\" on the pet's status screen.",
+            "data": {
+              "dashboard": "Dashboard to open"
+            },
+            "data_description": {
+              "dashboard": "Tapping one of this pet's notifications opens this dashboard. Pick one or type a path, like /lovelace/pets. Empty opens the app as it was."
             }
           }
         }

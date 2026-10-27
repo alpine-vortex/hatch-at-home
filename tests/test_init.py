@@ -374,6 +374,7 @@ async def test_options_flow_saves_a_flat_mapping(
             "activity": {"zone": "zone.home", "tv": ["media_player.tv"]},
             "sky": {},
             "privacy": {"privacy": True},
+            "notifications": {},
         },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
@@ -561,6 +562,7 @@ async def test_options_show_fahrenheit_and_store_celsius(
         "activity": {"zone": "zone.home", "away_after": 2},
         "sky": {},
         "privacy": {"privacy": True},
+        "notifications": {},
     }
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], sections
@@ -765,6 +767,7 @@ async def test_options_reject_impossible_settings(
         "activity": {"zone": "zone.home"},
         "sky": {},
         "privacy": {"privacy": True},
+        "notifications": {},
     }
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], sections

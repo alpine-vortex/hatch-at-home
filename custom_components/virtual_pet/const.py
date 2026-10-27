@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 DOMAIN = "virtual_pet"
-VERSION = "0.24.0"  # keep in step with manifest.json (a test checks)
+VERSION = "0.24.1"  # keep in step with manifest.json (a test checks)
 LOGGER = logging.getLogger(__package__)
 
 CONF_BEDTIME = "bedtime"
@@ -58,3 +58,4 @@ CONF_MOON_PHASE = "moon_phase"
 CONF_MOON_ILLUMINATION = "moon_illumination"  # 0-1 or %
 CONF_MOON_ALTITUDE = "moon_altitude"  # degrees; above 0 means up
 CONF_CHORES = "chores"  # to-do lists; a done item earns the pet a treat
+CONF_DASHBOARD = "dashboard"  # the path a tap on the pet's notifications opens
