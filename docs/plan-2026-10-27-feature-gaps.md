@@ -2,9 +2,10 @@
 
 **Status:** planned, nothing started. The owner chose these items from an outside
 feature-gap audit, which compared Hatch at Home with Tamagotchi and Giga Pets.
-An adversarial review of the first draft changed several of them; the owner
-accepted all of its recommendations, and asked for a third minigame based on the
-classic Tamagotchi games. The open decisions left are listed with each item.
+Three adversarial reviews followed: of the first draft, of how fun the games
+are, and of the whole plan against the code. The owner accepted their
+recommendations; this version includes them. The only decision still open is
+D's species and trait.
 
 ## What the audit said and what came of it
 
@@ -13,7 +14,7 @@ classic Tamagotchi games. The open decisions left are listed with each item.
 | Daily diary in the journal | Not doing (owner's call). |
 | Pet reaches back into the house on calls | **Planned (A):** a blueprint, no integration code. |
 | Care-shaped evolution / guide the next egg | **Planned (B) and (D):** choose the next egg; a one-species alternate adult, shaped by the house (a trait) rather than by care quality. |
-| More minigames | **Planned (C1–C3):** Higher or Lower (the 1997 second-generation Tamagotchi's game); Catch (the Giga Pets game), as a prototype first; copy me only with a twist. |
+| More minigames | **Planned (C):** Higher or Lower (the 1997 second-generation Tamagotchi's game), then Catch (the Giga Pets game), as a prototype first. Copy me was cut: too easy as drafted, and it needed its own buttons and service shape. |
 | Trained tricks | Not now. Signature poses are drawn for the child only, so other stages would need stand-ins or new art. |
 | Pets on the shelf noticing each other | Not now. |
 | Birthdays / calendar celebrations | Not now. A generation lasts 3–5 weeks (adult at 14 days, egg a week later), so a yearly birthday never arrives. A calendar "big day" was offered and not chosen. |
@@ -24,7 +25,7 @@ classic Tamagotchi games. The open decisions left are listed with each item.
 | Assist on a real agent, notification buttons on a real phone | Already open (HANDOFF items 1 and 5). They need the owner. |
 | BirdNET visits | Deferred by the owner. |
 
-## A. Call response blueprint (S, no release)
+## A. Call response blueprint (S–M, no release)
 
 An optional HA automation blueprint: when the pet calls, briefly pulse a lamp of the
 owner's choosing and/or play a short sound on a speaker. Every piece is opt-in and
@@ -35,158 +36,194 @@ set up by the owner. The integration doesn't change.
   blueprint is imported from its GitHub URL. The README gets a section with a
   "My Home Assistant" import button. No version bump: it goes live when it's
   merged. The README change reaches HACS users with the next release.
+- **A stable URL first.** The import button and the blueprint's `source_url`
+  name a branch. The default branch is a session branch
+  (`ccr-a5f628ca-979gik`), so a rename would break both. Before publishing the
+  URL, ask the owner to settle on a lasting default branch (for example
+  `main`), or point the URL at a tag.
 - Trigger: the `virtual_pet_call_started` event, filtered by `pet_id` (a
-  `config_entry` selector limited to `virtual_pet`). **Events from fast-forward
-  carry `simulated: true` and are skipped**, so a debug run doesn't flash the
-  lamps.
+  `config_entry` selector limited to `virtual_pet`; `pet_id` is the config
+  entry ID).
+- **Events from fast-forward carry `simulated: true` and are skipped**, so a
+  debug run doesn't flash the lamps. This needs a template condition, because
+  an event-data filter can't match "key absent".
 - Inputs: the pet; the lights (optional), and the colour or flash; the media
-  player and sound (optional); a cooldown in minutes (default 30).
+  player and sound (optional); a cooldown in minutes (default 30); **quiet hours
+  for the sound** (on by default, 22:00–07:00; the pet can be awake and calling
+  past bedtime).
 - **Lights: change the colour or use `light.turn_on` with `flash: short`, never
-  the brightness.** Past bedtime the pet treats a bright room light as "too
-  bright" (`home.py`), and the pet can be awake and calling then. A brighter
-  pulse could feed back into what it senses. Only lights that are already on
-  are touched, so a dark room never lights up at night. A colour pulse restores
-  the previous colour afterwards. `flash` needs no restore.
+  the brightness.**
+  - Past bedtime the pet treats a bright room light as "too bright"
+    (`home.py`), and the pet can be awake and calling then. A brighter pulse
+    could feed back into what it senses.
+  - Only lights that are already on are touched, so a dark room never lights up
+    at night.
+  - A colour pulse is restored through a `scene.create` snapshot
+    (`snapshot_entities`), not by rebuilding the colour in YAML, which breaks
+    between colour and colour-temperature modes. `flash` needs no restore.
 - No "only while someone's home" input: an away pet is frozen and never calls
   (`model.advance`).
-- The cooldown uses `mode: single` and a delay at the end, so repeated calls are
-  dropped instead of queued.
+- **The cooldown** uses `mode: single` with `max_exceeded: silent` and a delay at
+  the end. Repeated calls are dropped instead of queued, and nothing is logged
+  for each dropped call.
 - Fake calls appear on the bus as real ones (`reason: happiness`). That's intended:
   the blueprint must not give them away.
-- Tests: load the blueprint through HA's blueprint component in pytest, fire the
-  event, and assert the service calls. Check that the cooldown holds, that
-  simulated events are ignored, and that lights that are off stay off.
+- **Tests (budget for them; not a quick one):**
+  - copy the blueprint into a temporary `config_dir`, since the testing config
+    is shared (HANDOFF "Tests");
+  - set up stand-in `light` and `media_player` entities and services;
+  - fire the event, and assert the service calls;
+  - check that the cooldown holds, that simulated events are ignored, that lights
+    that are off stay off, and that quiet hours mute the sound.
 
-## B. Choose the next egg (S–M)
+## B. Choose the next egg (M)
 
 `design-worlds.md` already lists this as a later option. A **select entity**,
 `select.<pet>_next_egg`, with "Surprise me" (the default) plus **every ready
-species in the device's world**. It's stored on the state and used when the egg
+species in the egg's world**. It's stored on the state and used when the egg
 hatches (`model._hatch`, which currently picks at random and prefers unraised
 species). After hatching it resets to "Surprise me".
 
+- **A new platform.** The integration has no select platform yet (`PLATFORMS` in
+  `__init__.py`). This adds `select.py`, its strings, icon and translations, and
+  `Platform.SELECT`.
 - Any ready species, not only those already raised. A "raised only" rule would
   make the choice useless until the third generation (6–10 weeks in), because
   the hatch already prefers unraised species. Any species also lets the owner
   pick D's pilot creature. "Surprise me" stays the default.
 - It can be set at any time. It applies to the next hatch, so it can be set
   before laying the egg.
+- **The egg's world, not always the current one.** A world change through
+  reconfigure on a hatched pet waits in `CONF_NEXT_WORLD` until the egg is laid,
+  then the entry reloads (`coordinator.py`). While such a change is pending, the
+  select offers the **next** world's roster. Otherwise a choice made before
+  laying would be dropped silently at the reload.
 - The state gets a new field, `egg_choice: str | None`, carried over by
-  `lay_egg`. It's dropped if that species leaves the roster, for example after a
-  world change through reconfigure. The select's options follow the roster.
+  `lay_egg`. It's dropped (back to surprise) if that species isn't on the egg's
+  roster when it hatches.
 - The card: the egg screen shows the choice ("a kitten is on the way" versus
-  "who could it be?"). Changing it happens from the entity (HA's more-info
-  dialog) or the card editor, without adding a button to the device.
-- Tests: the choice is honoured; "surprise" keeps today's behaviour; a choice
-  from another world is ignored; the choice survives a restart and a world
-  change.
+  "who could it be?"). The choice is changed from the entity (HA's more-info
+  dialog, or any dashboard). The card editor can't do it: it edits the card's
+  own YAML, which isn't per pet.
+- Tests:
+  - the choice is honoured;
+  - "surprise" keeps today's behaviour;
+  - a choice from another world is ignored;
+  - the choice survives a restart;
+  - with a pending world change, the options are the next world's and a choice
+    from it is honoured after the reload;
+  - an older stored state without `egg_choice` loads.
 
 ## C. More minigames (M each)
 
 The pet has the first-generation Tamagotchi's left/right game. More come in
-turn, after the 2026-11-03 tuning review, so the game-use numbers from that
-review give a baseline.
+turn, after the 2026-11-03 tuning review.
 
-**The fun test.** Skill games pay a win like plain play (below), so nobody plays a
-game for its reward. It gets played only if it's fun on its own. An
-adversarial review of the games found:
-- **Higher or Lower is close to solved:** the right guess is obvious except on a
-  5. Keep it for nostalgia and because it's cheap, but don't count on it to
-  carry the fun.
-- **Copy me as first drafted is too easy:** three to five lefts and rights are
-  trivial to remember. It's built only with a twist (C2).
+**The fun test.** No game is played for its reward (the rule below keeps the
+games about level). A game gets played only if it's fun on its own. The
+reviews found:
+- **Higher or Lower is partly solved.** On 1–3 and 7–9 the right guess is plain.
+  On 4, 5 and 6 (a third of rounds) it's close to a coin flip. A good player
+  wins about 92% of games. Keep it for nostalgia and because it's cheap, but
+  don't count on it to carry the fun.
 - **Catch's original wasn't hard either:** Giga Pets players called it "almost
   impossible to lose". Its appeal is watching your own creature pounce, so it
-  needs decoys, speed-up and per-creature motion to stay fun, and it's tried out
-  as a prototype before any server work (C3).
-- Several thin games are worth less than one good one. Each game must earn the
-  next one: watch the play counts (`game_finished` with `game`) and the owner's
-  feedback before building the next.
+  needs decoys, speed-up and its own motion to stay fun, and it's tried out as a
+  prototype before any server work.
+- Several thin games are worth less than one good one. **Each game must earn the
+  next one**, judged by the play counts below and the owner's word.
 
-Order: C1, then C3 (the prototype, then the full version if it's kept), then C2
-only if a twist makes it worth having. C1 and C2 reuse the left and right
-buttons, need no new art, and are checked on the server like the current game.
-C3 is timed by the card (see C3).
+Order: C1, then the C2 prototype, then the full C2 if it's kept.
 
-**Shared changes (done with C1):**
-- `Game` gains a `kind`, and `virtual_pet.play_game` gets an optional `game`
-  field (default `left_right`). `virtual_pet_game_finished` gains `game`. The
-  same `GAME_IDLE_MINUTES` drop and refusals apply.
-- **Rewards: skill games pay a win like plain play.** Plain play gives
-  `PLAY_HAPPINESS` (20). Left/right is a coin flip (a win gives 25, a loss 10;
-  17.5 on average), so it's already worth less than plain play. A skill game
-  that pays 25 would be the best happiness button and leave the luck game
-  pointless. So a win in C1 or C2 gives `PLAY_HAPPINESS`, and a loss gives
-  `GAME_LOSE_HAPPINESS`. Left/right keeps its 25 as the reward for luck.
-  Energy, hunger and weight are the same as the existing game.
-- Card: the play button opens a picker with one button per game. The picker
-  remembers the last game played.
-- The species' `reactions.won` pose is reused for every game.
+### Shared changes (all made in C1, so the service changes shape once)
 
-### C1. Higher or Lower (the classic, first)
+- **The service, designed once for every game.** `virtual_pet.play_game` gets:
+  - `game`: `left_right` (the default), `higher_lower` or `catch`;
+  - `guess`: optional. Without a guess, the call starts a game and returns its
+    opening (Higher or Lower's first number, Catch's rounds). With a guess, it
+    plays a round. For `left_right`, the first guess still starts the game, as
+    today, so existing automations keep working;
+  - `caught`: Catch's finish call (C2), reserved now.
+  - Each game checks the guesses it accepts (`left`/`right`,
+    `lower`/`higher`), replacing today's schema check against `SIDES` alone.
+- **Game state.** `Game` gains `kind`, plus each game's own fields:
+  - `number` (Higher or Lower's current number);
+  - `rounds_plan` (Catch's rounds as handed out: side and decoy);
+  - left/right needs nothing new.
+  `from_dict` drops unknown keys and the 3-minute idle drop clears any game in
+  progress, so a downgrade loses only an unfinished game. Test loading a
+  stored game from before the change.
+- **Play counts for "each game must earn the next".** Today nothing measures it:
+  `game_finished` isn't one of the kept moments, the care log holds only 20
+  entries shared by every action, and diagnostics show only the state. The state
+  gains `games: {kind: {played, won}}`, persisted for the pet's life, shown in
+  diagnostics and on the debug sensor, and carried into the journal record when
+  an egg is laid. The tuning review reads it from there.
+- `virtual_pet_game_finished` gains `game`. The same `GAME_IDLE_MINUTES` drop and
+  refusals apply to every game.
+- **Rewards: the games stay about level on average.** On the card, "play" *is*
+  the left/right game: a win gives 25 and a loss 10, about 17.5 on average.
+  The plain-play button (20) exists only as an entity and through Assist. A
+  skill game paying 25 for a win would leave left/right pointless. So a win in
+  Higher or Lower or Catch gives `PLAY_HAPPINESS` (20), and a loss gives
+  `GAME_LOSE_HAPPINESS` (10). At a 90% win rate that's about 19 on average.
+  Left/right keeps its 25 as the reward for luck. Happiness is capped, so the
+  difference is small in practice. Energy, hunger and weight are the same as the
+  existing game.
+- **Card: the play button opens a picker** with one button per game. Plain play
+  isn't added: it stays an entity and an Assist action, as today. The picker
+  remembers the last game played. With only one game available, the button
+  starts it directly, as today.
+- A win shows the species' `reactions.won` pose. Otter and squirrel have none,
+  and poses exist only for the child stage, so the fallback is the existing
+  `hop`.
+
+### C1. Higher or Lower (first)
 
 The game from the 1997 second-generation Tamagotchi: the pet shows a number from
 1 to 9, and the player guesses whether the next number will be higher or lower.
 Five rounds; three right wins, the same as the existing game.
 
+- The start call (`game: higher_lower`, no guess) returns the first number.
+- Each guess (`lower` or `higher`) returns whether it was right and the next
+  number.
 - The next number is never the same as the current one, so there are no ties.
-- Left = lower, right = higher. It's one guess per round, the same flow as
-  left/right, so the service shape stays as it is (`guess`: `lower` or `higher`).
-  The number to guess against comes back in each response, and the first
-  number in the start response.
+- Left = lower, right = higher.
 - Card: the number is drawn in Tiny5 on the pet's screen, the pet "flips" it
   with the existing `perk`, and the score uses the same line as the left/right
   game.
-- With good play the win rate is around 90%. That's why the win reward is set to
-  plain play's above.
-- Tests: no ties; the score and win line; the idle drop; the rewards; one
-  `card-check` step that plays a game through.
+- Ships with all the shared changes above.
+- Tests:
+  - no ties;
+  - the score and the win line;
+  - the idle drop and the rewards;
+  - the play counts;
+  - left/right still starts on its first guess;
+  - a stored game from before the change loads;
+  - one `card-check` step that plays a game through.
 
-### C2. Copy me (only with a twist)
-
-The pet shows a short sequence and the player repeats it. A wrong step ends that
-round; two rounds right out of three wins. **As first drafted (3–5 lefts and
-rights), it's too easy to be worth building.** It's built only with a twist
-that makes it a real memory test, for example:
-- four directions (adding up and down, with two more buttons on the game
-  overlay), with longer sequences (4, 6, then 8 steps);
-- or the pet shows the sequence once, quickly, and then the pet itself acts as
-  a distraction (wandering, a bubble) while the player answers.
-Choose the twist when C2 comes up, by playing a card prototype as for C3. If no
-twist feels good, drop C2.
-
-- **A separate start call.** Today the first guess starts a game, and `guess` is
-  required. Copy me needs a call that starts the game and returns the first
-  sequence, so `guess` becomes optional (`game: copy_me` with no guess starts
-  the game).
-- **One call per round, not per tap.** The card collects the player's taps and
-  sends the whole answer for that round (`answer: [left, right, …]`). The
-  server checks it and returns the next sequence. That's 3 calls per game
-  instead of about 12.
-- Each step shows for about 600 ms, and there's no time limit on the answer.
-- Tests: the sequence lengths; a wrong answer; a malformed answer is rejected;
-  the idle drop; the rewards; one `card-check` step.
-
-### C3. Catch (the Giga Pets game; prototype first)
+### C2. Catch (the Giga Pets game; prototype first)
 
 From the 1997 Tiger Giga Pets ([Compu Kitty
 manual](https://www.hasbro.com/common/instruct/kitty-in.pdf): "press the LEFT or
 RIGHT key to make your pet react … at the correct time"). Something drifts in
 from one side, and you tap that side while it's in reach, so the pet pounces.
-It's the only reflex game in the set: left/right is luck, Higher or Lower is
-odds, and copy me is memory.
+It's the reflex game of the set: left/right is luck, and Higher or Lower is
+odds.
 
 **How it plays:** five rounds, catch three to win.
-- Each round, the creature's own play prop drifts in from the left or right:
-  the ball, the gecko's cricket, the squirrel's pine cone (every species has a
-  `play` prop already).
+- Each round, the species' `play` prop drifts in from the left or right.
+  - Every species has one, but six borrow the bird's ball (axolotl, bat,
+    bunny, luna moth, tarantula, tree frog).
+  - The others have their own: the gecko's cricket, the squirrel's pine cone,
+    the kitten's, the otter's and the octopus's toys.
 - Tap that side while the prop is in the catch zone, and the pet turns toward
   it (the sprite mirrored in CSS) and pounces (the existing `hop`). A catch
-  shows the species' `reactions.won` pose briefly, which is the Giga Pets "trick";
-  that pose exists for the child stage only, so other stages hop.
+  shows the `won` pose if there is one (see the shared changes), which is the
+  Giga Pets "trick".
 - Tap too early, too late or on the wrong side, and it gets away.
 
-**What keeps it fun** (from the fun review):
+**What keeps it fun:**
 - **Decoys.** Now and then something drifts in that the pet mustn't catch (a
   bee, a wasp); tapping it loses the round. That turns "tap when it arrives"
   into "tap or don't?". Biggest win for the least work. The prototype uses a
@@ -194,9 +231,11 @@ odds, and copy me is memory.
   Catch is kept.
 - **Speed-up within a game.** Round 1 is slow and forgiving; round 5 is quick.
   Every game builds to a tense last round.
-- **Per-creature motion.** The cricket hops, the moth zigzags, the ball rolls,
-  the fish swims a wave: a few CSS motion types, picked by a `catch_motion`
-  key in `species.json` (default: roll).
+- **Motion by prop, not by species.** The ball rolls, the cricket hops, a moth
+  would zigzag. The motion belongs to the prop sprite (a `motion` entry next to
+  the prop in `species.json`, defaulting to roll), so a borrowed ball rolls for
+  every species that borrows it. Today that means most species roll; a creature
+  gets its own motion by getting its own prop.
 - **Best score.** "best catch: 5/5" on the status screen, kept per pet.
 - No stage-based difficulty: more rules for little gain.
 
@@ -208,17 +247,24 @@ odds, and copy me is memory.
 - It's the only planned game that needs quick hands, and the others stay
   available, so play itself is never gated behind reflexes.
 
+**Timing on the real card.**
+- The card ticks on a 700 ms `setInterval` and re-renders on every `hass`
+  update. The catch window can't hang off either.
+- The game runs on `requestAnimationFrame` and `performance.now()`, in its own
+  overlay, which a state update doesn't redraw while a game is running.
+- Try the prototype on the wall panel early; it's the slowest device.
+
 **Who judges the taps: the card.** A round trip to the server can take
 longer than the catch window, so the server can't time the taps.
-- The start call (`game: catch`) returns all five rounds: the side, and
-  whether it's a decoy. The card runs the rounds locally and times the taps in
-  the browser, where network lag can't matter.
-- One finish call reports the catches (`caught: n`). The server checks the game
-  exists and hasn't timed out and that `n` is between 0 and 5, then applies the
-  reward and the best score.
-- The card is trusted, and nothing here needs guarding: anyone who can call
-  `play_game` can already press "play" as often as they like, and happiness is
-  capped.
+- The start call (`game: catch`, no guess) returns all five rounds: the side,
+  and whether it's a decoy. The card runs the rounds locally and times the taps
+  in the browser, where network lag can't matter.
+- One finish call reports the catches (`caught: n`). The server checks that the
+  game exists and hasn't timed out, and that `n` is between 0 and the rounds
+  that weren't decoys. It then applies the reward, the play counts and the
+  best score.
+- The card is trusted, and nothing here needs guarding: the pet can already be
+  played with at any time, and happiness is capped.
 - Assist can't play it; it doesn't offer any game today.
 
 **Prototype first (card only).**
@@ -228,13 +274,19 @@ longer than the catch window, so the server can't time the taps.
 - It goes out in a normal release, with the option off by default and
   undocumented.
 - The owner plays it on the phone and the wall dashboard for a few days.
-- **Keep it** only if they find themselves coming back to it. Then build the
-  server side above, ask Sol for the decoy prop, and ship it in the picker.
+- The prototype records nothing on the server, so **the owner's word decides**.
+- **Keep it** if they find themselves coming back to it: build the server side
+  above, ask Sol for the decoy prop, and ship it in the picker.
 - **Drop it** otherwise, with only the card code to remove.
 
-Tests (full version): the finish call's checks; the idle drop; the rewards; the
-best score survives a restart. `card-check` drives one game with the card's
-clock stubbed (a test hook for the timer), so its taps land deterministically.
+Tests (full version):
+- the finish call's checks;
+- the idle drop, the rewards and the play counts;
+- the best score survives a restart.
+- `card-check` drives one game using Playwright's `page.clock` to control time,
+  with no test hook in the card. The clock is installed only after the HA
+  frontend's own reload, about 10–15 s after the first page load (see HANDOFF),
+  so HA's timers aren't frozen while it boots.
 
 ## D. An alternate adult form: one-species pilot (M, art-bound)
 
@@ -247,46 +299,60 @@ company…), so neither form is a grade.
 
 - **One alternate look for one species, for one trait.** At adulthood, a pet
   that has that trait (learned or inherited) takes the alternate look. It's
-  decided once and stored, like upbringing (`adult_form` on the state), so a
-  trait learned later doesn't flip it. Because traits pass down the line, a
-  family can keep its look across generations.
+  decided once, at the moment the pet becomes an adult, and stored
+  (`adult_form` on the state), so a trait learned later doesn't flip it.
+  Because traits pass down the line, a family can keep its look across
+  generations.
+- **Pets that are already adults when it ships keep the plain look.** Unlike
+  `upbringing`, which `from_dict` fills in for stored adults, `adult_form` is
+  filled in as None, so nobody's adult changes look at an update. A world
+  change doesn't touch it: it applies to the next egg only.
 - **The species comes from a world the owner actually runs** (which worlds are in
-  the private notes, not this repo). Otherwise the pilot is never seen. B lets
-  the owner pick the creature for the next egg.
+  the private notes). Otherwise the pilot is never seen. B lets the owner pick
+  the creature for the next egg.
 - **The trait should be one the house reliably teaches.** Check the owner's
   current pets' traits through the debug sensor or diagnostics before choosing.
+- **Keep the house out of the repo.** The species and trait together hint at the
+  owner's world and house (a fireplace, say). Commit messages, docs and the art
+  brief describe the feature in general terms ("an alternate adult for one
+  species, chosen by a trait"), never as "the owner's house has…". The
+  `species.json` entry itself is unavoidable and reads as an ordinary design
+  choice. The reason for the pick lives in the private notes.
 - `species.json`: an optional `adult_forms` map, trait → sprite prefix, e.g.
-  `{"fireside": "adult_fireside"}`. A pet without a mapped trait uses the plain
+  `{"<trait>": "adult_<name>"}`. A pet without a mapped trait uses the plain
   adult. The sprites README documents it.
 - The card reads the form from the life-stage sensor's attributes (a new
   `adult_form` next to `upbringing`). The journal records each generation's
   form, and the "all grown up" line can name it.
 - **Art request to Sol** (a full adult sheet, the same size as the plain adult:
-  10 moods × 2 frames for the kitten). Probe first, as for new creatures. It's
-  sent only once the species and trait are chosen, since both shape the brief.
-- Tests: `tests/test_species.py` checks that every mapped prefix has a full set
-  of sprites; the form is decided once at adulthood and survives a restart;
-  Playwright screenshots of both forms.
+  10 moods × 2 frames). Probe first, as for new creatures. It's sent only once
+  the species and trait are chosen, since both shape the brief.
+- Tests:
+  - `tests/test_species.py` checks that every mapped prefix has a full set of
+    sprites;
+  - the form is decided once at adulthood and survives a restart;
+  - a stored adult from before the change loads with no form;
+  - Playwright screenshots of both forms.
 
-Decisions (to settle when D starts):
-- Which species and trait? The rule is a species from a world the owner runs,
-  and a trait the house teaches. A visual fit helps (a kitten with `fireside`
-  or `couch_potato`, a bat with `moon_child`).
+Decision (to settle when D starts): which species and trait. The rule is a
+species from a world the owner runs and a trait the house teaches; a visual fit
+helps.
 
 ## Order and releases
 
+0. **Before A ships:** settle the default branch, since A needs a stable URL.
+   (HANDOFF's stale version line was fixed along with this plan.)
 1. **A** (blueprint): merged on its own, no release.
 2. **B** (next egg): 0.22.0.
 3. **D's decision and art request**: pick the species and trait from the owner's
    pets, then send the brief to Sol. The code comes when the art arrives.
-4. **C1** (Higher or Lower, with the shared game changes): 0.23.0, after the
+4. **C1** (Higher or Lower, with every shared game change): 0.23.0, after the
    2026-11-03 tuning review.
-5. **C3 prototype** (Catch, card only, hidden option): it can ride along in
+5. **C2 prototype** (Catch, card only, hidden option): it can ride along in
    0.23.0 or come in a patch release. The owner plays it for a few days.
-6. **C3 full** (server side, decoy prop, in the picker): 0.24.0, only if the
+6. **C2 full** (server side, decoy prop, in the picker): 0.24.0, only if the
    owner keeps it.
-7. **C2** (copy me), only if a twist proves itself in a prototype.
-8. **D's code**, once the art is in.
+7. **D's code**, once the art is in.
 
 Each release: `scripts/test`, `scripts/card-check` where the card changes,
 screenshots to the owner, and then the release workflow as in the HANDOFF.

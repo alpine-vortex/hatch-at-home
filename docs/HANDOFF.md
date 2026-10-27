@@ -1,7 +1,7 @@
 # Handoff (2026-10-27, end of the fourth session)
 
 Branch: `ccr-a5f628ca-979gik`, which is also the repo's default branch (all work
-pushed; no PR). Version **0.20.0**, released. **The owner runs it on their live HA**
+pushed; no PR). Version **0.21.0**, released. **The owner runs it on their live HA**
 (they were on 0.18.0 at the end of the fourth session).
 Read the README first, then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and
@@ -93,8 +93,8 @@ details before committing it.
 5. **Unconfirmed on a real phone:** the notification buttons. Ask the owner.
 6. **Feature-gap plan** (`docs/plan-2026-10-27-feature-gaps.md`): the owner chose
    a call-response blueprint, choosing the next egg, more minigames (Higher or
-   Lower; Catch from Giga Pets as a card-only prototype first; copy me only with a
-   twist) and a one-species alternate adult chosen by a trait. The
+   Lower; then Catch from Giga Pets, as a card-only prototype first; copy me was
+   cut) and a one-species alternate adult chosen by a trait. The
    plan has been reviewed and the owner has approved it; D still needs a species
    and a trait picked from the owner's pets. Not chosen (don't start unasked): learning household
    routines, a daily diary in the journal (declined), pets on the shelf noticing
