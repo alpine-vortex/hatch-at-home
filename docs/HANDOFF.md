@@ -44,6 +44,12 @@ details before committing it.
   entity answer. `PetCoordinator.current_mood()` now holds the privacy rule the mood
   sensor used. Tested end to end through the built-in agent in `tests/test_assist.py`;
   not yet tried on a real voice assistant or LLM agent.
+- **0.20.1** (polish pass, checked in the browser on all six worlds at 420 and 330 px):
+  the header is one line (no "1 / n" chip; the world is on the device plate), the dots
+  wrap instead of pushing the arrows off a narrow card, neighbouring devices peek
+  visibly, status rows share one grid, tapered wind streaks, the tank lid sits on the
+  body, lily-pad buttons stay inside the pad, moon stars clear of the labels, and the
+  tree frog stands on a lily pad (`perch_lilypad`, drawn by `art/treefrog/make_perch.py`).
 - **Worlds, all six live:**
   - Woodland: bird, Douglas squirrel (deer to come). Egg shell.
   - Terrarium: leopard gecko (tarantula held back). Tank shell.
@@ -96,8 +102,9 @@ details before committing it.
 7. **BirdNET bird visits:** the owner deferred this ("will be reset at a later time");
    don't start it unasked. The design and the stalled-feed workaround are in the
    private notes.
-8. **Small known nits:** the tree frog's snack is hard to read; Pond's day scene puts
-   the pet on open water; moods vary a little in size (asleep and sick bigger).
+8. **Small known nits:** the tree frog's snack is hard to read. (Pond's open water
+   is solved by the frog's `perch`; mood sizes were measured in 0.20.1 and differ
+   under 12% except the child gecko asleep, 17%, from its drawn "zzz".)
 
 ## How to
 

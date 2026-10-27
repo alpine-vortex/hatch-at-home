@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.20.0";
+const VERSION = "0.20.1";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -143,10 +143,6 @@ const STYLE = `
   .title { font: 400 22px 'Tiny5', monospace; color: var(--hp-ink); }
   .sub { font-size: 13px; color: var(--hp-subink); margin-top: 2px; }
   .chips { display: flex; gap: 6px; align-items: center; }
-  .compact .chip { display: none; }
-  .chip { white-space: nowrap; font: 400 12px 'Tiny5', monospace; letter-spacing: .08em; padding: 6px 10px;
-    border-radius: 10px; background: color-mix(in srgb, var(--hp-ink) 14%, transparent);
-    color: var(--hp-ink); }
   .statusbtn { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px;
     border: none; border-radius: 22px; cursor: pointer; font: 400 14px 'Tiny5', monospace;
     color: var(--hp-ink); background: color-mix(in srgb, var(--hp-ink) 14%, transparent); }
@@ -157,17 +153,20 @@ const STYLE = `
   .track { position: relative; display: flex; gap: 16px; align-items: flex-end;
     transition: transform .5s cubic-bezier(.2,.8,.2,1); }
   .slide { flex-shrink: 0; transition: opacity .5s, transform .5s; transform-origin: 50% 100%; }
-  .slide.away-slide { opacity: .45; transform: scale(.9); }
+  .slide.away-slide { opacity: .5; transform: scale(.94); }
   .foot { display: flex; align-items: center; justify-content: space-between; padding: 0 14px 14px; }
   .nav { width: 44px; height: 44px; border: none; border-radius: 22px; cursor: pointer;
     display: flex; align-items: center; justify-content: center; color: var(--hp-ink);
     background: color-mix(in srgb, var(--hp-ink) 14%, transparent); }
-  .dots { display: flex; gap: 8px; }
-  .dot { width: 24px; height: 24px; border: none; padding: 0; cursor: pointer;
+  /* Dots share what room the arrows leave; many pets wrap onto a second row. */
+  .foot { gap: 8px; }
+  .nav { flex-shrink: 0; }
+  .dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 4px; min-width: 0; }
+  .dot { width: 22px; height: 24px; border: none; padding: 0; cursor: pointer;
     background: none; display: flex; align-items: center; justify-content: center; }
   .dot::before { content: ""; width: 10px; height: 10px; border-radius: 5px;
     background: color-mix(in srgb, var(--hp-ink) 55%, transparent); transition: width .3s; }
-  .dot[aria-current="true"]::before { width: 26px; background: var(--hp-ink); }
+  .dot[aria-current="true"]::before { width: 20px; background: var(--hp-ink); }
   .slide.away-slide { cursor: pointer; }
   .single .foot { display: none; }
 
@@ -179,6 +178,8 @@ const STYLE = `
     box-shadow: inset 0 4px 0 rgba(255,255,255,.18); display: flex; justify-content: center;
     align-items: center; gap: 6px; }
   .lid span { width: 12%; height: 4px; border-radius: 2px; background: rgba(0,0,0,.25); }
+  /* The lid sits over the body's top bevel, which on a pale shell reads as a gap. */
+  .lid { position: relative; z-index: 1; margin-bottom: -5px; }
   .feet { width: 82%; display: flex; justify-content: space-between; }
   .feet span { width: 34px; height: 10px; background: var(--d-dark); border-radius: 0 0 6px 6px; }
   /* House: a pitched roof with a chimney, sitting on the body like a cottage. */
@@ -211,6 +212,7 @@ const STYLE = `
     height: 34px; margin-left: -23px; background: var(--hp-backdrop);
     clip-path: polygon(0 0, 100% 0, 50% 100%); }
   .pad .toy .cap { border-radius: 50%; }
+  .pad .buttons { width: 86%; }
   /* Moon: a crescent riding on top of a rounded body sprinkled with stars. */
   .crescent { width: 64px; height: 64px; border-radius: 50%; margin: 0 0 -26px 26px;
     box-shadow: inset -15px 7px 0 0 var(--d-bezel); transform: rotate(-20deg); position: relative; z-index: 1; }
@@ -219,8 +221,8 @@ const STYLE = `
       radial-gradient(circle at 88% 14%, rgba(255,255,255,.45) 0 1.5px, transparent 2.5px),
       radial-gradient(circle at 6% 62%, rgba(255,255,255,.4) 0 1.5px, transparent 2.5px),
       radial-gradient(circle at 94% 56%, rgba(255,255,255,.5) 0 1.5px, transparent 2.5px),
-      radial-gradient(circle at 20% 94%, rgba(255,255,255,.35) 0 1.5px, transparent 2.5px),
-      radial-gradient(circle at 80% 95%, rgba(255,255,255,.45) 0 1.5px, transparent 2.5px); }
+      radial-gradient(circle at 4% 86%, rgba(255,255,255,.35) 0 1.5px, transparent 2.5px),
+      radial-gradient(circle at 96% 90%, rgba(255,255,255,.45) 0 1.5px, transparent 2.5px); }
   .moon .toy .cap { border-radius: 50%; }
   .murk { inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .8s; }
   .body { width: 100%; box-sizing: border-box; background: var(--d-shell);
@@ -258,7 +260,7 @@ const STYLE = `
   .screen.night .bg { filter: brightness(.85); }
   .screen.dim .bg { filter: brightness(.5) saturate(.75); }
   .screen.dim .pet { filter: brightness(.8); }
-  .pet { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%; }
+  .pet, .perch { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%; }
   .pet.hop { animation: hop .7s ease-in-out infinite; }
   @keyframes hop { 50% { transform: translateY(-9%); } }
   .poop { bottom: 5%; height: 15%; }
@@ -303,10 +305,11 @@ const STYLE = `
   /* The fan: wind lines cross the scene and the pet sways. */
   .breeze { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1; }
   .screen.breezy .breeze, .screen.windy .breeze { display: block; }
-  .breeze span { position: absolute; left: -40%; height: 3px; width: 34%; border-radius: 2px;
-    background: rgba(255,255,255,.8); animation: wind 1.1s linear infinite; }
+  .breeze span { position: absolute; left: -40%; height: 2px; width: 34%; border-radius: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.85) 45%, rgba(255,255,255,.6) 80%, transparent);
+    animation: wind 1.1s linear infinite; }
   .breeze span:nth-child(1) { top: 30%; }
-  .breeze span:nth-child(2) { top: 48%; animation-delay: .35s; }
+  .breeze span:nth-child(2) { top: 48%; width: 24%; animation-delay: .35s; }
   .breeze span:nth-child(3) { top: 64%; animation-delay: .7s; }
   @keyframes wind { to { left: 110%; } }
   .screen.breezy .pet { animation: sway .7s ease-in-out infinite; }
@@ -343,18 +346,22 @@ const STYLE = `
       radial-gradient(ellipse 10% 4% at 50% 90%, transparent 55%, rgba(255,255,255,.95) 62%, transparent 75%);
     animation: ripple 1.4s ease-out infinite; }
   @keyframes ripple { 0% { opacity: 0; transform: scale(.7); } 30% { opacity: 1; } 100% { opacity: 0; transform: scale(1.25); } }
-  .pet.go-left { translate: -60% 0; }
-  .pet.go-right { translate: 60% 0; }
+  .pet.go-left, .perch.go-left { translate: -60% 0; }
+  .pet.go-right, .perch.go-right { translate: 60% 0; }
+  /* What the pet stands on (species.json "perch"); it follows the pet around. */
+  .perch { transition: translate .25s ease-out; }
+  .perch.wander-l { translate: -16% 0; transition-duration: .9s; }
+  .perch.wander-r { translate: 16% 0; transition-duration: .9s; }
   .status { position: absolute; inset: 0; background: #e9e2c6; color: #2f3a24; padding: 9px 12px;
     display: none; flex-direction: column; gap: 4px; font-size: 13px; overflow: auto; }
   .screen.show-status .status { display: flex; }
   .screen.show-status .bubble { display: none; }
-  .row { display: grid; grid-template-columns: 78px minmax(0, 1fr); align-items: center; gap: 6px; }
+  /* Every row: an icon slot (maybe empty), the label, the value; all on one grid. */
+  .row { display: grid; grid-template-columns: 18px 84px minmax(0, 1fr); align-items: center; gap: 6px; }
   .bar { height: 9px; border: 2px solid #2f3a24; padding: 1px; }
   .bar div { height: 100%; background: #2f3a24; }
   .hearts { letter-spacing: 2px; }
   .hearts .off { opacity: .25; }
-  .row.traits { grid-template-columns: 100px minmax(0, 1fr); }
   .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 2px 0;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
   .bell { border: 2px solid #2f3a24; border-radius: 10px; background: none; color: inherit;
@@ -384,7 +391,6 @@ const STYLE = `
   .compact .deco { display: none; }
   .screen.faded .bg { filter: brightness(.55) saturate(.8); }
   .screen .status img { position: static; } /* not scene sprites */
-  .row.icons { grid-template-columns: 18px 76px minmax(0, 1fr); }
   .row .picon { width: 18px; height: 18px; }
   .hearts { display: flex; gap: 3px; }
   .hearts img { width: 18px; height: 18px; image-rendering: pixelated; }
@@ -518,7 +524,6 @@ class HatchPetCard extends HTMLElement {
           <div><div class="title-row"><img class="emblem" alt=""><div class="title"></div></div>
             <div class="sub"></div></div>
           <div class="chips">
-            <span class="chip"></span>
             <button class="statusbtn" aria-pressed="false">${pixelIcon("icon_status", 24)}<span>Status</span></button>
           </div>
         </div>
@@ -577,6 +582,7 @@ class HatchPetCard extends HTMLElement {
             <img class="bg" alt="">
             <img class="awaysign" alt=""><div class="awaylabel"></div>
             <img class="poop p0" alt=""><img class="poop p1" alt=""><img class="poop p2" alt="">
+            <img class="perch" alt="">
             <img class="pet" alt="">
             <img class="prop" alt="">
             <img class="murk" alt="">
@@ -602,6 +608,7 @@ class HatchPetCard extends HTMLElement {
     const s = {
       el: slide, device: q(".device"), label: q(".label"), screen: q(".screen"), bg: q(".bg"),
       awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), pet: q(".pet"), prop: q(".prop"),
+      perch: q(".perch"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"),
@@ -613,6 +620,12 @@ class HatchPetCard extends HTMLElement {
         console.warn("hatch-pet-card: missing sprite", src);
       }
     }));
+    // The perch moves where the pet moves (wandering, the game) and grows with it.
+    const PERCH_MOVES = ["wander-l", "wander-r", "go-left", "go-right"];
+    new MutationObserver(() => {
+      for (const c of PERCH_MOVES) s.perch.classList.toggle(c, s.pet.classList.contains(c));
+      s.perch.style.scale = s.pet.style.scale;
+    }).observe(s.pet, { attributes: true, attributeFilter: ["class", "style"] });
     // Taps on the game mustn't reach the screen behind (which opens the status).
     s.gameBox.addEventListener("click", (e) => e.stopPropagation());
     q(".gl").addEventListener("click", () => this._guess(s, "left"));
@@ -791,12 +804,10 @@ class HatchPetCard extends HTMLElement {
       img.style.display = name ? "" : "none";
       if (name) img.src = `${BASE}/ui/${name}.png?v=${VERSION}`;
     });
-    this._card.querySelector(".sub").textContent = [world.name, kind,
-      stage?.state !== "egg" ? STAGE_LABELS[stage?.state] : null,
+    // The world is on the device's plate and the emblem, so the line stays short.
+    this._card.querySelector(".sub").textContent = [kind,
+      stage?.state !== "egg" ? STAGE_LABELS[stage?.state]?.toLowerCase() : null,
       days != null ? `day ${Math.floor(days) + 1}` : null].filter(Boolean).join(" · ");
-    const chip = this._card.querySelector(".chip");
-    chip.textContent = `${this._index + 1} / ${this._slides.length}`;
-    chip.style.display = this._slides.length > 1 ? "" : "none";
 
     while (this._dots.children.length < this._slides.length) {
       const i = this._dots.children.length;
@@ -879,6 +890,7 @@ class HatchPetCard extends HTMLElement {
     s.screen.classList.toggle("night", scene === "night");
     s.screen.classList.toggle("dim", scene === "dim");
 
+    this._show(s, s.perch, away ? null : sp.perch);
     if (away) {
       s.frames = [];
       this._show(s, s.pet, null);
@@ -1331,19 +1343,22 @@ class HatchPetCard extends HTMLElement {
     const lines = log.slice(0, 3).map((e) =>
       `<div>${escape(e.action.replace("_", " "))}${e.by ? ` by ${escape(e.by)}` : ""} · ${timeAgo(e.at)}` +
       `${e.result && e.result !== "ok" ? ` (${escape(e.result.replace("_", " "))}${e.score ? ` ${escape(e.score)}` : ""})` : ""}</div>`);
+    const row = (iconName, label, value) =>
+      `<div class="row">${iconName ? ic(iconName) : "<span></span>"}<span>${label}</span>${value}</div>`;
+    const adult = this._state(s, "sensor.life_stage")?.state === "adult";
     s.status.innerHTML = `
-      <div class="row icons">${ic("icon_feed")}<span>hunger</span>${hearts(value("hunger"))}</div>
-      <div class="row icons">${ic("icon_play")}<span>happy</span>${hearts(value("happiness"))}</div>
-      <div class="row icons">${ic("stat_energy")}<span>energy</span>${bar(value("energy"))}</div>
-      <div class="row icons">${ic("stat_health")}<span>health</span>${bar(value("health"))}</div>
-      <div class="row icons">${ic("stat_discipline")}<span>discipline</span>${bar(value("discipline"))}</div>
-      <div class="row traits"><span>weight</span><span>${weightLabel(value("weight"))}</span></div>
-      <div class="row icons">${ic("stat_care_miss")}<span>misses</span><span>${value("care_misses") ?? "–"}</span></div>
-      <div class="row traits"><span>whines</span><span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0} ignored</span></div>
-      <div class="row traits"><span>traits</span><span>${traits.length ? traits.join(" · ") : "none yet"}</span></div>
-      ${stageAttrs.upbringing ? `<div class="row traits"><span>${this._state(s, "sensor.life_stage")?.state === "adult" ? "raised" : "growing up"}</span><span>${escape(stageAttrs.upbringing)}</span></div>` : ""}
-      ${stageAttrs.next_world ? `<div class="row traits"><span>next egg</span><span>in ${escape(stageAttrs.next_world)}</span></div>` : ""}
-      <div class="row traits"><span>notify me</span><span><button class="bell" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span></div>
+      ${row("icon_feed", "hunger", hearts(value("hunger")))}
+      ${row("icon_play", "happy", hearts(value("happiness")))}
+      ${row("stat_energy", "energy", bar(value("energy")))}
+      ${row("stat_health", "health", bar(value("health")))}
+      ${row("stat_discipline", "discipline", bar(value("discipline")))}
+      ${row(null, "weight", `<span>${weightLabel(value("weight"))}</span>`)}
+      ${row("stat_care_miss", "misses", `<span>${value("care_misses") ?? "–"}</span>`)}
+      ${row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0} ignored</span>`)}
+      ${row(null, "traits", `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
+      ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
+      ${stageAttrs.next_world ? row(null, "next egg", `<span>in ${escape(stageAttrs.next_world)}</span>`) : ""}
+      ${row(null, "notify me", `<span><button class="bell" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>
       <button class="jlink">journal ›</button>`;
     this._journalLink(s, true);
