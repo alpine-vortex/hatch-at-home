@@ -107,7 +107,8 @@ details before committing it.
    Lower; then Catch from Giga Pets, as a card-only prototype first; copy me was
    cut) and a one-species alternate adult chosen by a trait. A (the blueprint) and B (the next egg, 0.23.0) are released; C1 (Higher or
    Lower) is built and waits in a PR until after the 2026-11-03 tuning review; the
-   Catch prototype is next. D: the owner picked the bird; the trait is still open.
+   Catch prototype is next. D became trait flair (flair around the pet for every trait, a cap of 4 traits,
+   per-pet temperament, 7 new traits); Sol has the brief for 16 flair sprites.
    **Two sessions work on this repo at once** (this plan's, and the one doing art
    and releases). Both land work in `main` through PRs; whoever releases takes the
    next free version from `main` then, and never releases the other's unmerged work.
