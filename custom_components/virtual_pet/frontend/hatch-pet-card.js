@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.22.0";
+const VERSION = "0.23.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -1344,6 +1344,10 @@ class HatchPetCard extends HTMLElement {
     const row = (iconName, label, value) =>
       `<div class="row">${iconName ? ic(iconName) : "<span></span>"}<span>${label}</span>${value}</div>`;
     const adult = this._state(s, "sensor.life_stage")?.state === "adult";
+    const isEgg = this._state(s, "sensor.life_stage")?.state === "egg";
+    // The creature picked for the next egg (if any), and its world if that changes.
+    const nextEgg = [stageAttrs.next_egg?.toLowerCase(), stageAttrs.next_world && `in ${stageAttrs.next_world}`]
+      .filter(Boolean).join(" ");
     s.status.innerHTML = `
       ${row("icon_feed", "hunger", hearts(value("hunger")))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
@@ -1355,7 +1359,7 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0} ignored</span>`)}
       ${row(null, "traits", `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
-      ${stageAttrs.next_world ? row(null, "next egg", `<span>in ${escape(stageAttrs.next_world)}</span>`) : ""}
+      ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${row(null, "notify me", `<span><button class="bell" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>No care yet.</div>"}</div>
       <button class="jlink">journal ›</button>`;

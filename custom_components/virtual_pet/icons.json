@@ -46,6 +46,11 @@
         "default": "mdi:egg-outline"
       }
     },
+    "select": {
+      "next_egg": {
+        "default": "mdi:egg-outline"
+      }
+    },
     "sensor": {
       "hunger": {
         "default": "mdi:food-apple"

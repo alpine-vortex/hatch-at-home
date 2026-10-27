@@ -122,6 +122,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.world_name = self.world
         self.roster: tuple[str, ...] = ()
         self.species_names: dict[str, str] = {}
+        # What the next egg can hatch into: the next world's roster while a
+        # world change waits for the egg, otherwise this world's.
+        self.egg_roster: tuple[str, ...] = ()
+        self.egg_species_names: dict[str, str] = {}
         self.rng = random.Random()
         self.state: model.PetState | None = None
         # Last calculation, for the diagnostic sensor.
@@ -195,6 +199,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
         self.roster = tuple(catalog.roster(self.world))
         self.species_names = {s: catalog.species[s].get("name", s) for s in self.roster}
+        self.egg_roster = (
+            tuple(catalog.roster(next_world)) if next_world else self.roster
+        )
+        self.egg_species_names = {
+            s: catalog.species[s].get("name", s) for s in self.egg_roster
+        }
         if not self.roster:
             LOGGER.warning(
                 "World %s has no ready species yet; %s stays an egg until it does",
@@ -223,6 +233,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 self.state.species = old_species
                 if model.life_stage(self.state) != "egg":
                     self.state.raised.append(old_species)
+        if self.state.egg_choice not in self.egg_roster:
+            # The world changed under the choice (reconfigure): back to a surprise.
+            self.state.egg_choice = None
         self._save()
 
     async def _async_update_data(self) -> model.PetState:
@@ -576,6 +589,15 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             )
             self.hass.config_entries.async_update_entry(self.config_entry, data=data)
             self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
+
+    async def async_set_egg_choice(self, species: str | None) -> None:
+        """Pick the species the next egg hatches into; None leaves it a surprise."""
+        assert self.state is not None
+        if species is not None and species not in self.egg_roster:
+            raise ValueError(f"{species} can't hatch from this device's next egg")
+        self.state.egg_choice = species
+        self._save()
+        self._publish()
 
     async def async_set_lights_out(self, on: bool) -> None:
         """Flip the lights-out switch."""

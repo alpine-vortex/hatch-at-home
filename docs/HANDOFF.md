@@ -3,7 +3,7 @@
 Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's branch
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
-a session may push to `main`. Version **0.22.0**, released. **The owner runs it on
+a session may push to `main`. Version **0.23.0**, released. **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read the README first, then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and
@@ -90,7 +90,7 @@ details before committing it.
 6. **Feature-gap plan** (`docs/plan-2026-10-27-feature-gaps.md`): the owner chose
    a call-response blueprint, choosing the next egg, more minigames (Higher or
    Lower; then Catch from Giga Pets, as a card-only prototype first; copy me was
-   cut) and a one-species alternate adult chosen by a trait. A (the blueprint) is built; next is B. The
+   cut) and a one-species alternate adult chosen by a trait. A (the blueprint, merged) and B (the next egg) are built; next is D's choice, then C1 after the 2026-11-03 tuning review. The
    plan has been reviewed and the owner has approved it; D still needs a species
    and a trait picked from the owner's pets. Not chosen (don't start unasked): learning household
    routines, a daily diary in the journal (declined), pets on the shelf noticing

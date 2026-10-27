@@ -182,6 +182,11 @@
         "name": "Lay egg"
       }
     },
+    "select": {
+      "next_egg": {
+        "name": "Next egg"
+      }
+    },
     "sensor": {
       "hunger": {
         "name": "Hunger"
