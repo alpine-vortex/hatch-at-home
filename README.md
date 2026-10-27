@@ -5,10 +5,13 @@ let the real house (weather, light, bedtime, who's home) shape its mood and
 scenery. **The house can never hurt the pet**; it only changes how the pet
 looks, what it says and what it asks for.
 
-Status: **phase 3, home awareness**. The pet lives in HA (stats, calls, care misses,
-poop, sleep, care buttons, restart catch-up, fast-forward), sits on a pixel-art
-**device shelf** card, and now reacts to your house: weather, indoor temperature,
-lights, bedtime, people coming and going, and the TV and music.
+Status: **phase 4, life**, nearly done (bird visits from BirdNET-Pi are still to
+come). The pet lives in HA: stats, calls, care misses, poop, sleep, weight,
+discipline, a left/right game and chore treats. It sits on a pixel-art **device
+shelf** card and reacts to your house: weather, indoor temperature, lights,
+bedtime, people coming and going, the TV and music, and the moon. It learns traits,
+grows up with an upbringing, and starts new generations that you can follow in its
+journal.
 
 Each pet lives in a **device** themed for its **world**: an orange egg-shaped toy for
 Woodland (the bird and the Douglas squirrel), a sandstone tank for Terrarium (the
@@ -33,14 +36,15 @@ creatures hatches. See `docs/design-worlds.md`.
 3. Restart HA: Settings → System → power icon (top right) → Restart Home Assistant.
 4. Settings → Devices & services → Add integration → search **Virtual Pet**,
    then name your pet and pick its world: Woodland (bird, squirrel), Terrarium
-   (leopard gecko), Hearth (kitten, bunny), Tidepool (sea otter, octopus) Pond (tree frog, axolotl) or Night Sky (bat, luna moth). Add the integration again for each extra pet device.
+   (leopard gecko), Hearth (kitten, bunny), Tidepool (sea otter, octopus), Pond (tree frog, axolotl) or Night Sky (bat, luna moth). Add the integration again for each extra pet device.
 
 ### Updating
 
 With HACS, new versions appear under Settings → Updates. Install, restart HA,
 then reload the browser page. By hand, copy the folder over the old one and do the
-same. Either way your pets are safe: they live in HA's own storage, not in the
-integration folder.
+same. Either way your pets are safe: they live in HA's own storage
+(`/config/.storage/virtual_pet.<entry id>`), not in the integration folder. Restoring
+an HA backup rewinds the pet to that point, which is fine.
 
 Moving a manual install to HACS needs nothing special: add the custom repository,
 download, restart. HACS replaces the folder you copied.
@@ -94,10 +98,6 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 - The sleep button turns into "wake" whenever the pet is asleep, even if it dozed off
   by itself; one tap wakes it.
 
-**Updating:** replace the folder with the new copy and restart. The pet's
-save file lives in `/config/.storage/virtual_pet.<entry id>` and is kept.
-Restoring an HA backup rewinds the pet to that point, which is fine.
-
 ## What you get
 
 One device named after your pet (rename the device to rename the pet; its
@@ -115,7 +115,7 @@ notifications and journal follow), with:
 | `button.<pet>_feed`, `_snack`, `_play`, `_clean`, `_medicine`, `_scold`, `_praise` | Care. Medicine is unavailable unless the pet is sick. |
 | `button.<pet>_lay_egg` | Starts the next generation. Available from a week into adulthood (day 21), while the pet is well and home. |
 | `button.<pet>_blanket`, `_fan` | Answers to what the house makes the pet ask for. Unavailable unless it's asking. |
-| `sensor.<pet>_debug` | Diagnostic, **disabled by default**. Enable it on the entity's settings page to see the raw numbers. |
+| `sensor.<pet>_debug` | Diagnostic, **disabled by default**. Enable it on the entity's settings page to see the raw numbers. For a file to share, use **Download diagnostics** on the pet's device page instead: it leaves out your entity IDs and people's names. |
 
 ### Quick dashboard card
 
@@ -159,7 +159,7 @@ and it adds at most +3 happiness an hour.
 
 ### Sleep
 
-| Field | Default | What it does | This house |
+| Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Bedtime | 23:00 | Drowsy 30 minutes before. If nobody puts it to bed, it dozes off an hour after. Turning lights-out off after bedtime costs a little happiness. | 23:00 |
 | Wake time | 07:00 | It wakes up on its own. | 07:00 |
@@ -172,7 +172,7 @@ the pet comes home.
 
 ### Weather and air
 
-| Field | Default | What it does | This house |
+| Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Rain sensor | none | On/off "it's raining", or a rain rate where anything above 0 means rain. Beats the forecast. Rain brings a rainy scene and a **blanket?** request. | `input_boolean.raining` |
 | Weather forecast | none | Sunny, snow and fog, and rain when there's no rain sensor. | `weather.forecast_home` |
@@ -184,7 +184,7 @@ the pet comes home.
 
 ### The pet's room
 
-| Field | Default | What it does | This house |
+| Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Room lights | none | At half brightness or more, from an hour before bedtime: squints, "too bright, it's late!". Dim evening light makes it cozy. Daylight never counts. | living room lights |
 | Fireplace | none | Any entity that's on, heating or above 0 when lit (not a thermometer: that's always above 0). Curls up by it and gets a little happier. | `switch.fireplace` |
@@ -192,7 +192,7 @@ the pet comes home.
 
 ### People and activity
 
-| Field | Default | What it does | This house |
+| Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Home zone | `zone.home` | Counts the people in it. Someone arriving gets an excited greeting, at most once every 30 minutes. | `zone.home` |
 | Go to the sitter's after | 2 h | With nobody home this long, the pet is frozen: no hunger, no aging, no calls. | 2 h |
@@ -239,7 +239,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   about 4 points a day, so the habit needs a reminder now and then.
 - **Poop:** a meal comes out about 2 hours later. Poop older than an hour slowly
   costs health and may make it sick. *Clean* flushes it.
-- **Sleep:** bedtime 23:00, wake 07:00 (editable from phase 3). Lights-out puts it
+- **Sleep:** bedtime 23:00, wake 07:00 (change both in the options). Lights-out puts it
   to bed; outside sleep hours that's a nap that ends when it's rested. Left up
   past bedtime, it dozes off on its own after an hour with no penalty. Turning
   lights-out off during sleep hours costs a little happiness. No calls while asleep.
@@ -298,7 +298,9 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   this pet's calls, sickness, hatching, growing up, new traits and eggs on your phone, through
   the Home Assistant app. It only changes them for whoever is signed in; each person
   chooses for themselves. Automations can use `virtual_pet.notify_me` the same way.
-  Fast-forward never notifies.
+  A call's notification has buttons that answer it (Feed, Clean, Medicine, Lights
+  out; Play or Scold for a plea to play), and it clears itself once the call is
+  answered or missed. Fast-forward never notifies.
 - **Restarts never hurt it.** HA downtime freezes the pet: nothing decays,
   ages or expires while HA is off.
 
@@ -364,9 +366,9 @@ HACS's and Home Assistant's checks and the tests on every push.
 1. ✅ Living pet
 2. ✅ The card: device shelf, sprites, speech bubble, poop, attention icon, status screen
 3. ✅ Home awareness: options (entity mapping, bedtime, privacy), weather, light, bedtime, presence, activity, AQI and requests
-4. Life (in progress): ✅ traits, ✅ generations and journal, ✅ moon, ✅ notifications, ✅ adult forms; still to come: bird visits from BirdNET-Pi
+4. Life (in progress): ✅ traits, ✅ generations and journal, ✅ moon, ✅ notifications, ✅ adult forms, ✅ upbringing, ✅ weight; still to come: bird visits from BirdNET-Pi
 5. ✅ HACS packaging
-6. Chores, minigames, more species
+6. Play (in progress): ✅ chore treats, ✅ the left/right game; still to come: more species
 
 ## License
 

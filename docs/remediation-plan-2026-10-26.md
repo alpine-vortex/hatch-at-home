@@ -7,7 +7,7 @@
     because the state has already swapped by the time the card hears of it.
   - 2.1: the miss counter doesn't flash.
 - Phase 4: the request is going to Sol.
-- Phase 5: open.
+- Phase 5: in 0.17.0, notification buttons, the diagnostics download and the README cleanup; the rest is open.
 
 Covers everything the interaction-feedback review found. That review ran against
 commit `348143f`; the findings were rechecked by hand on `3982a11`. The plan also

@@ -954,3 +954,20 @@ def test_weight_shows_in_what_it_says():
     assert model.mood(pet, at(9), SETTINGS)[2] == "feeling a bit round..."
     pet.weight = 10.0
     assert model.mood(pet, at(9), SETTINGS)[2] == "could use a proper meal"
+
+
+def test_call_notifications_offer_the_answer_as_a_button():
+    from custom_components.virtual_pet import notify
+
+    assert notify.actions({"type": "call_started", "reason": "happiness"}, "p1") == [
+        {"action": "VIRTUAL_PET:p1:play", "title": "Play"},
+        {"action": "VIRTUAL_PET:p1:scold", "title": "Scold"},
+    ]
+    assert notify.actions({"type": "became_sick"}, "p1")[0]["title"] == "Medicine"
+    assert notify.actions({"type": "hatched"}, "p1") == []
+    assert notify.parse_action("VIRTUAL_PET:01ABC:lights_out") == (
+        "01ABC",
+        "lights_out",
+    )
+    assert notify.parse_action("VIRTUAL_PET:x_y:feed") == ("x_y", "feed")
+    assert notify.parse_action("SOMETHING_ELSE") is None

@@ -650,7 +650,10 @@ async def test_notifications_go_to_the_users_who_opted_in(
         await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
     assert [c.data["message"] for c in mine] == ["Pip is hungry!"]
-    assert mine[0].data["data"]["tag"].endswith("call_started")
+    assert mine[0].data["data"]["tag"] == "virtual_pet_test_pet_call"
+    assert mine[0].data["data"]["actions"] == [
+        {"action": "VIRTUAL_PET:test_pet:feed", "title": "Feed"}
+    ]
     assert theirs == []
 
     await hass.services.async_call(
@@ -899,3 +902,71 @@ async def test_moments_reach_the_card_but_not_from_fast_forward(
     assert "at" in moments[0]
     misses = hass.states.get("sensor.pip_care_misses")
     assert misses.attributes["discipline_misses"] == 0
+
+
+async def test_notification_buttons_care_for_the_pet_and_clear_the_call(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, hunger=26.0)
+    await setup(hass)
+    me = await hass.auth.async_create_user("Me")
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": me.id, "device_name": "My Phone"}
+    ).add_to_hass(hass)
+    phone = async_mock_service(hass, "notify", "mobile_app_my_phone")
+    await hass.services.async_call(
+        DOMAIN,
+        "notify_me",
+        {"entity_id": "sensor.pip_mood", "enabled": True},
+        blocking=True,
+        context=Context(user_id=me.id),
+    )
+    for _ in range(6):  # hunger drops below 25 and it calls
+        await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert [c.data["message"] for c in phone] == ["Pip is hungry!"]
+
+    hass.bus.async_fire(
+        "mobile_app_notification_action",
+        {"action": "VIRTUAL_PET:test_pet:feed"},
+        context=Context(user_id=me.id),
+    )
+    await hass.async_block_till_done()
+    log = hass.states.get("sensor.pip_last_care").attributes["log"]
+    assert log[0]["action"] == "feed" and log[0]["by"] == "Me"
+    assert phone[-1].data["message"] == "clear_notification"
+    assert phone[-1].data["data"]["tag"] == "virtual_pet_test_pet_call"
+
+    # Someone else's button, or a malformed one, does nothing.
+    hass.bus.async_fire("mobile_app_notification_action", {"action": "OTHER"})
+    hass.bus.async_fire(
+        "mobile_app_notification_action", {"action": "VIRTUAL_PET:nope:feed"}
+    )
+    await hass.async_block_till_done()
+
+
+async def test_diagnostics_hide_the_house_and_the_people(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    from custom_components.virtual_pet.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    hass_storage[STORE_KEY] = hatched_pet(
+        now,
+        notify_users=["user-1"],
+        care_log=[{"at": now, "action": "feed", "by": "Alex", "result": "ok"}],
+    )
+    config = await setup_with_house(
+        hass, weather="weather.home", tv=["media_player.tv"]
+    )
+    diag = await async_get_config_entry_diagnostics(hass, config)
+    assert diag["options"]["weather"] == "**REDACTED**"
+    assert diag["options"]["tv"] == "**REDACTED**"
+    assert diag["pet"]["notify_users"] == "**REDACTED**"
+    assert diag["pet"]["care_log"][0]["by"] == "**REDACTED**"
+    assert diag["now"]["stage"] == "child"
+    assert "Alex" not in str(diag) and "user-1" not in str(diag)

@@ -8,6 +8,7 @@ from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.const import ATTR_ENTITY_ID, Platform
 from homeassistant.core import (
+    Event,
     HomeAssistant,
     ServiceCall,
     ServiceResponse,
@@ -19,6 +20,7 @@ from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
 import voluptuous as vol
 
+from . import notify
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_ENABLED,
@@ -39,6 +41,9 @@ from .model import SIDES
 PLATFORMS = [Platform.BINARY_SENSOR, Platform.BUTTON, Platform.SENSOR, Platform.SWITCH]
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+# Fired by the Home Assistant app when a notification button is pressed.
+EVENT_NOTIFICATION_ACTION = "mobile_app_notification_action"
 
 NOTIFY_ME_SCHEMA = vol.Schema(
     {
@@ -126,6 +131,20 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         schema=PLAY_GAME_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
+
+    async def notification_button(event: Event) -> None:
+        """A button on a pet's phone notification (mobile_app) was pressed."""
+        parsed = notify.parse_action(str(event.data.get("action", "")))
+        if parsed is None:
+            return
+        entry = hass.config_entries.async_get_entry(parsed[0])
+        if entry is None or entry.domain != DOMAIN:
+            return
+        coordinator: PetCoordinator | None = getattr(entry, "runtime_data", None)
+        if coordinator is not None:
+            await coordinator.async_notification_button(parsed[1], event.context)
+
+    hass.bus.async_listen(EVENT_NOTIFICATION_ACTION, notification_button)
 
     async_register_admin_service(
         hass,

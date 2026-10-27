@@ -114,6 +114,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.debug: dict[str, Any] = {}
         # Recent events for the card to react to, newest first (not saved).
         self.moments: list[dict[str, Any]] = []
+        # A call notification is on the phones (cleared when the call is over).
+        self._call_notified = False
         # The house: nothing is read until HA has fully started.
         self.home = HomeEffect()
         self.presence = Presence(
@@ -364,19 +366,40 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """Tell the users who opted in, on their phones. Never for fast-forward."""
         if simulated or self.state is None or not self.state.notify_users:
             return
+        users = list(self.state.notify_users)
+        if event["type"] in notify.CALL_OVER_EVENTS and self._call_notified:
+            # The call is over: take its notification off the phones.
+            self._call_notified = False
+            self._send(users, "clear_notification", notify.call_tag(self.pet_id))
         text = notify.message(event, self.state.name, self.species_names)
         if text is None:
             return
+        if event["type"] in notify.CALL_EVENTS:
+            self._call_notified = True
+            tag = notify.call_tag(self.pet_id)
+        else:
+            tag = f"{DOMAIN}_{self.pet_id}_{event['type']}"
+        self._send(users, text, tag, notify.actions(event, self.pet_id))
+
+    def _send(
+        self,
+        users: list[str],
+        text: str,
+        tag: str,
+        buttons: list[dict[str, str]] | None = None,
+    ) -> None:
         self.config_entry.async_create_background_task(
             self.hass,
-            notify.send(
-                self.hass,
-                list(self.state.notify_users),
-                text,
-                f"{DOMAIN}_{self.pet_id}_{event['type']}",
-            ),
+            notify.send(self.hass, users, text, tag, buttons),
             f"{DOMAIN} notify",
         )
+
+    async def async_notification_button(self, key: str, context: Context) -> None:
+        """Someone pressed a button on one of this pet's notifications."""
+        if key == "lights_out":
+            await self.async_set_lights_out(True)
+        elif key in model.ACTIONS:
+            await self.async_action(key, context)
 
     async def async_set_notify(self, user_id: str, enabled: bool) -> None:
         """Opt a user in or out of this pet's notifications."""

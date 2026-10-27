@@ -37,6 +37,46 @@ TRAITS = {
 }
 
 
+# Buttons on a call's notification: what would answer it. A plea to play may be
+# a fake call, so it offers scolding too (both always, so they give nothing away).
+ACTION_PREFIX = "VIRTUAL_PET:"
+ANSWERS: dict[str, list[tuple[str, str]]] = {
+    "hunger": [("feed", "Feed")],
+    "happiness": [("play", "Play"), ("scold", "Scold")],
+    "dirty": [("clean", "Clean")],
+    "energy": [("lights_out", "Lights out")],
+    "sick": [("medicine", "Medicine")],
+}
+# Notifications about a call share one tag, so a newer one replaces the older
+# and answering it clears it from the phone.
+CALL_EVENTS = {"call_started", "became_sick"}
+CALL_OVER_EVENTS = {"call_answered", "care_miss", "fell_asleep"}
+
+
+def call_tag(pet_id: str) -> str:
+    """The tag shared by a pet's call notifications."""
+    return f"virtual_pet_{pet_id}_call"
+
+
+def actions(event: dict[str, Any], pet_id: str) -> list[dict[str, str]]:
+    """Notification buttons that answer the event's call, if any."""
+    reason = "sick" if event["type"] == "became_sick" else event.get("reason", "")
+    if event["type"] not in CALL_EVENTS:
+        return []
+    return [
+        {"action": f"{ACTION_PREFIX}{pet_id}:{key}", "title": title}
+        for key, title in ANSWERS.get(reason, [])
+    ]
+
+
+def parse_action(action: str) -> tuple[str, str] | None:
+    """(pet_id, care action) from a pressed notification button, or None."""
+    if not action.startswith(ACTION_PREFIX):
+        return None
+    pet_id, _, key = action[len(ACTION_PREFIX) :].rpartition(":")
+    return (pet_id, key) if pet_id and key else None
+
+
 def _a(noun: str) -> str:
     """'a' or 'an', by the first letter."""
     return f"{'an' if noun[:1].lower() in 'aeiou' else 'a'} {noun}"
@@ -81,15 +121,27 @@ def phones(hass: HomeAssistant, user_id: str) -> list[str]:
     return services
 
 
-async def send(hass: HomeAssistant, user_ids: list[str], text: str, tag: str) -> None:
-    """Send to every phone of every subscribed user; a failure only logs."""
+async def send(
+    hass: HomeAssistant,
+    user_ids: list[str],
+    text: str,
+    tag: str,
+    buttons: list[dict[str, str]] | None = None,
+) -> None:
+    """Send to every phone of every subscribed user; a failure only logs.
+
+    The text "clear_notification" removes the tagged notification instead.
+    """
+    data: dict[str, Any] = {"tag": tag, "group": "virtual_pet"}
+    if buttons:
+        data["actions"] = buttons
     for user_id in user_ids:
         for service in phones(hass, user_id):
             try:
                 await hass.services.async_call(
                     "notify",
                     service,
-                    {"message": text, "data": {"tag": tag, "group": "virtual_pet"}},
+                    {"message": text, "data": data},
                     blocking=True,
                 )
             except Exception:  # noqa: BLE001 - a phone being gone must not break the pet
