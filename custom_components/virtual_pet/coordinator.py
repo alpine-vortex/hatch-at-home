@@ -578,14 +578,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         return result
 
     async def async_play_game(
-        self, guess: str, context: Context | None
+        self, guess: str | None, context: Context | None, kind: str = "left_right"
     ) -> dict[str, Any]:
-        """One round of the left/right game."""
+        """One round of a game, or with no guess, the start of one."""
         assert self.state is not None
         now = self._now()
         self._advance(now)
         by = await self._who(context)
-        info, events = model.play_game(self.state, guess, now, self.rng, by)
+        if guess is None:
+            info, events = model.start_game(self.state, kind, now, self.rng, by)
+        else:
+            info, events = model.play_game(
+                self.state, guess, now, self.rng, by, kind=kind
+            )
         if info["result"] == "away" and self.privacy:
             info["result"] = self.state.care_log[0]["result"] = "asleep"
             for event in events:

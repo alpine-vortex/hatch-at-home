@@ -30,7 +30,7 @@ function icon(name, size = 22) {
 const ACTIONS = [
   { key: "feed", label: "feed", wants: "hungry" },
   { key: "snack", label: "snack" },
-  { key: "play", label: "play", aria: "play: a left or right guessing game", wants: "bored" },
+  { key: "play", label: "play", aria: "play a game", wants: "bored" },
   { key: "clean", label: "clean", wants: "dirty" },
   { key: "medicine", label: "meds", aria: "meds: give medicine", wants: "sick" },
   { key: "scold", label: "scold" },
@@ -38,6 +38,13 @@ const ACTIONS = [
 ];
 
 // What the pet says back when a care action did nothing.
+// The games the play button offers (virtual_pet.play_game), in picker order.
+const GAMES = [
+  { key: "left_right", label: "left or right", guesses: ["left", "right"] },
+  { key: "higher_lower", label: "higher or lower", guesses: ["lower", "higher"] },
+];
+const LAST_GAME_KEY = "hatch-last-game";
+
 const REFUSALS = {
   full: "I'm full!",
   not_needed: "I'm fine, thanks!",
@@ -47,6 +54,7 @@ const REFUSALS = {
   not_sick: "I'm not sick!",
   unfair: "hey, I didn't do anything!",
   spoiled: "hehe, whining works",
+  no_game: "let's start over",
   egg: "...",
   away: "I'm at the sitter's!",
 };
@@ -312,6 +320,17 @@ const STYLE = `
   .game .gl { left: 4%; bottom: 8%; }
   .game .gr { right: 4%; bottom: 8%; }
   .game .gx { right: 4%; top: 6%; min-width: 32px; min-height: 32px; font: inherit; font-size: 14px; }
+  .game .gpick { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px;
+    align-items: center; justify-content: center; }
+  .game .gpick[hidden], .game .gnum[hidden], .game .gl[hidden], .game .gr[hidden] { display: none; }
+  .game .gpick button { position: static; border-radius: 12px; padding: 6px 14px; font: inherit;
+    font-size: 14px; min-height: 44px; }
+  .game .gnum { position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
+    min-width: 48px; padding: 2px 10px; border-radius: 10px; text-align: center; font-size: 36px;
+    line-height: 1.1; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
+    box-shadow: 2px 2px 0 #3a2a1a; }
+  .game .gnum.flip { animation: perk .3s ease-out; }
+  .game .hl { font: inherit; font-size: 14px; }
   .game .gscore { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
@@ -617,6 +636,9 @@ class HatchPetCard extends HTMLElement {
             <img class="attention" alt="">
             <div class="bubble"></div>
             <div class="game" hidden>
+              <div class="gpick" role="group" aria-label="Pick a game">${GAMES.map((g) =>
+                `<button data-game="${g.key}">${g.label}</button>`).join("")}</div>
+              <span class="gnum" aria-live="polite" hidden></span>
               <button class="gl" aria-label="Guess left">${icon("prev", 22)}</button>
               <span class="gscore" aria-live="polite"></span>
               <button class="gr" aria-label="Guess right">${icon("next", 22)}</button>
@@ -636,7 +658,7 @@ class HatchPetCard extends HTMLElement {
       perch: q(".perch"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
-      request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"),
+      request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
     };
     slide.querySelectorAll("img").forEach((img) => img.addEventListener("error", () => {
       const src = img.getAttribute("src");
@@ -656,6 +678,8 @@ class HatchPetCard extends HTMLElement {
     q(".gl").addEventListener("click", () => this._guess(s, "left"));
     q(".gr").addEventListener("click", () => this._guess(s, "right"));
     q(".gx").addEventListener("click", () => this._endGame(s, "maybe later!"));
+    s.gameBox.querySelectorAll(".gpick button").forEach((b) =>
+      b.addEventListener("click", () => this._pickGame(s, b.dataset.game)));
     s.request.addEventListener("click", () => {
       const key = s.request.dataset.key;
       if (!key) return;
@@ -1565,9 +1589,9 @@ class HatchPetCard extends HTMLElement {
     if (id) this._call(button, s, "button", "press", id);
   }
 
-  // --- The left/right game --------------------------------------------------
-  // The server hides the pet and keeps score (virtual_pet.play_game); the card
-  // only asks, and shows where the pet went.
+  // --- Games ----------------------------------------------------------------
+  // The server keeps the game and the score (virtual_pet.play_game); the card
+  // only asks, and shows what happened.
 
   _startGame(s, button) {
     this._tapped(button, s);
@@ -1579,37 +1603,110 @@ class HatchPetCard extends HTMLElement {
       return;
     }
     if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
-    s.game = { round: 0, wins: 0, busy: false };
-    s.gameBox.hidden = false;
-    s.gameScore.textContent = `round 1/5`;
-    s.bubble.textContent = "left or right? guess where I'll go!";
+    if (GAMES.length === 1) {
+      this._pickGame(s, GAMES[0].key);
+      return;
+    }
+    s.game = { picking: true };
+    this._gameView(s, "pick");
+    s.bubble.textContent = "what shall we play?";
+    s.sayUntil = Date.now() + 60000;
+    let last = null;
+    try {
+      last = localStorage.getItem(LAST_GAME_KEY);
+    } catch (err) {
+      // no storage here (a private window): start from the first game
+    }
+    const pick = s.gameBox.querySelector(`.gpick [data-game="${last}"]`) ||
+      s.gameBox.querySelector(".gpick button");
+    pick.focus({ preventScroll: true });
+  }
+
+  // Show the picker ("pick") or a game's buttons (its key) in the game overlay.
+  _gameView(s, view) {
+    const box = s.gameBox;
+    box.hidden = false;
+    box.querySelector(".gpick").hidden = view !== "pick";
+    s.gameNum.hidden = view !== "higher_lower";
+    const [gl, gr] = [box.querySelector(".gl"), box.querySelector(".gr")];
+    gl.hidden = gr.hidden = view === "pick";
+    s.gameScore.hidden = view === "pick";
+    const hl = view === "higher_lower";
+    gl.innerHTML = hl ? '<span class="hl">lo</span>' : icon("prev", 22);
+    gr.innerHTML = hl ? '<span class="hl">hi</span>' : icon("next", 22);
+    gl.setAttribute("aria-label", hl ? "Guess lower" : "Guess left");
+    gr.setAttribute("aria-label", hl ? "Guess higher" : "Guess right");
+    box.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });
+  }
+
+  async _pickGame(s, kind) {
+    if (!s.game) return;
+    try {
+      localStorage.setItem(LAST_GAME_KEY, kind);
+    } catch (err) {
+      // no storage: the picker just won't remember
+    }
+    s.game = { kind, round: 0, wins: 0, busy: false };
+    this._gameView(s, kind);
+    s.gameScore.textContent = "round 1/5";
+    if (kind === "left_right") {
+      s.bubble.textContent = "left or right? guess where I'll go!";
+    } else {
+      // Higher or Lower shows its first number before the first guess.
+      s.game.busy = true;
+      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = true; });
+      const info = await this._playCall(s, { game: kind });
+      if (!info) return;
+      s.game.busy = false;
+      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });
+      s.gameNum.textContent = String(info.number);
+      s.bubble.textContent = "will the next one be higher or lower?";
+    }
     s.sayUntil = Date.now() + 60000;
     s.gameBox.querySelector(".gl").focus({ preventScroll: true });
   }
 
-  async _guess(s, side) {
+  // One play_game call; ends the game (with a line) on a failure or refusal.
+  async _playCall(s, data) {
     const id = s.ids?.["sensor.mood"];
-    if (!s.game || s.game.busy || !id) return;
-    s.game.busy = true;
-    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = true; });
+    if (!id) return null;
     let info;
     try {
       const res = await this._hass.callService(
-        "virtual_pet", "play_game", { entity_id: id, guess: side }, undefined, false, true);
+        "virtual_pet", "play_game", { entity_id: id, ...data }, undefined, false, true);
       info = res?.response;
     } catch (err) {
       this._endGame(s, "hmm, that didn't work");
-      return;
+      return null;
     }
-    if (!s.game) return; // stopped while waiting
+    if (!s.game) return null; // stopped while waiting
     if (!info || info.result !== "ok") {
       this._endGame(s, REFUSALS[info?.result] || "not now");
-      return;
+      return null;
     }
+    return info;
+  }
+
+  async _guess(s, side) {
+    if (!s.game || s.game.busy || !s.game.kind) return;
+    const kind = s.game.kind;
+    const game = GAMES.find((g) => g.key === kind);
+    const guess = game.guesses[side === "left" ? 0 : 1];
+    s.game.busy = true;
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = true; });
+    const info = await this._playCall(s, { game: kind, guess });
+    if (!info) return;
     s.game.round = info.round;
     s.game.wins = info.wins;
-    s.pet.classList.add(`go-${info.went}`);
-    s.bubble.textContent = info.correct ? "yes! you found me" : `nope, I went ${info.went}!`;
+    if (kind === "higher_lower") {
+      s.gameNum.textContent = String(info.number);
+      this._animate(s, s.gameNum, "flip", 300);
+      this._animate(s, s.pet, "perk", 300);
+      s.bubble.textContent = info.correct ? `yes! ${info.number}` : `nope, ${info.number}!`;
+    } else {
+      s.pet.classList.add(`go-${info.went}`);
+      s.bubble.textContent = info.correct ? "yes! you found me" : `nope, I went ${info.went}!`;
+    }
     s.gameScore.textContent = `round ${info.round}/${info.rounds} · ${info.wins} right`;
     if (navigator.vibrate && info.correct) navigator.vibrate([12, 40, 12]);
     setTimeout(() => {
@@ -1623,7 +1720,7 @@ class HatchPetCard extends HTMLElement {
       s.game.busy = false;
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.disabled = false; });
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
-      s.bubble.textContent = "again! left or right?";
+      s.bubble.textContent = kind === "higher_lower" ? "higher or lower?" : "again! left or right?";
     }, 900);
   }
 

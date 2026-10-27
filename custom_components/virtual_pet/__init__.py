@@ -29,6 +29,7 @@ from . import notify
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_ENABLED,
+    ATTR_GAME,
     ATTR_GUESS,
     ATTR_HOURS,
     CARD_FILENAME,
@@ -41,7 +42,7 @@ from .const import (
     VERSION,
 )
 from .coordinator import PetConfigEntry, PetCoordinator, PetStore
-from .model import SIDES
+from .model import GAMES
 
 PLATFORMS = [
     Platform.BINARY_SENSOR,
@@ -65,7 +66,11 @@ NOTIFY_ME_SCHEMA = vol.Schema(
 PLAY_GAME_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
-        vol.Required(ATTR_GUESS): vol.In(SIDES),
+        vol.Optional(ATTR_GAME, default="left_right"): vol.In(list(GAMES)),
+        # Without a guess, the call starts a game and returns its opening.
+        vol.Optional(ATTR_GUESS): vol.In(
+            sorted({g for gs in GAMES.values() for g in gs})
+        ),
     }
 )
 FAST_FORWARD_SCHEMA = vol.Schema(
@@ -129,7 +134,18 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         await pet_of(call).async_set_notify(user_id, call.data[ATTR_ENABLED])
 
     async def play_game(call: ServiceCall) -> ServiceResponse:
-        return await pet_of(call).async_play_game(call.data[ATTR_GUESS], call.context)
+        kind = call.data[ATTR_GAME]
+        guess = call.data.get(ATTR_GUESS)
+        if guess is not None and guess not in GAMES[kind]:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="wrong_guess",
+                translation_placeholders={
+                    "guess": guess,
+                    "guesses": " or ".join(GAMES[kind]),
+                },
+            )
+        return await pet_of(call).async_play_game(guess, call.context, kind)
 
     hass.services.async_register(
         DOMAIN, SERVICE_NOTIFY_ME, notify_me, schema=NOTIFY_ME_SCHEMA

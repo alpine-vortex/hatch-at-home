@@ -259,5 +259,6 @@ class DebugSensor(PetEntity, SensorEntity):
             "poops": [stamp(t).isoformat() for t in pet.poops],
             "digesting": [stamp(t).isoformat() for t in pet.digesting],
             "latched": list(pet.latched),
+            "games": {kind: dict(counts) for kind, counts in pet.games.items()},
             "calculation": dict(self.coordinator.debug),
         }
