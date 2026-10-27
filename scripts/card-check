@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Check the pet shelf card in the throwaway HA (start scripts/develop first).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+exec node scripts/card-check.js "$@"

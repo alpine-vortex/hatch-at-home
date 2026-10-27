@@ -359,7 +359,13 @@ Never develop against your live HA. This repo includes a throwaway instance.
 scripts/setup     # .venv with HA 2026.10 + test tools (needs uv, Python 3.14)
 scripts/test      # ruff + pytest
 scripts/develop   # throwaway HA at http://localhost:8123, config in dev/config
+scripts/card-check  # with develop running: drives the card in Chromium (Playwright)
 ```
+
+`scripts/card-check` onboards a fresh instance (user `dev`, password `devdevdev`) and
+creates two pets if there are none. It then checks the shelf, status and journal
+screens, a full game, the reactions to moments, the egg's frames and the card editor,
+and saves screenshots to `dev/card-check/`.
 
 `dev/config/configuration.yaml` has stand-in entities (fake weather, lux,
 indoor temperature, AQI, motion, presence and music) for the home-awareness
