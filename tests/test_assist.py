@@ -64,6 +64,16 @@ def speech(response: intent.IntentResponse) -> str:
     return response.speech["plain"]["speech"]
 
 
+async def test_status_keeps_the_reasons_own_punctuation(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=10.0)
+    assert await async_setup_component(hass, "intent", {})
+    await setup(hass)
+    text = speech(await ask(hass, "VirtualPetStatus"))
+    assert not text.endswith(("?.", "!.", "~.", "..")), text
+
+
 async def test_status_answers_in_the_pets_voice(
     hass: HomeAssistant, pip: MockConfigEntry
 ) -> None:
