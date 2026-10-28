@@ -95,8 +95,9 @@ details before committing it.
   `species.json` `hat` points now exist for the deer, the axolotl (its gills rise above
   its crown) and the tarantula (the hat goes on its front body, by its face, not on its
   abdomen). Every costume was previewed on all 13 creatures × 4 stages, close up.
-  Costumes carry `skip` lists: no cat ears on creatures with their own ears, the bird
-  or the luna moth, no horns on the bird or deer (owner: ears on the bird were "a fail").
+  Costumes carry `skip` lists (my call, not the owner's): no cat ears on creatures
+  with their own ears or the luna moth, no horns on the deer. The bird wears them all:
+  the owner's complaint was where the ears landed, which was a preview mix-up.
   The ears and horns have a thin band. Costumes sit on the lowest head top across the
   idle frames (`_headTopAll`). The preview script's injected creature can be undone by
   the test pet's own update mid-shot; discard cells that show the wrong creature.

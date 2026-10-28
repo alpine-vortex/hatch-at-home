@@ -175,13 +175,13 @@ const SEASONS = [
     countdown: "Halloween", // "3 sleeps till Halloween!" before the treat day
     // A costume a day (by pet and date); sink: how far into the head it sits,
     // in frame pixels; width at the scene's scale; skip: creatures it doesn't
-    // suit (cat ears on a creature with its own ears, or on a bird, read wrong).
+    // suit (cat ears on a creature with its own ears read wrong).
     costumes: [
       { art: "hat", sink: 7, width: 64 },
       { art: "pumpkin_cap", sink: 6, width: 60 },
       { art: "cat_ears", sink: 10, width: 76,
-        skip: ["bird", "kitten", "bunny", "deer", "bat", "squirrel", "lunamoth"] },
-      { art: "horns", sink: 9, width: 68, skip: ["bird", "deer"] },
+        skip: ["kitten", "bunny", "deer", "bat", "squirrel", "lunamoth"] },
+      { art: "horns", sink: 9, width: 68, skip: ["deer"] },
     ],
     lanterns: ["pumpkin", "pumpkin_2", "pumpkin_3"], // a new face every day
     snack: "candy", // snacks are candy
