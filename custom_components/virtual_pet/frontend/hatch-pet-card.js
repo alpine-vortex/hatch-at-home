@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.31.0";
+const VERSION = "0.32.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -99,6 +99,70 @@ const CHIRPS = { // [frequency Hz, length s] notes, played one after another
   harvest: [[523, 0.1], [659, 0.1], [784, 0.1], [659, 0.1], [784, 0.22]],
 };
 let audio = null; // one AudioContext for every card on the page
+
+// Voices (species.json "voice"): now and then a line opens with the creature's
+// sound ("tweet! hi, Sam!"), never twice within VOICE_QUIET_MS, so a burst of
+// lines carries it once. Lines type out at its pace; with "babble" on for this
+// browser (off by default), each letter is a tiny syllable at its pitch.
+const BABBLE_KEY = "hatch-babble";
+const BABBLE_MAX_S = 1.2;
+const VOICE_QUIET_MS = 120000;
+const VOICE_MAX = 60; // characters: past this the sound is left off
+// Lines that open with a sound of their own (whole words, any case).
+const OPENERS = /^(?:[*♪…]|\.\.\.|(?:hmm+|hehe|boo|gobble|crack|eep|eek|news|o+h+|brr+|aww+|mm+h?|ew|whe+|la la|yay|zzz|pitter)(?![a-z]))/i;
+let babbling = []; // the oscillators of the babble now playing
+
+function babbleOn() {
+  try {
+    return localStorage.getItem(BABBLE_KEY) === "on";
+  } catch (err) {
+    return false;
+  }
+}
+
+function unlockAudio() {
+  audio ||= new (window.AudioContext || window.webkitAudioContext)();
+  if (audio.state === "suspended") audio.resume();
+}
+
+function stopBabble() {
+  for (const osc of babbling) {
+    try {
+      osc.stop();
+    } catch (err) {
+      // already done
+    }
+  }
+  babbling = [];
+}
+
+// A babble: a syllable per letter (vowels a little higher), spaces and marks
+// a pause, at the creature's pitch and pace; quieter than the chirps.
+function babble(text, voice) {
+  stopBabble();
+  unlockAudio();
+  const step = 1 / voice.pace;
+  let t = audio.currentTime + 0.01;
+  const end = t + BABBLE_MAX_S;
+  for (const ch of text) {
+    if (t >= end) break;
+    if (/\p{L}/u.test(ch)) {
+      const lower = ch.toLowerCase();
+      const semis = (lower.codePointAt(0) % 7) - 3 + (/[aeiouy]/.test(lower) ? 2 : 0);
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = voice.pitch * 2 ** (semis / 12);
+      gain.gain.setValueAtTime(0.04, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(t);
+      osc.stop(t + 0.045);
+      babbling.push(osc);
+    }
+    t += step;
+  }
+}
 
 function soundsOn() {
   try {
@@ -730,6 +794,7 @@ const STYLE = `
   .awaysign { left: 50%; bottom: 12%; height: 40%; margin-left: -20%; }
   .awaylabel { position: absolute; left: 0; right: 0; bottom: 5%; text-align: center;
     color: #fff; font-size: 15px; text-shadow: 0 1px 3px #000; }
+  .bubble .untyped { visibility: hidden; } /* laid out whole, so it never grows */
   .bubble { position: absolute; left: 5%; top: 6%; max-width: 64%; padding: 5px 9px;
     background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a; border-radius: 8px;
     font-size: 14px; line-height: 1.2; box-shadow: 3px 3px 0 #3a2a1a; }
@@ -1173,12 +1238,25 @@ class HatchPetCard extends HTMLElement {
         this._go(this._index + (dx < 0 ? 1 : -1));
       }
     });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) (this._slides || []).forEach((x) => this._stopTyping(x));
+    });
+    // iOS locks audio again after a reload until a tap: any tap unlocks it.
+    this._card.addEventListener("pointerdown", () => {
+      if (!soundsOn() && !babbleOn()) return;
+      try {
+        unlockAudio();
+      } catch (err) {
+        // no WebAudio
+      }
+    });
     this._resize = new ResizeObserver(() => this._layout());
     this._resize.observe(this._viewport);
     this._visible = true;
     new IntersectionObserver((entries) => {
       this._visible = entries.some((e) => e.isIntersecting);
       this._card.classList.toggle("offscreen", !this._visible); // pauses the loops
+      if (!this._visible) this._slides.forEach((x) => this._stopTyping(x));
       if (this._visible && this._dirty) this._update(); // catch up on what was skipped
     }).observe(this._card);
     this._slides = [];
@@ -1251,6 +1329,7 @@ class HatchPetCard extends HTMLElement {
     // What the pet says to someone (a refusal, a game's result, a moment) is read
     // out by screen readers; its idle chatter isn't. Only the pet on show.
     new MutationObserver(() => {
+      if (s.plain !== undefined && s.bubble.textContent === s.plain) return; // _speak announced it
       const text = spoken(s.bubble.textContent);
       if (s.sayUntil && s === this._slides[this._index] && text && s.live.textContent !== text) {
         s.live.textContent = text;
@@ -1449,6 +1528,7 @@ class HatchPetCard extends HTMLElement {
   _go(index) {
     const n = this._slides.length;
     if (!n) return;
+    this._slides.forEach((x) => this._stopTyping(x));
     this._index = (index + n) % n;
     this._renderShelf();
   }
@@ -1769,6 +1849,7 @@ class HatchPetCard extends HTMLElement {
 
   _toggleStatus(s) {
     const open = !s.screen.classList.contains("show-status");
+    if (open) this._stopTyping(s); // the bubble hides: the line is said whole
     s.screen.classList.toggle("show-status", open);
     s.journal = false;
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
@@ -1913,6 +1994,7 @@ class HatchPetCard extends HTMLElement {
         dirty: ["ew...", "*sniff sniff*"],
       }[s.moodState] || ["♪ hm hm hm ♪", "...", "*looks around*", "la la la"];
       this._write(s, pick(lines), 2500);
+      s.plain = s.bubble.textContent; // idle chatter isn't read out
     }
   }
 
@@ -1922,8 +2004,99 @@ class HatchPetCard extends HTMLElement {
   // Every line put straight into the bubble. With ms, it holds the bubble that
   // long; without, the hold stays as it was (a game keeps its own).
   _write(s, text, ms) {
+    this._stopTyping(s);
+    s.plain = undefined;
     s.bubble.textContent = text;
     if (ms !== undefined) s.sayUntil = Date.now() + ms;
+  }
+
+  // A line that may carry the creature's sound, typed out at its pace (and
+  // babbled, if this browser wants that). Screen readers get the plain line,
+  // once; the sound is hidden from them.
+  _speak(s, text, ms = 4500) {
+    const voice = s.species?.voice;
+    const sound = this._soundFor(s, text);
+    const onShow = s === this._slides[this._index];
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const pace = voice?.pace;
+    this._stopTyping(s);
+    if (sound) s.voicedAt = Date.now();
+    s.plain = sound ? `${sound} ${text}` : text;
+    s.bubble.textContent = "";
+    if (sound) {
+      const snd = document.createElement("span");
+      snd.className = "snd";
+      snd.setAttribute("aria-hidden", "true");
+      snd.textContent = `${sound} `;
+      s.bubble.append(snd);
+    }
+    let typingMs = 0;
+    if (onShow && !calm && pace > 0 && this._visible && !document.hidden) {
+      const chars = [...text]; // by code point: an emoji is never split
+      const typed = document.createElement("span");
+      const rest = document.createElement("span");
+      rest.className = "untyped";
+      rest.textContent = text;
+      s.bubble.append(typed, rest);
+      const start = Date.now();
+      typingMs = (chars.length / pace) * 1000;
+      const job = { finish: () => { typed.textContent = text; rest.textContent = ""; } };
+      job.timer = setInterval(() => {
+        if (s.typing !== job) return;
+        // By the time gone by, so a tab that was held back catches up.
+        const n = Math.min(chars.length, Math.floor(((Date.now() - start) / 1000) * pace));
+        typed.textContent = chars.slice(0, n).join("");
+        rest.textContent = chars.slice(n).join("");
+        if (n >= chars.length) this._stopTyping(s, false);
+      }, 40);
+      s.typing = job;
+      s.bubble.dataset.typing = "1";
+      if (sound && babbleOn() && this._mayPlay(s) && !s.game && !s.screen.classList.contains("show-status")) {
+        try {
+          babble(text, voice);
+          s.babbling = true;
+        } catch (err) {
+          // no WebAudio: it types quietly
+        }
+      }
+    } else {
+      s.bubble.append(text);
+    }
+    s.sayUntil = Date.now() + typingMs + ms;
+    const plain = spoken(text);
+    if (onShow && plain && s.live.textContent !== plain) s.live.textContent = plain;
+  }
+
+  // The sound a line opens with ("tweet!", "tweet tweet!!", "tweet?",
+  // "tweet..."), or null: no voice, said one lately, the line has an opener of
+  // its own, or it wouldn't fit.
+  _soundFor(s, text) {
+    const sound = s.species?.voice?.sound;
+    if (!sound || Date.now() - (s.voicedAt || 0) < VOICE_QUIET_MS) return null;
+    const line = String(text).trim();
+    if (OPENERS.test(line) || line.toLowerCase().startsWith(sound)) return null;
+    const end = line.replace(/[\s♥♡♪★❄☂~\uFE0F\p{Extended_Pictographic}]+$/u, "");
+    const form = /!!$/.test(end) ? `${sound} ${sound}!!`
+      : /\?$/.test(end) ? `${sound}?`
+      : /(\.\.\.|…)$/.test(end) ? `${sound}...`
+      : `${sound}!`;
+    return form.length + 1 + line.length > VOICE_MAX ? null : form;
+  }
+
+  // Typing done at once (the whole line shows); its babble stops too, unless
+  // the line simply finished.
+  _stopTyping(s, hush = true) {
+    const job = s.typing;
+    if (job) {
+      s.typing = null;
+      clearInterval(job.timer);
+      job.finish();
+      delete s.bubble.dataset.typing;
+    }
+    if (hush && s.babbling) {
+      s.babbling = false;
+      stopBabble();
+    }
   }
 
   // Lines waiting for the bubble (a dream, the away note, a wish), said one at
@@ -1942,7 +2115,7 @@ class HatchPetCard extends HTMLElement {
     }
     if (!s.queue?.length || s.sayUntil > now || s.game || s.screen.classList.contains("show-status")) return;
     const { text, ms, then } = s.queue.shift();
-    this._write(s, text, ms);
+    this._speak(s, text, ms);
     this._animate(s, s.pet, "perk", 320);
     then?.();
   }
@@ -2096,7 +2269,7 @@ class HatchPetCard extends HTMLElement {
     const lines = first ? [hello, `${first}!! hi!`, hello] : [hello, "hi hi!", hello];
     if (level >= BOND.warm) lines.push(`${first}! I missed you ♥`, `yay, ${first}'s here!`);
     if (nickname) lines.push(`hi, ${nickname}!`, `${nickname}!! ♥`, `there's my ${nickname}!`);
-    this._write(s, pick(lines), 4000);
+    this._speak(s, pick(lines), 4000);
     const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (level >= BOND.hop && !calm) this._animate(s, s.pet, "greethop", 1400);
     else this._animate(s, s.pet, "perk", 320);
@@ -2159,7 +2332,7 @@ class HatchPetCard extends HTMLElement {
     const line = NOTES[note.kind]?.(note);
     if (!line) return;
     if (note.kind === "up_early") { // said while it sleeps: not queued behind its sleep
-      this._write(s, line, 5000);
+      this._speak(s, line, 5000);
       return;
     }
     this._queue(s, line, 5000);
@@ -2194,7 +2367,7 @@ class HatchPetCard extends HTMLElement {
       e.stopPropagation(); // the screen behind would open the status
       this._tapped(e.target.closest("button"));
       done();
-      this._write(s, pick(question.answers[answer]), 4500);
+      this._speak(s, pick(question.answers[answer]), 4500);
       const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
       if (["great", "you"].includes(answer) && !calm) this._animate(s, s.pet, "greethop", 1400);
       else if (["tough", "not really"].includes(answer) && !calm) this._bondHearts(s);
@@ -2244,15 +2417,20 @@ class HatchPetCard extends HTMLElement {
   // A chirp, if this device turned sounds on and the pet is up at a sane hour.
   // Only the pet on show chirps: the shelf's other slides update too.
   _chirp(s, name) {
-    if (s !== this._slides[this._index]) return;
-    const hour = new Date().getHours();
-    const late = hour >= QUIET_HOURS[0] || hour < QUIET_HOURS[1];
-    if (!soundsOn() || s.asleep || s.lightsOut || late || document.visibilityState !== "visible") return;
+    if (!soundsOn() || !this._mayPlay(s)) return;
     try {
       playChirp(name);
     } catch (err) {
       // no WebAudio: stay quiet
     }
+  }
+
+  // The pet on show, up at a sane hour, on a page in view: it may make a sound.
+  _mayPlay(s) {
+    if (s !== this._slides[this._index]) return false;
+    const hour = new Date().getHours();
+    const late = hour >= QUIET_HOURS[0] || hour < QUIET_HOURS[1];
+    return !s.asleep && !s.lightsOut && !late && document.visibilityState === "visible";
   }
 
   _sparkle(s) {
@@ -2267,6 +2445,7 @@ class HatchPetCard extends HTMLElement {
     const say = (text, ms = 4500) => {
       this._write(s, text, ms);
     };
+    const speak = (text, ms = 4500) => this._speak(s, text, ms); // may carry its sound
     switch (m.type) {
       case "care_miss":
         say("...oh, there you are ♥", 5000); // never guilt
@@ -2325,25 +2504,25 @@ class HatchPetCard extends HTMLElement {
         }
         break;
       case "good_morning":
-        say(pick(["morning!! you're up!", "morning! ♪"]));
+        speak(pick(["morning!! you're up!", "morning! ♪"]));
         this._animate(s, s.pet, "stretch", 1100);
         break;
       case "sunset":
-        say(pick(["ooh, the sunset...", "pretty sky tonight", "the sun's going down"]));
+        speak(pick(["ooh, the sunset...", "pretty sky tonight", "the sun's going down"]));
         this._look(s, 3000);
         break;
       case "sunrise":
-        say(pick(["the sun's up!", "good morning, sun!"]));
+        speak(pick(["the sun's up!", "good morning, sun!"]));
         this._look(s, 2500);
         break;
       case "watching":
         // A long title gets the short lines, so the bubble leaves the pet in view.
         const title = short(m.title);
-        say(pick([`ooh, ${title}!`, `is this ${title}?`, `${title}! I love this one`]));
+        speak(pick([`ooh, ${title}!`, `is this ${title}?`, `${title}! I love this one`]));
         this._animate(s, s.pet, "perk", 320);
         break;
       case "listening":
-        say(m.artist && Math.random() < 0.5
+        speak(m.artist && Math.random() < 0.5
           ? `♪ is this ${short(m.artist)}? ♪`
           : `♪ ${short(m.title)} ♪`);
         break;
@@ -2359,7 +2538,7 @@ class HatchPetCard extends HTMLElement {
           lines.push(`${topic} news! ${h}`);
         }
         const line = pick(lines);
-        say(line, 4000 + line.length * 50); // long enough to read, never long
+        speak(line, 4000 + line.length * 50); // long enough to read, never long
         this._animate(s, s.pet, "perk", 320);
         break;
       }
@@ -2376,7 +2555,7 @@ class HatchPetCard extends HTMLElement {
           cold: t ? [`brr, ${t} outside!`, `${t} out there... brr`] : ["brr, so cold out!"],
         }[m.change];
         if (!lines) break;
-        say(pick(lines));
+        speak(pick(lines));
         if (m.change === "rainbow" || m.change === "snow_started") this._sparkle(s);
         if (m.change === "cold") this._animate(s, s.pet, "sulk", 800);
         else this._look(s, 2500);
@@ -2397,7 +2576,7 @@ class HatchPetCard extends HTMLElement {
           sunny: today ? ["sunny today! yay"] : ["sun tomorrow! yay"],
         }[m.kind];
         if (!lines) break;
-        say(pick(lines), 5000);
+        speak(pick(lines), 5000);
         if (m.kind === "cold" || m.kind === "colder") this._animate(s, s.pet, "sulk", 800);
         else this._animate(s, s.pet, "perk", 320);
         break;
@@ -2453,7 +2632,7 @@ class HatchPetCard extends HTMLElement {
         const name = short((bond?.level >= BOND.nickname && bond.nickname) ||
           this._hass.user?.name?.trim().split(/\s+/)[0], 16);
         // Instead of the plain goodnight just said, not after it.
-        this._write(s, withName("thank you for tucking me in ♥", name), 4000);
+        this._speak(s, withName("thank you for tucking me in ♥", name), 4000);
         break;
       }
       case "bond_favourite":
@@ -2461,16 +2640,19 @@ class HatchPetCard extends HTMLElement {
           this._queue(s, pick(["our favourite game! ♥", "I love playing this with you ♥"]));
         }
         break;
+      case "favourite_snack": // at most once a day (the server's); a holiday snack says its own
+        if (!seasonNow(this._config)?.snack) this._queue(s, `${short(m.food, 16)}, my favourite!!`);
+        break;
       case "tv_off_late":
         say(pick(["*yawn* bedtime?", "all done? sleepy now..."]));
         break;
       case "first_snow":
-        say("the first snow!! ❄");
+        speak("the first snow!! ❄");
         this._sparkle(s);
         this._animate(s, s.pet, "stretch", 1100);
         break;
       case "first_frost":
-        say("brr, frost outside!");
+        speak("brr, frost outside!");
         this._animate(s, s.pet, "sulk", 800);
         break;
       case "pooped": {
@@ -2608,9 +2790,10 @@ class HatchPetCard extends HTMLElement {
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
-      ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
+      ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell notify" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       ${bond ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!this._myDay}">${this._myDay ? "on" : "off"}</button></span>`) : ""}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
+      ${s.species?.voice ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`) : ""}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>
@@ -2623,7 +2806,7 @@ class HatchPetCard extends HTMLElement {
       this._setMyDay(s, !this._myDay, e.currentTarget);
     });
     // No "notify me" row on a shared screen.
-    s.status.querySelector(".bell:not(.sound):not(.myday):not(.shared)")?.addEventListener("click", (e) => {
+    s.status.querySelector(".bell.notify")?.addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
       this._tapped(e.currentTarget);
       this._setNotify(s, !notifying, e.currentTarget);
@@ -2659,6 +2842,23 @@ class HatchPetCard extends HTMLElement {
       }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
+    s.status.querySelector(".bell.babble")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const on = !babbleOn();
+      try {
+        localStorage.setItem(BABBLE_KEY, on ? "on" : "off");
+      } catch (err) {
+        this._statusMessage(s, "This browser can't save sound settings.");
+        return;
+      }
+      try {
+        if (on) babble(`${s.species.voice.sound} hello there`, s.species.voice); // a sample; unlocks audio
+      } catch (err) {
+        // no WebAudio
+      }
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+    });
   }
 
   // "My day" is per person too: steps, stairs and sleep from their own phones.
@@ -2685,7 +2885,7 @@ class HatchPetCard extends HTMLElement {
   async _setNotify(s, enabled) {
     const id = s.ids?.["sensor.life_stage"];
     if (!id) return;
-    const button = s.status.querySelector(".bell:not(.sound):not(.myday):not(.shared)");
+    const button = s.status.querySelector(".bell.notify");
     if (button) {
       button.classList.add("pending");
       button.setAttribute("aria-pressed", String(enabled));
@@ -3112,7 +3312,7 @@ class HatchPetCard extends HTMLElement {
       const treat = new Date(today.getFullYear(), treatOn[0] - 1, treatOn[1]);
       const days = Math.round((treat - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
       if (days > 0 && days <= 7 && oncePerDay(`count-${season.key}-${s.ids?.device}`)) {
-        this._write(s, days === 1 ? `${season.countdown} is tomorrow!!` : `${days} sleeps till ${season.countdown}!`, 4500);
+        this._speak(s, days === 1 ? `${season.countdown} is tomorrow!!` : `${days} sleeps till ${season.countdown}!`, 4500);
         this._animate(s, s.pet, "perk", 320);
         return;
       }
@@ -3232,7 +3432,7 @@ class HatchPetCard extends HTMLElement {
     box.append(hat);
     s.screen.appendChild(box);
     s.flairUntil = Date.now() + FLAIR_MS + 1800;
-    this._write(s, line, 4000);
+    this._speak(s, line, 4000);
     this._animate(s, s.pet, "perk", 320);
     setTimeout(() => box.remove(), FLAIR_MS + 1800);
   }
@@ -3251,7 +3451,7 @@ class HatchPetCard extends HTMLElement {
       box.append(sweet);
     }
     this._sparkle(s);
-    this._write(s, season.thanks ? this._thanks(s) : "a treat! thank you!! ♪", 3500);
+    this._speak(s, season.thanks ? this._thanks(s) : "a treat! thank you!! ♪", 3500);
   }
 
   // Thanks to everyone: never ranking who did the most.
@@ -3298,7 +3498,7 @@ class HatchPetCard extends HTMLElement {
       if (season.chirp) this._chirp(s, season.chirp);
     }, 1400);
     setTimeout(() => {
-      this._write(s, pick(greet), 3000);
+      this._speak(s, pick(greet), 3000);
       this._animate(s, s.pet, "perk", 320);
     }, 3400);
   }

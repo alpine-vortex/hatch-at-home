@@ -140,9 +140,19 @@ async function main() {
     el.setConfig({ ...el._config, seasonal: false }); el.hass = el._hass;
   });
   await seasonsOff();
+  // Pets speak with their sound now and then; checks of exact lines keep it
+  // off (as if one was just said), and the voice checks turn it back on.
+  const hush = () => page.locator("hatch-pet-card").evaluate((el) => {
+    el._slides.forEach((s) => { s.voicedAt = Date.now() + 1e9; });
+  });
+  await hush();
   const cur = () => page.locator("hatch-pet-card .slide:not(.away-slide)");
   const shot = (name) => cur().locator(".device").screenshot({ path: path.join(OUT, `${name}.png`) });
-  const bubble = () => cur().locator(".bubble").innerText();
+  // The bubble's words once typed out (a typed line is laid out whole first).
+  const bubble = async () => {
+    await cur().locator(".bubble:not([data-typing])").waitFor({ timeout: 10000 }).catch(() => {});
+    return cur().locator(".bubble").innerText();
+  };
   const button = (i) => cur().locator(".toy").nth(i);
   const evaluate = (fn, arg) => page.evaluate(fn, arg);
   // The card keeps its entity map private; rebuild it for the pet on show.
@@ -200,6 +210,27 @@ async function main() {
     await evaluate(() => localStorage.getItem("hatch-sounds")) === "on");
   await cur().locator(".bell.sound").click(); // off again for the rest of the run
   await page.waitForTimeout(300);
+  const babbleBefore = await cur().locator(".bell.babble").getAttribute("aria-pressed");
+  await cur().locator(".bell.babble").click();
+  await page.waitForTimeout(300);
+  check("babble starts off and turns on here",
+    babbleBefore === "false" && await cur().locator(".bell.babble").getAttribute("aria-pressed") === "true" &&
+    await evaluate(() => localStorage.getItem("hatch-babble")) === "on");
+  await cur().locator(".bell.babble").click(); // off again
+  await page.waitForTimeout(300);
+  // "notify me" has its own switch; a shared screen has none, and babble is still babble.
+  const bells = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const count = () => [".bell.notify", ".bell.babble"].map((q) => s.status.querySelectorAll(q).length).join("/");
+    const personal = count();
+    localStorage.setItem("hatch-shared-screen", "on");
+    el._renderStatus(s, []);
+    const shared = count();
+    localStorage.setItem("hatch-shared-screen", "off");
+    el._renderStatus(s, []);
+    return { personal, shared };
+  });
+  check("each switch is found by its own name", bells.personal === "1/1" && bells.shared === "0/1", JSON.stringify(bells));
   await cur().locator(".jlink").click();
   await page.waitForTimeout(1200);
   check("journal opens", /journal/.test(await cur().locator(".status").innerText()));
@@ -409,6 +440,73 @@ async function main() {
     return s.bubble.textContent;
   });
   check("long titles are cut to fit the bubble", cut.length <= 48 && cut.includes("…"), `${cut} (${cut.length})`);
+
+  // Voices: now and then a line opens with the creature's sound (hidden from
+  // screen readers), once per burst; typed out without the bubble growing.
+  const voices = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const out = { sound: s.species.voice.sound };
+    s.queue = [];
+    s.voicedAt = 0;
+    el._speak(s, "hi, Dev!", 3000);
+    out.typing = !!s.bubble.dataset.typing;
+    const w0 = s.bubble.getBoundingClientRect().width;
+    out.hidden = s.bubble.querySelector(".snd")?.getAttribute("aria-hidden");
+    await wait(60);
+    out.steady = Math.abs(s.bubble.getBoundingClientRect().width - w0) < 0.5;
+    for (let i = 0; i < 100 && s.bubble.dataset.typing; i++) await wait(50);
+    out.done = !s.bubble.dataset.typing;
+    out.voiced = s.bubble.textContent;
+    out.live = s.live.textContent;
+    // A burst: three queued lines, said one after another; only the first voiced.
+    s.voicedAt = 0;
+    out.burst = [];
+    for (const line of ["morning!", "I dreamed I could fly!", "how was your day?"]) el._queue(s, line, 300);
+    for (let i = 0; i < 3; i++) {
+      s.sayUntil = 0;
+      el._sayQueued(s);
+      out.burst.push(s.bubble.textContent);
+    }
+    // A sad line and one with its own opener stay plain.
+    s.voicedAt = 0;
+    el._moment(s, { type: "care_miss", at: new Date().toISOString() });
+    out.miss = s.bubble.textContent;
+    el._speak(s, "hmm... sleepy", 300);
+    out.opener = s.bubble.textContent;
+    // Opening the status screen says the line whole.
+    el._speak(s, "this line is long enough to still be typing", 300);
+    el._toggleStatus(s);
+    out.finished = !s.bubble.dataset.typing && !s.bubble.querySelector(".untyped")?.textContent;
+    el._toggleStatus(s);
+    // Its favourite snack (the server says so at most once a day).
+    s.queue = [];
+    el._moment(s, { type: "favourite_snack", food: "hazelnuts", at: new Date().toISOString() });
+    out.favourite = s.queue.map((q) => q.text);
+    s.queue = [];
+    s.sayUntil = 0;
+    s.voicedAt = Date.now() + 1e9; // hushed again for the checks after
+    return out;
+  });
+  const snd = voices.sound;
+  check("a line can open with the creature's sound, hidden from screen readers",
+    voices.voiced === `${snd}! hi, Dev!` && voices.hidden === "true" && voices.live === "hi, Dev!", JSON.stringify(voices));
+  check("a line types out without the bubble growing", voices.typing && voices.steady && voices.done, JSON.stringify(voices));
+  check("a burst of lines carries the sound once",
+    voices.burst.join("|") === `${snd}! morning!|I dreamed I could fly!|how was your day?`, voices.burst.join("|"));
+  check("sad lines and lines with their own opener stay plain",
+    voices.miss === "...oh, there you are ♥" && voices.opener === "hmm... sleepy", `${voices.miss} | ${voices.opener}`);
+  check("opening the status screen finishes the line", voices.finished);
+  check("its favourite snack is said", voices.favourite.join() === "hazelnuts, my favourite!!", voices.favourite.join());
+  // Reduced motion: no typing.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const still = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    el._speak(s, "no typing here", 300);
+    return { typing: !!s.bubble.dataset.typing, said: s.bubble.textContent };
+  });
+  await page.emulateMedia({ reducedMotion: null });
+  check("reduced motion: lines show whole", !still.typing && still.said === "no typing here", JSON.stringify(still));
   // A close friend coming home: "you're home!!" to them, by name to anyone else.
   await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
   await evaluate(() => document.querySelector("home-assistant").hass.callApi("POST", "states/person.sam_check",
