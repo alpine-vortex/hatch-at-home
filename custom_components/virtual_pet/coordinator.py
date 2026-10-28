@@ -922,6 +922,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._save()
         return events
 
+    def photos(self, user: str) -> list[dict[str, Any]]:
+        """One person's photos from this device's pets, oldest first: theirs
+        only (the websocket command; never on a sensor or the bus)."""
+        if self.state is None:
+            return []
+        photos = self.state.bonds.get(user, {}).get("photos", {})
+        return [
+            {"generation": int(gen), **photos[gen]} for gen in sorted(photos, key=int)
+        ]
+
     def bond_for(self, user: str | None) -> tuple[int, str | None]:
         """(level, nickname once it has picked one) for a person; 0 for none."""
         bond = self.state.bonds.get(user or "") if self.state else None
@@ -1066,6 +1076,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return {"notes": notes, "ask": None, "counted": False}
         self._visits[user] = now
         events = self._bond(user, "visit")
+        # Best friends get a photo (once a generation); _notes says so.
+        if model.take_photo(self.state, user, self._today(now)[0]):
+            self._save()
         if granted := self._grant("say_hi", await self._who_id(user), now):
             events += granted + self._bond(user, "wish")
         self._fire(events)
@@ -1198,6 +1211,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 ("pet", "friends", today, {"kind": "friends_for", "months": months})
             )
         out += celebrations[:1]
+        gen = str(state.generation)
+        if gen in bond.get("photos", {}) and noted.get("photo") != gen:
+            out.append(("pet", "photo", gen, {"kind": "photo"}))
         dream = state.dream or {}
         if dream.get("kind") == "picked" and dream.get("day") == today:
             if noted.get("dream") != today:

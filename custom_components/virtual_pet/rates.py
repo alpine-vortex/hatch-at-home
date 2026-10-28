@@ -283,6 +283,7 @@ BOND_DAILY_LIMIT = 8  # care and games, per person per day
 BOND_LEVELS = (0, 4, 10, 20, 34, 52, 75, 105, 145, 200)
 BOND_NICKNAME_LEVEL = 4  # it picks a nickname for them
 BOND_FAVOURITE_LEVEL = 6  # it picks its favourite of their games
+BOND_PHOTO_LEVEL = 10  # best friends: it makes them a photo, once a generation
 BOND_FRIEND_LEVEL = 3  # close enough to cheer when they come home, or wish on them
 BOND_VISIT_EVERY_MINUTES = 60  # the card's visit call, per person (in memory)
 FRIEND_HOME_EVERY_MINUTES = 30  # the cheer when a friend arrives, per person

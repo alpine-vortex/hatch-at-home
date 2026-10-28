@@ -2784,3 +2784,66 @@ async def test_one_birthday_message_across_pets_from_the_closest(
     await hass.async_block_till_done(wait_background_tasks=True)
     # Once, from Bo (the closest), by Bo's nickname.
     assert [c.data["message"] for c in phone] == ["Bo says: happy birthday, sunbeam! ♥"]
+
+
+async def test_a_best_friends_photo_is_theirs_alone(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+) -> None:
+    from custom_components.virtual_pet.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    me = hass_admin_user.id
+    best = model.R.BOND_LEVELS[model.R.BOND_PHOTO_LEVEL - 1]
+    theirs = {"name": "Old", "species": "bird", "stage": "adult", "on": "2026-01-02"}
+    hass_storage[STORE_KEY] = hatched_pet(
+        now,
+        species="otter",
+        age_hours=130.0,
+        generation=2,
+        traits=["helper"],
+        bonds={
+            me: {"points": best},
+            "other": {"points": best, "photos": {"1": theirs}},
+        },
+    )
+    config = await setup(hass)
+    coordinator = config.runtime_data
+    bus = async_capture_events(hass, MATCH_ALL)
+    reply = await look(hass, me)
+    assert {"kind": "photo"} in reply["notes"]
+    assert "photos" not in reply  # only through the photos command
+    coordinator._visits.clear()
+    assert {"kind": "photo"} not in (await look(hass, me))["notes"]  # said once
+    client = await hass_ws_client(hass)
+    await client.send_json_auto_id(
+        {"type": "virtual_pet/photos", "entity_id": "sensor.pip_mood"}
+    )
+    result = (await client.receive_json())["result"]
+    assert result == {
+        "photos": [
+            {
+                "generation": 2,
+                "name": "Pip",
+                "species": "otter",
+                "stage": "teen",
+                "traits": ["helper"],
+                "on": "2026-10-26",
+            }
+        ]
+    }
+    # Never on a sensor, the bus or in diagnostics.
+    await hass.async_block_till_done()
+    bonds = hass.states.get("sensor.pip_life_stage").attributes["bonds"]
+    assert "photos" not in str(bonds) and "photos" not in str(bus)
+    diag = await async_get_config_entry_diagnostics(hass, config)
+    assert "photos" not in str(diag) and "Old" not in str(diag)
+    # A new generation's photo is said again, and the first is kept.
+    coordinator.state.generation = 3
+    coordinator._visits.clear()
+    assert {"kind": "photo"} in (await look(hass, me))["notes"]
+    assert [p["generation"] for p in coordinator.photos(me)] == [2, 3]

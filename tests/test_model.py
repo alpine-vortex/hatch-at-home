@@ -1625,3 +1625,54 @@ def test_hatching_dates_its_birthday_and_a_new_egg_has_none():
     pet.hatched_on, pet.catchphrase = "2026-09-01", "yay"
     new, _ = model.lay_egg(pet, at(12), random.Random(1))
     assert new.hatched_on is None and new.catchphrase is None
+
+
+def test_a_best_friend_gets_a_photo_once_a_generation():
+    pet = hatched(at(9), species="otter", traits=["helper", "night_owl"])
+    best = R.BOND_LEVELS[R.BOND_PHOTO_LEVEL - 1]
+    pet.bonds = {"u1": {"points": best}, "u2": {"points": best - 1}}
+    # A child (or a hatchling with an inherited bond) waits until it's a teen.
+    assert not model.take_photo(pet, "u1", "2026-10-28")
+    pet.age_hours = 130.0
+    assert not model.take_photo(pet, "u2", "2026-10-28")  # not best friends yet
+    assert not model.take_photo(pet, "nobody", "2026-10-28")
+    assert model.take_photo(pet, "u1", "2026-10-28")
+    assert pet.bonds["u1"]["photos"] == {
+        "1": {
+            "name": "Pip",
+            "species": "otter",
+            "stage": "teen",
+            "traits": ["helper", "night_owl"],
+            "on": "2026-10-28",
+        }
+    }
+    assert not model.take_photo(pet, "u1", "2026-11-02")  # once
+    # The next generation keeps the first photo and makes its own.
+    pet.age_hours = 10_000.0
+    egg, _ = model.lay_egg(pet, at(10), random.Random(1))
+    assert not model.take_photo(egg, "u1", "2026-11-02")  # an egg
+    egg.species, egg.age_hours = "bird", 400.0
+    assert model.take_photo(egg, "u1", "2026-11-20")
+    assert egg.bonds["u1"]["photos"]["1"]["species"] == "otter"
+    assert egg.bonds["u1"]["photos"]["2"]["stage"] == "adult"
+
+
+def test_photos_survive_a_bad_save():
+    pet = hatched(at(9))
+    data = pet.to_dict()
+    good = {"name": "Pip", "species": "bird", "stage": "teen", "on": "2026-10-28"}
+    data["bonds"] = {
+        "u1": {
+            "points": 200,
+            "photos": {
+                "1": {**good, "traits": ["helper", 3, "early_bird"]},
+                "2": {**good, "species": None},
+                "x": good,
+                "3": "junk",
+            },
+        },
+        "u2": {"points": 5, "photos": "junk"},
+    }
+    bonds = model.PetState.from_dict(data).bonds
+    assert bonds["u1"]["photos"] == {"1": {**good, "traits": ["helper", "early_bird"]}}
+    assert bonds["u2"] == {"points": 5, "photos": {}}

@@ -201,7 +201,11 @@ class PetState:
         if kwargs.get("upbringing") not in UPBRINGINGS:
             kwargs["upbringing"] = None
         kwargs["bonds"] = {
-            str(user): {**bond, "points": int(bond.get("points") or 0)}
+            str(user): {
+                **bond,
+                "points": int(bond.get("points") or 0),
+                **({"photos": _photos(bond["photos"])} if "photos" in bond else {}),
+            }
             for user, bond in (kwargs.get("bonds") or {}).items()
             if isinstance(bond, dict)
         }
@@ -1511,6 +1515,58 @@ def friends_for(since: str | None, today: str) -> int | None:
     next_month = date(now.year + now.month // 12, now.month % 12 + 1, 1)
     last_day = (next_month - timedelta(days=1)).day
     return months if now.day == min(first.day, last_day) else None
+
+
+# A best friend's photo: what the pet was like the day it was taken.
+PHOTO_FIELDS = ("name", "species", "stage", "on")
+PHOTO_STAGES = ("teen", "adult")  # not a baby that inherited a close bond
+
+
+def take_photo(state: PetState, user: str, today: str) -> bool:
+    """At bond level 10, once per generation, the pet makes its best friend a
+    photo of itself (teen or older). Only the snapshot; the card draws it."""
+    bond = state.bonds.get(user)
+    if (
+        not bond
+        or bond_level(bond["points"]) < R.BOND_PHOTO_LEVEL
+        or life_stage(state) not in PHOTO_STAGES
+        or not state.species
+    ):
+        return False
+    photos = bond.setdefault("photos", {})
+    if str(state.generation) in photos:
+        return False
+    photos[str(state.generation)] = {
+        "name": state.name,
+        "species": state.species,
+        "stage": life_stage(state),
+        "traits": list(state.traits[: R.TRAIT_CAP]),
+        "on": today,
+    }
+    return True
+
+
+def _photos(value: Any) -> dict[str, dict[str, Any]]:
+    """A bond's photos as loaded: damaged ones are dropped, the bond kept."""
+    if not isinstance(value, dict):
+        return {}
+    out = {}
+    for gen, photo in value.items():
+        if (
+            not isinstance(gen, str)
+            or not gen.isdigit()
+            or not isinstance(photo, dict)
+            or not all(isinstance(photo.get(k), str) for k in PHOTO_FIELDS)
+        ):
+            continue
+        traits = photo.get("traits")
+        out[gen] = {
+            **{k: photo[k] for k in PHOTO_FIELDS},
+            "traits": [t for t in traits if isinstance(t, str)][: R.TRAIT_CAP]
+            if isinstance(traits, list)
+            else [],
+        }
+    return out
 
 
 def game_record(state: PetState, user: str, game: str, wins: int) -> list[Event]:
