@@ -30,7 +30,7 @@
   },
   "backgrounds": { "day": "gecko/bg_vivarium", "night": "gecko/bg_night", "rain": "gecko/bg_rain", "dim": "gecko/bg_dim" },
   "words": { "food": "crickets", "home": "burrow" },
-  "voice": { "sound": "fuzz", "pitch": 400, "pace": 26, "likes": ["crickets", "mealworms", "waxworms"] },
+  "voice": { "sound": "fuzz", "catchphrase": "tippy-toes", "pitch": 400, "pace": 26, "likes": ["crickets", "mealworms", "waxworms"] },
   "reactions": { "won": "wave", "praise": "wave", "scold": "hair_flick" },
   "head": { "baby": [101, 130], "child": [96, 116], "teen": [90, 88], "adult": [80, 96] },
   "hat": { "baby": [148, 150], "child": [158, 142], "teen": [166, 112], "adult": [180, 140] }

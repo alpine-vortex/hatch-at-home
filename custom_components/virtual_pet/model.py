@@ -139,6 +139,8 @@ class PetState:
     # Its own favourites, picked once from its creature's likes: {"snack": ...}.
     favourites: dict[str, str] = field(default_factory=dict)
     favourite_said: str | None = None  # local date it last said so
+    # What it says at the end of things, from a close friend (None: its own).
+    catchphrase: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store."""
@@ -207,8 +209,9 @@ class PetState:
             for k, v in (favourites if isinstance(favourites, dict) else {}).items()
             if isinstance(k, str) and isinstance(v, str)
         }
-        if not isinstance(kwargs.get("favourite_said"), str):
-            kwargs["favourite_said"] = None
+        for key in ("favourite_said", "catchphrase"):
+            if not isinstance(kwargs.get(key), str):
+                kwargs[key] = None
         state = cls(**kwargs)
         if state.upbringing is None and life_stage(state) == "adult":
             # Grew up before upbringings existed: judge it on its record so far.

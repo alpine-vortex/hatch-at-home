@@ -29,7 +29,7 @@
   },
   "backgrounds": { "day": "bg_day", "night": "bg_night", "rain": "bg_rain", "dim": "bg_night" },
   "words": { "food": "bugs", "home": "roost" },
-  "voice": { "sound": "squee", "pitch": 1200, "pace": 45, "likes": ["midges", "beetles", "mosquitoes"] },
+  "voice": { "sound": "squee", "catchphrase": "flappity", "pitch": 1200, "pace": 45, "likes": ["midges", "beetles", "mosquitoes"] },
   "reactions": { "play": "echo", "won": "echo", "praise": "hang", "blanket": "wing_wrap" },
   "head": { "baby": [136, 84], "child": [136, 60], "teen": [140, 32], "adult": [140, 32] }
 }

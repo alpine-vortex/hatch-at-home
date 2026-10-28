@@ -176,6 +176,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # food words of their own (a moth: no snacks there).
         self.likes: dict[str, list[str]] = {}
         self.own_food_stages: dict[str, set[str]] = {}
+        self.catchphrases: dict[str, str] = {}  # each creature's own
         self.state: model.PetState | None = None
         # Last calculation, for the diagnostic sensor.
         self.debug: dict[str, Any] = {}
@@ -286,6 +287,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         }
         for key, data in catalog.species.items():
             voice = data.get("voice") if isinstance(data.get("voice"), dict) else {}
+            if isinstance(voice.get("catchphrase"), str):
+                self.catchphrases[key] = voice["catchphrase"]
             likes = voice.get("likes")
             self.likes[key] = (
                 [x for x in likes if isinstance(x, str) and x]
@@ -1295,20 +1298,72 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             has_forecast=P.tomorrow(today) in self.forecast,
             came_home=came_home,
             rested=any(n["kind"] == "rested" for n in notes),
+            pet_once=self._pet_once(user, today),
         )
         if kind is None:
             return None
         P.mark_asked(person, today, hour)
         if kind in P.ONCE_KINDS:
             P.mark_once(person, kind, today)
+        if kind == "catchphrase":
+            self._catch_ask(user)["asked"].append(today)
+            self._save()
         self.people.save()
         return kind
 
+    def _pet_once(self, user: str, today: str) -> tuple[str, ...]:
+        """The pet's own one-time questions still open for this person: its
+        catchphrase, from a close friend, once per generation (a hatchling
+        waits until it's a child, though the bond it inherits is close)."""
+        state = self.state
+        assert state is not None
+        if self.bond_for(user)[0] < R.CATCHPHRASE_LEVEL or model.life_stage(state) in (
+            "egg",
+            "baby",
+        ):
+            return ()
+        ask = self._catch_ask(user)
+        if ask.get("answered") or not P.may_ask_again(ask["asked"], today):
+            return ()
+        return ("catchphrase",)
+
+    def _catch_ask(self, user: str) -> dict[str, Any]:
+        """This generation's catchphrase question in a close friend's bond."""
+        assert self.state is not None
+        bond = self.state.bonds[user]
+        ask = bond.get("catchphrase")
+        if not isinstance(ask, dict) or ask.get("generation") != self.state.generation:
+            ask = bond["catchphrase"] = {
+                "generation": self.state.generation,
+                "asked": [],
+            }
+        return ask
+
     async def async_answer(self, user: str, question: str, answer: str) -> None:
-        """A remembered answer: a favourite, tonight's dream, a guess."""
+        """A remembered answer: a favourite, tonight's dream, a guess, its
+        catchphrase."""
         assert self.state is not None
         if answer not in P.ANSWERS.get(question, ()):
             raise ValueError(f"{answer} isn't an answer to {question}")
+        if question == "catchphrase":
+            # Only from the close friend it asked, while the question is open:
+            # it's the pet's, and everyone hears it.
+            bond = self.state.bonds.get(user)
+            ask = bond.get("catchphrase") if bond else None
+            if (
+                self.bond_for(user)[0] < R.CATCHPHRASE_LEVEL
+                or not isinstance(ask, dict)
+                or ask.get("generation") != self.state.generation
+                or not ask.get("asked")
+                or ask.get("answered")
+            ):
+                raise ValueError("It didn't ask that")
+            ask["answered"] = True
+            if answer != "keep":
+                self.state.catchphrase = answer
+            self._save()
+            self._publish()
+            return
         person = self.people.person(user)
         today = self._today(self._now())[0]
         if question in ("fav_weather", "fav_season"):

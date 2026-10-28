@@ -46,6 +46,8 @@ ANSWERS: dict[str, tuple[str, ...]] = {
     "fav_season": ("spring", "summer", "autumn", "winter"),
     "dream": ("stars", "sea", "snacks", "you"),
     "guess": ("rain", "sun"),
+    # The pet's, not the person's: what it says at the end of things.
+    "catchphrase": ("hehe", "yay", "and stuff", "la la", "keep"),
 }
 # One-time questions about the person, in the order they're asked, with the bond
 # level each needs. (The pet's own one-time question, its catchphrase, comes from
@@ -260,7 +262,7 @@ def once_due(
         if (
             level >= need
             and kind not in done
-            and _may_ask_again(tries.get(kind, []), today)
+            and may_ask_again(tries.get(kind, []), today)
         ):
             return kind
     return pet_once[0] if pet_once else None
@@ -273,7 +275,7 @@ def mark_once(person: dict[str, Any], kind: str, today: str) -> None:
     person["once_last"] = today
 
 
-def _may_ask_again(days: list[str], today: str) -> bool:
+def may_ask_again(days: list[str], today: str) -> bool:
     """A one-time question left unanswered is asked again once, weeks later."""
     if len(days) >= R.ASK_LIKES_TRIES:
         return False

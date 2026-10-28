@@ -2541,3 +2541,65 @@ async def test_an_egg_for_the_next_world_picks_from_its_own_likes(
     coordinator.state.age_hours = 30.0
     coordinator._pick_favourite()
     assert coordinator.state.favourites["snack"] in coordinator.likes["lunamoth"]
+
+
+async def test_a_close_friend_gives_it_a_catchphrase_once_a_generation(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+) -> None:
+    me = hass_admin_user.id
+    hass_storage[STORE_KEY] = hatched_pet(
+        dt_util.utcnow().timestamp(),
+        species="squirrel",
+        bonds={me: {"points": model.R.BOND_LEVELS[model.R.CATCHPHRASE_LEVEL - 1]}},
+    )
+    config = await setup(hass)
+    coordinator = config.runtime_data
+    stage = "sensor.pip_life_stage"
+    assert hass.states.get(stage).attributes["catchphrase"] == "acorn"  # its own
+    client = await hass_ws_client(hass)
+
+    async def answer(value: str) -> bool:
+        await client.send_json_auto_id(
+            {
+                "type": "virtual_pet/answer",
+                "entity_id": "sensor.pip_mood",
+                "question": "catchphrase",
+                "answer": value,
+            }
+        )
+        return (await client.receive_json())["success"]
+
+    assert not await answer("yay")  # it didn't ask
+    assert coordinator._pet_once(me, "2026-10-28") == ("catchphrase",)
+    coordinator._catch_ask(me)["asked"].append("2026-10-28")  # asked on a look
+    assert await answer("yay")
+    await hass.async_block_till_done()
+    assert hass.states.get(stage).attributes["catchphrase"] == "yay"
+    assert coordinator._pet_once(me, "2026-12-28") == ()  # answered
+    assert not await answer("hehe")  # once
+    # A new generation asks again; "keep" keeps what it says.
+    coordinator.state.generation += 1
+    assert coordinator._pet_once(me, "2026-12-28") == ("catchphrase",)
+    coordinator._catch_ask(me)["asked"].append("2026-12-28")
+    assert await answer("keep")
+    assert coordinator.state.catchphrase == "yay"
+    # Someone not close enough can't set it, and gets no bond for trying.
+    coordinator.state.bonds = {}
+    assert not await answer("hehe")
+    assert coordinator.state.bonds == {}
+
+
+async def test_a_hatchling_waits_to_ask_for_a_catchphrase(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    me = await friend(hass, 0)
+    hass_storage[STORE_KEY] = hatched_pet(
+        now,
+        age_hours=2.0,
+        bonds={me.id: {"points": model.R.BOND_LEVELS[9]}},  # an inherited bond
+    )
+    config = await setup(hass)
+    assert config.runtime_data._pet_once(me.id, "2026-10-26") == ()

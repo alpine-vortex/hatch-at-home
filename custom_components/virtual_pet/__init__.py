@@ -309,7 +309,11 @@ async def websocket_answer(
     if msg["answer"] not in ANSWERS[msg["question"]]:
         connection.send_error(msg["id"], "invalid_answer", "Not an answer to that")
         return
-    await pet.async_answer(connection.user.id, msg["question"], msg["answer"])
+    try:
+        await pet.async_answer(connection.user.id, msg["question"], msg["answer"])
+    except ValueError:
+        connection.send_error(msg["id"], "not_asked", "It didn't ask that")
+        return
     connection.send_result(msg["id"])
 
 

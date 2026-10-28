@@ -540,6 +540,37 @@ async function main() {
   });
   await page.emulateMedia({ reducedMotion: null });
   check("reduced motion: lines show whole", !still.typing && still.said === "no typing here", JSON.stringify(still));
+  // Its catchphrase ends every third voiced line that names nobody, never a
+  // question; a close friend can give it a new one (the box wraps, three a row).
+  const catchy = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const out = { phrase: el._state(s, "sensor.life_stage")?.attributes.catchphrase, said: [] };
+    s.catchCount = 0;
+    for (const line of ["the sun's up!", "is this Bluey?", "pretty sky tonight", "the rain stopped!"]) {
+      s.voicedAt = 0;
+      el._speak(s, line, 300, { catch: true });
+      el._stopTyping(s);
+      out.said.push(s.bubble.textContent);
+    }
+    el._ask(s, "catchphrase");
+    const buttons = [...s.screen.querySelectorAll(".askday button")];
+    out.labels = buttons.map((b) => b.textContent);
+    out.rows = new Set(buttons.map((b) => Math.round(b.getBoundingClientRect().top))).size;
+    const box = s.screen.querySelector(".askday").getBoundingClientRect();
+    out.inside = box.left >= s.screen.getBoundingClientRect().left && box.right <= s.screen.getBoundingClientRect().right;
+    el._clearAsk(s);
+    s.voicedAt = Date.now() + 1e9;
+    s.sayUntil = 0;
+    return out;
+  });
+  const p = catchy.phrase;
+  check("its catchphrase ends every third line that names nobody, never a question",
+    !!p && catchy.said[0] === `${snd}! the sun's up!` && catchy.said[1] === `${snd}? is this Bluey?` &&
+    catchy.said[2] === `${snd}! pretty sky tonight` && catchy.said[3] === `${snd}! the rain stopped! ${p}`,
+    catchy.said.join(" | "));
+  check("a friend can give it a catchphrase: five choices in two rows on the screen",
+    catchy.labels.join("|") === `hehe|yay|and stuff|la la|keep "${p}"` && catchy.rows === 2 && catchy.inside,
+    JSON.stringify(catchy));
   // A close friend coming home: "you're home!!" to them, by name to anyone else.
   await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
   await evaluate(() => document.querySelector("home-assistant").hass.callApi("POST", "states/person.sam_check",

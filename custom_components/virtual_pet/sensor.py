@@ -155,6 +155,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "dream",
             "bonds",
             "favourites",
+            "catchphrase",
         }
     )
 
@@ -229,6 +230,9 @@ class LifeStageSensor(PetEntity, SensorEntity):
             },
             # Its own favourites ({"snack": ...}): the pet's, not anyone's secret.
             "favourites": dict(self.pet.favourites),
+            # What it says at the end of things: a friend's pick, or its own.
+            "catchphrase": self.pet.catchphrase
+            or self.coordinator.catchphrases.get(self.pet.species or ""),
             "hatches_at": self._hatches_at(),
             "next_world": self.coordinator.next_world_name,
             # The creature picked for the next hatch, by name; None: a surprise.

@@ -460,6 +460,11 @@ const QUESTIONS = {
     stars: ["the stars... ok!"], sea: ["the sea! ok!"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ ok!"] } },
   guess: { q: "rain or sun tomorrow?", keep: true, answers: {
     rain: ["rain! we'll see ☂"], sun: ["sun! we'll see ☀"] } },
+  // The pet's own, from a close friend (the server checks it asked).
+  catchphrase: { q: "what should I say at the end of things?", keep: true,
+    answers: { hehe: null, yay: null, "and stuff": null, "la la": null, keep: null },
+    label: (a, s, mine) => (a === "keep" ? `keep "${mine}"` : a),
+    reply: (a, s, mine) => (a === "keep" ? `ok! I'll keep saying "${mine}" ♥` : `ok! I'll say "${a}"! ♥`) },
 };
 const PLACES = {
   gym: "back from the gym?! so strong!", work: "home from work! ♥",
@@ -1076,7 +1081,10 @@ const STYLE = `
   @keyframes burst { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
   .toy { position: relative; }
   .screen .askday { position: absolute; left: 0; right: 0; bottom: 3%; display: flex; gap: 8px;
-    justify-content: center; z-index: 3; }
+    flex-wrap: wrap; justify-content: center; z-index: 3; margin: 0 auto; }
+  .screen .askday.many { max-width: 236px; } /* three a row at most */
+  .screen .askday select { font: inherit; font-size: 14px; min-height: 44px; border-radius: 14px;
+    border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a; padding: 0 6px; }
   .screen .askday button { font: inherit; font-size: 14px; min-height: 44px; min-width: 64px; padding: 4px 10px;
     border-radius: 14px; border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a;
     box-shadow: 0 4px 0 #3a2a1a; transition: transform .08s, box-shadow .08s; }
@@ -2037,10 +2045,17 @@ class HatchPetCard extends HTMLElement {
 
   // A line that may carry the creature's sound, typed out at its pace (and
   // babbled, if this browser wants that). Screen readers get the plain line,
-  // once; the sound is hidden from them.
-  _speak(s, text, ms = 4500) {
+  // once; the sound is hidden from them. With catch: true (lines that name
+  // nobody), every third such voiced line ends with its catchphrase.
+  _speak(s, said, ms = 4500, { catch: catchy = false } = {}) {
     const voice = s.species?.voice;
-    const sound = this._soundFor(s, text);
+    const sound = this._soundFor(s, said);
+    let text = said;
+    if (sound && catchy && !said.includes("?")) {
+      s.catchCount = (s.catchCount || 0) + 1;
+      const phrase = this._state(s, "sensor.life_stage")?.attributes.catchphrase;
+      if (s.catchCount % 3 === 0 && phrase && `${sound} ${said} ${phrase}`.length <= VOICE_MAX) text = `${said} ${phrase}`;
+    }
     const onShow = s === this._slides[this._index];
     const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const pace = voice?.pace;
@@ -2126,8 +2141,8 @@ class HatchPetCard extends HTMLElement {
 
   // Lines waiting for the bubble (a dream, the away note, a wish), said one at
   // a time once nothing else is being said.
-  _queue(s, text, ms = 4500) {
-    (s.queue ??= []).push({ text, ms });
+  _queue(s, text, ms = 4500, opts = {}) {
+    (s.queue ??= []).push({ text, ms, opts });
   }
 
   _sayQueued(s) {
@@ -2139,8 +2154,8 @@ class HatchPetCard extends HTMLElement {
       return;
     }
     if (!s.queue?.length || s.sayUntil > now || s.game || s.screen.classList.contains("show-status")) return;
-    const { text, ms, then } = s.queue.shift();
-    this._speak(s, text, ms);
+    const { text, ms, then, opts } = s.queue.shift();
+    this._speak(s, text, ms, opts);
     this._animate(s, s.pet, "perk", 320);
     then?.();
   }
@@ -2379,20 +2394,37 @@ class HatchPetCard extends HTMLElement {
     box.className = "askday";
     box.setAttribute("role", "group");
     box.setAttribute("aria-label", question.q);
-    box.innerHTML = Object.keys(question.answers)
-      .map((a) => `<button data-answer="${escape(a)}">${escape(a)}</button>`).join("");
+    const mine = this._state(s, "sensor.life_stage")?.attributes.catchphrase || "mine";
+    const answers = Object.keys(question.answers);
+    box.classList.toggle("many", answers.length > 3);
+    box.innerHTML = (question.picker?.() || "") + answers
+      .map((a) => `<button data-answer="${escape(a)}">${escape(question.label?.(a, s, mine) ?? a)}</button>`).join("");
     const done = () => {
       box.remove();
       s.asking = false;
       clearTimeout(s.askTimer);
     };
+    // No tap in the box reaches the screen behind (it would open the status),
+    // and while someone is picking, it stays.
+    for (const type of ["click", "change", "pointerdown", "pointerup"]) box.addEventListener(type, (e) => e.stopPropagation());
+    const wait = () => {
+      clearTimeout(s.askTimer);
+      s.askTimer = setTimeout(done, ASK_MS);
+    };
+    box.addEventListener("focusin", wait);
+    box.addEventListener("change", (e) => {
+      wait();
+      question.changed?.(box, e);
+    });
     box.addEventListener("click", (e) => {
-      const answer = e.target.closest("button")?.dataset.answer;
+      let answer = e.target.closest("button")?.dataset.answer;
       if (!answer) return;
-      e.stopPropagation(); // the screen behind would open the status
+      if (question.value) answer = question.value(box, answer);
+      if (!answer) return;
       this._tapped(e.target.closest("button"));
       done();
-      this._speak(s, pick(question.answers[answer]), 4500);
+      const lines = question.answers[answer] ?? question.answers[e.target.closest("button").dataset.answer];
+      this._speak(s, question.reply ? question.reply(answer, s, mine) : pick(lines), 4500);
       const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
       if (["great", "you"].includes(answer) && !calm) this._animate(s, s.pet, "greethop", 1400);
       else if (["tough", "not really"].includes(answer) && !calm) this._bondHearts(s);
@@ -2470,7 +2502,7 @@ class HatchPetCard extends HTMLElement {
     const say = (text, ms = 4500) => {
       this._write(s, text, ms);
     };
-    const speak = (text, ms = 4500) => this._speak(s, text, ms); // may carry its sound
+    const speak = (text, ms = 4500) => this._speak(s, text, ms, { catch: true }); // may carry its sound
     switch (m.type) {
       case "care_miss":
         say("...oh, there you are ♥", 5000); // never guilt
@@ -2609,7 +2641,7 @@ class HatchPetCard extends HTMLElement {
       case "wish_granted": // lines that arrive together queue, so none is lost
         this._sparkle(s);
         this._chirp(s, "trait");
-        this._queue(s, pick(["my wish came true! thank you ♥", "yay, my wish! ♥", "best day ever! ♥"]));
+        this._queue(s, pick(["my wish came true! thank you ♥", "yay, my wish! ♥", "best day ever! ♥"]), 4500, { catch: true });
         break;
       case "bond_up": { // only the person whose bond it is sees it
         if (sharedScreen()) break; // nothing personal on a shared screen
@@ -2666,7 +2698,7 @@ class HatchPetCard extends HTMLElement {
         }
         break;
       case "favourite_snack": // at most once a day (the server's); a holiday snack says its own
-        if (!seasonNow(this._config)?.snack) this._queue(s, `${short(m.food, 16)}, my favourite!!`);
+        if (!seasonNow(this._config)?.snack) this._queue(s, `${short(m.food, 16)}, my favourite!!`, 4500, { catch: true });
         break;
       case "tv_off_late":
         say(pick(["*yawn* bedtime?", "all done? sleepy now..."]));
@@ -3460,7 +3492,7 @@ class HatchPetCard extends HTMLElement {
     box.append(hat);
     s.screen.appendChild(box);
     s.flairUntil = Date.now() + FLAIR_MS + 1800;
-    this._speak(s, line, 4000);
+    this._speak(s, line, 4000, { catch: true });
     this._animate(s, s.pet, "perk", 320);
     setTimeout(() => box.remove(), FLAIR_MS + 1800);
   }

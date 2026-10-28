@@ -31,7 +31,7 @@
   },
   "backgrounds": { "day": "bg_vivarium", "night": "bg_night", "rain": "bg_rain", "dim": "bg_dim" },
   "words": { "food": "mealworms", "home": "vivarium" },
-  "voice": { "sound": "tik", "pitch": 760, "pace": 34, "likes": ["mealworms", "crickets", "waxworms"] },
+  "voice": { "sound": "tik", "catchphrase": "click click", "pitch": 760, "pace": 34, "likes": ["mealworms", "crickets", "waxworms"] },
   "reactions": { "feed": "eye_lick", "snack": "eye_lick", "play": "tail_wiggle", "won": "tail_wiggle" },
   "head": { "baby": [178, 144], "child": [180, 132], "teen": [196, 104], "adult": [208, 136] }
 }
