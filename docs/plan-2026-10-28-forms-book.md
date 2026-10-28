@@ -1,77 +1,135 @@
-# The forms book (build plan, DRAFT 1)
+# The forms book (build plan, DRAFT 2)
 
 Option B of `scope-2026-10-28-progression-unlocks.md`. Its "Decided (owner,
-2026-10-28)" section is the authority, and this plan changes none of it:
+2026-10-28)" section is the authority, and this plan changes none of it. Draft 2
+folds in the adversarial audit of draft 1 (19 findings) and the owner's answers of
+2026-10-28; **the table at the end ("The audit of draft 1") wins over any older
+wording that survives in the body.**
 
 - Only portraits are locked, never play. Every creature can still hatch and be
   picked with `select.<pet>_next_egg` (`select.py:NextEggSelect`).
-- A form nobody here has reached is a **plain silhouette: no hints**, no text about
-  when or how it appears.
+- A form nobody here has reached is a **plain silhouette with no text at all**: no
+  hints, no stage label, nothing about when or how it appears (owner answer 3).
 - A new page is marked **once, on the card only**: one quiet "new page in your
   journal" moment and a dot on the journal link until it's opened. No phone message,
   nothing in HA history.
 - A hatched creature's baby form always shows; only forms not yet reached start dark.
-- Upbringing is words beside "raised by", never a collectable form.
+- Upbringing is words beside "raised here", never a collectable form.
 - Backfill from `raised` and `journal`, so no home ever sees fewer portraits than today.
 
-**Build after the 17-creature art branch (`claude/quirky-faraday-axugqq`) merges**,
-so the book is first seen with the full cast. This is a draft for an adversarial
-audit; it contains no code. Every new player-facing word is in the copy table
-("Copy") and is **a proposal for the owner**, not approved copy.
+## Decided (owner, 2026-10-28, after the draft 1 audit)
 
-## What the scope's numbers miss (checked against the art branch)
+1. A creature's tile shows the **furthest form** seen.
+2. A retired record **without** upbringing still counts as an adult (`adult` from any record).
+3. **No stage labels under dark forms.** A dark form is a plain silhouette with no
+   text at all.
+4. "Show every form" also reveals unhatched creatures and turns off the dot and the
+   new-page line.
+5. Upbringing words are printed for **retired and current adults only**.
+6. The new-page line comes **once per form**.
+7. Pets of deleted devices **stay** in the book (see "Deleted devices", the one place
+   this needs a mechanism decided at build time).
+8. The "raised here" list is capped at **four, then "and more"**.
+9. Beetle: **nothing** (no art, no `species.json`, absent from the book).
+10. The list includes pets from **every same-world device on the card**: pet names and
+    generations only, **never people**.
+11. **Personality words** sit beside a pet's name too, as the journal's family line
+    does.
+12. **"Show every form" ships as a card option, OFF by default.**
+13. The label is **"raised here"** (not "raised by").
+14. At teen, the new-page line comes **after** "I'm a teen now!" **and** the
+    personality reveal.
+15. A dark form's accessible name is **"not seen"** (no "yet"). The no-hint test regex
+    is widened (see Card checks, C2).
 
-Read with `git show origin/claude/quirky-faraday-axugqq:...`:
+Not asked, kept from draft 1's recommendations: on a **shared screen** the new-page
+line still fires but the dot is hidden (a wall tablet nobody opens would carry it
+forever).
 
-- `sprites/*/species.json` on the branch: **30 files, all `"ready"` (or default
-  ready), all with `"stages": ["baby", "child", "teen", "adult"]`.** There is no
-  species with fewer than four forms, so the page is always four slots.
-- `worlds.json` on the branch: woodland 5 (bird, squirrel, deer, fox, bananaslug),
-  terrarium 6 listed (gecko, tarantula, **beetle**, tortoise, beardeddragon,
-  ballpython), hearth 5, tidepool 5, pond 5, nightsky 5 = 31 names. **`beetle` has no
-  `species.json`**, so `species.py:load_catalog` never puts it in `Catalog.species`
-  (ready species with non-empty `stages` and `moods` only) and `Catalog.roster` drops it and Terrarium shows **5**, total **30 creatures, 120 forms**.
-  The card never sees `beetle`: its roster is `sensor.life_stage` attribute `roster`,
-  which is `coordinator.roster` (`coordinator.py:289`, `catalog.roster(self.world)`).
-  If beetle's art lands later, the book picks it up with no change.
-- The branch has 123 `*_content_1.png` files: the 120 forms plus 3 others (eggs).
-  The book draws each form from `sprites/<id>/<stage>_content_1.png`, the file
-  `_renderJournal` already uses for the child (`child_content_1.png`). The builder
-  re-checks that all 120 exist when the branch has merged (a missing one is a broken
-  image; the card falls back, see Card, "A missing image").
+## Privacy (a rule for this build)
+
+A separate privacy-hardening plan is removing every per-person sensor attribute
+(0.35.0b4 onward). This build must sit cleanly beside it:
+
+- `PetState.seen` (the per-device furthest-stage map, species to stage) **carries
+  nothing per-person and must be in `_unrecorded_attributes`.**
+- Nothing in the book names a person. The page reads **only** `seen`, `journal`
+  (`species`, `name`, `generation`, `upbringing`, `personality`), the live pet's
+  `species`, `generation`, `upbringing`, `personality`, `world`, `roster`, its stage
+  and its device name (the pet's name). It **never reads** `bonds`, `notify_users`,
+  `wish` (`for_name`), `favourites`, any nickname, or `hass.user`, and it must keep
+  working if the privacy plan has removed those attributes. A card-check injects a
+  bond nickname and a `notify_users` id and asserts neither string appears (C14).
+- Shared screens (`sharedScreen()`) show the book and the pets' names but no person.
+- Pet names are pets, not people; but the label says "raised **here**" so a viewer
+  can't read a pet's name as a person.
+
+This is a draft for review; it contains no code. Every new player-facing word is in
+the copy table ("Copy"): the owner approved the decisions above, the exact words are
+**proposals**.
+
+## What the scope's numbers miss (checked against main, 0.35.0b3)
+
+Re-checked on `origin/main` (`0821baf`, 0.35.0b3, PR #38 merged, so the 17-creature
+art is on main and the old "build after the art branch" precondition is met):
+
+- `sprites/*/species.json`: **30 files, all ready, all with `"stages": ["baby",
+  "child", "teen", "adult"]`.** No species has fewer than four forms, so the page is
+  always four slots.
+- `worlds.json`: woodland 5, terrarium 6 listed (gecko, tarantula, **beetle**,
+  tortoise, beardeddragon, ballpython), hearth 5, tidepool 5, pond 5, nightsky 5.
+  **`beetle` has no `species.json`**, so `species.py:load_catalog` never puts it in
+  `Catalog.species` and `Catalog.roster` drops it: Terrarium shows **5**, total
+  **30 creatures, 120 forms**. The card never sees `beetle` (its roster is
+  `sensor.life_stage` attribute `roster`, `coordinator.roster`). Owner answer 9:
+  nothing to do; if beetle's art lands with a `species.json` and four stages it
+  appears as one more unhatched tile.
+- `sprites/` holds **121** `*_content_1.png`: the 120 forms plus
+  `sprites/beetle/baby_content_1.png`. (Draft 1 said 123 = 120 + 3 eggs; wrong: no
+  egg file matches, and the other two beetle files are under `art/beetle/rejected-v1/`,
+  not `sprites/`.) The book draws each form from `sprites/<id>/<stage>_content_1.png`.
+  A data test (test 11) checks that every `species.json` species has all four files.
 - A stage's length is `rates.STAGE_STARTS`: baby from 0.5 h, child 24 h, teen 120 h,
-  adult 336 h of age (aging pauses while away). So a new creature's four pages open
-  over 14 days of age.
+  adult 336 h of age (aging pauses while away). A new creature's four pages open over
+  14 days of age.
+- Performance is a non-issue: the grid shows one world's roster (5-6 tiles) and a page
+  draws four images. The real costs are `_bookOf` on every `_update` (it loops slides
+  and parses `localStorage` JSON) and the existing `[dict(r) for r in journal]` copy per
+  sensor update. Parse the stored book **once per draw** and cache it (see Card).
+- A dark form is **not a secret, a display rule**: the coloured png is still fetched
+  and hidden by a CSS filter (as locked tiles are today), so anyone can open it in
+  devtools. Nobody should add a build check for that.
 
 ## What the person gets
 
 1. **The journal's grid is a book of creatures.** Open the journal (status screen,
    "journal ›"): the world's creatures as tiles, as today. A creature nobody here has
-   hatched is a black "???" tile, as today (and not tappable: there is nothing to
-   open). A hatched creature's tile shows its name and the **furthest form seen**
-   (see Card, "The tile").
+   hatched is a black "???" tile, as today (and not tappable). A hatched creature's tile
+   shows its name and the **furthest form seen** (Card, "The tile").
 2. **Tap a hatched creature: its page.** Four slots in a row: baby, child, teen,
-   adult. Forms reached here show in colour. Forms not reached are **plain
-   black silhouettes with no text** about when or how (owner, 2026-10-28). Under the
-   four slots: who raised it here, in words: "Pip · gen 2 · devoted"; a pet still
-   growing up shows "Pip · gen 3 · now". Nothing on the page is a number, a
-   percentage, "missing" or "x of 4".
-3. **A new page, once.** The first time any pet on the card's devices reaches a form
-   this browser hasn't been shown (a creature hatches, or grows into its next form),
-   the pet says one extra quiet line after its usual one ("a new page in your
-   journal ♥") and the journal link on the status screen gets a small dot, until the
-   journal is opened on this browser. Nothing goes to phones, Assist, the event bus,
-   notifications or HA history.
-4. **A card option "show every form"** (YAML key proposed below; default off). On:
-   every form is drawn in colour, for anyone who'd rather see everything. It is a
-   display choice: it changes nothing stored and takes nothing away.
+   adult. Forms reached here show in colour. Forms not reached are **plain black
+   silhouettes with no text at all**. Under the four slots: who raised it here, in
+   words: "Pip · gen 2 · devoted · shy"; a pet still growing up shows
+   "Pip · gen 3 · now". Nothing on the page is a number, a percentage, "missing" or
+   "x of 4".
+3. **A new page, once per form.** The first time any pet on the card's devices reaches
+   a form this browser hasn't been shown (a creature hatches, or grows into its next
+   form), the pet says one extra quiet line after its usual one(s) and the journal link
+   on the status screen gets a small dot, until the journal is opened on this browser.
+   At baby the bubbles are "hello!" then the new-page line; at child and adult, the stage
+   line then the new-page line; **at teen, "I'm a teen now!", the personality reveal,
+   then the new-page line** (three bubbles; draft 1 wrongly said two). Nothing goes to
+   phones, Assist, the event bus, notifications or HA history.
+4. **A card option "show every form"** (`show_all_forms`, **off by default**): every
+   creature and form is drawn in colour, unhatched creatures get their names, and the dot
+   and the new-page line are off. A display choice: changes nothing stored.
 5. **Existing homes lose nothing.** Every creature a device has hatched shows its baby
-   and child (today's tile is the child, so the child must stay visible); teens and
-   adults open from retired pets in `journal` and from the current pet's stage.
+   and child; teens and adults open from retired pets in `journal` and from the current
+   pet's stage.
 
 What stays exactly as it is: the egg, the roster, `select.<pet>_next_egg`, the way
-forms are drawn on the pet itself (a pet always draws its own current form), the
-family line and photos and memories below the grid.
+forms are drawn on the pet itself, the family line and photos and memories below the
+grid.
 
 ## Server (PR 1)
 
@@ -101,7 +159,7 @@ A small pure function `mark_seen(state)` in `model.py`: if `state.species` is se
 `life_stage(state)` is not `egg`, set `state.seen[species]` to the later of the
 existing value and the current stage (by `LIFE_STAGES` index). Called:
 
-1. In `model._step` (`model.py:~398`, the `if stage != was_stage:` branch), **after**
+1. In `model._step` (`model.py:409`, the `if stage != was_stage:` branch), **after**
    `_hatch` has run for the egg to baby step and after the `stage_changed` event is
    built, on every stage change. This covers hatching (egg to baby; `_hatch` sets
    `state.species` and appends `state.raised`, `model.py:458`) and each later stage.
@@ -131,7 +189,10 @@ every generation. This is the likeliest bug in the build, so it has its own test
 In `PetState.from_dict` (`model.py:153`), after the existing per-field validation
 and before `cls(**kwargs)`:
 
-- `seen` not a dict: `{}`. Keep only items whose key is a non-empty `str` and whose
+- **Name the local `book`, not `seen`**: `from_dict` already has a local `seen`
+  (`model.py:161`, `seen = dict(kwargs.get("trait_hours") ...)`) that a careless
+  `seen = kwargs.get("seen")` would clobber.
+- `book` (the `seen` kwarg) not a dict: `{}`. Keep only items whose key is a non-empty `str` and whose
   value is one of `baby`, `child`, `teen`, `adult` (drops `"egg"`, unknown stages,
   non-strings). Species not in today's catalog are **kept** (a shelved species can
   return; `raised` does the same, `from_dict` doesn't filter it).
@@ -147,6 +208,15 @@ other two rows run on every load.
 | each species in `state.raised` (`str`), **legacy stores only** | `child` (the scope's "reveals its baby and child"; today's tile is the child portrait, so this is what keeps the portrait) |
 | each `state.journal` record's `species` (`str`; retired pets are always adults, `model.lay_egg` only lays after `can_lay_egg`) | `adult` |
 | the current pet: `state.species` and `life_stage(state)` is not `egg` | its current stage |
+
+**The legacy `raised` row is capped for the current pet.** If the legacy `raised` row
+would raise the *current* pet's species above its actual stage (a baby hatched during a
+downgrade, a restored backup, a store with the field stripped: all look "legacy"), the
+cap is the current stage, which row 3 already knows. Two lines of code that remove the
+case of a child page for a baby. Species the current pet is *not* is unaffected: retired
+species in `raised` still get `child` ("never fewer portraits"). The known remaining
+exception to "only forms not yet reached start dark" is therefore only those retired
+species, whose child the old tile already showed.
 
 Why the `raised` row cannot run on every load: `_hatch` appends the species to
 `raised` at hatch (`model.py:458`), so a live baby is in `raised` with only `baby`
@@ -170,7 +240,8 @@ A home that has never had the field gets it filled on the first load after the
 update, and the first `async_save` stores it. Before that save the card still gets
 the attribute (it reads live state), so nothing waits for a write.
 
-A newer-version-written store loaded by an older version: the unknown key is ignored
+A downgrade then upgrade: an older build saves without `seen`, so the next upgrade is
+"legacy" again; the cap above keeps that harmless. A newer-version-written store loaded by an older version: the unknown key is ignored
 (`known` filter) and the data is not lost when it's saved back by the newer version
 (the older one drops it on its save; that is the same rollback behaviour as every
 field and is accepted).
@@ -211,346 +282,382 @@ Consequences, stated so the owner isn't surprised:
 - A device not on the card adds nothing to that card's book (same as `raised`).
   Two dashboards showing different devices can show different books. This is the
   scope's stated behaviour; no home-wide store is added (that is option D's).
-- A device deleted from HA takes its `seen` with it (same as `raised`, `journal`).
+- A device deleted from HA: owner answer 7 says its pets **stay**. That is more than
+  `raised` and `journal` do today (they go with the device's store), so it needs a
+  mechanism: see "Deleted devices" below.
 - No cross-person state: `seen` is the device's, not a person's, so the book can't
   rank anyone and is the same for everyone looking at the same card.
 - The new-page marker is per browser (below), not per person and not on the server.
 
-## Card (PR 2)
+### Deleted devices (owner answer 7: they stay)
 
-All in `custom_components/virtual_pet/frontend/hatch-pet-card.js`.
+Today a deleted device's `seen`, `raised` and `journal` leave with its config entry.
+"Pets of deleted devices stay" means a book page and its "raised here" lines survive a
+device being removed. The mechanism is **decided at build time**, within these limits:
 
-### Reading the book (one helper)
+- It stores only what the book already shows: species to furthest stage, and per
+  pet `name`, `generation`, `upbringing`, `personality`, `world`. **Nothing
+  per-person**, no `bonds`, `notify_users` or user ids, and anything of it exposed as an
+  attribute is in `_unrecorded_attributes`.
+- Proposal: when a config entry is removed (`async_remove_entry`), write those
+  records to a small home-wide `Store` (`virtual_pet.book`), and the sensor of any
+  same-world device exposes them as `seen`/`journal`-shaped "kept" data. This is the
+  smallest thing that works and is **a call for the owner/first mate before PR 1 starts**
+  because it touches option D's territory (a home-wide store, which the scope deferred).
+- A browser-only alternative (the card's `hatch-book-<world>` keeps the union of stages
+  it has seen) keeps portraits but not the pets' names and not other browsers.
+
+Test: remove a device whose pet reached adult; the surviving device's card still shows
+that creature's adult and the pet's line.
+
+
+## Card
+
+All in `custom_components/virtual_pet/frontend/hatch-pet-card.js`. Line numbers are
+0.35.0b3 and drift: **find things by function name** (`_renderJournal`, `_journalLink`,
+`_setStatus`, `_moment`, `_queue`, `_lines`, `_update`, `sharedScreen`).
+
+### Reading the book (one helper, cached per draw)
 
 `_bookOf(s)` (new, beside `_renderJournal`) returns, for the world of slide `s`:
 
 - `forms`: `{species: furthest stage}`, the max by stage index over every slide in
-  `this._slides` with `sensor.life_stage` attribute `world === stage.world` of
-  its `seen`. **Fallback when `seen` is absent** (an older server, a cached card
-  newer than the integration): derive from that slide's attributes the way the
-  server backfill does: `raised` to `child`, each `journal` record's `species` to
-  `adult`, and the slide's own species to its `sensor.life_stage` state if not
-  `egg`. So a card newer than its server never shows fewer portraits.
+  `this._slides` with `sensor.life_stage` attribute `world === stage.world` of its
+  `seen`. **Fallback when `seen` is absent** (an older server, a cached card newer than
+  the integration): derive from that slide's attributes the way the server backfill
+  does: `raised` to `child` (capped at the slide's own stage for its own species),
+  each `journal` record's `species` to `adult`, and the slide's own species to its
+  `sensor.life_stage` state if not `egg`. A card newer than its server never shows
+  fewer portraits.
 - `raisers`: per species, a list built from every same-world slide's `stage.journal`
   records (`{name, generation, upbringing, personality}`; **all** records, not the
-  family line's last four: `past = [...].slice(-4)` in `_renderJournal` only limits
-  that list) plus each slide's current pet (`generation`, device name via
-  `this._hass.devices[s.ids.device]`, `name_by_user || name`, and `upbringing` only
-  if the stage is `adult`, as `_renderJournal` already does for `now`).
+  family line's last four) plus each slide's current pet (`generation`, device name via
+  `this._hass.devices[s.ids.device]`, `name_by_user || name`, `personality` where it
+  has one, and `upbringing` only if the stage is `adult`). **Privacy rule:** this reads
+  no other attribute (see "Privacy").
 - `showAll`: `this._config.show_all_forms === true`.
+
+Cache the parsed result (and the parsed `localStorage` book) once per `_update`; do not
+re-parse per tile.
 
 ### The tile (what the grid shows)
 
 Today `_renderJournal` hard-codes `child_content_1.png` and `known = raised.has(id)`.
 Change `tiles` so a tile is:
 
-- **Unhatched** (not in `forms`, and not `showAll`): `.jtile.locked`, the child
-  image as now (`filter: brightness(0); opacity: .3` from the existing
-  `.jtile.locked img` rule, `hatch-pet-card.js:1179`), label `???`, not a button.
-  Identical to today.
-- **Hatched**: a `<button class="jtile">` (focusable; the grid is plain divs today)
-  showing the **furthest form seen** (`<stage>_content_1.png` for `forms[id]`) and
-  the lower-cased name. A creature that hatched *live* has only the baby seen, so
-  its tile shows the baby: a hard-coded child tile would contradict the page it opens
-  (it would show a form the page draws as a silhouette). A creature backfilled from
-  `raised` has `child` at least, so existing homes see the same child portrait as
-  today unless a later form has since been reached, in which case the tile has
-  grown up (this is "never fewer portraits": the tile shows at least what it showed).
-  Where the hatched creature is on the card's own pet, the tile is not highlighted.
-- A **dot** on a tile whose page has an unacknowledged form (below), so the thing
-  to open is findable; cleared when that page opens.
+- **Unhatched** (not in `forms`, and not `showAll`): `.jtile.locked`, the child image
+  as now (`.jtile.locked img { filter: brightness(0); opacity: .3 }`), label `???`, not
+  a button. Identical to today.
+- **Hatched**: a `<button class="jtile">` showing the **furthest form seen**
+  (`<stage>_content_1.png` for `forms[id]`; owner answer 1) and the lower-cased name. A
+  creature that hatched live has only the baby seen, so its tile shows the baby and
+  never contradicts the page it opens. A creature backfilled from `raised` has `child`
+  at least, so existing homes see at least today's portrait. The tile gets a **button
+  reset** in CSS (the grid and `.jtile` rules have none today).
+- A **dot** on a tile whose page has an unacknowledged form, as a child `<span>`
+  (never a class on the button: `_setStatus` restores focus by the focused element's
+  class string, so a class that appears and disappears loses the focus).
+- With `showAll` on: every creature is a hatched-style tile with its name, no dot.
 
-Tapping a hatched tile sets `s.page = id` and redraws `_renderJournal`; the page
-has its own "‹ journal" link, which clears it. A new state field on the slide, like
-`s.journal`, reset in the same two places `s.journal = false` is reset
-(`hatch-pet-card.js:1695` and `:2048`; the builder re-finds them).
+Tapping a hatched tile sets `s.page = id` and redraws. `s.page` is a new slide field
+reset in the same two places `s.journal = false` is reset (builder re-finds them by
+that text).
+
+### The journal is re-rendered: how the page must fit it
+
+`_renderJournal` is **not built for a page that re-renders** (draft 1 missed this):
+it first paints an "opening…" loading view on every call, then awaits `species.json`,
+and it is called again on every photo/state update (`if (s.journal) this._renderJournal(s)`).
+Also `_journalLink` binds `s.status.querySelector(".jlink")`, the **first** `.jlink`
+only. So:
+
+- The grid and the page are two render modes of `_renderJournal`. Skip the loading view
+  whenever `s.page` is set or the species names are already cached (cache `names` on
+  the slide after the first load), so tapping a tile or a state update never flashes
+  "Gathering your pet's memories…".
+- The page's "‹ journal" back link gets **its own class** (say `.jback`) and its own
+  handler; the grid's "‹ status" keeps `.jlink`. Never two `.jlink`s in one view.
+- `names` must cover **every species in `raisers` and `forms`**, not only `roster` plus
+  the last four `past` records (otherwise a name reads "undefined").
+- If a species' `species.json` fails, the header falls back to the id.
 
 ### The creature page
 
-Header: the creature's name (from `sprites/<id>/species.json` `name`, already loaded
-for `names` in `_renderJournal`). Then four slots in `STAGES` order:
+Header: the creature's name (`species.json` `name`). Then four slots in `STAGES` order,
+each a plain `<figure>` (nothing to open):
 
-- Reached (or `showAll`): the colour portrait, `alt` = "<name>, <stage>", and the
-  stage label under it.
-- Not reached: the same image with the `locked` filter (a new rule
-  `.jform.locked img`, copying `.jtile.locked img`), `alt=""`, and the stage label.
-  **No hint text.** The stage label is the structure of the page, the same on
-  every creature, and says nothing about when; whether to show it at all is open
-  question 3.
-- Each slot is a plain `<figure>`, not a button (nothing to open).
+- Reached (or `showAll`): the colour portrait, `alt` = "<name>, <stage>", and the stage
+  label under it **only for reached forms** (copy table).
+- Not reached: the same image with the `locked` filter (a new `.jform.locked img` rule,
+  copying `.jtile.locked img`), `alt=""` and `aria-label="not seen"` on the figure.
+  **No text at all, not even a stage label** (owner answer 3). A dark form is a plain
+  silhouette; the stage label is not drawn for it.
 
-Below, "raised by" lines from `raisers[id]`, newest generation first, at most four
-(then "and more"), each: `<name> · gen <n>` then upbringing/personality words **beside**
-the name when the record has them, like the family line does today
-(`${p.upbringing ? ` · ${escape(p.upbringing)}` : ""}`): the same words, the same
-place. A pet still growing up has no upbringing yet (as `_renderJournal` does for
-`now`): "now" instead. Upbringing is never a slot, a badge, a different portrait or a
-count. It is words, because the adult is drawn the same whatever the upbringing
-(`scope`, "Forms"), and a word like "scrappy" is only the record's own label (open
-question 5 asks whether the book should print it at all).
+Below, a "raised here" section from `raisers[id]`: **the newest four generations,
+shown oldest first** (the family line is also oldest first, one order throughout), with
+"and more" ahead of them when there are older ones. Each line: `<name> · gen <n>` then
+words beside the name, as the family line does: **upbringing for retired pets and
+current adults only** (owner answer 5; never beside a pet still growing up) and the
+**personality** word where the record or the pet has one (owner answer 11). A pet still
+growing up shows "now" in place of upbringing. Upbringing is never a slot, a badge, a
+different portrait or a count. A species with fewer than four `stages` in its
+`species.json` (none today) draws only its listed stages.
 
 ### The new page and the dot
 
-The marker is **per browser**, in `localStorage`, like the card's other "seen"
-state (`hatch-seen-<device>` at `hatch-pet-card.js:2372`, the once-a-day keys at
-`:369-374`):
+The marker is **per browser**, in `localStorage` (like `hatch-seen-<device>` and the
+once-a-day keys):
 
 - Key `hatch-book-<world>`: JSON `{species: stage}`, the forms **this browser has been
-  shown**. (A world, not a device, because the book is the world's on this card.)
-- **First load seeds it silently**: if the key is absent, store the current `forms`
-  and show nothing. Otherwise every existing home would get a dot for the whole
-  backfilled book, and every new browser would too. (Precedent: `s.lastMoment` is
-  seeded from the newest moment "not old ones", `:1977`.)
+  shown**. A world, not a device, because the book is the world's on this card. **Never
+  write a key for an undefined world** (`hatch-book-undefined`).
+- **Seeding waits for every slide.** Seed the key silently only when the key is absent
+  **and** every slide in `this._slides` has a `sensor.life_stage` state that carries a
+  `world`. Seeding on a first draw where one of two same-world devices hasn't arrived
+  would later show a dot for the whole backfilled book when it does (audit finding 1).
+  Until seeded: no dot, no line.
 - **The dot** is pending when any species' current stage is later than its stored one.
-  It's computed on each draw (`_update`) from `_bookOf`, so it survives a reload and
-  needs no server push. It sits on the journal link ("journal ›") on the status
-  screen and on the tile of each creature with a new form. **Opening the journal
-  clears it**: write `forms` to the key (the whole book, not per page: "opened" means
-  seen). This also happens when `showAll` is on (the dot is suppressed with it; open
-  question 4).
-- **The moment** (the extra line) is hooked to the live events the card already
-  gets, not to a diff of the merged book between draws (a diff gives false
-  positives: `this._slides` and their states don't all arrive on the first draw, a
-  reconnect can briefly drop states, and when a second same-world device's `seen`
-  shows up the merged value rises for nothing). The `hatched` and `stage_changed`
-  cases of `_moment` (`:2740-2752`) arrive through `sensor.last_care` `moments`
-  (unrecorded, already in `coordinator.MOMENTS`, so no new event), and old moments
-  are already skipped by the `s.lastMoment` seeding (`:1977`). On one of them, queue
-  the line **only if that (species, stage) wasn't in the merged book before this
-  event** (the book read just before the state update is applied is the draw's
-  `forms`; the builder takes it from the last draw's cache). A browser that wasn't
-  looking gets the dot, not the line, since it sees no live moment. The dot stays the
-  localStorage diff above. The line is `_queue`d (`hatch-pet-card.js:2327`), not said through `_moment`'s `say`,
-  so it follows "I'm a teen now!" / "hello!" rather than overwriting it: those come
-  from `_moment`'s `stage_changed` and `hatched` cases (`:2740-2752`), which `say`
-  immediately; `_sayQueued` then speaks the queued line when nothing is being said
-  (and the status screen is closed). Nothing server-side.
-- **A shared screen** (`sharedScreen()`, `:181`): the moment fires (the pet is the
-  home's; the line has no name in it). The **dot does not show** (a wall tablet nobody
-  opens would carry it forever, which reads as nagging); the pages still fill in. Open
-  question 4.
-- It doesn't use a bond, a name, or `hass.user`, so it is the same for every viewer.
-- It never plays a sound beyond what `_speak` already does for a line, and adds no
-  vibration.
+  Computed in `_update` from `_bookOf`, so it survives a reload and needs no server push.
+  It sits on the journal link (as a child `<span aria-label="new page">`, not a class on
+  the button) and on the tile of each creature with a new form. **Opening the journal
+  clears it**: write `forms` to the key. With `showAll` on, the dot is off (owner
+  answer 4).
+- **The moment** (the extra line), once per form (owner answer 6), is hooked to the live
+  events the card already gets (`hatched` and `stage_changed` in `sensor.last_care`
+  `moments`, already in `coordinator.MOMENTS`, so no new event), not to a diff of the
+  merged book. **Ordering is specified**, because `sensor.life_stage` `seen` and
+  `sensor.last_care` `moments` can arrive in the *same* hass update and `_update` runs the
+  moments in a `forEach`:
+  1. Read the **cached book from before this update** (the previous draw's `forms`)
+     *before* calling this update's `_bookOf`.
+  2. In the moments loop, for each fresh moment (those past `s.lastMoment`, and
+     `recent(m.at)`, 15 s of `last_care.last_updated`), compare its (species, stage)
+     against the cached book. If absent, queue the line and **add it to the cached
+     book at once**, so a second fresh moment in the same batch (`hatched` + a quick
+     `stage_changed`) compares against an up-to-date book.
+  3. After the loop, refresh the cache from this update's `_bookOf`.
+  Draft 1's "take it from the last draw's cache" left both failure modes: refreshing
+  before the loop means the hook never fires; after it with no per-moment update means a
+  stale compare.
+- **The line follows the stage lines and goes through `_lines`.** The extra line is
+  queued with `_queue` after `_moment`'s `say(...)`. At teen `_moment` already queues the
+  personality reveal; the hook runs after the whole `switch` for that moment, so the
+  order is "I'm a teen now!", the reveal, the new-page line (owner answer 14). It is
+  routed through `this._lines(s, "newpage", fallback)` so baby talk and the pet's voice
+  apply as for every other queued line (the baby-talk plan's mechanism); the copy table
+  has a baby-talk proposal.
+- **A shared screen** (`sharedScreen()`): the moment fires (no name or person in it);
+  the **dot does not show**; the pages still fill in.
+- **`showAll` on:** neither the dot nor the line (owner answer 4).
+- It uses no bond, no nickname and no `hass.user`, so it is the same for every viewer.
+  It adds no sound beyond what `_speak` already does and no vibration.
 
-### "Show every form"
+### "Show every form" (a card option, off by default)
 
-A card option `show_all_forms: true` (proposed name; the card's other option is
-`seasonal`, `:264`, and `experimental_catch`): read in `_bookOf`. On: every creature of
-the world is tappable and every form is in colour, **including creatures nobody has
-hatched** (so the tile's `???` becomes the name), and the dot and moment are off.
-Open question 4 asks whether show-all should reveal unhatched creatures; the
-recommendation is yes, because "show everything" that still hides a creature is a
-half-measure, and nothing is lost (a display choice, never stored).
-
-The editor (`hatch-pet-card-editor`, `:~4471`) has one field, `devices`, and a
-constant `computeLabel` (`() => "Pets on this shelf"`). Adding the checkbox means a
-per-name `computeLabel` (and `computeHelper`), a `boolean` selector in the schema,
-and `_changed` writing/removing the key (it already keeps other keys:
-`{ ...this._config }`). The builder confirms that on the dev HA.
+Card option `show_all_forms: true` (the card's other options are `seasonal` and
+`experimental_catch`), read in `_bookOf`. On: every creature of the world is tappable
+and every form is in colour, **including creatures nobody has hatched** (the `???`
+becomes the name), and the dot and the line are off. Off (the default) changes nothing.
+It shows **no** new words beyond the names already shown. The editor
+(`hatch-pet-card-editor`) has one field, `devices`, and a constant `computeLabel`; the
+checkbox means a per-name `computeLabel`/`computeHelper`, a `boolean` selector and
+`_changed` writing/removing the key (it already keeps other keys). The builder confirms
+on the dev HA. This ships as its own PR (2c), off the critical path.
 
 ### A missing image
 
-If a form's png fails to load (a species whose art is partial, or a cached card),
-the `<img>` gets an `onerror` that hides it and leaves the slot as an empty
-silhouette box, never a broken-image icon. A species with fewer than four `stages`
-in its `species.json` (none today) draws only its listed stages (the page reads
-`names[id]`'s `species.json` `stages`, already fetched by `loadJson`).
+If a form's png fails to load, the `<img>` gets an `onerror` that hides it and leaves
+the slot as an empty silhouette box, never a broken-image icon.
 
 ### Nothing is lost, and nothing nags
 
-The page never says "locked", "missing", "x of y" or a percentage, and has no
-header counter. The merge only takes maxima, so a form once seen stays (the server
-never lowers `seen`, `backfill_seen` only raises, and the card only reads). Deleting
-a browser's `localStorage` can only re-show a dot (re-seeded silently on the next
-load, so not even that).
+The page never says "locked", "missing", "x of y" or a percentage and has no counter.
+The merge only takes maxima, so a form once seen stays on the server side
+(`backfill_seen` only raises) and the card only reads. Clearing a browser's
+`localStorage` can only re-seed silently.
 
 ## Tests
 
 ### Server (`tests/test_model.py`, `tests/test_init.py`)
 
-pytest, the existing style (`test_hatching_prefers_a_species_not_raised_yet`,
-`model.advance(pet, start + HOUR, settings, random.Random(1), max_gap=None)`).
+pytest, the existing style (`model.advance(pet, start + HOUR, settings,
+random.Random(1), max_gap=None)`).
 
-1. Hatching sets `seen[species] == "baby"`; advancing a day sets `child`; to 120 h
-   `teen`; to 336 h `adult`. A big single `advance` that crosses two stages leaves the
-   later one.
+1. Hatching sets `seen[species] == "baby"`; a day later `child`; 120 h `teen`; 336 h
+   `adult`. A single `advance` that crosses two stages leaves the later one.
 2. `seen` never goes down: `mark_seen` with a lower stage keeps the higher.
-3. `lay_egg` carries `seen` to the egg (and the egg's `seen` is a copy, not the
-   same dict), and the new species hatching adds to it.
-4. `from_dict` with no `seen` (an old store) backfills: `raised=["bird","fox"]`
-   gives both `child`; a `journal` record for `fox` gives `adult`; a current teen
-   `squirrel` gives `teen`. A store with `raised=[]` and no journal gives `{}`.
-5. `from_dict` validation: `seen` a list, a string, `None` → `{}`; `{"bird":"egg"}`,
-   `{"bird":"giant"}`, `{1:"baby"}`, `{"":"baby"}` are dropped; unknown species kept;
-   round trip `from_dict(pet.to_dict()) == pet` (the existing pattern at line 353).
+3. `lay_egg` carries `seen` to the egg, **as a copy, not the same dict** (an explicit
+   alias assertion), and the new species hatching adds to it.
+4. `from_dict` with no `seen` backfills: `raised=["bird","fox"]` both `child`; a
+   `journal` record for `fox` (with **no** `upbringing`, owner answer 2) gives `adult`; a
+   current teen `squirrel` gives `teen`; `raised=[]` and no journal gives `{}`.
+5. `from_dict` validation: `seen` a list, string, `None` gives `{}`; `{"bird":"egg"}`,
+   `{"bird":"giant"}`, `{"":"baby"}` dropped; unknown species kept; round trip
+   `from_dict(pet.to_dict()) == pet`. (`{1:"baby"}` is only reachable by calling
+   `from_dict` with a Python dict, not from a JSON store: keep it for that path.)
 6. A restart doesn't promote a live baby: hatch, `from_dict(pet.to_dict())` keeps
-   `seen == {species: "baby"}` (the key is present, so the `raised` row is skipped).
-   Backfill never lowers also: a stored `seen` of `adult` for a species in `raised`
-   stays `adult`.
-7. Coordinator ordering (`tests/test_init.py`): a store with `species=None`, an old
-   species and no `raised` ends with that species in `seen` after setup.
-8. The sensor exposes a copy: mutating the model's dict after reading the attribute
-   doesn't change the attribute read earlier.
-9. `"seen"` is in `LifeStageSensor._unrecorded_attributes`.
-10. No new event: advancing across a stage fires the same event types as before
-    (hatched, stage_changed), and `coordinator.MOMENTS` is unchanged.
-11. The whole 30-creature case: for every species in a catalog built from the merged
-    branch's files, `species.json` has the four stages the card draws (a data test
-    in `tests/test_species.py`, run after the art branch merges).
+   `{species: "baby"}`. Backfill never lowers (`adult` stays). **A legacy store plus a
+   live baby survives two restarts unchanged.**
+7. **Legacy cap:** a store without `seen`, `raised=[current]`, current pet a baby: the
+   baby is `baby`, not `child`; a retired species in `raised` is `child`.
+8. Coordinator ordering: a store with `species=None`, an old species and no `raised`
+   ends with that species in `seen` after setup.
+9. The sensor exposes a copy (mutating the model's dict doesn't change an earlier read).
+10. `"seen"` is in `LifeStageSensor._unrecorded_attributes` (add it to the key loop in
+    `tests/test_init.py`, around line 840), **and no per-person key ever appears in
+    `seen`** (only species keys and stage values).
+11. No new event: advancing across a stage fires the same types as before and
+    `coordinator.MOMENTS` is unchanged. Use `fast_forward` for state (it is `simulated`,
+    so no moment, see Card checks).
+12. Data test (`tests/test_species.py`): for every species with a `species.json`, all
+    four `<stage>_content_1.png` exist, and `stages` is the four the card draws.
+13. Deleted devices (owner answer 7): per the mechanism chosen at build time.
 
 ### Card (`scripts/card-check.js`, `scripts/card-check`)
 
-The existing harness (needs `scripts/develop` running, Playwright). Pattern: `inject
-(entity, patch)` (`card-check.js:169`) patches an entity's state/attributes in the
-page; **a server update overwrites an injected attribute** (the file says so at
-`:389` and `:1241`), so each check injects, waits for the result to show, and
-re-injects until it does (the way `:1241-1254` does for memories).
+The existing harness (needs `scripts/develop` and Playwright). `inject(entity, patch)`
+patches an entity in the page; **a server update overwrites an injected attribute**, so
+each check injects, waits for the result and re-injects until it shows (as the memories
+check does).
 
-Checks the builder can actually run on the dev HA (two pets):
+How tests get a stage and a line: `fast_forward` (`services.yaml`, max 168 h per call)
+crosses stages on the dev HA but runs `_advance(simulated=True)`, which **skips
+`MOMENTS`** and fires events with `simulated: true`. So `fast_forward` gives the state
+and the **dot**; the **line** can only come from an **injected moment** in
+`sensor.last_care` `moments`, whose `at` must be within `recent()` (15 s of
+`last_care.last_updated`: the check sets both).
 
-- C1. **No `seen` on an old server** (inject without it): `raised: ["bird"]` shows
-  one coloured tile, the others `.jtile.locked`; a tile is a button; the count of
-  `.jtile.locked` equals roster minus raised.
-- C2. **Silhouettes and no hints**: inject `seen: {bird: "child"}`, open the journal,
-  tap the bird: four `.jform` figures, two coloured and two with `.locked`; the page
-  text matches none of `/in about|days?|weeks?|soon|grow|hint/` (the no-hint rule is
-  a regex check on the whole page text, not a visual one).
-- C3. **Tile shows the furthest form**: tile `img` src ends in `baby_content_1.png`
-  for `seen: {bird:"baby"}`, `child_content_1.png` for `child`, `teen_...` for `teen`.
-- C4. **Backfill parity**: with `raised: ["bird","squirrel"]` and `seen` absent the
-  tiles show the same two coloured as before this change (run the same inject on the
-  old build's expectation: two unlocked `.jtile`).
-- C5. **Two-device merge**: inject both dev pets' `world` to the same value and
-  `seen` to `{bird:"baby"}` and `{bird:"teen"}`; the bird page shows three coloured
-  forms. (The dev pets may not share a world; inject `world` if not.)
-- C6. **A pet in another world doesn't add to this book.** Inject one pet's `world`
-  to a different value with `seen: {squirrel: "adult"}`: the squirrel stays dark.
-- C7. **The new page**: seed (clear the key, load: no dot, no line); inject a
-  `stage_changed` moment into `sensor.last_care` `moments` together with the raised
-  `seen`; the journal link has the dot
-  (`.jlink.new` or the chosen class), the queued line appears once after the
-  stage line, a second identical inject says nothing again; opening the journal clears
-  the dot and rewrites `hatch-book-<world>`.
-- C8. **A browser that wasn't looking** (reload the page after injecting `seen`,
-  with the moment already in the list at load): dot yes, line no. Also: a second
-  same-world device's `seen` arriving later raises the merged book but fires no line
-  (the false positive the moment hook avoids).
-- C9. **Shared screen**: set `SHARED_KEY` on (`hatch-shared-screen`,
-  `:180`): line yes, dot no.
-- C10. **`show_all_forms: true`** (`setConfig` in-page): no `.locked` anywhere,
-  unhatched tiles show names, no dot.
-- C11. **Unrecorded** (may not be runnable): `card-check.js` has no history check
-  today, so this is new: its `api()` helper (`:33`) could `GET
-  /api/history/period/...?filter_entity_id=sensor.<pet>_life_stage` and assert no
-  `seen` key in any row, but only if the dev config has the recorder on. If it
-  doesn't, server test 9 is the guard and C11 is dropped; the PR says so.
-- C12. **No phone message / no event**: subscribe to the dev HA's event stream
-  (`/api/events` websocket `subscribe_events`) across a stage change and assert no
-  `virtual_pet_*` type outside the existing ones fires.
-- C13. A broken image (inject `species` to one with no teen art): the slot is a
-  silhouette box, no `<img>` naturalWidth 0 left visible.
-- Screenshots to `dev/card-check/` (`shot()` at `:238` is the model) at 330 px and
-  compact for the page with two reached forms and for the new-page dot, for the
-  owner's sample sheet. Downscale before reading.
+- C1. **No `seen` on an old server** (inject without it): `raised: ["bird"]` shows one
+  coloured tile, the others `.jtile.locked`; a tile is a button; `.jtile.locked` count =
+  roster minus raised.
+- C2. **Silhouettes, no text:** inject `seen: {bird: "child"}`, tap the bird: four
+  `.jform` figures, two coloured and two `.locked`. A **dark figure contains no text node
+  and no stage label**, and its accessible name is exactly "not seen". The whole page
+  text matches none of `/in about|days?|weeks?|soon|grow|hint|yet|later|locked|missing|\?|
+  still|until|unlock|need|reach/i`.
+- C3. **Tile shows the furthest form:** `img` src ends in `baby_content_1.png`,
+  `child_...`, `teen_...` for the matching `seen`.
+- C4. **Backfill parity:** `raised: ["bird","squirrel"]`, `seen` absent: two unlocked tiles
+  as before.
+- C5. **Two-device merge:** both dev pets' `world` the same, `seen` `{bird:"baby"}` and
+  `{bird:"teen"}`: the bird page shows three coloured forms, and the raised-here list has
+  both pets (names, generations only).
+- C6. **Another world adds nothing:** one pet's `world` different, `seen:
+  {squirrel:"adult"}`: the squirrel stays dark.
+- C7. **The new page:** seed (clear the key, load; no dot, no line); inject `seen` and a
+  `stage_changed` moment in the **same update**: the dot, one queued line **after** the stage
+  line; a second identical inject says nothing; opening the journal clears the dot and
+  rewrites the key. At teen the order is stage line, reveal, new-page line. In baby talk
+  the line is the baby-talk variant.
+- C8. **A browser that wasn't looking** (moment already in the list at load): dot yes,
+  line no. A second same-world device's `seen` arriving **late**: no dot and no line, and
+  the seed key is not written until both slides have a `world` (no `hatch-book-undefined`).
+- C9. **Shared screen:** line yes, dot no, no person on the page.
+- C10. **`show_all_forms: true`** (`setConfig`): no `.locked` anywhere, unhatched tiles
+  show names, no dot, no line; **off by default** (no option, behaves as C1).
+- C11. **Unrecorded** (only if the dev config has the recorder): history for the sensor has
+  no `seen`; else server test 10 is the guard and the PR says so.
+- C12. **No new event:** subscribe to the event stream across a `fast_forward` stage
+  change; only existing `virtual_pet_*` types fire.
+- C13. **A broken image:** inject a species with no teen art: the slot is a silhouette
+  box, no broken `<img>`.
+- C14. **Privacy:** inject a bond nickname and a `notify_users` id; neither string appears
+  anywhere on the grid or a page, on a shared screen or off.
+- C15. **Re-render:** tapping a tile or a state update on the page never shows
+  "Gathering your pet's memories…", and "‹ journal" and "‹ status" each work (separate
+  handlers); focus survives the dot appearing.
+- Screenshots to `dev/card-check/` at 330 px and compact for pages with **0, 2 and 4
+  forms** and for the dot, for the owner's sample sheet. Downscale before reading.
 
-What can't be checked on the dev HA: the 30-creature grid (the dev has two pets and
-the roster comes from the installed files) until the art branch has merged; `inject`
-only patches states, so the **look** of a real 6-creature Terrarium or a 5-creature
-Woodland in the grid is checked by injecting `roster` and `seen` (C3's mechanism)
-and a screenshot, not by real hatches.
+The look of a real 5-6 creature grid is checked by injecting `roster` and `seen`, not by
+real hatches. A real hatch-to-adult needs 14 days of age; `fast_forward` gets there in two
+calls but is simulated.
 
 ## Phases and PRs
 
-Two PRs, as the scope sized B, **after the art branch merges**, in this order (PR 2
-reads PR 1's attribute, but is built to survive its absence).
+Versions: **0.35.0b4 onward is the privacy-hardening work** (a separate plan). The forms
+book's versions are **decided at build time**, on top of whatever has shipped then; the
+bump goes last in each PR (as in the baby-talk plan). The builds are not blocked on the
+art (merged in 0.35.0b3).
 
-### PR 1: the state
+1. **PR 1: the state.** `model.py` (`seen`, `mark_seen`, `backfill_seen` with the legacy
+   cap, `from_dict` validation, `_step` call, `lay_egg` carry-over), `coordinator.py`
+   (second `backfill_seen` call), `sensor.py` (the attribute and its
+   `_unrecorded_attributes` entry), the deleted-devices mechanism, `docs/guide.md` (the
+   `sensor.<pet>_life_stage` row), tests 1-13.
+   **Done =** pytest passes; a dev HA's sensor shows `seen` after a restart on an old store;
+   history shows no `seen`; `lay_egg` keeps the book and is not aliased; a legacy store
+   plus a live baby survives two restarts; no new event types; nothing per-person in
+   `seen`; on a shared screen nothing changes yet. Nothing visible to the person.
+2. **PR 2a: the book.** `_bookOf` (cached), tile (button + reset), page, silhouettes,
+   the `_renderJournal` render modes and back link, card-check C1-C6, C13-C15.
+   **Done =** card-check passes; an old-server run (C1, C4) shows no fewer portraits; the
+   screenshots exist (330 px and compact; a page with 0, 2 and 4 forms) and the owner has
+   seen the sample sheet: no text on any dark form, no broken image, no "undefined".
+3. **PR 2b: the dot and the line.** Seeding, dot, moment hook with its ordering, shared
+   screen, `_lines` and baby talk, C7-C9, C12.
+   **Done =** C7-C9 and C12 pass, including the same-update and late-device cases; shared
+   screen shows the line, not the dot, and no person.
+4. **PR 2c: `show_all_forms` and the editor field,** off by default, C10. Off the critical
+   path; can ship after 2b.
 
-- `model.py`: `seen` field, `mark_seen`, `backfill_seen`, `from_dict` validation,
-  `_step` call, `lay_egg` carry-over.
-- `coordinator.py`: the second `backfill_seen` call after the old-species fix-up.
-- `sensor.py`: the `seen` attribute and its `_unrecorded_attributes` entry.
-- `docs/guide.md`: `seen` in the `sensor.<pet>_life_stage` attributes row
-  (guide, the `sensor.<pet>_life_stage` row, line 246) and one line saying it's unrecorded.
-- Tests 1-11 above.
-- **Done =** the pytest suite passes with the new tests; an installed dev HA's
-  `sensor.<pet>_life_stage` shows `seen` after a restart with an old store
-  (backfilled, one species per `raised`); the history query for it shows no `seen`;
-  `lay_egg` on the dev pet keeps the book; no new event types. Nothing visible changes
-  to the person yet.
+Guide: the "The journal" bullet describes the book, the silhouettes, the dot and the option
+(owner reviews at the PR 2a audit).
 
-### PR 2: the book
-
-- `hatch-pet-card.js`: `_bookOf`, the tile and its dot, `s.page` and the creature
-  page, the `.jform` rules, the new-page key and moment, `show_all_forms`, the editor
-  field, a `VERSION` bump last.
-- `scripts/card-check.js`: C1-C13.
-- `docs/guide.md`: "The journal" bullet (line ~490) now describes the book, the
-  silhouettes, the dot, the option.
-- Copy table below, once the owner has answered.
-- **Done =** `scripts/card-check` passes with the new checks; the screenshots exist;
-  an old-server run (C1/C4) shows no fewer portraits than the previous card; the
-  owner has seen the sample sheet (two or three creatures through `inject`).
-
-Version and changelog: the project ships `0.35.0b1` (card `VERSION`,
-`manifest.json`); the build numbers on top at build time and the version bump goes
-last (as in the baby-talk plan). A beta for the companion-app reason is not needed.
-
-## Copy (proposals for the owner; none is approved)
+## Copy (proposals; the owner approved the decisions, not the exact words)
 
 | Where | Proposed words | Notes |
 | --- | --- | --- |
-| The new-page line, in the pet's bubble | a new page in your journal ♥ | Once, after the stage line. No name in it, so it is the same on a shared screen |
+| New-page line, normal | a new page in your journal ♥ | Once per form; no name, same on a shared screen. Through `_lines` |
+| New-page line, baby talk | new page! journal! ♥ | Proposal for the baby-talk variant (`_lines`) |
 | Unhatched tile label | ??? | As today |
-| A dark form: stage label under it | baby / child / teen / adult | Structure, not a hint; open question 3 |
-| A dark form: accessible name | not seen yet | Screen readers only (`aria-label`); no time, no how |
-| Journal link when a page is waiting | journal › (a dot, no text) | The dot has `aria-label="new page"` (proposal) |
-| Page: back link | ‹ journal | Matches "‹ status" |
-| Page: raised by | raised by | Section label; lines are "Pip · gen 2 · devoted" |
-| A pet still growing up | now | In place of upbringing words |
-| More than four raisers | and more | |
-| Card option label / helper | Show every form / Draw every creature and form in colour | The editor's checkbox |
-| Guide, journal bullet | (the owner reviews at the PR 2 audit) | Not drafted here |
+| Dark form: visible text | (none) | Owner answer 3: a plain silhouette |
+| Dark form: accessible name | not seen | Owner answer 15; no "yet" |
+| Reached form: stage label | baby / child / teen / adult | Under reached forms only |
+| Journal link when a page is waiting | journal › plus a dot | Dot `aria-label="new page"` |
+| Page: back link | ‹ journal | Own class, matches "‹ status" |
+| Page: section label | raised here | Owner answer 13 |
+| Line | Pip · gen 2 · devoted · shy | Upbringing for retired and current adults only; personality where known |
+| A pet still growing up | Pip · gen 3 · now | |
+| More than four | and more | Ahead of the newest four |
+| Card option label / helper | Show every form / Draw every creature and form in colour | Editor checkbox, off by default |
 
-Nothing here counts, scores or names a requirement. The stage-line words that
-already exist ("I'm a teen now!", "all grown up! ♥") are not changed.
-
-## Open questions (each with a recommendation)
-
-1. **Does a creature's tile show the furthest form, or stay the child?**
-   Recommendation: the furthest form seen. It matches what the page opens to and
-   can't contradict it; backfilled homes still see the child at least.
-2. **Is a retired pet's adult enough to show the adult of that creature, even when the
-   record has no upbringing?** (`journal` records always carry `species`; an old record
-   may lack `upbringing`.) Recommendation: yes; `adult` from any record, the upbringing
-   words only where present.
-3. **Do dark forms carry a stage label?** The owner said no text about when or how.
-   A fixed "baby / child / teen / adult" label isn't either, and a page of four
-   unlabelled shapes is hard to read. Recommendation: labels shown; if the owner reads
-   it as a hint, drop them and keep the accessible name only.
-4. **Show-all and the dot:** does "show every form" also reveal unhatched creatures
-   and switch off the dot and moment? On a shared screen is the dot hidden?
-   Recommendations: yes to both; hidden on a shared screen, the moment still shown.
-5. **Where do the upbringing words sit?** (The owner decided they are words beside
-   "raised by"; that stands.) "Scrappy" could read as a verdict on a person's care.
-   Recommendation: print them for retired adults and for a current adult, never
-   next to a pet still growing up (it has none yet), as `_renderJournal` already
-   does for `now`.
-6. **Is the new-page line per form, or once per creature?** Recommendation: per form
-   (baby of a new creature, then each later stage): there are at most four a
-   creature, 120 over the whole cast, and each is the pet's own growing-up. The line
-   follows the stage line, so one growth event gives two short lines, no more.
-7. **A device not on the card, or a deleted device, takes its pages with it.**
-   Recommendation: accept, as `raised` does; a home-wide store is option D's cost.
-8. **Cap on the raised-by list** (four, then "and more"). Recommendation: keep; a
-   home with two devices and many generations stays short.
-9. **Beetle.** Terrarium's roster has `beetle` with no `species.json`, so it is absent
-   from the book. Recommendation: nothing to do; when its art is added (with a
-   `species.json` and four stages) it appears as one more unhatched tile.
+Nothing here counts, scores or names a requirement. Existing stage lines ("I'm a teen
+now!", "all grown up! ♥") are unchanged.
 
 ## Out of scope
 
-Code; the audit (a separate scout follows); hints or text on dark forms; points,
-percentages, "missing" counts; a home-wide store; gating eggs or worlds (options C, D);
-anything on phones, in Assist, in the LLM prompt or on the event bus.
+Code; another audit; hints or text on dark forms; points, percentages, "missing" counts;
+gating eggs or worlds (options C, D); anything on phones, in Assist, in the LLM prompt or
+on the event bus; anything per-person.
+
+## The audit of draft 1 (19 findings) and what changed
+
+**This table wins over any older wording in the body.** Each claim was checked against
+`origin/main` (0.35.0b3, `0821baf`) before folding. All 19 held; one needed a correction (#10).
+
+| # | Finding | Change |
+| --- | --- | --- |
+| 1 | The dot's first-load seeding races the slides (false dot for the whole book; key `hatch-book-undefined`). Confirmed. | Seed only when every slide has a `world`; never write an undefined-world key; C8 covers a late device. |
+| 2 | `_renderJournal` repaints "opening…" on every call and re-renders on updates; `_journalLink` binds only the first `.jlink`; `_setStatus` restores focus by class. Confirmed (`_renderJournal`, `_journalLink`, `_setStatus`). | Page is a render mode that skips the loading view; own back-link class and handler; dot on a child `<span>`; C15. |
+| 3 | "not seen yet" is a hint; C2 regex too narrow. Confirmed. | Owner 15: accessible name "not seen"; owner 3: no text at all on a dark form; regex widened; C2 asserts no text node. |
+| 4 | "Two lines" is false at teen (`_moment` queues the personality reveal). Confirmed. | Owner 14: line after the stage line and the reveal; routed through `_lines`; wording fixed to three bubbles at teen. |
+| 5 | The moment hook's "book before this event" was under-specified (same-update, same-batch moments). Confirmed. | Explicit three-step ordering (read before, update per moment, refresh after); C7 changes both in one update. |
+| 6 | `from_dict` already has a local `seen` (trait_hours). Confirmed (`model.py:161`). | The validated local is `book`. |
+| 7 | A downgrade/restore re-triggers the legacy `raised` row. Confirmed. | Cap the legacy row for the current pet at its actual stage; test 7. |
+| 8 | "Raised by" lists pets, not people; merges other devices' journals; personality words not decided; bonds one careless read away. Confirmed. | Owners 10, 11, 13 decided; "raised here"; a Privacy section of what the page may read; C14 injects a bond nickname and a `notify_users` id. |
+| 9 | Code references were stale. Confirmed. | Refer by function name; line numbers refreshed where kept; version 0.35.0b3; the "after the art branch" precondition dropped. |
+| 10 | Art facts wrong (123 = 120 + 3 eggs). Confirmed and corrected: main has **121** under `sprites/` (120 + `beetle/baby_content_1.png`); the other two are `art/beetle/rejected-v1/`; audit said extras = one in sprites plus two in art, which matches. | Sentence fixed; test 12 checks the four files per species. |
+| 11 | `fast_forward` is simulated and skips `MOMENTS`. Confirmed (`_advance(simulated=True)`, `_fire`). | State and dot via `fast_forward`; the line via an injected moment with `at` in `recent()`; C12 uses `fast_forward`. |
+| 12 | Tile/page edge cases (no-op sentence; button reset; `names` coverage; ordering; species.json failure). Confirmed. | Sentence deleted; button reset; names cover raisers and forms; one order (newest four, oldest first); id fallback. |
+| 13 | `show_all_forms` is new scope. | Owner 12: ships, off by default, as PR 2c. |
+| 14 | Dark forms still fetch the coloured png. | One sentence: a display rule, not a secret. |
+| 15 | Legacy `raised` row gives `child` to a legacy baby. | Fixed for the current pet by the #7 cap; stated as the one remaining exception for retired species. |
+| 16 | `{1:"baby"}` unreachable from a JSON store. | Kept for the Python-dict path, noted in test 5. |
+| 17 | Performance non-issue; real cost is `_bookOf` per `_update` and the localStorage parse. | One paragraph; cache per draw. |
+| 18 | PR 2 too big. | Split into 2a, 2b, 2c. |
+| 19 | Acceptance gaps. | "Done =" for each PR now includes the two-restart test, the alias test, screenshot criteria, and shared-screen conditions. |
+
+Also folded from the owner's 15 answers: all now under "Decided" above. The only
+mechanism left to choose at build time is for owner answer 7 (pets of deleted devices
+stay), see "Deleted devices".
