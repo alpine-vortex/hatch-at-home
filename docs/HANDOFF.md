@@ -34,20 +34,21 @@ session** (owner's request, 2026-10-28). Released: 0.33.1 (PR #29: the "birthday
 my phone" switch, off by default; the Art session's redrawn party hat, PR #28; a
 sturdier idle-life card check). `main` is clean; nothing is in flight.
 
-**Next: phase 4 of the voices plan, the photo** (A7), ready to build from
-`docs/plan-2026-10-28-phase4-photo.md` **draft 2** (planned and audited; its audit
-table at the end wins over the sections above). Two calls in it were mine, for the
-owner to overrule: the photo waits until the pet is a teen (an inherited level-10
-bond would otherwise photograph a 30-minute-old baby) and its caption says "best
-friends ♥" with the day it was taken; if Android can't save, the dialog says so
-honestly. **It ships first as a beta (0.34.0b1)** for the owner to try "save" on
-the iPhone and Android apps, then as 0.34.0.
+**Phase 4 of the voices plan, the photo (A7), is built as 0.34.0b1, awaiting the
+beta try** (crew branch `crew/hatch-at-home-s2407-phase-4-of-the-voices-plan-the`,
+from `docs/plan-2026-10-28-phase4-photo.md` draft 2; the owner confirmed both open
+calls on 2026-10-28: the photo waits until the pet is a teen, and if Android can't
+save, the dialog says so honestly). Not yet released: next, a GitHub pre-release
+0.34.0b1 from the PR's branch, with the ask to tap "save" on a photo in the
+iPhone and Android apps and say what happened; then fix (b2 if save changes) and
+release 0.34.0. The Android "you can save it from a computer" line is not shipped:
+it waits on that answer. `scripts/test` 409, `scripts/card-check` 93.
 
 The owner has said (2026-10-28): open, push and merge PRs when ready, and start on
 the next work. The way the owner wants work done: **a full plan, an adversarial
 audit by a fresh subagent, revise, then build**; after building, **another audit of
-the work**, fix, test (`scripts/test`, 406 tests), check the card
-(`scripts/card-check`, 87 checks), send screenshots, then PR. Each phase is its own
+the work**, fix, test (`scripts/test`, 409 tests), check the card
+(`scripts/card-check`, 93 checks), send screenshots, then PR. Each phase is its own
 PR. After phase 4: phases 5 (baby talk) and 6 (moths, its own plan and audit), then
 personality types (a new plan). Gifts and neighbours talking are noted in
 `docs/plan-2026-10-28-daily-checkins.md`.
@@ -333,9 +334,9 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
 - **Adults** exist for every creature (the last four arrived in 0.21.0). Long adults
   are drawn back up with `species.json` `"scale": {"adult": …}` (1.05–1.2; the bat
   needs none).
-- **Tests:** 406, run with `scripts/test` (ruff, format check, pytest).
+- **Tests:** 409, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
-  `scripts/card-check` (Playwright, 87 checks) drives the card against
+  `scripts/card-check` (Playwright, 93 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
 - **CI:** `.github/workflows/validate.yml` (HACS action, hassfest, tests) is green.
   License MIT; Tiny5 keeps its OFL.
