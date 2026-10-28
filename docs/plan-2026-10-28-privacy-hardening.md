@@ -1,4 +1,4 @@
-# Plan: privacy hardening (outside audit findings 1, 2, 3, 5, 6)
+# Plan: privacy hardening (outside audit findings 1, 2, 3, 5, 6, and follow-up A, B)
 
 **Draft 1, 2026-10-28.** A build plan only: no code changes here. An adversarial audit by a
 separate scout comes next. The build is review tier 2.
@@ -15,8 +15,19 @@ fixes five of them:
 **F4** (a downgrade round trip can change a settled personality) is accepted by the owner
 and stays out of this plan.
 
-Line numbers are for `main` at `fc239dc` (0.35.0b2). Python is unchanged since the audit's
-`53ee630`; the card has moved, so card references give the function name as well.
+A follow-up outside audit, the same day and also at `53ee630`, found two more. Both are in
+this plan:
+
+- **FA (high):** switching to a shared screen leaves a personal line showing.
+- **FB (medium):** removing the last pet keeps the people store, and the guide doesn't
+  say so.
+
+Line numbers are for `origin/main` at `0821baf` (0.35.0b3; P2a, PR #37, and the seventeen
+new creatures, PR #38, are merged).
+
+- **Python is unchanged since the audit's `53ee630`**, except `const.py`'s version.
+- **The card has moved.** Its references give the function name as well.
+- **`tests/test_init.py` has moved too.** The lines given here are current.
 
 ## Owner decisions (2026-10-28)
 
@@ -37,6 +48,14 @@ Line numbers are for `main` at `fc239dc` (0.35.0b2). Python is unchanged since t
   damaged but JSON-valid save never stops a pet loading.
 - **F6.** The card keeps its `IntersectionObserver` and disconnects it. `_dropSlide` tears
   a slide down the way `_forget` does: game, timers, photos, dialog.
+- **FA.** On the switch to a shared screen, clear or replace every slide's bubble and live
+  region, and stop typing and babble. A card check starts from a personal bubble.
+- **FB, keep the people store.** It survives removing the last pet, so personal settings
+  survive a reinstall.
+  - The guide says so.
+  - Each person gets a "forget my data" control that erases only their own record in the
+    people store.
+  - Its placement and wording are copy proposals.
 
 ## Ground rules for this plan
 
@@ -82,17 +101,17 @@ can read today. The **Reads** column names every consumer found by grepping
 
 | # | Where | Field | Set in | Reads |
 |---|---|---|---|---|
-| A | `sensor.life_stage` attr | `bonds` `{user_id: {level, nickname?, favourite?}}` | `sensor.py:LifeStageSensor.extra_state_attributes` 231-237 | Card `_bond(s)` 2651-2655. It has 6 callers: `_firstLook` 2476, `_wishLine` 2521, `_greet` 2601 (P2a hellos too), `_note` "your_birthday" 2700, `case "tucked_in"` 3028, status `you two` row 3150. card-check injects it at 303 and 390 (11 stub sites in all, with C and E). `tests/test_init.py:1775`. |
+| A | `sensor.life_stage` attr | `bonds` `{user_id: {level, nickname?, favourite?}}` | `sensor.py:LifeStageSensor.extra_state_attributes` 231-237 | Card `_bond(s)` 2651-2655. It has 6 callers: `_firstLook` 2476, `_wishLine` 2521, `_greet` 2601 (P2a hellos too), `_note` "your_birthday" 2700, `case "tucked_in"` 3028, status `you two` row 3150. card-check injects it at 303 and 390 (11 stub sites in all, with C and E). `tests/test_init.py:1784` and `1961`. |
 | B | `sensor.life_stage` attr | `notify_users` (list of HA user IDs) | `sensor.py` 216 | Card status "notify me" bell, 3160. card-check 222-230 area. Server-side readers use `state.notify_users`, not the sensor. |
 | C | `sensor.life_stage` attr | `wish.for` (user ID), `wish.for_name` (first name) | `sensor.py:_wish` 179-189, from `model.pick_wish` 1436-1439 | Card `_wishLine` 2516-2524 (names the friend to **every other viewer**, shared or not), `_wishSaid` 2527-2530, status wish row 3177. card-check 409-410 and 1618. |
-| D | bus + moments | `bond_up` `{user, level, nickname?, favourite?}` | `model.add_bond` 1679-1690 | Card `case "bond_up"` 2986. `tests/test_init.py:1802-1803`. Guide 642-643. |
+| D | bus + moments | `bond_up` `{user, level, nickname?, favourite?}` | `model.add_bond` 1679-1690 | Card `case "bond_up"` 2986. `tests/test_init.py:1812`. Guide 642-643. |
 | E | bus + moments | `bond_record` `{user, game, wins}`, `bond_favourite` `{user, game}` | `model.game_record` 1644, `model.favourite_game` 1704 | Card `case "bond_record"` 3017, `case "bond_favourite"` 3035. card-check 377 and 675. |
 | F | bus + moments | `friend_home` `{user, weather?}` | `coordinator._friends_home` 967-980 | Card `case "friend_home"` 3000: on another viewer's personal card it names them through `_personName(m.user)` 2636. `_firstLook` 2471-2478. card-check 377, 729, 763. |
 | G | bus + moments | `tucked_in` `{user}` | `coordinator.async_set_lights_out` 1780 | Card `case "tucked_in"` 3025. card-check 677. |
 | H | bus | `wish_made` `{kind, for?}` | `model.pick_wish` 1439, fired by `_daily_wish` 841-855 | No consumer in the repo. Automations may use it. |
-| I | bus + moments | `watching` `{title}`, `listening` `{title, artist?}` | `home.py:HouseMoments.update` 327-341 | Card `case "watching"` 2914, `case "listening"` 2920. `tests/test_init.py:1268-1279`. Guide 636. |
+| I | bus + moments | `watching` `{title}`, `listening` `{title, artist?}` | `home.py:HouseMoments.update` 327-341 | Card `case "watching"` 2914, `case "listening"` 2920. `tests/test_init.py:1266-1283`. Guide 636. |
 | J | `sensor.life_stage` attr | `dream.title` (a show or song it dreamed of) | `coordinator._check_ins` 903-904 seeds it; `model.dream_on_waking` copies the seed; `sensor.py` 228 | Card `DREAMS.watching` / `DREAMS.listening` 713-715, said in `_firstLook`. card-check 1160. |
-| K | `sensor.last_care` attr | `log[].by` (HA user's display name) | `model._log` 1102, 1242, 1332; `coordinator._who` 1809-1814 | Card status log lines (`by …`, hidden on a shared screen). `tests/test_init.py:165`, `tests/test_assist.py:134`. **Not in the owner's F1 list: Q4.** |
+| K | `sensor.last_care` attr | `log[].by` (HA user's display name) | `model._log` 1102, 1242, 1332; `coordinator._who` 1809-1814 | Card status log lines (`by …`, hidden on a shared screen). `tests/test_init.py:168, 1096`, `tests/test_assist.py:134`. **Not in the owner's F1 list: Q4.** |
 | M | recorder (`call_service`) | `notify_me` service data `{entity_id, enabled}` plus `context_user_id` | The card's `_setNotify` 3353-3374 calls `callService("virtual_pet", "notify_me", …)` | The recorder's `events` table. It is the same fact as B, kept in history. |
 | L | bus | `virtual_pet_welcomed` `{pet_id}` | `coordinator._welcome` 1597-1608 | Already clean. Kept. |
 
@@ -466,17 +485,161 @@ not just one that `PetState(**kwargs)` accepts.
     (`askTimer`) and `_dropPhotos`. `_dropPhotos` revokes URLs and closes the photo dialog
     when `this._photoFor?.s === s` (3700-3706).
   - Add the slide's other timers to `_forget`: `clearTimeout(s.breezeTimer)` (set at 3085),
-    `s.statusMessageTimer` (3383) and `s.flairTimer` (4313). These are all the slide timers
+    `s.statusMessageTimer` (3383) and `s.flairTimer` (4325). These are all the slide timers
     that `grep -n "s\.\w*Timer = setTimeout"` finds besides `askTimer`.
 - **`disconnectedCallback`'s per-slide loop** gets `s.unsub?.()` as well.
+
+## FA: switching to a shared screen
+
+**What happens today.**
+
+- The shared-screen toggle's handler in `_renderStatus` (`hatch-pet-card.js:3219-3232`)
+  does three things when it turns on, for every slide: `_clearAsk`, `queue = []` and
+  `_dropPhotos`.
+- It leaves untouched what is already on screen:
+  - **each slide's bubble** (`s.bubble`, written by `_write` 2334-2339 and `_speak`
+    2345-2405), which can hold "hi, sunbeam!", a birthday line or a bond moment;
+  - **its typing job and babble** (`s.typing` and `s.babbling`, stopped only by
+    `_stopTyping` 2423-2435);
+  - **the live region** (`s.live`), set by `_speak` (2402) and by the bubble's
+    `MutationObserver` in `_buildSlide` (1617-1623);
+  - **the bond hearts** (`.bondhearts`, from `_bondHearts` 2782);
+  - **the other slides' status screens.** `_renderStatus` is called only for the slide
+    whose toggle was pressed (3231). The other slides keep their cached `s.statusHtml`
+    (`_setStatus` 3391-3398), "you two" row included.
+  - **an open journal** (`s.journal`). Its photos are dropped, but the open view isn't
+    redrawn.
+- Then the status says "Nothing personal on this screen now." When it closes, the stale
+  line is still in the bubble.
+
+**The fix: a `_goShared()` method, called from the toggle when `on` is true.** It replaces
+the inline `forEach` at 3229. For every slide in `this._slides`:
+
+1. `this._clearAsk(slide)`, `slide.queue = []` and `this._dropPhotos(slide)`, as now.
+2. `this._stopTyping(slide)` (hush on).
+   - Its `job.finish()` writes the whole personal line into the bubble, so step 3 has to
+     come **after** it.
+3. `slide.bubble.textContent = ""`, `slide.plain = undefined`, `slide.sayUntil = 0`.
+   - The next `_tick` (2093) writes the mood's idle line (`_say`, 2132), which is the
+     server's nameless sentence.
+   - Writing `""` rather than a new line keeps the bubble's `MutationObserver` from
+     copying anything into the live region: it copies only while `sayUntil` is set.
+4. `slide.live.textContent = ""`.
+5. `slide.screen.querySelector(".bondhearts")?.remove()`.
+6. If `slide.journal` is open, close it (`s.journal = false`, as `_forget` 1797 does).
+7. `slide.statusHtml = null` and `slide.drawnSig = null`, then `this._redraw()` once after
+   the loop.
+   - Every slide's status is rebuilt without its personal rows, not only the slide whose
+     toggle was pressed.
+8. P3: `slide.mine = null`, then resubscribe with `shared: true` (as in the design
+   section).
+
+**What it keeps.** The game (a game's prompt names nobody), sounds, and the slide's pet.
+
+**Turning a shared screen back to personal** needs only the resubscribe (P3) and the
+status redraw. Nothing personal is waiting to be restored.
+
+**The status message itself** ("Nothing personal on this screen now.") is shown by
+`_statusMessage` in the status screen, not in the bubble. It stays as it is.
+
+## FB: the people store survives removal; "forget my data"
+
+**What is stored.**
+
+- `people.People` (`people.py:78-136`) keeps one record per HA user, in
+  `.storage/virtual_pet.people` (`STORE_KEY`, `people.py:28`). It is shared by every pet.
+  - It is loaded once, in `async_setup` (`__init__.py:123-125`).
+  - It is saved on shutdown (`coordinator.async_shutdown`, 1828-1833).
+- `async_remove_entry` (`__init__.py:435-440`) deletes only that pet's
+  `virtual_pet.<entry_id>`. So removing the last pet leaves the people store, and a later
+  setup loads it again.
+  - **Owner, 2026-10-28: that is the intended behaviour.** It is now documented, and no
+    code changes it.
+- A record's keys, from a grep of `coordinator.py` and `people.py` for `person[...]`,
+  `.get(...)`, `.pop(...)` and `.setdefault(...)`:
+  - `birthday`, `birthday_phone`, `birthday_skipped` and `birthday_sent`;
+  - `baby_talk` and `my_day`;
+  - `likes` and `likes_asked`, its once-only questions' answers;
+  - `guess`, `asked` and `once_last`;
+  - `alarms` (their usual alarm times);
+  - presence: `arrived`, `left` and `zone`, the last named zone;
+  - `sendoffs`;
+  - `noted`, which lines it has already said to them.
+- The store also has a household `weather` list (`saw_weather`, 122-130). It is no
+  person's, and it stays.
+
+**What stays elsewhere** (not in the people store, so "forget my data" doesn't touch it,
+as the owner decided):
+
+- each pet's `bonds[user]`: points, nickname, favourite game, photos, `noted`,
+  `tucked_at`, `best` and `games`;
+- `notify_users`;
+- `wish.for` and `wish.by`;
+- `dream_picks[].user`;
+- the care log's `by`.
+
+The wording below says so plainly ("your bonds stay"), and Q10 asks whether that is still
+what the owner wants.
+
+**Server.**
+
+- **`People.forget(user)`** runs `self.data["people"].pop(user, None)`, then
+  `await self.async_save_now()`, not the delayed `save()`.
+  - A restart inside the 60-second save delay must not bring the record back.
+  - The per-user `asyncio.Lock` in `_locks` is not removed: a visit may be holding it.
+- **A `virtual_pet/forget_me` websocket command** (`{type}` only; the people store is not
+  per pet).
+  - It runs `people.forget(connection.user.id)`, under `people.lock(user)`, so a visit
+    that is running finishes first.
+  - Then it calls `pet.async_set_updated_data(pet.state)` for every loaded pet, as
+    `async_set_my_day` does (`coordinator.py:1491-1498`).
+  - It is a websocket command, not a service, so nothing is on the bus or in the
+    recorder's `call_service` rows. It is the same reason `forget_birthday` is one
+    (`__init__.py:324-343`).
+  - Any signed-in user, read-only included, can forget only their own record.
+- **Presence comes back.** `person_moved` (`coordinator.py:438-463`) writes `arrived`,
+  `left` and `zone` for every person whose person entity is linked to a login, whatever
+  their settings. A record forgotten now gets those three again at the next arrival or
+  departure.
+  - The copy says "start fresh", not "nothing is kept".
+  - Whether `zone` should be kept only with "my day" on is Q11.
+- **The coordinators' in-memory per-user state** (`_visits`, `_cheered`) is not cleared.
+  It holds timings, not personal settings, and it is lost on restart.
+
+**Card.**
+
+- **One new status row, personal screens only**, below "baby talk" and above "sounds
+  here" (`_renderStatus`, after the baby-talk row at about 3199). That is the last of the
+  person's own rows, before the device's own ("sounds here", "babble", "shared screen").
+- **Two taps.** The first arms it: "sure? tap again", the `lay_egg` pattern with
+  `CONFIRM_MS` (1645-1653), kept on the button. The second sends the command.
+- **On success it clears the card's own copies:**
+  - `setBabyTalk(user, false)`;
+  - `this._myDay = false`;
+  - `this._birthdayKept = false`;
+  - `this._birthdayPhone = false`;
+  - the `hatch-welcomed-<user>` key in `localStorage`.
+  - Then it re-renders the status, with a status message (copy table).
+- **On failure:** "That didn't work. Try again." (the existing line).
+- **On an older server**, the command is unknown. The card shows the failure line. The
+  row only exists in the new card, so this is a stale page only.
+
+**Guide.** A short "What the pets remember about you" paragraph goes under `### Privacy`
+(`docs/guide.md:349-357`). It is in the copy table.
+- It says the people store is kept when pets are removed.
+- It says what "forget my data" erases and what it leaves.
+- It says how an admin can erase everyone's records: stop Home Assistant and delete
+  `.storage/virtual_pet.people`.
 
 ## Tests (pytest, `scripts/test`)
 
 Existing tests that assert the leak, and must be rewritten:
 
-- `tests/test_init.py:1775` (`bonds` on the sensor);
-- `tests/test_init.py:1802-1803` (`bond_up` with `user` in moments);
-- `tests/test_init.py:1268-1279` (title in moments);
+- `tests/test_init.py:1784` (`bonds` on the sensor);
+- `tests/test_init.py:1961` (`my_day` absent from `bonds[me.id]`: it becomes "absent
+  from every state");
+- `tests/test_init.py:1812` (`bond_up` with `user` in moments);
+- `tests/test_init.py:1266-1283` (title in moments);
 - `tests/test_welcome.py:58` `test_a_new_pet_is_welcomed_on_every_phone`.
 
 Grep `tests/` for `"for_name"`, `"notify_users"`, `attributes["bonds"]` and
@@ -486,12 +649,12 @@ New tests:
 
 1. **Two people, one non-admin** (`hass.auth.async_create_user("Other", group_ids=
    ["system-users"])`; a read-only one with `hass_read_only_access_token`, as
-   `test_init.py:2448-2460` does).
+   `test_init.py:2457-2470` does).
    - Build bonds for both, nickname and favourite included.
    - Each one's `virtual_pet/subscribe` snapshot carries only their own `mine`.
    - The other user's sees `mine.bond` of their own or `null`, and never the first
      user's ID or nickname anywhere in the payload (assert on `json.dumps(payload)`).
-   - Use the `hass_ws_client` pattern of `test_init.py:2142-2175`.
+   - Use the `hass_ws_client` pattern of `test_init.py:2151-2184`.
 2. **Shared subscribe.** `shared: true` gives `mine: null` and no private moments, but
    still gets `house.media`.
 3. **Live pushes.**
@@ -553,6 +716,24 @@ New tests:
      the people ones.
 9. **Diagnostics.** The existing diagnostics test still passes. Add the debug sensor's
    `calculation` with privacy **off**: titles are redacted (F2, Q1).
+10. **The people store is kept (FB).** Seed records for two users.
+    - Remove the only pet (`hass.config_entries.async_remove`). `hass_storage` still has
+      `virtual_pet.people`, and the pet's own key is gone.
+    - Add a pet again. User A's birthday comes back in the visit reply (`birthday_kept`).
+    - Repeat with two pets, removing one. The people store is untouched.
+11. **"Forget my data" (FB).**
+    - A, a non-admin, sends `virtual_pet/forget_me` over `hass_ws_client`. Then:
+      - A's record is gone from `people.data["people"]` and from the saved store at once,
+        with no `freezer` tick;
+      - B's record and `weather` are unchanged;
+      - every pet's `bonds[A]` and `notify_users` are unchanged;
+      - A's next visit reply has `birthday_kept: false`, `my_day: false` and
+        `baby_talk: false`;
+      - an `async_capture_events(hass, MATCH_ALL)` around the command captured nothing
+        about it.
+    - A read-only user can forget their own record.
+    - A visit still running when `forget_me` arrives finishes first, under the lock: no
+      half-written record survives.
 
 ## Card checks (`scripts/card-check`)
 
@@ -604,6 +785,32 @@ the crew host can.
   - Remove the card from the DOM: `disconnect` was called. Re-insert it: `observe` was
     called again.
 
+- **FA: starting from a personal bubble** (the follow-up audit's repro).
+  - Personal screen, with a bond of level 8 and the nickname "sunbeam" stubbed (P1:
+    `inject` as today; after P3: `_mineFor`).
+  - Make the pet say a named line with `_speak`, "hi, sunbeam!", with a long `ms`. Assert
+    that the bubble and `s.live` contain "sunbeam".
+  - Also leave a second slide with its status rendered personally ("you two"), and its
+    bond hearts showing.
+  - Open the status and press "shared screen", while the line is **still typing** (a run
+    with babble on) and again once it has finished.
+  - Then, for every slide, assert that neither `bubble.textContent` nor
+    `live.textContent` contains "sunbeam" or `USER.name`.
+  - Also assert:
+    - `s.typing` and `s.babbling` are null;
+    - there are no `.bondhearts`;
+    - no status contains "you two", "my day" or "notify me";
+    - the bubble after the next tick is the idle line.
+  - Close the status: the same assertions hold.
+- **FB: "forget my data".**
+  - The row is absent on a shared screen.
+  - One tap shows "sure? tap again" and sends nothing (wrap `callWS`).
+  - The second tap sends `virtual_pet/forget_me`. After it:
+    - the birthday rows are gone;
+    - "baby talk" and "my day" show off;
+    - `localStorage` has no `hatch-welcomed-<id>`.
+  - Then do a real visit after a fast-forward hour: `birthday_kept` is false.
+
 ## Phases and PRs
 
 All of it goes in the 0.35.0 beta series. HANDOFF: there is no 0.34.0, and the next full
@@ -611,8 +818,8 @@ release is 0.35.0. That needs the owner's say, Q6.
 
 | PR | Contents | Why this order |
 |---|---|---|
-| **P1: F5 + F6** | `from_dict` hardening and the helpers, `DamagedSave` handling with a repair issue and backup, the `People` sanitiser, the observer and `_dropSlide`. Tests 8, plus the F6 card check. | Independent of the channel, and the lowest risk. It makes the later moment and storage tests stand on a loader that can't crash. |
-| **P2: F3** | `_welcome` recipients, `notify.py` docstring, guide. Test 7. | Small and server-only. It can ride with P1 if the reviewer prefers. |
+| **P1: F5 + F6 + FA** | `from_dict` hardening and the helpers, `DamagedSave` handling with a repair issue and backup, the `People` sanitiser, the observer and `_dropSlide`, and `_goShared`. Tests 8, plus the F6 and FA card checks. | Independent of the channel, and the lowest risk. It makes the later moment and storage tests stand on a loader that can't crash. |
+| **P2: F3 + FB** | `_welcome` recipients, the `notify.py` docstring, `People.forget`, the `virtual_pet/forget_me` command, the card's "forget my data" row, and the guide (welcome, and what the pets remember). Tests 7, 10 and 11, plus the FB card check. | Small. FB's row joins the status screen's person rows and is independent of the channel. It can ride with P1 if the reviewer prefers. |
 | **P3: F1 + F2** | The `virtual_pet/subscribe` and `virtual_pet/notify_me` commands, `_watchers` and `_private` and `_house`, the `_fire` split and scrub, `sensor.py` attribute removals, `model.pick_wish` and `dream_on_waking`, the card on `s.mine` and `s.house`, the `_wishLine` rewrite, the debug-sensor redaction, guide and release note. Tests 1–6 and 9, plus the card checks above. | One PR. Both change what `moments` and the bus carry, and both depend on the same channel. Splitting them would ship a card that half-reads the old attributes. |
 
 Each PR runs `scripts/test` and `scripts/card-check`. P3 is the tier-2 build.
@@ -654,6 +861,12 @@ Each PR runs `scripts/test` and `scripts/card-check`. P3 is the tier-2 build.
 >   on "notify me" for another pet. It no longer goes to every phone.
 > - A damaged save file no longer stops a pet loading: what can be kept is kept, and
 >   anything unreadable is backed up with a note under Settings → Repairs.
+> - Turning on "shared screen" now clears anything personal the pet was saying at that
+>   moment.
+> - **New: "forget my data"** on the status screen erases what the pets remember about
+>   you: your birthday, your answers, and your baby talk and "my day" settings. Your bond
+>   with each pet stays. Removing the integration keeps these, so they're there if you
+>   set it up again.
 
 The **Apply filter** behaviour was checked in Home Assistant's `recorder/services.yaml`
 and `strings.json`: "Apply `entity_id` and `event_type` filters in addition to time-based
@@ -670,6 +883,13 @@ purge". It is in the same uv-cached Home Assistant that `scripts/setup` installs
 | `guide.md` 122-125 (bonds) | "…cheers when you come home ("Sam's home!!", and "welcome home!" when you next look in…) …some days its wish is for you ("I hope Sam plays a game with me today!"; anyone can still grant it)." | "…cheers when you come home ("you're home!!", on your own card; this needs your person entity linked to your login), and some days its wish is for you ("will you play a game with me today?", on your card; everyone else sees the plain wish, and anyone can still grant it)." |
 | `guide.md` 629-650 (events) | the list with `user`, `title`, `artist` and `for` | Drop the five personal events, and `title`, `artist` and `for`. Add: "Nothing about a person, nor what's playing, is ever on an event or a sensor: each person's card gets its own over a private websocket subscription." |
 | `guide.md` Recorder (684-695) | "Long attributes … are already kept out of the history database." | Add: "Its events are recorded like any other; none carries a person or a title. To keep them out of history altogether: `recorder: exclude: event_types: [virtual_pet_care, …]`." |
+| Card status row, label (FB) | (new) | "my data" |
+| Card status row, button (FB) | (new) | "forget" (armed: "sure? tap again") |
+| Card status row, `aria-label` (FB) | (new) | "forget my data: your birthday, answers and settings for every pet; your bonds stay" |
+| Card status message, done (FB) | (new) | "Forgotten. The pets start fresh with you ♥" |
+| Card status message, failed (FB) | (existing) | "That didn't work. Try again." |
+| `guide.md` `### Privacy` (FB), after the table | (new) | "**What the pets remember about you.** Your birthday, your answers to its questions, your alarm times, the last zone you came back from, and your "baby talk", "my day" and "birthday on my phone" switches are kept for you alone, for every pet. They stay when you remove a pet, even the last one, so they're there if you set it up again. **"forget my data"** on the status screen (not on a shared screen) erases all of that, for you only, at once. Your bond with each pet, its photos and its nickname for you stay. So does whether you get notifications: turn "notify me" off for that. The pets start fresh with you, and they note again when you next come home. To erase everyone's, an admin can stop Home Assistant and delete `.storage/virtual_pet.people`." |
+| `guide.md` 539-540 (birthday) | ""forget my birthday" on the status screen forgets it and stops asking." | "…forgets it and stops asking; "forget my data" forgets everything the pets remember about you (see Privacy)." |
 | Card (removed) | "Sam's home!!" / "ooh, Sam is back!" / "someone's home!! ♥" on others' cards | (no line; Q3) |
 | Card (removed) | `WISHES_FOR[k][0]`, e.g. "I hope Sam plays a game with me today!" | (no line: the plain `WISHES[k][0]`) |
 
@@ -736,3 +956,23 @@ bond-moment line are unchanged.
      setup with a repair issue and leaves the save file untouched. A pet that doesn't load
      until a fix ships is better than a pet that is quietly replaced.
    - The alternative, a reset on any error, needs the owner's say: it loses a pet.
+10. **FB: should "forget my data" also clear the bonds?**
+    - The owner said the people store only, so it doesn't. A person who wants a clean
+      slate keeps their bond points, nickname and photos with every pet.
+    - **Recommendation: keep it to the people store,** as decided, and say so on the
+      button's label and in the guide (copy table).
+    - A later "forget me everywhere" could remove `bonds[user]`, `notify_users` and
+      `dream_picks` from every pet too. That loses photos, so it needs its own wording.
+11. **FB: presence is kept with "my day" off.**
+    - `person_moved` (`coordinator.py:438-463`) stores `zone` for every linked person.
+      Its use in the visit's notes is behind "my day" (`_notes` 1272-1275).
+      `_came_home` (1164-1170) also reads it, to choose a question.
+    - **Recommendation: store `zone` only while "my day" is on,** as a small change in
+      P2. `arrived` and `left` are timestamps that the welcome home and the send-off need,
+      and they stay.
+    - Say no to leave it as it is: the guide paragraph above already discloses it.
+12. **FB: placement.**
+    - **Recommendation: the "my data" row goes last among the person's own rows** (after
+      "baby talk"), with the two-tap arm.
+    - The alternative is a link in the journal. The journal is the pet's, not the
+      person's, so the status screen fits better.
