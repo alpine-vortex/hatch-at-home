@@ -4,7 +4,7 @@ Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's bran
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
-release **0.29.1** (2026-10-28: the squirrel's `cheeks` pose no longer has six legs); 0.29.0
+release **0.29.1** (2026-10-28: the squirrel's paws-up poses no longer have six legs); 0.29.0
 (2026-10-28: the daily wish, dreams, "while you were out", and two
 Halloween costume fixes); 0.28.0 brought weather talk (#10) and Halloween (#11), 0.28.1
 the Halloween morning notification, 0.28.2 the redrawn witch. **The owner runs it on
