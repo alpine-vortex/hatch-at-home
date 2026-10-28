@@ -1393,6 +1393,405 @@ async function main() {
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
 
+  // Baby talk (phase 5): simpler lines while a pet is a baby or child, for a
+  // person who turned it on. The stage (and the viewer) are stubbed in-page,
+  // so a drifted pet or the coordinator's next update can't change the line.
+  {
+    // The tables, read from the card's source: the no-nagging words, repeats,
+    // asks only on call lines, the fit with the longest sound, real keys.
+    const vm = require("vm");
+    const src = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+    const literal = (name) => vm.runInNewContext(`(${src.match(new RegExp(`const ${name} = (\\{[\\s\\S]*?\\n\\});`))[1]})`);
+    const BABY = literal("BABY");
+    const normal = { REFUSALS: literal("REFUSALS"), WISHES: literal("WISHES") };
+    const seasons = [...src.matchAll(/key: "(halloween|thanksgiving)"/g)].map((m) => m[1]);
+    const card = new Set(["greet", "greet.warm", "greet.nickname", "idle.sleepy", "idle.bored", "idle.excited", "idle.hungry",
+      "idle.dirty", "idle.default", "yum", "favourite_snack", "wish_granted", "friend_home", "care_miss", "tucked_in", "bond_up"]);
+    const longName = "Wwwwwwwwwwwwwwww"; // 16, as short() leaves a name or food
+    const bad = [];
+    for (const [key, stages] of Object.entries(BABY)) {
+      const [table, sub] = key.split(".");
+      const known = card.has(key) || (normal[table] && sub in normal[table]) ||
+        (table === "season" && seasons.includes(sub));
+      if (!known) bad.push(`${key}: no such line`);
+      for (const [stage, lines] of Object.entries(stages)) {
+        if (!["baby", "child"].includes(stage)) bad.push(`${key}: stage ${stage}`);
+        for (const entry of lines) {
+          const line = typeof entry === "function" ? entry(longName) : entry;
+          const words = line.toLowerCase().match(/[a-z']+/g) || [];
+          const call = /^reason\.call_/.test(key);
+          if (/!!!/.test(line)) bad.push(`${key}: "${line}" !!!`);
+          if (/\b(still|again|why|never|pleas\w*|sad|cry|alone|forgot\w*)\b/i.test(line)) bad.push(`${key}: "${line}" nags`);
+          // "la la la" is a song (the owner's line), not a word said three times.
+          if (words.some((w, i) => i > 1 && w !== "la" && w === words[i - 1] && w === words[i - 2])) bad.push(`${key}: "${line}" three in a row`);
+          if (line.includes("?") && !call) bad.push(`${key}: "${line}" asks`);
+          if (call && !/call_(happiness|fake)$/.test(key) && new Set(words).size < words.length) bad.push(`${key}: "${line}" repeats`);
+          if ("squeak squeak!!".length + 1 + line.length > 60) bad.push(`${key}: "${line}" too long`);
+        }
+      }
+    }
+    check("baby talk lines: no nagging, asks only on calls, short enough, every key real", bad.length === 0, bad.join(" | "));
+  }
+  if (await cur().locator(".screen.show-status").count()) await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(300);
+  { // each check's results stay in here
+    const babyAs = (fn, arg) => page.locator("hatch-pet-card").evaluate(async (el, { fn, arg }) => {
+      const s = el._slides[el._index];
+      const realState = el._state;
+      const realHass = el._hass;
+      const me = realHass.user.id;
+      const keep = { voicedAt: s.voicedAt, queue: s.queue, catchCount: s.catchCount, asleep: s.asleep, calling: s.calling };
+      const visit = el._visit;
+      el._visit = () => {}; // friend_home looks in again: not in these checks
+      // Free to talk, whatever the dev pet is doing.
+      Object.assign(s, { asleep: false, calling: false, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
+      const t = {
+        stage: (stage) => {
+          el._state = function (slide, key) {
+            const st = realState.call(this, slide, key);
+            return key === "sensor.life_stage" && st ? { ...st, state: stage } : st;
+          };
+        },
+        as: (userId) => { el._hass = { ...realHass, user: { ...realHass.user, id: userId } }; },
+        cache: (value) => (value === null ? localStorage.removeItem(`hatch-baby-talk-${me}`)
+          : localStorage.setItem(`hatch-baby-talk-${me}`, value)),
+        greet: () => {
+          localStorage.removeItem(`hatch-greet-${el._hass.user.id}-${s.ids?.device}`);
+          s.greeted = false; s.sayUntil = 0; s.queue = []; s.voicedAt = Date.now() + 1e9;
+          el._greet(s); el._stopTyping(s);
+          return s.bubble.textContent;
+        },
+        idle: (mood) => { // with reduced motion on, the only idle move is a mumble
+          const saved = { moodState: s.moodState, drawn: s.drawn };
+          Object.assign(s, { moodState: mood, drawn: "adult", sayUntil: 0, nextIdle: 1, poseUntil: 0, movingUntil: 0 });
+          s.plain = undefined;
+          el._idle(s);
+          const out = s.plain === undefined ? "" : s.bubble.textContent;
+          Object.assign(s, saved, { sayUntil: 0 });
+          return out;
+        },
+        said: (fn2) => { s.queue = []; s.sayUntil = 0; fn2(); const q = s.queue.map((x) => ({ text: x.text, opts: x.opts })); s.queue = []; return q; },
+      };
+      try {
+        return await new Function("el", "s", "t", "arg", `return (${fn})(el, s, t, arg);`)(el, s, t, arg);
+      } finally {
+        el._state = realState;
+        el._hass = realHass;
+        el._visit = visit;
+        Object.assign(s, keep);
+        s.sayUntil = 0;
+        el._stopTyping(s);
+      }
+    }, { fn: fn.toString(), arg });
+    // The dev user's bond may be close (the warm lines join in); never a nickname here.
+    const NORMAL_GREET = /^(morning|hi|evening), Dev!$|^Dev!! hi!$|^Dev! I missed you ♥$|^yay, Dev's here!$/;
+    const BABY_GREET = /^hi hi, Dev!$|^Dev!! hi hi!$|^Dev!! ♥$|^yay yay, Dev!$/;
+    // Off (as it starts): a baby's greeting and idle lines are the normal ones.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const off = await babyAs(async (el, s, t) => {
+      t.cache(null);
+      t.stage("baby");
+      return { greet: t.greet(), idle: t.idle("excited"), row: s.status.querySelectorAll(".bell.babytalk").length };
+    });
+    check("baby talk starts off: a baby's greeting and idle lines are the normal ones",
+      NORMAL_GREET.test(off.greet) && ["hehe!", "wheee"].includes(off.idle), JSON.stringify(off));
+    // The cache, set before the first greeting: it already knows (no visit yet).
+    const on = await babyAs(async (el, s, t) => {
+      t.cache("on");
+      const out = {};
+      for (const stage of ["baby", "child", "teen", "adult"]) {
+        t.stage(stage);
+        out[stage] = { greet: t.greet(), idle: t.idle("excited"), sleepy: t.idle("sleepy") };
+      }
+      t.stage("baby");
+      s.voicedAt = 0; // the sound in front
+      localStorage.removeItem(`hatch-greet-${el._hass.user.id}-${s.ids?.device}`);
+      s.greeted = false; s.sayUntil = 0;
+      el._greet(s); el._stopTyping(s);
+      out.voiced = s.bubble.textContent;
+      out.sound = s.species?.voice?.sound;
+      t.as("someone-else"); // another person on this browser
+      out.other = t.greet();
+      t.cache(null);
+      return out;
+    });
+    check("baby talk on, a baby: baby greeting and idle lines, the greeting with its sound",
+      BABY_GREET.test(on.baby.greet) && ["hehe!", "yay yay!"].includes(on.baby.idle) &&
+      ["*yawn*", "sleepy...", "nap time..."].includes(on.baby.sleepy) &&
+      [`${on.sound}! hi hi, Dev!`, `${on.sound} ${on.sound}!! Dev!! hi hi!`, `${on.sound} ${on.sound}!! Dev!! ♥`, "yay yay, Dev!"]
+        .includes(on.voiced),
+      JSON.stringify(on));
+    check("baby talk on: a child, a teen and an adult greet and idle in the normal words",
+      ["child", "teen", "adult"].every((st) => NORMAL_GREET.test(on[st].greet) && ["hehe!", "wheee"].includes(on[st].idle)),
+      JSON.stringify([on.child, on.teen, on.adult]));
+    check("baby talk is kept per person: another person on this browser hears the normal lines",
+      NORMAL_GREET.test(on.other), on.other);
+    await page.emulateMedia({ reducedMotion: null });
+    // Two cards on one pet, signed in as two people (one on, one off): different lines.
+    const two = await babyAs(async (el, s, t) => {
+      localStorage.setItem("hatch-baby-talk-person-a", "on");
+      localStorage.setItem("hatch-baby-talk-person-b", "off");
+      t.stage("baby");
+      const out = {};
+      for (const who of ["person-a", "person-b"]) {
+        t.as(who);
+        out[who] = el._lines(s, "care_miss", "...oh, there you are ♥").text;
+      }
+      localStorage.removeItem("hatch-baby-talk-person-a");
+      localStorage.removeItem("hatch-baby-talk-person-b");
+      return out;
+    });
+    check("two people on one pet, one with baby talk: each reads their own line",
+      two["person-a"] === "oh! hi hi ♥" && two["person-b"] === "...oh, there you are ♥", JSON.stringify(two));
+    // The card's own lines, as a baby, and the catchphrase never on them.
+    const lines = await babyAs(async (el, s, t) => {
+      t.cache("on");
+      t.stage("baby");
+      const at = new Date().toISOString();
+      const out = {};
+      out.granted = t.said(() => el._moment(s, { type: "wish_granted", at }));
+      out.favourite = t.said(() => el._moment(s, { type: "favourite_snack", food: "hazelnuts", at }));
+      localStorage.removeItem(`hatch-welcomed-${el._hass.user.id}`);
+      out.home = t.said(() => el._moment(s, { type: "friend_home", user: el._hass.user.id, at }));
+      out.bond = t.said(() => el._moment(s, { type: "bond_up", user: el._hass.user.id, level: 3, at }));
+      s.sayUntil = 0;
+      el._moment(s, { type: "care_miss", at });
+      out.miss = s.bubble.textContent;
+      s.sayUntil = 0; s.voicedAt = Date.now() + 1e9;
+      el._moment(s, { type: "tucked_in", user: el._hass.user.id, at });
+      el._stopTyping(s);
+      out.tucked = s.bubble.textContent;
+      out.refusal = ["full", "too_tired", "not_sick"].map((result) => {
+        s.sayUntil = 0;
+        el._react(s, { action: "feed", result });
+        return s.bubble.textContent;
+      });
+      out.wish = el._wishSaid(s, { kind: "snack" }, ["I'd love a snack after lunch!"]);
+      out.aimed = el._wishSaid(s, { kind: "snack", for: "x", for_name: "Alex" }, ["I hope Alex brings me a snack after lunch!"]);
+      // Said aloud: the catchphrase is not on them, and the count doesn't move.
+      s.catchCount = 2; // the next catchy line would carry it
+      for (const q of [...out.granted, ...out.favourite]) {
+        s.sayUntil = 0;
+        s.voicedAt = 0;
+        el._speak(s, q.text, 300, q.opts);
+        el._stopTyping(s);
+        (out.spoken ??= []).push(s.bubble.textContent);
+      }
+      out.count = s.catchCount;
+      out.phrase = el._state(s, "sensor.life_stage")?.attributes.catchphrase;
+      t.cache(null);
+      return out;
+    });
+    check("a baby's moments: wish, favourite snack, home, bond, missed care, tucked in",
+      lines.granted[0]?.text === "yay yay! ♥" && lines.favourite[0]?.text === "hazelnuts! yay yay!" &&
+      lines.home[0]?.text === "you're home! yay yay ♥" && lines.bond[0]?.text === "yay, you! ♥" &&
+      lines.miss === "oh! hi hi ♥" && /^night night, \S+ ♥$/.test(lines.tucked), JSON.stringify(lines));
+    check("a baby's refusals and wish; an aimed wish keeps its words",
+      lines.refusal.join("|") === "tummy full!|too sleepy to play|I'm not sick!" && lines.wish === "wish... snack after lunch" &&
+      lines.aimed === "I hope Alex brings me a snack after lunch!", JSON.stringify(lines));
+    check("no catchphrase on a baby line, and the count doesn't move",
+      lines.granted[0]?.opts?.catch === false && lines.favourite[0]?.opts?.catch === false && lines.count === 2 &&
+      !lines.spoken.some((x) => lines.phrase && x.includes(lines.phrase)), JSON.stringify(lines));
+    // Holiday lines: a baby's own set; a child, a teen and "off" keep the normal ones.
+    const holiday = await babyAs(async (el, s, t) => {
+      const config = el._config;
+      const fly = [el._seasonFlyer, el._seasonVisitor, el._costume];
+      const out = {};
+      el._seasonFlyer = el._seasonVisitor = () => {};
+      el._costume = (slide, season, line, catchy) => { out.line = line; out.catchy = catchy; };
+      try {
+        for (const key of ["halloween", "thanksgiving"]) {
+          el._config = { ...config, seasonal: key };
+          localStorage.setItem(`hatch-costume-${key}-${s.ids?.device}-${new Date().toDateString()}`, "1");
+          for (const [stage, cache] of [["baby", "on"], ["child", "on"], ["teen", "on"], ["baby", "off"]]) {
+            t.cache(cache);
+            t.stage(stage);
+            const said = new Set();
+            let catchy = new Set();
+            for (let i = 0; i < 30; i++) {
+              s.nextCostume = 1;
+              el._seasonTick(s);
+              said.add(out.line);
+              catchy.add(out.catchy);
+            }
+            out[`${key}-${stage}-${cache}`] = { said: [...said], catchy: [...catchy] };
+          }
+        }
+      } finally {
+        [el._seasonFlyer, el._seasonVisitor, el._costume] = fly;
+        el._config = config;
+        t.cache(null);
+      }
+      return out;
+    });
+    const halloweenBaby = ["boo!", "boo! hehe", "spooky~", "yay, costume!"];
+    const halloweenNormal = ["boo!", "happy Halloween!", "spooky~", "trick or treat?", "do I look spooky?"];
+    check("holidays: a baby has its own costume lines, never with the catchphrase",
+      holiday["halloween-baby-on"].said.every((x) => halloweenBaby.includes(x)) &&
+      holiday["halloween-baby-on"].said.some((x) => !halloweenNormal.includes(x)) &&
+      holiday["halloween-baby-on"].catchy.join() === "false" &&
+      holiday["thanksgiving-baby-on"].said.every((x) => ["gobble gobble!", "pie! yum yum", "thank you ♥", "cozy cozy~", "leaves!"].includes(x)),
+      JSON.stringify(holiday));
+    check("holidays: a child, a teen and baby talk off keep the normal lines",
+      ["halloween-child-on", "halloween-teen-on", "halloween-baby-off"].every((k) =>
+        holiday[k].said.every((x) => halloweenNormal.includes(x)) && holiday[k].catchy.join() === "true"),
+      JSON.stringify(holiday));
+    // Screen readers hear a baby line once, as shown, without the sound; reduced motion: no typing.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const heard = await babyAs(async (el, s, t) => {
+      t.cache("on");
+      t.stage("baby");
+      let announced = 0;
+      const counter = new MutationObserver(() => { announced++; });
+      counter.observe(s.live, { childList: true, characterData: true, subtree: true });
+      s.voicedAt = 0; s.sayUntil = 0;
+      localStorage.removeItem(`hatch-greet-${el._hass.user.id}-${s.ids?.device}`);
+      s.greeted = false;
+      el._greet(s);
+      const out = { typing: !!s.bubble.dataset.typing, shown: s.bubble.textContent, sound: s.species?.voice?.sound };
+      // The line without its sound (and without the marks screen readers skip).
+      out.said = s.bubble.textContent.replace(s.bubble.querySelector(".snd")?.textContent || "", "").trim();
+      out.plain = out.said.replace(/[♥♡♪★~*]/g, "").replace(/\s+/g, " ").trim();
+      await new Promise((r) => setTimeout(r, 300));
+      counter.disconnect();
+      out.live = s.live.textContent;
+      out.announced = announced;
+      t.cache(null);
+      return out;
+    });
+    await page.emulateMedia({ reducedMotion: null });
+    check("screen readers hear a baby line once, as shown, without its sound; reduced motion: no typing",
+      heard.announced === 1 && heard.live === heard.plain && BABY_GREET.test(heard.said) && !heard.typing &&
+      !heard.live.includes(heard.sound),
+      JSON.stringify(heard));
+    // A shared screen: no baby talk row, and normal lines, even with the cache on.
+    const shared = await babyAs(async (el, s, t) => {
+      t.cache("on");
+      t.stage("baby");
+      localStorage.setItem("hatch-shared-screen", "on");
+      el._renderStatus(s, []);
+      const out = { row: s.status.querySelectorAll(".bell.babytalk").length, line: el._lines(s, "care_miss", "normal").text };
+      localStorage.setItem("hatch-shared-screen", "off");
+      el._renderStatus(s, []);
+      out.personalRow = s.status.querySelectorAll(".bell.babytalk").length;
+      t.cache(null);
+      return out;
+    });
+    check("a shared screen has no baby talk switch and says the normal lines",
+      shared.row === 0 && shared.line === "normal" && shared.personalRow === 1, JSON.stringify(shared));
+    // A visit reply carries the switch: an asleep (not counted) reply that says off
+    // turns the cache off; the real server's reply too.
+    const visit = await babyAs(async (el, s, t) => {
+      t.cache("on");
+      const realCall = el._hass.callService;
+      el._hass = { ...el._hass, callService: async () => ({ response: { notes: [], ask: null, counted: false, baby_talk: false } }) };
+      s.visitedAt = 0;
+      const realVisit = Object.getPrototypeOf(el)._visit; // babyAs holds the card's own
+      realVisit.call(el, s);
+      await new Promise((r) => setTimeout(r, 200));
+      const out = { asleep: localStorage.getItem(`hatch-baby-talk-${el._hass.user.id}`) };
+      el._hass = { ...el._hass, callService: realCall };
+      await el._hass.callWS({ type: "virtual_pet/baby_talk", entity_id: s.ids["sensor.life_stage"], enabled: true });
+      t.cache("off");
+      s.visitedAt = 0;
+      realVisit.call(el, s);
+      for (let i = 0; i < 30 && localStorage.getItem(`hatch-baby-talk-${el._hass.user.id}`) !== "on"; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      out.real = localStorage.getItem(`hatch-baby-talk-${el._hass.user.id}`);
+      await el._hass.callWS({ type: "virtual_pet/baby_talk", entity_id: s.ids["sensor.life_stage"], enabled: false });
+      t.cache(null);
+      s.queue = [];
+      el._clearAsk(s);
+      return out;
+    });
+    check("a visit reply sets the cache, an asleep one too", visit.asleep === "off" && visit.real === "on", JSON.stringify(visit));
+    // The switch: one command per tap, the button follows, a failed call goes back.
+    await page.locator("hatch-pet-card .statusbtn").click();
+    await page.waitForTimeout(400);
+    const toggle = await babyAs(async (el, s, t) => {
+      t.cache("off");
+      t.stage("adult");
+      el._renderStatus(s, el._state(s, "sensor.last_care")?.attributes.log || []);
+      const calls = [];
+      const realWS = el._hass.callWS;
+      let fail = false;
+      el._hass = { ...el._hass, callWS: async (msg) => { calls.push(msg); if (fail) throw new Error("no"); return null; } };
+      const btn = () => s.status.querySelector(".bell.babytalk");
+      const before = btn().getAttribute("aria-pressed");
+      btn().click();
+      await new Promise((r) => setTimeout(r, 100));
+      const out = { before, after: btn().getAttribute("aria-pressed"), text: btn().textContent, calls: calls.length,
+        type: calls[0]?.type, enabled: calls[0]?.enabled, cache: localStorage.getItem(`hatch-baby-talk-${el._hass.user.id}`),
+        note: s.status.querySelector(".status-feedback")?.textContent };
+      fail = true;
+      btn().click();
+      await new Promise((r) => setTimeout(r, 100));
+      out.failed = { pressed: btn().getAttribute("aria-pressed"), calls: calls.length, note: s.status.querySelector(".status-feedback")?.textContent,
+        cache: localStorage.getItem(`hatch-baby-talk-${el._hass.user.id}`) };
+      el._hass = { ...el._hass, callWS: realWS };
+      return out;
+    });
+    check("the baby talk switch: one call per tap, the button follows, a failed call goes back",
+      toggle.before === "false" && toggle.after === "true" && toggle.text === "on" && toggle.calls === 1 &&
+      toggle.type === "virtual_pet/baby_talk" && toggle.enabled === true && toggle.cache === "on" &&
+      toggle.note === "OK, baby talk for babies and children ♥" &&
+      toggle.failed.pressed === "true" && toggle.failed.calls === 2 && toggle.failed.note === "That didn't work. Try again." &&
+      toggle.failed.cache === "on", JSON.stringify(toggle));
+    await page.locator("hatch-pet-card").evaluate((el) => { // the switch, on, without the failed tap's note
+      const s = el._slides[el._index];
+      el._renderStatus(s, []);
+      s.status.querySelector(".status-feedback").hidden = true;
+    });
+    await cur().locator(".row", { hasText: "baby talk" }).scrollIntoViewIfNeeded();
+    await shot("06a-baby-talk-switch");
+    await page.locator("hatch-pet-card").evaluate((el) => {
+      const s = el._slides[el._index];
+      localStorage.setItem("hatch-shared-screen", "on");
+      el._renderStatus(s, []);
+    });
+    await cur().locator(".row", { hasText: "shared screen" }).scrollIntoViewIfNeeded();
+    await shot("06b-shared-no-baby-talk");
+    await page.locator("hatch-pet-card").evaluate((el) => {
+      const s = el._slides[el._index];
+      localStorage.setItem("hatch-shared-screen", "off");
+      localStorage.removeItem(`hatch-baby-talk-${el._hass.user.id}`);
+      el._renderStatus(s, []);
+    });
+    await page.locator("hatch-pet-card .statusbtn").click();
+    await page.waitForTimeout(400);
+    // Baby lines on screen, for the owner: two creatures, and a child.
+    const babyShot = async (name, stage, fn) => {
+      await page.locator("hatch-pet-card").evaluate((el, { stage, fn }) => {
+        const s = el._slides[el._index];
+        localStorage.setItem(`hatch-baby-talk-${el._hass.user.id}`, "on");
+        const realState = el._state;
+        el._state = function (slide, key) {
+          const st = realState.call(this, slide, key);
+          return key === "sensor.life_stage" && st ? { ...st, state: stage } : st;
+        };
+        s.sayUntil = 0; s.voicedAt = 0;
+        new Function("el", "s", fn)(el, s);
+        el._stopTyping(s);
+        s.sayUntil = Date.now() + 20000; // held for the screenshot
+        el._state = realState;
+        localStorage.removeItem(`hatch-baby-talk-${el._hass.user.id}`);
+      }, { stage, fn });
+      await page.waitForTimeout(300);
+      await shot(name);
+    };
+    await babyShot("06c-baby-greeting", "baby", `localStorage.removeItem("hatch-greet-" + el._hass.user.id + "-" + s.ids?.device); s.greeted = false; el._greet(s);`);
+    await babyShot("06d-baby-snack", "baby", `el._moment(s, { type: "favourite_snack", food: "hazelnuts", at: new Date().toISOString() }); el._sayQueued(s);`);
+    await page.locator("hatch-pet-card .nav.next").click();
+    await page.waitForTimeout(1500);
+    await hush();
+    await babyShot("06e-baby-other-creature", "baby", `el._moment(s, { type: "tucked_in", user: el._hass.user.id, at: new Date().toISOString() });`);
+    await page.locator("hatch-pet-card .nav.prev").click();
+    await page.waitForTimeout(1500);
+    await hush();
+    await page.locator("hatch-pet-card").evaluate((el) => el._slides.forEach((s) => { s.sayUntil = 0; }));
+  }
+
   // 5. The egg wiggles, then cracks, before it hatches.
   // A pet update can replace the injected egg, so inject until it shows (or 3 tries).
   for (const [minutes, frames] of [[12, "egg_wiggle"], [4, "egg_crack"]]) {

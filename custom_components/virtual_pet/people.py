@@ -107,6 +107,10 @@ class People:
     def my_day(self, user: str) -> bool:
         return bool(self.data["people"].get(user, {}).get("my_day"))
 
+    def baby_talk(self, user: str) -> bool:
+        """Simpler words from babies and children, on this person's cards."""
+        return bool(self.data["people"].get(user, {}).get("baby_talk"))
+
     def said(self, user: str, kind: str, key: str) -> bool:
         """Whether this line was already said (today, or for this key)."""
         return self.person(user).get("noted", {}).get(kind) == key

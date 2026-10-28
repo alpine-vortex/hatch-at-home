@@ -1066,14 +1066,24 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         last = self._visits.get(user, -1e12)
         just_home = person.get("arrived", 0) > last
         if now - last < R.BOND_VISIT_EVERY_MINUTES * 60 and not just_home:
-            return {"notes": [], "ask": None, "counted": False}
+            return {
+                "notes": [],
+                "ask": None,
+                "counted": False,
+                "baby_talk": self.people.baby_talk(user),
+            }
         self._advance(now)
         if not self._awake():
             # Asleep (or away): only the sleepy hello. The visit isn't counted,
             # so the lines it has wait for the next look once it's up.
             notes = self._up_early(user, now)
             self._publish()
-            return {"notes": notes, "ask": None, "counted": False}
+            return {
+                "notes": notes,
+                "ask": None,
+                "counted": False,
+                "baby_talk": self.people.baby_talk(user),
+            }
         self._visits[user] = now
         events = self._bond(user, "visit")
         # Best friends get a photo (once a generation); _notes says so.
@@ -1121,6 +1131,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "birthday_kept": bool(person.get("birthday")),
             "birthday_phone": bool(person.get("birthday_phone")),
             "made_room": made_room,
+            "baby_talk": self.people.baby_talk(user),
         }
 
     def _up_early(self, user: str, now: float) -> list[dict[str, Any]]:
@@ -1453,6 +1464,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     async def async_set_birthday_phone(self, user: str, enabled: bool) -> None:
         """Whether this person's phone hears "happy birthday" on the day."""
         self.people.person(user)["birthday_phone"] = enabled
+        self.people.save()
+
+    async def async_set_baby_talk(self, user: str, enabled: bool) -> None:
+        """Simpler words from babies and children on this person's cards. One
+        switch per person, for every pet; no entity shows it, so nothing to
+        republish (the card learns it from the visit reply)."""
+        self.people.person(user)["baby_talk"] = enabled
         self.people.save()
 
     async def async_forget_birthday(self, user: str) -> None:
