@@ -2428,8 +2428,10 @@ async def test_a_look_has_room_for_three_lines(
     hass_storage: dict[str, Any],
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """The card says how many lines it queued; the notes fill what's left."""
-    freezer.move_to("2026-10-29 19:00:00+00:00")
+    """The card says how many lines it queued; the notes fill what's left, and
+    the question comes only with room for it."""
+    # 20:30 on a dream day of the rotation, near bedtime: that question is due.
+    freezer.move_to("2026-10-29 20:30:00+00:00")
     me = await friend(hass, 0)
     hass_storage[STORE_KEY] = hatched_pet(
         dt_util.utcnow().timestamp(),
@@ -2437,20 +2439,18 @@ async def test_a_look_has_room_for_three_lines(
     )
     await setup(hass)
     coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
-    coordinator.state.dream = {
-        "kind": "picked",
-        "pick": "sea",
-        "user": me.id,
-        "day": "2026-10-29",
-    }
+    coordinator.state.wish = None
+    picked = {"kind": "picked", "pick": "sea", "user": me.id, "day": "2026-10-29"}
+    coordinator.state.dream = dict(picked)
     first = await coordinator.async_visit(me.id, queued=2)
-    assert len(first["notes"]) == 1 and first["ask"] is None  # 2 + 1 = 3
+    assert len(first["notes"]) == 1 and first["ask"] is None  # 2 + 1 = 3: no room
     coordinator._visits.clear()
     second = await coordinator.async_visit(me.id, queued=3)
-    assert second["notes"] == []  # no room: it waits
+    assert second["notes"] == [] and second["ask"] is None  # nothing fits: it waits
     coordinator._visits.clear()
     third = await coordinator.async_visit(me.id)
     assert [n["kind"] for n in third["notes"]] == ["dream"]  # nothing was lost
+    assert third["ask"] == "dream"  # 0 + 1 < 3: room for the question
 
 
 async def test_a_wish_is_open_only_while_it_can_come_true(
@@ -2468,3 +2468,7 @@ async def test_a_wish_is_open_only_while_it_can_come_true(
     freezer.move_to("2026-10-28 23:30:00+00:00")  # past bedtime
     coordinator.async_set_updated_data(coordinator.state)
     assert hass.states.get("sensor.pip_life_stage").attributes["wish"]["open"] is False
+    # "Tuck me in" comes true at bedtime: it stays open.
+    coordinator.state.wish = {"kind": "tuck_in", "day": "2026-10-28", "granted": False}
+    coordinator.async_set_updated_data(coordinator.state)
+    assert hass.states.get("sensor.pip_life_stage").attributes["wish"]["open"] is True

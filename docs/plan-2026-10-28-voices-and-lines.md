@@ -270,3 +270,13 @@ status screen), the creatures' own words (A3; the moth's per stage), and `queued
 as corrected. Checked: 372 tests, 65 card checks (new: plain screen-reader words,
 long titles cut, a shared screen showing nothing personal; the look's line budget
 server-side).
+
+Phase 1's own audit (9 findings) fixed: lines queued while asleep wait instead of
+being dropped (the before-sunrise hello is said at once); the moth's words as A3
+says (caterpillar on a branch, moth "moonlight" and "tree"); only "say hi" and "a
+snack after lunch" close at bedtime; no visit before the creature loads (so the
+first look runs first); the wish mention re-arms each day; one "good morning"; a
+shared screen also hides "notify me", names in the care log and others' arrivals,
+and its status page no longer breaks; Assist compares whole words and drops "zzz";
+`short()` never splits an emoji. Names are cut at 16 characters (30 for titles).
+372 tests, 68 card checks.

@@ -329,9 +329,29 @@ async function main() {
     const status = s.status.innerText;
     return { visited, said: s.bubble.textContent, bondRow: /you two|my day/.test(status) };
   });
+  // The status screen still works with it on (no "notify me" row to wire up).
+  const sharedStatus = await cur().evaluate((sl) => sl.querySelector(".screen").classList.contains("show-status") &&
+    !!sl.querySelector(".bell.shared") && !/notify me/.test(sl.querySelector(".status").innerText));
   await cur().locator(".bell.shared").click(); // personal again
   await page.waitForTimeout(400);
-  check("a shared screen shows nothing personal", !sharedView.visited && !sharedView.bondRow &&
+  // On a shared screen the bond's moments say nothing personal either.
+  const sharedMoments = await page.locator("hatch-pet-card").evaluate((el, me) => {
+    localStorage.setItem("hatch-shared-screen", "on");
+    const s = el._slides[el._index];
+    s.queue = [];
+    const before = s.bubble.textContent;
+    for (const type of ["bond_up", "bond_record", "tucked_in", "bond_favourite"]) {
+      el._moment(s, { type, user: me, level: 4, nickname: "sunbeam", game: "left_right", wins: 4, at: type });
+    }
+    el._moment(s, { type: "friend_home", user: "someone-else", at: new Date().toISOString() });
+    const out = { queued: s.queue.map((q) => q.text), bubble: s.bubble.textContent, before };
+    s.queue = [];
+    localStorage.setItem("hatch-shared-screen", "off");
+    return out;
+  }, me);
+  check("a shared screen's moments name nobody", sharedMoments.queued.join() === "someone's home!! ♥" &&
+    sharedMoments.bubble === sharedMoments.before, JSON.stringify(sharedMoments));
+  check("a shared screen shows nothing personal", sharedStatus && !sharedView.visited && !sharedView.bondRow &&
     !sharedView.said.includes(USER.name) && !sharedView.said.includes("sunbeam"), JSON.stringify(sharedView));
   // The server's update replaced the close bond injected above: inject it again.
   await inject(pet["sensor.life_stage"], { attributes: { bonds: { [me]: { level: 8, nickname: "sunbeam" } } } });
@@ -468,18 +488,61 @@ async function main() {
     el._note(s, { kind: "back_from", place: "gym" });
     el._note(s, { kind: "season", season: "autumn", holiday: "thanksgiving" });
     el._note(s, { kind: "rain_walk", steps: 8000 });
-    el._note(s, { kind: "up_early" });
     localStorage.removeItem(`hatch-welcomed-${me}`);
     el._moment(s, { type: "friend_home", user: me, weather: "wet", at: new Date().toISOString() });
     const out = s.queue.map((q) => q.text);
     s.queue = [];
     return out;
   }, me);
+  // Asleep, queued lines wait (they're said once on the server's side); only a
+  // question is dropped. The sleepy hello is said straight away.
+  const asleepQueue = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const was = s.asleep;
+    s.asleep = true;
+    s.queue = [{ text: "can I call you sunbeam? ♥", ms: 4000 }];
+    s.sayUntil = 0;
+    el._sayQueued(s);
+    const kept = s.queue.length;
+    el._note(s, { kind: "up_early" });
+    const hello = s.bubble.textContent;
+    s.asleep = was;
+    s.queue = [];
+    return { kept, hello };
+  });
+  check("asleep, lines wait and the sleepy hello is said", asleepQueue.kept === 1 &&
+    asleepQueue.hello === "mmh... you're up before the sun... zzz ♥", JSON.stringify(asleepQueue));
+  // The first look: welcome home first, three lines at most; a closed wish isn't said.
+  const look = await page.locator("hatch-pet-card").evaluate((el, me) => {
+    const s = el._slides[el._index];
+    const stageId = s.ids["sensor.life_stage"];
+    const careId = s.ids["sensor.last_care"];
+    const real = el._hass.states;
+    const now = new Date().toISOString();
+    const fake = { ...real,
+      [stageId]: { ...real[stageId], attributes: { ...real[stageId].attributes,
+        dream: { kind: "flying" }, wish: { kind: "play", granted: false, open: false } } },
+      [careId]: { ...real[careId], attributes: { ...real[careId].attributes,
+        moments: [{ type: "friend_home", user: me, weather: "cold", at: now }] } } };
+    el._hass = { ...el._hass, states: fake };
+    for (const k of Object.keys(localStorage)) {
+      if (/^hatch-(dream|wish|welcomed)-/.test(k)) localStorage.removeItem(k);
+    }
+    localStorage.setItem(`hatch-seen-${s.ids.device}`, String(Date.now() - 5 * 3600 * 1000));
+    s.lookedFirst = false; s.queue = [];
+    el._firstLook(s);
+    const out = s.queue.map((q) => q.text);
+    s.queue = [];
+    el._hass = { ...el._hass, states: real };
+    return out;
+  }, me);
+  check("the first look: welcome first, three lines at most, no closed wish",
+    look.length === 3 && look[0].startsWith("welcome home") && look[1] === "brr, was it cold out there?" &&
+    !look.some((l) => /play a game/.test(l)), look.join(" | "));
   check("the new private lines read right", lines[0] === "I dreamed about the sea, like you said! ♥" &&
     lines[1] === "I dreamed about the sea..." && lines[2] === "oh, sunny after all! good guess though ♥" &&
     lines[3] === "back from the gym?! so strong!" && lines[4] === "Thanksgiving in your favourite season! ♥" &&
-    /rain/.test(lines[5]) && lines[6] === "mmh... you're up before the sun... zzz ♥" &&
-    lines[8] === "it's wet out there! come get cozy ☂", lines.join(" | "));
+    /rain/.test(lines[5]) && lines[7] === "it's wet out there! come get cozy ☂", lines.join(" | "));
   check("a friend coming home is cheered, by name to others", /^(you're home!! ♥|yay, you're back! ♥)$/.test(cheers.out[0]) &&
     cheers.out[1] === "" && /^(Sam's home!!|ooh, Sam is back!)$/.test(cheers.out[2]),
   `${cheers.out.join(" | ")} (person ${cheers.person})`);
@@ -492,6 +555,16 @@ async function main() {
       (/_(?!content|excited|cozy|bored|sleepy|hungry|dirty|sick|asleep|calling)[a-z_]+_\d\.png/
         .test(pet.getAttribute("src") || "") && "pose") || "";
   });
+  // A question from the visit holds the bubble for a minute (no idle chatter over
+  // it): note it, and take it away for this check.
+  const hadQuestion = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const asked = !!s.screen.querySelector(".askday") || (s.queue || []).some((q) => q.then);
+    el._clearAsk(s);
+    s.sayUntil = 0;
+    return asked;
+  });
+  console.log(`note: a question was ${hadQuestion ? "" : "not "}open before the idle check`);
   const quietBubble = await bubble();
   let idle = "";
   // The first idle move is due 10-35 s in, but it's skipped if the pet is busy

@@ -152,7 +152,7 @@ async def test_privacy_keeps_the_sitter_quiet(
 ) -> None:
     pip.runtime_data.state.away = True
     response = await ask(hass, "VirtualPetStatus")
-    assert speech(response) == "Pip is asleep: zzz."
+    assert speech(response) == "Pip is asleep."
     response = await ask(hass, "VirtualPetCare", action="feed")
     assert speech(response) == "Pip is asleep."
 
@@ -270,6 +270,14 @@ def test_spoken_status_reads_well_aloud():
         "Pip is excited: dancing. Traits: night owl."
     )
     assert "*" not in spoken_status("Pip", "egg", "*wiggle wiggle*", [], None)
+    assert spoken_status("Pip", "asleep", "zzz", [], None) == "Pip is asleep."
+    # Whole words: "on" inside "content" isn't a repeat.
+    assert spoken_status("Pip", "content", "on top of the world", [], None) == (
+        "Pip is content: on top of the world."
+    )
+    assert spoken_status("Pip", "cozy", "sunny ☀ and warm", [], None) == (
+        "Pip is cozy: sunny and warm."
+    )
 
 
 async def test_no_thanks_for_a_scold(hass: HomeAssistant, pip: MockConfigEntry) -> None:

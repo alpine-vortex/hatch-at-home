@@ -168,14 +168,15 @@ class LifeStageSensor(PetEntity, SensorEntity):
         return {k: record[k] for k in keys if k in record}
 
     def _wish(self) -> dict[str, Any] | None:
-        """Today's wish; "open" while it can still come true (it's awake time:
-        no wish is granted while it sleeps), so the card stops mentioning it."""
+        """Today's wish; "open" while it can still come true, so the card stops
+        mentioning it: "say hi this afternoon" and "a snack after lunch" close
+        at bedtime ("tuck me in" is granted then, so it stays open)."""
         wish = self._today_only(self.pet.wish, ("kind", "granted", "for", "for_name"))
         if wish is not None:
-            now = dt_util.utcnow().timestamp()
-            wish["open"] = not wish.get("granted") and not model.in_sleep_hours(
-                now, self.coordinator.settings
+            late = wish.get("kind") in model.DAYTIME_WISHES and model.in_sleep_hours(
+                dt_util.utcnow().timestamp(), self.coordinator.settings
             )
+            wish["open"] = not wish.get("granted") and not late
         return wish
 
     def __init__(self, coordinator: PetCoordinator) -> None:

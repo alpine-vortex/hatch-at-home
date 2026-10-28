@@ -265,6 +265,13 @@ details before committing it.
 
 ## Open items, in priority order
 
+0. **Dev utility (owner, 2026-10-28, to do later):** a way to restore a test pet to
+   full health and/or reset it to defaults. The dev pets in `dev/config` drift after
+   many `card-check` runs (energy, weight, recent misses: sickness by neglect), which
+   breaks checks like idle life; today that means stopping HA and editing
+   `.storage/virtual_pet.*` by hand. A debug service (admin, like `fast_forward`) or a
+   `scripts/` helper.
+
 1. **Assist on the owner's HA:** ask them to try it (an LLM agent, and the sentences
    file) and report what it says; tune the wording from that.
 2. *(done)* Sol's batch "hatch-batch-feedback" and the deer arrived on 2026-10-27

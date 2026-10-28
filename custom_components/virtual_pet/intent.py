@@ -75,20 +75,24 @@ REFUSED = {
 }
 
 
+# What a voice would read out but shouldn't: hearts, notes, stars, weather symbols,
+# emoji, and the pet's own marks (*wiggle*, toasty~).
+MARKS = re.compile(r"[*~♪♥♡★☂☀❄\u2600-\u27bf\U0001f000-\U0001faff\ufe0f]")
+
+
 def spoken_status(
     name: str, mood: str, reason: str, traits: list[str], nickname: str | None
 ) -> str:
     """ "Hi, sunbeam! Pip is cozy: toasty by the fire." The greeting first; the
     pet's reason without the marks a voice would read out (*, ~, ♪), and left
     out when it only repeats the mood ("at the sitter's: at the sitter's")."""
-    said = re.sub(r"[*~♪♥]", "", reason).strip(" .")
-    said = re.sub(r"\s+", " ", said)
+    said = re.sub(r"\bz+\b", "", MARKS.sub("", reason), flags=re.IGNORECASE)
+    said = re.sub(r"\s+", " ", said).strip(" .")
     speech = f"{name} is {mood}"
-    if (
-        said
-        and said.casefold() not in mood.casefold()
-        and mood.casefold() not in said.casefold()
-    ):
+    words = set(re.findall(r"[\w']+", said.casefold()))
+    mood_words = set(re.findall(r"[\w']+", mood.casefold()))
+    # Whole words: a reason that only repeats the mood ("at the sitter's") is left out.
+    if said and not words <= mood_words and not mood_words <= words:
         end = "" if said.endswith(("!", "?", "…")) else "."
         speech += f": {said}{end}"
     else:

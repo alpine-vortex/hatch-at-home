@@ -1318,6 +1318,8 @@ ALWAYS_WISHES = {"play", "snack", "bath", "praise", "tuck_in", "sunset", "say_hi
 # Wishes a person grants, so the pet may wish one of them on a close friend
 # ("I hope Sam plays with me today"). Anyone can still grant it.
 AIMED_WISHES = {"play", "snack", "bath", "praise", "say_hi"}
+# Wishes that can't come true once it's bedtime (the card stops mentioning them).
+DAYTIME_WISHES = {"say_hi", "snack"}
 
 
 def pick_wish(
