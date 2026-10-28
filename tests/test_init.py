@@ -2506,3 +2506,29 @@ async def test_an_egg_hatched_by_fast_forward_picks_its_favourite(
     await hass.services.async_call(DOMAIN, "fast_forward", {"hours": 1}, blocking=True)
     species = coordinator.state.species
     assert coordinator.state.favourites["snack"] in coordinator.likes[species]
+
+
+async def test_no_favourite_snack_from_a_refused_snack(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, species="squirrel", asleep=True)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.rng.random = lambda: 0.0
+    await press(hass, "button.pip_snack")  # asleep: refused
+    assert "favourite_snack" not in [m["type"] for m in moments(hass)]
+    assert coordinator.state.favourite_said is None
+
+
+async def test_an_egg_for_the_next_world_picks_from_its_own_likes(
+    hass: HomeAssistant, now: float
+) -> None:
+    config = await setup(hass)
+    coordinator = config.runtime_data
+    # Likes come from every ready creature, not only this world's roster.
+    assert "lunamoth" not in coordinator.roster
+    assert coordinator.likes["lunamoth"][0] == "walnut leaves"
+    coordinator.state.species = "lunamoth"
+    coordinator.state.age_hours = 30.0
+    coordinator._pick_favourite()
+    assert coordinator.state.favourites["snack"] in coordinator.likes["lunamoth"]

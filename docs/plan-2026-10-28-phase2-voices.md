@@ -194,3 +194,32 @@ say theirs).
 | 17 | Writes in neither list | Every write is listed |
 | 18 | `favourites` hygiene; no voice validation; `lay_egg` needs no reset | `favourite_said` field, type check, `test_species` |
 | 19 | Over-built: the default babble, the fit check, `kind` and "quiet spell", a 220 Hz babble | Cut; pitch 330 Hz and up |
+
+## Built (2026-10-28, 0.32.0)
+
+As draft 2, with one change found in the screenshots: the sound takes the mood of
+the line's *first* sentence ("tweet! hi, Dev! how was your day?", not "tweet?"),
+and an egg never speaks with one. A "…" is a cut title, not a mood.
+
+The audit of the built work (12 findings, none blocking), all fixed:
+
+| # | Finding | Fix |
+| --- | --- | --- |
+| 1 | `pointerdown` doesn't count as a gesture for touch: iOS stays locked | Unlock on `touchend`, `pointerup` and `click` (capture) |
+| 2 | `hush` was lost on the check's page reload, so a check passed by timing | `hush()` again after the reload |
+| 3 | No whole-game check; one live announcement not counted; babble gates untested | A game check; a counted, cleared live region; babble checked playing, and not while asleep, in a game or behind the status (the check's browser may start audio) |
+| 4 | A cut title's "…" gave a happy line "squeak..." | "…" isn't a mood mark |
+| 5 | Babble queued on a suspended context could play out of turn | Only on a running context; the switch's sample waits for `resume()` |
+| 6 | One babble list shared by every card on the page | Each babble returns its own oscillators |
+| 7 | Typing and babble outlived a removed slide, a reused slide or the card | Stopped in `disconnectedCallback`, `_dropSlide`, `_forget`; the document listener is removed |
+| 8 | Sulky weather and forecast lines got a cheery sound | Cold, colder and storm lines stay plain |
+| 9 | Typing split emoji with joiners | `Intl.Segmenter` graphemes |
+| 10 | A line arriving behind the status screen typed invisibly | No typing while the status is open |
+| 11 | `from_dict` crashed on a `favourites` that isn't a dict | Checked |
+| 12 | Missing tests (refused snack, next-world likes) and guide text | Added |
+
+Also fixed while checking: the first-look card check raced the card's own tick
+(it could say the first queued line before the check did).
+
+Checked: 393 tests, 80 card checks (twice in a row). Not yet heard: the babble on real
+speakers, and the unlock on a real iPhone or iPad.

@@ -108,7 +108,8 @@ async function main() {
   }
   await ensurePets(access);
 
-  const browser = await chromium.launch();
+  // Audio may start without a tap here, so the babble checks can hear it play.
+  const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
   const page = await browser.newPage({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1) });
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -273,6 +274,7 @@ async function main() {
   await signedIn();
   await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
   await seasonsOff(); // the reload brought the card back with its own config
+  await hush(); // new slides: no sound unless a check asks for one
   for (let i = 0; i < slides; i++) {
     if ((await page.locator("hatch-pet-card .title").innerText()).trim() === petName) break;
     await page.locator("hatch-pet-card .nav.next").click();
@@ -449,6 +451,10 @@ async function main() {
     const out = { sound: s.species.voice.sound };
     s.queue = [];
     s.voicedAt = 0;
+    s.live.textContent = "";
+    out.announced = 0;
+    const counter = new MutationObserver(() => { out.announced++; });
+    counter.observe(s.live, { childList: true, characterData: true, subtree: true });
     el._speak(s, "hi, Dev!", 3000);
     out.typing = !!s.bubble.dataset.typing;
     const w0 = s.bubble.getBoundingClientRect().width;
@@ -459,6 +465,29 @@ async function main() {
     out.done = !s.bubble.dataset.typing;
     out.voiced = s.bubble.textContent;
     out.live = s.live.textContent;
+    counter.disconnect();
+    // Babble (on for this check) never while asleep, in a game or behind the status.
+    localStorage.setItem("hatch-babble", "on");
+    el._card.dispatchEvent(new Event("touchend")); // a tap unlocks audio
+    await wait(300);
+    const hour = new Date().getHours();
+    out.late = hour >= 21 || hour < 8; // quiet hours: no babble at all
+    const babbles = (setup) => {
+      const saved = { asleep: s.asleep, game: s.game, lightsOut: s.lightsOut };
+      setup();
+      s.voicedAt = 0;
+      el._speak(s, "hello hello", 300);
+      const on = !!s.babbling;
+      el._stopTyping(s);
+      Object.assign(s, saved);
+      if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      return on;
+    };
+    out.babbleAwake = babbles(() => { s.asleep = false; s.lightsOut = false; s.game = null; });
+    out.babbleAsleep = babbles(() => { s.asleep = true; });
+    out.babbleGame = babbles(() => { s.game = { kind: "left_right" }; });
+    out.babbleStatus = babbles(() => el._toggleStatus(s));
+    localStorage.setItem("hatch-babble", "off");
     // A burst: three queued lines, said one after another; only the first voiced.
     s.voicedAt = 0;
     out.burst = [];
@@ -492,6 +521,10 @@ async function main() {
   check("a line can open with the creature's sound, hidden from screen readers",
     voices.voiced === `${snd}! hi, Dev!` && voices.hidden === "true" && voices.live === "hi, Dev!", JSON.stringify(voices));
   check("a line types out without the bubble growing", voices.typing && voices.steady && voices.done, JSON.stringify(voices));
+  check("screen readers hear a spoken line once", voices.announced === 1, `${voices.announced} announcements`);
+  check("babble plays, but never while asleep, in a game or behind the status",
+    (voices.late ? !voices.babbleAwake : voices.babbleAwake) &&
+    !voices.babbleAsleep && !voices.babbleGame && !voices.babbleStatus, JSON.stringify(voices));
   check("a burst of lines carries the sound once",
     voices.burst.join("|") === `${snd}! morning!|I dreamed I could fly!|how was your day?`, voices.burst.join("|"));
   check("sad lines and lines with their own opener stay plain",
@@ -679,7 +712,16 @@ async function main() {
       idle = `says "${said}"`;
     }
   }
-  check("idle life happens by itself", !!idle, idle);
+  // If not: why the pet wasn't free for it.
+  const busy = idle ? "" : await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const left = (at) => Math.round(((at || 0) - Date.now()) / 1000);
+    return JSON.stringify({ mood: s.moodState, asleep: s.asleep, calling: s.calling, game: !!s.game,
+      say: left(s.sayUntil), pose: left(s.poseUntil), prop: left(s.propUntil), flair: left(s.flairUntil),
+      moving: left(s.movingUntil), next: left(s.nextIdle), status: s.screen.classList.contains("show-status"),
+      queue: (s.queue || []).length, bubble: s.bubble.textContent });
+  });
+  check("idle life happens by itself", !!idle, idle || busy);
   await shot("04b-idle");
   await button(2).click();
   await page.waitForTimeout(600);
@@ -689,11 +731,18 @@ async function main() {
   await cur().locator('.gpick [data-game="left_right"]').click();
   await page.waitForTimeout(400);
   let rounds = 0;
+  const gameSaid = [];
   for (let r = 0; r < 5 && !(await cur().locator(".game").isHidden()); r++) {
+    gameSaid.push(await cur().locator(".bubble").textContent());
     await cur().locator(r % 2 ? ".gr" : ".gl").click();
     await page.waitForTimeout(1400);
     rounds++;
   }
+  const moodLine = await evaluate((id) => document.querySelector("home-assistant").hass.states[id]?.attributes.reason || "",
+    pet["sensor.mood"]);
+  check("a game keeps the bubble for its own lines",
+    gameSaid.length === 5 && gameSaid.every((x) => x && x !== moodLine && /left|right|yes|nope|again/.test(x)),
+    gameSaid.join(" | "));
   await page.waitForTimeout(800);
   const log = await evaluate((id) => document.querySelector("home-assistant").hass.states[id].attributes.log, pet["sensor.last_care"]);
   check("the game plays five rounds", rounds === 5 && log?.[0]?.action === "game",
@@ -1006,6 +1055,7 @@ async function main() {
     localStorage.setItem(`hatch-seen-${device}`, String(Date.now() - 5 * 3600 * 1000));
     s.lookedFirst = false; s.queue = []; s.sayUntil = 0; s.flairUntil = 0;
     el._firstLook(s);
+    s.sayUntil = Date.now() + 60000; // the card's own tick mustn't say the first line before we do
   });
   const firstLook = [];
   for (const name of ["05-first-look", "05-dream", "05-wish"]) {

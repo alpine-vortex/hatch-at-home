@@ -110,7 +110,6 @@ const VOICE_QUIET_MS = 120000;
 const VOICE_MAX = 60; // characters: past this the sound is left off
 // Lines that open with a sound of their own (whole words, any case).
 const OPENERS = /^(?:[*♪…]|\.\.\.|(?:hmm+|hehe|boo|gobble|crack|eep|eek|news|o+h+|brr+|aww+|mm+h?|ew|whe+|la la|yay|zzz|pitter)(?![a-z]))/i;
-let babbling = []; // the oscillators of the babble now playing
 
 function babbleOn() {
   try {
@@ -125,22 +124,24 @@ function unlockAudio() {
   if (audio.state === "suspended") audio.resume();
 }
 
-function stopBabble() {
-  for (const osc of babbling) {
+// Stop one babble (its oscillators, from babble()).
+function stopBabble(oscs) {
+  for (const osc of oscs || []) {
     try {
       osc.stop();
     } catch (err) {
       // already done
     }
   }
-  babbling = [];
 }
 
 // A babble: a syllable per letter (vowels a little higher), spaces and marks
-// a pause, at the creature's pitch and pace; quieter than the chirps.
+// a pause, at the creature's pitch and pace; quieter than the chirps. Only
+// once a tap has unlocked audio (else it would wait and play out of turn).
+// Returns its oscillators, or null.
 function babble(text, voice) {
-  stopBabble();
-  unlockAudio();
+  if (audio?.state !== "running") return null;
+  const oscs = [];
   const step = 1 / voice.pace;
   let t = audio.currentTime + 0.01;
   const end = t + BABBLE_MAX_S;
@@ -158,10 +159,11 @@ function babble(text, voice) {
       osc.connect(gain).connect(audio.destination);
       osc.start(t);
       osc.stop(t + 0.045);
-      babbling.push(osc);
+      oscs.push(osc);
     }
     t += step;
   }
+  return oscs;
 }
 
 function soundsOn() {
@@ -530,6 +532,11 @@ const pick = (list) => list[Math.floor(Math.random() * list.length)];
 function spoken(text) {
   const plain = String(text || "").replace(/[♥♡♪★☂☀❄~*]|\p{Extended_Pictographic}/gu, "").replace(/\s+/g, " ").trim();
   return plain || (/[♥♡]/.test(text) ? "thank you!" : "");
+}
+// A line's characters as people see them (an emoji with its joiners is one).
+const SEGMENTER = typeof Intl !== "undefined" && Intl.Segmenter ? new Intl.Segmenter() : null;
+function graphemes(text) {
+  return SEGMENTER ? [...SEGMENTER.segment(text)].map((g) => g.segment) : [...text];
 }
 // Whole degrees in the owner's unit (the server converts), with a real minus.
 const degrees = (n) => (Number.isFinite(n) ? `${n}°`.replace("-", "−") : "");
@@ -1120,8 +1127,14 @@ class HatchPetCard extends HTMLElement {
     this._update();
   }
 
+  // A hidden tab: lines are said whole, and babbles stop.
+  _onHidden = () => {
+    if (document.hidden) (this._slides || []).forEach((x) => this._stopTyping(x));
+  };
+
   connectedCallback() {
     this._timer = setInterval(() => this._tick(), 700);
+    if (this._card) document.addEventListener("visibilitychange", this._onHidden);
     if (this._resize && this._viewport) this._resize.observe(this._viewport);
     if (!document.querySelector("[data-hatch-font]")) {
       // Tiny5 (SIL OFL), served by the integration so it works offline. It
@@ -1137,8 +1150,13 @@ class HatchPetCard extends HTMLElement {
   disconnectedCallback() {
     clearInterval(this._timer);
     this._resize?.disconnect();
-    // A game (Catch's animation loop above all) stops with the card.
-    for (const s of this._slides || []) if (s.game) this._endGame(s, null);
+    document.removeEventListener("visibilitychange", this._onHidden);
+    // A game (Catch's animation loop above all) stops with the card, and so
+    // does a line typing out.
+    for (const s of this._slides || []) {
+      if (s.game) this._endGame(s, null);
+      this._stopTyping(s);
+    }
   }
 
   // --- Finding the pets --------------------------------------------------------
@@ -1238,18 +1256,18 @@ class HatchPetCard extends HTMLElement {
         this._go(this._index + (dx < 0 ? 1 : -1));
       }
     });
-    document.addEventListener("visibilitychange", () => {
-      if (document.hidden) (this._slides || []).forEach((x) => this._stopTyping(x));
-    });
-    // iOS locks audio again after a reload until a tap: any tap unlocks it.
-    this._card.addEventListener("pointerdown", () => {
+    document.addEventListener("visibilitychange", this._onHidden);
+    // iOS locks audio again after a reload until a tap: any tap unlocks it
+    // (the end of a touch counts as a gesture there, its start doesn't).
+    const unlock = () => {
       if (!soundsOn() && !babbleOn()) return;
       try {
         unlockAudio();
       } catch (err) {
         // no WebAudio
       }
-    });
+    };
+    for (const type of ["touchend", "pointerup", "click"]) this._card.addEventListener(type, unlock, true);
     this._resize = new ResizeObserver(() => this._layout());
     this._resize.observe(this._viewport);
     this._visible = true;
@@ -1421,7 +1439,7 @@ class HatchPetCard extends HTMLElement {
     this._sig = sig;
 
     if (!devices.length) {
-      while (this._slides.length) this._slides.pop().el.remove();
+      while (this._slides.length) this._dropSlide(this._slides.pop());
       this._card.classList.add("single");
       this._card.querySelector(".chips").style.display = "none";
       const configured = [].concat(
@@ -1441,7 +1459,7 @@ class HatchPetCard extends HTMLElement {
       return;
     }
     while (this._slides.length < devices.length) this._slides.push(this._buildSlide());
-    while (this._slides.length > devices.length) this._slides.pop().el.remove();
+    while (this._slides.length > devices.length) this._dropSlide(this._slides.pop());
     this._index = Math.min(this._index, devices.length - 1);
 
     for (let i = 0; i < devices.length; i++) {
@@ -1492,10 +1510,17 @@ class HatchPetCard extends HTMLElement {
     this._update();
   }
 
+  _dropSlide(s) {
+    this._stopTyping(s);
+    s.el.remove();
+  }
+
   // A slide that now shows another pet starts fresh: nothing of the last
   // pet's (a game, an armed "sure?", the moments already seen) carries over.
   _forget(s) {
     if (s.game) this._endGame(s, null);
+    this._stopTyping(s);
+    s.voicedAt = 0;
     s.confirmUntil = 0;
     s.lastMoment = s.lastLogAt = undefined;
     s.greeted = false;
@@ -2031,8 +2056,9 @@ class HatchPetCard extends HTMLElement {
       s.bubble.append(snd);
     }
     let typingMs = 0;
-    if (onShow && !calm && pace > 0 && this._visible && !document.hidden) {
-      const chars = [...text]; // by code point: an emoji is never split
+    const status = s.screen.classList.contains("show-status");
+    if (onShow && !calm && !status && pace > 0 && this._visible && !document.hidden) {
+      const chars = graphemes(text); // an emoji is never split
       const typed = document.createElement("span");
       const rest = document.createElement("span");
       rest.className = "untyped";
@@ -2051,10 +2077,9 @@ class HatchPetCard extends HTMLElement {
       }, 40);
       s.typing = job;
       s.bubble.dataset.typing = "1";
-      if (sound && babbleOn() && this._mayPlay(s) && !s.game && !s.screen.classList.contains("show-status")) {
+      if (sound && babbleOn() && this._mayPlay(s) && !s.game) {
         try {
-          babble(text, voice);
-          s.babbling = true;
+          s.babbling = babble(text, voice);
         } catch (err) {
           // no WebAudio: it types quietly
         }
@@ -2075,10 +2100,10 @@ class HatchPetCard extends HTMLElement {
     if (!sound || s.hatchesAt || Date.now() - (s.voicedAt || 0) < VOICE_QUIET_MS) return null;
     const line = String(text).trim();
     if (OPENERS.test(line) || line.toLowerCase().startsWith(sound)) return null;
-    const mark = line.match(/!!|[!?]|\.\.\.|…/)?.[0];
+    const mark = line.match(/!!|[!?]|\.\.\./)?.[0]; // not "…": that's a cut title
     const form = mark === "!!" ? `${sound} ${sound}!!`
       : mark === "?" ? `${sound}?`
-      : mark === "..." || mark === "…" ? `${sound}...`
+      : mark === "..." ? `${sound}...`
       : `${sound}!`;
     return form.length + 1 + line.length > VOICE_MAX ? null : form;
   }
@@ -2094,8 +2119,8 @@ class HatchPetCard extends HTMLElement {
       delete s.bubble.dataset.typing;
     }
     if (hush && s.babbling) {
-      s.babbling = false;
-      stopBabble();
+      stopBabble(s.babbling);
+      s.babbling = null;
     }
   }
 
@@ -2555,7 +2580,7 @@ class HatchPetCard extends HTMLElement {
           cold: t ? [`brr, ${t} outside!`, `${t} out there... brr`] : ["brr, so cold out!"],
         }[m.change];
         if (!lines) break;
-        speak(pick(lines));
+        (m.change === "cold" ? say : speak)(pick(lines)); // a sulk gets no cheery sound
         if (m.change === "rainbow" || m.change === "snow_started") this._sparkle(s);
         if (m.change === "cold") this._animate(s, s.pet, "sulk", 800);
         else this._look(s, 2500);
@@ -2576,7 +2601,7 @@ class HatchPetCard extends HTMLElement {
           sunny: today ? ["sunny today! yay"] : ["sun tomorrow! yay"],
         }[m.kind];
         if (!lines) break;
-        speak(pick(lines), 5000);
+        (["storm", "cold", "colder"].includes(m.kind) ? say : speak)(pick(lines), 5000);
         if (m.kind === "cold" || m.kind === "colder") this._animate(s, s.pet, "sulk", 800);
         else this._animate(s, s.pet, "perk", 320);
         break;
@@ -2853,7 +2878,10 @@ class HatchPetCard extends HTMLElement {
         return;
       }
       try {
-        if (on) babble(`${s.species.voice.sound} hello there`, s.species.voice); // a sample; unlocks audio
+        if (on) { // a sample; this tap also unlocks audio on phones
+          unlockAudio();
+          audio.resume().then(() => babble(`${s.species.voice.sound} hello there`, s.species.voice));
+        }
       } catch (err) {
         // no WebAudio
       }

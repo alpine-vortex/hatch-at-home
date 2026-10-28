@@ -201,9 +201,10 @@ class PetState:
             for user, bond in (kwargs.get("bonds") or {}).items()
             if isinstance(bond, dict)
         }
+        favourites = kwargs.get("favourites")
         kwargs["favourites"] = {
             k: v
-            for k, v in (kwargs.get("favourites") or {}).items()
+            for k, v in (favourites if isinstance(favourites, dict) else {}).items()
             if isinstance(k, str) and isinstance(v, str)
         }
         if not isinstance(kwargs.get("favourite_said"), str):
