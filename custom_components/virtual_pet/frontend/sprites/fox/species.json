@@ -1,0 +1,95 @@
+{
+  "name": "Red fox",
+  "ready": true,
+  "stages": [
+    "baby",
+    "child",
+    "teen",
+    "adult"
+  ],
+  "scale": {
+    "adult": 1.05
+  },
+  "moods": [
+    "content",
+    "excited",
+    "cozy",
+    "bored",
+    "hungry",
+    "sleepy",
+    "asleep",
+    "sick",
+    "calling",
+    "dirty"
+  ],
+  "frames": 2,
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "pounce": [
+      "child_pounce_1",
+      "child_pounce_2"
+    ],
+    "tail_wrap": [
+      "child_tail_wrap_1",
+      "child_tail_wrap_2"
+    ],
+    "yip": [
+      "child_yip_1",
+      "child_yip_2"
+    ]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "bird/ball",
+    "clean": "bird/sparkle_clean",
+    "medicine": "bird/medicine",
+    "blanket": "bird/blanket",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": [
+      "bird/poop_1",
+      "bird/poop_2",
+      "bird/poop_3"
+    ]
+  },
+  "backgrounds": {
+    "day": "bird/bg_day",
+    "night": "bird/bg_night",
+    "rain": "bird/bg_rain",
+    "dim": "bird/bg_dim"
+  },
+  "words": {
+    "food": "berries",
+    "home": "den"
+  },
+  "reactions": {
+    "play": "pounce",
+    "won": "pounce",
+    "praise": "tail_wrap",
+    "scold": "yip"
+  },
+  "head": {
+    "baby": [
+      174,
+      108
+    ],
+    "child": [
+      192,
+      88
+    ],
+    "teen": [
+      154,
+      60
+    ],
+    "adult": [
+      162,
+      68
+    ]
+  }
+}
