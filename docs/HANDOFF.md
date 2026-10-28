@@ -251,6 +251,8 @@ details before committing it.
     read untrusted files with `python -I`.
   - Review with `scripts/art/` (each has usage in its docstring): `check.py`, `gaps.py`,
     `slivers.py`, `sheet.py`. Look at the sheet and send it to the owner.
+  - Close the outline with `scripts/art/outline.py` (generated sets leave gaps along
+    light edges). The checklist for new creatures is in `docs/design-worlds.md`.
   - Copy finished PNGs into `frontend/sprites/<species>/`; prompts, probes and scripts
     into `art/<species>/`, never raw sheets. Watch for name collisions.
   - Write `species.json` (see `sprites/README.md`; `reactions` maps actions to the

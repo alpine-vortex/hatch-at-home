@@ -158,3 +158,10 @@ forepaws at the chest but still stood on three feet, so they read as six legs. T
 middle foot was removed by hand on the 64×64 art grid (the foot rows cleared, the row
 above closed with the outline colour); the haunch foot and the far foot stay, and the
 feet stay on y=224.
+
+## The 2026-10-28 creatures
+
+`new-creatures/` holds the configs and probe prompts for the 17 creatures that bring
+every world to five. How they're made, the checklist for each set and what the probes
+taught us are in `docs/design-worlds.md` ("The 2026-10-28 creatures"). Probe sheets
+are in `art/<id>/<id>_probe.png`.

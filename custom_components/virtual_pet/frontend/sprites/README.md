@@ -20,10 +20,12 @@ while its adult sprites are being redrawn.
 | `reactions` | Optional. A care action (or `won` for a won game) → one of the `extras`, shown for 2.5 s after it. Child stage only, since extras are drawn for the child |
 | `props` | Sprite for each care action, plus `blanket`, `attention`, `away` and three `poop`. A name with a slash, like `bird/medicine`, borrows another species' sprite. |
 | `head` | Per stage, `[x, y]` in the 256 px frame: the middle of the head at its top, where trait flair floats above it. Measured with `scripts/art/heads.py` (its estimate, corrected where a tail, ear or wing rises higher than the head). |
-| `hat` | Optional, per stage, `[x, y]`: where a seasonal hat sits (the top of the skull). Only for creatures whose head point is on an ear or antler tip (the deer); otherwise the card finds the top of the head below the head point. |
+| `hat` | Optional, per stage, `[x, y]`: where a seasonal hat sits (the top of the skull). For creatures whose head point is on an ear or antler tip or a shell top (the deer, fox, hamster, corgi, tortoise); otherwise the card finds the top of the head below the head point. |
 | `perch` | Optional: a 256×256 sprite drawn under the pet's feet that moves and scales with it, for a creature whose scene puts it on open water (the tree frog's lily pad). |
-| `murk` | Water worlds only (`"mess": "murk"` in `worlds.json`): a 512×384 overlay that clouds the scene instead of showing poop, stronger with each mess |
+| `murk` | Water worlds only (`"mess": "murk"` in `worlds.json`): a 512×384 overlay that clouds the scene instead of showing poop, stronger with each mess. Every creature in the world needs it (later ones borrow the first's, like `otter/murk`); without it the card shows poop. |
 | `backgrounds` | `day`, `night`, `rain`, `dim` scenes, 512×384. Only `day` is required; missing scenes reuse it, dimmed by the card. |
 | `words` | Optional flavour words for speech |
 
 Sprites are 256×256 transparent PNGs with the feet on y=224; props are 128×128.
+Every creature has a closed dark outline; `scripts/art/outline.py` closes gaps along
+light edges in a generated set.
