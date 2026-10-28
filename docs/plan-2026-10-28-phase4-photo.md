@@ -1,4 +1,4 @@
-# Phase 4: a photo, for best friends (build plan, draft 1)
+# Phase 4: a photo, for best friends (build plan, draft 2)
 
 Phase 4 of `plan-2026-10-28-voices-and-lines.md`: A7. That plan's second audit,
 row 3, wins over part A: photos keyed by generation; delivered only by the visit's
@@ -6,7 +6,8 @@ response; shown only to that person, never on a shared screen; a canvas with its
 own fixed layout that waits for the Tiny5 font, no smoothing; saving by the share
 sheet where there is one, else the image shown for a long-press save; **tried on
 both companion apps before release**. So it ships first as a beta (0.34.0b1) for
-the owner to try, then as 0.34.0.
+the owner to try, then as 0.34.0. **Draft 2: the audit table at the end wins over
+the sections above it where they differ.**
 
 ## What the person gets
 
@@ -71,3 +72,22 @@ it's in your journal ♥" at their next look. In their journal (theirs only), a
 versions in HACS), with a short ask: on the iPhone app and the Android app, open
 the journal, tap "save" on a photo, and say what happened. Then fix and release
 0.34.0 from `main`.
+
+## The audit of draft 1 (14 findings) and what changed
+
+| # | Finding | Change |
+| --- | --- | --- |
+| 1 | Photos come back only on a counted visit: after a reload, at night and on a second device the row is empty | A websocket command `virtual_pet/photos` returns the caller's photos for one pet; the card fetches it when the journal opens. Not in the visit reply |
+| 2 | An overlay inside the slide is clipped (`overflow: hidden`, the track's transform) | A `<dialog>` opened with `showModal()`: above everything, focus trapped, Escape, `::backdrop`; sized `min(300px, 90vw)` |
+| 3 | From generation 2 the photo would be of a 30-minute-old baby (the bond is inherited at 10); "since" is from an older generation | Taken when the bond is 10 and this pet is a teen or older. The caption says "best friends ♥" and the day it was taken (no "since") |
+| 4 | A note handed back once can be lost in a full look; a fixed `noted` key would silence the next generation's | A derived note in `_notes`: `("pet", "photo", str(generation), …)` while this generation's photo exists and isn't noted; after the celebration. `take_photo` only writes the snapshot |
+| 5 | Turning "shared screen" on mid-session leaves photos visible | The journal checks `sharedScreen()` when it renders; the switch clears every slide's photos and revokes their URLs |
+| 6 | Data URLs in the status HTML are re-rendered and compared often | One render per generation, cached as a Blob with an object URL (short `blob:` strings in the HTML); revoked on `_forget` and on shared screen |
+| 7 | `navigator.share` after an awaited `toBlob` loses the gesture on WebKit | The File is made when the print renders; the tap calls `share` straight away. `AbortError` (cancelled) is done, not a failure |
+| 8 | The companion apps: Android WebView likely has no `share`, nor a long-press save; downloads need app support | Order: share if `canShare`; else the dialog with "press and hold the picture to save it" (no `user-select: none`, no `touch-callout` block on it); the download link only outside the companion apps (user agent without "Home Assistant/"). If the beta shows Android can't save at all, the dialog says so honestly ("you can save it from a computer") |
+| 9 | "A pixel in the middle is opaque" passes with no sprite | The check renders with and without the sprite and compares the sprite's area; and waits for every image (`naturalWidth`) and the font (`document.fonts.check`) |
+| 10 | ISO dates read as UTC (a day early west of UTC) | Parsed by parts: `new Date(y, m - 1, d)`, the month from `hass.locale` |
+| 11 | Drawing must follow `_renderSlide`: `scale`, the tree frog's `perch`, head points in 256-px space, borrowed paths | One helper for sprite paths (from `_show`), a cached `loadImage`; scale and perch as the shelf; flair from `head` points in sprite space. A tainted canvas (a Cast receiver) shows no print |
+| 12 | Canvas text is antialiased; Tiny5 is Latin only | Accepted; the month from `hass.locale`; non-Latin names fall back |
+| 13 | Many identical "save" buttons; focus after a rebuild | `aria-label="save the photo of Pip, generation 2"`, `data-gen`; focus returns to it when the dialog closes; "saved"/"shared" announced in `.status-feedback` |
+| 14 | `from_dict` doesn't check `photos`; growth; wording; `world` unused; untested fixes after b1 | `photos` checked as a dict of dicts; the row scrolls (newest last); "never in notifications"; `world` dropped; b2 if b1 needs save changes |
