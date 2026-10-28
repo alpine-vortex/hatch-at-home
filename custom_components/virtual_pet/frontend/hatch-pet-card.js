@@ -3755,7 +3755,8 @@ class HatchPetCard extends HTMLElement {
     }
     if (s.game !== game) return null; // stopped while waiting
     if (!info || info.result !== "ok") {
-      this._endGame(s, REFUSALS[info?.result] || "not now");
+      const refusal = REFUSALS[info?.result];
+      this._endGame(s, refusal ? this._lines(s, `REFUSALS.${info.result}`, refusal).text : "not now");
       return null;
     }
     return info;

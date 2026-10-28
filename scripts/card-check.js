@@ -1607,6 +1607,13 @@ async function main() {
         el._react(s, { action: "feed", result });
         return s.bubble.textContent;
       });
+      // The game's own refusal (a play that ends at once) goes through the same table.
+      const realCall = el._hass.callService;
+      el._hass = { ...el._hass, callService: async () => ({ response: { result: "too_tired" } }) };
+      s.game = { kind: "left_right" };
+      await el._playCall(s, { guess: "left" });
+      out.refusal.push(s.bubble.textContent);
+      el._hass = { ...el._hass, callService: realCall };
       out.wish = el._wishSaid(s, { kind: "snack" }, ["I'd love a snack after lunch!"]);
       out.aimed = el._wishSaid(s, { kind: "snack", for: "x", for_name: "Alex" }, ["I hope Alex brings me a snack after lunch!"]);
       // Said aloud: the catchphrase is not on them, and the count doesn't move.
@@ -1628,7 +1635,7 @@ async function main() {
       lines.home[0]?.text === "you're home! yay yay ♥" && lines.bond[0]?.text === "yay, you! ♥" &&
       lines.miss === "oh! hi hi ♥" && /^night night, \S+ ♥$/.test(lines.tucked), JSON.stringify(lines));
     check("a baby's refusals and wish; an aimed wish keeps its words",
-      lines.refusal.join("|") === "tummy full!|too sleepy to play|I'm not sick!" && lines.wish === "wish... snack after lunch" &&
+      lines.refusal.join("|") === "tummy full!|too sleepy to play|I'm not sick!|too sleepy to play" && lines.wish === "wish... snack after lunch" &&
       lines.aimed === "I hope Alex brings me a snack after lunch!", JSON.stringify(lines));
     check("no catchphrase on a baby line, and the count doesn't move",
       lines.granted[0]?.opts?.catch === false && lines.favourite[0]?.opts?.catch === false && lines.count === 2 &&
