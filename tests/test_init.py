@@ -97,8 +97,11 @@ async def test_config_flow_names_the_pet(hass: HomeAssistant) -> None:
         "pond",
         "nightsky",
     ]
-    # The beetle isn't ready yet, so the terrarium lists the gecko and tarantula.
-    assert worlds[1]["label"] == "Terrarium: Leopard gecko, Mexican red-knee tarantula"
+    # The beetle isn't ready yet, so the terrarium lists the other four.
+    assert worlds[1]["label"] == (
+        "Terrarium: Leopard gecko, Mexican red-knee tarantula, Russian tortoise, "
+        "Bearded dragon, Ball python"
+    )
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {CONF_NAME: "Juniper", "world": "woodland"}
     )
@@ -276,7 +279,8 @@ async def test_egg_hatches_into_a_roster_species(
     await hass.services.async_call(DOMAIN, "fast_forward", {"hours": 1}, blocking=True)
     species = hatched[0].data["species"]
     attrs = hass.states.get("sensor.pip_life_stage").attributes
-    assert species in attrs["roster"] == ["bird", "squirrel", "deer"]
+    assert attrs["roster"] == ["bird", "squirrel", "deer", "fox", "bananaslug"]
+    assert species in attrs["roster"]
     assert attrs["species"] == species
     assert attrs["raised"] == [species]
 
@@ -1299,6 +1303,8 @@ async def test_next_egg_choice_decides_the_hatch(
         "Bird",
         "Douglas squirrel",
         "Black-tailed deer",
+        "Red fox",
+        "Banana slug",
     ]
     entry = er.async_get(hass).async_get("select.pip_next_egg")
     assert entry.entity_category is er.EntityCategory.CONFIG
@@ -1340,6 +1346,9 @@ async def test_next_egg_offers_the_new_world_while_a_move_waits(
         "Surprise me",
         "Pacific tree frog",
         "Axolotl",
+        "Western pond turtle",
+        "Mallard duckling",
+        "Beaver",
     ]
     await pick(hass, "Axolotl")
     await press(hass, "button.pip_lay_egg")
