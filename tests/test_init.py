@@ -1216,7 +1216,9 @@ async def test_the_pet_comments_on_whats_on_tv(
     )
     await settle(hass, freezer)
     moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
-    assert moments[0]["type"] == "watching" and moments[0]["title"] == "Bluey"
+    # (The day's wish may be "watch TV together": then it comes true just after.)
+    watching = [m for m in moments if m["type"] == "watching"]
+    assert watching and watching[0]["title"] == "Bluey"
 
 
 async def pick(hass: HomeAssistant, option: str) -> None:
@@ -1629,3 +1631,57 @@ async def test_halloween_morning_greets_the_phones_once(
     await settle(hass, freezer)
     await hass.async_block_till_done(wait_background_tasks=True)
     assert len([c for c in phone if "Halloween" in c.data["message"]]) == expected
+
+
+# --- Daily check-ins --------------------------------------------------------
+
+
+async def test_the_days_wish_comes_true_when_someone_plays(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=60.0)
+    await setup(hass)
+    await settle(hass, freezer, 5 * 60)  # the tick picks today's wish
+    wish = hass.states.get("sensor.pip_life_stage").attributes["wish"]
+    assert wish["kind"] in {"play", "snack", "bath", "praise", "tuck_in", "sunset"}
+    assert wish["granted"] is False and "by" not in wish
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.state.wish["kind"] = "play"  # make it one a button can grant
+    await press(hass, "button.pip_play")
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.pip_life_stage").attributes["wish"]["granted"]
+    moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
+    assert moments[0]["type"] == "wish_granted" and moments[0]["kind"] == "play"
+
+
+async def test_it_dreams_of_last_nights_show(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-26 20:00:00+00:00")
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    await setup_with_house(hass, tv=["media_player.tv"])
+    hass.states.async_set(
+        "media_player.tv",
+        "playing",
+        {"media_content_type": "tvshow", "media_series_title": "Bluey"},
+    )
+    await settle(hass, freezer)
+    hass.states.async_set("media_player.tv", "off")
+    # Through the night (it goes to bed at 23:00) to the morning (wake 07:00).
+    for _ in range(12 * 12):
+        await settle(hass, freezer, 5 * 60)
+    dream = hass.states.get("sensor.pip_life_stage").attributes["dream"]
+    assert dream == {"kind": "watching", "title": "Bluey"}
+    # The title is the house's business: diagnostics leave it out.
+    from custom_components.virtual_pet.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    diag = await async_get_config_entry_diagnostics(hass, entry)
+    assert "Bluey" not in str(diag)

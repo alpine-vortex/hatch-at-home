@@ -264,6 +264,38 @@ const IDLE_SPREAD_MS = 25000;
 const IDLE_MOODS = new Set(["content", "cozy", "bored", "excited", "sleepy", "hungry", "dirty"]);
 // A viewer is greeted by name at most this often, per pet.
 const GREET_EVERY_MS = 3 * 3600 * 1000;
+// Daily check-ins. The day's wish (life_stage "wish"), in the pet's words and
+// short for the status screen; its dream (life_stage "dream"); the "while you
+// were out" note after this long away (per device).
+const WISHES = {
+  play: ["I wish we could play a game today!", "play a game together"],
+  snack: ["I'd love a snack after lunch...", "a snack after lunch"],
+  bath: ["I wish I could have a bubble bath!", "a bubble bath"],
+  praise: ["I hope someone says I'm good today", "hear \"good job!\""],
+  tuck_in: ["will you tuck me in tonight?", "be tucked in tonight"],
+  sunset: ["can we watch the sunset together?", "watch the sunset together"],
+  music: ["I wish we could listen to music today ♪", "some music"],
+  tv: ["can we watch something together today?", "watch TV together"],
+  chore: ["I'd love a treat from a chore today", "a chore treat"],
+  rain: ["I hope I get to see the rain today", "see the rain"],
+};
+const DREAMS = {
+  watching: (d) => `I dreamed about ${d.title}!`,
+  listening: (d) => `♪ I dreamed of ${d.title} ♪`,
+  rain_started: () => "I dreamed it was raining...",
+  rainbow: () => "I dreamed about a rainbow!",
+  snow_started: () => "I dreamed of snow ❄",
+  moon: () => "I dreamed I flew to the moon!",
+  game: () => "I dreamed we played and I won!",
+  chore: () => "I dreamed about treats...",
+  wish: () => "I dreamed my wish came true again ♥",
+  trait: () => "I had such a big dream last night...",
+  flying: () => "I dreamed I could fly!",
+  clouds: () => "I dreamed I napped on a cloud...",
+  feast: () => "I dreamed about a giant snack!",
+};
+const AWAY_NOTE_AFTER_MS = 3 * 3600 * 1000;
+const WISH_MENTION_MS = [600000, 900000]; // between reminders of an open wish
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 // Whole degrees in the owner's unit (the server converts), with a real minus.
 const degrees = (n) => (Number.isFinite(n) ? `${n}°`.replace("-", "−") : "");
@@ -1551,6 +1583,10 @@ class HatchPetCard extends HTMLElement {
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
       if (s === this._slides[this._index]) {
         this._greet(s);
+        this._firstLook(s);
+        this._sayQueued(s);
+        this._wishMention(s);
+        this._seen(s);
         this._idle(s);
         this._flairTick(s);
         this._seasonTick(s);
@@ -1628,6 +1664,97 @@ class HatchPetCard extends HTMLElement {
   }
 
   // Hello to whoever is looking, by first name, now and then (this browser only).
+  // --- Daily check-ins ----------------------------------------------------
+
+  // Lines waiting for the bubble (a dream, the away note, a wish), said one at
+  // a time once nothing else is being said.
+  _queue(s, text, ms = 4500) {
+    (s.queue ??= []).push({ text, ms });
+  }
+
+  _sayQueued(s) {
+    const now = Date.now();
+    if (!s.queue?.length || s.sayUntil > now || s.game || s.screen.classList.contains("show-status")) return;
+    const { text, ms } = s.queue.shift();
+    s.bubble.textContent = text;
+    s.sayUntil = now + ms;
+    this._animate(s, s.pet, "perk", 320);
+  }
+
+  // The first look at this pet on this device: what happened while you were
+  // out, this morning's dream and today's wish (each once a day per device).
+  _firstLook(s) {
+    const away = this._state(s, "sensor.mood")?.state === "away";
+    if (s.lookedFirst || !s.species || s.asleep || away || this._eggMinutes(this._state(s, "sensor.life_stage")) !== null) return;
+    s.lookedFirst = true;
+    const stage = this._state(s, "sensor.life_stage")?.attributes || {};
+    const device = s.ids?.device;
+    let seen = 0;
+    try {
+      seen = Number(localStorage.getItem(`hatch-seen-${device}`) || 0);
+    } catch (err) {
+      // no storage: no away note
+    }
+    if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS) {
+      const note = this._awayNote(s, seen);
+      if (note) this._queue(s, note, 5500);
+    }
+    const dream = stage.dream && DREAMS[stage.dream.kind];
+    if (dream && oncePerDay(`dream-${device}`)) this._queue(s, dream(stage.dream), 5000);
+    const wish = stage.wish && !stage.wish.granted && WISHES[stage.wish.kind];
+    if (wish && oncePerDay(`wish-${device}`)) this._queue(s, wish[0], 5000);
+  }
+
+  // Now and then, an open wish comes up again (never more than every 10 minutes).
+  _wishMention(s) {
+    const now = Date.now();
+    const [lo, hi] = WISH_MENTION_MS;
+    if (!s.nextWish) s.nextWish = now + lo + Math.random() * (hi - lo);
+    if (now < s.nextWish || !this._free(s)) return;
+    s.nextWish = now + lo + Math.random() * (hi - lo);
+    const wish = this._state(s, "sensor.life_stage")?.attributes.wish;
+    if (wish && !wish.granted && WISHES[wish.kind]) this._queue(s, WISHES[wish.kind][0]);
+  }
+
+  // When this device last saw the pet (for the away note), every minute.
+  _seen(s) {
+    const now = Date.now();
+    if (s.seenAt && now - s.seenAt < 60000) return;
+    s.seenAt = now;
+    try {
+      localStorage.setItem(`hatch-seen-${s.ids?.device}`, String(now));
+    } catch (err) {
+      // no storage
+    }
+  }
+
+  // "while you were out, I napped, watched the rain and had a snack!": up to
+  // three things from the moments and care since the device last looked.
+  _awayNote(s, since) {
+    const lastCare = this._state(s, "sensor.last_care")?.attributes || {};
+    const after = (at) => new Date(at).getTime() > since;
+    const bits = [];
+    const add = (b) => { if (b && !bits.includes(b)) bits.push(b); };
+    const MOMENT_BITS = {
+      fell_asleep: "napped", woke_up: "napped", watching: "watched TV", listening: "listened to music",
+      news: "heard some news", sunset: "watched the sunset", wish_granted: "got my wish!",
+      trait_learned: "learned something new", first_snow: "saw the first snow!",
+    };
+    const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow!", rainbow: "saw a rainbow?!", sun_out: "sunbathed" };
+    const CARE_BITS = { feed: "had a meal", snack: "had a snack", play: "played", game: "played a game", clean: "had a bath", chore_treat: "got a chore treat" };
+    for (const m of [...(lastCare.moments || [])].reverse()) {
+      if (!after(m.at)) continue;
+      add(m.type === "weather" ? WEATHER_BITS[m.change] : MOMENT_BITS[m.type]);
+    }
+    for (const e of [...(lastCare.log || [])].reverse()) {
+      if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) add(CARE_BITS[e.action]);
+    }
+    if (!bits.length) return null;
+    const list = bits.slice(0, 3);
+    const said = list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list[0];
+    return `while you were out, I ${said}`.replace(/([^!?])$/, "$1!");
+  }
+
   _greet(s) {
     if (s.greeted || !this._free(s)) return;
     s.greeted = true;
@@ -1823,6 +1950,11 @@ class HatchPetCard extends HTMLElement {
         else this._animate(s, s.pet, "perk", 320);
         break;
       }
+      case "wish_granted": // lines that arrive together queue, so none is lost
+        this._sparkle(s);
+        this._chirp(s, "trait");
+        this._queue(s, pick(["my wish came true! thank you ♥", "yay, my wish! ♥", "best day ever! ♥"]));
+        break;
       case "tv_off_late":
         say(pick(["*yawn* bedtime?", "all done? sleepy now..."]));
         break;
@@ -1954,6 +2086,8 @@ class HatchPetCard extends HTMLElement {
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
+      ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
+        ? `<span>♥ came true!</span>` : `<span>♡ ${escape(WISHES[stageAttrs.wish.kind][1])}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${row(null, "notify me", `<span><button class="bell" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}

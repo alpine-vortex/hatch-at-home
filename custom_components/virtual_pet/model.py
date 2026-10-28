@@ -125,6 +125,11 @@ class PetState:
     chore_treats: list[float] = field(default_factory=list)  # when each was earned
     firsts: dict[str, str] = field(default_factory=dict)  # kind -> season it was seen
     memories: list[dict[str, Any]] = field(default_factory=list)  # for the journal
+    # Daily check-ins: today's wish {kind, day, granted, by, at}; the day's
+    # moments a dream can be about; this morning's dream {kind, title?, day}.
+    wish: dict[str, Any] | None = None
+    dream_seeds: list[dict[str, Any]] = field(default_factory=list)
+    dream: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store."""
@@ -1278,6 +1283,82 @@ def season_first(state: PetState, kind: str, now: float, tz: tzinfo) -> list[Eve
     state.memories.append({"kind": f"first_{kind}", "at": now})
     del state.memories[:-MEMORIES_KEPT]
     return [{"type": f"first_{kind}"}]
+
+
+# --- Daily check-ins: a wish and a dream ---------------------------------------
+
+# What the pet can wish for, and what grants it. Each needs the house to be able
+# to grant it (coordinator.wish_options): no music wish without a music player.
+WISHES = (
+    "play",
+    "snack",
+    "bath",
+    "praise",
+    "tuck_in",
+    "sunset",
+    "music",
+    "tv",
+    "chore",
+    "rain",
+)
+ALWAYS_WISHES = {"play", "snack", "bath", "praise", "tuck_in", "sunset"}
+
+
+def pick_wish(
+    state: PetState, today: str, rng: random.Random, options: set[str]
+) -> list[Event]:
+    """Today's wish, once a day, from what the house can grant (never yesterday's
+    again). Missing a wish costs nothing: tomorrow brings a new one."""
+    if state.wish and state.wish.get("day") == today:
+        return []
+    last = state.wish.get("kind") if state.wish else None
+    choices = [k for k in WISHES if k in options and k != last] or [
+        k for k in WISHES if k in options
+    ]
+    if not choices:
+        return []
+    kind = rng.choice(choices)
+    state.wish = {"kind": kind, "day": today, "granted": False}
+    return [{"type": "wish_made", "kind": kind}]
+
+
+def grant_wish(
+    state: PetState, trigger: str, now: float, today: str, hour: int, by: str | None
+) -> list[Event]:
+    """Something happened that may be today's wish: grant it, once."""
+    wish = state.wish
+    if not wish or wish.get("granted") or wish.get("day") != today:
+        return []
+    if wish.get("kind") != trigger:
+        return []
+    if trigger == "snack" and hour < R.WISH_SNACK_AFTER_HOUR:
+        return []  # "a snack after lunch"
+    wish.update(granted=True, at=now, by=by)
+    state.happiness = _clamp(state.happiness + R.WISH_HAPPINESS)
+    return [{"type": "wish_granted", "kind": trigger}]
+
+
+def dream_seed(state: PetState, seed: dict[str, Any], now: float) -> None:
+    """Remember a moment of the day the pet might dream about tonight."""
+    state.dream_seeds.append({**seed, "at": now})
+    del state.dream_seeds[: -R.DREAM_SEEDS_KEPT]
+
+
+def dream_on_waking(
+    state: PetState, now: float, today: str, rng: random.Random
+) -> list[Event]:
+    """In the morning, the pet dreamed of one of yesterday's moments (or, with
+    none, maybe of something plain). The seeds are used up either way."""
+    fresh = [s for s in state.dream_seeds if now - s["at"] < R.DREAM_SEED_HOURS * 3600]
+    state.dream_seeds = []
+    if fresh:
+        seed = rng.choice(fresh)
+        state.dream = {k: v for k, v in seed.items() if k != "at"} | {"day": today}
+    elif rng.random() < R.DREAM_PLAIN_CHANCE:
+        state.dream = {"kind": rng.choice(["flying", "clouds", "feast"]), "day": today}
+    else:
+        return []
+    return [{"type": "dreamed", **state.dream}]
 
 
 # --- Chores -------------------------------------------------------------------

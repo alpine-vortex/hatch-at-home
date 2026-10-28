@@ -260,3 +260,11 @@ FAN_HAPPINESS = 8.0
 COMFORT_MINUTES = 120  # cozy (blanket) or cool (fan) lasts this long
 COMFORT_HAPPINESS = 1.0  # per hour while cozy or cool
 HOME_FIRE_HAPPINESS = 1.0  # a lit fireplace (counts toward the cap)
+
+# Daily check-ins: a wish a day, and a dream in the morning (cosmetic but for
+# the small happiness a granted wish gives).
+WISH_HAPPINESS = 8.0  # once, when the day's wish comes true
+WISH_SNACK_AFTER_HOUR = 12  # "a snack after lunch": local hour from which it counts
+DREAM_SEEDS_KEPT = 12  # the day's moments a dream can be about
+DREAM_SEED_HOURS = 30.0  # older seeds are forgotten
+DREAM_PLAIN_CHANCE = 0.5  # with nothing to dream about: a plain dream, or none

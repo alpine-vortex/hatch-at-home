@@ -103,6 +103,23 @@ details before committing it.
   The ears and horns have a thin band. Costumes sit on the lowest head top across the
   idle frames (`_headTopAll`). The preview script's injected creature can be undone by
   the test pet's own update mid-shot; discard cells that show the wrong creature.
+- **Daily check-ins, batch 1** (`docs/plan-2026-10-28-daily-checkins.md`, items 2 and
+  4; unreleased when written): `model.pick_wish` / `grant_wish` (state `wish`, from
+  `coordinator.wish_options()`: `ALWAYS_WISHES` plus music, TV, chores when mapped and
+  rain when today's forecast says so), granted in `coordinator._check_ins` from care,
+  games, chores, lights out, sunset with company, and the house (music, TV, rain);
+  `dream_seed` / `dream_on_waking` (state `dream_seeds`, `dream`), dreamed at the
+  morning wake. Both on the life stage sensor (`wish`, `dream`, today only, unrecorded;
+  who granted it stays on the server; diagnostics redact dream titles). Card: a say
+  queue (`_queue`, so lines that arrive together are all said), `_firstLook` (away
+  note, dream, wish, each once a day per device), `_wishMention`, the wish row, the
+  `wish_granted` moment. Next in the plan: the bond with each person (item 3; the owner
+  confirmed every player has their own HA login), then finds and visitors per world,
+  then pets visiting each other.
+- **Thanksgiving: must do** (owner, 2026-10-28; tududi task due 20 November): US date,
+  26 November 2026 (fourth Thursday, computed). The same all-out treatment as Halloween,
+  plus a morning greeting (`notify.HOLIDAYS` needs a computed-date path). Art through
+  the Hatch API Art session.
 - **Holiday mornings** (0.28.1): `notify.HOLIDAYS` maps a date to a holiday and
   `HOLIDAY_MORNINGS` its phone text; on that date the pet's first morning moment
   (`good_morning`, or waking at wake time) fires a `holiday` event, which notifies the

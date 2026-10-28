@@ -1354,3 +1354,68 @@ def test_the_first_snow_of_the_season_is_a_memory_once_per_winter():
     pet.age_hours = 14 * 24 + 7 * 24 + 1.0
     egg, _ = model.lay_egg(pet, next_winter, random.Random(1))
     assert len(egg.memories) == 2 and egg.firsts == pet.firsts
+
+
+# --- Daily check-ins --------------------------------------------------------
+
+
+def test_a_wish_a_day_from_what_the_house_can_grant():
+    pet = hatched(at(9))
+    rng = random.Random(1)
+    events = model.pick_wish(pet, "d1", rng, {"play", "snack"})
+    assert events == [{"type": "wish_made", "kind": pet.wish["kind"]}]
+    assert pet.wish["kind"] in {"play", "snack"} and not pet.wish["granted"]
+    assert model.pick_wish(pet, "d1", rng, {"play", "snack"}) == []  # once a day
+    first = pet.wish["kind"]
+    model.pick_wish(pet, "d2", rng, {"play", "snack"})
+    assert pet.wish["kind"] != first  # never yesterday's again
+    # Only one option left: that one, even if it was yesterday's.
+    model.pick_wish(pet, "d3", rng, {pet.wish["kind"]})
+    assert pet.wish["day"] == "d3"
+    assert model.pick_wish(hatched(at(9)), "d1", rng, set()) == []
+
+
+def test_a_wish_comes_true_once_and_only_today():
+    pet = hatched(at(9), happiness=50.0)
+    pet.wish = {"kind": "snack", "day": "d1", "granted": False}
+    assert model.grant_wish(pet, "play", at(13), "d1", 13, None) == []  # not this
+    assert model.grant_wish(pet, "snack", at(10), "d1", 10, None) == []  # not yet lunch
+    assert model.grant_wish(pet, "snack", at(13), "d2", 13, None) == []  # yesterday's
+    assert model.grant_wish(pet, "snack", at(13), "d1", 13, "Alex") == [
+        {"type": "wish_granted", "kind": "snack"}
+    ]
+    assert pet.wish["granted"] and pet.wish["by"] == "Alex"
+    assert pet.happiness == 50.0 + R.WISH_HAPPINESS
+    assert model.grant_wish(pet, "snack", at(14), "d1", 14, None) == []  # once
+
+
+def test_it_dreams_of_yesterday_and_forgets_old_seeds():
+    pet = hatched(at(20))
+    model.dream_seed(pet, {"kind": "watching", "title": "Bluey"}, at(20))
+    model.dream_seed(pet, {"kind": "moon"}, at(20) - 40 * HOUR)  # too old
+    events = model.dream_on_waking(pet, at(7, day=2), "d2", random.Random(0))
+    assert pet.dream == {"kind": "watching", "title": "Bluey", "day": "d2"}
+    assert events == [{"type": "dreamed", **pet.dream}]
+    assert pet.dream_seeds == []
+    # Nothing to dream of: a plain dream, or none.
+    kinds = set()
+    for seed in range(20):
+        pet.dream = None
+        model.dream_on_waking(pet, at(7, day=3), "d3", random.Random(seed))
+        kinds.add(pet.dream and pet.dream["kind"])
+    assert None in kinds and kinds - {None} <= {"flying", "clouds", "feast"}
+
+
+def test_dream_seeds_are_capped():
+    pet = hatched(at(9))
+    for i in range(R.DREAM_SEEDS_KEPT + 5):
+        model.dream_seed(pet, {"kind": "game"}, at(9) + i)
+    assert len(pet.dream_seeds) == R.DREAM_SEEDS_KEPT
+
+
+def test_a_save_from_before_check_ins_loads():
+    data = hatched(at(9)).to_dict()
+    for key in ("wish", "dream_seeds", "dream"):
+        data.pop(key)
+    pet = model.PetState.from_dict(data)
+    assert pet.wish is None and pet.dream_seeds == [] and pet.dream is None

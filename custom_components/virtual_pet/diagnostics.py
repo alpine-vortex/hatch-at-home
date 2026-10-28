@@ -75,7 +75,8 @@ async def async_get_config_entry_diagnostics(
         "world": coordinator.world,
         "roster": list(coordinator.roster),
         "options": async_redact_data(dict(entry.options), REDACT_OPTIONS),
-        "pet": async_redact_data(pet.to_dict(), REDACT_STATE),
+        # PRIVATE_READINGS: the titles a dream can be about.
+        "pet": async_redact_data(pet.to_dict(), REDACT_STATE | PRIVATE_READINGS),
         "now": {
             "stage": model.life_stage(pet),
             "mood": mood,

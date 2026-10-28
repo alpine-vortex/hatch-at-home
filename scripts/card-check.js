@@ -486,6 +486,57 @@ async function main() {
   check("seasonal: false takes the season away",
     await card.evaluate((el) => el._slides[el._index].seasonBox.children.length === 0));
 
+  // Daily check-ins: the first look of the day tells what happened while you
+  // were out, this morning's dream and today's wish, in turn; the wish is on the
+  // status screen; a wish coming true queues behind a line said at the same time.
+  const hourAgo = new Date(Date.now() - 3600 * 1000).toISOString();
+  await inject(pet["sensor.life_stage"], {
+    attributes: { wish: { kind: "sunset", granted: false }, dream: { kind: "watching", title: "Bluey" } },
+  });
+  await inject(pet["sensor.last_care"], {
+    attributes: { moments: [{ type: "weather", change: "rain_started", at: hourAgo },
+      { type: "fell_asleep", how: "house", at: hourAgo }] },
+  });
+  const firstLook = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const device = s.ids.device;
+    for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish)-/.test(k)) localStorage.removeItem(k);
+    localStorage.setItem(`hatch-seen-${device}`, String(Date.now() - 5 * 3600 * 1000));
+    s.lookedFirst = false; s.queue = []; s.sayUntil = 0; s.flairUntil = 0;
+    el._firstLook(s);
+    const said = [];
+    for (let i = 0; i < 3; i++) {
+      s.sayUntil = 0;
+      el._sayQueued(s);
+      said.push(s.bubble.textContent);
+    }
+    return said;
+  });
+  check("the first look tells the day's news, dream and wish",
+    /^while you were out, I (napped|watched the rain)/.test(firstLook[0]) && firstLook[1] === "I dreamed about Bluey!" &&
+      firstLook[2] === "can we watch the sunset together?", firstLook.join(" | "));
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(500);
+  check("the wish is on the status screen", /wish\s*♡ watch the sunset together/.test(await cur().locator(".status").innerText()));
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(300);
+  await inject(pet["sensor.life_stage"], { attributes: { wish: { kind: "sunset", granted: true } } });
+  await inject(pet["sensor.last_care"], {
+    attributes: { moments: [{ type: "wish_granted", kind: "sunset", at: new Date().toISOString() },
+      { type: "sunset", at: new Date().toISOString() }] },
+  });
+  await page.waitForTimeout(600);
+  const granted = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const first = s.bubble.textContent; // the sunset's line
+    s.sayUntil = 0;
+    el._sayQueued(s);
+    return [first, s.bubble.textContent];
+  });
+  check("a wish coming true is celebrated after the line said with it",
+    /sun|sky/.test(granted[0]) && /wish|best day/.test(granted[1]), granted.join(" | "));
+  await shot("05-wish-granted");
+
   // Excitement bounces briefly, not for the whole 15 minutes it lasts. The
   // bounce starts on becoming excited, and the games above may have excited the
   // pet already, so calm it first.

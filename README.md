@@ -91,6 +91,19 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   one side; tap that side as it reaches the pet, but let the bee go by. Five rounds,
   three catches win; the best score stays in this browser. No reward, nothing is sent
   to Home Assistant.
+- **Every day** there's something new when you look in:
+  - **A wish of the day**, picked when it wakes up, only from what your house can grant: play
+    a game together, a snack after lunch, a bubble bath, "good job!", being tucked in
+    tonight, watching the sunset together (someone home at sunset), and, when you have
+    them mapped, some music, TV together, a chore treat, or seeing the rain on a day the
+    forecast says rain. It's on the status screen and the pet mentions it now and then;
+    granting it brings a sparkle and a little happiness. A missed wish costs nothing:
+    tomorrow brings a new one.
+  - **A dream**: it may dream about something from the day before (a show it watched,
+    the rain, a game it won, its wish coming true) and tells the first person who
+    looks in that morning.
+  - **While you were out**: open the card after a few hours away and it tells you what
+    happened ("while you were out, I napped, watched the rain and played a game!").
 - **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
   off): from 20 to 31 October it's **Halloween**. Bunting hangs across the scene, a
   jack-o'-lantern with a new carved face each day sits by the pet and glows at night (it
