@@ -3956,6 +3956,7 @@ class HatchPetCard extends HTMLElement {
   _partyTick(s) {
     if (!this._state(s, "sensor.life_stage")?.attributes.birthday) return;
     if (!this._free(s) || s.pet.classList.contains("hop")) return;
+    if (this._hatSpot(s) === null) return; // a pose no hat can sit on: wait for the next
     const season = seasonNow(this._config);
     const today = new Date();
     const treatOn = season?.treat && seasonDate(season.treat, today.getFullYear());
