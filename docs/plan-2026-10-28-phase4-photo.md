@@ -1,5 +1,14 @@
 # Phase 4: a photo, for best friends (build plan, draft 2)
 
+**Status (2026-10-28): built as 0.34.0b1, awaiting the beta try on both
+companion apps.** Reconcile for phase 5: the snapshot keeps `{name, species,
+stage, traits, on}` (no `since`, no `world`); `take_photo` runs only on a
+counted visit (awake), and the note is derived in `_notes` right after the
+celebration. The quoted alt text lost "since" with the caption ("photo of Pip,
+best friends, <day>"); the download link's text is the file name. The card
+gained `loadImage` (cached, for canvases) and `spriteSrc` (the sprite path
+helper `_show` uses), which baby talk or moths may reuse.
+
 Phase 4 of `plan-2026-10-28-voices-and-lines.md`: A7. That plan's second audit,
 row 3, wins over part A: photos keyed by generation; delivered only by the visit's
 response; shown only to that person, never on a shared screen; a canvas with its

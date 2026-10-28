@@ -526,6 +526,11 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   to, by its nickname for you. Like every phone message, that one is in Home
   Assistant's history, where admins can see it; that's why it starts off. "forget my birthday" on the
   status screen forgets it and stops asking.
+- **A photo, for best friends.** At bond level 10, once a pet is a teen, it makes
+  you a framed photo of itself as it was that day ("I made you something! it's in
+  your journal ♥"), once per generation. It's in your journal under "photos", seen
+  only by you and never on a shared screen, a sensor or a phone message. Tap "save"
+  to share it or keep it.
 - **A welcome for every new pet.** Adding a pet through the integration tells the
   whole house: "Pip, a new virtual pet, just moved in! Say hi ♥" It goes to every phone with
   the Home Assistant app, whether or not anyone tapped "notify me", and to the
