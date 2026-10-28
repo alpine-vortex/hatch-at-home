@@ -64,3 +64,11 @@ async def test_phones_are_told_at_once_and_a_broken_one_stays_quiet(
     # The failure is logged without the phone's (often its owner's) name.
     warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
     assert warnings and not any("old" in w.lower() for w in warnings)
+
+
+def test_halloween_morning_reads_well_and_only_on_the_day():
+    assert notify.holiday(10, 31) == "halloween"
+    assert notify.holiday(10, 30) is None and notify.holiday(11, 1) is None
+    text = notify.message({"type": "holiday", "holiday": "halloween"}, "Pip", {})
+    assert text == "Happy Halloween! Pip is dressed up and ready to trick or treat 🎃"
+    assert notify.message({"type": "holiday", "holiday": "nope"}, "Pip", {}) is None

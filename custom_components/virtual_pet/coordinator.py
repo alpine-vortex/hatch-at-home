@@ -165,6 +165,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._forecast_at = -1e12
         self._forecast_due: float | None = None  # today's, after good morning
         self._forecast_evening: str | None = None  # the day last talked about
+        # The day the holiday morning was last sent (in memory; a restart that
+        # morning may send it again, and the phone's tag replaces the first).
+        self._holiday_on: str | None = None
         self.presence = Presence(
             entry.options.get(CONF_AWAY_AFTER, R.HOME_AWAY_AFTER_HOURS)
         )
@@ -623,6 +626,26 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 del self.moments[MOMENTS_KEPT:]
         if events:
             self.debug["last_events"] = [e["type"] for e in events][-10:]
+        morning = any(
+            e["type"] == "good_morning"
+            or (e["type"] == "woke_up" and e.get("how") == "morning")
+            for e in events
+        )
+        if morning and not simulated:
+            self._holiday_morning()
+
+    def _holiday_morning(self) -> None:
+        """On a holiday, the pet's first morning moment greets it on the phones
+        of the people who get its notifications (once a day)."""
+        if self.state is None or model.life_stage(self.state) == "egg":
+            return
+        local = dt_util.now()
+        today = local.date().isoformat()
+        kind = notify.holiday(local.month, local.day)
+        if kind is None or self._holiday_on == today:
+            return
+        self._holiday_on = today
+        self._fire([{"type": "holiday", "holiday": kind}])
 
     def _notify(self, event: model.Event, simulated: bool) -> None:
         """Tell the users who opted in, on their phones. Never for fast-forward."""

@@ -4,9 +4,8 @@ Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's bran
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
-release **0.27.0** (PR #7 merged: the games, trait flair, the polish pass and the
-256-colour backgrounds; the owner chose to release it before the tuning review).
-**The owner runs it on
+release **0.28.0** (2026-10-28: weather talk, #10, and Halloween, #11); **0.28.1** adds
+the Halloween morning notification (this branch). **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read the README first, then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and
@@ -101,6 +100,11 @@ details before committing it.
   The ears and horns have a thin band. Costumes sit on the lowest head top across the
   idle frames (`_headTopAll`). The preview script's injected creature can be undone by
   the test pet's own update mid-shot; discard cells that show the wrong creature.
+- **Holiday mornings** (0.28.1): `notify.HOLIDAYS` maps a date to a holiday and
+  `HOLIDAY_MORNINGS` its phone text; on that date the pet's first morning moment
+  (`good_morning`, or waking at wake time) fires a `holiday` event, which notifies the
+  opted-in users once a day (`_holiday_morning`, in memory). Halloween only so far;
+  Thanksgiving will need a computed date (the fourth Thursday of November).
 - **Weather talk** (Tier 1 of `docs/plan-2026-10-27-real-time-connections.md`,
   merged in PR #10, released in 0.28.0): `weather` moments (`change`:
   rain_started, rain_stopped, rainbow, snow_started, sun_out, hot, cold) from

@@ -1582,3 +1582,50 @@ async def test_wind_speed_reaches_the_mood(
     await setup_with_house(hass, weather="weather.home")
     await settle(hass, freezer)
     assert "windy" in hass.states.get("sensor.pip_mood").attributes["flags"]
+
+
+async def opted_in_phone(hass: HomeAssistant) -> list[Any]:
+    me = await hass.auth.async_create_user("Me")
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": me.id, "device_name": "My Phone"}
+    ).add_to_hass(hass)
+    phone = async_mock_service(hass, "notify", "mobile_app_my_phone")
+    await hass.services.async_call(
+        DOMAIN,
+        "notify_me",
+        {"entity_id": "sensor.pip_mood", "enabled": True},
+        blocking=True,
+        context=Context(user_id=me.id),
+    )
+    return phone
+
+
+@pytest.mark.parametrize(("day", "expected"), [(31, 1), (30, 0)])
+async def test_halloween_morning_greets_the_phones_once(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+    day: int,
+    expected: int,
+) -> None:
+    # The hall has been still for an hour, so nobody has stirred yet.
+    freezer.move_to(f"2026-10-{day} 07:00:00+00:00")
+    hass.states.async_set("binary_sensor.hall", "off")
+    freezer.move_to(f"2026-10-{day} 08:00:00+00:00")
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    await setup_with_house(hass, motion=["binary_sensor.hall"])
+    phone = await opted_in_phone(hass)
+    hass.states.async_set("binary_sensor.hall", "on")
+    await settle(hass, freezer)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    texts = [c.data["message"] for c in phone if "Halloween" in c.data["message"]]
+    assert len(texts) == expected
+    if expected:
+        assert texts[0].startswith("Happy Halloween! Pip is dressed up")
+    # Another morning moment the same day sends nothing more.
+    hass.states.async_set("binary_sensor.hall", "off")
+    await settle(hass, freezer, 20 * 60)
+    hass.states.async_set("binary_sensor.hall", "on")
+    await settle(hass, freezer)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len([c for c in phone if "Halloween" in c.data["message"]]) == expected
