@@ -43,9 +43,9 @@ WORLDS = [
     ("Night Sky", "nightsky", "5-Luna", ["bat", "lunamoth"]),
 ]
 NAMES = {
-    "bird": "Robin",
+    "bird": "Bird",
     "squirrel": "Squirrel",
-    "deer": "Fawn",
+    "deer": "Deer",
     "kitten": "Kitten",
     "bunny": "Lop bunny",
     "gecko": "Gecko",
@@ -490,7 +490,7 @@ if __name__ == "__main__":
             ("05-first_snow", "the first snow!"),
             ("05-sunset", "sunsets together"),
             ("05-trait_learned", "learns your habits"),
-            ("05-halloween-extras", "spooky seasons"),
+            ("05-halloween-extras", "Halloween dress-up"),
         ],
         (126, 104, 222),
         (150, 130, 236),

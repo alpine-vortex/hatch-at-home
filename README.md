@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/readme/hero.png" alt="Hatch at Home: a virtual pet that lives in your house, for Home Assistant. Two pet devices and a parade of all thirteen creatures." width="100%">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/hero.png" alt="Hatch at Home: a virtual pet that lives in your house, for Home Assistant. Two pet devices and a parade of all thirteen creatures." width="100%">
 </p>
 
 <h3 align="center">★ Your very own pixel pet... that lives in your smart home! ★</h3>
@@ -14,16 +14,16 @@
 
 ## 🥚 IT'S HATCHING!
 
-An egg has arrived at your house. Keep it warm, and out pops a tiny friend who
+An egg has arrived at your house. Give it half an hour, and out pops a tiny friend who
 **eats, naps, plays, poops, sulks, dreams and grows up**, right on your Home
 Assistant dashboard.
 
 But this is no ordinary virtual pet. **It knows your house!** It watches the rain
 from the window, curls up when you light the fire, dances when the music plays,
-yawns when the lights go out and cheers when you come home.
+says good night when the lights go out and cheers when you come home.
 
 <p align="center">
-  <img src="docs/readme/worlds.png" alt="Choose your world: six pet devices, Woodland, Hearth, Terrarium, Tidepool, Pond and Night Sky, each with its creatures" width="100%">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/worlds.png" alt="Choose your world: six pet devices, Woodland, Hearth, Terrarium, Tidepool, Pond and Night Sky, each with its creatures" width="100%">
 </p>
 
 ## ★ FEATURES ★
@@ -32,28 +32,28 @@ yawns when the lights go out and cheers when you come home.
 <tr>
 <td width="50%" valign="top">
 
-<img src="custom_components/virtual_pet/frontend/ui/icon_feed.png" width="24" alt=""> **Feed it! Clean it! Tuck it in!**<br>
+<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/icon_feed.png" width="24" alt=""> **Feed it! Clean it! Tuck it in!**<br>
 Eight toy buttons for meals, snacks, play, clean-ups, medicine, scolding, praise and bedtime.
 
-<img src="custom_components/virtual_pet/frontend/ui/stat_heart_full.png" width="24" alt=""> **It calls for YOU!**<br>
+<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/stat_heart_full.png" width="24" alt=""> **It calls for YOU!**<br>
 Hungry? Bored? Sleepy? It calls, and you have 20 minutes to answer. Your phone can buzz with buttons to answer it right away!
 
-<img src="custom_components/virtual_pet/frontend/ui/icon_play.png" width="24" alt=""> **Mini-games!**<br>
+<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/icon_play.png" width="24" alt=""> **Mini-games!**<br>
 *Left or right?* and *Higher or lower?* Win three rounds out of five to make its day!
 
-<img src="custom_components/virtual_pet/frontend/ui/icon_praise.png" width="24" alt=""> **Raise it right!**<br>
+<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/icon_praise.png" width="24" alt=""> **Raise it right!**<br>
 Scold the fake whines, praise the good days. How you raise it decides who it grows up to be: *devoted*, *steady* or *scrappy*.
 
 </td>
 <td width="50%" valign="top">
 
-<img src="custom_components/virtual_pet/frontend/ui/flair_music_lover_1.png" width="20" alt=""> **16 traits to learn!**<br>
+<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/flair_music_lover_1.png" width="20" alt=""> **16 traits to learn!**<br>
 Night owl, music lover, snow child, couch potato... It picks up habits from your house and keeps them for life.
 
-<img src="custom_components/virtual_pet/frontend/ui/icon_journal.png" width="24" alt=""> **A family that grows!**<br>
+<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/icon_journal.png" width="24" alt=""> **A family that grows!**<br>
 Lay an egg, start a new generation and pass a trait down the family line. Every pet goes in the journal.
 
-<img src="custom_components/virtual_pet/frontend/ui/icon_status.png" width="24" alt=""> **Something new every day!**<br>
+<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/icon_status.png" width="24" alt=""> **Something new every day!**<br>
 A wish of the day, a dream to tell you about, and "while you were out..." stories.
 
 🎙️ **Talk to it!**<br>
@@ -64,11 +64,11 @@ A wish of the day, a dream to tell you about, and "while you were out..." storie
 </table>
 
 <p align="center">
-  <img src="docs/readme/grow.png" alt="Watch it grow: a kitten goes from egg to baby in 30 minutes, child in a day, teen in five days and adult in fourteen" width="100%">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/grow.png" alt="Watch it grow: a kitten goes from egg to baby in 30 minutes, child in a day, teen in five days and adult in fourteen" width="100%">
 </p>
 
 <p align="center">
-  <img src="docs/readme/play.png" alt="A life of its own: it greets you by name, picks mini-games, plays higher or lower, shows hearts and meters, makes a daily wish and keeps a family journal" width="100%">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/play.png" alt="A life of its own: it greets you by name, picks mini-games, plays higher or lower, shows hearts and meters, makes a daily wish and keeps a family journal" width="100%">
 </p>
 
 ## 🏠 YOUR HOUSE COMES ALIVE!
@@ -86,11 +86,11 @@ Hook up the things you already have, and your pet notices them:
 | 🎵 plays music | dances! |
 | 🌙 sees a full moon | gazes up at it |
 | 🚪 hears you come home | gets excited to see you |
-| 💡 turns the lights out | gets drowsy and goes to bed |
+| 💡 goes dark at bedtime | says good night and goes to bed |
 | ✅ ticks off a chore | earns a treat! |
 
 <p align="center">
-  <img src="docs/readme/house.png" alt="It knows your house: it reads the forecast, watches TV, sees the first snow, watches sunsets, learns your habits and dresses up for Halloween" width="100%">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/house.png" alt="It knows your house: it reads the forecast, watches TV, sees the first snow, watches sunsets, learns your habits and dresses up for Halloween" width="100%">
 </p>
 
 > [!TIP]
@@ -100,7 +100,7 @@ Hook up the things you already have, and your pet notices them:
 > nobody home it goes to the sitter's, and nothing runs down until you're back.
 
 <p align="center">
-  <img src="docs/readme/collect.png" alt="Collect all 13: the adult creatures of every world, with the eggs they hatch from" width="100%">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/collect.png" alt="Collect all 13: the adult creatures of every world, with the eggs they hatch from" width="100%">
 </p>
 
 ## 🐣 HOW TO HATCH YOUR EGG
@@ -121,7 +121,7 @@ weather, lights, TV and more. Every setting is optional.
 install and development, are in the **[full guide](docs/guide.md)**.
 
 <p align="center">
-  <img src="docs/readme/footer.png" alt="Ages 8 to 108. Requires Home Assistant. Free and open source, MIT licensed." width="100%">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/footer.png" alt="Ages 8 to 108. Requires Home Assistant. Free and open source, MIT licensed." width="100%">
 </p>
 
 <sub>MIT licensed, see [`LICENSE`](LICENSE). The bundled Tiny5 font is under the SIL
