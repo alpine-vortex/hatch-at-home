@@ -1,0 +1,11 @@
+Use your image generation tool to draw ONE image (landscape 3:2) and save it as tortoise_probe.png in the current directory.
+
+A probe sheet of 2 rows x 3 columns of equal square cells introducing a NEW original cute Russian tortoise for a virtual pet: a round high-domed shell of olive-tan plates, each plate with a dark brown centre and a tan border; a blunt friendly tan head; four sturdy scaly tan legs with little claws; a tiny pointed tail. It lives in the same world as the creature in the attached reference sheet, so match that sheet's style and palette feel; do not copy its creature. Faces three-quarters to the right. Each stage keeps its body colours identical in the cells it appears in; moods show through face, pose and small props only, never by recolouring the body.
+- Row 1, mood 'content' (happy idle, soft smile, eyes as gentle arcs). Left = BABY: the hatchling (row 1 left): flatter rounder shell, big head and eyes. Middle = CHILD: the young tortoise (row 1 middle). Right = TEEN: the big tortoise (row 1 right), the biggest, high dome.
+- Row 2, all the TEEN unless stated. Left = mood 'sick': droopy sad eyes, a small thermometer in its mouth (NO colour tint on the body). Middle = mood 'asleep': head and legs tucked mostly inside its shell, eyes closed, a small 'z'. Right = the CHILD in its signature pose 'hide': pulled completely into its shell, only two eyes peeking out of the front opening (scold).
+Row 1 grows clearly from left to right; the three stages share colours and markings so they read as one creature growing up. In every cell the creature rests on the same height, low in the cell.
+
+Attach: art/gecko/gecko_ref_v5.png (style reference).
+
+Art style: chunky retro pixel art exactly like the attached reference sheet: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark pixel outline. Keep the reference's pixel size relative to the subject, so the pixels are large and clearly visible
+Background: one flat even mid-grey everywhere (no gradient, no texture, no floor, no shadows on it). Every subject is drawn whole inside its own cell with a generous empty margin; nothing crosses a cell edge. No text labels, no titles, no cell borders, no grid lines.
