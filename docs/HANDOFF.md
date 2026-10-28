@@ -4,12 +4,14 @@ Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's bran
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
-release **0.29.0** (2026-10-28: the daily wish, dreams, "while you were out", and two
+release **0.29.1** (2026-10-28: the squirrel's paws-up poses no longer have six legs); 0.29.0
+(2026-10-28: the daily wish, dreams, "while you were out", and two
 Halloween costume fixes); 0.28.0 brought weather talk (#10) and Halloween (#11), 0.28.1
 the Halloween morning notification, 0.28.2 the redrawn witch. **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read `docs/guide.md` first (the full user guide; the README is box-back
-marketing with pictures from `scripts/readme/`), then `docs/design-worlds.md`, `art/README.md`,
+marketing; its art, palette, frames and how to redraw them are in
+`docs/readme/README.md`), then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and
 `docs/assist-scoping.md`. The owner's original brief is not in the repo; its key rules
 are restated across the README and the design doc.
@@ -202,7 +204,11 @@ details before committing it.
    and shipped in 0.22.0: rain scenes for every world, the gecko's night and dim, the
    shared `ui/prop_fan`, `prop_scold`, `prop_praise` (the card's `FALLBACK_PROPS`; the
    fan keeps its CSS breeze too). A species with its own `bg_rain` gets no drawn rain.
-3. **Art from Sol:** nothing is on order. Every creature on every roster has all four
+3. **Art reviews (2026-10-28):** two reviews of the live frames disagree;
+   `docs/plan-2026-10-28-art-reviews.md` reconciles them. Next: phase 1 (merge the
+   branch `claude/elegant-pascal-44cy2y` and release), then phase 2 (small fixes here)
+   and phase 3 (one art batch).
+   **Art from Sol:** nothing is on order. Every creature on every roster has all four
    stages. Ideas if more is wanted: house poses for baby, teen and adult (expensive),
    a clearer tree-frog snack, an Ocean world.
 4. **Tuning review, about 2026-11-03.** A scheduled reminder fires then. Ask the owner
