@@ -239,3 +239,18 @@ async def test_example_sentences_with_the_built_in_agent(
     assert await say(hass, "lights out, Pip") == "Pip is settling down to sleep."
     # Not every "how is" is about the pet.
     assert "Pip" not in await say(hass, "how is the weather")
+
+
+async def test_the_pet_calls_a_friend_by_nickname(
+    hass: HomeAssistant, pip: MockConfigEntry
+) -> None:
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    pip.runtime_data.state.bonds[me.id] = {"points": 40, "nickname": "sunbeam"}
+    response = await ask(hass, "VirtualPetStatus", context=Context(user_id=me.id))
+    assert speech(response).endswith(" Hi, sunbeam!")
+    assert response.speech_slots["nickname"] == "sunbeam"
+    response = await ask(
+        hass, "VirtualPetCare", context=Context(user_id=me.id), action="feed"
+    )
+    assert speech(response) == "Pip is eating. Thanks, sunbeam!"
+    assert "sunbeam" not in speech(await ask(hass, "VirtualPetStatus"))

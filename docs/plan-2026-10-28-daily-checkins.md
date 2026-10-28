@@ -99,8 +99,17 @@ and the pet mentions it now and then.
 owner to change: points per visit 2 (once a day), care 1, a game 2, a granted wish 3;
 care and games capped at 8 a day per person; levels at 0, 4, 10, 20, 34, 52, 75, 105,
 145, 200 points; the unlocks at levels 2 (warmer hello), 3 (hop), 4 (nickname),
-6 (favourite game, +4 happiness when played together) and 8 (hearts); bonds carry
+6 (favourite game, a line when played together) and 8 (hearts); bonds carry
 into the next generation. The "come say hi" wish came with it.
+
+**Second pass** (owner, 2026-10-28: flavour, not gameplay; no journal work now): the
+favourite game lost its happiness, so a bond never changes the stats. Added: the
+nickname on that person's phone notifications and in Assist; a cheer when a close
+friend (level 3+) comes home, by their person entity, and "welcome home" at their
+next look; and a wish now and then aimed at a close friend (35%, play, snack, bath,
+praise or say hi; anyone can grant it). Declined: memories in the journal, and care
+from a friend working better (a good bond is inevitable, so it would only make the
+game easier).
 
 From Nintendogs and the Digimon bracelets: the pet knows each person, separately.
 

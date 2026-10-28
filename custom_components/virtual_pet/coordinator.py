@@ -9,7 +9,13 @@ from typing import Any
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, UnitOfTemperature
+from homeassistant.const import (
+    EVENT_HOMEASSISTANT_STARTED,
+    STATE_HOME,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+    UnitOfTemperature,
+)
 from homeassistant.core import (
     Context,
     CoreState,
@@ -104,6 +110,7 @@ MOMENTS = {
     "wish_granted",
     "bond_up",
     "bond_favourite",
+    "friend_home",
 }
 MOMENTS_KEPT = 10
 # Moments a dream can be about, by the dream's kind. (Not news: it stays
@@ -185,6 +192,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # last looked in (virtual_pet.visit; in memory).
         self._actor: str | None = None
         self._visits: dict[str, float] = {}
+        # People (HA user IDs) whose person entity just came home, and when the
+        # pet last cheered for each (in memory).
+        self._arrivals: list[str] = []
+        self._cheered: dict[str, float] = {}
         self.presence = Presence(
             entry.options.get(CONF_AWAY_AFTER, R.HOME_AWAY_AFTER_HOURS)
         )
@@ -373,6 +384,25 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             async_track_state_change_event(self.hass, ids, changed)
         )
         self.config_entry.async_on_unload(self._home_debouncer.async_shutdown)
+
+        @callback
+        def person_moved(event: Event[EventStateChangedData]) -> None:
+            old, new = event.data["old_state"], event.data["new_state"]
+            if (
+                old is None
+                or new is None
+                or new.state != STATE_HOME
+                or old.state in (STATE_HOME, STATE_UNAVAILABLE, STATE_UNKNOWN)
+            ):
+                return
+            if user := new.attributes.get("user_id"):
+                self._arrivals.append(user)
+                self._home_debouncer.async_schedule_call()
+
+        if persons := self.hass.states.async_entity_ids("person"):
+            self.config_entry.async_on_unload(
+                async_track_state_change_event(self.hass, persons, person_moved)
+            )
         self.hass.async_create_task(self._async_home_changed())
         self._want_forecast(self._now())
 
@@ -479,6 +509,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # After the update: an arrival just now starts the greeting.
         if self.presence.greeting(now):
             effect.flags.insert(0, "greeting")
+        arrivals, self._arrivals = self._arrivals, []
+        if self._awake():
+            self._fire(self._friends_home(arrivals, now))
         self._fire(self._passing_moments(readings, now))
         if self._awake():
             # The house can grant the day's wish, and give the pet things to dream of.
@@ -712,7 +745,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if model.in_sleep_hours(now, settings):
             return []
         today, _ = self._today(now)
-        events = model.pick_wish(self.state, today, self.rng, self.wish_options())
+        events = model.pick_wish(
+            self.state, today, self.rng, self.wish_options(), self.friends()
+        )
         if events:
             self._save()
         return events
@@ -785,6 +820,43 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._save()
         return events
 
+    def bond_for(self, user: str | None) -> tuple[int, str | None]:
+        """(level, nickname once it has picked one) for a person; 0 for none."""
+        bond = self.state.bonds.get(user or "") if self.state else None
+        if not bond:
+            return 0, None
+        return model.bond_level(bond["points"]), bond.get("nickname")
+
+    def _person_names(self) -> dict[str, str]:
+        """First names of the people with a person entity, by HA user ID."""
+        names = {}
+        for state in self.hass.states.async_all("person"):
+            if user := state.attributes.get("user_id"):
+                first = (state.name or "").split()
+                if first:
+                    names[user] = first[0]
+        return names
+
+    def friends(self) -> dict[str, str]:
+        """Its close friends who have a person entity: {user ID: first name}."""
+        return {
+            user: name
+            for user, name in self._person_names().items()
+            if self.bond_for(user)[0] >= R.BOND_FRIEND_LEVEL
+        }
+
+    def _friends_home(self, arrivals: list[str], now: float) -> list[model.Event]:
+        """A close friend just came home: the pet cheers for them by name."""
+        events: list[model.Event] = []
+        for user in dict.fromkeys(arrivals):
+            if self.bond_for(user)[0] < R.BOND_FRIEND_LEVEL:
+                continue
+            if now - self._cheered.get(user, -1e12) < R.FRIEND_HOME_EVERY_MINUTES * 60:
+                continue
+            self._cheered[user] = now
+            events.append({"type": "friend_home", "user": user})
+        return events
+
     async def async_visit(self, user: str) -> None:
         """Someone opened the card on this pet (the card calls this, at most
         hourly per person): a visit counts for their bond once a day, and may
@@ -833,7 +905,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             tag = notify.call_tag(self.pet_id)
         else:
             tag = f"{DOMAIN}_{self.pet_id}_{event['type']}"
-        self._send(users, text, tag, notify.actions(event, self.pet_id))
+        # Each person's phones get the nickname the pet gave them, if any.
+        by_nickname: dict[str | None, list[str]] = {}
+        for user in users:
+            by_nickname.setdefault(self.bond_for(user)[1], []).append(user)
+        buttons = notify.actions(event, self.pet_id)
+        for nickname, group in by_nickname.items():
+            personal = notify.to_friend(text, nickname) if nickname else text
+            self._send(group, personal, tag, buttons)
 
     def _send(
         self,

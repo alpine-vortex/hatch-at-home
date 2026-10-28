@@ -1461,7 +1461,7 @@ def test_a_close_bond_brings_a_nickname_then_a_favourite_game():
     pet.happiness = 50.0
     assert model.favourite_game(pet, "u2", "higher_lower") == []
     assert types(model.favourite_game(pet, "u1", "higher_lower")) == ["bond_favourite"]
-    assert pet.happiness == 50.0 + R.BOND_FAVOURITE_HAPPINESS
+    assert pet.happiness == 50.0  # flavour only: a bond never changes the stats
 
 
 def test_bonds_carry_into_the_next_generation_and_survive_a_bad_save():
@@ -1473,3 +1473,22 @@ def test_bonds_carry_into_the_next_generation_and_survive_a_bad_save():
     data = pet.to_dict()
     data["bonds"] = {"u1": {"points": "12"}, "u2": "junk"}
     assert model.PetState.from_dict(data).bonds == {"u1": {"points": 12}}
+
+
+def test_a_wish_may_be_aimed_at_a_close_friend():
+    pet = hatched(at(9))
+    model.pick_wish(pet, "2026-10-01", Lucky(1), {"play"}, {"u1": "Sam"})
+    assert pet.wish == {
+        "kind": "play",
+        "day": "2026-10-01",
+        "granted": False,
+        "for": "u1",
+        "for_name": "Sam",
+    }
+    # Anyone may grant it.
+    assert model.grant_wish(pet, "play", at(10), "2026-10-01", 10, "Alex")
+    # Not one the house grants, nor without friends.
+    model.pick_wish(pet, "2026-10-02", Lucky(1), {"tuck_in"}, {"u1": "Sam"})
+    assert "for" not in pet.wish
+    model.pick_wish(pet, "2026-10-03", Lucky(1), {"play"}, {})
+    assert "for" not in pet.wish

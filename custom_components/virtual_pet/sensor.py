@@ -202,7 +202,10 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "roster": list(self.coordinator.roster),
             # Daily check-ins: today's wish and this morning's dream, for the card
             # (who granted the wish stays on the server).
-            "wish": self._today_only(self.pet.wish, ("kind", "granted")),
+            # "for": a close friend it hopes grants it (user ID and first name).
+            "wish": self._today_only(
+                self.pet.wish, ("kind", "granted", "for", "for_name")
+            ),
             "dream": self._today_only(self.pet.dream, ("kind", "title")),
             # Each person's bond, by HA user ID; the card shows only the viewer's
             # own (points and who played what stay on the server).

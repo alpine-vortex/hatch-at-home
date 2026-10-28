@@ -3,7 +3,8 @@
 Each user turns them on for a pet from the card (service virtual_pet.notify_me).
 They go to that user's phones through the Home Assistant app (mobile_app).
 The one exception is the welcome when a pet is added, which goes to every phone.
-Messages never name anyone.
+Messages never name anyone; a person's own phones may get the nickname the pet
+gave them.
 """
 
 from __future__ import annotations
@@ -153,6 +154,14 @@ def message(event: dict[str, Any], name: str, species: dict[str, str]) -> str | 
     if kind == "egg_laid":
         return f"{name} laid an egg: generation {event['generation']} is on its way."
     return None
+
+
+def to_friend(text: str, nickname: str) -> str:
+    """The message for someone the pet has a nickname for: "Pip is hungry,
+    sunbeam!". One that doesn't end in . ! or ? (a holiday's emoji) stays."""
+    if text[-1:] in ("!", "?", "."):
+        return f"{text[:-1]}, {nickname}{text[-1]}"
+    return text
 
 
 def welcome(name: str) -> str:

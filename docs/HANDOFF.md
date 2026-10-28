@@ -143,7 +143,14 @@ details before committing it.
   hearts at 8, a "you two" row of five hearts on the status screen, and `bond_up` /
   `bond_favourite` moments said only to their `user`. Diagnostics redact `bonds` and
   moments' `user`, and add anonymous `bond_points`. Bonds carry into the next
-  generation (my call). `card-check` (now 54 checks) covers the visit, a close bond's
+  generation (my call). Second pass (owner: flavour only, never stats): the favourite
+  game no longer adds happiness; `bond_for` gives (level, nickname); `_notify` sends
+  each nickname group its own text (`notify.to_friend`); Assist's status and care
+  replies add "Hi, sunbeam!" / "Thanks, sunbeam!" and status slots `bond`, `nickname`;
+  `friend_home` moments from person entities coming home (`person_moved` →
+  `_arrivals` → `_friends_home` in `_sense_home`, level `BOND_FRIEND_LEVEL`, once per
+  `FRIEND_HOME_EVERY_MINUTES` per person); aimed wishes (`pick_wish` `friends`, wish
+  `for` and `for_name`, `WISH_FOR_CHANCE`), drawn by the card's `_wishLine`. `card-check` (now 56 checks) covers the visit, a close bond's
   greeting, the status row and the level-up line. Next in the plan: finds and
   visitors per world, then pets visiting each other.
 - **Thanksgiving** (owner, 2026-10-28: "must do", the same all-out treatment as
@@ -221,9 +228,9 @@ details before committing it.
 - **Adults** exist for every creature (the last four arrived in 0.21.0). Long adults
   are drawn back up with `species.json` `"scale": {"adult": …}` (1.05–1.2; the bat
   needs none).
-- **Tests:** 326, run with `scripts/test` (ruff, format check, pytest).
+- **Tests:** 330, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
-  `scripts/card-check` (Playwright, 54 checks) drives the card against
+  `scripts/card-check` (Playwright, 56 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
 - **CI:** `.github/workflows/validate.yml` (HACS action, hassfest, tests) is green.
   License MIT; Tiny5 keeps its OFL.

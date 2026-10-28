@@ -273,6 +273,10 @@ async function main() {
   await calm();
   await page.locator("hatch-pet-card").evaluate((el) => {
     const s = el._slides[el._index];
+    window.__greetHop = false; // the hop is short: watch for it rather than poll
+    new MutationObserver(() => {
+      if (s.pet.classList.contains("greethop")) window.__greetHop = true;
+    }).observe(s.pet, { attributes: true, attributeFilter: ["class"] });
     s.greeted = false;
     s.sayUntil = 0;
   });
@@ -281,7 +285,7 @@ async function main() {
     await page.waitForTimeout(150);
     close = await cur().evaluate((slide) => ({
       hearts: slide.querySelectorAll(".bondhearts img").length,
-      hop: slide.querySelector(".pet").classList.contains("greethop"),
+      hop: window.__greetHop,
       said: slide.querySelector(".bubble").textContent,
     }));
   }
@@ -309,6 +313,36 @@ async function main() {
   const theirs = await levelUp("someone-else");
   check("a bond level-up is said only to its person",
     mine[0] === "can I call you sunbeam? ♥" && theirs.length === 0, `${mine} / ${theirs}`);
+  // A wish aimed at a close friend: spoken to them, about them to anyone else.
+  const aimed = await page.locator("hatch-pet-card").evaluate((el, me) => {
+    const s = el._slides[el._index];
+    const toMe = el._wishLine({ kind: "play", for: me, for_name: "Dev" }, s);
+    const ofThem = el._wishLine({ kind: "play", for: "someone-else", for_name: "Sam" }, s);
+    return [toMe[0], toMe[1], ofThem[0], ofThem[1]];
+  }, me);
+  check("a wish can be aimed at a close friend", aimed.join(" | ") ===
+    "will you play a game with me today, sunbeam? | play a game with you | " +
+    "I hope Sam plays a game with me today! | play a game with Sam", aimed.join(" | "));
+  // A close friend coming home: "you're home!!" to them, by name to anyone else.
+  await evaluate(() => document.querySelector("home-assistant").hass.callApi("POST", "states/person.sam_check",
+    { state: "home", attributes: { user_id: "someone-else", friendly_name: "Sam Check" } }));
+  await page.waitForTimeout(500);
+  const cheers = await page.locator("hatch-pet-card").evaluate((el, me) => {
+    const s = el._slides[el._index];
+    const person = Object.values(el._hass.states).find((st) => st.entity_id.startsWith("person.") &&
+      st.attributes.user_id === me);
+    const out = [];
+    const at = new Date().toISOString(); // the same arrival twice: cheered once
+    for (const user of [me, me, "someone-else"]) {
+      s.queue = [];
+      el._moment(s, { type: "friend_home", user, at });
+      out.push(s.queue[0]?.text || "");
+    }
+    return { out, person: person?.attributes.friendly_name };
+  }, me);
+  check("a friend coming home is cheered, by name to others", /^(you're home!! ♥|yay, you're back! ♥)$/.test(cheers.out[0]) &&
+    cheers.out[1] === "" && /^(Sam's home!!|ooh, Sam is back!)$/.test(cheers.out[2]),
+  `${cheers.out.join(" | ")} (person ${cheers.person})`);
 
   // Idle life: something small happens on its own within a minute.
   const idleSign = () => cur().evaluate((slide) => {

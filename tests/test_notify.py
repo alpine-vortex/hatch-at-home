@@ -90,3 +90,13 @@ def test_thanksgiving_is_the_fourth_thursday_of_november():
     )
     text = notify.message({"type": "holiday", "holiday": "thanksgiving"}, "Pip", {})
     assert text == "Happy Thanksgiving! Pip is thankful for you 🦃"
+
+
+def test_a_friend_is_told_by_nickname():
+    assert notify.to_friend("Pip is hungry!", "sunbeam") == "Pip is hungry, sunbeam!"
+    assert (
+        notify.to_friend("Pip is sleepy. Lights out?", "bean")
+        == "Pip is sleepy. Lights out, bean?"
+    )
+    holiday = notify.HOLIDAY_MORNINGS["thanksgiving"].format(name="Pip")
+    assert notify.to_friend(holiday, "bean") == holiday

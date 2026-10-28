@@ -1313,13 +1313,21 @@ WISHES = (
     "say_hi",
 )
 ALWAYS_WISHES = {"play", "snack", "bath", "praise", "tuck_in", "sunset", "say_hi"}
+# Wishes a person grants, so the pet may wish one of them on a close friend
+# ("I hope Sam plays with me today"). Anyone can still grant it.
+AIMED_WISHES = {"play", "snack", "bath", "praise", "say_hi"}
 
 
 def pick_wish(
-    state: PetState, today: str, rng: random.Random, options: set[str]
+    state: PetState,
+    today: str,
+    rng: random.Random,
+    options: set[str],
+    friends: dict[str, str] | None = None,
 ) -> list[Event]:
     """Today's wish, once a day, from what the house can grant (never yesterday's
-    again). Missing a wish costs nothing: tomorrow brings a new one."""
+    again), now and then aimed at one of its close friends ({user ID: first
+    name}). Missing a wish costs nothing: tomorrow brings a new one."""
     if state.wish and state.wish.get("day") == today:
         return []
     last = state.wish.get("kind") if state.wish else None
@@ -1330,6 +1338,10 @@ def pick_wish(
         return []
     kind = rng.choice(choices)
     state.wish = {"kind": kind, "day": today, "granted": False}
+    if friends and kind in AIMED_WISHES and rng.random() < R.WISH_FOR_CHANCE:
+        user = rng.choice(sorted(friends))
+        state.wish.update({"for": user, "for_name": friends[user]})
+        return [{"type": "wish_made", "kind": kind, "for": user}]
     return [{"type": "wish_made", "kind": kind}]
 
 
@@ -1460,10 +1472,10 @@ def add_bond(
 
 
 def favourite_game(state: PetState, user: str, game: str) -> list[Event]:
-    """They finished the pet's favourite game with them: a little extra joy."""
+    """They finished the pet's favourite game with them: it says so (flavour
+    only; a bond never changes the stats)."""
     if state.bonds.get(user, {}).get("favourite") != game:
         return []
-    state.happiness = _clamp(state.happiness + R.BOND_FAVOURITE_HAPPINESS)
     return [{"type": "bond_favourite", "user": user, "game": game}]
 
 

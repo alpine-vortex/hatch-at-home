@@ -155,6 +155,9 @@ class StatusIntent(intent.IntentHandler):
         speech = f"{name} is {MOOD_WORDS[mood]}: {reason}{end}"
         if traits:
             speech += f" Traits: {', '.join(traits)}."
+        level, nickname = pet.bond_for(intent_obj.context.user_id)
+        if nickname:
+            speech += f" Hi, {nickname}!"
         response.async_set_speech(speech)
         response.async_set_speech_slots(
             {
@@ -170,6 +173,9 @@ class StatusIntent(intent.IntentHandler):
                 "requests": model.requests(
                     state, dt_util.utcnow().timestamp(), pet.settings
                 ),
+                # The bond with whoever is asking (1-10), and what it calls them.
+                "bond": level or None,
+                "nickname": nickname,
             }
         )
         return response
@@ -204,7 +210,9 @@ class CareIntent(intent.IntentHandler):
             result = await pet.async_action(action, intent_obj.context)
         response = intent_obj.create_response()
         if result == model.OK:
-            response.async_set_speech(f"{name} {DONE[action]}.")
+            nickname = pet.bond_for(intent_obj.context.user_id)[1]
+            thanks = f" Thanks, {nickname}!" if nickname else ""
+            response.async_set_speech(f"{name} {DONE[action]}.{thanks}")
         else:
             response.async_set_speech(f"{name} {REFUSED.get(result, 'did nothing')}.")
         response.async_set_speech_slots(

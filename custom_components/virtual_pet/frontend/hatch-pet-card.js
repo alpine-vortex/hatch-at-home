@@ -341,6 +341,18 @@ const WISHES = {
   rain: ["I hope I get to see the rain today", "see the rain"],
   say_hi: ["will you come say hi this afternoon?", "a hello this afternoon"],
 };
+// A wish aimed at a close friend (life_stage wish "for", "for_name"): said of
+// them, said to them, and short for the status screen.
+const WISHES_FOR = {
+  play: [(n) => `I hope ${n} plays a game with me today!`, "will you play a game with me today?", (n) => `play a game with ${n}`],
+  snack: [(n) => `I hope ${n} brings me a snack after lunch...`, "will you bring me a snack after lunch?", (n) => `a snack from ${n}`],
+  bath: [(n) => `I wish ${n} would give me a bubble bath!`, "will you give me a bubble bath today?", (n) => `a bubble bath from ${n}`],
+  praise: [(n) => `I hope ${n} says I'm good today`, "will you tell me I'm good today?", (n) => `hear "good job!" from ${n}`],
+  say_hi: [(n) => `I hope ${n} comes to say hi this afternoon!`, "will you come say hi this afternoon?", (n) => `a hello from ${n}`],
+};
+// "will you play?" + "sunbeam" -> "will you play, sunbeam?"
+const withName = (line, name) => (name ? line.replace(/([!?.]*)$/, `, ${name}$1`) : line);
+const FRIEND_WELCOME_MS = 6 * 3600 * 1000; // "welcome home!" at the next look, this long after
 const DREAMS = {
   watching: (d) => `I dreamed about ${d.title}!`,
   listening: (d) => `♪ I dreamed of ${d.title} ♪`,
@@ -1830,8 +1842,41 @@ class HatchPetCard extends HTMLElement {
     }
     const dream = stage.dream && DREAMS[stage.dream.kind];
     if (dream && oncePerDay(`dream-${device}`)) this._queue(s, dream(stage.dream), 5000);
-    const wish = stage.wish && !stage.wish.granted && WISHES[stage.wish.kind];
+    const wish = stage.wish && !stage.wish.granted && this._wishLine(stage.wish, s);
     if (wish && oncePerDay(`wish-${device}`)) this._queue(s, wish[0], 5000);
+    // A close friend who came home while the card was closed: welcome them now.
+    const me = this._hass.user?.id;
+    const home = (this._state(s, "sensor.last_care")?.attributes.moments || [])
+      .find((m) => m.type === "friend_home" && m.user === me);
+    const at = home && new Date(home.at).getTime();
+    if (at && Date.now() - at < FRIEND_WELCOME_MS && this._welcomeDue(s, at)) {
+      const bond = this._bond(s);
+      const first = this._hass.user?.name?.trim().split(/\s+/)[0];
+      this._queue(s, `welcome home, ${(bond?.level >= BOND.nickname && bond.nickname) || first || "friend"}! ♥`, 5000);
+    }
+  }
+
+  // Each "came home" is welcomed once per device (seen live, or at the next look).
+  _welcomeDue(s, at) {
+    const key = `hatch-welcomed-${this._hass.user?.id}-${s.ids?.device}`;
+    try {
+      if (Number(localStorage.getItem(key) || 0) >= at) return false;
+      localStorage.setItem(key, String(at));
+    } catch (err) {
+      // no storage: once per page load
+    }
+    return true;
+  }
+
+  // Today's wish in the pet's words and short: [line, status text], or null.
+  // One aimed at a close friend names them, or speaks to them if they're looking.
+  _wishLine(wish, s) {
+    if (!WISHES[wish.kind]) return null;
+    const aimed = wish.for && wish.for_name && WISHES_FOR[wish.kind];
+    if (!aimed) return WISHES[wish.kind];
+    if (wish.for !== this._hass.user?.id) return [aimed[0](wish.for_name), aimed[2](wish.for_name)];
+    const bond = this._bond(s);
+    return [withName(aimed[1], bond?.level >= BOND.nickname ? bond.nickname : null), aimed[2]("you")];
   }
 
   // Now and then, an open wish comes up again (never more than every 10 minutes).
@@ -1842,7 +1887,8 @@ class HatchPetCard extends HTMLElement {
     if (now < s.nextWish || !this._free(s)) return;
     s.nextWish = now + lo + Math.random() * (hi - lo);
     const wish = this._state(s, "sensor.life_stage")?.attributes.wish;
-    if (wish && !wish.granted && WISHES[wish.kind]) this._queue(s, WISHES[wish.kind][0]);
+    const line = wish && !wish.granted && this._wishLine(wish, s);
+    if (line) this._queue(s, line[0]);
   }
 
   // When this device last saw the pet (for the away note), every minute.
@@ -1911,6 +1957,13 @@ class HatchPetCard extends HTMLElement {
     if (level >= BOND.hop && !calm) this._animate(s, s.pet, "greethop", 1400);
     else this._animate(s, s.pet, "perk", 320);
     if (level >= BOND.hearts && !calm) this._bondHearts(s);
+  }
+
+  // A person's first name, from their person entity (by HA user ID).
+  _personName(userId) {
+    const person = Object.values(this._hass.states || {})
+      .find((st) => st.entity_id.startsWith("person.") && st.attributes.user_id === userId);
+    return (person?.attributes.friendly_name || "").trim().split(/\s+/)[0] || null;
   }
 
   // The viewer's own bond with this pet: {level, nickname?, favourite?} or null.
@@ -2138,6 +2191,21 @@ class HatchPetCard extends HTMLElement {
           : pick(["I like you a lot, you know ♥", "we're getting close! ♥", "you're the best ♥"]), 5000);
         break;
       }
+      case "friend_home": { // a close friend's person entity came home
+        const me = this._hass.user?.id;
+        if (m.user === me) {
+          if (!this._welcomeDue(s, new Date(m.at).getTime())) break;
+          this._queue(s, pick(["you're home!! ♥", "yay, you're back! ♥"]), 4500);
+          const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+          if (!calm) this._animate(s, s.pet, "greethop", 1400);
+          break;
+        }
+        const name = this._personName(m.user);
+        if (!name) break;
+        this._queue(s, pick([`${name}'s home!!`, `ooh, ${name} is back!`]), 4000);
+        this._animate(s, s.pet, "perk", 320);
+        break;
+      }
       case "bond_favourite":
         if (m.user === this._hass.user?.id) this._queue(s, pick(["our favourite game! ♥", "I love playing this with you ♥"]));
         break;
@@ -2272,7 +2340,7 @@ class HatchPetCard extends HTMLElement {
     // Today's wish comes first: it changes daily, the rest is there every day.
     const html = `
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
-        ? `<span>♥ came true!</span>` : `<span>♡ ${escape(WISHES[stageAttrs.wish.kind][1])}</span>`) : ""}
+        ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
       ${row("icon_feed", "hunger", hearts(value("hunger")))}
       ${row("icon_play", "happy", hearts(value("happiness")))}

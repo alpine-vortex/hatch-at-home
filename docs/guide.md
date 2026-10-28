@@ -115,9 +115,14 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   rush, and a bond never goes down, even after days away. Ten levels, slow near the
   top (about a week to level 5, a month or so to 10). Closer, it greets you more
   warmly (level 2), hops when you look in (3), picks a nickname for you ("hi,
-  sunbeam!", 4), has a favourite game with you that cheers it up extra when you play
-  it (6), and floats hearts just for you (8). The status screen shows "you two" in five
-  hearts. Each person only ever sees their own bond. Care through Assist counts for
+  sunbeam!", 4), has a favourite game with you and says so when you play it (6), and
+  floats hearts just for you (8). Once it has a nickname for you, your phone
+  notifications and Assist use it too ("Pip is hungry, sunbeam!", "Thanks,
+  sunbeam!"). From level 3 it cheers when you come home ("Sam's home!!", and "welcome
+  home!" when you next look in; this needs your person entity linked to your login),
+  and some days its wish is for you ("I hope Sam plays a game with me today!"; anyone
+  can still grant it). A bond never changes the pet's stats: it's flavour. The status
+  screen shows "you two" in five hearts. Each person only ever sees their own bond. Care through Assist counts for
   whoever is signed in; automations build no bond. A new generation keeps the household's bonds. (The card tells the pet who
   looked in with `virtual_pet.visit`, counted at most hourly.)
 - **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
@@ -526,7 +531,7 @@ names are included.
 `virtual_pet_wish_made` and `virtual_pet_wish_granted` (with `kind`),
 `virtual_pet_bond_up` (with `user`, the HA user ID, `level`, and `nickname` or
 `favourite` when the level brings one), `virtual_pet_bond_favourite` (with `user` and
-`game`).
+`game`), `virtual_pet_friend_home` (with `user`: a close friend came home).
 
 Events fired during a fast-forward carry `simulated: true`.
 

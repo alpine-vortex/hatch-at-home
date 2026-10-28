@@ -1798,3 +1798,49 @@ async def test_diagnostics_hide_whose_bond_it_is(
     diag = await async_get_config_entry_diagnostics(hass, config)
     assert "user-1" not in str(diag) and "sunbeam" not in str(diag)
     assert diag["bond_points"] == [40]
+
+
+async def test_the_pet_knows_its_friends_on_their_phones_and_at_the_door(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    me = await hass.auth.async_create_user("Me")
+    other = await hass.auth.async_create_user("Other")
+    hass.states.async_set(
+        "person.me", "not_home", {"user_id": me.id, "friendly_name": "Sam Smith"}
+    )
+    hass.states.async_set("person.other", "not_home", {"user_id": other.id})
+    hass_storage[STORE_KEY] = hatched_pet(
+        now,
+        bonds={
+            me.id: {"points": model.R.BOND_LEVELS[4], "nickname": "sunbeam"},
+            other.id: {"points": 0},
+        },
+    )
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    assert coordinator.friends() == {me.id: "Sam"}
+    # Phones: the nickname for the friend, plain for everyone else.
+    for user, phone in ((me, "mine"), (other, "theirs")):
+        MockConfigEntry(
+            domain="mobile_app", data={"user_id": user.id, "device_name": phone}
+        ).add_to_hass(hass)
+    mine = async_mock_service(hass, "notify", "mobile_app_mine")
+    theirs = async_mock_service(hass, "notify", "mobile_app_theirs")
+    coordinator.state.notify_users = [me.id, other.id]
+    coordinator._fire([{"type": "first_frost"}])
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert mine[0].data["message"].endswith("of the season, sunbeam.")
+    assert theirs[0].data["message"].endswith("of the season.")
+    # At the door: a close friend coming home is cheered, once in a while.
+    for _ in range(2):
+        hass.states.async_set("person.me", "home", {"user_id": me.id})
+        hass.states.async_set("person.other", "home", {"user_id": other.id})
+        await settle(hass, freezer)
+        hass.states.async_set("person.me", "not_home", {"user_id": me.id})
+        hass.states.async_set("person.other", "not_home", {"user_id": other.id})
+        await settle(hass, freezer)
+    moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
+    assert [m["user"] for m in moments if m["type"] == "friend_home"] == [me.id]
