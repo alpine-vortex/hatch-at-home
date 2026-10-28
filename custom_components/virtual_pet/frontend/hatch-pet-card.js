@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.28.2";
+const VERSION = "0.29.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -178,7 +178,7 @@ const SEASONS = [
     // suit (cat ears on a creature with its own ears read wrong).
     costumes: [
       { art: "hat", sink: 7, width: 64 },
-      { art: "pumpkin_cap", sink: 6, width: 60 },
+      { art: "pumpkin_cap", sink: 10, width: 60 },
       { art: "cat_ears", sink: 10, width: 76,
         skip: ["kitten", "bunny", "deer", "bat", "squirrel", "lunamoth"] },
       { art: "horns", sink: 9, width: 68, skip: ["deer"] },
@@ -1605,10 +1605,17 @@ class HatchPetCard extends HTMLElement {
     return s.species && !s.asleep && !s.calling && !s.game && IDLE_MOODS.has(s.moodState) &&
       !s.screen.classList.contains("show-status") &&
       !(s.sayUntil > now) && !(s.poseUntil > now) && !(s.propUntil > now) &&
-      !(s.flairUntil > now);
+      !(s.flairUntil > now) && !(s.movingUntil > now);
+  }
+
+  // A wander or a look moves the pet off its spot for a while; a hat placed
+  // then would be left hovering where the pet was.
+  _moving(s, ms) {
+    s.movingUntil = Math.max(s.movingUntil || 0, Date.now() + ms);
   }
 
   _look(s, ms) {
+    this._moving(s, ms + 250);
     s.pet.classList.add("look");
     setTimeout(() => s.pet.classList.remove("look"), ms);
   }
@@ -1638,6 +1645,7 @@ class HatchPetCard extends HTMLElement {
     } else if (move === "wander") {
       const side = pick(["wander-l", "wander-r"]);
       s.pet.classList.add(side);
+      this._moving(s, 2200 + 900); // out, and the slide back
       setTimeout(() => s.pet.classList.remove(side), 2200);
     } else if (move === "perk") {
       this._animate(s, s.pet, "perk", 320);
@@ -1648,6 +1656,7 @@ class HatchPetCard extends HTMLElement {
       const rtl = Math.random() < 0.5;
       speck.className = `speck${rtl ? " rtl" : ""}`;
       s.screen.append(speck);
+      this._moving(s, 2700);
       setTimeout(() => this._look(s, 1300), rtl ? 1200 : 0); // follows it across
       setTimeout(() => speck.remove(), 2700);
     } else {
@@ -2072,7 +2081,10 @@ class HatchPetCard extends HTMLElement {
     // The creature picked for the next egg (if any), and its world if that changes.
     const nextEgg = [stageAttrs.next_egg?.toLowerCase(), stageAttrs.next_world && `in ${stageAttrs.next_world}`]
       .filter(Boolean).join(" ");
+    // Today's wish comes first: it changes daily, the rest is there every day.
     const html = `
+      ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
+        ? `<span>♥ came true!</span>` : `<span>♡ ${escape(WISHES[stageAttrs.wish.kind][1])}</span>`) : ""}
       ${row("icon_feed", "hunger", hearts(value("hunger")))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}
@@ -2086,8 +2098,6 @@ class HatchPetCard extends HTMLElement {
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
-      ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
-        ? `<span>♥ came true!</span>` : `<span>♡ ${escape(WISHES[stageAttrs.wish.kind][1])}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${row(null, "notify me", `<span><button class="bell" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}

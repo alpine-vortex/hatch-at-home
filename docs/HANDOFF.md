@@ -4,8 +4,9 @@ Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's bran
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
-release **0.28.0** (2026-10-28: weather talk, #10, and Halloween, #11); **0.28.1** adds
-the Halloween morning notification (this branch). **The owner runs it on
+release **0.29.0** (2026-10-28: the daily wish, dreams, "while you were out", and two
+Halloween costume fixes); 0.28.0 brought weather talk (#10) and Halloween (#11), 0.28.1
+the Halloween morning notification, 0.28.2 the redrawn witch. **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read `docs/guide.md` first (the full user guide; the README is box-back
 marketing with pictures from `scripts/readme/`), then `docs/design-worlds.md`, `art/README.md`,
@@ -104,8 +105,15 @@ details before committing it.
   The ears and horns have a thin band. Costumes sit on the lowest head top across the
   idle frames (`_headTopAll`). The preview script's injected creature can be undone by
   the test pet's own update mid-shot; discard cells that show the wrong creature.
+  Re-verified 2026-10-28 (0.29.0) on all 13 creatures × 4 stages × 4 costumes, which
+  found two faults, both fixed: a costume moment could fire while the pet was mid-wander
+  or mid-look (mirrored), leaving the hat hovering where the pet had been (`_free` now
+  waits out `movingUntil`, set by `_moving` for a wander, a look and a speck), and the
+  pumpkin cap's flat bottom read as perched on domed heads (sink 6 → 10). The preview
+  script is not in the repo; it freezes the card's `hass` setter, injects species and
+  stage, and must check the frame on show (`s.pet.src`) is the one asked for.
 - **Daily check-ins, batch 1** (`docs/plan-2026-10-28-daily-checkins.md`, items 2 and
-  4; unreleased when written): `model.pick_wish` / `grant_wish` (state `wish`, from
+  4; released in 0.29.0): `model.pick_wish` / `grant_wish` (state `wish`, from
   `coordinator.wish_options()`: `ALWAYS_WISHES` plus music, TV, chores when mapped and
   rain when today's forecast says so), granted in `coordinator._check_ins` from care,
   games, chores, lights out, sunset with company, and the house (music, TV, rain);
@@ -114,7 +122,9 @@ details before committing it.
   who granted it stays on the server; diagnostics redact dream titles). Card: a say
   queue (`_queue`, so lines that arrive together are all said), `_firstLook` (away
   note, dream, wish, each once a day per device), `_wishMention`, the wish row, the
-  `wish_granted` moment. Next in the plan: the bond with each person (item 3; the owner
+  `wish_granted` moment. The wish row leads the status screen (0.29.0; lower down it
+  sat below the fold). `card-check` screenshots the three first-look lines and the
+  status screen. Next in the plan: the bond with each person (item 3; the owner
   confirmed every player has their own HA login), then finds and visitors per world,
   then pets visiting each other.
 - **Thanksgiving: must do** (owner, 2026-10-28; tududi task due 20 November): US date,
