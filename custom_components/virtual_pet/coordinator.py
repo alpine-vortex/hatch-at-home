@@ -770,7 +770,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return
         local = dt_util.now()
         today = local.date().isoformat()
-        kind = notify.holiday(local.month, local.day)
+        kind = notify.holiday(local.date())
         if kind is None or self._holiday_on == today:
             return
         self._holiday_on = today

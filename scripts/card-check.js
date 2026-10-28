@@ -449,7 +449,7 @@ async function main() {
     const scanned = el._headTopAll(s, hx, hy);
     const top = s.species.hat?.[s.drawn] ? Math.max(hy, scanned ?? hy) : scanned;
     return {
-      pieces: [...s.seasonBox.querySelectorAll("img")].map((i) => i.className.split(" ")[0]),
+      pieces: [...s.seasonBox.querySelectorAll("img")].map((i) => i.className).join(" ").split(" "),
       hatBottom: hat && hat.bottom - sr.top, headTop: r.top - sr.top + top * (r.height / 256),
       fy: at.fy, said: s.bubble.textContent,
     };
@@ -466,8 +466,9 @@ async function main() {
   // would be left hovering where the pet was.
   const movingBlocks = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
+    // Idle life would start its own wander or look meanwhile: hold it off.
     Object.assign(s, { sayUntil: 0, flairUntil: 0, movingUntil: 0, poseUntil: 0, propUntil: 0,
-      moodState: "content", asleep: false, calling: false, game: null });
+      moodState: "content", asleep: false, calling: false, game: null, nextIdle: Date.now() + 600000 });
     s.screen.classList.remove("show-status");
     const before = el._free(s);
     el._look(s, 300);
@@ -479,10 +480,10 @@ async function main() {
   // Halloween's extras: bunting, a ghost the pet jumps at, candy for a snack.
   const extras = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
-    const season = { key: "halloween" };
+    const season = el.constructor.seasons.find((x) => x.key === "halloween");
     s.screen.querySelector(".costume")?.remove();
     s.sayUntil = 0; s.flairUntil = 0;
-    el._seasonGhost(s, season);
+    el._seasonVisitor(s, season);
     await new Promise((r) => setTimeout(r, 1800));
     const ghost = !!s.seasonBox.querySelector(".sghost");
     const eep = s.bubble.textContent;
@@ -496,6 +497,90 @@ async function main() {
     `bunting ${extras.bunting}, ghost ${extras.ghost} (${extras.eep}), witch ${extras.witch}`);
   check("snacks are candy at halloween", /season_halloween_candy/.test(extras.prop), extras.prop.split("/").pop());
   await shot("05-halloween-extras");
+
+  // Thanksgiving: its dates move with the fourth Thursday of November (from
+  // 12 days before to the Sunday after); the harvest scene, falling leaves,
+  // every costume seated, a turkey that walks by, geese in a V, pie for a
+  // snack, and on the day the pet thanks whoever cared for it most.
+  const tgDates = await card.evaluate((el) => {
+    const at = (y, m, d) => el.constructor.seasonNow({}, new Date(y, m - 1, d))?.key || "-";
+    return [at(2026, 11, 13), at(2026, 11, 14), at(2026, 11, 29), at(2026, 11, 30),
+      at(2024, 12, 1), at(2024, 12, 2), at(2026, 10, 31), at(2026, 11, 1)].join(" ");
+  });
+  check("thanksgiving's dates follow the fourth thursday", tgDates ===
+    "- thanksgiving thanksgiving - thanksgiving - halloween -", tgDates);
+  await card.evaluate((el) => { el.setConfig({ ...el._config, seasonal: "thanksgiving" }); el.hass = el._hass; });
+  await page.waitForTimeout(800);
+  const harvest = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const season = el.constructor.seasons.find((x) => x.key === "thanksgiving");
+    const [hx, hy] = s.species.hat?.[s.drawn] || s.species.head[s.drawn];
+    el._headTopAll(s, hx, hy);
+    await new Promise((r) => setTimeout(r, 600));
+    const scanned = el._headTopAll(s, hx, hy);
+    const top = s.species.hat?.[s.drawn] ? Math.max(hy, scanned ?? hy) : scanned;
+    const r = s.pet.getBoundingClientRect();
+    const sr = s.screen.getBoundingClientRect();
+    const headTop = r.top - sr.top + top * (r.height / 256);
+    // Every costume, skip lists aside: the brim sinks a little into the head.
+    const seats = [];
+    for (const costume of season.costumes) {
+      s.sayUntil = 0; s.flairUntil = 0; s.movingUntil = 0;
+      el._costume(s, { ...season, costumes: [{ ...costume, skip: [] }] }, costume.art);
+      await new Promise((res) => setTimeout(res, 700));
+      const img = s.screen.querySelector(".costume .hat img");
+      const b = img.getBoundingClientRect().bottom - sr.top;
+      seats.push(`${costume.art} ${Math.round(b - headTop)}${img.naturalWidth ? "" : " (no art)"}`);
+    }
+    return {
+      pieces: [...s.seasonBox.querySelectorAll("img")].map((i) => i.className).join(" ").split(" "),
+      leaves: s.seasonBox.querySelectorAll(".leaf").length, seats,
+    };
+  });
+  check("thanksgiving dresses the scene", harvest.pieces.includes("lantern") && harvest.pieces.includes("leaves") &&
+    harvest.leaves === 6, `${[...new Set(harvest.pieces)].join(" ")}; ${harvest.leaves} falling`);
+  check("every thanksgiving costume sits on the head",
+    harvest.seats.every((x) => { const d = Number(x.split(" ")[1]); return d > 0 && d < 20 && !/no art/.test(x); }),
+    harvest.seats.join(", "));
+  await shot("05-thanksgiving");
+  const feast = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const season = el.constructor.seasons.find((x) => x.key === "thanksgiving");
+    s.screen.querySelector(".costume")?.remove();
+    s.sayUntil = 0; s.flairUntil = 0;
+    s.nextFlyer = Date.now() + 600000; // only the flock sent here
+    s.seasonBox.querySelectorAll(".sgoose").forEach((g) => g.remove());
+    el._seasonVisitor(s, season);
+    el._seasonFlyer(s, season);
+    await new Promise((r) => setTimeout(r, 1800));
+    const turkey = !!s.seasonBox.querySelector(".sturkey.walk");
+    const gobble = s.bubble.textContent;
+    const geese = s.seasonBox.querySelectorAll(".sgoose").length;
+    el._react(s, { action: "snack", result: "ok", at: Date.now() / 1000 });
+    return { turkey, gobble, geese, prop: s.prop.getAttribute("src") || "" };
+  });
+  check("a turkey walks by and geese fly over", feast.turkey && feast.gobble === "gobble?!" && feast.geese === 3,
+    `turkey ${feast.turkey} (${feast.gobble}), ${feast.geese} geese`);
+  check("snacks are pie at thanksgiving", /season_thanksgiving_pie/.test(feast.prop), feast.prop.split("/").pop());
+  await shot("05-thanksgiving-extras");
+  await inject(pet["sensor.last_care"], { attributes: { log: [
+    { action: "feed", by: "Dev Person", at: new Date().toISOString() },
+    { action: "play", by: "Sam", at: new Date().toISOString() },
+    { action: "clean", by: "Dev Person", at: new Date().toISOString() },
+  ] } });
+  await page.waitForTimeout(600);
+  const thanks = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const season = el.constructor.seasons.find((x) => x.key === "thanksgiving");
+    s.sayUntil = 0; s.flairUntil = 0; s.movingUntil = 0;
+    el._costume(s, season, season.treatLine);
+    const first = s.bubble.textContent;
+    el._seasonTreat(s, season);
+    return [first, s.bubble.textContent, !!s.screen.querySelector(".costume .pop img[src*=plate]")];
+  });
+  check("on the day, the pet gives thanks", thanks[0] === "happy thanksgiving! ♥" &&
+    thanks[1] === "thank you for taking care of me, Dev ♥" && thanks[2], thanks.join(" | "));
+  await shot("05-thanksgiving-thanks");
   await card.evaluate((el) => { el.setConfig({ ...el._config, seasonal: false }); el.hass = el._hass; });
   await page.waitForTimeout(800);
   check("seasonal: false takes the season away",

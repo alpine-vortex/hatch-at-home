@@ -4,9 +4,9 @@ Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's bran
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
-release **0.29.1** (2026-10-28: the squirrel's paws-up poses no longer have six legs); 0.29.0
-(2026-10-28: the daily wish, dreams, "while you were out", and two
-Halloween costume fixes); 0.28.0 brought weather talk (#10) and Halloween (#11), 0.28.1
+release **0.30.0** (2026-10-28: Thanksgiving, #18, and the squirrel's paws-up poses
+no longer having six legs); 0.29.0 brought the daily wish, dreams, "while you were out"
+and two Halloween costume fixes; 0.28.0 brought weather talk (#10) and Halloween (#11), 0.28.1
 the Halloween morning notification, 0.28.2 the redrawn witch. **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read `docs/guide.md` first (the full user guide; the README is box-back
@@ -129,15 +129,30 @@ details before committing it.
   status screen. Next in the plan: the bond with each person (item 3; the owner
   confirmed every player has their own HA login), then finds and visitors per world,
   then pets visiting each other.
-- **Thanksgiving: must do** (owner, 2026-10-28; tududi task due 20 November): US date,
-  26 November 2026 (fourth Thursday, computed). The same all-out treatment as Halloween,
-  plus a morning greeting (`notify.HOLIDAYS` needs a computed-date path). Art through
-  the Hatch API Art session.
+- **Thanksgiving** (owner, 2026-10-28: "must do", the same all-out treatment as
+  Halloween; tududi task due 20 November). Built on 2026-10-28, released in 0.30.0:
+  `SEASONS` grew general fields (documented above the list: `corner`, `sweet`, `flyer`
+  with `flock`, `nightFlyer`, `visitor`, `snackLines`, `treatLine`, `thanks`, `leaves`,
+  `chirp`), and Halloween moved onto them unchanged. `from`/`to`/`treat` may be a
+  function of the year: Thanksgiving is the fourth Thursday of November
+  (`thanksgiving(year, days)`), from 12 days before to the Sunday after (14–29 Nov
+  2026). Pieces: a leaf garland, falling leaves, a harvest piece of the day
+  (cornucopia, gourds, basket), corner leaves, a plate by Hearth's door and popped on
+  the day, a wheat-sheaf deco, geese in a V of 3 (by day too), a walking turkey
+  visitor ("gobble?!"), pie snacks, costumes pilgrim hat / leaf crown / feather band /
+  acorn cap (no skip lists; all seat on 13 creatures × 4 stages), a `harvest` chirp,
+  and on the day "happy thanksgiving! ♥" then a thank-you to whoever gave the most care
+  in the recent log (`_thanks`, first names only). The night lantern glow is
+  Halloween's only (`.s-halloween`). The art is the Hatch API Art session's redraw of
+  the stand-ins from `art/seasonal/make_thanksgiving.py` (2026-10-28, branch
+  `thanksgiving-art`, 19 of 19; cut from Sol's drawings, the geese placed by hand).
+  Checked on the card: every costume on 13 creatures × 4 stages, the turkey and
+  geese at night.
 - **Holiday mornings** (0.28.1): `notify.HOLIDAYS` maps a date to a holiday and
   `HOLIDAY_MORNINGS` its phone text; on that date the pet's first morning moment
   (`good_morning`, or waking at wake time) fires a `holiday` event, which notifies the
-  opted-in users once a day (`_holiday_morning`, in memory). Halloween only so far;
-  Thanksgiving will need a computed date (the fourth Thursday of November).
+  opted-in users once a day (`_holiday_morning`, in memory). `notify.holiday(date)`
+  also answers Thanksgiving (`notify.thanksgiving(year)`, computed).
 - **Weather talk** (Tier 1 of `docs/plan-2026-10-27-real-time-connections.md`,
   merged in PR #10, released in 0.28.0): `weather` moments (`change`:
   rain_started, rain_stopped, rainbow, snow_started, sun_out, hot, cold) from

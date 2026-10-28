@@ -70,7 +70,7 @@ devices:
 entities:
   - sensor.pip_mood
 experimental_catch: true  # optional prototype: adds Catch to the game picker
-seasonal: false  # optional: no seasonal touches (on by default; "halloween" previews it)
+seasonal: false  # optional: no seasonal touches (on by default; "halloween" or "thanksgiving" previews one)
 ```
 
 **Upgrading from 0.3.x:** you added the card as a dashboard resource back then.
@@ -118,7 +118,17 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   minutes with something spooky to say; a friendly ghost floats by now and then and
   makes it jump; snacks are candy; the first visit of each day counts down ("3 sleeps
   till Halloween!"); and on the 31st the first visit gets "trick or treat!" and a
-  sweet. All cosmetic.
+  sweet.
+  **Thanksgiving** (US; the fourth Thursday of November) runs from 12 days before it to
+  the Sunday after. A leaf garland hangs across the scene, autumn leaves drift down, a
+  harvest piece of the day sits by the pet (a horn of plenty, gourds or a basket of
+  apples), leaves gather in the corner (both corners of the Terrarium), a plate waits by
+  the door in Hearth, a sheaf of wheat joins the device's decorations, and geese fly
+  over in a V. The costume of the day is a pilgrim hat, a leaf crown, a feather band or
+  an acorn cap; a turkey wanders by now and then ("gobble?!"); snacks are pumpkin pie;
+  the countdown runs ("3 sleeps till Thanksgiving!"); and on the day the first visit
+  gets "happy thanksgiving!", a plate, and a thank-you to whoever has looked after the
+  pet most lately. All cosmetic.
 - Tap the screen for the status page: hearts and meters, weight, care misses and
   ignored whines, traits (n/4) and the one it's learning next, upbringing, the next
   egg, the notify-me and sounds switches, recent care, and a link to the journal. Tap
@@ -401,7 +411,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 - **Notifications:** opt in per person. On the status screen, tap "notify me" to get
   this pet's calls, sickness, hatching, growing up, new or deeper traits, the season's
   first snow and frost, new eggs, and a holiday greeting on the morning of Halloween
-  ("Happy Halloween! Pip is dressed up and ready to trick or treat 🎃") on your phone, through
+  ("Happy Halloween! Pip is dressed up and ready to trick or treat 🎃") and of
+  Thanksgiving ("Happy Thanksgiving! Pip is thankful for you 🦃") on your phone, through
   the Home Assistant app. It only changes them for whoever is signed in; each person
   chooses for themselves. Automations can use `virtual_pet.notify_me` the same way.
   A call's notification has buttons that answer it (Feed, Clean, Medicine, Lights
