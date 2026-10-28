@@ -103,7 +103,7 @@ C = {
 
  # --- Hearth ---
  "corgi": dict(world="hearth", name="Corgi puppy", kind="Pembroke corgi", measure="w", target=(150, 185, 215),
-   look="red-and-white: warm ginger back and ears, white chest, belly, muzzle and paws, a white blaze between the eyes, short stubby legs, a long body, a fluffy round rump with almost no tail.",
+   look="red-and-white: warm ginger back and ears, white chest, belly, muzzle and paws, a white blaze between the eyes, short stubby legs, a long body, a fluffy round rump with almost no tail. A DOG face: a short rounded dog muzzle, a black nose, a dog's smile; no whiskers and no cat mouth (it must not look like the Hearth kitten).",
    stages=("BABY: the tiny puppy (row 1 left): BOTH ears floppy and folded down, round belly.",
            "CHILD: the puppy (row 1 middle): ONE ear up and one ear flopped.",
            "TEEN: the young corgi (row 1 right), the biggest: BOTH big ears standing tall."),
