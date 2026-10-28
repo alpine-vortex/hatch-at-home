@@ -38,6 +38,7 @@ from .const import (
     DOMAIN,
     FRONTEND_URL,
     SERVICE_FAST_FORWARD,
+    SERVICE_MY_DAY,
     SERVICE_NOTIFY_ME,
     SERVICE_PLAY_GAME,
     SERVICE_SHARE_NEWS,
@@ -158,16 +159,27 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             )
         await pet_of(call).async_set_notify(user_id, call.data[ATTR_ENABLED])
 
-    async def visit(call: ServiceCall) -> None:
-        # The card says who's looking in; only for the signed-in person.
+    async def signed_in(call: ServiceCall) -> str | None:
+        """The person calling (None for a system user); nobody: an error."""
         user_id = call.context.user_id
         if user_id is None:
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="not_signed_in"
             )
         user = await hass.auth.async_get_user(user_id)
-        if user is not None and not user.system_generated:
-            await pet_of(call).async_visit(user_id)
+        return user_id if user is not None and not user.system_generated else None
+
+    async def visit(call: ServiceCall) -> ServiceResponse:
+        # The card says who's looking in. What the pet tells them comes back
+        # to them alone, in the response.
+        if user_id := await signed_in(call):
+            return await pet_of(call).async_visit(user_id)
+        return {"notes": []}
+
+    async def my_day(call: ServiceCall) -> None:
+        # Each person opts themselves in or out; nobody else.
+        if user_id := await signed_in(call):
+            await pet_of(call).async_set_my_day(user_id, call.data[ATTR_ENABLED])
 
     async def play_game(call: ServiceCall) -> ServiceResponse:
         kind = call.data[ATTR_GAME]
@@ -205,7 +217,16 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         DOMAIN, SERVICE_NOTIFY_ME, notify_me, schema=NOTIFY_ME_SCHEMA
     )
 
-    hass.services.async_register(DOMAIN, SERVICE_VISIT, visit, schema=VISIT_SCHEMA)
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_VISIT,
+        visit,
+        schema=VISIT_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_MY_DAY, my_day, schema=NOTIFY_ME_SCHEMA
+    )
 
     hass.services.async_register(
         DOMAIN,

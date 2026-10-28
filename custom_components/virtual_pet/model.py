@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import copy
 from dataclasses import asdict, dataclass, field, fields
-from datetime import datetime, time, timedelta, tzinfo
+from datetime import date, datetime, time, timedelta, tzinfo
 import math
 import random
 from typing import Any
@@ -1422,6 +1422,30 @@ def bond_of(state: PetState, user: str) -> dict[str, Any]:
     return state.bonds.setdefault(user, {"points": 0})
 
 
+def friends_for(since: str | None, today: str) -> int | None:
+    """Whole months since they first met, if today is the day ("we've been
+    friends for a month!"); the 31st falls on a short month's last day."""
+    if not since:
+        return None
+    first, now = date.fromisoformat(since), date.fromisoformat(today)
+    months = (now.year - first.year) * 12 + now.month - first.month
+    if months < 1:
+        return None
+    next_month = date(now.year + now.month // 12, now.month % 12 + 1, 1)
+    last_day = (next_month - timedelta(days=1)).day
+    return months if now.day == min(first.day, last_day) else None
+
+
+def game_record(state: PetState, user: str, game: str, wins: int) -> list[Event]:
+    """Each person's best at each game; beating it is worth a word to them."""
+    best = bond_of(state, user).setdefault("best", {})
+    before = best.get(game)
+    best[game] = max(wins, before or 0)
+    if before is None or wins <= before:
+        return []  # the first game only sets the mark
+    return [{"type": "bond_record", "user": user, "game": game, "wins": wins}]
+
+
 def add_bond(
     state: PetState,
     user: str,
@@ -1433,6 +1457,7 @@ def add_bond(
     """Bond points for one person; they never go down. A new level may unlock
     something for that person: a nickname, a favourite game of theirs."""
     bond = bond_of(state, user)
+    bond.setdefault("since", today)  # the day they first met
     if bond.get("day") != today:
         bond.update(day=today, today=0, visited=False)
     if kind == "game" and game:

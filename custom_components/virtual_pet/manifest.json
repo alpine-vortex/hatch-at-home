@@ -1,6 +1,7 @@
 {
   "domain": "virtual_pet",
   "name": "Virtual Pet",
+  "after_dependencies": ["recorder"],
   "codeowners": [],
   "config_flow": true,
   "dependencies": ["frontend", "http"],

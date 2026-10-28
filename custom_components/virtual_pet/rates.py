@@ -285,3 +285,23 @@ BOND_FAVOURITE_LEVEL = 6  # it picks its favourite of their games
 BOND_FRIEND_LEVEL = 3  # close enough to cheer when they come home, or wish on them
 BOND_VISIT_EVERY_MINUTES = 60  # the card's visit call, per person (in memory)
 FRIEND_HOME_EVERY_MINUTES = 30  # the cheer when a friend arrives, per person
+TUCK_IN_EVENING_HOUR = 18  # lights out by hand from here (to 3 am) is tucking in
+TUCK_IN_THANKS_HOURS = (4.0, 18.0)  # "you tucked me in last night", this long after
+
+# "My day" (opt-in per person, wellbeing.py): what the pet notices, by bond level.
+MY_DAY_STEPS_LEVEL = 2
+MY_DAY_STEPS = 10000  # a milestone day
+MY_DAY_USUAL_LEVEL = 4
+MY_DAY_USUAL_DAYS = 14  # "usual": their median over this many days
+MY_DAY_USUAL_MIN_DAYS = 5  # fewer days than this: no "usual" yet
+MY_DAY_USUAL_MIN_STEPS = 1000  # a usual this low says nothing
+MY_DAY_MORE = 1.3  # "more than usual": this many times their usual
+MY_DAY_MORE_MIN_STEPS = 1500  # and at least this many steps more
+MY_DAY_ACTIVE_LEVEL = 5  # a bike ride, a run, lots of stairs
+MY_DAY_STAIRS = 10  # floors
+MY_DAY_BEST_LEVEL = 7
+MY_DAY_BEST_DAYS = 30  # "your most active day in weeks"
+MY_DAY_BEST_MIN_DAYS = 7
+MY_DAY_BEST_MIN_STEPS = 5000
+MY_DAY_SLEEP_LEVEL = 8
+MY_DAY_RESTED_HOURS = 7.0  # and at least their usual

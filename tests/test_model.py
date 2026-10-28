@@ -1492,3 +1492,21 @@ def test_a_wish_may_be_aimed_at_a_close_friend():
     assert "for" not in pet.wish
     model.pick_wish(pet, "2026-10-03", Lucky(1), {"play"}, {})
     assert "for" not in pet.wish
+
+
+def test_friendship_days_fall_monthly_and_on_short_months():
+    assert model.friends_for("2026-09-28", "2026-10-28") == 1
+    assert model.friends_for("2026-09-28", "2026-10-27") is None
+    assert model.friends_for("2026-10-01", "2026-10-28") is None  # not a month yet
+    assert model.friends_for("2026-01-31", "2026-02-28") == 1
+    assert model.friends_for("2025-10-28", "2026-10-28") == 12
+    assert model.friends_for(None, "2026-10-28") is None
+
+
+def test_a_game_record_is_each_persons_own():
+    pet = hatched(at(9))
+    assert model.game_record(pet, "u1", "left_right", 3) == []  # sets the mark
+    assert model.game_record(pet, "u1", "left_right", 3) == []
+    assert types(model.game_record(pet, "u1", "left_right", 4)) == ["bond_record"]
+    assert model.game_record(pet, "u2", "left_right", 2) == []  # their first
+    assert pet.bonds["u1"]["best"] == {"left_right": 4}

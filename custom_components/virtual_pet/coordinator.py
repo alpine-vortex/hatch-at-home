@@ -37,7 +37,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from . import model, notify, rates as R
+from . import model, notify, rates as R, wellbeing
 from .const import (
     CONF_AWAY_AFTER,
     CONF_BEDTIME,
@@ -111,6 +111,8 @@ MOMENTS = {
     "bond_up",
     "bond_favourite",
     "friend_home",
+    "bond_record",
+    "tucked_in",
 }
 MOMENTS_KEPT = 10
 # Moments a dream can be about, by the dream's kind. (Not news: it stays
@@ -196,6 +198,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # pet last cheered for each (in memory).
         self._arrivals: list[str] = []
         self._cheered: dict[str, float] = {}
+        # "My day": a bike ride or a run today, per person (in memory).
+        self._moved: dict[str, tuple[str, set[str]]] = {}
         self.presence = Presence(
             entry.options.get(CONF_AWAY_AFTER, R.HOME_AWAY_AFTER_HOURS)
         )
@@ -398,6 +402,26 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             if user := new.attributes.get("user_id"):
                 self._arrivals.append(user)
                 self._home_debouncer.async_schedule_call()
+
+        movers = wellbeing.activity_sensors(self.hass)
+
+        @callback
+        def phone_moved(event: Event[EventStateChangedData]) -> None:
+            new = event.data["new_state"]
+            move = wellbeing.MOVES.get((new.state if new else "").lower())
+            user = movers.get(event.data["entity_id"])
+            if move and user:
+                today = self._today(self._now())[0]
+                day, moves = self._moved.get(user, ("", set()))
+                if day != today:
+                    moves = set()
+                moves.add(move)
+                self._moved[user] = (today, moves)
+
+        if movers:
+            self.config_entry.async_on_unload(
+                async_track_state_change_event(self.hass, list(movers), phone_moved)
+            )
 
         if persons := self.hass.states.async_entity_ids("person"):
             self.config_entry.async_on_unload(
@@ -857,14 +881,15 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             events.append({"type": "friend_home", "user": user})
         return events
 
-    async def async_visit(self, user: str) -> None:
+    async def async_visit(self, user: str) -> dict[str, Any]:
         """Someone opened the card on this pet (the card calls this, at most
         hourly per person): a visit counts for their bond once a day, and may
-        be today's "come say hi" wish."""
+        be today's "come say hi" wish. Returns what the pet has to tell only
+        them: {"notes": [...]}, each once."""
         assert self.state is not None
         now = self._now()
         if now - self._visits.get(user, -1e12) < R.BOND_VISIT_EVERY_MINUTES * 60:
-            return
+            return {"notes": []}
         self._visits[user] = now
         self._advance(now)
         events = self._bond(user, "visit")
@@ -873,6 +898,55 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         ):
             events += granted + self._bond(user, "wish")
         self._fire(events)
+        notes = await self._notes(user, now) if self._awake() else []
+        if notes:
+            self._save()
+        self._publish()
+        return {"notes": notes}
+
+    async def _notes(self, user: str, now: float) -> list[dict[str, Any]]:
+        """Private lines for one person: how long they've been friends, a thank
+        you for last night's tuck-in, and what it noticed about their day."""
+        assert self.state is not None
+        bond = self.state.bonds.get(user)
+        if not bond:
+            return []
+        today, hour = self._today(now)
+        notes: list[dict[str, Any]] = []
+        noted = bond.setdefault("noted", {})
+        months = model.friends_for(bond.get("since"), today)
+        if months and noted.get("friends") != today:
+            noted["friends"] = today
+            notes.append({"kind": "friends_for", "months": months})
+        tucked = bond.get("tucked_at")
+        low, high = R.TUCK_IN_THANKS_HOURS
+        if (
+            tucked
+            and noted.get("tucked") != tucked
+            and hour < 12
+            and low * 3600 <= now - tucked <= high * 3600
+        ):
+            noted["tucked"] = tucked
+            notes.append({"kind": "tucked_in"})
+        if bond.get("my_day") and noted.get("day") != today:
+            day, moves = self._moved.get(user, ("", set()))
+            seen = await wellbeing.read_day(
+                self.hass,
+                wellbeing.find_sensors(self.hass, user),
+                moves if day == today else set(),
+            )
+            level = model.bond_level(bond["points"])
+            if note := wellbeing.notice(seen, level, hour):
+                noted["day"] = today
+                notes.append(note)
+        return notes
+
+    async def async_set_my_day(self, user: str, enabled: bool) -> None:
+        """Let the pet notice this person's day (steps, sleep...), or stop."""
+        assert self.state is not None
+        bond = model.bond_of(self.state, user)
+        bond["my_day"] = enabled
+        self._save()
         self._publish()
 
     def _holiday_morning(self) -> None:
@@ -946,7 +1020,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if state is None or (state.call is None and not state.sick):
             return  # a stale notification: the call is over (a scold would be unfair)
         if key == "lights_out":
-            await self.async_set_lights_out(True)
+            await self.async_set_lights_out(True, context)
         elif key in model.ACTIONS:
             await self.async_action(key, context)
 
@@ -1020,6 +1094,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             if event["type"] == "game_finished" and person is not None:
                 events += self._bond(person, "game", event["game"])
                 events += model.favourite_game(self.state, person, event["game"])
+                events += model.game_record(
+                    self.state, person, event["game"], event["wins"]
+                )
         self._actor = person
         try:
             self._fire(events)
@@ -1089,12 +1166,24 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._save()
         self._publish()
 
-    async def async_set_lights_out(self, on: bool) -> None:
-        """Flip the lights-out switch."""
+    async def async_set_lights_out(
+        self, on: bool, context: Context | None = None
+    ) -> None:
+        """Flip the lights-out switch. Someone putting it to bed in the evening
+        tucked it in: it says goodnight to them, and thanks them in the morning."""
         assert self.state is not None
         now = self._now()
         self._advance(now)
-        self._fire(model.set_lights_out(self.state, on, now, self.settings))
+        events = model.set_lights_out(self.state, on, now, self.settings)
+        hour = self._today(now)[1]
+        evening = hour >= R.TUCK_IN_EVENING_HOUR or hour < 3
+        person = await self._person(context) if on and evening else None
+        if person and any(
+            e["type"] == "fell_asleep" and e.get("how") == "lights" for e in events
+        ):
+            model.bond_of(self.state, person)["tucked_at"] = now
+            events.append({"type": "tucked_in", "user": person})
+        self._fire(events)
         self._save()
         self._publish()
 

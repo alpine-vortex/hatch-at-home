@@ -299,6 +299,19 @@ async function main() {
     await bondRow.count() === 1 && await bondRow.locator(".hearts").getAttribute("aria-label") === "bond level 8 of 10",
     await bondRow.count() ? await bondRow.innerText() : "no row");
   await shot("04c-bond-status");
+  // "My day" is each person's own switch.
+  await cur().locator(".bell.myday").click();
+  let myDay = false;
+  for (let i = 0; i < 20 && !myDay; i++) {
+    await page.waitForTimeout(250);
+    myDay = (await bondOf())?.my_day === true;
+  }
+  check("my day turns on for this person", myDay);
+  await cur().locator(".bell.myday").click(); // off again
+  await page.waitForTimeout(800);
+  // The server's update replaced the close bond injected above: inject it again.
+  await inject(pet["sensor.life_stage"], { attributes: { bonds: { [me]: { level: 8, nickname: "sunbeam" } } } });
+  await page.waitForTimeout(300);
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(300);
   // A level-up is said only to the person whose bond grew.
@@ -340,6 +353,42 @@ async function main() {
     }
     return { out, person: person?.attributes.friendly_name };
   }, me);
+  // What the pet tells only you: a friendship month, last night's tuck-in, a
+  // busy day; a record and a goodnight, to their person only.
+  const secret = await page.locator("hatch-pet-card").evaluate((el, me) => {
+    const s = el._slides[el._index];
+    s.queue = [];
+    el._note(s, { kind: "friends_for", months: 1 });
+    el._note(s, { kind: "steps", steps: 11000 });
+    el._note(s, { kind: "stairs", floors: 12 });
+    el._moment(s, { type: "bond_record", user: me, game: "left_right", wins: 4, at: "x" });
+    el._moment(s, { type: "bond_record", user: "someone-else", game: "left_right", wins: 5, at: "y" });
+    el._moment(s, { type: "tucked_in", user: me, at: "z" });
+    const out = s.queue.map((q) => q.text);
+    s.queue = [];
+    return out;
+  }, me);
+  check("private notes, records and goodnights are said to their person",
+    secret[0] === "we've been friends for a month! ♥" && secret[1] === "11,000 steps?! you've been busy!" &&
+    secret[2] === "12 floors of stairs?! you're a climber!" && secret[3] === "you beat your best left or right! 4/5 ♥" &&
+    /^(night night|sweet dreams|thank you for tucking me in), sunbeam ♥$/.test(secret[4]) && secret.length === 5,
+    secret.join(" | "));
+  // "How was your day?": three answers, a warm reply, and it goes away.
+  const askBox = cur().locator(".askday");
+  await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    s.bubble.textContent = "how was your day?";
+    s.sayUntil = Date.now() + 20000;
+    el._askDay(s);
+  });
+  const answers = await askBox.locator("button").allInnerTexts();
+  await shot("04d-ask-day");
+  await askBox.locator('button[data-answer="tough"]').click();
+  await page.waitForTimeout(300);
+  const reply = await bubble();
+  check("it asks how your day was, and answers kindly", answers.join() === "great,ok,tough" &&
+    /snuggle|cuddle/.test(reply) && await askBox.count() === 0, `${answers.join()} -> ${reply}`);
+  await shot("04e-ask-day-answer");
   check("a friend coming home is cheered, by name to others", /^(you're home!! ♥|yay, you're back! ♥)$/.test(cheers.out[0]) &&
     cheers.out[1] === "" && /^(Sam's home!!|ooh, Sam is back!)$/.test(cheers.out[2]),
   `${cheers.out.join(" | ")} (person ${cheers.person})`);

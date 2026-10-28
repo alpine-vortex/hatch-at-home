@@ -1844,3 +1844,109 @@ async def test_the_pet_knows_its_friends_on_their_phones_and_at_the_door(
         await settle(hass, freezer)
     moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
     assert [m["user"] for m in moments if m["type"] == "friend_home"] == [me.id]
+
+
+async def test_the_visit_tells_only_its_person_what_it_noticed(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 15:00:00+00:00")
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    phone = MockConfigEntry(domain="mobile_app", data={"user_id": me.id})
+    phone.add_to_hass(hass)
+    er.async_get(hass).async_get_or_create(
+        "sensor",
+        "mobile_app",
+        "hook_steps",
+        config_entry=phone,
+        suggested_object_id="my_steps",
+    )
+    hass.states.async_set("sensor.my_steps", "11234")
+    hass_storage[STORE_KEY] = hatched_pet(
+        dt_util.utcnow().timestamp(),
+        bonds={me.id: {"points": model.R.BOND_LEVELS[2], "since": "2026-09-28"}},
+    )
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.state.wish["kind"] = "bath"
+
+    async def look() -> list[dict[str, Any]]:
+        response = await hass.services.async_call(
+            DOMAIN,
+            "visit",
+            {"entity_id": "sensor.pip_mood"},
+            blocking=True,
+            return_response=True,
+            context=Context(user_id=me.id),
+        )
+        return response["notes"]
+
+    # A month of friendship today; "my day" is off until they turn it on.
+    assert await look() == [{"kind": "friends_for", "months": 1}]
+    await hass.services.async_call(
+        DOMAIN,
+        "my_day",
+        {"entity_id": "sensor.pip_mood", "enabled": True},
+        blocking=True,
+        context=Context(user_id=me.id),
+    )
+    bonds = hass.states.get("sensor.pip_life_stage").attributes["bonds"]
+    assert bonds[me.id]["my_day"] is True
+    freezer.tick(timedelta(hours=1))
+    assert await look() == [{"kind": "steps", "steps": 11000}]
+    freezer.tick(timedelta(hours=1))
+    assert await look() == []  # each once a day
+
+
+async def test_tucked_in_says_goodnight_and_thanks_in_the_morning(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 21:00:00+00:00")
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    await setup(hass)
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.pip_lights_out"},
+        blocking=True,
+        context=Context(user_id=me.id),
+    )
+    moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
+    assert any(m["type"] == "tucked_in" and m["user"] == me.id for m in moments)
+    # The morning after, awake: a thank-you, once.
+    freezer.move_to("2026-10-29 08:00:00+00:00")
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    await coordinator.async_set_lights_out(False)
+    assert coordinator._awake()
+    notes = await coordinator.async_visit(me.id)
+    assert {"kind": "tucked_in"} in notes["notes"]
+    coordinator._visits.clear()
+    assert {"kind": "tucked_in"} not in (await coordinator.async_visit(me.id))["notes"]
+
+
+async def test_beating_your_own_best_game_is_noticed(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, bonds={me.id: {"points": 0, "best": {"left_right": -1}}}
+    )
+    await setup(hass)
+    for _ in range(5):
+        await hass.services.async_call(
+            DOMAIN,
+            "play_game",
+            {"entity_id": "button.pip_feed", "guess": "left"},
+            blocking=True,
+            return_response=True,
+            context=Context(user_id=me.id),
+        )
+    moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
+    record = next(m for m in moments if m["type"] == "bond_record")
+    assert record["user"] == me.id and record["game"] == "left_right"

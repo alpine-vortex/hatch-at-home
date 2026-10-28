@@ -33,6 +33,18 @@ visit:
       selector:
         entity:
           integration: virtual_pet
+my_day:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: virtual_pet
+    enabled:
+      required: true
+      example: true
+      selector:
+        boolean:
 play_game:
   fields:
     entity_id:

@@ -150,7 +150,20 @@ details before committing it.
   `friend_home` moments from person entities coming home (`person_moved` →
   `_arrivals` → `_friends_home` in `_sense_home`, level `BOND_FRIEND_LEVEL`, once per
   `FRIEND_HOME_EVERY_MINUTES` per person); aimed wishes (`pick_wish` `friends`, wish
-  `for` and `for_name`, `WISH_FOR_CHANCE`), drawn by the card's `_wishLine`. `card-check` (now 56 checks) covers the visit, a close bond's
+  `for` and `for_name`, `WISH_FOR_CHANCE`), drawn by the card's `_wishLine`. Third
+  pass: `virtual_pet.visit` now answers with `notes` for the caller only
+  (`_notes`: `friends_for` from bond `since`, `tucked_in` from `tucked_at`, and
+  "my day" from `wellbeing.notice`, each once a day via bond `noted`); new service
+  `virtual_pet.my_day` (bond `my_day`); `wellbeing.py` finds each person's phone
+  sensors through mobile_app's `user_id`, reads today and their 14-day median from
+  recorder statistics (hourly `change`), and keeps bike rides and runs seen today in
+  memory (`_moved`); `model.game_record` (bond `best`, `bond_record` moment); lights
+  out by a person in the evening is `tucked_in` (switch, Assist and the phone button
+  pass their context). Card: `_note`, `_maybeAskDay` / `_askDay` (a queued line can
+  carry `then`), a "my day" switch on the status screen. Unverified: real phones'
+  sensors (the companion docs' names are used: `steps`, `floors_ascended`,
+  `activity`, `detected_activity`, `health_connect_daily_steps`,
+  `health_connect_daily_floors`, `health_connect_sleep_duration`). `card-check` (now 59 checks) covers the visit, a close bond's
   greeting, the status row and the level-up line. Next in the plan: finds and
   visitors per world, then pets visiting each other.
 - **Thanksgiving** (owner, 2026-10-28: "must do", the same all-out treatment as
@@ -228,9 +241,9 @@ details before committing it.
 - **Adults** exist for every creature (the last four arrived in 0.21.0). Long adults
   are drawn back up with `species.json` `"scale": {"adult": …}` (1.05–1.2; the bat
   needs none).
-- **Tests:** 330, run with `scripts/test` (ruff, format check, pytest).
+- **Tests:** 340, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
-  `scripts/card-check` (Playwright, 56 checks) drives the card against
+  `scripts/card-check` (Playwright, 59 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
 - **CI:** `.github/workflows/validate.yml` (HACS action, hassfest, tests) is green.
   License MIT; Tiny5 keeps its OFL.

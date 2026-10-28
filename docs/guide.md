@@ -121,8 +121,28 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   sunbeam!"). From level 3 it cheers when you come home ("Sam's home!!", and "welcome
   home!" when you next look in; this needs your person entity linked to your login),
   and some days its wish is for you ("I hope Sam plays a game with me today!"; anyone
-  can still grant it). A bond never changes the pet's stats: it's flavour. The status
-  screen shows "you two" in five hearts. Each person only ever sees their own bond. Care through Assist counts for
+  can still grant it). It also:
+  - remembers when you met, and says so each month ("we've been friends for a
+    month! ♥");
+  - cheers when you beat your own best at a game, which it keeps for each person;
+  - says goodnight when you tuck it in in the evening (lights out by hand from 6 pm),
+    and thanks you the next morning;
+  - sometimes asks "how was your day?" when you come home or look in late in the day
+    (from level 2). Tap great, ok or tough and it answers kindly. Nothing is kept.
+
+  A bond never changes the pet's stats: it's flavour. The status screen shows "you
+  two" in five hearts.
+- **My day** (opt in on the status screen, for yourself only): the pet notices your
+  good days from the phones you signed in to the Home Assistant app with. It only
+  ever says something when a day stands out for the better, and only to you, at most
+  once a day; never a quiet day, a short night, a heart rate or a weight. The closer
+  your bond, the more it notices: a 10,000-step day (level 2), more steps than your
+  own usual by this time of day (4), a bike ride, a run or lots of stairs (5), your
+  most active day in weeks (7), and a good night's sleep, at least your usual (8).
+  It reads the companion app's steps, floors and activity sensors (iOS) and Health
+  Connect's daily steps, floors and sleep (Android); Android's plain step counter
+  works through Home Assistant's long-term statistics. "Usual" is your own median
+  over the last two weeks, from that history; the pet stores none of it. Each person only ever sees their own bond. Care through Assist counts for
   whoever is signed in; automations build no bond. A new generation keeps the household's bonds. (The card tells the pet who
   looked in with `virtual_pet.visit`, counted at most hourly.)
 - **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
@@ -531,7 +551,10 @@ names are included.
 `virtual_pet_wish_made` and `virtual_pet_wish_granted` (with `kind`),
 `virtual_pet_bond_up` (with `user`, the HA user ID, `level`, and `nickname` or
 `favourite` when the level brings one), `virtual_pet_bond_favourite` (with `user` and
-`game`), `virtual_pet_friend_home` (with `user`: a close friend came home).
+`game`), `virtual_pet_friend_home` (with `user`: a close friend came home),
+`virtual_pet_bond_record` (with `user`, `game`, `wins`: a new personal best),
+`virtual_pet_tucked_in` (with `user`). What it notices about someone's day is never
+an event: it goes only to that person, in `virtual_pet.visit`'s response.
 
 Events fired during a fast-forward carry `simulated: true`.
 

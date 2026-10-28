@@ -204,7 +204,7 @@ class CareIntent(intent.IntentHandler):
         action = slots[SLOT_ACTION]["value"]
         name = pet_name(pet)
         if action == LIGHTS_OUT:
-            await pet.async_set_lights_out(True)
+            await pet.async_set_lights_out(True, intent_obj.context)
             result = model.OK
         else:
             result = await pet.async_action(action, intent_obj.context)

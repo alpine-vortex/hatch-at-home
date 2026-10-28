@@ -350,9 +350,31 @@ const WISHES_FOR = {
   praise: [(n) => `I hope ${n} says I'm good today`, "will you tell me I'm good today?", (n) => `hear "good job!" from ${n}`],
   say_hi: [(n) => `I hope ${n} comes to say hi this afternoon!`, "will you come say hi this afternoon?", (n) => `a hello from ${n}`],
 };
-// "will you play?" + "sunbeam" -> "will you play, sunbeam?"
-const withName = (line, name) => (name ? line.replace(/([!?.]*)$/, `, ${name}$1`) : line);
+// "will you play?" + "sunbeam" -> "will you play, sunbeam?"; "night night ♥" -> "night night, sunbeam ♥"
+const withName = (line, name) => (name ? line.replace(/([!?.]*)(\s*♥)?$/, `, ${name}$1$2`) : line);
 const FRIEND_WELCOME_MS = 6 * 3600 * 1000; // "welcome home!" at the next look, this long after
+// "How was your day?": asked now and then (once a day per person and device) when
+// a friend comes home or looks in late in the day. Card only; nothing is kept.
+const ASK_DAY = { chance: 0.6, after: 16, ms: 20000 };
+const DAY_ANSWERS = {
+  great: ["yay!! that makes me so happy ♥", "a great day! tell me everything! ♥"],
+  ok: ["ok days are good days too ♥", "I'm glad you're here now ♥"],
+  tough: ["aww... come here *snuggle* ♥", "I'm here for you ♥ *cuddle*"],
+};
+// What the pet tells only you (virtual_pet.visit's notes), each once.
+const NOTES = {
+  friends_for: (n) => n.months % 12 === 0
+    ? `we've been friends for ${n.months === 12 ? "a whole year" : `${n.months / 12} years`}!! ♥`
+    : `we've been friends for ${n.months === 1 ? "a month" : `${n.months} months`}! ♥`,
+  tucked_in: () => pick(["thanks for tucking me in last night ♥", "I slept so well after you tucked me in ♥"]),
+  steps: (n) => `${n.steps.toLocaleString()} steps?! you've been busy!`,
+  more_than_usual: () => pick(["you've walked way more than usual today!", "so many steps today! you've been so active!"]),
+  best_day: () => "your most active day in weeks!! ♥",
+  bike: () => "were you on a bike?! wheee!",
+  run: () => "did you go for a run?! so fast!",
+  stairs: (n) => `${n.floors} floors of stairs?! you're a climber!`,
+  rested: () => pick(["you look so well rested! ♥", "good morning! you slept so well ♥"]),
+};
 const DREAMS = {
   watching: (d) => `I dreamed about ${d.title}!`,
   listening: (d) => `♪ I dreamed of ${d.title} ♪`,
@@ -913,6 +935,13 @@ const STYLE = `
     animation: burst .45s ease-out forwards; }
   @keyframes burst { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
   .toy { position: relative; }
+  .screen .askday { position: absolute; left: 0; right: 0; bottom: 3%; display: flex; gap: 8px;
+    justify-content: center; z-index: 3; }
+  .screen .askday button { font: inherit; font-size: 14px; min-height: 44px; min-width: 64px; padding: 4px 10px;
+    border-radius: 14px; border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a;
+    box-shadow: 0 4px 0 #3a2a1a; transition: transform .08s, box-shadow .08s; }
+  .screen .askday button:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
+  .screen.show-status .askday { display: none; }
   .screen .bondhearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
     opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }
   @keyframes bondheart { 0% { transform: translateY(0) scale(.7); opacity: 0; } 20% { opacity: 1; }
@@ -1816,10 +1845,11 @@ class HatchPetCard extends HTMLElement {
   _sayQueued(s) {
     const now = Date.now();
     if (!s.queue?.length || s.sayUntil > now || s.game || s.screen.classList.contains("show-status")) return;
-    const { text, ms } = s.queue.shift();
+    const { text, ms, then } = s.queue.shift();
     s.bubble.textContent = text;
     s.sayUntil = now + ms;
     this._animate(s, s.pet, "perk", 320);
+    then?.();
   }
 
   // The first look at this pet on this device: what happened while you were
@@ -1853,6 +1883,9 @@ class HatchPetCard extends HTMLElement {
       const bond = this._bond(s);
       const first = this._hass.user?.name?.trim().split(/\s+/)[0];
       this._queue(s, `welcome home, ${(bond?.level >= BOND.nickname && bond.nickname) || first || "friend"}! ♥`, 5000);
+      this._maybeAskDay(s, true);
+    } else {
+      this._maybeAskDay(s);
     }
   }
 
@@ -1977,9 +2010,63 @@ class HatchPetCard extends HTMLElement {
     const id = s.ids?.["sensor.life_stage"];
     if (!id || !this._hass.user || Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
     s.visitedAt = Date.now();
-    this._hass.callService("virtual_pet", "visit", { entity_id: id }).catch(() => {
-      // an older integration has no visit: no bond yet, nothing else changes
+    this._hass.callService("virtual_pet", "visit", { entity_id: id }, undefined, false, true)
+      .then((res) => (res?.response?.notes || []).forEach((note) => this._note(s, note)))
+      .catch(() => {
+        // an older integration has no visit: no bond yet, nothing else changes
+      });
+  }
+
+  // Something the pet has to tell only the viewer (from the visit).
+  _note(s, note) {
+    const line = NOTES[note.kind]?.(note);
+    if (!line) return;
+    this._queue(s, line, 5000);
+    if (note.kind === "friends_for") {
+      this._sparkle(s);
+      if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) this._bondHearts(s);
+    }
+  }
+
+  // "How was your day?" now and then: when a close friend comes home (home), or
+  // at the first look late in the day.
+  _maybeAskDay(s, home = false) {
+    const bond = this._bond(s);
+    if (!bond || bond.level < BOND.warm || s.asking) return;
+    if (!home && new Date().getHours() < ASK_DAY.after) return;
+    if (Math.random() > ASK_DAY.chance || !oncePerDay(`askday-${this._hass.user?.id}-${s.ids?.device}`)) return;
+    s.asking = true;
+    s.queue = s.queue || [];
+    s.queue.push({ text: "how was your day?", ms: ASK_DAY.ms, then: () => this._askDay(s) });
+  }
+
+  _askDay(s) {
+    s.screen.querySelector(".askday")?.remove();
+    const box = document.createElement("div");
+    box.className = "askday";
+    box.setAttribute("role", "group");
+    box.setAttribute("aria-label", "How was your day?");
+    box.innerHTML = ["great", "ok", "tough"].map((a) => `<button data-answer="${a}">${a}</button>`).join("");
+    const done = () => {
+      box.remove();
+      s.asking = false;
+      clearTimeout(s.askTimer);
+    };
+    box.addEventListener("click", (e) => {
+      const answer = e.target.closest("button")?.dataset.answer;
+      if (!answer) return;
+      e.stopPropagation(); // the screen behind would open the status
+      this._tapped(e.target.closest("button"));
+      done();
+      s.bubble.textContent = pick(DAY_ANSWERS[answer]);
+      s.sayUntil = Date.now() + 4500;
+      const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      if (answer === "great" && !calm) this._animate(s, s.pet, "greethop", 1400);
+      else if (answer === "tough" && !calm) this._bondHearts(s);
+      else this._animate(s, s.pet, "perk", 320);
     });
+    s.screen.append(box);
+    s.askTimer = setTimeout(done, ASK_DAY.ms);
   }
 
   // Hearts that float up around the pet: only for someone it's very close to.
@@ -2198,12 +2285,28 @@ class HatchPetCard extends HTMLElement {
           this._queue(s, pick(["you're home!! ♥", "yay, you're back! ♥"]), 4500);
           const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
           if (!calm) this._animate(s, s.pet, "greethop", 1400);
+          this._maybeAskDay(s, true);
           break;
         }
         const name = this._personName(m.user);
         if (!name) break;
         this._queue(s, pick([`${name}'s home!!`, `ooh, ${name} is back!`]), 4000);
         this._animate(s, s.pet, "perk", 320);
+        break;
+      }
+      case "bond_record": { // only its person
+        if (m.user !== this._hass.user?.id) break;
+        const game = GAMES.find((g) => g.key === m.game);
+        this._sparkle(s);
+        this._queue(s, `you beat your best ${game ? game.label : "game"}! ${m.wins}/5 ♥`);
+        break;
+      }
+      case "tucked_in": {
+        if (m.user !== this._hass.user?.id) break;
+        const bond = this._bond(s);
+        const name = (bond?.level >= BOND.nickname && bond.nickname) ||
+          this._hass.user?.name?.trim().split(/\s+/)[0];
+        this._queue(s, withName(pick(["night night ♥", "sweet dreams ♥", "thank you for tucking me in ♥"]), name), 4000);
         break;
       }
       case "bond_favourite":
@@ -2357,13 +2460,19 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${row(null, "notify me", `<span><button class="bell" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
+      ${bond ? row(null, "my day", `<span><button class="bell myday" aria-label="let the pet notice my day" aria-pressed="${!!bond.my_day}">${bond.my_day ? "on" : "off"}</button></span>`) : ""}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     this._journalLink(s, true);
-    s.status.querySelector(".bell:not(.sound)").addEventListener("click", (e) => {
+    s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      this._setMyDay(s, !bond.my_day, e.currentTarget);
+    });
+    s.status.querySelector(".bell:not(.sound):not(.myday)").addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
       this._tapped(e.currentTarget);
       this._setNotify(s, !notifying, e.currentTarget);
@@ -2387,11 +2496,30 @@ class HatchPetCard extends HTMLElement {
     });
   }
 
+  // "My day" is per person too: steps, stairs and sleep from their own phones.
+  async _setMyDay(s, enabled, button) {
+    const id = s.ids?.["sensor.life_stage"];
+    if (!id) return;
+    button.classList.add("pending");
+    button.setAttribute("aria-pressed", String(enabled));
+    button.textContent = enabled ? "on" : "off";
+    try {
+      await this._hass.callService("virtual_pet", "my_day", { entity_id: id, enabled });
+      this._statusMessage(s, enabled ? "I'll notice your good days! ♥" : "OK, I won't peek.");
+    } catch (err) {
+      button.setAttribute("aria-pressed", String(!enabled));
+      button.textContent = !enabled ? "on" : "off";
+      this._statusMessage(s, "That didn't work. Try again.");
+    } finally {
+      button.classList.remove("pending");
+    }
+  }
+
   // Phone notifications are per user: this only changes them for whoever is signed in.
   async _setNotify(s, enabled) {
     const id = s.ids?.["sensor.life_stage"];
     if (!id) return;
-    const button = s.status.querySelector(".bell:not(.sound)");
+    const button = s.status.querySelector(".bell:not(.sound):not(.myday)");
     if (button) {
       button.classList.add("pending");
       button.setAttribute("aria-pressed", String(enabled));

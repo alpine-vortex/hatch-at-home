@@ -111,6 +111,13 @@ praise or say hi; anyone can grant it). Declined: memories in the journal, and c
 from a friend working better (a good bond is inevitable, so it would only make the
 game easier).
 
+**Third pass** (owner, 2026-10-28; declined: remembering each person's music):
+"my day" (`wellbeing.py`, opt-in per person, positive only, gated by level, from
+their own phones and HA's long-term statistics), the monthly friendship day, each
+person's game records, goodnight and a morning thank-you for tucking it in, and
+"how was your day?" (card only). Not yet seen on a real phone: which sensors the
+players' phones report, and whether Android's step counter has statistics.
+
 From Nintendogs and the Digimon bracelets: the pet knows each person, separately.
 
 - **Who:** HA users. Care already records who did it (`coordinator._who`). Visits
