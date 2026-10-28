@@ -143,8 +143,21 @@ async function main() {
   await seasonsOff();
   // Pets speak with their sound now and then; checks of exact lines keep it
   // off (as if one was just said), and the voice checks turn it back on.
+  // A dev pet that has grown into a teen has a personality, which would swap
+  // exact lines half the time: the pets have none here unless a check stubs
+  // one in (4c, 4d). Installed once per card, so again after a reload.
   const hush = () => page.locator("hatch-pet-card").evaluate((el) => {
     el._slides.forEach((s) => { s.voicedAt = Date.now() + 1e9; });
+    if (el.__typeless) return;
+    el.__typeless = true;
+    const realState = el._state;
+    const typeless = new WeakMap(); // one copy per state, so a check can still edit what it's given
+    el._state = function (slide, key) {
+      const st = realState.call(this, slide, key);
+      if (key !== "sensor.life_stage" || !st?.attributes?.personality) return st;
+      if (!typeless.has(st)) typeless.set(st, { ...st, attributes: { ...st.attributes, personality: null } });
+      return typeless.get(st);
+    };
   });
   await hush();
   const cur = () => page.locator("hatch-pet-card .slide:not(.away-slide)");

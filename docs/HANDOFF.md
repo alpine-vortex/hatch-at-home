@@ -75,7 +75,10 @@ Wired: `good_morning`, `sunset`, `fell_asleep` (house or lights), `wish_granted`
 `hello_shared` on a shared screen; `hello_warm`/`hello_hearts` only with
 `_bond(s)` non-null) and flips the coin between it and today's lines; a teen
 `stage_changed` carrying a type queues its `reveal` line. Card check "4d" lints
-the table and stubs `Math.random` (0.1 heads, 0.9 tails). `scripts/test` 458,
+the table and stubs `Math.random` (0.1 heads, 0.9 tails). `hush()` in the card check also
+wraps `el._state` once per card so `sensor.life_stage` has `personality: null` unless a
+check stubs one in: a drifted dev pet that grew into a teen would otherwise swap the
+older exact-line checks (favourite snack, sunset, the baby-talk greetings) half the time. `scripts/test` 458,
 `scripts/card-check` 123. Not in P2a: idle and mood lines (P2b), upbringing
 lines, idle manner (P3), Assist (P4).
 Card checks stub `el._state` for the life stage (kept until the screenshot) to show
