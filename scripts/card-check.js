@@ -540,6 +540,105 @@ async function main() {
   });
   await page.emulateMedia({ reducedMotion: null });
   check("reduced motion: lines show whole", !still.typing && still.said === "no typing here", JSON.stringify(still));
+  // Its catchphrase ends every third voiced line that names nobody, never a
+  // question; a close friend can give it a new one (the box wraps, three a row).
+  const catchy = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const out = { phrase: el._state(s, "sensor.life_stage")?.attributes.catchphrase, said: [] };
+    s.catchCount = 0;
+    for (const line of ["the sun's up!", "is this Bluey?", "pretty sky tonight", "the rain stopped!"]) {
+      s.voicedAt = 0;
+      el._speak(s, line, 300, { catch: true });
+      el._stopTyping(s);
+      out.said.push(s.bubble.textContent);
+    }
+    el._ask(s, "catchphrase");
+    const buttons = [...s.screen.querySelectorAll(".askday button")];
+    out.labels = buttons.map((b) => b.textContent);
+    out.rows = new Set(buttons.map((b) => Math.round(b.getBoundingClientRect().top))).size;
+    const box = s.screen.querySelector(".askday").getBoundingClientRect();
+    out.inside = box.left >= s.screen.getBoundingClientRect().left && box.right <= s.screen.getBoundingClientRect().right;
+    el._clearAsk(s);
+    s.voicedAt = Date.now() + 1e9;
+    s.sayUntil = 0;
+    return out;
+  });
+  const p = catchy.phrase;
+  check("its catchphrase ends every third line that names nobody, never a question",
+    !!p && catchy.said[0] === `${snd}! the sun's up!` && catchy.said[1] === `${snd}? is this Bluey?` &&
+    catchy.said[2] === `${snd}! pretty sky tonight` && catchy.said[3] === `${snd}! the rain stopped! ${p}`,
+    catchy.said.join(" | "));
+  check("a friend can give it a catchphrase: five choices in two rows on the screen",
+    catchy.labels.join("|") === `hehe|yay|and stuff|la la|keep "${p}"` && catchy.rows === 2 && catchy.inside,
+    JSON.stringify(catchy));
+  // Birthdays: yours, picked in the question box (a tap on a picker stays in the
+  // box); a celebration takes the away note's place; the pet's party; forgetting.
+  const bday = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const out = {};
+    el._ask(s, "birthday");
+    const box = s.screen.querySelector(".askday");
+    const month = box.querySelector(".bmonth");
+    month.value = "2";
+    month.dispatchEvent(new Event("change", { bubbles: true }));
+    out.febDays = box.querySelector(".bday").options.length;
+    month.click();
+    box.querySelector(".bday").click();
+    out.statusAfterPick = s.screen.classList.contains("show-status");
+    box.querySelector(".bday").value = "14";
+    box.querySelector('[data-answer="ok"]').click();
+    for (let i = 0; i < 100 && s.bubble.dataset.typing; i++) await wait(50);
+    out.reply = s.bubble.textContent;
+    s.queue = [{ text: "a", ms: 300 }, { text: "while you were out...", ms: 300, opts: { away: true } }, { text: "c", ms: 300 }];
+    el._note(s, { kind: "pet_birthday", months: 3 }, true); // the server made room for it
+    out.queue = s.queue.map((q) => q.text);
+    s.queue = [];
+    el._note(s, { kind: "your_birthday", quiet: false });
+    el._note(s, { kind: "birthday_friends", months: 11 });
+    out.yours = s.queue.map((q) => q.text);
+    s.queue = [];
+    // The pet's yearly birthday: confetti and the party hat.
+    const free = el._free;
+    el._free = () => true;
+    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-party-")) localStorage.removeItem(k);
+    const stage = el._state(s, "sensor.life_stage");
+    const attrs = stage.attributes;
+    stage.attributes = { ...attrs, birthday: { years: 1 } };
+    el._partyTick(s);
+    stage.attributes = attrs;
+    el._free = free;
+    out.confetti = !!s.screen.querySelector(".confetti i");
+    out.hat = s.screen.querySelector(".costume img")?.getAttribute("src") || "";
+    out.said = s.bubble.textContent;
+    s.screen.querySelector(".costume")?.remove();
+    s.sayUntil = 0;
+    s.flairUntil = 0;
+    // "forget my birthday": only when one is kept, never on a shared screen.
+    el._birthdayKept = true;
+    el._renderStatus(s, []);
+    out.forget = !!s.status.querySelector(".bell.forgetbday");
+    localStorage.setItem("hatch-shared-screen", "on");
+    el._renderStatus(s, []);
+    out.forgetShared = !!s.status.querySelector(".bell.forgetbday");
+    localStorage.setItem("hatch-shared-screen", "off");
+    el._renderStatus(s, []);
+    s.status.querySelector(".bell.forgetbday").click();
+    for (let i = 0; i < 40 && el._birthdayKept; i++) await wait(50);
+    out.forgotten = !el._birthdayKept;
+    s.voicedAt = Date.now() + 1e9;
+    return out;
+  });
+  check("your birthday is picked in the box, and a tap on a picker stays there",
+    bday.febDays === 29 && !bday.statusAfterPick && /Feb 14! I'll remember ♥$/.test(bday.reply), JSON.stringify(bday));
+  check("a celebration takes the away note's place; yours is by name",
+    bday.queue.join("|") === "a|c|I'm 3 months old today! ♥" &&
+    /^happy birthday, \S+!! ♥$/.test(bday.yours[0]) &&
+    bday.yours[1] === "I'm 11 months old, and we've been friends all that time! ♥", JSON.stringify(bday));
+  check("its birthday brings confetti and a party hat",
+    bday.confetti && /season_party_hat/.test(bday.hat) && /party hat on! ♪$/.test(bday.said), JSON.stringify(bday));
+  check("your birthday can be forgotten, never shown on a shared screen",
+    bday.forget && !bday.forgetShared && bday.forgotten, JSON.stringify(bday));
   // A close friend coming home: "you're home!!" to them, by name to anyone else.
   await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
   await evaluate(() => document.querySelector("home-assistant").hass.callApi("POST", "states/person.sam_check",

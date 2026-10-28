@@ -8,6 +8,7 @@ whatever events these return.
 
 from __future__ import annotations
 
+import calendar
 import copy
 from dataclasses import asdict, dataclass, field, fields
 from datetime import date, datetime, time, timedelta, tzinfo
@@ -139,6 +140,9 @@ class PetState:
     # Its own favourites, picked once from its creature's likes: {"snack": ...}.
     favourites: dict[str, str] = field(default_factory=dict)
     favourite_said: str | None = None  # local date it last said so
+    # What it says at the end of things, from a close friend (None: its own).
+    catchphrase: str | None = None
+    hatched_on: str | None = None  # local date it hatched: its birthday
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store."""
@@ -207,8 +211,14 @@ class PetState:
             for k, v in (favourites if isinstance(favourites, dict) else {}).items()
             if isinstance(k, str) and isinstance(v, str)
         }
-        if not isinstance(kwargs.get("favourite_said"), str):
-            kwargs["favourite_said"] = None
+        for key in ("favourite_said", "catchphrase", "hatched_on"):
+            if not isinstance(kwargs.get(key), str):
+                kwargs[key] = None
+        try:
+            if kwargs["hatched_on"]:
+                date.fromisoformat(kwargs["hatched_on"])
+        except ValueError:
+            kwargs["hatched_on"] = None  # damaged: worked out again at load
         state = cls(**kwargs)
         if state.upbringing is None and life_stage(state) == "adult":
             # Grew up before upbringings existed: judge it on its record so far.
@@ -427,6 +437,7 @@ def _hatch(
         state.temperament = {t: round(rng.uniform(low, high), 2) for t in TRAITS}
     if state.species not in state.raised:
         state.raised.append(state.species)
+    state.hatched_on = datetime.fromtimestamp(t, settings.tz).date().isoformat()
     events.append({"type": "hatched", "species": state.species})
     if state.lights_out:
         # Someone put the egg to bed; the hatchling goes straight to sleep.
@@ -1453,6 +1464,39 @@ def bond_level(points: int) -> int:
 def bond_of(state: PetState, user: str) -> dict[str, Any]:
     """One person's bond, created on first use."""
     return state.bonds.setdefault(user, {"points": 0})
+
+
+def pet_birthday(hatched_on: str | None, today: str) -> dict[str, int] | None:
+    """Its birthday, if today is one: monthly in its first year ({"months": n}),
+    then yearly ({"years": n}); the 31st falls on a short month's last day."""
+    months = friends_for(hatched_on, today)
+    if not months:
+        return None
+    if months < 12:
+        return {"months": months}
+    return {"years": months // 12} if months % 12 == 0 else None
+
+
+def valid_birthday(value: str) -> bool:
+    """A real month and day, "MM-DD" (29 February too)."""
+    if len(value) != 5 or value[2] != "-" or not (value[:2] + value[3:]).isdigit():
+        return False
+    try:
+        date(2000, int(value[:2]), int(value[3:]))  # 2000: a leap year
+    except ValueError:
+        return False
+    return True
+
+
+def birthday_today(birthday: str | None, today: str) -> bool:
+    """Whether a "MM-DD" birthday is today; 29 February is the 28th in
+    other years."""
+    if not birthday or not valid_birthday(birthday):
+        return False
+    day = date.fromisoformat(today)
+    if birthday == "02-29" and not calendar.isleap(day.year):
+        return today[5:] == "02-28"
+    return today[5:] == birthday
 
 
 def friends_for(since: str | None, today: str) -> int | None:

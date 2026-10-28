@@ -1,10 +1,11 @@
-# Handoff (2026-10-28, sixth session, after phase 2)
+# Handoff (2026-10-28, sixth session, after phase 3)
 
 Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's branch
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
-release **0.31.0** (2026-10-28: the bond with each person, bond connections and
+release **0.32.0** (2026-10-28: each creature's voice, typing, babble and a
+favourite snack, #26); 0.31.0 brought the bond with each person, bond connections and
 phase 1 of the voices plan, #25); 0.30.0 brought Thanksgiving (#18) and the squirrel's paws-up poses
 no longer having six legs; 0.29.0 brought the daily wish, dreams, "while you were out"
 and two Halloween costume fixes; 0.28.0 brought weather talk (#10) and Halloween (#11), 0.28.1
@@ -27,32 +28,35 @@ details before committing it.
 
 ## Start here (sixth session, 2026-10-28)
 
-0.31.0 is released (PR #25 merged). **In flight: PR for phase 2 of the voices plan**
-(branch `ccr-a828d8c1-uv2so3` -> `main`, version 0.32.0): each creature's sound,
-typing, babble and the favourite snack, built from
-`docs/plan-2026-10-28-phase2-voices.md` (planned, audited, revised, built, audited,
-fixed; its "Built" section). The owner has said (2026-10-28): open, push and merge
-PRs when ready, and start on the next work. So:
+0.32.0 is released (PR #26, voices). **In flight: the PR for phase 3 of the voices
+plan** (branch `ccr-a828d8c1-uv2so3` -> `main`, version 0.33.0): the catchphrase,
+birthdays (the pet's and yours) and the one-time question fix, built from
+`docs/plan-2026-10-28-phase3-catchphrase-birthdays.md` (planned, audited, revised,
+built, audited, fixed; its "Built" section). The owner has said (2026-10-28): open,
+push and merge PRs when ready, and start on the next work. So:
 
-1. When CI is green, merge it (a merge commit), then release 0.32.0 (Release
-   workflow on `main`, see "How to").
-2. Then **phase 3 of `docs/plan-2026-10-28-voices-and-lines.md`** (A5 catchphrase, A6
-   birthdays, the one-time question fix) on the designated branch restarted from
-   `main`. Read the plan's "The second audit" first: it overrides part A.
+1. When CI is green, merge it (a merge commit), then release 0.33.0 (Release
+   workflow on `main`, see "How to"). The PR asks the owner whether to keep the
+   birthday phone message (it's in HA's history, like every phone message).
+2. Then **phase 4 of `docs/plan-2026-10-28-voices-and-lines.md`**: the photo (A7).
+   Its second-audit row 3 overrides part A; the save must be tried on both companion
+   apps before release (ask the owner). Restart the designated branch from `main`.
+   Also: ask the Hatch API Art session for a real party hat (`ui/season_party_hat.png`,
+   64 x 48, brim on the bottom row; the stand-in is `art/birthday/make_party.py`).
 3. The way the owner wants work done: **a full plan, an adversarial audit by a fresh
    subagent, revise, then build**; after building, **another audit of the work**, fix,
-   test (`scripts/test`), check the card (`scripts/card-check`, now 80 checks), send
+   test (`scripts/test`), check the card (`scripts/card-check`, now 86 checks), send
    screenshots, then PR. Each phase is its own PR.
-4. Then phases 4 (photo), 5 (baby talk), 6 (moths, its own plan and audit). After
-   those: personality types (a new plan). Gifts and neighbours talking are noted in
+4. Then phases 5 (baby talk), 6 (moths, its own plan and audit). After those:
+   personality types (a new plan). Gifts and neighbours talking are noted in
    `docs/plan-2026-10-28-daily-checkins.md`.
 
 The plans to read: `docs/plan-2026-10-28-daily-checkins.md` (item 3 and its passes),
 `docs/plan-2026-10-28-bond-connections.md` (built; its audits), and
-`docs/plan-2026-10-28-voices-and-lines.md` (draft 3; phases 1 and 2 built). The
-owner's taste so far: Animal Crossing is the touchstone; flavour, never gameplay, for
-bonds; positive or quiet, never guilt, nagging or ranking people; private things only
-to their person.
+`docs/plan-2026-10-28-voices-and-lines.md` (draft 3; phases 1-3 built). The owner's
+taste so far: Animal Crossing is the touchstone; flavour, never gameplay, for bonds;
+positive or quiet, never guilt, nagging or ranking people; private things only to
+their person.
 
 **Dev pets drift.** After many `card-check` runs the dev pets in `dev/config` get
 sick (weight 0, recent misses), and checks like idle life fail. Until the dev utility
@@ -251,6 +255,20 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   on the pet, picked after every advance from `coordinator.likes`; the
   `favourite_snack` moment at most once a day (`FAVOURITE_SNACK_CHANCE`), not at a
   stage with its own food. card-check's `hush()` keeps legacy checks unvoiced.
+- **Catchphrase and birthdays** (phase 3; 0.33.0, PR open): one-time questions
+  (`people.ONCE`, `once_due`, `mark_once`; 11-20 h, `ASK_ONCE_GAP_DAYS` apart, each
+  its own tries). Catchphrase: `voice.catchphrase` per creature, `PetState.catchphrase`
+  (a friend's pick), asked at `CATCHPHRASE_LEVEL` from the child stage, once per
+  generation (`bond["catchphrase"]`, `_pet_once`, `_catch_ask`; answers checked);
+  the card's `_speak(..., {catch: true})` ends every third such voiced line with it.
+  Birthdays: `hatched_on` (set in `_hatch`; old pets at load from `born`),
+  `model.pet_birthday` / `valid_birthday` / `birthday_today`; your birthday in the
+  people store only (`birthday`, `birthday_skipped`, `birthday_sent`), answered and
+  forgotten by websocket; celebration notes first in `_notes` (one a look; the visit
+  says `made_room` when it forced room, and the card drops its away note);
+  `_birthday_morning` (phone, once a year, closest hatched pet at home, nickname).
+  Card: `QUESTIONS.birthday` pickers, `_partyTick` / `_confetti` / `PARTY` through
+  `_costume`, "forget my birthday" on the status screen.
 - **Holiday mornings** (0.28.1): `notify.HOLIDAYS` maps a date to a holiday and
   `HOLIDAY_MORNINGS` its phone text; on that date the pet's first morning moment
   (`good_morning`, or waking at wake time) fires a `holiday` event, which notifies the
@@ -307,9 +325,9 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
 - **Adults** exist for every creature (the last four arrived in 0.21.0). Long adults
   are drawn back up with `species.json` `"scale": {"adult": …}` (1.05–1.2; the bat
   needs none).
-- **Tests:** 393, run with `scripts/test` (ruff, format check, pytest).
+- **Tests:** 406, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
-  `scripts/card-check` (Playwright, 80 checks) drives the card against
+  `scripts/card-check` (Playwright, 86 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
 - **CI:** `.github/workflows/validate.yml` (HACS action, hassfest, tests) is green.
   License MIT; Tiny5 keeps its OFL.

@@ -8,7 +8,13 @@ from typing import Any
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant import config_entries
-from homeassistant.const import CONF_NAME, STATE_OFF, STATE_ON, STATE_UNAVAILABLE
+from homeassistant.const import (
+    CONF_NAME,
+    MATCH_ALL,
+    STATE_OFF,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+)
 from homeassistant.core import (
     Context,
     HomeAssistant,
@@ -29,7 +35,7 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 
-from custom_components.virtual_pet import model
+from custom_components.virtual_pet import model, people as P
 from custom_components.virtual_pet.const import DOMAIN
 
 STORE_KEY = f"{DOMAIN}.test_pet"
@@ -1966,11 +1972,11 @@ async def friend(hass: HomeAssistant, points: int, **person: Any) -> Any:
     return me
 
 
-async def look(hass: HomeAssistant, user_id: str) -> dict[str, Any]:
+async def look(hass: HomeAssistant, user_id: str, queued: int = 0) -> dict[str, Any]:
     return await hass.services.async_call(
         DOMAIN,
         "visit",
-        {"entity_id": "sensor.pip_mood"},
+        {"entity_id": "sensor.pip_mood", "queued": queued},
         blocking=True,
         return_response=True,
         context=Context(user_id=user_id),
@@ -1992,6 +1998,9 @@ async def test_back_from_the_gym_then_how_was_your_day(
     coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
     coordinator.state.wish["kind"] = "bath"
     coordinator.people.person(me.id)["my_day"] = True
+    coordinator.people.person(me.id).update(
+        likes={"fav_weather": "sun", "fav_season": "autumn"}, birthday_skipped=True
+    )  # asked before
     for place in ("not_home", "Gym", "not_home", "home"):
         hass.states.async_set("person.sam", place, {"user_id": me.id})
         await settle(hass, freezer, 60)
@@ -2245,7 +2254,10 @@ async def test_coming_home_from_anywhere_still_counts_the_visit(
         dt_util.utcnow().timestamp(),
         bonds={me.id: {"points": model.R.BOND_LEVELS[3], "since": "2026-10-28"}},
     )
-    await setup(hass)
+    config = await setup(hass)
+    config.runtime_data.people.person(me.id).update(
+        likes={"fav_weather": "sun", "fav_season": "autumn"}, birthday_skipped=True
+    )  # asked before
     hass.states.async_set("person.sam", "not_home", {"user_id": me.id})
     await settle(hass, freezer, 60)
     hass.states.async_set("person.sam", "home", {"user_id": me.id})
@@ -2340,6 +2352,9 @@ async def test_two_pets_looked_at_together_say_a_person_line_once(
         pets.append(config.runtime_data)
         pets[-1].state.wish = None
     pets[0].people.person(me.id)["my_day"] = True
+    pets[0].people.person(me.id).update(
+        likes={"fav_weather": "sun", "fav_season": "autumn"}, birthday_skipped=True
+    )  # asked before
     # Reading the phones' history awaits the recorder: let the other pet run then.
     from custom_components.virtual_pet import wellbeing
 
@@ -2532,3 +2547,231 @@ async def test_an_egg_for_the_next_world_picks_from_its_own_likes(
     coordinator.state.age_hours = 30.0
     coordinator._pick_favourite()
     assert coordinator.state.favourites["snack"] in coordinator.likes["lunamoth"]
+
+
+async def test_a_close_friend_gives_it_a_catchphrase_once_a_generation(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+) -> None:
+    me = hass_admin_user.id
+    hass_storage[STORE_KEY] = hatched_pet(
+        dt_util.utcnow().timestamp(),
+        species="squirrel",
+        bonds={me: {"points": model.R.BOND_LEVELS[model.R.CATCHPHRASE_LEVEL - 1]}},
+    )
+    config = await setup(hass)
+    coordinator = config.runtime_data
+    stage = "sensor.pip_life_stage"
+    assert hass.states.get(stage).attributes["catchphrase"] == "acorn"  # its own
+    client = await hass_ws_client(hass)
+
+    async def answer(value: str) -> bool:
+        await client.send_json_auto_id(
+            {
+                "type": "virtual_pet/answer",
+                "entity_id": "sensor.pip_mood",
+                "question": "catchphrase",
+                "answer": value,
+            }
+        )
+        return (await client.receive_json())["success"]
+
+    assert not await answer("yay")  # it didn't ask
+    assert coordinator._pet_once(me, "2026-10-28") == ("catchphrase",)
+    coordinator._catch_ask(me)["asked"].append("2026-10-28")  # asked on a look
+    assert await answer("yay")
+    await hass.async_block_till_done()
+    assert hass.states.get(stage).attributes["catchphrase"] == "yay"
+    assert coordinator._pet_once(me, "2026-12-28") == ()  # answered
+    assert not await answer("hehe")  # once
+    # A new generation asks again; "keep" keeps what it says.
+    coordinator.state.generation += 1
+    assert coordinator._pet_once(me, "2026-12-28") == ("catchphrase",)
+    coordinator._catch_ask(me)["asked"].append("2026-12-28")
+    assert await answer("keep")
+    assert coordinator.state.catchphrase == "yay"
+    # Someone not close enough can't set it, and gets no bond for trying.
+    coordinator.state.bonds = {}
+    assert not await answer("hehe")
+    assert coordinator.state.bonds == {}
+
+
+async def test_a_hatchling_waits_to_ask_for_a_catchphrase(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    me = await friend(hass, 0)
+    hass_storage[STORE_KEY] = hatched_pet(
+        now,
+        age_hours=2.0,
+        bonds={me.id: {"points": model.R.BOND_LEVELS[9]}},  # an inherited bond
+    )
+    config = await setup(hass)
+    assert config.runtime_data._pet_once(me.id, "2026-10-26") == ()
+
+
+async def test_an_old_pet_learns_its_birthday_at_load(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)  # born 30 hours ago, no birthday yet
+    await setup(hass)
+    attrs = hass.states.get("sensor.pip_life_stage").attributes
+    assert attrs["hatched_on"] == "2026-10-25"  # laid 08:00 on the 25th (UTC)
+    assert attrs["birthday"] is None
+
+
+async def test_your_birthday_stays_yours(
+    hass: HomeAssistant,
+    caplog: pytest.LogCaptureFixture,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    config = await setup(hass)
+    client = await hass_ws_client(hass)
+    bus = async_capture_events(hass, MATCH_ALL)
+
+    async def send(msg: dict[str, Any]) -> dict[str, Any]:
+        await client.send_json_auto_id({"entity_id": "sensor.pip_mood", **msg})
+        return await client.receive_json()
+
+    answer = {"type": "virtual_pet/answer", "question": "birthday"}
+    bad = await send({**answer, "answer": "02-30"})
+    assert not bad["success"] and "02-30" not in str(bad)  # never echoed
+    assert (await send({**answer, "answer": "03-14"}))["success"]
+    person = config.runtime_data.people.person(hass_admin_user.id)
+    assert person["birthday"] == "03-14"
+    # On no state, the bus, the log or in diagnostics.
+    assert "03-14" not in str([e.data for e in bus])
+    # Our own log (HA's websocket debug log, off by default, prints every message).
+    ours = [r.getMessage() for r in caplog.records if "virtual_pet" in r.name]
+    assert "03-14" not in str(ours)
+    for state in hass.states.async_all():
+        assert "03-14" not in str(state.attributes)
+    from custom_components.virtual_pet.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    assert "03-14" not in str(await async_get_config_entry_diagnostics(hass, config))
+    assert (await send({"type": "virtual_pet/forget_birthday"}))["success"]
+    assert "birthday" not in person and person["birthday_skipped"]
+    assert P.once_due(person, "2026-10-28", 12, 10) != "birthday"  # never again
+
+
+async def test_one_celebration_a_look_your_birthday_first(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 13:00:00+00:00")
+    me = await friend(hass, 0)
+    hass_storage[STORE_KEY] = hatched_pet(
+        dt_util.utcnow().timestamp(),
+        hatched_on="2026-07-28",  # 3 months old today
+        bonds={me.id: {"points": model.R.BOND_LEVELS[3], "since": "2026-07-28"}},
+    )
+    config = await setup(hass)
+    config.runtime_data.people.person(me.id).update(
+        birthday="10-28",
+        likes={"fav_weather": "sun", "fav_season": "autumn"},
+    )
+    response = await look(hass, me.id, queued=3)  # a full look still has room
+    assert response["notes"][:1] == [{"kind": "your_birthday", "quiet": False}]
+    assert response["made_room"]  # the card drops its away note for it
+    assert response["birthday_kept"]
+    await settle(hass, freezer, 3601)
+    response = await look(hass, me.id)
+    # The same number of months: one line for both.
+    assert response["notes"][0] == {"kind": "birthday_friends", "months": 3}
+    await settle(hass, freezer, 3601)
+    kinds = [n["kind"] for n in (await look(hass, me.id))["notes"]]
+    assert not {"your_birthday", "birthday_friends", "friends_for"} & set(kinds)
+
+
+async def test_a_second_generation_says_its_own_age(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 13:00:00+00:00")
+    me = await friend(hass, 0)
+    hass_storage[STORE_KEY] = hatched_pet(
+        dt_util.utcnow().timestamp(),
+        hatched_on="2026-09-28",  # a month old; friends for longer (a bond inherited)
+        bonds={me.id: {"points": model.R.BOND_LEVELS[3], "since": "2026-04-28"}},
+    )
+    await setup(hass)
+    response = await look(hass, me.id)
+    assert response["notes"][0] == {"kind": "pet_birthday", "months": 1}
+
+
+async def test_a_birthday_on_the_phone_once_by_nickname(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 08:00:00+00:00")
+    me = await friend(hass, 0)
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": me.id, "device_name": "Sams Phone"}
+    ).add_to_hass(hass)
+    phone = async_mock_service(hass, "notify", "mobile_app_sams_phone")
+    hass_storage[STORE_KEY] = hatched_pet(
+        dt_util.utcnow().timestamp(),
+        notify_users=[me.id],
+        bonds={me.id: {"points": model.R.BOND_LEVELS[4], "nickname": "sunbeam"}},
+    )
+    config = await setup(hass)
+    coordinator = config.runtime_data
+    coordinator.people.person(me.id)["birthday"] = "10-28"
+    coordinator._birthday_morning()
+    coordinator._birthday_morning()  # a second morning moment: no second message
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert [c.data["message"] for c in phone] == [
+        "Pip says: happy birthday, sunbeam! ♥"
+    ]
+
+
+async def test_one_birthday_message_across_pets_from_the_closest(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 08:00:00+00:00")
+    await hass.config.async_set_time_zone("UTC")
+    me = await friend(hass, 0)
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": me.id, "device_name": "Sams Phone"}
+    ).add_to_hass(hass)
+    phone = async_mock_service(hass, "notify", "mobile_app_sams_phone")
+    pets = []
+    for entry_id, name, level, nickname in (
+        ("test_pet", "Pip", 3, "pal"),
+        ("other_pet", "Bo", 6, "sunbeam"),
+    ):
+        hass_storage[f"{DOMAIN}.{entry_id}"] = {
+            **hatched_pet(
+                dt_util.utcnow().timestamp(),
+                notify_users=[me.id],
+                bonds={
+                    me.id: {"points": model.R.BOND_LEVELS[level], "nickname": nickname}
+                },
+            ),
+            "key": f"{DOMAIN}.{entry_id}",
+        }
+        hass_storage[f"{DOMAIN}.{entry_id}"]["data"]["name"] = name
+        config = MockConfigEntry(
+            domain=DOMAIN, title=name, data={CONF_NAME: name}, entry_id=entry_id
+        )
+        config.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(config.entry_id)
+        await hass.async_block_till_done()
+        pets.append(config.runtime_data)
+    pets[0].people.person(me.id)["birthday"] = "10-28"
+    for pet in pets:  # each pet's own morning
+        pet._birthday_morning()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    # Once, from Bo (the closest), by Bo's nickname.
+    assert [c.data["message"] for c in phone] == ["Bo says: happy birthday, sunbeam! ♥"]
