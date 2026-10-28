@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.29.1";
+const VERSION = "0.29.2";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -402,6 +402,14 @@ const STYLE = `
     border: none; border-radius: 22px; cursor: pointer; font: 400 14px 'Tiny5', monospace;
     color: var(--hp-ink); background: color-mix(in srgb, var(--hp-ink) 14%, transparent); }
   .statusbtn[aria-pressed="true"] { background: var(--hp-ink); color: var(--hp-backdrop); }
+  .tap-feedback { position: relative; overflow: visible; }
+  .tap-feedback.pressed { transform: scale(.94); filter: brightness(.9); }
+  .toy.tap-feedback.pressed { transform: none; filter: none; }
+  .tap-feedback::after { content: ""; position: absolute; inset: 0; border: 2px solid currentColor;
+    border-radius: inherit; pointer-events: none; opacity: 0; }
+  .tap-feedback.tapped::after { animation: tap-ring .38s ease-out; }
+  .toy.tap-feedback::after { display: none; }
+  @keyframes tap-ring { 0% { opacity: .65; transform: scale(.82); } 100% { opacity: 0; transform: scale(1.28); } }
   .viewport { position: relative; overflow: hidden; padding: 14px 0 22px; touch-action: pan-y; }
   .ground { position: absolute; left: 0; right: 0; bottom: 0; height: 26%;
     background: var(--hp-ground); transition: background .5s; }
@@ -759,6 +767,10 @@ const STYLE = `
     font: 400 12px 'Tiny5', monospace; padding: 3px 10px; min-width: 44px; min-height: 26px;
     cursor: pointer; }
   .bell[aria-pressed="true"] { background: #2f3a24; color: #e9e2c6; }
+  .bell.pending { opacity: .65; }
+  .game button[aria-disabled="true"] { opacity: .55; }
+  .status-feedback { position: sticky; bottom: 0; margin-top: auto; padding: 5px 7px;
+    background: #2f3a24; color: #e9e2c6; font-size: 12px; min-height: 14px; }
   .jhead { display: flex; justify-content: space-between; align-items: baseline; }
   .jgrid { display: flex; flex-wrap: wrap; gap: 6px 10px; }
   .jtile { display: flex; flex-direction: column; align-items: center; width: 64px; font-size: 11px;
@@ -940,10 +952,19 @@ class HatchPetCard extends HTMLElement {
     this._dots = root.querySelector(".dots");
     root.querySelector(".statusbtn").addEventListener("click", () => {
       const s = this._slides[this._index];
-      if (s) this._toggleStatus(s);
+      if (s) {
+        this._tapped(root.querySelector(".statusbtn"));
+        this._toggleStatus(s);
+      }
     });
-    root.querySelector(".prev").addEventListener("click", () => this._go(this._index - 1));
-    root.querySelector(".next").addEventListener("click", () => this._go(this._index + 1));
+    root.querySelector(".prev").addEventListener("click", (e) => {
+      this._tapped(e.currentTarget);
+      this._go(this._index - 1);
+    });
+    root.querySelector(".next").addEventListener("click", (e) => {
+      this._tapped(e.currentTarget);
+      this._go(this._index + 1);
+    });
     let startX = null;
     this._viewport.addEventListener("pointerdown", (e) => {
       startX = e.clientX;
@@ -1048,15 +1069,22 @@ class HatchPetCard extends HTMLElement {
     });
     q(".gl").addEventListener("click", () => this._guess(s, "left"));
     q(".gr").addEventListener("click", () => this._guess(s, "right"));
-    q(".gx").addEventListener("click", () => this._endGame(s, "maybe later!"));
+    q(".gx").addEventListener("click", (e) => {
+      this._tapped(e.currentTarget, s);
+      this._endGame(s, "maybe later!");
+    });
     q(".gpick").addEventListener("click", (e) => {
       const b = e.target.closest("button[data-game]");
-      if (b) this._pickGame(s, b.dataset.game);
+      if (b) {
+        this._tapped(b, s);
+        this._pickGame(s, b.dataset.game);
+      }
     });
     s.request.addEventListener("click", () => {
       const key = s.request.dataset.key;
       if (!key) return;
       if (key === "lay_egg" && !(Date.now() < s.confirmUntil)) {
+        this._tapped(s.request, s);
         s.confirmUntil = Date.now() + CONFIRM_MS;
         s.request.textContent = "sure? tap again";
         s.request.setAttribute("aria-label", "Sure? Press again to lay an egg");
@@ -1069,7 +1097,10 @@ class HatchPetCard extends HTMLElement {
     // A tap on the screen is a shortcut for the Status button; it holds buttons of its
     // own (the game, the bell, the journal), so it isn't a button itself.
     s.screen.addEventListener("click", () => {
-      if (!this._swiped) this._toggleStatus(s);
+      if (!this._swiped) {
+        this._tapped(this._card.querySelector(".statusbtn"));
+        this._toggleStatus(s);
+      }
     });
     // The device beside the current one is inert; tapping it brings it forward.
     slide.addEventListener("click", () => {
@@ -1278,7 +1309,10 @@ class HatchPetCard extends HTMLElement {
       const i = this._dots.children.length;
       const dot = document.createElement("button");
       dot.className = "dot";
-      dot.addEventListener("click", () => this._go(i));
+      dot.addEventListener("click", (e) => {
+        this._tapped(e.currentTarget);
+        this._go(i);
+      });
       this._dots.append(dot);
     }
     while (this._dots.children.length > this._slides.length) this._dots.lastChild.remove();
@@ -2102,19 +2136,23 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "notify me", `<span><button class="bell" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
-      <button class="jlink">journal ›</button>`;
+      <button class="jlink">journal ›</button>
+      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     this._journalLink(s, true);
     s.status.querySelector(".bell:not(.sound)").addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
-      this._setNotify(s, !notifying);
+      this._tapped(e.currentTarget);
+      this._setNotify(s, !notifying, e.currentTarget);
     });
     s.status.querySelector(".bell.sound").addEventListener("click", (e) => {
       e.stopPropagation();
+      this._tapped(e.currentTarget);
       const on = !soundsOn();
       try {
         localStorage.setItem(SOUND_KEY, on ? "on" : "off");
       } catch (err) {
+        this._statusMessage(s, "This browser can't save sound settings.");
         return; // no storage: sounds stay off
       }
       try {
@@ -2130,13 +2168,36 @@ class HatchPetCard extends HTMLElement {
   async _setNotify(s, enabled) {
     const id = s.ids?.["sensor.life_stage"];
     if (!id) return;
+    const button = s.status.querySelector(".bell:not(.sound)");
+    if (button) {
+      button.classList.add("pending");
+      button.setAttribute("aria-pressed", String(enabled));
+      button.textContent = enabled ? "on" : "off";
+    }
     try {
       await this._hass.callService("virtual_pet", "notify_me", { entity_id: id, enabled });
-      s.bubble.textContent = enabled ? "I'll ping your phone!" : "ok, no more pings";
+      this._statusMessage(s, enabled ? "I'll ping your phone!" : "Phone pings off.");
     } catch (err) {
-      s.bubble.textContent = "hmm, that didn't work";
+      if (button) {
+        button.setAttribute("aria-pressed", String(!enabled));
+        button.textContent = !enabled ? "on" : "off";
+      }
+      this._statusMessage(s, "That didn't work. Try again.");
+    } finally {
+      button?.classList.remove("pending");
     }
-    s.sayUntil = Date.now() + 3500;
+  }
+
+  _statusMessage(s, message) {
+    const note = s.status.querySelector(".status-feedback");
+    if (!note) return;
+    note.textContent = message;
+    note.hidden = false;
+    clearTimeout(s.statusMessageTimer);
+    s.statusMessageTimer = setTimeout(() => {
+      note.hidden = true;
+      note.textContent = "";
+    }, 3500);
   }
 
   // Fill the status screen; false if it already shows this (kept as is, so
@@ -2156,6 +2217,7 @@ class HatchPetCard extends HTMLElement {
   _journalLink(s, open) {
     s.status.querySelector(".jlink").addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
+      this._tapped(e.currentTarget);
       s.journal = open;
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
@@ -2164,6 +2226,11 @@ class HatchPetCard extends HTMLElement {
 
   // The world's creatures (unraised ones as silhouettes) and this device's past pets.
   async _renderJournal(s) {
+    const loading = `
+      <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span><span>opening…</span></div>
+      <div class="log">Gathering your pet's memories…</div>
+      <button class="jlink">‹ status</button>`;
+    if (this._setStatus(s, loading)) this._journalLink(s, false);
     const stage = this._state(s, "sensor.life_stage")?.attributes || {};
     const roster = stage.roster || [];
     const raised = new Set();
@@ -2226,17 +2293,23 @@ class HatchPetCard extends HTMLElement {
 
   // --- Actions ----------------------------------------------------------------
 
-  // Instant feedback on every tap: the button stays pressed long enough to
-  // see, a ring bursts out, the phone ticks, and the pet perks up. The real
-  // reaction (a prop, or a refusal in the bubble) follows when HA confirms.
+  // Instant feedback for every control: a visible press and ring, a short
+  // haptic where the browser supports it, and a perk when the pet is involved.
+  // The real reaction (a prop, or a refusal in the bubble) follows on response.
   _tapped(button, s) {
-    button.classList.add("pressed");
+    if (!button || button.disabled) return;
+    button.classList.add("tap-feedback", "tapped", "pressed");
     setTimeout(() => button.classList.remove("pressed"), 160);
-    const ring = document.createElement("span");
-    ring.className = "burst";
-    button.append(ring);
-    setTimeout(() => ring.remove(), 500);
-    if (navigator.vibrate) navigator.vibrate(12);
+    setTimeout(() => button.classList.remove("tapped"), 400);
+    if (button.classList.contains("toy")) {
+      const ring = document.createElement("span");
+      ring.className = "burst";
+      button.append(ring);
+      setTimeout(() => ring.remove(), 500);
+    }
+    if (navigator.vibrate) {
+      try { navigator.vibrate(12); } catch (err) { /* Unsupported or blocked by the browser. */ }
+    }
     if (s?.pet) {
       s.pet.classList.remove("perk");
       void s.pet.offsetWidth; // restart the animation
@@ -2352,6 +2425,7 @@ class HatchPetCard extends HTMLElement {
       // Higher or Lower shows its first number before the first guess.
       s.game.busy = true;
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+      s.gameScore.textContent = "thinking…";
       const info = await this._playCall(s, { game: kind });
       if (!info) return;
       s.game.busy = false;
@@ -2393,6 +2467,7 @@ class HatchPetCard extends HTMLElement {
 
   async _guess(s, side) {
     if (!s.game || s.game.busy || !s.game.kind) return;
+    this._tapped(s.gameBox.querySelector(side === "left" ? ".gl" : ".gr"), s);
     const kind = s.game.kind;
     if (kind === "catch") {
       this._catchTap(s, side);
@@ -2402,6 +2477,7 @@ class HatchPetCard extends HTMLElement {
     const guess = game.guesses[side === "left" ? 0 : 1];
     s.game.busy = true;
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+    s.gameScore.textContent = "thinking…";
     const info = await this._playCall(s, { game: kind, guess });
     if (!info) return;
     s.game.round = info.round;
@@ -2416,7 +2492,6 @@ class HatchPetCard extends HTMLElement {
       s.bubble.textContent = info.correct ? "yes! you found me" : `nope, I went ${info.went}!`;
     }
     s.gameScore.textContent = `round ${info.round}/${info.rounds} · ${info.wins} right`;
-    if (navigator.vibrate && info.correct) navigator.vibrate([12, 40, 12]);
     setTimeout(() => {
       s.pet.classList.remove("go-left", "go-right");
       if (!s.game) return;
@@ -2936,7 +3011,6 @@ class HatchPetCard extends HTMLElement {
     g.wins += ok ? 1 : 0;
     s.bubble.textContent = line;
     if (ok) this._pounce(s);
-    if (navigator.vibrate && ok) navigator.vibrate([12, 40, 12]);
     s.gameScore.textContent = `round ${g.round}/${CATCH.rounds} · ${g.wins} caught`;
     setTimeout(() => {
       s.pet.classList.remove("go-left", "go-right");
