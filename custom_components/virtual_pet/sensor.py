@@ -156,6 +156,8 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "bonds",
             "favourites",
             "catchphrase",
+            "hatched_on",
+            "birthday",
         }
     )
 
@@ -233,6 +235,19 @@ class LifeStageSensor(PetEntity, SensorEntity):
             # What it says at the end of things: a friend's pick, or its own.
             "catchphrase": self.pet.catchphrase
             or self.coordinator.catchphrases.get(self.pet.species or ""),
+            # Its birthday (the house's date): {"years": n} on the day, for the
+            # card's party; monthly ones in its first year are lines, not parties.
+            "hatched_on": self.pet.hatched_on,
+            "birthday": (
+                b
+                if (
+                    b := model.pet_birthday(
+                        self.pet.hatched_on, dt_util.now().date().isoformat()
+                    )
+                )
+                and "years" in b
+                else None
+            ),
             "hatches_at": self._hatches_at(),
             "next_world": self.coordinator.next_world_name,
             # The creature picked for the next hatch, by name; None: a surprise.

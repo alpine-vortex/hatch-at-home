@@ -124,6 +124,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await people.async_load()
     hass.data[DOMAIN] = {"people": people, "pets": {}}
     websocket_api.async_register_command(hass, websocket_answer)
+    websocket_api.async_register_command(hass, websocket_forget_birthday)
 
     async def fast_forward(call: ServiceCall) -> ServiceResponse:
         entries: list[PetConfigEntry] = hass.config_entries.async_loaded_entries(DOMAIN)
@@ -285,7 +286,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     {
         vol.Required("type"): f"{DOMAIN}/answer",
         vol.Required("entity_id"): cv.entity_id,
-        vol.Required("question"): vol.In(list(ANSWERS)),
+        vol.Required("question"): vol.In([*ANSWERS, "birthday"]),
         vol.Required("answer"): cv.string,
     }
 )
@@ -306,7 +307,7 @@ async def websocket_answer(
     if pet is None:
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
-    if msg["answer"] not in ANSWERS[msg["question"]]:
+    if msg["question"] != "birthday" and msg["answer"] not in ANSWERS[msg["question"]]:
         connection.send_error(msg["id"], "invalid_answer", "Not an answer to that")
         return
     try:
@@ -314,6 +315,28 @@ async def websocket_answer(
     except ValueError:
         connection.send_error(msg["id"], "not_asked", "It didn't ask that")
         return
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/forget_birthday",
+        vol.Required("entity_id"): cv.entity_id,
+    }
+)
+@websocket_api.async_response
+async def websocket_forget_birthday(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Forget the signed-in person's birthday (and don't ask again)."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    await pet.async_forget_birthday(connection.user.id)
     connection.send_result(msg["id"])
 
 

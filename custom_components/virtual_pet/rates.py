@@ -324,6 +324,7 @@ ASK_LIKES_AGAIN_DAYS = 14  # ...this many days later, then never
 ASK_ONCE_GAP_DAYS = 3  # days between one person's one-time questions
 BIRTHDAY_ASK_LEVEL = 4  # "when's your birthday?"
 CATCHPHRASE_LEVEL = 7  # "what should I say at the end of things?"
+BIRTHDAY_QUIET_BELOW = 30.0  # happiness: below it, a quiet "happy birthday ♥"
 ASK_DAY_FROM = 16  # "how was your day?" on its rotation day
 ASK_DREAM_BEFORE_BED_MINUTES = 180  # "what should I dream about?"
 ASK_GUESS_FROM = 17  # "rain or sun tomorrow?"

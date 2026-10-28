@@ -1585,3 +1585,41 @@ def test_a_new_egg_has_no_favourites_and_old_saves_load():
     assert damaged.favourites == {"x": "y"} and damaged.favourite_said is None
     data["favourites"] = ["hazelnuts"]  # not even a dict
     assert model.PetState.from_dict(data).favourites == {}
+
+
+# --- Birthdays ---------------------------------------------------------------
+
+
+def test_its_birthday_is_monthly_in_its_first_year_then_yearly():
+    assert model.pet_birthday("2026-01-31", "2026-02-28") == {
+        "months": 1
+    }  # short month
+    assert model.pet_birthday("2026-01-31", "2026-03-31") == {"months": 2}
+    assert model.pet_birthday("2026-01-31", "2026-03-30") is None
+    assert model.pet_birthday("2026-01-31", "2026-12-31") == {"months": 11}
+    assert model.pet_birthday("2026-01-31", "2027-01-31") == {"years": 1}
+    assert model.pet_birthday("2026-01-31", "2027-02-28") is None  # 13 months: no
+    assert model.pet_birthday(None, "2027-01-31") is None
+
+
+def test_a_birthday_is_a_real_day_and_29_february_comes_every_year():
+    assert model.valid_birthday("02-29") and model.valid_birthday("12-31")
+    for bad in ("02-30", "13-01", "1-01", "aa-bb", "04-31", "0229", ""):
+        assert not model.valid_birthday(bad), bad
+    assert model.birthday_today("03-14", "2027-03-14")
+    assert not model.birthday_today("03-14", "2027-03-15")
+    assert model.birthday_today("02-29", "2027-02-28")  # not a leap year
+    assert not model.birthday_today("02-29", "2028-02-28")
+    assert model.birthday_today("02-29", "2028-02-29")
+    assert not model.birthday_today(None, "2028-02-29")
+
+
+def test_hatching_dates_its_birthday_and_a_new_egg_has_none():
+    egg = model.PetState.new("Pip", at(23, 50))
+    run(egg, at(23, 50) + 40 * MIN)  # hatches at 00:20 the next day (UTC)
+    assert model.life_stage(egg) == "baby"
+    assert egg.hatched_on == "2026-10-02"
+    pet = hatched(at(12), age_hours=ADULT + R.LAY_EGG_AFTER_ADULT_HOURS + 5)
+    pet.hatched_on, pet.catchphrase = "2026-09-01", "yay"
+    new, _ = model.lay_egg(pet, at(12), random.Random(1))
+    assert new.hatched_on is None and new.catchphrase is None

@@ -178,6 +178,11 @@ def send_off(kind: str, name: str, nickname: str | None) -> str:
     return SEND_OFFS[kind].format(name=name, to=f", {nickname}" if nickname else "")
 
 
+def birthday(name: str, nickname: str | None) -> str:
+    """A friend's birthday, on their own phone (a nickname, never a name)."""
+    return f"{name} says: happy birthday{f', {nickname}' if nickname else ''}! ♥"
+
+
 def welcome(name: str) -> str:
     """The message when a pet is added to the house."""
     return f"{name}, a new virtual pet, just moved in! Say hi ♥"
