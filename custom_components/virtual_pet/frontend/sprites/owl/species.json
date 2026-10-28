@@ -1,0 +1,95 @@
+{
+  "name": "Saw-whet owl",
+  "ready": true,
+  "stages": [
+    "baby",
+    "child",
+    "teen",
+    "adult"
+  ],
+  "scale": {
+    "adult": 1.05
+  },
+  "moods": [
+    "content",
+    "excited",
+    "cozy",
+    "bored",
+    "hungry",
+    "sleepy",
+    "asleep",
+    "sick",
+    "calling",
+    "dirty"
+  ],
+  "frames": 2,
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "head_turn": [
+      "child_head_turn_1",
+      "child_head_turn_2"
+    ],
+    "toot": [
+      "child_toot_1",
+      "child_toot_2"
+    ],
+    "feather_puff": [
+      "child_feather_puff_1",
+      "child_feather_puff_2"
+    ]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "play",
+    "clean": "bird/sparkle_clean",
+    "medicine": "bird/medicine",
+    "blanket": "bird/blanket",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": [
+      "bird/poop_1",
+      "bird/poop_2",
+      "bird/poop_3"
+    ]
+  },
+  "backgrounds": {
+    "day": "bat/bg_day",
+    "night": "bat/bg_night",
+    "rain": "bat/bg_rain",
+    "dim": "bat/bg_night"
+  },
+  "words": {
+    "food": "moths",
+    "home": "hollow"
+  },
+  "reactions": {
+    "play": "head_turn",
+    "won": "toot",
+    "praise": "toot",
+    "scold": "feather_puff"
+  },
+  "head": {
+    "baby": [
+      148,
+      100
+    ],
+    "child": [
+      148,
+      60
+    ],
+    "teen": [
+      146,
+      24
+    ],
+    "adult": [
+      148,
+      32
+    ]
+  }
+}
