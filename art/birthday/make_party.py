@@ -1,11 +1,12 @@
-"""The birthday party hat, a stand-in drawn in code (like art/seasonal/).
+"""The birthday party hat, hand-placed pixel by pixel (like art/seasonal/).
 
 Usage: python art/birthday/make_party.py [out dir]  (default art/birthday/out)
 
 Same canvas and anchoring as the season hats (64 x 48, 4 px art pixels, the brim
 on the bottom row, centred), so the card's costume code places it unchanged.
-Copy the result to frontend/ui/season_party_hat.png. A redraw by the Hatch API
-Art session should keep the name, canvas and anchoring.
+Copy the result to frontend/ui/season_party_hat.png. Redrawn 2026-10-28 by the
+art session: a cone with spiral stripes lit from the left, a pom-pom, and a
+blue band with white dots.
 """
 
 from __future__ import annotations
@@ -22,9 +23,11 @@ C = {
     "o": (59, 26, 12, 255),  # outline
     "p": (240, 110, 150, 255),  # pink stripe
     "P": (196, 72, 112, 255),  # its shade
+    "q": (255, 170, 196, 255),  # its light
     "y": (255, 214, 77, 255),  # yellow stripe
     "Y": (214, 168, 40, 255),
-    "w": (252, 250, 240, 255),  # pom-pom
+    "z": (255, 240, 170, 255),
+    "w": (252, 250, 240, 255),  # pom-pom, and the band's dots
     "W": (210, 206, 196, 255),
     "b": (92, 168, 220, 255),  # band
     "B": (60, 120, 170, 255),
@@ -32,17 +35,17 @@ C = {
 
 HAT = [
     "......oooo......",
-    "......owWo......",
-    ".......oo.......",
-    "......oppo......",
-    "......oyYo......",
-    ".....oppPPo.....",
-    ".....oyyyYo.....",
-    "....opppPPPo....",
-    "....oyyyyyYo....",
-    "...oooooooooo...",
-    "...obbbbbbbBo...",
-    "...oooooooooo...",
+    ".....owwwwo.....",
+    ".....owwWWo.....",
+    "......oooo......",
+    "......opPo......",
+    ".....ozppPo.....",
+    ".....ozyyPo.....",
+    "....oqpyyyYo....",
+    "....oqpppyYo....",
+    "...ozyyppppYo...",
+    "..obwbbwbbwbBo..",
+    "..oooooooooooo..",
 ]
 
 
