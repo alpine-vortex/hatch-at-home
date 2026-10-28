@@ -9,6 +9,7 @@ Messages never name anyone.
 from __future__ import annotations
 
 import asyncio
+from datetime import date, timedelta
 from typing import Any
 
 from homeassistant.core import HomeAssistant
@@ -50,12 +51,21 @@ TRAITS = {
 HOLIDAYS: dict[tuple[int, int], str] = {(10, 31): "halloween"}
 HOLIDAY_MORNINGS = {
     "halloween": "Happy Halloween! {name} is dressed up and ready to trick or treat 🎃",
+    "thanksgiving": "Happy Thanksgiving! {name} is thankful for you 🦃",
 }
 
 
-def holiday(month: int, day: int) -> str | None:
+def thanksgiving(year: int) -> date:
+    """US Thanksgiving: the fourth Thursday of November."""
+    first = date(year, 11, 1)
+    return first + timedelta(days=(3 - first.weekday()) % 7 + 21)
+
+
+def holiday(day: date) -> str | None:
     """The holiday on this date, if the pet greets it."""
-    return HOLIDAYS.get((month, day))
+    if day == thanksgiving(day.year):
+        return "thanksgiving"
+    return HOLIDAYS.get((day.month, day.day))
 
 
 # Buttons on a call's notification: what would answer it. A plea to play may be

@@ -127,15 +127,28 @@ details before committing it.
   status screen. Next in the plan: the bond with each person (item 3; the owner
   confirmed every player has their own HA login), then finds and visitors per world,
   then pets visiting each other.
-- **Thanksgiving: must do** (owner, 2026-10-28; tududi task due 20 November): US date,
-  26 November 2026 (fourth Thursday, computed). The same all-out treatment as Halloween,
-  plus a morning greeting (`notify.HOLIDAYS` needs a computed-date path). Art through
-  the Hatch API Art session.
+- **Thanksgiving** (owner, 2026-10-28: "must do", the same all-out treatment as
+  Halloween; tududi task due 20 November). Built on 2026-10-28, unreleased when written:
+  `SEASONS` grew general fields (documented above the list: `corner`, `sweet`, `flyer`
+  with `flock`, `nightFlyer`, `visitor`, `snackLines`, `treatLine`, `thanks`, `leaves`,
+  `chirp`), and Halloween moved onto them unchanged. `from`/`to`/`treat` may be a
+  function of the year: Thanksgiving is the fourth Thursday of November
+  (`thanksgiving(year, days)`), from 12 days before to the Sunday after (14–29 Nov
+  2026). Pieces: a leaf garland, falling leaves, a harvest piece of the day
+  (cornucopia, gourds, basket), corner leaves, a plate by Hearth's door and popped on
+  the day, a wheat-sheaf deco, geese in a V of 3 (by day too), a walking turkey
+  visitor ("gobble?!"), pie snacks, costumes pilgrim hat / leaf crown / feather band /
+  acorn cap (no skip lists; all seat on 13 creatures × 4 stages), a `harvest` chirp,
+  and on the day "happy thanksgiving! ♥" then a thank-you to whoever gave the most care
+  in the recent log (`_thanks`, first names only). The night lantern glow is
+  Halloween's only (`.s-halloween`). The art is stand-ins from
+  `art/seasonal/make_thanksgiving.py`; a redraw was asked of the Hatch API Art session
+  on 2026-10-28 (same names, canvases and anchoring), wanted before 14 November.
 - **Holiday mornings** (0.28.1): `notify.HOLIDAYS` maps a date to a holiday and
   `HOLIDAY_MORNINGS` its phone text; on that date the pet's first morning moment
   (`good_morning`, or waking at wake time) fires a `holiday` event, which notifies the
-  opted-in users once a day (`_holiday_morning`, in memory). Halloween only so far;
-  Thanksgiving will need a computed date (the fourth Thursday of November).
+  opted-in users once a day (`_holiday_morning`, in memory). `notify.holiday(date)`
+  also answers Thanksgiving (`notify.thanksgiving(year)`, computed).
 - **Weather talk** (Tier 1 of `docs/plan-2026-10-27-real-time-connections.md`,
   merged in PR #10, released in 0.28.0): `weather` moments (`change`:
   rain_started, rain_stopped, rainbow, snow_started, sun_out, hot, cold) from
