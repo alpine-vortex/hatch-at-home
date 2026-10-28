@@ -1,0 +1,96 @@
+{
+  "name": "Hermit crab",
+  "ready": true,
+  "stages": [
+    "baby",
+    "child",
+    "teen",
+    "adult"
+  ],
+  "scale": {
+    "adult": 1.1
+  },
+  "moods": [
+    "content",
+    "excited",
+    "cozy",
+    "bored",
+    "hungry",
+    "sleepy",
+    "asleep",
+    "sick",
+    "calling",
+    "dirty"
+  ],
+  "frames": 2,
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "shell_peek": [
+      "child_shell_peek_1",
+      "child_shell_peek_2"
+    ],
+    "shell_try": [
+      "child_shell_try_1",
+      "child_shell_try_2"
+    ],
+    "claw_wave": [
+      "child_claw_wave_1",
+      "child_claw_wave_2"
+    ]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "play",
+    "clean": "otter/bubbles",
+    "medicine": "bird/medicine",
+    "blanket": "bird/blanket",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": [
+      "bird/poop_1",
+      "bird/poop_2",
+      "bird/poop_3"
+    ]
+  },
+  "backgrounds": {
+    "day": "otter/bg_day",
+    "night": "otter/bg_night",
+    "rain": "otter/bg_rain",
+    "dim": "otter/bg_night"
+  },
+  "words": {
+    "food": "seaweed",
+    "home": "shell"
+  },
+  "reactions": {
+    "play": "shell_try",
+    "won": "claw_wave",
+    "praise": "claw_wave",
+    "scold": "shell_peek"
+  },
+  "head": {
+    "baby": [
+      124,
+      144
+    ],
+    "child": [
+      128,
+      112
+    ],
+    "teen": [
+      116,
+      80
+    ],
+    "adult": [
+      110,
+      88
+    ]
+  },
+  "murk": "otter/murk"
+}
