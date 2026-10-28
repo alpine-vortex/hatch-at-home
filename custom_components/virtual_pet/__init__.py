@@ -70,7 +70,13 @@ NOTIFY_ME_SCHEMA = vol.Schema(
         vol.Required(ATTR_ENABLED): cv.boolean,
     }
 )
-VISIT_SCHEMA = vol.Schema({vol.Required(ATTR_ENTITY_ID): cv.entity_id})
+VISIT_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        # Lines the card already queued at this look (an older card sends none).
+        vol.Optional("queued", default=0): vol.All(vol.Coerce(int), vol.Range(0, 6)),
+    }
+)
 PLAY_GAME_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
@@ -179,7 +185,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         # The card says who's looking in. What the pet tells them comes back
         # to them alone, in the response.
         if user_id := await signed_in(call):
-            return await pet_of(call).async_visit(user_id)
+            return await pet_of(call).async_visit(user_id, call.data["queued"])
         return {"notes": []}
 
     async def my_day(call: ServiceCall) -> None:

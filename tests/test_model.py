@@ -975,7 +975,7 @@ def test_lights_flipped_on_and_off_while_away_change_nothing():
         ),
         (
             {"type": "stage_changed", "stage": "adult", "upbringing": "devoted"},
-            "Pip is all grown up: a devoted adult.",
+            "Pip is all grown up!",
         ),
         ({"type": "stage_changed", "stage": "child"}, None),
     ],
@@ -1459,8 +1459,13 @@ def test_a_close_bond_brings_a_nickname_then_a_favourite_game():
     assert events[0]["favourite"] == "higher_lower"  # the one they play most
     assert pet.bonds["u1"]["nickname"] == nickname  # kept
     pet.happiness = 50.0
-    assert model.favourite_game(pet, "u2", "higher_lower") == []
-    assert types(model.favourite_game(pet, "u1", "higher_lower")) == ["bond_favourite"]
+    assert model.favourite_game(pet, "u2", "higher_lower", "2026-10-02") == []
+    assert types(model.favourite_game(pet, "u1", "higher_lower", "2026-10-02")) == [
+        "bond_favourite"
+    ]
+    assert (
+        model.favourite_game(pet, "u1", "higher_lower", "2026-10-02") == []
+    )  # once a day
     assert pet.happiness == 50.0  # flavour only: a bond never changes the stats
 
 

@@ -2421,3 +2421,50 @@ async def test_tucking_it_in_grants_the_tuck_in_wish_to_them(
     )
     assert coordinator.state.wish["granted"]
     assert coordinator.state.bonds[me.id]["points"] == model.R.BOND_WISH_POINTS
+
+
+async def test_a_look_has_room_for_three_lines(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The card says how many lines it queued; the notes fill what's left."""
+    freezer.move_to("2026-10-29 19:00:00+00:00")
+    me = await friend(hass, 0)
+    hass_storage[STORE_KEY] = hatched_pet(
+        dt_util.utcnow().timestamp(),
+        bonds={me.id: {"points": model.R.BOND_LEVELS[2], "since": "2026-09-29"}},
+    )
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.state.dream = {
+        "kind": "picked",
+        "pick": "sea",
+        "user": me.id,
+        "day": "2026-10-29",
+    }
+    first = await coordinator.async_visit(me.id, queued=2)
+    assert len(first["notes"]) == 1 and first["ask"] is None  # 2 + 1 = 3
+    coordinator._visits.clear()
+    second = await coordinator.async_visit(me.id, queued=3)
+    assert second["notes"] == []  # no room: it waits
+    coordinator._visits.clear()
+    third = await coordinator.async_visit(me.id)
+    assert [n["kind"] for n in third["notes"]] == ["dream"]  # nothing was lost
+
+
+async def test_a_wish_is_open_only_while_it_can_come_true(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 15:00:00+00:00")
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.state.wish = {"kind": "say_hi", "day": "2026-10-28", "granted": False}
+    coordinator.async_set_updated_data(coordinator.state)
+    assert hass.states.get("sensor.pip_life_stage").attributes["wish"]["open"] is True
+    freezer.move_to("2026-10-28 23:30:00+00:00")  # past bedtime
+    coordinator.async_set_updated_data(coordinator.state)
+    assert hass.states.get("sensor.pip_life_stage").attributes["wish"]["open"] is False

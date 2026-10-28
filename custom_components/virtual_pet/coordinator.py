@@ -993,7 +993,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return "cold"
         return None
 
-    async def async_visit(self, user: str) -> dict[str, Any]:
+    async def async_visit(self, user: str, queued: int = 0) -> dict[str, Any]:
         """Someone opened the card on this pet (the card calls this, at most
         hourly per person, and again when they come home): a visit counts for
         their bond once a day, and may be today's "come say hi" wish. Returns
@@ -1025,8 +1025,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # One look at a time per person: two pets on one dashboard visited
         # together must not both say the same person line.
         async with self.people.lock(user):
+            # At most NOTES_PER_VISIT, and no more than the look has room for
+            # (FIRST_LOOK_LINES, minus what the card already queued).
+            room = min(R.NOTES_PER_VISIT, max(0, R.LOOK_LINES - queued))
             for scope, kind, key, note in await self._notes(user, now):
-                if len(notes) >= R.NOTES_PER_VISIT:
+                if len(notes) >= room:
                     break  # the rest wait for a later look
                 if scope == "pet":
                     model.bond_of(self.state, user).setdefault("noted", {})[kind] = key
@@ -1035,7 +1038,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 if kind == "guess":
                     person.pop("guess", None)  # said: used up
                 notes.append(note)
-        ask = self._question(user, now, came_home, notes)
+        # A question only when the look has room for one more line.
+        fits = queued + len(notes) < R.LOOK_LINES
+        ask = self._question(user, now, came_home, notes) if fits else None
         self._save()
         self._publish()
         # "my day" goes to this person only (a state attribute is everyone's).
@@ -1437,7 +1442,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         for event in list(events):
             if event["type"] == "game_finished" and person is not None:
                 events += self._bond(person, "game", event["game"])
-                events += model.favourite_game(self.state, person, event["game"])
+                events += model.favourite_game(
+                    self.state, person, event["game"], self._today(now)[0]
+                )
                 events += model.game_record(
                     self.state, person, event["game"], event["wins"]
                 )

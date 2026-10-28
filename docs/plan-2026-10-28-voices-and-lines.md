@@ -262,3 +262,10 @@ Where this section and part A differ, this section wins.
 4. **The photo** (A7), after trying the save on both companion apps.
 5. **Baby talk** (A8).
 6. **Moths** (part B), with its own plan and audit.
+
+## Phase 1 built (2026-10-28)
+
+The line fixes (A9 1, 2, 4-21; 3 is phase-later as it needs the per-browser switch
+UI with the voice settings), the creatures' own words (A3; the moth's per stage), and
+`queued` as corrected. Checked: 372 tests, 64 card checks (new: plain screen-reader
+words, long titles cut, the look's line budget server-side).

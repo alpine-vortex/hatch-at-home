@@ -100,7 +100,8 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     tonight, watching the sunset together (someone home at sunset), someone coming to
     say hi in the afternoon (opening the card after noon), and, when you have
     them mapped, some music, TV together, a chore treat, or seeing the rain on a day the
-    forecast says rain. It's on the status screen and the pet mentions it now and then;
+    forecast says rain. It's on the status screen and the pet mentions it once more later
+    (never again after bedtime, when it can't come true);
     granting it brings a sparkle and a little happiness. A missed wish costs nothing:
     tomorrow brings a new one.
   - **A dream**: it may dream about something from the day before (a show it watched,
@@ -136,10 +137,10 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     "...season?". It remembers favourites, tonight's dream and your guess; the rest
     of your answers stay on your screen;
   - remembers your favourites: "it's snowing, your favourite!! ❄", "it's autumn, your
-    favourite! 🍂" once a season (no season talk in the tropics), "Thanksgiving in
-    autumn, your favourite time! ♥";
-  - says what it's like out there when you come home ("you're all wet! come get
-    cozy ☔", "brr, was it cold out there?");
+    favourite! ♥" once a season (no season talk in the tropics), "Thanksgiving in
+    your favourite season! ♥";
+  - says what it's like out there when you come home ("it's wet out there! come
+    get cozy ☂", "brr, was it cold out there?");
   - greets you sleepily if you look in before sunrise ("mmh... you're up before the
     sun... zzz ♥").
 
@@ -196,8 +197,8 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   over in a V. The costume of the day is a pilgrim hat, a leaf crown, a feather band or
   an acorn cap; a turkey wanders by now and then ("gobble?!"); snacks are pumpkin pie;
   the countdown runs ("3 sleeps till Thanksgiving!"); and on the day the first visit
-  gets "happy thanksgiving!", a plate, and a thank-you to whoever has looked after the
-  pet most lately. All cosmetic.
+  gets "happy Thanksgiving! ♥", a plate, and a thank-you to everyone who looks after
+  it ("thank you all for taking care of me ♥"). All cosmetic.
 - Tap the screen for the status page: hearts and meters, weight, care misses and
   ignored whines, traits (n/4) and the one it's learning next, upbringing, the next
   egg, the notify-me and sounds switches, recent care, and a link to the journal. Tap
@@ -210,7 +211,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   from automations and voice too. A button glows when the pet needs it, for example
   Feed when it's hungry. Medicine is greyed out unless it's sick.
 - The pet reacts to what happens to it, even when nobody pressed anything: a missed
-  call ("...nobody came"), hatching ("hello!"), growing up, a new trait, a good
+  call (gently: "...oh, there you are ♥"), hatching ("hello!"), growing up, a new trait, a good
   morning, a fair scolding. In its child stage, each creature also has its own
   reactions, like the squirrel stuffing its cheeks with a snack or the kitten's
   zoomies after play.
@@ -492,7 +493,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   only changes this browser, and the pet stays quiet while it sleeps and from 21:00
   to 08:00.
 - **A welcome for every new pet.** Adding a pet through the integration tells the
-  whole house: "Pip has been welcomed into the home." It goes to every phone with
+  whole house: "Pip, a new virtual pet, just moved in! Say hi ♥" It goes to every phone with
   the Home Assistant app, whether or not anyone tapped "notify me", and to the
   notifications in the sidebar. A new generation laid as an egg isn't a new pet,
   and restarts never welcome again.

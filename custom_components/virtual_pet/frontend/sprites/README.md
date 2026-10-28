@@ -24,6 +24,6 @@ while its adult sprites are being redrawn.
 | `perch` | Optional: a 256×256 sprite drawn under the pet's feet that moves and scales with it, for a creature whose scene puts it on open water (the tree frog's lily pad). |
 | `murk` | Water worlds only (`"mess": "murk"` in `worlds.json`): a 512×384 overlay that clouds the scene instead of showing poop, stronger with each mess |
 | `backgrounds` | `day`, `night`, `rain`, `dim` scenes, 512×384. Only `day` is required; missing scenes reuse it, dimmed by the card. |
-| `words` | Optional flavour words for speech |
+| `words` | Optional flavour words for speech: `food`, `home`, and per-stage overrides (`"adult": {"home": "branch"}`) |
 
 Sprites are 256×256 transparent PNGs with the feet on y=224; props are 128×128.

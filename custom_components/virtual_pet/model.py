@@ -1516,11 +1516,13 @@ def add_bond(
     return [event]
 
 
-def favourite_game(state: PetState, user: str, game: str) -> list[Event]:
-    """They finished the pet's favourite game with them: it says so (flavour
-    only; a bond never changes the stats)."""
-    if state.bonds.get(user, {}).get("favourite") != game:
+def favourite_game(state: PetState, user: str, game: str, today: str) -> list[Event]:
+    """They finished the pet's favourite game with them: it says so, once a day
+    (flavour only; a bond never changes the stats)."""
+    bond = state.bonds.get(user, {})
+    if bond.get("favourite") != game or bond.get("favourite_said") == today:
         return []
+    bond["favourite_said"] = today
     return [{"type": "bond_favourite", "user": user, "game": game}]
 
 
@@ -1703,7 +1705,7 @@ _MOOD_REASONS = {
     "sick": "feeling sick",
     "asleep": "zzz",
     "hungry": "a little peckish",
-    "dirty": "someone should tidy up",
+    "dirty": "a bit messy in here...",
     "bored": "nothing to do",
     "excited": "that was fun!",
     "cozy": "nice and cozy",

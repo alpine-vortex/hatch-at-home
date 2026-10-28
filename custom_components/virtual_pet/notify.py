@@ -23,23 +23,23 @@ CALLS = {
     "happiness": "wants to play",
     "energy": "is sleepy. Lights out?",
     "dirty": "needs a clean",
-    "sick": "feels sick and is calling",
+    "sick": "feels sick. Medicine?",
 }
 
 
 # How each trait reads in "Pip ... now" and "Pip's ... runs deep now".
 TRAITS = {
-    "night_owl": ("is a night owl", "night-owl streak"),
+    "night_owl": ("is a night owl", "night-owl side"),
     "music_lover": ("is a music lover", "love of music"),
     "homebody": ("is a homebody", "homebody heart"),
     "sun_lover": ("is a sun lover", "love of the sun"),
     "fireside": ("loves the fireside", "love of the fire"),
     "moon_child": ("is a moon child", "moon-child soul"),
     "storm_watcher": ("is a storm watcher", "love of storms"),
-    "couch_potato": ("is a couch potato", "couch-potato streak"),
-    "social_butterfly": ("is a social butterfly", "social streak"),
-    "early_bird": ("is an early bird", "early-bird streak"),
-    "helper": ("is a little helper", "helpful streak"),
+    "couch_potato": ("is a couch potato", "couch-potato side"),
+    "social_butterfly": ("is a social butterfly", "social side"),
+    "early_bird": ("is an early bird", "early-bird side"),
+    "helper": ("is a little helper", "helpful side"),
     "player": ("loves a game", "love of games"),
     "snow_child": ("is a snow child", "love of snow"),
     "breeze_rider": ("rides the breeze", "love of the wind"),
@@ -134,12 +134,12 @@ def message(event: dict[str, Any], name: str, species: dict[str, str]) -> str | 
         text = f"{name} {CALLS.get(event.get('reason', ''), 'is calling')}"
         return text if text.endswith("?") else f"{text}!"
     if kind == "became_sick":
-        return f"{name} is feeling sick. Medicine?"
+        return f"{name} feels sick. Medicine?"
     if kind == "hatched":
         found = species.get(event.get("species", ""), "new friend")
         return f"{name} hatched: it's {_a(found.lower())}!"
     if kind == "stage_changed" and event.get("upbringing"):
-        return f"{name} is all grown up: {_a(event['upbringing'])} adult."
+        return f"{name} is all grown up!"  # the upbringing isn't a grade to announce
     if kind == "trait_learned":
         return f"{name} {_trait(event['trait'])[0]} now."
     if kind == "trait_deepened":
@@ -180,7 +180,7 @@ def send_off(kind: str, name: str, nickname: str | None) -> str:
 
 def welcome(name: str) -> str:
     """The message when a pet is added to the house."""
-    return f"{name} has been welcomed into the home."
+    return f"{name}, a new virtual pet, just moved in! Say hi ♥"
 
 
 def dashboard_path(value: str | None) -> str | None:

@@ -344,6 +344,26 @@ async function main() {
     return before && !s.screen.querySelector(".askday") && !s.asking;
   });
   check("a question gives way to a game", gaveWay);
+  // Screen readers hear plain words: no hearts or notes; a bare heart is "thank you!".
+  const heard = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const out = [];
+    for (const line of ["you're the best ♥", "♥", "♪ la la la ♪"]) {
+      s.sayUntil = Date.now() + 3000;
+      s.bubble.textContent = line;
+      await new Promise((r) => setTimeout(r, 50));
+      out.push(s.live.textContent);
+    }
+    return out;
+  });
+  check("screen readers hear plain words", heard.join("|") === "you're the best|thank you!|la la la", heard.join("|"));
+  // A long title is cut to fit.
+  const cut = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    el._moment(s, { type: "watching", title: "The Great British Bake Off: Christmas Special", at: new Date().toISOString() });
+    return s.bubble.textContent;
+  });
+  check("long titles are cut to fit the bubble", cut.length <= 48 && cut.includes("…"), `${cut} (${cut.length})`);
   // A close friend coming home: "you're home!!" to them, by name to anyone else.
   await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
   await evaluate(() => document.querySelector("home-assistant").hass.callApi("POST", "states/person.sam_check",
@@ -373,14 +393,14 @@ async function main() {
     el._moment(s, { type: "bond_record", user: me, game: "left_right", wins: 4, at: "x" });
     el._moment(s, { type: "bond_record", user: "someone-else", game: "left_right", wins: 5, at: "y" });
     el._moment(s, { type: "tucked_in", user: me, at: "z" });
-    const out = s.queue.map((q) => q.text);
+    const out = [...s.queue.map((q) => q.text), s.bubble.textContent]; // the goodnight replaces, not queues
     s.queue = [];
     return out;
   }, me);
   check("private notes, records and goodnights are said to their person",
     secret[0] === "we've been friends for a month! ♥" && secret[1] === "11,000 steps?! you've been busy!" &&
-    secret[2] === "12 floors of stairs?! you're a climber!" && secret[3] === "you beat your best left or right! 4/5 ♥" &&
-    /^(night night|sweet dreams|thank you for tucking me in), sunbeam ♥$/.test(secret[4]) && secret.length === 5,
+    secret[2] === "12 floors of stairs?! you're a climber!" && secret[3] === "new best at left or right! 4/5 ♥" &&
+    secret[4] === "thank you for tucking me in, sunbeam ♥" && secret.length === 5,
     secret.join(" | "));
   // "How was your day?": three answers, a warm reply, and it goes away.
   const askBox = cur().locator(".askday");
@@ -430,11 +450,11 @@ async function main() {
     s.queue = [];
     return out;
   }, me);
-  check("the new private lines read right", lines[0] === "I dreamed about the sea 🌊, like you said! ♥" &&
-    lines[1] === "I dreamed about the sea 🌊..." && lines[2] === "ha, sunny after all! good guess though ♥" &&
-    lines[3] === "back from the gym?! so strong!" && lines[4] === "Thanksgiving in autumn, your favourite time! ♥" &&
+  check("the new private lines read right", lines[0] === "I dreamed about the sea, like you said! ♥" &&
+    lines[1] === "I dreamed about the sea..." && lines[2] === "oh, sunny after all! good guess though ♥" &&
+    lines[3] === "back from the gym?! so strong!" && lines[4] === "Thanksgiving in your favourite season! ♥" &&
     /rain/.test(lines[5]) && lines[6] === "mmh... you're up before the sun... zzz ♥" &&
-    lines[8] === "you're all wet! come get cozy ☔", lines.join(" | "));
+    lines[8] === "it's wet out there! come get cozy ☂", lines.join(" | "));
   check("a friend coming home is cheered, by name to others", /^(you're home!! ♥|yay, you're back! ♥)$/.test(cheers.out[0]) &&
     cheers.out[1] === "" && /^(Sam's home!!|ooh, Sam is back!)$/.test(cheers.out[2]),
   `${cheers.out.join(" | ")} (person ${cheers.person})`);
@@ -550,7 +570,7 @@ async function main() {
 
   // 4. Moments make the pet react.
   for (const [type, extra, expect] of [
-    ["care_miss", { reason: "hunger" }, "nobody came"],
+    ["care_miss", { reason: "hunger" }, "there you are"],
     ["stage_changed", { stage: "teen", from: "child" }, "teen now"],
     ["trait_learned", { trait: "music_lover", level: 1 }, "new trait"],
     ["sunset", {}, "sun|sky"],
@@ -761,8 +781,8 @@ async function main() {
     el._seasonTreat(s, season);
     return [first, s.bubble.textContent, !!s.screen.querySelector(".costume .pop img[src*=plate]")];
   });
-  check("on the day, the pet gives thanks", thanks[0] === "happy thanksgiving! ♥" &&
-    thanks[1] === "thank you for taking care of me, Dev ♥" && thanks[2], thanks.join(" | "));
+  check("on the day, the pet gives thanks", thanks[0] === "happy Thanksgiving! ♥" &&
+    thanks[1] === "thank you all for taking care of me ♥" && thanks[2], thanks.join(" | "));
   await shot("05-thanksgiving-thanks");
   await card.evaluate((el) => { el.setConfig({ ...el._config, seasonal: false }); el.hass = el._hass; });
   await page.waitForTimeout(800);

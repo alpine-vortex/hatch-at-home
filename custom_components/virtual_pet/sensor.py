@@ -167,6 +167,17 @@ class LifeStageSensor(PetEntity, SensorEntity):
             return None
         return {k: record[k] for k in keys if k in record}
 
+    def _wish(self) -> dict[str, Any] | None:
+        """Today's wish; "open" while it can still come true (it's awake time:
+        no wish is granted while it sleeps), so the card stops mentioning it."""
+        wish = self._today_only(self.pet.wish, ("kind", "granted", "for", "for_name"))
+        if wish is not None:
+            now = dt_util.utcnow().timestamp()
+            wish["open"] = not wish.get("granted") and not model.in_sleep_hours(
+                now, self.coordinator.settings
+            )
+        return wish
+
     def __init__(self, coordinator: PetCoordinator) -> None:
         super().__init__(coordinator, "life_stage")
 
@@ -203,9 +214,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             # Daily check-ins: today's wish and this morning's dream, for the card
             # (who granted the wish stays on the server).
             # "for": a close friend it hopes grants it (user ID and first name).
-            "wish": self._today_only(
-                self.pet.wish, ("kind", "granted", "for", "for_name")
-            ),
+            "wish": self._wish(),
             "dream": self._today_only(self.pet.dream, ("kind", "title")),
             # Each person's bond, by HA user ID; the card shows only the viewer's
             # own (points, who played what and "my day" stay on the server).

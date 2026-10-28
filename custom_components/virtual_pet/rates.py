@@ -309,6 +309,7 @@ MY_DAY_RESTED_HOURS = 7.0  # and at least their usual
 
 # Bond connections (people.py): what the pets know about each person, shared.
 NOTES_PER_VISIT = 2  # private lines said at one look; the rest wait
+LOOK_LINES = 3  # lines at one look, the card's own and the notes together
 PEOPLE_WEATHER_DAYS = 4  # days of the house's weather kept
 SEASON_TROPICS_LATITUDE = 23.5  # nearer the equator: no season talk
 ASK_LEVEL = 2  # questions ("how was your day?") from this bond level

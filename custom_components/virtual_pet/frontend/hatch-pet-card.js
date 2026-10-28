@@ -184,7 +184,7 @@ const SEASONS = [
       terrarium: { corners: ["left", "right"] }, // a tarantula's tank
       nightsky: { dayFlyers: true, nightFlyer: true }, // bats by day too; the witch at night
     },
-    lines: ["boo!", "happy halloween!", "spooky~", "trick or treat?", "do I look spooky?"],
+    lines: ["boo!", "happy Halloween!", "spooky~", "trick or treat?", "do I look spooky?"],
     treat: [10, 31],
     treatLine: "trick or treat!",
     countdown: "Halloween", // "3 sleeps till Halloween!" before the treat day
@@ -217,10 +217,10 @@ const SEASONS = [
       hearth: { sweets: true }, // a plate by the door
       terrarium: { corners: ["left", "right"] },
     },
-    lines: ["gobble gobble!", "happy thanksgiving!", "I'm thankful for you ♥", "smells like pie...",
+    lines: ["gobble gobble!", "happy Thanksgiving!", "I'm thankful for you ♥", "smells like pie...",
       "so cozy~", "look at all the leaves!"],
     treat: (y) => thanksgiving(y),
-    treatLine: "happy thanksgiving! ♥",
+    treatLine: "happy Thanksgiving! ♥",
     thanks: true,
     countdown: "Thanksgiving",
     costumes: [
@@ -236,7 +236,7 @@ const SEASONS = [
     snackLines: ["pie!! ♪", "pumpkin pie, my favourite!", "mmm, still warm ♪"],
     flyer: { art: ["goose_1", "goose_2"], cls: "sgoose", ms: 8000, flock: 3 },
     visitor: { art: ["turkey_1", "turkey_2"], cls: "sturkey", ms: 7000, startle: "gobble?!", jump: "perk",
-      greet: ["hi, turkey!", "happy thanksgiving, turkey ♪", "gobble gobble to you too!"] },
+      greet: ["hi, turkey!", "happy Thanksgiving, turkey ♪", "gobble gobble to you too!"] },
     chirp: "harvest",
     bunting: true,
     leaves: true,
@@ -252,7 +252,7 @@ function thanksgiving(year, days = 0) {
 const seasonDate = (when, year) => (typeof when === "function" ? when(year) : when);
 const HEAD_TOPS = new Map(); // frame|x -> the top of the head (see _headTop)
 const FRAME_IMGS = new Map(); // src -> Image, for measuring frames not on show
-const SEASON_COSTUME_MS = [90000, 150000]; // between costume moments
+const SEASON_COSTUME_MS = [600000, 900000]; // between costume moments (10-15 min)
 const SEASON_FLYER_MS = [20000, 45000]; // between bats (or geese) flying by
 const SEASON_VISITOR_MS = [240000, 420000]; // between ghosts (or turkeys)
 const SEASON_NIGHT_FLYER_MS = [120000, 240000];
@@ -330,7 +330,7 @@ const GREET_EVERY_MS = 3 * 3600 * 1000;
 // were out" note after this long away (per device).
 const WISHES = {
   play: ["I wish we could play a game today!", "play a game together"],
-  snack: ["I'd love a snack after lunch...", "a snack after lunch"],
+  snack: ["I'd love a snack after lunch!", "a snack after lunch"],
   bath: ["I wish I could have a bubble bath!", "a bubble bath"],
   praise: ["I hope someone says I'm good today", "hear \"good job!\""],
   tuck_in: ["will you tuck me in tonight?", "be tucked in tonight"],
@@ -345,7 +345,7 @@ const WISHES = {
 // them, said to them, and short for the status screen.
 const WISHES_FOR = {
   play: [(n) => `I hope ${n} plays a game with me today!`, "will you play a game with me today?", (n) => `play a game with ${n}`],
-  snack: [(n) => `I hope ${n} brings me a snack after lunch...`, "will you bring me a snack after lunch?", (n) => `a snack from ${n}`],
+  snack: [(n) => `I hope ${n} brings me a snack after lunch!`, "will you bring me a snack after lunch?", (n) => `a snack from ${n}`],
   bath: [(n) => `I wish ${n} would give me a bubble bath!`, "will you give me a bubble bath today?", (n) => `a bubble bath from ${n}`],
   praise: [(n) => `I hope ${n} says I'm good today`, "will you tell me I'm good today?", (n) => `hear "good job!" from ${n}`],
   say_hi: [(n) => `I hope ${n} comes to say hi this afternoon!`, "will you come say hi this afternoon?", (n) => `a hello from ${n}`],
@@ -353,11 +353,14 @@ const WISHES_FOR = {
 // "will you play?" + "sunbeam" -> "will you play, sunbeam?"; "night night ♥" -> "night night, sunbeam ♥"
 const withName = (line, name) => (name ? line.replace(/([!?.]*)(\s*♥)?$/, `, ${name}$1$2`) : line);
 const FRIEND_WELCOME_MS = 6 * 3600 * 1000; // "welcome home!" at the next look, this long after
+const FIRST_LOOK_LINES = 3; // lines queued at the first look (the visit's notes fill what's left)
+// Titles, artists and names cut so a line fits the bubble on a 330 px card.
+const short = (text, max = 30) => (text && text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text);
 const WELCOME_SAME_ARRIVAL_MS = 10 * 60 * 1000; // pets' reports this close: one arrival
 // Questions the pet asks; the server picks which and when (visit's "ask"), so
 // the daily limit holds across pets and devices. "keep" answers go back to the
 // server (virtual_pet/answer); the others stay on the card.
-const ASK_MS = 20000;
+const ASK_MS = 60000; // a question stays this long (it was not asked for, so focus stays put)
 const QUESTIONS = {
   how_day: { q: "how was your day?", answers: {
     great: ["yay!! that makes me so happy ♥", "a great day! tell me everything! ♥"],
@@ -368,25 +371,25 @@ const QUESTIONS = {
     ok: ["a cozy morning then ♥"],
     "not really": ["aww, take it easy today ♥", "a slow morning then... *yawn* ♥"] } },
   fav_weather: { q: "what's your favourite weather?", keep: true, answers: {
-    sun: ["sunny days! me too ☀"], rain: ["ooh, cozy rain ☔"], snow: ["snow!! ❄ I'll remember"],
-    storms: ["storms! so exciting ⚡"] } },
+    sun: ["sunny days! me too ☀"], rain: ["ooh, cozy rain ☂"], snow: ["snow!! ❄ I'll remember"],
+    storms: ["storms! so exciting!"] } },
   fav_season: { q: "what's your favourite season?", keep: true, answers: {
-    spring: ["spring! flowers everywhere 🌸"], summer: ["summer! sunshine! ☀"],
-    autumn: ["autumn! crunchy leaves 🍂"], winter: ["winter! snuggly ❄"] } },
+    spring: ["spring! flowers everywhere ♪"], summer: ["summer! sunshine! ☀"],
+    autumn: ["autumn! crunchy leaves ♪"], winter: ["winter! snuggly ❄"] } },
   dream: { q: "what should I dream about tonight?", keep: true, answers: {
-    stars: ["the stars... ✨ ok!"], sea: ["the sea! 🌊 ok!"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ ok!"] } },
+    stars: ["the stars... ok!"], sea: ["the sea! ok!"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ ok!"] } },
   guess: { q: "rain or sun tomorrow?", keep: true, answers: {
-    rain: ["rain! we'll see ☔"], sun: ["sun! we'll see ☀"] } },
+    rain: ["rain! we'll see ☂"], sun: ["sun! we'll see ☀"] } },
 };
 const PLACES = {
-  gym: "back from the gym?! so strong!", work: "long day at work? ♥",
-  school: "how was school? ♥", park: "did you have fun at the park?",
+  gym: "back from the gym?! so strong!", work: "home from work! ♥",
+  school: "back from class? ♥", park: "did you have fun at the park?",
 };
 const HOME_WEATHER = {
-  wet: "you're all wet! come get cozy ☔", snowy: "snow on your shoes! ❄",
+  wet: "it's wet out there! come get cozy ☂", snowy: "snow on your shoes! ❄",
   cold: "brr, was it cold out there?", hot: "you must be thirsty after that heat!",
 };
-const SEASON_ICONS = { spring: "🌸", summer: "☀", autumn: "🍂", winter: "❄" };
+const SEASON_ICONS = { spring: "♪", summer: "☀", autumn: "♥", winter: "❄" };
 // What the pet tells only you (virtual_pet.visit's notes), each once.
 const NOTES = {
   friends_for: (n) => n.months % 12 === 0
@@ -399,29 +402,29 @@ const NOTES = {
   bike: () => "were you on a bike?! wheee!",
   run: () => "did you go for a run?! so fast!",
   stairs: (n) => `${n.floors} floors of stairs?! you're a climber!`,
-  rested: () => pick(["you look so well rested! ♥", "good morning! you slept so well ♥"]),
-  rain_walk: () => pick(["you walked in the rain?! so brave!", "out in the rain and still so many steps! ☔"]),
+  rested: () => pick(["you got a good sleep! ♥", "good morning! you slept so well ♥"]),
+  rain_walk: () => pick(["you walked in the rain?! so brave!", "out in the rain and still so many steps! ☂"]),
   snow_walk: () => "you went walking in the snow?! ❄ so brave!",
   dream: (n) => n.pick === "you"
     ? (n.yours ? "I dreamed about you, like you said! ♥" : "I dreamed about my friends ♥")
-    : `I dreamed about ${{ stars: "the stars ✨", sea: "the sea 🌊", snacks: "snacks!" }[n.pick] || n.pick}${n.yours ? ", like you said! ♥" : "..."}`,
+    : `I dreamed about ${{ stars: "the stars", sea: "the sea", snacks: "snacks" }[n.pick] || n.pick}${n.yours ? ", like you said! ♥" : "..."}`,
   guess: (n) => n.outcome === "right"
-    ? (n.guess === "rain" ? "you were right!! it rained ☔" : "you were right!! sunny ☀")
+    ? (n.guess === "rain" ? "you were right!! it rained ☂" : "you were right!! sunny ☀")
     : n.outcome === "wrong"
-      ? (n.guess === "rain" ? "ha, sunny after all! good guess though ♥" : "ha, it rained after all! good guess though ♥")
+      ? (n.guess === "rain" ? "oh, sunny after all! good guess though ♥" : "oh, it rained after all! good guess though ♥")
       : "it was cloudy all day! nobody wins ♥",
   back_from: (n) => PLACES[n.place],
-  fav_weather: (n) => ({ sun: "it's sunny, your favourite! ☀", rain: "it's raining, your favourite! ☔",
-    snow: "it's snowing, your favourite!! ❄", storms: "a storm! your favourite ⚡" })[n.weather],
+  fav_weather: (n) => ({ sun: "it's sunny, your favourite! ☀", rain: "it's raining, your favourite! ☂",
+    snow: "it's snowing, your favourite!! ❄", storms: "a storm! your favourite!" })[n.weather],
   season: (n) => n.holiday
-    ? `${n.holiday === "halloween" ? "Halloween" : "Thanksgiving"} in ${n.season}, your favourite time! ♥`
+    ? `${n.holiday === "halloween" ? "Halloween" : "Thanksgiving"} in your favourite season! ♥`
     : `it's ${n.season}, your favourite! ${SEASON_ICONS[n.season] || ""}`.trim(),
   early_alarm: () => "early start tomorrow? sleep well ♥",
   up_early: () => "mmh... you're up before the sun... zzz ♥",
 };
 const DREAMS = {
-  watching: (d) => `I dreamed about ${d.title}!`,
-  listening: (d) => `♪ I dreamed of ${d.title} ♪`,
+  watching: (d) => `I dreamed about ${short(d.title)}!`,
+  listening: (d) => `♪ I dreamed of ${short(d.title)} ♪`,
   rain_started: () => "I dreamed it was raining...",
   rainbow: () => "I dreamed about a rainbow!",
   snow_started: () => "I dreamed of snow ❄",
@@ -432,7 +435,7 @@ const DREAMS = {
   trait: () => "I had such a big dream last night...",
   flying: () => "I dreamed I could fly!",
   clouds: () => "I dreamed I napped on a cloud...",
-  feast: () => "I dreamed about a giant snack!",
+  feast: (d, w) => `I dreamed about a mountain of ${w?.food || "snacks"}!`,
 };
 const AWAY_NOTE_AFTER_MS = 3 * 3600 * 1000;
 // A bond with each person (life_stage "bonds", by HA user ID; only the viewer's
@@ -444,6 +447,12 @@ const VISIT_EVERY_MS = 3600 * 1000; // virtual_pet.visit, as the server counts i
 const VISIT_RETRY_MS = 5 * 60 * 1000; // after a visit that didn't count
 const WISH_MENTION_MS = [600000, 900000]; // between reminders of an open wish
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
+// A line as a screen reader should hear it: no hearts, notes, stars or emoji; a
+// bare heart (praise) is "thank you!".
+function spoken(text) {
+  const plain = String(text || "").replace(/[♥♡♪★☂☀❄~*]|\p{Extended_Pictographic}/gu, "").replace(/\s+/g, " ").trim();
+  return plain || (/[♥♡]/.test(text) ? "thank you!" : "");
+}
 // Whole degrees in the owner's unit (the server converts), with a real minus.
 const degrees = (n) => (Number.isFinite(n) ? `${n}°`.replace("-", "−") : "");
 // How long the happy bounce lasts when the pet gets excited.
@@ -1228,8 +1237,8 @@ class HatchPetCard extends HTMLElement {
     // What the pet says to someone (a refusal, a game's result, a moment) is read
     // out by screen readers; its idle chatter isn't. Only the pet on show.
     new MutationObserver(() => {
-      const text = s.bubble.textContent;
-      if (s.sayUntil && s === this._slides[this._index] && s.live.textContent !== text) {
+      const text = spoken(s.bubble.textContent);
+      if (s.sayUntil && s === this._slides[this._index] && text && s.live.textContent !== text) {
         s.live.textContent = text;
       }
     }).observe(s.bubble, { childList: true, characterData: true, subtree: true });
@@ -1737,7 +1746,8 @@ class HatchPetCard extends HTMLElement {
     if (away) return "";
     if (s.hatchesAt) {
       const minutes = Math.max(1, Math.ceil((new Date(s.hatchesAt) - Date.now()) / 60000));
-      return minutes <= 1 ? "crack... crack..." : `hatching in about ${minutes} min`;
+      if (minutes <= 1) return "crack... crack...";
+      return minutes < 60 ? `hatching in about ${minutes} min` : `hatching in about ${Math.round(minutes / 60)} h`;
     }
     return mood?.attributes.reason || "";
   }
@@ -1800,9 +1810,9 @@ class HatchPetCard extends HTMLElement {
       }
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
       if (s === this._slides[this._index]) {
-        this._visit(s);
         this._greet(s);
-        this._firstLook(s);
+        this._firstLook(s); // before the visit: it tells the server what's queued
+        this._visit(s);
         this._sayQueued(s);
         this._wishMention(s);
         this._seen(s);
@@ -1879,11 +1889,12 @@ class HatchPetCard extends HTMLElement {
       setTimeout(() => this._look(s, 1300), rtl ? 1200 : 0); // follows it across
       setTimeout(() => speck.remove(), 2700);
     } else {
+      const words = this._words(s);
       const lines = {
-        sleepy: ["*yawn*", "mm... sleepy"],
-        bored: ["hmm...", "*sigh*", "anyone wanna play?"],
+        sleepy: ["*yawn*", "mm... sleepy", ...(words.home ? [`my ${words.home} looks cozy...`] : [])],
+        bored: ["hmm...", "*rolls around*", "anyone wanna play?"],
         excited: ["hehe!", "wheee"],
-        hungry: ["*tummy rumbles*", "is it snack time?"],
+        hungry: ["*tummy rumbles*", "is it snack time?", ...(words.food ? [`mmm... ${words.food}...`] : [])],
         dirty: ["ew...", "*sniff sniff*"],
       }[s.moodState] || ["♪ hm hm hm ♪", "...", "*looks around*", "la la la"];
       s.bubble.textContent = pick(lines);
@@ -1902,6 +1913,11 @@ class HatchPetCard extends HTMLElement {
 
   _sayQueued(s) {
     const now = Date.now();
+    if (s.asleep && s.queue?.length) {
+      this._clearAsk(s); // asleep: nothing more is said (a question waits for another day)
+      s.queue = [];
+      return;
+    }
     if (!s.queue?.length || s.sayUntil > now || s.game || s.screen.classList.contains("show-status")) return;
     const { text, ms, then } = s.queue.shift();
     s.bubble.textContent = text;
@@ -1918,6 +1934,21 @@ class HatchPetCard extends HTMLElement {
     s.lookedFirst = true;
     const stage = this._state(s, "sensor.life_stage")?.attributes || {};
     const device = s.ids?.device;
+    // At most FIRST_LOOK_LINES lines, in this order; what doesn't fit isn't said
+    // (the dream and wish come again at the next first look; the visit's notes
+    // are budgeted on the server from what's queued here).
+    const lines = [];
+    const me = this._hass.user?.id;
+    const home = (this._state(s, "sensor.last_care")?.attributes.moments || [])
+      .find((m) => m.type === "friend_home" && m.user === me);
+    const at = home && new Date(home.at).getTime();
+    if (at && Date.now() - at < FRIEND_WELCOME_MS && this._welcomeDue(s, at)) {
+      // A close friend who came home while the card was closed: welcome them first.
+      const bond = this._bond(s);
+      const first = short(this._hass.user?.name?.trim().split(/\s+/)[0]);
+      lines.push([`welcome home, ${(bond?.level >= BOND.nickname && bond.nickname) || first || "friend"}! ♥`, 5000]);
+      if (HOME_WEATHER[home.weather]) lines.push([HOME_WEATHER[home.weather], 4500]);
+    }
     let seen = 0;
     try {
       seen = Number(localStorage.getItem(`hatch-seen-${device}`) || 0);
@@ -1926,23 +1957,15 @@ class HatchPetCard extends HTMLElement {
     }
     if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS) {
       const note = this._awayNote(s, seen);
-      if (note) this._queue(s, note, 5500);
+      if (note) lines.push([note, 5500]);
     }
     const dream = stage.dream && DREAMS[stage.dream.kind];
-    if (dream && oncePerDay(`dream-${device}`)) this._queue(s, dream(stage.dream), 5000);
-    const wish = stage.wish && !stage.wish.granted && this._wishLine(stage.wish, s);
-    if (wish && oncePerDay(`wish-${device}`)) this._queue(s, wish[0], 5000);
-    // A close friend who came home while the card was closed: welcome them now.
-    const me = this._hass.user?.id;
-    const home = (this._state(s, "sensor.last_care")?.attributes.moments || [])
-      .find((m) => m.type === "friend_home" && m.user === me);
-    const at = home && new Date(home.at).getTime();
-    if (at && Date.now() - at < FRIEND_WELCOME_MS && this._welcomeDue(s, at)) {
-      const bond = this._bond(s);
-      const first = this._hass.user?.name?.trim().split(/\s+/)[0];
-      this._queue(s, `welcome home, ${(bond?.level >= BOND.nickname && bond.nickname) || first || "friend"}! ♥`, 5000);
-      if (HOME_WEATHER[home.weather]) this._queue(s, HOME_WEATHER[home.weather], 4500);
+    if (dream && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
+      lines.push([dream(stage.dream, this._words(s)), 5000]);
     }
+    const wish = stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
+    if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([wish[0], 5000]);
+    for (const [text, ms] of lines.slice(0, FIRST_LOOK_LINES)) this._queue(s, text, ms);
   }
 
   // Each "came home" is welcomed once in this browser, by any pet (seen live,
@@ -1965,21 +1988,22 @@ class HatchPetCard extends HTMLElement {
     if (!WISHES[wish.kind]) return null;
     const aimed = wish.for && wish.for_name && WISHES_FOR[wish.kind];
     if (!aimed) return WISHES[wish.kind];
-    if (wish.for !== this._hass.user?.id) return [aimed[0](wish.for_name), aimed[2](wish.for_name)];
+    if (wish.for !== this._hass.user?.id) return [aimed[0](short(wish.for_name, 16)), aimed[2](short(wish.for_name, 16))];
     const bond = this._bond(s);
     return [withName(aimed[1], bond?.level >= BOND.nickname ? bond.nickname : null), aimed[2]("you")];
   }
 
-  // Now and then, an open wish comes up again (never more than every 10 minutes).
+  // An open wish comes up once more after the first look (never all day), and
+  // only while it can still come true (the server's "open").
   _wishMention(s) {
     const now = Date.now();
     const [lo, hi] = WISH_MENTION_MS;
     if (!s.nextWish) s.nextWish = now + lo + Math.random() * (hi - lo);
     if (now < s.nextWish || !this._free(s)) return;
-    s.nextWish = now + lo + Math.random() * (hi - lo);
+    s.nextWish = Infinity;
     const wish = this._state(s, "sensor.life_stage")?.attributes.wish;
-    const line = wish && !wish.granted && this._wishLine(wish, s);
-    if (line) this._queue(s, line[0]);
+    const line = wish && !wish.granted && wish.open !== false && this._wishLine(wish, s);
+    if (line && oncePerDay(`wishmention-${s.ids?.device}`)) this._queue(s, line[0]);
   }
 
   // When this device last saw the pet (for the away note), every minute.
@@ -2003,10 +2027,10 @@ class HatchPetCard extends HTMLElement {
     const add = (b) => { if (b && !bits.includes(b)) bits.push(b); };
     const MOMENT_BITS = {
       fell_asleep: "napped", woke_up: "napped", watching: "watched TV", listening: "listened to music",
-      news: "heard some news", sunset: "watched the sunset", wish_granted: "got my wish!",
-      trait_learned: "learned something new", first_snow: "saw the first snow!",
+      news: "heard some news", sunset: "watched the sunset", wish_granted: "got my wish",
+      trait_learned: "learned something new", first_snow: "saw the first snow",
     };
-    const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow!", rainbow: "saw a rainbow?!", sun_out: "sunbathed" };
+    const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow", rainbow: "saw a rainbow", sun_out: "sunbathed" };
     const CARE_BITS = { feed: "had a meal", snack: "had a snack", play: "played", game: "played a game", clean: "had a bath", chore_treat: "got a chore treat" };
     for (const m of [...(lastCare.moments || [])].reverse()) {
       if (!after(m.at)) continue;
@@ -2016,9 +2040,8 @@ class HatchPetCard extends HTMLElement {
       if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) add(CARE_BITS[e.action]);
     }
     if (!bits.length) return null;
-    const list = bits.slice(0, 3);
-    const said = list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list[0];
-    return `while you were out, I ${said}`.replace(/([^!?])$/, "$1!");
+    const list = bits.slice(0, 2); // two at most: a bubble on a 330 px card
+    return `while you were out, I ${list.join(" and ")}!`;
   }
 
   _greet(s) {
@@ -2028,7 +2051,7 @@ class HatchPetCard extends HTMLElement {
     const bond = this._bond(s);
     const level = bond?.level || 0;
     const nickname = level >= BOND.nickname ? bond.nickname : null;
-    const first = user?.name?.trim().split(/\s+/)[0] || nickname;
+    const first = short(user?.name?.trim().split(/\s+/)[0], 16) || nickname;
     if (!first) return;
     const key = `hatch-greet-${user.id}-${s.ids?.device}`;
     try {
@@ -2038,7 +2061,7 @@ class HatchPetCard extends HTMLElement {
       // no storage (private window): greet anyway, once per page load
     }
     const hour = new Date().getHours();
-    const hello = hour < 12 ? `morning, ${first}!` : hour < 18 ? `hi ${first}!` : `evening, ${first}!`;
+    const hello = hour < 12 ? `morning, ${first}!` : hour < 18 ? `hi, ${first}!` : `evening, ${first}!`;
     const lines = [hello, `${first}!! hi!`, hello];
     if (level >= BOND.warm) lines.push(`${first}! I missed you ♥`, `yay, ${first}'s here!`);
     if (nickname) lines.push(`hi, ${nickname}!`, `${nickname}!! ♥`, `there's my ${nickname}!`);
@@ -2054,7 +2077,15 @@ class HatchPetCard extends HTMLElement {
   _personName(userId) {
     const person = Object.values(this._hass.states || {})
       .find((st) => st.entity_id.startsWith("person.") && st.attributes.user_id === userId);
-    return (person?.attributes.friendly_name || "").trim().split(/\s+/)[0] || null;
+    return short((person?.attributes.friendly_name || "").trim().split(/\s+/)[0], 16) || null;
+  }
+
+  // The creature's own words (food, home), for its stage (a moth isn't a
+  // caterpillar): species.json "words", with per-stage overrides.
+  _words(s) {
+    const words = s.species?.words || {};
+    const stage = this._state(s, "sensor.life_stage")?.state;
+    return { food: words.food, home: words.home, ...(words[stage] || {}) };
   }
 
   // The viewer's own bond with this pet: {level, nickname?, favourite?} or null.
@@ -2068,7 +2099,8 @@ class HatchPetCard extends HTMLElement {
     const id = s.ids?.["sensor.life_stage"];
     if (!id || !this._hass.user || Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
     s.visitedAt = Date.now();
-    this._hass.callService("virtual_pet", "visit", { entity_id: id }, undefined, false, true)
+    const queued = Math.min((s.queue || []).length, 6);
+    this._hass.callService("virtual_pet", "visit", { entity_id: id, queued }, undefined, false, true)
       .then((res) => {
         const reply = res?.response || {};
         if (s.ids?.["sensor.life_stage"] !== id) return; // the slide shows another pet now
@@ -2203,11 +2235,11 @@ class HatchPetCard extends HTMLElement {
     };
     switch (m.type) {
       case "care_miss":
-        say("...nobody came", 6000);
-        this._animate(s, s.pet, "sulk", 800);
+        say("...oh, there you are ♥", 5000); // never guilt
+        this._animate(s, s.pet, "perk", 320);
         break;
       case "discipline_miss":
-        say("...fine, I'll stop");
+        say("ok, ok... ♪");
         break;
       case "call_answered":
         if (m.reason === "fake") { // only a fair scold answers a fake call
@@ -2224,7 +2256,7 @@ class HatchPetCard extends HTMLElement {
       case "stage_changed":
         if (m.stage === "baby") break; // hatching says hello
         say(m.stage === "adult"
-          ? `all grown up${m.upbringing ? `: ${m.upbringing}` : ""}!`
+          ? "all grown up! ♥" // the upbringing is on the status screen, not announced
           : `I'm a ${m.stage} now!`);
         this._animate(s, s.pet, "stretch", 1100);
         this._sparkle(s);
@@ -2253,14 +2285,13 @@ class HatchPetCard extends HTMLElement {
         break;
       case "fell_asleep":
         if (m.how === "collapsed") {
-          say("so... tired... zzz", 5000);
-          this._animate(s, s.pet, "sulk", 800);
+          say("so... sleepy... zzz", 5000);
         } else if (m.how === "house" || m.how === "lights") {
           say(pick(["good night...", "night night...", "sleep tight..."]), 4000);
         }
         break;
       case "good_morning":
-        say(pick(["good morning!", "morning!! you're up!", "hi! sleep well?"]));
+        say(pick(["good morning!", "morning!! you're up!", "morning! ♪"]));
         this._animate(s, s.pet, "stretch", 1100);
         break;
       case "sunset":
@@ -2273,14 +2304,14 @@ class HatchPetCard extends HTMLElement {
         break;
       case "watching":
         // A long title gets the short lines, so the bubble leaves the pet in view.
-        say(pick([`ooh, ${m.title}!`, `is this ${m.title}?`,
-          m.title.length <= 40 ? `${m.title}! I love this one` : `ooh, ${m.title}!`]));
+        const title = short(m.title);
+        say(pick([`ooh, ${title}!`, `is this ${title}?`, `${title}! I love this one`]));
         this._animate(s, s.pet, "perk", 320);
         break;
       case "listening":
         say(m.artist && Math.random() < 0.5
-          ? `♪ is this ${m.artist}? ♪`
-          : `♪ ${m.title} ♪`);
+          ? `♪ is this ${short(m.artist)}? ♪`
+          : `♪ ${short(m.title)} ♪`);
         break;
       case "news": { // virtual_pet.share_news: a passing moment, like a TV title
         const h = String(m.headline || "");
@@ -2329,7 +2360,7 @@ class HatchPetCard extends HTMLElement {
           warmer: hi ? [today ? `warmer today: ${hi}!` : `warmer tomorrow: ${hi}!`] : [today ? "warmer today!" : "warmer tomorrow!"],
           colder: hi ? [today ? `colder today, only ${hi}` : `colder tomorrow... ${hi}`] : [today ? "colder today..." : "colder tomorrow..."],
           rain: today ? ["rain later today...", "rain's coming later"] : ["rain tomorrow... blanket day?"],
-          sunny: today ? ["sunny today, finally!"] : ["sun tomorrow, finally!"],
+          sunny: today ? ["sunny today! yay"] : ["sun tomorrow! yay"],
         }[m.kind];
         if (!lines) break;
         say(pick(lines), 5000);
@@ -2349,6 +2380,8 @@ class HatchPetCard extends HTMLElement {
         const game = GAMES.find((g) => g.key === m.favourite);
         this._queue(s, game ? `${game.label} is our game now! ♥`
           : m.nickname ? `can I call you ${m.nickname}? ♥`
+          : m.level >= BOND.max ? "you're my very best friend ♥"
+          : m.level === BOND.max - 1 ? "you make every day better ♥"
           : m.level >= BOND.hearts ? "I'm always so happy when you're here ♥"
           : pick(["I like you a lot, you know ♥", "we're getting close! ♥", "you're the best ♥"]), 5000);
         break;
@@ -2375,7 +2408,7 @@ class HatchPetCard extends HTMLElement {
         if (m.user !== this._hass.user?.id) break;
         const game = GAMES.find((g) => g.key === m.game);
         this._sparkle(s);
-        this._queue(s, `you beat your best ${game ? game.label : "game"}! ${m.wins}/5 ♥`);
+        this._queue(s, `new best at ${game ? game.label : "a game"}! ${m.wins}/5 ♥`);
         break;
       }
       case "tucked_in": {
@@ -2383,7 +2416,9 @@ class HatchPetCard extends HTMLElement {
         const bond = this._bond(s);
         const name = (bond?.level >= BOND.nickname && bond.nickname) ||
           this._hass.user?.name?.trim().split(/\s+/)[0];
-        this._queue(s, withName(pick(["night night ♥", "sweet dreams ♥", "thank you for tucking me in ♥"]), name), 4000);
+        // Instead of the plain goodnight just said, not after it.
+        s.bubble.textContent = withName("thank you for tucking me in ♥", name);
+        s.sayUntil = Date.now() + 4000;
         break;
       }
       case "bond_favourite":
@@ -2429,6 +2464,11 @@ class HatchPetCard extends HTMLElement {
         s.screen.classList.add("breezy");
         clearTimeout(s.breezeTimer);
         s.breezeTimer = setTimeout(() => s.screen.classList.remove("breezy"), 2600);
+      }
+      const food = this._words(s).food;
+      if (entry.action === "feed" && food && Math.random() < 0.5) {
+        s.bubble.textContent = `yum, ${food}!`; // its own food, in its own words
+        s.sayUntil = Date.now() + 2500;
       }
       if (entry.action === "praise") {
         s.bubble.textContent = "♥";
@@ -2529,7 +2569,7 @@ class HatchPetCard extends HTMLElement {
       ${row("stat_discipline", "discipline", bar(value("discipline")))}
       ${row(null, "weight", `<span>${weightLabel(value("weight"))}</span>`)}
       ${row("stat_care_miss", "misses", `<span>${value("care_misses") ?? "–"}</span>`)}
-      ${row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0} ignored</span>`)}
+      ${row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0}</span>`)}
       ${row(null, traits.length > cap ? "traits" : `traits ${traits.length}/${cap}`, `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
       ${bestCatch ? row(null, "best catch", `<span>${bestCatch}/${CATCH.rounds}</span>`) : ""}
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
@@ -2537,7 +2577,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${row(null, "notify me", `<span><button class="bell" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
-      ${bond ? row(null, "my day", `<span><button class="bell myday" aria-label="let the pet notice my day" aria-pressed="${!!this._myDay}">${this._myDay ? "on" : "off"}</button></span>`) : ""}
+      ${bond ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!this._myDay}">${this._myDay ? "on" : "off"}</button></span>`) : ""}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>
@@ -3173,15 +3213,9 @@ class HatchPetCard extends HTMLElement {
     s.sayUntil = Date.now() + 3500;
   }
 
-  // Thanks to whoever gave the most care in the recent log (first names only).
-  _thanks(s) {
-    const counts = {};
-    for (const e of this._state(s, "sensor.last_care")?.attributes.log || []) {
-      const name = e.by?.split(" ")[0];
-      if (name) counts[name] = (counts[name] || 0) + 1;
-    }
-    const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
-    return best ? `thank you for taking care of me, ${best} ♥` : "thank you for taking care of me ♥";
+  // Thanks to everyone: never ranking who did the most.
+  _thanks() {
+    return "thank you all for taking care of me ♥";
   }
 
   // The season's flyer: one, or a flock in a V, from one side.
