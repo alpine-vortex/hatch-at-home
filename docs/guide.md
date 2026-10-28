@@ -206,8 +206,8 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   it ("thank you all for taking care of me ♥"). All cosmetic.
 - Tap the screen for the status page: hearts and meters, weight, care misses and
   ignored whines, traits (n/4) and the one it's learning next, upbringing,
-  personality (from teen), the next egg, the notify-me and sounds switches, recent care, and a link to the journal. Tap
-  again to go back.
+  personality (from teen), the next egg, the notify-me and sounds switches, recent
+  care, and a link to the journal. Tap again to go back.
 - Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
   and phones give a tiny vibration. Then the real reaction follows (a food bowl, a
   sparkle, or a refusal like "I'm full!"). If HA rejects the press, the button shakes

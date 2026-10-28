@@ -970,6 +970,31 @@ def test_a_personality_is_settled_on_becoming_a_teen():
     assert pet.personality == kept
 
 
+def test_an_adult_without_a_personality_settles_one_on_growing_up():
+    adult = dict(R.STAGE_STARTS)["adult"]
+    start = at(9)
+    pet = hatched(start, age_hours=adult - 0.1)
+    assert pet.personality is None  # built after load, so no backfill
+    events = run(pet, start + 10 * MIN)
+    grown = [e for e in events if e["type"] == "stage_changed"]
+    assert len(grown) == 1 and grown[0]["stage"] == "adult"
+    assert grown[0]["personality"] == pet.personality in model.PERSONALITIES
+    assert grown[0]["upbringing"] == pet.upbringing
+
+
+def test_damaged_trait_levels_are_dropped_on_load():
+    pet = hatched(at(9), age_hours=TEEN + 1)
+    pet.traits = ["homebody", "fireside", "player"]
+    data = pet.to_dict()
+    del data["personality"]
+    data["trait_levels"] = {"homebody": "2", "fireside": None, "player": 3, "x": 9}
+    loaded = model.PetState.from_dict(data)
+    assert loaded.trait_levels == {"player": 3}
+    assert loaded.personality in model.PERSONALITIES
+    data["trait_levels"] = [1]
+    assert model.PetState.from_dict(data).trait_levels == {}
+
+
 def test_eggs_and_babies_have_no_personality():
     start = at(9)
     pet = model.PetState.new("Pip", start)
@@ -1127,6 +1152,7 @@ def test_lights_flipped_on_and_off_while_away_change_nothing():
             "Pip is all grown up!",
         ),
         ({"type": "stage_changed", "stage": "child"}, None),
+        ({"type": "stage_changed", "stage": "teen", "personality": "sweet"}, None),
     ],
 )
 def test_notification_wording(event, text):

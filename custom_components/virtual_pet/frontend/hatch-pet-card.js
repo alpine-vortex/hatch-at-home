@@ -3332,7 +3332,7 @@ class HatchPetCard extends HTMLElement {
       `${escape(p.name)} · ${escape((names[p.species] || "egg").toLowerCase())}` +
       `${p.age_days != null ? ` · ${Math.round(p.age_days)} d` : ""}` +
       `${p.upbringing ? ` · ${escape(p.upbringing)}` : ""}` +
-      `${p.personality ? ` · ${escape(p.personality.replaceAll("_", " "))}` : ""}` +
+      `${p.personality ? ` · ${escape(String(p.personality).replaceAll("_", " "))}` : ""}` +
       `${gamesPlayed(p.games) ? ` · ${gamesPlayed(p.games)} games` : ""}` +
       `${p.traits?.length ? `<br><span class="gt">${p.traits.map((t) =>
         traitLabel(t, p.levels?.[t], t === p.inherited)).join(" ")}</span>` : ""}</div>`);

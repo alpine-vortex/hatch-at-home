@@ -57,7 +57,9 @@ released). Personality starts the 0.35.0 series. A teen settles one of eight typ
 nudged by trait leanings, never care); saved on `PetState.personality`, backfilled
 at load for teens and adults, kept in the journal record; `sensor.life_stage`
 attribute `personality` (unrecorded) and diagnostics; the card's "personality"
-status row and the journal line. No lines yet (P2a). `scripts/test` 455,
+status row and the journal line. No lines yet (P2a). Release note (owner, plan Q10):
+"your teen and adult pets now have a personality; how it talks comes in the next
+update". `scripts/test` 455,
 `scripts/card-check` 116. Next: the tier-2 audit of the built work, then the PR.
 Card checks stub `el._state` for the life stage (kept until the screenshot) to show
 a teen, an adult and journal records; see "4c" in `scripts/card-check.js`.

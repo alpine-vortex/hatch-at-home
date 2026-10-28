@@ -195,6 +195,12 @@ class PetState:
             for t, f in (kwargs.get("temperament") or {}).items()
             if t in TRAITS and isinstance(f, int | float)
         }
+        levels = kwargs.get("trait_levels")
+        kwargs["trait_levels"] = {
+            t: n
+            for t, n in (levels if isinstance(levels, dict) else {}).items()
+            if isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= 3
+        }
         if not isinstance(kwargs.get("egg_choice"), str):
             kwargs["egg_choice"] = None
         if not isinstance(kwargs.get("early_morning_on"), str):
@@ -991,7 +997,7 @@ def personality_for(state: PetState) -> str:
     for trait in state.traits:
         for kind in PERSONALITY_LEANINGS.get(trait, ()):
             weights[kind] += trait_level(state, trait)
-    rng = random.Random(f"personality-{state.born}")
+    rng = random.Random(f"personality-{float(state.born)}")
     return rng.choices(PERSONALITIES, weights=[weights[k] for k in PERSONALITIES])[0]
 
 
