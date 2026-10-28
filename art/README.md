@@ -150,3 +150,11 @@ adults stay on screen; otter 1.05, squirrel none), which the card applies with t
 fixed. Sizes still vary a little between moods (asleep and sick come out bigger), as
 the teens' do. Prompts are in `art/<species>/adult/`, Sol's adult scripts in
 `art/adults/`; the raw sheets aren't committed.
+
+## Frame review: 2026-10-28
+
+A review of every live frame found two broken adult sets (axolotl, luna moth: outline
+lost in the cut) and frames drawn at the wrong size for their stage. The axolotl and
+moth outlines were closed with `art/adults/outline_fix.py`, and the oversized gecko sick
+and squirrel baby cozy/sleepy frames were shrunk with `scripts/art/rescale.py`. What
+needs new drawings is listed in `art/redraw-2026-10-28.md`.
