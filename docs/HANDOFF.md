@@ -32,7 +32,7 @@ details before committing it.
 **The driving role for this project passed to the owner's "Hatch First Mate"
 session** (owner's request, 2026-10-28). Released: 0.33.1 (PR #29: the "birthday on
 my phone" switch, off by default; the Art session's redrawn party hat, PR #28; a
-sturdier idle-life card check). Pre-released: **0.34.0b1** (PR #31, the photo).
+sturdier idle-life card check). Pre-released: **0.34.0b1** (PR #31, the photo) and **0.34.0b2** (PR #34, baby talk).
 
 **Phase 4 of the voices plan, the photo (A7), is merged and pre-released as
 0.34.0b1** (PR #31, 2026-10-28; from `docs/plan-2026-10-28-phase4-photo.md` draft 2,
@@ -42,16 +42,12 @@ best friend's journal, tap "save" on a photo, and say what happened. Then b2 if
 saving needs changes (the Android "you can save it from a computer" line waits on
 this answer), and release 0.34.0. `scripts/test` 409, `scripts/card-check` 94 at 0.34.0b1.
 
-**Phase 5 of the voices plan, baby talk (A8), is built as 0.34.0b2** (crew branch
-`crew/hatch-at-home-s2416-phase-5-of-the-voices-plan-bab`, 2026-10-28; from
-`docs/plan-2026-10-28-phase5-baby-talk.md` draft 2 and the owner's approved lines;
-not yet audited, PR'd or released). It rides in the 0.34.0 beta series because the
-0.34.0b1 phone test is still owed. Two commits: the switch and the card's lines,
-then `reason_key` on `sensor.mood` (revertable alone). `scripts/test` 444,
-`scripts/card-check` 111. Next: the tier-2 audit of the built work, then the PR.
-
-**0.34.0b2 is pre-released** (baby talk). **Still owed: the owner's phone test of
-0.34.0b1/b2** (the photo's "save" on the iPhone and Android companion apps, above).
+**Phase 5 of the voices plan, baby talk (A8), is merged (PR #34) and pre-released
+as 0.34.0b2** (from `docs/plan-2026-10-28-phase5-baby-talk.md` draft 2 and the
+owner's approved lines). It rides in the 0.34.0 beta series because the 0.34.0b1
+phone test is still owed. `scripts/test` 444, `scripts/card-check` 111 at 0.34.0b2.
+**Still owed: the owner's phone test of 0.34.0b1/b2** (the photo's "save" on the
+iPhone and Android companion apps, above), then release 0.34.0.
 
 **Personality P1, the type, is built as 0.35.0b1** (crew branch
 `crew/hatch-at-home-s2419-personality-p1-the-type-saved`, 2026-10-28; from
