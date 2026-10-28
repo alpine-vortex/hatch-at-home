@@ -1,8 +1,8 @@
 """Draw the README's box-art images into docs/readme/.
 
-Inputs: the card's own sprites, UI icons and Tiny5 font, plus screenshots:
-  dev/readme-shots/   from `node scripts/readme/shots.js shoot` (one per world)
-  dev/card-check/     from `SCALE=2 scripts/card-check`
+Inputs: the card's own sprites, UI icons and Tiny5 font, plus the screenshots
+committed in docs/readme/src/. docs/readme/README.md is the style guide: palette,
+type, frames, each image's layout and how to retake the screenshots.
 Needs Pillow and fontTools (with brotli) to read the woff2 font.
 Run from the repo root: python3 scripts/readme/art.py
 """
@@ -19,9 +19,8 @@ ROOT = Path(__file__).resolve().parents[2]
 FRONT = ROOT / "custom_components/virtual_pet/frontend"
 SPRITES = FRONT / "sprites"
 UI = FRONT / "ui"
-SHOTS = ROOT / "dev/readme-shots"
-CHECK = ROOT / "dev/card-check"
 OUT = ROOT / "docs/readme"
+SRC = OUT / "src"
 
 PINK = (255, 111, 170)
 PINK_LT = (255, 150, 196)
@@ -34,13 +33,15 @@ CREAM = (255, 246, 224)
 WHITE = (255, 255, 255)
 RED = (232, 52, 60)
 
+# (title, world key, roster in card order). The key names the UI emblem
+# (ui/emblem_<key>.png) and the screenshot (src/world-<key>.png).
 WORLDS = [
-    ("Woodland", "woodland", "0-Checkpip", ["bird", "squirrel", "deer"]),
-    ("Hearth", "hearth", "1-Checkmew", ["kitten", "bunny"]),
-    ("Terrarium", "terrarium", "2-Pebble", ["gecko", "tarantula"]),
-    ("Tidepool", "tidepool", "3-Ripple", ["otter", "octopus"]),
-    ("Pond", "pond", "4-Lily", ["treefrog", "axolotl"]),
-    ("Night Sky", "nightsky", "5-Luna", ["bat", "lunamoth"]),
+    ("Woodland", "woodland", ["bird", "squirrel", "deer"]),
+    ("Hearth", "hearth", ["kitten", "bunny"]),
+    ("Terrarium", "terrarium", ["gecko", "tarantula"]),
+    ("Tidepool", "tidepool", ["otter", "octopus"]),
+    ("Pond", "pond", ["treefrog", "axolotl"]),
+    ("Night Sky", "nightsky", ["bat", "lunamoth"]),
 ]
 NAMES = {
     "bird": "Bird",
@@ -228,12 +229,12 @@ def ribbon(img, cx, y, text, px, fill=PURPLE, ink=WHITE, pad=28):
 
 
 def device(name: str) -> Image.Image:
-    return Image.open(SHOTS / f"{name}.png").convert("RGBA")
+    return Image.open(SRC / f"world-{name}.png").convert("RGBA")
 
 
 def screen(name: str) -> Image.Image:
     """The LCD and its bezel, cut from a 2x card-check shot of the Woodland egg."""
-    return Image.open(CHECK / f"{name}.png").convert("RGBA").crop((38, 238, 622, 688))
+    return Image.open(SRC / f"{name}.png").convert("RGBA").crop((38, 238, 622, 688))
 
 
 def scale_h(im, h):
@@ -259,8 +260,8 @@ def hero():
     sparkles(img, 26, 1, (30, 30, w - 30, 560))
     # Two devices, tilted like toys in a blister pack.
     for name, angle, xy in [
-        ("1-Checkmew", 7, (1060, 70)),
-        ("0-Checkpip", -6, (1190, 150)),
+        ("hearth", 7, (1060, 70)),
+        ("woodland", -6, (1190, 150)),
     ]:
         dev = scale_h(device(name), 560)
         card = Image.new("RGBA", (dev.width + 36, dev.height + 36), (0, 0, 0, 0))
@@ -279,7 +280,7 @@ def hero():
     d = ImageDraw.Draw(img)
     d.rectangle([0, 760, w, h], fill=PURPLE)
     d.rectangle([0, 752, w, 760], fill=YELLOW)
-    cast = [s for _, _, _, roster in WORLDS for s in roster]
+    cast = [s for _, _, roster in WORLDS for s in roster]
     step = (w - 400) / (len(cast) - 1)
     for i, s in enumerate(cast):
         sp = sprite(s, "child_content_1", 136)
@@ -314,8 +315,8 @@ def worlds():
         anchor="ma",
     )
     col = w / 6
-    for i, (title, _key, shot, roster) in enumerate(WORLDS):
-        dev = scale_w(device(shot), 214)
+    for i, (title, key, roster) in enumerate(WORLDS):
+        dev = scale_w(device(key), 214)
         cx = round(col * i + col / 2)
         top = 170
         drop(img, dev, (cx - dev.width // 2, top), radius=18, border=6)
@@ -383,7 +384,7 @@ def collect():
         anchor="ma",
     )
     col = w / 6
-    for i, (title, key, _, roster) in enumerate(WORLDS):
+    for i, (title, key, roster) in enumerate(WORLDS):
         cx = round(col * i + col / 2)
         d = ImageDraw.Draw(img)
         d.rounded_rectangle([cx - 120 + 8, 158, cx + 120 + 8, h - 22], 26, fill=PURPLE)

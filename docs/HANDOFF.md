@@ -9,7 +9,8 @@ Halloween costume fixes); 0.28.0 brought weather talk (#10) and Halloween (#11),
 the Halloween morning notification, 0.28.2 the redrawn witch. **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read `docs/guide.md` first (the full user guide; the README is box-back
-marketing with pictures from `scripts/readme/`), then `docs/design-worlds.md`, `art/README.md`,
+marketing; its art, palette, frames and how to redraw them are in
+`docs/readme/README.md`), then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and
 `docs/assist-scoping.md`. The owner's original brief is not in the repo; its key rules
 are restated across the README and the design doc.
