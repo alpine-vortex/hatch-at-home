@@ -30,6 +30,7 @@
   "murk": "treefrog/murk",
   "backgrounds": { "day": "treefrog/bg_day", "night": "treefrog/bg_night", "rain": "treefrog/bg_rain", "dim": "treefrog/bg_night" },
   "words": { "food": "bloodworms", "home": "pond" },
+  "voice": { "sound": "blep", "pitch": 460, "pace": 28, "likes": ["bloodworms", "earthworms", "shrimp"] },
   "reactions": { "play": "float", "won": "gill_flutter", "praise": "smile", "snack": "smile" },
   "head": { "baby": [170, 144], "child": [184, 124], "teen": [192, 104], "adult": [198, 132] },
   "hat": { "baby": [148, 148], "child": [160, 132], "teen": [166, 112], "adult": [176, 140] }

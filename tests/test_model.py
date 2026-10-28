@@ -1530,3 +1530,58 @@ def test_last_nights_dream_pick_comes_true():
         "day": "2026-10-02",
     }
     assert pet.dream_picks == [] and pet.dream_seeds == []
+
+
+# --- Its favourite snack ------------------------------------------------------
+
+
+class Luck(random.Random):
+    """Chance always fires."""
+
+    def random(self) -> float:
+        return 0.0
+
+
+def test_it_picks_a_favourite_snack_once_from_its_likes():
+    egg = model.PetState.new("Pip", at(12))
+    assert not model.pick_favourite(egg, ["hazelnuts"], random.Random(1))  # an egg
+    pet = hatched(at(12))
+    assert not model.pick_favourite(pet, [], random.Random(1))  # nothing it likes
+    assert pet.favourites == {}
+    assert model.pick_favourite(pet, ["hazelnuts", "fir cones"], random.Random(1))
+    first = pet.favourites["snack"]
+    assert first in ("hazelnuts", "fir cones")
+    assert not model.pick_favourite(pet, ["mushrooms"], random.Random(2))  # for good
+    assert pet.favourites == {"snack": first}
+
+
+def test_its_favourite_snack_is_said_at_most_once_a_day():
+    pet = hatched(at(12))
+    assert model.favourite_snack(pet, "2026-10-01", Luck()) == []  # none picked yet
+    pet.favourites = {"snack": "hazelnuts"}
+    assert model.favourite_snack(pet, "2026-10-01", NoLuck()) == []  # not this time
+    assert pet.favourite_said is None
+    assert model.favourite_snack(pet, "2026-10-01", Luck()) == [
+        {"type": "favourite_snack", "food": "hazelnuts"}
+    ]
+    assert model.favourite_snack(pet, "2026-10-01", Luck()) == []
+    assert model.favourite_snack(pet, "2026-10-02", Luck(), own_food=True) == []
+    assert len(model.favourite_snack(pet, "2026-10-02", Luck())) == 1
+
+
+def test_a_new_egg_has_no_favourites_and_old_saves_load():
+    pet = hatched(at(12), age_hours=ADULT + R.LAY_EGG_AFTER_ADULT_HOURS + 5)
+    pet.species, pet.favourites = "squirrel", {"snack": "hazelnuts"}
+    pet.favourite_said = "2026-10-01"
+    egg, _ = model.lay_egg(pet, at(12), random.Random(1))
+    assert egg.favourites == {} and egg.favourite_said is None
+    data = pet.to_dict()
+    assert model.PetState.from_dict(data).favourites == {"snack": "hazelnuts"}
+    del data["favourites"], data["favourite_said"]
+    old = model.PetState.from_dict(data)
+    assert old.favourites == {} and old.favourite_said is None
+    data["favourites"], data["favourite_said"] = {"snack": 3, "x": "y"}, 5
+    damaged = model.PetState.from_dict(data)
+    assert damaged.favourites == {"x": "y"} and damaged.favourite_said is None
+    data["favourites"] = ["hazelnuts"]  # not even a dict
+    assert model.PetState.from_dict(data).favourites == {}

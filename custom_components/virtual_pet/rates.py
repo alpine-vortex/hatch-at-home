@@ -270,6 +270,7 @@ WISH_FOR_CHANCE = 0.35  # a person's wish is aimed at a close friend
 DREAM_SEEDS_KEPT = 12  # the day's moments a dream can be about
 DREAM_SEED_HOURS = 30.0  # older seeds are forgotten
 DREAM_PLAIN_CHANCE = 0.5  # with nothing to dream about: a plain dream, or none
+FAVOURITE_SNACK_CHANCE = 0.4  # a snack is its favourite (said at most once a day)
 
 # A bond with each person (HA user). Points never go down. A typical day (a
 # visit, a few care actions, a game) earns about 8.

@@ -154,6 +154,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "wish",
             "dream",
             "bonds",
+            "favourites",
         }
     )
 
@@ -226,6 +227,8 @@ class LifeStageSensor(PetEntity, SensorEntity):
                 }
                 for user, b in self.pet.bonds.items()
             },
+            # Its own favourites ({"snack": ...}): the pet's, not anyone's secret.
+            "favourites": dict(self.pet.favourites),
             "hatches_at": self._hatches_at(),
             "next_world": self.coordinator.next_world_name,
             # The creature picked for the next hatch, by name; None: a surprise.

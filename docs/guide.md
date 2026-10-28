@@ -497,6 +497,17 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   for little chirps when the pet calls, hatches, learns a trait or wins a game. It
   only changes this browser, and the pet stays quiet while it sleeps and from 21:00
   to 08:00.
+- **Its voice.** Every creature has its own sound: the bird says "tweet", the
+  squirrel "chirr", the octopus "bloop". Now and then a line opens with it ("tweet!
+  hi, Sam!"), never more than once every two minutes, and never on a sad or sick
+  line. Lines type out at the creature's own speed (not with reduced motion turned
+  on). Tap "babble" on the status screen for its voice as it talks, a tiny sound
+  per letter at its own pitch: off by default, only for this browser, and quiet at
+  the same times as the chirps. Screen readers hear the words without the sound.
+- **Its favourite snack.** At hatching each pet picks a favourite from its
+  creature's foods (the squirrel likes hazelnuts, fir cones and mushrooms), and now
+  and then a snack turns out to be it: "hazelnuts, my favourite!!", at most once a
+  day. It's on the life stage sensor as `favourites`.
 - **A welcome for every new pet.** Adding a pet through the integration tells the
   whole house: "Pip, a new virtual pet, just moved in! Say hi ♥" It goes to every phone with
   the Home Assistant app, whether or not anyone tapped "notify me", and to the
@@ -590,7 +601,7 @@ names are included.
 `favourite` when the level brings one), `virtual_pet_bond_favourite` (with `user` and
 `game`), `virtual_pet_friend_home` (with `user`: a close friend came home),
 `virtual_pet_bond_record` (with `user`, `game`, `wins`: a new personal best),
-`virtual_pet_tucked_in` (with `user`). What it notices about someone's day, where
+`virtual_pet_tucked_in` (with `user`), `virtual_pet_favourite_snack` (with `food`). What it notices about someone's day, where
 they've been, their alarm and their answers are never an event: they go only to
 that person, in `virtual_pet.visit`'s response, and answers come in through the
 websocket command `virtual_pet/answer`, which (unlike a service call) puts nothing

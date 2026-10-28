@@ -1,11 +1,12 @@
-# Handoff (2026-10-28, sixth session)
+# Handoff (2026-10-28, sixth session, after phase 2)
 
 Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's branch
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
-release **0.30.0** (2026-10-28: Thanksgiving, #18, and the squirrel's paws-up poses
-no longer having six legs); 0.29.0 brought the daily wish, dreams, "while you were out"
+release **0.31.0** (2026-10-28: the bond with each person, bond connections and
+phase 1 of the voices plan, #25); 0.30.0 brought Thanksgiving (#18) and the squirrel's paws-up poses
+no longer having six legs; 0.29.0 brought the daily wish, dreams, "while you were out"
 and two Halloween costume fixes; 0.28.0 brought weather talk (#10) and Halloween (#11), 0.28.1
 the Halloween morning notification, 0.28.2 the redrawn witch. **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
@@ -24,38 +25,34 @@ house check of 2026-10-27, BirdNET notes, the file-share host and Sol's session 
 History was rewritten once to remove them. Scan anything from Sol or the owner for such
 details before committing it.
 
-## Start here (sixth session, 2026-10-28, before a context clear)
+## Start here (sixth session, 2026-10-28)
 
-**In flight: PR #25** (branch `ccr-a828d8c1-uv2so3` → `main`, version 0.31.0): the
-bond with each person, bond connections (twelve features), and phase 1 of the voices
-plan (every line reviewed). This session is subscribed to it; CI was running when
-the context was cleared. The owner has said (2026-10-28): **open, push and merge the
-PR when ready, and start on the next work**. So:
+0.31.0 is released (PR #25 merged). **In flight: PR for phase 2 of the voices plan**
+(branch `ccr-a828d8c1-uv2so3` -> `main`, version 0.32.0): each creature's sound,
+typing, babble and the favourite snack, built from
+`docs/plan-2026-10-28-phase2-voices.md` (planned, audited, revised, built, audited,
+fixed; its "Built" section). The owner has said (2026-10-28): open, push and merge
+PRs when ready, and start on the next work. So:
 
-1. When CI is green (tests, hassfest, hacs, card), merge #25 (a merge commit), then
-   release 0.31.0 (Release workflow on `main`, see "How to"). If CI is red, fix it on
-   the branch first. Unsubscribe from #25 once merged.
-2. Start **phase 2 of `docs/plan-2026-10-28-voices-and-lines.md`** on the designated
-   branch restarted from `main` (`git fetch origin main && git checkout -B
-   ccr-a828d8c1-uv2so3 origin/main`, then a force-with-lease push: it only held merged
-   history). Phase 2: A1 (each creature's sound, `_speak`, once per burst), A2
-   (typing and Animalese babble, with the second audit's row 1 and 7 fixes), A4 (the
-   favourite snack). Read the plan's draft-3 section "The second audit" first: it
-   overrides part A where they differ.
+1. When CI is green, merge it (a merge commit), then release 0.32.0 (Release
+   workflow on `main`, see "How to").
+2. Then **phase 3 of `docs/plan-2026-10-28-voices-and-lines.md`** (A5 catchphrase, A6
+   birthdays, the one-time question fix) on the designated branch restarted from
+   `main`. Read the plan's "The second audit" first: it overrides part A.
 3. The way the owner wants work done: **a full plan, an adversarial audit by a fresh
    subagent, revise, then build**; after building, **another audit of the work**, fix,
-   test (`scripts/test`), check the card (`scripts/card-check`, now 68 checks), send
+   test (`scripts/test`), check the card (`scripts/card-check`, now 80 checks), send
    screenshots, then PR. Each phase is its own PR.
-4. Then phases 3 (catchphrase, birthdays), 4 (photo), 5 (baby talk), 6 (moths, its
-   own plan and audit). After those: personality types (a new plan). Gifts and
-   neighbours talking are noted in `docs/plan-2026-10-28-daily-checkins.md`.
+4. Then phases 4 (photo), 5 (baby talk), 6 (moths, its own plan and audit). After
+   those: personality types (a new plan). Gifts and neighbours talking are noted in
+   `docs/plan-2026-10-28-daily-checkins.md`.
 
 The plans to read: `docs/plan-2026-10-28-daily-checkins.md` (item 3 and its passes),
 `docs/plan-2026-10-28-bond-connections.md` (built; its audits), and
-`docs/plan-2026-10-28-voices-and-lines.md` (draft 3, phase 1 built). The owner's
-taste so far: Animal Crossing is the touchstone; flavour, never gameplay, for bonds;
-positive or quiet, never guilt, nagging or ranking people; private things only to
-their person.
+`docs/plan-2026-10-28-voices-and-lines.md` (draft 3; phases 1 and 2 built). The
+owner's taste so far: Animal Crossing is the touchstone; flavour, never gameplay, for
+bonds; positive or quiet, never guilt, nagging or ranking people; private things only
+to their person.
 
 **Dev pets drift.** After many `card-check` runs the dev pets in `dev/config` get
 sick (weight 0, recent misses), and checks like idle life fail. Until the dev utility
@@ -240,6 +237,20 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   `thanksgiving-art`, 19 of 19; cut from Sol's drawings, the geese placed by hand).
   Checked on the card: every costume on 13 creatures × 4 stages, the turkey and
   geese at night.
+- **Voices** (phase 2 of the voices plan; 0.32.0, PR open): `species.json` `voice`
+  (`sound`, `pitch`, `pace`, `likes`). Card: `_write` is the one direct bubble write
+  (with `ms` it sets the hold; without, a game keeps its own); `_speak` may open a
+  line with the sound (`_soundFor`: not within `VOICE_QUIET_MS` of the last, not on
+  `OPENERS`, by the first sentence's mark, not for an egg, ≤ 60 characters), types it
+  out (`untyped` span hidden, so no layout shift; `data-typing` while typing;
+  finished by `_stopTyping` on status, slide change, offscreen, hidden tab), and
+  babbles it with the per-browser "babble" switch (`hatch-babble`; only on a running
+  AudioContext, unlocked by a tap's end). `s.plain` holds the text `_speak` already
+  announced, so the live-region observer skips only that. Sad, sick, refusal, game,
+  idle and sulky weather lines stay plain. Server: `favourites` / `favourite_said`
+  on the pet, picked after every advance from `coordinator.likes`; the
+  `favourite_snack` moment at most once a day (`FAVOURITE_SNACK_CHANCE`), not at a
+  stage with its own food. card-check's `hush()` keeps legacy checks unvoiced.
 - **Holiday mornings** (0.28.1): `notify.HOLIDAYS` maps a date to a holiday and
   `HOLIDAY_MORNINGS` its phone text; on that date the pet's first morning moment
   (`good_morning`, or waking at wake time) fires a `holiday` event, which notifies the
@@ -296,9 +307,9 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
 - **Adults** exist for every creature (the last four arrived in 0.21.0). Long adults
   are drawn back up with `species.json` `"scale": {"adult": …}` (1.05–1.2; the bat
   needs none).
-- **Tests:** 368, run with `scripts/test` (ruff, format check, pytest).
+- **Tests:** 393, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
-  `scripts/card-check` (Playwright, 62 checks) drives the card against
+  `scripts/card-check` (Playwright, 80 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
 - **CI:** `.github/workflows/validate.yml` (HACS action, hassfest, tests) is green.
   License MIT; Tiny5 keeps its OFL.

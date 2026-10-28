@@ -108,7 +108,8 @@ async function main() {
   }
   await ensurePets(access);
 
-  const browser = await chromium.launch();
+  // Audio may start without a tap here, so the babble checks can hear it play.
+  const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
   const page = await browser.newPage({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1) });
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -140,9 +141,19 @@ async function main() {
     el.setConfig({ ...el._config, seasonal: false }); el.hass = el._hass;
   });
   await seasonsOff();
+  // Pets speak with their sound now and then; checks of exact lines keep it
+  // off (as if one was just said), and the voice checks turn it back on.
+  const hush = () => page.locator("hatch-pet-card").evaluate((el) => {
+    el._slides.forEach((s) => { s.voicedAt = Date.now() + 1e9; });
+  });
+  await hush();
   const cur = () => page.locator("hatch-pet-card .slide:not(.away-slide)");
   const shot = (name) => cur().locator(".device").screenshot({ path: path.join(OUT, `${name}.png`) });
-  const bubble = () => cur().locator(".bubble").innerText();
+  // The bubble's words once typed out (a typed line is laid out whole first).
+  const bubble = async () => {
+    await cur().locator(".bubble:not([data-typing])").waitFor({ timeout: 10000 }).catch(() => {});
+    return cur().locator(".bubble").innerText();
+  };
   const button = (i) => cur().locator(".toy").nth(i);
   const evaluate = (fn, arg) => page.evaluate(fn, arg);
   // The card keeps its entity map private; rebuild it for the pet on show.
@@ -200,6 +211,27 @@ async function main() {
     await evaluate(() => localStorage.getItem("hatch-sounds")) === "on");
   await cur().locator(".bell.sound").click(); // off again for the rest of the run
   await page.waitForTimeout(300);
+  const babbleBefore = await cur().locator(".bell.babble").getAttribute("aria-pressed");
+  await cur().locator(".bell.babble").click();
+  await page.waitForTimeout(300);
+  check("babble starts off and turns on here",
+    babbleBefore === "false" && await cur().locator(".bell.babble").getAttribute("aria-pressed") === "true" &&
+    await evaluate(() => localStorage.getItem("hatch-babble")) === "on");
+  await cur().locator(".bell.babble").click(); // off again
+  await page.waitForTimeout(300);
+  // "notify me" has its own switch; a shared screen has none, and babble is still babble.
+  const bells = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const count = () => [".bell.notify", ".bell.babble"].map((q) => s.status.querySelectorAll(q).length).join("/");
+    const personal = count();
+    localStorage.setItem("hatch-shared-screen", "on");
+    el._renderStatus(s, []);
+    const shared = count();
+    localStorage.setItem("hatch-shared-screen", "off");
+    el._renderStatus(s, []);
+    return { personal, shared };
+  });
+  check("each switch is found by its own name", bells.personal === "1/1" && bells.shared === "0/1", JSON.stringify(bells));
   await cur().locator(".jlink").click();
   await page.waitForTimeout(1200);
   check("journal opens", /journal/.test(await cur().locator(".status").innerText()));
@@ -242,6 +274,7 @@ async function main() {
   await signedIn();
   await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
   await seasonsOff(); // the reload brought the card back with its own config
+  await hush(); // new slides: no sound unless a check asks for one
   for (let i = 0; i < slides; i++) {
     if ((await page.locator("hatch-pet-card .title").innerText()).trim() === petName) break;
     await page.locator("hatch-pet-card .nav.next").click();
@@ -409,6 +442,104 @@ async function main() {
     return s.bubble.textContent;
   });
   check("long titles are cut to fit the bubble", cut.length <= 48 && cut.includes("…"), `${cut} (${cut.length})`);
+
+  // Voices: now and then a line opens with the creature's sound (hidden from
+  // screen readers), once per burst; typed out without the bubble growing.
+  const voices = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const out = { sound: s.species.voice.sound };
+    s.queue = [];
+    s.voicedAt = 0;
+    s.live.textContent = "";
+    out.announced = 0;
+    const counter = new MutationObserver(() => { out.announced++; });
+    counter.observe(s.live, { childList: true, characterData: true, subtree: true });
+    el._speak(s, "hi, Dev!", 3000);
+    out.typing = !!s.bubble.dataset.typing;
+    const w0 = s.bubble.getBoundingClientRect().width;
+    out.hidden = s.bubble.querySelector(".snd")?.getAttribute("aria-hidden");
+    await wait(60);
+    out.steady = Math.abs(s.bubble.getBoundingClientRect().width - w0) < 0.5;
+    for (let i = 0; i < 100 && s.bubble.dataset.typing; i++) await wait(50);
+    out.done = !s.bubble.dataset.typing;
+    out.voiced = s.bubble.textContent;
+    out.live = s.live.textContent;
+    counter.disconnect();
+    // Babble (on for this check) never while asleep, in a game or behind the status.
+    localStorage.setItem("hatch-babble", "on");
+    el._card.dispatchEvent(new Event("touchend")); // a tap unlocks audio
+    await wait(300);
+    const hour = new Date().getHours();
+    out.late = hour >= 21 || hour < 8; // quiet hours: no babble at all
+    const babbles = (setup) => {
+      const saved = { asleep: s.asleep, game: s.game, lightsOut: s.lightsOut };
+      setup();
+      s.voicedAt = 0;
+      el._speak(s, "hello hello", 300);
+      const on = !!s.babbling;
+      el._stopTyping(s);
+      Object.assign(s, saved);
+      if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      return on;
+    };
+    out.babbleAwake = babbles(() => { s.asleep = false; s.lightsOut = false; s.game = null; });
+    out.babbleAsleep = babbles(() => { s.asleep = true; });
+    out.babbleGame = babbles(() => { s.game = { kind: "left_right" }; });
+    out.babbleStatus = babbles(() => el._toggleStatus(s));
+    localStorage.setItem("hatch-babble", "off");
+    // A burst: three queued lines, said one after another; only the first voiced.
+    s.voicedAt = 0;
+    out.burst = [];
+    for (const line of ["morning!", "I dreamed I could fly!", "how was your day?"]) el._queue(s, line, 300);
+    for (let i = 0; i < 3; i++) {
+      s.sayUntil = 0;
+      el._sayQueued(s);
+      out.burst.push(s.bubble.textContent);
+    }
+    // A sad line and one with its own opener stay plain.
+    s.voicedAt = 0;
+    el._moment(s, { type: "care_miss", at: new Date().toISOString() });
+    out.miss = s.bubble.textContent;
+    el._speak(s, "hmm... sleepy", 300);
+    out.opener = s.bubble.textContent;
+    // Opening the status screen says the line whole.
+    el._speak(s, "this line is long enough to still be typing", 300);
+    el._toggleStatus(s);
+    out.finished = !s.bubble.dataset.typing && !s.bubble.querySelector(".untyped")?.textContent;
+    el._toggleStatus(s);
+    // Its favourite snack (the server says so at most once a day).
+    s.queue = [];
+    el._moment(s, { type: "favourite_snack", food: "hazelnuts", at: new Date().toISOString() });
+    out.favourite = s.queue.map((q) => q.text);
+    s.queue = [];
+    s.sayUntil = 0;
+    s.voicedAt = Date.now() + 1e9; // hushed again for the checks after
+    return out;
+  });
+  const snd = voices.sound;
+  check("a line can open with the creature's sound, hidden from screen readers",
+    voices.voiced === `${snd}! hi, Dev!` && voices.hidden === "true" && voices.live === "hi, Dev!", JSON.stringify(voices));
+  check("a line types out without the bubble growing", voices.typing && voices.steady && voices.done, JSON.stringify(voices));
+  check("screen readers hear a spoken line once", voices.announced === 1, `${voices.announced} announcements`);
+  check("babble plays, but never while asleep, in a game or behind the status",
+    (voices.late ? !voices.babbleAwake : voices.babbleAwake) &&
+    !voices.babbleAsleep && !voices.babbleGame && !voices.babbleStatus, JSON.stringify(voices));
+  check("a burst of lines carries the sound once",
+    voices.burst.join("|") === `${snd}! morning!|I dreamed I could fly!|how was your day?`, voices.burst.join("|"));
+  check("sad lines and lines with their own opener stay plain",
+    voices.miss === "...oh, there you are ♥" && voices.opener === "hmm... sleepy", `${voices.miss} | ${voices.opener}`);
+  check("opening the status screen finishes the line", voices.finished);
+  check("its favourite snack is said", voices.favourite.join() === "hazelnuts, my favourite!!", voices.favourite.join());
+  // Reduced motion: no typing.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const still = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    el._speak(s, "no typing here", 300);
+    return { typing: !!s.bubble.dataset.typing, said: s.bubble.textContent };
+  });
+  await page.emulateMedia({ reducedMotion: null });
+  check("reduced motion: lines show whole", !still.typing && still.said === "no typing here", JSON.stringify(still));
   // A close friend coming home: "you're home!!" to them, by name to anyone else.
   await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
   await evaluate(() => document.querySelector("home-assistant").hass.callApi("POST", "states/person.sam_check",
@@ -581,7 +712,16 @@ async function main() {
       idle = `says "${said}"`;
     }
   }
-  check("idle life happens by itself", !!idle, idle);
+  // If not: why the pet wasn't free for it.
+  const busy = idle ? "" : await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const left = (at) => Math.round(((at || 0) - Date.now()) / 1000);
+    return JSON.stringify({ mood: s.moodState, asleep: s.asleep, calling: s.calling, game: !!s.game,
+      say: left(s.sayUntil), pose: left(s.poseUntil), prop: left(s.propUntil), flair: left(s.flairUntil),
+      moving: left(s.movingUntil), next: left(s.nextIdle), status: s.screen.classList.contains("show-status"),
+      queue: (s.queue || []).length, bubble: s.bubble.textContent });
+  });
+  check("idle life happens by itself", !!idle, idle || busy);
   await shot("04b-idle");
   await button(2).click();
   await page.waitForTimeout(600);
@@ -591,11 +731,18 @@ async function main() {
   await cur().locator('.gpick [data-game="left_right"]').click();
   await page.waitForTimeout(400);
   let rounds = 0;
+  const gameSaid = [];
   for (let r = 0; r < 5 && !(await cur().locator(".game").isHidden()); r++) {
+    gameSaid.push(await cur().locator(".bubble").textContent());
     await cur().locator(r % 2 ? ".gr" : ".gl").click();
     await page.waitForTimeout(1400);
     rounds++;
   }
+  const moodLine = await evaluate((id) => document.querySelector("home-assistant").hass.states[id]?.attributes.reason || "",
+    pet["sensor.mood"]);
+  check("a game keeps the bubble for its own lines",
+    gameSaid.length === 5 && gameSaid.every((x) => x && x !== moodLine && /left|right|yes|nope|again/.test(x)),
+    gameSaid.join(" | "));
   await page.waitForTimeout(800);
   const log = await evaluate((id) => document.querySelector("home-assistant").hass.states[id].attributes.log, pet["sensor.last_care"]);
   check("the game plays five rounds", rounds === 5 && log?.[0]?.action === "game",
@@ -850,6 +997,9 @@ async function main() {
     s.screen.querySelector(".costume")?.remove();
     s.sayUntil = 0; s.flairUntil = 0;
     s.nextFlyer = Date.now() + 600000; // only the flock sent here
+    // A flock the tick already sent has its wing geese still to come (450 ms after
+    // the leader): let them arrive before clearing the sky.
+    await new Promise((r) => setTimeout(r, 600));
     s.seasonBox.querySelectorAll(".sgoose").forEach((g) => g.remove());
     el._seasonVisitor(s, season);
     el._seasonFlyer(s, season);
@@ -905,6 +1055,7 @@ async function main() {
     localStorage.setItem(`hatch-seen-${device}`, String(Date.now() - 5 * 3600 * 1000));
     s.lookedFirst = false; s.queue = []; s.sayUntil = 0; s.flairUntil = 0;
     el._firstLook(s);
+    s.sayUntil = Date.now() + 60000; // the card's own tick mustn't say the first line before we do
   });
   const firstLook = [];
   for (const name of ["05-first-look", "05-dream", "05-wish"]) {
