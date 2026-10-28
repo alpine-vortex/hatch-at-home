@@ -75,6 +75,11 @@ senses. Rare ones are marked ★.
   sprites. Finds at the deco size (32 × 32 art pixels); visitors as two-frame
   sprites. I can draw stand-ins in code to try it first, as for Halloween.
 - **Cost:** L. Model and service S–M, card M, art the long pole.
+- **Gifts** (owner, 2026-10-28, from Animal Crossing: "love it, need good variety
+  here"): now and then a pet saves a find for the person it's closest to ("I saved
+  this pine cone for you! ♥"), given at their next look. Variety matters: weight
+  gifts away from what they already got, use the rarer finds as gifts more often,
+  and let some gifts be one-of-a-kind (a find only a gift can bring).
 
 ## 2. A daily wish (cheap; no art)
 
@@ -165,6 +170,9 @@ be more than one pet.
   on the tick, `visiting` on both states; the card loads the guest's species to draw
   it. No new art, since every creature exists. **Cost:** M.
 - **Only one pet?** Nothing changes, and the visitors from feature 1 fill the gap.
+- **Neighbours talking** (owner, 2026-10-28, from Animal Crossing): pets mention each
+  other ("have you met Mochi? she's so nice!", "Mochi visited yesterday ♥"), more as
+  they become friends.
 
 ## 6. Seasons
 
