@@ -35,7 +35,7 @@ C = {
    words={"food": "berries", "home": "den"},
    adult="a long elegant muzzle, a full luxurious tail, calm narrow amber eyes"),
  "bananaslug": dict(world="woodland", name="Banana slug", kind="Pacific banana slug", measure="w", target=(150, 190, 225),
-   look="a long soft banana-yellow body with a few small dark brown spots, a smooth saddle-shaped mantle over the front half, a happy face on the front. ANATOMY: exactly 2 SHORT THICK rounded eye-stalks on top of the head with the eyes at their tips, and 2 tiny nubs below them; no legs, no arms; it glides on a flat foot with a faint shiny slime line under it.",
+   look="a long soft banana-yellow body with a few small dark brown spots, a smooth saddle-shaped mantle over the front half, a happy face on the front. ANATOMY: exactly 2 SHORT THICK rounded eye-stalks on top of the head with the eyes at their tips, and 2 tiny nubs below them; ONLY TWO EYES in total, at the stalk tips, and NO eyes on the face itself (the face has just a smile and blush); no legs, no arms; it glides on a flat foot with a faint shiny slime line under it.",
    stages=("BABY: the tiny pale-yellow slug (row 1 left), almost no spots, big eyes.",
            "CHILD: the plump young slug (row 1 middle).",
            "TEEN: the long fat slug (row 1 right), the biggest, more spots."),
