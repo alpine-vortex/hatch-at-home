@@ -92,5 +92,8 @@
       80
     ]
   },
-  "murk": "treefrog/murk"
+  "murk": "treefrog/murk",
+  "hat": {
+    "child_watch_tv": [124, 108]
+  }
 }
