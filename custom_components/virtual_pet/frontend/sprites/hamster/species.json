@@ -1,0 +1,93 @@
+{
+  "name": "Syrian hamster",
+  "ready": true,
+  "stages": [
+    "baby",
+    "child",
+    "teen",
+    "adult"
+  ],
+  "moods": [
+    "content",
+    "excited",
+    "cozy",
+    "bored",
+    "hungry",
+    "sleepy",
+    "asleep",
+    "sick",
+    "calling",
+    "dirty"
+  ],
+  "frames": 2,
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "cheeks": [
+      "child_cheeks_1",
+      "child_cheeks_2"
+    ],
+    "wheel": [
+      "child_wheel_1",
+      "child_wheel_2"
+    ],
+    "stand_up": [
+      "child_stand_up_1",
+      "child_stand_up_2"
+    ]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "play",
+    "clean": "bird/sparkle_clean",
+    "medicine": "bird/medicine",
+    "blanket": "bird/blanket",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": [
+      "bird/poop_1",
+      "bird/poop_2",
+      "bird/poop_3"
+    ]
+  },
+  "backgrounds": {
+    "day": "kitten/bg_day",
+    "night": "kitten/bg_night",
+    "rain": "kitten/bg_rain",
+    "dim": "kitten/bg_dim"
+  },
+  "words": {
+    "food": "seeds",
+    "home": "nest"
+  },
+  "reactions": {
+    "feed": "cheeks",
+    "snack": "cheeks",
+    "play": "wheel",
+    "won": "wheel",
+    "scold": "stand_up"
+  },
+  "head": {
+    "baby": [
+      158,
+      100
+    ],
+    "child": [
+      160,
+      72
+    ],
+    "teen": [
+      166,
+      48
+    ],
+    "adult": [
+      194,
+      72
+    ]
+  }
+}
