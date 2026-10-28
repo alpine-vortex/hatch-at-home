@@ -29,8 +29,8 @@ Read with `git show origin/claude/quirky-faraday-axugqq:...`:
 - `worlds.json` on the branch: woodland 5 (bird, squirrel, deer, fox, bananaslug),
   terrarium 6 listed (gecko, tarantula, **beetle**, tortoise, beardeddragon,
   ballpython), hearth 5, tidepool 5, pond 5, nightsky 5 = 31 names. **`beetle` has no
-  `species.json`**, so `species.py:Catalog.roster` drops it (it keeps only species in
-  `Catalog.species`) and Terrarium shows **5**, total **30 creatures, 120 forms**.
+  `species.json`**, so `species.py:load_catalog` never puts it in `Catalog.species`
+  (ready species with non-empty `stages` and `moods` only) and `Catalog.roster` drops it and Terrarium shows **5**, total **30 creatures, 120 forms**.
   The card never sees `beetle`: its roster is `sensor.life_stage` attribute `roster`,
   which is `coordinator.roster` (`coordinator.py:289`, `catalog.roster(self.world)`).
   If beetle's art lands later, the book picks it up with no change.
@@ -136,24 +136,35 @@ and before `cls(**kwargs)`:
   non-strings). Species not in today's catalog are **kept** (a shelved species can
   return; `raised` does the same, `from_dict` doesn't filter it).
 
-After `state = cls(**kwargs)`, a helper `backfill_seen(state)` (a module function
-in `model.py`, so the coordinator can call it too) raises `state.seen` to at least:
+After `state = cls(**kwargs)`, a helper `backfill_seen(state, legacy)` (a module
+function in `model.py`, so the coordinator can call it too) raises `state.seen`
+to at least the rows below. `legacy` is `"seen" not in data`: the store was written
+before this field existed. **The `raised` row runs only when `legacy` is true.** The
+other two rows run on every load.
 
 | Source | Raises `seen[species]` to |
 | --- | --- |
-| each species in `state.raised` (`str`) | `child` (the scope's "reveals its baby and child"; today's tile is the child portrait, so this is what keeps the portrait) |
+| each species in `state.raised` (`str`), **legacy stores only** | `child` (the scope's "reveals its baby and child"; today's tile is the child portrait, so this is what keeps the portrait) |
 | each `state.journal` record's `species` (`str`; retired pets are always adults, `model.lay_egg` only lays after `can_lay_egg`) | `adult` |
 | the current pet: `state.species` and `life_stage(state)` is not `egg` | its current stage |
 
-It only ever raises (max by index), so it is **idempotent and safe to run on every
-load**: no flag, no migration, no storage version bump (the project's `STORE_VERSION`
+Why the `raised` row cannot run on every load: `_hatch` appends the species to
+`raised` at hatch (`model.py:458`), so a live baby is in `raised` with only `baby`
+seen. A restart in its first day would otherwise raise it to `child` early, breaking
+"only forms not yet reached start dark", the plan's own "a creature that hatched live
+has only the baby seen", and sending a false new-page line to an open card. The
+`journal` and current-stage rows are always true, so they are safe every load. The
+marker for "legacy" is the key's absence, so there is no flag, no migration, no
+storage version bump (the project's `STORE_VERSION`
 stays; `from_dict` already "ignores unknown keys and defaults new ones", `model.py:155`).
 
 **Ordering trap.** `coordinator.py:340-344` appends `old_species` to `raised` *after*
 `from_dict` (a pet set up before worlds existed). A backfill that lives only in
-`from_dict` misses that species. So the coordinator calls `model.backfill_seen(self.state)`
-once more right after that block, and after `model.catch_up`. (`catch_up` doesn't
-change age, only shifts timers, but the call belongs after the fix-up either way.)
+`from_dict` misses that species. So the coordinator calls
+`model.backfill_seen(self.state, "seen" not in data)` once more right after that
+block (`data` is the loaded dict, still in hand at `coordinator.py:334`); in the
+`data is None` branch (a brand-new pet) nothing is needed. A legacy store with an
+old species and no `seen` therefore gets that species at `child` too.
 
 A home that has never had the field gets it filled on the first load after the
 update, and the first `async_save` stores it. Before that save the card still gets
@@ -297,11 +308,19 @@ state (`hatch-seen-<device>` at `hatch-pet-card.js:2372`, the once-a-day keys at
   clears it**: write `forms` to the key (the whole book, not per page: "opened" means
   seen). This also happens when `showAll` is on (the dot is suppressed with it; open
   question 4).
-- **The moment** (the extra line) fires only for a change this page **saw happen**:
-  the previous draw's `forms` for the slide's own species was lower than now. A
-  browser that wasn't looking gets the dot, not the line. So it can't repeat: it
-  needs a rise between two draws, and the stored key is not what triggers it. The
-  line is `_queue`d (`hatch-pet-card.js:2327`), not said through `_moment`'s `say`,
+- **The moment** (the extra line) is hooked to the live events the card already
+  gets, not to a diff of the merged book between draws (a diff gives false
+  positives: `this._slides` and their states don't all arrive on the first draw, a
+  reconnect can briefly drop states, and when a second same-world device's `seen`
+  shows up the merged value rises for nothing). The `hatched` and `stage_changed`
+  cases of `_moment` (`:2740-2752`) arrive through `sensor.last_care` `moments`
+  (unrecorded, already in `coordinator.MOMENTS`, so no new event), and old moments
+  are already skipped by the `s.lastMoment` seeding (`:1977`). On one of them, queue
+  the line **only if that (species, stage) wasn't in the merged book before this
+  event** (the book read just before the state update is applied is the draw's
+  `forms`; the builder takes it from the last draw's cache). A browser that wasn't
+  looking gets the dot, not the line, since it sees no live moment. The dot stays the
+  localStorage diff above. The line is `_queue`d (`hatch-pet-card.js:2327`), not said through `_moment`'s `say`,
   so it follows "I'm a teen now!" / "hello!" rather than overwriting it: those come
   from `_moment`'s `stage_changed` and `hatched` cases (`:2740-2752`), which `say`
   immediately; `_sayQueued` then speaks the queued line when nothing is being said
@@ -365,7 +384,9 @@ pytest, the existing style (`test_hatching_prefers_a_species_not_raised_yet`,
 5. `from_dict` validation: `seen` a list, a string, `None` → `{}`; `{"bird":"egg"}`,
    `{"bird":"giant"}`, `{1:"baby"}`, `{"":"baby"}` are dropped; unknown species kept;
    round trip `from_dict(pet.to_dict()) == pet` (the existing pattern at line 353).
-6. Backfill never lowers: a stored `seen` of `adult` for a species in `raised`
+6. A restart doesn't promote a live baby: hatch, `from_dict(pet.to_dict())` keeps
+   `seen == {species: "baby"}` (the key is present, so the `raised` row is skipped).
+   Backfill never lowers also: a stored `seen` of `adult` for a species in `raised`
    stays `adult`.
 7. Coordinator ordering (`tests/test_init.py`): a store with `species=None`, an old
    species and no `raised` ends with that species in `seen` after setup.
@@ -405,13 +426,16 @@ Checks the builder can actually run on the dev HA (two pets):
   forms. (The dev pets may not share a world; inject `world` if not.)
 - C6. **A pet in another world doesn't add to this book.** Inject one pet's `world`
   to a different value with `seen: {squirrel: "adult"}`: the squirrel stays dark.
-- C7. **The new page**: seed (clear the key, load: no dot, no line); raise a
-  species' `seen` by injecting a later stage; the journal link has the dot
+- C7. **The new page**: seed (clear the key, load: no dot, no line); inject a
+  `stage_changed` moment into `sensor.last_care` `moments` together with the raised
+  `seen`; the journal link has the dot
   (`.jlink.new` or the chosen class), the queued line appears once after the
   stage line, a second identical inject says nothing again; opening the journal clears
   the dot and rewrites `hatch-book-<world>`.
-- C8. **A browser that wasn't looking** (reload the page after the inject): dot yes,
-  line no.
+- C8. **A browser that wasn't looking** (reload the page after injecting `seen`,
+  with the moment already in the list at load): dot yes, line no. Also: a second
+  same-world device's `seen` arriving later raises the merged book but fires no line
+  (the false positive the moment hook avoids).
 - C9. **Shared screen**: set `SHARED_KEY` on (`hatch-shared-screen`,
   `:180`): line yes, dot no.
 - C10. **`show_all_forms: true`** (`setConfig` in-page): no `.locked` anywhere,
@@ -448,7 +472,7 @@ reads PR 1's attribute, but is built to survive its absence).
 - `coordinator.py`: the second `backfill_seen` call after the old-species fix-up.
 - `sensor.py`: the `seen` attribute and its `_unrecorded_attributes` entry.
 - `docs/guide.md`: `seen` in the `sensor.<pet>_life_stage` attributes row
-  (guide, "life_stage" row, line ~239) and one line saying it's unrecorded.
+  (guide, the `sensor.<pet>_life_stage` row, line 246) and one line saying it's unrecorded.
 - Tests 1-11 above.
 - **Done =** the pytest suite passes with the new tests; an installed dev HA's
   `sensor.<pet>_life_stage` shows `seen` after a restart with an old store
@@ -508,11 +532,11 @@ already exist ("I'm a teen now!", "all grown up! ♥") are not changed.
 4. **Show-all and the dot:** does "show every form" also reveal unhatched creatures
    and switch off the dot and moment? On a shared screen is the dot hidden?
    Recommendations: yes to both; hidden on a shared screen, the moment still shown.
-5. **Print upbringing words at all?** The owner decided "words beside raised by",
-   which the family line already prints (devoted, steady, scrappy). "Scrappy" could
-   read as a verdict on a person's care. Recommendation: keep the words (the owner's
-   decision, and the family line already shows them), but only on the page of a
-   retired adult, never next to a pet still growing up.
+5. **Where do the upbringing words sit?** (The owner decided they are words beside
+   "raised by"; that stands.) "Scrappy" could read as a verdict on a person's care.
+   Recommendation: print them for retired adults and for a current adult, never
+   next to a pet still growing up (it has none yet), as `_renderJournal` already
+   does for `now`.
 6. **Is the new-page line per form, or once per creature?** Recommendation: per form
    (baby of a new creature, then each later stage): there are at most four a
    creature, 120 over the whole cast, and each is the pet's own growing-up. The line
