@@ -204,7 +204,11 @@ details before committing it.
    and shipped in 0.22.0: rain scenes for every world, the gecko's night and dim, the
    shared `ui/prop_fan`, `prop_scold`, `prop_praise` (the card's `FALLBACK_PROPS`; the
    fan keeps its CSS breeze too). A species with its own `bg_rain` gets no drawn rain.
-3. **Art from Sol:** nothing is on order. Every creature on every roster has all four
+3. **Art reviews (2026-10-28):** two reviews of the live frames disagree;
+   `docs/plan-2026-10-28-art-reviews.md` reconciles them. Next: phase 1 (merge the
+   branch `claude/elegant-pascal-44cy2y` and release), then phase 2 (small fixes here)
+   and phase 3 (one art batch).
+   **Art from Sol:** nothing is on order. Every creature on every roster has all four
    stages. Ideas if more is wanted: house poses for baby, teen and adult (expensive),
    a clearer tree-frog snack, an Ocean world.
 4. **Tuning review, about 2026-11-03.** A scheduled reminder fires then. Ask the owner
