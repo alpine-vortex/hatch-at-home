@@ -265,7 +265,8 @@ Where this section and part A differ, this section wins.
 
 ## Phase 1 built (2026-10-28)
 
-The line fixes (A9 1, 2, 4-21; 3 is phase-later as it needs the per-browser switch
-UI with the voice settings), the creatures' own words (A3; the moth's per stage), and
-`queued` as corrected. Checked: 372 tests, 64 card checks (new: plain screen-reader
-words, long titles cut, the look's line budget server-side).
+All the line fixes (A9 1-21, with "shared screen" as a per-browser switch on the
+status screen), the creatures' own words (A3; the moth's per stage), and `queued`
+as corrected. Checked: 372 tests, 65 card checks (new: plain screen-reader words,
+long titles cut, a shared screen showing nothing personal; the look's line budget
+server-side).

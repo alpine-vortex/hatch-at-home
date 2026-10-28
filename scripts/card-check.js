@@ -308,6 +308,31 @@ async function main() {
     myDay === true && !("my_day" in ((await bondOf()) || {})));
   await cur().locator(".bell.myday").click(); // off again
   await page.waitForTimeout(800);
+  // A shared screen shows nothing personal: no bond row, no "my day", no visit,
+  // a greeting without a name.
+  await cur().locator(".bell.shared").click();
+  await page.waitForTimeout(400);
+  const sharedView = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    let visited = false;
+    const real = el._hass.callService.bind(el._hass);
+    el._hass.callService = (d, svc, ...rest) => { if (svc === "visit") visited = true; return real(d, svc, ...rest); };
+    s.visitedAt = 0;
+    el._visit(s);
+    el._hass.callService = real;
+    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-greet-")) localStorage.removeItem(k);
+    s.greeted = false; s.sayUntil = 0;
+    const free = el._free;
+    el._free = () => true;
+    el._greet(s);
+    el._free = free;
+    const status = s.status.innerText;
+    return { visited, said: s.bubble.textContent, bondRow: /you two|my day/.test(status) };
+  });
+  await cur().locator(".bell.shared").click(); // personal again
+  await page.waitForTimeout(400);
+  check("a shared screen shows nothing personal", !sharedView.visited && !sharedView.bondRow &&
+    !sharedView.said.includes(USER.name) && !sharedView.said.includes("sunbeam"), JSON.stringify(sharedView));
   // The server's update replaced the close bond injected above: inject it again.
   await inject(pet["sensor.life_stage"], { attributes: { bonds: { [me]: { level: 8, nickname: "sunbeam" } } } });
   await page.waitForTimeout(300);

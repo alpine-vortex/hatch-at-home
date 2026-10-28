@@ -171,6 +171,11 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     today, take an umbrella, sunbeam ☂"), with "notify me" on, at most three times a
     week, from the pet you're closest to, and silent (level 3).
 
+  On a wall tablet or any screen the whole family looks at but one person is signed
+  in to, turn on "shared screen" on its status page (it's saved in that browser
+  only): it shows nothing personal there, no names, notes, questions, bond or "my
+  day", and doesn't count as anyone's visit.
+
   "My day" is one switch per person, for every pet. Phone focus modes and Do Not
   Disturb are left to your phone: the pet's calls and sickness are time-sensitive
   (they may come through a focus you allow), everything else waits like any other

@@ -108,6 +108,17 @@ function soundsOn() {
   }
 }
 
+// A shared screen (a wall tablet signed in as one person): this browser shows
+// nothing personal, no names, notes, questions or bond, and makes no visits.
+const SHARED_KEY = "hatch-shared-screen";
+function sharedScreen() {
+  try {
+    return localStorage.getItem(SHARED_KEY) === "on";
+  } catch (err) {
+    return false;
+  }
+}
+
 function playChirp(name) {
   const notes = CHIRPS[name];
   if (!notes) return;
@@ -1942,7 +1953,7 @@ class HatchPetCard extends HTMLElement {
     const home = (this._state(s, "sensor.last_care")?.attributes.moments || [])
       .find((m) => m.type === "friend_home" && m.user === me);
     const at = home && new Date(home.at).getTime();
-    if (at && Date.now() - at < FRIEND_WELCOME_MS && this._welcomeDue(s, at)) {
+    if (at && !sharedScreen() && Date.now() - at < FRIEND_WELCOME_MS && this._welcomeDue(s, at)) {
       // A close friend who came home while the card was closed: welcome them first.
       const bond = this._bond(s);
       const first = short(this._hass.user?.name?.trim().split(/\s+/)[0]);
@@ -1988,7 +1999,7 @@ class HatchPetCard extends HTMLElement {
     if (!WISHES[wish.kind]) return null;
     const aimed = wish.for && wish.for_name && WISHES_FOR[wish.kind];
     if (!aimed) return WISHES[wish.kind];
-    if (wish.for !== this._hass.user?.id) return [aimed[0](short(wish.for_name, 16)), aimed[2](short(wish.for_name, 16))];
+    if (wish.for !== this._hass.user?.id || sharedScreen()) return [aimed[0](short(wish.for_name, 16)), aimed[2](short(wish.for_name, 16))];
     const bond = this._bond(s);
     return [withName(aimed[1], bond?.level >= BOND.nickname ? bond.nickname : null), aimed[2]("you")];
   }
@@ -2051,8 +2062,9 @@ class HatchPetCard extends HTMLElement {
     const bond = this._bond(s);
     const level = bond?.level || 0;
     const nickname = level >= BOND.nickname ? bond.nickname : null;
-    const first = short(user?.name?.trim().split(/\s+/)[0], 16) || nickname;
-    if (!first) return;
+    const shared = sharedScreen(); // no names on a shared screen
+    const first = shared ? null : short(user?.name?.trim().split(/\s+/)[0], 16) || nickname;
+    if (!first && !shared) return;
     const key = `hatch-greet-${user.id}-${s.ids?.device}`;
     try {
       if (Date.now() - Number(localStorage.getItem(key) || 0) < GREET_EVERY_MS) return;
@@ -2061,8 +2073,10 @@ class HatchPetCard extends HTMLElement {
       // no storage (private window): greet anyway, once per page load
     }
     const hour = new Date().getHours();
-    const hello = hour < 12 ? `morning, ${first}!` : hour < 18 ? `hi, ${first}!` : `evening, ${first}!`;
-    const lines = [hello, `${first}!! hi!`, hello];
+    const hello = !first
+      ? (hour < 12 ? "morning!" : hour < 18 ? "hi!" : "evening!")
+      : hour < 12 ? `morning, ${first}!` : hour < 18 ? `hi, ${first}!` : `evening, ${first}!`;
+    const lines = first ? [hello, `${first}!! hi!`, hello] : [hello, "hi hi!", hello];
     if (level >= BOND.warm) lines.push(`${first}! I missed you ♥`, `yay, ${first}'s here!`);
     if (nickname) lines.push(`hi, ${nickname}!`, `${nickname}!! ♥`, `there's my ${nickname}!`);
     s.bubble.textContent = pick(lines);
@@ -2091,13 +2105,14 @@ class HatchPetCard extends HTMLElement {
   // The viewer's own bond with this pet: {level, nickname?, favourite?} or null.
   _bond(s) {
     const id = this._hass.user?.id;
+    if (sharedScreen()) return null; // nobody's bond on a shared screen
     return (id && this._state(s, "sensor.life_stage")?.attributes.bonds?.[id]) || null;
   }
 
   // Tell the pet who's looking in (for the bond, and a "come say hi" wish).
   _visit(s) {
     const id = s.ids?.["sensor.life_stage"];
-    if (!id || !this._hass.user || Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
+    if (!id || !this._hass.user || sharedScreen() || Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
     s.visitedAt = Date.now();
     const queued = Math.min((s.queue || []).length, 6);
     this._hass.callService("virtual_pet", "visit", { entity_id: id, queued }, undefined, false, true)
@@ -2374,6 +2389,7 @@ class HatchPetCard extends HTMLElement {
         this._queue(s, pick(["my wish came true! thank you ♥", "yay, my wish! ♥", "best day ever! ♥"]));
         break;
       case "bond_up": { // only the person whose bond it is sees it
+        if (sharedScreen()) break; // nothing personal on a shared screen
         if (m.user !== this._hass.user?.id) break;
         this._sparkle(s);
         this._chirp(s, "trait");
@@ -2388,7 +2404,7 @@ class HatchPetCard extends HTMLElement {
       }
       case "friend_home": { // a close friend's person entity came home
         const me = this._hass.user?.id;
-        if (m.user === me) {
+        if (m.user === me && !sharedScreen()) {
           if (!this._welcomeDue(s, new Date(m.at).getTime())) break;
           this._queue(s, pick(["you're home!! ♥", "yay, you're back! ♥"]), 4500);
           if (HOME_WEATHER[m.weather]) this._queue(s, HOME_WEATHER[m.weather], 4500);
@@ -2405,6 +2421,7 @@ class HatchPetCard extends HTMLElement {
         break;
       }
       case "bond_record": { // only its person
+        if (sharedScreen()) break; // nothing personal on a shared screen
         if (m.user !== this._hass.user?.id) break;
         const game = GAMES.find((g) => g.key === m.game);
         this._sparkle(s);
@@ -2412,6 +2429,7 @@ class HatchPetCard extends HTMLElement {
         break;
       }
       case "tucked_in": {
+        if (sharedScreen()) break; // nothing personal on a shared screen
         if (m.user !== this._hass.user?.id) break;
         const bond = this._bond(s);
         const name = (bond?.level >= BOND.nickname && bond.nickname) ||
@@ -2422,7 +2440,9 @@ class HatchPetCard extends HTMLElement {
         break;
       }
       case "bond_favourite":
-        if (m.user === this._hass.user?.id) this._queue(s, pick(["our favourite game! ♥", "I love playing this with you ♥"]));
+        if (m.user === this._hass.user?.id && !sharedScreen()) {
+          this._queue(s, pick(["our favourite game! ♥", "I love playing this with you ♥"]));
+        }
         break;
       case "tv_off_late":
         say(pick(["*yawn* bedtime?", "all done? sleepy now..."]));
@@ -2579,6 +2599,7 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "notify me", `<span><button class="bell" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       ${bond ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!this._myDay}">${this._myDay ? "on" : "off"}</button></span>`) : ""}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
+      ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
@@ -2589,10 +2610,24 @@ class HatchPetCard extends HTMLElement {
       this._tapped(e.currentTarget);
       this._setMyDay(s, !this._myDay, e.currentTarget);
     });
-    s.status.querySelector(".bell:not(.sound):not(.myday)").addEventListener("click", (e) => {
+    s.status.querySelector(".bell:not(.sound):not(.myday):not(.shared)").addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
       this._tapped(e.currentTarget);
       this._setNotify(s, !notifying, e.currentTarget);
+    });
+    s.status.querySelector(".bell.shared").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const on = !sharedScreen();
+      try {
+        localStorage.setItem(SHARED_KEY, on ? "on" : "off");
+      } catch (err) {
+        this._statusMessage(s, "This browser can't save that setting.");
+        return;
+      }
+      if (on) this._slides.forEach((slide) => this._clearAsk(slide));
+      this._statusMessage(s, on ? "Nothing personal on this screen now." : "This screen is personal again.");
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
     s.status.querySelector(".bell.sound").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -2637,7 +2672,7 @@ class HatchPetCard extends HTMLElement {
   async _setNotify(s, enabled) {
     const id = s.ids?.["sensor.life_stage"];
     if (!id) return;
-    const button = s.status.querySelector(".bell:not(.sound):not(.myday)");
+    const button = s.status.querySelector(".bell:not(.sound):not(.myday):not(.shared)");
     if (button) {
       button.classList.add("pending");
       button.setAttribute("aria-pressed", String(enabled));
