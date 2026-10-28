@@ -2067,18 +2067,18 @@ class HatchPetCard extends HTMLElement {
     if (onShow && plain && s.live.textContent !== plain) s.live.textContent = plain;
   }
 
-  // The sound a line opens with ("tweet!", "tweet tweet!!", "tweet?",
-  // "tweet..."), or null: no voice, said one lately, the line has an opener of
-  // its own, or it wouldn't fit.
+  // The sound a line opens with, in the mood of its first sentence ("tweet!",
+  // "tweet tweet!!", "tweet?", "tweet..."), or null: no voice (or still an
+  // egg), said one lately, the line has an opener of its own, or it wouldn't fit.
   _soundFor(s, text) {
     const sound = s.species?.voice?.sound;
-    if (!sound || Date.now() - (s.voicedAt || 0) < VOICE_QUIET_MS) return null;
+    if (!sound || s.hatchesAt || Date.now() - (s.voicedAt || 0) < VOICE_QUIET_MS) return null;
     const line = String(text).trim();
     if (OPENERS.test(line) || line.toLowerCase().startsWith(sound)) return null;
-    const end = line.replace(/[\s♥♡♪★❄☂~\uFE0F\p{Extended_Pictographic}]+$/u, "");
-    const form = /!!$/.test(end) ? `${sound} ${sound}!!`
-      : /\?$/.test(end) ? `${sound}?`
-      : /(\.\.\.|…)$/.test(end) ? `${sound}...`
+    const mark = line.match(/!!|[!?]|\.\.\.|…/)?.[0];
+    const form = mark === "!!" ? `${sound} ${sound}!!`
+      : mark === "?" ? `${sound}?`
+      : mark === "..." || mark === "…" ? `${sound}...`
       : `${sound}!`;
     return form.length + 1 + line.length > VOICE_MAX ? null : form;
   }
