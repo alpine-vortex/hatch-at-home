@@ -242,7 +242,7 @@ lay the egg, then rename it.
 | Entity | What it is |
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline`, `_weight` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. Weight is healthy between 25 and 75. |
-| `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `call_deadline`. |
+| `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `reason_key` (which sentence that is, for the card's baby talk), `call_deadline`. |
 | `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `games` (played and won per game), `memories` (first snow and frost), `hatches_at` (while an egg), `next_world`, `next_egg` and `journal` (the device's retired pets). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far (attribute `discipline_misses`: fake calls nobody answered). |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them; `moments`: the last 10 things that happened to it, for the card to react to. |
@@ -531,6 +531,17 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   your journal ♥"), once per generation. It's in your journal under "photos", seen
   only by you and never on a shared screen, a sensor or a phone message. Tap "save"
   to share it or keep it.
+- **Baby talk.** Turn "baby talk" on (status screen; off by default) and, while a
+  pet is a baby or a child, its common lines get simpler: "hungy!" for a baby's
+  hungry call, "hi hi, Sam!", "yay yay!". Babies get the most changes, children a
+  few; teens and adults never change. A pet is a baby for about its first day of
+  age and a child for about the next four, so about 4.5 days in all (age pauses
+  while it's away). A need still names the need (hungry, sleepy, play, stinky,
+  medicine), and its catchphrase never ends a baby line. The switch is yours: it
+  follows you to every pet and every device you're signed in on, but a change made
+  on one device reaches the others at their next visit, up to an hour later. Only
+  the card changes: phone messages, Assist, the journal and the status screen keep
+  their words, and a shared screen has no switch and no baby talk.
 - **A welcome for every new pet.** Adding a pet through the integration tells the
   whole house: "Pip, a new virtual pet, just moved in! Say hi ♥" It goes to every phone with
   the Home Assistant app, whether or not anyone tapped "notify me", and to the

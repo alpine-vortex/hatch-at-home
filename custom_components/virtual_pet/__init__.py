@@ -126,6 +126,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_answer)
     websocket_api.async_register_command(hass, websocket_forget_birthday)
     websocket_api.async_register_command(hass, websocket_birthday_phone)
+    websocket_api.async_register_command(hass, websocket_baby_talk)
     websocket_api.async_register_command(hass, websocket_photos)
 
     async def fast_forward(call: ServiceCall) -> ServiceResponse:
@@ -363,6 +364,31 @@ async def websocket_birthday_phone(
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
     await pet.async_set_birthday_phone(connection.user.id, msg["enabled"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/baby_talk",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_baby_talk(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Simpler words from babies and children on the signed-in person's cards
+    (off by default). A websocket command, so the choice stays off the event
+    bus."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    await pet.async_set_baby_talk(connection.user.id, msg["enabled"])
     connection.send_result(msg["id"])
 
 

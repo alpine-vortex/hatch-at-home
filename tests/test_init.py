@@ -838,6 +838,24 @@ async def test_busy_attributes_stay_out_of_history(
         assert key in attrs
         assert key in LifeStageSensor._unrecorded_attributes, key
     assert attrs["upbringing"] == "steady"  # on track: no misses, no discipline
+    from custom_components.virtual_pet.sensor import MoodSensor
+
+    mood = hass.states.get("sensor.pip_mood").attributes
+    assert mood["reason_key"] == "content" and mood["reason"] == "all good"
+    assert "reason_key" in MoodSensor._unrecorded_attributes
+
+
+async def test_the_reason_key_stays_off_assist_and_the_away_nap(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, hunger=20.0)
+    config = await setup(hass)
+    pet = config.runtime_data
+    # Every other caller still gets (mood, flags, reason): the plain sentence.
+    assert pet.current_mood() == ("hungry", ["hungry"], "a little peckish")
+    assert pet.current_mood_keyed()[3] == "hungry"
+    pet.state.away = True  # privacy on: away looks like a nap, key and all
+    assert pet.current_mood_keyed() == ("asleep", ["asleep"], "zzz", "asleep")
 
 
 async def test_play_game_service_plays_five_rounds(
@@ -2847,3 +2865,102 @@ async def test_a_best_friends_photo_is_theirs_alone(
     coordinator._visits.clear()
     assert {"kind": "photo"} in (await look(hass, me))["notes"]
     assert [p["generation"] for p in coordinator.photos(me)] == [2, 3]
+
+
+# --- Baby talk (phase 5) ---------------------------------------------------------
+
+
+async def test_baby_talk_is_each_persons_and_stays_off_the_record(
+    hass: HomeAssistant,
+    caplog: pytest.LogCaptureFixture,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    config = await setup(hass)
+    pet = config.runtime_data
+    other = await hass.auth.async_create_user("Alex", group_ids=["system-admin"])
+    assert (await pet.async_visit(hass_admin_user.id))["baby_talk"] is False  # off
+    client = await hass_ws_client(hass)
+    bus = async_capture_events(hass, MATCH_ALL)
+
+    async def send(entity_id: str, enabled: bool) -> dict[str, Any]:
+        await client.send_json_auto_id(
+            {
+                "type": "virtual_pet/baby_talk",
+                "entity_id": entity_id,
+                "enabled": enabled,
+            }
+        )
+        return await client.receive_json()
+
+    bad = await send("sensor.nobody_mood", True)
+    assert not bad["success"] and "nobody" not in str(bad["error"])  # never echoed
+    assert (await send("sensor.pip_mood", True))["success"]
+    assert pet.people.person(hass_admin_user.id)["baby_talk"] is True
+    assert pet.people.baby_talk(other.id) is False  # two people, independent
+    pet.people.person(other.id)["baby_talk"] = "off"  # a hand-edited string is not on
+    assert pet.people.baby_talk(other.id) is False
+    del pet.people.person(other.id)["baby_talk"]
+    pet._visits.clear()
+    assert (await pet.async_visit(hass_admin_user.id))["baby_talk"] is True
+    assert (await pet.async_visit(other.id))["baby_talk"] is False
+    # On no state, the bus, our log or in diagnostics.
+    assert "baby_talk" not in str([e.data for e in bus])
+    ours = [r.getMessage() for r in caplog.records if "virtual_pet" in r.name]
+    assert "baby_talk" not in str(ours)
+    for state in hass.states.async_all():
+        assert "baby_talk" not in str(state.attributes)
+    from custom_components.virtual_pet.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    assert "baby_talk" not in str(
+        await async_get_config_entry_diagnostics(hass, config)
+    )
+    assert (await send("sensor.pip_mood", False))["success"]
+    assert pet.people.baby_talk(hass_admin_user.id) is False
+
+
+async def test_every_visit_reply_carries_baby_talk(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 12:00:00+00:00")
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    config = await setup(hass)
+    pet = config.runtime_data
+    await pet.async_set_baby_talk(me.id, True)
+    counted = await pet.async_visit(me.id)
+    assert counted["counted"] and counted["baby_talk"] is True
+    too_soon = await pet.async_visit(me.id)  # the second look within the hour
+    assert not too_soon["counted"] and too_soon["baby_talk"] is True
+    await pet.async_set_lights_out(True)
+    pet._visits.clear()
+    asleep = await pet.async_visit(me.id)  # a reload at night
+    assert not asleep["counted"] and asleep["baby_talk"] is True
+
+
+async def test_one_baby_talk_switch_for_every_pet(
+    hass: HomeAssistant, hass_storage: dict[str, Any], now: float
+) -> None:
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    pets = []
+    for entry_id, name in (("test_pet", "Pip"), ("other_pet", "Bo")):
+        hass_storage[f"{DOMAIN}.{entry_id}"] = {
+            **hatched_pet(now),
+            "key": f"{DOMAIN}.{entry_id}",
+        }
+        hass_storage[f"{DOMAIN}.{entry_id}"]["data"]["name"] = name
+        config = MockConfigEntry(
+            domain=DOMAIN, title=name, data={CONF_NAME: name}, entry_id=entry_id
+        )
+        config.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(config.entry_id)
+        await hass.async_block_till_done()
+        pets.append(config.runtime_data)
+    await pets[0].async_set_baby_talk(me.id, True)
+    assert (await pets[1].async_visit(me.id))["baby_talk"] is True  # one store

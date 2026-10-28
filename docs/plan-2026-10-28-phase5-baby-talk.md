@@ -1,11 +1,15 @@
 # Phase 5: baby talk (build plan, DRAFT 2)
 
+**Status (2026-10-28): built as 0.34.0b2** on crew branch
+`crew/hatch-at-home-s2416-phase-5-of-the-voices-plan-bab` (the switch and card lines,
+then `reason_key` in its own commit); the tier-2 audit of the built work is next.
+
 Phase 5 of `plan-2026-10-28-voices-and-lines.md`: A8, plus the second audit's row 9
 (kept by the owner as the last feature phase; the cache is keyed by user ID) and
 A9.3 (no baby talk switch on a shared screen) and row 4 (the catchphrase is never
 in baby talk). **Its own PR, built on `main` after phase 4 (0.34.0b1) has merged;
-the version is decided at build time** (see Release). Docs only so far: nothing
-here is built. **Draft 2:** folds in the audit of draft 1 and the owner's answers
+the version is decided at build time** (see Release). Built (see Status above).
+**Draft 2:** folds in the audit of draft 1 and the owner's answers
 of 2026-10-28; the table at the end ("The audit of draft 1") wins where it differs
 from the sections above.
 

@@ -17,7 +17,7 @@ import random
 from typing import Any
 
 from . import rates as R
-from .home import COZY_FLAGS, EXCITED_FLAGS, HomeEffect
+from .home import COZY_FLAGS, EXCITED_FLAGS, REASONS, HomeEffect
 
 STATS = ("hunger", "happiness", "energy", "health", "discipline", "weight")
 
@@ -1769,6 +1769,17 @@ def _apply_lights(
 
 def mood(state: PetState, now: float, settings: Settings) -> tuple[str, list[str], str]:
     """Resolve (mood, active flags, short reason) by fixed priority."""
+    current, flags, reason, _ = mood_keyed(state, now, settings)
+    return current, flags, reason
+
+
+def mood_keyed(
+    state: PetState, now: float, settings: Settings
+) -> tuple[str, list[str], str, str]:
+    """mood(), plus a key for the reason: which sentence it is, so the card
+    can say it in its own words (baby talk) without matching on English.
+    call_<reason>, sleepy_drowsy/sleepy_low, the mood, home_<flag> or
+    weight_<band>: whichever branch chose the sentence."""
     flags: list[str] = []
     if state.away:
         flags.append("away")
@@ -1811,16 +1822,18 @@ def mood(state: PetState, now: float, settings: Settings) -> tuple[str, list[str
         flags.append("cozy")
 
     current = next((m for m in MOODS if m in flags), "content")
-    reason = _reason(state, current, drowsy)
+    reason, key = _reason(state, current, drowsy)
     if current in ("content", "cozy", "excited", "sleepy", "bored") and not (
         now - state.last_excite < R.EXCITED_MINUTES * 60
     ):
         # Say what the house is doing, so the connection is visible.
         effect = HomeEffect(flags=[f for f in flags if f in home])
-        reason = effect.reason() or reason
+        if flag := effect.reason_flag():
+            reason, key = REASONS[flag], f"home_{flag}"
         # The pet's own body comes before what the house is doing.
-        reason = _WEIGHT_REASONS.get(weight_band(state), reason)
-    return current, flags, reason
+        if (band := weight_band(state)) in _WEIGHT_REASONS:
+            reason, key = _WEIGHT_REASONS[band], f"weight_{band}"
+    return current, flags, reason, key
 
 
 _WEIGHT_REASONS = {
@@ -1852,9 +1865,12 @@ _MOOD_REASONS = {
 }
 
 
-def _reason(state: PetState, current: str, drowsy: bool) -> str:
+def _reason(state: PetState, current: str, drowsy: bool) -> tuple[str, str]:
+    """The sentence for the mood, and its key."""
     if current == "calling" and state.call is not None:
-        return _CALL_REASONS[state.call.reason]
+        return _CALL_REASONS[state.call.reason], f"call_{state.call.reason}"
     if current == "sleepy":
-        return "getting late, eyes drooping" if drowsy else "running low on energy"
-    return _MOOD_REASONS.get(current, "")
+        if drowsy:
+            return "getting late, eyes drooping", "sleepy_drowsy"
+        return "running low on energy", "sleepy_low"
+    return _MOOD_REASONS.get(current, ""), current
