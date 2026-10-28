@@ -46,6 +46,18 @@ TRAITS = {
 }
 
 
+# Holidays the pet greets on the phone in the morning (the card does the rest).
+HOLIDAYS: dict[tuple[int, int], str] = {(10, 31): "halloween"}
+HOLIDAY_MORNINGS = {
+    "halloween": "Happy Halloween! {name} is dressed up and ready to trick or treat 🎃",
+}
+
+
+def holiday(month: int, day: int) -> str | None:
+    """The holiday on this date, if the pet greets it."""
+    return HOLIDAYS.get((month, day))
+
+
 # Buttons on a call's notification: what would answer it. A plea to play may be
 # a fake call, so it offers scolding too (both always, so they give nothing away).
 ACTION_PREFIX = "VIRTUAL_PET:"
@@ -126,6 +138,8 @@ def message(event: dict[str, Any], name: str, species: dict[str, str]) -> str | 
         return f"{name} saw the first snow of the season!"
     if kind == "first_frost":
         return f"{name} noticed the first frost of the season."
+    if kind == "holiday" and event.get("holiday") in HOLIDAY_MORNINGS:
+        return HOLIDAY_MORNINGS[event["holiday"]].format(name=name)
     if kind == "egg_laid":
         return f"{name} laid an egg: generation {event['generation']} is on its way."
     return None

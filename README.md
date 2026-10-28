@@ -384,7 +384,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   device's family line: each generation with its traits, stars and upbringing.
 - **Notifications:** opt in per person. On the status screen, tap "notify me" to get
   this pet's calls, sickness, hatching, growing up, new or deeper traits, the season's
-  first snow and frost, and new eggs on your phone, through
+  first snow and frost, new eggs, and a holiday greeting on the morning of Halloween
+  ("Happy Halloween! Pip is dressed up and ready to trick or treat 🎃") on your phone, through
   the Home Assistant app. It only changes them for whoever is signed in; each person
   chooses for themselves. Automations can use `virtual_pet.notify_me` the same way.
   A call's notification has buttons that answer it (Feed, Clean, Medicine, Lights
