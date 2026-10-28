@@ -8,3 +8,6 @@ dev/config/*
 !dev/config/dashboards/
 dev/card-check/
 node_modules/
+
+# Private art-generation runs and call log (never committed)
+private-content/
