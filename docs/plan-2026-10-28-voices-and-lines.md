@@ -1,4 +1,4 @@
-# Voices and lines, 2026-10-28 (plan; draft 2, revised after the first audit)
+# Voices and lines, 2026-10-28 (plan; draft 3, revised after two audits)
 
 The owner chose all of this on 2026-10-28, after an audit of every line the pet says
 (24 findings) and the question "Do all pets talk identically?" (they did). Animal
@@ -207,6 +207,8 @@ answer the audit's points:
   `aria-disabled` so a tap can explain).
 - Balance: without hunger calls a moth misses less; the upbringing grade and trait
   learning are checked against the bat's.
+- Its favourite snack (A4) for a moth stage, the aimed snack wish (`AIMED_WISHES`),
+  chore treats (`treats_waiting`) and the moth's food words.
 - "I'm a moth now!" when it changes, and on the phone; a hunger notification sent just
   before has its Feed button refused gently.
 - The species flag reaches the model through `Settings`; button entities' availability;
@@ -231,3 +233,32 @@ answer the audit's points:
   baby talk, the photo) for the owner.
 - **Cost:** L. Split into two commits at least: lines and voices first, then
   birthdays, catchphrase and photo.
+
+## The second audit (draft 2) and what changed
+
+Where this section and part A differ, this section wins.
+
+| # | Finding | Change |
+| --- | --- | --- |
+| 1 | Typing would announce each letter to screen readers (the bubble's observer copies every change to the live region), a direct write mid-typing would be overwritten, and the bubble would grow letter by letter | `_speak` owns the live region (the observer skips while typing; the plain line is announced once). Every direct bubble write goes through `_write`, which cancels typing. The full line is laid out and revealed by elapsed time (no layout shift, no stall in background tabs); `sayUntil` covers typing time; a tap finishes the line. Reduced motion: no typing, no babble. The mood line and idle lines never type. |
+| 2 | `queued` is always 0 (the tick visits before the first look), `3 - queued` raises the 2-note cap, and an old card sends nothing | `_firstLook` runs before `_visit`. `queued` is optional (0-6, default 0); notes allowed: `min(2, max(0, 3 - queued))`; the question only when the budget allows one more line. A question that doesn't fit waits for the next visit (an hour at most; accepted). |
+| 3 | The photo would move to the next generation with the bond, reach the card on a public attribute, show in the shared journal, and saving a PNG is unreliable in the companion apps | Photos keyed by generation (`bond.photos[generation]`); a new pet gives its own at level 10 with that person. Delivered only by the visit response (or a websocket fetch), shown in the journal only to that person and never on a shared screen. The canvas has its own fixed layout, waits for the Tiny5 font, no smoothing. Saving: `navigator.share({files})` where there is one, else the image shown for a long-press save; tested on both apps before release. Its own phase. |
+| 4 | The catchphrase's "asked" flag in the people store would be used up by the first pet; a second person's answer replaces the first's; seven buttons overflow 330 px; it could end a question | "Asked" lives in the pet's bond (per generation). Each creature has a default catchphrase (in `voice`), so "keep mine" means something. Never added to questions, lines with a name, or baby talk. Four choices plus "keep mine", two rows if needed, never over the pet. The latest friend's choice wins (it's the pet's, like a villager's). |
+| 5 | The one-time questions stall behind an ignored first one (a bug today), rarely open for morning users; `MM-DD` needs its own check; "skip" must stick; the picker's taps open the status screen; the birthday push must not be a bus event | `choose_question` asks each one-time question independently (fixing the stall). The one-time window no longer needs a question-free morning. Birthday answers validated as a real month-day (02-29 allowed); "skip" stored, never asked again; the status screen has "forget my birthday". The question box stops every tap (selects too) and stays 60 s. The birthday push is like the send-off: from the closest pet, passive, marked once a year in the people store, never on the bus. A sad or sick day gets a quiet "happy birthday ♥" with no song. |
+| 6 | The pet's month-day, the bond's friendship month and your birthday can all land on one look; the yearly party collides with Halloween | One celebration line per look, merged when they coincide ("I'm 3 months old, and we've been friends all that time! ♥"); monthly lines in the first year only, then yearly; the party replaces the monthly line; a holiday costume wins over the party hat, the party moves to the next day's first look. Birthdays use the calendar from `hatched_on` (approximate for old pets: their first log entry after hatching, else `born`). |
+| 7 | A babble on every typed line (idle chatter too) is noise on a shared tablet | Babble only on voiced lines, at most about 1.2 s, through the chirp gates (quiet hours, asleep, lights out, visible, current slide), cutting the previous one. Its own per-browser switch ("babble"), off by default, separate from "sounds here". On iOS, audio needs a tap after each reload, as chirps do. |
+| 8 | "tik" and "tip" one letter apart in one world ("tip" reads as money); "blub" means crying; the opener list misses openers | Tarantula: "fuzz". Octopus: "bloop". The deer keeps "mew" (the real word for a fawn's call; the kitten says "mrrp"). Opener list adds "ooh", "brr", "aww", "mmh", "wheee", "la la", "yay", "zzz", "pitter". "Never on phones" means notifications; the card on a phone speaks normally. |
+| 9 | Baby talk shows about 4.5 days per pet for a lot of machinery | Kept (owner's choice), as the last phase; the cache is keyed by user ID. |
+| 10 | Part B misses the moth's favourite, the snack wish, chore treats and the moth's food words | Added to part B's list. Favourites picked at load only after hatching. `favourites`, `catchphrase` and `hatched_on` are unrecorded attributes (or none). |
+| 11 | Typing will flake the exact-text card checks; dates; pixels | A "typing done" promise the checks await; injected dates for birthday checks; one live-region announcement per line checked; a tap test for the question box; photo pixels sampled. Server tests for lay_egg carry-over, load migration, `MM-DD`/skip, no birthday bus event, one push across pets, `queued` default. |
+| 12 | Too big for one PR | Phases, below. |
+
+## Phases (each its own PR, each tested, screenshotted and audited before the next)
+
+1. **Lines** (A9, A3 words, the corrected `queued`): text and small logic only. Goes
+   into the bond PR, since the lines audit covered the bond's lines.
+2. **Voices** (A1 sounds and `_speak`, A2 typing and babble, A4 favourite snack).
+3. **Questions and birthdays** (A5 catchphrase, A6 birthdays, the one-time question fix).
+4. **The photo** (A7), after trying the save on both companion apps.
+5. **Baby talk** (A8).
+6. **Moths** (part B), with its own plan and audit.
