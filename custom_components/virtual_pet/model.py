@@ -121,6 +121,7 @@ class PetState:
     early_morning_on: str | None = None  # local date of the last early-bird morning
     temperament: dict[str, float] = field(default_factory=dict)  # trait -> factor
     upbringing: str | None = None  # decided on reaching adulthood (UPBRINGINGS)
+    personality: str | None = None  # settled on becoming a teen (PERSONALITIES)
     game: Game | None = None
     games: dict[str, dict[str, int]] = field(default_factory=dict)  # kind -> counts
     treats_waiting: int = 0  # chore treats it gets when it's next awake and home
@@ -194,12 +195,20 @@ class PetState:
             for t, f in (kwargs.get("temperament") or {}).items()
             if t in TRAITS and isinstance(f, int | float)
         }
+        levels = kwargs.get("trait_levels")
+        kwargs["trait_levels"] = {
+            t: n
+            for t, n in (levels if isinstance(levels, dict) else {}).items()
+            if isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= 3
+        }
         if not isinstance(kwargs.get("egg_choice"), str):
             kwargs["egg_choice"] = None
         if not isinstance(kwargs.get("early_morning_on"), str):
             kwargs["early_morning_on"] = None
         if kwargs.get("upbringing") not in UPBRINGINGS:
             kwargs["upbringing"] = None
+        if kwargs.get("personality") not in PERSONALITIES:
+            kwargs["personality"] = None
         kwargs["bonds"] = {
             str(user): {
                 **bond,
@@ -227,6 +236,9 @@ class PetState:
         if state.upbringing is None and life_stage(state) == "adult":
             # Grew up before upbringings existed: judge it on its record so far.
             state.upbringing = upbringing(state)
+        if state.personality is None and life_stage(state) in ("teen", "adult"):
+            # Became a teen before personalities existed: settled now, quietly.
+            state.personality = personality_for(state)
         return state
 
     @classmethod
@@ -402,6 +414,10 @@ def _step(
                 return
             _hatch(state, settings, rng, events, t1)
         changed: Event = {"type": "stage_changed", "stage": stage, "from": was_stage}
+        if stage in ("teen", "adult") and state.personality is None:
+            # Before this step's _learn: the traits it had as it crossed over.
+            state.personality = personality_for(state)
+            changed["personality"] = state.personality
         if stage == "adult":
             state.upbringing = upbringing(state)
             changed["upbringing"] = state.upbringing
@@ -937,6 +953,54 @@ def upbringing(state: PetState) -> str:
     return next(name for name, low in R.UPBRINGING_GRADES if score >= low)
 
 
+# --- Personality ----------------------------------------------------------------
+
+# How it talks and idles: flavour only, never a rate, a stat or a care result.
+PERSONALITIES = (
+    "mellow",
+    "sweet",
+    "bouncy",
+    "starry",
+    "old_soul",
+    "fancy",
+    "charming",
+    "plucky",
+)
+# Each trait nudges two types; every type is leaned toward by four traits.
+PERSONALITY_LEANINGS: dict[str, tuple[str, str]] = {
+    "night_owl": ("mellow", "old_soul"),
+    "music_lover": ("starry", "charming"),
+    "homebody": ("sweet", "mellow"),
+    "early_bird": ("bouncy", "sweet"),
+    "helper": ("sweet", "plucky"),
+    "player": ("bouncy", "starry"),
+    "sun_lover": ("bouncy", "fancy"),
+    "fireside": ("old_soul", "sweet"),
+    "moon_child": ("charming", "fancy"),
+    "storm_watcher": ("plucky", "old_soul"),
+    "couch_potato": ("mellow", "starry"),
+    "social_butterfly": ("starry", "charming"),
+    "snow_child": ("fancy", "bouncy"),
+    "breeze_rider": ("plucky", "fancy"),  # a breeze ruffles feathers
+    "fog_wanderer": ("old_soul", "mellow"),
+    "thunder_heart": ("plucky", "charming"),
+}
+
+
+def personality_for(state: PetState) -> str:
+    """Its type: an even pick, nudged by the traits it holds.
+
+    Reads only its birth time and traits, never how it was cared for (the type
+    is not a grade), and draws from its own generator, never the shared rng.
+    """
+    weights = dict.fromkeys(PERSONALITIES, 1)
+    for trait in state.traits:
+        for kind in PERSONALITY_LEANINGS.get(trait, ()):
+            weights[kind] += trait_level(state, trait)
+    rng = random.Random(f"personality-{float(state.born)}")
+    return rng.choices(PERSONALITIES, weights=[weights[k] for k in PERSONALITIES])[0]
+
+
 # --- Generations --------------------------------------------------------------
 
 
@@ -969,6 +1033,7 @@ def lay_egg(
         "age_days": round(state.age_hours / 24, 1),
         "care_misses": state.care_misses,
         "upbringing": upbringing(state),
+        "personality": state.personality,
         "games": game_counts(state),
     }
     egg = PetState.new(state.name, now)

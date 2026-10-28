@@ -48,7 +48,7 @@ Scold the fake whines, praise the good days. How you raise it decides who it gro
 <td width="50%" valign="top">
 
 <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/flair_music_lover_1.png" width="20" alt=""> **16 traits to learn!**<br>
-Night owl, music lover, snow child, couch potato... It picks up habits from your house and keeps them for life.
+Night owl, music lover, snow child, couch potato... It picks up habits from your house and keeps them for life. As a teen it settles into one of eight personalities, from mellow to plucky.
 
 <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/icon_journal.png" width="24" alt=""> **A family that grows!**<br>
 Lay an egg, start a new generation and pass a trait down the family line. Every pet goes in the journal.

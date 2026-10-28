@@ -7,8 +7,10 @@ personalities and The Sims' traits, emotions and wants.
 
 Draft 1 was written for an adversarial audit by a separate scout. **Draft 2** folds
 in that audit (18 findings) and the owner's answers of 2026-10-28; the table at the
-end ("The audit of draft 1") wins where it differs from the sections above. Docs
-only: nothing here is built. **Every line in this file is a proposal for the owner, not approved
+end ("The audit of draft 1") wins where it differs from the sections above.
+**Status: P1 (the type) is built as 0.35.0b1** (crew branch
+`crew/hatch-at-home-s2419-personality-p1-the-type-saved`, 2026-10-28; not yet
+audited, PR'd or released); P2a onward are not built. **Every line in this file is a proposal for the owner, not approved
 copy.** All lines are in the tables under "The lines"; none appears anywhere else.
 The phases are separate PRs, each with its own audit, as the owner works.
 

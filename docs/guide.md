@@ -205,9 +205,9 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   gets "happy Thanksgiving! ♥", a plate, and a thank-you to everyone who looks after
   it ("thank you all for taking care of me ♥"). All cosmetic.
 - Tap the screen for the status page: hearts and meters, weight, care misses and
-  ignored whines, traits (n/4) and the one it's learning next, upbringing, the next
-  egg, the notify-me and sounds switches, recent care, and a link to the journal. Tap
-  again to go back.
+  ignored whines, traits (n/4) and the one it's learning next, upbringing,
+  personality (from teen), the next egg, the notify-me and sounds switches, recent
+  care, and a link to the journal. Tap again to go back.
 - Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
   and phones give a tiny vibration. Then the real reaction follows (a food bowl, a
   sparkle, or a refusal like "I'm full!"). If HA rejects the press, the button shakes
@@ -243,7 +243,7 @@ lay the egg, then rename it.
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline`, `_weight` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. Weight is healthy between 25 and 75. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `reason_key` (which sentence that is, for the card's baby talk), `call_deadline`. |
-| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `games` (played and won per game), `memories` (first snow and frost), `hatches_at` (while an egg), `next_world`, `next_egg` and `journal` (the device's retired pets). |
+| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `memories` (first snow and frost), `hatches_at` (while an egg), `next_world`, `next_egg` and `journal` (the device's retired pets). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far (attribute `discipline_misses`: fake calls nobody answered). |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them; `moments`: the last 10 things that happened to it, for the card to react to. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
@@ -431,6 +431,13 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 
   A pet with no care misses and a little discipline (35 or more) grows up devoted;
   it takes about five misses, with no scolding, to grow up scrappy.
+- **Personality:** on becoming a teen, the pet settles into one of eight
+  personalities and keeps it for life: mellow, sweet, bouncy, starry, old soul,
+  fancy, charming or plucky. Any creature can be any type. It's mostly luck; each
+  trait it has by then nudges it a little toward two types (a homebody leans sweet
+  or mellow), and how it was cared for never counts. It's flavour only: it never
+  changes a stat, a call or a care result. The status screen and the journal show
+  it; how each type talks comes in a later update.
 - **Traits:** the pet picks up habits from your house and keeps them for life, up
   to **four** (an inherited one counts; once it has four it learns no more). Only
   time it spends awake counts, and traits only ever add a little happiness (all
@@ -482,7 +489,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   a world change is waiting. The choice is for one egg; the next is a surprise again.
 - **The journal:** on the status screen, tap "journal". It shows the world's
   creatures (ones nobody in this home has raised yet are silhouettes) and this
-  device's family line: each generation with its traits, stars and upbringing.
+  device's family line: each generation with its traits, stars, upbringing and
+  personality.
 - **Notifications:** opt in per person. On the status screen, tap "notify me" to get
   this pet's calls, sickness, hatching, growing up, new or deeper traits, the season's
   first snow and frost, new eggs, and a holiday greeting on the morning of Halloween
@@ -621,7 +629,7 @@ names are included.
 `virtual_pet_call_started`, `virtual_pet_call_answered`, `virtual_pet_care_miss`,
 `virtual_pet_discipline_miss`, `virtual_pet_pooped`, `virtual_pet_became_sick`,
 `virtual_pet_recovered`, `virtual_pet_fell_asleep`, `virtual_pet_woke_up`,
-`virtual_pet_stage_changed` (with `upbringing` on reaching adulthood), `virtual_pet_care`, `virtual_pet_hatched`,
+`virtual_pet_stage_changed` (with `personality` on becoming a teen, `upbringing` on reaching adulthood), `virtual_pet_care`, `virtual_pet_hatched`,
 `virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`,
 `virtual_pet_game_finished` (with `game`, `won`, `wins`), `virtual_pet_chore_treat`,
 `virtual_pet_sunrise`, `virtual_pet_sunset`, `virtual_pet_good_morning`,

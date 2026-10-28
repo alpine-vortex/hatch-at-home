@@ -32,7 +32,9 @@ details before committing it.
 **The driving role for this project passed to the owner's "Hatch First Mate"
 session** (owner's request, 2026-10-28). Released: 0.33.1 (PR #29: the "birthday on
 my phone" switch, off by default; the Art session's redrawn party hat, PR #28; a
-sturdier idle-life card check). Pre-released: **0.34.0b1** (PR #31, the photo).
+sturdier idle-life card check). Pre-released: **0.34.0b1** (PR #31, the photo), **0.34.0b2** (PR #34, baby talk) and
+**0.35.0b1** (PR #36, personality P1). **There will be no 0.34.0** (owner, 2026-10-28):
+after the owner's phone test, the next full release is **0.35.0**, with all three.
 
 **Phase 4 of the voices plan, the photo (A7), is merged and pre-released as
 0.34.0b1** (PR #31, 2026-10-28; from `docs/plan-2026-10-28-phase4-photo.md` draft 2,
@@ -40,15 +42,28 @@ plus its tier-2 audit's fixes). **Owed: the phone test** (owner, 2026-10-28: not
 possible now, marked for later): on the iPhone and Android companion apps, open a
 best friend's journal, tap "save" on a photo, and say what happened. Then b2 if
 saving needs changes (the Android "you can save it from a computer" line waits on
-this answer), and release 0.34.0. `scripts/test` 409, `scripts/card-check` 94 at 0.34.0b1.
+this answer), and release 0.35.0 (no 0.34.0, above). `scripts/test` 409, `scripts/card-check` 94 at 0.34.0b1.
 
-**Phase 5 of the voices plan, baby talk (A8), is built as 0.34.0b2** (crew branch
-`crew/hatch-at-home-s2416-phase-5-of-the-voices-plan-bab`, 2026-10-28; from
-`docs/plan-2026-10-28-phase5-baby-talk.md` draft 2 and the owner's approved lines;
-not yet audited, PR'd or released). It rides in the 0.34.0 beta series because the
-0.34.0b1 phone test is still owed. Two commits: the switch and the card's lines,
-then `reason_key` on `sensor.mood` (revertable alone). `scripts/test` 444,
-`scripts/card-check` 111. Next: the tier-2 audit of the built work, then the PR.
+**Phase 5 of the voices plan, baby talk (A8), is merged (PR #34) and pre-released
+as 0.34.0b2** (from `docs/plan-2026-10-28-phase5-baby-talk.md` draft 2 and the
+owner's approved lines). It rides in the 0.34.0 beta series because the 0.34.0b1
+phone test is still owed. `scripts/test` 444, `scripts/card-check` 111 at 0.34.0b2.
+**Still owed: the owner's phone test of 0.34.0b1/b2** (the photo's "save" on the
+iPhone and Android companion apps, above), then release 0.35.0.
+
+**Personality P1, the type, is merged (PR #36) and pre-released as 0.35.0b1**
+(2026-10-28; from `docs/plan-2026-10-28-personality-types.md` draft 2, plus its
+tier-2 audit's nits). Personality starts the 0.35.0 series. A teen settles one of eight types
+(`model.PERSONALITIES`, `personality_for`: its own `Random(f"personality-{born}")`,
+nudged by trait leanings, never care); saved on `PetState.personality`, backfilled
+at load for teens and adults, kept in the journal record; `sensor.life_stage`
+attribute `personality` (unrecorded) and diagnostics; the card's "personality"
+status row and the journal line. No lines yet (P2a). Release note (owner, plan Q10):
+"your teen and adult pets now have a personality; how it talks comes in the next
+update". `scripts/test` 458,
+`scripts/card-check` 116. Next: P2a (its voice), after the owner's say.
+Card checks stub `el._state` for the life stage (kept until the screenshot) to show
+a teen, an adult and journal records; see "4c" in `scripts/card-check.js`.
 
 **For personality P2 (the `_lines` helper as built):** `_lines(s, key, normal, arg)`
 returns `{text, baby}`, and the call sites pass `catch: !line.baby`, so a persona
@@ -60,8 +75,8 @@ card lines by name (`care_miss`, `tucked_in`...), `WISHES.<kind>`,
 `REFUSALS.<result>`, `season.<key>`, and `reason.<reason_key>` for the mood line.
 `_costume` takes a `catchy` flag. The card check reads `BABY` from the card's
 source (`const BABY = {...\n};`), so a `PERSONA` table of the same shape can share
-that lint. **Personality types** has a plan in draft (crew branches; draft 2
-folding its audit).
+that lint. **Personality types** has its plan
+(`docs/plan-2026-10-28-personality-types.md`, draft 2, on main); P1 is built (above).
 
 The owner has said (2026-10-28): open, push and merge PRs when ready, and start on
 the next work. The way the owner wants work done: **a full plan, an adversarial
