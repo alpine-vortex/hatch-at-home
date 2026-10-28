@@ -150,3 +150,11 @@ adults stay on screen; otter 1.05, squirrel none), which the card applies with t
 fixed. Sizes still vary a little between moods (asleep and sick come out bigger), as
 the teens' do. Prompts are in `art/<species>/adult/`, Sol's adult scripts in
 `art/adults/`; the raw sheets aren't committed.
+
+## Squirrel `cheeks`: six legs fixed (2026-10-28, v0.29.1)
+
+`child_cheeks_1/2` (the snack reaction) held both forepaws at the chest but still
+stood on three feet, so it read as six legs. The middle foot was removed by hand on
+the 64×64 art grid (rows 53–55 cleared, row 52 closed with the outline colour); the
+haunch foot and the far foot stay. `child_hungry_2` and `child_shiver` have the same
+paws-up-on-three-feet pose and haven't been touched.
