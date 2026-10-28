@@ -32,5 +32,8 @@
   "words": { "food": "shrimp", "home": "den" },
   "voice": { "sound": "bloop", "catchphrase": "wiggle", "pitch": 340, "pace": 25, "likes": ["shrimp", "crab", "clams"] },
   "reactions": { "play": "jar", "won": "colour_shift", "praise": "colour_shift", "scold": "ink" },
-  "head": { "baby": [130, 116], "child": [130, 100], "teen": [122, 76], "adult": [122, 108] }
+  "head": { "baby": [130, 116], "child": [130, 100], "teen": [122, 76], "adult": [122, 108] },
+  "hat": {
+    "child_watch_tv": [102, 96]
+  }
 }

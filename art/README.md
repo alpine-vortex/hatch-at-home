@@ -166,3 +166,10 @@ lost in the cut) and frames drawn at the wrong size for their stage. The axolotl
 moth outlines were closed with `art/adults/outline_fix.py`, and the oversized gecko sick
 and squirrel baby cozy/sleepy frames were shrunk with `scripts/art/rescale.py`. What
 needs new drawings is listed in `art/redraw-2026-10-28.md`.
+
+## The 2026-10-28 creatures
+
+`new-creatures/` holds the configs and probe prompts for the 17 creatures that bring
+every world to five. How they're made, the checklist for each set and what the probes
+taught us are in `docs/design-worlds.md` ("The 2026-10-28 creatures"). Probe sheets
+are in `art/<id>/<id>_probe.png`.

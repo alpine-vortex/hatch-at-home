@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.35.0b2";
+const VERSION = "0.35.0b3";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -3993,7 +3993,7 @@ class HatchPetCard extends HTMLElement {
   _seasonTick(s) {
     const season = seasonNow(this._config);
     if (!season || !s.species) return;
-    const spot = s.species.hat?.[s.drawn] || s.species.head?.[s.drawn];
+    const spot = this._hatSpot(s) || s.species.head?.[s.drawn];
     if (spot) this._headTopAll(s, spot[0], spot[1]); // measure ahead
     const now = Date.now();
     const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -4039,6 +4039,7 @@ class HatchPetCard extends HTMLElement {
         return;
       }
     }
+    if (this._hatSpot(s) === null) return; // a pose no hat can sit on: wait for the next
     const treatDay = treatOn && today.getMonth() + 1 === treatOn[0] && today.getDate() === treatOn[1];
     if (treatDay && !s.treated) {
       s.treated = true;
@@ -4075,6 +4076,7 @@ class HatchPetCard extends HTMLElement {
   _partyTick(s) {
     if (!this._state(s, "sensor.life_stage")?.attributes.birthday) return;
     if (!this._free(s) || s.pet.classList.contains("hop")) return;
+    if (this._hatSpot(s) === null) return; // a pose no hat can sit on: wait for the next
     const season = seasonNow(this._config);
     const today = new Date();
     const treatOn = season?.treat && seasonDate(season.treat, today.getFullYear());
@@ -4176,6 +4178,16 @@ class HatchPetCard extends HTMLElement {
     return low;
   }
 
+  // species.json "hat" for the pose on show ("adult_dirty"), else for the stage:
+  // a pose that sits the creature up carries its head well above the stage's point
+  // (the opossum frets sitting up). null: no hat fits the pose (its frames bounce
+  // between a leap and a crouch), so the costume waits for another pose.
+  _hatSpot(s) {
+    const pose = (this._frames(s)[0] || "").replace(/_\d+$/, "");
+    const hat = s.species.hat || {};
+    return pose in hat ? hat[pose] : hat[s.drawn];
+  }
+
   // The hat sits on top of the head, brim sunk in a little.
   _costume(s, season, line, catchy = true) {
     const head = s.species?.head?.[s.drawn];
@@ -4185,7 +4197,7 @@ class HatchPetCard extends HTMLElement {
     const r = s.pet.getBoundingClientRect();
     const sr = s.screen.getBoundingClientRect();
     // species.json "hat" where ears or antlers rise above the skull (the deer).
-    const own = s.species.hat?.[s.drawn];
+    const own = this._hatSpot(s);
     const k = r.height / 256;
     // With a hat point, the lower of it and the frames' top in its column (another
     // mood's frames can carry the head lower).

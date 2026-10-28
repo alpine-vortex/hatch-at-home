@@ -1,0 +1,98 @@
+{
+  "name": "Tufted puffin",
+  "ready": true,
+  "stages": [
+    "baby",
+    "child",
+    "teen",
+    "adult"
+  ],
+  "scale": {
+    "adult": 1.1
+  },
+  "moods": [
+    "content",
+    "excited",
+    "cozy",
+    "bored",
+    "hungry",
+    "sleepy",
+    "asleep",
+    "sick",
+    "calling",
+    "dirty"
+  ],
+  "frames": 2,
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "fish_bill": [
+      "child_fish_bill_1",
+      "child_fish_bill_2"
+    ],
+    "waddle": [
+      "child_waddle_1",
+      "child_waddle_2"
+    ],
+    "bill_clack": [
+      "child_bill_clack_1",
+      "child_bill_clack_2"
+    ]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "play",
+    "clean": "otter/bubbles",
+    "medicine": "bird/medicine",
+    "blanket": "bird/blanket",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": [
+      "bird/poop_1",
+      "bird/poop_2",
+      "bird/poop_3"
+    ]
+  },
+  "backgrounds": {
+    "day": "otter/bg_day",
+    "night": "otter/bg_night",
+    "rain": "otter/bg_rain",
+    "dim": "otter/bg_night"
+  },
+  "words": {
+    "food": "fish",
+    "home": "burrow"
+  },
+  "voice": { "sound": "arr", "catchphrase": "flap flap", "pitch": 600, "pace": 38, "likes": ["sand eels", "herring", "capelin"] },
+  "reactions": {
+    "feed": "fish_bill",
+    "snack": "fish_bill",
+    "play": "waddle",
+    "won": "waddle",
+    "scold": "bill_clack"
+  },
+  "head": {
+    "baby": [
+      140,
+      108
+    ],
+    "child": [
+      120,
+      68
+    ],
+    "teen": [
+      114,
+      36
+    ],
+    "adult": [
+      118,
+      48
+    ]
+  },
+  "murk": "otter/murk"
+}
