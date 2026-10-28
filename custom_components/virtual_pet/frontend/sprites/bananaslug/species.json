@@ -1,0 +1,95 @@
+{
+  "name": "Banana slug",
+  "ready": true,
+  "stages": [
+    "baby",
+    "child",
+    "teen",
+    "adult"
+  ],
+  "scale": {
+    "adult": 1.1
+  },
+  "moods": [
+    "content",
+    "excited",
+    "cozy",
+    "bored",
+    "hungry",
+    "sleepy",
+    "asleep",
+    "sick",
+    "calling",
+    "dirty"
+  ],
+  "frames": 2,
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "slime_slide": [
+      "child_slime_slide_1",
+      "child_slime_slide_2"
+    ],
+    "curl_up": [
+      "child_curl_up_1",
+      "child_curl_up_2"
+    ],
+    "mushroom": [
+      "child_mushroom_1",
+      "child_mushroom_2"
+    ]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "play",
+    "clean": "bird/sparkle_clean",
+    "medicine": "bird/medicine",
+    "blanket": "bird/blanket",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": [
+      "bird/poop_1",
+      "bird/poop_2",
+      "bird/poop_3"
+    ]
+  },
+  "backgrounds": {
+    "day": "bird/bg_day",
+    "night": "bird/bg_night",
+    "rain": "bird/bg_rain",
+    "dim": "bird/bg_dim"
+  },
+  "words": {
+    "food": "mushrooms",
+    "home": "log"
+  },
+  "reactions": {
+    "play": "slime_slide",
+    "won": "slime_slide",
+    "feed": "mushroom",
+    "scold": "curl_up"
+  },
+  "head": {
+    "baby": [
+      176,
+      148
+    ],
+    "child": [
+      196,
+      132
+    ],
+    "teen": [
+      218,
+      116
+    ],
+    "adult": [
+      226,
+      144
+    ]
+  }
+}
