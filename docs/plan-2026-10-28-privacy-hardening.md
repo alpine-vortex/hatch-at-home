@@ -47,9 +47,13 @@ Line numbers are for `main` at `fc239dc` (0.35.0b2). Python is unchanged since t
 - **Anything on the bus is recorded.**
   - The recorder stores custom bus events (`virtual_pet_*`) in its `events` table by
     default, with their `event_data`.
-  - Every `subscribe_events` client also sees them live. That includes non-admin users:
-    the frontend subscribes to `state_changed` only, but any admin can subscribe to all
-    events.
+  - Live, they reach admins only. `handle_subscribe_events`
+    (`homeassistant/components/websocket_api/commands.py`) refuses a non-admin any event
+    type outside `SUBSCRIBE_ALLOWLIST`, and `virtual_pet_*` is not on it.
+  - So the threat model is:
+    - **Attributes (A–C, J, K)** are readable live by every signed-in user.
+    - **Bus events (D–I)** reach admins live, and anyone with history or database access
+      through the recorder.
 - **Caller-scoped means a reply or a pushed message on one authenticated connection,
   addressed by `connection.user.id`.**
   - The existing examples:
@@ -60,6 +64,11 @@ Line numbers are for `main` at `fc239dc` (0.35.0b2). Python is unchanged since t
   - A service response goes only to the caller. The `call_service` event that Home
     Assistant records carries the service data, which is `{entity_id, queued}` for
     `visit`, but never the response.
+  - The recorded `call_service` row also carries the caller's `context_user_id`.
+    - For `visit`, that tells the database who looked in and when, but carries no bond
+      data. Accepted, and noted here.
+    - For `notify_me`, it records who opted in (`enabled` plus the user). That is the same
+      fact as `notify_users`, so it needs a fix (row M).
 - **`_fire`'s events carry no `Context`.** `_fire` (`coordinator.py:783-811`) calls
   `hass.bus.async_fire(type, data)` with none, so the recorded event's `context_user_id`
   is empty.
@@ -84,6 +93,7 @@ can read today. The **Reads** column names every consumer found by grepping
 | I | bus + moments | `watching` `{title}`, `listening` `{title, artist?}` | `home.py:HouseMoments.update` 327-341 | Card `case "watching"` 2914, `case "listening"` 2920. `tests/test_init.py:1268-1279`. Guide 636. |
 | J | `sensor.life_stage` attr | `dream.title` (a show or song it dreamed of) | `coordinator._check_ins` 903-904 seeds it; `model.dream_on_waking` copies the seed; `sensor.py` 228 | Card `DREAMS.watching` / `DREAMS.listening` 713-715, said in `_firstLook`. card-check 1160. |
 | K | `sensor.last_care` attr | `log[].by` (HA user's display name) | `model._log` 1102, 1242, 1332; `coordinator._who` 1809-1814 | Card status log lines (`by …`, hidden on a shared screen). `tests/test_init.py:165`, `tests/test_assist.py:134`. **Not in the owner's F1 list: Q4.** |
+| M | recorder (`call_service`) | `notify_me` service data `{entity_id, enabled}` plus `context_user_id` | The card's `_setNotify` 3353-3374 calls `callService("virtual_pet", "notify_me", …)` | The recorder's `events` table. It is the same fact as B, kept in history. |
 | L | bus | `virtual_pet_welcomed` `{pet_id}` | `coordinator._welcome` 1597-1608 | Already clean. Kept. |
 
 **Checked, needing no change:**
@@ -100,6 +110,12 @@ can read today. The **Reads** column names every consumer found by grepping
   - `coordinator._notify`, 1554-1581, and `_birthday_morning`, 1500-1539, read
     `state.notify_users` and `bond_for` on the server.
   - Each phone gets its own nickname (`by_nickname`, 1571-1581).
+- **`notify.message` (`notify.py:130`) has no text for D–G.** None of `bond_up`,
+  `bond_record`, `bond_favourite`, `friend_home` or `tucked_in` appears in `notify.py`.
+  So `_notify` sending to every `notify_users` member never carries one person's bond
+  moment to another's phone.
+  - The build keeps it that way: a test sends each of the five and asserts that no notify
+    call follows.
 - **diagnostics.py.** It already redacts `by`, `notify_users`, `bonds`, `user`, `for` and
   `for_name` (61), plus moments' `user` and `nickname` (98-100). After this plan, the
   redaction stays as a belt-and-braces measure.
@@ -181,6 +197,11 @@ per-connection pushes:
   - `PRIVATE_EVENT_FIELDS = {"user", "for", "for_name", "nickname", "favourite", "title",
     "artist"}` is a final scrub of `data`, applied before `async_fire` and before
     `self.moments.insert`. Then a missed case leaks nothing.
+- **`websocket_notify_me`, a new `virtual_pet/notify_me` command** (`{entity_id,
+  enabled}`).
+  - It calls `pet.async_set_notify(connection.user.id, enabled)`, like
+    `websocket_baby_talk` (`__init__.py:370-392`), so nothing goes on the bus (row M).
+  - The `virtual_pet.notify_me` service stays for automations and scripts.
 - **Push on change.** `_publish()` (`coordinator.py:1635`) also calls `_push_watchers()`.
   - It rebuilds each watcher's `mine` and `house` and sends only what changed since that
     watcher's last send. This covers `async_set_notify`, bond points from care and games,
@@ -261,6 +282,10 @@ per-connection pushes:
   - `WISHES_FOR[k][0]` ("I hope Sam plays…") becomes unused: delete it.
   - `_wishSaid` tests `s.mine?.wish_for_you` instead of `wish.for && wish.for_name`.
 - **The "notify me" bell** (3160) reads `s.mine?.notify_me`.
+  - `_setNotify` calls `callWS({type: "virtual_pet/notify_me", …})` instead of the service,
+    as `_setBabyTalk` (3323) does.
+  - On `unknown_command` (a stale page against an older server) it falls back to the
+    service.
   - `_setNotify` (3353-3374) already flips the button optimistically and calls the
     `notify_me` service. It keeps doing that, and also sets `s.mine.notify_me = enabled`
     at once, so a redraw before the push doesn't flip it back.
@@ -399,15 +424,21 @@ not just one that `PetState(**kwargs)` accepts.
 
 ### `coordinator.async_load` (325-357)
 
-- **`from_dict` raises `DamagedSave`, or any other exception** (a last-resort `except
-  Exception`, logged with the traceback):
+- **Only for a non-dict root (`DamagedSave`)** (the scope is Q9):
   1. Copy the raw data into a sibling store,
      `Store(hass, 1, f"{DOMAIN}.{entry_id}.damaged")`, before anything else is saved.
   2. Raise a repair issue `save_damaged` (`self._issue`, 384-398, is_fixable False) that
      names the pet and the backup file.
   3. Start a fresh egg **without** `_welcome()`. It isn't a new pet in the house.
   4. Set up as normal.
-- **The pet loads every time.** Only a non-dict root or a bug reaches this path.
+- **Any other exception from `from_dict`** is a bug in the validation, not damaged data.
+  It is logged and raises a `save_damaged` repair issue, and setup fails
+  (`ConfigEntryNotReady` is wrong here: retrying won't help, so raise `ConfigEntryError`).
+  - The save file is untouched, and the next release can load it.
+  - It never resets the pet. See Q9.
+- **`async_remove_entry`** (`__init__.py:432-438`) also removes the `.damaged` store and
+  deletes the `save_damaged` issue, as it does for `missing_entities` and
+  `world_not_ready`.
 
 ### `people.People.async_load` (`people.py:90-96`) and readers
 
@@ -474,14 +505,21 @@ New tests:
    - Assert that no event's `data` has any key in `PRIVATE_EVENT_FIELDS`.
    - Assert that no value equals a user ID, a person's first name, a nickname or the
      title "Bluey".
-   - Assert that no event's `context.user_id` is set.
+   - Assert that no `virtual_pet_*` event's `context.user_id` is set. Scope this to the
+     pet's own events: `call_service` and `button.press` state changes rightly carry the
+     caller's context.
+   - Assert that the card's `virtual_pet/notify_me` command fires no `call_service`.
+   - Fire each of D–G with someone in `notify_users`: no `notify.*` call follows.
 5. **Nothing personal on states.**
    - After the same day, walk `hass.states.async_all()` for the pet's entities and
      `json.dumps` their attributes.
    - None of the IDs, names, nicknames or titles above may appear.
    - Catch `wish.for`, `notify_users`, `dream.title` and `moments`.
 6. **Recorder.**
-   - With `recorder_mock` (already used by `tests/test_wellbeing.py:31,84`), run the
+   - Put this in its own module, `tests/test_recorded.py`, with the `recorder_db_url`
+     fixture override that `tests/test_wellbeing.py:31` has. The recorder's database must
+     be ready before Home Assistant starts.
+   - With `recorder_mock` (as `tests/test_wellbeing.py:84`), run the
      scripted day and call `async_wait_recording_done`.
    - Query the `events` table (`EventData.shared_data`) and `state_attributes`
      (`StateAttributes.shared_attrs`) for the same strings.
@@ -575,7 +613,7 @@ release is 0.35.0. That needs the owner's say, Q6.
 |---|---|---|
 | **P1: F5 + F6** | `from_dict` hardening and the helpers, `DamagedSave` handling with a repair issue and backup, the `People` sanitiser, the observer and `_dropSlide`. Tests 8, plus the F6 card check. | Independent of the channel, and the lowest risk. It makes the later moment and storage tests stand on a loader that can't crash. |
 | **P2: F3** | `_welcome` recipients, `notify.py` docstring, guide. Test 7. | Small and server-only. It can ride with P1 if the reviewer prefers. |
-| **P3: F1 + F2** | The `virtual_pet/subscribe` command, `_watchers` and `_private` and `_house`, the `_fire` split and scrub, `sensor.py` attribute removals, `model.pick_wish` and `dream_on_waking`, the card on `s.mine` and `s.house`, the `_wishLine` rewrite, the debug-sensor redaction, guide and release note. Tests 1–6 and 9, plus the card checks above. | One PR. Both change what `moments` and the bus carry, and both depend on the same channel. Splitting them would ship a card that half-reads the old attributes. |
+| **P3: F1 + F2** | The `virtual_pet/subscribe` and `virtual_pet/notify_me` commands, `_watchers` and `_private` and `_house`, the `_fire` split and scrub, `sensor.py` attribute removals, `model.pick_wish` and `dream_on_waking`, the card on `s.mine` and `s.house`, the `_wishLine` rewrite, the debug-sensor redaction, guide and release note. Tests 1–6 and 9, plus the card checks above. | One PR. Both change what `moments` and the bus carry, and both depend on the same channel. Splitting them would ship a card that half-reads the old attributes. |
 
 Each PR runs `scripts/test` and `scripts/card-check`. P3 is the tier-2 build.
 
@@ -689,3 +727,12 @@ bond-moment line are unchanged.
    - **Recommendation: no.** Bonds key on the HA user, not the person entity
      (`_person`, 1820-1826). A system user never subscribes from a browser, and a system
      user's bond is never built (`_person` filters `system_generated`).
+9. **F5: what happens when validation itself fails?**
+   - A fresh egg is the only way forward when the root isn't an object: there is nothing
+     to keep, and the raw value is backed up.
+   - For any other exception during load (a bug in the new checks, say), resetting would
+     turn every pet into an egg on an upgrade.
+   - **Recommendation: the egg reset only for a non-dict root.** Anything else fails
+     setup with a repair issue and leaves the save file untouched. A pet that doesn't load
+     until a fix ships is better than a pet that is quietly replaced.
+   - The alternative, a reset on any error, needs the owner's say: it loses a pet.
