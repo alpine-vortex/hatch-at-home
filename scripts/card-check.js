@@ -135,9 +135,10 @@ async function main() {
 
   // No seasonal touches until their own check: a costume moment would take the
   // bubble in the middle of another check.
-  await page.locator("hatch-pet-card").evaluate((el) => {
+  const seasonsOff = () => page.locator("hatch-pet-card").evaluate((el) => {
     el.setConfig({ ...el._config, seasonal: false }); el.hass = el._hass;
   });
+  await seasonsOff();
   const cur = () => page.locator("hatch-pet-card .slide:not(.away-slide)");
   const shot = (name) => cur().locator(".device").screenshot({ path: path.join(OUT, `${name}.png`) });
   const bubble = () => cur().locator(".bubble").innerText();
@@ -239,6 +240,7 @@ async function main() {
   await page.reload();
   await signedIn();
   await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+  await seasonsOff(); // the reload brought the card back with its own config
   for (let i = 0; i < slides; i++) {
     if ((await page.locator("hatch-pet-card .title").innerText()).trim() === petName) break;
     await page.locator("hatch-pet-card .nav.next").click();
@@ -436,16 +438,23 @@ async function main() {
     const hat = s.screen.querySelector(".costume .hat")?.getBoundingClientRect();
     const at = el._flairAnchors(s);
     const sr = s.screen.getBoundingClientRect();
+    const r = s.pet.getBoundingClientRect();
+    // The real top of the head in the frame on show (or the species' hat point).
+    const [hx, hy] = s.species.hat?.[s.drawn] || s.species.head[s.drawn];
+    const top = s.species.hat?.[s.drawn] ? hy : el._headTop(s, hx, hy);
     return {
       pieces: [...s.seasonBox.querySelectorAll("img")].map((i) => i.className.split(" ")[0]),
-      hatBottom: hat && hat.bottom - sr.top, hy: at.hy, fy: at.fy, said: s.bubble.textContent,
+      hatBottom: hat && hat.bottom - sr.top, headTop: r.top - sr.top + top * (r.height / 256),
+      fy: at.fy, said: s.bubble.textContent,
     };
   });
   check("halloween dresses the scene", spooky.pieces.includes("lantern") && spooky.pieces.includes("web"),
     spooky.pieces.join(" "));
+  // Seated: the brim sinks a little into the head, never floats above its top.
   check("the costume hat sits on the head",
-    spooky.hatBottom >= spooky.hy - 2 && spooky.hatBottom < spooky.fy && spooky.said === "boo!",
-    `hat bottom ${Math.round(spooky.hatBottom)} vs head ${Math.round(spooky.hy)}`);
+    spooky.hatBottom > spooky.headTop && spooky.hatBottom < spooky.headTop + 20 &&
+      spooky.hatBottom < spooky.fy && spooky.said === "boo!",
+    `hat bottom ${Math.round(spooky.hatBottom)} vs head top ${Math.round(spooky.headTop)}`);
   await shot("05-halloween");
   await card.evaluate((el) => { el.setConfig({ ...el._config, seasonal: false }); el.hass = el._hass; });
   await page.waitForTimeout(800);
