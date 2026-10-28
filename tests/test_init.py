@@ -863,6 +863,10 @@ async def test_the_personality_attribute_stays_out_of_history(
     diag = await async_get_config_entry_diagnostics(hass, config)
     assert diag["now"]["personality"] == attrs["personality"]
     assert diag["pet"]["personality"] == attrs["personality"]
+    # ...and it reaches the store when the entry unloads.
+    assert await hass.config_entries.async_unload(config.entry_id)
+    await hass.async_block_till_done()
+    assert hass_storage[STORE_KEY]["data"]["personality"] == attrs["personality"]
 
 
 async def test_a_child_has_no_personality_attribute_value(
