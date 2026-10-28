@@ -2900,6 +2900,9 @@ async def test_baby_talk_is_each_persons_and_stays_off_the_record(
     assert (await send("sensor.pip_mood", True))["success"]
     assert pet.people.person(hass_admin_user.id)["baby_talk"] is True
     assert pet.people.baby_talk(other.id) is False  # two people, independent
+    pet.people.person(other.id)["baby_talk"] = "off"  # a hand-edited string is not on
+    assert pet.people.baby_talk(other.id) is False
+    del pet.people.person(other.id)["baby_talk"]
     pet._visits.clear()
     assert (await pet.async_visit(hass_admin_user.id))["baby_talk"] is True
     assert (await pet.async_visit(other.id))["baby_talk"] is False

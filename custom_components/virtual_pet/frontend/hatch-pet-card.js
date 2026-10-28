@@ -2476,6 +2476,13 @@ class HatchPetCard extends HTMLElement {
     return `while you were out, I ${list.join(" and ")}!`;
   }
 
+  _hourHello(first) {
+    const hour = new Date().getHours();
+    return !first
+      ? (hour < 12 ? "morning!" : hour < 18 ? "hi!" : "evening!")
+      : hour < 12 ? `morning, ${first}!` : hour < 18 ? `hi, ${first}!` : `evening, ${first}!`;
+  }
+
   _greet(s) {
     if (s.greeted || !this._free(s)) return;
     s.greeted = true;
@@ -2493,10 +2500,7 @@ class HatchPetCard extends HTMLElement {
     } catch (err) {
       // no storage (private window): greet anyway, once per page load
     }
-    const hour = new Date().getHours();
-    const hello = !first
-      ? (hour < 12 ? "morning!" : hour < 18 ? "hi!" : "evening!")
-      : hour < 12 ? `morning, ${first}!` : hour < 18 ? `hi, ${first}!` : `evening, ${first}!`;
+    const hello = this._hourHello(first);
     // Baby talk (never on a shared screen, so only with a name): each set swaps
     // on its own, and names go in after the choice.
     const baby = (key, name, normal) => this._babySet(s, key)?.map((line) => line(name)) || normal;
@@ -3202,18 +3206,21 @@ class HatchPetCard extends HTMLElement {
     button.classList.add("pending");
     button.setAttribute("aria-pressed", String(enabled));
     button.textContent = enabled ? "on" : "off";
+    setBabyTalk(user, enabled); // at once, so a re-render mid-call draws the new state
     try {
       await this._hass.callWS({ type: "virtual_pet/baby_talk", entity_id: id, enabled });
-      setBabyTalk(user, enabled);
       if (enabled) {
-        // A baby or child on screen says hello in its new words; else a note.
-        const name = short(this._hass.user?.name?.trim().split(/\s+/)[0], 16);
-        // A child's hello is the plain one (the plan's child greeting).
-        const hello = this._babySet(s, "greet") || [(n) => `hi, ${n}!`, (n) => `${n}!! hi!`];
-        if (this._babyStage(s)) this._speak(s, name ? pick(hello)(name) : "hi hi!", 4000);
-        else this._statusMessage(s, "OK, baby talk for babies and children ♥");
+        // The status screen hides the bubble, so the note always shows; a baby
+        // or child on screen says hello as well, for when the screen closes.
+        this._statusMessage(s, "OK, baby talk for babies and children ♥");
+        if (this._babyStage(s)) {
+          const name = short(this._hass.user?.name?.trim().split(/\s+/)[0], 16);
+          const baby = this._babySet(s, "greet"); // a child's hello is the normal one
+          this._speak(s, name ? (baby ? pick(baby)(name) : this._hourHello(name)) : "hi hi!", 4000);
+        }
       }
     } catch (err) {
+      setBabyTalk(user, !enabled);
       button.setAttribute("aria-pressed", String(!enabled));
       button.textContent = !enabled ? "on" : "off";
       this._statusMessage(s, "That didn't work. Try again.");

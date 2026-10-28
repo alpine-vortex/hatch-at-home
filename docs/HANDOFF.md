@@ -63,7 +63,7 @@ source (`const BABY = {...\n};`), so a `PERSONA` table of the same shape can sha
 that lint. **Personality types** has a plan in draft (crew branches; draft 2
 folding its audit).
 
-026-10-28): open, push and merge PRs when ready, and start on
+The owner has said (2026-10-28): open, push and merge PRs when ready, and start on
 the next work. The way the owner wants work done: **a full plan, an adversarial
 audit by a fresh subagent, revise, then build**; after building, **another audit of
 the work**, fix, test (`scripts/test`, 409 tests), check the card

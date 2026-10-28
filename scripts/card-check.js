@@ -1778,6 +1778,15 @@ async function main() {
       out.failed = { pressed: btn().getAttribute("aria-pressed"), calls: calls.length, note: s.status.querySelector(".status-feedback")?.textContent,
         cache: localStorage.getItem(`hatch-baby-talk-${el._hass.user.id}`) };
       el._hass = { ...el._hass, callWS: realWS };
+      // A baby on screen: the status screen hides the bubble, so the note must show.
+      t.stage("baby");
+      el._hass = { ...el._hass, callWS: async () => null };
+      btn().click(); // the failed tap left it on; turn off, then on
+      await new Promise((r) => setTimeout(r, 100));
+      btn().click();
+      await new Promise((r) => setTimeout(r, 100));
+      out.babyNote = s.status.querySelector(".status-feedback")?.textContent;
+      el._hass = { ...el._hass, callWS: realWS };
       return out;
     });
     check("the baby talk switch: one call per tap, the button follows, a failed call goes back",
@@ -1785,7 +1794,7 @@ async function main() {
       toggle.type === "virtual_pet/baby_talk" && toggle.enabled === true && toggle.cache === "on" &&
       toggle.note === "OK, baby talk for babies and children ♥" &&
       toggle.failed.pressed === "true" && toggle.failed.calls === 2 && toggle.failed.note === "That didn't work. Try again." &&
-      toggle.failed.cache === "on", JSON.stringify(toggle));
+      toggle.failed.cache === "on" && toggle.babyNote === "OK, baby talk for babies and children ♥", JSON.stringify(toggle));
     await page.locator("hatch-pet-card").evaluate((el) => { // the switch, on, without the failed tap's note
       const s = el._slides[el._index];
       el._renderStatus(s, []);
