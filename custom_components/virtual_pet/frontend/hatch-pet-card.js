@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.33.1";
+const VERSION = "0.34.0b1";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -534,6 +534,7 @@ const NOTES = {
     : `it's ${n.season}, your favourite! ${SEASON_ICONS[n.season] || ""}`.trim(),
   early_alarm: () => "early start tomorrow? sleep well ♥",
   up_early: () => "mmh... you're up before the sun... zzz ♥",
+  photo: () => "I made you something! it's in your journal ♥",
 };
 const DREAMS = {
   watching: (d) => `I dreamed about ${short(d.title)}!`,
@@ -603,6 +604,40 @@ function loadJson(path) {
     cache.set(path, request);
   }
   return cache.get(path);
+}
+
+// Images for a canvas (a photo): same origin, so the canvas stays untainted.
+const IMAGES = new Map();
+function loadImage(src) {
+  if (!IMAGES.has(src)) {
+    const request = new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`missing ${src}`));
+      img.src = src;
+    });
+    request.catch(() => { if (IMAGES.get(src) === request) IMAGES.delete(src); });
+    IMAGES.set(src, request);
+  }
+  return IMAGES.get(src);
+}
+
+// A creature's sprite; "bird/medicine" borrows another species' sprite.
+function spriteSrc(speciesId, sprite) {
+  const path = sprite.includes("/") ? sprite : `${speciesId}/${sprite}`;
+  return `${BASE}/sprites/${path}.png?v=${VERSION}`;
+}
+
+// A best friend's photo: a print, 300 x 380 (drawn at 2x), the picture a
+// square of the creature's day backdrop with the pet as it was then.
+const PHOTO = { w: 300, h: 380, px: 2, pic: 268, edge: 16 };
+const PHOTO_GROUND = { helper: 1.35, couch_potato: 1.35, player: -1.35, homebody: -1.3, fireside: 1.3, fog_wanderer: -0.6 };
+const inCompanionApp = () => /Home Assistant\//.test(navigator.userAgent || "");
+// "2026-10-28" as that day where the viewer is (not midnight UTC).
+function localDay(iso, locale) {
+  const [y, m, d] = String(iso).split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return new Date(y, m - 1, d).toLocaleDateString(locale || undefined, { day: "numeric", month: "long", year: "numeric" });
 }
 
 function escape(text) {
@@ -1070,6 +1105,17 @@ const STYLE = `
   .jtile img { width: 48px; height: 48px; image-rendering: pixelated; }
   .jtile.locked img { filter: brightness(0); opacity: .3; }
   .jlist { font-size: 12px; opacity: .9; display: flex; flex-direction: column; gap: 3px; }
+  .photos { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+  .prow { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px; }
+  .print { margin: 0; flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .screen .status .print img { width: 72px; height: 91px; box-shadow: 2px 2px 0 rgba(58,42,26,.35); }
+  .photo-dialog { width: min(300px, 90vw); box-sizing: border-box; padding: 12px; border: 3px solid #3a2a1a;
+    border-radius: 12px; background: #e9e2c6; color: #2f3a24; font: 400 13px 'Tiny5', monospace; text-align: center; }
+  .photo-dialog::backdrop { background: rgba(20, 16, 10, .65); }
+  /* Press and hold to save: nothing here blocks the long-press menu. */
+  .photo-dialog .pbig { display: block; width: 100%; height: auto; -webkit-touch-callout: default; user-select: auto; }
+  .photo-dialog p { margin: 8px 0 4px; }
+  .photo-dialog a { display: block; margin: 4px 0 8px; color: inherit; word-break: break-all; }
   .jlist .gt { padding-left: 10px; }
   .ticon { width: 14px; height: 14px; object-fit: contain; vertical-align: -3px; margin-right: 2px;
     image-rendering: pixelated; }
@@ -1580,6 +1626,7 @@ class HatchPetCard extends HTMLElement {
     s.visitedAt = 0;
     s.lookedFirst = false;
     s.wishDay = null;
+    this._dropPhotos(s);
   }
 
   // Take an open question off the screen (a game, another pet on this slide).
@@ -1720,9 +1767,7 @@ class HatchPetCard extends HTMLElement {
       img.style.display = "none";
       return;
     }
-    // "bird/medicine" borrows another species' sprite.
-    const path = sprite.includes("/") ? sprite : `${s.speciesId}/${sprite}`;
-    const src = `${BASE}/sprites/${path}.png?v=${VERSION}`;
+    const src = spriteSrc(s.speciesId, sprite);
     if (img.getAttribute("src") !== src) img.setAttribute("src", src);
     img.style.display = "";
   }
@@ -2938,7 +2983,7 @@ class HatchPetCard extends HTMLElement {
         this._statusMessage(s, "This browser can't save that setting.");
         return;
       }
-      if (on) this._slides.forEach((slide) => { this._clearAsk(slide); slide.queue = []; });
+      if (on) this._slides.forEach((slide) => { this._clearAsk(slide); slide.queue = []; this._dropPhotos(slide); });
       this._statusMessage(s, on ? "Nothing personal on this screen now." : "This screen is personal again.");
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
@@ -3080,6 +3125,7 @@ class HatchPetCard extends HTMLElement {
       e.stopPropagation(); // the screen behind would close the status
       this._tapped(e.currentTarget);
       s.journal = open;
+      if (open) this._loadPhotos(s); // a best friend's photos, theirs only
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
     });
@@ -3132,9 +3178,240 @@ class HatchPetCard extends HTMLElement {
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
       <div class="jgrid">${tiles.join("")}</div>
+      ${this._photoRow(s)}
       <div class="jlist">${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
-      <button class="jlink">‹ status</button>`;
-    if (this._setStatus(s, html)) this._journalLink(s, false);
+      <button class="jlink">‹ status</button>
+      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
+    if (!this._setStatus(s, html)) return;
+    this._journalLink(s, false);
+    s.status.querySelectorAll(".psave").forEach((button) => button.addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      this._tapped(e.currentTarget);
+      this._savePhoto(s, Number(e.currentTarget.dataset.gen));
+    }));
+  }
+
+  // --- A best friend's photo ---------------------------------------------------
+  // Only the viewer's (virtual_pet/photos, never a sensor), never on a shared
+  // screen; each drawn once and kept as a Blob behind a short blob: URL.
+
+  // The journal's "photos" row: a print per generation, oldest first.
+  _photoRow(s) {
+    if (sharedScreen() || !s.photos?.size) return "";
+    const prints = [...s.photos.values()].map(({ photo, url }) =>
+      `<figure class="print"><img src="${url}" alt="${escape(this._photoAlt(photo))}">` +
+      `<button class="bell psave" data-gen="${photo.generation}" ` +
+      `aria-label="${escape(`save the photo of ${photo.name}, generation ${photo.generation}`)}">save</button></figure>`);
+    return `<div class="photos"><span>photos</span><div class="prow">${prints.join("")}</div></div>`;
+  }
+
+  _photoAlt(photo) {
+    return `photo of ${photo.name}, best friends, ${localDay(photo.on, this._hass?.locale?.language)}`;
+  }
+
+  // Fetch the viewer's photos when the journal opens, and draw the new ones.
+  async _loadPhotos(s) {
+    const id = s.ids?.["sensor.life_stage"];
+    if (!id || !this._hass.user || sharedScreen()) return;
+    const epoch = s.photoEpoch || 0;
+    let photos;
+    try {
+      photos = (await this._hass.callWS({ type: "virtual_pet/photos", entity_id: id }))?.photos || [];
+    } catch (err) {
+      return; // an older integration: no photos
+    }
+    const kept = s.photos || new Map();
+    const next = new Map();
+    const made = [];
+    for (const photo of photos) {
+      const sig = JSON.stringify(photo);
+      const had = kept.get(photo.generation);
+      if (had?.sig === sig) {
+        next.set(photo.generation, had);
+        continue;
+      }
+      // A tainted canvas (a Cast receiver) or a missing creature: no print.
+      const print = await this._printPhoto(photo).catch(() => null);
+      if (print) {
+        made.push(print);
+        next.set(photo.generation, { ...print, sig, photo });
+      }
+    }
+    if ((s.photoEpoch || 0) !== epoch || s.ids?.["sensor.life_stage"] !== id || sharedScreen()) {
+      made.forEach((p) => URL.revokeObjectURL(p.url)); // dropped meanwhile
+      return;
+    }
+    for (const [gen, p] of kept) if (next.get(gen) !== p) URL.revokeObjectURL(p.url);
+    s.photos = next;
+    if (s.journal) this._renderJournal(s);
+  }
+
+  // A photo as a PNG: the Blob, its URL, and the File a share sheet takes
+  // (made now, so "save" can share straight from the tap).
+  async _printPhoto(photo) {
+    const canvas = await this._renderPhoto(photo);
+    const blob = await new Promise((resolve, reject) => {
+      try {
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no print"))), "image/png");
+      } catch (err) {
+        reject(err);
+      }
+    });
+    const name = `${String(photo.name).replace(/[\\/:*?"<>|]+/g, "").trim() || "pet"}-best-friends.png`;
+    const file = typeof File === "function" ? new File([blob], name, { type: "image/png" }) : null;
+    return { blob, url: URL.createObjectURL(blob), file, name };
+  }
+
+  // Draw a photo: a cream print with a thicker bottom edge, the creature's day
+  // backdrop cropped square, the pet as it was (its drawn stage, scale and
+  // perch, as on the shelf), one flair per place, its name and the day.
+  // sprite: false leaves the pet out (card-check compares the two).
+  async _renderPhoto(photo, { sprite = true } = {}) {
+    const sp = await loadJson(`sprites/${photo.species}/species.json`);
+    const { w, h, px, pic, edge } = PHOTO;
+    const stage = sp.stages?.includes(photo.stage) ? photo.stage
+      : sp.stage_fallback?.[photo.stage] || sp.stages?.[sp.stages.length - 1];
+    const traits = (photo.traits || []).filter((t) => FLAIR[t]);
+    const shown = ["head", "air", "ground"].map((place) => [place, traits.find((t) => FLAIR[t].place === place)])
+      .filter(([, t]) => t);
+    const flairSrc = (t) => `${BASE}/ui/flair_${FLAIR[t].art ? `${t}_1` : t}.png?v=${VERSION}`;
+    const bg = sp.backgrounds?.day || Object.values(sp.backgrounds || {})[0];
+    const [back, pet, perch, ...pieces] = await Promise.all([
+      bg ? loadImage(spriteSrc(photo.species, bg)) : null,
+      sprite ? loadImage(spriteSrc(photo.species, `${stage}_content_1`)) : null,
+      sp.perch ? loadImage(spriteSrc(photo.species, sp.perch)) : null,
+      ...shown.map(([, t]) => loadImage(flairSrc(t)).catch(() => null)),
+    ]);
+    try {
+      await document.fonts?.load("22px Tiny5");
+    } catch (err) {
+      // no font loading: the fallback face draws the words
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = w * px;
+    canvas.height = h * px;
+    const g = canvas.getContext("2d");
+    g.scale(px, px);
+    g.imageSmoothingEnabled = false;
+    g.fillStyle = "#f6efdc";
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = "#3a2a1a";
+    g.fillRect(edge - 2, edge - 2, pic + 4, pic + 4);
+    g.save();
+    g.beginPath();
+    g.rect(edge, edge, pic, pic);
+    g.clip();
+    if (back) {
+      const side = Math.min(back.naturalWidth, back.naturalHeight);
+      g.drawImage(back, (back.naturalWidth - side) / 2, back.naturalHeight - side, side, side, edge, edge, pic, pic);
+    } else {
+      g.fillStyle = "#2b2f3a";
+      g.fillRect(edge, edge, pic, pic);
+    }
+    // The shelf's pet box: 62% of the scene's height, its feet 4% up, centred;
+    // species.json "scale" grows it about its feet. The scene is 384 px tall.
+    const ks = pic / 384;
+    const box = 0.62 * pic * (sp.scale?.[stage] || 1);
+    const cx = edge + pic / 2;
+    const left = cx - box / 2;
+    const top = edge + pic * 0.96 - box;
+    if (perch) g.drawImage(perch, left, top, box, box);
+    if (pet) g.drawImage(pet, left, top, box, box);
+    const k = box / 256;
+    const [hx, hy] = sp.head?.[stage] || [128, 96];
+    const head = { x: left + hx * k, y: top + hy * k };
+    const fy = top + 224 * k;
+    const half = box * 0.32;
+    const away = head.x >= cx ? -1 : 1; // the air's flair on the other side from the head
+    shown.forEach(([place, t], i) => {
+      const img = pieces[i];
+      if (!img) return;
+      const fw = img.naturalWidth * ks;
+      const fh = img.naturalHeight * ks;
+      // Placed by its bottom middle, as the shelf's flair is.
+      const at = place === "head" ? [head.x + (t === "thunder_heart" ? 6 : 0), head.y - 6 * ks]
+        : place === "air" ? [cx + away * half * 1.4, head.y + 18 * ks]
+          : [cx + (PHOTO_GROUND[t] ?? 1.35) * half, fy + 2 * ks];
+      g.drawImage(img, at[0] - fw / 2, at[1] - fh, fw, fh);
+    });
+    g.restore();
+    g.fillStyle = "#3a2a1a";
+    g.textAlign = "center";
+    g.font = "400 22px Tiny5, monospace";
+    g.fillText(photo.name, w / 2, edge + pic + 36, pic);
+    g.font = "400 14px Tiny5, monospace";
+    g.fillText("best friends ♥", w / 2, edge + pic + 58, pic);
+    g.font = "400 12px Tiny5, monospace";
+    g.fillStyle = "#6a5a44";
+    g.fillText(localDay(photo.on, this._hass?.locale?.language), w / 2, edge + pic + 78, pic);
+    return canvas;
+  }
+
+  // "save": the share sheet where there is one (straight from the tap: WebKit
+  // drops the gesture after an await), else the picture in a dialog.
+  _savePhoto(s, gen) {
+    const p = s.photos?.get(gen);
+    if (!p || sharedScreen()) return;
+    const files = p.file ? [p.file] : null;
+    if (files && navigator.canShare?.({ files })) {
+      navigator.share({ files, title: "best friends ♥" }).then(
+        () => this._statusMessage(s, "shared"),
+        (err) => { if (err?.name !== "AbortError") this._photoDialog(s, gen); }, // cancelled: done
+      );
+      return;
+    }
+    this._photoDialog(s, gen);
+  }
+
+  // The picture full size, above everything (a modal <dialog>: focus kept in
+  // it, Escape closes), to press and hold; a download link outside the apps.
+  _photoDialog(s, gen) {
+    const p = s.photos?.get(gen);
+    if (!p) return;
+    let dialog = this.shadowRoot.querySelector(".photo-dialog");
+    if (!dialog) {
+      dialog = document.createElement("dialog");
+      dialog.className = "photo-dialog";
+      dialog.innerHTML = `<img class="pbig" alt=""><p>press and hold the picture to save it</p>` +
+        `<a class="pdownload"></a><button class="bell pclose">close</button>`;
+      // It stops every tap: nothing behind it reacts. A tap outside it closes it.
+      dialog.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (e.target === dialog) dialog.close();
+      });
+      dialog.querySelector(".pclose").addEventListener("click", () => dialog.close());
+      dialog.querySelector(".pdownload").addEventListener("click", () => {
+        if (this._photoFor) this._statusMessage(this._photoFor.s, "saved");
+      });
+      dialog.addEventListener("close", () => {
+        const was = this._photoFor;
+        this._photoFor = null;
+        // Back to its "save" (the journal may have been redrawn meanwhile).
+        was?.s.status.querySelector(`.psave[data-gen="${was.gen}"]`)?.focus({ preventScroll: true });
+      });
+      this.shadowRoot.append(dialog);
+    }
+    const img = dialog.querySelector(".pbig");
+    img.src = p.url;
+    img.alt = this._photoAlt(p.photo);
+    const link = dialog.querySelector(".pdownload");
+    link.href = p.url;
+    link.download = p.name;
+    link.textContent = p.name;
+    link.hidden = inCompanionApp(); // the apps don't download; press and hold there
+    this._photoFor = { s, gen };
+    if (!dialog.open) {
+      if (dialog.showModal) dialog.showModal();
+      else dialog.setAttribute("open", "");
+    }
+  }
+
+  // Forget a slide's photos (another pet on it, or a shared screen now).
+  _dropPhotos(s) {
+    s.photoEpoch = (s.photoEpoch || 0) + 1;
+    s.photos?.forEach((p) => URL.revokeObjectURL(p.url));
+    s.photos = null;
+    if (this._photoFor?.s === s) this.shadowRoot.querySelector(".photo-dialog")?.close();
   }
 
   // Seasonal firsts and other moments the family remembers, newest first.
