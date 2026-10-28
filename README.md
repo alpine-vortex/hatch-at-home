@@ -67,6 +67,7 @@ devices:
 entities:
   - sensor.pip_mood
 experimental_catch: true  # optional prototype: adds Catch to the game picker
+seasonal: false  # optional: no seasonal touches (on by default; "halloween" previews it)
 ```
 
 **Upgrading from 0.3.x:** you added the card as a dashboard resource back then.
@@ -90,6 +91,13 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   one side; tap that side as it reaches the pet, but let the bee go by. Five rounds,
   three catches win; the best score stays in this browser. No reward, nothing is sent
   to Home Assistant.
+- **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
+  off): from 20 to 31 October it's **Halloween**. A jack-o'-lantern sits by the pet and
+  glows at night (it floats in Tidepool and Pond), cobwebs hang in the corner (both
+  corners of the Terrarium), a sweet waits by the door in Hearth, a pumpkin joins the
+  device's decorations, and bats flit across at night (in Night Sky by day too). Every
+  couple of minutes the pet puts on a witch hat and says something spooky, and on the
+  31st the first visit of the day gets "trick or treat!" and a sweet. All cosmetic.
 - Tap the screen for the status page: hearts and meters, weight, care misses and
   ignored whines, traits (n/4) and the one it's learning next, upbringing, the next
   egg, the notify-me and sounds switches, recent care, and a link to the journal. Tap

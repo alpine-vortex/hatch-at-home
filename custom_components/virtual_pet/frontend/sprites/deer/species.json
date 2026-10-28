@@ -29,5 +29,6 @@
   "backgrounds": { "day": "bird/bg_day", "night": "bird/bg_night", "rain": "bird/bg_rain", "dim": "bird/bg_dim" },
   "words": { "food": "acorns", "home": "thicket" },
   "reactions": { "feed": "nibble", "snack": "nibble", "chore_treat": "nibble", "won": "pronk", "scold": "flag" },
-  "head": { "baby": [162, 84], "child": [178, 60], "teen": [202, 28], "adult": [152, 28] }
+  "head": { "baby": [162, 84], "child": [178, 60], "teen": [202, 28], "adult": [152, 28] },
+  "hat": { "baby": [136, 104], "child": [144, 88], "teen": [180, 52], "adult": [178, 66] }
 }

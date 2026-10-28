@@ -80,8 +80,17 @@ details before committing it.
   `NEWS_COOLDOWN_MINUTES` (30) per pet, in memory, set only when news shows. The
   headline is cut at 60 characters (`home.news_text`): at 80 the bubble buried the pet
   on a 330 px card. Checked in the browser at 420 and 330 px.
+- **Seasons, starting with Halloween** (0.28.0, card only): `SEASONS` in the card
+  (date window, per-world `worlds` parts, lines, a `treat` day), `seasonNow` by the
+  viewer's local date, card option `seasonal` (false, or a key to force one). Pieces
+  in `.season` behind the pet; the costume hat sits on the top of the head found by
+  `_headTop` (first solid pixel down the head point's column) or on `species.json`
+  `hat` where ears or antlers rise above the skull (the deer; the owner caught it
+  hovering). Stand-in art drawn by `art/seasonal/make_halloween.py`
+  (`ui/season_halloween_*`); Sol could redraw it. `card-check` forces the season and
+  checks the hat; it keeps seasons off for the other checks.
 - **Weather talk** (Tier 1 of `docs/plan-2026-10-27-real-time-connections.md`,
-  unreleased on branch `ccr-a828d8c1-uv2so3`): `weather` moments (`change`:
+  merged in PR #10, released in 0.28.0): `weather` moments (`change`:
   rain_started, rain_stopped, rainbow, snow_started, sun_out, hot, cold) from
   `HouseMoments._weather`, one per `HOME_WEATHER_GAP_MINUTES`, each kind once per
   `HOME_WEATHER_COOLDOWN_MINUTES`; `forecast` moments (`when` today/tomorrow, `kind`)
