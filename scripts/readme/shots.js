@@ -1,16 +1,18 @@
 // Shoot one device per world for the README art (scripts/readme/art.py).
-//
-// With scripts/develop running and scripts/card-check run once (it onboards and
+// docs/readme/README.md walks through the whole retake; in short, with
+// scripts/develop running and scripts/card-check run once (it onboards and
 // makes the Woodland and Hearth pets):
 //   node scripts/readme/shots.js setup   adds a pet in each other world, 26 h old
-//   node scripts/readme/shots.js shoot   saves each device to dev/readme-shots/
-// Take the shots in daylight (HA's time zone) with the pets awake and cared for;
-// SEASONAL=1 PREFIX=h adds the Halloween versions.
+//   node scripts/readme/shots.js care    puts them to bed 6 h, then wakes, feeds,
+//                                        cleans, cures and plays with every pet
+//   node scripts/readme/shots.js shoot   saves docs/readme/src/world-<world>.png
+// Shoot in daylight in HA's time zone, or the scenes are night and the pets
+// asleep. SEASONAL=1 shoots the Halloween versions as halloween-<world>.png.
 const { chromium } = require("playwright");
 const path = require("path");
 const HA = "http://localhost:8123";
 const CLIENT = `${HA}/`;
-const OUT = process.env.OUT || path.join(__dirname, "..", "..", "dev", "readme-shots");
+const OUT = process.env.OUT || path.join(__dirname, "..", "..", "docs", "readme", "src");
 require("fs").mkdirSync(OUT, { recursive: true });
 async function api(method, url, token, body, form = false) {
   const headers = {}; if (token) headers.Authorization = `Bearer ${token}`;
@@ -27,16 +29,37 @@ async function signIn() {
   const done = await api("POST", `/auth/login_flow/${flow.flow_id}`, null, { client_id: CLIENT, username: "dev", password: "devdevdev" });
   return (await api("POST", "/auth/token", null, { grant_type: "authorization_code", code: done.result, client_id: CLIENT }, true)).access_token;
 }
+// Every pet's entity prefix, from its lights-out switch.
+async function pets(access) {
+  const states = await api("GET", "/api/states", access);
+  return states.map((s) => s.entity_id.match(/^switch\.(.+)_lights_out$/)?.[1]).filter(Boolean);
+}
 (async () => {
   const access = await signIn();
   const mode = process.argv[2];
+  const call = (service, data) => api("POST", `/api/services/${service}`, access, data);
   if (mode === "setup") {
     for (const [name, world] of [["Pebble", "terrarium"], ["Ripple", "tidepool"], ["Lily", "pond"], ["Luna", "nightsky"]]) {
       const flow = await api("POST", "/api/config/config_entries/flow", access, { handler: "virtual_pet" });
       const r = await api("POST", `/api/config/config_entries/flow/${flow.flow_id}`, access, { name, world });
       console.log(name, r.type, r.errors || "");
     }
-    await api("POST", "/api/services/virtual_pet/fast_forward", access, { hours: Number(process.argv[3] || 26) });
+    await call("virtual_pet/fast_forward", { hours: Number(process.argv[3] || 26) });
+    return;
+  }
+  if (mode === "care") {
+    const all = await pets(access);
+    for (const p of all) await call("switch/turn_on", { entity_id: `switch.${p}_lights_out` });
+    await call("virtual_pet/fast_forward", { hours: 6 }); // rested
+    for (const p of all) {
+      await call("switch/turn_off", { entity_id: `switch.${p}_lights_out` });
+      for (const b of ["feed", "feed", "clean", "medicine", "play", "praise"]) {
+        // Medicine is unavailable unless the pet is sick; that's fine.
+        await call("button/press", { entity_id: `button.${p}_${b}` }).catch(() => {});
+      }
+    }
+    const states = await api("GET", "/api/states", access);
+    for (const p of all) console.log(p, states.find((s) => s.entity_id === `sensor.${p}_mood`)?.state);
     return;
   }
   const browser = await chromium.launch();
@@ -54,12 +77,22 @@ async function signIn() {
   await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
   const seasonal = process.env.SEASONAL === "1" ? "halloween" : false;
   await page.locator("hatch-pet-card").evaluate((el, s) => { el.setConfig({ ...el._config, seasonal: s }); el.hass = el._hass; }, seasonal);
+  // The world of the pet on show, from its life stage sensor.
+  const worldOf = (title) => page.evaluate((title) => {
+    const hass = document.querySelector("home-assistant").hass;
+    const device = Object.values(hass.devices).find((d) => (d.name_by_user || d.name) === title);
+    const stage = Object.values(hass.entities).find((e) => e.device_id === device?.id && e.translation_key === "life_stage");
+    return hass.states[stage?.entity_id]?.attributes.world;
+  }, title);
   const n = await page.locator("hatch-pet-card .slide").count();
   for (let i = 0; i < n; i++) {
-    await page.waitForTimeout(Number(process.env.WAIT || 2500));
+    // Halloween needs longer: the costume and the first-visit countdown come in.
+    await page.waitForTimeout(Number(process.env.WAIT || (seasonal ? 9000 : 3000)));
     const title = (await page.locator("hatch-pet-card .title").innerText()).trim();
-    await page.locator("hatch-pet-card .slide:not(.away-slide)").locator(".device").screenshot({ path: path.join(OUT, `${process.env.PREFIX || ""}${i}-${title}.png`) });
-    console.log(i, title);
+    const world = await worldOf(title);
+    const file = `${seasonal ? "halloween" : "world"}-${world}.png`;
+    await page.locator("hatch-pet-card .slide:not(.away-slide)").locator(".device").screenshot({ path: path.join(OUT, file) });
+    console.log(title, "->", file);
     await page.locator("hatch-pet-card .next").click();
   }
   await browser.close();

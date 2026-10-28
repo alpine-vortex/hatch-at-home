@@ -466,8 +466,9 @@ async function main() {
   // would be left hovering where the pet was.
   const movingBlocks = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
+    // Idle life would start its own wander or look meanwhile: hold it off.
     Object.assign(s, { sayUntil: 0, flairUntil: 0, movingUntil: 0, poseUntil: 0, propUntil: 0,
-      moodState: "content", asleep: false, calling: false, game: null });
+      moodState: "content", asleep: false, calling: false, game: null, nextIdle: Date.now() + 600000 });
     s.screen.classList.remove("show-status");
     const before = el._free(s);
     el._look(s, 300);

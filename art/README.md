@@ -150,3 +150,19 @@ adults stay on screen; otter 1.05, squirrel none), which the card applies with t
 fixed. Sizes still vary a little between moods (asleep and sick come out bigger), as
 the teens' do. Prompts are in `art/<species>/adult/`, Sol's adult scripts in
 `art/adults/`; the raw sheets aren't committed.
+
+## Squirrel paws-up poses: six legs fixed (2026-10-28, v0.29.1)
+
+`child_cheeks_1/2` (the snack reaction), `child_hungry_2` and `child_shiver` held both
+forepaws at the chest but still stood on three feet, so they read as six legs. The
+middle foot was removed by hand on the 64×64 art grid (the foot rows cleared, the row
+above closed with the outline colour); the haunch foot and the far foot stay, and the
+feet stay on y=224.
+
+## Frame review: 2026-10-28
+
+A review of every live frame found two broken adult sets (axolotl, luna moth: outline
+lost in the cut) and frames drawn at the wrong size for their stage. The axolotl and
+moth outlines were closed with `art/adults/outline_fix.py`, and the oversized gecko sick
+and squirrel baby cozy/sleepy frames were shrunk with `scripts/art/rescale.py`. What
+needs new drawings is listed in `art/redraw-2026-10-28.md`.
