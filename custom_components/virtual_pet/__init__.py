@@ -293,13 +293,11 @@ async def websocket_answer(
     and the recorder would keep the answer. Only for the person asking.
     """
     entity = er.async_get(hass).async_get(msg["entity_id"])
-    entry = (
-        hass.config_entries.async_get_entry(entity.config_entry_id)
-        if entity and entity.config_entry_id
-        else None
+    # Only a loaded pet: a disabled entry may still hold its old coordinator.
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
     )
-    pet: PetCoordinator | None = getattr(entry, "runtime_data", None)
-    if entry is None or entry.domain != DOMAIN or pet is None:
+    if pet is None:
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
     if msg["answer"] not in ANSWERS[msg["question"]]:

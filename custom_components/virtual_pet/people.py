@@ -14,6 +14,7 @@ only through the visit's response, or their own phone. Diagnostics leave it out.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, timedelta
 import statistics
 from typing import Any
@@ -60,6 +61,11 @@ class People:
     def __init__(self, hass: HomeAssistant) -> None:
         self._store: Store[dict[str, Any]] = Store(hass, STORE_VERSION, STORE_KEY)
         self.data: dict[str, Any] = {"people": {}, "weather": {}}
+        self._locks: dict[str, asyncio.Lock] = {}
+
+    def lock(self, user: str) -> asyncio.Lock:
+        """One look at a time per person, across every pet."""
+        return self._locks.setdefault(user, asyncio.Lock())
 
     async def async_load(self) -> None:
         loaded = await self._store.async_load()
@@ -202,11 +208,15 @@ def choose_question(
         and R.ASK_LIKES_FROM <= hour < R.ASK_LIKES_UNTIL
         and "morning" not in asked
     ):
-        last = person.get("liked_on")
-        if "fav_weather" not in likes:
-            return "fav_weather"
-        if "fav_season" not in likes and last != today:
-            return "fav_season"
+        tries = person.get("likes_asked") or {}
+        asked_today = any(today in days for days in tries.values())
+        for kind in ("fav_weather", "fav_season"):
+            if kind in likes:
+                continue
+            days = tries.get(kind, [])
+            if asked_today or not _may_ask_again(days, today):
+                break  # one at a time, and the season only after the weather
+            return kind
     kind = rotation(date.fromisoformat(today))
     if kind == "how_day" and hour >= R.ASK_DAY_FROM:
         return "how_day"
@@ -215,6 +225,16 @@ def choose_question(
     if kind == "guess" and has_forecast and hour >= R.ASK_GUESS_FROM:
         return "guess"
     return None
+
+
+def _may_ask_again(days: list[str], today: str) -> bool:
+    """A one-time question left unanswered is asked again once, weeks later."""
+    if len(days) >= R.ASK_LIKES_TRIES:
+        return False
+    if not days:
+        return True
+    gap = date.fromisoformat(today) - date.fromisoformat(days[-1])
+    return gap.days >= R.ASK_LIKES_AGAIN_DAYS
 
 
 def mark_asked(person: dict[str, Any], today: str, hour: int) -> None:

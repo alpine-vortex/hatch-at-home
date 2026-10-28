@@ -208,15 +208,11 @@ class LifeStageSensor(PetEntity, SensorEntity):
             ),
             "dream": self._today_only(self.pet.dream, ("kind", "title")),
             # Each person's bond, by HA user ID; the card shows only the viewer's
-            # own (points and who played what stay on the server).
+            # own (points, who played what and "my day" stay on the server).
             "bonds": {
                 user: {
                     "level": model.bond_level(b["points"]),
                     **{k: b[k] for k in ("nickname", "favourite") if b.get(k)},
-                    # One switch per person, for every pet (people.py).
-                    **(
-                        {"my_day": True} if self.coordinator.people.my_day(user) else {}
-                    ),
                 }
                 for user, b in self.pet.bonds.items()
             },

@@ -301,12 +301,11 @@ async function main() {
   await shot("04c-bond-status");
   // "My day" is each person's own switch.
   await cur().locator(".bell.myday").click();
-  let myDay = false;
-  for (let i = 0; i < 20 && !myDay; i++) {
-    await page.waitForTimeout(250);
-    myDay = (await bondOf())?.my_day === true;
-  }
-  check("my day turns on for this person", myDay);
+  await page.waitForTimeout(1200);
+  const myDay = await page.locator("hatch-pet-card").evaluate((el) => el._myDay);
+  // Theirs alone: never on the life stage sensor every user can read.
+  check("my day turns on for this person, privately",
+    myDay === true && !("my_day" in ((await bondOf()) || {})));
   await cur().locator(".bell.myday").click(); // off again
   await page.waitForTimeout(800);
   // The server's update replaced the close bond injected above: inject it again.
@@ -336,7 +335,17 @@ async function main() {
   check("a wish can be aimed at a close friend", aimed.join(" | ") ===
     "will you play a game with me today, sunbeam? | play a game with you | " +
     "I hope Sam plays a game with me today! | play a game with Sam", aimed.join(" | "));
+  // A question gives way to a game.
+  const gaveWay = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    el._ask(s, "how_day");
+    const before = !!s.screen.querySelector(".askday");
+    el._clearAsk(s); // what starting a game does
+    return before && !s.screen.querySelector(".askday") && !s.asking;
+  });
+  check("a question gives way to a game", gaveWay);
   // A close friend coming home: "you're home!!" to them, by name to anyone else.
+  await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
   await evaluate(() => document.querySelector("home-assistant").hass.callApi("POST", "states/person.sam_check",
     { state: "home", attributes: { user_id: "someone-else", friendly_name: "Sam Check" } }));
   await page.waitForTimeout(500);

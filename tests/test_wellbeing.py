@@ -120,3 +120,34 @@ async def test_usual_comes_from_their_own_history(
         "kind": "more_than_usual",
         "steps": 6300,
     }
+
+
+async def test_the_best_sensor_wins_whatever_the_registry_order(
+    hass: HomeAssistant,
+) -> None:
+    registry = er.async_get(hass)
+    phone = MockConfigEntry(domain="mobile_app", data={"user_id": "u1"})
+    phone.add_to_hass(hass)
+    for key in ("steps_sensor", "health_connect_daily_steps"):  # worse one first
+        registry.async_get_or_create(
+            "sensor",
+            "mobile_app",
+            f"hook_{key}",
+            config_entry=phone,
+            suggested_object_id=key,
+        )
+    assert find_sensors(hass, "u1").found["steps"] == (
+        "sensor.health_connect_daily_steps",
+        True,
+    )
+
+
+async def test_yesterdays_count_isnt_todays(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    await hass.config.async_set_time_zone("UTC")
+    freezer.move_to("2026-10-27 22:00:00+00:00")
+    hass.states.async_set("sensor.steps", "12000")  # last night's total
+    freezer.move_to("2026-10-28 07:00:00+00:00")
+    day = await read_day(hass, Sensors({"steps": ("sensor.steps", True)}), set())
+    assert day.steps is None

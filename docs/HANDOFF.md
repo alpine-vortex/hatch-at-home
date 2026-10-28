@@ -176,7 +176,9 @@ details before committing it.
   answers come by the websocket command `virtual_pet/answer` (no bus event). Calls
   are `time-sensitive` on phones, send-offs `passive`; focus/DND are not read.
   `model.pick_dream` / `dream_on_waking` make a picked dream; diagnostics redact its
-  `user`. `card-check` (now 61 checks) covers the visit, a close bond's
+  `user`. A code audit before the PR found 17 problems, all fixed but one (new person
+  entities and phone sensors are noticed only after a reload); see the plan's last
+  section. `card-check` (now 62 checks) covers the visit, a close bond's
   greeting, the status row and the level-up line. Next in the plan: finds and
   visitors per world, then pets visiting each other.
 - **Thanksgiving** (owner, 2026-10-28: "must do", the same all-out treatment as
@@ -254,9 +256,9 @@ details before committing it.
 - **Adults** exist for every creature (the last four arrived in 0.21.0). Long adults
   are drawn back up with `species.json` `"scale": {"adult": …}` (1.05–1.2; the bat
   needs none).
-- **Tests:** 358, run with `scripts/test` (ruff, format check, pytest).
+- **Tests:** 368, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
-  `scripts/card-check` (Playwright, 61 checks) drives the card against
+  `scripts/card-check` (Playwright, 62 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
 - **CI:** `.github/workflows/validate.yml` (HACS action, hassfest, tests) is green.
   License MIT; Tiny5 keeps its OFL.

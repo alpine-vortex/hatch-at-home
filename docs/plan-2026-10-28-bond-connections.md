@@ -251,3 +251,35 @@ at the wake, the guess, the alarm's package filter, no zone name on any state) a
 61 card checks (the question widget, a kept answer sent by websocket, every new
 line). Not yet seen on real phones: the sensors, the zone and alarm paths, and the
 iOS/Android urgency fields.
+
+## Code audit before the PR (2026-10-28)
+
+A second subagent audited the whole branch. Fixed, each with a test that fails
+without the fix (but 6's, which needed the test to yield where the recorder would):
+
+1. Coming home without having been in a zone crashed the visit for two hours.
+2. A zone from yesterday explained today's errand: a zone now counts only if
+   entered after the person last left home.
+3. The guess result was used up even when the two-line limit held it back.
+4. An unanswered favourite was asked every day: now once more two weeks later, then
+   never.
+5. Diagnostics showed a wish's `for` and `for_name`, and moments' nicknames.
+6. Two pets visited at once could both say a person line: one look at a time per
+   person (`People.lock`).
+7. "My day" was on the life stage sensor for every user to read: now only in the
+   visit's response.
+8. The card's question box sat over a game, and a slide given to another pet kept
+   the last pet's lines, question and dream answer.
+9. A daily step count not updated since midnight was taken for today's.
+10. The card waited an hour after a visit that didn't count (the pet asleep): it
+    tries again after 5 minutes.
+11. The send-off now comes from the closest pet that notifies them.
+12. A walk in the rain needs 5,000 steps.
+13. The house's weather is noted while the pet is out too.
+15. Two pets reporting one arrival gave two welcomes.
+16. Tucking it in now grants the "tuck me in" wish to whoever did it.
+17. The answer command only reaches a loaded pet.
+18. The phone sensor's choice follows its priority, not the registry's order.
+
+Left as is: person entities and phone activity sensors added after a pet starts
+are noticed after its next reload (14).

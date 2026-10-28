@@ -1891,8 +1891,9 @@ async def test_the_visit_tells_only_its_person_what_it_noticed(
         blocking=True,
         context=Context(user_id=me.id),
     )
+    # The switch is theirs alone: on the visit's response, not on a state.
     bonds = hass.states.get("sensor.pip_life_stage").attributes["bonds"]
-    assert bonds[me.id]["my_day"] is True
+    assert "my_day" not in bonds[me.id]
     freezer.tick(timedelta(hours=1))
     assert await look() == [{"kind": "steps", "steps": 11000}]
     freezer.tick(timedelta(hours=1))
@@ -1999,7 +2000,7 @@ async def test_back_from_the_gym_then_how_was_your_day(
     # Said once; asked once; nothing private on any state.
     coordinator._visits.clear()
     again = await look(hass, me.id)
-    assert again == {"notes": [], "ask": None}
+    assert again["notes"] == [] and again["ask"] is None
     for state in hass.states.async_all():
         assert "Gym" not in str(state.attributes), state.entity_id
 
@@ -2229,3 +2230,194 @@ async def test_coming_home_in_the_rain(
     coordinator._weather_now, coordinator._outdoor_c = set(), -2.0
     coordinator._cheered.clear()
     assert coordinator._friends_home(["u1"], now)[0]["weather"] == "cold"
+
+
+async def test_coming_home_from_anywhere_still_counts_the_visit(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Audit: no zone at all used to crash the visit for two hours."""
+    freezer.move_to("2026-10-28 17:00:00+00:00")
+    me = await friend(hass, 0)
+    hass_storage[STORE_KEY] = hatched_pet(
+        dt_util.utcnow().timestamp(),
+        bonds={me.id: {"points": model.R.BOND_LEVELS[3], "since": "2026-10-28"}},
+    )
+    await setup(hass)
+    hass.states.async_set("person.sam", "not_home", {"user_id": me.id})
+    await settle(hass, freezer, 60)
+    hass.states.async_set("person.sam", "home", {"user_id": me.id})
+    await settle(hass, freezer, 60)
+    response = await look(hass, me.id)
+    assert response["counted"] and response["ask"] == "how_day"
+
+
+async def test_yesterdays_gym_doesnt_explain_todays_errand(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 17:00:00+00:00")
+    me = await friend(hass, 0)
+    hass_storage[STORE_KEY] = hatched_pet(
+        dt_util.utcnow().timestamp(),
+        bonds={me.id: {"points": model.R.BOND_LEVELS[3], "since": "2026-10-28"}},
+    )
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.people.person(me.id)["my_day"] = True
+    for place in ("not_home", "Gym", "not_home", "home"):
+        hass.states.async_set("person.sam", place, {"user_id": me.id})
+        await settle(hass, freezer, 60)
+    assert {"kind": "back_from", "place": "gym"} in (await look(hass, me.id))["notes"]
+    freezer.move_to("2026-10-29 12:00:00+00:00")
+    for place in ("not_home", "home"):  # to the shop and back
+        hass.states.async_set("person.sam", place, {"user_id": me.id})
+        await settle(hass, freezer, 60)
+    response = await look(hass, me.id)
+    assert not any(n["kind"] == "back_from" for n in response["notes"])
+
+
+async def test_a_guess_waits_when_two_lines_came_first(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 20:00:00+00:00")
+    me = await friend(hass, 0)
+    hass_storage[STORE_KEY] = hatched_pet(
+        dt_util.utcnow().timestamp(),
+        bonds={me.id: {"points": model.R.BOND_LEVELS[2], "since": "2026-09-29"}},
+    )
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    await coordinator.async_answer(me.id, "guess", "rain")
+    coordinator.people.saw_weather("2026-10-29", {"rain"})
+    freezer.move_to("2026-10-29 19:00:00+00:00")
+    coordinator.state.dream = {
+        "kind": "picked",
+        "pick": "sea",
+        "user": me.id,
+        "day": "2026-10-29",
+    }
+    coordinator._visits.clear()
+    first = (await coordinator.async_visit(me.id))["notes"]
+    assert [n["kind"] for n in first] == ["friends_for", "dream"]
+    coordinator._visits.clear()
+    second = (await coordinator.async_visit(me.id))["notes"]
+    assert second == [{"kind": "guess", "guess": "rain", "outcome": "right"}]
+
+
+async def test_two_pets_looked_at_together_say_a_person_line_once(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import asyncio
+
+    freezer.move_to("2026-10-28 17:00:00+00:00")
+    await hass.config.async_set_time_zone("UTC")
+    me = await friend(hass, 0)
+    pets = []
+    for entry_id, name in (("test_pet", "Pip"), ("other_pet", "Bo")):
+        hass_storage[f"{DOMAIN}.{entry_id}"] = {
+            **hatched_pet(
+                dt_util.utcnow().timestamp(),
+                bonds={me.id: {"points": model.R.BOND_LEVELS[3]}},
+            ),
+            "key": f"{DOMAIN}.{entry_id}",
+        }
+        hass_storage[f"{DOMAIN}.{entry_id}"]["data"]["name"] = name
+        config = MockConfigEntry(
+            domain=DOMAIN, title=name, data={CONF_NAME: name}, entry_id=entry_id
+        )
+        config.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(config.entry_id)
+        await hass.async_block_till_done()
+        pets.append(config.runtime_data)
+        pets[-1].state.wish = None
+    pets[0].people.person(me.id)["my_day"] = True
+    # Reading the phones' history awaits the recorder: let the other pet run then.
+    from custom_components.virtual_pet import wellbeing
+
+    async def slow_read_day(*args: Any) -> Any:
+        await asyncio.sleep(0)
+        return wellbeing.Day()
+
+    monkeypatch.setattr(wellbeing, "read_day", slow_read_day)
+    for place in ("not_home", "Gym", "not_home", "home"):
+        hass.states.async_set("person.sam", place, {"user_id": me.id})
+        await settle(hass, freezer, 60)
+    both = await asyncio.gather(*(p.async_visit(me.id) for p in pets))
+    zone_lines = [n for r in both for n in r["notes"] if n["kind"] == "back_from"]
+    assert len(zone_lines) == 1
+    assert [r["ask"] for r in both].count("how_day") == 1  # one question, one pet
+
+
+async def test_diagnostics_hide_a_wish_aimed_at_someone(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    from custom_components.virtual_pet.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    config = await setup(hass)
+    config.runtime_data.state.wish = {
+        "kind": "play",
+        "day": "2026-10-26",
+        "granted": False,
+        "for": "user-9",
+        "for_name": "Samwise",
+    }
+    diag = await async_get_config_entry_diagnostics(hass, config)
+    assert "user-9" not in str(diag) and "Samwise" not in str(diag)
+
+
+async def test_a_non_admin_answers_for_themselves(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_read_only_user: Any,
+    hass_read_only_access_token: str,
+    hass_admin_user: Any,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    await setup(hass)
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    await client.send_json_auto_id(
+        {
+            "type": "virtual_pet/answer",
+            "entity_id": "sensor.pip_mood",
+            "question": "fav_season",
+            "answer": "winter",
+        }
+    )
+    assert (await client.receive_json())["success"]
+    people = hass.data[DOMAIN]["people"]
+    assert people.person(hass_read_only_user.id)["likes"] == {"fav_season": "winter"}
+    assert "likes" not in people.person(hass_admin_user.id)
+
+
+async def test_tucking_it_in_grants_the_tuck_in_wish_to_them(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 21:00:00+00:00")
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.state.wish = {"kind": "tuck_in", "day": "2026-10-28", "granted": False}
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.pip_lights_out"},
+        blocking=True,
+        context=Context(user_id=me.id),
+    )
+    assert coordinator.state.wish["granted"]
+    assert coordinator.state.bonds[me.id]["points"] == model.R.BOND_WISH_POINTS

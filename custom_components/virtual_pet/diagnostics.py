@@ -58,7 +58,7 @@ REDACT_OPTIONS = {
     CONF_ZONE,
 }
 # People: who cared for the pet, who gets its notifications, and who's close.
-REDACT_STATE = {"by", "notify_users", "bonds", "user"}
+REDACT_STATE = {"by", "notify_users", "bonds", "user", "for", "for_name"}
 
 
 async def async_get_config_entry_diagnostics(
@@ -96,6 +96,6 @@ async def async_get_config_entry_diagnostics(
         ),
         # "user": whose bond grew.
         "moments": async_redact_data(
-            list(coordinator.moments), PRIVATE_READINGS | {"user"}
+            list(coordinator.moments), PRIVATE_READINGS | {"user", "nickname"}
         ),
     }

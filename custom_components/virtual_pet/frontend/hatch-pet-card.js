@@ -353,6 +353,7 @@ const WISHES_FOR = {
 // "will you play?" + "sunbeam" -> "will you play, sunbeam?"; "night night ♥" -> "night night, sunbeam ♥"
 const withName = (line, name) => (name ? line.replace(/([!?.]*)(\s*♥)?$/, `, ${name}$1$2`) : line);
 const FRIEND_WELCOME_MS = 6 * 3600 * 1000; // "welcome home!" at the next look, this long after
+const WELCOME_SAME_ARRIVAL_MS = 10 * 60 * 1000; // pets' reports this close: one arrival
 // Questions the pet asks; the server picks which and when (visit's "ask"), so
 // the daily limit holds across pets and devices. "keep" answers go back to the
 // server (virtual_pet/answer); the others stay on the card.
@@ -440,6 +441,7 @@ const AWAY_NOTE_AFTER_MS = 3 * 3600 * 1000;
 // and hearts only for them.
 const BOND = { warm: 2, hop: 3, nickname: 4, favourite: 6, hearts: 8, max: 10 };
 const VISIT_EVERY_MS = 3600 * 1000; // virtual_pet.visit, as the server counts it
+const VISIT_RETRY_MS = 5 * 60 * 1000; // after a visit that didn't count
 const WISH_MENTION_MS = [600000, 900000]; // between reminders of an open wish
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 // Whole degrees in the owner's unit (the server converts), with a real minus.
@@ -1400,6 +1402,19 @@ class HatchPetCard extends HTMLElement {
     s.journal = false;
     s.statusHtml = null;
     s.drawnSig = null;
+    // The last pet's private lines and question aren't this one's.
+    this._clearAsk(s);
+    s.queue = [];
+    s.visitedAt = 0;
+    s.lookedFirst = false;
+  }
+
+  // Take an open question off the screen (a game, another pet on this slide).
+  _clearAsk(s) {
+    s.screen?.querySelector(".askday")?.remove();
+    clearTimeout(s.askTimer);
+    s.asking = false;
+    if (s.queue) s.queue = s.queue.filter((q) => !q.then);
   }
 
   _state(s, key) {
@@ -1935,7 +1950,8 @@ class HatchPetCard extends HTMLElement {
   _welcomeDue(s, at) {
     const key = `hatch-welcomed-${this._hass.user?.id}`;
     try {
-      if (Number(localStorage.getItem(key) || 0) >= at) return false;
+      // Each pet reports the same arrival a moment apart: one welcome for it.
+      if (Number(localStorage.getItem(key) || 0) + WELCOME_SAME_ARRIVAL_MS >= at) return false;
       localStorage.setItem(key, String(at));
     } catch (err) {
       // no storage: once per page load
@@ -2054,11 +2070,19 @@ class HatchPetCard extends HTMLElement {
     s.visitedAt = Date.now();
     this._hass.callService("virtual_pet", "visit", { entity_id: id }, undefined, false, true)
       .then((res) => {
-        (res?.response?.notes || []).forEach((note) => this._note(s, note));
-        const ask = res?.response?.ask;
+        const reply = res?.response || {};
+        if (s.ids?.["sensor.life_stage"] !== id) return; // the slide shows another pet now
+        if (reply.counted === false) {
+          // Not counted (it was asleep, or too soon): try again in a few minutes,
+          // so the morning's lines come soon after it wakes.
+          s.visitedAt = Date.now() - VISIT_EVERY_MS + VISIT_RETRY_MS;
+        }
+        if (typeof reply.my_day === "boolean") this._myDay = reply.my_day;
+        (reply.notes || []).forEach((note) => this._note(s, note));
+        const ask = reply.ask;
         if (QUESTIONS[ask] && !s.asking) {
           s.asking = true;
-          (s.queue ??= []).push({ text: QUESTIONS[ask].q, ms: ASK_MS, then: () => this._ask(s, ask) });
+          (s.queue ??= []).push({ text: QUESTIONS[ask].q, ms: ASK_MS, then: () => this._ask(s, ask, id) });
         }
       })
       .catch(() => {
@@ -2078,8 +2102,12 @@ class HatchPetCard extends HTMLElement {
   }
 
   // A question with its answers as buttons (the line is already in the bubble).
-  _ask(s, kind) {
+  _ask(s, kind, entity = s.ids?.["sensor.life_stage"]) {
     const question = QUESTIONS[kind];
+    if (!question || s.game || s.ids?.["sensor.life_stage"] !== entity) {
+      s.asking = false; // a game, or another pet on this slide now: not now
+      return;
+    }
     s.screen.querySelector(".askday")?.remove();
     const box = document.createElement("div");
     box.className = "askday";
@@ -2106,7 +2134,7 @@ class HatchPetCard extends HTMLElement {
       else this._animate(s, s.pet, "perk", 320);
       if (question.keep) {
         // A websocket command, not a service call: answers stay off the event bus.
-        this._hass.callWS({ type: "virtual_pet/answer", entity_id: s.ids?.["sensor.life_stage"],
+        this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity,
           question: kind, answer }).catch(() => {
           // not kept this time: it may ask again another day
         });
@@ -2509,7 +2537,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${row(null, "notify me", `<span><button class="bell" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
-      ${bond ? row(null, "my day", `<span><button class="bell myday" aria-label="let the pet notice my day" aria-pressed="${!!bond.my_day}">${bond.my_day ? "on" : "off"}</button></span>`) : ""}
+      ${bond ? row(null, "my day", `<span><button class="bell myday" aria-label="let the pet notice my day" aria-pressed="${!!this._myDay}">${this._myDay ? "on" : "off"}</button></span>`) : ""}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>
@@ -2519,7 +2547,7 @@ class HatchPetCard extends HTMLElement {
     s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);
-      this._setMyDay(s, !bond.my_day, e.currentTarget);
+      this._setMyDay(s, !this._myDay, e.currentTarget);
     });
     s.status.querySelector(".bell:not(.sound):not(.myday)").addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
@@ -2554,6 +2582,7 @@ class HatchPetCard extends HTMLElement {
     button.textContent = enabled ? "on" : "off";
     try {
       await this._hass.callService("virtual_pet", "my_day", { entity_id: id, enabled });
+      this._myDay = enabled; // one switch per person, for every pet
       this._statusMessage(s, enabled ? "I'll notice your good days! ♥" : "OK, I won't peek.");
     } catch (err) {
       button.setAttribute("aria-pressed", String(!enabled));
@@ -2745,6 +2774,7 @@ class HatchPetCard extends HTMLElement {
 
   _startGame(s, button) {
     this._tapped(button, s);
+    this._clearAsk(s); // a game takes the screen
     const energy = Number.parseFloat(this._state(s, "sensor.energy")?.state);
     const refusal = s.asleep ? REFUSALS.asleep : energy < 15 ? REFUSALS.too_tired : null;
     if (refusal) {

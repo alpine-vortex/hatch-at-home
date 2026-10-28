@@ -415,6 +415,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 person["zone"] = {"name": new.state, "at": now}
                 self.people.save()
             if old.state == STATE_HOME:
+                person["left"] = now  # a zone counts only if entered after this
+                self.people.save()
                 self._send_off(user, now)
 
         movers = wellbeing.activity_sensors(self.hass)
@@ -558,7 +560,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._weather_now = kinds | (
             {"storm"} if readings.condition in STORMY else set()
         )
-        if self._awake() and kinds:
+        if kinds:  # the house's weather, while the pet is out too
             self.people.saw_weather(self._today(now)[0], kinds)
         arrivals, self._arrivals = self._arrivals, []
         if self._awake():
@@ -929,11 +931,15 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         return self.hass.data[DOMAIN]["people"]
 
     def _closest_pet(self, user: str) -> PetCoordinator:
-        """Of the loaded pets, the one this person is closest to (it speaks for
-        all of them on their phone)."""
+        """Of the loaded pets that notify this person, the one they're closest
+        to (it speaks for all of them on their phone)."""
         pets: dict[str, PetCoordinator] = self.hass.data[DOMAIN]["pets"]
         return max(
-            (p for p in pets.values() if p.state is not None),
+            (
+                p
+                for p in pets.values()
+                if p.state is not None and user in p.state.notify_users
+            ),
             key=lambda p: (p.bond_for(user)[0], p.pet_id),
             default=self,
         )
@@ -1001,14 +1007,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         last = self._visits.get(user, -1e12)
         just_home = person.get("arrived", 0) > last
         if now - last < R.BOND_VISIT_EVERY_MINUTES * 60 and not just_home:
-            return {"notes": [], "ask": None}
+            return {"notes": [], "ask": None, "counted": False}
         self._advance(now)
         if not self._awake():
             # Asleep (or away): only the sleepy hello. The visit isn't counted,
             # so the lines it has wait for the next look once it's up.
             notes = self._up_early(user, now)
             self._publish()
-            return {"notes": notes, "ask": None}
+            return {"notes": notes, "ask": None, "counted": False}
         self._visits[user] = now
         events = self._bond(user, "visit")
         if granted := self._grant("say_hi", await self._who_id(user), now):
@@ -1016,18 +1022,29 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._fire(events)
         came_home = self._came_home(user, now)
         notes: list[dict[str, Any]] = []
-        for scope, kind, key, note in await self._notes(user, now):
-            if len(notes) >= R.NOTES_PER_VISIT:
-                break
-            if scope == "pet":
-                model.bond_of(self.state, user).setdefault("noted", {})[kind] = key
-            else:
-                self.people.mark(user, kind, key)
-            notes.append(note)
+        # One look at a time per person: two pets on one dashboard visited
+        # together must not both say the same person line.
+        async with self.people.lock(user):
+            for scope, kind, key, note in await self._notes(user, now):
+                if len(notes) >= R.NOTES_PER_VISIT:
+                    break  # the rest wait for a later look
+                if scope == "pet":
+                    model.bond_of(self.state, user).setdefault("noted", {})[kind] = key
+                else:
+                    self.people.mark(user, kind, key)
+                if kind == "guess":
+                    person.pop("guess", None)  # said: used up
+                notes.append(note)
         ask = self._question(user, now, came_home, notes)
         self._save()
         self._publish()
-        return {"notes": notes, "ask": ask}
+        # "my day" goes to this person only (a state attribute is everyone's).
+        return {
+            "notes": notes,
+            "ask": ask,
+            "counted": True,
+            "my_day": self.people.my_day(user),
+        }
 
     def _up_early(self, user: str, now: float) -> list[dict[str, Any]]:
         """Looking in on the sleeping pet before sunrise: a sleepy hello."""
@@ -1055,10 +1072,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         arrived = person.get("arrived", 0)
         if now - arrived > R.JUST_HOME_HOURS * 3600:
             return None
-        zone = person.get("zone") or {}
-        if zone.get("at", 0) < arrived and arrived - zone["at"] < 24 * 3600:
-            return P.zone_word(zone.get("name")) or "home"
-        return "home"
+        return P.zone_word(self._trip_zone(person)) or "home"
+
+    @staticmethod
+    def _trip_zone(person: dict[str, Any]) -> str | None:
+        """The zone this trip was to: entered after they last left home and
+        before they came back (a stale zone never explains a later errand)."""
+        zone = person.get("zone")
+        arrived = person.get("arrived", 0)
+        if not zone or not person.get("left", 0) < zone.get("at", 0) < arrived:
+            return None
+        return zone.get("name")
 
     async def _notes(
         self, user: str, now: float
@@ -1106,9 +1130,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             outcome = P.guess_outcome(
                 guess["guess"], self.people.weather_on(guess["day"])
             )
-            person.pop("guess")
-            self.people.save()
-            if guess["day"] >= (local.date() - timedelta(days=2)).isoformat():
+            if guess["day"] < (local.date() - timedelta(days=2)).isoformat():
+                person.pop("guess")  # too long ago to bring up
+                self.people.save()
+            else:
                 out.append(
                     (
                         "person",
@@ -1117,15 +1142,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                         {"kind": "guess", "guess": guess["guess"], "outcome": outcome},
                     )
                 )
-        zone = person.get("zone") or {}
         arrived = person.get("arrived", 0)
         if (
             my_day
             and level >= R.ZONE_LEVEL
-            and zone
-            and zone["at"] < arrived
             and now - arrived <= R.ZONE_REMEMBER_HOURS * 3600
-            and (place := P.zone_word(zone.get("name")))
+            and (place := P.zone_word(self._trip_zone(person)))
             and not self.people.said(user, "zone", str(arrived))
         ):
             out.append(
@@ -1237,8 +1259,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if kind is None:
             return None
         P.mark_asked(person, today, hour)
-        if kind == "fav_weather":
-            person["liked_on"] = today
+        if kind in ("fav_weather", "fav_season"):
+            person.setdefault("likes_asked", {}).setdefault(kind, []).append(today)
         self.people.save()
         return kind
 
@@ -1505,7 +1527,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         ):
             model.bond_of(self.state, person)["tucked_at"] = now
             events.append({"type": "tucked_in", "user": person})
-        self._fire(events)
+        self._actor = person or await self._person(context)
+        try:
+            self._fire(events)  # may grant the "tuck me in" wish: theirs
+        finally:
+            self._actor = None
         self._save()
         self._publish()
 

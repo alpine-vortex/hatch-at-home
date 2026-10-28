@@ -71,7 +71,9 @@ def find_sensors(hass: HomeAssistant, user_id: str) -> Sensors:
         for e in hass.config_entries.async_entries("mobile_app")
         if e.data.get("user_id") == user_id
     }
-    found: dict[str, tuple[str, bool]] = {}
+    # Per kind, the best match by SENSORS' order (Health Connect's daily count
+    # over a step counter since the phone restarted), whatever the registry's.
+    best: dict[str, tuple[int, str, bool]] = {}
     for entity in er.async_get(hass).entities.values():
         if entity.platform != "mobile_app" or entity.config_entry_id not in entries:
             continue
@@ -79,12 +81,12 @@ def find_sensors(hass: HomeAssistant, user_id: str) -> Sensors:
             continue
         unique = (entity.unique_id or "").lower()
         for kind, keys in SENSORS.items():
-            if kind in found:
-                continue
-            for key, daily in keys.items():  # most specific first
+            for rank, (key, daily) in enumerate(keys.items()):
                 if unique == key or unique.endswith(f"_{key}"):
-                    found[kind] = (entity.entity_id, daily)
+                    if kind not in best or rank < best[kind][0]:
+                        best[kind] = (rank, entity.entity_id, daily)
                     break
+    found = {kind: (entity_id, daily) for kind, (_, entity_id, daily) in best.items()}
     return Sensors(found)
 
 
@@ -133,8 +135,8 @@ def notice(day: Day, level: int, hour: int) -> dict[str, Any] | None:
         ):
             return {"kind": "stairs", "floors": int(floors)}
     usual = day.steps_usual
-    walked = steps >= usual if usual else steps >= R.MY_DAY_WEATHER_WALK_STEPS
-    if level >= R.MY_DAY_USUAL_LEVEL and walked and steps:
+    walked = steps >= R.MY_DAY_WEATHER_WALK_STEPS and (not usual or steps >= usual)
+    if level >= R.MY_DAY_USUAL_LEVEL and walked:
         for kind in ("snow", "rain"):  # out in it anyway
             if kind in day.weather:
                 return {"kind": f"{kind}_walk", "steps": int(steps)}
@@ -196,10 +198,15 @@ async def _stats(
     return out
 
 
-def _number(hass: HomeAssistant, entity_id: str) -> float | None:
+def _number(
+    hass: HomeAssistant, entity_id: str, since: datetime | None = None
+) -> float | None:
+    """The sensor's value, if it has one (and was updated since `since`)."""
     state = hass.states.get(entity_id)
+    if state is None or (since is not None and state.last_updated < since):
+        return None
     try:
-        return float(state.state) if state else None
+        return float(state.state)
     except ValueError:
         return None
 
@@ -220,7 +227,8 @@ async def _counter(
     # Today from the sensor itself where it starts again at midnight (it's up to
     # the minute), else from the statistics, which stop at the last whole hour.
     # Either way, compare it with the same part of the day before.
-    today = _number(hass, entity_id) if daily else None
+    # A daily count not updated since midnight is still yesterday's.
+    today = _number(hass, entity_id, midnight) if daily else None
     until = now.hour + 1 if today is not None else now.hour
     by_day: dict[str, float] = {}
     for when, change in hourly:

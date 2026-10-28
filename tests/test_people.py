@@ -70,11 +70,21 @@ def test_one_question_a_morning_and_one_later():
 def test_the_likes_come_once_each_on_different_days():
     person: dict = {}
     assert ask(person, hour=12) == "fav_weather"
+    person["likes_asked"] = {"fav_weather": ["2026-10-28"]}
     person["likes"] = {"fav_weather": "rain"}
-    person["liked_on"] = "2026-10-28"
     assert ask(person, hour=12) != "fav_season"  # not the same day
     assert ask(person, today="2026-10-29", hour=12) == "fav_season"
     assert ask(person, today="2026-10-29", hour=12, level=2) is None
+
+
+def test_an_unanswered_favourite_is_asked_once_more_weeks_later():
+    person: dict = {"likes_asked": {"fav_weather": ["2026-10-28"]}}
+    assert ask(person, today="2026-10-29", hour=12) != "fav_weather"
+    assert ask(person, today="2026-11-11", hour=12) == "fav_weather"
+    person["likes_asked"]["fav_weather"].append("2026-11-11")
+    assert ask(person, today="2026-12-30", hour=12) != "fav_weather"  # never again
+    # The season waits for the weather question to be done with.
+    assert ask(person, today="2026-12-30", hour=12) != "fav_season"
 
 
 def test_the_later_question_rotates_by_day():
