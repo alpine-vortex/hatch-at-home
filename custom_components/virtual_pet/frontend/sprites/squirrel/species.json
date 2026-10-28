@@ -30,5 +30,10 @@
   "words": { "food": "hazelnuts", "home": "drey" },
   "voice": { "sound": "chirr", "catchphrase": "acorn", "pitch": 900, "pace": 44, "likes": ["hazelnuts", "fir cones", "mushrooms"] },
   "reactions": { "feed": "cache", "snack": "cheeks", "chore_treat": "cheeks", "scold": "chatter" },
-  "head": { "baby": [166, 84], "child": [180, 40], "teen": [170, 36], "adult": [180, 52] }
+  "head": { "baby": [166, 84], "child": [180, 40], "teen": [170, 36], "adult": [180, 52] },
+  "hat": {
+    "child_watch_tv": [132, 92],
+    "teen_excited": null,
+    "adult_excited": null
+  }
 }

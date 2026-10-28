@@ -32,5 +32,8 @@
   "words": { "food": "kibble", "home": "basket" },
   "voice": { "sound": "mrrp", "catchphrase": "purr", "pitch": 820, "pace": 38, "likes": ["kibble", "tuna", "chicken"] },
   "reactions": { "play": "zoomies", "won": "zoomies", "praise": "knead", "blanket": "loaf" },
-  "head": { "baby": [156, 72], "child": [176, 48], "teen": [176, 32], "adult": [184, 56] }
+  "head": { "baby": [156, 72], "child": [176, 48], "teen": [176, 32], "adult": [184, 56] },
+  "hat": {
+    "child_watch_tv": [136, 76]
+  }
 }

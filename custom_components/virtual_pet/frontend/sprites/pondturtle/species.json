@@ -1,0 +1,20 @@
+{
+  "name": "Western pond turtle",
+  "ready": true,
+  "stages": ["baby", "child", "teen", "adult"],
+  "scale": {"adult": 1.2},
+  "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
+  "frames": 2,
+  "extras": {"squint": "child_squint", "shiver": "child_shiver", "sweat": "child_sweat", "mask": "child_mask", "dance": "child_dance", "watch_tv": "child_watch_tv", "bask": ["child_bask_1", "child_bask_2"], "tuck": ["child_tuck_1", "child_tuck_2"], "swim": ["child_swim_1", "child_swim_2"]},
+  "props": {"feed": "bowl_food", "snack": "snack", "play": "play", "clean": "treefrog/bubbles", "medicine": "bird/medicine", "blanket": "bird/blanket", "attention": "bird/attention", "away": "bird/sitter_sign", "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]},
+  "backgrounds": {"day": "treefrog/bg_day", "night": "treefrog/bg_night", "rain": "treefrog/bg_rain", "dim": "treefrog/bg_night"},
+  "words": {"food": "snails", "home": "log"},
+  "voice": { "sound": "plip", "catchphrase": "sunny rock", "pitch": 420, "pace": 26, "likes": ["duckweed", "snails", "earthworms"] },
+  "reactions": {"play": "swim", "won": "swim", "praise": "bask", "scold": "tuck"},
+  "head": {"baby": [176, 148], "child": [184, 128], "teen": [196, 112], "adult": [208, 132]},
+  "murk": "treefrog/murk",
+  "hat": {
+    "child_watch_tv": [128, 132],
+    "teen_hungry": [164, 120]
+  }
+}

@@ -1,0 +1,11 @@
+Use your image generation tool to draw ONE image (landscape 3:2) and save it as puffin_probe.png in the current directory.
+
+A probe sheet of 2 rows x 3 columns of equal square cells introducing a NEW original cute tufted puffin for a virtual pet: a round black seabird, a white face mask, a big chunky orange-red bill, two long golden-cream head plumes swept back behind the eyes (thick and simple), bright orange webbed feet. It stands on a small low grey rock (the baseline). It lives in the same world as the creature in the attached reference sheet, so match that sheet's style and palette feel; do not copy its creature. Faces three-quarters to the right. Each stage keeps its body colours identical in the cells it appears in; moods show through face, pose and small props only, never by recolouring the body.
+- Row 1, mood 'content' (happy idle, soft smile, eyes as gentle arcs). Left = BABY: the puffling (row 1 left): a round fluffy grey down-ball with a small dark bill, no plumes. Middle = CHILD: the young puffin (row 1 middle): dark grey-black, a smaller dull orange bill, short plumes. Right = TEEN: the puffin (row 1 right), the biggest: full orange-red bill and long golden plumes.
+- Row 2, all the TEEN unless stated. Left = mood 'sick': droopy sad eyes, a small thermometer in its mouth (NO colour tint on the body). Middle = mood 'asleep': eyes closed, resting curled up, a small 'z'. Right = the CHILD in its signature pose 'fish_bill': proudly holding a neat row of little silver fish crosswise in its bill.
+Row 1 grows clearly from left to right; the three stages share colours and markings so they read as one creature growing up. In every cell the creature rests on the same height, low in the cell.
+
+Attach: art/otter/otter_probe.png (style reference).
+
+Art style: chunky retro pixel art exactly like the attached reference sheet: big hard square pixels, no anti-aliasing, no gradients, limited palette, dark pixel outline. Keep the reference's pixel size relative to the subject, so the pixels are large and clearly visible
+Background: one flat even mid-grey everywhere (no gradient, no texture, no floor, no shadows on it). Every subject is drawn whole inside its own cell with a generous empty margin; nothing crosses a cell edge. No text labels, no titles, no cell borders, no grid lines.

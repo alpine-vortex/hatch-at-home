@@ -34,5 +34,8 @@
   "words": { "food": "flies", "home": "lily pad" },
   "voice": { "sound": "ribbit", "catchphrase": "hoppity", "pitch": 520, "pace": 34, "likes": ["flies", "crickets", "beetles"] },
   "reactions": { "feed": "tongue", "snack": "tongue", "won": "croak", "praise": "croak" },
-  "head": { "baby": [160, 148], "child": [154, 116], "teen": [168, 72], "adult": [182, 96] }
+  "head": { "baby": [160, 148], "child": [154, 116], "teen": [168, 72], "adult": [182, 96] },
+  "hat": {
+    "child_watch_tv": [116, 112]
+  }
 }

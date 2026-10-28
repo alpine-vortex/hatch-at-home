@@ -30,5 +30,10 @@
   "words": { "food": "berries", "home": "nest" },
   "voice": { "sound": "tweet", "catchphrase": "tra la", "pitch": 1100, "pace": 42, "likes": ["berries", "sunflower seeds", "mealworms"] },
   "reactions": { "play": "birdwatch", "won": "birdwatch" },
-  "head": { "baby": [148, 72], "child": [158, 44], "teen": [170, 12], "adult": [200, 56] }
+  "head": { "baby": [148, 72], "child": [158, 44], "teen": [170, 12], "adult": [200, 56] },
+  "hat": {
+    "child_watch_tv": [112, 104],
+    "adult_dirty": [160, 32],
+    "adult_hungry": [156, 56]
+  }
 }

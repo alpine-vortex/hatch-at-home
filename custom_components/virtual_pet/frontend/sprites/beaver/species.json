@@ -1,0 +1,100 @@
+{
+  "name": "Beaver",
+  "ready": true,
+  "stages": [
+    "baby",
+    "child",
+    "teen",
+    "adult"
+  ],
+  "scale": {
+    "adult": 1.05
+  },
+  "moods": [
+    "content",
+    "excited",
+    "cozy",
+    "bored",
+    "hungry",
+    "sleepy",
+    "asleep",
+    "sick",
+    "calling",
+    "dirty"
+  ],
+  "frames": 2,
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "stick": [
+      "child_stick_1",
+      "child_stick_2"
+    ],
+    "tail_slap": [
+      "child_tail_slap_1",
+      "child_tail_slap_2"
+    ],
+    "gnaw": [
+      "child_gnaw_1",
+      "child_gnaw_2"
+    ]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "play",
+    "clean": "treefrog/bubbles",
+    "medicine": "bird/medicine",
+    "blanket": "bird/blanket",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": [
+      "bird/poop_1",
+      "bird/poop_2",
+      "bird/poop_3"
+    ]
+  },
+  "backgrounds": {
+    "day": "treefrog/bg_day",
+    "night": "treefrog/bg_night",
+    "rain": "treefrog/bg_rain",
+    "dim": "treefrog/bg_night"
+  },
+  "words": {
+    "food": "willow",
+    "home": "lodge"
+  },
+  "voice": { "sound": "chomp", "catchphrase": "busy busy", "pitch": 500, "pace": 32, "likes": ["willow bark", "water lilies", "aspen twigs"] },
+  "reactions": {
+    "play": "gnaw",
+    "won": "stick",
+    "praise": "stick",
+    "scold": "tail_slap"
+  },
+  "head": {
+    "baby": [
+      154,
+      132
+    ],
+    "child": [
+      172,
+      100
+    ],
+    "teen": [
+      182,
+      72
+    ],
+    "adult": [
+      186,
+      80
+    ]
+  },
+  "murk": "treefrog/murk",
+  "hat": {
+    "child_watch_tv": [124, 108]
+  }
+}
