@@ -214,7 +214,7 @@ async def test_llm_agents_get_two_tools(
 
 @pytest.fixture
 async def with_sentences(hass: HomeAssistant, tmp_path: Path) -> None:
-    """The example sentences, copied in as the README says."""
+    """The example sentences, copied in as docs/guide.md says."""
     target = tmp_path / "custom_sentences/en"
     target.mkdir(parents=True)
     shutil.copy(SENTENCES, target / "virtual_pet.yaml")
