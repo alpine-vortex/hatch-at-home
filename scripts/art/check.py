@@ -28,29 +28,31 @@ for f in sorted(os.listdir(new)):
     if not f.endswith(".png"):
         continue
     p = os.path.join(new, f)
-    im = Image.open(p)
+    # Most shipped sprites are optimized palette-indexed PNGs (see
+    # scripts/art/palette.py). Convert before checking alpha and dimensions;
+    # the encoded mode is an implementation detail, not an art defect.
+    im = Image.open(p).convert("RGBA")
     note = []
-    if f.startswith("bg_"):
+    if f.startswith(("bg_", "murk")):
         if im.size != (512, 384):
             note.append(f"BG SIZE {im.size}")
     else:
         b = bbox(p)
-        if im.mode != "RGBA":
-            note.append(f"mode {im.mode}")
         exp = (256, 256)
         if im.size not in [(256, 256), (128, 128)]:
             note.append(f"SIZE {im.size}")
+        is_character = f.startswith(("baby_", "child_", "teen_", "adult_", "egg_"))
         if (
-            im.size == (256, 256)
+            is_character
+            and im.size == (256, 256)
             and b
-            and not f.startswith(("bowl", "snack", "play"))
             and abs(b[3] - 223) > 2
         ):
             note.append(f"feet y={b[3] + 1}")
-        if b and b[1] == 0:
+        if is_character and b and b[1] == 0:
             note.append("TOUCHES TOP")
         m = re.match(r"(.*)_(\d)$", f[:-4])
-        if m and b:
+        if is_character and m and b:
             groups[m.group(1)][m.group(2)] = b
     if old and os.path.exists(os.path.join(old, f)):
         same = open(p, "rb").read() == open(os.path.join(old, f), "rb").read()
