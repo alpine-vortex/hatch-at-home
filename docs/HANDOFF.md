@@ -33,7 +33,11 @@ details before committing it.
 session** (owner's request, 2026-10-28). Released: 0.33.1 (PR #29: the "birthday on
 my phone" switch, off by default; the Art session's redrawn party hat, PR #28; a
 sturdier idle-life card check). Pre-released: **0.34.0b1** (PR #31, the photo), **0.34.0b2** (PR #34, baby talk) and
-**0.35.0b1** (PR #36, personality P1). **There will be no 0.34.0** (owner, 2026-10-28):
+**0.35.0b1** (PR #36, personality P1), **0.35.0b2** (PR #37, P2a, its voice) and
+**0.35.0b3** (the 17 new creatures from the Hatch API Art session, with the voices the
+owner approved; owner art sign-off 2026-10-28, open calls accepted: the firefly adult's
+legs, the ball python child's unused climb, the hermit crab's hat on its shell, the
+duckling's 1.2 adult scale). **There will be no 0.34.0** (owner, 2026-10-28):
 after the owner's phone test, the next full release is **0.35.0**, with all three.
 
 **Phase 4 of the voices plan, the photo (A7), is merged and pre-released as
