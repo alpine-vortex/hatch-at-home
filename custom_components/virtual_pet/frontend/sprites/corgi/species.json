@@ -1,95 +1,15 @@
 {
   "name": "Corgi puppy",
   "ready": true,
-  "stages": [
-    "baby",
-    "child",
-    "teen",
-    "adult"
-  ],
-  "scale": {
-    "adult": 1.1
-  },
-  "moods": [
-    "content",
-    "excited",
-    "cozy",
-    "bored",
-    "hungry",
-    "sleepy",
-    "asleep",
-    "sick",
-    "calling",
-    "dirty"
-  ],
+  "stages": ["baby", "child", "teen", "adult"],
+  "scale": {"adult": 1.1},
+  "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
   "frames": 2,
-  "extras": {
-    "squint": "child_squint",
-    "shiver": "child_shiver",
-    "sweat": "child_sweat",
-    "mask": "child_mask",
-    "dance": "child_dance",
-    "watch_tv": "child_watch_tv",
-    "sploot": [
-      "child_sploot_1",
-      "child_sploot_2"
-    ],
-    "head_tilt": [
-      "child_head_tilt_1",
-      "child_head_tilt_2"
-    ],
-    "ball_fetch": [
-      "child_ball_fetch_1",
-      "child_ball_fetch_2"
-    ]
-  },
-  "props": {
-    "feed": "bowl_food",
-    "snack": "snack",
-    "play": "play",
-    "clean": "bird/sparkle_clean",
-    "medicine": "bird/medicine",
-    "blanket": "bird/blanket",
-    "attention": "bird/attention",
-    "away": "bird/sitter_sign",
-    "poop": [
-      "bird/poop_1",
-      "bird/poop_2",
-      "bird/poop_3"
-    ]
-  },
-  "backgrounds": {
-    "day": "kitten/bg_day",
-    "night": "kitten/bg_night",
-    "rain": "kitten/bg_rain",
-    "dim": "kitten/bg_dim"
-  },
-  "words": {
-    "food": "kibble",
-    "home": "bed"
-  },
-  "reactions": {
-    "play": "ball_fetch",
-    "won": "ball_fetch",
-    "praise": "sploot",
-    "scold": "head_tilt"
-  },
-  "head": {
-    "baby": [
-      150,
-      132
-    ],
-    "child": [
-      182,
-      88
-    ],
-    "teen": [
-      204,
-      64
-    ],
-    "adult": [
-      204,
-      76
-    ]
-  }
+  "extras": {"squint": "child_squint", "shiver": "child_shiver", "sweat": "child_sweat", "mask": "child_mask", "dance": "child_dance", "watch_tv": "child_watch_tv", "sploot": ["child_sploot_1", "child_sploot_2"], "head_tilt": ["child_head_tilt_1", "child_head_tilt_2"], "ball_fetch": ["child_ball_fetch_1", "child_ball_fetch_2"]},
+  "props": {"feed": "bowl_food", "snack": "snack", "play": "play", "clean": "bird/sparkle_clean", "medicine": "bird/medicine", "blanket": "bird/blanket", "attention": "bird/attention", "away": "bird/sitter_sign", "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]},
+  "backgrounds": {"day": "kitten/bg_day", "night": "kitten/bg_night", "rain": "kitten/bg_rain", "dim": "kitten/bg_dim"},
+  "words": {"food": "kibble", "home": "bed"},
+  "reactions": {"play": "ball_fetch", "won": "ball_fetch", "praise": "sploot", "scold": "head_tilt"},
+  "head": {"baby": [150, 132], "child": [182, 88], "teen": [204, 64], "adult": [204, 76]},
+  "hat": {"baby": [150, 132], "child": [152, 108], "teen": [168, 92], "adult": [171, 100]}
 }
