@@ -366,13 +366,13 @@ lines, no superlative or time word in the hellos).
 
 | Type | Line 1 | Line 2 |
 | --- | --- | --- |
-| mellow | {n}... glad it's you ♥ | {n}, my nap buddy ♥ |
-| sweet | {n}, I saved you a hug ♥ | {n}! glad it's you ♥ |
-| bouncy | {n}!! glad it's you! ♥ | {n}! my hup-hup pal ♥ |
-| starry | {n}! my front-row friend ★ | {n}! glad it's you ★ |
+| mellow | {n}... come nap with me ♥ | {n}, my nap buddy ♥ |
+| sweet | {n}, I saved you a hug ♥ | {n}! you feel like home ♥ |
+| bouncy | {n}!! my heart's hopping! ♥ | {n}! my hup-hup pal ♥ |
+| starry | {n}! my front-row friend ★ | {n}! my stage lights up ★ |
 | old soul | {n}. glad it's you ♥ | ah, {n}. my old friend ♥ |
 | fancy | {n}! you brighten my day ♥ | {n}! darling, it's you ♥ |
-| charming | {n}, my dear, dear friend ♥ | {n}! glad it's you ♥ |
+| charming | {n}, my dear, dear friend ♥ | {n}! how grand, it's you ♥ |
 | plucky | {n}! my partner ♥ | {n}! partners for life ♥ |
 
 **Idle, default (`_idle`'s mumble)** (`idle`)
@@ -521,8 +521,10 @@ Notes on the lines:
   (card:2584-2590); the reveal is a second bubble, **`_queue(s, line, 4500,
   {catch: true})` right after it**, as `wish_granted` and `favourite_snack` already
   queue, so neither line is lost.
-- **Bond 8:** warm, never superlative ("glad it's you ♥"): several types share that
-  line on purpose; the owner may want more variety there.
+- **Bond 8:** warm, never superlative. Only old soul says "glad it's you ♥"; the
+  owner asked for the others to vary (2026-10-28). The owner approved the lines on
+  2026-10-28, with sweet's "hope you slept well" and the "sleep well" / "sleep tight"
+  good-night lines kept.
 - **Wish granted:** today's normal pool includes "my wish came true! thank you ♥",
   which still shows on the other half of the coin. It thanks nobody in particular,
   so it is left as it is; the owner may want to look at it.
