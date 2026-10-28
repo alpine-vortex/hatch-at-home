@@ -27,7 +27,8 @@
     "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]
   },
   "backgrounds": { "day": "bat/bg_day", "night": "bat/bg_night", "rain": "bat/bg_rain", "dim": "bat/bg_night" },
-  "words": { "food": "leaves", "home": "cocoon" },
+  "words": { "food": "leaves", "home": "branch", "teen": { "food": "moonlight", "home": "tree" }, "adult": { "food": "moonlight", "home": "tree" } },
+  "voice": { "sound": "fwip", "catchphrase": "flutter", "pitch": 660, "pace": 30, "likes": ["walnut leaves", "birch leaves", "sweetgum leaves"] },
   "reactions": { "play": "glow", "won": "wing_spread", "praise": "wing_spread" },
   "head": { "baby": [162, 140], "child": [178, 120], "teen": [128, 72], "adult": [128, 96] },
   "hat": {

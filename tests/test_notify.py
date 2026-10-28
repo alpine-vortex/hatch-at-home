@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import date
 import logging
 
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -67,8 +68,45 @@ async def test_phones_are_told_at_once_and_a_broken_one_stays_quiet(
 
 
 def test_halloween_morning_reads_well_and_only_on_the_day():
-    assert notify.holiday(10, 31) == "halloween"
-    assert notify.holiday(10, 30) is None and notify.holiday(11, 1) is None
+    assert notify.holiday(date(2026, 10, 31)) == "halloween"
+    assert (
+        notify.holiday(date(2026, 10, 30)) is None
+        and notify.holiday(date(2026, 11, 1)) is None
+    )
     text = notify.message({"type": "holiday", "holiday": "halloween"}, "Pip", {})
     assert text == "Happy Halloween! Pip is dressed up and ready to trick or treat 🎃"
     assert notify.message({"type": "holiday", "holiday": "nope"}, "Pip", {}) is None
+
+
+def test_thanksgiving_is_the_fourth_thursday_of_november():
+    # 1 November on a Sunday, a Thursday and a Friday: the earliest and latest dates.
+    assert notify.thanksgiving(2026) == date(2026, 11, 26)
+    assert notify.thanksgiving(2029) == date(2029, 11, 22)
+    assert notify.thanksgiving(2024) == date(2024, 11, 28)
+    assert notify.holiday(date(2026, 11, 26)) == "thanksgiving"
+    assert (
+        notify.holiday(date(2026, 11, 19)) is None
+        and notify.holiday(date(2026, 11, 27)) is None
+    )
+    text = notify.message({"type": "holiday", "holiday": "thanksgiving"}, "Pip", {})
+    assert text == "Happy Thanksgiving! Pip is thankful for you 🦃"
+
+
+def test_a_friend_is_told_by_nickname():
+    assert notify.to_friend("Pip is hungry!", "sunbeam") == "Pip is hungry, sunbeam!"
+    assert (
+        notify.to_friend("Pip is sleepy. Lights out?", "bean")
+        == "Pip is sleepy. Lights out, bean?"
+    )
+    holiday = notify.HOLIDAY_MORNINGS["thanksgiving"].format(name="Pip")
+    assert notify.to_friend(holiday, "bean") == holiday
+
+
+def test_send_offs_read_well():
+    assert (
+        notify.send_off("rain", "Pip", "sunbeam")
+        == "Pip says: rain today, take an umbrella, sunbeam ☂"
+    )
+    assert (
+        notify.send_off("hot", "Pip", None) == "Pip says: it's a hot one, stay cool! ☀"
+    )

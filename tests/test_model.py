@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import UTC, datetime
 import random
 
 import pytest
 
 from custom_components.virtual_pet import model, rates as R
-from custom_components.virtual_pet.home import HomeEffect
+from custom_components.virtual_pet.home import REASONS, HomeEffect
 
 HOUR = 3600.0
 MIN = 60.0
@@ -611,6 +612,7 @@ def test_laying_an_egg_retires_the_parent_to_the_journal():
     pet.species, pet.raised = "squirrel", ["bird", "squirrel"]
     pet.traits = ["night_owl", "homebody"]
     pet.care_misses = 3
+    pet.personality = "old_soul"
     egg, events = model.lay_egg(pet, at(12), random.Random(1))
     assert model.life_stage(egg) == "egg"
     assert egg.name == "Pip" and egg.born == at(12)
@@ -631,9 +633,11 @@ def test_laying_an_egg_retires_the_parent_to_the_journal():
             "age_days": round(pet.age_hours / 24, 1),
             "care_misses": 3,
             "upbringing": "steady",  # 3 misses and no discipline
+            "personality": "old_soul",
             "games": {},
         }
     ]
+    assert egg.personality is None
     assert events == [
         {
             "type": "egg_laid",
@@ -890,6 +894,7 @@ def test_upbringing_is_decided_on_growing_up(misses, discipline, grade):
     adult = dict(R.STAGE_STARTS)["adult"]
     start = at(9)
     pet = hatched(start, age_hours=adult - 0.1, discipline=discipline)
+    pet.personality = "sweet"  # settled at teen
     pet.care_misses = misses
     pet.hunger = pet.happiness = 99.0
     assert model.upbringing(pet) == grade  # on track before the day comes
@@ -939,6 +944,175 @@ def test_old_adult_saves_get_an_upbringing_and_bad_ones_are_dropped():
     assert model.PetState.from_dict(young).upbringing is None
 
 
+TEEN = dict(R.STAGE_STARTS)["teen"]
+
+
+def test_a_personality_is_settled_on_becoming_a_teen():
+    start = at(9)
+    pet = hatched(start)  # a child
+    run(pet, start + (TEEN - 30.0 - 0.1) * HOUR)
+    assert model.life_stage(pet) == "child" and pet.personality is None
+    events = run(pet, pet.last_updated + 10 * MIN)
+    grown = [e for e in events if e["type"] == "stage_changed"]
+    assert grown == [
+        {
+            "type": "stage_changed",
+            "stage": "teen",
+            "from": "child",
+            "personality": pet.personality,
+        }
+    ]
+    assert pet.personality in model.PERSONALITIES
+    # Kept for life: a new trait doesn't change it.
+    kept = pet.personality
+    pet.traits, pet.trait_levels = ["player"], {"player": 3}
+    run(pet, pet.last_updated + HOUR)
+    assert pet.personality == kept
+
+
+def test_an_adult_without_a_personality_settles_one_on_growing_up():
+    adult = dict(R.STAGE_STARTS)["adult"]
+    start = at(9)
+    pet = hatched(start, age_hours=adult - 0.1)
+    assert pet.personality is None  # built after load, so no backfill
+    events = run(pet, start + 10 * MIN)
+    grown = [e for e in events if e["type"] == "stage_changed"]
+    assert len(grown) == 1 and grown[0]["stage"] == "adult"
+    assert grown[0]["personality"] == pet.personality in model.PERSONALITIES
+    assert grown[0]["upbringing"] == pet.upbringing
+
+
+def test_damaged_trait_levels_are_dropped_on_load():
+    pet = hatched(at(9), age_hours=TEEN + 1)
+    pet.traits = ["homebody", "fireside", "player"]
+    data = pet.to_dict()
+    del data["personality"]
+    data["trait_levels"] = {"homebody": "2", "fireside": None, "player": 3, "x": 9}
+    loaded = model.PetState.from_dict(data)
+    assert loaded.trait_levels == {"player": 3}
+    assert loaded.personality in model.PERSONALITIES
+    data["trait_levels"] = [1]
+    assert model.PetState.from_dict(data).trait_levels == {}
+
+
+def test_eggs_and_babies_have_no_personality():
+    start = at(9)
+    pet = model.PetState.new("Pip", start)
+    assert pet.personality is None
+    model.advance(
+        pet,
+        start + 2 * HOUR,
+        model.Settings(tz=UTC, roster=("bird",)),
+        random.Random(1),
+        max_gap=None,
+    )
+    assert model.life_stage(pet) == "baby" and pet.personality is None
+
+
+def test_personality_for_is_deterministic():
+    pet = hatched(at(9), age_hours=TEEN + 1)
+    pet.traits, pet.trait_levels = ["homebody", "player"], {"homebody": 2}
+    first = model.personality_for(pet)
+    assert first in model.PERSONALITIES
+    assert all(model.personality_for(pet) == first for _ in range(5))
+    again = model.PetState.from_dict(pet.to_dict())
+    assert model.personality_for(again) == first
+
+
+def test_every_type_is_leaned_toward_by_four_traits():
+    assert set(model.PERSONALITY_LEANINGS) == set(model.TRAITS)
+    counts = Counter(k for pair in model.PERSONALITY_LEANINGS.values() for k in pair)
+    assert counts == dict.fromkeys(model.PERSONALITIES, 4)
+
+
+def test_picking_a_personality_leaves_the_shared_rng_alone():
+    start = at(9)
+    settings = model.Settings(tz=UTC, roster=("bird", "squirrel"))
+    pets, rngs = [], []
+    for preset in (None, "sweet"):
+        pet = model.PetState.new("Pip", start)
+        rng = random.Random(5)
+        model.advance(pet, start + HOUR, settings, rng, max_gap=None)  # hatches
+        pet.age_hours = TEEN - 0.5
+        pet.personality = preset  # "sweet": the teen branch has nothing to do
+        pet.hunger = pet.happiness = pet.energy = 10.0  # calls and sickness draw
+        model.advance(pet, pet.last_updated + 6 * HOUR, settings, rng, max_gap=None)
+        pets.append(pet)
+        rngs.append(rng)
+    assert pets[0].personality in model.PERSONALITIES
+    assert rngs[0].getstate() == rngs[1].getstate()
+    plain, preset = pets
+    assert plain.species == preset.species
+    assert plain.temperament == preset.temperament
+    assert plain.sick == preset.sick and plain.care_log == preset.care_log
+    state = random.getstate()
+    model.personality_for(plain)
+    assert random.getstate() == state  # nor the module's
+
+
+def test_personality_is_flavour_only():
+    start = at(9)
+    house = model.Settings(
+        tz=UTC,
+        roster=("bird",),
+        home=HomeEffect(flags=["rainy", "watching_tv"], company=True),
+    )
+    pets = []
+    for kind in ("mellow", "plucky"):
+        pet = hatched(start, age_hours=TEEN + 1, species="bird", personality=kind)
+        model.advance(pet, start + 7 * 24 * HOUR, house, random.Random(9), None)
+        pets.append(pet.to_dict())
+    a, b = pets
+    assert (a.pop("personality"), b.pop("personality")) == ("mellow", "plucky")
+    assert a == b  # stats, calls, care log, traits: everything else
+
+
+def test_personality_is_not_a_grade():
+    pet = hatched(at(9), age_hours=TEEN + 1)
+    pet.traits = ["helper"]
+    kind = model.personality_for(pet)
+    for misses, discipline, raised in ((10, 0.0, "scrappy"), (0, 100.0, "devoted")):
+        pet.care_misses, pet.discipline, pet.upbringing = misses, discipline, raised
+        assert model.personality_for(pet) == kind
+
+
+def test_every_type_is_reachable_and_traits_nudge():
+    plain = Counter(
+        model.personality_for(model.PetState.new("Pip", float(born)))
+        for born in range(4000)
+    )
+    assert set(plain) == set(model.PERSONALITIES)
+    assert all(400 <= n <= 600 for n in plain.values())  # 500 each, roughly
+    nudged = Counter()
+    for born in range(4000):
+        pet = model.PetState.new("Pip", float(born))
+        pet.traits, pet.trait_levels = ["homebody"], {"homebody": 3}
+        nudged[model.personality_for(pet)] += 1
+    # ★★★ homebody: sweet and mellow 4 each of 14, 2 in 7 instead of 1 in 8.
+    for kind in ("sweet", "mellow"):
+        assert nudged[kind] > 1.8 * plain[kind]
+
+
+def test_saves_without_a_personality_are_backfilled_and_bad_ones_dropped():
+    for age in (TEEN + 1, 400.0):
+        pet = hatched(at(9), age_hours=age)
+        pet.traits = ["fireside"]
+        data = pet.to_dict()
+        del data["personality"]
+        loaded = model.PetState.from_dict(data)
+        assert loaded.personality == model.personality_for(pet)
+        assert model.PetState.from_dict(data).personality == loaded.personality
+        data["personality"] = "grumpy"
+        assert model.PetState.from_dict(data).personality == loaded.personality
+        data["personality"] = "fancy"  # a saved one is kept, whatever the traits say
+        assert model.PetState.from_dict(data).personality == "fancy"
+    baby = hatched(at(9)).to_dict()
+    del baby["personality"]
+    assert model.PetState.from_dict(baby).personality is None
+    baby["personality"] = 3
+    assert model.PetState.from_dict(baby).personality is None
+
+
 def test_lights_out_while_away_is_applied_on_return():
     start = at(14)
     pet = hatched(start)
@@ -975,9 +1149,10 @@ def test_lights_flipped_on_and_off_while_away_change_nothing():
         ),
         (
             {"type": "stage_changed", "stage": "adult", "upbringing": "devoted"},
-            "Pip is all grown up: a devoted adult.",
+            "Pip is all grown up!",
         ),
         ({"type": "stage_changed", "stage": "child"}, None),
+        ({"type": "stage_changed", "stage": "teen", "personality": "sweet"}, None),
     ],
 )
 def test_notification_wording(event, text):
@@ -1419,3 +1594,336 @@ def test_a_save_from_before_check_ins_loads():
         data.pop(key)
     pet = model.PetState.from_dict(data)
     assert pet.wish is None and pet.dream_seeds == [] and pet.dream is None
+
+
+# --- Bonds -------------------------------------------------------------------
+
+
+def test_bond_levels_are_slow_at_the_top():
+    assert model.bond_level(0) == 1
+    assert model.bond_level(R.BOND_LEVELS[1]) == 2
+    assert model.bond_level(10**6) == 10
+    steps = [b - a for a, b in zip(R.BOND_LEVELS, R.BOND_LEVELS[1:], strict=False)]
+    assert steps == sorted(steps)
+
+
+def test_care_and_games_have_a_daily_limit_and_a_visit_counts_once():
+    pet = hatched(at(9))
+    rng = random.Random(1)
+    for _ in range(20):
+        model.add_bond(pet, "u1", "care", "2026-10-01", rng)
+    model.add_bond(pet, "u1", "visit", "2026-10-01", rng)
+    model.add_bond(pet, "u1", "visit", "2026-10-01", rng)
+    assert pet.bonds["u1"]["points"] == R.BOND_DAILY_LIMIT + R.BOND_VISIT_POINTS
+    # A new day, a new allowance; points never go down.
+    model.add_bond(pet, "u1", "care", "2026-10-02", rng)
+    assert pet.bonds["u1"]["points"] == R.BOND_DAILY_LIMIT + R.BOND_VISIT_POINTS + 1
+
+
+def test_a_close_bond_brings_a_nickname_then_a_favourite_game():
+    pet = hatched(at(9))
+    rng = random.Random(1)
+    pet.bonds["u1"] = {"points": R.BOND_LEVELS[3] - 1, "games": {"higher_lower": 3}}
+    pet.bonds["u2"] = {"points": 0, "nickname": "sunbeam"}
+    events = model.add_bond(pet, "u1", "wish", "2026-10-01", rng)
+    assert events[0]["level"] == R.BOND_NICKNAME_LEVEL
+    nickname = pet.bonds["u1"]["nickname"]
+    assert nickname in model.NICKNAMES and nickname != "sunbeam"  # not someone else's
+    pet.bonds["u1"]["points"] = R.BOND_LEVELS[R.BOND_FAVOURITE_LEVEL - 1] - 1
+    events = model.add_bond(pet, "u1", "game", "2026-10-02", rng, "left_right")
+    assert events[0]["favourite"] == "higher_lower"  # the one they play most
+    assert pet.bonds["u1"]["nickname"] == nickname  # kept
+    pet.happiness = 50.0
+    assert model.favourite_game(pet, "u2", "higher_lower", "2026-10-02") == []
+    assert types(model.favourite_game(pet, "u1", "higher_lower", "2026-10-02")) == [
+        "bond_favourite"
+    ]
+    assert (
+        model.favourite_game(pet, "u1", "higher_lower", "2026-10-02") == []
+    )  # once a day
+    assert pet.happiness == 50.0  # flavour only: a bond never changes the stats
+
+
+def test_bonds_carry_into_the_next_generation_and_survive_a_bad_save():
+    pet = hatched(at(9))
+    pet.age_hours = 10_000.0
+    pet.bonds = {"u1": {"points": 30, "nickname": "bean"}}
+    egg, _ = model.lay_egg(pet, at(10), random.Random(1))
+    assert egg.bonds == pet.bonds and egg.bonds is not pet.bonds
+    data = pet.to_dict()
+    data["bonds"] = {"u1": {"points": "12"}, "u2": "junk"}
+    assert model.PetState.from_dict(data).bonds == {"u1": {"points": 12}}
+
+
+def test_a_wish_may_be_aimed_at_a_close_friend():
+    pet = hatched(at(9))
+    model.pick_wish(pet, "2026-10-01", Lucky(1), {"play"}, {"u1": "Sam"})
+    assert pet.wish == {
+        "kind": "play",
+        "day": "2026-10-01",
+        "granted": False,
+        "for": "u1",
+        "for_name": "Sam",
+    }
+    # Anyone may grant it.
+    assert model.grant_wish(pet, "play", at(10), "2026-10-01", 10, "Alex")
+    # Not one the house grants, nor without friends.
+    model.pick_wish(pet, "2026-10-02", Lucky(1), {"tuck_in"}, {"u1": "Sam"})
+    assert "for" not in pet.wish
+    model.pick_wish(pet, "2026-10-03", Lucky(1), {"play"}, {})
+    assert "for" not in pet.wish
+
+
+def test_friendship_days_fall_monthly_and_on_short_months():
+    assert model.friends_for("2026-09-28", "2026-10-28") == 1
+    assert model.friends_for("2026-09-28", "2026-10-27") is None
+    assert model.friends_for("2026-10-01", "2026-10-28") is None  # not a month yet
+    assert model.friends_for("2026-01-31", "2026-02-28") == 1
+    assert model.friends_for("2025-10-28", "2026-10-28") == 12
+    assert model.friends_for(None, "2026-10-28") is None
+
+
+def test_a_game_record_is_each_persons_own():
+    pet = hatched(at(9))
+    assert model.game_record(pet, "u1", "left_right", 3) == []  # sets the mark
+    assert model.game_record(pet, "u1", "left_right", 3) == []
+    assert types(model.game_record(pet, "u1", "left_right", 4)) == ["bond_record"]
+    assert model.game_record(pet, "u2", "left_right", 2) == []  # their first
+    assert pet.bonds["u1"]["best"] == {"left_right": 4}
+
+
+def test_last_nights_dream_pick_comes_true():
+    pet = hatched(at(9))
+    model.dream_seed(pet, {"kind": "game"}, at(20))
+    model.pick_dream(pet, "u1", "sea", at(21))
+    model.pick_dream(pet, "u1", "stars", at(21, 30))  # their latest choice
+    model.dream_on_waking(pet, at(7, day=2), "2026-10-02", random.Random(1))
+    assert pet.dream == {
+        "kind": "picked",
+        "pick": "stars",
+        "user": "u1",
+        "day": "2026-10-02",
+    }
+    assert pet.dream_picks == [] and pet.dream_seeds == []
+
+
+# --- Its favourite snack ------------------------------------------------------
+
+
+class Luck(random.Random):
+    """Chance always fires."""
+
+    def random(self) -> float:
+        return 0.0
+
+
+def test_it_picks_a_favourite_snack_once_from_its_likes():
+    egg = model.PetState.new("Pip", at(12))
+    assert not model.pick_favourite(egg, ["hazelnuts"], random.Random(1))  # an egg
+    pet = hatched(at(12))
+    assert not model.pick_favourite(pet, [], random.Random(1))  # nothing it likes
+    assert pet.favourites == {}
+    assert model.pick_favourite(pet, ["hazelnuts", "fir cones"], random.Random(1))
+    first = pet.favourites["snack"]
+    assert first in ("hazelnuts", "fir cones")
+    assert not model.pick_favourite(pet, ["mushrooms"], random.Random(2))  # for good
+    assert pet.favourites == {"snack": first}
+
+
+def test_its_favourite_snack_is_said_at_most_once_a_day():
+    pet = hatched(at(12))
+    assert model.favourite_snack(pet, "2026-10-01", Luck()) == []  # none picked yet
+    pet.favourites = {"snack": "hazelnuts"}
+    assert model.favourite_snack(pet, "2026-10-01", NoLuck()) == []  # not this time
+    assert pet.favourite_said is None
+    assert model.favourite_snack(pet, "2026-10-01", Luck()) == [
+        {"type": "favourite_snack", "food": "hazelnuts"}
+    ]
+    assert model.favourite_snack(pet, "2026-10-01", Luck()) == []
+    assert model.favourite_snack(pet, "2026-10-02", Luck(), own_food=True) == []
+    assert len(model.favourite_snack(pet, "2026-10-02", Luck())) == 1
+
+
+def test_a_new_egg_has_no_favourites_and_old_saves_load():
+    pet = hatched(at(12), age_hours=ADULT + R.LAY_EGG_AFTER_ADULT_HOURS + 5)
+    pet.species, pet.favourites = "squirrel", {"snack": "hazelnuts"}
+    pet.favourite_said = "2026-10-01"
+    egg, _ = model.lay_egg(pet, at(12), random.Random(1))
+    assert egg.favourites == {} and egg.favourite_said is None
+    data = pet.to_dict()
+    assert model.PetState.from_dict(data).favourites == {"snack": "hazelnuts"}
+    del data["favourites"], data["favourite_said"]
+    old = model.PetState.from_dict(data)
+    assert old.favourites == {} and old.favourite_said is None
+    data["favourites"], data["favourite_said"] = {"snack": 3, "x": "y"}, 5
+    damaged = model.PetState.from_dict(data)
+    assert damaged.favourites == {"x": "y"} and damaged.favourite_said is None
+    data["favourites"] = ["hazelnuts"]  # not even a dict
+    assert model.PetState.from_dict(data).favourites == {}
+    data["hatched_on"] = "2026-13-45"  # damaged: worked out again at load
+    assert model.PetState.from_dict(data).hatched_on is None
+
+
+# --- Birthdays ---------------------------------------------------------------
+
+
+def test_its_birthday_is_monthly_in_its_first_year_then_yearly():
+    assert model.pet_birthday("2026-01-31", "2026-02-28") == {
+        "months": 1
+    }  # short month
+    assert model.pet_birthday("2026-01-31", "2026-03-31") == {"months": 2}
+    assert model.pet_birthday("2026-01-31", "2026-03-30") is None
+    assert model.pet_birthday("2026-01-31", "2026-12-31") == {"months": 11}
+    assert model.pet_birthday("2026-01-31", "2027-01-31") == {"years": 1}
+    assert model.pet_birthday("2026-01-31", "2027-02-28") is None  # 13 months: no
+    assert model.pet_birthday(None, "2027-01-31") is None
+
+
+def test_a_birthday_is_a_real_day_and_29_february_comes_every_year():
+    assert model.valid_birthday("02-29") and model.valid_birthday("12-31")
+    for bad in ("02-30", "13-01", "1-01", "aa-bb", "04-31", "0229", ""):
+        assert not model.valid_birthday(bad), bad
+    assert model.birthday_today("03-14", "2027-03-14")
+    assert not model.birthday_today("03-14", "2027-03-15")
+    assert model.birthday_today("02-29", "2027-02-28")  # not a leap year
+    assert not model.birthday_today("02-29", "2028-02-28")
+    assert model.birthday_today("02-29", "2028-02-29")
+    assert not model.birthday_today(None, "2028-02-29")
+
+
+def test_hatching_dates_its_birthday_and_a_new_egg_has_none():
+    egg = model.PetState.new("Pip", at(23, 50))
+    run(egg, at(23, 50) + 40 * MIN)  # hatches at 00:20 the next day (UTC)
+    assert model.life_stage(egg) == "baby"
+    assert egg.hatched_on == "2026-10-02"
+    pet = hatched(at(12), age_hours=ADULT + R.LAY_EGG_AFTER_ADULT_HOURS + 5)
+    pet.hatched_on, pet.catchphrase = "2026-09-01", "yay"
+    new, _ = model.lay_egg(pet, at(12), random.Random(1))
+    assert new.hatched_on is None and new.catchphrase is None
+
+
+def test_a_best_friend_gets_a_photo_once_a_generation():
+    pet = hatched(at(9), species="otter", traits=["helper", "night_owl"])
+    best = R.BOND_LEVELS[R.BOND_PHOTO_LEVEL - 1]
+    pet.bonds = {"u1": {"points": best}, "u2": {"points": best - 1}}
+    # A child (or a hatchling with an inherited bond) waits until it's a teen.
+    assert not model.take_photo(pet, "u1", "2026-10-28")
+    pet.age_hours = 130.0
+    assert not model.take_photo(pet, "u2", "2026-10-28")  # not best friends yet
+    assert not model.take_photo(pet, "nobody", "2026-10-28")
+    assert model.take_photo(pet, "u1", "2026-10-28")
+    assert pet.bonds["u1"]["photos"] == {
+        "1": {
+            "name": "Pip",
+            "species": "otter",
+            "stage": "teen",
+            "traits": ["helper", "night_owl"],
+            "on": "2026-10-28",
+        }
+    }
+    assert not model.take_photo(pet, "u1", "2026-11-02")  # once
+    # The next generation keeps the first photo and makes its own.
+    pet.age_hours = 10_000.0
+    egg, _ = model.lay_egg(pet, at(10), random.Random(1))
+    assert not model.take_photo(egg, "u1", "2026-11-02")  # an egg
+    egg.species, egg.age_hours = "bird", 400.0
+    assert model.take_photo(egg, "u1", "2026-11-20")
+    assert egg.bonds["u1"]["photos"]["1"]["species"] == "otter"
+    assert egg.bonds["u1"]["photos"]["2"]["stage"] == "adult"
+
+
+def test_photos_survive_a_bad_save():
+    pet = hatched(at(9))
+    data = pet.to_dict()
+    good = {"name": "Pip", "species": "bird", "stage": "teen", "on": "2026-10-28"}
+    data["bonds"] = {
+        "u1": {
+            "points": 200,
+            "photos": {
+                "1": {**good, "traits": ["helper", 3, "early_bird"]},
+                "2": {**good, "species": None},
+                "x": good,
+                "²": good,
+                "01": good,
+                "3": "junk",
+            },
+        },
+        "u2": {"points": 5, "photos": "junk"},
+    }
+    bonds = model.PetState.from_dict(data).bonds
+    assert bonds["u1"]["photos"] == {"1": {**good, "traits": ["helper", "early_bird"]}}
+    assert bonds["u2"] == {"points": 5, "photos": {}}
+
+
+# --- reason_key: which sentence the mood line is (baby talk keys it) ----------
+
+
+def keyed(pet: model.PetState, now: float, settings: model.Settings = SETTINGS):
+    full = model.mood_keyed(pet, now, settings)
+    assert full[:3] == model.mood(pet, now, settings)  # mood() is unchanged
+    return full
+
+
+@pytest.mark.parametrize("reason", sorted(model._CALL_REASONS))
+def test_reason_key_of_a_call(reason: str):
+    now = at(14)
+    pet = hatched(now)
+    pet.call = model.Call(reason, now, now + 20 * MIN)
+    current, _, sentence, key = keyed(pet, now)
+    assert current == "calling" and key == f"call_{reason}"
+    assert sentence == model._CALL_REASONS[reason]
+
+
+@pytest.mark.parametrize(
+    ("stats", "mood"),
+    [
+        ({"hunger": 20.0}, "hungry"),
+        ({"happiness": 10.0}, "bored"),
+        ({}, "content"),
+        ({"last_excite": at(14)}, "excited"),
+    ],
+)
+def test_reason_key_of_a_mood(stats: dict, mood: str):
+    now = at(14)
+    pet = hatched(now, **stats)
+    current, _, sentence, key = keyed(pet, now)
+    assert (current, key, sentence) == (mood, mood, model._MOOD_REASONS[mood])
+
+
+def test_reason_key_of_dirty_and_the_sleepy_sentences():
+    now = at(14)
+    pet = hatched(now)
+    pet.poops = [now]
+    assert keyed(pet, now)[3] == "dirty"
+    drowsy = keyed(hatched(at(22, 40)), at(22, 40))
+    assert drowsy[2:] == ("getting late, eyes drooping", "sleepy_drowsy")
+    low = keyed(hatched(now, energy=5.0), now)
+    assert low[2:] == ("running low on energy", "sleepy_low")
+
+
+@pytest.mark.parametrize("flag", sorted(REASONS))
+def test_reason_key_of_the_house(flag: str):
+    now = at(14)
+    house = model.Settings(tz=UTC, home=HomeEffect(flags=[flag]))
+    current, _, sentence, key = keyed(hatched(now), now, house)
+    assert current in ("content", "cozy", "excited", "sleepy", "bored")
+    assert (sentence, key) == (REASONS[flag], f"home_{flag}")
+
+
+def test_reason_key_follows_the_branch_that_won():
+    now = at(14)
+    rainy = model.Settings(tz=UTC, home=HomeEffect(flags=["rainy"]))
+    # The body comes before the house: the weight line shadows the rain.
+    for band, weight in (("heavy", R.WEIGHT_HEAVY_ABOVE + 1), ("light", 1.0)):
+        pet = hatched(now, weight=weight)
+        assert keyed(pet, now, rainy)[2:] == (
+            model._WEIGHT_REASONS[band],
+            f"weight_{band}",
+        )
+    # Just excited: neither the house nor the weight says it.
+    pet = hatched(now, last_excite=now, weight=R.WEIGHT_HEAVY_ABOVE + 1)
+    assert keyed(pet, now, rainy)[2:] == ("that was fun!", "excited")
+    # A call is never shadowed by the house.
+    pet = hatched(now)
+    pet.call = model.Call("hunger", now, now + 20 * MIN)
+    assert keyed(pet, now, rainy)[3] == "call_hunger"

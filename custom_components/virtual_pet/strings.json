@@ -304,6 +304,30 @@
         }
       }
     },
+    "visit": {
+      "name": "Visit",
+      "description": "Tells the pet that you, the user calling it, looked in. The card calls it when you open it: the first visit of the day counts toward your bond with the pet, and an afternoon visit grants a \"come say hi\" wish. Counted at most hourly. The response holds what the pet has to tell only you (notes), each once.",
+      "fields": {
+        "entity_id": {
+          "name": "Pet",
+          "description": "Any entity of the pet."
+        }
+      }
+    },
+    "my_day": {
+      "name": "My day",
+      "description": "Lets the pet notice your day, or stops it, for you, the user calling it: steps, stairs, a bike ride or a run, and a good night's sleep, from the phones you signed in to the Home Assistant app with. It only ever says something when a day stands out for the better, and only to you. The closer your bond, the more it notices.",
+      "fields": {
+        "entity_id": {
+          "name": "Pet",
+          "description": "Any entity of the pet."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "On to let it notice your day, off to stop."
+        }
+      }
+    },
     "play_game": {
       "name": "Play a game",
       "description": "One round of a game the card's play button starts. Five rounds make a game; three right guesses win it. Left or right: the pet hides left or right and you guess; the first guess starts a game. Higher or lower: call once without a guess to start and see the first number (1-9), then guess whether the next is higher or lower.",

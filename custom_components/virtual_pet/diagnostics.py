@@ -57,8 +57,8 @@ REDACT_OPTIONS = {
     CONF_WEATHER,
     CONF_ZONE,
 }
-# People: who cared for the pet, and who gets its notifications.
-REDACT_STATE = {"by", "notify_users"}
+# People: who cared for the pet, who gets its notifications, and who's close.
+REDACT_STATE = {"by", "notify_users", "bonds", "user", "for", "for_name"}
 
 
 async def async_get_config_entry_diagnostics(
@@ -77,6 +77,8 @@ async def async_get_config_entry_diagnostics(
         "options": async_redact_data(dict(entry.options), REDACT_OPTIONS),
         # PRIVATE_READINGS: the titles a dream can be about.
         "pet": async_redact_data(pet.to_dict(), REDACT_STATE | PRIVATE_READINGS),
+        # For tuning, without saying whose: each person's points, highest first.
+        "bond_points": sorted((b["points"] for b in pet.bonds.values()), reverse=True),
         "now": {
             "stage": model.life_stage(pet),
             "mood": mood,
@@ -87,10 +89,14 @@ async def async_get_config_entry_diagnostics(
             "whine_rate_per_hour": round(model.whine_rate(pet), 4),
             "upbringing": model.upbringing(pet),
             "upbringing_score": round(model.upbringing_score(pet), 1),
+            "personality": pet.personality,
             "trait_progress": model.trait_progress(pet),
         },
         "calculation": async_redact_data(
             dict(coordinator.debug), REDACT_OPTIONS | PRIVATE_READINGS
         ),
-        "moments": async_redact_data(list(coordinator.moments), PRIVATE_READINGS),
+        # "user": whose bond grew.
+        "moments": async_redact_data(
+            list(coordinator.moments), PRIVATE_READINGS | {"user", "nickname"}
+        ),
     }

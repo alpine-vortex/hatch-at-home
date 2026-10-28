@@ -8,14 +8,16 @@ whatever events these return.
 
 from __future__ import annotations
 
+import calendar
+import copy
 from dataclasses import asdict, dataclass, field, fields
-from datetime import datetime, time, timedelta, tzinfo
+from datetime import date, datetime, time, timedelta, tzinfo
 import math
 import random
 from typing import Any
 
 from . import rates as R
-from .home import COZY_FLAGS, EXCITED_FLAGS, HomeEffect
+from .home import COZY_FLAGS, EXCITED_FLAGS, REASONS, HomeEffect
 
 STATS = ("hunger", "happiness", "energy", "health", "discipline", "weight")
 
@@ -119,6 +121,7 @@ class PetState:
     early_morning_on: str | None = None  # local date of the last early-bird morning
     temperament: dict[str, float] = field(default_factory=dict)  # trait -> factor
     upbringing: str | None = None  # decided on reaching adulthood (UPBRINGINGS)
+    personality: str | None = None  # settled on becoming a teen (PERSONALITIES)
     game: Game | None = None
     games: dict[str, dict[str, int]] = field(default_factory=dict)  # kind -> counts
     treats_waiting: int = 0  # chore treats it gets when it's next awake and home
@@ -130,6 +133,17 @@ class PetState:
     wish: dict[str, Any] | None = None
     dream_seeds: list[dict[str, Any]] = field(default_factory=list)
     dream: dict[str, Any] | None = None
+    # "What should I dream about tonight?": {user, pick, at}, used at the wake.
+    dream_picks: list[dict[str, Any]] = field(default_factory=list)
+    # HA user ID -> {points, day, today, visited, games, nickname?, favourite?}.
+    # The household's, not the pet's: carried into the next generation.
+    bonds: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Its own favourites, picked once from its creature's likes: {"snack": ...}.
+    favourites: dict[str, str] = field(default_factory=dict)
+    favourite_said: str | None = None  # local date it last said so
+    # What it says at the end of things, from a close friend (None: its own).
+    catchphrase: str | None = None
+    hatched_on: str | None = None  # local date it hatched: its birthday
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store."""
@@ -181,16 +195,50 @@ class PetState:
             for t, f in (kwargs.get("temperament") or {}).items()
             if t in TRAITS and isinstance(f, int | float)
         }
+        levels = kwargs.get("trait_levels")
+        kwargs["trait_levels"] = {
+            t: n
+            for t, n in (levels if isinstance(levels, dict) else {}).items()
+            if isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= 3
+        }
         if not isinstance(kwargs.get("egg_choice"), str):
             kwargs["egg_choice"] = None
         if not isinstance(kwargs.get("early_morning_on"), str):
             kwargs["early_morning_on"] = None
         if kwargs.get("upbringing") not in UPBRINGINGS:
             kwargs["upbringing"] = None
+        if kwargs.get("personality") not in PERSONALITIES:
+            kwargs["personality"] = None
+        kwargs["bonds"] = {
+            str(user): {
+                **bond,
+                "points": int(bond.get("points") or 0),
+                **({"photos": _photos(bond["photos"])} if "photos" in bond else {}),
+            }
+            for user, bond in (kwargs.get("bonds") or {}).items()
+            if isinstance(bond, dict)
+        }
+        favourites = kwargs.get("favourites")
+        kwargs["favourites"] = {
+            k: v
+            for k, v in (favourites if isinstance(favourites, dict) else {}).items()
+            if isinstance(k, str) and isinstance(v, str)
+        }
+        for key in ("favourite_said", "catchphrase", "hatched_on"):
+            if not isinstance(kwargs.get(key), str):
+                kwargs[key] = None
+        try:
+            if kwargs["hatched_on"]:
+                date.fromisoformat(kwargs["hatched_on"])
+        except ValueError:
+            kwargs["hatched_on"] = None  # damaged: worked out again at load
         state = cls(**kwargs)
         if state.upbringing is None and life_stage(state) == "adult":
             # Grew up before upbringings existed: judge it on its record so far.
             state.upbringing = upbringing(state)
+        if state.personality is None and life_stage(state) in ("teen", "adult"):
+            # Became a teen before personalities existed: settled now, quietly.
+            state.personality = personality_for(state)
         return state
 
     @classmethod
@@ -366,6 +414,10 @@ def _step(
                 return
             _hatch(state, settings, rng, events, t1)
         changed: Event = {"type": "stage_changed", "stage": stage, "from": was_stage}
+        if stage in ("teen", "adult") and state.personality is None:
+            # Before this step's _learn: the traits it had as it crossed over.
+            state.personality = personality_for(state)
+            changed["personality"] = state.personality
         if stage == "adult":
             state.upbringing = upbringing(state)
             changed["upbringing"] = state.upbringing
@@ -405,6 +457,7 @@ def _hatch(
         state.temperament = {t: round(rng.uniform(low, high), 2) for t in TRAITS}
     if state.species not in state.raised:
         state.raised.append(state.species)
+    state.hatched_on = datetime.fromtimestamp(t, settings.tz).date().isoformat()
     events.append({"type": "hatched", "species": state.species})
     if state.lights_out:
         # Someone put the egg to bed; the hatchling goes straight to sleep.
@@ -900,6 +953,54 @@ def upbringing(state: PetState) -> str:
     return next(name for name, low in R.UPBRINGING_GRADES if score >= low)
 
 
+# --- Personality ----------------------------------------------------------------
+
+# How it talks and idles: flavour only, never a rate, a stat or a care result.
+PERSONALITIES = (
+    "mellow",
+    "sweet",
+    "bouncy",
+    "starry",
+    "old_soul",
+    "fancy",
+    "charming",
+    "plucky",
+)
+# Each trait nudges two types; every type is leaned toward by four traits.
+PERSONALITY_LEANINGS: dict[str, tuple[str, str]] = {
+    "night_owl": ("mellow", "old_soul"),
+    "music_lover": ("starry", "charming"),
+    "homebody": ("sweet", "mellow"),
+    "early_bird": ("bouncy", "sweet"),
+    "helper": ("sweet", "plucky"),
+    "player": ("bouncy", "starry"),
+    "sun_lover": ("bouncy", "fancy"),
+    "fireside": ("old_soul", "sweet"),
+    "moon_child": ("charming", "fancy"),
+    "storm_watcher": ("plucky", "old_soul"),
+    "couch_potato": ("mellow", "starry"),
+    "social_butterfly": ("starry", "charming"),
+    "snow_child": ("fancy", "bouncy"),
+    "breeze_rider": ("plucky", "fancy"),  # a breeze ruffles feathers
+    "fog_wanderer": ("old_soul", "mellow"),
+    "thunder_heart": ("plucky", "charming"),
+}
+
+
+def personality_for(state: PetState) -> str:
+    """Its type: an even pick, nudged by the traits it holds.
+
+    Reads only its birth time and traits, never how it was cared for (the type
+    is not a grade), and draws from its own generator, never the shared rng.
+    """
+    weights = dict.fromkeys(PERSONALITIES, 1)
+    for trait in state.traits:
+        for kind in PERSONALITY_LEANINGS.get(trait, ()):
+            weights[kind] += trait_level(state, trait)
+    rng = random.Random(f"personality-{float(state.born)}")
+    return rng.choices(PERSONALITIES, weights=[weights[k] for k in PERSONALITIES])[0]
+
+
 # --- Generations --------------------------------------------------------------
 
 
@@ -932,6 +1033,7 @@ def lay_egg(
         "age_days": round(state.age_hours / 24, 1),
         "care_misses": state.care_misses,
         "upbringing": upbringing(state),
+        "personality": state.personality,
         "games": game_counts(state),
     }
     egg = PetState.new(state.name, now)
@@ -940,6 +1042,7 @@ def lay_egg(
     egg.egg_choice = state.egg_choice  # chosen before laying: for this egg
     egg.journal = [*state.journal, record]
     egg.notify_users = list(state.notify_users)
+    egg.bonds = copy.deepcopy(state.bonds)  # the family stays close to the device
     egg.firsts = dict(state.firsts)  # the household's season, not the pet's
     egg.memories = list(state.memories)
     # Chore treats earned today wait for the hatchling, and count toward today's limit.
@@ -1300,15 +1403,26 @@ WISHES = (
     "tv",
     "chore",
     "rain",
+    "say_hi",
 )
-ALWAYS_WISHES = {"play", "snack", "bath", "praise", "tuck_in", "sunset"}
+ALWAYS_WISHES = {"play", "snack", "bath", "praise", "tuck_in", "sunset", "say_hi"}
+# Wishes a person grants, so the pet may wish one of them on a close friend
+# ("I hope Sam plays with me today"). Anyone can still grant it.
+AIMED_WISHES = {"play", "snack", "bath", "praise", "say_hi"}
+# Wishes that can't come true once it's bedtime (the card stops mentioning them).
+DAYTIME_WISHES = {"say_hi", "snack"}
 
 
 def pick_wish(
-    state: PetState, today: str, rng: random.Random, options: set[str]
+    state: PetState,
+    today: str,
+    rng: random.Random,
+    options: set[str],
+    friends: dict[str, str] | None = None,
 ) -> list[Event]:
     """Today's wish, once a day, from what the house can grant (never yesterday's
-    again). Missing a wish costs nothing: tomorrow brings a new one."""
+    again), now and then aimed at one of its close friends ({user ID: first
+    name}). Missing a wish costs nothing: tomorrow brings a new one."""
     if state.wish and state.wish.get("day") == today:
         return []
     last = state.wish.get("kind") if state.wish else None
@@ -1319,6 +1433,10 @@ def pick_wish(
         return []
     kind = rng.choice(choices)
     state.wish = {"kind": kind, "day": today, "granted": False}
+    if friends and kind in AIMED_WISHES and rng.random() < R.WISH_FOR_CHANCE:
+        user = rng.choice(sorted(friends))
+        state.wish.update({"for": user, "for_name": friends[user]})
+        return [{"type": "wish_made", "kind": kind, "for": user}]
     return [{"type": "wish_made", "kind": kind}]
 
 
@@ -1333,9 +1451,17 @@ def grant_wish(
         return []
     if trigger == "snack" and hour < R.WISH_SNACK_AFTER_HOUR:
         return []  # "a snack after lunch"
+    if trigger == "say_hi" and hour < R.WISH_SAY_HI_AFTER_HOUR:
+        return []  # "come say hi this afternoon"
     wish.update(granted=True, at=now, by=by)
     state.happiness = _clamp(state.happiness + R.WISH_HAPPINESS)
     return [{"type": "wish_granted", "kind": trigger}]
+
+
+def pick_dream(state: PetState, user: str, pick: str, now: float) -> None:
+    """Someone chose what the pet dreams about tonight (their latest choice)."""
+    state.dream_picks = [p for p in state.dream_picks if p["user"] != user]
+    state.dream_picks.append({"user": user, "pick": pick, "at": now})
 
 
 def dream_seed(state: PetState, seed: dict[str, Any], now: float) -> None:
@@ -1351,6 +1477,18 @@ def dream_on_waking(
     none, maybe of something plain). The seeds are used up either way."""
     fresh = [s for s in state.dream_seeds if now - s["at"] < R.DREAM_SEED_HOURS * 3600]
     state.dream_seeds = []
+    picks = [p for p in state.dream_picks if now - p["at"] < R.DREAM_PICK_HOURS * 3600]
+    state.dream_picks = []
+    if picks:
+        # Someone asked for this dream (one of them, if several did).
+        chosen = rng.choice(picks)
+        state.dream = {
+            "kind": "picked",
+            "pick": chosen["pick"],
+            "user": chosen["user"],
+            "day": today,
+        }
+        return [{"type": "dreamed", "kind": "picked", "pick": chosen["pick"]}]
     if fresh:
         seed = rng.choice(fresh)
         state.dream = {k: v for k, v in seed.items() if k != "at"} | {"day": today}
@@ -1359,6 +1497,237 @@ def dream_on_waking(
     else:
         return []
     return [{"type": "dreamed", **state.dream}]
+
+
+# --- Bonds: the pet knows each person, separately ------------------------------
+
+# What a person did, and the bond points it earns. Care and games share a daily
+# limit per person, so a run of praise doesn't buy a bond.
+BOND_POINTS = {
+    "visit": R.BOND_VISIT_POINTS,  # once a day
+    "care": R.BOND_CARE_POINTS,
+    "game": R.BOND_GAME_POINTS,
+    "wish": R.BOND_WISH_POINTS,  # granted their wish (once a day anyway)
+}
+BOND_DAILY_KINDS = ("care", "game")
+# What the pet may call someone once they're close (BOND_NICKNAME_LEVEL).
+NICKNAMES = (
+    "sunbeam",
+    "buddy",
+    "sprout",
+    "bean",
+    "pebble",
+    "honeybee",
+    "button",
+    "starlight",
+    "pumpkin",
+    "pal",
+)
+
+
+def bond_level(points: int) -> int:
+    """1-10, slow at the top (rates.BOND_LEVELS)."""
+    return sum(1 for need in R.BOND_LEVELS if points >= need)
+
+
+def bond_of(state: PetState, user: str) -> dict[str, Any]:
+    """One person's bond, created on first use."""
+    return state.bonds.setdefault(user, {"points": 0})
+
+
+def pet_birthday(hatched_on: str | None, today: str) -> dict[str, int] | None:
+    """Its birthday, if today is one: monthly in its first year ({"months": n}),
+    then yearly ({"years": n}); the 31st falls on a short month's last day."""
+    months = friends_for(hatched_on, today)
+    if not months:
+        return None
+    if months < 12:
+        return {"months": months}
+    return {"years": months // 12} if months % 12 == 0 else None
+
+
+def valid_birthday(value: str) -> bool:
+    """A real month and day, "MM-DD" (29 February too)."""
+    if len(value) != 5 or value[2] != "-" or not (value[:2] + value[3:]).isdigit():
+        return False
+    try:
+        date(2000, int(value[:2]), int(value[3:]))  # 2000: a leap year
+    except ValueError:
+        return False
+    return True
+
+
+def birthday_today(birthday: str | None, today: str) -> bool:
+    """Whether a "MM-DD" birthday is today; 29 February is the 28th in
+    other years."""
+    if not birthday or not valid_birthday(birthday):
+        return False
+    day = date.fromisoformat(today)
+    if birthday == "02-29" and not calendar.isleap(day.year):
+        return today[5:] == "02-28"
+    return today[5:] == birthday
+
+
+def friends_for(since: str | None, today: str) -> int | None:
+    """Whole months since they first met, if today is the day ("we've been
+    friends for a month!"); the 31st falls on a short month's last day."""
+    if not since:
+        return None
+    first, now = date.fromisoformat(since), date.fromisoformat(today)
+    months = (now.year - first.year) * 12 + now.month - first.month
+    if months < 1:
+        return None
+    next_month = date(now.year + now.month // 12, now.month % 12 + 1, 1)
+    last_day = (next_month - timedelta(days=1)).day
+    return months if now.day == min(first.day, last_day) else None
+
+
+# A best friend's photo: what the pet was like the day it was taken.
+PHOTO_FIELDS = ("name", "species", "stage", "on")
+PHOTO_STAGES = ("teen", "adult")  # not a baby that inherited a close bond
+
+
+def take_photo(state: PetState, user: str, today: str) -> bool:
+    """At bond level 10, once per generation, the pet makes its best friend a
+    photo of itself (teen or older). Only the snapshot; the card draws it."""
+    bond = state.bonds.get(user)
+    if (
+        not bond
+        or bond_level(bond["points"]) < R.BOND_PHOTO_LEVEL
+        or life_stage(state) not in PHOTO_STAGES
+        or not state.species
+    ):
+        return False
+    photos = bond.setdefault("photos", {})
+    if str(state.generation) in photos:
+        return False
+    photos[str(state.generation)] = {
+        "name": state.name,
+        "species": state.species,
+        "stage": life_stage(state),
+        "traits": list(state.traits[: R.TRAIT_CAP]),
+        "on": today,
+    }
+    return True
+
+
+def _photos(value: Any) -> dict[str, dict[str, Any]]:
+    """A bond's photos as loaded: damaged ones are dropped, the bond kept."""
+    if not isinstance(value, dict):
+        return {}
+    out = {}
+    for gen, photo in value.items():
+        if (
+            not isinstance(gen, str)
+            or not (gen.isdecimal() and str(int(gen)) == gen)
+            or not isinstance(photo, dict)
+            or not all(isinstance(photo.get(k), str) for k in PHOTO_FIELDS)
+        ):
+            continue
+        traits = photo.get("traits")
+        out[gen] = {
+            **{k: photo[k] for k in PHOTO_FIELDS},
+            "traits": [t for t in traits if isinstance(t, str)][: R.TRAIT_CAP]
+            if isinstance(traits, list)
+            else [],
+        }
+    return out
+
+
+def game_record(state: PetState, user: str, game: str, wins: int) -> list[Event]:
+    """Each person's best at each game; beating it is worth a word to them."""
+    best = bond_of(state, user).setdefault("best", {})
+    before = best.get(game)
+    best[game] = max(wins, before or 0)
+    if before is None or wins <= before:
+        return []  # the first game only sets the mark
+    return [{"type": "bond_record", "user": user, "game": game, "wins": wins}]
+
+
+def add_bond(
+    state: PetState,
+    user: str,
+    kind: str,
+    today: str,
+    rng: random.Random,
+    game: str | None = None,
+) -> list[Event]:
+    """Bond points for one person; they never go down. A new level may unlock
+    something for that person: a nickname, a favourite game of theirs."""
+    bond = bond_of(state, user)
+    bond.setdefault("since", today)  # the day they first met
+    if bond.get("day") != today:
+        bond.update(day=today, today=0, visited=False)
+    if kind == "game" and game:
+        games = bond.setdefault("games", {})
+        games[game] = games.get(game, 0) + 1
+    points = BOND_POINTS[kind]
+    if kind == "visit":
+        if bond["visited"]:
+            return []
+        bond["visited"] = True
+    elif kind in BOND_DAILY_KINDS:
+        points = min(points, R.BOND_DAILY_LIMIT - bond["today"])
+        if points <= 0:
+            return []
+        bond["today"] += points
+    before = bond_level(bond["points"])
+    bond["points"] += points
+    level = bond_level(bond["points"])
+    if level == before:
+        return []
+    event: Event = {"type": "bond_up", "user": user, "level": level}
+    if level >= R.BOND_NICKNAME_LEVEL and not bond.get("nickname"):
+        taken = {b.get("nickname") for b in state.bonds.values()}
+        bond["nickname"] = rng.choice(
+            [n for n in NICKNAMES if n not in taken] or list(NICKNAMES)
+        )
+        event["nickname"] = bond["nickname"]
+    if level >= R.BOND_FAVOURITE_LEVEL and not bond.get("favourite"):
+        # The game they've played most together, or one it just likes.
+        played = bond.get("games") or {}
+        known = [g for g in GAMES if played.get(g)]
+        bond["favourite"] = (
+            max(known, key=lambda g: played[g]) if known else rng.choice(list(GAMES))
+        )
+        event["favourite"] = bond["favourite"]
+    return [event]
+
+
+def favourite_game(state: PetState, user: str, game: str, today: str) -> list[Event]:
+    """They finished the pet's favourite game with them: it says so, once a day
+    (flavour only; a bond never changes the stats)."""
+    bond = state.bonds.get(user, {})
+    if bond.get("favourite") != game or bond.get("favourite_said") == today:
+        return []
+    bond["favourite_said"] = today
+    return [{"type": "bond_favourite", "user": user, "game": game}]
+
+
+# --- Its favourite snack --------------------------------------------------------
+
+
+def pick_favourite(state: PetState, likes: list[str], rng: random.Random) -> bool:
+    """Once it has hatched, it picks a favourite snack from its creature's likes,
+    for good. Whether it picked one now."""
+    if "snack" in state.favourites or not likes or life_stage(state) == "egg":
+        return False
+    state.favourites["snack"] = rng.choice(likes)
+    return True
+
+
+def favourite_snack(
+    state: PetState, today: str, rng: random.Random, own_food: bool = False
+) -> list[Event]:
+    """Now and then a snack is its favourite: it says so, at most once a day.
+    Not at a stage with food of its own (a moth)."""
+    food = state.favourites.get("snack")
+    if not food or own_food or state.favourite_said == today:
+        return []
+    if rng.random() >= R.FAVOURITE_SNACK_CHANCE:
+        return []
+    state.favourite_said = today
+    return [{"type": "favourite_snack", "food": food}]
 
 
 # --- Chores -------------------------------------------------------------------
@@ -1465,6 +1834,17 @@ def _apply_lights(
 
 def mood(state: PetState, now: float, settings: Settings) -> tuple[str, list[str], str]:
     """Resolve (mood, active flags, short reason) by fixed priority."""
+    current, flags, reason, _ = mood_keyed(state, now, settings)
+    return current, flags, reason
+
+
+def mood_keyed(
+    state: PetState, now: float, settings: Settings
+) -> tuple[str, list[str], str, str]:
+    """mood(), plus a key for the reason: which sentence it is, so the card
+    can say it in its own words (baby talk) without matching on English.
+    call_<reason>, sleepy_drowsy/sleepy_low, the mood, home_<flag> or
+    weight_<band>: whichever branch chose the sentence."""
     flags: list[str] = []
     if state.away:
         flags.append("away")
@@ -1507,16 +1887,18 @@ def mood(state: PetState, now: float, settings: Settings) -> tuple[str, list[str
         flags.append("cozy")
 
     current = next((m for m in MOODS if m in flags), "content")
-    reason = _reason(state, current, drowsy)
+    reason, key = _reason(state, current, drowsy)
     if current in ("content", "cozy", "excited", "sleepy", "bored") and not (
         now - state.last_excite < R.EXCITED_MINUTES * 60
     ):
         # Say what the house is doing, so the connection is visible.
         effect = HomeEffect(flags=[f for f in flags if f in home])
-        reason = effect.reason() or reason
+        if flag := effect.reason_flag():
+            reason, key = REASONS[flag], f"home_{flag}"
         # The pet's own body comes before what the house is doing.
-        reason = _WEIGHT_REASONS.get(weight_band(state), reason)
-    return current, flags, reason
+        if (band := weight_band(state)) in _WEIGHT_REASONS:
+            reason, key = _WEIGHT_REASONS[band], f"weight_{band}"
+    return current, flags, reason, key
 
 
 _WEIGHT_REASONS = {
@@ -1540,7 +1922,7 @@ _MOOD_REASONS = {
     "sick": "feeling sick",
     "asleep": "zzz",
     "hungry": "a little peckish",
-    "dirty": "someone should tidy up",
+    "dirty": "a bit messy in here...",
     "bored": "nothing to do",
     "excited": "that was fun!",
     "cozy": "nice and cozy",
@@ -1548,9 +1930,12 @@ _MOOD_REASONS = {
 }
 
 
-def _reason(state: PetState, current: str, drowsy: bool) -> str:
+def _reason(state: PetState, current: str, drowsy: bool) -> tuple[str, str]:
+    """The sentence for the mood, and its key."""
     if current == "calling" and state.call is not None:
-        return _CALL_REASONS[state.call.reason]
+        return _CALL_REASONS[state.call.reason], f"call_{state.call.reason}"
     if current == "sleepy":
-        return "getting late, eyes drooping" if drowsy else "running low on energy"
-    return _MOOD_REASONS.get(current, "")
+        if drowsy:
+            return "getting late, eyes drooping", "sleepy_drowsy"
+        return "running low on energy", "sleepy_low"
+    return _MOOD_REASONS.get(current, ""), current

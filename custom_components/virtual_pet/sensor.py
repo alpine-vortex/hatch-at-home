@@ -100,13 +100,15 @@ class MoodSensor(PetEntity, SensorEntity):
 
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = list(model.MOODS)
-    _unrecorded_attributes = frozenset({"flags", "reason", "call_deadline", "requests"})
+    _unrecorded_attributes = frozenset(
+        {"flags", "reason", "reason_key", "call_deadline", "requests"}
+    )
 
     def __init__(self, coordinator: PetCoordinator) -> None:
         super().__init__(coordinator, "mood")
 
-    def _resolve(self) -> tuple[str, list[str], str]:
-        return self.coordinator.current_mood()
+    def _resolve(self) -> tuple[str, list[str], str, str]:
+        return self.coordinator.current_mood_keyed()
 
     @property
     def native_value(self) -> str:
@@ -114,11 +116,13 @@ class MoodSensor(PetEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        _, flags, reason = self._resolve()
+        _, flags, reason, reason_key = self._resolve()
         call = self.pet.call
         return {
             "flags": flags,
             "reason": reason,
+            # Which sentence the reason is, for the card's own words (baby talk).
+            "reason_key": reason_key,
             "requests": model.requests(
                 self.pet, dt_util.utcnow().timestamp(), self.coordinator.settings
             ),
@@ -153,6 +157,12 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "games",
             "wish",
             "dream",
+            "bonds",
+            "favourites",
+            "catchphrase",
+            "personality",
+            "hatched_on",
+            "birthday",
         }
     )
 
@@ -165,6 +175,18 @@ class LifeStageSensor(PetEntity, SensorEntity):
         if not record or record.get("day") != dt_util.now().date().isoformat():
             return None
         return {k: record[k] for k in keys if k in record}
+
+    def _wish(self) -> dict[str, Any] | None:
+        """Today's wish; "open" while it can still come true, so the card stops
+        mentioning it: "say hi this afternoon" and "a snack after lunch" close
+        at bedtime ("tuck me in" is granted then, so it stays open)."""
+        wish = self._today_only(self.pet.wish, ("kind", "granted", "for", "for_name"))
+        if wish is not None:
+            late = wish.get("kind") in model.DAYTIME_WISHES and model.in_sleep_hours(
+                dt_util.utcnow().timestamp(), self.coordinator.settings
+            )
+            wish["open"] = not wish.get("granted") and not late
+        return wish
 
     def __init__(self, coordinator: PetCoordinator) -> None:
         super().__init__(coordinator, "life_stage")
@@ -201,8 +223,36 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "roster": list(self.coordinator.roster),
             # Daily check-ins: today's wish and this morning's dream, for the card
             # (who granted the wish stays on the server).
-            "wish": self._today_only(self.pet.wish, ("kind", "granted")),
+            # "for": a close friend it hopes grants it (user ID and first name).
+            "wish": self._wish(),
             "dream": self._today_only(self.pet.dream, ("kind", "title")),
+            # Each person's bond, by HA user ID; the card shows only the viewer's
+            # own (points, who played what and "my day" stay on the server).
+            "bonds": {
+                user: {
+                    "level": model.bond_level(b["points"]),
+                    **{k: b[k] for k in ("nickname", "favourite") if b.get(k)},
+                }
+                for user, b in self.pet.bonds.items()
+            },
+            # Its own favourites ({"snack": ...}): the pet's, not anyone's secret.
+            "favourites": dict(self.pet.favourites),
+            # What it says at the end of things: a friend's pick, or its own.
+            "catchphrase": self.pet.catchphrase
+            or self.coordinator.catchphrases.get(self.pet.species or ""),
+            # Its birthday (the house's date): {"years": n} on the day, for the
+            # card's party; monthly ones in its first year are lines, not parties.
+            "hatched_on": self.pet.hatched_on,
+            "birthday": (
+                b
+                if (
+                    b := model.pet_birthday(
+                        self.pet.hatched_on, dt_util.now().date().isoformat()
+                    )
+                )
+                and "years" in b
+                else None
+            ),
             "hatches_at": self._hatches_at(),
             "next_world": self.coordinator.next_world_name,
             # The creature picked for the next hatch, by name; None: a surprise.
@@ -218,6 +268,8 @@ class LifeStageSensor(PetEntity, SensorEntity):
                 else None
             ),
             "upbringing_score": round(model.upbringing_score(self.pet)),
+            # Settled at teen; None before.
+            "personality": self.pet.personality,
         }
 
     def _hatches_at(self) -> str | None:

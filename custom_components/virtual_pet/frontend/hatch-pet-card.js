@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.29.1";
+const VERSION = "0.35.0b1";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -96,14 +96,118 @@ const CHIRPS = { // [frequency Hz, length s] notes, played one after another
   win: [[784, 0.08], [988, 0.08], [1319, 0.18]],
   trait: [[1047, 0.07], [1319, 0.07], [1568, 0.07], [2093, 0.14]],
   spooky: [[660, 0.12], [622, 0.12], [587, 0.12], [523, 0.26]],
+  harvest: [[523, 0.1], [659, 0.1], [784, 0.1], [659, 0.1], [784, 0.22]],
+  birthday: [[523, 0.12], [523, 0.1], [587, 0.22], [523, 0.22], [698, 0.22], [659, 0.4]],
 };
 let audio = null; // one AudioContext for every card on the page
+
+// Voices (species.json "voice"): now and then a line opens with the creature's
+// sound ("tweet! hi, Sam!"), never twice within VOICE_QUIET_MS, so a burst of
+// lines carries it once. Lines type out at its pace; with "babble" on for this
+// browser (off by default), each letter is a tiny syllable at its pitch.
+const BABBLE_KEY = "hatch-babble";
+const BABBLE_MAX_S = 1.2;
+const VOICE_QUIET_MS = 120000;
+const VOICE_MAX = 60; // characters: past this the sound is left off
+// Lines that open with a sound of their own (whole words, any case).
+const OPENERS = /^(?:[*♪…]|\.\.\.|(?:hmm+|hehe|boo|gobble|crack|eep|eek|news|o+h+|brr+|aww+|mm+h?|ew|whe+|la la|yay|zzz|pitter)(?![a-z]))/i;
+
+function babbleOn() {
+  try {
+    return localStorage.getItem(BABBLE_KEY) === "on";
+  } catch (err) {
+    return false;
+  }
+}
+
+function unlockAudio() {
+  audio ||= new (window.AudioContext || window.webkitAudioContext)();
+  if (audio.state === "suspended") audio.resume();
+}
+
+// Stop one babble (its oscillators, from babble()).
+function stopBabble(oscs) {
+  for (const osc of oscs || []) {
+    try {
+      osc.stop();
+    } catch (err) {
+      // already done
+    }
+  }
+}
+
+// A babble: a syllable per letter (vowels a little higher), spaces and marks
+// a pause, at the creature's pitch and pace; quieter than the chirps. Only
+// once a tap has unlocked audio (else it would wait and play out of turn).
+// Returns its oscillators, or null.
+function babble(text, voice) {
+  if (audio?.state !== "running") return null;
+  const oscs = [];
+  const step = 1 / voice.pace;
+  let t = audio.currentTime + 0.01;
+  const end = t + BABBLE_MAX_S;
+  for (const ch of text) {
+    if (t >= end) break;
+    if (/\p{L}/u.test(ch)) {
+      const lower = ch.toLowerCase();
+      const semis = (lower.codePointAt(0) % 7) - 3 + (/[aeiouy]/.test(lower) ? 2 : 0);
+      const osc = audio.createOscillator();
+      const gain = audio.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = voice.pitch * 2 ** (semis / 12);
+      gain.gain.setValueAtTime(0.04, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
+      osc.connect(gain).connect(audio.destination);
+      osc.start(t);
+      osc.stop(t + 0.045);
+      oscs.push(osc);
+    }
+    t += step;
+  }
+  return oscs;
+}
 
 function soundsOn() {
   try {
     return localStorage.getItem(SOUND_KEY) === "on";
   } catch (err) {
     return false;
+  }
+}
+
+// A shared screen (a wall tablet signed in as one person): this browser shows
+// nothing personal, no names, notes, questions or bond, and makes no visits.
+const SHARED_KEY = "hatch-shared-screen";
+function sharedScreen() {
+  try {
+    return localStorage.getItem(SHARED_KEY) === "on";
+  } catch (err) {
+    return false;
+  }
+}
+
+// Baby talk (the person's own switch, on the server; cached here per user ID so
+// the first greeting of a page load already knows): simpler words while a pet
+// is a baby or a child. Never on a shared screen.
+const BABY_TALK_KEY = "hatch-baby-talk-";
+const BABY_TALK = new Map(); // user ID -> on, as last heard on this page (for no storage)
+function babyTalk(userId) {
+  if (!userId || sharedScreen()) return false;
+  try {
+    const kept = localStorage.getItem(BABY_TALK_KEY + userId);
+    if (kept !== null) return kept === "on";
+  } catch (err) {
+    // no storage (a private window): what this page heard
+  }
+  return BABY_TALK.get(userId) === true;
+}
+function setBabyTalk(userId, on) {
+  if (!userId) return;
+  BABY_TALK.set(userId, on);
+  try {
+    localStorage.setItem(BABY_TALK_KEY + userId, on ? "on" : "off");
+  } catch (err) {
+    // no storage (a private window): this page remembers it
   }
 }
 
@@ -155,27 +259,38 @@ const FLAIR = {
   homebody: { place: "ground" },
   couch_potato: { place: "ground" },
 };
-// Seasonal touches, by the viewer's own date (month, day; inclusive). Each
-// world can differ ("*" is every other world). Card option `seasonal: false`
-// turns them off; `seasonal: <key>` shows one now (a preview, and card-check).
+// Seasonal touches, by the viewer's own date (month, day; inclusive; or a
+// function of the year for a holiday that moves). Each world can differ ("*"
+// is every other world). Card option `seasonal: false` turns them off;
+// `seasonal: <key>` shows one now (a preview, and card-check).
+//
+// What a season can have (its art is ui/season_<key>_<name>.png):
+// - lanterns: a ground piece of the day (part.lantern: "ground" or "float")
+// - corner: a piece in the top corners (part.corners: the sides)
+// - sweet: by the door (part.sweets) and popped at the pet's feet on the treat day
+// - costumes: a hat of the day; sink: how far into the head it sits, in frame
+//   pixels; width at the scene's scale; skip: creatures it doesn't suit
+// - flyer: crosses the sky at night, and by day where part.dayFlyers (flock: how many)
+// - nightFlyer: crosses the night sky where part.nightFlyer (the witch)
+// - visitor: comes by now and then; the pet startles, then greets it
+// - snack: the snack prop, with snackLines; treat: the treat day, with treatLine
+//   (thanks: the pet thanks whoever cared for it most); countdown: its name
+// - bunting, mist (at night), leaves (falling), chirp
 const SEASONS = [
   {
     key: "halloween", from: [10, 20], to: [10, 31],
     worlds: {
-      "*": { lantern: "ground", web: ["right"], dayBats: false, sweets: false },
+      "*": { lantern: "ground", corners: ["right"], dayFlyers: false, sweets: false },
       tidepool: { lantern: "float" }, // the lantern bobs in the water
       pond: { lantern: "float" },
-      nightsky: { dayBats: true }, // bats fly here by day too (elsewhere, at night)
       hearth: { sweets: true }, // a sweet by the door
-      terrarium: { web: ["left", "right"] }, // a tarantula's tank
-      nightsky: { dayBats: true, witch: true }, // a witch crosses the night sky
+      terrarium: { corners: ["left", "right"] }, // a tarantula's tank
+      nightsky: { dayFlyers: true, nightFlyer: true }, // bats by day too; the witch at night
     },
-    lines: ["boo!", "happy halloween!", "spooky~", "trick or treat?", "do I look spooky?"],
-    treat: [10, 31], // the first visit of the day: trick or treat!
+    lines: ["boo!", "happy Halloween!", "spooky~", "trick or treat?", "do I look spooky?"],
+    treat: [10, 31],
+    treatLine: "trick or treat!",
     countdown: "Halloween", // "3 sleeps till Halloween!" before the treat day
-    // A costume a day (by pet and date); sink: how far into the head it sits,
-    // in frame pixels; width at the scene's scale; skip: creatures it doesn't
-    // suit (cat ears on a creature with its own ears read wrong).
     costumes: [
       { art: "hat", sink: 7, width: 64 },
       { art: "pumpkin_cap", sink: 10, width: 60 },
@@ -184,18 +299,66 @@ const SEASONS = [
       { art: "horns", sink: 9, width: 68, skip: ["deer"] },
     ],
     lanterns: ["pumpkin", "pumpkin_2", "pumpkin_3"], // a new face every day
-    snack: "candy", // snacks are candy
-    ghost: true, // a friendly ghost floats by now and then
+    corner: "web",
+    sweet: "sweet",
+    snack: "candy",
+    snackLines: ["candy!! ♪", "ooh, candy corn!", "a treat! ♪"],
+    flyer: { art: ["bat_1", "bat_2"], cls: "sbat", ms: 5200 },
+    nightFlyer: { art: "witch", cls: "switch", ms: 7500 },
+    visitor: { art: ["ghost_1", "ghost_2"], cls: "sghost", ms: 6500, startle: "eep!!", jump: "sulk",
+      greet: ["hehe, hi ghost!", "oh, it's just a friendly ghost~", "boo to you too!"] },
+    chirp: "spooky",
     bunting: true,
-    mist: true, // at night
+    mist: true,
+  },
+  {
+    // US Thanksgiving (the fourth Thursday of November): from 12 days before
+    // to the Sunday after.
+    key: "thanksgiving", from: (y) => thanksgiving(y, -12), to: (y) => thanksgiving(y, 3),
+    worlds: {
+      "*": { lantern: "ground", corners: ["right"], dayFlyers: true, sweets: false },
+      hearth: { sweets: true }, // a plate by the door
+      terrarium: { corners: ["left", "right"] },
+    },
+    lines: ["gobble gobble!", "happy Thanksgiving!", "I'm thankful for you ♥", "smells like pie...",
+      "so cozy~", "look at all the leaves!"],
+    treat: (y) => thanksgiving(y),
+    treatLine: "happy Thanksgiving! ♥",
+    thanks: true,
+    countdown: "Thanksgiving",
+    costumes: [
+      { art: "pilgrim_hat", sink: 7, width: 64 },
+      { art: "leaf_crown", sink: 9, width: 76 },
+      { art: "feather_band", sink: 9, width: 68 },
+      { art: "acorn_cap", sink: 10, width: 60 },
+    ],
+    lanterns: ["cornucopia", "gourds", "basket"],
+    corner: "leaves",
+    sweet: "plate",
+    snack: "pie",
+    snackLines: ["pie!! ♪", "pumpkin pie, my favourite!", "mmm, still warm ♪"],
+    flyer: { art: ["goose_1", "goose_2"], cls: "sgoose", ms: 8000, flock: 3 },
+    visitor: { art: ["turkey_1", "turkey_2"], cls: "sturkey", ms: 7000, startle: "gobble?!", jump: "perk",
+      greet: ["hi, turkey!", "happy Thanksgiving, turkey ♪", "gobble gobble to you too!"] },
+    chirp: "harvest",
+    bunting: true,
+    leaves: true,
   },
 ];
+// Thanksgiving's [month, day] in a year (the fourth Thursday of November),
+// moved by `days`.
+function thanksgiving(year, days = 0) {
+  const first = new Date(year, 10, 1).getDay(); // 0 Sunday ... 4 Thursday
+  const at = new Date(year, 10, 1 + ((4 - first + 7) % 7) + 21 + days);
+  return [at.getMonth() + 1, at.getDate()];
+}
+const seasonDate = (when, year) => (typeof when === "function" ? when(year) : when);
 const HEAD_TOPS = new Map(); // frame|x -> the top of the head (see _headTop)
 const FRAME_IMGS = new Map(); // src -> Image, for measuring frames not on show
-const SEASON_COSTUME_MS = [90000, 150000]; // between costume moments
-const SEASON_BAT_MS = [20000, 45000]; // between bats flying by
-const SEASON_GHOST_MS = [240000, 420000]; // between ghosts
-const SEASON_WITCH_MS = [120000, 240000];
+const SEASON_COSTUME_MS = [600000, 900000]; // between costume moments (10-15 min)
+const SEASON_FLYER_MS = [20000, 45000]; // between bats (or geese) flying by
+const SEASON_VISITOR_MS = [240000, 420000]; // between ghosts (or turkeys)
+const SEASON_NIGHT_FLYER_MS = [120000, 240000];
 // The same pick all day for one pet: a small hash of the device and the date.
 const dailyPick = (list, salt = "") => {
   const key = `${salt}|${new Date().toDateString()}`;
@@ -221,7 +384,8 @@ function seasonNow(config, date = new Date()) {
   if (typeof config?.seasonal === "string") return SEASONS.find((x) => x.key === config.seasonal) || null;
   const md = [date.getMonth() + 1, date.getDate()];
   const after = (a, b) => a[0] > b[0] || (a[0] === b[0] && a[1] >= b[1]);
-  return SEASONS.find((x) => after(md, x.from) && after(x.to, md)) || null;
+  const year = date.getFullYear();
+  return SEASONS.find((x) => after(md, seasonDate(x.from, year)) && after(seasonDate(x.to, year), md)) || null;
 }
 
 // Catch's decoy: Sol's bee (ui/catch_decoy_1, _2: wings up, down), facing left.
@@ -262,6 +426,7 @@ const MEMORY_LABELS = { first_snow: "first snow", first_frost: "first frost" };
 const IDLE_MIN_MS = 20000;
 const IDLE_SPREAD_MS = 25000;
 const IDLE_MOODS = new Set(["content", "cozy", "bored", "excited", "sleepy", "hungry", "dirty"]);
+const IDLE_LINES = new Set(["sleepy", "bored", "excited", "hungry", "dirty"]); // the rest say the default lines
 // A viewer is greeted by name at most this often, per pet.
 const GREET_EVERY_MS = 3 * 3600 * 1000;
 // Daily check-ins. The day's wish (life_stage "wish"), in the pet's words and
@@ -269,7 +434,7 @@ const GREET_EVERY_MS = 3 * 3600 * 1000;
 // were out" note after this long away (per device).
 const WISHES = {
   play: ["I wish we could play a game today!", "play a game together"],
-  snack: ["I'd love a snack after lunch...", "a snack after lunch"],
+  snack: ["I'd love a snack after lunch!", "a snack after lunch"],
   bath: ["I wish I could have a bubble bath!", "a bubble bath"],
   praise: ["I hope someone says I'm good today", "hear \"good job!\""],
   tuck_in: ["will you tuck me in tonight?", "be tucked in tonight"],
@@ -278,10 +443,174 @@ const WISHES = {
   tv: ["can we watch something together today?", "watch TV together"],
   chore: ["I'd love a treat from a chore today", "a chore treat"],
   rain: ["I hope I get to see the rain today", "see the rain"],
+  say_hi: ["will you come say hi this afternoon?", "a hello this afternoon"],
+};
+// A wish aimed at a close friend (life_stage wish "for", "for_name"): said of
+// them, said to them, and short for the status screen.
+const WISHES_FOR = {
+  play: [(n) => `I hope ${n} plays a game with me today!`, "will you play a game with me today?", (n) => `play a game with ${n}`],
+  snack: [(n) => `I hope ${n} brings me a snack after lunch!`, "will you bring me a snack after lunch?", (n) => `a snack from ${n}`],
+  bath: [(n) => `I wish ${n} would give me a bubble bath!`, "will you give me a bubble bath today?", (n) => `a bubble bath from ${n}`],
+  praise: [(n) => `I hope ${n} says I'm good today`, "will you tell me I'm good today?", (n) => `hear "good job!" from ${n}`],
+  say_hi: [(n) => `I hope ${n} comes to say hi this afternoon!`, "will you come say hi this afternoon?", (n) => `a hello from ${n}`],
+};
+// "will you play?" + "sunbeam" -> "will you play, sunbeam?"; "night night ♥" -> "night night, sunbeam ♥"
+const withName = (line, name) => (name ? line.replace(/([!?.]*)(\s*♥)?$/, `, ${name}$1$2`) : line);
+// Baby talk: a line's simpler versions, by the pet's stage (sensor.life_stage),
+// for the lines that carry no news (docs/plan-2026-10-28-phase5-baby-talk.md).
+// A key or stage that isn't here keeps its normal line. A function takes the
+// name or food; names are never rewritten. Only call lines may ask.
+const BABY = {
+  "greet": { baby: [(n) => `hi hi, ${n}!`, (n) => `${n}!! hi hi!`] },
+  "greet.warm": { baby: [(n) => `${n}!! ♥`, (n) => `yay yay, ${n}!`] },
+  "greet.nickname": { baby: [(n) => `hi hi, ${n}!`, (n) => `${n}!! ♥`, (n) => `my ${n}!! yay yay`] },
+  "idle.sleepy": { baby: ["*yawn*", "sleepy...", "nap time..."] },
+  "idle.bored": { baby: ["hmm...", "la la la"] },
+  "idle.excited": { baby: ["hehe!", "yay yay!"] },
+  "idle.hungry": { baby: ["*tummy rumbles*", "snack time..."] },
+  "idle.default": { baby: ["♪ la la ♪", "*looks around*"] },
+  "yum": { baby: [(food) => `yum yum, ${food}!`] },
+  "favourite_snack": { baby: [(food) => `${food}! yay yay!`] },
+  "wish_granted": { baby: ["yay yay! ♥"] },
+  "friend_home": { baby: ["you're home! yay yay ♥"] },
+  "care_miss": { baby: ["oh! hi hi ♥"] },
+  "tucked_in": { baby: ["night night ♥"] }, // withName: "night night, Sam ♥"
+  "bond_up": { baby: ["yay, you! ♥"] },
+  "WISHES.play": { baby: ["wish... play today"] },
+  "WISHES.snack": { baby: ["wish... snack after lunch"] },
+  "WISHES.bath": { baby: ["wish... bubble bath!"] },
+  "WISHES.tuck_in": { baby: ["wish... tuck me in tonight"] },
+  "REFUSALS.full": { baby: ["tummy full!"] },
+  "REFUSALS.too_tired": { baby: ["too sleepy to play"] },
+  // The mood line (sensor.mood reason_key): one line each, as it's redrawn
+  // every tick. Statements, except the calls. home_* and weight_* stay normal.
+  "reason.call_hunger": { baby: ["hungy!"], child: ["tummy rumbly!"] },
+  "reason.call_sick": { baby: ["owie... medicine?"], child: ["feeling icky, medicine?"] },
+  "reason.call_dirty": { baby: ["stinky! clean?"], child: ["it's getting stinky!"] },
+  "reason.call_energy": { baby: ["sleepy... bedtime?"], child: ["so sleepy... bedtime?"] },
+  "reason.call_happiness": { baby: ["play play?"] },
+  "reason.call_fake": { baby: ["play play?"] },
+  "reason.sleepy_drowsy": { baby: ["sleepy..."] },
+  "reason.sleepy_low": { baby: ["sleepy..."] },
+  "reason.hungry": { baby: ["a little hungy"], child: ["a little hungry"] },
+  "reason.dirty": { baby: ["messy..."] },
+  "reason.bored": { baby: ["la la la"] },
+  "reason.excited": { baby: ["yay yay!"], child: ["that was fun! yay!"] },
+  "reason.cozy": { baby: ["cozy cozy"] },
+  "reason.content": { baby: ["happy!"], child: ["all good!"] },
+  // In place of season.lines (the costume bubble); children keep the normal ones.
+  "season.halloween": { baby: ["boo!", "boo! hehe", "spooky~", "yay, costume!"] },
+  "season.thanksgiving": { baby: ["gobble gobble!", "pie! yum yum", "thank you ♥", "cozy cozy~", "leaves!"] },
+};
+const FRIEND_WELCOME_MS = 6 * 3600 * 1000; // "welcome home!" at the next look, this long after
+const FIRST_LOOK_LINES = 3; // lines queued at the first look (the visit's notes fill what's left)
+// Titles, artists and names cut so a line fits the bubble on a 330 px card.
+const short = (text, max = 30) => {
+  const chars = Array.from(text || ""); // whole characters: never half an emoji
+  return chars.length > max ? `${chars.slice(0, max - 1).join("").trimEnd()}…` : text;
+};
+const WELCOME_SAME_ARRIVAL_MS = 10 * 60 * 1000; // pets' reports this close: one arrival
+// Questions the pet asks; the server picks which and when (visit's "ask"), so
+// the daily limit holds across pets and devices. "keep" answers go back to the
+// server (virtual_pet/answer); the others stay on the card.
+const ASK_MS = 60000; // a question stays this long (it was not asked for, so focus stays put)
+const QUESTIONS = {
+  how_day: { q: "how was your day?", answers: {
+    great: ["yay!! that makes me so happy ♥", "a great day! tell me everything! ♥"],
+    ok: ["ok days are good days too ♥", "I'm glad you're here now ♥"],
+    tough: ["aww... come here *snuggle* ♥", "I'm here for you ♥ *cuddle*"] } },
+  slept: { q: "did you sleep well?", answers: {
+    great: ["yay! ♥ good morning!", "me too! ♥"],
+    ok: ["a cozy morning then ♥"],
+    "not really": ["aww, take it easy today ♥", "a slow morning then... *yawn* ♥"] } },
+  fav_weather: { q: "what's your favourite weather?", keep: true, answers: {
+    sun: ["sunny days! me too ☀"], rain: ["ooh, cozy rain ☂"], snow: ["snow!! ❄ I'll remember"],
+    storms: ["storms! so exciting!"] } },
+  fav_season: { q: "what's your favourite season?", keep: true, answers: {
+    spring: ["spring! flowers everywhere ♪"], summer: ["summer! sunshine! ☀"],
+    autumn: ["autumn! crunchy leaves ♪"], winter: ["winter! snuggly ❄"] } },
+  dream: { q: "what should I dream about tonight?", keep: true, answers: {
+    stars: ["the stars... ok!"], sea: ["the sea! ok!"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ ok!"] } },
+  guess: { q: "rain or sun tomorrow?", keep: true, answers: {
+    rain: ["rain! we'll see ☂"], sun: ["sun! we'll see ☀"] } },
+  // Theirs, kept privately on the server ("skip" sticks; forgotten on the status screen).
+  birthday: { q: "when's your birthday?", keep: true, answers: { ok: null, skip: null },
+    picker: () => `<select class="bmonth" aria-label="month">${MONTHS.map((m, i) =>
+      `<option value="${i + 1}">${m}</option>`).join("")}</select>` +
+      `<select class="bday" aria-label="day">${dayOptions(31)}</select>`,
+    changed: (box, e) => {
+      if (!e.target.classList.contains("bmonth")) return;
+      const day = box.querySelector(".bday");
+      const keep = Number(day.value);
+      day.innerHTML = dayOptions(new Date(2000, Number(e.target.value), 0).getDate()); // 2000: 29 Feb
+      day.value = String(Math.min(keep, day.options.length));
+    },
+    value: (box, a) => (a === "skip" ? "skip"
+      : `${box.querySelector(".bmonth").value.padStart(2, "0")}-${box.querySelector(".bday").value.padStart(2, "0")}`),
+    reply: (a) => (a === "skip" ? "ok! ♥"
+      : `${MONTHS[Number(a.slice(0, 2)) - 1]} ${Number(a.slice(3))}! I'll remember ♥`) },
+  // The pet's own, from a close friend (the server checks it asked).
+  catchphrase: { q: "what should I say at the end of things?", keep: true,
+    answers: { hehe: null, yay: null, "and stuff": null, "la la": null, keep: null },
+    label: (a, s, mine) => (a === "keep" ? `keep "${mine}"` : a),
+    reply: (a, s, mine) => (a === "keep" ? `ok! I'll keep saying "${mine}" ♥` : `ok! I'll say "${a}"! ♥`) },
+};
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const dayOptions = (n) => Array.from({ length: n }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
+// Its yearly birthday: a party hat (the season costume code places it) and confetti.
+const PARTY = { key: "party", costumes: [{ art: "hat", sink: 7, width: 56 }],
+  lines: ["party hat on! ♪", "do you like my party hat?", "best birthday ever! ♪"] };
+// The visit's celebration lines: one a look, and always a place for it.
+const CELEBRATION_NOTES = new Set(["your_birthday", "pet_birthday", "birthday_friends", "friends_for"]);
+const months = (n) => `${n} month${n === 1 ? "" : "s"}`;
+const PLACES = {
+  gym: "back from the gym?! so strong!", work: "home from work! ♥",
+  school: "back from class? ♥", park: "did you have fun at the park?",
+};
+const HOME_WEATHER = {
+  wet: "it's wet out there! come get cozy ☂", snowy: "snow on your shoes! ❄",
+  cold: "brr, was it cold out there?", hot: "you must be thirsty after that heat!",
+};
+const SEASON_ICONS = { spring: "♪", summer: "☀", autumn: "♥", winter: "❄" };
+// What the pet tells only you (virtual_pet.visit's notes), each once.
+const NOTES = {
+  pet_birthday: (n) => (n.years ? `it's my birthday!! I'm ${n.years} today! ♥` : `I'm ${months(n.months)} old today! ♥`),
+  birthday_friends: (n) => `I'm ${months(n.months)} old, and we've been friends all that time! ♥`,
+  your_birthday: (n) => (n.quiet ? "happy birthday ♥" : "happy birthday!! ♥"), // _note adds the name
+  friends_for: (n) => n.months % 12 === 0
+    ? `we've been friends for ${n.months === 12 ? "a whole year" : `${n.months / 12} years`}!! ♥`
+    : `we've been friends for ${n.months === 1 ? "a month" : `${n.months} months`}! ♥`,
+  tucked_in: () => pick(["thanks for tucking me in last night ♥", "I slept so well after you tucked me in ♥"]),
+  steps: (n) => `${n.steps.toLocaleString()} steps?! you've been busy!`,
+  more_than_usual: () => pick(["you've walked way more than usual today!", "so many steps today! you've been so active!"]),
+  best_day: () => "your most active day in weeks!! ♥",
+  bike: () => "were you on a bike?! wheee!",
+  run: () => "did you go for a run?! so fast!",
+  stairs: (n) => `${n.floors} floors of stairs?! you're a climber!`,
+  rested: () => pick(["you got a good sleep! ♥", "you slept so well! ♥"]),
+  rain_walk: () => pick(["you walked in the rain?! so brave!", "out in the rain and still so many steps! ☂"]),
+  snow_walk: () => "you went walking in the snow?! ❄ so brave!",
+  dream: (n) => n.pick === "you"
+    ? (n.yours ? "I dreamed about you, like you said! ♥" : "I dreamed about my friends ♥")
+    : `I dreamed about ${{ stars: "the stars", sea: "the sea", snacks: "snacks" }[n.pick] || n.pick}${n.yours ? ", like you said! ♥" : "..."}`,
+  guess: (n) => n.outcome === "right"
+    ? (n.guess === "rain" ? "you were right!! it rained ☂" : "you were right!! sunny ☀")
+    : n.outcome === "wrong"
+      ? (n.guess === "rain" ? "oh, sunny after all! good guess though ♥" : "oh, it rained after all! good guess though ♥")
+      : "it was cloudy all day! nobody wins ♥",
+  back_from: (n) => PLACES[n.place],
+  fav_weather: (n) => ({ sun: "it's sunny, your favourite! ☀", rain: "it's raining, your favourite! ☂",
+    snow: "it's snowing, your favourite!! ❄", storms: "a storm! your favourite!" })[n.weather],
+  season: (n) => n.holiday
+    ? `${n.holiday === "halloween" ? "Halloween" : "Thanksgiving"} in your favourite season! ♥`
+    : `it's ${n.season}, your favourite! ${SEASON_ICONS[n.season] || ""}`.trim(),
+  early_alarm: () => "early start tomorrow? sleep well ♥",
+  up_early: () => "mmh... you're up before the sun... zzz ♥",
+  photo: () => "I made you something! it's in your journal ♥",
 };
 const DREAMS = {
-  watching: (d) => `I dreamed about ${d.title}!`,
-  listening: (d) => `♪ I dreamed of ${d.title} ♪`,
+  watching: (d) => `I dreamed about ${short(d.title)}!`,
+  listening: (d) => `♪ I dreamed of ${short(d.title)} ♪`,
   rain_started: () => "I dreamed it was raining...",
   rainbow: () => "I dreamed about a rainbow!",
   snow_started: () => "I dreamed of snow ❄",
@@ -292,11 +621,29 @@ const DREAMS = {
   trait: () => "I had such a big dream last night...",
   flying: () => "I dreamed I could fly!",
   clouds: () => "I dreamed I napped on a cloud...",
-  feast: () => "I dreamed about a giant snack!",
+  feast: (d, w) => `I dreamed about a mountain of ${w?.food || "snacks"}!`,
 };
 const AWAY_NOTE_AFTER_MS = 3 * 3600 * 1000;
+// A bond with each person (life_stage "bonds", by HA user ID; only the viewer's
+// own is ever shown). What each level brings, as in rates.py: a warmer hello, a
+// hop when they look in, the nickname it picked, its favourite of their games,
+// and hearts only for them.
+const BOND = { warm: 2, hop: 3, nickname: 4, favourite: 6, hearts: 8, max: 10 };
+const VISIT_EVERY_MS = 3600 * 1000; // virtual_pet.visit, as the server counts it
+const VISIT_RETRY_MS = 5 * 60 * 1000; // after a visit that didn't count
 const WISH_MENTION_MS = [600000, 900000]; // between reminders of an open wish
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
+// A line as a screen reader should hear it: no hearts, notes, stars or emoji; a
+// bare heart (praise) is "thank you!".
+function spoken(text) {
+  const plain = String(text || "").replace(/[♥♡♪★☂☀❄~*]|\p{Extended_Pictographic}/gu, "").replace(/\s+/g, " ").trim();
+  return plain || (/[♥♡]/.test(text) ? "thank you!" : "");
+}
+// A line's characters as people see them (an emoji with its joiners is one).
+const SEGMENTER = typeof Intl !== "undefined" && Intl.Segmenter ? new Intl.Segmenter() : null;
+function graphemes(text) {
+  return SEGMENTER ? [...SEGMENTER.segment(text)].map((g) => g.segment) : [...text];
+}
 // Whole degrees in the owner's unit (the server converts), with a real minus.
 const degrees = (n) => (Number.isFinite(n) ? `${n}°`.replace("-", "−") : "");
 // How long the happy bounce lasts when the pet gets excited.
@@ -329,6 +676,41 @@ function loadJson(path) {
     cache.set(path, request);
   }
   return cache.get(path);
+}
+
+// Images for a canvas (a photo): same origin, so the canvas stays untainted.
+const IMAGES = new Map();
+function loadImage(src) {
+  if (!IMAGES.has(src)) {
+    const request = new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`missing ${src}`));
+      img.src = src;
+    });
+    request.catch(() => { if (IMAGES.get(src) === request) IMAGES.delete(src); });
+    IMAGES.set(src, request);
+  }
+  return IMAGES.get(src);
+}
+
+// A creature's sprite; "bird/medicine" borrows another species' sprite.
+function spriteSrc(speciesId, sprite) {
+  const path = sprite.includes("/") ? sprite : `${speciesId}/${sprite}`;
+  return `${BASE}/sprites/${path}.png?v=${VERSION}`;
+}
+
+// A best friend's photo: a print, 300 x 380 (drawn at 2x), the picture a
+// square of the creature's day backdrop with the pet as it was then.
+const PHOTO = { w: 300, h: 380, px: 2, pic: 268, edge: 16 };
+const PHOTO_GROUND = { helper: 1.35, couch_potato: 1.35, player: -1.35, homebody: -1.3, fireside: 1.3, fog_wanderer: -0.6 };
+const PHOTO_GROUND_DY = { fog_wanderer: 4, homebody: 4, player: 0 }; // x ks below the feet, as the shelf has them
+const inCompanionApp = () => /Home Assistant\//.test(navigator.userAgent || "");
+// "2026-10-28" as that day where the viewer is (not midnight UTC).
+function localDay(iso, locale) {
+  const [y, m, d] = String(iso).split("-").map(Number);
+  if (!y || !m || !d) return "";
+  return new Date(y, m - 1, d).toLocaleDateString(locale || undefined, { day: "numeric", month: "long", year: "numeric" });
 }
 
 function escape(text) {
@@ -402,6 +784,14 @@ const STYLE = `
     border: none; border-radius: 22px; cursor: pointer; font: 400 14px 'Tiny5', monospace;
     color: var(--hp-ink); background: color-mix(in srgb, var(--hp-ink) 14%, transparent); }
   .statusbtn[aria-pressed="true"] { background: var(--hp-ink); color: var(--hp-backdrop); }
+  .tap-feedback { position: relative; overflow: visible; }
+  .tap-feedback.pressed { transform: scale(.94); filter: brightness(.9); }
+  .toy.tap-feedback.pressed { transform: none; filter: none; }
+  .tap-feedback::after { content: ""; position: absolute; inset: 0; border: 2px solid currentColor;
+    border-radius: inherit; pointer-events: none; opacity: 0; }
+  .tap-feedback.tapped::after { animation: tap-ring .38s ease-out; }
+  .toy.tap-feedback::after { display: none; }
+  @keyframes tap-ring { 0% { opacity: .65; transform: scale(.82); } 100% { opacity: 0; transform: scale(1.28); } }
   .viewport { position: relative; overflow: hidden; padding: 14px 0 22px; touch-action: pan-y; }
   .ground { position: absolute; left: 0; right: 0; bottom: 0; height: 26%;
     background: var(--hp-ground); transition: background .5s; }
@@ -541,6 +931,7 @@ const STYLE = `
   .screen.dim .pet { filter: brightness(.8); }
   .pet, .perch { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%; }
   .pet.hop { animation: hop .7s ease-in-out infinite; }
+  .pet.greethop { animation: hop .7s ease-in-out 2; } /* its own class: the bounce clears "hop" */
   @keyframes hop { 50% { transform: translateY(-9%); } }
   .poop { bottom: 5%; height: 15%; }
   .poop.p0 { left: 6%; } .poop.p1 { left: 18%; bottom: 3%; } .poop.p2 { right: 7%; }
@@ -551,6 +942,7 @@ const STYLE = `
   .awaysign { left: 50%; bottom: 12%; height: 40%; margin-left: -20%; }
   .awaylabel { position: absolute; left: 0; right: 0; bottom: 5%; text-align: center;
     color: #fff; font-size: 15px; text-shadow: 0 1px 3px #000; }
+  .bubble .untyped { visibility: hidden; } /* laid out whole, so it never grows */
   .bubble { position: absolute; left: 5%; top: 6%; max-width: 64%; padding: 5px 9px;
     background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a; border-radius: 8px;
     font-size: 14px; line-height: 1.2; box-shadow: 3px 3px 0 #3a2a1a; }
@@ -634,14 +1026,15 @@ const STYLE = `
   .season .lantern { right: 5%; bottom: 5%; width: 17%; }
   .season .lantern.lantern-float { bottom: 30%; animation: s-bob 3s ease-in-out infinite alternate; }
   @keyframes s-bob { to { transform: translateY(-8%) rotate(-4deg); } }
-  .screen.night .season .lantern, .screen.dim .season .lantern {
+  .screen.s-halloween.night .season .lantern, .screen.s-halloween.dim .season .lantern {
     filter: drop-shadow(0 0 6px rgba(255, 170, 60, .95)); animation: s-flicker 1.6s ease-in-out infinite; }
-  .screen.night .season .lantern.lantern-float, .screen.dim .season .lantern.lantern-float {
+  .screen.s-halloween.night .season .lantern.lantern-float,
+  .screen.s-halloween.dim .season .lantern.lantern-float {
     animation: s-flicker 1.6s ease-in-out infinite, s-bob 3s ease-in-out infinite alternate; }
   @keyframes s-flicker { 50% { filter: drop-shadow(0 0 3px rgba(255, 150, 50, .7)); } }
-  .season .web { top: 0; width: 17%; opacity: .85; }
-  .season .web.right { right: 0; }
-  .season .web.left { left: 0; transform: scaleX(-1); }
+  .season .corner { top: 0; width: 17%; opacity: .85; }
+  .season .corner.right { right: 0; }
+  .season .corner.left { left: 0; transform: scaleX(-1); }
   .season .sweet { right: 23%; bottom: 5%; width: 7%; }
   .season .sfly { position: absolute; animation: s-fly var(--fly-ms, 5s) linear forwards; }
   .season .sfly img { position: static; display: block; width: 100%; }
@@ -652,6 +1045,11 @@ const STYLE = `
   .season .sghost { width: 13%; top: 30%; opacity: .9; }
   .season .sghost.flap img { animation-duration: .8s; }
   .season .switch { width: 22%; top: 5%; }
+  .season .sgoose { width: 10%; }
+  /* A walker keeps to the ground: no flight bob, a slower step. */
+  .season .sturkey { width: 15%; bottom: 6%; }
+  .season .sturkey.flap img { animation-duration: .5s; }
+  .season .sfly.walk.ltr { animation-name: s-ltr; } .season .sfly.walk.rtl { animation-name: s-rtl; }
   .season .sfly.ltr { left: -25%; } .season .sfly.rtl { left: 112%; }
   @keyframes s-fly { 25% { translate: 0 30%; } 50% { translate: 0 -20%; } 75% { translate: 0 25%; } }
   .season .sfly.ltr { animation-name: s-fly, s-ltr; } .season .sfly.rtl { animation-name: s-fly, s-rtl; }
@@ -665,7 +1063,16 @@ const STYLE = `
     animation: s-mist 9s ease-in-out infinite alternate; }
   .screen.night .season .mist, .screen.dim .season .mist { display: block; }
   @keyframes s-mist { to { transform: translateX(6%); opacity: .7; } }
+  .season .leaf { top: -6%; width: 3.5%; opacity: 0;
+    animation: s-leaf var(--leaf-ms, 9s) linear var(--leaf-delay, 0s) infinite; }
+  @keyframes s-leaf { 0% { top: -6%; opacity: 0; translate: 0 0; rotate: 0deg; } 8% { opacity: 1; }
+    35% { translate: -140% 0; rotate: 90deg; } 70% { translate: 120% 0; rotate: 200deg; }
+    90% { opacity: 1; } 100% { top: 100%; opacity: 0; translate: -60% 0; rotate: 300deg; } }
   .costume .fx.hat { transform: translate(-50%, -100%); }
+  .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+  .confetti i { position: absolute; top: -6%; left: var(--x); width: 5px; height: 8px; background: var(--c);
+    animation: confetti 2.6s linear var(--d) forwards; }
+  @keyframes confetti { to { top: 106%; rotate: 540deg; } }
   .game .gcatch { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
     pointer-events: none; will-change: left, transform; }
   .game .gcatch[hidden] { display: none; }
@@ -674,7 +1081,8 @@ const STYLE = `
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
-  .screen.show-status .flash, .screen.show-status .speck { display: none !important; }
+  .screen.show-status .flash, .screen.show-status .speck,
+  .screen.show-status .bondhearts { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
   .pet.sulk { animation: shake .35s 2; }
@@ -759,6 +1167,10 @@ const STYLE = `
     font: 400 12px 'Tiny5', monospace; padding: 3px 10px; min-width: 44px; min-height: 26px;
     cursor: pointer; }
   .bell[aria-pressed="true"] { background: #2f3a24; color: #e9e2c6; }
+  .bell.pending { opacity: .65; }
+  .game button[aria-disabled="true"] { opacity: .55; }
+  .status-feedback { position: sticky; bottom: 0; margin-top: auto; padding: 5px 7px;
+    background: #2f3a24; color: #e9e2c6; font-size: 12px; min-height: 14px; }
   .jhead { display: flex; justify-content: space-between; align-items: baseline; }
   .jgrid { display: flex; flex-wrap: wrap; gap: 6px 10px; }
   .jtile { display: flex; flex-direction: column; align-items: center; width: 64px; font-size: 11px;
@@ -766,6 +1178,18 @@ const STYLE = `
   .jtile img { width: 48px; height: 48px; image-rendering: pixelated; }
   .jtile.locked img { filter: brightness(0); opacity: .3; }
   .jlist { font-size: 12px; opacity: .9; display: flex; flex-direction: column; gap: 3px; }
+  .photos { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+  .prow { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px; }
+  .print { margin: 0; flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .screen .status .print img { width: 72px; height: 91px; box-shadow: 2px 2px 0 rgba(58,42,26,.35); }
+  .photo-dialog { width: min(300px, 90vw); box-sizing: border-box; padding: 12px; border: 3px solid #3a2a1a;
+    border-radius: 12px; background: #e9e2c6; color: #2f3a24; font: 400 13px 'Tiny5', monospace; text-align: center; }
+  .photo-dialog::backdrop { background: rgba(20, 16, 10, .65); }
+  /* Press and hold to save: nothing here blocks the long-press menu. */
+  .photo-dialog .pbig { display: block; width: 100%; height: auto; -webkit-touch-callout: default; user-select: auto; }
+  .photo-dialog p { margin: 8px 0 4px; }
+  .photo-dialog a { display: block; margin: 4px 0 8px; color: inherit; word-break: break-all; }
+  .photo-dialog a[hidden] { display: none; }
   .jlist .gt { padding-left: 10px; }
   .ticon { width: 14px; height: 14px; object-fit: contain; vertical-align: -3px; margin-right: 2px;
     image-rendering: pixelated; }
@@ -808,6 +1232,25 @@ const STYLE = `
     animation: burst .45s ease-out forwards; }
   @keyframes burst { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
   .toy { position: relative; }
+  .screen .askday { position: absolute; left: 0; right: 0; bottom: 3%; display: flex; gap: 8px;
+    flex-wrap: wrap; justify-content: center; z-index: 3; margin: 0 auto; }
+  .screen .askday.many { max-width: 236px; } /* three a row at most */
+  .compact .screen .askday { gap: 4px; bottom: 2%; }
+  .compact .screen .askday.many { max-width: 100%; }
+  .compact .screen .askday button, .compact .screen .askday select { min-height: 40px; min-width: 44px;
+    font-size: 12px; padding: 2px 7px; border-radius: 10px; }
+  .screen .askday select, .compact .screen .askday select { font-size: 16px; } /* iOS zooms in under 16 px */
+  .screen .askday select { font: inherit; font-size: 14px; min-height: 44px; border-radius: 14px;
+    border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a; padding: 0 6px; }
+  .screen .askday button { font: inherit; font-size: 14px; min-height: 44px; min-width: 64px; padding: 4px 10px;
+    border-radius: 14px; border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a;
+    box-shadow: 0 4px 0 #3a2a1a; transition: transform .08s, box-shadow .08s; }
+  .screen .askday button:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
+  .screen.show-status .askday { display: none; }
+  .screen .bondhearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
+    opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }
+  @keyframes bondheart { 0% { transform: translateY(0) scale(.7); opacity: 0; } 20% { opacity: 1; }
+    100% { transform: translateY(-70px) scale(1); opacity: 0; } }
   .pet.perk { animation: perk .3s ease-out; }
   @keyframes perk { 40% { transform: translateY(-6%) scale(1.04, .96); } }
   .toy.wanted .cap { background: #ffe9a8;
@@ -849,8 +1292,14 @@ class HatchPetCard extends HTMLElement {
     this._update();
   }
 
+  // A hidden tab: lines are said whole, and babbles stop.
+  _onHidden = () => {
+    if (document.hidden) (this._slides || []).forEach((x) => this._stopTyping(x));
+  };
+
   connectedCallback() {
     this._timer = setInterval(() => this._tick(), 700);
+    if (this._card) document.addEventListener("visibilitychange", this._onHidden);
     if (this._resize && this._viewport) this._resize.observe(this._viewport);
     if (!document.querySelector("[data-hatch-font]")) {
       // Tiny5 (SIL OFL), served by the integration so it works offline. It
@@ -866,8 +1315,14 @@ class HatchPetCard extends HTMLElement {
   disconnectedCallback() {
     clearInterval(this._timer);
     this._resize?.disconnect();
-    // A game (Catch's animation loop above all) stops with the card.
-    for (const s of this._slides || []) if (s.game) this._endGame(s, null);
+    document.removeEventListener("visibilitychange", this._onHidden);
+    // A game (Catch's animation loop above all) stops with the card, and so
+    // does a line typing out.
+    for (const s of this._slides || []) {
+      if (s.game) this._endGame(s, null);
+      this._stopTyping(s);
+      this._dropPhotos(s);
+    }
   }
 
   // --- Finding the pets --------------------------------------------------------
@@ -940,10 +1395,19 @@ class HatchPetCard extends HTMLElement {
     this._dots = root.querySelector(".dots");
     root.querySelector(".statusbtn").addEventListener("click", () => {
       const s = this._slides[this._index];
-      if (s) this._toggleStatus(s);
+      if (s) {
+        this._tapped(root.querySelector(".statusbtn"));
+        this._toggleStatus(s);
+      }
     });
-    root.querySelector(".prev").addEventListener("click", () => this._go(this._index - 1));
-    root.querySelector(".next").addEventListener("click", () => this._go(this._index + 1));
+    root.querySelector(".prev").addEventListener("click", (e) => {
+      this._tapped(e.currentTarget);
+      this._go(this._index - 1);
+    });
+    root.querySelector(".next").addEventListener("click", (e) => {
+      this._tapped(e.currentTarget);
+      this._go(this._index + 1);
+    });
     let startX = null;
     this._viewport.addEventListener("pointerdown", (e) => {
       startX = e.clientX;
@@ -958,12 +1422,25 @@ class HatchPetCard extends HTMLElement {
         this._go(this._index + (dx < 0 ? 1 : -1));
       }
     });
+    document.addEventListener("visibilitychange", this._onHidden);
+    // iOS locks audio again after a reload until a tap: any tap unlocks it
+    // (the end of a touch counts as a gesture there, its start doesn't).
+    const unlock = () => {
+      if (!soundsOn() && !babbleOn()) return;
+      try {
+        unlockAudio();
+      } catch (err) {
+        // no WebAudio
+      }
+    };
+    for (const type of ["touchend", "pointerup", "click"]) this._card.addEventListener(type, unlock, true);
     this._resize = new ResizeObserver(() => this._layout());
     this._resize.observe(this._viewport);
     this._visible = true;
     new IntersectionObserver((entries) => {
       this._visible = entries.some((e) => e.isIntersecting);
       this._card.classList.toggle("offscreen", !this._visible); // pauses the loops
+      if (!this._visible) this._slides.forEach((x) => this._stopTyping(x));
       if (this._visible && this._dirty) this._update(); // catch up on what was skipped
     }).observe(this._card);
     this._slides = [];
@@ -1036,8 +1513,9 @@ class HatchPetCard extends HTMLElement {
     // What the pet says to someone (a refusal, a game's result, a moment) is read
     // out by screen readers; its idle chatter isn't. Only the pet on show.
     new MutationObserver(() => {
-      const text = s.bubble.textContent;
-      if (s.sayUntil && s === this._slides[this._index] && s.live.textContent !== text) {
+      if (s.plain !== undefined && s.bubble.textContent === s.plain) return; // _speak announced it
+      const text = spoken(s.bubble.textContent);
+      if (s.sayUntil && s === this._slides[this._index] && text && s.live.textContent !== text) {
         s.live.textContent = text;
       }
     }).observe(s.bubble, { childList: true, characterData: true, subtree: true });
@@ -1048,15 +1526,22 @@ class HatchPetCard extends HTMLElement {
     });
     q(".gl").addEventListener("click", () => this._guess(s, "left"));
     q(".gr").addEventListener("click", () => this._guess(s, "right"));
-    q(".gx").addEventListener("click", () => this._endGame(s, "maybe later!"));
+    q(".gx").addEventListener("click", (e) => {
+      this._tapped(e.currentTarget, s);
+      this._endGame(s, "maybe later!");
+    });
     q(".gpick").addEventListener("click", (e) => {
       const b = e.target.closest("button[data-game]");
-      if (b) this._pickGame(s, b.dataset.game);
+      if (b) {
+        this._tapped(b, s);
+        this._pickGame(s, b.dataset.game);
+      }
     });
     s.request.addEventListener("click", () => {
       const key = s.request.dataset.key;
       if (!key) return;
       if (key === "lay_egg" && !(Date.now() < s.confirmUntil)) {
+        this._tapped(s.request, s);
         s.confirmUntil = Date.now() + CONFIRM_MS;
         s.request.textContent = "sure? tap again";
         s.request.setAttribute("aria-label", "Sure? Press again to lay an egg");
@@ -1069,7 +1554,10 @@ class HatchPetCard extends HTMLElement {
     // A tap on the screen is a shortcut for the Status button; it holds buttons of its
     // own (the game, the bell, the journal), so it isn't a button itself.
     s.screen.addEventListener("click", () => {
-      if (!this._swiped) this._toggleStatus(s);
+      if (!this._swiped) {
+        this._tapped(this._card.querySelector(".statusbtn"));
+        this._toggleStatus(s);
+      }
     });
     // The device beside the current one is inert; tapping it brings it forward.
     slide.addEventListener("click", () => {
@@ -1117,7 +1605,7 @@ class HatchPetCard extends HTMLElement {
     this._sig = sig;
 
     if (!devices.length) {
-      while (this._slides.length) this._slides.pop().el.remove();
+      while (this._slides.length) this._dropSlide(this._slides.pop());
       this._card.classList.add("single");
       this._card.querySelector(".chips").style.display = "none";
       const configured = [].concat(
@@ -1137,7 +1625,7 @@ class HatchPetCard extends HTMLElement {
       return;
     }
     while (this._slides.length < devices.length) this._slides.push(this._buildSlide());
-    while (this._slides.length > devices.length) this._slides.pop().el.remove();
+    while (this._slides.length > devices.length) this._dropSlide(this._slides.pop());
     this._index = Math.min(this._index, devices.length - 1);
 
     for (let i = 0; i < devices.length; i++) {
@@ -1159,7 +1647,7 @@ class HatchPetCard extends HTMLElement {
           this._sig = null;
           this._update();
         }).catch(() => {
-          s.bubble.textContent = `missing sprites for ${speciesId}`;
+          this._write(s, `missing sprites for ${speciesId}`);
           if (s.speciesId === speciesId) s.speciesId = null; // try again on the next update
         });
       }
@@ -1188,10 +1676,17 @@ class HatchPetCard extends HTMLElement {
     this._update();
   }
 
+  _dropSlide(s) {
+    this._stopTyping(s);
+    s.el.remove();
+  }
+
   // A slide that now shows another pet starts fresh: nothing of the last
   // pet's (a game, an armed "sure?", the moments already seen) carries over.
   _forget(s) {
     if (s.game) this._endGame(s, null);
+    this._stopTyping(s);
+    s.voicedAt = 0;
     s.confirmUntil = 0;
     s.lastMoment = s.lastLogAt = undefined;
     s.greeted = false;
@@ -1200,6 +1695,21 @@ class HatchPetCard extends HTMLElement {
     s.journal = false;
     s.statusHtml = null;
     s.drawnSig = null;
+    // The last pet's private lines and question aren't this one's.
+    this._clearAsk(s);
+    s.queue = [];
+    s.visitedAt = 0;
+    s.lookedFirst = false;
+    s.wishDay = null;
+    this._dropPhotos(s);
+  }
+
+  // Take an open question off the screen (a game, another pet on this slide).
+  _clearAsk(s) {
+    s.screen?.querySelector(".askday")?.remove();
+    clearTimeout(s.askTimer);
+    s.asking = false;
+    if (s.queue) s.queue = s.queue.filter((q) => !q.ask); // a question only (a birthday line stays)
   }
 
   _state(s, key) {
@@ -1210,6 +1720,7 @@ class HatchPetCard extends HTMLElement {
   _go(index) {
     const n = this._slides.length;
     if (!n) return;
+    this._slides.forEach((x) => this._stopTyping(x));
     this._index = (index + n) % n;
     this._renderShelf();
   }
@@ -1278,7 +1789,10 @@ class HatchPetCard extends HTMLElement {
       const i = this._dots.children.length;
       const dot = document.createElement("button");
       dot.className = "dot";
-      dot.addEventListener("click", () => this._go(i));
+      dot.addEventListener("click", (e) => {
+        this._tapped(e.currentTarget);
+        this._go(i);
+      });
       this._dots.append(dot);
     }
     while (this._dots.children.length > this._slides.length) this._dots.lastChild.remove();
@@ -1328,9 +1842,7 @@ class HatchPetCard extends HTMLElement {
       img.style.display = "none";
       return;
     }
-    // "bird/medicine" borrows another species' sprite.
-    const path = sprite.includes("/") ? sprite : `${s.speciesId}/${sprite}`;
-    const src = `${BASE}/sprites/${path}.png?v=${VERSION}`;
+    const src = spriteSrc(s.speciesId, sprite);
     if (img.getAttribute("src") !== src) img.setAttribute("src", src);
     img.style.display = "";
   }
@@ -1476,7 +1988,7 @@ class HatchPetCard extends HTMLElement {
     const egg = stage === "egg";
     if (s.game && (asleep || away || egg)) this._endGame(s, null);
     s.hatchesAt = egg ? stageState?.attributes.hatches_at : null;
-    if (!s.sayUntil || Date.now() > s.sayUntil) s.bubble.textContent = this._say(s, mood, away);
+    if (!s.sayUntil || Date.now() > s.sayUntil) this._write(s, this._say(s, mood, away));
 
     for (const action of ACTIONS) {
       const b = s.buttons[action.key];
@@ -1519,13 +2031,19 @@ class HatchPetCard extends HTMLElement {
     if (away) return "";
     if (s.hatchesAt) {
       const minutes = Math.max(1, Math.ceil((new Date(s.hatchesAt) - Date.now()) / 60000));
-      return minutes <= 1 ? "crack... crack..." : `hatching in about ${minutes} min`;
+      if (minutes <= 1) return "crack... crack...";
+      return minutes < 60 ? `hatching in about ${minutes} min` : `hatching in about ${Math.round(minutes / 60)} h`;
     }
-    return mood?.attributes.reason || "";
+    // The server's sentence, or baby talk keyed by which sentence it is (an
+    // older integration sends no key: the sentence as it is).
+    const reason = mood?.attributes.reason || "";
+    const key = mood?.attributes.reason_key;
+    return key ? this._lines(s, `reason.${key}`, reason).text : reason;
   }
 
   _toggleStatus(s) {
     const open = !s.screen.classList.contains("show-status");
+    if (open) this._stopTyping(s); // the bubble hides: the line is said whole
     s.screen.classList.toggle("show-status", open);
     s.journal = false;
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
@@ -1583,18 +2101,20 @@ class HatchPetCard extends HTMLElement {
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
       if (s === this._slides[this._index]) {
         this._greet(s);
-        this._firstLook(s);
+        this._firstLook(s); // before the visit: it tells the server what's queued
+        this._visit(s);
         this._sayQueued(s);
         this._wishMention(s);
         this._seen(s);
         this._idle(s);
         this._flairTick(s);
         this._seasonTick(s);
+        this._partyTick(s);
       }
       if (!s.sayUntil && s.species) {
         const mood = this._state(s, "sensor.mood");
         const text = this._say(s, mood, mood?.state === "away");
-        if (s.bubble.textContent !== text) s.bubble.textContent = text;
+        if (s.bubble.textContent !== text) this._write(s, text);
       }
     });
   }
@@ -1621,6 +2141,28 @@ class HatchPetCard extends HTMLElement {
   }
 
   // Idle life: every so often, something small. Calm when motion is reduced.
+  // Baby talk for this pet and viewer: "baby" or "child" while it's on and the
+  // pet is one (its life_stage state: s.drawn is the drawn stage), else null.
+  _babyStage(s) {
+    const stage = this._state(s, "sensor.life_stage")?.state;
+    return (stage === "baby" || stage === "child") && babyTalk(this._hass?.user?.id) ? stage : null;
+  }
+
+  // The baby talk lines for a key at this pet's stage, or null (normal lines).
+  _babySet(s, key) {
+    const stage = this._babyStage(s);
+    return (stage && BABY[key]?.[stage]) || null;
+  }
+
+  // A line in baby talk, or the normal one: {text, baby}. A swapped line never
+  // carries the catchphrase (callers pass catch: !baby).
+  _lines(s, key, normal, arg) {
+    const set = this._babySet(s, key);
+    if (!set) return { text: normal, baby: false };
+    const line = pick(set);
+    return { text: typeof line === "function" ? line(arg) : line, baby: true };
+  }
+
   _idle(s) {
     const now = Date.now();
     if (!s.nextIdle) s.nextIdle = now + IDLE_MIN_MS / 2 + Math.random() * IDLE_SPREAD_MS;
@@ -1660,34 +2202,146 @@ class HatchPetCard extends HTMLElement {
       setTimeout(() => this._look(s, 1300), rtl ? 1200 : 0); // follows it across
       setTimeout(() => speck.remove(), 2700);
     } else {
-      const lines = {
-        sleepy: ["*yawn*", "mm... sleepy"],
-        bored: ["hmm...", "*sigh*", "anyone wanna play?"],
+      const words = this._words(s);
+      const lines = this._babySet(s, `idle.${IDLE_LINES.has(s.moodState) ? s.moodState : "default"}`) || {
+        sleepy: ["*yawn*", "mm... sleepy", ...(words.home ? [`my ${words.home} looks cozy...`] : [])],
+        bored: ["hmm...", "*rolls around*", "anyone wanna play?"],
         excited: ["hehe!", "wheee"],
-        hungry: ["*tummy rumbles*", "is it snack time?"],
+        hungry: ["*tummy rumbles*", "is it snack time?", ...(words.food ? [`mmm... ${words.food}...`] : [])],
         dirty: ["ew...", "*sniff sniff*"],
       }[s.moodState] || ["♪ hm hm hm ♪", "...", "*looks around*", "la la la"];
-      s.bubble.textContent = pick(lines);
-      s.sayUntil = now + 2500;
+      this._write(s, pick(lines), 2500);
+      s.plain = s.bubble.textContent; // idle chatter isn't read out
     }
   }
 
   // Hello to whoever is looking, by first name, now and then (this browser only).
   // --- Daily check-ins ----------------------------------------------------
 
+  // Every line put straight into the bubble. With ms, it holds the bubble that
+  // long; without, the hold stays as it was (a game keeps its own).
+  _write(s, text, ms) {
+    this._stopTyping(s);
+    s.plain = undefined;
+    s.bubble.textContent = text;
+    if (ms !== undefined) s.sayUntil = Date.now() + ms;
+  }
+
+  // A line that may carry the creature's sound, typed out at its pace (and
+  // babbled, if this browser wants that). Screen readers get the plain line,
+  // once; the sound is hidden from them. With catch: true (lines that name
+  // nobody), every third such voiced line ends with its catchphrase.
+  _speak(s, said, ms = 4500, { catch: catchy = false } = {}) {
+    const voice = s.species?.voice;
+    const sound = this._soundFor(s, said);
+    let text = said;
+    if (sound && catchy && !said.includes("?")) {
+      s.catchCount = (s.catchCount || 0) + 1;
+      const phrase = this._state(s, "sensor.life_stage")?.attributes.catchphrase;
+      if (s.catchCount % 3 === 0 && phrase && `${sound} ${said} ${phrase}`.length <= VOICE_MAX) text = `${said} ${phrase}`;
+    }
+    const onShow = s === this._slides[this._index];
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const pace = voice?.pace;
+    this._stopTyping(s);
+    if (sound) s.voicedAt = Date.now();
+    s.plain = sound ? `${sound} ${text}` : text;
+    s.bubble.textContent = "";
+    if (sound) {
+      const snd = document.createElement("span");
+      snd.className = "snd";
+      snd.setAttribute("aria-hidden", "true");
+      snd.textContent = `${sound} `;
+      s.bubble.append(snd);
+    }
+    let typingMs = 0;
+    const status = s.screen.classList.contains("show-status");
+    if (onShow && !calm && !status && pace > 0 && this._visible && !document.hidden) {
+      const chars = graphemes(text); // an emoji is never split
+      const typed = document.createElement("span");
+      const rest = document.createElement("span");
+      rest.className = "untyped";
+      rest.textContent = text;
+      s.bubble.append(typed, rest);
+      const start = Date.now();
+      typingMs = (chars.length / pace) * 1000;
+      const job = { finish: () => { typed.textContent = text; rest.textContent = ""; } };
+      job.timer = setInterval(() => {
+        if (s.typing !== job) return;
+        // By the time gone by, so a tab that was held back catches up.
+        const n = Math.min(chars.length, Math.floor(((Date.now() - start) / 1000) * pace));
+        typed.textContent = chars.slice(0, n).join("");
+        rest.textContent = chars.slice(n).join("");
+        if (n >= chars.length) this._stopTyping(s, false);
+      }, 40);
+      s.typing = job;
+      s.bubble.dataset.typing = "1";
+      if (sound && babbleOn() && this._mayPlay(s) && !s.game) {
+        try {
+          s.babbling = babble(text, voice);
+        } catch (err) {
+          // no WebAudio: it types quietly
+        }
+      }
+    } else {
+      s.bubble.append(text);
+    }
+    s.sayUntil = Date.now() + typingMs + ms;
+    const plain = spoken(text);
+    if (onShow && plain && s.live.textContent !== plain) s.live.textContent = plain;
+  }
+
+  // The sound a line opens with, in the mood of its first sentence ("tweet!",
+  // "tweet tweet!!", "tweet?", "tweet..."), or null: no voice (or still an
+  // egg), said one lately, the line has an opener of its own, or it wouldn't fit.
+  _soundFor(s, text) {
+    const sound = s.species?.voice?.sound;
+    if (!sound || s.hatchesAt || Date.now() - (s.voicedAt || 0) < VOICE_QUIET_MS) return null;
+    const line = String(text).trim();
+    if (OPENERS.test(line) || line.toLowerCase().startsWith(sound)) return null;
+    const mark = line.match(/!!|[!?]|\.\.\./)?.[0]; // not "…": that's a cut title
+    const form = mark === "!!" ? `${sound} ${sound}!!`
+      : mark === "?" ? `${sound}?`
+      : mark === "..." ? `${sound}...`
+      : `${sound}!`;
+    return form.length + 1 + line.length > VOICE_MAX ? null : form;
+  }
+
+  // Typing done at once (the whole line shows); its babble stops too, unless
+  // the line simply finished.
+  _stopTyping(s, hush = true) {
+    const job = s.typing;
+    if (job) {
+      s.typing = null;
+      clearInterval(job.timer);
+      job.finish();
+      delete s.bubble.dataset.typing;
+    }
+    if (hush && s.babbling) {
+      stopBabble(s.babbling);
+      s.babbling = null;
+    }
+  }
+
   // Lines waiting for the bubble (a dream, the away note, a wish), said one at
   // a time once nothing else is being said.
-  _queue(s, text, ms = 4500) {
-    (s.queue ??= []).push({ text, ms });
+  _queue(s, text, ms = 4500, opts = {}) {
+    (s.queue ??= []).push({ text, ms, opts });
   }
 
   _sayQueued(s) {
     const now = Date.now();
+    if (s.asleep && s.queue?.length) {
+      // Asleep: the lines wait until it's up (they were said once, on the
+      // server's side); only a question is dropped, it may come another day.
+      if (s.queue.some((q) => q.ask)) this._clearAsk(s);
+      return;
+    }
     if (!s.queue?.length || s.sayUntil > now || s.game || s.screen.classList.contains("show-status")) return;
-    const { text, ms } = s.queue.shift();
-    s.bubble.textContent = text;
-    s.sayUntil = now + ms;
+    const { text, ms, then, opts } = s.queue.shift();
+    this._speak(s, text, ms, opts);
     this._animate(s, s.pet, "perk", 320);
+    then?.();
   }
 
   // The first look at this pet on this device: what happened while you were
@@ -1698,6 +2352,21 @@ class HatchPetCard extends HTMLElement {
     s.lookedFirst = true;
     const stage = this._state(s, "sensor.life_stage")?.attributes || {};
     const device = s.ids?.device;
+    // At most FIRST_LOOK_LINES lines, in this order; what doesn't fit isn't said
+    // (the dream and wish come again at the next first look; the visit's notes
+    // are budgeted on the server from what's queued here).
+    const lines = [];
+    const me = this._hass.user?.id;
+    const home = (this._state(s, "sensor.last_care")?.attributes.moments || [])
+      .find((m) => m.type === "friend_home" && m.user === me);
+    const at = home && new Date(home.at).getTime();
+    if (at && !sharedScreen() && Date.now() - at < FRIEND_WELCOME_MS && this._welcomeDue(s, at)) {
+      // A close friend who came home while the card was closed: welcome them first.
+      const bond = this._bond(s);
+      const first = short(this._hass.user?.name?.trim().split(/\s+/)[0]);
+      lines.push([`welcome home, ${(bond?.level >= BOND.nickname && bond.nickname) || first || "friend"}! ♥`, 5000]);
+      if (HOME_WEATHER[home.weather]) lines.push([HOME_WEATHER[home.weather], 4500]);
+    }
     let seen = 0;
     try {
       seen = Number(localStorage.getItem(`hatch-seen-${device}`) || 0);
@@ -1706,23 +2375,67 @@ class HatchPetCard extends HTMLElement {
     }
     if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS) {
       const note = this._awayNote(s, seen);
-      if (note) this._queue(s, note, 5500);
+      if (note) lines.push([note, 5500, { away: true }]);
     }
     const dream = stage.dream && DREAMS[stage.dream.kind];
-    if (dream && oncePerDay(`dream-${device}`)) this._queue(s, dream(stage.dream), 5000);
-    const wish = stage.wish && !stage.wish.granted && WISHES[stage.wish.kind];
-    if (wish && oncePerDay(`wish-${device}`)) this._queue(s, wish[0], 5000);
+    if (dream && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
+      lines.push([dream(stage.dream, this._words(s)), 5000]);
+    }
+    const wish = stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
+    if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000]);
+    for (const [text, ms, opts] of lines.slice(0, FIRST_LOOK_LINES)) this._queue(s, text, ms, opts);
   }
 
-  // Now and then, an open wish comes up again (never more than every 10 minutes).
+  // Each "came home" is welcomed once in this browser, by any pet (seen live,
+  // or at the next look).
+  _welcomeDue(s, at) {
+    const key = `hatch-welcomed-${this._hass.user?.id}`;
+    try {
+      // Each pet reports the same arrival a moment apart: one welcome for it.
+      if (Number(localStorage.getItem(key) || 0) + WELCOME_SAME_ARRIVAL_MS >= at) return false;
+      localStorage.setItem(key, String(at));
+    } catch (err) {
+      // no storage: once per page load
+    }
+    return true;
+  }
+
+  // Today's wish in the pet's words and short: [line, status text], or null.
+  // One aimed at a close friend names them, or speaks to them if they're looking.
+  _wishLine(wish, s) {
+    if (!WISHES[wish.kind]) return null;
+    const aimed = wish.for && wish.for_name && WISHES_FOR[wish.kind];
+    if (!aimed) return WISHES[wish.kind];
+    if (wish.for !== this._hass.user?.id || sharedScreen()) return [aimed[0](short(wish.for_name, 16)), aimed[2](short(wish.for_name, 16))];
+    const bond = this._bond(s);
+    return [withName(aimed[1], bond?.level >= BOND.nickname ? bond.nickname : null), aimed[2]("you")];
+  }
+
+  // The wish as the pet says it: in baby talk if it's on (not an aimed wish:
+  // that keeps its words; the status screen's short text never changes).
+  _wishSaid(s, wish, line) {
+    if (wish.for && wish.for_name && WISHES_FOR[wish.kind]) return line[0];
+    return this._lines(s, `WISHES.${wish.kind}`, line[0]).text;
+  }
+
+  // An open wish comes up once more after the first look (never all day), and
+  // only while it can still come true (the server's "open").
   _wishMention(s) {
     const now = Date.now();
     const [lo, hi] = WISH_MENTION_MS;
+    const today = new Date().toDateString();
+    if (s.wishDay !== today) { // a new day (a tablet left on overnight): a new mention
+      s.wishDay = today;
+      s.nextWish = 0;
+    }
     if (!s.nextWish) s.nextWish = now + lo + Math.random() * (hi - lo);
     if (now < s.nextWish || !this._free(s)) return;
-    s.nextWish = now + lo + Math.random() * (hi - lo);
+    const wish0 = this._state(s, "sensor.life_stage")?.attributes.wish;
+    if (!wish0 || wish0.granted || wish0.open === false) return; // not yet, or not now: keep it
+    s.nextWish = Infinity;
     const wish = this._state(s, "sensor.life_stage")?.attributes.wish;
-    if (wish && !wish.granted && WISHES[wish.kind]) this._queue(s, WISHES[wish.kind][0]);
+    const line = wish && !wish.granted && wish.open !== false && this._wishLine(wish, s);
+    if (line && oncePerDay(`wishmention-${s.ids?.device}`)) this._queue(s, this._wishSaid(s, wish, line));
   }
 
   // When this device last saw the pet (for the away note), every minute.
@@ -1746,10 +2459,10 @@ class HatchPetCard extends HTMLElement {
     const add = (b) => { if (b && !bits.includes(b)) bits.push(b); };
     const MOMENT_BITS = {
       fell_asleep: "napped", woke_up: "napped", watching: "watched TV", listening: "listened to music",
-      news: "heard some news", sunset: "watched the sunset", wish_granted: "got my wish!",
-      trait_learned: "learned something new", first_snow: "saw the first snow!",
+      news: "heard some news", sunset: "watched the sunset", wish_granted: "got my wish",
+      trait_learned: "learned something new", first_snow: "saw the first snow",
     };
-    const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow!", rainbow: "saw a rainbow?!", sun_out: "sunbathed" };
+    const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow", rainbow: "saw a rainbow", sun_out: "sunbathed" };
     const CARE_BITS = { feed: "had a meal", snack: "had a snack", play: "played", game: "played a game", clean: "had a bath", chore_treat: "got a chore treat" };
     for (const m of [...(lastCare.moments || [])].reverse()) {
       if (!after(m.at)) continue;
@@ -1759,29 +2472,210 @@ class HatchPetCard extends HTMLElement {
       if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) add(CARE_BITS[e.action]);
     }
     if (!bits.length) return null;
-    const list = bits.slice(0, 3);
-    const said = list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list[0];
-    return `while you were out, I ${said}`.replace(/([^!?])$/, "$1!");
+    const list = bits.slice(0, 2); // two at most: a bubble on a 330 px card
+    return `while you were out, I ${list.join(" and ")}!`;
+  }
+
+  _hourHello(first) {
+    const hour = new Date().getHours();
+    return !first
+      ? (hour < 12 ? "morning!" : hour < 18 ? "hi!" : "evening!")
+      : hour < 12 ? `morning, ${first}!` : hour < 18 ? `hi, ${first}!` : `evening, ${first}!`;
   }
 
   _greet(s) {
     if (s.greeted || !this._free(s)) return;
     s.greeted = true;
     const user = this._hass.user;
-    const first = user?.name?.trim().split(/\s+/)[0];
-    if (!first) return;
-    const key = `hatch-greet-${user.id}-${s.ids?.device}`;
+    const bond = this._bond(s);
+    const level = bond?.level || 0;
+    const nickname = level >= BOND.nickname ? bond.nickname : null;
+    const shared = sharedScreen(); // no names on a shared screen
+    const first = shared ? null : short(user?.name?.trim().split(/\s+/)[0], 16) || nickname;
+    if (!first && !shared) return;
+    const key = `hatch-greet-${user?.id}-${s.ids?.device}`;
     try {
       if (Date.now() - Number(localStorage.getItem(key) || 0) < GREET_EVERY_MS) return;
       localStorage.setItem(key, String(Date.now()));
     } catch (err) {
       // no storage (private window): greet anyway, once per page load
     }
-    const hour = new Date().getHours();
-    const hello = hour < 12 ? `morning, ${first}!` : hour < 18 ? `hi ${first}!` : `evening, ${first}!`;
-    s.bubble.textContent = pick([hello, `${first}!! hi!`, hello]);
-    s.sayUntil = Date.now() + 4000;
-    this._animate(s, s.pet, "perk", 320);
+    const hello = this._hourHello(first);
+    // Baby talk (never on a shared screen, so only with a name): each set swaps
+    // on its own, and names go in after the choice.
+    const baby = (key, name, normal) => this._babySet(s, key)?.map((line) => line(name)) || normal;
+    const lines = first ? baby("greet", first, [hello, `${first}!! hi!`, hello]) : [hello, "hi hi!", hello];
+    if (level >= BOND.warm) lines.push(...baby("greet.warm", first, [`${first}! I missed you ♥`, `yay, ${first}'s here!`]));
+    if (nickname) lines.push(...baby("greet.nickname", nickname, [`hi, ${nickname}!`, `${nickname}!! ♥`, `there's my ${nickname}!`]));
+    this._speak(s, pick(lines), 4000);
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (level >= BOND.hop && !calm) this._animate(s, s.pet, "greethop", 1400);
+    else this._animate(s, s.pet, "perk", 320);
+    if (level >= BOND.hearts && !calm) this._bondHearts(s);
+  }
+
+  // A person's first name, from their person entity (by HA user ID).
+  _personName(userId) {
+    const person = Object.values(this._hass.states || {})
+      .find((st) => st.entity_id.startsWith("person.") && st.attributes.user_id === userId);
+    return short((person?.attributes.friendly_name || "").trim().split(/\s+/)[0], 16) || null;
+  }
+
+  // The creature's own words (food, home), for its stage (a moth isn't a
+  // caterpillar): species.json "words", with per-stage overrides.
+  _words(s) {
+    const words = s.species?.words || {};
+    const stage = this._state(s, "sensor.life_stage")?.state;
+    return { food: words.food, home: words.home, ...(words[stage] || {}) };
+  }
+
+  // The viewer's own bond with this pet: {level, nickname?, favourite?} or null.
+  _bond(s) {
+    const id = this._hass.user?.id;
+    if (sharedScreen()) return null; // nobody's bond on a shared screen
+    return (id && this._state(s, "sensor.life_stage")?.attributes.bonds?.[id]) || null;
+  }
+
+  // Tell the pet who's looking in (for the bond, and a "come say hi" wish).
+  _visit(s) {
+    const id = s.ids?.["sensor.life_stage"];
+    // Not before the first look has run (it needs the creature): it says what's queued.
+    if (!id || !s.species || !this._hass.user || sharedScreen() || Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
+    s.visitedAt = Date.now();
+    const queued = Math.min((s.queue || []).length, 6);
+    this._hass.callService("virtual_pet", "visit", { entity_id: id, queued }, undefined, false, true)
+      .then((res) => {
+        const reply = res?.response || {};
+        if (s.ids?.["sensor.life_stage"] !== id) return; // the slide shows another pet now
+        if (reply.counted === false) {
+          // Not counted (it was asleep, or too soon): try again in a few minutes,
+          // so the morning's lines come soon after it wakes.
+          s.visitedAt = Date.now() - VISIT_EVERY_MS + VISIT_RETRY_MS;
+        }
+        if (typeof reply.my_day === "boolean") this._myDay = reply.my_day;
+        if (typeof reply.baby_talk === "boolean") setBabyTalk(this._hass.user?.id, reply.baby_talk);
+        if (typeof reply.birthday_kept === "boolean") this._birthdayKept = reply.birthday_kept;
+        if (typeof reply.birthday_phone === "boolean") this._birthdayPhone = reply.birthday_phone;
+        (reply.notes || []).forEach((note) => this._note(s, note, !!reply.made_room));
+        const ask = reply.ask;
+        if (QUESTIONS[ask] && !s.asking) {
+          s.asking = true;
+          (s.queue ??= []).push({ text: QUESTIONS[ask].q, ms: ASK_MS, ask: true, then: () => this._ask(s, ask, id) });
+        }
+      })
+      .catch(() => {
+        // an older integration has no visit: no bond yet, nothing else changes
+      });
+  }
+
+  // Something the pet has to tell only the viewer (from the visit).
+  _note(s, note, madeRoom = false) {
+    let line = NOTES[note.kind]?.(note);
+    if (!line) return;
+    if (CELEBRATION_NOTES.has(note.kind) && madeRoom && s.queue) {
+      // The look was full and the server made room for a celebration: it
+      // takes the away note's place (if that isn't said yet).
+      const away = s.queue.findIndex((q) => q.opts?.away);
+      if (away >= 0) s.queue.splice(away, 1);
+    }
+    if (note.kind === "your_birthday") {
+      const bond = this._bond(s);
+      const name = (bond?.level >= BOND.nickname && bond.nickname) || short(this._hass.user?.name?.trim().split(/\s+/)[0], 16);
+      if (!note.quiet && name) line = `happy birthday, ${name}!! ♥`;
+      (s.queue ??= []).push({ text: line, ms: 5000, then: () => {
+        if (!note.quiet) this._chirp(s, "birthday");
+        this._sparkle(s);
+      } });
+      return;
+    }
+    if (note.kind === "up_early") { // said while it sleeps: not queued behind its sleep
+      this._speak(s, line, 5000);
+      return;
+    }
+    this._queue(s, line, 5000);
+    if (note.kind === "friends_for") {
+      this._sparkle(s);
+      if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) this._bondHearts(s);
+    }
+  }
+
+  // A question with its answers as buttons (the line is already in the bubble).
+  _ask(s, kind, entity = s.ids?.["sensor.life_stage"]) {
+    const question = QUESTIONS[kind];
+    if (!question || s.game || s.ids?.["sensor.life_stage"] !== entity) {
+      s.asking = false; // a game, or another pet on this slide now: not now
+      return;
+    }
+    s.screen.querySelector(".askday")?.remove();
+    const box = document.createElement("div");
+    box.className = "askday";
+    box.setAttribute("role", "group");
+    box.setAttribute("aria-label", question.q);
+    const mine = this._state(s, "sensor.life_stage")?.attributes.catchphrase || "mine";
+    const answers = Object.keys(question.answers);
+    box.classList.toggle("many", answers.length > 3);
+    box.innerHTML = (question.picker?.() || "") + answers
+      .map((a) => `<button data-answer="${escape(a)}">${escape(question.label?.(a, s, mine) ?? a)}</button>`).join("");
+    const done = () => {
+      box.remove();
+      s.asking = false;
+      clearTimeout(s.askTimer);
+    };
+    // No tap in the box reaches the screen behind (it would open the status),
+    // and while someone is picking, it stays.
+    for (const type of ["click", "change", "pointerdown", "pointerup"]) box.addEventListener(type, (e) => e.stopPropagation());
+    const wait = () => {
+      clearTimeout(s.askTimer);
+      s.askTimer = setTimeout(done, ASK_MS);
+    };
+    box.addEventListener("focusin", wait);
+    box.addEventListener("change", (e) => {
+      wait();
+      question.changed?.(box, e);
+    });
+    box.addEventListener("click", (e) => {
+      let answer = e.target.closest("button")?.dataset.answer;
+      if (!answer) return;
+      if (question.value) answer = question.value(box, answer);
+      if (!answer) return;
+      this._tapped(e.target.closest("button"));
+      done();
+      const lines = question.answers[answer] ?? question.answers[e.target.closest("button").dataset.answer];
+      this._speak(s, question.reply ? question.reply(answer, s, mine) : pick(lines), 4500);
+      const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      if (["great", "you"].includes(answer) && !calm) this._animate(s, s.pet, "greethop", 1400);
+      else if (["tough", "not really"].includes(answer) && !calm) this._bondHearts(s);
+      else this._animate(s, s.pet, "perk", 320);
+      if (question.keep) {
+        // A websocket command, not a service call: answers stay off the event bus.
+        this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity,
+          question: kind, answer }).then(() => {
+          if (kind === "birthday") this._birthdayKept = answer !== "skip";
+        }).catch(() => {
+          // not kept this time: it may ask again another day
+        });
+      }
+    });
+    s.screen.append(box);
+    s.askTimer = setTimeout(done, ASK_MS);
+  }
+
+  // Hearts that float up around the pet: only for someone it's very close to.
+  _bondHearts(s) {
+    s.screen.querySelector(".bondhearts")?.remove();
+    const box = document.createElement("div");
+    box.className = "bondhearts";
+    box.setAttribute("aria-hidden", "true");
+    [[-34, 0], [30, 0.35], [-8, 0.7], [16, 1.05]].forEach(([x, delay]) => {
+      const img = document.createElement("img");
+      img.src = `${BASE}/ui/stat_heart_full.png?v=${VERSION}`;
+      img.alt = "";
+      img.style.setProperty("--x", `${x}px`);
+      img.style.animationDelay = `${delay}s`;
+      box.append(img);
+    });
+    s.screen.append(box);
+    setTimeout(() => box.remove(), 2800);
   }
 
   // The frames to draw now: a reaction pose while one runs, else the mood's.
@@ -1799,15 +2693,20 @@ class HatchPetCard extends HTMLElement {
   // A chirp, if this device turned sounds on and the pet is up at a sane hour.
   // Only the pet on show chirps: the shelf's other slides update too.
   _chirp(s, name) {
-    if (s !== this._slides[this._index]) return;
-    const hour = new Date().getHours();
-    const late = hour >= QUIET_HOURS[0] || hour < QUIET_HOURS[1];
-    if (!soundsOn() || s.asleep || s.lightsOut || late || document.visibilityState !== "visible") return;
+    if (!soundsOn() || !this._mayPlay(s)) return;
     try {
       playChirp(name);
     } catch (err) {
       // no WebAudio: stay quiet
     }
+  }
+
+  // The pet on show, up at a sane hour, on a page in view: it may make a sound.
+  _mayPlay(s) {
+    if (s !== this._slides[this._index]) return false;
+    const hour = new Date().getHours();
+    const late = hour >= QUIET_HOURS[0] || hour < QUIET_HOURS[1];
+    return !s.asleep && !s.lightsOut && !late && document.visibilityState === "visible";
   }
 
   _sparkle(s) {
@@ -1820,16 +2719,16 @@ class HatchPetCard extends HTMLElement {
   // Something happened in HA (sensor.last_care "moments"): show it.
   _moment(s, m) {
     const say = (text, ms = 4500) => {
-      s.bubble.textContent = text;
-      s.sayUntil = Date.now() + ms;
+      this._write(s, text, ms);
     };
+    const speak = (text, ms = 4500) => this._speak(s, text, ms, { catch: true }); // may carry its sound
     switch (m.type) {
       case "care_miss":
-        say("...nobody came", 6000);
-        this._animate(s, s.pet, "sulk", 800);
+        say(this._lines(s, "care_miss", "...oh, there you are ♥").text, 5000); // never guilt
+        this._animate(s, s.pet, "perk", 320);
         break;
       case "discipline_miss":
-        say("...fine, I'll stop");
+        say("ok, ok... ♪");
         break;
       case "call_answered":
         if (m.reason === "fake") { // only a fair scold answers a fake call
@@ -1846,7 +2745,7 @@ class HatchPetCard extends HTMLElement {
       case "stage_changed":
         if (m.stage === "baby") break; // hatching says hello
         say(m.stage === "adult"
-          ? `all grown up${m.upbringing ? `: ${m.upbringing}` : ""}!`
+          ? "all grown up! ♥" // the upbringing is on the status screen, not announced
           : `I'm a ${m.stage} now!`);
         this._animate(s, s.pet, "stretch", 1100);
         this._sparkle(s);
@@ -1875,34 +2774,33 @@ class HatchPetCard extends HTMLElement {
         break;
       case "fell_asleep":
         if (m.how === "collapsed") {
-          say("so... tired... zzz", 5000);
-          this._animate(s, s.pet, "sulk", 800);
+          say("so... sleepy... zzz", 5000);
         } else if (m.how === "house" || m.how === "lights") {
           say(pick(["good night...", "night night...", "sleep tight..."]), 4000);
         }
         break;
       case "good_morning":
-        say(pick(["good morning!", "morning!! you're up!", "hi! sleep well?"]));
+        speak(pick(["morning!! you're up!", "morning! ♪"]));
         this._animate(s, s.pet, "stretch", 1100);
         break;
       case "sunset":
-        say(pick(["ooh, the sunset...", "pretty sky tonight", "the sun's going down"]));
+        speak(pick(["ooh, the sunset...", "pretty sky tonight", "the sun's going down"]));
         this._look(s, 3000);
         break;
       case "sunrise":
-        say(pick(["the sun's up!", "good morning, sun!"]));
+        speak(pick(["the sun's up!", "good morning, sun!"]));
         this._look(s, 2500);
         break;
       case "watching":
         // A long title gets the short lines, so the bubble leaves the pet in view.
-        say(pick([`ooh, ${m.title}!`, `is this ${m.title}?`,
-          m.title.length <= 40 ? `${m.title}! I love this one` : `ooh, ${m.title}!`]));
+        const title = short(m.title);
+        this._speak(s, pick([`ooh, ${title}!`, `is this ${title}?`, `${title}! I love this one`]), 4500);
         this._animate(s, s.pet, "perk", 320);
         break;
       case "listening":
-        say(m.artist && Math.random() < 0.5
-          ? `♪ is this ${m.artist}? ♪`
-          : `♪ ${m.title} ♪`);
+        this._speak(s, m.artist && Math.random() < 0.5
+          ? `♪ is this ${short(m.artist)}? ♪`
+          : `♪ ${short(m.title)} ♪`);
         break;
       case "news": { // virtual_pet.share_news: a passing moment, like a TV title
         const h = String(m.headline || "");
@@ -1916,7 +2814,7 @@ class HatchPetCard extends HTMLElement {
           lines.push(`${topic} news! ${h}`);
         }
         const line = pick(lines);
-        say(line, 4000 + line.length * 50); // long enough to read, never long
+        this._speak(s, line, 4000 + line.length * 50); // long enough to read; a headline gets no catchphrase
         this._animate(s, s.pet, "perk", 320);
         break;
       }
@@ -1933,7 +2831,7 @@ class HatchPetCard extends HTMLElement {
           cold: t ? [`brr, ${t} outside!`, `${t} out there... brr`] : ["brr, so cold out!"],
         }[m.change];
         if (!lines) break;
-        say(pick(lines));
+        (m.change === "cold" ? say : speak)(pick(lines)); // a sulk gets no cheery sound
         if (m.change === "rainbow" || m.change === "snow_started") this._sparkle(s);
         if (m.change === "cold") this._animate(s, s.pet, "sulk", 800);
         else this._look(s, 2500);
@@ -1951,10 +2849,10 @@ class HatchPetCard extends HTMLElement {
           warmer: hi ? [today ? `warmer today: ${hi}!` : `warmer tomorrow: ${hi}!`] : [today ? "warmer today!" : "warmer tomorrow!"],
           colder: hi ? [today ? `colder today, only ${hi}` : `colder tomorrow... ${hi}`] : [today ? "colder today..." : "colder tomorrow..."],
           rain: today ? ["rain later today...", "rain's coming later"] : ["rain tomorrow... blanket day?"],
-          sunny: today ? ["sunny today, finally!"] : ["sun tomorrow, finally!"],
+          sunny: today ? ["sunny today! yay"] : ["sun tomorrow! yay"],
         }[m.kind];
         if (!lines) break;
-        say(pick(lines), 5000);
+        (["storm", "cold", "colder"].includes(m.kind) ? say : speak)(pick(lines), 5000);
         if (m.kind === "cold" || m.kind === "colder") this._animate(s, s.pet, "sulk", 800);
         else this._animate(s, s.pet, "perk", 320);
         break;
@@ -1962,18 +2860,80 @@ class HatchPetCard extends HTMLElement {
       case "wish_granted": // lines that arrive together queue, so none is lost
         this._sparkle(s);
         this._chirp(s, "trait");
-        this._queue(s, pick(["my wish came true! thank you ♥", "yay, my wish! ♥", "best day ever! ♥"]));
+        const granted = this._lines(s, "wish_granted", pick(["my wish came true! thank you ♥", "yay, my wish! ♥", "best day ever! ♥"]));
+        this._queue(s, granted.text, 4500, { catch: !granted.baby });
+        break;
+      case "bond_up": { // only the person whose bond it is sees it
+        if (sharedScreen()) break; // nothing personal on a shared screen
+        if (m.user !== this._hass.user?.id) break;
+        this._sparkle(s);
+        this._chirp(s, "trait");
+        const game = GAMES.find((g) => g.key === m.favourite);
+        this._queue(s, game ? `${game.label} is our game now! ♥`
+          : m.nickname ? `can I call you ${m.nickname}? ♥`
+          : m.level >= BOND.max ? "you're my very best friend ♥"
+          : m.level === BOND.max - 1 ? "you make every day better ♥"
+          : m.level >= BOND.hearts ? "I'm always so happy when you're here ♥"
+          : this._lines(s, "bond_up", pick(["I like you a lot, you know ♥", "we're getting close! ♥", "you're the best ♥"])).text, 5000);
+        break;
+      }
+      case "friend_home": { // a close friend's person entity came home
+        const me = this._hass.user?.id;
+        if (m.user === me && !sharedScreen()) {
+          if (!this._welcomeDue(s, new Date(m.at).getTime())) break;
+          this._queue(s, this._lines(s, "friend_home", pick(["you're home!! ♥", "yay, you're back! ♥"])).text, 4500);
+          if (HOME_WEATHER[m.weather]) this._queue(s, HOME_WEATHER[m.weather], 4500);
+          const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+          if (!calm) this._animate(s, s.pet, "greethop", 1400);
+          s.visitedAt = 0; // look in again now: the pet may want to ask about your day
+          this._visit(s);
+          break;
+        }
+        const name = sharedScreen() ? null : this._personName(m.user);
+        this._queue(s, name ? pick([`${name}'s home!!`, `ooh, ${name} is back!`]) : "someone's home!! ♥", 4000);
+        this._animate(s, s.pet, "perk", 320);
+        break;
+      }
+      case "bond_record": { // only its person
+        if (sharedScreen()) break; // nothing personal on a shared screen
+        if (m.user !== this._hass.user?.id) break;
+        const game = GAMES.find((g) => g.key === m.game);
+        this._sparkle(s);
+        this._queue(s, `new best at ${game ? game.label : "a game"}! ${m.wins}/5 ♥`);
+        break;
+      }
+      case "tucked_in": {
+        if (sharedScreen()) break; // nothing personal on a shared screen
+        if (m.user !== this._hass.user?.id) break;
+        const bond = this._bond(s);
+        const name = short((bond?.level >= BOND.nickname && bond.nickname) ||
+          this._hass.user?.name?.trim().split(/\s+/)[0], 16);
+        // Instead of the plain goodnight just said, not after it.
+        this._speak(s, withName(this._lines(s, "tucked_in", "thank you for tucking me in ♥").text, name), 4000);
+        break;
+      }
+      case "bond_favourite":
+        if (m.user === this._hass.user?.id && !sharedScreen()) {
+          this._queue(s, pick(["our favourite game! ♥", "I love playing this with you ♥"]));
+        }
+        break;
+      case "favourite_snack": // at most once a day (the server's); a holiday snack says its own
+        if (!seasonNow(this._config)?.snack) {
+          const food = short(m.food, 16);
+          const line = this._lines(s, "favourite_snack", `${food}, my favourite!!`, food);
+          this._queue(s, line.text, 4500, { catch: !line.baby });
+        }
         break;
       case "tv_off_late":
         say(pick(["*yawn* bedtime?", "all done? sleepy now..."]));
         break;
       case "first_snow":
-        say("the first snow!! ❄");
+        speak("the first snow!! ❄");
         this._sparkle(s);
         this._animate(s, s.pet, "stretch", 1100);
         break;
       case "first_frost":
-        say("brr, frost outside!");
+        speak("brr, frost outside!");
         this._animate(s, s.pet, "sulk", 800);
         break;
       case "pooped": {
@@ -1987,8 +2947,7 @@ class HatchPetCard extends HTMLElement {
   _react(s, entry) {
     s.screen.querySelector(".costume")?.remove(); // care takes the stage
     if (entry.action === "chore_treat") {
-      s.bubble.textContent = "a treat! someone did a chore ♪";
-      s.sayUntil = Date.now() + 3500;
+      this._write(s, "a treat! someone did a chore ♪", 3500);
     }
     if (["ok", "won", "lost"].includes(entry.result)) {
       const key = PROP_FOR[entry.action] || entry.action;
@@ -2005,15 +2964,17 @@ class HatchPetCard extends HTMLElement {
         clearTimeout(s.breezeTimer);
         s.breezeTimer = setTimeout(() => s.screen.classList.remove("breezy"), 2600);
       }
+      const food = this._words(s).food;
+      if (entry.action === "feed" && food && Math.random() < 0.5) {
+        this._write(s, this._lines(s, "yum", `yum, ${food}!`, food).text, 2500); // its own food, in its own words
+      }
       if (entry.action === "praise") {
-        s.bubble.textContent = "♥";
-        s.sayUntil = Date.now() + 2500;
+        this._write(s, "♥", 2500);
       }
       const season = seasonNow(this._config);
       const candy = season?.snack && key === "snack" ? `../ui/season_${season.key}_${season.snack}` : null;
       if (candy) {
-        s.bubble.textContent = pick(["candy!! ♪", "ooh, candy corn!", "a treat! ♪"]);
-        s.sayUntil = Date.now() + 2500;
+        this._write(s, pick(season.snackLines || ["a treat! ♪"]), 2500);
       }
       const prop = candy || s.species?.props?.[key] || FALLBACK_PROPS[key];
       if (prop) {
@@ -2024,8 +2985,7 @@ class HatchPetCard extends HTMLElement {
     }
     const line = REFUSALS[entry.result];
     if (line) {
-      s.bubble.textContent = line;
-      s.sayUntil = Date.now() + 3500;
+      this._write(s, this._lines(s, `REFUSALS.${entry.result}`, line).text, 3500);
     }
   }
 
@@ -2066,13 +3026,24 @@ class HatchPetCard extends HTMLElement {
     } catch (err) {
       // no storage: no best score to show
     }
+    // The viewer's own bond, in five hearts (a half heart a level).
+    const bond = this._bond(s);
+    const bondHearts = (level) => {
+      const img = (n) => `<img src="${BASE}/ui/stat_heart_${n}.png?v=${VERSION}" alt="">`;
+      let out = "";
+      for (let i = 0; i < BOND.max / 2; i++) {
+        const left = level - i * 2;
+        out += img(left >= 2 ? "full" : left === 1 ? "half" : "empty");
+      }
+      return `<span class="hearts" role="img" aria-label="bond level ${level} of ${BOND.max}">${out}</span>`;
+    };
     const notifying = (this._state(s, "sensor.life_stage")?.attributes.notify_users || [])
       .includes(this._hass.user?.id);
     const ic = (n) => pixelIcon(n, 18);
     const bar = (v) => v === null ? "–"
       : `<div class="bar" role="img" aria-label="${Math.round(v)} of 100"><div style="width:${v}%"></div></div>`;
     const lines = log.slice(0, 3).map((e) =>
-      `<div>${escape(e.action.replace("_", " "))}${e.by ? ` by ${escape(e.by)}` : ""} · ${timeAgo(e.at)}` +
+      `<div>${escape(e.action.replace("_", " "))}${e.by && !sharedScreen() ? ` by ${escape(e.by)}` : ""} · ${timeAgo(e.at)}` +
       `${e.result && e.result !== "ok" ? ` (${escape(e.result.replace("_", " "))}${e.score ? ` ${escape(e.score)}` : ""})` : ""}</div>`);
     const row = (iconName, label, value) =>
       `<div class="row">${iconName ? ic(iconName) : "<span></span>"}<span>${label}</span>${value}</div>`;
@@ -2084,7 +3055,8 @@ class HatchPetCard extends HTMLElement {
     // Today's wish comes first: it changes daily, the rest is there every day.
     const html = `
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
-        ? `<span>♥ came true!</span>` : `<span>♡ ${escape(WISHES[stageAttrs.wish.kind][1])}</span>`) : ""}
+        ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
+      ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
       ${row("icon_feed", "hunger", hearts(value("hunger")))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}
@@ -2092,29 +3064,60 @@ class HatchPetCard extends HTMLElement {
       ${row("stat_discipline", "discipline", bar(value("discipline")))}
       ${row(null, "weight", `<span>${weightLabel(value("weight"))}</span>`)}
       ${row("stat_care_miss", "misses", `<span>${value("care_misses") ?? "–"}</span>`)}
-      ${row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0} ignored</span>`)}
+      ${row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0}</span>`)}
       ${row(null, traits.length > cap ? "traits" : `traits ${traits.length}/${cap}`, `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
       ${bestCatch ? row(null, "best catch", `<span>${bestCatch}/${CATCH.rounds}</span>`) : ""}
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
+      ${stageAttrs.personality ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
-      ${row(null, "notify me", `<span><button class="bell" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
+      ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell notify" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
+      ${bond ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!this._myDay}">${this._myDay ? "on" : "off"}</button></span>`) : ""}
+      ${this._birthdayKept && !sharedScreen() ? row(null, "my birthday", `<span><button class="bell forgetbday" aria-label="forget my birthday">forget</button></span>`) +
+        row(null, "birthday on my phone", `<span><button class="bell bdayphone" aria-label="birthday on my phone: a happy birthday message on your phone on the day" aria-pressed="${!!this._birthdayPhone}">${this._birthdayPhone ? "on" : "off"}</button></span>`) : ""}
+      ${sharedScreen() ? "" : row(null, "baby talk", `<span><button class="bell babytalk" aria-label="baby talk: simpler words while a pet is a baby or child" aria-pressed="${babyTalk(this._hass.user?.id)}">${babyTalk(this._hass.user?.id) ? "on" : "off"}</button></span>`)}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
+      ${s.species?.voice ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`) : ""}
+      ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
-      <button class="jlink">journal ›</button>`;
+      <button class="jlink">journal ›</button>
+      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     this._journalLink(s, true);
-    s.status.querySelector(".bell:not(.sound)").addEventListener("click", (e) => {
+    s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      this._setMyDay(s, !this._myDay, e.currentTarget);
+    });
+    // No "notify me" row on a shared screen.
+    s.status.querySelector(".bell.notify")?.addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
-      this._setNotify(s, !notifying);
+      this._tapped(e.currentTarget);
+      this._setNotify(s, !notifying, e.currentTarget);
+    });
+    s.status.querySelector(".bell.shared").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const on = !sharedScreen();
+      try {
+        localStorage.setItem(SHARED_KEY, on ? "on" : "off");
+      } catch (err) {
+        this._statusMessage(s, "This browser can't save that setting.");
+        return;
+      }
+      if (on) this._slides.forEach((slide) => { this._clearAsk(slide); slide.queue = []; this._dropPhotos(slide); });
+      this._statusMessage(s, on ? "Nothing personal on this screen now." : "This screen is personal again.");
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
     s.status.querySelector(".bell.sound").addEventListener("click", (e) => {
       e.stopPropagation();
+      this._tapped(e.currentTarget);
       const on = !soundsOn();
       try {
         localStorage.setItem(SOUND_KEY, on ? "on" : "off");
       } catch (err) {
+        this._statusMessage(s, "This browser can't save sound settings.");
         return; // no storage: sounds stay off
       }
       try {
@@ -2124,19 +3127,143 @@ class HatchPetCard extends HTMLElement {
       }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
+    s.status.querySelector(".bell.bdayphone")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const enabled = !this._birthdayPhone;
+      this._hass.callWS({ type: "virtual_pet/birthday_phone", entity_id: s.ids?.["sensor.life_stage"], enabled })
+        .then(() => {
+          this._birthdayPhone = enabled;
+          this._statusMessage(s, enabled ? "Your phone will hear it on the day ♥" : "Only here, then.");
+          this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+        })
+        .catch(() => this._statusMessage(s, "That didn't work. Try again."));
+    });
+    s.status.querySelector(".bell.babytalk")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      this._setBabyTalk(s, !babyTalk(this._hass.user?.id), e.currentTarget);
+    });
+    s.status.querySelector(".bell.forgetbday")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      this._hass.callWS({ type: "virtual_pet/forget_birthday", entity_id: s.ids?.["sensor.life_stage"] })
+        .then(() => {
+          this._birthdayKept = false;
+          this._birthdayPhone = false;
+          this._statusMessage(s, "Forgotten. I won't ask again.");
+          this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+        })
+        .catch(() => this._statusMessage(s, "That didn't work. Try again."));
+    });
+    s.status.querySelector(".bell.babble")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const on = !babbleOn();
+      try {
+        localStorage.setItem(BABBLE_KEY, on ? "on" : "off");
+      } catch (err) {
+        this._statusMessage(s, "This browser can't save sound settings.");
+        return;
+      }
+      try {
+        if (on) { // a sample; this tap also unlocks audio on phones
+          unlockAudio();
+          audio.resume().then(() => babble(`${s.species.voice.sound} hello there`, s.species.voice));
+        }
+      } catch (err) {
+        // no WebAudio
+      }
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+    });
+  }
+
+  // "My day" is per person too: steps, stairs and sleep from their own phones.
+  async _setMyDay(s, enabled, button) {
+    const id = s.ids?.["sensor.life_stage"];
+    if (!id) return;
+    button.classList.add("pending");
+    button.setAttribute("aria-pressed", String(enabled));
+    button.textContent = enabled ? "on" : "off";
+    try {
+      await this._hass.callService("virtual_pet", "my_day", { entity_id: id, enabled });
+      this._myDay = enabled; // one switch per person, for every pet
+      this._statusMessage(s, enabled ? "I'll notice your good days! ♥" : "OK, I won't peek.");
+    } catch (err) {
+      button.setAttribute("aria-pressed", String(!enabled));
+      button.textContent = !enabled ? "on" : "off";
+      this._statusMessage(s, "That didn't work. Try again.");
+    } finally {
+      button.classList.remove("pending");
+    }
+  }
+
+  // Baby talk is the person's, for every pet and device: kept on the server
+  // (a websocket command, off the event bus), cached here by user ID.
+  async _setBabyTalk(s, enabled, button) {
+    const id = s.ids?.["sensor.life_stage"];
+    const user = this._hass.user?.id;
+    if (!id || !user) return;
+    button.classList.add("pending");
+    button.setAttribute("aria-pressed", String(enabled));
+    button.textContent = enabled ? "on" : "off";
+    setBabyTalk(user, enabled); // at once, so a re-render mid-call draws the new state
+    try {
+      await this._hass.callWS({ type: "virtual_pet/baby_talk", entity_id: id, enabled });
+      if (enabled) {
+        // The status screen hides the bubble, so the note always shows; a baby
+        // or child on screen says hello as well, for when the screen closes.
+        this._statusMessage(s, "OK, baby talk for babies and children ♥");
+        if (this._babyStage(s)) {
+          const name = short(this._hass.user?.name?.trim().split(/\s+/)[0], 16);
+          const baby = this._babySet(s, "greet"); // a child's hello is the normal one
+          this._speak(s, name ? (baby ? pick(baby)(name) : this._hourHello(name)) : "hi hi!", 4000);
+        }
+      }
+    } catch (err) {
+      setBabyTalk(user, !enabled);
+      button.setAttribute("aria-pressed", String(!enabled));
+      button.textContent = !enabled ? "on" : "off";
+      this._statusMessage(s, "That didn't work. Try again.");
+    } finally {
+      button.classList.remove("pending");
+    }
   }
 
   // Phone notifications are per user: this only changes them for whoever is signed in.
   async _setNotify(s, enabled) {
     const id = s.ids?.["sensor.life_stage"];
     if (!id) return;
+    const button = s.status.querySelector(".bell.notify");
+    if (button) {
+      button.classList.add("pending");
+      button.setAttribute("aria-pressed", String(enabled));
+      button.textContent = enabled ? "on" : "off";
+    }
     try {
       await this._hass.callService("virtual_pet", "notify_me", { entity_id: id, enabled });
-      s.bubble.textContent = enabled ? "I'll ping your phone!" : "ok, no more pings";
+      this._statusMessage(s, enabled ? "I'll ping your phone!" : "Phone pings off.");
     } catch (err) {
-      s.bubble.textContent = "hmm, that didn't work";
+      if (button) {
+        button.setAttribute("aria-pressed", String(!enabled));
+        button.textContent = !enabled ? "on" : "off";
+      }
+      this._statusMessage(s, "That didn't work. Try again.");
+    } finally {
+      button?.classList.remove("pending");
     }
-    s.sayUntil = Date.now() + 3500;
+  }
+
+  _statusMessage(s, message) {
+    const note = s.status.querySelector(".status-feedback");
+    if (!note) return;
+    note.textContent = message;
+    note.hidden = false;
+    clearTimeout(s.statusMessageTimer);
+    s.statusMessageTimer = setTimeout(() => {
+      note.hidden = true;
+      note.textContent = "";
+    }, 3500);
   }
 
   // Fill the status screen; false if it already shows this (kept as is, so
@@ -2146,7 +3273,7 @@ class HatchPetCard extends HTMLElement {
     // Keep focus on the same control (a toggle, the journal link) across the redraw.
     const active = this.shadowRoot?.activeElement;
     const keep = s.status.contains(active) && active.className
-      ? `.${active.className.trim().split(/\s+/).join(".")}` : null;
+      ? `.${active.className.trim().split(/\s+/).join(".")}${active.dataset?.gen ? `[data-gen="${active.dataset.gen}"]` : ""}` : null;
     s.statusHtml = html;
     s.status.innerHTML = html;
     if (keep) s.status.querySelector(keep)?.focus({ preventScroll: true });
@@ -2156,7 +3283,9 @@ class HatchPetCard extends HTMLElement {
   _journalLink(s, open) {
     s.status.querySelector(".jlink").addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
+      this._tapped(e.currentTarget);
       s.journal = open;
+      if (open) this._loadPhotos(s); // a best friend's photos, theirs only
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
     });
@@ -2164,6 +3293,11 @@ class HatchPetCard extends HTMLElement {
 
   // The world's creatures (unraised ones as silhouettes) and this device's past pets.
   async _renderJournal(s) {
+    const loading = `
+      <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span><span>opening…</span></div>
+      <div class="log">Gathering your pet's memories…</div>
+      <button class="jlink">‹ status</button>`;
+    if (this._setStatus(s, loading)) this._journalLink(s, false);
     const stage = this._state(s, "sensor.life_stage")?.attributes || {};
     const roster = stage.roster || [];
     const raised = new Set();
@@ -2177,6 +3311,7 @@ class HatchPetCard extends HTMLElement {
       traits: stage.traits || [], levels: stage.trait_levels || {}, inherited: stage.inherited_trait,
       games: stage.games || {},
       upbringing: this._state(s, "sensor.life_stage")?.state === "adult" ? stage.upbringing : null,
+      personality: stage.personality,
       current: true,
     };
     const past = [...(stage.journal || []), now].slice(-4);
@@ -2197,6 +3332,7 @@ class HatchPetCard extends HTMLElement {
       `${escape(p.name)} · ${escape((names[p.species] || "egg").toLowerCase())}` +
       `${p.age_days != null ? ` · ${Math.round(p.age_days)} d` : ""}` +
       `${p.upbringing ? ` · ${escape(p.upbringing)}` : ""}` +
+      `${p.personality ? ` · ${escape(String(p.personality).replaceAll("_", " "))}` : ""}` +
       `${gamesPlayed(p.games) ? ` · ${gamesPlayed(p.games)} games` : ""}` +
       `${p.traits?.length ? `<br><span class="gt">${p.traits.map((t) =>
         traitLabel(t, p.levels?.[t], t === p.inherited)).join(" ")}</span>` : ""}</div>`);
@@ -2204,9 +3340,249 @@ class HatchPetCard extends HTMLElement {
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
       <div class="jgrid">${tiles.join("")}</div>
+      ${this._photoRow(s)}
       <div class="jlist">${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
-      <button class="jlink">‹ status</button>`;
-    if (this._setStatus(s, html)) this._journalLink(s, false);
+      <button class="jlink">‹ status</button>
+      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
+    if (!this._setStatus(s, html)) return;
+    this._journalLink(s, false);
+    s.status.querySelectorAll(".psave").forEach((button) => button.addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      this._tapped(e.currentTarget);
+      this._savePhoto(s, Number(e.currentTarget.dataset.gen));
+    }));
+  }
+
+  // --- A best friend's photo ---------------------------------------------------
+  // Only the viewer's (virtual_pet/photos, never a sensor), never on a shared
+  // screen; each drawn once and kept as a Blob behind a short blob: URL.
+
+  // The journal's "photos" row: a print per generation, oldest first.
+  _photoRow(s) {
+    if (sharedScreen() || !s.photos?.size) return "";
+    const prints = [...s.photos.values()].map(({ photo, url }) =>
+      `<figure class="print"><img src="${url}" alt="${escape(this._photoAlt(photo))}">` +
+      `<button class="bell psave" data-gen="${photo.generation}" ` +
+      `aria-label="${escape(`save the photo of ${photo.name}, generation ${photo.generation}`)}">save</button></figure>`);
+    return `<div class="photos"><span>photos</span><div class="prow">${prints.join("")}</div></div>`;
+  }
+
+  _photoAlt(photo) {
+    return `photo of ${photo.name}, best friends, ${localDay(photo.on, this._hass?.locale?.language)}`;
+  }
+
+  // Fetch the viewer's photos when the journal opens, and draw the new ones.
+  _loadPhotos(s) {
+    // One load in flight per slide: a second open shares it.
+    if (!s.photoLoad) s.photoLoad = this._fetchPhotos(s).finally(() => { s.photoLoad = null; });
+    return s.photoLoad;
+  }
+
+  async _fetchPhotos(s) {
+    const id = s.ids?.["sensor.life_stage"];
+    if (!id || !this._hass.user || sharedScreen()) return;
+    const epoch = s.photoEpoch || 0;
+    let photos;
+    try {
+      photos = (await this._hass.callWS({ type: "virtual_pet/photos", entity_id: id }))?.photos || [];
+    } catch (err) {
+      return; // an older integration: no photos
+    }
+    const kept = s.photos || new Map();
+    const next = new Map();
+    const made = [];
+    for (const photo of photos) {
+      const sig = JSON.stringify(photo);
+      const had = kept.get(photo.generation);
+      if (had?.sig === sig) {
+        next.set(photo.generation, had);
+        continue;
+      }
+      // A tainted canvas (a Cast receiver) or a missing creature: no print.
+      const print = await this._printPhoto(photo).catch(() => null);
+      if (print) {
+        made.push(print);
+        next.set(photo.generation, { ...print, sig, photo });
+      }
+    }
+    if ((s.photoEpoch || 0) !== epoch || s.ids?.["sensor.life_stage"] !== id || sharedScreen()) {
+      made.forEach((p) => URL.revokeObjectURL(p.url)); // dropped meanwhile
+      return;
+    }
+    for (const [gen, p] of kept) if (next.get(gen) !== p) URL.revokeObjectURL(p.url);
+    s.photos = next;
+    if (s.journal) this._renderJournal(s);
+  }
+
+  // A photo as a PNG: the Blob, its URL, and the File a share sheet takes
+  // (made now, so "save" can share straight from the tap).
+  async _printPhoto(photo) {
+    const canvas = await this._renderPhoto(photo);
+    const blob = await new Promise((resolve, reject) => {
+      try {
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("no print"))), "image/png");
+      } catch (err) {
+        reject(err);
+      }
+    });
+    const name = `${String(photo.name).replace(/[\\/:*?"<>|]+/g, "").trim() || "pet"}-best-friends.png`;
+    const file = typeof File === "function" ? new File([blob], name, { type: "image/png" }) : null;
+    return { blob, url: URL.createObjectURL(blob), file, name };
+  }
+
+  // Draw a photo: a cream print with a thicker bottom edge, the creature's day
+  // backdrop cropped square, the pet as it was (its drawn stage, scale and
+  // perch, as on the shelf), one flair per place, its name and the day.
+  // sprite: false leaves the pet out (card-check compares the two).
+  async _renderPhoto(photo, { sprite = true } = {}) {
+    const sp = await loadJson(`sprites/${photo.species}/species.json`);
+    const { w, h, px, pic, edge } = PHOTO;
+    const stage = sp.stages?.includes(photo.stage) ? photo.stage
+      : sp.stage_fallback?.[photo.stage] || sp.stages?.[sp.stages.length - 1];
+    const traits = (photo.traits || []).filter((t) => FLAIR[t]);
+    const shown = ["head", "air", "ground"].map((place) => [place, traits.find((t) => FLAIR[t].place === place)])
+      .filter(([, t]) => t);
+    const flairSrc = (t) => `${BASE}/ui/flair_${FLAIR[t].art ? `${t}_1` : t}.png?v=${VERSION}`;
+    const bg = sp.backgrounds?.day || Object.values(sp.backgrounds || {})[0];
+    const [back, pet, perch, ...pieces] = await Promise.all([
+      bg ? loadImage(spriteSrc(photo.species, bg)) : null,
+      sprite ? loadImage(spriteSrc(photo.species, `${stage}_content_1`)) : null,
+      sp.perch ? loadImage(spriteSrc(photo.species, sp.perch)) : null,
+      ...shown.map(([, t]) => loadImage(flairSrc(t)).catch(() => null)),
+    ]);
+    try {
+      await document.fonts?.load("22px Tiny5");
+    } catch (err) {
+      // no font loading: the fallback face draws the words
+    }
+    const canvas = document.createElement("canvas");
+    canvas.width = w * px;
+    canvas.height = h * px;
+    const g = canvas.getContext("2d");
+    g.scale(px, px);
+    g.imageSmoothingEnabled = false;
+    g.fillStyle = "#f6efdc";
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = "#3a2a1a";
+    g.fillRect(edge - 2, edge - 2, pic + 4, pic + 4);
+    g.save();
+    g.beginPath();
+    g.rect(edge, edge, pic, pic);
+    g.clip();
+    if (back) {
+      const side = Math.min(back.naturalWidth, back.naturalHeight);
+      g.drawImage(back, (back.naturalWidth - side) / 2, back.naturalHeight - side, side, side, edge, edge, pic, pic);
+    } else {
+      g.fillStyle = "#2b2f3a";
+      g.fillRect(edge, edge, pic, pic);
+    }
+    // The shelf's pet box: 62% of the scene's height, its feet 4% up, centred;
+    // species.json "scale" grows it about its feet. The scene is 384 px tall.
+    const ks = pic / 384;
+    const box = 0.62 * pic * (sp.scale?.[stage] || 1);
+    const cx = edge + pic / 2;
+    const left = cx - box / 2;
+    const top = edge + pic * 0.96 - box;
+    if (perch) g.drawImage(perch, left, top, box, box);
+    if (pet) g.drawImage(pet, left, top, box, box);
+    const k = box / 256;
+    const [hx, hy] = sp.head?.[stage] || [128, 96];
+    const head = { x: left + hx * k, y: top + hy * k };
+    const fy = top + 224 * k;
+    const half = box * 0.32;
+    const away = head.x >= cx ? -1 : 1; // the air's flair on the other side from the head
+    shown.forEach(([place, t], i) => {
+      const img = pieces[i];
+      if (!img) return;
+      const fw = img.naturalWidth * ks;
+      const fh = img.naturalHeight * ks;
+      // Placed by its bottom middle, as the shelf's flair is.
+      const at = place === "head" ? [head.x + (t === "thunder_heart" ? 6 : 0), head.y - 6 * ks]
+        : place === "air" ? [cx + away * half * 1.4, head.y + 18 * ks]
+          : [cx + (PHOTO_GROUND[t] ?? 1.35) * half, fy + (PHOTO_GROUND_DY[t] ?? 2) * ks];
+      g.drawImage(img, at[0] - fw / 2, at[1] - fh, fw, fh);
+    });
+    g.restore();
+    g.fillStyle = "#3a2a1a";
+    g.textAlign = "center";
+    g.font = "400 22px Tiny5, monospace";
+    g.fillText(photo.name, w / 2, edge + pic + 36, pic);
+    g.font = "400 14px Tiny5, monospace";
+    g.fillText("best friends ♥", w / 2, edge + pic + 58, pic);
+    g.font = "400 12px Tiny5, monospace";
+    g.fillStyle = "#6a5a44";
+    g.fillText(localDay(photo.on, this._hass?.locale?.language), w / 2, edge + pic + 78, pic);
+    return canvas;
+  }
+
+  // "save": the share sheet where there is one (straight from the tap: WebKit
+  // drops the gesture after an await), else the picture in a dialog.
+  _savePhoto(s, gen) {
+    const p = s.photos?.get(gen);
+    if (!p || sharedScreen()) return;
+    const files = p.file ? [p.file] : null;
+    if (files && navigator.canShare?.({ files })) {
+      navigator.share({ files, title: "best friends ♥" }).then(
+        () => this._statusMessage(s, "shared"),
+        (err) => { if (err?.name !== "AbortError") this._photoDialog(s, gen); }, // cancelled: done
+      );
+      return;
+    }
+    this._photoDialog(s, gen);
+  }
+
+  // The picture full size, above everything (a modal <dialog>: focus kept in
+  // it, Escape closes), to press and hold; a download link outside the apps.
+  _photoDialog(s, gen) {
+    const p = s.photos?.get(gen);
+    if (!p) return;
+    let dialog = this.shadowRoot.querySelector(".photo-dialog");
+    if (!dialog) {
+      dialog = document.createElement("dialog");
+      dialog.className = "photo-dialog";
+      dialog.innerHTML = `<img class="pbig" alt=""><p>press and hold the picture to save it</p>` +
+        `<a class="pdownload"></a><button class="bell pclose">close</button>`;
+      // It stops every tap: nothing behind it reacts. A tap outside it closes it.
+      dialog.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const box = dialog.getBoundingClientRect();
+        const inside = e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom;
+        if (e.target === dialog && !inside) dialog.close();
+      });
+      dialog.querySelector(".pclose").addEventListener("click", () => dialog.close());
+      dialog.querySelector(".pdownload").addEventListener("click", () => {
+        if (this._photoFor) this._statusMessage(this._photoFor.s, "saved");
+      });
+      dialog.addEventListener("close", () => {
+        const was = this._photoFor;
+        this._photoFor = null;
+        // Back to its "save" (the journal may have been redrawn meanwhile).
+        was?.s.status.querySelector(`.psave[data-gen="${was.gen}"]`)?.focus({ preventScroll: true });
+      });
+      this.shadowRoot.append(dialog);
+    }
+    const img = dialog.querySelector(".pbig");
+    img.src = p.url;
+    img.alt = this._photoAlt(p.photo);
+    const link = dialog.querySelector(".pdownload");
+    link.href = p.url;
+    link.download = p.name;
+    link.textContent = p.name;
+    link.hidden = inCompanionApp(); // the apps don't download; press and hold there
+    this._photoFor = { s, gen };
+    if (!dialog.open) {
+      if (dialog.showModal) dialog.showModal();
+      else dialog.setAttribute("open", "");
+    }
+  }
+
+  // Forget a slide's photos (another pet on it, or a shared screen now).
+  _dropPhotos(s) {
+    s.photoEpoch = (s.photoEpoch || 0) + 1;
+    s.photoLoad = null; // a load still running will find its epoch stale
+    s.photos?.forEach((p) => URL.revokeObjectURL(p.url));
+    s.photos = null;
+    if (this._photoFor?.s === s) this.shadowRoot.querySelector(".photo-dialog")?.close();
   }
 
   // Seasonal firsts and other moments the family remembers, newest first.
@@ -2226,17 +3602,23 @@ class HatchPetCard extends HTMLElement {
 
   // --- Actions ----------------------------------------------------------------
 
-  // Instant feedback on every tap: the button stays pressed long enough to
-  // see, a ring bursts out, the phone ticks, and the pet perks up. The real
-  // reaction (a prop, or a refusal in the bubble) follows when HA confirms.
+  // Instant feedback for every control: a visible press and ring, a short
+  // haptic where the browser supports it, and a perk when the pet is involved.
+  // The real reaction (a prop, or a refusal in the bubble) follows on response.
   _tapped(button, s) {
-    button.classList.add("pressed");
+    if (!button || button.disabled) return;
+    button.classList.add("tap-feedback", "tapped", "pressed");
     setTimeout(() => button.classList.remove("pressed"), 160);
-    const ring = document.createElement("span");
-    ring.className = "burst";
-    button.append(ring);
-    setTimeout(() => ring.remove(), 500);
-    if (navigator.vibrate) navigator.vibrate(12);
+    setTimeout(() => button.classList.remove("tapped"), 400);
+    if (button.classList.contains("toy")) {
+      const ring = document.createElement("span");
+      ring.className = "burst";
+      button.append(ring);
+      setTimeout(() => ring.remove(), 500);
+    }
+    if (navigator.vibrate) {
+      try { navigator.vibrate(12); } catch (err) { /* Unsupported or blocked by the browser. */ }
+    }
     if (s?.pet) {
       s.pet.classList.remove("perk");
       void s.pet.offsetWidth; // restart the animation
@@ -2253,8 +3635,7 @@ class HatchPetCard extends HTMLElement {
     } catch (err) {
       button.classList.add("failed");
       setTimeout(() => button.classList.remove("failed"), 400);
-      s.bubble.textContent = "hmm, that didn't work";
-      s.sayUntil = Date.now() + 3500;
+      this._write(s, "hmm, that didn't work", 3500);
     } finally {
       button.classList.remove("pending");
     }
@@ -2272,11 +3653,11 @@ class HatchPetCard extends HTMLElement {
 
   _startGame(s, button) {
     this._tapped(button, s);
+    this._clearAsk(s); // a game takes the screen
     const energy = Number.parseFloat(this._state(s, "sensor.energy")?.state);
     const refusal = s.asleep ? REFUSALS.asleep : energy < 15 ? REFUSALS.too_tired : null;
     if (refusal) {
-      s.bubble.textContent = refusal;
-      s.sayUntil = Date.now() + 3500;
+      this._write(s, refusal, 3500);
       return;
     }
     if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
@@ -2293,8 +3674,7 @@ class HatchPetCard extends HTMLElement {
       `${g.label}</button>`).join("");
     this._gameView(s, "pick");
     // A narrow card has room for one short line beside the close button.
-    s.bubble.textContent = this._card.classList.contains("compact") ? "pick a game!" : "what shall we play?";
-    s.sayUntil = Date.now() + 60000;
+    this._write(s, this._card.classList.contains("compact") ? "pick a game!" : "what shall we play?", 60000);
     let last = null;
     try {
       last = localStorage.getItem(LAST_GAME_KEY);
@@ -2340,24 +3720,24 @@ class HatchPetCard extends HTMLElement {
     this._gameView(s, kind);
     s.gameScore.textContent = "round 1/5";
     if (kind === "catch") {
-      s.bubble.textContent = "catch it! tap its side as it reaches me";
-      s.sayUntil = Date.now() + 60000;
+      this._write(s, "catch it! tap its side as it reaches me", 60000);
       s.gameBox.querySelector(".gl").focus({ preventScroll: true });
       setTimeout(() => this._catchRound(s), 900);
       return;
     }
     if (kind === "left_right") {
-      s.bubble.textContent = "left or right? guess where I'll go!";
+      this._write(s, "left or right? guess where I'll go!");
     } else {
       // Higher or Lower shows its first number before the first guess.
       s.game.busy = true;
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+      s.gameScore.textContent = "thinking…";
       const info = await this._playCall(s, { game: kind });
       if (!info) return;
       s.game.busy = false;
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
       this._showNumber(s, info.number);
-      s.bubble.textContent = "will the next one be higher or lower?";
+      this._write(s, "will the next one be higher or lower?");
     }
     s.sayUntil = Date.now() + 60000;
     s.gameBox.querySelector(".gl").focus({ preventScroll: true });
@@ -2385,7 +3765,8 @@ class HatchPetCard extends HTMLElement {
     }
     if (s.game !== game) return null; // stopped while waiting
     if (!info || info.result !== "ok") {
-      this._endGame(s, REFUSALS[info?.result] || "not now");
+      const refusal = REFUSALS[info?.result];
+      this._endGame(s, refusal ? this._lines(s, `REFUSALS.${info.result}`, refusal).text : "not now");
       return null;
     }
     return info;
@@ -2393,6 +3774,7 @@ class HatchPetCard extends HTMLElement {
 
   async _guess(s, side) {
     if (!s.game || s.game.busy || !s.game.kind) return;
+    this._tapped(s.gameBox.querySelector(side === "left" ? ".gl" : ".gr"), s);
     const kind = s.game.kind;
     if (kind === "catch") {
       this._catchTap(s, side);
@@ -2402,6 +3784,7 @@ class HatchPetCard extends HTMLElement {
     const guess = game.guesses[side === "left" ? 0 : 1];
     s.game.busy = true;
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+    s.gameScore.textContent = "thinking…";
     const info = await this._playCall(s, { game: kind, guess });
     if (!info) return;
     s.game.round = info.round;
@@ -2410,13 +3793,12 @@ class HatchPetCard extends HTMLElement {
       this._showNumber(s, info.number);
       this._animate(s, s.gameNum, "flip", 300);
       this._animate(s, s.pet, "perk", 300);
-      s.bubble.textContent = info.correct ? `yes! ${info.number}` : `nope, ${info.number}!`;
+      this._write(s, info.correct ? `yes! ${info.number}` : `nope, ${info.number}!`);
     } else {
       s.pet.classList.add(`go-${info.went}`);
-      s.bubble.textContent = info.correct ? "yes! you found me" : `nope, I went ${info.went}!`;
+      this._write(s, info.correct ? "yes! you found me" : `nope, I went ${info.went}!`);
     }
     s.gameScore.textContent = `round ${info.round}/${info.rounds} · ${info.wins} right`;
-    if (navigator.vibrate && info.correct) navigator.vibrate([12, 40, 12]);
     setTimeout(() => {
       s.pet.classList.remove("go-left", "go-right");
       if (!s.game) return;
@@ -2429,14 +3811,15 @@ class HatchPetCard extends HTMLElement {
       s.game.busy = false;
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
-      s.bubble.textContent = kind === "higher_lower" ? "higher or lower?" : "again! left or right?";
+      this._write(s, kind === "higher_lower" ? "higher or lower?" : "again! left or right?");
     }, 900);
   }
 
   // --- Seasons --------------------------------------------------------------
 
   // The season's pieces in the scene (behind the pet): a lantern by its side,
-  // cobwebs in the corners, a sweet. Drawn again only when something changes.
+  // cobwebs in the corners, a sweet, falling leaves. Drawn again only when
+  // something changes.
   _renderSeason(s) {
     const season = seasonNow(this._config);
     const part = season && seasonPart(season, s.worldKey);
@@ -2467,16 +3850,26 @@ class HatchPetCard extends HTMLElement {
       img.src = src(name);
       s.seasonBox.append(img);
     };
-    if (part.lantern) {
-      add(dailyPick(season.lanterns || ["pumpkin"], season.key), `lantern lantern-${part.lantern}`);
+    if (part.lantern && season.lanterns) {
+      add(dailyPick(season.lanterns, season.key), `lantern lantern-${part.lantern}`);
     }
-    for (const side of part.web || []) add("web", `web ${side}`);
-    if (part.sweets) add("sweet", "sweet");
+    if (season.corner) for (const side of part.corners || []) add(season.corner, `corner ${season.corner} ${side}`);
+    if (part.sweets && season.sweet) add(season.sweet, `sweet ${season.sweet}`);
+    // Leaves drift down, each on its own path and pace.
+    if (season.leaves) {
+      for (let i = 0; i < 6; i++) {
+        add(`leaf_${(i % 3) + 1}`, "leaf");
+        const leaf = s.seasonBox.lastChild;
+        leaf.style.left = `${8 + i * 15 + Math.random() * 6}%`;
+        leaf.style.setProperty("--leaf-ms", `${8 + Math.random() * 5}s`);
+        leaf.style.setProperty("--leaf-delay", `${-Math.random() * 12}s`);
+      }
+    }
   }
 
   // Now and then, a costume moment: the season's hat on the pet's head and a
   // seasonal line. On the treat day, the first visit gets "trick or treat!".
-  // Bats flit across at night (and by day where the world says so).
+  // Bats (geese) cross at night, and by day where the world says so.
   _seasonTick(s) {
     const season = seasonNow(this._config);
     if (!season || !s.species) return;
@@ -2485,45 +3878,49 @@ class HatchPetCard extends HTMLElement {
     const now = Date.now();
     const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const part = seasonPart(season, s.worldKey);
-    if (!s.nextBat) s.nextBat = now + 6000 + Math.random() * 10000;
-    if (now >= s.nextBat) {
-      const [lo, hi] = SEASON_BAT_MS;
-      s.nextBat = now + lo + Math.random() * (hi - lo);
-      const dark = s.screen.classList.contains("night") || s.screen.classList.contains("dim");
-      if (!calm && (dark || part.dayBats)) this._seasonBat(s, season);
+    const dark = s.screen.classList.contains("night") || s.screen.classList.contains("dim");
+    if (season.flyer) {
+      if (!s.nextFlyer) s.nextFlyer = now + 6000 + Math.random() * 10000;
+      if (now >= s.nextFlyer) {
+        const [lo, hi] = SEASON_FLYER_MS;
+        s.nextFlyer = now + lo + Math.random() * (hi - lo);
+        if (!calm && (dark || part.dayFlyers)) this._seasonFlyer(s, season);
+      }
     }
-    if (part.witch && !s.nextWitch) s.nextWitch = now + 20000 + Math.random() * 40000;
-    if (part.witch && now >= s.nextWitch) {
-      const [lo, hi] = SEASON_WITCH_MS;
-      s.nextWitch = now + lo + Math.random() * (hi - lo);
-      const dark = s.screen.classList.contains("night") || s.screen.classList.contains("dim");
-      if (!calm && dark) this._seasonFly(s, season, "witch", "switch", 7500);
+    if (season.nightFlyer && part.nightFlyer) {
+      if (!s.nextNightFlyer) s.nextNightFlyer = now + 20000 + Math.random() * 40000;
+      if (now >= s.nextNightFlyer) {
+        const [lo, hi] = SEASON_NIGHT_FLYER_MS;
+        s.nextNightFlyer = now + lo + Math.random() * (hi - lo);
+        const { art, cls, ms } = season.nightFlyer;
+        if (!calm && dark) this._seasonFly(s, season, art, cls, ms, { ltr: true });
+      }
     }
     if (!this._free(s) || s.pet.classList.contains("hop")) return;
     const today = new Date();
     // The countdown, on the first look of the day.
-    if (season.countdown && season.treat && !s.counted) {
+    const treatOn = season.treat && seasonDate(season.treat, today.getFullYear());
+    if (season.countdown && treatOn && !s.counted) {
       s.counted = true;
-      const treat = new Date(today.getFullYear(), season.treat[0] - 1, season.treat[1]);
+      const treat = new Date(today.getFullYear(), treatOn[0] - 1, treatOn[1]);
       const days = Math.round((treat - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
       if (days > 0 && days <= 7 && oncePerDay(`count-${season.key}-${s.ids?.device}`)) {
-        s.bubble.textContent = days === 1 ? `${season.countdown} is tomorrow!!` : `${days} sleeps till ${season.countdown}!`;
-        s.sayUntil = now + 4500;
+        this._speak(s, days === 1 ? `${season.countdown} is tomorrow!!` : `${days} sleeps till ${season.countdown}!`, 4500);
         this._animate(s, s.pet, "perk", 320);
         return;
       }
     }
-    if (season.ghost && !calm) {
-      if (!s.nextGhost) s.nextGhost = now + 60000 + Math.random() * 60000;
-      if (now >= s.nextGhost) {
-        const [lo, hi] = SEASON_GHOST_MS;
-        s.nextGhost = now + lo + Math.random() * (hi - lo);
-        this._seasonGhost(s, season);
+    if (season.visitor && !calm) {
+      if (!s.nextVisitor) s.nextVisitor = now + 60000 + Math.random() * 60000;
+      if (now >= s.nextVisitor) {
+        const [lo, hi] = SEASON_VISITOR_MS;
+        s.nextVisitor = now + lo + Math.random() * (hi - lo);
+        this._seasonVisitor(s, season);
         return;
       }
     }
     if (this._hatSpot(s) === null) return; // a pose no hat can sit on: wait for the next
-    const treatDay = season.treat && today.getMonth() + 1 === season.treat[0] && today.getDate() === season.treat[1];
+    const treatDay = treatOn && today.getMonth() + 1 === treatOn[0] && today.getDate() === treatOn[1];
     if (treatDay && !s.treated) {
       s.treated = true;
       const key = `hatch-treat-${season.key}-${s.ids?.device}-${today.toDateString()}`;
@@ -2535,18 +3932,79 @@ class HatchPetCard extends HTMLElement {
         // no storage: once per page load
       }
       if (fresh) {
-        this._costume(s, season, "trick or treat!");
+        this._costume(s, season, season.treatLine || pick(season.lines));
         setTimeout(() => this._seasonTreat(s, season), 1600);
         return;
       }
     }
+    if (this._state(s, "sensor.life_stage")?.attributes.birthday) return; // the party's day
     if (!s.nextCostume) s.nextCostume = now + 8000 + Math.random() * 12000;
     if (now < s.nextCostume) return;
     const [lo, hi] = SEASON_COSTUME_MS;
     s.nextCostume = now + lo + Math.random() * (hi - lo);
     const fresh = season.costumes && oncePerDay(`costume-${season.key}-${s.ids?.device}`);
-    this._costume(s, season, fresh ? "new costume today! do you like it?" : pick(season.lines));
-    if (fresh) this._chirp(s, "spooky");
+    const line = fresh ? { text: "new costume today! do you like it?", baby: false }
+      : this._lines(s, `season.${season.key}`, pick(season.lines));
+    this._costume(s, season, line.text, !line.baby);
+    if (fresh && season.chirp) this._chirp(s, season.chirp);
+  }
+
+  // Its yearly birthday (the server's date): confetti and the party hat at
+  // the first look of the day on this device (a tablet left on overnight too:
+  // the day turning starts it), then the hat now and then. On a holiday's own
+  // day that holiday's costume wins: confetti, no party hat.
+  _partyTick(s) {
+    if (!this._state(s, "sensor.life_stage")?.attributes.birthday) return;
+    if (!this._free(s) || s.pet.classList.contains("hop")) return;
+    const season = seasonNow(this._config);
+    const today = new Date();
+    const treatOn = season?.treat && seasonDate(season.treat, today.getFullYear());
+    const treatDay = treatOn && today.getMonth() + 1 === treatOn[0] && today.getDate() === treatOn[1];
+    const now = Date.now();
+    if (this._partyFirst(s)) {
+      this._confetti(s);
+      if (!treatDay) this._costume(s, PARTY, "party hat on! ♪"); // the visit says "it's my birthday!!"
+      s.nextParty = now + SEASON_COSTUME_MS[0];
+      return;
+    }
+    if (treatDay) return;
+    if (!s.nextParty) s.nextParty = now + SEASON_COSTUME_MS[0];
+    if (now < s.nextParty) return;
+    const [lo, hi] = SEASON_COSTUME_MS;
+    s.nextParty = now + lo + Math.random() * (hi - lo);
+    this._costume(s, PARTY, pick(PARTY.lines));
+  }
+
+  // The first party moment of this birthday on this device (keyed by the
+  // birthday itself, not the browser's date, which may be another time zone's).
+  _partyFirst(s) {
+    const stage = this._state(s, "sensor.life_stage")?.attributes || {};
+    const key = `hatch-party-${s.ids?.device}-${stage.hatched_on}-${stage.birthday?.years}`;
+    try {
+      if (localStorage.getItem(key)) return false;
+      localStorage.setItem(key, "1");
+    } catch (err) {
+      if (this._parties?.has(key)) return false;
+      (this._parties ??= new Set()).add(key);
+    }
+    return true;
+  }
+
+  _confetti(s) {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const box = document.createElement("div");
+    box.className = "confetti";
+    box.setAttribute("aria-hidden", "true");
+    const colors = ["#f06e96", "#ffd64d", "#5ca8dc", "#8fd17a", "#fffdf5"];
+    for (let i = 0; i < 18; i++) {
+      const bit = document.createElement("i");
+      bit.style.setProperty("--x", `${Math.random() * 100}%`);
+      bit.style.setProperty("--d", `${Math.random() * 0.9}s`);
+      bit.style.setProperty("--c", colors[i % colors.length]);
+      box.append(bit);
+    }
+    s.screen.append(box);
+    setTimeout(() => box.remove(), 3600);
   }
 
   // Where a hat sits: the top of the head in the frame on show, found by going
@@ -2610,7 +4068,7 @@ class HatchPetCard extends HTMLElement {
   }
 
   // The hat sits on top of the head, brim sunk in a little.
-  _costume(s, season, line) {
+  _costume(s, season, line, catchy = true) {
     const head = s.species?.head?.[s.drawn];
     if (!head) return; // no head point (an egg): no hat
     s.screen.querySelector(".costume")?.remove();
@@ -2639,39 +4097,51 @@ class HatchPetCard extends HTMLElement {
     box.append(hat);
     s.screen.appendChild(box);
     s.flairUntil = Date.now() + FLAIR_MS + 1800;
-    s.bubble.textContent = line;
-    s.sayUntil = Date.now() + 4000;
+    this._speak(s, line, 4000, { catch: catchy });
     this._animate(s, s.pet, "perk", 320);
     setTimeout(() => box.remove(), FLAIR_MS + 1800);
   }
 
-  // Trick or treat: a sweet pops up at its feet.
+  // Trick or treat: a sweet pops up at its feet. At Thanksgiving, the pet
+  // thanks whoever cared for it most lately.
   _seasonTreat(s, season) {
     const at = this._flairAnchors(s);
     const box = s.screen.querySelector(".costume");
     if (!box) return;
-    const sweet = document.createElement("div");
-    sweet.className = "fx pop";
-    sweet.innerHTML = `<img src="${BASE}/ui/season_${season.key}_sweet.png?v=${VERSION}" alt="">`;
-    Object.assign(sweet.style, { left: `${at.cx + at.half * 1.1}px`, top: `${at.fy}px`, width: `${48 * at.ks}px` });
-    box.append(sweet);
+    if (season.sweet) {
+      const sweet = document.createElement("div");
+      sweet.className = "fx pop";
+      sweet.innerHTML = `<img src="${BASE}/ui/season_${season.key}_${season.sweet}.png?v=${VERSION}" alt="">`;
+      Object.assign(sweet.style, { left: `${at.cx + at.half * 1.1}px`, top: `${at.fy}px`, width: `${48 * at.ks}px` });
+      box.append(sweet);
+    }
     this._sparkle(s);
-    s.bubble.textContent = "a treat! thank you!! ♪";
-    s.sayUntil = Date.now() + 3500;
+    this._speak(s, season.thanks ? this._thanks(s) : "a treat! thank you!! ♪", 3500);
   }
 
-  _seasonBat(s, season) {
-    this._seasonFly(s, season, ["bat_1", "bat_2"], "sbat", 5200);
+  // Thanks to everyone: never ranking who did the most.
+  _thanks() {
+    return "thank you all for taking care of me ♥";
+  }
+
+  // The season's flyer: one, or a flock in a V, from one side.
+  _seasonFlyer(s, season) {
+    const { art, cls, ms, flock = 1 } = season.flyer;
+    const ltr = Math.random() < 0.5;
+    const top = 8 + Math.random() * 22;
+    for (let i = 0; i < flock; i++) {
+      const lag = Math.abs(i - (flock - 1) / 2); // the leader in the middle, ahead
+      setTimeout(() => this._seasonFly(s, season, art, cls, ms, { ltr, top: top + lag * 6 }), lag * 450);
+    }
   }
 
   // Something crosses the scene (a bat, the witch, the ghost): one image or
-  // two flapping frames, from a random side unless it's the witch (left to right).
-  _seasonFly(s, season, art, cls, ms) {
+  // two flapping frames, from a random side unless told which.
+  _seasonFly(s, season, art, cls, ms, { ltr = Math.random() < 0.5, top = null, walk = false } = {}) {
     const el = document.createElement("div");
-    const ltr = cls === "switch" || Math.random() < 0.5;
-    el.className = `sfly ${cls} ${ltr ? "ltr" : "rtl"}`;
+    el.className = `sfly ${cls} ${ltr ? "ltr" : "rtl"}${walk ? " walk" : ""}`;
     el.style.setProperty("--fly-ms", `${ms}ms`);
-    if (cls === "sbat") el.style.top = `${8 + Math.random() * 22}%`;
+    if (top !== null) el.style.top = `${top}%`;
     const frames = Array.isArray(art) ? art : [art];
     el.innerHTML = frames.map((n) =>
       `<img src="${BASE}/ui/season_${season.key}_${n}.png?v=${VERSION}" alt="">`).join("");
@@ -2681,20 +4151,19 @@ class HatchPetCard extends HTMLElement {
     return el;
   }
 
-  // A friendly ghost floats by; the pet jumps, then giggles.
-  _seasonGhost(s, season) {
-    const ms = 6500;
-    this._seasonFly(s, season, ["ghost_1", "ghost_2"], "sghost", ms);
+  // A visitor comes by (a friendly ghost floats, a turkey walks); the pet
+  // startles, then greets it.
+  _seasonVisitor(s, season) {
+    const { art, cls, ms, startle, jump, greet } = season.visitor;
+    this._seasonFly(s, season, art, cls, ms, { walk: cls === "sturkey" });
     s.flairUntil = Date.now() + ms; // nothing else meanwhile
     setTimeout(() => {
-      s.bubble.textContent = "eep!!";
-      s.sayUntil = Date.now() + 1800;
-      this._animate(s, s.pet, "sulk", 800);
-      this._chirp(s, "spooky");
+      this._write(s, startle, 1800);
+      this._animate(s, s.pet, jump, jump === "perk" ? 320 : 800);
+      if (season.chirp) this._chirp(s, season.chirp);
     }, 1400);
     setTimeout(() => {
-      s.bubble.textContent = pick(["hehe, hi ghost!", "oh, it's just a friendly ghost~", "boo to you too!"]);
-      s.sayUntil = Date.now() + 3000;
+      this._speak(s, pick(greet), 3000);
       this._animate(s, s.pet, "perk", 320);
     }, 3400);
   }
@@ -2945,9 +4414,8 @@ class HatchPetCard extends HTMLElement {
     s.catchEl.hidden = true;
     g.round += 1;
     g.wins += ok ? 1 : 0;
-    s.bubble.textContent = line;
+    this._write(s, line);
     if (ok) this._pounce(s);
-    if (navigator.vibrate && ok) navigator.vibrate([12, 40, 12]);
     s.gameScore.textContent = `round ${g.round}/${CATCH.rounds} · ${g.wins} caught`;
     setTimeout(() => {
       s.pet.classList.remove("go-left", "go-right");
@@ -2991,7 +4459,7 @@ class HatchPetCard extends HTMLElement {
     if (focused) s.buttons.play?.focus({ preventScroll: true });
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
     s.pet.classList.remove("go-left", "go-right");
-    if (line) s.bubble.textContent = line;
+    if (line) this._write(s, line);
     s.sayUntil = line ? Date.now() + 4000 : 0;
   }
 
@@ -3059,6 +4527,10 @@ class HatchPetCardEditor extends HTMLElement {
     }));
   }
 }
+
+// For scripts/card-check and scripts/costume-preview.
+HatchPetCard.seasons = SEASONS;
+HatchPetCard.seasonNow = seasonNow;
 
 // The integration loads this file on every dashboard. If an old manual
 // resource also loads it, keep the first definition instead of erroring.

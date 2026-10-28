@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from homeassistant.components import persistent_notification
+from homeassistant.components import persistent_notification, websocket_api
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.const import ATTR_ENTITY_ID, Platform
@@ -38,15 +38,18 @@ from .const import (
     DOMAIN,
     FRONTEND_URL,
     SERVICE_FAST_FORWARD,
+    SERVICE_MY_DAY,
     SERVICE_NOTIFY_ME,
     SERVICE_PLAY_GAME,
     SERVICE_SHARE_NEWS,
+    SERVICE_VISIT,
     STORE_VERSION,
     VERSION,
 )
 from .coordinator import PetConfigEntry, PetCoordinator, PetStore
 from .home import news_text
 from .model import GAMES
+from .people import ANSWERS, People
 
 PLATFORMS = [
     Platform.BINARY_SENSOR,
@@ -65,6 +68,13 @@ NOTIFY_ME_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
         vol.Required(ATTR_ENABLED): cv.boolean,
+    }
+)
+VISIT_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        # Lines the card already queued at this look (an older card sends none).
+        vol.Optional("queued", default=0): vol.All(vol.Coerce(int), vol.Range(0, 6)),
     }
 )
 PLAY_GAME_SCHEMA = vol.Schema(
@@ -109,6 +119,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
     # The version in the URL makes browsers fetch the new card after an update.
     add_extra_js_url(hass, f"{FRONTEND_URL}/{CARD_FILENAME}?v={VERSION}")
+    # What the pets know about each person, shared; and the loaded pets.
+    people = People(hass)
+    await people.async_load()
+    hass.data[DOMAIN] = {"people": people, "pets": {}}
+    websocket_api.async_register_command(hass, websocket_answer)
+    websocket_api.async_register_command(hass, websocket_forget_birthday)
+    websocket_api.async_register_command(hass, websocket_birthday_phone)
+    websocket_api.async_register_command(hass, websocket_baby_talk)
+    websocket_api.async_register_command(hass, websocket_photos)
 
     async def fast_forward(call: ServiceCall) -> ServiceResponse:
         entries: list[PetConfigEntry] = hass.config_entries.async_loaded_entries(DOMAIN)
@@ -156,6 +175,28 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             )
         await pet_of(call).async_set_notify(user_id, call.data[ATTR_ENABLED])
 
+    async def signed_in(call: ServiceCall) -> str | None:
+        """The person calling (None for a system user); nobody: an error."""
+        user_id = call.context.user_id
+        if user_id is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="not_signed_in"
+            )
+        user = await hass.auth.async_get_user(user_id)
+        return user_id if user is not None and not user.system_generated else None
+
+    async def visit(call: ServiceCall) -> ServiceResponse:
+        # The card says who's looking in. What the pet tells them comes back
+        # to them alone, in the response.
+        if user_id := await signed_in(call):
+            return await pet_of(call).async_visit(user_id, call.data["queued"])
+        return {"notes": []}
+
+    async def my_day(call: ServiceCall) -> None:
+        # Each person opts themselves in or out; nobody else.
+        if user_id := await signed_in(call):
+            await pet_of(call).async_set_my_day(user_id, call.data[ATTR_ENABLED])
+
     async def play_game(call: ServiceCall) -> ServiceResponse:
         kind = call.data[ATTR_GAME]
         guess = call.data.get(ATTR_GUESS)
@@ -190,6 +231,17 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
     hass.services.async_register(
         DOMAIN, SERVICE_NOTIFY_ME, notify_me, schema=NOTIFY_ME_SCHEMA
+    )
+
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_VISIT,
+        visit,
+        schema=VISIT_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_MY_DAY, my_day, schema=NOTIFY_ME_SCHEMA
     )
 
     hass.services.async_register(
@@ -233,12 +285,142 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     return True
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/answer",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("question"): vol.In([*ANSWERS, "birthday"]),
+        vol.Required("answer"): cv.string,
+    }
+)
+@websocket_api.async_response
+async def websocket_answer(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """An answer to a pet's question ("what's your favourite weather?").
+
+    A websocket command, not a service: a service call is an event on the bus,
+    and the recorder would keep the answer. Only for the person asking.
+    """
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    # Only a loaded pet: a disabled entry may still hold its old coordinator.
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    if msg["question"] != "birthday" and msg["answer"] not in ANSWERS[msg["question"]]:
+        connection.send_error(msg["id"], "invalid_answer", "Not an answer to that")
+        return
+    try:
+        await pet.async_answer(connection.user.id, msg["question"], msg["answer"])
+    except ValueError:
+        connection.send_error(msg["id"], "not_asked", "It didn't ask that")
+        return
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/forget_birthday",
+        vol.Required("entity_id"): cv.entity_id,
+    }
+)
+@websocket_api.async_response
+async def websocket_forget_birthday(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Forget the signed-in person's birthday (and don't ask again)."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    await pet.async_forget_birthday(connection.user.id)
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/birthday_phone",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_birthday_phone(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Whether the signed-in person's phone hears "happy birthday" (off by
+    default). A websocket command, so the choice stays off the event bus."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    await pet.async_set_birthday_phone(connection.user.id, msg["enabled"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/baby_talk",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_baby_talk(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Simpler words from babies and children on the signed-in person's cards
+    (off by default). A websocket command, so the choice stays off the event
+    bus."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    await pet.async_set_baby_talk(connection.user.id, msg["enabled"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/photos",
+        vol.Required("entity_id"): cv.entity_id,
+    }
+)
+@websocket_api.async_response
+async def websocket_photos(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The signed-in person's photos from this pet's family, for their journal.
+    A websocket command, so they reach only that person."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    connection.send_result(msg["id"], {"photos": pet.photos(connection.user.id)})
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
     """Wake the pet up."""
     coordinator = PetCoordinator(hass, entry)
     await coordinator.async_load()
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
+    hass.data[DOMAIN]["pets"][entry.entry_id] = coordinator
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.async_start_home()
     return True
@@ -246,6 +428,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
     """Put the pet away. The coordinator saves itself on shutdown."""
+    hass.data[DOMAIN]["pets"].pop(entry.entry_id, None)
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 

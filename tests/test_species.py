@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import re
 
 from PIL import Image
 import pytest
@@ -101,3 +102,25 @@ def test_every_trait_has_flair_art() -> None:
         assert (ui / f"flair_{trait}.png").exists() or (
             ui / f"flair_{trait}_1.png"
         ).exists(), trait
+
+
+@pytest.mark.parametrize("species", READY)
+def test_every_creature_has_a_voice(species: str) -> None:
+    """Its own sound (one word), a babble's pitch and pace, and 2-3 foods it likes."""
+    voice = json.loads((SPRITES / species / "species.json").read_text())["voice"]
+    assert re.fullmatch(r"[a-z]+", voice["sound"]), voice["sound"]
+    assert 330 <= voice["pitch"] <= 1200
+    assert 25 <= voice["pace"] <= 45
+    likes = voice["likes"]
+    assert 2 <= len(likes) <= 3 and len(set(likes)) == len(likes)
+    assert all(isinstance(x, str) and 0 < len(x) <= 16 for x in likes)
+
+
+def test_creatures_in_one_world_sound_different() -> None:
+    for key, world in WORLDS.items():
+        sounds = [
+            json.loads((SPRITES / s / "species.json").read_text())["voice"]["sound"]
+            for s in world.get("roster", [])
+            if s in READY
+        ]
+        assert len(set(sounds)) == len(sounds), key

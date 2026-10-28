@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 DOMAIN = "virtual_pet"
-VERSION = "0.29.1"  # keep in step with manifest.json (a test checks)
+VERSION = "0.35.0b1"  # keep in step with manifest.json (a test checks)
 LOGGER = logging.getLogger(__package__)
 
 CONF_BEDTIME = "bedtime"
@@ -23,6 +23,8 @@ SERVICE_PLAY_GAME = "play_game"
 ATTR_GUESS = "guess"
 ATTR_GAME = "game"
 SERVICE_SHARE_NEWS = "share_news"
+SERVICE_VISIT = "visit"
+SERVICE_MY_DAY = "my_day"
 ATTR_HEADLINE = "headline"
 ATTR_TOPIC = "topic"
 ATTR_HOURS = "hours"

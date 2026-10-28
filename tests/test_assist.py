@@ -152,7 +152,7 @@ async def test_privacy_keeps_the_sitter_quiet(
 ) -> None:
     pip.runtime_data.state.away = True
     response = await ask(hass, "VirtualPetStatus")
-    assert speech(response) == "Pip is asleep: zzz."
+    assert speech(response) == "Pip is asleep."
     response = await ask(hass, "VirtualPetCare", action="feed")
     assert speech(response) == "Pip is asleep."
 
@@ -239,3 +239,51 @@ async def test_example_sentences_with_the_built_in_agent(
     assert await say(hass, "lights out, Pip") == "Pip is settling down to sleep."
     # Not every "how is" is about the pet.
     assert "Pip" not in await say(hass, "how is the weather")
+
+
+async def test_the_pet_calls_a_friend_by_nickname(
+    hass: HomeAssistant, pip: MockConfigEntry
+) -> None:
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    pip.runtime_data.state.bonds[me.id] = {"points": 40, "nickname": "sunbeam"}
+    response = await ask(hass, "VirtualPetStatus", context=Context(user_id=me.id))
+    assert speech(response).startswith("Hi, sunbeam! Pip is ")
+    assert response.speech_slots["nickname"] == "sunbeam"
+    response = await ask(
+        hass, "VirtualPetCare", context=Context(user_id=me.id), action="feed"
+    )
+    assert speech(response) == "Pip is eating. Thanks, sunbeam!"
+    assert "sunbeam" not in speech(await ask(hass, "VirtualPetStatus"))
+
+
+def test_spoken_status_reads_well_aloud():
+    from custom_components.virtual_pet.intent import spoken_status
+
+    assert spoken_status("Pip", "cozy", "toasty by the fire~", [], "sunbeam") == (
+        "Hi, sunbeam! Pip is cozy: toasty by the fire."
+    )
+    # A reason that only repeats the mood isn't said twice.
+    assert spoken_status("Pip", "at the sitter's", "at the sitter's", [], None) == (
+        "Pip is at the sitter's."
+    )
+    assert spoken_status("Pip", "excited", "♪ dancing ♪", ["night owl"], None) == (
+        "Pip is excited: dancing. Traits: night owl."
+    )
+    assert "*" not in spoken_status("Pip", "egg", "*wiggle wiggle*", [], None)
+    assert spoken_status("Pip", "asleep", "zzz", [], None) == "Pip is asleep."
+    # Whole words: "on" inside "content" isn't a repeat.
+    assert spoken_status("Pip", "content", "on top of the world", [], None) == (
+        "Pip is content: on top of the world."
+    )
+    assert spoken_status("Pip", "cozy", "sunny ☀ and warm", [], None) == (
+        "Pip is cozy: sunny and warm."
+    )
+
+
+async def test_no_thanks_for_a_scold(hass: HomeAssistant, pip: MockConfigEntry) -> None:
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    pip.runtime_data.state.bonds[me.id] = {"points": 40, "nickname": "sunbeam"}
+    response = await ask(
+        hass, "VirtualPetCare", context=Context(user_id=me.id), action="scold"
+    )
+    assert "Thanks" not in speech(response)
