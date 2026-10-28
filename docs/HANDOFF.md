@@ -141,9 +141,11 @@ details before committing it.
   acorn cap (no skip lists; all seat on 13 creatures × 4 stages), a `harvest` chirp,
   and on the day "happy thanksgiving! ♥" then a thank-you to whoever gave the most care
   in the recent log (`_thanks`, first names only). The night lantern glow is
-  Halloween's only (`.s-halloween`). The art is stand-ins from
-  `art/seasonal/make_thanksgiving.py`; a redraw was asked of the Hatch API Art session
-  on 2026-10-28 (same names, canvases and anchoring), wanted before 14 November.
+  Halloween's only (`.s-halloween`). The art is the Hatch API Art session's redraw of
+  the stand-ins from `art/seasonal/make_thanksgiving.py` (2026-10-28, branch
+  `thanksgiving-art`, 19 of 19; cut from Sol's drawings, the geese placed by hand).
+  Checked on the card: every costume on 13 creatures × 4 stages, the turkey and
+  geese at night.
 - **Holiday mornings** (0.28.1): `notify.HOLIDAYS` maps a date to a holiday and
   `HOLIDAY_MORNINGS` its phone text; on that date the pet's first morning moment
   (`good_morning`, or waking at wake time) fires a `holiday` event, which notifies the

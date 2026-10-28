@@ -6,7 +6,8 @@ Stand-ins in the Halloween stand-ins' style (dark brown outline, two or three
 tones, 4 px art pixels) and on the same canvases as their Halloween
 counterparts, so the card places both alike: a hat's brim on the bottom edge,
 a walker's feet on the bottom edge, a flyer facing right. The Hatch API Art
-session is asked to redraw them at the same names, sizes and anchoring.
+session redrew all 19 on 2026-10-28 at the same names, sizes and anchoring; those
+are in frontend/ui. This script writes elsewhere, so a rerun never overwrites them.
 """
 
 from __future__ import annotations
