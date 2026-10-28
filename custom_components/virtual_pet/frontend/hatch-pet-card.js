@@ -174,12 +174,14 @@ const SEASONS = [
     treat: [10, 31], // the first visit of the day: trick or treat!
     countdown: "Halloween", // "3 sleeps till Halloween!" before the treat day
     // A costume a day (by pet and date); sink: how far into the head it sits,
-    // in frame pixels; width at the scene's scale.
+    // in frame pixels; width at the scene's scale; skip: creatures it doesn't
+    // suit (cat ears on a creature with its own ears, or on a bird, read wrong).
     costumes: [
       { art: "hat", sink: 7, width: 64 },
       { art: "pumpkin_cap", sink: 6, width: 60 },
-      { art: "cat_ears", sink: 12, width: 76 },
-      { art: "horns", sink: 10, width: 68 },
+      { art: "cat_ears", sink: 10, width: 76,
+        skip: ["bird", "kitten", "bunny", "deer", "bat", "squirrel", "lunamoth"] },
+      { art: "horns", sink: 9, width: 68, skip: ["bird", "deer"] },
     ],
     lanterns: ["pumpkin", "pumpkin_2", "pumpkin_3"], // a new face every day
     snack: "candy", // snacks are candy
@@ -2468,7 +2470,8 @@ class HatchPetCard extends HTMLElement {
     const scanned = own ? this._headTopAll(s, own[0], own[1]) : this._headTopAll(s, head[0], head[1]);
     const top = own ? Math.max(own[1], scanned ?? own[1]) : scanned;
     // Today's costume for this pet (the hat, without a list).
-    const costume = dailyPick(season.costumes || [{ art: "hat", sink: 7, width: 64 }], s.ids?.device);
+    const suits = (season.costumes || []).filter((c) => !c.skip?.includes(s.speciesId));
+    const costume = dailyPick(suits.length ? suits : [{ art: "hat", sink: 7, width: 64 }], s.ids?.device);
     const brim = top === null ? at.hy + 14 * at.ks : r.top - sr.top + (top + costume.sink) * k;
     const x = own ? r.left - sr.left + own[0] * k : at.hx;
     const box = document.createElement("div");

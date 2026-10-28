@@ -95,6 +95,11 @@ details before committing it.
   `species.json` `hat` points now exist for the deer, the axolotl (its gills rise above
   its crown) and the tarantula (the hat goes on its front body, by its face, not on its
   abdomen). Every costume was previewed on all 13 creatures × 4 stages, close up.
+  Costumes carry `skip` lists: no cat ears on creatures with their own ears, the bird
+  or the luna moth, no horns on the bird or deer (owner: ears on the bird were "a fail").
+  The ears and horns have a thin band. Costumes sit on the lowest head top across the
+  idle frames (`_headTopAll`). The preview script's injected creature can be undone by
+  the test pet's own update mid-shot; discard cells that show the wrong creature.
 - **Weather talk** (Tier 1 of `docs/plan-2026-10-27-real-time-connections.md`,
   merged in PR #10, released in 0.28.0): `weather` moments (`change`:
   rain_started, rain_stopped, rainbow, snow_started, sun_out, hot, cold) from

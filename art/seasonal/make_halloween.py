@@ -294,9 +294,9 @@ def ears(kind: str) -> list[list[str]]:
                 for x in range(w):
                     if abs(x - cx) <= half - 1.2:
                         grid[y][x] = inner
-    for y in (h - 2, h - 1):
-        for x in range(1, w - 1):
-            grid[y][x] = band
+    for x in range(2, w - 2):  # a thin band, so it reads as ears, not a bar
+        grid[h - 1][x] = band
+    del grid[h - 2]
     return outline(grid)
 
 
@@ -359,7 +359,7 @@ HORNS = [
     ".RRx........xRR.",
     "..RRx......xRR..",
     "..RRRx....xRRR..",
-    "xxxxxxxxxxxxxxxx",
+    "..xxxxxxxxxxxx..",
 ]
 
 CANDY = [
