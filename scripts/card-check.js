@@ -802,6 +802,15 @@ async function main() {
     return asked;
   });
   console.log(`note: a question was ${hadQuestion ? "" : "not "}open before the idle check`);
+  // A call (a need, or a whine) keeps idle life away by design: show the pet
+  // content for this check, as if it had been answered (the integration's next
+  // update, minutes away, puts the real mood back).
+  if (await evaluate((id) => document.querySelector("home-assistant").hass.states[id]?.state === "calling",
+    pet["sensor.mood"])) {
+    console.log("note: the pet was calling; shown content for the idle check");
+    await inject(pet["sensor.mood"], { state: "content" });
+    await page.waitForTimeout(800);
+  }
   const quietBubble = await bubble();
   let idle = "";
   // The first idle move is due 10-35 s in, but it's skipped if the pet is busy
