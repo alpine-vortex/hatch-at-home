@@ -31,13 +31,31 @@ SAVE_DELAY = 60
 
 # Questions a pet may ask, and the answers that are remembered (the rest are
 # answered on the card and kept nowhere).
-QUESTIONS = ("slept", "how_day", "fav_weather", "fav_season", "dream", "guess")
+QUESTIONS = (
+    "slept",
+    "how_day",
+    "fav_weather",
+    "fav_season",
+    "dream",
+    "guess",
+    "birthday",
+    "catchphrase",
+)
 ANSWERS: dict[str, tuple[str, ...]] = {
     "fav_weather": ("sun", "rain", "snow", "storms"),
     "fav_season": ("spring", "summer", "autumn", "winter"),
     "dream": ("stars", "sea", "snacks", "you"),
     "guess": ("rain", "sun"),
 }
+# One-time questions about the person, in the order they're asked, with the bond
+# level each needs. (The pet's own one-time question, its catchphrase, comes from
+# the coordinator: its tries live in the pet's bond.)
+ONCE = (
+    ("fav_weather", R.ASK_LIKES_LEVEL),
+    ("fav_season", R.ASK_LIKES_LEVEL),
+    ("birthday", R.BIRTHDAY_ASK_LEVEL),
+)
+ONCE_KINDS = {kind for kind, _ in ONCE} | {"catchphrase"}
 # The later slot's rotation by date, so no question crowds out the others.
 ROTATION = ("how_day", "dream", "guess")
 # Zones worth a word when someone comes back from one (by a word in its name).
@@ -186,37 +204,27 @@ def choose_question(
     has_forecast: bool,
     came_home: str | None,
     rested: bool,
+    pet_once: tuple[str, ...] = (),
 ) -> str | None:
     """The question to ask on this visit, or None: at most one in the morning
-    (before noon) and one later, per person per day, across every pet."""
+    (before noon) and one later, per person per day, across every pet. A
+    one-time question that's due comes first in the later slot; pet_once are
+    the pet's own still open for this person."""
     if level < R.ASK_LEVEL:
         return None
     asked = person.get("asked") or {}
     if asked.get("day") != today:
         asked = {"day": today}
-    likes = person.get("likes") or {}
     if hour < 12:
         if "morning" in asked or rested or hour < R.ASK_MORNING_FROM:
             return None
         return "slept"
     if "later" in asked:
         return None
+    if once := once_due(person, today, hour, level, pet_once):
+        return once
     if came_home in DAY_ZONES or came_home == "home":
         return "how_day"  # back from work or school, or a friend just home
-    if (
-        level >= R.ASK_LIKES_LEVEL
-        and R.ASK_LIKES_FROM <= hour < R.ASK_LIKES_UNTIL
-        and "morning" not in asked
-    ):
-        tries = person.get("likes_asked") or {}
-        asked_today = any(today in days for days in tries.values())
-        for kind in ("fav_weather", "fav_season"):
-            if kind in likes:
-                continue
-            days = tries.get(kind, [])
-            if asked_today or not _may_ask_again(days, today):
-                break  # one at a time, and the season only after the weather
-            return kind
     kind = rotation(date.fromisoformat(today))
     if kind == "how_day" and hour >= R.ASK_DAY_FROM:
         return "how_day"
@@ -225,6 +233,44 @@ def choose_question(
     if kind == "guess" and has_forecast and hour >= R.ASK_GUESS_FROM:
         return "guess"
     return None
+
+
+def once_due(
+    person: dict[str, Any],
+    today: str,
+    hour: int,
+    level: int,
+    pet_once: tuple[str, ...] = (),
+) -> str | None:
+    """A one-time question due now: each has its own tries, so one left
+    unanswered never holds up the next; a few days apart per person."""
+    if not R.ASK_LIKES_FROM <= hour < R.ASK_LIKES_UNTIL:
+        return None
+    last = person.get("once_last")
+    if last and (date.fromisoformat(today) - date.fromisoformat(last)).days < (
+        R.ASK_ONCE_GAP_DAYS
+    ):
+        return None
+    likes = person.get("likes") or {}
+    tries = person.get("likes_asked") or {}
+    done = {*likes, *(["birthday"] if person.get("birthday") else [])}
+    if person.get("birthday_skipped"):
+        done.add("birthday")
+    for kind, need in ONCE:
+        if (
+            level >= need
+            and kind not in done
+            and _may_ask_again(tries.get(kind, []), today)
+        ):
+            return kind
+    return pet_once[0] if pet_once else None
+
+
+def mark_once(person: dict[str, Any], kind: str, today: str) -> None:
+    """A one-time question was asked today (its tries; the gap to the next)."""
+    if kind in dict(ONCE):
+        person.setdefault("likes_asked", {}).setdefault(kind, []).append(today)
+    person["once_last"] = today
 
 
 def _may_ask_again(days: list[str], today: str) -> bool:

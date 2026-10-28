@@ -316,9 +316,14 @@ SEASON_TROPICS_LATITUDE = 23.5  # nearer the equator: no season talk
 ASK_LEVEL = 2  # questions ("how was your day?") from this bond level
 ASK_MORNING_FROM = 5  # "did you sleep well?" from this hour to noon
 ASK_LIKES_LEVEL = 3  # "what's your favourite weather?", then season
-ASK_LIKES_FROM, ASK_LIKES_UNTIL = 11, 16
+# One-time questions (favourite weather and season, your birthday, its
+# catchphrase): in the later slot, in this window, a few days apart.
+ASK_LIKES_FROM, ASK_LIKES_UNTIL = 11, 20
 ASK_LIKES_TRIES = 2  # an unanswered one-time question: asked once more...
 ASK_LIKES_AGAIN_DAYS = 14  # ...this many days later, then never
+ASK_ONCE_GAP_DAYS = 3  # days between one person's one-time questions
+BIRTHDAY_ASK_LEVEL = 4  # "when's your birthday?"
+CATCHPHRASE_LEVEL = 7  # "what should I say at the end of things?"
 ASK_DAY_FROM = 16  # "how was your day?" on its rotation day
 ASK_DREAM_BEFORE_BED_MINUTES = 180  # "what should I dream about?"
 ASK_GUESS_FROM = 17  # "rain or sun tomorrow?"

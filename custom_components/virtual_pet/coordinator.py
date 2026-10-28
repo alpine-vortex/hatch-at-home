@@ -1299,8 +1299,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if kind is None:
             return None
         P.mark_asked(person, today, hour)
-        if kind in ("fav_weather", "fav_season"):
-            person.setdefault("likes_asked", {}).setdefault(kind, []).append(today)
+        if kind in P.ONCE_KINDS:
+            P.mark_once(person, kind, today)
         self.people.save()
         return kind
 

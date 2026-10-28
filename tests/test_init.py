@@ -1992,6 +1992,9 @@ async def test_back_from_the_gym_then_how_was_your_day(
     coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
     coordinator.state.wish["kind"] = "bath"
     coordinator.people.person(me.id)["my_day"] = True
+    coordinator.people.person(me.id).update(
+        likes={"fav_weather": "sun", "fav_season": "autumn"}, birthday_skipped=True
+    )  # asked before
     for place in ("not_home", "Gym", "not_home", "home"):
         hass.states.async_set("person.sam", place, {"user_id": me.id})
         await settle(hass, freezer, 60)
@@ -2245,7 +2248,10 @@ async def test_coming_home_from_anywhere_still_counts_the_visit(
         dt_util.utcnow().timestamp(),
         bonds={me.id: {"points": model.R.BOND_LEVELS[3], "since": "2026-10-28"}},
     )
-    await setup(hass)
+    config = await setup(hass)
+    config.runtime_data.people.person(me.id).update(
+        likes={"fav_weather": "sun", "fav_season": "autumn"}, birthday_skipped=True
+    )  # asked before
     hass.states.async_set("person.sam", "not_home", {"user_id": me.id})
     await settle(hass, freezer, 60)
     hass.states.async_set("person.sam", "home", {"user_id": me.id})
@@ -2340,6 +2346,9 @@ async def test_two_pets_looked_at_together_say_a_person_line_once(
         pets.append(config.runtime_data)
         pets[-1].state.wish = None
     pets[0].people.person(me.id)["my_day"] = True
+    pets[0].people.person(me.id).update(
+        likes={"fav_weather": "sun", "fav_season": "autumn"}, birthday_skipped=True
+    )  # asked before
     # Reading the phones' history awaits the recorder: let the other pet run then.
     from custom_components.virtual_pet import wellbeing
 

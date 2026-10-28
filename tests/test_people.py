@@ -67,24 +67,50 @@ def test_one_question_a_morning_and_one_later():
     assert ask(person, level=1, today="2026-10-30", hour=8) is None
 
 
-def test_the_likes_come_once_each_on_different_days():
+def test_the_likes_come_once_each_days_apart():
     person: dict = {}
     assert ask(person, hour=12) == "fav_weather"
-    person["likes_asked"] = {"fav_weather": ["2026-10-28"]}
+    P.mark_once(person, "fav_weather", "2026-10-28")
     person["likes"] = {"fav_weather": "rain"}
-    assert ask(person, hour=12) != "fav_season"  # not the same day
-    assert ask(person, today="2026-10-29", hour=12) == "fav_season"
-    assert ask(person, today="2026-10-29", hour=12, level=2) is None
+    assert ask(person, today="2026-10-29", hour=12) != "fav_season"  # days apart
+    assert ask(person, today="2026-10-31", hour=12) == "fav_season"
+    assert ask(person, today="2026-10-31", hour=12, level=2) is None
 
 
 def test_an_unanswered_favourite_is_asked_once_more_weeks_later():
-    person: dict = {"likes_asked": {"fav_weather": ["2026-10-28"]}}
+    person: dict = {}
+    P.mark_once(person, "fav_weather", "2026-10-28")
     assert ask(person, today="2026-10-29", hour=12) != "fav_weather"
+    # It doesn't hold up the season (it used to: the stall).
+    assert ask(person, today="2026-10-31", hour=12) == "fav_season"
+    P.mark_once(person, "fav_season", "2026-10-31")
     assert ask(person, today="2026-11-11", hour=12) == "fav_weather"
-    person["likes_asked"]["fav_weather"].append("2026-11-11")
-    assert ask(person, today="2026-12-30", hour=12) != "fav_weather"  # never again
-    # The season waits for the weather question to be done with.
-    assert ask(person, today="2026-12-30", hour=12) != "fav_season"
+    P.mark_once(person, "fav_weather", "2026-11-11")
+    assert ask(person, today="2026-11-14", hour=12) == "fav_season"
+    P.mark_once(person, "fav_season", "2026-11-14")
+    later = ask(person, today="2026-12-30", hour=12)
+    assert later not in ("fav_weather", "fav_season")  # never again
+
+
+def test_a_one_time_question_comes_first_in_the_evening_too():
+    """Someone out all day, home at six: asked after the morning's question."""
+    person: dict = {"likes": {"fav_weather": "sun", "fav_season": "autumn"}}
+    P.mark_asked(person, "2026-10-28", 8)  # "did you sleep well?" this morning
+    assert ask(person, hour=18, came_home="work", level=4) == "birthday"
+    assert ask(person, hour=21, came_home="work", level=4) == "how_day"  # too late
+    person["birthday_skipped"] = True
+    assert ask(person, hour=18, came_home="work", level=4) == "how_day"
+
+
+def test_the_pets_own_one_time_question_comes_after_the_persons():
+    person: dict = {"likes": {"fav_weather": "sun", "fav_season": "autumn"}}
+    assert ask(person, hour=12, level=7, pet_once=("catchphrase",)) == "birthday"
+    person["birthday"] = "03-14"
+    assert ask(person, hour=12, level=7, pet_once=("catchphrase",)) == "catchphrase"
+    P.mark_once(person, "catchphrase", "2026-10-28")
+    assert ask(
+        person, today="2026-10-29", hour=12, level=7, pet_once=("catchphrase",)
+    ) != ("catchphrase")
 
 
 def test_the_later_question_rotates_by_day():
