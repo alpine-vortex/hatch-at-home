@@ -125,6 +125,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.data[DOMAIN] = {"people": people, "pets": {}}
     websocket_api.async_register_command(hass, websocket_answer)
     websocket_api.async_register_command(hass, websocket_forget_birthday)
+    websocket_api.async_register_command(hass, websocket_birthday_phone)
 
     async def fast_forward(call: ServiceCall) -> ServiceResponse:
         entries: list[PetConfigEntry] = hass.config_entries.async_loaded_entries(DOMAIN)
@@ -337,6 +338,30 @@ async def websocket_forget_birthday(
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
     await pet.async_forget_birthday(connection.user.id)
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/birthday_phone",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_birthday_phone(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Whether the signed-in person's phone hears "happy birthday" (off by
+    default). A websocket command, so the choice stays off the event bus."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    await pet.async_set_birthday_phone(connection.user.id, msg["enabled"])
     connection.send_result(msg["id"])
 
 

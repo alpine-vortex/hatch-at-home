@@ -1,10 +1,11 @@
-# Handoff (2026-10-28, sixth session, after phase 3)
+# Handoff (2026-10-28, end of the sixth session)
 
 Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's branch
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
-release **0.32.0** (2026-10-28: each creature's voice, typing, babble and a
+release **0.33.1** (2026-10-28: catchphrase, birthdays and the one-time
+question fix, #27, #29); 0.32.0 brought each creature's voice, typing, babble and a
 favourite snack, #26); 0.31.0 brought the bond with each person, bond connections and
 phase 1 of the voices plan, #25); 0.30.0 brought Thanksgiving (#18) and the squirrel's paws-up poses
 no longer having six legs; 0.29.0 brought the daily wish, dreams, "while you were out"
@@ -26,37 +27,44 @@ house check of 2026-10-27, BirdNET notes, the file-share host and Sol's session 
 History was rewritten once to remove them. Scan anything from Sol or the owner for such
 details before committing it.
 
-## Start here (sixth session, 2026-10-28)
+## Start here (handed over 2026-10-28 at the end of the sixth session)
 
-0.32.0 is released (PR #26, voices). **In flight: the PR for phase 3 of the voices
-plan** (branch `ccr-a828d8c1-uv2so3` -> `main`, version 0.33.0): the catchphrase,
-birthdays (the pet's and yours) and the one-time question fix, built from
-`docs/plan-2026-10-28-phase3-catchphrase-birthdays.md` (planned, audited, revised,
-built, audited, fixed; its "Built" section). The owner has said (2026-10-28): open,
-push and merge PRs when ready, and start on the next work. So:
+**The driving role for this project passed to the owner's "Hatch First Mate"
+session** (owner's request, 2026-10-28). Released: 0.33.1 (PR #29: the "birthday on
+my phone" switch, off by default; the Art session's redrawn party hat, PR #28; a
+sturdier idle-life card check). `main` is clean; nothing is in flight.
 
-1. When CI is green, merge it (a merge commit), then release 0.33.0 (Release
-   workflow on `main`, see "How to"). The PR asks the owner whether to keep the
-   birthday phone message (it's in HA's history, like every phone message).
-2. Then **phase 4 of `docs/plan-2026-10-28-voices-and-lines.md`**: the photo (A7).
-   Its second-audit row 3 overrides part A; the save must be tried on both companion
-   apps before release (ask the owner). Restart the designated branch from `main`.
-   Also: ask the Hatch API Art session for a real party hat (`ui/season_party_hat.png`,
-   64 x 48, brim on the bottom row; the stand-in is `art/birthday/make_party.py`).
-3. The way the owner wants work done: **a full plan, an adversarial audit by a fresh
-   subagent, revise, then build**; after building, **another audit of the work**, fix,
-   test (`scripts/test`), check the card (`scripts/card-check`, now 86 checks), send
-   screenshots, then PR. Each phase is its own PR.
-4. Then phases 5 (baby talk), 6 (moths, its own plan and audit). After those:
-   personality types (a new plan). Gifts and neighbours talking are noted in
-   `docs/plan-2026-10-28-daily-checkins.md`.
+**Next: phase 4 of the voices plan, the photo** (A7), ready to build from
+`docs/plan-2026-10-28-phase4-photo.md` **draft 2** (planned and audited; its audit
+table at the end wins over the sections above). Two calls in it were mine, for the
+owner to overrule: the photo waits until the pet is a teen (an inherited level-10
+bond would otherwise photograph a 30-minute-old baby) and its caption says "best
+friends ♥" with the day it was taken; if Android can't save, the dialog says so
+honestly. **It ships first as a beta (0.34.0b1)** for the owner to try "save" on
+the iPhone and Android apps, then as 0.34.0.
 
-The plans to read: `docs/plan-2026-10-28-daily-checkins.md` (item 3 and its passes),
-`docs/plan-2026-10-28-bond-connections.md` (built; its audits), and
-`docs/plan-2026-10-28-voices-and-lines.md` (draft 3; phases 1-3 built). The owner's
-taste so far: Animal Crossing is the touchstone; flavour, never gameplay, for bonds;
-positive or quiet, never guilt, nagging or ranking people; private things only to
-their person.
+The owner has said (2026-10-28): open, push and merge PRs when ready, and start on
+the next work. The way the owner wants work done: **a full plan, an adversarial
+audit by a fresh subagent, revise, then build**; after building, **another audit of
+the work**, fix, test (`scripts/test`, 406 tests), check the card
+(`scripts/card-check`, 87 checks), send screenshots, then PR. Each phase is its own
+PR. After phase 4: phases 5 (baby talk) and 6 (moths, its own plan and audit), then
+personality types (a new plan). Gifts and neighbours talking are noted in
+`docs/plan-2026-10-28-daily-checkins.md`.
+
+The plans to read: `docs/plan-2026-10-28-voices-and-lines.md` (draft 3; phases 1-3
+built) and its phase files (`phase2-voices`, `phase3-catchphrase-birthdays`,
+`phase4-photo`), `docs/plan-2026-10-28-daily-checkins.md`,
+`docs/plan-2026-10-28-bond-connections.md`. The owner's taste: Animal Crossing is the
+touchstone; flavour, never gameplay, for bonds; positive or quiet, never guilt,
+nagging or ranking people; private things only to their person (a birthday, a
+photo); anything that leaves a trace in HA's history is opt-in (the birthday phone
+switch).
+
+Card-check tips from this session: `hush()` keeps legacy checks unvoiced (pets now
+open lines with their sound); `bubble()` waits for typing; checks that call the
+card's own methods should hold `sayUntil` so the card's tick doesn't race them; the
+dev pets drift (below).
 
 **Dev pets drift.** After many `card-check` runs the dev pets in `dev/config` get
 sick (weight 0, recent misses), and checks like idle life fail. Until the dev utility
@@ -241,7 +249,7 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   `thanksgiving-art`, 19 of 19; cut from Sol's drawings, the geese placed by hand).
   Checked on the card: every costume on 13 creatures × 4 stages, the turkey and
   geese at night.
-- **Voices** (phase 2 of the voices plan; 0.32.0, PR open): `species.json` `voice`
+- **Voices** (phase 2 of the voices plan; released in 0.32.0): `species.json` `voice`
   (`sound`, `pitch`, `pace`, `likes`). Card: `_write` is the one direct bubble write
   (with `ms` it sets the hold; without, a game keeps its own); `_speak` may open a
   line with the sound (`_soundFor`: not within `VOICE_QUIET_MS` of the last, not on
@@ -255,7 +263,7 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   on the pet, picked after every advance from `coordinator.likes`; the
   `favourite_snack` moment at most once a day (`FAVOURITE_SNACK_CHANCE`), not at a
   stage with its own food. card-check's `hush()` keeps legacy checks unvoiced.
-- **Catchphrase and birthdays** (phase 3; 0.33.0, PR open): one-time questions
+- **Catchphrase and birthdays** (phase 3; released in 0.33.0): one-time questions
   (`people.ONCE`, `once_due`, `mark_once`; 11-20 h, `ASK_ONCE_GAP_DAYS` apart, each
   its own tries). Catchphrase: `voice.catchphrase` per creature, `PetState.catchphrase`
   (a friend's pick), asked at `CATCHPHRASE_LEVEL` from the child stage, once per
@@ -327,7 +335,7 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   needs none).
 - **Tests:** 406, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
-  `scripts/card-check` (Playwright, 86 checks) drives the card against
+  `scripts/card-check` (Playwright, 87 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
 - **CI:** `.github/workflows/validate.yml` (HACS action, hassfest, tests) is green.
   License MIT; Tiny5 keeps its OFL.
