@@ -1,19 +1,26 @@
 """Halloween pieces for the card's seasonal touches, drawn in code.
 
-Usage: python art/seasonal/make_halloween.py  (writes frontend/ui/season_halloween_*)
+Usage: python art/seasonal/make_halloween.py [out dir]  (default art/seasonal/out)
 
-Stand-ins in Sol's style (dark brown outline, two or three tones, 4 px art
-pixels): a jack-o'-lantern, a cobweb, a bat (two frames), a witch hat and a
-sweet. Sol can redraw any of them; the card only needs the file names.
+These were the stand-ins (dark brown outline, two or three tones, 4 px art
+pixels). On 2026-10-28 the Hatch API Art session redrew all 17; 16 of its
+pieces are in frontend/ui, and the witch is still this script's silhouette
+(the redraw's purple shading blurred it). The script writes elsewhere so a rerun
+never overwrites the redrawn art; copy a piece over by hand if it's wanted.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 
 from PIL import Image
 
-OUT = Path(__file__).resolve().parents[2] / "custom_components/virtual_pet/frontend/ui"
+OUT = (
+    Path(sys.argv[1])
+    if len(sys.argv) > 1
+    else Path(__file__).resolve().parent / "out"
+)
 PX = 4  # screen pixels per art pixel
 
 OUTLINE = (59, 26, 12, 255)
@@ -387,6 +394,7 @@ BUNTING = [
 
 
 def main() -> None:
+    OUT.mkdir(parents=True, exist_ok=True)
     save(pumpkin(), "pumpkin")
     for face in (2, 3):
         save(pumpkin(face), f"pumpkin_{face}")

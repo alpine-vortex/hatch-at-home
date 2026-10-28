@@ -11,3 +11,4 @@ node_modules/
 
 # Private art-generation runs and call log (never committed)
 private-content/
+art/seasonal/out/
