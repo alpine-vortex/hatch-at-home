@@ -50,6 +50,22 @@ not yet audited, PR'd or released). It rides in the 0.34.0 beta series because t
 then `reason_key` on `sensor.mood` (revertable alone). `scripts/test` 444,
 `scripts/card-check` 111. Next: the tier-2 audit of the built work, then the PR.
 
+**0.34.0b2 is pre-released** (baby talk). **Still owed: the owner's phone test of
+0.34.0b1/b2** (the photo's "save" on the iPhone and Android companion apps, above).
+
+**Personality P1, the type, is built as 0.35.0b1** (crew branch
+`crew/hatch-at-home-s2419-personality-p1-the-type-saved`, 2026-10-28; from
+`docs/plan-2026-10-28-personality-types.md` draft 2; not yet audited, PR'd or
+released). Personality starts the 0.35.0 series. A teen settles one of eight types
+(`model.PERSONALITIES`, `personality_for`: its own `Random(f"personality-{born}")`,
+nudged by trait leanings, never care); saved on `PetState.personality`, backfilled
+at load for teens and adults, kept in the journal record; `sensor.life_stage`
+attribute `personality` (unrecorded) and diagnostics; the card's "personality"
+status row and the journal line. No lines yet (P2a). `scripts/test` 455,
+`scripts/card-check` 116. Next: the tier-2 audit of the built work, then the PR.
+Card checks stub `el._state` for the life stage (kept until the screenshot) to show
+a teen, an adult and journal records; see "4c" in `scripts/card-check.js`.
+
 **For personality P2 (the `_lines` helper as built):** `_lines(s, key, normal, arg)`
 returns `{text, baby}`, and the call sites pass `catch: !line.baby`, so a persona
 layer that returns `baby: false` keeps the catchphrase without touching them.
@@ -60,8 +76,8 @@ card lines by name (`care_miss`, `tucked_in`...), `WISHES.<kind>`,
 `REFUSALS.<result>`, `season.<key>`, and `reason.<reason_key>` for the mood line.
 `_costume` takes a `catchy` flag. The card check reads `BABY` from the card's
 source (`const BABY = {...\n};`), so a `PERSONA` table of the same shape can share
-that lint. **Personality types** has a plan in draft (crew branches; draft 2
-folding its audit).
+that lint. **Personality types** has its plan
+(`docs/plan-2026-10-28-personality-types.md`, draft 2, on main); P1 is built (above).
 
 The owner has said (2026-10-28): open, push and merge PRs when ready, and start on
 the next work. The way the owner wants work done: **a full plan, an adversarial

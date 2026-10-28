@@ -1851,6 +1851,76 @@ async function main() {
     await page.locator("hatch-pet-card").evaluate((el) => el._slides.forEach((s) => { s.sayUntil = 0; }));
   }
 
+  // 4c. Personality (P1): a "personality" row for a teen and an adult, none for a
+  // baby or an older server; the type on the journal line, none on an old record.
+  // The life stage is stubbed in-page and kept until the screenshot is taken.
+  {
+    const asPet = (stage, attrs, journal = false) => page.locator("hatch-pet-card").evaluate(async (el, { stage, attrs, journal }) => {
+      const s = el._slides[el._index];
+      window.__realState ??= el._state;
+      const realState = window.__realState;
+      el._state = function (slide, key) {
+        const st = realState.call(this, slide, key);
+        if (key !== "sensor.life_stage" || !st || slide !== s) return st;
+        const out = { ...st.attributes, ...attrs };
+        if (attrs.personality === "drop") delete out.personality; // a server before P1
+        return { ...st, state: stage, attributes: out };
+      };
+      s.journal = journal;
+      el._renderStatus(s, []);
+      for (let i = 0; i < 40 && journal && !s.status.querySelector(".gen"); i++) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      const text = (sel) => [...s.status.querySelectorAll(sel)].map((r) => r.innerText.replace(/\s+/g, " ").trim());
+      return journal ? text(".gen") : text(".row");
+    }, { stage, attrs, journal });
+    const unstubState = () => page.locator("hatch-pet-card").evaluate((el) => {
+      if (window.__realState) el._state = window.__realState;
+      delete window.__realState;
+      const s = el._slides[el._index];
+      s.journal = false;
+      el._renderStatus(s, []);
+    });
+    const typeRow = (rows) => rows.filter((r) => r.startsWith("personality"));
+    const personalityShot = async (name) => {
+      const row = cur().locator(".row", { hasText: "personality" });
+      if (await row.count()) await row.scrollIntoViewIfNeeded();
+      else await cur().locator(".row", { hasText: "traits" }).scrollIntoViewIfNeeded();
+      await shot(name);
+    };
+    await page.locator("hatch-pet-card .statusbtn").click();
+    await page.waitForTimeout(400);
+    const teen = await asPet("teen", { personality: "fancy", upbringing: "steady" });
+    check("a teen's status screen shows its personality", typeRow(teen).join() === "personality fancy" &&
+      teen.some((r) => r === "growing up steady"), JSON.stringify(typeRow(teen)));
+    await personalityShot("07a-personality-teen");
+    const adult = await asPet("adult", { personality: "old_soul", upbringing: "devoted" });
+    check("an adult's status screen shows its personality, in words", typeRow(adult).join() === "personality old soul",
+      JSON.stringify(typeRow(adult)));
+    await personalityShot("07b-personality-adult");
+    const baby = await asPet("baby", { personality: null });
+    check("a baby's status screen has no personality row", typeRow(baby).length === 0, JSON.stringify(typeRow(baby)));
+    await personalityShot("07c-personality-none-for-a-baby");
+    const older = await asPet("teen", { personality: "drop" });
+    check("a teen from an older server has no personality row", typeRow(older).length === 0, JSON.stringify(typeRow(older)));
+    const species = await page.locator("hatch-pet-card").evaluate((el) =>
+      el._state(el._slides[el._index], "sensor.life_stage")?.attributes.species);
+    const record = (generation, name, extra) => ({ generation, name, species, traits: ["homebody"],
+      levels: { homebody: 1 }, inherited: null, age_days: 21.2, care_misses: 0, games: {}, ...extra });
+    const journal = (await asPet("adult", {
+      personality: "old_soul", upbringing: "devoted", generation: 3,
+      journal: [record(1, "Checkold", { upbringing: "steady" }), record(2, "Checksweet", { upbringing: "devoted", personality: "sweet" })],
+    }, true)).filter((line) => /^gen \d/.test(line)); // not the memories
+    check("the journal shows each generation's personality, none on an old record",
+      journal.length === 3 && !/sweet|old soul|mellow|bouncy|starry|fancy|charming|plucky/.test(journal[0]) &&
+      / · devoted · sweet( |$)/.test(journal[1]) && / · devoted · old soul( |$)/.test(journal[2]) && /\(now\)/.test(journal[2]),
+      JSON.stringify(journal));
+    await shot("07d-personality-journal");
+    await unstubState();
+    await page.locator("hatch-pet-card .statusbtn").click();
+    await page.waitForTimeout(400);
+  }
+
   // 5. The egg wiggles, then cracks, before it hatches.
   // A pet update can replace the injected egg, so inject until it shows (or 3 tries).
   for (const [minutes, frames] of [[12, "egg_wiggle"], [4, "egg_crack"]]) {
