@@ -86,8 +86,10 @@ details before committing it.
   `_headTop` (first solid pixel down the head point's column) or on `species.json`
   `hat` where ears or antlers rise above the skull (the deer; the owner caught it
   hovering). The art is the Hatch API Art session's redraw (2026-10-28, 16 of 17
-  pieces); the witch is still the stand-in silhouette from
-  `art/seasonal/make_halloween.py` (it now writes to `art/seasonal/out/`, not `ui/`). `card-check` forces the season and
+  pieces) and its witch (0.28.2, a near-black silhouette with a cat and a lantern
+  pixel; the stand-in from
+  `art/seasonal/make_halloween.py` flew backwards; the script now writes to
+  `art/seasonal/out/`, not `ui/`). `card-check` forces the season and
   checks the hat; it keeps seasons off for the other checks. Halloween's extras (owner:
   "go all out on every holiday"): a costume of the day per pet (`costumes`, each with
   its `sink` into the head), a lantern face of the day, bunting, night mist, a ghost the
