@@ -68,6 +68,7 @@
     "food": "moths",
     "home": "hollow"
   },
+  "voice": { "sound": "hoo", "catchphrase": "who knows", "pitch": 380, "pace": 27, "likes": ["moths", "beetles", "crickets"] },
   "reactions": {
     "play": "head_turn",
     "won": "toot",

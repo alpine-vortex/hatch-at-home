@@ -68,6 +68,7 @@
     "food": "berries",
     "home": "hollow"
   },
+  "voice": { "sound": "click", "catchphrase": "hang in there", "pitch": 600, "pace": 31, "likes": ["persimmons", "ripe pears", "snails"] },
   "reactions": {
     "play": "tail_curl",
     "won": "play_dead",

@@ -9,6 +9,7 @@
   "props": {"feed": "bowl_food", "snack": "bowl_food", "play": "play", "clean": "bird/sparkle_clean", "medicine": "bird/medicine", "blanket": "bird/blanket", "heat": "gecko/heat_glow", "attention": "bird/attention", "away": "bird/sitter_sign", "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]},
   "backgrounds": {"day": "gecko/bg_vivarium", "night": "gecko/bg_night", "rain": "gecko/bg_rain", "dim": "gecko/bg_dim"},
   "words": {"food": "dinner", "home": "hide"},
+  "voice": { "sound": "hiss", "catchphrase": "curl up", "pitch": 360, "pace": 25, "likes": ["quail eggs", "egg yolk"] },
   "reactions": {"play": "tongue_flick", "won": "tongue_flick", "praise": "tongue_flick", "scold": "ball"},
   "head": {"baby": [154, 136], "child": [170, 104], "teen": [176, 76], "adult": [180, 108]},
   "hat": {

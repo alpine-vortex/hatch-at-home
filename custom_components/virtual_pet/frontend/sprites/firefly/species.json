@@ -68,6 +68,7 @@
     "food": "nectar",
     "home": "grass"
   },
+  "voice": { "sound": "blink", "catchphrase": "glow glow", "pitch": 1180, "pace": 43, "likes": ["nectar", "pollen"] },
   "reactions": {
     "play": "flutter",
     "won": "blink",

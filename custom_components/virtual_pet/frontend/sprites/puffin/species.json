@@ -68,6 +68,7 @@
     "food": "fish",
     "home": "burrow"
   },
+  "voice": { "sound": "arr", "catchphrase": "flap flap", "pitch": 600, "pace": 38, "likes": ["sand eels", "herring", "capelin"] },
   "reactions": {
     "feed": "fish_bill",
     "snack": "fish_bill",

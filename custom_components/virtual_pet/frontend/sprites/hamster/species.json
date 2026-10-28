@@ -8,6 +8,7 @@
   "props": {"feed": "bowl_food", "snack": "snack", "play": "play", "clean": "bird/sparkle_clean", "medicine": "bird/medicine", "blanket": "bird/blanket", "attention": "bird/attention", "away": "bird/sitter_sign", "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]},
   "backgrounds": {"day": "kitten/bg_day", "night": "kitten/bg_night", "rain": "kitten/bg_rain", "dim": "kitten/bg_dim"},
   "words": {"food": "seeds", "home": "nest"},
+  "voice": { "sound": "peep", "catchphrase": "cheeks full", "pitch": 1150, "pace": 45, "likes": ["sunflower seeds", "pumpkin seeds", "peanuts"] },
   "reactions": {"feed": "cheeks", "snack": "cheeks", "play": "wheel", "won": "wheel", "scold": "stand_up"},
   "head": {"baby": [158, 100], "child": [160, 72], "teen": [166, 48], "adult": [194, 72]},
   "hat": {

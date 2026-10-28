@@ -9,6 +9,7 @@
   "props": {"feed": "bowl_food", "snack": "snack", "play": "play", "clean": "bird/sparkle_clean", "medicine": "bird/medicine", "blanket": "bird/blanket", "attention": "bird/attention", "away": "bird/sitter_sign", "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]},
   "backgrounds": {"day": "kitten/bg_day", "night": "kitten/bg_night", "rain": "kitten/bg_rain", "dim": "kitten/bg_dim"},
   "words": {"food": "kibble", "home": "bed"},
+  "voice": { "sound": "woof", "catchphrase": "zoomies", "pitch": 640, "pace": 40, "likes": ["kibble", "peanut butter", "carrots"] },
   "reactions": {"play": "ball_fetch", "won": "ball_fetch", "praise": "sploot", "scold": "head_tilt"},
   "head": {"baby": [150, 132], "child": [182, 88], "teen": [204, 64], "adult": [204, 76]},
   "hat": {

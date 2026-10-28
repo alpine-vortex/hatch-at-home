@@ -68,6 +68,7 @@
     "food": "peas",
     "home": "reeds"
   },
+  "voice": { "sound": "quack", "catchphrase": "waddle waddle", "pitch": 1050, "pace": 42, "likes": ["peas", "oats", "water bugs"] },
   "reactions": {
     "play": "bottoms_up",
     "won": "quack",

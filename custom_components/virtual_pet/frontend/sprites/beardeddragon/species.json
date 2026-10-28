@@ -66,6 +66,7 @@
     "food": "crickets",
     "home": "rock"
   },
+  "voice": { "sound": "puff", "catchphrase": "sun's out", "pitch": 560, "pace": 33, "likes": ["crickets", "collard greens", "squash"] },
   "reactions": {
     "praise": "bask",
     "won": "bask",

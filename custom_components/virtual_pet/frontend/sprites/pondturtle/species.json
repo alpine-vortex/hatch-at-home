@@ -9,6 +9,7 @@
   "props": {"feed": "bowl_food", "snack": "snack", "play": "play", "clean": "treefrog/bubbles", "medicine": "bird/medicine", "blanket": "bird/blanket", "attention": "bird/attention", "away": "bird/sitter_sign", "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]},
   "backgrounds": {"day": "treefrog/bg_day", "night": "treefrog/bg_night", "rain": "treefrog/bg_rain", "dim": "treefrog/bg_night"},
   "words": {"food": "snails", "home": "log"},
+  "voice": { "sound": "plip", "catchphrase": "sunny rock", "pitch": 420, "pace": 26, "likes": ["duckweed", "snails", "earthworms"] },
   "reactions": {"play": "swim", "won": "swim", "praise": "bask", "scold": "tuck"},
   "head": {"baby": [176, 148], "child": [184, 128], "teen": [196, 112], "adult": [208, 132]},
   "murk": "treefrog/murk",

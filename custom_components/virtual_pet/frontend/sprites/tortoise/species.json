@@ -8,6 +8,7 @@
   "props": {"feed": "bowl_food", "snack": "snack", "play": "play", "clean": "bird/sparkle_clean", "medicine": "bird/medicine", "blanket": "bird/blanket", "heat": "gecko/heat_glow", "attention": "bird/attention", "away": "bird/sitter_sign", "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]},
   "backgrounds": {"day": "gecko/bg_vivarium", "night": "gecko/bg_night", "rain": "gecko/bg_rain", "dim": "gecko/bg_dim"},
   "words": {"food": "dandelions", "home": "burrow"},
+  "voice": { "sound": "munch", "catchphrase": "no rush", "pitch": 350, "pace": 25, "likes": ["dandelions", "hibiscus", "clover"] },
   "reactions": {"play": "dig", "feed": "munch", "snack": "munch", "scold": "hide"},
   "head": {"baby": [124, 144], "child": [130, 124], "teen": [122, 96], "adult": [124, 100]},
   "hat": {

@@ -68,6 +68,7 @@
     "food": "kibble",
     "home": "hammock"
   },
+  "voice": { "sound": "dook", "catchphrase": "tunnel time", "pitch": 860, "pace": 44, "likes": ["chicken", "egg yolk", "salmon"] },
   "reactions": {
     "play": "tunnel",
     "won": "war_dance",

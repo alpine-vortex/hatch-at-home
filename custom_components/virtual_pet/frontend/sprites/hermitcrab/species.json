@@ -68,6 +68,7 @@
     "food": "seaweed",
     "home": "shell"
   },
+  "voice": { "sound": "clack", "catchphrase": "cozy shell", "pitch": 720, "pace": 30, "likes": ["seaweed", "sea lettuce", "shrimp"] },
   "reactions": {
     "play": "shell_try",
     "won": "claw_wave",

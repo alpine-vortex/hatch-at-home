@@ -9,6 +9,7 @@
   "props": {"feed": "otter/bowl_food", "snack": "snack", "play": "play", "clean": "otter/bubbles", "medicine": "bird/medicine", "blanket": "bird/blanket", "attention": "bird/attention", "away": "bird/sitter_sign", "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]},
   "backgrounds": {"day": "otter/bg_day", "night": "otter/bg_night", "rain": "otter/bg_rain", "dim": "otter/bg_night"},
   "words": {"food": "fish", "home": "rock"},
+  "voice": { "sound": "arf", "catchphrase": "flip flop", "pitch": 560, "pace": 34, "likes": ["herring", "squid", "sardines"] },
   "reactions": {"praise": "banana", "won": "flipper_clap", "play": "flipper_clap", "scold": "splash"},
   "head": {"baby": [158, 132], "child": [170, 120], "teen": [176, 88], "adult": [194, 116]},
   "murk": "otter/murk",

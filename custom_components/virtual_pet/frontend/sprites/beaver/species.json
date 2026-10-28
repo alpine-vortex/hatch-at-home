@@ -68,6 +68,7 @@
     "food": "willow",
     "home": "lodge"
   },
+  "voice": { "sound": "chomp", "catchphrase": "busy busy", "pitch": 500, "pace": 32, "likes": ["willow bark", "water lilies", "aspen twigs"] },
   "reactions": {
     "play": "gnaw",
     "won": "stick",

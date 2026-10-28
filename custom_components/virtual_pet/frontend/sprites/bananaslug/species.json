@@ -68,6 +68,7 @@
     "food": "mushrooms",
     "home": "log"
   },
+  "voice": { "sound": "squish", "catchphrase": "slow and steady", "pitch": 380, "pace": 25, "likes": ["mushrooms", "fallen leaves", "dandelions"] },
   "reactions": {
     "play": "slime_slide",
     "won": "slime_slide",
