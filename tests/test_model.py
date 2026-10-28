@@ -1668,6 +1668,8 @@ def test_photos_survive_a_bad_save():
                 "1": {**good, "traits": ["helper", 3, "early_bird"]},
                 "2": {**good, "species": None},
                 "x": good,
+                "²": good,
+                "01": good,
                 "3": "junk",
             },
         },

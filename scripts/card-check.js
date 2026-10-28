@@ -1340,6 +1340,24 @@ async function main() {
     focus: el.shadowRoot.activeElement?.dataset?.gen,
   }));
   check("the dialog closes with Escape, back on its save", !closed.open && closed.focus === "2", JSON.stringify(closed));
+  // In a companion app the download link is hidden for real (computed style, not the property).
+  const inApp = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const share = navigator.share;
+    const canShare = navigator.canShare;
+    Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
+    Object.defineProperty(navigator, "canShare", { value: undefined, configurable: true });
+    Object.defineProperty(navigator, "userAgent", { value: "Mozilla/5.0 Home Assistant/2026.10", configurable: true });
+    el._slides[el._index].status.querySelector('.psave[data-gen="2"]').click();
+    await new Promise((r) => setTimeout(r, 300));
+    const link = el.shadowRoot.querySelector(".photo-dialog .pdownload");
+    const out = { display: getComputedStyle(link).display, hidden: link.hidden };
+    el.shadowRoot.querySelector(".photo-dialog").close();
+    delete navigator.userAgent; // back to the prototype's
+    Object.defineProperty(navigator, "share", { value: share, configurable: true });
+    Object.defineProperty(navigator, "canShare", { value: canShare, configurable: true });
+    return out;
+  });
+  check("in the companion app the download link is not displayed", inApp.hidden && inApp.display === "none", JSON.stringify(inApp));
   // A shared screen shows no photo, and forgets them.
   const shared = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const s = el._slides[el._index];

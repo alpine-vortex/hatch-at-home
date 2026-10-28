@@ -632,6 +632,7 @@ function spriteSrc(speciesId, sprite) {
 // square of the creature's day backdrop with the pet as it was then.
 const PHOTO = { w: 300, h: 380, px: 2, pic: 268, edge: 16 };
 const PHOTO_GROUND = { helper: 1.35, couch_potato: 1.35, player: -1.35, homebody: -1.3, fireside: 1.3, fog_wanderer: -0.6 };
+const PHOTO_GROUND_DY = { fog_wanderer: 4, homebody: 4, player: 0 }; // x ks below the feet, as the shelf has them
 const inCompanionApp = () => /Home Assistant\//.test(navigator.userAgent || "");
 // "2026-10-28" as that day where the viewer is (not midnight UTC).
 function localDay(iso, locale) {
@@ -1116,6 +1117,7 @@ const STYLE = `
   .photo-dialog .pbig { display: block; width: 100%; height: auto; -webkit-touch-callout: default; user-select: auto; }
   .photo-dialog p { margin: 8px 0 4px; }
   .photo-dialog a { display: block; margin: 4px 0 8px; color: inherit; word-break: break-all; }
+  .photo-dialog a[hidden] { display: none; }
   .jlist .gt { padding-left: 10px; }
   .ticon { width: 14px; height: 14px; object-fit: contain; vertical-align: -3px; margin-right: 2px;
     image-rendering: pixelated; }
@@ -1247,6 +1249,7 @@ class HatchPetCard extends HTMLElement {
     for (const s of this._slides || []) {
       if (s.game) this._endGame(s, null);
       this._stopTyping(s);
+      this._dropPhotos(s);
     }
   }
 
@@ -3113,7 +3116,7 @@ class HatchPetCard extends HTMLElement {
     // Keep focus on the same control (a toggle, the journal link) across the redraw.
     const active = this.shadowRoot?.activeElement;
     const keep = s.status.contains(active) && active.className
-      ? `.${active.className.trim().split(/\s+/).join(".")}` : null;
+      ? `.${active.className.trim().split(/\s+/).join(".")}${active.dataset?.gen ? `[data-gen="${active.dataset.gen}"]` : ""}` : null;
     s.statusHtml = html;
     s.status.innerHTML = html;
     if (keep) s.status.querySelector(keep)?.focus({ preventScroll: true });
@@ -3210,7 +3213,13 @@ class HatchPetCard extends HTMLElement {
   }
 
   // Fetch the viewer's photos when the journal opens, and draw the new ones.
-  async _loadPhotos(s) {
+  _loadPhotos(s) {
+    // One load in flight per slide: a second open shares it.
+    if (!s.photoLoad) s.photoLoad = this._fetchPhotos(s).finally(() => { s.photoLoad = null; });
+    return s.photoLoad;
+  }
+
+  async _fetchPhotos(s) {
     const id = s.ids?.["sensor.life_stage"];
     if (!id || !this._hass.user || sharedScreen()) return;
     const epoch = s.photoEpoch || 0;
@@ -3331,7 +3340,7 @@ class HatchPetCard extends HTMLElement {
       // Placed by its bottom middle, as the shelf's flair is.
       const at = place === "head" ? [head.x + (t === "thunder_heart" ? 6 : 0), head.y - 6 * ks]
         : place === "air" ? [cx + away * half * 1.4, head.y + 18 * ks]
-          : [cx + (PHOTO_GROUND[t] ?? 1.35) * half, fy + 2 * ks];
+          : [cx + (PHOTO_GROUND[t] ?? 1.35) * half, fy + (PHOTO_GROUND_DY[t] ?? 2) * ks];
       g.drawImage(img, at[0] - fw / 2, at[1] - fh, fw, fh);
     });
     g.restore();
@@ -3377,7 +3386,9 @@ class HatchPetCard extends HTMLElement {
       // It stops every tap: nothing behind it reacts. A tap outside it closes it.
       dialog.addEventListener("click", (e) => {
         e.stopPropagation();
-        if (e.target === dialog) dialog.close();
+        const box = dialog.getBoundingClientRect();
+        const inside = e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom;
+        if (e.target === dialog && !inside) dialog.close();
       });
       dialog.querySelector(".pclose").addEventListener("click", () => dialog.close());
       dialog.querySelector(".pdownload").addEventListener("click", () => {
@@ -3409,6 +3420,7 @@ class HatchPetCard extends HTMLElement {
   // Forget a slide's photos (another pet on it, or a shared screen now).
   _dropPhotos(s) {
     s.photoEpoch = (s.photoEpoch || 0) + 1;
+    s.photoLoad = null; // a load still running will find its epoch stale
     s.photos?.forEach((p) => URL.revokeObjectURL(p.url));
     s.photos = null;
     if (this._photoFor?.s === s) this.shadowRoot.querySelector(".photo-dialog")?.close();
