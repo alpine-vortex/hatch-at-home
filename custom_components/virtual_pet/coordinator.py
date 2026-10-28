@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import timedelta
+from datetime import datetime, timedelta
 import random
 from typing import Any
 
@@ -37,7 +37,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from . import model, notify, rates as R, wellbeing
+from . import model, notify, people as P, rates as R, wellbeing
 from .const import (
     CONF_AWAY_AFTER,
     CONF_BEDTIME,
@@ -64,6 +64,8 @@ from .const import (
 from .home import (
     RAINY,
     SNOWY,
+    STORMY,
+    SUNNY,
     DayForecast,
     HomeEffect,
     HouseMoments,
@@ -200,6 +202,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._cheered: dict[str, float] = {}
         # "My day": a bike ride or a run today, per person (in memory).
         self._moved: dict[str, tuple[str, set[str]]] = {}
+        # The house's weather now (rain, snow, sun, storm) and outdoors in °C.
+        self._weather_now: set[str] = set()
+        self._outdoor_c: float | None = None
         self.presence = Presence(
             entry.options.get(CONF_AWAY_AFTER, R.HOME_AWAY_AFTER_HOURS)
         )
@@ -392,16 +397,25 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         @callback
         def person_moved(event: Event[EventStateChangedData]) -> None:
             old, new = event.data["old_state"], event.data["new_state"]
-            if (
-                old is None
-                or new is None
-                or new.state != STATE_HOME
-                or old.state in (STATE_HOME, STATE_UNAVAILABLE, STATE_UNKNOWN)
-            ):
+            unknown = (STATE_UNAVAILABLE, STATE_UNKNOWN)
+            if old is None or new is None or old.state in unknown:
                 return
-            if user := new.attributes.get("user_id"):
+            user = new.attributes.get("user_id")
+            if not user or new.state in unknown or new.state == old.state:
+                return
+            now = self._now()
+            person = self.people.person(user)
+            if new.state == STATE_HOME:
+                person["arrived"] = now
+                self.people.save()
                 self._arrivals.append(user)
                 self._home_debouncer.async_schedule_call()
+            elif new.state != "not_home":
+                # A zone they made (work, the gym): remembered, privately.
+                person["zone"] = {"name": new.state, "at": now}
+                self.people.save()
+            if old.state == STATE_HOME:
+                self._send_off(user, now)
 
         movers = wellbeing.activity_sensors(self.hass)
 
@@ -533,6 +547,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # After the update: an arrival just now starts the greeting.
         if self.presence.greeting(now):
             effect.flags.insert(0, "greeting")
+        kinds = set()
+        if is_raining(readings):
+            kinds.add("rain")
+        if readings.condition in SNOWY:
+            kinds.add("snow")
+        if readings.condition in SUNNY and readings.sun_up:
+            kinds.add("sun")
+        self._outdoor_c = readings.outdoor_c
+        self._weather_now = kinds | (
+            {"storm"} if readings.condition in STORMY else set()
+        )
+        if self._awake() and kinds:
+            self.people.saw_weather(self._today(now)[0], kinds)
         arrivals, self._arrivals = self._arrivals, []
         if self._awake():
             self._fire(self._friends_home(arrivals, now))
@@ -878,46 +905,190 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             if now - self._cheered.get(user, -1e12) < R.FRIEND_HOME_EVERY_MINUTES * 60:
                 continue
             self._cheered[user] = now
-            events.append({"type": "friend_home", "user": user})
+            event: model.Event = {"type": "friend_home", "user": user}
+            if weather := self._home_weather():
+                event["weather"] = weather
+            events.append(event)
         return events
+
+    def _home_weather(self) -> str | None:
+        """What it's like out there, for someone coming in (the house's
+        weather, not private): wet, snowy, cold or hot."""
+        if "rain" in self._weather_now:
+            return "wet"
+        if "snow" in self._weather_now:
+            return "snowy"
+        if self._outdoor_c is not None and self._outdoor_c <= R.HOME_COLD_C:
+            return "cold"
+        if self._outdoor_c is not None and self._outdoor_c >= R.HOME_HOT_C:
+            return "hot"
+        return None
+
+    @property
+    def people(self) -> P.People:
+        return self.hass.data[DOMAIN]["people"]
+
+    def _closest_pet(self, user: str) -> PetCoordinator:
+        """Of the loaded pets, the one this person is closest to (it speaks for
+        all of them on their phone)."""
+        pets: dict[str, PetCoordinator] = self.hass.data[DOMAIN]["pets"]
+        return max(
+            (p for p in pets.values() if p.state is not None),
+            key=lambda p: (p.bond_for(user)[0], p.pet_id),
+            default=self,
+        )
+
+    def _send_off(self, user: str, now: float) -> None:
+        """Someone with "my day" on heads out on a notable morning: one line on
+        their phone ("rain later today, take an umbrella ☂"), a few times a week
+        at most, from the pet they're closest to."""
+        if self._closest_pet(user) is not self or self.state is None:
+            return
+        level, nickname = self.bond_for(user)
+        if (
+            level < R.SENDOFF_LEVEL
+            or not self.people.my_day(user)
+            or user not in self.state.notify_users
+        ):
+            return
+        today, hour = self._today(now)
+        if not R.SENDOFF_HOURS[0] <= hour < R.SENDOFF_HOURS[1]:
+            return
+        person = self.people.person(user)
+        week = (dt_util.now().date() - timedelta(days=6)).isoformat()
+        days = [d for d in person.get("sendoffs", []) if d >= week]
+        if today in days or len(days) >= R.SENDOFF_PER_WEEK:
+            return
+        kind = self._send_off_kind(today)
+        if kind is None:
+            return
+        person["sendoffs"] = [*days, today]
+        self.people.save()
+        self._send(
+            [user],
+            notify.send_off(kind, self.state.name, nickname),
+            f"{DOMAIN}_send_off",
+            level="passive",
+        )
+
+    def _send_off_kind(self, today: str) -> str | None:
+        """rain, snow, hot or cold: today, by the forecast or the sky now."""
+        day = self.forecast.get(today)
+        if "rain" in self._weather_now or (day and day.condition in RAINY):
+            return "rain"
+        if "snow" in self._weather_now or (day and day.condition in SNOWY):
+            return "snow"
+        if day and day.high_c is not None and day.high_c >= R.HOME_HOT_DAY_C:
+            return "hot"
+        if day and (
+            (day.low_c is not None and day.low_c <= R.HOME_COLD_SNAP_C)
+            or (day.high_c is not None and day.high_c <= R.HOME_COLD_DAY_HIGH_C)
+        ):
+            return "cold"
+        return None
 
     async def async_visit(self, user: str) -> dict[str, Any]:
         """Someone opened the card on this pet (the card calls this, at most
-        hourly per person): a visit counts for their bond once a day, and may
-        be today's "come say hi" wish. Returns what the pet has to tell only
-        them: {"notes": [...]}, each once."""
+        hourly per person, and again when they come home): a visit counts for
+        their bond once a day, and may be today's "come say hi" wish. Returns
+        what the pet has to tell only them, {"notes": [...], "ask": kind or
+        None}: at most NOTES_PER_VISIT lines, the rest kept for a later look,
+        and a question chosen here so the daily limit holds across pets and
+        devices."""
         assert self.state is not None
         now = self._now()
-        if now - self._visits.get(user, -1e12) < R.BOND_VISIT_EVERY_MINUTES * 60:
-            return {"notes": []}
-        self._visits[user] = now
+        person = self.people.person(user)
+        last = self._visits.get(user, -1e12)
+        just_home = person.get("arrived", 0) > last
+        if now - last < R.BOND_VISIT_EVERY_MINUTES * 60 and not just_home:
+            return {"notes": [], "ask": None}
         self._advance(now)
+        if not self._awake():
+            # Asleep (or away): only the sleepy hello. The visit isn't counted,
+            # so the lines it has wait for the next look once it's up.
+            notes = self._up_early(user, now)
+            self._publish()
+            return {"notes": notes, "ask": None}
+        self._visits[user] = now
         events = self._bond(user, "visit")
-        if self._awake() and (
-            granted := self._grant("say_hi", await self._who_id(user), now)
-        ):
+        if granted := self._grant("say_hi", await self._who_id(user), now):
             events += granted + self._bond(user, "wish")
         self._fire(events)
-        notes = await self._notes(user, now) if self._awake() else []
-        if notes:
-            self._save()
-        self._publish()
-        return {"notes": notes}
-
-    async def _notes(self, user: str, now: float) -> list[dict[str, Any]]:
-        """Private lines for one person: how long they've been friends, a thank
-        you for last night's tuck-in, and what it noticed about their day."""
-        assert self.state is not None
-        bond = self.state.bonds.get(user)
-        if not bond:
-            return []
-        today, hour = self._today(now)
+        came_home = self._came_home(user, now)
         notes: list[dict[str, Any]] = []
-        noted = bond.setdefault("noted", {})
+        for scope, kind, key, note in await self._notes(user, now):
+            if len(notes) >= R.NOTES_PER_VISIT:
+                break
+            if scope == "pet":
+                model.bond_of(self.state, user).setdefault("noted", {})[kind] = key
+            else:
+                self.people.mark(user, kind, key)
+            notes.append(note)
+        ask = self._question(user, now, came_home, notes)
+        self._save()
+        self._publish()
+        return {"notes": notes, "ask": ask}
+
+    def _up_early(self, user: str, now: float) -> list[dict[str, Any]]:
+        """Looking in on the sleeping pet before sunrise: a sleepy hello."""
+        state = self.state
+        assert state is not None
+        today, hour = self._today(now)
+        sun = self.hass.states.get("sun.sun")
+        if (
+            state.away
+            or not state.asleep
+            or model.life_stage(state) == "egg"
+            or not R.UP_EARLY_FROM <= hour < 12
+            or sun is None
+            or sun.state != "below_horizon"
+            or self.bond_for(user)[0] < R.ASK_LEVEL
+            or self.people.said(user, "up_early", today)
+        ):
+            return []
+        self.people.mark(user, "up_early", today)
+        return [{"kind": "up_early"}]
+
+    def _came_home(self, user: str, now: float) -> str | None:
+        """ "work", "school", "gym", "park" or "home" if they came home lately."""
+        person = self.people.person(user)
+        arrived = person.get("arrived", 0)
+        if now - arrived > R.JUST_HOME_HOURS * 3600:
+            return None
+        zone = person.get("zone") or {}
+        if zone.get("at", 0) < arrived and arrived - zone["at"] < 24 * 3600:
+            return P.zone_word(zone.get("name")) or "home"
+        return "home"
+
+    async def _notes(
+        self, user: str, now: float
+    ) -> list[tuple[str, str, str, dict[str, Any]]]:
+        """Private lines for one person, best first: (scope, kind, key, note).
+        "pet" lines are this pet's own (said once each by this pet); "person"
+        lines are said once by whichever pet they look at first."""
+        state = self.state
+        assert state is not None
+        bond = model.bond_of(state, user)
+        noted = bond.get("noted", {})
+        person = self.people.person(user)
+        likes = person.get("likes") or {}
+        level = model.bond_level(bond["points"])
+        my_day = self.people.my_day(user)
+        local = dt_util.now()
+        today, hour = local.date().isoformat(), local.hour
+        out: list[tuple[str, str, str, dict[str, Any]]] = []
+
         months = model.friends_for(bond.get("since"), today)
         if months and noted.get("friends") != today:
-            noted["friends"] = today
-            notes.append({"kind": "friends_for", "months": months})
+            out.append(
+                ("pet", "friends", today, {"kind": "friends_for", "months": months})
+            )
+        dream = state.dream or {}
+        if dream.get("kind") == "picked" and dream.get("day") == today:
+            if noted.get("dream") != today:
+                note = {"kind": "dream", "pick": dream["pick"]}
+                note["yours"] = dream.get("user") == user
+                out.append(("pet", "dream", today, note))
         tucked = bond.get("tucked_at")
         low, high = R.TUCK_IN_THANKS_HOURS
         if (
@@ -926,28 +1097,175 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             and hour < 12
             and low * 3600 <= now - tucked <= high * 3600
         ):
-            noted["tucked"] = tucked
-            notes.append({"kind": "tucked_in"})
-        if bond.get("my_day") and noted.get("day") != today:
+            out.append(("pet", "tucked", tucked, {"kind": "tucked_in"}))
+        guess = person.get("guess") or {}
+        if guess.get("day") and (
+            guess["day"] < today
+            or (guess["day"] == today and hour >= R.GUESS_FROM_HOUR)
+        ):
+            outcome = P.guess_outcome(
+                guess["guess"], self.people.weather_on(guess["day"])
+            )
+            person.pop("guess")
+            self.people.save()
+            if guess["day"] >= (local.date() - timedelta(days=2)).isoformat():
+                out.append(
+                    (
+                        "person",
+                        "guess",
+                        today,
+                        {"kind": "guess", "guess": guess["guess"], "outcome": outcome},
+                    )
+                )
+        zone = person.get("zone") or {}
+        arrived = person.get("arrived", 0)
+        if (
+            my_day
+            and level >= R.ZONE_LEVEL
+            and zone
+            and zone["at"] < arrived
+            and now - arrived <= R.ZONE_REMEMBER_HOURS * 3600
+            and (place := P.zone_word(zone.get("name")))
+            and not self.people.said(user, "zone", str(arrived))
+        ):
+            out.append(
+                ("person", "zone", str(arrived), {"kind": "back_from", "place": place})
+            )
+        if my_day and not self.people.said(user, "day", today):
             day, moves = self._moved.get(user, ("", set()))
             seen = await wellbeing.read_day(
                 self.hass,
                 wellbeing.find_sensors(self.hass, user),
                 moves if day == today else set(),
+                self.people.weather_on(today),
             )
-            level = model.bond_level(bond["points"])
             if note := wellbeing.notice(seen, level, hour):
-                noted["day"] = today
-                notes.append(note)
-        return notes
+                out.append(("person", "day", today, note))
+        fav = likes.get("fav_weather")
+        if (
+            fav
+            and {"sun": "sun", "rain": "rain", "snow": "snow", "storms": "storm"}[fav]
+            in self._weather_now
+            and not self.people.said(user, "fav_weather", today)
+        ):
+            out.append(
+                (
+                    "person",
+                    "fav_weather",
+                    today,
+                    {"kind": "fav_weather", "weather": fav},
+                )
+            )
+        key = P.season_key(local.date(), self.hass.config.latitude)
+        if likes.get("fav_season") and key and key.split("-")[0] == likes["fav_season"]:
+            holiday = notify.holiday(local.date())
+            if holiday and not self.people.said(user, "season_holiday", today):
+                out.append(
+                    (
+                        "person",
+                        "season_holiday",
+                        today,
+                        {
+                            "kind": "season",
+                            "season": likes["fav_season"],
+                            "holiday": holiday,
+                        },
+                    )
+                )
+            elif not self.people.said(user, "season", key):
+                out.append(
+                    (
+                        "person",
+                        "season",
+                        key,
+                        {"kind": "season", "season": likes["fav_season"]},
+                    )
+                )
+        if (
+            my_day
+            and level >= R.ALARM_LEVEL
+            and hour >= R.ALARM_EVENING_FROM
+            and not self.people.said(user, "alarm", today)
+            and (minute := self._tomorrows_alarm(user, local)) is not None
+            and P.early_alarm(minute, [m for _, m in person.get("alarms", [])[:-1]])
+        ):
+            out.append(("person", "alarm", today, {"kind": "early_alarm"}))
+        return out
+
+    def _tomorrows_alarm(self, user: str, local: datetime) -> int | None:
+        """Tomorrow's clock alarm on their Android phone, in minutes after
+        midnight (HA's time zone), remembered for their usual."""
+        found = wellbeing.find_sensors(self.hass, user).found.get("alarm")
+        state = self.hass.states.get(found[0]) if found else None
+        if state is None:
+            return None
+        package = str(state.attributes.get("Package") or "").casefold()
+        if package and "clock" not in package and "alarm" not in package:
+            return None  # another app's reminder, not a wake-up alarm
+        when = dt_util.parse_datetime(state.state)
+        if when is None:
+            return None
+        when = dt_util.as_local(when)
+        if when.date() != local.date() + timedelta(days=1):
+            return None
+        minute = when.hour * 60 + when.minute
+        person = self.people.person(user)
+        alarms = [
+            a for a in person.get("alarms", []) if a[0] != when.date().isoformat()
+        ]
+        person["alarms"] = [*alarms, [when.date().isoformat(), minute]][-R.ALARM_KEPT :]
+        self.people.save()
+        return minute
+
+    def _question(
+        self, user: str, now: float, came_home: str | None, notes: list[dict[str, Any]]
+    ) -> str | None:
+        """The question for this look, if it's time for one (people.py)."""
+        assert self.state is not None
+        person = self.people.person(user)
+        today, hour = self._today(now)
+        kind = P.choose_question(
+            person,
+            today,
+            hour,
+            level=self.bond_for(user)[0],
+            to_bed_minutes=model.minutes_to_bedtime(now, self.settings),
+            has_forecast=P.tomorrow(today) in self.forecast,
+            came_home=came_home,
+            rested=any(n["kind"] == "rested" for n in notes),
+        )
+        if kind is None:
+            return None
+        P.mark_asked(person, today, hour)
+        if kind == "fav_weather":
+            person["liked_on"] = today
+        self.people.save()
+        return kind
+
+    async def async_answer(self, user: str, question: str, answer: str) -> None:
+        """A remembered answer: a favourite, tonight's dream, a guess."""
+        assert self.state is not None
+        if answer not in P.ANSWERS.get(question, ()):
+            raise ValueError(f"{answer} isn't an answer to {question}")
+        person = self.people.person(user)
+        today = self._today(self._now())[0]
+        if question in ("fav_weather", "fav_season"):
+            person.setdefault("likes", {})[question] = answer
+        elif question == "guess":
+            person["guess"] = {"day": P.tomorrow(today), "guess": answer}
+        elif question == "dream":
+            model.pick_dream(self.state, user, answer, self._now())
+            self._save()
+        self.people.save()
 
     async def async_set_my_day(self, user: str, enabled: bool) -> None:
-        """Let the pet notice this person's day (steps, sleep...), or stop."""
-        assert self.state is not None
-        bond = model.bond_of(self.state, user)
-        bond["my_day"] = enabled
-        self._save()
-        self._publish()
+        """Let the pets notice this person's day (steps, sleep, where they've
+        been...), or stop. One switch per person, for every pet."""
+        self.people.person(user)["my_day"] = enabled
+        self.people.save()
+        for pet in self.hass.data[DOMAIN]["pets"].values():
+            if pet.state is not None:
+                pet.async_set_updated_data(pet.state)
 
     def _holiday_morning(self) -> None:
         """On a holiday, the pet's first morning moment greets it on the phones
@@ -984,9 +1302,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         for user in users:
             by_nickname.setdefault(self.bond_for(user)[1], []).append(user)
         buttons = notify.actions(event, self.pet_id)
+        # A call may break through a focus mode the person allows; the rest wait
+        # like any notification while their phone is in focus or do not disturb.
+        level = "time-sensitive" if event["type"] in notify.CALL_EVENTS else None
         for nickname, group in by_nickname.items():
             personal = notify.to_friend(text, nickname) if nickname else text
-            self._send(group, personal, tag, buttons)
+            self._send(group, personal, tag, buttons, level)
 
     def _send(
         self,
@@ -994,10 +1315,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         text: str,
         tag: str,
         buttons: list[dict[str, str]] | None = None,
+        level: str | None = None,
     ) -> None:
         self.config_entry.async_create_background_task(
             self.hass,
-            notify.send(self.hass, users, text, tag, buttons, self.dashboard),
+            notify.send(self.hass, users, text, tag, buttons, self.dashboard, level),
             f"{DOMAIN} notify",
         )
 
@@ -1230,3 +1552,4 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         await super().async_shutdown()
         if self.state is not None:
             await self.store.async_save(self.state.to_dict())
+        await self.people.async_save_now()

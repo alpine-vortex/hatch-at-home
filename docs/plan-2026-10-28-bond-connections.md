@@ -1,4 +1,4 @@
-# Bond connections, 2026-10-28 (plan; revised after the audit)
+# Bond connections, 2026-10-28 (built as revised after the audit)
 
 The owner chose all twelve of these on 2026-10-28 ("These are wonderful"). They
 build on the bond with each person (`docs/plan-2026-10-28-daily-checkins.md`, item
@@ -242,3 +242,12 @@ on the server.
 - **Phones:** calls and sickness `time-sensitive` (iOS `push.interruption-level`;
   Android channel "Pet calls", high importance); send-offs `passive` and Android
   channel "Pet news", low importance.
+
+## Built (2026-10-28)
+
+As revised above. Checked: 358 tests (people.py's rules, each note and its gate,
+the send-off limits, the answer command putting nothing on the bus, the dream pick
+at the wake, the guess, the alarm's package filter, no zone name on any state) and
+61 card checks (the question widget, a kept answer sent by websocket, every new
+line). Not yet seen on real phones: the sensors, the zone and alarm paths, and the
+iOS/Android urgency fields.

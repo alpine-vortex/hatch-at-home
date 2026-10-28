@@ -379,7 +379,7 @@ async function main() {
     const s = el._slides[el._index];
     s.bubble.textContent = "how was your day?";
     s.sayUntil = Date.now() + 20000;
-    el._askDay(s);
+    el._ask(s, "how_day");
   });
   const answers = await askBox.locator("button").allInnerTexts();
   await shot("04d-ask-day");
@@ -389,6 +389,43 @@ async function main() {
   check("it asks how your day was, and answers kindly", answers.join() === "great,ok,tough" &&
     /snuggle|cuddle/.test(reply) && await askBox.count() === 0, `${answers.join()} -> ${reply}`);
   await shot("04e-ask-day-answer");
+  // A remembered answer goes to the server as a websocket command, not a service.
+  const kept = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const sent = [];
+    const real = el._hass.callWS.bind(el._hass);
+    el._hass.callWS = (msg) => { sent.push(msg); return real(msg); };
+    el._ask(s, "fav_weather");
+    s.screen.querySelector('.askday button[data-answer="snow"]').click();
+    await new Promise((r) => setTimeout(r, 600));
+    el._hass.callWS = real;
+    return { sent, said: s.bubble.textContent };
+  });
+  check("a favourite is kept through the answer command",
+    kept.sent.length === 1 && kept.sent[0].type === "virtual_pet/answer" && kept.sent[0].question === "fav_weather" &&
+    kept.sent[0].answer === "snow" && kept.said === "snow!! ❄ I'll remember", JSON.stringify(kept));
+  // The new lines: a dream someone picked, a guess, a zone, the season, coming home wet.
+  const lines = await page.locator("hatch-pet-card").evaluate((el, me) => {
+    const s = el._slides[el._index];
+    s.queue = [];
+    el._note(s, { kind: "dream", pick: "sea", yours: true });
+    el._note(s, { kind: "dream", pick: "sea", yours: false });
+    el._note(s, { kind: "guess", guess: "rain", outcome: "wrong" });
+    el._note(s, { kind: "back_from", place: "gym" });
+    el._note(s, { kind: "season", season: "autumn", holiday: "thanksgiving" });
+    el._note(s, { kind: "rain_walk", steps: 8000 });
+    el._note(s, { kind: "up_early" });
+    localStorage.removeItem(`hatch-welcomed-${me}`);
+    el._moment(s, { type: "friend_home", user: me, weather: "wet", at: new Date().toISOString() });
+    const out = s.queue.map((q) => q.text);
+    s.queue = [];
+    return out;
+  }, me);
+  check("the new private lines read right", lines[0] === "I dreamed about the sea 🌊, like you said! ♥" &&
+    lines[1] === "I dreamed about the sea 🌊..." && lines[2] === "ha, sunny after all! good guess though ♥" &&
+    lines[3] === "back from the gym?! so strong!" && lines[4] === "Thanksgiving in autumn, your favourite time! ♥" &&
+    /rain/.test(lines[5]) && lines[6] === "mmh... you're up before the sun... zzz ♥" &&
+    lines[8] === "you're all wet! come get cozy ☔", lines.join(" | "));
   check("a friend coming home is cheered, by name to others", /^(you're home!! ♥|yay, you're back! ♥)$/.test(cheers.out[0]) &&
     cheers.out[1] === "" && /^(Sam's home!!|ooh, Sam is back!)$/.test(cheers.out[2]),
   `${cheers.out.join(" | ")} (person ${cheers.person})`);

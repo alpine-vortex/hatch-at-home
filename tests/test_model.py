@@ -1510,3 +1510,18 @@ def test_a_game_record_is_each_persons_own():
     assert types(model.game_record(pet, "u1", "left_right", 4)) == ["bond_record"]
     assert model.game_record(pet, "u2", "left_right", 2) == []  # their first
     assert pet.bonds["u1"]["best"] == {"left_right": 4}
+
+
+def test_last_nights_dream_pick_comes_true():
+    pet = hatched(at(9))
+    model.dream_seed(pet, {"kind": "game"}, at(20))
+    model.pick_dream(pet, "u1", "sea", at(21))
+    model.pick_dream(pet, "u1", "stars", at(21, 30))  # their latest choice
+    model.dream_on_waking(pet, at(7, day=2), "2026-10-02", random.Random(1))
+    assert pet.dream == {
+        "kind": "picked",
+        "pick": "stars",
+        "user": "u1",
+        "day": "2026-10-02",
+    }
+    assert pet.dream_picks == [] and pet.dream_seeds == []

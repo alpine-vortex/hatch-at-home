@@ -353,14 +353,39 @@ const WISHES_FOR = {
 // "will you play?" + "sunbeam" -> "will you play, sunbeam?"; "night night ♥" -> "night night, sunbeam ♥"
 const withName = (line, name) => (name ? line.replace(/([!?.]*)(\s*♥)?$/, `, ${name}$1$2`) : line);
 const FRIEND_WELCOME_MS = 6 * 3600 * 1000; // "welcome home!" at the next look, this long after
-// "How was your day?": asked now and then (once a day per person and device) when
-// a friend comes home or looks in late in the day. Card only; nothing is kept.
-const ASK_DAY = { chance: 0.6, after: 16, ms: 20000 };
-const DAY_ANSWERS = {
-  great: ["yay!! that makes me so happy ♥", "a great day! tell me everything! ♥"],
-  ok: ["ok days are good days too ♥", "I'm glad you're here now ♥"],
-  tough: ["aww... come here *snuggle* ♥", "I'm here for you ♥ *cuddle*"],
+// Questions the pet asks; the server picks which and when (visit's "ask"), so
+// the daily limit holds across pets and devices. "keep" answers go back to the
+// server (virtual_pet/answer); the others stay on the card.
+const ASK_MS = 20000;
+const QUESTIONS = {
+  how_day: { q: "how was your day?", answers: {
+    great: ["yay!! that makes me so happy ♥", "a great day! tell me everything! ♥"],
+    ok: ["ok days are good days too ♥", "I'm glad you're here now ♥"],
+    tough: ["aww... come here *snuggle* ♥", "I'm here for you ♥ *cuddle*"] } },
+  slept: { q: "did you sleep well?", answers: {
+    great: ["yay! ♥ good morning!", "me too! ♥"],
+    ok: ["a cozy morning then ♥"],
+    "not really": ["aww, take it easy today ♥", "a slow morning then... *yawn* ♥"] } },
+  fav_weather: { q: "what's your favourite weather?", keep: true, answers: {
+    sun: ["sunny days! me too ☀"], rain: ["ooh, cozy rain ☔"], snow: ["snow!! ❄ I'll remember"],
+    storms: ["storms! so exciting ⚡"] } },
+  fav_season: { q: "what's your favourite season?", keep: true, answers: {
+    spring: ["spring! flowers everywhere 🌸"], summer: ["summer! sunshine! ☀"],
+    autumn: ["autumn! crunchy leaves 🍂"], winter: ["winter! snuggly ❄"] } },
+  dream: { q: "what should I dream about tonight?", keep: true, answers: {
+    stars: ["the stars... ✨ ok!"], sea: ["the sea! 🌊 ok!"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ ok!"] } },
+  guess: { q: "rain or sun tomorrow?", keep: true, answers: {
+    rain: ["rain! we'll see ☔"], sun: ["sun! we'll see ☀"] } },
 };
+const PLACES = {
+  gym: "back from the gym?! so strong!", work: "long day at work? ♥",
+  school: "how was school? ♥", park: "did you have fun at the park?",
+};
+const HOME_WEATHER = {
+  wet: "you're all wet! come get cozy ☔", snowy: "snow on your shoes! ❄",
+  cold: "brr, was it cold out there?", hot: "you must be thirsty after that heat!",
+};
+const SEASON_ICONS = { spring: "🌸", summer: "☀", autumn: "🍂", winter: "❄" };
 // What the pet tells only you (virtual_pet.visit's notes), each once.
 const NOTES = {
   friends_for: (n) => n.months % 12 === 0
@@ -374,6 +399,24 @@ const NOTES = {
   run: () => "did you go for a run?! so fast!",
   stairs: (n) => `${n.floors} floors of stairs?! you're a climber!`,
   rested: () => pick(["you look so well rested! ♥", "good morning! you slept so well ♥"]),
+  rain_walk: () => pick(["you walked in the rain?! so brave!", "out in the rain and still so many steps! ☔"]),
+  snow_walk: () => "you went walking in the snow?! ❄ so brave!",
+  dream: (n) => n.pick === "you"
+    ? (n.yours ? "I dreamed about you, like you said! ♥" : "I dreamed about my friends ♥")
+    : `I dreamed about ${{ stars: "the stars ✨", sea: "the sea 🌊", snacks: "snacks!" }[n.pick] || n.pick}${n.yours ? ", like you said! ♥" : "..."}`,
+  guess: (n) => n.outcome === "right"
+    ? (n.guess === "rain" ? "you were right!! it rained ☔" : "you were right!! sunny ☀")
+    : n.outcome === "wrong"
+      ? (n.guess === "rain" ? "ha, sunny after all! good guess though ♥" : "ha, it rained after all! good guess though ♥")
+      : "it was cloudy all day! nobody wins ♥",
+  back_from: (n) => PLACES[n.place],
+  fav_weather: (n) => ({ sun: "it's sunny, your favourite! ☀", rain: "it's raining, your favourite! ☔",
+    snow: "it's snowing, your favourite!! ❄", storms: "a storm! your favourite ⚡" })[n.weather],
+  season: (n) => n.holiday
+    ? `${n.holiday === "halloween" ? "Halloween" : "Thanksgiving"} in ${n.season}, your favourite time! ♥`
+    : `it's ${n.season}, your favourite! ${SEASON_ICONS[n.season] || ""}`.trim(),
+  early_alarm: () => "early start tomorrow? sleep well ♥",
+  up_early: () => "mmh... you're up before the sun... zzz ♥",
 };
 const DREAMS = {
   watching: (d) => `I dreamed about ${d.title}!`,
@@ -1883,15 +1926,14 @@ class HatchPetCard extends HTMLElement {
       const bond = this._bond(s);
       const first = this._hass.user?.name?.trim().split(/\s+/)[0];
       this._queue(s, `welcome home, ${(bond?.level >= BOND.nickname && bond.nickname) || first || "friend"}! ♥`, 5000);
-      this._maybeAskDay(s, true);
-    } else {
-      this._maybeAskDay(s);
+      if (HOME_WEATHER[home.weather]) this._queue(s, HOME_WEATHER[home.weather], 4500);
     }
   }
 
-  // Each "came home" is welcomed once per device (seen live, or at the next look).
+  // Each "came home" is welcomed once in this browser, by any pet (seen live,
+  // or at the next look).
   _welcomeDue(s, at) {
-    const key = `hatch-welcomed-${this._hass.user?.id}-${s.ids?.device}`;
+    const key = `hatch-welcomed-${this._hass.user?.id}`;
     try {
       if (Number(localStorage.getItem(key) || 0) >= at) return false;
       localStorage.setItem(key, String(at));
@@ -2011,7 +2053,14 @@ class HatchPetCard extends HTMLElement {
     if (!id || !this._hass.user || Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
     s.visitedAt = Date.now();
     this._hass.callService("virtual_pet", "visit", { entity_id: id }, undefined, false, true)
-      .then((res) => (res?.response?.notes || []).forEach((note) => this._note(s, note)))
+      .then((res) => {
+        (res?.response?.notes || []).forEach((note) => this._note(s, note));
+        const ask = res?.response?.ask;
+        if (QUESTIONS[ask] && !s.asking) {
+          s.asking = true;
+          (s.queue ??= []).push({ text: QUESTIONS[ask].q, ms: ASK_MS, then: () => this._ask(s, ask) });
+        }
+      })
       .catch(() => {
         // an older integration has no visit: no bond yet, nothing else changes
       });
@@ -2028,25 +2077,16 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
-  // "How was your day?" now and then: when a close friend comes home (home), or
-  // at the first look late in the day.
-  _maybeAskDay(s, home = false) {
-    const bond = this._bond(s);
-    if (!bond || bond.level < BOND.warm || s.asking) return;
-    if (!home && new Date().getHours() < ASK_DAY.after) return;
-    if (Math.random() > ASK_DAY.chance || !oncePerDay(`askday-${this._hass.user?.id}-${s.ids?.device}`)) return;
-    s.asking = true;
-    s.queue = s.queue || [];
-    s.queue.push({ text: "how was your day?", ms: ASK_DAY.ms, then: () => this._askDay(s) });
-  }
-
-  _askDay(s) {
+  // A question with its answers as buttons (the line is already in the bubble).
+  _ask(s, kind) {
+    const question = QUESTIONS[kind];
     s.screen.querySelector(".askday")?.remove();
     const box = document.createElement("div");
     box.className = "askday";
     box.setAttribute("role", "group");
-    box.setAttribute("aria-label", "How was your day?");
-    box.innerHTML = ["great", "ok", "tough"].map((a) => `<button data-answer="${a}">${a}</button>`).join("");
+    box.setAttribute("aria-label", question.q);
+    box.innerHTML = Object.keys(question.answers)
+      .map((a) => `<button data-answer="${escape(a)}">${escape(a)}</button>`).join("");
     const done = () => {
       box.remove();
       s.asking = false;
@@ -2058,15 +2098,22 @@ class HatchPetCard extends HTMLElement {
       e.stopPropagation(); // the screen behind would open the status
       this._tapped(e.target.closest("button"));
       done();
-      s.bubble.textContent = pick(DAY_ANSWERS[answer]);
+      s.bubble.textContent = pick(question.answers[answer]);
       s.sayUntil = Date.now() + 4500;
       const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-      if (answer === "great" && !calm) this._animate(s, s.pet, "greethop", 1400);
-      else if (answer === "tough" && !calm) this._bondHearts(s);
+      if (["great", "you"].includes(answer) && !calm) this._animate(s, s.pet, "greethop", 1400);
+      else if (["tough", "not really"].includes(answer) && !calm) this._bondHearts(s);
       else this._animate(s, s.pet, "perk", 320);
+      if (question.keep) {
+        // A websocket command, not a service call: answers stay off the event bus.
+        this._hass.callWS({ type: "virtual_pet/answer", entity_id: s.ids?.["sensor.life_stage"],
+          question: kind, answer }).catch(() => {
+          // not kept this time: it may ask again another day
+        });
+      }
     });
     s.screen.append(box);
-    s.askTimer = setTimeout(done, ASK_DAY.ms);
+    s.askTimer = setTimeout(done, ASK_MS);
   }
 
   // Hearts that float up around the pet: only for someone it's very close to.
@@ -2283,9 +2330,11 @@ class HatchPetCard extends HTMLElement {
         if (m.user === me) {
           if (!this._welcomeDue(s, new Date(m.at).getTime())) break;
           this._queue(s, pick(["you're home!! ♥", "yay, you're back! ♥"]), 4500);
+          if (HOME_WEATHER[m.weather]) this._queue(s, HOME_WEATHER[m.weather], 4500);
           const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
           if (!calm) this._animate(s, s.pet, "greethop", 1400);
-          this._maybeAskDay(s, true);
+          s.visitedAt = 0; // look in again now: the pet may want to ask about your day
+          this._visit(s);
           break;
         }
         const name = this._personName(m.user);

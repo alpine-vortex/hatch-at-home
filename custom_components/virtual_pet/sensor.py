@@ -212,9 +212,11 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "bonds": {
                 user: {
                     "level": model.bond_level(b["points"]),
-                    **{
-                        k: b[k] for k in ("nickname", "favourite", "my_day") if b.get(k)
-                    },
+                    **{k: b[k] for k in ("nickname", "favourite") if b.get(k)},
+                    # One switch per person, for every pet (people.py).
+                    **(
+                        {"my_day": True} if self.coordinator.people.my_day(user) else {}
+                    ),
                 }
                 for user, b in self.pet.bonds.items()
             },

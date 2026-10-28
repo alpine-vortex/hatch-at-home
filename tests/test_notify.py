@@ -100,3 +100,13 @@ def test_a_friend_is_told_by_nickname():
     )
     holiday = notify.HOLIDAY_MORNINGS["thanksgiving"].format(name="Pip")
     assert notify.to_friend(holiday, "bean") == holiday
+
+
+def test_send_offs_read_well():
+    assert (
+        notify.send_off("rain", "Pip", "sunbeam")
+        == "Pip says: rain today, take an umbrella, sunbeam ☂"
+    )
+    assert (
+        notify.send_off("hot", "Pip", None) == "Pip says: it's a hot one, stay cool! ☀"
+    )

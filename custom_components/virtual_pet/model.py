@@ -131,6 +131,8 @@ class PetState:
     wish: dict[str, Any] | None = None
     dream_seeds: list[dict[str, Any]] = field(default_factory=list)
     dream: dict[str, Any] | None = None
+    # "What should I dream about tonight?": {user, pick, at}, used at the wake.
+    dream_picks: list[dict[str, Any]] = field(default_factory=list)
     # HA user ID -> {points, day, today, visited, games, nickname?, favourite?}.
     # The household's, not the pet's: carried into the next generation.
     bonds: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -1363,6 +1365,12 @@ def grant_wish(
     return [{"type": "wish_granted", "kind": trigger}]
 
 
+def pick_dream(state: PetState, user: str, pick: str, now: float) -> None:
+    """Someone chose what the pet dreams about tonight (their latest choice)."""
+    state.dream_picks = [p for p in state.dream_picks if p["user"] != user]
+    state.dream_picks.append({"user": user, "pick": pick, "at": now})
+
+
 def dream_seed(state: PetState, seed: dict[str, Any], now: float) -> None:
     """Remember a moment of the day the pet might dream about tonight."""
     state.dream_seeds.append({**seed, "at": now})
@@ -1376,6 +1384,18 @@ def dream_on_waking(
     none, maybe of something plain). The seeds are used up either way."""
     fresh = [s for s in state.dream_seeds if now - s["at"] < R.DREAM_SEED_HOURS * 3600]
     state.dream_seeds = []
+    picks = [p for p in state.dream_picks if now - p["at"] < R.DREAM_PICK_HOURS * 3600]
+    state.dream_picks = []
+    if picks:
+        # Someone asked for this dream (one of them, if several did).
+        chosen = rng.choice(picks)
+        state.dream = {
+            "kind": "picked",
+            "pick": chosen["pick"],
+            "user": chosen["user"],
+            "day": today,
+        }
+        return [{"type": "dreamed", "kind": "picked", "pick": chosen["pick"]}]
     if fresh:
         seed = rng.choice(fresh)
         state.dream = {k: v for k, v in seed.items() if k != "at"} | {"day": today}

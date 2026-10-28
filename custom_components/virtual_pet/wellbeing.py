@@ -34,6 +34,7 @@ SENSORS: dict[str, dict[str, bool]] = {
     "floors": {"health_connect_daily_floors": True, "floors_ascended": True},
     "sleep": {"health_connect_sleep_duration": False},
     "activity": {"detected_activity": False, "activity": False},
+    "alarm": {"next_alarm": False},  # Android
 }
 # Activity states worth a word, as the two apps name them.
 MOVES = {"running": "run", "cycling": "bike", "on_bicycle": "bike"}
@@ -60,6 +61,7 @@ class Day:
     sleep_hours: float | None = None
     sleep_usual: float | None = None
     moved: set[str] = field(default_factory=set)  # "run", "bike" today
+    weather: set[str] = field(default_factory=set)  # the house's: rain, snow, sun
 
 
 def find_sensors(hass: HomeAssistant, user_id: str) -> Sensors:
@@ -131,6 +133,11 @@ def notice(day: Day, level: int, hour: int) -> dict[str, Any] | None:
         ):
             return {"kind": "stairs", "floors": int(floors)}
     usual = day.steps_usual
+    walked = steps >= usual if usual else steps >= R.MY_DAY_WEATHER_WALK_STEPS
+    if level >= R.MY_DAY_USUAL_LEVEL and walked and steps:
+        for kind in ("snow", "rain"):  # out in it anyway
+            if kind in day.weather:
+                return {"kind": f"{kind}_walk", "steps": int(steps)}
     if (
         level >= R.MY_DAY_USUAL_LEVEL
         and usual is not None
@@ -237,10 +244,15 @@ async def _counter(
     return today, usual, (max(whole) if whole else None), len(whole)
 
 
-async def read_day(hass: HomeAssistant, sensors: Sensors, moved: set[str]) -> Day:
+async def read_day(
+    hass: HomeAssistant,
+    sensors: Sensors,
+    moved: set[str],
+    weather: set[str] | None = None,
+) -> Day:
     """Today so far for one person, from their phones and their history."""
     now = dt_util.now()
-    day = Day(moved=set(moved))
+    day = Day(moved=set(moved), weather=set(weather or ()))
     if found := sensors.found.get("steps"):
         day.steps, day.steps_usual, day.steps_best, day.steps_days = await _counter(
             hass, found[0], found[1], now

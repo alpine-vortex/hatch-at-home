@@ -127,8 +127,23 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   - cheers when you beat your own best at a game, which it keeps for each person;
   - says goodnight when you tuck it in in the evening (lights out by hand from 6 pm),
     and thanks you the next morning;
-  - sometimes asks "how was your day?" when you come home or look in late in the day
-    (from level 2). Tap great, ok or tough and it answers kindly. Nothing is kept.
+  - asks you things now and then (from level 2), at most one question in the morning
+    and one later, per person, however many pets and screens you have: "did you
+    sleep well?", "how was your day?" (always after you come back from work or
+    school), "what should I dream about tonight?" (and the next morning it dreamed
+    it: "I dreamed about the sea, like you said! ♥"), "rain or sun tomorrow?" (judged
+    the next evening, no score), and once each "what's your favourite weather?" and
+    "...season?". It remembers favourites, tonight's dream and your guess; the rest
+    of your answers stay on your screen;
+  - remembers your favourites: "it's snowing, your favourite!! ❄", "it's autumn, your
+    favourite! 🍂" once a season (no season talk in the tropics), "Thanksgiving in
+    autumn, your favourite time! ♥";
+  - says what it's like out there when you come home ("you're all wet! come get
+    cozy ☔", "brr, was it cold out there?");
+  - greets you sleepily if you look in before sunrise ("mmh... you're up before the
+    sun... zzz ♥").
+
+  At most two of these lines at one look; the rest wait for your next one.
 
   A bond never changes the pet's stats: it's flavour. The status screen shows "you
   two" in five hearts.
@@ -142,7 +157,23 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   It reads the companion app's steps, floors and activity sensors (iOS) and Health
   Connect's daily steps, floors and sleep (Android); Android's plain step counter
   works through Home Assistant's long-term statistics. "Usual" is your own median
-  over the last two weeks, from that history; the pet stores none of it. Each person only ever sees their own bond. Care through Assist counts for
+  over the last two weeks, from that history; the pet stores none of it. With "my
+  day" on, it also notices:
+  - a walk in the rain or snow ("you walked in the rain?! so brave!", level 4);
+  - coming back from a zone you made, when its name has gym, work, office, school,
+    college, university or park in it ("back from the gym?! so strong!", level 3;
+    other zones are never named);
+  - an early alarm tomorrow on an Android phone (the Next alarm sensor, which is
+    off by default in the app): "early start tomorrow? sleep well ♥", from 19:00,
+    when it's at least 45 minutes before your usual (level 3);
+  - a send-off on your phone on a notable morning as you leave ("Pip says: rain
+    today, take an umbrella, sunbeam ☂"), with "notify me" on, at most three times a
+    week, from the pet you're closest to, and silent (level 3).
+
+  "My day" is one switch per person, for every pet. Phone focus modes and Do Not
+  Disturb are left to your phone: the pet's calls and sickness are time-sensitive
+  (they may come through a focus you allow), everything else waits like any other
+  notification. Each person only ever sees their own bond. Care through Assist counts for
   whoever is signed in; automations build no bond. A new generation keeps the household's bonds. (The card tells the pet who
   looked in with `virtual_pet.visit`, counted at most hourly.)
 - **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
@@ -553,8 +584,11 @@ names are included.
 `favourite` when the level brings one), `virtual_pet_bond_favourite` (with `user` and
 `game`), `virtual_pet_friend_home` (with `user`: a close friend came home),
 `virtual_pet_bond_record` (with `user`, `game`, `wins`: a new personal best),
-`virtual_pet_tucked_in` (with `user`). What it notices about someone's day is never
-an event: it goes only to that person, in `virtual_pet.visit`'s response.
+`virtual_pet_tucked_in` (with `user`). What it notices about someone's day, where
+they've been, their alarm and their answers are never an event: they go only to
+that person, in `virtual_pet.visit`'s response, and answers come in through the
+websocket command `virtual_pet/answer`, which (unlike a service call) puts nothing
+on the event bus.
 
 Events fired during a fast-forward carry `simulated: true`.
 
