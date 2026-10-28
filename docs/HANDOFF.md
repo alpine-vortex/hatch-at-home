@@ -32,7 +32,7 @@ details before committing it.
 **The driving role for this project passed to the owner's "Hatch First Mate"
 session** (owner's request, 2026-10-28). Released: 0.33.1 (PR #29: the "birthday on
 my phone" switch, off by default; the Art session's redrawn party hat, PR #28; a
-sturdier idle-life card check). `main` is clean; nothing is in flight.
+sturdier idle-life card check). `main` is clean; phase 4 is on a crew branch, awaiting the beta try.
 
 **Phase 4 of the voices plan, the photo (A7), is built as 0.34.0b1, awaiting the
 beta try** (crew branch `crew/hatch-at-home-s2407-phase-4-of-the-voices-plan-the`,
