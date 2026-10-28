@@ -189,6 +189,7 @@ const SEASONS = [
   },
 ];
 const HEAD_TOPS = new Map(); // frame|x -> the top of the head (see _headTop)
+const FRAME_IMGS = new Map(); // src -> Image, for measuring frames not on show
 const SEASON_COSTUME_MS = [90000, 150000]; // between costume moments
 const SEASON_BAT_MS = [20000, 45000]; // between bats flying by
 const SEASON_GHOST_MS = [240000, 420000]; // between ghosts
@@ -2333,6 +2334,8 @@ class HatchPetCard extends HTMLElement {
   _seasonTick(s) {
     const season = seasonNow(this._config);
     if (!season || !s.species) return;
+    const spot = s.species.hat?.[s.drawn] || s.species.head?.[s.drawn];
+    if (spot) this._headTopAll(s, spot[0], spot[1]); // measure ahead
     const now = Date.now();
     const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const part = seasonPart(season, s.worldKey);
@@ -2403,8 +2406,7 @@ class HatchPetCard extends HTMLElement {
   // down the head point's column to the first solid pixel. (The head point is
   // for flair floating above the head, so a hat there would hover.) Cached per
   // frame; null if the frame can't be read.
-  _headTop(s, hx, hy) {
-    const img = s.pet;
+  _headTop(img, hx, hy) {
     const key = `${img.currentSrc || img.src}|${hx}`;
     if (HEAD_TOPS.has(key)) return HEAD_TOPS.get(key);
     if (!img.complete || !img.naturalWidth) return null;
@@ -2429,6 +2431,27 @@ class HatchPetCard extends HTMLElement {
     return top;
   }
 
+  // The lowest head top across the frames on show (a pet's two idle frames can
+  // carry the head a few pixels apart), so a hat never hovers on either: it
+  // sits a little deeper on the other. Frames not loaded yet are measured on a
+  // later call (_seasonTick calls this every tick to have them ready).
+  _headTopAll(s, hx, hy) {
+    let low = this._headTop(s.pet, hx, hy);
+    for (const sprite of this._frames(s)) {
+      const path = sprite.includes("/") ? sprite : `${s.speciesId}/${sprite}`;
+      const src = new URL(`${BASE}/sprites/${path}.png?v=${VERSION}`, location.href).href;
+      let img = FRAME_IMGS.get(src);
+      if (!img) {
+        img = new Image();
+        img.src = src;
+        FRAME_IMGS.set(src, img);
+      }
+      const top = this._headTop(img, hx, hy);
+      if (top !== null && (low === null || top > low)) low = top;
+    }
+    return low;
+  }
+
   // The hat sits on top of the head, brim sunk in a little.
   _costume(s, season, line) {
     const head = s.species?.head?.[s.drawn];
@@ -2440,7 +2463,10 @@ class HatchPetCard extends HTMLElement {
     // species.json "hat" where ears or antlers rise above the skull (the deer).
     const own = s.species.hat?.[s.drawn];
     const k = r.height / 256;
-    const top = own ? own[1] : this._headTop(s, head[0], head[1]);
+    // With a hat point, the lower of it and the frames' top in its column (another
+    // mood's frames can carry the head lower).
+    const scanned = own ? this._headTopAll(s, own[0], own[1]) : this._headTopAll(s, head[0], head[1]);
+    const top = own ? Math.max(own[1], scanned ?? own[1]) : scanned;
     // Today's costume for this pet (the hat, without a list).
     const costume = dailyPick(season.costumes || [{ art: "hat", sink: 7, width: 64 }], s.ids?.device);
     const brim = top === null ? at.hy + 14 * at.ks : r.top - sr.top + (top + costume.sink) * k;

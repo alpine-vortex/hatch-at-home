@@ -433,6 +433,9 @@ async function main() {
   const spooky = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
     s.sayUntil = 0; s.flairUntil = 0;
+    const [hx0, hy0] = s.species.hat?.[s.drawn] || s.species.head[s.drawn];
+    el._headTopAll(s, hx0, hy0); // load every frame first, as the season's ticks do
+    await new Promise((r) => setTimeout(r, 600));
     el._costume(s, { key: "halloween" }, "boo!");
     await new Promise((r) => setTimeout(r, 900));
     const hat = s.screen.querySelector(".costume .hat")?.getBoundingClientRect();
@@ -441,7 +444,9 @@ async function main() {
     const r = s.pet.getBoundingClientRect();
     // The real top of the head in the frame on show (or the species' hat point).
     const [hx, hy] = s.species.hat?.[s.drawn] || s.species.head[s.drawn];
-    const top = s.species.hat?.[s.drawn] ? hy : el._headTop(s, hx, hy);
+    // The lowest top across the idle frames: on every frame the hat must sit on the head.
+    const scanned = el._headTopAll(s, hx, hy);
+    const top = s.species.hat?.[s.drawn] ? Math.max(hy, scanned ?? hy) : scanned;
     return {
       pieces: [...s.seasonBox.querySelectorAll("img")].map((i) => i.className.split(" ")[0]),
       hatBottom: hat && hat.bottom - sr.top, headTop: r.top - sr.top + top * (r.height / 256),
