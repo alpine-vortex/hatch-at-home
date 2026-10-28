@@ -850,6 +850,9 @@ async function main() {
     s.screen.querySelector(".costume")?.remove();
     s.sayUntil = 0; s.flairUntil = 0;
     s.nextFlyer = Date.now() + 600000; // only the flock sent here
+    // A flock the tick already sent has its wing geese still to come (450 ms after
+    // the leader): let them arrive before clearing the sky.
+    await new Promise((r) => setTimeout(r, 600));
     s.seasonBox.querySelectorAll(".sgoose").forEach((g) => g.remove());
     el._seasonVisitor(s, season);
     el._seasonFlyer(s, season);
