@@ -461,6 +461,20 @@ async function main() {
       spooky.hatBottom < spooky.fy && spooky.said === "boo!",
     `hat bottom ${Math.round(spooky.hatBottom)} vs head top ${Math.round(spooky.headTop)}`);
   await shot("05-halloween");
+  // No costume while the pet is off its spot (a wander or a look): the hat
+  // would be left hovering where the pet was.
+  const movingBlocks = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    Object.assign(s, { sayUntil: 0, flairUntil: 0, movingUntil: 0, poseUntil: 0, propUntil: 0,
+      moodState: "content", asleep: false, calling: false, game: null });
+    s.screen.classList.remove("show-status");
+    const before = el._free(s);
+    el._look(s, 300);
+    const during = el._free(s);
+    await new Promise((r) => setTimeout(r, 700));
+    return [before, during, el._free(s)];
+  });
+  check("no costume moment while the pet moves", movingBlocks.join() === "true,false,true", movingBlocks.join());
   // Halloween's extras: bunting, a ghost the pet jumps at, candy for a snack.
   const extras = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
@@ -497,27 +511,31 @@ async function main() {
     attributes: { moments: [{ type: "weather", change: "rain_started", at: hourAgo },
       { type: "fell_asleep", how: "house", at: hourAgo }] },
   });
-  const firstLook = await card.evaluate(async (el) => {
+  await card.evaluate(async (el) => {
     const s = el._slides[el._index];
     const device = s.ids.device;
     for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish)-/.test(k)) localStorage.removeItem(k);
     localStorage.setItem(`hatch-seen-${device}`, String(Date.now() - 5 * 3600 * 1000));
     s.lookedFirst = false; s.queue = []; s.sayUntil = 0; s.flairUntil = 0;
     el._firstLook(s);
-    const said = [];
-    for (let i = 0; i < 3; i++) {
+  });
+  const firstLook = [];
+  for (const name of ["05-first-look", "05-dream", "05-wish"]) {
+    firstLook.push(await card.evaluate((el) => {
+      const s = el._slides[el._index];
       s.sayUntil = 0;
       el._sayQueued(s);
-      said.push(s.bubble.textContent);
-    }
-    return said;
-  });
+      return s.bubble.textContent;
+    }));
+    await shot(name);
+  }
   check("the first look tells the day's news, dream and wish",
     /^while you were out, I (napped|watched the rain)/.test(firstLook[0]) && firstLook[1] === "I dreamed about Bluey!" &&
       firstLook[2] === "can we watch the sunset together?", firstLook.join(" | "));
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(500);
   check("the wish is on the status screen", /wish\s*♡ watch the sunset together/.test(await cur().locator(".status").innerText()));
+  await shot("05-wish-status");
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(300);
   await inject(pet["sensor.life_stage"], { attributes: { wish: { kind: "sunset", granted: true } } });
