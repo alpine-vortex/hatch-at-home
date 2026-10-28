@@ -1,95 +1,15 @@
 {
   "name": "Western pond turtle",
   "ready": true,
-  "stages": [
-    "baby",
-    "child",
-    "teen",
-    "adult"
-  ],
-  "scale": {
-    "adult": 1.15
-  },
-  "moods": [
-    "content",
-    "excited",
-    "cozy",
-    "bored",
-    "hungry",
-    "sleepy",
-    "asleep",
-    "sick",
-    "calling",
-    "dirty"
-  ],
+  "stages": ["baby", "child", "teen", "adult"],
+  "scale": {"adult": 1.15},
+  "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
   "frames": 2,
-  "extras": {
-    "squint": "child_squint",
-    "shiver": "child_shiver",
-    "sweat": "child_sweat",
-    "mask": "child_mask",
-    "dance": "child_dance",
-    "watch_tv": "child_watch_tv",
-    "bask": [
-      "child_bask_1",
-      "child_bask_2"
-    ],
-    "tuck": [
-      "child_tuck_1",
-      "child_tuck_2"
-    ],
-    "swim": [
-      "child_swim_1",
-      "child_swim_2"
-    ]
-  },
-  "props": {
-    "feed": "axolotl/bowl_food",
-    "snack": "snack",
-    "play": "play",
-    "clean": "treefrog/bubbles",
-    "medicine": "bird/medicine",
-    "blanket": "bird/blanket",
-    "attention": "bird/attention",
-    "away": "bird/sitter_sign",
-    "poop": [
-      "bird/poop_1",
-      "bird/poop_2",
-      "bird/poop_3"
-    ]
-  },
-  "backgrounds": {
-    "day": "treefrog/bg_day",
-    "night": "treefrog/bg_night",
-    "rain": "treefrog/bg_rain",
-    "dim": "treefrog/bg_night"
-  },
-  "words": {
-    "food": "snails",
-    "home": "log"
-  },
-  "reactions": {
-    "play": "swim",
-    "won": "swim",
-    "praise": "bask",
-    "scold": "tuck"
-  },
-  "head": {
-    "baby": [
-      174,
-      160
-    ],
-    "child": [
-      176,
-      132
-    ],
-    "teen": [
-      192,
-      112
-    ],
-    "adult": [
-      208,
-      132
-    ]
-  }
+  "extras": {"squint": "child_squint", "shiver": "child_shiver", "sweat": "child_sweat", "mask": "child_mask", "dance": "child_dance", "watch_tv": "child_watch_tv", "bask": ["child_bask_1", "child_bask_2"], "tuck": ["child_tuck_1", "child_tuck_2"], "swim": ["child_swim_1", "child_swim_2"]},
+  "props": {"feed": "axolotl/bowl_food", "snack": "snack", "play": "play", "clean": "treefrog/bubbles", "medicine": "bird/medicine", "blanket": "bird/blanket", "attention": "bird/attention", "away": "bird/sitter_sign", "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]},
+  "backgrounds": {"day": "treefrog/bg_day", "night": "treefrog/bg_night", "rain": "treefrog/bg_rain", "dim": "treefrog/bg_night"},
+  "words": {"food": "snails", "home": "log"},
+  "reactions": {"play": "swim", "won": "swim", "praise": "bask", "scold": "tuck"},
+  "head": {"baby": [174, 160], "child": [176, 132], "teen": [192, 112], "adult": [208, 132]},
+  "murk": "treefrog/murk"
 }
