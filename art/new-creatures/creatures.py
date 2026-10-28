@@ -87,7 +87,7 @@ C = {
  "ballpython": dict(world="terrarium", name="Ball python", kind="ball python", measure="w", target=(150, 185, 220),
    look="a smooth chunky snake: warm dark-brown body with big caramel-tan blotches edged in darker brown, a cream belly, a small rounded head with kind round eyes and a gentle smile. ANATOMY: no legs, no arms, no ears; a short forked tongue only when it flicks.",
    stages=("BABY: the hatchling (row 1 left): a thin little loop, big head and eyes.",
-           "CHILD: the young python (row 1 middle): a loose S-curve coil.",
+           "CHILD: the young python (row 1 middle): a loose S-curve coil with ONE single tail tip, tucked behind the coil; nothing hangs in front of the neck, no forked or hooked ends.",
            "TEEN: the thick python (row 1 right), the biggest, in a neat coil."),
    moods={"calling": ("head raised high above its coil, a small '!' above it", "frame 2 = head swayed to the other side, tongue flick"),
           "excited": ("head up and swaying happily, tongue flicking, small sparkles", "frame 2 = head the other way, sparkles moved"),
@@ -194,7 +194,7 @@ C = {
 
  # --- Pond (murk) ---
  "pondturtle": dict(world="pond", name="Western pond turtle", kind="western pond turtle", measure="w", target=(150, 185, 220),
-   look="a LOW, flat, smooth dark olive-brown shell with fine yellow flecks (not domed like a tortoise), a dark olive head with yellow flecks, a pale yellow chin and throat, four WEBBED clawed feet, a short tail.",
+   look="a LOW, flat, SMOOTH dark brown shell made of a few LARGE simple plates in two flat shades of brown, with NO fine flecks or speckles anywhere (keep colour areas big and solid so it reads at small size); a dark brown head with a clean pale yellow chin and throat; four WEBBED clawed feet; a short tail; a solid continuous dark outline around the whole silhouette.",
    stages=("BABY: the hatchling (row 1 left): coin-sized round shell, big head, long tail.",
            "CHILD: the young turtle (row 1 middle).",
            "TEEN: the turtle (row 1 right), the biggest."),
