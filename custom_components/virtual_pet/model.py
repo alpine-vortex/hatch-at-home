@@ -1554,7 +1554,7 @@ def _photos(value: Any) -> dict[str, dict[str, Any]]:
     for gen, photo in value.items():
         if (
             not isinstance(gen, str)
-            or not gen.isdigit()
+            or not (gen.isdecimal() and str(int(gen)) == gen)
             or not isinstance(photo, dict)
             or not all(isinstance(photo.get(k), str) for k in PHOTO_FIELDS)
         ):
