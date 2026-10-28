@@ -2480,7 +2480,7 @@ class HatchPetCard extends HTMLElement {
   _seasonTick(s) {
     const season = seasonNow(this._config);
     if (!season || !s.species) return;
-    const spot = s.species.hat?.[s.drawn] || s.species.head?.[s.drawn];
+    const spot = this._hatSpot(s) || s.species.head?.[s.drawn];
     if (spot) this._headTopAll(s, spot[0], spot[1]); // measure ahead
     const now = Date.now();
     const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -2598,6 +2598,14 @@ class HatchPetCard extends HTMLElement {
     return low;
   }
 
+  // species.json "hat" for the pose on show ("adult_calling"), else for the stage:
+  // a pose that sits the creature up carries its head well above the stage's point
+  // (the opossum calls and frets sitting up).
+  _hatSpot(s) {
+    const pose = (this._frames(s)[0] || "").replace(/_\d+$/, "");
+    return s.species.hat?.[pose] || s.species.hat?.[s.drawn];
+  }
+
   // The hat sits on top of the head, brim sunk in a little.
   _costume(s, season, line) {
     const head = s.species?.head?.[s.drawn];
@@ -2607,7 +2615,7 @@ class HatchPetCard extends HTMLElement {
     const r = s.pet.getBoundingClientRect();
     const sr = s.screen.getBoundingClientRect();
     // species.json "hat" where ears or antlers rise above the skull (the deer).
-    const own = s.species.hat?.[s.drawn];
+    const own = this._hatSpot(s);
     const k = r.height / 256;
     // With a hat point, the lower of it and the frames' top in its column (another
     // mood's frames can carry the head lower).
