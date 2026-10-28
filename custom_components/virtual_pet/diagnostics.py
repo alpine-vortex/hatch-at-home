@@ -89,6 +89,7 @@ async def async_get_config_entry_diagnostics(
             "whine_rate_per_hour": round(model.whine_rate(pet), 4),
             "upbringing": model.upbringing(pet),
             "upbringing_score": round(model.upbringing_score(pet), 1),
+            "personality": pet.personality,
             "trait_progress": model.trait_progress(pet),
         },
         "calculation": async_redact_data(

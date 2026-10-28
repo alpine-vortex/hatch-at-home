@@ -160,6 +160,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "bonds",
             "favourites",
             "catchphrase",
+            "personality",
             "hatched_on",
             "birthday",
         }
@@ -267,6 +268,8 @@ class LifeStageSensor(PetEntity, SensorEntity):
                 else None
             ),
             "upbringing_score": round(model.upbringing_score(self.pet)),
+            # Settled at teen; None before.
+            "personality": self.pet.personality,
         }
 
     def _hatches_at(self) -> str | None:

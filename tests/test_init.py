@@ -845,6 +845,34 @@ async def test_busy_attributes_stay_out_of_history(
     assert "reason_key" in MoodSensor._unrecorded_attributes
 
 
+async def test_the_personality_attribute_stays_out_of_history(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    from custom_components.virtual_pet.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+    from custom_components.virtual_pet.sensor import LifeStageSensor
+
+    assert "personality" in LifeStageSensor._unrecorded_attributes
+    # A teen saved before personalities: backfilled quietly at load.
+    hass_storage[STORE_KEY] = hatched_pet(now, age_hours=130.0)
+    config = await setup(hass)
+    attrs = hass.states.get("sensor.pip_life_stage").attributes
+    assert attrs["personality"] in model.PERSONALITIES
+    assert attrs["personality"] == config.runtime_data.state.personality
+    diag = await async_get_config_entry_diagnostics(hass, config)
+    assert diag["now"]["personality"] == attrs["personality"]
+    assert diag["pet"]["personality"] == attrs["personality"]
+
+
+async def test_a_child_has_no_personality_attribute_value(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    assert hass.states.get("sensor.pip_life_stage").attributes["personality"] is None
+
+
 async def test_the_reason_key_stays_off_assist_and_the_away_nap(
     hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
 ) -> None:

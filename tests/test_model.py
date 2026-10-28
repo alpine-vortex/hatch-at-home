@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from datetime import UTC, datetime
 import random
 
@@ -611,6 +612,7 @@ def test_laying_an_egg_retires_the_parent_to_the_journal():
     pet.species, pet.raised = "squirrel", ["bird", "squirrel"]
     pet.traits = ["night_owl", "homebody"]
     pet.care_misses = 3
+    pet.personality = "old_soul"
     egg, events = model.lay_egg(pet, at(12), random.Random(1))
     assert model.life_stage(egg) == "egg"
     assert egg.name == "Pip" and egg.born == at(12)
@@ -631,9 +633,11 @@ def test_laying_an_egg_retires_the_parent_to_the_journal():
             "age_days": round(pet.age_hours / 24, 1),
             "care_misses": 3,
             "upbringing": "steady",  # 3 misses and no discipline
+            "personality": "old_soul",
             "games": {},
         }
     ]
+    assert egg.personality is None
     assert events == [
         {
             "type": "egg_laid",
@@ -890,6 +894,7 @@ def test_upbringing_is_decided_on_growing_up(misses, discipline, grade):
     adult = dict(R.STAGE_STARTS)["adult"]
     start = at(9)
     pet = hatched(start, age_hours=adult - 0.1, discipline=discipline)
+    pet.personality = "sweet"  # settled at teen
     pet.care_misses = misses
     pet.hunger = pet.happiness = 99.0
     assert model.upbringing(pet) == grade  # on track before the day comes
@@ -937,6 +942,150 @@ def test_old_adult_saves_get_an_upbringing_and_bad_ones_are_dropped():
     young = hatched(at(9)).to_dict()
     young["upbringing"] = "legendary"
     assert model.PetState.from_dict(young).upbringing is None
+
+
+TEEN = dict(R.STAGE_STARTS)["teen"]
+
+
+def test_a_personality_is_settled_on_becoming_a_teen():
+    start = at(9)
+    pet = hatched(start)  # a child
+    run(pet, start + (TEEN - 30.0 - 0.1) * HOUR)
+    assert model.life_stage(pet) == "child" and pet.personality is None
+    events = run(pet, pet.last_updated + 10 * MIN)
+    grown = [e for e in events if e["type"] == "stage_changed"]
+    assert grown == [
+        {
+            "type": "stage_changed",
+            "stage": "teen",
+            "from": "child",
+            "personality": pet.personality,
+        }
+    ]
+    assert pet.personality in model.PERSONALITIES
+    # Kept for life: a new trait doesn't change it.
+    kept = pet.personality
+    pet.traits, pet.trait_levels = ["player"], {"player": 3}
+    run(pet, pet.last_updated + HOUR)
+    assert pet.personality == kept
+
+
+def test_eggs_and_babies_have_no_personality():
+    start = at(9)
+    pet = model.PetState.new("Pip", start)
+    assert pet.personality is None
+    model.advance(
+        pet,
+        start + 2 * HOUR,
+        model.Settings(tz=UTC, roster=("bird",)),
+        random.Random(1),
+        max_gap=None,
+    )
+    assert model.life_stage(pet) == "baby" and pet.personality is None
+
+
+def test_personality_for_is_deterministic():
+    pet = hatched(at(9), age_hours=TEEN + 1)
+    pet.traits, pet.trait_levels = ["homebody", "player"], {"homebody": 2}
+    first = model.personality_for(pet)
+    assert first in model.PERSONALITIES
+    assert all(model.personality_for(pet) == first for _ in range(5))
+    again = model.PetState.from_dict(pet.to_dict())
+    assert model.personality_for(again) == first
+
+
+def test_every_type_is_leaned_toward_by_four_traits():
+    assert set(model.PERSONALITY_LEANINGS) == set(model.TRAITS)
+    counts = Counter(k for pair in model.PERSONALITY_LEANINGS.values() for k in pair)
+    assert counts == dict.fromkeys(model.PERSONALITIES, 4)
+
+
+def test_picking_a_personality_leaves_the_shared_rng_alone():
+    start = at(9)
+    settings = model.Settings(tz=UTC, roster=("bird", "squirrel"))
+    pets, rngs = [], []
+    for preset in (None, "sweet"):
+        pet = model.PetState.new("Pip", start)
+        rng = random.Random(5)
+        model.advance(pet, start + HOUR, settings, rng, max_gap=None)  # hatches
+        pet.age_hours = TEEN - 0.5
+        pet.personality = preset  # "sweet": the teen branch has nothing to do
+        pet.hunger = pet.happiness = pet.energy = 10.0  # calls and sickness draw
+        model.advance(pet, pet.last_updated + 6 * HOUR, settings, rng, max_gap=None)
+        pets.append(pet)
+        rngs.append(rng)
+    assert pets[0].personality in model.PERSONALITIES
+    assert rngs[0].getstate() == rngs[1].getstate()
+    plain, preset = pets
+    assert plain.species == preset.species
+    assert plain.temperament == preset.temperament
+    assert plain.sick == preset.sick and plain.care_log == preset.care_log
+    state = random.getstate()
+    model.personality_for(plain)
+    assert random.getstate() == state  # nor the module's
+
+
+def test_personality_is_flavour_only():
+    start = at(9)
+    house = model.Settings(
+        tz=UTC,
+        roster=("bird",),
+        home=HomeEffect(flags=["rainy", "watching_tv"], company=True),
+    )
+    pets = []
+    for kind in ("mellow", "plucky"):
+        pet = hatched(start, age_hours=TEEN + 1, species="bird", personality=kind)
+        model.advance(pet, start + 7 * 24 * HOUR, house, random.Random(9), None)
+        pets.append(pet.to_dict())
+    a, b = pets
+    assert (a.pop("personality"), b.pop("personality")) == ("mellow", "plucky")
+    assert a == b  # stats, calls, care log, traits: everything else
+
+
+def test_personality_is_not_a_grade():
+    pet = hatched(at(9), age_hours=TEEN + 1)
+    pet.traits = ["helper"]
+    kind = model.personality_for(pet)
+    for misses, discipline, raised in ((10, 0.0, "scrappy"), (0, 100.0, "devoted")):
+        pet.care_misses, pet.discipline, pet.upbringing = misses, discipline, raised
+        assert model.personality_for(pet) == kind
+
+
+def test_every_type_is_reachable_and_traits_nudge():
+    plain = Counter(
+        model.personality_for(model.PetState.new("Pip", float(born)))
+        for born in range(4000)
+    )
+    assert set(plain) == set(model.PERSONALITIES)
+    assert all(400 <= n <= 600 for n in plain.values())  # 500 each, roughly
+    nudged = Counter()
+    for born in range(4000):
+        pet = model.PetState.new("Pip", float(born))
+        pet.traits, pet.trait_levels = ["homebody"], {"homebody": 3}
+        nudged[model.personality_for(pet)] += 1
+    # ★★★ homebody: sweet and mellow 4 each of 14, 2 in 7 instead of 1 in 8.
+    for kind in ("sweet", "mellow"):
+        assert nudged[kind] > 1.8 * plain[kind]
+
+
+def test_saves_without_a_personality_are_backfilled_and_bad_ones_dropped():
+    for age in (TEEN + 1, 400.0):
+        pet = hatched(at(9), age_hours=age)
+        pet.traits = ["fireside"]
+        data = pet.to_dict()
+        del data["personality"]
+        loaded = model.PetState.from_dict(data)
+        assert loaded.personality == model.personality_for(pet)
+        assert model.PetState.from_dict(data).personality == loaded.personality
+        data["personality"] = "grumpy"
+        assert model.PetState.from_dict(data).personality == loaded.personality
+        data["personality"] = "fancy"  # a saved one is kept, whatever the traits say
+        assert model.PetState.from_dict(data).personality == "fancy"
+    baby = hatched(at(9)).to_dict()
+    del baby["personality"]
+    assert model.PetState.from_dict(baby).personality is None
+    baby["personality"] = 3
+    assert model.PetState.from_dict(baby).personality is None
 
 
 def test_lights_out_while_away_is_applied_on_return():
