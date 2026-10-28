@@ -1585,6 +1585,8 @@ def test_a_new_egg_has_no_favourites_and_old_saves_load():
     assert damaged.favourites == {"x": "y"} and damaged.favourite_said is None
     data["favourites"] = ["hazelnuts"]  # not even a dict
     assert model.PetState.from_dict(data).favourites == {}
+    data["hatched_on"] = "2026-13-45"  # damaged: worked out again at load
+    assert model.PetState.from_dict(data).hatched_on is None
 
 
 # --- Birthdays ---------------------------------------------------------------

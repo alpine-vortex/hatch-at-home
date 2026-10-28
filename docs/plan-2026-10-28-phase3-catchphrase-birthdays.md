@@ -173,3 +173,31 @@ asked that morning.
 | 18 | Does forgetting mean never asked again? A first name on the phone | Forgetting counts as skipped. The phone uses the nickname or nothing: "Pip says: happy birthday! ♥" |
 | 19 | One-time questions could take six days in a row | At least 3 days between one-time questions (per person) |
 | 20 | Over-built: the `once_asked` rename; "one a day" is already the later slot's cap; likes have no skip | Keep `likes_asked` (now also `birthday`); no rename; skip is the birthday's only |
+
+## Built (2026-10-28, 0.33.0)
+
+As draft 2. Found in the screenshots: the question box covered the question in the
+compact layout (smaller buttons there now, 40 px). The party's first line is "party
+hat on! ♪" (the visit says "it's my birthday!!").
+
+The audit of the built work (9 findings, none blocking), all fixed:
+
+| # | Finding | Fix |
+| --- | --- | --- |
+| 1 | Your birthday line rode the queue with a `then` hook, and a game or sleep cleared every entry with one: lost for the year | Questions are marked `ask`; only those are cleared |
+| 2 | The away note was dropped only if the queue was still full when the visit answered, which it rarely is | The server says `made_room` when it made room; the card then drops the away note if it's still queued |
+| 3 | The catchphrase could end a news headline or a TV title | Titles and headlines get no catchphrase |
+| 4 | "forget my birthday" showed only after the next visit | Shown as soon as the answer is kept |
+| 5 | The party's once-a-day key used the browser's date (another time zone: twice) | Keyed by the birthday itself (`hatched_on`, years) |
+| 6 | "it's my birthday!!" said twice at the first look | The party opens with "party hat on! ♪" |
+| 7 | 34 px targets in compact; selects under 16 px make iOS zoom | 40 px; selects at 16 px |
+| 8 | A damaged `hatched_on` would raise on every look | Not a date: dropped, worked out again at load |
+| 9 | The privacy test only watched service calls; no two-pet phone test | Every bus event and the integration's own log are checked; a two-pet test (one message, from the closest pet, its nickname) |
+
+Known and accepted: Home Assistant's own websocket debug log (off by default)
+prints every incoming websocket message, a birthday answer included; and the
+birthday phone message is in HA's history like every phone message (the owner may
+veto it). The treat-day check on the card uses the browser's date.
+
+Checked: 406 tests, 86 card checks (twice). Screenshots: the party, both question
+boxes at 420 and 330 px.

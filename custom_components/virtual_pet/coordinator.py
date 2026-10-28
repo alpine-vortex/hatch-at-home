@@ -1078,8 +1078,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             # (FIRST_LOOK_LINES, minus what the card already queued).
             room = min(R.NOTES_PER_VISIT, max(0, R.LOOK_LINES - queued))
             found = await self._notes(user, now)
-            if found and found[0][3]["kind"] in CELEBRATIONS:
-                room = max(room, 1)  # it takes the away note's place on the card
+            made_room = bool(found and found[0][3]["kind"] in CELEBRATIONS and not room)
+            if made_room:
+                room = 1  # a celebration takes the away note's place on the card
             for scope, kind, key, note in found:
                 if len(notes) >= room:
                     break  # the rest wait for a later look
@@ -1105,6 +1106,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "counted": True,
             "my_day": self.people.my_day(user),
             "birthday_kept": bool(person.get("birthday")),
+            "made_room": made_room,
         }
 
     def _up_early(self, user: str, now: float) -> list[dict[str, Any]]:

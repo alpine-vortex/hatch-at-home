@@ -591,7 +591,7 @@ async function main() {
     for (let i = 0; i < 100 && s.bubble.dataset.typing; i++) await wait(50);
     out.reply = s.bubble.textContent;
     s.queue = [{ text: "a", ms: 300 }, { text: "while you were out...", ms: 300, opts: { away: true } }, { text: "c", ms: 300 }];
-    el._note(s, { kind: "pet_birthday", months: 3 });
+    el._note(s, { kind: "pet_birthday", months: 3 }, true); // the server made room for it
     out.queue = s.queue.map((q) => q.text);
     s.queue = [];
     el._note(s, { kind: "your_birthday", quiet: false });
@@ -636,7 +636,7 @@ async function main() {
     /^happy birthday, \S+!! ♥$/.test(bday.yours[0]) &&
     bday.yours[1] === "I'm 11 months old, and we've been friends all that time! ♥", JSON.stringify(bday));
   check("its birthday brings confetti and a party hat",
-    bday.confetti && /season_party_hat/.test(bday.hat) && /it's my birthday!! ♥$/.test(bday.said), JSON.stringify(bday));
+    bday.confetti && /season_party_hat/.test(bday.hat) && /party hat on! ♪$/.test(bday.said), JSON.stringify(bday));
   check("your birthday can be forgotten, never shown on a shared screen",
     bday.forget && !bday.forgetShared && bday.forgotten, JSON.stringify(bday));
   // A close friend coming home: "you're home!!" to them, by name to anyone else.

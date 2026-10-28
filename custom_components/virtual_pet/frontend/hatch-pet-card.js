@@ -487,7 +487,7 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const dayOptions = (n) => Array.from({ length: n }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
 // Its yearly birthday: a party hat (the season costume code places it) and confetti.
 const PARTY = { key: "party", costumes: [{ art: "hat", sink: 7, width: 56 }],
-  lines: ["party hat on! ♪", "it's my birthday!! ♥", "best birthday ever! ♪"] };
+  lines: ["party hat on! ♪", "do you like my party hat?", "best birthday ever! ♪"] };
 // The visit's celebration lines: one a look, and always a place for it.
 const CELEBRATION_NOTES = new Set(["your_birthday", "pet_birthday", "birthday_friends", "friends_for"]);
 const months = (n) => `${n} month${n === 1 ? "" : "s"}`;
@@ -1117,8 +1117,9 @@ const STYLE = `
   .screen .askday.many { max-width: 236px; } /* three a row at most */
   .compact .screen .askday { gap: 4px; bottom: 2%; }
   .compact .screen .askday.many { max-width: 100%; }
-  .compact .screen .askday button, .compact .screen .askday select { min-height: 34px; min-width: 44px;
+  .compact .screen .askday button, .compact .screen .askday select { min-height: 40px; min-width: 44px;
     font-size: 12px; padding: 2px 7px; border-radius: 10px; }
+  .screen .askday select, .compact .screen .askday select { font-size: 16px; } /* iOS zooms in under 16 px */
   .screen .askday select { font: inherit; font-size: 14px; min-height: 44px; border-radius: 14px;
     border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a; padding: 0 6px; }
   .screen .askday button { font: inherit; font-size: 14px; min-height: 44px; min-width: 64px; padding: 4px 10px;
@@ -1586,7 +1587,7 @@ class HatchPetCard extends HTMLElement {
     s.screen?.querySelector(".askday")?.remove();
     clearTimeout(s.askTimer);
     s.asking = false;
-    if (s.queue) s.queue = s.queue.filter((q) => !q.then);
+    if (s.queue) s.queue = s.queue.filter((q) => !q.ask); // a question only (a birthday line stays)
   }
 
   _state(s, key) {
@@ -2187,7 +2188,7 @@ class HatchPetCard extends HTMLElement {
     if (s.asleep && s.queue?.length) {
       // Asleep: the lines wait until it's up (they were said once, on the
       // server's side); only a question is dropped, it may come another day.
-      if (s.queue.some((q) => q.then)) this._clearAsk(s);
+      if (s.queue.some((q) => q.ask)) this._clearAsk(s);
       return;
     }
     if (!s.queue?.length || s.sayUntil > now || s.game || s.screen.classList.contains("show-status")) return;
@@ -2393,11 +2394,11 @@ class HatchPetCard extends HTMLElement {
         }
         if (typeof reply.my_day === "boolean") this._myDay = reply.my_day;
         if (typeof reply.birthday_kept === "boolean") this._birthdayKept = reply.birthday_kept;
-        (reply.notes || []).forEach((note) => this._note(s, note));
+        (reply.notes || []).forEach((note) => this._note(s, note, !!reply.made_room));
         const ask = reply.ask;
         if (QUESTIONS[ask] && !s.asking) {
           s.asking = true;
-          (s.queue ??= []).push({ text: QUESTIONS[ask].q, ms: ASK_MS, then: () => this._ask(s, ask, id) });
+          (s.queue ??= []).push({ text: QUESTIONS[ask].q, ms: ASK_MS, ask: true, then: () => this._ask(s, ask, id) });
         }
       })
       .catch(() => {
@@ -2406,11 +2407,12 @@ class HatchPetCard extends HTMLElement {
   }
 
   // Something the pet has to tell only the viewer (from the visit).
-  _note(s, note) {
+  _note(s, note, madeRoom = false) {
     let line = NOTES[note.kind]?.(note);
     if (!line) return;
-    if (CELEBRATION_NOTES.has(note.kind) && (s.queue || []).length >= FIRST_LOOK_LINES) {
-      // A celebration always gets a place: it takes the away note's.
+    if (CELEBRATION_NOTES.has(note.kind) && madeRoom && s.queue) {
+      // The look was full and the server made room for a celebration: it
+      // takes the away note's place (if that isn't said yet).
       const away = s.queue.findIndex((q) => q.opts?.away);
       if (away >= 0) s.queue.splice(away, 1);
     }
@@ -2485,7 +2487,9 @@ class HatchPetCard extends HTMLElement {
       if (question.keep) {
         // A websocket command, not a service call: answers stay off the event bus.
         this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity,
-          question: kind, answer }).catch(() => {
+          question: kind, answer }).then(() => {
+          if (kind === "birthday") this._birthdayKept = answer !== "skip";
+        }).catch(() => {
           // not kept this time: it may ask again another day
         });
       }
@@ -2628,11 +2632,11 @@ class HatchPetCard extends HTMLElement {
       case "watching":
         // A long title gets the short lines, so the bubble leaves the pet in view.
         const title = short(m.title);
-        speak(pick([`ooh, ${title}!`, `is this ${title}?`, `${title}! I love this one`]));
+        this._speak(s, pick([`ooh, ${title}!`, `is this ${title}?`, `${title}! I love this one`]), 4500);
         this._animate(s, s.pet, "perk", 320);
         break;
       case "listening":
-        speak(m.artist && Math.random() < 0.5
+        this._speak(s, m.artist && Math.random() < 0.5
           ? `♪ is this ${short(m.artist)}? ♪`
           : `♪ ${short(m.title)} ♪`);
         break;
@@ -2648,7 +2652,7 @@ class HatchPetCard extends HTMLElement {
           lines.push(`${topic} news! ${h}`);
         }
         const line = pick(lines);
-        speak(line, 4000 + line.length * 50); // long enough to read, never long
+        this._speak(s, line, 4000 + line.length * 50); // long enough to read; a headline gets no catchphrase
         this._animate(s, s.pet, "perk", 320);
         break;
       }
@@ -3490,9 +3494,9 @@ class HatchPetCard extends HTMLElement {
     const treatOn = season?.treat && seasonDate(season.treat, today.getFullYear());
     const treatDay = treatOn && today.getMonth() + 1 === treatOn[0] && today.getDate() === treatOn[1];
     const now = Date.now();
-    if (oncePerDay(`party-${s.ids?.device}`)) {
+    if (this._partyFirst(s)) {
       this._confetti(s);
-      if (!treatDay) this._costume(s, PARTY, "it's my birthday!! ♥");
+      if (!treatDay) this._costume(s, PARTY, "party hat on! ♪"); // the visit says "it's my birthday!!"
       s.nextParty = now + SEASON_COSTUME_MS[0];
       return;
     }
@@ -3502,6 +3506,21 @@ class HatchPetCard extends HTMLElement {
     const [lo, hi] = SEASON_COSTUME_MS;
     s.nextParty = now + lo + Math.random() * (hi - lo);
     this._costume(s, PARTY, pick(PARTY.lines));
+  }
+
+  // The first party moment of this birthday on this device (keyed by the
+  // birthday itself, not the browser's date, which may be another time zone's).
+  _partyFirst(s) {
+    const stage = this._state(s, "sensor.life_stage")?.attributes || {};
+    const key = `hatch-party-${s.ids?.device}-${stage.hatched_on}-${stage.birthday?.years}`;
+    try {
+      if (localStorage.getItem(key)) return false;
+      localStorage.setItem(key, "1");
+    } catch (err) {
+      if (this._parties?.has(key)) return false;
+      (this._parties ??= new Set()).add(key);
+    }
+    return true;
   }
 
   _confetti(s) {

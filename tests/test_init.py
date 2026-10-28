@@ -8,7 +8,13 @@ from typing import Any
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant import config_entries
-from homeassistant.const import CONF_NAME, STATE_OFF, STATE_ON, STATE_UNAVAILABLE
+from homeassistant.const import (
+    CONF_NAME,
+    MATCH_ALL,
+    STATE_OFF,
+    STATE_ON,
+    STATE_UNAVAILABLE,
+)
 from homeassistant.core import (
     Context,
     HomeAssistant,
@@ -2617,6 +2623,7 @@ async def test_an_old_pet_learns_its_birthday_at_load(
 
 async def test_your_birthday_stays_yours(
     hass: HomeAssistant,
+    caplog: pytest.LogCaptureFixture,
     hass_storage: dict[str, Any],
     hass_ws_client: Any,
     hass_admin_user: Any,
@@ -2624,7 +2631,7 @@ async def test_your_birthday_stays_yours(
     hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
     config = await setup(hass)
     client = await hass_ws_client(hass)
-    bus = async_capture_events(hass, "call_service")
+    bus = async_capture_events(hass, MATCH_ALL)
 
     async def send(msg: dict[str, Any]) -> dict[str, Any]:
         await client.send_json_auto_id({"entity_id": "sensor.pip_mood", **msg})
@@ -2636,8 +2643,11 @@ async def test_your_birthday_stays_yours(
     assert (await send({**answer, "answer": "03-14"}))["success"]
     person = config.runtime_data.people.person(hass_admin_user.id)
     assert person["birthday"] == "03-14"
-    # On no state, the bus or in diagnostics.
-    assert bus == []
+    # On no state, the bus, the log or in diagnostics.
+    assert "03-14" not in str([e.data for e in bus])
+    # Our own log (HA's websocket debug log, off by default, prints every message).
+    ours = [r.getMessage() for r in caplog.records if "virtual_pet" in r.name]
+    assert "03-14" not in str(ours)
     for state in hass.states.async_all():
         assert "03-14" not in str(state.attributes)
     from custom_components.virtual_pet.diagnostics import (
@@ -2669,6 +2679,7 @@ async def test_one_celebration_a_look_your_birthday_first(
     )
     response = await look(hass, me.id, queued=3)  # a full look still has room
     assert response["notes"][:1] == [{"kind": "your_birthday", "quiet": False}]
+    assert response["made_room"]  # the card drops its away note for it
     assert response["birthday_kept"]
     await settle(hass, freezer, 3601)
     response = await look(hass, me.id)
@@ -2721,3 +2732,46 @@ async def test_a_birthday_on_the_phone_once_by_nickname(
     assert [c.data["message"] for c in phone] == [
         "Pip says: happy birthday, sunbeam! ♥"
     ]
+
+
+async def test_one_birthday_message_across_pets_from_the_closest(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 08:00:00+00:00")
+    await hass.config.async_set_time_zone("UTC")
+    me = await friend(hass, 0)
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": me.id, "device_name": "Sams Phone"}
+    ).add_to_hass(hass)
+    phone = async_mock_service(hass, "notify", "mobile_app_sams_phone")
+    pets = []
+    for entry_id, name, level, nickname in (
+        ("test_pet", "Pip", 3, "pal"),
+        ("other_pet", "Bo", 6, "sunbeam"),
+    ):
+        hass_storage[f"{DOMAIN}.{entry_id}"] = {
+            **hatched_pet(
+                dt_util.utcnow().timestamp(),
+                notify_users=[me.id],
+                bonds={
+                    me.id: {"points": model.R.BOND_LEVELS[level], "nickname": nickname}
+                },
+            ),
+            "key": f"{DOMAIN}.{entry_id}",
+        }
+        hass_storage[f"{DOMAIN}.{entry_id}"]["data"]["name"] = name
+        config = MockConfigEntry(
+            domain=DOMAIN, title=name, data={CONF_NAME: name}, entry_id=entry_id
+        )
+        config.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(config.entry_id)
+        await hass.async_block_till_done()
+        pets.append(config.runtime_data)
+    pets[0].people.person(me.id)["birthday"] = "10-28"
+    for pet in pets:  # each pet's own morning
+        pet._birthday_morning()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    # Once, from Bo (the closest), by Bo's nickname.
+    assert [c.data["message"] for c in phone] == ["Bo says: happy birthday, sunbeam! ♥"]

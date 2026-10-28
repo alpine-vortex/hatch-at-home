@@ -214,6 +214,11 @@ class PetState:
         for key in ("favourite_said", "catchphrase", "hatched_on"):
             if not isinstance(kwargs.get(key), str):
                 kwargs[key] = None
+        try:
+            if kwargs["hatched_on"]:
+                date.fromisoformat(kwargs["hatched_on"])
+        except ValueError:
+            kwargs["hatched_on"] = None  # damaged: worked out again at load
         state = cls(**kwargs)
         if state.upbringing is None and life_stage(state) == "adult":
             # Grew up before upbringings existed: judge it on its record so far.
