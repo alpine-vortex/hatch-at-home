@@ -100,13 +100,15 @@ class MoodSensor(PetEntity, SensorEntity):
 
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_options = list(model.MOODS)
-    _unrecorded_attributes = frozenset({"flags", "reason", "call_deadline", "requests"})
+    _unrecorded_attributes = frozenset(
+        {"flags", "reason", "reason_key", "call_deadline", "requests"}
+    )
 
     def __init__(self, coordinator: PetCoordinator) -> None:
         super().__init__(coordinator, "mood")
 
-    def _resolve(self) -> tuple[str, list[str], str]:
-        return self.coordinator.current_mood()
+    def _resolve(self) -> tuple[str, list[str], str, str]:
+        return self.coordinator.current_mood_keyed()
 
     @property
     def native_value(self) -> str:
@@ -114,11 +116,13 @@ class MoodSensor(PetEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        _, flags, reason = self._resolve()
+        _, flags, reason, reason_key = self._resolve()
         call = self.pet.call
         return {
             "flags": flags,
             "reason": reason,
+            # Which sentence the reason is, for the card's own words (baby talk).
+            "reason_key": reason_key,
             "requests": model.requests(
                 self.pet, dt_util.utcnow().timestamp(), self.coordinator.settings
             ),

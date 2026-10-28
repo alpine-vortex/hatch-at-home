@@ -8,7 +8,7 @@ import random
 import pytest
 
 from custom_components.virtual_pet import model, rates as R
-from custom_components.virtual_pet.home import HomeEffect
+from custom_components.virtual_pet.home import REASONS, HomeEffect
 
 HOUR = 3600.0
 MIN = 60.0
@@ -1678,3 +1678,77 @@ def test_photos_survive_a_bad_save():
     bonds = model.PetState.from_dict(data).bonds
     assert bonds["u1"]["photos"] == {"1": {**good, "traits": ["helper", "early_bird"]}}
     assert bonds["u2"] == {"points": 5, "photos": {}}
+
+
+# --- reason_key: which sentence the mood line is (baby talk keys it) ----------
+
+
+def keyed(pet: model.PetState, now: float, settings: model.Settings = SETTINGS):
+    full = model.mood_keyed(pet, now, settings)
+    assert full[:3] == model.mood(pet, now, settings)  # mood() is unchanged
+    return full
+
+
+@pytest.mark.parametrize("reason", sorted(model._CALL_REASONS))
+def test_reason_key_of_a_call(reason: str):
+    now = at(14)
+    pet = hatched(now)
+    pet.call = model.Call(reason, now, now + 20 * MIN)
+    current, _, sentence, key = keyed(pet, now)
+    assert current == "calling" and key == f"call_{reason}"
+    assert sentence == model._CALL_REASONS[reason]
+
+
+@pytest.mark.parametrize(
+    ("stats", "mood"),
+    [
+        ({"hunger": 20.0}, "hungry"),
+        ({"happiness": 10.0}, "bored"),
+        ({}, "content"),
+        ({"last_excite": at(14)}, "excited"),
+    ],
+)
+def test_reason_key_of_a_mood(stats: dict, mood: str):
+    now = at(14)
+    pet = hatched(now, **stats)
+    current, _, sentence, key = keyed(pet, now)
+    assert (current, key, sentence) == (mood, mood, model._MOOD_REASONS[mood])
+
+
+def test_reason_key_of_dirty_and_the_sleepy_sentences():
+    now = at(14)
+    pet = hatched(now)
+    pet.poops = [now]
+    assert keyed(pet, now)[3] == "dirty"
+    drowsy = keyed(hatched(at(22, 40)), at(22, 40))
+    assert drowsy[2:] == ("getting late, eyes drooping", "sleepy_drowsy")
+    low = keyed(hatched(now, energy=5.0), now)
+    assert low[2:] == ("running low on energy", "sleepy_low")
+
+
+@pytest.mark.parametrize("flag", sorted(REASONS))
+def test_reason_key_of_the_house(flag: str):
+    now = at(14)
+    house = model.Settings(tz=UTC, home=HomeEffect(flags=[flag]))
+    current, _, sentence, key = keyed(hatched(now), now, house)
+    assert current in ("content", "cozy", "excited", "sleepy", "bored")
+    assert (sentence, key) == (REASONS[flag], f"home_{flag}")
+
+
+def test_reason_key_follows_the_branch_that_won():
+    now = at(14)
+    rainy = model.Settings(tz=UTC, home=HomeEffect(flags=["rainy"]))
+    # The body comes before the house: the weight line shadows the rain.
+    for band, weight in (("heavy", R.WEIGHT_HEAVY_ABOVE + 1), ("light", 1.0)):
+        pet = hatched(now, weight=weight)
+        assert keyed(pet, now, rainy)[2:] == (
+            model._WEIGHT_REASONS[band],
+            f"weight_{band}",
+        )
+    # Just excited: neither the house nor the weight says it.
+    pet = hatched(now, last_excite=now, weight=R.WEIGHT_HEAVY_ABOVE + 1)
+    assert keyed(pet, now, rainy)[2:] == ("that was fun!", "excited")
+    # A call is never shadowed by the house.
+    pet = hatched(now)
+    pet.call = model.Call("hunger", now, now + 20 * MIN)
+    assert keyed(pet, now, rainy)[3] == "call_hunger"

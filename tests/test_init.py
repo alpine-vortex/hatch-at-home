@@ -838,6 +838,24 @@ async def test_busy_attributes_stay_out_of_history(
         assert key in attrs
         assert key in LifeStageSensor._unrecorded_attributes, key
     assert attrs["upbringing"] == "steady"  # on track: no misses, no discipline
+    from custom_components.virtual_pet.sensor import MoodSensor
+
+    mood = hass.states.get("sensor.pip_mood").attributes
+    assert mood["reason_key"] == "content" and mood["reason"] == "all good"
+    assert "reason_key" in MoodSensor._unrecorded_attributes
+
+
+async def test_the_reason_key_stays_off_assist_and_the_away_nap(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, hunger=20.0)
+    config = await setup(hass)
+    pet = config.runtime_data
+    # Every other caller still gets (mood, flags, reason): the plain sentence.
+    assert pet.current_mood() == ("hungry", ["hungry"], "a little peckish")
+    assert pet.current_mood_keyed()[3] == "hungry"
+    pet.state.away = True  # privacy on: away looks like a nap, key and all
+    assert pet.current_mood_keyed() == ("asleep", ["asleep"], "zzz", "asleep")
 
 
 async def test_play_game_service_plays_five_rounds(

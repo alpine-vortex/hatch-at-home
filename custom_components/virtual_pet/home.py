@@ -89,7 +89,12 @@ class HomeEffect:
 
     def reason(self) -> str | None:
         """The highest-priority thing the pet would say about the house."""
-        return next((REASONS[f] for f in REASONS if f in self.flags), None)
+        flag = self.reason_flag()
+        return REASONS[flag] if flag else None
+
+    def reason_flag(self) -> str | None:
+        """The flag behind reason() (the card's key for the sentence)."""
+        return next((f for f in REASONS if f in self.flags), None)
 
 
 RAINY = {"rainy", "pouring", "lightning-rainy", "hail"}

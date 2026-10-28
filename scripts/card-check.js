@@ -1407,12 +1407,16 @@ async function main() {
     const seasons = [...src.matchAll(/key: "(halloween|thanksgiving)"/g)].map((m) => m[1]);
     const card = new Set(["greet", "greet.warm", "greet.nickname", "idle.sleepy", "idle.bored", "idle.excited", "idle.hungry",
       "idle.dirty", "idle.default", "yum", "favourite_snack", "wish_granted", "friend_home", "care_miss", "tucked_in", "bond_up"]);
+    // The mood line's keys (sensor.mood reason_key), from the model's own tables.
+    const py = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "model.py"), "utf8");
+    const keysOf = (name) => [...py.split(`\n${name} = {`)[1].split("\n}")[0].matchAll(/"(\w+)":/g)].map((m) => m[1]);
+    const reasons = new Set([...keysOf("_CALL_REASONS").map((k) => `call_${k}`), ...keysOf("_MOOD_REASONS"), "sleepy_drowsy", "sleepy_low"]);
     const longName = "Wwwwwwwwwwwwwwww"; // 16, as short() leaves a name or food
     const bad = [];
     for (const [key, stages] of Object.entries(BABY)) {
       const [table, sub] = key.split(".");
       const known = card.has(key) || (normal[table] && sub in normal[table]) ||
-        (table === "season" && seasons.includes(sub));
+        (table === "season" && seasons.includes(sub)) || (table === "reason" && reasons.has(sub));
       if (!known) bad.push(`${key}: no such line`);
       for (const [stage, lines] of Object.entries(stages)) {
         if (!["baby", "child"].includes(stage)) bad.push(`${key}: stage ${stage}`);
@@ -1543,6 +1547,43 @@ async function main() {
     });
     check("two people on one pet, one with baby talk: each reads their own line",
       two["person-a"] === "oh! hi hi ♥" && two["person-b"] === "...oh, there you are ♥", JSON.stringify(two));
+    // The mood line, by its reason_key: baby and child words; the house, the
+    // weight, an unknown key and an older integration (no key) keep the sentence.
+    const moodLine = await babyAs(async (el, s, t) => {
+      const say = (key, reason) => el._say(s, { state: "calling", attributes: { reason, ...(key ? { reason_key: key } : {}) } }, false);
+      const out = {};
+      t.cache("on");
+      for (const stage of ["baby", "child", "teen", "adult"]) {
+        t.stage(stage);
+        out[stage] = [say("call_hunger", "tummy rumbling!"), say("call_sick", "feeling sick, medicine please?"),
+          say("excited", "that was fun!"), say("content", "all good"), say("bored", "nothing to do")];
+      }
+      t.stage("baby");
+      out.kept = [say("home_rainy", "rainy day, blanket please?"), say("weight_heavy", "feeling a bit round..."),
+        say("brand_new_key", "a new sentence"), say(null, "tummy rumbling!")];
+      t.cache("off");
+      out.off = say("call_hunger", "tummy rumbling!");
+      // The mood line isn't read out: the tick writes it with no hold.
+      t.cache("on");
+      let announced = 0;
+      const counter = new MutationObserver(() => { announced++; });
+      counter.observe(s.live, { childList: true, characterData: true, subtree: true });
+      s.sayUntil = 0;
+      el._write(s, say("call_hunger", "tummy rumbling!"));
+      await new Promise((r) => setTimeout(r, 200));
+      counter.disconnect();
+      out.announced = announced;
+      t.cache(null);
+      return out;
+    });
+    check("baby talk on: a baby's mood line is its own (\"hungy!\"), a child's a little, a teen's and an adult's normal",
+      moodLine.baby.join("|") === "hungy!|owie... medicine?|yay yay!|happy!|la la la" &&
+      moodLine.child.join("|") === "tummy rumbly!|feeling icky, medicine?|that was fun! yay!|all good!|nothing to do" &&
+      ["teen", "adult"].every((st) => moodLine[st].join("|") === "tummy rumbling!|feeling sick, medicine please?|that was fun!|all good|nothing to do"),
+      JSON.stringify(moodLine));
+    check("the house, the weight, an unknown key and no key keep the sentence; off is normal; the mood line isn't read out",
+      moodLine.kept.join("|") === "rainy day, blanket please?|feeling a bit round...|a new sentence|tummy rumbling!" &&
+      moodLine.off === "tummy rumbling!" && moodLine.announced === 0, JSON.stringify(moodLine));
     // The card's own lines, as a baby, and the catchphrase never on them.
     const lines = await babyAs(async (el, s, t) => {
       t.cache("on");
@@ -1786,6 +1827,8 @@ async function main() {
     await page.waitForTimeout(1500);
     await hush();
     await babyShot("06e-baby-other-creature", "baby", `el._moment(s, { type: "tucked_in", user: el._hass.user.id, at: new Date().toISOString() });`);
+    await babyShot("06f-child-line", "child", `el._write(s, el._say(s, { state: "calling", attributes: { reason: "tummy rumbling!", reason_key: "call_hunger" } }, false), 20000);`);
+    await babyShot("06g-baby-mood-line", "baby", `el._write(s, el._say(s, { state: "calling", attributes: { reason: "tummy rumbling!", reason_key: "call_hunger" } }, false), 20000);`);
     await page.locator("hatch-pet-card .nav.prev").click();
     await page.waitForTimeout(1500);
     await hush();

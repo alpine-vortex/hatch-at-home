@@ -255,12 +255,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def current_mood(self) -> tuple[str, list[str], str]:
         """(mood, flags, reason) as shown anywhere outside the pet's own file."""
+        mood, flags, reason, _ = self.current_mood_keyed()
+        return mood, flags, reason
+
+    def current_mood_keyed(self) -> tuple[str, list[str], str, str]:
+        """current_mood() and the reason's key (the mood sensor's attributes)."""
         assert self.state is not None
-        mood, flags, reason = model.mood(self.state, self._now(), self.settings)
+        mood, flags, reason, key = model.mood_keyed(
+            self.state, self._now(), self.settings
+        )
         if mood == "away" and self.privacy:
             # Privacy: an empty house looks like a nap on any dashboard.
-            return "asleep", ["asleep"], "zzz"
-        return mood, flags, reason
+            return "asleep", ["asleep"], "zzz", "asleep"
+        return mood, flags, reason, key
 
     @staticmethod
     def _now() -> float:

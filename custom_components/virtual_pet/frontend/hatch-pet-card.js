@@ -482,6 +482,22 @@ const BABY = {
   "WISHES.tuck_in": { baby: ["wish... tuck me in tonight"] },
   "REFUSALS.full": { baby: ["tummy full!"] },
   "REFUSALS.too_tired": { baby: ["too sleepy to play"] },
+  // The mood line (sensor.mood reason_key): one line each, as it's redrawn
+  // every tick. Statements, except the calls. home_* and weight_* stay normal.
+  "reason.call_hunger": { baby: ["hungy!"], child: ["tummy rumbly!"] },
+  "reason.call_sick": { baby: ["owie... medicine?"], child: ["feeling icky, medicine?"] },
+  "reason.call_dirty": { baby: ["stinky! clean?"], child: ["it's getting stinky!"] },
+  "reason.call_energy": { baby: ["sleepy... bedtime?"], child: ["so sleepy... bedtime?"] },
+  "reason.call_happiness": { baby: ["play play?"] },
+  "reason.call_fake": { baby: ["play play?"] },
+  "reason.sleepy_drowsy": { baby: ["sleepy..."] },
+  "reason.sleepy_low": { baby: ["sleepy..."] },
+  "reason.hungry": { baby: ["a little hungy"], child: ["a little hungry"] },
+  "reason.dirty": { baby: ["messy..."] },
+  "reason.bored": { baby: ["la la la"] },
+  "reason.excited": { baby: ["yay yay!"], child: ["that was fun! yay!"] },
+  "reason.cozy": { baby: ["cozy cozy"] },
+  "reason.content": { baby: ["happy!"], child: ["all good!"] },
   // In place of season.lines (the costume bubble); children keep the normal ones.
   "season.halloween": { baby: ["boo!", "boo! hehe", "spooky~", "yay, costume!"] },
   "season.thanksgiving": { baby: ["gobble gobble!", "pie! yum yum", "thank you ♥", "cozy cozy~", "leaves!"] },
@@ -2018,7 +2034,11 @@ class HatchPetCard extends HTMLElement {
       if (minutes <= 1) return "crack... crack...";
       return minutes < 60 ? `hatching in about ${minutes} min` : `hatching in about ${Math.round(minutes / 60)} h`;
     }
-    return mood?.attributes.reason || "";
+    // The server's sentence, or baby talk keyed by which sentence it is (an
+    // older integration sends no key: the sentence as it is).
+    const reason = mood?.attributes.reason || "";
+    const key = mood?.attributes.reason_key;
+    return key ? this._lines(s, `reason.${key}`, reason).text : reason;
   }
 
   _toggleStatus(s) {
