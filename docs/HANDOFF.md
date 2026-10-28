@@ -61,7 +61,26 @@ attribute `personality` (unrecorded) and diagnostics; the card's "personality"
 status row and the journal line. No lines yet (P2a). Release note (owner, plan Q10):
 "your teen and adult pets now have a personality; how it talks comes in the next
 update". `scripts/test` 458,
-`scripts/card-check` 116. Next: P2a (its voice), after the owner's say.
+`scripts/card-check` 116.
+
+**Personality P2a, its voice, is built as 0.35.0b2** (crew branch
+`crew/hatch-at-home-s2423-personality-p2a-each-type-s-he`, 2026-10-28; card only,
+no save or server change; awaiting its audit and PR). The card's `PERSONA` table
+(`PERSONA[type][key]`, generated verbatim from the plan's approved tables) and
+`_persona(s)` (teen or adult with a known `personality`, else null). `_lines` now
+goes baby talk, then the type on a fair coin (the half rule), then normal; a type
+line returns `baby: false`, so it keeps the catchphrase where the site allows one.
+Wired: `good_morning`, `sunset`, `fell_asleep` (house or lights), `wish_granted`,
+`favourite_snack`; `_greet` builds a second filled array (`hello`, or
+`hello_shared` on a shared screen; `hello_warm`/`hello_hearts` only with
+`_bond(s)` non-null) and flips the coin between it and today's lines; a teen
+`stage_changed` carrying a type queues its `reveal` line. Card check "4d" lints
+the table and stubs `Math.random` (0.1 heads, 0.9 tails). `hush()` in the card check also
+wraps `el._state` once per card so `sensor.life_stage` has `personality: null` unless a
+check stubs one in: a drifted dev pet that grew into a teen would otherwise swap the
+older exact-line checks (favourite snack, sunset, the baby-talk greetings) half the time. `scripts/test` 458,
+`scripts/card-check` 123. Not in P2a: idle and mood lines (P2b), upbringing
+lines, idle manner (P3), Assist (P4).
 Card checks stub `el._state` for the life stage (kept until the screenshot) to show
 a teen, an adult and journal records; see "4c" in `scripts/card-check.js`.
 
