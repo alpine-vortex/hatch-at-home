@@ -2655,8 +2655,12 @@ async def test_your_birthday_stays_yours(
     )
 
     assert "03-14" not in str(await async_get_config_entry_diagnostics(hass, config))
+    toggle = {"type": "virtual_pet/birthday_phone", "enabled": True}
+    assert (await send(toggle))["success"]
+    assert person["birthday_phone"] is True
     assert (await send({"type": "virtual_pet/forget_birthday"}))["success"]
     assert "birthday" not in person and person["birthday_skipped"]
+    assert "birthday_phone" not in person
     assert P.once_due(person, "2026-10-28", 12, 10) != "birthday"  # never again
 
 
@@ -2725,7 +2729,12 @@ async def test_a_birthday_on_the_phone_once_by_nickname(
     )
     config = await setup(hass)
     coordinator = config.runtime_data
-    coordinator.people.person(me.id)["birthday"] = "10-28"
+    person = coordinator.people.person(me.id)
+    person["birthday"] = "10-28"
+    coordinator._birthday_morning()  # the phone switch is off by default
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert phone == []
+    person["birthday_phone"] = True
     coordinator._birthday_morning()
     coordinator._birthday_morning()  # a second morning moment: no second message
     await hass.async_block_till_done(wait_background_tasks=True)
@@ -2769,7 +2778,7 @@ async def test_one_birthday_message_across_pets_from_the_closest(
         assert await hass.config_entries.async_setup(config.entry_id)
         await hass.async_block_till_done()
         pets.append(config.runtime_data)
-    pets[0].people.person(me.id)["birthday"] = "10-28"
+    pets[0].people.person(me.id).update(birthday="10-28", birthday_phone=True)
     for pet in pets:  # each pet's own morning
         pet._birthday_morning()
     await hass.async_block_till_done(wait_background_tasks=True)

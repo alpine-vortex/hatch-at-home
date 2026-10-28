@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.33.0";
+const VERSION = "0.33.1";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -2394,6 +2394,7 @@ class HatchPetCard extends HTMLElement {
         }
         if (typeof reply.my_day === "boolean") this._myDay = reply.my_day;
         if (typeof reply.birthday_kept === "boolean") this._birthdayKept = reply.birthday_kept;
+        if (typeof reply.birthday_phone === "boolean") this._birthdayPhone = reply.birthday_phone;
         (reply.notes || []).forEach((note) => this._note(s, note, !!reply.made_room));
         const ask = reply.ask;
         if (QUESTIONS[ask] && !s.asking) {
@@ -2906,7 +2907,8 @@ class HatchPetCard extends HTMLElement {
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell notify" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       ${bond ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!this._myDay}">${this._myDay ? "on" : "off"}</button></span>`) : ""}
-      ${this._birthdayKept && !sharedScreen() ? row(null, "my birthday", `<span><button class="bell forgetbday" aria-label="forget my birthday">forget</button></span>`) : ""}
+      ${this._birthdayKept && !sharedScreen() ? row(null, "my birthday", `<span><button class="bell forgetbday" aria-label="forget my birthday">forget</button></span>`) +
+        row(null, "birthday on my phone", `<span><button class="bell bdayphone" aria-label="birthday on my phone: a happy birthday message on your phone on the day" aria-pressed="${!!this._birthdayPhone}">${this._birthdayPhone ? "on" : "off"}</button></span>`) : ""}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       ${s.species?.voice ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`) : ""}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
@@ -2957,12 +2959,25 @@ class HatchPetCard extends HTMLElement {
       }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
+    s.status.querySelector(".bell.bdayphone")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const enabled = !this._birthdayPhone;
+      this._hass.callWS({ type: "virtual_pet/birthday_phone", entity_id: s.ids?.["sensor.life_stage"], enabled })
+        .then(() => {
+          this._birthdayPhone = enabled;
+          this._statusMessage(s, enabled ? "Your phone will hear it on the day ♥" : "Only here, then.");
+          this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+        })
+        .catch(() => this._statusMessage(s, "That didn't work. Try again."));
+    });
     s.status.querySelector(".bell.forgetbday")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);
       this._hass.callWS({ type: "virtual_pet/forget_birthday", entity_id: s.ids?.["sensor.life_stage"] })
         .then(() => {
           this._birthdayKept = false;
+          this._birthdayPhone = false;
           this._statusMessage(s, "Forgotten. I won't ask again.");
           this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
         })

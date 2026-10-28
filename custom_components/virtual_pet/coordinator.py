@@ -1106,6 +1106,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "counted": True,
             "my_day": self.people.my_day(user),
             "birthday_kept": bool(person.get("birthday")),
+            "birthday_phone": bool(person.get("birthday_phone")),
             "made_room": made_room,
         }
 
@@ -1433,10 +1434,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._save()
         self.people.save()
 
+    async def async_set_birthday_phone(self, user: str, enabled: bool) -> None:
+        """Whether this person's phone hears "happy birthday" on the day."""
+        self.people.person(user)["birthday_phone"] = enabled
+        self.people.save()
+
     async def async_forget_birthday(self, user: str) -> None:
         """Forget someone's birthday, and don't ask again."""
         person = self.people.person(user)
         person.pop("birthday", None)
+        person.pop("birthday_phone", None)
         person["birthday_skipped"] = True
         self.people.save()
 
@@ -1452,7 +1459,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     def _birthday_morning(self) -> None:
         """A friend's birthday: their phone hears it with the first morning of
         any hatched pet at home that notifies them, from the one they're
-        closest to, once a year. Their nickname, never their name."""
+        closest to, once a year. Their nickname, never their name. Only if
+        they turned "birthday on my phone" on (off by default: the message is
+        in HA's history, which admins can read)."""
         state = self.state
         if state is None or state.away or model.life_stage(state) == "egg":
             return
@@ -1461,7 +1470,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         pets: dict[str, PetCoordinator] = self.hass.data[DOMAIN]["pets"]
         for user in state.notify_users:
             person = self.people.data["people"].get(user) or {}
-            if not model.birthday_today(person.get("birthday"), today):
+            if not person.get("birthday_phone") or not model.birthday_today(
+                person.get("birthday"), today
+            ):
                 continue
             if person.get("birthday_sent") == year:
                 continue

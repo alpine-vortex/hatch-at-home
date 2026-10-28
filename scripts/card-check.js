@@ -616,11 +616,16 @@ async function main() {
     s.flairUntil = 0;
     // "forget my birthday": only when one is kept, never on a shared screen.
     el._birthdayKept = true;
+    el._birthdayPhone = false;
     el._renderStatus(s, []);
     out.forget = !!s.status.querySelector(".bell.forgetbday");
+    out.phoneOff = s.status.querySelector(".bell.bdayphone")?.getAttribute("aria-pressed");
+    s.status.querySelector(".bell.bdayphone").click();
+    for (let i = 0; i < 40 && !el._birthdayPhone; i++) await wait(50);
+    out.phoneOn = s.status.querySelector(".bell.bdayphone")?.getAttribute("aria-pressed");
     localStorage.setItem("hatch-shared-screen", "on");
     el._renderStatus(s, []);
-    out.forgetShared = !!s.status.querySelector(".bell.forgetbday");
+    out.forgetShared = !!s.status.querySelector(".bell.forgetbday, .bell.bdayphone");
     localStorage.setItem("hatch-shared-screen", "off");
     el._renderStatus(s, []);
     s.status.querySelector(".bell.forgetbday").click();
@@ -639,6 +644,8 @@ async function main() {
     bday.confetti && /season_party_hat/.test(bday.hat) && /party hat on! ♪$/.test(bday.said), JSON.stringify(bday));
   check("your birthday can be forgotten, never shown on a shared screen",
     bday.forget && !bday.forgetShared && bday.forgotten, JSON.stringify(bday));
+  check("the birthday phone message is off until you turn it on",
+    bday.phoneOff === "false" && bday.phoneOn === "true", JSON.stringify(bday));
   // A close friend coming home: "you're home!!" to them, by name to anyone else.
   await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
   await evaluate(() => document.querySelector("home-assistant").hass.callApi("POST", "states/person.sam_check",

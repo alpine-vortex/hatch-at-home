@@ -521,9 +521,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   it asks you, once, when your birthday is (or "skip", which it remembers). Your
   birthday is kept only for you: never on a sensor, an event or diagnostics. On the
   day, the first pet you look at says "happy birthday!!" with a little tune, and
-  with "notify me" on, your phone hears it once that morning from the pet you're
-  closest to, by its nickname for you. Like every phone message, that one is in
-  Home Assistant's history, where admins can see it. "forget my birthday" on the
+  if you turn "birthday on my phone" on (status screen; off by default) and have
+  "notify me" on, your phone hears it once that morning from the pet you're closest
+  to, by its nickname for you. Like every phone message, that one is in Home
+  Assistant's history, where admins can see it; that's why it starts off. "forget my birthday" on the
   status screen forgets it and stops asking.
 - **A welcome for every new pet.** Adding a pet through the integration tells the
   whole house: "Pip, a new virtual pet, just moved in! Say hi ♥" It goes to every phone with
