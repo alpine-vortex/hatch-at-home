@@ -32,19 +32,21 @@ details before committing it.
 **The driving role for this project passed to the owner's "Hatch First Mate"
 session** (owner's request, 2026-10-28). Released: 0.33.1 (PR #29: the "birthday on
 my phone" switch, off by default; the Art session's redrawn party hat, PR #28; a
-sturdier idle-life card check). `main` is clean; phase 4 is on a crew branch, awaiting the beta try.
+sturdier idle-life card check). Pre-released: **0.34.0b1** (PR #31, the photo).
 
-**Phase 4 of the voices plan, the photo (A7), is built as 0.34.0b1, awaiting the
-beta try** (crew branch `crew/hatch-at-home-s2407-phase-4-of-the-voices-plan-the`,
-from `docs/plan-2026-10-28-phase4-photo.md` draft 2; the owner confirmed both open
-calls on 2026-10-28: the photo waits until the pet is a teen, and if Android can't
-save, the dialog says so honestly). Not yet released: next, a GitHub pre-release
-0.34.0b1 from the PR's branch, with the ask to tap "save" on a photo in the
-iPhone and Android apps and say what happened; then fix (b2 if save changes) and
-release 0.34.0. The Android "you can save it from a computer" line is not shipped:
-it waits on that answer. `scripts/test` 409, `scripts/card-check` 93.
+**Phase 4 of the voic**Phase 4 of the voices plan, the photo (A7), is merged and pre-released as
+0.34.0b1** (PR #31, 2026-10-28; from `docs/plan-2026-10-28-phase4-photo.md` draft 2,
+plus its tier-2 audit's fixes). **Owed: the phone test** (owner, 2026-10-28: not
+possible now, marked for later): on the iPhone and Android companion apps, open a
+best friend's journal, tap "save" on a photo, and say what happened. Then b2 if
+saving needs changes (the Android "you can save it from a computer" line waits on
+this answer), and release 0.34.0. `scripts/test` 409, `scripts/card-check` 94.
 
-The owner has said (2026-10-28): open, push and merge PRs when ready, and start on
+**Phase 5 (baby talk)** is planned and audited (`docs/plan-2026-10-28-phase5-baby-talk.md`
+draft 2, PR #30; the owner approved its lines). **Personality types** has a plan in
+draft (crew branches; draft 2 folding its audit).
+
+026-10-28): open, push and merge PRs when ready, and start on
 the next work. The way the owner wants work done: **a full plan, an adversarial
 audit by a fresh subagent, revise, then build**; after building, **another audit of
 the work**, fix, test (`scripts/test`, 409 tests), check the card
