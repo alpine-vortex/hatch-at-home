@@ -1,9 +1,10 @@
-# Phase 3: a catchphrase, birthdays, and the one-time questions (build plan, draft 1)
+# Phase 3: a catchphrase, birthdays, and the one-time questions (build plan, draft 2)
 
 Phase 3 of `plan-2026-10-28-voices-and-lines.md`: A5 (a catchphrase a friend gives
 it), A6 (birthdays, the pet's and yours) and the one-time question fix. That plan's
 "The second audit" section (rows 4, 5, 6, 11) wins over part A; this file says how
-it's built. Version 0.33.0, its own PR.
+it's built. Version 0.33.0, its own PR. **Draft 2: the audit table at the end wins
+over the sections above it where they differ.**
 
 ## 0. The one-time questions (the fix comes first)
 
@@ -147,3 +148,28 @@ asked that morning.
 2. Catchphrase: data, server, card, checks.
 3. Birthdays: the pet's, then yours; art stand-in.
 4. Screenshots, the audit of the work, fixes, PR.
+
+## The audit of draft 1 (20 findings) and what changed
+
+| # | Finding | Change |
+| --- | --- | --- |
+| 1 | The care log keeps 20 entries, so "oldest entry" dates an old pet's birthday to last week | Old pets: `born` plus the egg's hours (`EGG_HOURS`); exact, since downtime doesn't age a pet and each egg's `born` is when it was laid |
+| 2 | 11-16 and "how was your day?" first: someone out all day is never asked a one-time question | The window is 11-20, and on a day a one-time question is due it's asked before the rotation and before "how was your day?" (a test for an evening-only person) |
+| 3 | There's no per-person wake time; `_closest_pet` may pick an egg or an away pet | The phone message comes with the first morning moment of any hatched, home pet that notifies them that day, worded from the closest hatched, home pet; once a year (people store) |
+| 4 | The catchphrase example has a name; name detection misses others' names; few lines qualify | `_speak(s, text, ms, {catch: true})`: callers opt in (house moments, wish lines without a name, seasonal and costume lines, the favourite snack); it's added on every third such voiced line; never on a question |
+| 5 | "friends all that time" is false for a second generation (bonds carry over) | Merged only when the two month counts are equal; else the birthday, and the friendship line another look |
+| 6 | A season's costume would hold the party back up to two weeks; the costume code needs a season | Only a treat day (Halloween, Thanksgiving) wins; any other day the party hat replaces that pet's costume. The party hat has its own tick, sink, width, skip list, and uses `hat` points |
+| 7 | Five buttons don't fit one row at 330 px | The box wraps, at most 3 a row; selects labelled "month", "day"; a screenshot at 330 px and compact |
+| 8 | The 60 s timer closes the box mid-pick; taps between buttons reach the screen today | The timer restarts on focus and change; the box stops click, change and pointerdown |
+| 9 | A celebration that doesn't fit the look is lost (notes are for that day only) | A celebration line always gets a place: it takes the away note's place in the first look when both are due (the card drops the away note when the visit brings a celebration) |
+| 10 | The phone message goes through `notify.*`, a service call the recorder keeps | Said plainly: like every phone message the pets send, it's in HA's history for admins. The owner may veto it (asked in the PR) |
+| 11 | Catchphrases clash: kitten "mew mew" (deer's sound), tarantula "fuzzy", gecko "tik tok", bunny "hop hop", squirrel "nutty"; "toodles" reads as goodbye | bird "tra la", squirrel "acorn", deer "mm-hm", gecko "click click", tarantula "tippy-toes", kitten "purr", bunny "nibble", otter "splish", octopus "wiggle", tree frog "hoppity", axolotl "smiley", bat "flappity", luna moth "flutter". Choices: `hehe`, `yay`, `and stuff`, `la la` (an opener: allowed at the end) |
+| 12 | `test_people.py` asserts the stall | That test changes |
+| 13 | The server never checks the catchphrase was asked: anyone could set it; `bond_of` would make a bond | Accepted only from a person at level 7+ whose catchphrase question is open for this generation; no bond is created |
+| 14 | Birthday answers would hit the fixed-answer validation; errors would echo the date | Its own validation before `ANSWERS`; no value in any error or log |
+| 15 | The coordinator hook dates the hatch by when it runs; the card's party uses the browser's date | `hatched_on` set in `model._hatch` from its time and `settings.tz`; the sensor says `birthday_today` (HA's date) and the card follows it |
+| 16 | A tablet left on overnight never gets the party's confetti | The party starts when the date (the sensor's `birthday_today`) turns, once per device per day |
+| 17 | A new generation inherits a level-7 bond and would ask at once; "keep mine" is unclear | Asked from the child stage on; the button says "keep '<current>'" |
+| 18 | Does forgetting mean never asked again? A first name on the phone | Forgetting counts as skipped. The phone uses the nickname or nothing: "Pip says: happy birthday! ♥" |
+| 19 | One-time questions could take six days in a row | At least 3 days between one-time questions (per person) |
+| 20 | Over-built: the `once_asked` rename; "one a day" is already the later slot's cap; likes have no skip | Keep `likes_asked` (now also `birthday`); no rename; skip is the birthday's only |
