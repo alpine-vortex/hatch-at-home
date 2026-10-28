@@ -8,7 +8,8 @@ release **0.29.0** (2026-10-28: the daily wish, dreams, "while you were out", an
 Halloween costume fixes); 0.28.0 brought weather talk (#10) and Halloween (#11), 0.28.1
 the Halloween morning notification, 0.28.2 the redrawn witch. **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
-Read the README first, then `docs/design-worlds.md`, `art/README.md`,
+Read `docs/guide.md` first (the full user guide; the README is box-back
+marketing with pictures from `scripts/readme/`), then `docs/design-worlds.md`, `art/README.md`,
 `docs/remediation-plan-2026-10-26.md` (the last review and what came of it) and
 `docs/assist-scoping.md`. The owner's original brief is not in the repo; its key rules
 are restated across the README and the design doc.
@@ -23,7 +24,7 @@ details before committing it.
 
 ## Where things stand
 
-- **Phases 0–3, HACS packaging and most of phase 4 are done and released.** README
+- **Phases 0–3, HACS packaging and most of phase 4 are done and released.** `docs/guide.md`
   "How the pet works" describes all of it for users.
 - **The fourth session (0.16–0.19)** added:
   - **Gameplay:** discipline that fades and damps whining; upbringing at adulthood

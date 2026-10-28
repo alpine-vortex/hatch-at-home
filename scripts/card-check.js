@@ -5,7 +5,8 @@
 // Screenshots go to dev/card-check/. Exits non-zero if any check fails.
 // Needs Playwright with Chromium (preinstalled in the cloud sessions).
 //
-// Environment: HA_URL (default http://localhost:8123).
+// Environment: HA_URL (default http://localhost:8123); SCALE=2 for sharp
+// screenshots (the README art uses them).
 
 const { chromium } = require("playwright");
 const fs = require("fs");
@@ -108,7 +109,7 @@ async function main() {
   await ensurePets(access);
 
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 420, height: 860 } });
+  const page = await browser.newPage({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1) });
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => {
