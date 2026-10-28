@@ -1,95 +1,15 @@
 {
   "name": "Harbor seal pup",
   "ready": true,
-  "stages": [
-    "baby",
-    "child",
-    "teen",
-    "adult"
-  ],
-  "scale": {
-    "adult": 1.1
-  },
-  "moods": [
-    "content",
-    "excited",
-    "cozy",
-    "bored",
-    "hungry",
-    "sleepy",
-    "asleep",
-    "sick",
-    "calling",
-    "dirty"
-  ],
+  "stages": ["baby", "child", "teen", "adult"],
+  "scale": {"adult": 1.1},
+  "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
   "frames": 2,
-  "extras": {
-    "squint": "child_squint",
-    "shiver": "child_shiver",
-    "sweat": "child_sweat",
-    "mask": "child_mask",
-    "dance": "child_dance",
-    "watch_tv": "child_watch_tv",
-    "banana": [
-      "child_banana_1",
-      "child_banana_2"
-    ],
-    "flipper_clap": [
-      "child_flipper_clap_1",
-      "child_flipper_clap_2"
-    ],
-    "splash": [
-      "child_splash_1",
-      "child_splash_2"
-    ]
-  },
-  "props": {
-    "feed": "otter/bowl_food",
-    "snack": "snack",
-    "play": "play",
-    "clean": "otter/bubbles",
-    "medicine": "bird/medicine",
-    "blanket": "bird/blanket",
-    "attention": "bird/attention",
-    "away": "bird/sitter_sign",
-    "poop": [
-      "bird/poop_1",
-      "bird/poop_2",
-      "bird/poop_3"
-    ]
-  },
-  "backgrounds": {
-    "day": "otter/bg_day",
-    "night": "otter/bg_night",
-    "rain": "otter/bg_rain",
-    "dim": "otter/bg_night"
-  },
-  "words": {
-    "food": "fish",
-    "home": "rock"
-  },
-  "reactions": {
-    "praise": "banana",
-    "won": "flipper_clap",
-    "play": "flipper_clap",
-    "scold": "splash"
-  },
-  "head": {
-    "baby": [
-      158,
-      132
-    ],
-    "child": [
-      170,
-      120
-    ],
-    "teen": [
-      176,
-      88
-    ],
-    "adult": [
-      194,
-      116
-    ]
-  }
+  "extras": {"squint": "child_squint", "shiver": "child_shiver", "sweat": "child_sweat", "mask": "child_mask", "dance": "child_dance", "watch_tv": "child_watch_tv", "banana": ["child_banana_1", "child_banana_2"], "flipper_clap": ["child_flipper_clap_1", "child_flipper_clap_2"], "splash": ["child_splash_1", "child_splash_2"]},
+  "props": {"feed": "otter/bowl_food", "snack": "snack", "play": "play", "clean": "otter/bubbles", "medicine": "bird/medicine", "blanket": "bird/blanket", "attention": "bird/attention", "away": "bird/sitter_sign", "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]},
+  "backgrounds": {"day": "otter/bg_day", "night": "otter/bg_night", "rain": "otter/bg_rain", "dim": "otter/bg_night"},
+  "words": {"food": "fish", "home": "rock"},
+  "reactions": {"praise": "banana", "won": "flipper_clap", "play": "flipper_clap", "scold": "splash"},
+  "head": {"baby": [158, 132], "child": [170, 120], "teen": [176, 88], "adult": [194, 116]},
+  "murk": "otter/murk"
 }
