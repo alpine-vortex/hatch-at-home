@@ -4,8 +4,8 @@ Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's bran
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
-release **0.29.0** (2026-10-28: the daily wish, dreams, "while you were out", and two
-Halloween costume fixes); 0.28.0 brought weather talk (#10) and Halloween (#11), 0.28.1
+release **0.30.0** (2026-10-28: Thanksgiving, #18); 0.29.0 brought the daily wish,
+dreams, "while you were out" and two Halloween costume fixes; 0.28.0 brought weather talk (#10) and Halloween (#11), 0.28.1
 the Halloween morning notification, 0.28.2 the redrawn witch. **The owner runs it on
 their live HA** (they were on 0.18.0 at the end of the fourth session).
 Read `docs/guide.md` first (the full user guide; the README is box-back
@@ -128,7 +128,7 @@ details before committing it.
   confirmed every player has their own HA login), then finds and visitors per world,
   then pets visiting each other.
 - **Thanksgiving** (owner, 2026-10-28: "must do", the same all-out treatment as
-  Halloween; tududi task due 20 November). Built on 2026-10-28, unreleased when written:
+  Halloween; tududi task due 20 November). Built on 2026-10-28, released in 0.30.0:
   `SEASONS` grew general fields (documented above the list: `corner`, `sweet`, `flyer`
   with `flock`, `nightFlyer`, `visitor`, `snackLines`, `treatLine`, `thanks`, `leaves`,
   `chirp`), and Halloween moved onto them unchanged. `from`/`to`/`treat` may be a
