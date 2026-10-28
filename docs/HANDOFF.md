@@ -242,6 +242,11 @@ details before committing it.
   pre-release, which HACS offers only to someone who turned on "show beta
   versions" for the integration. Run the workflow with ref = the PR's branch to
   let the owner try unmerged work; the final release later drops the suffix.
+- **Art requests (from 2026-10-28):** send them to the owner's **Hatch API Art**
+  session (find it with `list_sessions`; it isn't named here because the repo is public).
+  It decides between Luna and Sol. A Halloween redraw of all 17 `season_halloween_*`
+  stand-ins was requested on 2026-10-28, due 30 October; keep the stand-ins' file names,
+  canvas sizes and anchoring when installing it.
 - **Message Sol:** `send_message` to Sol's session (ID in the private notes). Sol can't
   reply; the owner relays links. Ask for batch jobs (cheaper).
 - **Card not showing after an update:** a hard refresh, or in the companion app,
