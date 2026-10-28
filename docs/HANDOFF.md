@@ -126,9 +126,26 @@ details before committing it.
   note, dream, wish, each once a day per device), `_wishMention`, the wish row, the
   `wish_granted` moment. The wish row leads the status screen (0.29.0; lower down it
   sat below the fold). `card-check` screenshots the three first-look lines and the
-  status screen. Next in the plan: the bond with each person (item 3; the owner
-  confirmed every player has their own HA login), then finds and visitors per world,
-  then pets visiting each other.
+  status screen.
+- **Daily check-ins, the bond with each person** (item 3; the owner confirmed every
+  player has their own HA login; 0.31.0, not yet released): state `bonds` (HA user ID
+  → points, today's count, visited, games per kind, nickname, favourite), from
+  `model.add_bond` (visit, care, game, wish; care and games share
+  `BOND_DAILY_LIMIT`), `bond_level` from `BOND_LEVELS`, a nickname at level 4 and the
+  favourite of their games at 6 (`favourite_game`: extra happiness). The coordinator
+  credits the person behind a button or `play_game` (`_person`: system users and
+  automations get none), and the wish to whoever granted it (`_actor`). New service
+  `virtual_pet.visit` (the card calls it on the pet on show, hourly; the server also
+  limits it hourly per person, in memory) counts the day's visit and grants the new
+  `say_hi` wish after noon. Life stage `bonds` (unrecorded): only levels, nicknames and
+  favourites; the card shows only the viewer's (`_bond`): warmer hellos at 2, a hop
+  (`greethop`, not `hop`, which the excited bounce clears) at 3, the nickname at 4,
+  hearts at 8, a "you two" row of five hearts on the status screen, and `bond_up` /
+  `bond_favourite` moments said only to their `user`. Diagnostics redact `bonds` and
+  moments' `user`, and add anonymous `bond_points`. Bonds carry into the next
+  generation (my call). `card-check` (now 54 checks) covers the visit, a close bond's
+  greeting, the status row and the level-up line. Next in the plan: finds and
+  visitors per world, then pets visiting each other.
 - **Thanksgiving** (owner, 2026-10-28: "must do", the same all-out treatment as
   Halloween; tududi task due 20 November). Built on 2026-10-28, released in 0.30.0:
   `SEASONS` grew general fields (documented above the list: `corner`, `sweet`, `flyer`
@@ -204,9 +221,9 @@ details before committing it.
 - **Adults** exist for every creature (the last four arrived in 0.21.0). Long adults
   are drawn back up with `species.json` `"scale": {"adult": …}` (1.05–1.2; the bat
   needs none).
-- **Tests:** 273, run with `scripts/test` (ruff, format check, pytest).
+- **Tests:** 326, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
-  `scripts/card-check` (Playwright, 32 checks) drives the card against
+  `scripts/card-check` (Playwright, 54 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
 - **CI:** `.github/workflows/validate.yml` (HACS action, hassfest, tests) is green.
   License MIT; Tiny5 keeps its OFL.

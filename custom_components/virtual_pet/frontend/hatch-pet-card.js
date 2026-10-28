@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.30.0";
+const VERSION = "0.31.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -339,6 +339,7 @@ const WISHES = {
   tv: ["can we watch something together today?", "watch TV together"],
   chore: ["I'd love a treat from a chore today", "a chore treat"],
   rain: ["I hope I get to see the rain today", "see the rain"],
+  say_hi: ["will you come say hi this afternoon?", "a hello this afternoon"],
 };
 const DREAMS = {
   watching: (d) => `I dreamed about ${d.title}!`,
@@ -356,6 +357,12 @@ const DREAMS = {
   feast: () => "I dreamed about a giant snack!",
 };
 const AWAY_NOTE_AFTER_MS = 3 * 3600 * 1000;
+// A bond with each person (life_stage "bonds", by HA user ID; only the viewer's
+// own is ever shown). What each level brings, as in rates.py: a warmer hello, a
+// hop when they look in, the nickname it picked, its favourite of their games,
+// and hearts only for them.
+const BOND = { warm: 2, hop: 3, nickname: 4, favourite: 6, hearts: 8, max: 10 };
+const VISIT_EVERY_MS = 3600 * 1000; // virtual_pet.visit, as the server counts it
 const WISH_MENTION_MS = [600000, 900000]; // between reminders of an open wish
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
 // Whole degrees in the owner's unit (the server converts), with a real minus.
@@ -610,6 +617,7 @@ const STYLE = `
   .screen.dim .pet { filter: brightness(.8); }
   .pet, .perch { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%; }
   .pet.hop { animation: hop .7s ease-in-out infinite; }
+  .pet.greethop { animation: hop .7s ease-in-out 2; } /* its own class: the bounce clears "hop" */
   @keyframes hop { 50% { transform: translateY(-9%); } }
   .poop { bottom: 5%; height: 15%; }
   .poop.p0 { left: 6%; } .poop.p1 { left: 18%; bottom: 3%; } .poop.p2 { right: 7%; }
@@ -754,7 +762,8 @@ const STYLE = `
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
-  .screen.show-status .flash, .screen.show-status .speck { display: none !important; }
+  .screen.show-status .flash, .screen.show-status .speck,
+  .screen.show-status .bondhearts { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
   .pet.sulk { animation: shake .35s 2; }
@@ -892,6 +901,10 @@ const STYLE = `
     animation: burst .45s ease-out forwards; }
   @keyframes burst { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
   .toy { position: relative; }
+  .screen .bondhearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
+    opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }
+  @keyframes bondheart { 0% { transform: translateY(0) scale(.7); opacity: 0; } 20% { opacity: 1; }
+    100% { transform: translateY(-70px) scale(1); opacity: 0; } }
   .pet.perk { animation: perk .3s ease-out; }
   @keyframes perk { 40% { transform: translateY(-6%) scale(1.04, .96); } }
   .toy.wanted .cap { background: #ffe9a8;
@@ -1688,6 +1701,7 @@ class HatchPetCard extends HTMLElement {
       }
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
       if (s === this._slides[this._index]) {
+        this._visit(s);
         this._greet(s);
         this._firstLook(s);
         this._sayQueued(s);
@@ -1874,7 +1888,10 @@ class HatchPetCard extends HTMLElement {
     if (s.greeted || !this._free(s)) return;
     s.greeted = true;
     const user = this._hass.user;
-    const first = user?.name?.trim().split(/\s+/)[0];
+    const bond = this._bond(s);
+    const level = bond?.level || 0;
+    const nickname = level >= BOND.nickname ? bond.nickname : null;
+    const first = user?.name?.trim().split(/\s+/)[0] || nickname;
     if (!first) return;
     const key = `hatch-greet-${user.id}-${s.ids?.device}`;
     try {
@@ -1885,9 +1902,49 @@ class HatchPetCard extends HTMLElement {
     }
     const hour = new Date().getHours();
     const hello = hour < 12 ? `morning, ${first}!` : hour < 18 ? `hi ${first}!` : `evening, ${first}!`;
-    s.bubble.textContent = pick([hello, `${first}!! hi!`, hello]);
+    const lines = [hello, `${first}!! hi!`, hello];
+    if (level >= BOND.warm) lines.push(`${first}! I missed you ♥`, `yay, ${first}'s here!`);
+    if (nickname) lines.push(`hi, ${nickname}!`, `${nickname}!! ♥`, `there's my ${nickname}!`);
+    s.bubble.textContent = pick(lines);
     s.sayUntil = Date.now() + 4000;
-    this._animate(s, s.pet, "perk", 320);
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (level >= BOND.hop && !calm) this._animate(s, s.pet, "greethop", 1400);
+    else this._animate(s, s.pet, "perk", 320);
+    if (level >= BOND.hearts && !calm) this._bondHearts(s);
+  }
+
+  // The viewer's own bond with this pet: {level, nickname?, favourite?} or null.
+  _bond(s) {
+    const id = this._hass.user?.id;
+    return (id && this._state(s, "sensor.life_stage")?.attributes.bonds?.[id]) || null;
+  }
+
+  // Tell the pet who's looking in (for the bond, and a "come say hi" wish).
+  _visit(s) {
+    const id = s.ids?.["sensor.life_stage"];
+    if (!id || !this._hass.user || Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
+    s.visitedAt = Date.now();
+    this._hass.callService("virtual_pet", "visit", { entity_id: id }).catch(() => {
+      // an older integration has no visit: no bond yet, nothing else changes
+    });
+  }
+
+  // Hearts that float up around the pet: only for someone it's very close to.
+  _bondHearts(s) {
+    s.screen.querySelector(".bondhearts")?.remove();
+    const box = document.createElement("div");
+    box.className = "bondhearts";
+    box.setAttribute("aria-hidden", "true");
+    [[-34, 0], [30, 0.35], [-8, 0.7], [16, 1.05]].forEach(([x, delay]) => {
+      const img = document.createElement("img");
+      img.src = `${BASE}/ui/stat_heart_full.png?v=${VERSION}`;
+      img.alt = "";
+      img.style.setProperty("--x", `${x}px`);
+      img.style.animationDelay = `${delay}s`;
+      box.append(img);
+    });
+    s.screen.append(box);
+    setTimeout(() => box.remove(), 2800);
   }
 
   // The frames to draw now: a reaction pose while one runs, else the mood's.
@@ -2070,6 +2127,20 @@ class HatchPetCard extends HTMLElement {
         this._chirp(s, "trait");
         this._queue(s, pick(["my wish came true! thank you ♥", "yay, my wish! ♥", "best day ever! ♥"]));
         break;
+      case "bond_up": { // only the person whose bond it is sees it
+        if (m.user !== this._hass.user?.id) break;
+        this._sparkle(s);
+        this._chirp(s, "trait");
+        const game = GAMES.find((g) => g.key === m.favourite);
+        this._queue(s, game ? `${game.label} is our game now! ♥`
+          : m.nickname ? `can I call you ${m.nickname}? ♥`
+          : m.level >= BOND.hearts ? "I'm always so happy when you're here ♥"
+          : pick(["I like you a lot, you know ♥", "we're getting close! ♥", "you're the best ♥"]), 5000);
+        break;
+      }
+      case "bond_favourite":
+        if (m.user === this._hass.user?.id) this._queue(s, pick(["our favourite game! ♥", "I love playing this with you ♥"]));
+        break;
       case "tv_off_late":
         say(pick(["*yawn* bedtime?", "all done? sleepy now..."]));
         break;
@@ -2172,6 +2243,17 @@ class HatchPetCard extends HTMLElement {
     } catch (err) {
       // no storage: no best score to show
     }
+    // The viewer's own bond, in five hearts (a half heart a level).
+    const bond = this._bond(s);
+    const bondHearts = (level) => {
+      const img = (n) => `<img src="${BASE}/ui/stat_heart_${n}.png?v=${VERSION}" alt="">`;
+      let out = "";
+      for (let i = 0; i < BOND.max / 2; i++) {
+        const left = level - i * 2;
+        out += img(left >= 2 ? "full" : left === 1 ? "half" : "empty");
+      }
+      return `<span class="hearts" role="img" aria-label="bond level ${level} of ${BOND.max}">${out}</span>`;
+    };
     const notifying = (this._state(s, "sensor.life_stage")?.attributes.notify_users || [])
       .includes(this._hass.user?.id);
     const ic = (n) => pixelIcon(n, 18);
@@ -2191,6 +2273,7 @@ class HatchPetCard extends HTMLElement {
     const html = `
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
         ? `<span>♥ came true!</span>` : `<span>♡ ${escape(WISHES[stageAttrs.wish.kind][1])}</span>`) : ""}
+      ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
       ${row("icon_feed", "hunger", hearts(value("hunger")))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}

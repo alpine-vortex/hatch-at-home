@@ -153,6 +153,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "games",
             "wish",
             "dream",
+            "bonds",
         }
     )
 
@@ -203,6 +204,15 @@ class LifeStageSensor(PetEntity, SensorEntity):
             # (who granted the wish stays on the server).
             "wish": self._today_only(self.pet.wish, ("kind", "granted")),
             "dream": self._today_only(self.pet.dream, ("kind", "title")),
+            # Each person's bond, by HA user ID; the card shows only the viewer's
+            # own (points and who played what stay on the server).
+            "bonds": {
+                user: {
+                    "level": model.bond_level(b["points"]),
+                    **{k: b[k] for k in ("nickname", "favourite") if b.get(k)},
+                }
+                for user, b in self.pet.bonds.items()
+            },
             "hatches_at": self._hatches_at(),
             "next_world": self.coordinator.next_world_name,
             # The creature picked for the next hatch, by name; None: a surprise.

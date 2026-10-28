@@ -41,6 +41,7 @@ from .const import (
     SERVICE_NOTIFY_ME,
     SERVICE_PLAY_GAME,
     SERVICE_SHARE_NEWS,
+    SERVICE_VISIT,
     STORE_VERSION,
     VERSION,
 )
@@ -67,6 +68,7 @@ NOTIFY_ME_SCHEMA = vol.Schema(
         vol.Required(ATTR_ENABLED): cv.boolean,
     }
 )
+VISIT_SCHEMA = vol.Schema({vol.Required(ATTR_ENTITY_ID): cv.entity_id})
 PLAY_GAME_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
@@ -156,6 +158,17 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             )
         await pet_of(call).async_set_notify(user_id, call.data[ATTR_ENABLED])
 
+    async def visit(call: ServiceCall) -> None:
+        # The card says who's looking in; only for the signed-in person.
+        user_id = call.context.user_id
+        if user_id is None:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="not_signed_in"
+            )
+        user = await hass.auth.async_get_user(user_id)
+        if user is not None and not user.system_generated:
+            await pet_of(call).async_visit(user_id)
+
     async def play_game(call: ServiceCall) -> ServiceResponse:
         kind = call.data[ATTR_GAME]
         guess = call.data.get(ATTR_GUESS)
@@ -191,6 +204,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     hass.services.async_register(
         DOMAIN, SERVICE_NOTIFY_ME, notify_me, schema=NOTIFY_ME_SCHEMA
     )
+
+    hass.services.async_register(DOMAIN, SERVICE_VISIT, visit, schema=VISIT_SCHEMA)
 
     hass.services.async_register(
         DOMAIN,

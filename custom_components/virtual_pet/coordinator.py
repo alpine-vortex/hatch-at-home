@@ -102,6 +102,8 @@ MOMENTS = {
     "weather",
     "forecast",
     "wish_granted",
+    "bond_up",
+    "bond_favourite",
 }
 MOMENTS_KEPT = 10
 # Moments a dream can be about, by the dream's kind. (Not news: it stays
@@ -179,6 +181,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # The day the holiday morning was last sent (in memory; a restart that
         # morning may send it again, and the phone's tag replaces the first).
         self._holiday_on: str | None = None
+        # The person behind the care being applied (bonds), and when each person
+        # last looked in (virtual_pet.visit; in memory).
+        self._actor: str | None = None
+        self._visits: dict[str, float] = {}
         self.presence = Presence(
             entry.options.get(CONF_AWAY_AFTER, R.HOME_AWAY_AFTER_HOURS)
         )
@@ -762,6 +768,40 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 model.dream_seed(state, {"kind": DREAM_OF[kind]}, now)
         if granted:
             self._fire(granted)
+            if self._actor and any(e["type"] == "wish_granted" for e in granted):
+                self._fire(self._bond(self._actor, "wish"))
+
+    # --- Bonds: the pet knows each person -------------------------------------
+
+    def _bond(
+        self, user: str | None, kind: str, game: str | None = None
+    ) -> list[model.Event]:
+        """Bond points for whoever did something (never for automations)."""
+        if user is None or self.state is None:
+            return []
+        events = model.add_bond(
+            self.state, user, kind, self._today(self._now())[0], self.rng, game
+        )
+        self._save()
+        return events
+
+    async def async_visit(self, user: str) -> None:
+        """Someone opened the card on this pet (the card calls this, at most
+        hourly per person): a visit counts for their bond once a day, and may
+        be today's "come say hi" wish."""
+        assert self.state is not None
+        now = self._now()
+        if now - self._visits.get(user, -1e12) < R.BOND_VISIT_EVERY_MINUTES * 60:
+            return
+        self._visits[user] = now
+        self._advance(now)
+        events = self._bond(user, "visit")
+        if self._awake() and (
+            granted := self._grant("say_hi", await self._who_id(user), now)
+        ):
+            events += granted + self._bond(user, "wish")
+        self._fire(events)
+        self._publish()
 
     def _holiday_morning(self) -> None:
         """On a holiday, the pet's first morning moment greets it on the phones
@@ -856,6 +896,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         now = self._now()
         self._advance(now)
         by = await self._who(context)
+        person = await self._person(context)
         result, events = model.apply_action(
             self.state, action, now, self.rng, by, self.settings
         )
@@ -866,7 +907,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             for event in events:
                 if event["type"] == "care":
                     event["result"] = result
-        self._fire(events)
+        if result == model.OK:
+            events += self._bond(person, "care")
+        self._actor = person
+        try:
+            self._fire(events)
+        finally:
+            self._actor = None
         self._save()
         self._publish()
         return result
@@ -879,6 +926,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         now = self._now()
         self._advance(now)
         by = await self._who(context)
+        person = await self._person(context)
         if guess is None:
             info, events = model.start_game(self.state, kind, now, self.rng, by)
         else:
@@ -889,7 +937,15 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             info["result"] = self.state.care_log[0]["result"] = "asleep"
             for event in events:
                 event["result"] = "asleep"
-        self._fire(events)
+        for event in list(events):
+            if event["type"] == "game_finished" and person is not None:
+                events += self._bond(person, "game", event["game"])
+                events += model.favourite_game(self.state, person, event["game"])
+        self._actor = person
+        try:
+            self._fire(events)
+        finally:
+            self._actor = None
         self._save()
         self._publish()
         return info
@@ -988,6 +1044,18 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return None
         user = await self.hass.auth.async_get_user(context.user_id)
         return user.name if user else None
+
+    async def _who_id(self, user_id: str) -> str | None:
+        user = await self.hass.auth.async_get_user(user_id)
+        return user.name if user else None
+
+    async def _person(self, context: Context | None) -> str | None:
+        """The HA user behind an action, for their bond: a person, not a
+        system user (an automation or the app's own calls)."""
+        if context is None or context.user_id is None:
+            return None
+        user = await self.hass.auth.async_get_user(context.user_id)
+        return user.id if user and not user.system_generated else None
 
     async def async_shutdown(self) -> None:
         """Write the pet to disk now."""

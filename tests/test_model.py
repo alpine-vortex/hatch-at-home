@@ -1419,3 +1419,57 @@ def test_a_save_from_before_check_ins_loads():
         data.pop(key)
     pet = model.PetState.from_dict(data)
     assert pet.wish is None and pet.dream_seeds == [] and pet.dream is None
+
+
+# --- Bonds -------------------------------------------------------------------
+
+
+def test_bond_levels_are_slow_at_the_top():
+    assert model.bond_level(0) == 1
+    assert model.bond_level(R.BOND_LEVELS[1]) == 2
+    assert model.bond_level(10**6) == 10
+    steps = [b - a for a, b in zip(R.BOND_LEVELS, R.BOND_LEVELS[1:], strict=False)]
+    assert steps == sorted(steps)
+
+
+def test_care_and_games_have_a_daily_limit_and_a_visit_counts_once():
+    pet = hatched(at(9))
+    rng = random.Random(1)
+    for _ in range(20):
+        model.add_bond(pet, "u1", "care", "2026-10-01", rng)
+    model.add_bond(pet, "u1", "visit", "2026-10-01", rng)
+    model.add_bond(pet, "u1", "visit", "2026-10-01", rng)
+    assert pet.bonds["u1"]["points"] == R.BOND_DAILY_LIMIT + R.BOND_VISIT_POINTS
+    # A new day, a new allowance; points never go down.
+    model.add_bond(pet, "u1", "care", "2026-10-02", rng)
+    assert pet.bonds["u1"]["points"] == R.BOND_DAILY_LIMIT + R.BOND_VISIT_POINTS + 1
+
+
+def test_a_close_bond_brings_a_nickname_then_a_favourite_game():
+    pet = hatched(at(9))
+    rng = random.Random(1)
+    pet.bonds["u1"] = {"points": R.BOND_LEVELS[3] - 1, "games": {"higher_lower": 3}}
+    pet.bonds["u2"] = {"points": 0, "nickname": "sunbeam"}
+    events = model.add_bond(pet, "u1", "wish", "2026-10-01", rng)
+    assert events[0]["level"] == R.BOND_NICKNAME_LEVEL
+    nickname = pet.bonds["u1"]["nickname"]
+    assert nickname in model.NICKNAMES and nickname != "sunbeam"  # not someone else's
+    pet.bonds["u1"]["points"] = R.BOND_LEVELS[R.BOND_FAVOURITE_LEVEL - 1] - 1
+    events = model.add_bond(pet, "u1", "game", "2026-10-02", rng, "left_right")
+    assert events[0]["favourite"] == "higher_lower"  # the one they play most
+    assert pet.bonds["u1"]["nickname"] == nickname  # kept
+    pet.happiness = 50.0
+    assert model.favourite_game(pet, "u2", "higher_lower") == []
+    assert types(model.favourite_game(pet, "u1", "higher_lower")) == ["bond_favourite"]
+    assert pet.happiness == 50.0 + R.BOND_FAVOURITE_HAPPINESS
+
+
+def test_bonds_carry_into_the_next_generation_and_survive_a_bad_save():
+    pet = hatched(at(9))
+    pet.age_hours = 10_000.0
+    pet.bonds = {"u1": {"points": 30, "nickname": "bean"}}
+    egg, _ = model.lay_egg(pet, at(10), random.Random(1))
+    assert egg.bonds == pet.bonds and egg.bonds is not pet.bonds
+    data = pet.to_dict()
+    data["bonds"] = {"u1": {"points": "12"}, "u2": "junk"}
+    assert model.PetState.from_dict(data).bonds == {"u1": {"points": 12}}

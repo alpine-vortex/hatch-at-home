@@ -1,4 +1,4 @@
-# Daily check-ins, 2026-10-28 (scope; seasons started, the rest not built)
+# Daily check-ins, 2026-10-28 (scope; wish, dream, away note, bond and seasons built)
 
 The person who will play with the pet loves virtual pets, gets attached, and checks
 on them every day. The journal matters less to them. What matters is that **every
@@ -94,6 +94,13 @@ and the pet mentions it now and then.
   moments and care actions. **Cost:** S–M.
 
 ## 3. A bond with each person (cheap to start; grows)
+
+**Built** (2026-10-28, after 0.30.0): as below, with these choices of mine for the
+owner to change: points per visit 2 (once a day), care 1, a game 2, a granted wish 3;
+care and games capped at 8 a day per person; levels at 0, 4, 10, 20, 34, 52, 75, 105,
+145, 200 points; the unlocks at levels 2 (warmer hello), 3 (hop), 4 (nickname),
+6 (favourite game, +4 happiness when played together) and 8 (hearts); bonds carry
+into the next generation. The "come say hi" wish came with it.
 
 From Nintendogs and the Digimon bracelets: the pet knows each person, separately.
 

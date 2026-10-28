@@ -256,6 +256,60 @@ async function main() {
   check("greets the viewer by first name", greeting.includes(USER.name), greeting);
   await shot("04a-greeting");
 
+  // The bond: looking in starts one for the viewer (virtual_pet.visit).
+  const me = await evaluate(() => document.querySelector("home-assistant").hass.user.id);
+  const bondOf = () => evaluate(({ e, me }) =>
+    document.querySelector("home-assistant").hass.states[e].attributes.bonds?.[me], { e: pet["sensor.life_stage"], me });
+  let bond = null;
+  for (let i = 0; i < 20 && !bond; i++) {
+    await page.waitForTimeout(500);
+    bond = await bondOf();
+  }
+  check("looking in starts a bond", bond?.level >= 1, JSON.stringify(bond));
+  // A close bond: the nickname, a hop and hearts, and five hearts on the status screen.
+  await inject(pet["sensor.life_stage"], { attributes: { bonds: { [me]: { level: 8, nickname: "sunbeam" } } } });
+  await evaluate(() => Object.keys(localStorage)
+    .filter((k) => k.startsWith("hatch-greet-")).forEach((k) => localStorage.removeItem(k)));
+  await calm();
+  await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    s.greeted = false;
+    s.sayUntil = 0;
+  });
+  let close = {};
+  for (let i = 0; i < 20 && !close.hearts; i++) {
+    await page.waitForTimeout(150);
+    close = await cur().evaluate((slide) => ({
+      hearts: slide.querySelectorAll(".bondhearts img").length,
+      hop: slide.querySelector(".pet").classList.contains("greethop"),
+      said: slide.querySelector(".bubble").textContent,
+    }));
+  }
+  check("a close bond greets with a hop and hearts", close.hearts === 4 && close.hop &&
+    (close.said.includes("sunbeam") || close.said.includes(USER.name)), JSON.stringify(close));
+  await shot("04b-close-bond");
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(500);
+  const bondRow = cur().locator(".status .row", { hasText: "you two" });
+  check("the status screen shows the viewer's bond",
+    await bondRow.count() === 1 && await bondRow.locator(".hearts").getAttribute("aria-label") === "bond level 8 of 10",
+    await bondRow.count() ? await bondRow.innerText() : "no row");
+  await shot("04c-bond-status");
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(300);
+  // A level-up is said only to the person whose bond grew.
+  const levelUp = (user) => page.locator("hatch-pet-card").evaluate((el, user) => {
+    const s = el._slides[el._index];
+    s.queue = [];
+    s.sayUntil = 0;
+    el._moment(s, { type: "bond_up", user, level: 4, nickname: "sunbeam" });
+    return s.queue.map((q) => q.text);
+  }, user);
+  const mine = await levelUp(me);
+  const theirs = await levelUp("someone-else");
+  check("a bond level-up is said only to its person",
+    mine[0] === "can I call you sunbeam? ♥" && theirs.length === 0, `${mine} / ${theirs}`);
+
   // Idle life: something small happens on its own within a minute.
   const idleSign = () => cur().evaluate((slide) => {
     const pet = slide.querySelector(".pet");

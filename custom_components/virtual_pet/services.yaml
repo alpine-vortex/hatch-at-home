@@ -26,6 +26,13 @@ notify_me:
       example: true
       selector:
         boolean:
+visit:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: virtual_pet
 play_game:
   fields:
     entity_id:

@@ -97,7 +97,8 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 - **Every day** there's something new when you look in:
   - **A wish of the day**, picked when it wakes up, only from what your house can grant: play
     a game together, a snack after lunch, a bubble bath, "good job!", being tucked in
-    tonight, watching the sunset together (someone home at sunset), and, when you have
+    tonight, watching the sunset together (someone home at sunset), someone coming to
+    say hi in the afternoon (opening the card after noon), and, when you have
     them mapped, some music, TV together, a chore treat, or seeing the rain on a day the
     forecast says rain. It's on the status screen and the pet mentions it now and then;
     granting it brings a sparkle and a little happiness. A missed wish costs nothing:
@@ -107,6 +108,18 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     looks in that morning.
   - **While you were out**: open the card after a few hours away and it tells you what
     happened ("while you were out, I napped, watched the rain and played a game!").
+- **A bond with each person.** The pet gets to know everyone who signs in to Home
+  Assistant with their own login, separately (a shared wall-tablet login counts as one
+  person). Looking in once a day, caring for it, playing games and granting its wish
+  bring you closer; care and games count up to a daily limit, so there's no need to
+  rush, and a bond never goes down, even after days away. Ten levels, slow near the
+  top (about a week to level 5, a month or so to 10). Closer, it greets you more
+  warmly (level 2), hops when you look in (3), picks a nickname for you ("hi,
+  sunbeam!", 4), has a favourite game with you that cheers it up extra when you play
+  it (6), and floats hearts just for you (8). The status screen shows "you two" in five
+  hearts. Each person only ever sees their own bond. Care through Assist counts for
+  whoever is signed in; automations build no bond. A new generation keeps the household's bonds. (The card tells the pet who
+  looked in with `virtual_pet.visit`, counted at most hourly.)
 - **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
   off): from 20 to 31 October it's **Halloween**. Bunting hangs across the scene, a
   jack-o'-lantern with a new carved face each day sits by the pet and glows at night (it
@@ -509,7 +522,11 @@ names are included.
 `virtual_pet_tv_off_late`, `virtual_pet_news` (with `headline`, and `topic` if given),
 `virtual_pet_first_snow`, `virtual_pet_first_frost`,
 `virtual_pet_trait_learned` and `virtual_pet_trait_deepened` (with `trait`, `level`), `virtual_pet_egg_laid` (with `generation`,
-`parent_species`, `inherited_trait`), `virtual_pet_welcomed` (once, when the pet is added).
+`parent_species`, `inherited_trait`), `virtual_pet_welcomed` (once, when the pet is added),
+`virtual_pet_wish_made` and `virtual_pet_wish_granted` (with `kind`),
+`virtual_pet_bond_up` (with `user`, the HA user ID, `level`, and `nickname` or
+`favourite` when the level brings one), `virtual_pet_bond_favourite` (with `user` and
+`game`).
 
 Events fired during a fast-forward carry `simulated: true`.
 

@@ -304,6 +304,16 @@
         }
       }
     },
+    "visit": {
+      "name": "Visit",
+      "description": "Tells the pet that you, the user calling it, looked in. The card calls it when you open it: the first visit of the day counts toward your bond with the pet, and an afternoon visit grants a \"come say hi\" wish. Counted at most hourly.",
+      "fields": {
+        "entity_id": {
+          "name": "Pet",
+          "description": "Any entity of the pet."
+        }
+      }
+    },
     "play_game": {
       "name": "Play a game",
       "description": "One round of a game the card's play button starts. Five rounds make a game; three right guesses win it. Left or right: the pet hides left or right and you guess; the first guess starts a game. Higher or lower: call once without a guess to start and see the first number (1-9), then guess whether the next is higher or lower.",

@@ -28,6 +28,7 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 
+from custom_components.virtual_pet import model
 from custom_components.virtual_pet.const import DOMAIN
 
 STORE_KEY = f"{DOMAIN}.test_pet"
@@ -1646,7 +1647,7 @@ async def test_the_days_wish_comes_true_when_someone_plays(
     await setup(hass)
     await settle(hass, freezer, 5 * 60)  # the tick picks today's wish
     wish = hass.states.get("sensor.pip_life_stage").attributes["wish"]
-    assert wish["kind"] in {"play", "snack", "bath", "praise", "tuck_in", "sunset"}
+    assert wish["kind"] in model.ALWAYS_WISHES
     assert wish["granted"] is False and "by" not in wish
     coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
     coordinator.state.wish["kind"] = "play"  # make it one a button can grant
@@ -1685,3 +1686,115 @@ async def test_it_dreams_of_last_nights_show(
     entry = hass.config_entries.async_entries(DOMAIN)[0]
     diag = await async_get_config_entry_diagnostics(hass, entry)
     assert "Bluey" not in str(diag)
+
+
+# --- Bonds ------------------------------------------------------------------
+
+
+async def visit(hass: HomeAssistant, user_id: str) -> None:
+    await hass.services.async_call(
+        DOMAIN,
+        "visit",
+        {"entity_id": "sensor.pip_mood"},
+        blocking=True,
+        context=Context(user_id=user_id),
+    )
+
+
+async def test_each_person_has_their_own_bond(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0)
+    await setup(hass)
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    other = await hass.auth.async_create_user("Other", group_ids=["system-admin"])
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.state.wish["kind"] = "bath"  # a wish nobody here grants
+    await visit(hass, me.id)
+    await visit(hass, me.id)  # again within the hour: nothing more
+    bonds = hass.states.get("sensor.pip_life_stage").attributes["bonds"]
+    assert bonds == {me.id: {"level": 1}}
+    assert coordinator.state.bonds[me.id]["points"] == model.R.BOND_VISIT_POINTS
+    # Care by the other person counts for them alone.
+    for _ in range(2):
+        await hass.services.async_call(
+            "button",
+            "press",
+            {"entity_id": "button.pip_praise"},
+            blocking=True,
+            context=Context(user_id=other.id),
+        )
+    assert coordinator.state.bonds[other.id]["points"] == 2 * model.R.BOND_CARE_POINTS
+    assert coordinator.state.bonds[me.id]["points"] == model.R.BOND_VISIT_POINTS
+    # A game played together.
+    for _ in range(5):
+        await hass.services.async_call(
+            DOMAIN,
+            "play_game",
+            {"entity_id": "button.pip_feed", "guess": "left"},
+            blocking=True,
+            return_response=True,
+            context=Context(user_id=me.id),
+        )
+    bond = coordinator.state.bonds[me.id]
+    assert bond["points"] == model.R.BOND_VISIT_POINTS + model.R.BOND_GAME_POINTS
+    assert bond["games"] == {"left_right": 1}
+    moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
+    assert {"type": "bond_up", "user": me.id, "level": 2}.items() <= moments[0].items()
+    # Automations and system users build no bond.
+    await press(hass, "button.pip_snack")
+    system = await hass.auth.async_create_system_user("Automation")
+    await visit(hass, system.id)
+    assert set(coordinator.state.bonds) == {me.id, other.id}
+
+
+async def test_an_afternoon_visit_grants_the_say_hi_wish(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=60.0)
+    await setup(hass)
+    await settle(hass, freezer, 5 * 60)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.state.wish["kind"] = "say_hi"
+    me = await hass.auth.async_create_user("Me")
+    await visit(hass, me.id)  # 14:00, the afternoon
+    assert coordinator.state.wish["granted"] and coordinator.state.wish["by"] == "Me"
+    assert coordinator.state.bonds[me.id]["points"] == (
+        model.R.BOND_VISIT_POINTS + model.R.BOND_WISH_POINTS
+    )
+
+
+async def test_the_visit_needs_someone_signed_in(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "visit", {"entity_id": "sensor.pip_mood"}, blocking=True
+        )
+
+
+async def test_diagnostics_hide_whose_bond_it_is(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    from custom_components.virtual_pet.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, bonds={"user-1": {"points": 40, "nickname": "sunbeam"}}
+    )
+    config = await setup(hass)
+    config.runtime_data.moments.append(
+        {"type": "bond_up", "user": "user-1", "level": 5, "at": now}
+    )
+    diag = await async_get_config_entry_diagnostics(hass, config)
+    assert "user-1" not in str(diag) and "sunbeam" not in str(diag)
+    assert diag["bond_points"] == [40]

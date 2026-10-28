@@ -265,6 +265,21 @@ HOME_FIRE_HAPPINESS = 1.0  # a lit fireplace (counts toward the cap)
 # the small happiness a granted wish gives).
 WISH_HAPPINESS = 8.0  # once, when the day's wish comes true
 WISH_SNACK_AFTER_HOUR = 12  # "a snack after lunch": local hour from which it counts
+WISH_SAY_HI_AFTER_HOUR = 12  # "come say hi this afternoon"
 DREAM_SEEDS_KEPT = 12  # the day's moments a dream can be about
 DREAM_SEED_HOURS = 30.0  # older seeds are forgotten
 DREAM_PLAIN_CHANCE = 0.5  # with nothing to dream about: a plain dream, or none
+
+# A bond with each person (HA user). Points never go down. A typical day (a
+# visit, a few care actions, a game) earns about 8.
+BOND_VISIT_POINTS = 2  # the first look of the day
+BOND_CARE_POINTS = 1
+BOND_GAME_POINTS = 2
+BOND_WISH_POINTS = 3  # granted the day's wish
+BOND_DAILY_LIMIT = 8  # care and games, per person per day
+# Points needed for levels 1-10: a week to level 5, about a month to level 10.
+BOND_LEVELS = (0, 4, 10, 20, 34, 52, 75, 105, 145, 200)
+BOND_NICKNAME_LEVEL = 4  # it picks a nickname for them
+BOND_FAVOURITE_LEVEL = 6  # it picks its favourite of their games
+BOND_FAVOURITE_HAPPINESS = 4.0  # playing that game together
+BOND_VISIT_EVERY_MINUTES = 60  # the card's visit call, per person (in memory)
