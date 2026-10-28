@@ -115,6 +115,7 @@ MOMENTS = {
     "friend_home",
     "bond_record",
     "tucked_in",
+    "favourite_snack",
 }
 MOMENTS_KEPT = 10
 # Moments a dream can be about, by the dream's kind. (Not news: it stays
@@ -171,6 +172,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.egg_roster: tuple[str, ...] = ()
         self.egg_species_names: dict[str, str] = {}
         self.rng = random.Random()
+        # Each ready creature's favourite-snack choices, and the stages with
+        # food words of their own (a moth: no snacks there).
+        self.likes: dict[str, list[str]] = {}
+        self.own_food_stages: dict[str, set[str]] = {}
         self.state: model.PetState | None = None
         # Last calculation, for the diagnostic sensor.
         self.debug: dict[str, Any] = {}
@@ -279,6 +284,20 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.egg_species_names = {
             s: catalog.species[s].get("name", s) for s in self.egg_roster
         }
+        for key, data in catalog.species.items():
+            voice = data.get("voice") if isinstance(data.get("voice"), dict) else {}
+            likes = voice.get("likes")
+            self.likes[key] = (
+                [x for x in likes if isinstance(x, str) and x]
+                if isinstance(likes, list)
+                else []
+            )
+            words = data.get("words") if isinstance(data.get("words"), dict) else {}
+            self.own_food_stages[key] = {
+                stage
+                for stage, w in words.items()
+                if isinstance(w, dict) and "food" in w
+            }
         if not self.roster:
             LOGGER.warning(
                 "World %s has no ready species yet; %s stays an egg until it does",
@@ -314,6 +333,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if self.state.egg_choice not in self.egg_roster:
             # The world changed under the choice (reconfigure): back to a surprise.
             self.state.egg_choice = None
+        self._pick_favourite()
         self._save()
 
     async def _async_update_data(self) -> model.PetState:
@@ -730,7 +750,15 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.debug["last_tick"] = dt_util.utc_from_timestamp(now).isoformat()
         self.debug["last_step_minutes"] = round((now - before) / 60, 2)
         self._fire(events, simulated)
+        self._pick_favourite()
         self._save()
+
+    def _pick_favourite(self) -> None:
+        """A hatched pet without a favourite snack picks one (at hatching, or
+        at load for a pet from before favourites)."""
+        state = self.state
+        if state is not None and state.species:
+            model.pick_favourite(state, self.likes.get(state.species, []), self.rng)
 
     def _fire(self, events: list[model.Event], simulated: bool = False) -> None:
         for event in events:
@@ -835,6 +863,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             kind = e["type"]
             if kind == "care" and e.get("result") == model.OK and e["action"] in care:
                 granted += self._grant(care[e["action"]], by, now)
+                if e["action"] == "snack":
+                    own = model.life_stage(state) in self.own_food_stages.get(
+                        state.species or "", set()
+                    )
+                    granted += model.favourite_snack(
+                        state, self._today(now)[0], self.rng, own
+                    )
             elif kind == "game_finished":
                 granted += self._grant("play", by, now)
                 if e.get("won"):
@@ -1554,6 +1589,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # Pull the simulated future back to the real present.
         model.shift_times(self.state, -seconds)
         self._fire(events, simulated=True)
+        self._pick_favourite()
         self._save()
         self._publish()
         return {

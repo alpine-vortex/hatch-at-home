@@ -136,6 +136,9 @@ class PetState:
     # HA user ID -> {points, day, today, visited, games, nickname?, favourite?}.
     # The household's, not the pet's: carried into the next generation.
     bonds: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Its own favourites, picked once from its creature's likes: {"snack": ...}.
+    favourites: dict[str, str] = field(default_factory=dict)
+    favourite_said: str | None = None  # local date it last said so
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store."""
@@ -198,6 +201,13 @@ class PetState:
             for user, bond in (kwargs.get("bonds") or {}).items()
             if isinstance(bond, dict)
         }
+        kwargs["favourites"] = {
+            k: v
+            for k, v in (kwargs.get("favourites") or {}).items()
+            if isinstance(k, str) and isinstance(v, str)
+        }
+        if not isinstance(kwargs.get("favourite_said"), str):
+            kwargs["favourite_said"] = None
         state = cls(**kwargs)
         if state.upbringing is None and life_stage(state) == "adult":
             # Grew up before upbringings existed: judge it on its record so far.
@@ -1526,6 +1536,32 @@ def favourite_game(state: PetState, user: str, game: str, today: str) -> list[Ev
         return []
     bond["favourite_said"] = today
     return [{"type": "bond_favourite", "user": user, "game": game}]
+
+
+# --- Its favourite snack --------------------------------------------------------
+
+
+def pick_favourite(state: PetState, likes: list[str], rng: random.Random) -> bool:
+    """Once it has hatched, it picks a favourite snack from its creature's likes,
+    for good. Whether it picked one now."""
+    if "snack" in state.favourites or not likes or life_stage(state) == "egg":
+        return False
+    state.favourites["snack"] = rng.choice(likes)
+    return True
+
+
+def favourite_snack(
+    state: PetState, today: str, rng: random.Random, own_food: bool = False
+) -> list[Event]:
+    """Now and then a snack is its favourite: it says so, at most once a day.
+    Not at a stage with food of its own (a moth)."""
+    food = state.favourites.get("snack")
+    if not food or own_food or state.favourite_said == today:
+        return []
+    if rng.random() >= R.FAVOURITE_SNACK_CHANCE:
+        return []
+    state.favourite_said = today
+    return [{"type": "favourite_snack", "food": food}]
 
 
 # --- Chores -------------------------------------------------------------------

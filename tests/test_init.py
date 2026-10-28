@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import random
 from typing import Any
 
 from freezegun.api import FrozenDateTimeFactory
@@ -2472,3 +2473,36 @@ async def test_a_wish_is_open_only_while_it_can_come_true(
     coordinator.state.wish = {"kind": "tuck_in", "day": "2026-10-28", "granted": False}
     coordinator.async_set_updated_data(coordinator.state)
     assert hass.states.get("sensor.pip_life_stage").attributes["wish"]["open"] is True
+
+
+async def test_a_hatched_pet_picks_a_favourite_snack_and_says_so(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+) -> None:
+    # A pet from before favourites picks one at load.
+    hass_storage[STORE_KEY] = hatched_pet(now, species="squirrel", hunger=40.0)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    likes = ["hazelnuts", "fir cones", "mushrooms"]
+    food = coordinator.state.favourites["snack"]
+    assert food in likes
+    attrs = hass.states.get("sensor.pip_life_stage").attributes
+    assert attrs["favourites"] == {"snack": food}
+    coordinator.rng = random.Random()
+    coordinator.rng.random = lambda: 0.0  # this snack is its favourite
+    await press(hass, "button.pip_snack")
+    assert {"type": "favourite_snack", "food": food}.items() <= moments(hass)[0].items()
+    await press(hass, "button.pip_snack")  # once a day
+    assert [m["type"] for m in moments(hass)].count("favourite_snack") == 1
+
+
+async def test_an_egg_hatched_by_fast_forward_picks_its_favourite(
+    hass: HomeAssistant, now: float
+) -> None:
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    assert coordinator.state.favourites == {}
+    await hass.services.async_call(DOMAIN, "fast_forward", {"hours": 1}, blocking=True)
+    species = coordinator.state.species
+    assert coordinator.state.favourites["snack"] in coordinator.likes[species]
