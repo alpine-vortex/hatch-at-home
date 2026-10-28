@@ -456,6 +456,26 @@ async function main() {
       spooky.hatBottom < spooky.fy && spooky.said === "boo!",
     `hat bottom ${Math.round(spooky.hatBottom)} vs head top ${Math.round(spooky.headTop)}`);
   await shot("05-halloween");
+  // Halloween's extras: bunting, a ghost the pet jumps at, candy for a snack.
+  const extras = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const season = { key: "halloween" };
+    s.screen.querySelector(".costume")?.remove();
+    s.sayUntil = 0; s.flairUntil = 0;
+    el._seasonGhost(s, season);
+    await new Promise((r) => setTimeout(r, 1800));
+    const ghost = !!s.seasonBox.querySelector(".sghost");
+    const eep = s.bubble.textContent;
+    el._seasonFly(s, season, "witch", "switch", 3000);
+    const witch = !!s.seasonBox.querySelector(".switch img");
+    el._react(s, { action: "snack", result: "ok", at: Date.now() / 1000 });
+    return { bunting: !!s.seasonBox.querySelector(".bunting"), ghost, eep, witch,
+      prop: s.prop.getAttribute("src") || "" };
+  });
+  check("halloween extras show", extras.bunting && extras.ghost && extras.witch && extras.eep === "eep!!",
+    `bunting ${extras.bunting}, ghost ${extras.ghost} (${extras.eep}), witch ${extras.witch}`);
+  check("snacks are candy at halloween", /season_halloween_candy/.test(extras.prop), extras.prop.split("/").pop());
+  await shot("05-halloween-extras");
   await card.evaluate((el) => { el.setConfig({ ...el._config, seasonal: false }); el.hass = el._hass; });
   await page.waitForTimeout(800);
   check("seasonal: false takes the season away",

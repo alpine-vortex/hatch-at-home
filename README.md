@@ -92,12 +92,17 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   three catches win; the best score stays in this browser. No reward, nothing is sent
   to Home Assistant.
 - **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
-  off): from 20 to 31 October it's **Halloween**. A jack-o'-lantern sits by the pet and
-  glows at night (it floats in Tidepool and Pond), cobwebs hang in the corner (both
-  corners of the Terrarium), a sweet waits by the door in Hearth, a pumpkin joins the
-  device's decorations, and bats flit across at night (in Night Sky by day too). Every
-  couple of minutes the pet puts on a witch hat and says something spooky, and on the
-  31st the first visit of the day gets "trick or treat!" and a sweet. All cosmetic.
+  off): from 20 to 31 October it's **Halloween**. Bunting hangs across the scene, a
+  jack-o'-lantern with a new carved face each day sits by the pet and glows at night (it
+  floats in Tidepool and Pond), cobwebs hang in the corner (both corners of the
+  Terrarium), a sweet waits by the door in Hearth, a pumpkin joins the device's
+  decorations, mist curls along the ground at night, bats flit across at night (in Night
+  Sky by day too, where a witch crosses the sky). Each pet has a costume of the day (a
+  witch hat, a pumpkin cap, cat ears or little horns) that it puts on every couple of
+  minutes with something spooky to say; a friendly ghost floats by now and then and
+  makes it jump; snacks are candy; the first visit of each day counts down ("3 sleeps
+  till Halloween!"); and on the 31st the first visit gets "trick or treat!" and a
+  sweet. All cosmetic.
 - Tap the screen for the status page: hearts and meters, weight, care misses and
   ignored whines, traits (n/4) and the one it's learning next, upbringing, the next
   egg, the notify-me and sounds switches, recent care, and a link to the journal. Tap

@@ -88,7 +88,13 @@ details before committing it.
   `hat` where ears or antlers rise above the skull (the deer; the owner caught it
   hovering). Stand-in art drawn by `art/seasonal/make_halloween.py`
   (`ui/season_halloween_*`); Sol could redraw it. `card-check` forces the season and
-  checks the hat; it keeps seasons off for the other checks.
+  checks the hat; it keeps seasons off for the other checks. Halloween's extras (owner:
+  "go all out on every holiday"): a costume of the day per pet (`costumes`, each with
+  its `sink` into the head), a lantern face of the day, bunting, night mist, a ghost the
+  pet jumps at, a witch in Night Sky, candy for snacks, a countdown, a `spooky` chirp.
+  `species.json` `hat` points now exist for the deer, the axolotl (its gills rise above
+  its crown) and the tarantula (the hat goes on its front body, by its face, not on its
+  abdomen). Every costume was previewed on all 13 creatures × 4 stages, close up.
 - **Weather talk** (Tier 1 of `docs/plan-2026-10-27-real-time-connections.md`,
   merged in PR #10, released in 0.28.0): `weather` moments (`change`:
   rain_started, rain_stopped, rainbow, snow_started, sun_out, hot, cold) from
