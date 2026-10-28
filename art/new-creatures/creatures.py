@@ -95,7 +95,7 @@ C = {
           "hungry": ("looking at an empty little dish beside it, tongue flicking", "frame 2 = same, tongue in")},
    sigs=[("ball", "curled into a tight round ball with its head tucked in the middle, one eye peeking (scold)", "frame 2 = head poking up out of the ball"),
          ("tongue_flick", "head raised and curious, forked tongue flicking out to taste the air", "frame 2 = tongue in, head tilted"),
-         ("climb", "draped happily over a short branch, head hanging down, upside-down smile", "frame 2 = same, tail tip curling")],
+         ("climb", "a short pale-brown branch lying FLAT ON THE GROUND, and the snake draped happily over it with its head raised and a big smile; the branch is a separate lighter stick with its own outline, and the snake's whole body has its own dark outline so the two never merge", "frame 2 = same, head tilted the other way, tail tip curling")],
    reactions={"play": "climb", "won": "tongue_flick", "praise": "tongue_flick", "scold": "ball"},
    props=[("bowl_food", "a small covered dinner dish"), ("play", "a short smooth branch")],
    words={"food": "dinner", "home": "hide"},
