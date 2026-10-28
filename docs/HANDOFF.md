@@ -1,4 +1,4 @@
-# Handoff (2026-10-27, fifth session)
+# Handoff (2026-10-28, sixth session)
 
 Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's branch
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
@@ -23,6 +23,46 @@ tool's `list`, then `read` it): the entity mapping and options for their house, 
 house check of 2026-10-27, BirdNET notes, the file-share host and Sol's session ID.
 History was rewritten once to remove them. Scan anything from Sol or the owner for such
 details before committing it.
+
+## Start here (sixth session, 2026-10-28, before a context clear)
+
+**In flight: PR #25** (branch `ccr-a828d8c1-uv2so3` → `main`, version 0.31.0): the
+bond with each person, bond connections (twelve features), and phase 1 of the voices
+plan (every line reviewed). This session is subscribed to it; CI was running when
+the context was cleared. The owner has said (2026-10-28): **open, push and merge the
+PR when ready, and start on the next work**. So:
+
+1. When CI is green (tests, hassfest, hacs, card), merge #25 (a merge commit), then
+   release 0.31.0 (Release workflow on `main`, see "How to"). If CI is red, fix it on
+   the branch first. Unsubscribe from #25 once merged.
+2. Start **phase 2 of `docs/plan-2026-10-28-voices-and-lines.md`** on the designated
+   branch restarted from `main` (`git fetch origin main && git checkout -B
+   ccr-a828d8c1-uv2so3 origin/main`, then a force-with-lease push: it only held merged
+   history). Phase 2: A1 (each creature's sound, `_speak`, once per burst), A2
+   (typing and Animalese babble, with the second audit's row 1 and 7 fixes), A4 (the
+   favourite snack). Read the plan's draft-3 section "The second audit" first: it
+   overrides part A where they differ.
+3. The way the owner wants work done: **a full plan, an adversarial audit by a fresh
+   subagent, revise, then build**; after building, **another audit of the work**, fix,
+   test (`scripts/test`), check the card (`scripts/card-check`, now 68 checks), send
+   screenshots, then PR. Each phase is its own PR.
+4. Then phases 3 (catchphrase, birthdays), 4 (photo), 5 (baby talk), 6 (moths, its
+   own plan and audit). After those: personality types (a new plan). Gifts and
+   neighbours talking are noted in `docs/plan-2026-10-28-daily-checkins.md`.
+
+The plans to read: `docs/plan-2026-10-28-daily-checkins.md` (item 3 and its passes),
+`docs/plan-2026-10-28-bond-connections.md` (built; its audits), and
+`docs/plan-2026-10-28-voices-and-lines.md` (draft 3, phase 1 built). The owner's
+taste so far: Animal Crossing is the touchstone; flavour, never gameplay, for bonds;
+positive or quiet, never guilt, nagging or ranking people; private things only to
+their person.
+
+**Dev pets drift.** After many `card-check` runs the dev pets in `dev/config` get
+sick (weight 0, recent misses), and checks like idle life fail. Until the dev utility
+(open item 0) exists: stop HA, then in `dev/config/.storage/virtual_pet.0*` set
+`sick` false, `recent_misses` [], `health` 100, `energy` 90, `hunger` 80, `weight` 50,
+`call` null, `latched` [], and start it again. An old HA may still be running from an
+earlier session: `scripts/develop` then exits with "stop the existing instance".
 
 ## Where things stand
 
