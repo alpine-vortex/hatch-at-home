@@ -1,0 +1,26 @@
+{
+  "name": "Russian tortoise",
+  "ready": true,
+  "stages": ["baby", "child", "teen", "adult"],
+  "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],
+  "frames": 2,
+  "extras": {"squint": "child_squint", "shiver": "child_shiver", "sweat": "child_sweat", "mask": "child_mask", "dance": "child_dance", "watch_tv": "child_watch_tv", "hide": ["child_hide_1", "child_hide_2"], "dig": ["child_dig_1", "child_dig_2"], "munch": ["child_munch_1", "child_munch_2"]},
+  "props": {"feed": "bowl_food", "snack": "snack", "play": "play", "clean": "bird/sparkle_clean", "medicine": "bird/medicine", "blanket": "bird/blanket", "heat": "gecko/heat_glow", "attention": "bird/attention", "away": "bird/sitter_sign", "poop": ["bird/poop_1", "bird/poop_2", "bird/poop_3"]},
+  "backgrounds": {"day": "gecko/bg_vivarium", "night": "gecko/bg_night", "rain": "gecko/bg_rain", "dim": "gecko/bg_dim"},
+  "words": {"food": "dandelions", "home": "burrow"},
+  "voice": { "sound": "munch", "catchphrase": "no rush", "pitch": 350, "pace": 25, "likes": ["dandelions", "hibiscus", "clover"] },
+  "reactions": {"play": "dig", "feed": "munch", "snack": "munch", "scold": "hide"},
+  "head": {"baby": [124, 144], "child": [130, 124], "teen": [122, 96], "adult": [124, 100]},
+  "hat": {
+    "baby": [168, 148],
+    "baby_excited": [164, 112],
+    "child": [184, 136],
+    "child_excited": [174, 104],
+    "child_watch_tv": [128, 140],
+    "teen": [196, 116],
+    "teen_excited": [190, 76],
+    "adult": [206, 140],
+    "adult_dirty": [206, 124],
+    "adult_excited": [196, 80]
+  }
+}

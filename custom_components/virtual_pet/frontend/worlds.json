@@ -5,7 +5,9 @@
     "roster": [
       "bird",
       "squirrel",
-      "deer"
+      "deer",
+      "fox",
+      "bananaslug"
     ],
     "shell": {
       "shape": "egg",
@@ -33,7 +35,10 @@
     "roster": [
       "gecko",
       "tarantula",
-      "beetle"
+      "beetle",
+      "tortoise",
+      "beardeddragon",
+      "ballpython"
     ],
     "shell": {
       "shape": "tank",
@@ -59,7 +64,10 @@
     "label": "hatch · home",
     "roster": [
       "kitten",
-      "bunny"
+      "bunny",
+      "corgi",
+      "hamster",
+      "ferret"
     ],
     "shell": {
       "shape": "house",
@@ -86,7 +94,10 @@
     "label": "hatch · tide",
     "roster": [
       "otter",
-      "octopus"
+      "octopus",
+      "seal",
+      "hermitcrab",
+      "puffin"
     ],
     "shell": {
       "shape": "porthole",
@@ -114,7 +125,10 @@
     "label": "hatch · pond",
     "roster": [
       "treefrog",
-      "axolotl"
+      "axolotl",
+      "pondturtle",
+      "duckling",
+      "beaver"
     ],
     "shell": {
       "shape": "pad",
@@ -142,7 +156,10 @@
     "label": "hatch · night",
     "roster": [
       "bat",
-      "lunamoth"
+      "lunamoth",
+      "owl",
+      "firefly",
+      "opossum"
     ],
     "shell": {
       "shape": "moon",

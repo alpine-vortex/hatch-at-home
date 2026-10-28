@@ -437,7 +437,11 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   trait it has by then nudges it a little toward two types (a homebody leans sweet
   or mellow), and how it was cared for never counts. It's flavour only: it never
   changes a stat, a call or a care result. The status screen and the journal show
-  it; how each type talks comes in a later update.
+  it, and a new teen says which kind it is. From then on, about half the time, it
+  says its hellos, good morning, good night, the sunset, a wish coming true and its
+  favourite snack in its type's own words (on a shared screen, hellos without a
+  name; a few more once it knows you well). Its idle chatter and mood line keep the
+  usual words for now.
 - **Traits:** the pet picks up habits from your house and keeps them for life, up
   to **four** (an inherited one counts; once it has four it learns no more). Only
   time it spends awake counts, and traits only ever add a little happiness (all

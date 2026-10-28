@@ -143,8 +143,21 @@ async function main() {
   await seasonsOff();
   // Pets speak with their sound now and then; checks of exact lines keep it
   // off (as if one was just said), and the voice checks turn it back on.
+  // A dev pet that has grown into a teen has a personality, which would swap
+  // exact lines half the time: the pets have none here unless a check stubs
+  // one in (4c, 4d). Installed once per card, so again after a reload.
   const hush = () => page.locator("hatch-pet-card").evaluate((el) => {
     el._slides.forEach((s) => { s.voicedAt = Date.now() + 1e9; });
+    if (el.__typeless) return;
+    el.__typeless = true;
+    const realState = el._state;
+    const typeless = new WeakMap(); // one copy per state, so a check can still edit what it's given
+    el._state = function (slide, key) {
+      const st = realState.call(this, slide, key);
+      if (key !== "sensor.life_stage" || !st?.attributes?.personality) return st;
+      if (!typeless.has(st)) typeless.set(st, { ...st, attributes: { ...st.attributes, personality: null } });
+      return typeless.get(st);
+    };
   });
   await hush();
   const cur = () => page.locator("hatch-pet-card .slide:not(.away-slide)");
@@ -997,7 +1010,7 @@ async function main() {
   const spooky = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
     s.sayUntil = 0; s.flairUntil = 0;
-    const [hx0, hy0] = s.species.hat?.[s.drawn] || s.species.head[s.drawn];
+    const [hx0, hy0] = el._hatSpot(s) || s.species.head[s.drawn];
     el._headTopAll(s, hx0, hy0); // load every frame first, as the season's ticks do
     await new Promise((r) => setTimeout(r, 600));
     el._costume(s, { key: "halloween" }, "boo!");
@@ -1007,10 +1020,10 @@ async function main() {
     const sr = s.screen.getBoundingClientRect();
     const r = s.pet.getBoundingClientRect();
     // The real top of the head in the frame on show (or the species' hat point).
-    const [hx, hy] = s.species.hat?.[s.drawn] || s.species.head[s.drawn];
+    const [hx, hy] = el._hatSpot(s) || s.species.head[s.drawn];
     // The lowest top across the idle frames: on every frame the hat must sit on the head.
     const scanned = el._headTopAll(s, hx, hy);
-    const top = s.species.hat?.[s.drawn] ? Math.max(hy, scanned ?? hy) : scanned;
+    const top = el._hatSpot(s) ? Math.max(hy, scanned ?? hy) : scanned;
     return {
       pieces: [...s.seasonBox.querySelectorAll("img")].map((i) => i.className).join(" ").split(" "),
       hatBottom: hat && hat.bottom - sr.top, headTop: r.top - sr.top + top * (r.height / 256),
@@ -1919,6 +1932,302 @@ async function main() {
     await unstubState();
     await page.locator("hatch-pet-card .statusbtn").click();
     await page.waitForTimeout(400);
+  }
+
+  // 4d. Personality (P2a): each type's hellos, reveal and moments. The table is
+  // read from the card's source; the stage, the type and the viewer's bond are
+  // stubbed in-page, and Math.random is pinned where a check needs one side of
+  // the coin (0.1: the type's first line; 0.9: the normal pick).
+  {
+    const vm = require("vm");
+    const src = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+    const PERSONA = vm.runInNewContext(`(${src.match(/const PERSONA = (\{[\s\S]*?\n\});/)[1]})`);
+    const py = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "model.py"), "utf8");
+    const TYPES = [...py.split("\nPERSONALITIES = (")[1].split("\n)")[0].matchAll(/"(\w+)"/g)].map((m) => m[1]);
+    const KEYS = ["reveal", "hello", "hello_shared", "hello_warm", "hello_hearts",
+      "good_morning", "sunset", "fell_asleep", "wish_granted", "favourite_snack"];
+    const HELLOS = ["hello", "hello_shared", "hello_warm", "hello_hearts"];
+    const longName = "Wwwwwwwwwwwwwwww"; // 16, as _greet leaves a name
+    const longFood = "sunflower seeds"; // 15, the longest likes entry
+    const fill = (line, arg) => (typeof line === "function" ? line(arg) : line);
+    const bad = [];
+    if (Object.keys(PERSONA).sort().join() !== [...TYPES].sort().join()) bad.push(`types ${Object.keys(PERSONA)} vs ${TYPES}`);
+    for (const [type, keys] of Object.entries(PERSONA)) {
+      if (Object.keys(keys).join() !== KEYS.join()) bad.push(`${type}: keys ${Object.keys(keys)}`);
+      for (const [key, lines] of Object.entries(keys)) {
+        if (lines.length < 2 || lines.length > 3) bad.push(`${type}.${key}: ${lines.length} lines`);
+        const named = ["hello", "hello_warm", "hello_hearts"].includes(key);
+        const food = key === "favourite_snack";
+        for (const entry of lines) {
+          if ((typeof entry === "function") !== (named || food)) bad.push(`${type}.${key}: "${fill(entry, "{x}")}" name or food`);
+          const line = fill(entry, food ? longFood : longName);
+          const words = line.toLowerCase().match(/[a-z']+/g) || [];
+          if (/!!!/.test(line)) bad.push(`${type}.${key}: "${line}" !!!`);
+          if (/\b(still|again|why|never|pleas\w*|sad|cry|alone|forgot\w*)\b/i.test(line)) bad.push(`${type}.${key}: "${line}" nags`);
+          if (words.some((w, i) => i > 1 && w === words[i - 1] && w === words[i - 2])) bad.push(`${type}.${key}: "${line}" three in a row`);
+          if (line.includes("?")) bad.push(`${type}.${key}: "${line}" asks`);
+          if (line.length > 40) bad.push(`${type}.${key}: "${line}" ${line.length} long`);
+          if (key === "wish_granted" && /thank|you remembered|too kind/i.test(line)) bad.push(`${type}.${key}: "${line}" credits someone`);
+          if (HELLOS.includes(key) && /\b(favourite|best|morning|afternoon|evening|night|tonight|tomorrow)\b/i.test(line)) {
+            bad.push(`${type}.${key}: "${line}" ranks or tells the time`);
+          }
+        }
+      }
+    }
+    check("personality lines: all eight types, every key, 2-3 lines, 40 at most, no nagging, no asking, wishes credit nobody",
+      bad.length === 0, bad.join(" | "));
+
+    // One pet on show, as a teen or adult of a type, with this viewer's bond.
+    const typeAs = (fn, arg) => page.locator("hatch-pet-card").evaluate(async (el, { fn, arg }) => {
+      const s = el._slides[el._index];
+      const realState = el._state;
+      const realRandom = Math.random;
+      const me = el._hass.user.id;
+      const keep = { voicedAt: s.voicedAt, queue: s.queue, catchCount: s.catchCount, asleep: s.asleep, calling: s.calling };
+      const kept = { shared: localStorage.getItem("hatch-shared-screen"), baby: localStorage.getItem(`hatch-baby-talk-${me}`) };
+      const free = () => Object.assign(s, { asleep: false, calling: false, sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0,
+        movingUntil: 0, queue: [], voicedAt: Date.now() + 1e9 });
+      free();
+      const t = {
+        pet: (stage, personality, level = null) => {
+          el._state = function (slide, key) {
+            const st = realState.call(this, slide, key);
+            if (key !== "sensor.life_stage" || !st || slide !== s) return st;
+            return { ...st, state: stage, attributes: { ...st.attributes, personality,
+              bonds: level === null ? {} : { [me]: { level } } } };
+          };
+        },
+        random: (r) => { Math.random = r === null ? realRandom : () => r; },
+        shared: (on) => localStorage.setItem("hatch-shared-screen", on ? "on" : "off"),
+        baby: (on) => localStorage.setItem(`hatch-baby-talk-${me}`, on ? "on" : "off"),
+        greet: () => {
+          free();
+          localStorage.removeItem(`hatch-greet-${el._hass.user.id}-${s.ids?.device}`);
+          s.greeted = false;
+          el._greet(s); el._stopTyping(s);
+          return s.bubble.textContent;
+        },
+        moment: (m) => { // what's said now, and what's queued after it
+          free();
+          el._moment(s, { at: new Date().toISOString(), ...m }); el._stopTyping(s);
+          const out = { said: s.bubble.textContent, queued: s.queue.map((q) => ({ text: q.text, catch: !!q.opts?.catch })) };
+          s.queue = [];
+          return out;
+        },
+      };
+      try {
+        return await new Function("el", "s", "t", "arg", `return (${fn})(el, s, t, arg);`)(el, s, t, arg);
+      } finally {
+        el._state = realState;
+        Math.random = realRandom;
+        for (const [k, v] of [["hatch-shared-screen", kept.shared], [`hatch-baby-talk-${me}`, kept.baby]]) {
+          if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v);
+        }
+        Object.assign(s, keep);
+        s.sayUntil = 0;
+        el._stopTyping(s);
+      }
+    }, { fn: fn.toString(), arg });
+    const filled = (type, key, arg) => PERSONA[type][key].map((line) => fill(line, arg));
+    await page.emulateMedia({ reducedMotion: "reduce" });
+
+    // The half rule, at every site: heads the type's line, tails the normal pick.
+    const MOMENTS = [["good_morning", { type: "good_morning" }], ["sunset", { type: "sunset" }],
+      ["fell_asleep", { type: "fell_asleep", how: "house" }], ["wish_granted", { type: "wish_granted" }],
+      ["favourite_snack", { type: "favourite_snack", food: "hazelnuts" }]];
+    const half = await typeAs(async (el, s, t, { types, moments }) => {
+      const out = {};
+      for (const type of types) {
+        t.pet(type === "old_soul" ? "adult" : "teen", type, 0);
+        out[type] = {};
+        for (const r of [0.1, 0.9]) {
+          t.random(r);
+          out[type][r] = { greet: t.greet() };
+          for (const [key, m] of moments) {
+            const said = t.moment(m);
+            out[type][r][key] = said.queued.length ? said.queued[0] : { text: said.said };
+          }
+        }
+      }
+      return out;
+    }, { types: TYPES, moments: MOMENTS });
+    const NORMAL = {
+      greet: /^(morning|hi|evening), Dev!$|^Dev!! hi!$/,
+      good_morning: /^morning!! you're up!$|^morning! ♪$/,
+      sunset: /^ooh, the sunset\.\.\.$|^pretty sky tonight$|^the sun's going down$/,
+      fell_asleep: /^good night\.\.\.$|^night night\.\.\.$|^sleep tight\.\.\.$/,
+      wish_granted: /^my wish came true! thank you ♥$|^yay, my wish! ♥$|^best day ever! ♥$/,
+      favourite_snack: /^hazelnuts, my favourite!!$/,
+    };
+    const halfBad = [];
+    for (const type of TYPES) {
+      const heads = half[type][0.1];
+      const tails = half[type][0.9];
+      if (heads.greet !== filled(type, "hello", "Dev")[0]) halfBad.push(`${type} hello: ${heads.greet}`);
+      if (!NORMAL.greet.test(tails.greet)) halfBad.push(`${type} normal hello: ${tails.greet}`);
+      for (const [key] of MOMENTS) {
+        if (heads[key].text !== filled(type, key, "hazelnuts")[0]) halfBad.push(`${type} ${key}: ${heads[key].text}`);
+        if (!NORMAL[key].test(tails[key].text)) halfBad.push(`${type} normal ${key}: ${tails[key].text}`);
+      }
+      // The catchphrase follows the site: queued wish and snack lines may carry it.
+      if (!heads.wish_granted.catch || !heads.favourite_snack.catch) halfBad.push(`${type}: queued line without catch`);
+    }
+    check("the half rule: heads a type's own hello and moments, tails the normal ones, for all eight",
+      halfBad.length === 0, halfBad.slice(0, 6).join(" | "));
+
+    // Precedence: baby talk, then the type, then normal; a baby or child never
+    // speaks a type (even one stubbed in), nor a pet with none or an unknown one.
+    const order = await typeAs(async (el, s, t) => {
+      t.random(0.1);
+      const wish = () => t.moment({ type: "wish_granted" }).queued[0]?.text;
+      const out = {};
+      t.baby(true);
+      t.pet("baby", "sweet", 0); out.babyOn = wish();
+      t.baby(false);
+      t.pet("baby", "sweet", 0); out.babyOff = wish();
+      t.pet("child", "sweet", 0); out.child = wish();
+      t.baby(true);
+      t.pet("teen", "sweet", 0); out.teenOn = wish();
+      t.pet("teen", null, 0); out.none = wish();
+      t.pet("adult", "grumpy", 0); out.unknown = wish();
+      return out;
+    });
+    check("baby talk first, then the type, then normal: a baby or child never speaks a type, nor a pet without one",
+      order.babyOn === "yay yay! ♥" && order.babyOff === "my wish came true! thank you ♥" &&
+      order.child === "my wish came true! thank you ♥" && order.teenOn === PERSONA.sweet.wish_granted[0] &&
+      order.none === "my wish came true! thank you ♥" && order.unknown === "my wish came true! thank you ♥",
+      JSON.stringify(order));
+
+    // Hellos: a shared screen says the nameless ones and never a bond line (its
+    // bond injected at 8 all the same); signed in, a bond line only at 2+ and 8+.
+    const hellos = await typeAs(async (el, s, t, types) => {
+      const out = {};
+      for (const type of types) {
+        const run = (n) => Array.from({ length: n }, () => t.greet());
+        t.shared(true);
+        t.pet("teen", type, 8);
+        const shared = run(40);
+        t.shared(false);
+        t.pet("teen", type, null);
+        const stranger = run(30);
+        t.pet("adult", type, 0);
+        const zero = run(30);
+        t.pet("adult", type, 2);
+        const warm = run(40);
+        t.pet("adult", type, 8);
+        const hearts = run(60);
+        out[type] = { shared, stranger, zero, warm, hearts };
+      }
+      return out;
+    }, TYPES);
+    const helloBad = [];
+    const nameless = /^(morning|hi|evening)!$|^hi hi!$/;
+    for (const type of TYPES) {
+      const h = hellos[type];
+      const own = (key) => filled(type, key, "Dev");
+      const plain = (line) => NORMAL.greet.test(line);
+      const warmNormal = /^Dev! I missed you ♥$|^yay, Dev's here!$/;
+      if (!h.shared.every((l) => !l.includes("Dev") && (nameless.test(l) || PERSONA[type].hello_shared.includes(l)))) {
+        helloBad.push(`${type} shared: ${h.shared.find((l) => !nameless.test(l) && !PERSONA[type].hello_shared.includes(l))}`);
+      }
+      if (!h.shared.some((l) => PERSONA[type].hello_shared.includes(l))) helloBad.push(`${type} shared: never its own`);
+      for (const [name, lines] of [["no bond", h.stranger], ["bond 0", h.zero]]) {
+        if (!lines.every((l) => plain(l) || own("hello").includes(l))) helloBad.push(`${type} ${name}: ${lines.find((l) => !plain(l) && !own("hello").includes(l))}`);
+      }
+      const warmOk = (l) => plain(l) || warmNormal.test(l) || own("hello").includes(l) || own("hello_warm").includes(l);
+      if (!h.warm.every(warmOk)) helloBad.push(`${type} bond 2: ${h.warm.find((l) => !warmOk(l))}`);
+      if (!h.warm.some((l) => own("hello_warm").includes(l))) helloBad.push(`${type} bond 2: no warm line`);
+      const heartsOk = (l) => warmOk(l) || own("hello_hearts").includes(l);
+      if (!h.hearts.every(heartsOk)) helloBad.push(`${type} bond 8: ${h.hearts.find((l) => !heartsOk(l))}`);
+      if (!h.hearts.some((l) => own("hello_hearts").includes(l))) helloBad.push(`${type} bond 8: no bond-8 line`);
+    }
+    check("hellos by type: nameless on a shared screen and never a bond line; bond lines only with the viewer's own bond",
+      helloBad.length === 0, helloBad.slice(0, 6).join(" | "));
+
+    // The reveal: "I'm a teen now!", then the type's line in a bubble of its
+    // own (with its catchphrase allowed); none for an adult or without a type.
+    const reveal = await typeAs(async (el, s, t, types) => {
+      t.pet("teen", null, 0);
+      const out = {};
+      for (const type of types) out[type] = t.moment({ type: "stage_changed", stage: "teen", from: "child", personality: type });
+      out.adult = t.moment({ type: "stage_changed", stage: "adult", from: "teen", personality: "sweet", upbringing: "steady" });
+      out.none = t.moment({ type: "stage_changed", stage: "teen", from: "child" });
+      return out;
+    }, TYPES);
+    check("a new teen says its type after \"I'm a teen now!\", in a bubble of its own; an adult or no type, none",
+      TYPES.every((type) => reveal[type].said === "I'm a teen now!" && reveal[type].queued.length === 1 &&
+        PERSONA[type].reveal.includes(reveal[type].queued[0].text) && reveal[type].queued[0].catch) &&
+      reveal.adult.queued.length === 0 && reveal.none.queued.length === 0 && reveal.none.said === "I'm a teen now!",
+      JSON.stringify([reveal.plucky, reveal.adult, reveal.none]));
+    await page.emulateMedia({ reducedMotion: null });
+
+    // Live: the moment arrives through sensor.last_care and both lines show.
+    await hush();
+    await inject(pet["sensor.last_care"], {
+      attributes: { moments: [{ type: "stage_changed", stage: "teen", from: "child", personality: "charming", at: new Date().toISOString() }] },
+    });
+    await page.waitForTimeout(500);
+    const stageLine = await bubble();
+    await shot("07e-reveal-stage-line");
+    let revealLine = "";
+    for (let i = 0; i < 30 && !PERSONA.charming.reveal.includes(revealLine); i++) {
+      await page.waitForTimeout(300);
+      revealLine = (await bubble()).trim();
+    }
+    await shot("07f-reveal-charming");
+    check("live, the reveal shows after the stage line, neither lost", stageLine.trim() === "I'm a teen now!" &&
+      PERSONA.charming.reveal.includes(revealLine), `${stageLine} -> ${revealLine}`);
+
+    // Side by side, for the owner: a named hello, a shared-screen hello and a
+    // moment, in three types' words (the stub kept until the shot is taken).
+    const show = (type, stage, what) => page.locator("hatch-pet-card").evaluate(async (el, { type, stage, what }) => {
+      const s = el._slides[el._index];
+      window.__p2State ??= el._state;
+      const realState = window.__p2State;
+      el._state = function (slide, key) {
+        const st = realState.call(this, slide, key);
+        if (key !== "sensor.life_stage" || !st || slide !== s) return st;
+        return { ...st, state: stage, attributes: { ...st.attributes, personality: type, bonds: {} } };
+      };
+      const realRandom = Math.random;
+      Math.random = () => 0.1;
+      localStorage.setItem("hatch-shared-screen", what === "shared" ? "on" : "off");
+      Object.assign(s, { asleep: false, calling: false, sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0,
+        queue: [], voicedAt: Date.now() + 1e9 });
+      try {
+        if (what === "sunset") {
+          el._moment(s, { type: "sunset", at: new Date().toISOString() });
+        } else {
+          localStorage.removeItem(`hatch-greet-${el._hass.user.id}-${s.ids?.device}`);
+          s.greeted = false;
+          el._greet(s);
+        }
+        el._stopTyping(s);
+        s.sayUntil = Date.now() + 8000; // held for the screenshot
+      } finally {
+        Math.random = realRandom;
+        localStorage.setItem("hatch-shared-screen", "off");
+      }
+      return s.bubble.textContent;
+    }, { type, stage, what });
+    const unshow = () => page.locator("hatch-pet-card").evaluate((el) => {
+      if (window.__p2State) el._state = window.__p2State;
+      delete window.__p2State;
+      el._slides[el._index].sayUntil = 0;
+    });
+    const sideBySide = [];
+    for (const [type, what] of [["sweet", "named"], ["old_soul", "named"], ["bouncy", "named"],
+      ["starry", "shared"], ["fancy", "shared"], ["plucky", "shared"],
+      ["mellow", "sunset"], ["charming", "sunset"], ["old_soul", "sunset"]]) {
+      const said = await show(type, "teen", what);
+      await page.waitForTimeout(150);
+      const name = `07g-${what}-${type}`;
+      await shot(name);
+      sideBySide.push(`${name}: ${said}`);
+    }
+    await unshow();
+    check("the side-by-side screenshots say each type's own line", sideBySide.length === 9 &&
+      sideBySide.every((l) => !/: $/.test(l)), sideBySide.join(" | "));
   }
 
   // 5. The egg wiggles, then cracks, before it hatches.

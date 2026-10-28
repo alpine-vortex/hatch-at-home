@@ -1,0 +1,96 @@
+{
+  "name": "Firefly",
+  "ready": true,
+  "stages": [
+    "baby",
+    "child",
+    "teen",
+    "adult"
+  ],
+  "scale": {
+    "adult": 1.1
+  },
+  "moods": [
+    "content",
+    "excited",
+    "cozy",
+    "bored",
+    "hungry",
+    "sleepy",
+    "asleep",
+    "sick",
+    "calling",
+    "dirty"
+  ],
+  "frames": 2,
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "blink": [
+      "child_blink_1",
+      "child_blink_2"
+    ],
+    "flutter": [
+      "child_flutter_1",
+      "child_flutter_2"
+    ],
+    "dim": [
+      "child_dim_1",
+      "child_dim_2"
+    ]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "play",
+    "clean": "bird/sparkle_clean",
+    "medicine": "bird/medicine",
+    "blanket": "bird/blanket",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": [
+      "bird/poop_1",
+      "bird/poop_2",
+      "bird/poop_3"
+    ]
+  },
+  "backgrounds": {
+    "day": "bat/bg_day",
+    "night": "bat/bg_night",
+    "rain": "bat/bg_rain",
+    "dim": "bat/bg_night"
+  },
+  "words": {
+    "food": "nectar",
+    "home": "grass"
+  },
+  "voice": { "sound": "blink", "catchphrase": "glow glow", "pitch": 1180, "pace": 43, "likes": ["nectar", "pollen"] },
+  "reactions": {
+    "play": "flutter",
+    "won": "blink",
+    "praise": "blink",
+    "scold": "dim"
+  },
+  "head": {
+    "baby": [
+      160,
+      186
+    ],
+    "child": [
+      166,
+      186
+    ],
+    "teen": [
+      180,
+      178
+    ],
+    "adult": [
+      188,
+      184
+    ]
+  }
+}

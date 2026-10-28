@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.35.0b1";
+const VERSION = "0.35.0b3";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -501,6 +501,108 @@ const BABY = {
   // In place of season.lines (the costume bubble); children keep the normal ones.
   "season.halloween": { baby: ["boo!", "boo! hehe", "spooky~", "yay, costume!"] },
   "season.thanksgiving": { baby: ["gobble gobble!", "pie! yum yum", "thank you ♥", "cozy cozy~", "leaves!"] },
+};
+// Personality (P2a): each type's own lines, for a teen or an adult whose
+// life_stage carries a personality (docs/plan-2026-10-28-personality-types.md).
+// A fair coin picks between the type's lines and the normal pick, so the voice
+// is about half of what's said at each key. A function takes the name or food.
+const PERSONA = {
+  mellow: {
+    reveal: ["I think I'm the mellow kind ♪", "mellow, that's me... ♪"],
+    hello: [(n) => `oh hey, ${n}... ♪`, (n) => `${n}... hi hi ♥`, (n) => `mm, ${n}! comfy day ♪`],
+    hello_shared: ["oh hey, everyone... ♪", "mm... hi, all ♥"],
+    hello_warm: [(n) => `${n}! comfy day, huh ♥`, (n) => `${n}... come sit a while ♥`],
+    hello_hearts: [(n) => `${n}... come nap with me ♥`, (n) => `${n}, my nap buddy ♥`],
+    good_morning: ["mmh... morning already...", "five more minutes... ♪", "morning... slow and easy"],
+    sunset: ["sunset... perfect nap light", "mm, warm and orange...", "a lazy sky tonight ♪"],
+    fell_asleep: ["best part of the day... zzz", "comfy... zzz", "night... ♪ zzz"],
+    wish_granted: ["my wish! that's so nice ♥", "mm, my wish came true ♥", "a wish come true... nice ♪"],
+    favourite_snack: [(food) => `${food}... my favourite... ♥`, (food) => `mm, ${food}... yum ♥`, (food) => `${food}! snack time ♪`],
+  },
+  sweet: {
+    reveal: ["I think I'm the sweet kind ♥", "sweet, that's me ♥"],
+    hello: [(n) => `hi, ${n}! glad you're here ♥`, (n) => `hello hello, ${n} ♥`, (n) => `${n}! hi! ♥`],
+    hello_shared: ["hi, everyone! ♥", "hello, hello ♥"],
+    hello_warm: [(n) => `${n}! you made my day ♥`, (n) => `${n}! I'm so glad you came ♥`],
+    hello_hearts: [(n) => `${n}, I saved you a hug ♥`, (n) => `${n}! you feel like home ♥`],
+    good_morning: ["good morning! hope you slept well", "morning! ♥ a fresh new day", "morning! I tidied up ♥"],
+    sunset: ["the sky's all pink ♥", "what a soft sky ♥", "sunset already, how nice"],
+    fell_asleep: ["sweet dreams ♥", "night night ♥", "all tucked in ♥"],
+    wish_granted: ["my wish came true ♥", "a wish come true! ♥", "my wish! so happy ♥"],
+    favourite_snack: [(food) => `${food}! my favourite ♥`, (food) => `ooh, ${food}! ♥`, (food) => `${food}! yum yum ♥`],
+  },
+  bouncy: {
+    reveal: ["I think I'm the bouncy kind!", "bouncy! that's me! hup!"],
+    hello: [(n) => `${n}!! hup hup!`, (n) => `${n}! let's go! ♥`, (n) => `hiya, ${n}! *bounce*`],
+    hello_shared: ["hiya, everyone! hup!", "hup hup! hi!"],
+    hello_warm: [(n) => `${n}! yay yay! ♥`, (n) => `${n}! I'm all bouncy now ♥`],
+    hello_hearts: [(n) => `${n}!! my heart's hopping! ♥`, (n) => `${n}! my hup-hup pal ♥`],
+    good_morning: ["morning!! let's go!", "up and hopping!", "morning! ready, set, go!"],
+    sunset: ["the sun's racing down!", "zoom, there goes the sun!", "the sky's going orange!"],
+    fell_asleep: ["big day! night night", "phew! night night", "all hopped out... zzz"],
+    wish_granted: ["my wish!! yes yes!", "wish come true! woo!", "my wish! hup hup! ♥"],
+    favourite_snack: [(food) => `${food}! power snack!!`, (food) => `${food}! yes!`, (food) => `${food}! hup hup!`],
+  },
+  starry: {
+    reveal: ["I think I'm the starry kind ★", "a star is born! that's me ★"],
+    hello: [(n) => `${n}! you're here! ★`, (n) => `ah, ${n}! my audience ★`, (n) => `${n}! cue the music ★`],
+    hello_shared: ["hello, everyone! ★", "welcome, welcome! ★"],
+    hello_warm: [(n) => `hi hi, superstar ${n} ★`, (n) => `${n}! take a bow with me ★`],
+    hello_hearts: [(n) => `${n}! my front-row friend ★`, (n) => `${n}! my stage lights up ★`],
+    good_morning: ["morning! a brand new show ★", "rise and shine! ★", "morning! ♪ la la ♪"],
+    sunset: ["the sky's putting on a show!", "what a finale! ★", "bravo, sky! bravo! ★"],
+    fell_asleep: ["and... curtain! night ★", "that's a wrap! night ★", "lights down... zzz ★"],
+    wish_granted: ["a wish come true! ★", "my wish! encore! ★", "dreams do come true ★"],
+    favourite_snack: [(food) => `${food}! a snack for a star ★`, (food) => `${food}! bravo! ★`, (food) => `ooh, ${food}! ★`],
+  },
+  old_soul: {
+    reveal: ["hm. an old soul, I think.", "an old soul. suits me."],
+    hello: [(n) => `hello, ${n}.`, (n) => `hello there, ${n}.`, (n) => `${n}. come in, come in.`],
+    hello_shared: ["hello, all.", "hm. hello there."],
+    hello_warm: [(n) => `ah, ${n}. good to see you ♥`, (n) => `${n}. sit, sit. ♥`],
+    hello_hearts: [(n) => `${n}. glad it's you ♥`, (n) => `ah, ${n}. my old friend ♥`],
+    good_morning: ["morning. the kettle's on", "morning. a fine day for it", "hm. morning, then."],
+    sunset: ["they don't make sunsets like this", "a fine sunset, that.", "hm. lovely, that sky."],
+    fell_asleep: ["night, now. sleep well.", "off to bed. night.", "a good day. night ♥"],
+    wish_granted: ["well, now. a wish come true ♥", "hm. my wish. how nice ♥", "well. that's a fine thing ♥"],
+    favourite_snack: [(food) => `ah, ${food}. the good stuff`, (food) => `${food}. now that's proper`, (food) => `hm. ${food}. very nice`],
+  },
+  fancy: {
+    reveal: ["I think I'm the fancy kind ♥", "fancy, that's me. how lovely ♥"],
+    hello: [(n) => `${n}! what a lovely surprise`, (n) => `oh, ${n}! how lovely ♥`, (n) => `${n}! welcome, welcome ♥`],
+    hello_shared: ["oh, how lovely! hello ♥", "welcome, darlings ♥"],
+    hello_warm: [(n) => `${n}, darling! ♥`, (n) => `${n}! come see my corner ♥`],
+    hello_hearts: [(n) => `${n}! you brighten my day ♥`, (n) => `${n}! darling, it's you ♥`],
+    good_morning: ["morning! what a pretty day", "morning! time to fluff up ♥", "good morning, darling ♥"],
+    sunset: ["pink and gold, my colours", "what a pretty sky ♥", "ooh, so elegant tonight"],
+    fell_asleep: ["beauty sleep time ♥", "night night, darlings ♥", "off to my silk pillow ♥"],
+    wish_granted: ["a wish, granted! lovely ♥", "my wish! how divine ♥", "a wish come true, darling ♥"],
+    favourite_snack: [(food) => `${food}, how elegant ♥`, (food) => `${food}! simply divine ♥`, (food) => `ooh, ${food}! fancy ♥`],
+  },
+  charming: {
+    reveal: ["I'm the charming kind, I think ♥", "charming, that's me ♥"],
+    hello: [(n) => `ah, ${n}! a delight`, (n) => `${n}! what an honour ♥`, (n) => `${n}! the room lights up`],
+    hello_shared: ["ah, everyone! a delight ♥", "welcome, dear friends ♥"],
+    hello_warm: [(n) => `${n}! my dear friend ♥`, (n) => `${n}! what a treat ♥`],
+    hello_hearts: [(n) => `${n}, my dear, dear friend ♥`, (n) => `${n}! how grand, it's you ♥`],
+    good_morning: ["good morning, sunshine!", "a splendid morning to you", "morning! what an occasion"],
+    sunset: ["a sunset, just for us", "how grand, this sky ♥", "a splendid sunset ♥"],
+    fell_asleep: ["goodnight, dear friends ♥", "until tomorrow, friends ♥", "a splendid day. night ♥"],
+    wish_granted: ["my wish! how splendid ♥", "a wish come true! grand ♥", "what a marvellous wish ♥"],
+    favourite_snack: [(food) => `${food}! exquisite ♥`, (food) => `ah, ${food}! splendid ♥`, (food) => `${food}, what a treat ♥`],
+  },
+  plucky: {
+    reveal: ["I'm the plucky kind! hmph ♥", "plucky, that's me! ♥"],
+    hello: [(n) => `yo, ${n}!`, (n) => `hey, ${n}! all clear here`, (n) => `${n}! reporting for duty`],
+    hello_shared: ["yo, everyone!", "hey hey! all clear here"],
+    hello_warm: [(n) => `${n}! I've got your back ♥`, (n) => `${n}! you and me, team ♥`],
+    hello_hearts: [(n) => `${n}! my partner ♥`, (n) => `${n}! partners for life ♥`],
+    good_morning: ["up and at 'em!", "morning! all clear", "rise and shine, team!"],
+    sunset: ["nice sky. I'll keep watch", "sun's down. all quiet", "not bad, sky. not bad"],
+    fell_asleep: ["I'll keep watch. night ♥", "night, team ♥", "all safe. sleep tight ♥"],
+    wish_granted: ["my wish! heck yes! ♥", "a wish come true! hah ♥", "wish granted! nice ♥"],
+    favourite_snack: [(food) => `${food}! now we're talking`, (food) => `${food}! that's the stuff`, (food) => `${food}! fuel up ♥`],
+  },
 };
 const FRIEND_WELCOME_MS = 6 * 3600 * 1000; // "welcome home!" at the next look, this long after
 const FIRST_LOOK_LINES = 3; // lines queued at the first look (the visit's notes fill what's left)
@@ -2154,13 +2256,22 @@ class HatchPetCard extends HTMLElement {
     return (stage && BABY[key]?.[stage]) || null;
   }
 
-  // A line in baby talk, or the normal one: {text, baby}. A swapped line never
-  // carries the catchphrase (callers pass catch: !baby).
+  // The pet's own lines by its personality (PERSONA), for a teen or an adult
+  // that has one, else null. Babies and children never have a type.
+  _persona(s) {
+    const st = this._state(s, "sensor.life_stage");
+    return (st?.state === "teen" || st?.state === "adult") && PERSONA[st.attributes?.personality] || null;
+  }
+
+  // A line in baby talk, else half the time in its personality's words, else
+  // the normal one: {text, baby}. A baby line never carries the catchphrase
+  // (callers pass catch: !baby); a personality line may, as the normal one does.
   _lines(s, key, normal, arg) {
     const set = this._babySet(s, key);
-    if (!set) return { text: normal, baby: false };
-    const line = pick(set);
-    return { text: typeof line === "function" ? line(arg) : line, baby: true };
+    const own = !set && this._persona(s)?.[key];
+    const line = set ? pick(set) : own && Math.random() < 0.5 ? pick(own) : null;
+    if (line === null) return { text: normal, baby: false };
+    return { text: typeof line === "function" ? line(arg) : line, baby: !!set };
   }
 
   _idle(s) {
@@ -2507,7 +2618,14 @@ class HatchPetCard extends HTMLElement {
     const lines = first ? baby("greet", first, [hello, `${first}!! hi!`, hello]) : [hello, "hi hi!", hello];
     if (level >= BOND.warm) lines.push(...baby("greet.warm", first, [`${first}! I missed you ♥`, `yay, ${first}'s here!`]));
     if (nickname) lines.push(...baby("greet.nickname", nickname, [`hi, ${nickname}!`, `${nickname}!! ♥`, `there's my ${nickname}!`]));
-    this._speak(s, pick(lines), 4000);
+    // Its personality's hellos, filled the same way: half the time, one of
+    // those. A shared screen gets the nameless ones; the bond lines need the
+    // viewer's own bond (none on a shared screen), never the level alone.
+    const type = this._persona(s);
+    const own = !type ? [] : first ? type.hello.map((line) => line(first)) : [...type.hello_shared];
+    if (type && bond && first && bond.level >= BOND.warm) own.push(...type.hello_warm.map((line) => line(first)));
+    if (type && bond && first && bond.level >= BOND.hearts) own.push(...type.hello_hearts.map((line) => line(first)));
+    this._speak(s, pick(own.length && Math.random() < 0.5 ? own : lines), 4000);
     const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (level >= BOND.hop && !calm) this._animate(s, s.pet, "greethop", 1400);
     else this._animate(s, s.pet, "perk", 320);
@@ -2747,6 +2865,8 @@ class HatchPetCard extends HTMLElement {
         say(m.stage === "adult"
           ? "all grown up! ♥" // the upbringing is on the status screen, not announced
           : `I'm a ${m.stage} now!`);
+        // A new teen tells its personality, in a bubble of its own after this one.
+        if (m.stage === "teen" && PERSONA[m.personality]) this._queue(s, pick(PERSONA[m.personality].reveal), 4500, { catch: true });
         this._animate(s, s.pet, "stretch", 1100);
         this._sparkle(s);
         break;
@@ -2776,15 +2896,15 @@ class HatchPetCard extends HTMLElement {
         if (m.how === "collapsed") {
           say("so... sleepy... zzz", 5000);
         } else if (m.how === "house" || m.how === "lights") {
-          say(pick(["good night...", "night night...", "sleep tight..."]), 4000);
+          say(this._lines(s, "fell_asleep", pick(["good night...", "night night...", "sleep tight..."])).text, 4000);
         }
         break;
       case "good_morning":
-        speak(pick(["morning!! you're up!", "morning! ♪"]));
+        speak(this._lines(s, "good_morning", pick(["morning!! you're up!", "morning! ♪"])).text);
         this._animate(s, s.pet, "stretch", 1100);
         break;
       case "sunset":
-        speak(pick(["ooh, the sunset...", "pretty sky tonight", "the sun's going down"]));
+        speak(this._lines(s, "sunset", pick(["ooh, the sunset...", "pretty sky tonight", "the sun's going down"])).text);
         this._look(s, 3000);
         break;
       case "sunrise":
@@ -3873,7 +3993,7 @@ class HatchPetCard extends HTMLElement {
   _seasonTick(s) {
     const season = seasonNow(this._config);
     if (!season || !s.species) return;
-    const spot = s.species.hat?.[s.drawn] || s.species.head?.[s.drawn];
+    const spot = this._hatSpot(s) || s.species.head?.[s.drawn];
     if (spot) this._headTopAll(s, spot[0], spot[1]); // measure ahead
     const now = Date.now();
     const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -3919,6 +4039,7 @@ class HatchPetCard extends HTMLElement {
         return;
       }
     }
+    if (this._hatSpot(s) === null) return; // a pose no hat can sit on: wait for the next
     const treatDay = treatOn && today.getMonth() + 1 === treatOn[0] && today.getDate() === treatOn[1];
     if (treatDay && !s.treated) {
       s.treated = true;
@@ -3955,6 +4076,7 @@ class HatchPetCard extends HTMLElement {
   _partyTick(s) {
     if (!this._state(s, "sensor.life_stage")?.attributes.birthday) return;
     if (!this._free(s) || s.pet.classList.contains("hop")) return;
+    if (this._hatSpot(s) === null) return; // a pose no hat can sit on: wait for the next
     const season = seasonNow(this._config);
     const today = new Date();
     const treatOn = season?.treat && seasonDate(season.treat, today.getFullYear());
@@ -4056,6 +4178,16 @@ class HatchPetCard extends HTMLElement {
     return low;
   }
 
+  // species.json "hat" for the pose on show ("adult_dirty"), else for the stage:
+  // a pose that sits the creature up carries its head well above the stage's point
+  // (the opossum frets sitting up). null: no hat fits the pose (its frames bounce
+  // between a leap and a crouch), so the costume waits for another pose.
+  _hatSpot(s) {
+    const pose = (this._frames(s)[0] || "").replace(/_\d+$/, "");
+    const hat = s.species.hat || {};
+    return pose in hat ? hat[pose] : hat[s.drawn];
+  }
+
   // The hat sits on top of the head, brim sunk in a little.
   _costume(s, season, line, catchy = true) {
     const head = s.species?.head?.[s.drawn];
@@ -4065,7 +4197,7 @@ class HatchPetCard extends HTMLElement {
     const r = s.pet.getBoundingClientRect();
     const sr = s.screen.getBoundingClientRect();
     // species.json "hat" where ears or antlers rise above the skull (the deer).
-    const own = s.species.hat?.[s.drawn];
+    const own = this._hatSpot(s);
     const k = r.height / 256;
     // With a hat point, the lower of it and the frames' top in its column (another
     // mood's frames can carry the head lower).

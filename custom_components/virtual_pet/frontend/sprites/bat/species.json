@@ -31,5 +31,10 @@
   "words": { "food": "bugs", "home": "roost" },
   "voice": { "sound": "squee", "catchphrase": "flappity", "pitch": 1200, "pace": 45, "likes": ["midges", "beetles", "mosquitoes"] },
   "reactions": { "play": "echo", "won": "echo", "praise": "hang", "blanket": "wing_wrap" },
-  "head": { "baby": [136, 84], "child": [136, 60], "teen": [140, 32], "adult": [140, 32] }
+  "head": { "baby": [136, 84], "child": [136, 60], "teen": [140, 32], "adult": [140, 32] },
+  "hat": {
+    "child_watch_tv": [96, 76],
+    "adult_bored": [162, 80],
+    "adult_sleepy": [168, 60]
+  }
 }

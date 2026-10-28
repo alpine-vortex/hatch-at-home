@@ -1,0 +1,105 @@
+{
+  "name": "Opossum",
+  "ready": true,
+  "stages": [
+    "baby",
+    "child",
+    "teen",
+    "adult"
+  ],
+  "scale": {
+    "adult": 1.1
+  },
+  "moods": [
+    "content",
+    "excited",
+    "cozy",
+    "bored",
+    "hungry",
+    "sleepy",
+    "asleep",
+    "sick",
+    "calling",
+    "dirty"
+  ],
+  "frames": 2,
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "play_dead": [
+      "child_play_dead_1",
+      "child_play_dead_2"
+    ],
+    "hiss": [
+      "child_hiss_1",
+      "child_hiss_2"
+    ],
+    "tail_curl": [
+      "child_tail_curl_1",
+      "child_tail_curl_2"
+    ]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "play",
+    "clean": "bird/sparkle_clean",
+    "medicine": "bird/medicine",
+    "blanket": "bird/blanket",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": [
+      "bird/poop_1",
+      "bird/poop_2",
+      "bird/poop_3"
+    ]
+  },
+  "backgrounds": {
+    "day": "bat/bg_day",
+    "night": "bat/bg_night",
+    "rain": "bat/bg_rain",
+    "dim": "bat/bg_night"
+  },
+  "words": {
+    "food": "berries",
+    "home": "hollow"
+  },
+  "voice": { "sound": "click", "catchphrase": "hang in there", "pitch": 600, "pace": 31, "likes": ["persimmons", "ripe pears", "snails"] },
+  "reactions": {
+    "play": "tail_curl",
+    "won": "play_dead",
+    "praise": "tail_curl",
+    "scold": "hiss"
+  },
+  "head": {
+    "baby": [
+      174,
+      120
+    ],
+    "child": [
+      184,
+      92
+    ],
+    "teen": [
+      194,
+      68
+    ],
+    "adult": [
+      204,
+      112
+    ]
+  },
+  "hat": {
+    "baby": [146, 132],
+    "child": [156, 104],
+    "child_watch_tv": [120, 116],
+    "teen": [156, 84],
+    "teen_cozy": [198, 92],
+    "adult": [184, 120],
+    "adult_dirty": [180, 80]
+  }
+}
