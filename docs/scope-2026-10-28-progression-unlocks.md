@@ -248,3 +248,15 @@ after the art branch merges, so the book is first seen with ~30 creatures, not 5
    <https://nookipedia.com/wiki/Critterpedia>
 6. Bulbapedia, Pokédex (Pinball) (seen as a silhouette, caught as the full entry):
    <https://bulbapedia.bulbagarden.net/wiki/Pok%C3%A9dex_(Pinball)>
+
+## Decided (owner, 2026-10-28)
+
+- **Option B, the forms book.** Only portraits are locked, never play. Build it after
+  the 17-creature art branch merges, from a build plan that is audited first.
+- **No hints on silhouettes:** a dark form is a plain silhouette, with no text about
+  when or how it appears.
+- **A new page is marked once, on the card only:** one quiet "new page in your
+  journal" moment and a dot on the journal link until it's opened. No phone message.
+- First-mate defaults, which the owner may overrule: a hatched creature's baby form
+  always shows, and only forms not yet reached here start dark (Q2). Upbringing shows
+  as words beside "raised by" and is never a collectable form (Q5). Q6 doesn't apply.
