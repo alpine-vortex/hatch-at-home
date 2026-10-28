@@ -1,0 +1,93 @@
+{
+  "name": "Russian tortoise",
+  "ready": true,
+  "stages": [
+    "baby",
+    "child",
+    "teen",
+    "adult"
+  ],
+  "moods": [
+    "content",
+    "excited",
+    "cozy",
+    "bored",
+    "hungry",
+    "sleepy",
+    "asleep",
+    "sick",
+    "calling",
+    "dirty"
+  ],
+  "frames": 2,
+  "extras": {
+    "squint": "child_squint",
+    "shiver": "child_shiver",
+    "sweat": "child_sweat",
+    "mask": "child_mask",
+    "dance": "child_dance",
+    "watch_tv": "child_watch_tv",
+    "hide": [
+      "child_hide_1",
+      "child_hide_2"
+    ],
+    "dig": [
+      "child_dig_1",
+      "child_dig_2"
+    ],
+    "munch": [
+      "child_munch_1",
+      "child_munch_2"
+    ]
+  },
+  "props": {
+    "feed": "bowl_food",
+    "snack": "snack",
+    "play": "play",
+    "clean": "bird/sparkle_clean",
+    "medicine": "bird/medicine",
+    "blanket": "bird/blanket",
+    "heat": "gecko/heat_glow",
+    "attention": "bird/attention",
+    "away": "bird/sitter_sign",
+    "poop": [
+      "bird/poop_1",
+      "bird/poop_2",
+      "bird/poop_3"
+    ]
+  },
+  "backgrounds": {
+    "day": "gecko/bg_vivarium",
+    "night": "gecko/bg_night",
+    "rain": "gecko/bg_rain",
+    "dim": "gecko/bg_dim"
+  },
+  "words": {
+    "food": "dandelions",
+    "home": "burrow"
+  },
+  "reactions": {
+    "play": "dig",
+    "feed": "munch",
+    "snack": "munch",
+    "scold": "hide"
+  },
+  "head": {
+    "baby": [
+      124,
+      144
+    ],
+    "child": [
+      130,
+      124
+    ],
+    "teen": [
+      122,
+      96
+    ],
+    "adult": [
+      124,
+      100
+    ]
+  }
+}
