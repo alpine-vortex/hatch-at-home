@@ -133,6 +133,12 @@ async function main() {
     throw new Error(`The card never appeared; see ${path.join(OUT, "00-no-card.png")}`);
   }
 
+  // No seasonal touches until their own check: a costume moment would take the
+  // bubble in the middle of another check.
+  const seasonsOff = () => page.locator("hatch-pet-card").evaluate((el) => {
+    el.setConfig({ ...el._config, seasonal: false }); el.hass = el._hass;
+  });
+  await seasonsOff();
   const cur = () => page.locator("hatch-pet-card .slide:not(.away-slide)");
   const shot = (name) => cur().locator(".device").screenshot({ path: path.join(OUT, `${name}.png`) });
   const bubble = () => cur().locator(".bubble").innerText();
@@ -234,6 +240,7 @@ async function main() {
   await page.reload();
   await signedIn();
   await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+  await seasonsOff(); // the reload brought the card back with its own config
   for (let i = 0; i < slides; i++) {
     if ((await page.locator("hatch-pet-card .title").innerText()).trim() === petName) break;
     await page.locator("hatch-pet-card .nav.next").click();
@@ -416,6 +423,68 @@ async function main() {
     `cloud bottom ${Math.round(cloud?.bottom)} vs head ${Math.round(flair.at.hy)}`);
   check("a flair moment clears itself", flair.after === 0);
   await inject(pet["sensor.life_stage"], { attributes: { traits: [], trait_levels: {} } });
+
+  // Seasons: forced to Halloween, the lantern and web are in the scene, and a
+  // costume moment puts the hat on the head (its brim at or below the head
+  // point, never hovering over it). Off again with seasonal: false.
+  const card = page.locator("hatch-pet-card");
+  await card.evaluate((el) => { el.setConfig({ ...el._config, seasonal: "halloween" }); el.hass = el._hass; });
+  await page.waitForTimeout(800);
+  const spooky = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    s.sayUntil = 0; s.flairUntil = 0;
+    const [hx0, hy0] = s.species.hat?.[s.drawn] || s.species.head[s.drawn];
+    el._headTopAll(s, hx0, hy0); // load every frame first, as the season's ticks do
+    await new Promise((r) => setTimeout(r, 600));
+    el._costume(s, { key: "halloween" }, "boo!");
+    await new Promise((r) => setTimeout(r, 900));
+    const hat = s.screen.querySelector(".costume .hat")?.getBoundingClientRect();
+    const at = el._flairAnchors(s);
+    const sr = s.screen.getBoundingClientRect();
+    const r = s.pet.getBoundingClientRect();
+    // The real top of the head in the frame on show (or the species' hat point).
+    const [hx, hy] = s.species.hat?.[s.drawn] || s.species.head[s.drawn];
+    // The lowest top across the idle frames: on every frame the hat must sit on the head.
+    const scanned = el._headTopAll(s, hx, hy);
+    const top = s.species.hat?.[s.drawn] ? Math.max(hy, scanned ?? hy) : scanned;
+    return {
+      pieces: [...s.seasonBox.querySelectorAll("img")].map((i) => i.className.split(" ")[0]),
+      hatBottom: hat && hat.bottom - sr.top, headTop: r.top - sr.top + top * (r.height / 256),
+      fy: at.fy, said: s.bubble.textContent,
+    };
+  });
+  check("halloween dresses the scene", spooky.pieces.includes("lantern") && spooky.pieces.includes("web"),
+    spooky.pieces.join(" "));
+  // Seated: the brim sinks a little into the head, never floats above its top.
+  check("the costume hat sits on the head",
+    spooky.hatBottom > spooky.headTop && spooky.hatBottom < spooky.headTop + 20 &&
+      spooky.hatBottom < spooky.fy && spooky.said === "boo!",
+    `hat bottom ${Math.round(spooky.hatBottom)} vs head top ${Math.round(spooky.headTop)}`);
+  await shot("05-halloween");
+  // Halloween's extras: bunting, a ghost the pet jumps at, candy for a snack.
+  const extras = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const season = { key: "halloween" };
+    s.screen.querySelector(".costume")?.remove();
+    s.sayUntil = 0; s.flairUntil = 0;
+    el._seasonGhost(s, season);
+    await new Promise((r) => setTimeout(r, 1800));
+    const ghost = !!s.seasonBox.querySelector(".sghost");
+    const eep = s.bubble.textContent;
+    el._seasonFly(s, season, "witch", "switch", 3000);
+    const witch = !!s.seasonBox.querySelector(".switch img");
+    el._react(s, { action: "snack", result: "ok", at: Date.now() / 1000 });
+    return { bunting: !!s.seasonBox.querySelector(".bunting"), ghost, eep, witch,
+      prop: s.prop.getAttribute("src") || "" };
+  });
+  check("halloween extras show", extras.bunting && extras.ghost && extras.witch && extras.eep === "eep!!",
+    `bunting ${extras.bunting}, ghost ${extras.ghost} (${extras.eep}), witch ${extras.witch}`);
+  check("snacks are candy at halloween", /season_halloween_candy/.test(extras.prop), extras.prop.split("/").pop());
+  await shot("05-halloween-extras");
+  await card.evaluate((el) => { el.setConfig({ ...el._config, seasonal: false }); el.hass = el._hass; });
+  await page.waitForTimeout(800);
+  check("seasonal: false takes the season away",
+    await card.evaluate((el) => el._slides[el._index].seasonBox.children.length === 0));
 
   // Excitement bounces briefly, not for the whole 15 minutes it lasts. The
   // bounce starts on becoming excited, and the games above may have excited the

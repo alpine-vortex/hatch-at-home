@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.27.0";
+const VERSION = "0.28.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -95,6 +95,7 @@ const CHIRPS = { // [frequency Hz, length s] notes, played one after another
   hatch: [[523, 0.09], [659, 0.09], [784, 0.09], [1047, 0.16]],
   win: [[784, 0.08], [988, 0.08], [1319, 0.18]],
   trait: [[1047, 0.07], [1319, 0.07], [1568, 0.07], [2093, 0.14]],
+  spooky: [[660, 0.12], [622, 0.12], [587, 0.12], [523, 0.26]],
 };
 let audio = null; // one AudioContext for every card on the page
 
@@ -154,6 +155,75 @@ const FLAIR = {
   homebody: { place: "ground" },
   couch_potato: { place: "ground" },
 };
+// Seasonal touches, by the viewer's own date (month, day; inclusive). Each
+// world can differ ("*" is every other world). Card option `seasonal: false`
+// turns them off; `seasonal: <key>` shows one now (a preview, and card-check).
+const SEASONS = [
+  {
+    key: "halloween", from: [10, 20], to: [10, 31],
+    worlds: {
+      "*": { lantern: "ground", web: ["right"], dayBats: false, sweets: false },
+      tidepool: { lantern: "float" }, // the lantern bobs in the water
+      pond: { lantern: "float" },
+      nightsky: { dayBats: true }, // bats fly here by day too (elsewhere, at night)
+      hearth: { sweets: true }, // a sweet by the door
+      terrarium: { web: ["left", "right"] }, // a tarantula's tank
+      nightsky: { dayBats: true, witch: true }, // a witch crosses the night sky
+    },
+    lines: ["boo!", "happy halloween!", "spooky~", "trick or treat?", "do I look spooky?"],
+    treat: [10, 31], // the first visit of the day: trick or treat!
+    countdown: "Halloween", // "3 sleeps till Halloween!" before the treat day
+    // A costume a day (by pet and date); sink: how far into the head it sits,
+    // in frame pixels; width at the scene's scale; skip: creatures it doesn't
+    // suit (cat ears on a creature with its own ears read wrong).
+    costumes: [
+      { art: "hat", sink: 7, width: 64 },
+      { art: "pumpkin_cap", sink: 6, width: 60 },
+      { art: "cat_ears", sink: 10, width: 76,
+        skip: ["kitten", "bunny", "deer", "bat", "squirrel", "lunamoth"] },
+      { art: "horns", sink: 9, width: 68, skip: ["deer"] },
+    ],
+    lanterns: ["pumpkin", "pumpkin_2", "pumpkin_3"], // a new face every day
+    snack: "candy", // snacks are candy
+    ghost: true, // a friendly ghost floats by now and then
+    bunting: true,
+    mist: true, // at night
+  },
+];
+const HEAD_TOPS = new Map(); // frame|x -> the top of the head (see _headTop)
+const FRAME_IMGS = new Map(); // src -> Image, for measuring frames not on show
+const SEASON_COSTUME_MS = [90000, 150000]; // between costume moments
+const SEASON_BAT_MS = [20000, 45000]; // between bats flying by
+const SEASON_GHOST_MS = [240000, 420000]; // between ghosts
+const SEASON_WITCH_MS = [120000, 240000];
+// The same pick all day for one pet: a small hash of the device and the date.
+const dailyPick = (list, salt = "") => {
+  const key = `${salt}|${new Date().toDateString()}`;
+  let h = 0;
+  for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return list[h % list.length];
+};
+// Once per device per day (localStorage; once per page load without it).
+function oncePerDay(name) {
+  const key = `hatch-${name}-${new Date().toDateString()}`;
+  try {
+    if (localStorage.getItem(key)) return false;
+    localStorage.setItem(key, "1");
+  } catch (err) {
+    if (oncePerDay.seen?.has(key)) return false;
+    (oncePerDay.seen ??= new Set()).add(key);
+  }
+  return true;
+}
+const seasonPart = (season, world) => ({ ...season.worlds["*"], ...season.worlds[world] });
+function seasonNow(config, date = new Date()) {
+  if (config?.seasonal === false) return null;
+  if (typeof config?.seasonal === "string") return SEASONS.find((x) => x.key === config.seasonal) || null;
+  const md = [date.getMonth() + 1, date.getDate()];
+  const after = (a, b) => a[0] > b[0] || (a[0] === b[0] && a[1] >= b[1]);
+  return SEASONS.find((x) => after(md, x.from) && after(x.to, md)) || null;
+}
+
 // Catch's decoy: Sol's bee (ui/catch_decoy_1, _2: wings up, down), facing left.
 const BEE_FRAMES = [1, 2].map((n) => `${BASE}/ui/catch_decoy_${n}.png?v=${VERSION}`);
 const BEE_FLAP_MS = 120;
@@ -527,6 +597,43 @@ const STYLE = `
     background: radial-gradient(closest-side, rgba(255, 160, 70, .7), rgba(255, 160, 70, 0));
     animation-name: fl-glow; animation-direction: alternate; }
   @keyframes fl-glow { to { opacity: .55; } }
+  /* Seasonal touches (SEASONS): behind the pet, sized to the screen. */
+  .season { position: absolute; inset: 0; pointer-events: none; }
+  .season .lantern { right: 5%; bottom: 5%; width: 17%; }
+  .season .lantern.lantern-float { bottom: 30%; animation: s-bob 3s ease-in-out infinite alternate; }
+  @keyframes s-bob { to { transform: translateY(-8%) rotate(-4deg); } }
+  .screen.night .season .lantern, .screen.dim .season .lantern {
+    filter: drop-shadow(0 0 6px rgba(255, 170, 60, .95)); animation: s-flicker 1.6s ease-in-out infinite; }
+  .screen.night .season .lantern.lantern-float, .screen.dim .season .lantern.lantern-float {
+    animation: s-flicker 1.6s ease-in-out infinite, s-bob 3s ease-in-out infinite alternate; }
+  @keyframes s-flicker { 50% { filter: drop-shadow(0 0 3px rgba(255, 150, 50, .7)); } }
+  .season .web { top: 0; width: 17%; opacity: .85; }
+  .season .web.right { right: 0; }
+  .season .web.left { left: 0; transform: scaleX(-1); }
+  .season .sweet { right: 23%; bottom: 5%; width: 7%; }
+  .season .sfly { position: absolute; animation: s-fly var(--fly-ms, 5s) linear forwards; }
+  .season .sfly img { position: static; display: block; width: 100%; }
+  .season .sfly.flap img + img { position: absolute; inset: 0; }
+  .season .sfly.flap img { animation: fl-frame-a .3s steps(1) infinite; }
+  .season .sfly.flap img + img { animation-name: fl-frame-b; }
+  .season .sbat { width: 9%; }
+  .season .sghost { width: 13%; top: 30%; opacity: .9; }
+  .season .sghost.flap img { animation-duration: .8s; }
+  .season .switch { width: 22%; top: 5%; }
+  .season .sfly.ltr { left: -25%; } .season .sfly.rtl { left: 112%; }
+  @keyframes s-fly { 25% { translate: 0 30%; } 50% { translate: 0 -20%; } 75% { translate: 0 25%; } }
+  .season .sfly.ltr { animation-name: s-fly, s-ltr; } .season .sfly.rtl { animation-name: s-fly, s-rtl; }
+  .season .sfly.rtl img { transform: scaleX(-1); } /* the art faces right */
+  @keyframes s-ltr { to { left: 112%; } } @keyframes s-rtl { to { left: -25%; } }
+  .season .bunting { position: absolute; top: 0; left: 0; right: 0; height: 8.4%;
+    background-repeat: repeat-x; background-size: 18.75% 100%; image-rendering: pixelated; }
+  .season .mist { position: absolute; left: -10%; right: -10%; bottom: 0; height: 26%; display: none;
+    background: radial-gradient(ellipse at 30% 100%, rgba(214, 206, 240, .45), transparent 65%),
+      radial-gradient(ellipse at 75% 100%, rgba(214, 206, 240, .4), transparent 60%);
+    animation: s-mist 9s ease-in-out infinite alternate; }
+  .screen.night .season .mist, .screen.dim .season .mist { display: block; }
+  @keyframes s-mist { to { transform: translateX(6%); opacity: .7; } }
+  .costume .fx.hat { transform: translate(-50%, -100%); }
   .game .gcatch { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
     pointer-events: none; will-change: left, transform; }
   .game .gcatch[hidden] { display: none; }
@@ -842,6 +949,7 @@ class HatchPetCard extends HTMLElement {
           <div class="bezel"><div class="screen">
             <img class="bg" alt="">
             <img class="awaysign" alt=""><div class="awaylabel"></div>
+            <div class="season"></div>
             <img class="poop p0" alt="mess"><img class="poop p1" alt="mess"><img class="poop p2" alt="mess">
             <img class="perch" alt="">
             <img class="pet" alt="">
@@ -878,7 +986,7 @@ class HatchPetCard extends HTMLElement {
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
-      catchEl: q(".gcatch"), live: q(".sr[role=status]"),
+      catchEl: q(".gcatch"), live: q(".sr[role=status]"), seasonBox: q(".season"),
     };
     slide.querySelectorAll("img").forEach((img) => img.addEventListener("error", () => {
       const src = img.getAttribute("src");
@@ -1005,7 +1113,8 @@ class HatchPetCard extends HTMLElement {
       if (s.ids && s.ids.device !== devices[i].device) this._forget(s); // another pet now
       s.ids = devices[i];
       const stage = this._state(s, "sensor.life_stage");
-      s.world = worlds[stage?.attributes.world] || Object.values(worlds)[0];
+      s.worldKey = worlds[stage?.attributes.world] ? stage.attributes.world : Object.keys(worlds)[0];
+      s.world = worlds[s.worldKey];
       const roster = stage?.attributes.roster || [];
       // An egg is always drawn as its world's egg (the first species on the roster).
       const speciesId = (stage?.state === "egg" && roster[0]) || stage?.attributes.species || roster[0];
@@ -1120,8 +1229,10 @@ class HatchPetCard extends HTMLElement {
     } else {
       emblem.style.display = "none";
     }
+    const season = seasonNow(this._config);
     this._card.querySelectorAll(".deco").forEach((img, i) => {
-      const name = world.deco?.[i];
+      // In season, the right-hand decoration is the season's.
+      const name = season && i === 1 ? `season_${season.key}_deco` : world.deco?.[i];
       img.style.display = name ? "" : "none";
       const src = name && `${BASE}/ui/${name}.png?v=${VERSION}`;
       if (src && img.getAttribute("src") !== src) img.src = src;
@@ -1258,6 +1369,7 @@ class HatchPetCard extends HTMLElement {
     s.screen.classList.toggle("faded", !own && scene !== "day" && scene !== "rain");
     s.screen.classList.toggle("night", scene === "night");
     s.screen.classList.toggle("dim", scene === "dim");
+    this._renderSeason(s);
 
     this._show(s, s.perch, away ? null : sp.perch);
     if (away) {
@@ -1441,6 +1553,7 @@ class HatchPetCard extends HTMLElement {
         this._greet(s);
         this._idle(s);
         this._flairTick(s);
+        this._seasonTick(s);
       }
       if (!s.sayUntil && s.species) {
         const mood = this._state(s, "sensor.mood");
@@ -1731,6 +1844,7 @@ class HatchPetCard extends HTMLElement {
   }
 
   _react(s, entry) {
+    s.screen.querySelector(".costume")?.remove(); // care takes the stage
     if (entry.action === "chore_treat") {
       s.bubble.textContent = "a treat! someone did a chore ♪";
       s.sayUntil = Date.now() + 3500;
@@ -1754,7 +1868,13 @@ class HatchPetCard extends HTMLElement {
         s.bubble.textContent = "♥";
         s.sayUntil = Date.now() + 2500;
       }
-      const prop = s.species?.props?.[key] || FALLBACK_PROPS[key];
+      const season = seasonNow(this._config);
+      const candy = season?.snack && key === "snack" ? `../ui/season_${season.key}_${season.snack}` : null;
+      if (candy) {
+        s.bubble.textContent = pick(["candy!! ♪", "ooh, candy corn!", "a treat! ♪"]);
+        s.sayUntil = Date.now() + 2500;
+      }
+      const prop = candy || s.species?.props?.[key] || FALLBACK_PROPS[key];
       if (prop) {
         this._show(s, s.prop, prop);
         s.propUntil = Date.now() + 2500;
@@ -2167,6 +2287,261 @@ class HatchPetCard extends HTMLElement {
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
       s.bubble.textContent = kind === "higher_lower" ? "higher or lower?" : "again! left or right?";
     }, 900);
+  }
+
+  // --- Seasons --------------------------------------------------------------
+
+  // The season's pieces in the scene (behind the pet): a lantern by its side,
+  // cobwebs in the corners, a sweet. Drawn again only when something changes.
+  _renderSeason(s) {
+    const season = seasonNow(this._config);
+    const part = season && seasonPart(season, s.worldKey);
+    const sig = season ? `${season.key}|${s.worldKey}|${new Date().toDateString()}` : "";
+    if (s.seasonSig === sig) return;
+    s.seasonSig = sig;
+    s.seasonBox.innerHTML = "";
+    for (const c of [...s.screen.classList]) if (c.startsWith("s-")) s.screen.classList.remove(c);
+    s.screen.classList.toggle("in-season", !!season);
+    if (!season) return;
+    s.screen.classList.add(`s-${season.key}`);
+    if (season.mist) {
+      const mist = document.createElement("div");
+      mist.className = "mist";
+      s.seasonBox.append(mist);
+    }
+    if (season.bunting) {
+      const bunting = document.createElement("div");
+      bunting.className = "bunting";
+      bunting.style.backgroundImage = `url(${BASE}/ui/season_${season.key}_bunting.png?v=${VERSION})`;
+      s.seasonBox.append(bunting);
+    }
+    const src = (n) => `${BASE}/ui/season_${season.key}_${n}.png?v=${VERSION}`;
+    const add = (name, cls) => {
+      const img = document.createElement("img");
+      img.className = cls;
+      img.alt = "";
+      img.src = src(name);
+      s.seasonBox.append(img);
+    };
+    if (part.lantern) {
+      add(dailyPick(season.lanterns || ["pumpkin"], season.key), `lantern lantern-${part.lantern}`);
+    }
+    for (const side of part.web || []) add("web", `web ${side}`);
+    if (part.sweets) add("sweet", "sweet");
+  }
+
+  // Now and then, a costume moment: the season's hat on the pet's head and a
+  // seasonal line. On the treat day, the first visit gets "trick or treat!".
+  // Bats flit across at night (and by day where the world says so).
+  _seasonTick(s) {
+    const season = seasonNow(this._config);
+    if (!season || !s.species) return;
+    const spot = s.species.hat?.[s.drawn] || s.species.head?.[s.drawn];
+    if (spot) this._headTopAll(s, spot[0], spot[1]); // measure ahead
+    const now = Date.now();
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const part = seasonPart(season, s.worldKey);
+    if (!s.nextBat) s.nextBat = now + 6000 + Math.random() * 10000;
+    if (now >= s.nextBat) {
+      const [lo, hi] = SEASON_BAT_MS;
+      s.nextBat = now + lo + Math.random() * (hi - lo);
+      const dark = s.screen.classList.contains("night") || s.screen.classList.contains("dim");
+      if (!calm && (dark || part.dayBats)) this._seasonBat(s, season);
+    }
+    if (part.witch && !s.nextWitch) s.nextWitch = now + 20000 + Math.random() * 40000;
+    if (part.witch && now >= s.nextWitch) {
+      const [lo, hi] = SEASON_WITCH_MS;
+      s.nextWitch = now + lo + Math.random() * (hi - lo);
+      const dark = s.screen.classList.contains("night") || s.screen.classList.contains("dim");
+      if (!calm && dark) this._seasonFly(s, season, "witch", "switch", 7500);
+    }
+    if (!this._free(s) || s.pet.classList.contains("hop")) return;
+    const today = new Date();
+    // The countdown, on the first look of the day.
+    if (season.countdown && season.treat && !s.counted) {
+      s.counted = true;
+      const treat = new Date(today.getFullYear(), season.treat[0] - 1, season.treat[1]);
+      const days = Math.round((treat - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
+      if (days > 0 && days <= 7 && oncePerDay(`count-${season.key}-${s.ids?.device}`)) {
+        s.bubble.textContent = days === 1 ? `${season.countdown} is tomorrow!!` : `${days} sleeps till ${season.countdown}!`;
+        s.sayUntil = now + 4500;
+        this._animate(s, s.pet, "perk", 320);
+        return;
+      }
+    }
+    if (season.ghost && !calm) {
+      if (!s.nextGhost) s.nextGhost = now + 60000 + Math.random() * 60000;
+      if (now >= s.nextGhost) {
+        const [lo, hi] = SEASON_GHOST_MS;
+        s.nextGhost = now + lo + Math.random() * (hi - lo);
+        this._seasonGhost(s, season);
+        return;
+      }
+    }
+    const treatDay = season.treat && today.getMonth() + 1 === season.treat[0] && today.getDate() === season.treat[1];
+    if (treatDay && !s.treated) {
+      s.treated = true;
+      const key = `hatch-treat-${season.key}-${s.ids?.device}-${today.toDateString()}`;
+      let fresh = true;
+      try {
+        fresh = !localStorage.getItem(key);
+        localStorage.setItem(key, "1");
+      } catch (err) {
+        // no storage: once per page load
+      }
+      if (fresh) {
+        this._costume(s, season, "trick or treat!");
+        setTimeout(() => this._seasonTreat(s, season), 1600);
+        return;
+      }
+    }
+    if (!s.nextCostume) s.nextCostume = now + 8000 + Math.random() * 12000;
+    if (now < s.nextCostume) return;
+    const [lo, hi] = SEASON_COSTUME_MS;
+    s.nextCostume = now + lo + Math.random() * (hi - lo);
+    const fresh = season.costumes && oncePerDay(`costume-${season.key}-${s.ids?.device}`);
+    this._costume(s, season, fresh ? "new costume today! do you like it?" : pick(season.lines));
+    if (fresh) this._chirp(s, "spooky");
+  }
+
+  // Where a hat sits: the top of the head in the frame on show, found by going
+  // down the head point's column to the first solid pixel. (The head point is
+  // for flair floating above the head, so a hat there would hover.) Cached per
+  // frame; null if the frame can't be read.
+  _headTop(img, hx, hy) {
+    const key = `${img.currentSrc || img.src}|${hx}`;
+    if (HEAD_TOPS.has(key)) return HEAD_TOPS.get(key);
+    if (!img.complete || !img.naturalWidth) return null;
+    let top = null;
+    try {
+      const c = document.createElement("canvas");
+      c.width = c.height = 256;
+      const g = c.getContext("2d", { willReadFrequently: true });
+      g.drawImage(img, 0, 0, 256, 256);
+      const from = Math.max(0, Math.round(hy) - 40);
+      const x0 = Math.min(251, Math.max(0, Math.round(hx) - 2));
+      const data = g.getImageData(x0, from, 5, 256 - from).data;
+      for (let y = 0; y < 256 - from && top === null; y++) {
+        for (let x = 0; x < 5; x++) {
+          if (data[(y * 5 + x) * 4 + 3] > 128) { top = from + y; break; }
+        }
+      }
+    } catch (err) {
+      top = null; // no canvas: the head point will do
+    }
+    HEAD_TOPS.set(key, top);
+    return top;
+  }
+
+  // The lowest head top across the frames on show (a pet's two idle frames can
+  // carry the head a few pixels apart), so a hat never hovers on either: it
+  // sits a little deeper on the other. Frames not loaded yet are measured on a
+  // later call (_seasonTick calls this every tick to have them ready).
+  _headTopAll(s, hx, hy) {
+    let low = this._headTop(s.pet, hx, hy);
+    for (const sprite of this._frames(s)) {
+      const path = sprite.includes("/") ? sprite : `${s.speciesId}/${sprite}`;
+      const src = new URL(`${BASE}/sprites/${path}.png?v=${VERSION}`, location.href).href;
+      let img = FRAME_IMGS.get(src);
+      if (!img) {
+        img = new Image();
+        img.src = src;
+        FRAME_IMGS.set(src, img);
+      }
+      const top = this._headTop(img, hx, hy);
+      if (top !== null && (low === null || top > low)) low = top;
+    }
+    return low;
+  }
+
+  // The hat sits on top of the head, brim sunk in a little.
+  _costume(s, season, line) {
+    const head = s.species?.head?.[s.drawn];
+    if (!head) return; // no head point (an egg): no hat
+    s.screen.querySelector(".costume")?.remove();
+    const at = this._flairAnchors(s);
+    const r = s.pet.getBoundingClientRect();
+    const sr = s.screen.getBoundingClientRect();
+    // species.json "hat" where ears or antlers rise above the skull (the deer).
+    const own = s.species.hat?.[s.drawn];
+    const k = r.height / 256;
+    // With a hat point, the lower of it and the frames' top in its column (another
+    // mood's frames can carry the head lower).
+    const scanned = own ? this._headTopAll(s, own[0], own[1]) : this._headTopAll(s, head[0], head[1]);
+    const top = own ? Math.max(own[1], scanned ?? own[1]) : scanned;
+    // Today's costume for this pet (the hat, without a list).
+    const suits = (season.costumes || []).filter((c) => !c.skip?.includes(s.speciesId));
+    const costume = dailyPick(suits.length ? suits : [{ art: "hat", sink: 7, width: 64 }], s.ids?.device);
+    const brim = top === null ? at.hy + 14 * at.ks : r.top - sr.top + (top + costume.sink) * k;
+    const x = own ? r.left - sr.left + own[0] * k : at.hx;
+    const box = document.createElement("div");
+    box.className = "flair costume";
+    box.style.setProperty("--fl-ms", `${FLAIR_MS + 1800}ms`);
+    const hat = document.createElement("div");
+    hat.className = "fx hat";
+    hat.innerHTML = `<img src="${BASE}/ui/season_${season.key}_${costume.art}.png?v=${VERSION}" alt="">`;
+    Object.assign(hat.style, { left: `${x}px`, top: `${brim}px`, width: `${costume.width * at.ks}px` });
+    box.append(hat);
+    s.screen.appendChild(box);
+    s.flairUntil = Date.now() + FLAIR_MS + 1800;
+    s.bubble.textContent = line;
+    s.sayUntil = Date.now() + 4000;
+    this._animate(s, s.pet, "perk", 320);
+    setTimeout(() => box.remove(), FLAIR_MS + 1800);
+  }
+
+  // Trick or treat: a sweet pops up at its feet.
+  _seasonTreat(s, season) {
+    const at = this._flairAnchors(s);
+    const box = s.screen.querySelector(".costume");
+    if (!box) return;
+    const sweet = document.createElement("div");
+    sweet.className = "fx pop";
+    sweet.innerHTML = `<img src="${BASE}/ui/season_${season.key}_sweet.png?v=${VERSION}" alt="">`;
+    Object.assign(sweet.style, { left: `${at.cx + at.half * 1.1}px`, top: `${at.fy}px`, width: `${48 * at.ks}px` });
+    box.append(sweet);
+    this._sparkle(s);
+    s.bubble.textContent = "a treat! thank you!! ♪";
+    s.sayUntil = Date.now() + 3500;
+  }
+
+  _seasonBat(s, season) {
+    this._seasonFly(s, season, ["bat_1", "bat_2"], "sbat", 5200);
+  }
+
+  // Something crosses the scene (a bat, the witch, the ghost): one image or
+  // two flapping frames, from a random side unless it's the witch (left to right).
+  _seasonFly(s, season, art, cls, ms) {
+    const el = document.createElement("div");
+    const ltr = cls === "switch" || Math.random() < 0.5;
+    el.className = `sfly ${cls} ${ltr ? "ltr" : "rtl"}`;
+    el.style.setProperty("--fly-ms", `${ms}ms`);
+    if (cls === "sbat") el.style.top = `${8 + Math.random() * 22}%`;
+    const frames = Array.isArray(art) ? art : [art];
+    el.innerHTML = frames.map((n) =>
+      `<img src="${BASE}/ui/season_${season.key}_${n}.png?v=${VERSION}" alt="">`).join("");
+    if (frames.length > 1) el.classList.add("flap");
+    s.seasonBox.append(el);
+    setTimeout(() => el.remove(), ms + 200);
+    return el;
+  }
+
+  // A friendly ghost floats by; the pet jumps, then giggles.
+  _seasonGhost(s, season) {
+    const ms = 6500;
+    this._seasonFly(s, season, ["ghost_1", "ghost_2"], "sghost", ms);
+    s.flairUntil = Date.now() + ms; // nothing else meanwhile
+    setTimeout(() => {
+      s.bubble.textContent = "eep!!";
+      s.sayUntil = Date.now() + 1800;
+      this._animate(s, s.pet, "sulk", 800);
+      this._chirp(s, "spooky");
+    }, 1400);
+    setTimeout(() => {
+      s.bubble.textContent = pick(["hehe, hi ghost!", "oh, it's just a friendly ghost~", "boo to you too!"]);
+      s.sayUntil = Date.now() + 3000;
+      this._animate(s, s.pet, "perk", 320);
+    }, 3400);
   }
 
   // --- Trait flair ----------------------------------------------------------

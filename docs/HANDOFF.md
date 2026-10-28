@@ -80,8 +80,29 @@ details before committing it.
   `NEWS_COOLDOWN_MINUTES` (30) per pet, in memory, set only when news shows. The
   headline is cut at 60 characters (`home.news_text`): at 80 the bubble buried the pet
   on a 330 px card. Checked in the browser at 420 and 330 px.
+- **Seasons, starting with Halloween** (0.28.0, card only): `SEASONS` in the card
+  (date window, per-world `worlds` parts, lines, a `treat` day), `seasonNow` by the
+  viewer's local date, card option `seasonal` (false, or a key to force one). Pieces
+  in `.season` behind the pet; the costume hat sits on the top of the head found by
+  `_headTop` (first solid pixel down the head point's column) or on `species.json`
+  `hat` where ears or antlers rise above the skull (the deer; the owner caught it
+  hovering). Stand-in art drawn by `art/seasonal/make_halloween.py`
+  (`ui/season_halloween_*`); Sol could redraw it. `card-check` forces the season and
+  checks the hat; it keeps seasons off for the other checks. Halloween's extras (owner:
+  "go all out on every holiday"): a costume of the day per pet (`costumes`, each with
+  its `sink` into the head), a lantern face of the day, bunting, night mist, a ghost the
+  pet jumps at, a witch in Night Sky, candy for snacks, a countdown, a `spooky` chirp.
+  `species.json` `hat` points now exist for the deer, the axolotl (its gills rise above
+  its crown) and the tarantula (the hat goes on its front body, by its face, not on its
+  abdomen). Every costume was previewed on all 13 creatures × 4 stages, close up.
+  Costumes carry `skip` lists (my call, not the owner's): no cat ears on creatures
+  with their own ears or the luna moth, no horns on the deer. The bird wears them all:
+  the owner's complaint was where the ears landed, which was a preview mix-up.
+  The ears and horns have a thin band. Costumes sit on the lowest head top across the
+  idle frames (`_headTopAll`). The preview script's injected creature can be undone by
+  the test pet's own update mid-shot; discard cells that show the wrong creature.
 - **Weather talk** (Tier 1 of `docs/plan-2026-10-27-real-time-connections.md`,
-  unreleased on branch `ccr-a828d8c1-uv2so3`): `weather` moments (`change`:
+  merged in PR #10, released in 0.28.0): `weather` moments (`change`:
   rain_started, rain_stopped, rainbow, snow_started, sun_out, hot, cold) from
   `HouseMoments._weather`, one per `HOME_WEATHER_GAP_MINUTES`, each kind once per
   `HOME_WEATHER_COOLDOWN_MINUTES`; `forecast` moments (`when` today/tomorrow, `kind`)
@@ -221,6 +242,11 @@ details before committing it.
   pre-release, which HACS offers only to someone who turned on "show beta
   versions" for the integration. Run the workflow with ref = the PR's branch to
   let the owner try unmerged work; the final release later drops the suffix.
+- **Art requests (from 2026-10-28):** send them to the owner's **Hatch API Art**
+  session (find it with `list_sessions`; it isn't named here because the repo is public).
+  It decides between Luna and Sol. A Halloween redraw of all 17 `season_halloween_*`
+  stand-ins was requested on 2026-10-28, due 30 October; keep the stand-ins' file names,
+  canvas sizes and anchoring when installing it.
 - **Message Sol:** `send_message` to Sol's session (ID in the private notes). Sol can't
   reply; the owner relays links. Ask for batch jobs (cheaper).
 - **Card not showing after an update:** a hard refresh, or in the companion app,
