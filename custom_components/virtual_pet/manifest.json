@@ -1,6 +1,7 @@
 {
   "domain": "virtual_pet",
   "name": "Virtual Pet",
+  "after_dependencies": ["recorder"],
   "codeowners": [],
   "config_flow": true,
   "dependencies": ["frontend", "http"],
@@ -9,5 +10,5 @@
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/alpine-vortex/hatch-at-home/issues",
   "requirements": [],
-  "version": "0.30.0"
+  "version": "0.31.0"
 }

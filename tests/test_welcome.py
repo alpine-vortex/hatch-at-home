@@ -20,7 +20,7 @@ from custom_components.virtual_pet.const import DOMAIN
 
 from .test_init import STORE_KEY, hatched_pet, now, settle, setup  # noqa: F401
 
-WELCOME = "Pip has been welcomed into the home."
+WELCOME = "Pip, a new virtual pet, just moved in! Say hi ♥"
 
 
 @pytest.fixture

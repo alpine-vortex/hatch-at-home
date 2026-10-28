@@ -1,4 +1,4 @@
-# Daily check-ins, 2026-10-28 (scope; seasons started, the rest not built)
+# Daily check-ins, 2026-10-28 (scope; wish, dream, away note, bond and seasons built)
 
 The person who will play with the pet loves virtual pets, gets attached, and checks
 on them every day. The journal matters less to them. What matters is that **every
@@ -75,6 +75,11 @@ senses. Rare ones are marked ★.
   sprites. Finds at the deco size (32 × 32 art pixels); visitors as two-frame
   sprites. I can draw stand-ins in code to try it first, as for Halloween.
 - **Cost:** L. Model and service S–M, card M, art the long pole.
+- **Gifts** (owner, 2026-10-28, from Animal Crossing: "love it, need good variety
+  here"): now and then a pet saves a find for the person it's closest to ("I saved
+  this pine cone for you! ♥"), given at their next look. Variety matters: weight
+  gifts away from what they already got, use the rarer finds as gifts more often,
+  and let some gifts be one-of-a-kind (a find only a gift can bring).
 
 ## 2. A daily wish (cheap; no art)
 
@@ -94,6 +99,29 @@ and the pet mentions it now and then.
   moments and care actions. **Cost:** S–M.
 
 ## 3. A bond with each person (cheap to start; grows)
+
+**Built** (2026-10-28, after 0.30.0): as below, with these choices of mine for the
+owner to change: points per visit 2 (once a day), care 1, a game 2, a granted wish 3;
+care and games capped at 8 a day per person; levels at 0, 4, 10, 20, 34, 52, 75, 105,
+145, 200 points; the unlocks at levels 2 (warmer hello), 3 (hop), 4 (nickname),
+6 (favourite game, a line when played together) and 8 (hearts); bonds carry
+into the next generation. The "come say hi" wish came with it.
+
+**Second pass** (owner, 2026-10-28: flavour, not gameplay; no journal work now): the
+favourite game lost its happiness, so a bond never changes the stats. Added: the
+nickname on that person's phone notifications and in Assist; a cheer when a close
+friend (level 3+) comes home, by their person entity, and "welcome home" at their
+next look; and a wish now and then aimed at a close friend (35%, play, snack, bath,
+praise or say hi; anyone can grant it). Declined: memories in the journal, and care
+from a friend working better (a good bond is inevitable, so it would only make the
+game easier).
+
+**Third pass** (owner, 2026-10-28; declined: remembering each person's music):
+"my day" (`wellbeing.py`, opt-in per person, positive only, gated by level, from
+their own phones and HA's long-term statistics), the monthly friendship day, each
+person's game records, goodnight and a morning thank-you for tucking it in, and
+"how was your day?" (card only). Not yet seen on a real phone: which sensors the
+players' phones report, and whether Android's step counter has statistics.
 
 From Nintendogs and the Digimon bracelets: the pet knows each person, separately.
 
@@ -142,6 +170,9 @@ be more than one pet.
   on the tick, `visiting` on both states; the card loads the guest's species to draw
   it. No new art, since every creature exists. **Cost:** M.
 - **Only one pet?** Nothing changes, and the visitors from feature 1 fill the gap.
+- **Neighbours talking** (owner, 2026-10-28, from Animal Crossing): pets mention each
+  other ("have you met Mochi? she's so nice!", "Mochi visited yesterday ♥"), more as
+  they become friends.
 
 ## 6. Seasons
 

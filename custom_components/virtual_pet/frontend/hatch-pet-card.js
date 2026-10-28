@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.30.0";
+const VERSION = "0.31.0";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -108,6 +108,17 @@ function soundsOn() {
   }
 }
 
+// A shared screen (a wall tablet signed in as one person): this browser shows
+// nothing personal, no names, notes, questions or bond, and makes no visits.
+const SHARED_KEY = "hatch-shared-screen";
+function sharedScreen() {
+  try {
+    return localStorage.getItem(SHARED_KEY) === "on";
+  } catch (err) {
+    return false;
+  }
+}
+
 function playChirp(name) {
   const notes = CHIRPS[name];
   if (!notes) return;
@@ -184,7 +195,7 @@ const SEASONS = [
       terrarium: { corners: ["left", "right"] }, // a tarantula's tank
       nightsky: { dayFlyers: true, nightFlyer: true }, // bats by day too; the witch at night
     },
-    lines: ["boo!", "happy halloween!", "spooky~", "trick or treat?", "do I look spooky?"],
+    lines: ["boo!", "happy Halloween!", "spooky~", "trick or treat?", "do I look spooky?"],
     treat: [10, 31],
     treatLine: "trick or treat!",
     countdown: "Halloween", // "3 sleeps till Halloween!" before the treat day
@@ -217,10 +228,10 @@ const SEASONS = [
       hearth: { sweets: true }, // a plate by the door
       terrarium: { corners: ["left", "right"] },
     },
-    lines: ["gobble gobble!", "happy thanksgiving!", "I'm thankful for you ♥", "smells like pie...",
+    lines: ["gobble gobble!", "happy Thanksgiving!", "I'm thankful for you ♥", "smells like pie...",
       "so cozy~", "look at all the leaves!"],
     treat: (y) => thanksgiving(y),
-    treatLine: "happy thanksgiving! ♥",
+    treatLine: "happy Thanksgiving! ♥",
     thanks: true,
     countdown: "Thanksgiving",
     costumes: [
@@ -236,7 +247,7 @@ const SEASONS = [
     snackLines: ["pie!! ♪", "pumpkin pie, my favourite!", "mmm, still warm ♪"],
     flyer: { art: ["goose_1", "goose_2"], cls: "sgoose", ms: 8000, flock: 3 },
     visitor: { art: ["turkey_1", "turkey_2"], cls: "sturkey", ms: 7000, startle: "gobble?!", jump: "perk",
-      greet: ["hi, turkey!", "happy thanksgiving, turkey ♪", "gobble gobble to you too!"] },
+      greet: ["hi, turkey!", "happy Thanksgiving, turkey ♪", "gobble gobble to you too!"] },
     chirp: "harvest",
     bunting: true,
     leaves: true,
@@ -252,7 +263,7 @@ function thanksgiving(year, days = 0) {
 const seasonDate = (when, year) => (typeof when === "function" ? when(year) : when);
 const HEAD_TOPS = new Map(); // frame|x -> the top of the head (see _headTop)
 const FRAME_IMGS = new Map(); // src -> Image, for measuring frames not on show
-const SEASON_COSTUME_MS = [90000, 150000]; // between costume moments
+const SEASON_COSTUME_MS = [600000, 900000]; // between costume moments (10-15 min)
 const SEASON_FLYER_MS = [20000, 45000]; // between bats (or geese) flying by
 const SEASON_VISITOR_MS = [240000, 420000]; // between ghosts (or turkeys)
 const SEASON_NIGHT_FLYER_MS = [120000, 240000];
@@ -330,7 +341,7 @@ const GREET_EVERY_MS = 3 * 3600 * 1000;
 // were out" note after this long away (per device).
 const WISHES = {
   play: ["I wish we could play a game today!", "play a game together"],
-  snack: ["I'd love a snack after lunch...", "a snack after lunch"],
+  snack: ["I'd love a snack after lunch!", "a snack after lunch"],
   bath: ["I wish I could have a bubble bath!", "a bubble bath"],
   praise: ["I hope someone says I'm good today", "hear \"good job!\""],
   tuck_in: ["will you tuck me in tonight?", "be tucked in tonight"],
@@ -339,10 +350,95 @@ const WISHES = {
   tv: ["can we watch something together today?", "watch TV together"],
   chore: ["I'd love a treat from a chore today", "a chore treat"],
   rain: ["I hope I get to see the rain today", "see the rain"],
+  say_hi: ["will you come say hi this afternoon?", "a hello this afternoon"],
+};
+// A wish aimed at a close friend (life_stage wish "for", "for_name"): said of
+// them, said to them, and short for the status screen.
+const WISHES_FOR = {
+  play: [(n) => `I hope ${n} plays a game with me today!`, "will you play a game with me today?", (n) => `play a game with ${n}`],
+  snack: [(n) => `I hope ${n} brings me a snack after lunch!`, "will you bring me a snack after lunch?", (n) => `a snack from ${n}`],
+  bath: [(n) => `I wish ${n} would give me a bubble bath!`, "will you give me a bubble bath today?", (n) => `a bubble bath from ${n}`],
+  praise: [(n) => `I hope ${n} says I'm good today`, "will you tell me I'm good today?", (n) => `hear "good job!" from ${n}`],
+  say_hi: [(n) => `I hope ${n} comes to say hi this afternoon!`, "will you come say hi this afternoon?", (n) => `a hello from ${n}`],
+};
+// "will you play?" + "sunbeam" -> "will you play, sunbeam?"; "night night ♥" -> "night night, sunbeam ♥"
+const withName = (line, name) => (name ? line.replace(/([!?.]*)(\s*♥)?$/, `, ${name}$1$2`) : line);
+const FRIEND_WELCOME_MS = 6 * 3600 * 1000; // "welcome home!" at the next look, this long after
+const FIRST_LOOK_LINES = 3; // lines queued at the first look (the visit's notes fill what's left)
+// Titles, artists and names cut so a line fits the bubble on a 330 px card.
+const short = (text, max = 30) => {
+  const chars = Array.from(text || ""); // whole characters: never half an emoji
+  return chars.length > max ? `${chars.slice(0, max - 1).join("").trimEnd()}…` : text;
+};
+const WELCOME_SAME_ARRIVAL_MS = 10 * 60 * 1000; // pets' reports this close: one arrival
+// Questions the pet asks; the server picks which and when (visit's "ask"), so
+// the daily limit holds across pets and devices. "keep" answers go back to the
+// server (virtual_pet/answer); the others stay on the card.
+const ASK_MS = 60000; // a question stays this long (it was not asked for, so focus stays put)
+const QUESTIONS = {
+  how_day: { q: "how was your day?", answers: {
+    great: ["yay!! that makes me so happy ♥", "a great day! tell me everything! ♥"],
+    ok: ["ok days are good days too ♥", "I'm glad you're here now ♥"],
+    tough: ["aww... come here *snuggle* ♥", "I'm here for you ♥ *cuddle*"] } },
+  slept: { q: "did you sleep well?", answers: {
+    great: ["yay! ♥ good morning!", "me too! ♥"],
+    ok: ["a cozy morning then ♥"],
+    "not really": ["aww, take it easy today ♥", "a slow morning then... *yawn* ♥"] } },
+  fav_weather: { q: "what's your favourite weather?", keep: true, answers: {
+    sun: ["sunny days! me too ☀"], rain: ["ooh, cozy rain ☂"], snow: ["snow!! ❄ I'll remember"],
+    storms: ["storms! so exciting!"] } },
+  fav_season: { q: "what's your favourite season?", keep: true, answers: {
+    spring: ["spring! flowers everywhere ♪"], summer: ["summer! sunshine! ☀"],
+    autumn: ["autumn! crunchy leaves ♪"], winter: ["winter! snuggly ❄"] } },
+  dream: { q: "what should I dream about tonight?", keep: true, answers: {
+    stars: ["the stars... ok!"], sea: ["the sea! ok!"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ ok!"] } },
+  guess: { q: "rain or sun tomorrow?", keep: true, answers: {
+    rain: ["rain! we'll see ☂"], sun: ["sun! we'll see ☀"] } },
+};
+const PLACES = {
+  gym: "back from the gym?! so strong!", work: "home from work! ♥",
+  school: "back from class? ♥", park: "did you have fun at the park?",
+};
+const HOME_WEATHER = {
+  wet: "it's wet out there! come get cozy ☂", snowy: "snow on your shoes! ❄",
+  cold: "brr, was it cold out there?", hot: "you must be thirsty after that heat!",
+};
+const SEASON_ICONS = { spring: "♪", summer: "☀", autumn: "♥", winter: "❄" };
+// What the pet tells only you (virtual_pet.visit's notes), each once.
+const NOTES = {
+  friends_for: (n) => n.months % 12 === 0
+    ? `we've been friends for ${n.months === 12 ? "a whole year" : `${n.months / 12} years`}!! ♥`
+    : `we've been friends for ${n.months === 1 ? "a month" : `${n.months} months`}! ♥`,
+  tucked_in: () => pick(["thanks for tucking me in last night ♥", "I slept so well after you tucked me in ♥"]),
+  steps: (n) => `${n.steps.toLocaleString()} steps?! you've been busy!`,
+  more_than_usual: () => pick(["you've walked way more than usual today!", "so many steps today! you've been so active!"]),
+  best_day: () => "your most active day in weeks!! ♥",
+  bike: () => "were you on a bike?! wheee!",
+  run: () => "did you go for a run?! so fast!",
+  stairs: (n) => `${n.floors} floors of stairs?! you're a climber!`,
+  rested: () => pick(["you got a good sleep! ♥", "you slept so well! ♥"]),
+  rain_walk: () => pick(["you walked in the rain?! so brave!", "out in the rain and still so many steps! ☂"]),
+  snow_walk: () => "you went walking in the snow?! ❄ so brave!",
+  dream: (n) => n.pick === "you"
+    ? (n.yours ? "I dreamed about you, like you said! ♥" : "I dreamed about my friends ♥")
+    : `I dreamed about ${{ stars: "the stars", sea: "the sea", snacks: "snacks" }[n.pick] || n.pick}${n.yours ? ", like you said! ♥" : "..."}`,
+  guess: (n) => n.outcome === "right"
+    ? (n.guess === "rain" ? "you were right!! it rained ☂" : "you were right!! sunny ☀")
+    : n.outcome === "wrong"
+      ? (n.guess === "rain" ? "oh, sunny after all! good guess though ♥" : "oh, it rained after all! good guess though ♥")
+      : "it was cloudy all day! nobody wins ♥",
+  back_from: (n) => PLACES[n.place],
+  fav_weather: (n) => ({ sun: "it's sunny, your favourite! ☀", rain: "it's raining, your favourite! ☂",
+    snow: "it's snowing, your favourite!! ❄", storms: "a storm! your favourite!" })[n.weather],
+  season: (n) => n.holiday
+    ? `${n.holiday === "halloween" ? "Halloween" : "Thanksgiving"} in your favourite season! ♥`
+    : `it's ${n.season}, your favourite! ${SEASON_ICONS[n.season] || ""}`.trim(),
+  early_alarm: () => "early start tomorrow? sleep well ♥",
+  up_early: () => "mmh... you're up before the sun... zzz ♥",
 };
 const DREAMS = {
-  watching: (d) => `I dreamed about ${d.title}!`,
-  listening: (d) => `♪ I dreamed of ${d.title} ♪`,
+  watching: (d) => `I dreamed about ${short(d.title)}!`,
+  listening: (d) => `♪ I dreamed of ${short(d.title)} ♪`,
   rain_started: () => "I dreamed it was raining...",
   rainbow: () => "I dreamed about a rainbow!",
   snow_started: () => "I dreamed of snow ❄",
@@ -353,11 +449,24 @@ const DREAMS = {
   trait: () => "I had such a big dream last night...",
   flying: () => "I dreamed I could fly!",
   clouds: () => "I dreamed I napped on a cloud...",
-  feast: () => "I dreamed about a giant snack!",
+  feast: (d, w) => `I dreamed about a mountain of ${w?.food || "snacks"}!`,
 };
 const AWAY_NOTE_AFTER_MS = 3 * 3600 * 1000;
+// A bond with each person (life_stage "bonds", by HA user ID; only the viewer's
+// own is ever shown). What each level brings, as in rates.py: a warmer hello, a
+// hop when they look in, the nickname it picked, its favourite of their games,
+// and hearts only for them.
+const BOND = { warm: 2, hop: 3, nickname: 4, favourite: 6, hearts: 8, max: 10 };
+const VISIT_EVERY_MS = 3600 * 1000; // virtual_pet.visit, as the server counts it
+const VISIT_RETRY_MS = 5 * 60 * 1000; // after a visit that didn't count
 const WISH_MENTION_MS = [600000, 900000]; // between reminders of an open wish
 const pick = (list) => list[Math.floor(Math.random() * list.length)];
+// A line as a screen reader should hear it: no hearts, notes, stars or emoji; a
+// bare heart (praise) is "thank you!".
+function spoken(text) {
+  const plain = String(text || "").replace(/[♥♡♪★☂☀❄~*]|\p{Extended_Pictographic}/gu, "").replace(/\s+/g, " ").trim();
+  return plain || (/[♥♡]/.test(text) ? "thank you!" : "");
+}
 // Whole degrees in the owner's unit (the server converts), with a real minus.
 const degrees = (n) => (Number.isFinite(n) ? `${n}°`.replace("-", "−") : "");
 // How long the happy bounce lasts when the pet gets excited.
@@ -610,6 +719,7 @@ const STYLE = `
   .screen.dim .pet { filter: brightness(.8); }
   .pet, .perch { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%; }
   .pet.hop { animation: hop .7s ease-in-out infinite; }
+  .pet.greethop { animation: hop .7s ease-in-out 2; } /* its own class: the bounce clears "hop" */
   @keyframes hop { 50% { transform: translateY(-9%); } }
   .poop { bottom: 5%; height: 15%; }
   .poop.p0 { left: 6%; } .poop.p1 { left: 18%; bottom: 3%; } .poop.p2 { right: 7%; }
@@ -754,7 +864,8 @@ const STYLE = `
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
-  .screen.show-status .flash, .screen.show-status .speck { display: none !important; }
+  .screen.show-status .flash, .screen.show-status .speck,
+  .screen.show-status .bondhearts { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
   .pet.sulk { animation: shake .35s 2; }
@@ -892,6 +1003,17 @@ const STYLE = `
     animation: burst .45s ease-out forwards; }
   @keyframes burst { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
   .toy { position: relative; }
+  .screen .askday { position: absolute; left: 0; right: 0; bottom: 3%; display: flex; gap: 8px;
+    justify-content: center; z-index: 3; }
+  .screen .askday button { font: inherit; font-size: 14px; min-height: 44px; min-width: 64px; padding: 4px 10px;
+    border-radius: 14px; border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a;
+    box-shadow: 0 4px 0 #3a2a1a; transition: transform .08s, box-shadow .08s; }
+  .screen .askday button:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
+  .screen.show-status .askday { display: none; }
+  .screen .bondhearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
+    opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }
+  @keyframes bondheart { 0% { transform: translateY(0) scale(.7); opacity: 0; } 20% { opacity: 1; }
+    100% { transform: translateY(-70px) scale(1); opacity: 0; } }
   .pet.perk { animation: perk .3s ease-out; }
   @keyframes perk { 40% { transform: translateY(-6%) scale(1.04, .96); } }
   .toy.wanted .cap { background: #ffe9a8;
@@ -1129,8 +1251,8 @@ class HatchPetCard extends HTMLElement {
     // What the pet says to someone (a refusal, a game's result, a moment) is read
     // out by screen readers; its idle chatter isn't. Only the pet on show.
     new MutationObserver(() => {
-      const text = s.bubble.textContent;
-      if (s.sayUntil && s === this._slides[this._index] && s.live.textContent !== text) {
+      const text = spoken(s.bubble.textContent);
+      if (s.sayUntil && s === this._slides[this._index] && text && s.live.textContent !== text) {
         s.live.textContent = text;
       }
     }).observe(s.bubble, { childList: true, characterData: true, subtree: true });
@@ -1303,6 +1425,20 @@ class HatchPetCard extends HTMLElement {
     s.journal = false;
     s.statusHtml = null;
     s.drawnSig = null;
+    // The last pet's private lines and question aren't this one's.
+    this._clearAsk(s);
+    s.queue = [];
+    s.visitedAt = 0;
+    s.lookedFirst = false;
+    s.wishDay = null;
+  }
+
+  // Take an open question off the screen (a game, another pet on this slide).
+  _clearAsk(s) {
+    s.screen?.querySelector(".askday")?.remove();
+    clearTimeout(s.askTimer);
+    s.asking = false;
+    if (s.queue) s.queue = s.queue.filter((q) => !q.then);
   }
 
   _state(s, key) {
@@ -1625,7 +1761,8 @@ class HatchPetCard extends HTMLElement {
     if (away) return "";
     if (s.hatchesAt) {
       const minutes = Math.max(1, Math.ceil((new Date(s.hatchesAt) - Date.now()) / 60000));
-      return minutes <= 1 ? "crack... crack..." : `hatching in about ${minutes} min`;
+      if (minutes <= 1) return "crack... crack...";
+      return minutes < 60 ? `hatching in about ${minutes} min` : `hatching in about ${Math.round(minutes / 60)} h`;
     }
     return mood?.attributes.reason || "";
   }
@@ -1689,7 +1826,8 @@ class HatchPetCard extends HTMLElement {
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
       if (s === this._slides[this._index]) {
         this._greet(s);
-        this._firstLook(s);
+        this._firstLook(s); // before the visit: it tells the server what's queued
+        this._visit(s);
         this._sayQueued(s);
         this._wishMention(s);
         this._seen(s);
@@ -1766,11 +1904,12 @@ class HatchPetCard extends HTMLElement {
       setTimeout(() => this._look(s, 1300), rtl ? 1200 : 0); // follows it across
       setTimeout(() => speck.remove(), 2700);
     } else {
+      const words = this._words(s);
       const lines = {
-        sleepy: ["*yawn*", "mm... sleepy"],
-        bored: ["hmm...", "*sigh*", "anyone wanna play?"],
+        sleepy: ["*yawn*", "mm... sleepy", ...(words.home ? [`my ${words.home} looks cozy...`] : [])],
+        bored: ["hmm...", "*rolls around*", "anyone wanna play?"],
         excited: ["hehe!", "wheee"],
-        hungry: ["*tummy rumbles*", "is it snack time?"],
+        hungry: ["*tummy rumbles*", "is it snack time?", ...(words.food ? [`mmm... ${words.food}...`] : [])],
         dirty: ["ew...", "*sniff sniff*"],
       }[s.moodState] || ["♪ hm hm hm ♪", "...", "*looks around*", "la la la"];
       s.bubble.textContent = pick(lines);
@@ -1789,11 +1928,18 @@ class HatchPetCard extends HTMLElement {
 
   _sayQueued(s) {
     const now = Date.now();
+    if (s.asleep && s.queue?.length) {
+      // Asleep: the lines wait until it's up (they were said once, on the
+      // server's side); only a question is dropped, it may come another day.
+      if (s.queue.some((q) => q.then)) this._clearAsk(s);
+      return;
+    }
     if (!s.queue?.length || s.sayUntil > now || s.game || s.screen.classList.contains("show-status")) return;
-    const { text, ms } = s.queue.shift();
+    const { text, ms, then } = s.queue.shift();
     s.bubble.textContent = text;
     s.sayUntil = now + ms;
     this._animate(s, s.pet, "perk", 320);
+    then?.();
   }
 
   // The first look at this pet on this device: what happened while you were
@@ -1804,6 +1950,21 @@ class HatchPetCard extends HTMLElement {
     s.lookedFirst = true;
     const stage = this._state(s, "sensor.life_stage")?.attributes || {};
     const device = s.ids?.device;
+    // At most FIRST_LOOK_LINES lines, in this order; what doesn't fit isn't said
+    // (the dream and wish come again at the next first look; the visit's notes
+    // are budgeted on the server from what's queued here).
+    const lines = [];
+    const me = this._hass.user?.id;
+    const home = (this._state(s, "sensor.last_care")?.attributes.moments || [])
+      .find((m) => m.type === "friend_home" && m.user === me);
+    const at = home && new Date(home.at).getTime();
+    if (at && !sharedScreen() && Date.now() - at < FRIEND_WELCOME_MS && this._welcomeDue(s, at)) {
+      // A close friend who came home while the card was closed: welcome them first.
+      const bond = this._bond(s);
+      const first = short(this._hass.user?.name?.trim().split(/\s+/)[0]);
+      lines.push([`welcome home, ${(bond?.level >= BOND.nickname && bond.nickname) || first || "friend"}! ♥`, 5000]);
+      if (HOME_WEATHER[home.weather]) lines.push([HOME_WEATHER[home.weather], 4500]);
+    }
     let seen = 0;
     try {
       seen = Number(localStorage.getItem(`hatch-seen-${device}`) || 0);
@@ -1812,23 +1973,60 @@ class HatchPetCard extends HTMLElement {
     }
     if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS) {
       const note = this._awayNote(s, seen);
-      if (note) this._queue(s, note, 5500);
+      if (note) lines.push([note, 5500]);
     }
     const dream = stage.dream && DREAMS[stage.dream.kind];
-    if (dream && oncePerDay(`dream-${device}`)) this._queue(s, dream(stage.dream), 5000);
-    const wish = stage.wish && !stage.wish.granted && WISHES[stage.wish.kind];
-    if (wish && oncePerDay(`wish-${device}`)) this._queue(s, wish[0], 5000);
+    if (dream && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
+      lines.push([dream(stage.dream, this._words(s)), 5000]);
+    }
+    const wish = stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
+    if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([wish[0], 5000]);
+    for (const [text, ms] of lines.slice(0, FIRST_LOOK_LINES)) this._queue(s, text, ms);
   }
 
-  // Now and then, an open wish comes up again (never more than every 10 minutes).
+  // Each "came home" is welcomed once in this browser, by any pet (seen live,
+  // or at the next look).
+  _welcomeDue(s, at) {
+    const key = `hatch-welcomed-${this._hass.user?.id}`;
+    try {
+      // Each pet reports the same arrival a moment apart: one welcome for it.
+      if (Number(localStorage.getItem(key) || 0) + WELCOME_SAME_ARRIVAL_MS >= at) return false;
+      localStorage.setItem(key, String(at));
+    } catch (err) {
+      // no storage: once per page load
+    }
+    return true;
+  }
+
+  // Today's wish in the pet's words and short: [line, status text], or null.
+  // One aimed at a close friend names them, or speaks to them if they're looking.
+  _wishLine(wish, s) {
+    if (!WISHES[wish.kind]) return null;
+    const aimed = wish.for && wish.for_name && WISHES_FOR[wish.kind];
+    if (!aimed) return WISHES[wish.kind];
+    if (wish.for !== this._hass.user?.id || sharedScreen()) return [aimed[0](short(wish.for_name, 16)), aimed[2](short(wish.for_name, 16))];
+    const bond = this._bond(s);
+    return [withName(aimed[1], bond?.level >= BOND.nickname ? bond.nickname : null), aimed[2]("you")];
+  }
+
+  // An open wish comes up once more after the first look (never all day), and
+  // only while it can still come true (the server's "open").
   _wishMention(s) {
     const now = Date.now();
     const [lo, hi] = WISH_MENTION_MS;
+    const today = new Date().toDateString();
+    if (s.wishDay !== today) { // a new day (a tablet left on overnight): a new mention
+      s.wishDay = today;
+      s.nextWish = 0;
+    }
     if (!s.nextWish) s.nextWish = now + lo + Math.random() * (hi - lo);
     if (now < s.nextWish || !this._free(s)) return;
-    s.nextWish = now + lo + Math.random() * (hi - lo);
+    const wish0 = this._state(s, "sensor.life_stage")?.attributes.wish;
+    if (!wish0 || wish0.granted || wish0.open === false) return; // not yet, or not now: keep it
+    s.nextWish = Infinity;
     const wish = this._state(s, "sensor.life_stage")?.attributes.wish;
-    if (wish && !wish.granted && WISHES[wish.kind]) this._queue(s, WISHES[wish.kind][0]);
+    const line = wish && !wish.granted && wish.open !== false && this._wishLine(wish, s);
+    if (line && oncePerDay(`wishmention-${s.ids?.device}`)) this._queue(s, line[0]);
   }
 
   // When this device last saw the pet (for the away note), every minute.
@@ -1852,10 +2050,10 @@ class HatchPetCard extends HTMLElement {
     const add = (b) => { if (b && !bits.includes(b)) bits.push(b); };
     const MOMENT_BITS = {
       fell_asleep: "napped", woke_up: "napped", watching: "watched TV", listening: "listened to music",
-      news: "heard some news", sunset: "watched the sunset", wish_granted: "got my wish!",
-      trait_learned: "learned something new", first_snow: "saw the first snow!",
+      news: "heard some news", sunset: "watched the sunset", wish_granted: "got my wish",
+      trait_learned: "learned something new", first_snow: "saw the first snow",
     };
-    const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow!", rainbow: "saw a rainbow?!", sun_out: "sunbathed" };
+    const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow", rainbow: "saw a rainbow", sun_out: "sunbathed" };
     const CARE_BITS = { feed: "had a meal", snack: "had a snack", play: "played", game: "played a game", clean: "had a bath", chore_treat: "got a chore treat" };
     for (const m of [...(lastCare.moments || [])].reverse()) {
       if (!after(m.at)) continue;
@@ -1865,18 +2063,21 @@ class HatchPetCard extends HTMLElement {
       if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) add(CARE_BITS[e.action]);
     }
     if (!bits.length) return null;
-    const list = bits.slice(0, 3);
-    const said = list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list[0];
-    return `while you were out, I ${said}`.replace(/([^!?])$/, "$1!");
+    const list = bits.slice(0, 2); // two at most: a bubble on a 330 px card
+    return `while you were out, I ${list.join(" and ")}!`;
   }
 
   _greet(s) {
     if (s.greeted || !this._free(s)) return;
     s.greeted = true;
     const user = this._hass.user;
-    const first = user?.name?.trim().split(/\s+/)[0];
-    if (!first) return;
-    const key = `hatch-greet-${user.id}-${s.ids?.device}`;
+    const bond = this._bond(s);
+    const level = bond?.level || 0;
+    const nickname = level >= BOND.nickname ? bond.nickname : null;
+    const shared = sharedScreen(); // no names on a shared screen
+    const first = shared ? null : short(user?.name?.trim().split(/\s+/)[0], 16) || nickname;
+    if (!first && !shared) return;
+    const key = `hatch-greet-${user?.id}-${s.ids?.device}`;
     try {
       if (Date.now() - Number(localStorage.getItem(key) || 0) < GREET_EVERY_MS) return;
       localStorage.setItem(key, String(Date.now()));
@@ -1884,10 +2085,146 @@ class HatchPetCard extends HTMLElement {
       // no storage (private window): greet anyway, once per page load
     }
     const hour = new Date().getHours();
-    const hello = hour < 12 ? `morning, ${first}!` : hour < 18 ? `hi ${first}!` : `evening, ${first}!`;
-    s.bubble.textContent = pick([hello, `${first}!! hi!`, hello]);
+    const hello = !first
+      ? (hour < 12 ? "morning!" : hour < 18 ? "hi!" : "evening!")
+      : hour < 12 ? `morning, ${first}!` : hour < 18 ? `hi, ${first}!` : `evening, ${first}!`;
+    const lines = first ? [hello, `${first}!! hi!`, hello] : [hello, "hi hi!", hello];
+    if (level >= BOND.warm) lines.push(`${first}! I missed you ♥`, `yay, ${first}'s here!`);
+    if (nickname) lines.push(`hi, ${nickname}!`, `${nickname}!! ♥`, `there's my ${nickname}!`);
+    s.bubble.textContent = pick(lines);
     s.sayUntil = Date.now() + 4000;
-    this._animate(s, s.pet, "perk", 320);
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (level >= BOND.hop && !calm) this._animate(s, s.pet, "greethop", 1400);
+    else this._animate(s, s.pet, "perk", 320);
+    if (level >= BOND.hearts && !calm) this._bondHearts(s);
+  }
+
+  // A person's first name, from their person entity (by HA user ID).
+  _personName(userId) {
+    const person = Object.values(this._hass.states || {})
+      .find((st) => st.entity_id.startsWith("person.") && st.attributes.user_id === userId);
+    return short((person?.attributes.friendly_name || "").trim().split(/\s+/)[0], 16) || null;
+  }
+
+  // The creature's own words (food, home), for its stage (a moth isn't a
+  // caterpillar): species.json "words", with per-stage overrides.
+  _words(s) {
+    const words = s.species?.words || {};
+    const stage = this._state(s, "sensor.life_stage")?.state;
+    return { food: words.food, home: words.home, ...(words[stage] || {}) };
+  }
+
+  // The viewer's own bond with this pet: {level, nickname?, favourite?} or null.
+  _bond(s) {
+    const id = this._hass.user?.id;
+    if (sharedScreen()) return null; // nobody's bond on a shared screen
+    return (id && this._state(s, "sensor.life_stage")?.attributes.bonds?.[id]) || null;
+  }
+
+  // Tell the pet who's looking in (for the bond, and a "come say hi" wish).
+  _visit(s) {
+    const id = s.ids?.["sensor.life_stage"];
+    // Not before the first look has run (it needs the creature): it says what's queued.
+    if (!id || !s.species || !this._hass.user || sharedScreen() || Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
+    s.visitedAt = Date.now();
+    const queued = Math.min((s.queue || []).length, 6);
+    this._hass.callService("virtual_pet", "visit", { entity_id: id, queued }, undefined, false, true)
+      .then((res) => {
+        const reply = res?.response || {};
+        if (s.ids?.["sensor.life_stage"] !== id) return; // the slide shows another pet now
+        if (reply.counted === false) {
+          // Not counted (it was asleep, or too soon): try again in a few minutes,
+          // so the morning's lines come soon after it wakes.
+          s.visitedAt = Date.now() - VISIT_EVERY_MS + VISIT_RETRY_MS;
+        }
+        if (typeof reply.my_day === "boolean") this._myDay = reply.my_day;
+        (reply.notes || []).forEach((note) => this._note(s, note));
+        const ask = reply.ask;
+        if (QUESTIONS[ask] && !s.asking) {
+          s.asking = true;
+          (s.queue ??= []).push({ text: QUESTIONS[ask].q, ms: ASK_MS, then: () => this._ask(s, ask, id) });
+        }
+      })
+      .catch(() => {
+        // an older integration has no visit: no bond yet, nothing else changes
+      });
+  }
+
+  // Something the pet has to tell only the viewer (from the visit).
+  _note(s, note) {
+    const line = NOTES[note.kind]?.(note);
+    if (!line) return;
+    if (note.kind === "up_early") { // said while it sleeps: not queued behind its sleep
+      s.bubble.textContent = line;
+      s.sayUntil = Date.now() + 5000;
+      return;
+    }
+    this._queue(s, line, 5000);
+    if (note.kind === "friends_for") {
+      this._sparkle(s);
+      if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) this._bondHearts(s);
+    }
+  }
+
+  // A question with its answers as buttons (the line is already in the bubble).
+  _ask(s, kind, entity = s.ids?.["sensor.life_stage"]) {
+    const question = QUESTIONS[kind];
+    if (!question || s.game || s.ids?.["sensor.life_stage"] !== entity) {
+      s.asking = false; // a game, or another pet on this slide now: not now
+      return;
+    }
+    s.screen.querySelector(".askday")?.remove();
+    const box = document.createElement("div");
+    box.className = "askday";
+    box.setAttribute("role", "group");
+    box.setAttribute("aria-label", question.q);
+    box.innerHTML = Object.keys(question.answers)
+      .map((a) => `<button data-answer="${escape(a)}">${escape(a)}</button>`).join("");
+    const done = () => {
+      box.remove();
+      s.asking = false;
+      clearTimeout(s.askTimer);
+    };
+    box.addEventListener("click", (e) => {
+      const answer = e.target.closest("button")?.dataset.answer;
+      if (!answer) return;
+      e.stopPropagation(); // the screen behind would open the status
+      this._tapped(e.target.closest("button"));
+      done();
+      s.bubble.textContent = pick(question.answers[answer]);
+      s.sayUntil = Date.now() + 4500;
+      const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      if (["great", "you"].includes(answer) && !calm) this._animate(s, s.pet, "greethop", 1400);
+      else if (["tough", "not really"].includes(answer) && !calm) this._bondHearts(s);
+      else this._animate(s, s.pet, "perk", 320);
+      if (question.keep) {
+        // A websocket command, not a service call: answers stay off the event bus.
+        this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity,
+          question: kind, answer }).catch(() => {
+          // not kept this time: it may ask again another day
+        });
+      }
+    });
+    s.screen.append(box);
+    s.askTimer = setTimeout(done, ASK_MS);
+  }
+
+  // Hearts that float up around the pet: only for someone it's very close to.
+  _bondHearts(s) {
+    s.screen.querySelector(".bondhearts")?.remove();
+    const box = document.createElement("div");
+    box.className = "bondhearts";
+    box.setAttribute("aria-hidden", "true");
+    [[-34, 0], [30, 0.35], [-8, 0.7], [16, 1.05]].forEach(([x, delay]) => {
+      const img = document.createElement("img");
+      img.src = `${BASE}/ui/stat_heart_full.png?v=${VERSION}`;
+      img.alt = "";
+      img.style.setProperty("--x", `${x}px`);
+      img.style.animationDelay = `${delay}s`;
+      box.append(img);
+    });
+    s.screen.append(box);
+    setTimeout(() => box.remove(), 2800);
   }
 
   // The frames to draw now: a reaction pose while one runs, else the mood's.
@@ -1931,11 +2268,11 @@ class HatchPetCard extends HTMLElement {
     };
     switch (m.type) {
       case "care_miss":
-        say("...nobody came", 6000);
-        this._animate(s, s.pet, "sulk", 800);
+        say("...oh, there you are ♥", 5000); // never guilt
+        this._animate(s, s.pet, "perk", 320);
         break;
       case "discipline_miss":
-        say("...fine, I'll stop");
+        say("ok, ok... ♪");
         break;
       case "call_answered":
         if (m.reason === "fake") { // only a fair scold answers a fake call
@@ -1952,7 +2289,7 @@ class HatchPetCard extends HTMLElement {
       case "stage_changed":
         if (m.stage === "baby") break; // hatching says hello
         say(m.stage === "adult"
-          ? `all grown up${m.upbringing ? `: ${m.upbringing}` : ""}!`
+          ? "all grown up! ♥" // the upbringing is on the status screen, not announced
           : `I'm a ${m.stage} now!`);
         this._animate(s, s.pet, "stretch", 1100);
         this._sparkle(s);
@@ -1981,14 +2318,13 @@ class HatchPetCard extends HTMLElement {
         break;
       case "fell_asleep":
         if (m.how === "collapsed") {
-          say("so... tired... zzz", 5000);
-          this._animate(s, s.pet, "sulk", 800);
+          say("so... sleepy... zzz", 5000);
         } else if (m.how === "house" || m.how === "lights") {
           say(pick(["good night...", "night night...", "sleep tight..."]), 4000);
         }
         break;
       case "good_morning":
-        say(pick(["good morning!", "morning!! you're up!", "hi! sleep well?"]));
+        say(pick(["morning!! you're up!", "morning! ♪"]));
         this._animate(s, s.pet, "stretch", 1100);
         break;
       case "sunset":
@@ -2001,14 +2337,14 @@ class HatchPetCard extends HTMLElement {
         break;
       case "watching":
         // A long title gets the short lines, so the bubble leaves the pet in view.
-        say(pick([`ooh, ${m.title}!`, `is this ${m.title}?`,
-          m.title.length <= 40 ? `${m.title}! I love this one` : `ooh, ${m.title}!`]));
+        const title = short(m.title);
+        say(pick([`ooh, ${title}!`, `is this ${title}?`, `${title}! I love this one`]));
         this._animate(s, s.pet, "perk", 320);
         break;
       case "listening":
         say(m.artist && Math.random() < 0.5
-          ? `♪ is this ${m.artist}? ♪`
-          : `♪ ${m.title} ♪`);
+          ? `♪ is this ${short(m.artist)}? ♪`
+          : `♪ ${short(m.title)} ♪`);
         break;
       case "news": { // virtual_pet.share_news: a passing moment, like a TV title
         const h = String(m.headline || "");
@@ -2057,7 +2393,7 @@ class HatchPetCard extends HTMLElement {
           warmer: hi ? [today ? `warmer today: ${hi}!` : `warmer tomorrow: ${hi}!`] : [today ? "warmer today!" : "warmer tomorrow!"],
           colder: hi ? [today ? `colder today, only ${hi}` : `colder tomorrow... ${hi}`] : [today ? "colder today..." : "colder tomorrow..."],
           rain: today ? ["rain later today...", "rain's coming later"] : ["rain tomorrow... blanket day?"],
-          sunny: today ? ["sunny today, finally!"] : ["sun tomorrow, finally!"],
+          sunny: today ? ["sunny today! yay"] : ["sun tomorrow! yay"],
         }[m.kind];
         if (!lines) break;
         say(pick(lines), 5000);
@@ -2069,6 +2405,61 @@ class HatchPetCard extends HTMLElement {
         this._sparkle(s);
         this._chirp(s, "trait");
         this._queue(s, pick(["my wish came true! thank you ♥", "yay, my wish! ♥", "best day ever! ♥"]));
+        break;
+      case "bond_up": { // only the person whose bond it is sees it
+        if (sharedScreen()) break; // nothing personal on a shared screen
+        if (m.user !== this._hass.user?.id) break;
+        this._sparkle(s);
+        this._chirp(s, "trait");
+        const game = GAMES.find((g) => g.key === m.favourite);
+        this._queue(s, game ? `${game.label} is our game now! ♥`
+          : m.nickname ? `can I call you ${m.nickname}? ♥`
+          : m.level >= BOND.max ? "you're my very best friend ♥"
+          : m.level === BOND.max - 1 ? "you make every day better ♥"
+          : m.level >= BOND.hearts ? "I'm always so happy when you're here ♥"
+          : pick(["I like you a lot, you know ♥", "we're getting close! ♥", "you're the best ♥"]), 5000);
+        break;
+      }
+      case "friend_home": { // a close friend's person entity came home
+        const me = this._hass.user?.id;
+        if (m.user === me && !sharedScreen()) {
+          if (!this._welcomeDue(s, new Date(m.at).getTime())) break;
+          this._queue(s, pick(["you're home!! ♥", "yay, you're back! ♥"]), 4500);
+          if (HOME_WEATHER[m.weather]) this._queue(s, HOME_WEATHER[m.weather], 4500);
+          const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+          if (!calm) this._animate(s, s.pet, "greethop", 1400);
+          s.visitedAt = 0; // look in again now: the pet may want to ask about your day
+          this._visit(s);
+          break;
+        }
+        const name = sharedScreen() ? null : this._personName(m.user);
+        this._queue(s, name ? pick([`${name}'s home!!`, `ooh, ${name} is back!`]) : "someone's home!! ♥", 4000);
+        this._animate(s, s.pet, "perk", 320);
+        break;
+      }
+      case "bond_record": { // only its person
+        if (sharedScreen()) break; // nothing personal on a shared screen
+        if (m.user !== this._hass.user?.id) break;
+        const game = GAMES.find((g) => g.key === m.game);
+        this._sparkle(s);
+        this._queue(s, `new best at ${game ? game.label : "a game"}! ${m.wins}/5 ♥`);
+        break;
+      }
+      case "tucked_in": {
+        if (sharedScreen()) break; // nothing personal on a shared screen
+        if (m.user !== this._hass.user?.id) break;
+        const bond = this._bond(s);
+        const name = short((bond?.level >= BOND.nickname && bond.nickname) ||
+          this._hass.user?.name?.trim().split(/\s+/)[0], 16);
+        // Instead of the plain goodnight just said, not after it.
+        s.bubble.textContent = withName("thank you for tucking me in ♥", name);
+        s.sayUntil = Date.now() + 4000;
+        break;
+      }
+      case "bond_favourite":
+        if (m.user === this._hass.user?.id && !sharedScreen()) {
+          this._queue(s, pick(["our favourite game! ♥", "I love playing this with you ♥"]));
+        }
         break;
       case "tv_off_late":
         say(pick(["*yawn* bedtime?", "all done? sleepy now..."]));
@@ -2110,6 +2501,11 @@ class HatchPetCard extends HTMLElement {
         s.screen.classList.add("breezy");
         clearTimeout(s.breezeTimer);
         s.breezeTimer = setTimeout(() => s.screen.classList.remove("breezy"), 2600);
+      }
+      const food = this._words(s).food;
+      if (entry.action === "feed" && food && Math.random() < 0.5) {
+        s.bubble.textContent = `yum, ${food}!`; // its own food, in its own words
+        s.sayUntil = Date.now() + 2500;
       }
       if (entry.action === "praise") {
         s.bubble.textContent = "♥";
@@ -2172,13 +2568,24 @@ class HatchPetCard extends HTMLElement {
     } catch (err) {
       // no storage: no best score to show
     }
+    // The viewer's own bond, in five hearts (a half heart a level).
+    const bond = this._bond(s);
+    const bondHearts = (level) => {
+      const img = (n) => `<img src="${BASE}/ui/stat_heart_${n}.png?v=${VERSION}" alt="">`;
+      let out = "";
+      for (let i = 0; i < BOND.max / 2; i++) {
+        const left = level - i * 2;
+        out += img(left >= 2 ? "full" : left === 1 ? "half" : "empty");
+      }
+      return `<span class="hearts" role="img" aria-label="bond level ${level} of ${BOND.max}">${out}</span>`;
+    };
     const notifying = (this._state(s, "sensor.life_stage")?.attributes.notify_users || [])
       .includes(this._hass.user?.id);
     const ic = (n) => pixelIcon(n, 18);
     const bar = (v) => v === null ? "–"
       : `<div class="bar" role="img" aria-label="${Math.round(v)} of 100"><div style="width:${v}%"></div></div>`;
     const lines = log.slice(0, 3).map((e) =>
-      `<div>${escape(e.action.replace("_", " "))}${e.by ? ` by ${escape(e.by)}` : ""} · ${timeAgo(e.at)}` +
+      `<div>${escape(e.action.replace("_", " "))}${e.by && !sharedScreen() ? ` by ${escape(e.by)}` : ""} · ${timeAgo(e.at)}` +
       `${e.result && e.result !== "ok" ? ` (${escape(e.result.replace("_", " "))}${e.score ? ` ${escape(e.score)}` : ""})` : ""}</div>`);
     const row = (iconName, label, value) =>
       `<div class="row">${iconName ? ic(iconName) : "<span></span>"}<span>${label}</span>${value}</div>`;
@@ -2190,7 +2597,8 @@ class HatchPetCard extends HTMLElement {
     // Today's wish comes first: it changes daily, the rest is there every day.
     const html = `
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
-        ? `<span>♥ came true!</span>` : `<span>♡ ${escape(WISHES[stageAttrs.wish.kind][1])}</span>`) : ""}
+        ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
+      ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
       ${row("icon_feed", "hunger", hearts(value("hunger")))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}
@@ -2198,24 +2606,46 @@ class HatchPetCard extends HTMLElement {
       ${row("stat_discipline", "discipline", bar(value("discipline")))}
       ${row(null, "weight", `<span>${weightLabel(value("weight"))}</span>`)}
       ${row("stat_care_miss", "misses", `<span>${value("care_misses") ?? "–"}</span>`)}
-      ${row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0} ignored</span>`)}
+      ${row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0}</span>`)}
       ${row(null, traits.length > cap ? "traits" : `traits ${traits.length}/${cap}`, `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
       ${bestCatch ? row(null, "best catch", `<span>${bestCatch}/${CATCH.rounds}</span>`) : ""}
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
-      ${row(null, "notify me", `<span><button class="bell" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
+      ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
+      ${bond ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!this._myDay}">${this._myDay ? "on" : "off"}</button></span>`) : ""}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
+      ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     this._journalLink(s, true);
-    s.status.querySelector(".bell:not(.sound)").addEventListener("click", (e) => {
+    s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      this._setMyDay(s, !this._myDay, e.currentTarget);
+    });
+    // No "notify me" row on a shared screen.
+    s.status.querySelector(".bell:not(.sound):not(.myday):not(.shared)")?.addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
       this._tapped(e.currentTarget);
       this._setNotify(s, !notifying, e.currentTarget);
+    });
+    s.status.querySelector(".bell.shared").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const on = !sharedScreen();
+      try {
+        localStorage.setItem(SHARED_KEY, on ? "on" : "off");
+      } catch (err) {
+        this._statusMessage(s, "This browser can't save that setting.");
+        return;
+      }
+      if (on) this._slides.forEach((slide) => { this._clearAsk(slide); slide.queue = []; });
+      this._statusMessage(s, on ? "Nothing personal on this screen now." : "This screen is personal again.");
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
     s.status.querySelector(".bell.sound").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -2236,11 +2666,31 @@ class HatchPetCard extends HTMLElement {
     });
   }
 
+  // "My day" is per person too: steps, stairs and sleep from their own phones.
+  async _setMyDay(s, enabled, button) {
+    const id = s.ids?.["sensor.life_stage"];
+    if (!id) return;
+    button.classList.add("pending");
+    button.setAttribute("aria-pressed", String(enabled));
+    button.textContent = enabled ? "on" : "off";
+    try {
+      await this._hass.callService("virtual_pet", "my_day", { entity_id: id, enabled });
+      this._myDay = enabled; // one switch per person, for every pet
+      this._statusMessage(s, enabled ? "I'll notice your good days! ♥" : "OK, I won't peek.");
+    } catch (err) {
+      button.setAttribute("aria-pressed", String(!enabled));
+      button.textContent = !enabled ? "on" : "off";
+      this._statusMessage(s, "That didn't work. Try again.");
+    } finally {
+      button.classList.remove("pending");
+    }
+  }
+
   // Phone notifications are per user: this only changes them for whoever is signed in.
   async _setNotify(s, enabled) {
     const id = s.ids?.["sensor.life_stage"];
     if (!id) return;
-    const button = s.status.querySelector(".bell:not(.sound)");
+    const button = s.status.querySelector(".bell:not(.sound):not(.myday):not(.shared)");
     if (button) {
       button.classList.add("pending");
       button.setAttribute("aria-pressed", String(enabled));
@@ -2417,6 +2867,7 @@ class HatchPetCard extends HTMLElement {
 
   _startGame(s, button) {
     this._tapped(button, s);
+    this._clearAsk(s); // a game takes the screen
     const energy = Number.parseFloat(this._state(s, "sensor.energy")?.state);
     const refusal = s.asleep ? REFUSALS.asleep : energy < 15 ? REFUSALS.too_tired : null;
     if (refusal) {
@@ -2815,15 +3266,9 @@ class HatchPetCard extends HTMLElement {
     s.sayUntil = Date.now() + 3500;
   }
 
-  // Thanks to whoever gave the most care in the recent log (first names only).
-  _thanks(s) {
-    const counts = {};
-    for (const e of this._state(s, "sensor.last_care")?.attributes.log || []) {
-      const name = e.by?.split(" ")[0];
-      if (name) counts[name] = (counts[name] || 0) + 1;
-    }
-    const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0];
-    return best ? `thank you for taking care of me, ${best} ♥` : "thank you for taking care of me ♥";
+  // Thanks to everyone: never ranking who did the most.
+  _thanks() {
+    return "thank you all for taking care of me ♥";
   }
 
   // The season's flyer: one, or a flock in a V, from one side.

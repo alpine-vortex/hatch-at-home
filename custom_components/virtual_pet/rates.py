@@ -265,6 +265,76 @@ HOME_FIRE_HAPPINESS = 1.0  # a lit fireplace (counts toward the cap)
 # the small happiness a granted wish gives).
 WISH_HAPPINESS = 8.0  # once, when the day's wish comes true
 WISH_SNACK_AFTER_HOUR = 12  # "a snack after lunch": local hour from which it counts
+WISH_SAY_HI_AFTER_HOUR = 12  # "come say hi this afternoon"
+WISH_FOR_CHANCE = 0.35  # a person's wish is aimed at a close friend
 DREAM_SEEDS_KEPT = 12  # the day's moments a dream can be about
 DREAM_SEED_HOURS = 30.0  # older seeds are forgotten
 DREAM_PLAIN_CHANCE = 0.5  # with nothing to dream about: a plain dream, or none
+
+# A bond with each person (HA user). Points never go down. A typical day (a
+# visit, a few care actions, a game) earns about 8.
+BOND_VISIT_POINTS = 2  # the first look of the day
+BOND_CARE_POINTS = 1
+BOND_GAME_POINTS = 2
+BOND_WISH_POINTS = 3  # granted the day's wish
+BOND_DAILY_LIMIT = 8  # care and games, per person per day
+# Points needed for levels 1-10: a week to level 5, about a month to level 10.
+BOND_LEVELS = (0, 4, 10, 20, 34, 52, 75, 105, 145, 200)
+BOND_NICKNAME_LEVEL = 4  # it picks a nickname for them
+BOND_FAVOURITE_LEVEL = 6  # it picks its favourite of their games
+BOND_FRIEND_LEVEL = 3  # close enough to cheer when they come home, or wish on them
+BOND_VISIT_EVERY_MINUTES = 60  # the card's visit call, per person (in memory)
+FRIEND_HOME_EVERY_MINUTES = 30  # the cheer when a friend arrives, per person
+TUCK_IN_EVENING_HOUR = 18  # lights out by hand from here (to 3 am) is tucking in
+TUCK_IN_THANKS_HOURS = (4.0, 18.0)  # "you tucked me in last night", this long after
+
+# "My day" (opt-in per person, wellbeing.py): what the pet notices, by bond level.
+MY_DAY_STEPS_LEVEL = 2
+MY_DAY_STEPS = 10000  # a milestone day
+MY_DAY_USUAL_LEVEL = 4
+MY_DAY_USUAL_DAYS = 14  # "usual": their median over this many days
+MY_DAY_USUAL_MIN_DAYS = 5  # fewer days than this: no "usual" yet
+MY_DAY_USUAL_MIN_STEPS = 1000  # a usual this low says nothing
+MY_DAY_MORE = 1.3  # "more than usual": this many times their usual
+MY_DAY_MORE_MIN_STEPS = 1500  # and at least this many steps more
+MY_DAY_ACTIVE_LEVEL = 5  # a bike ride, a run, lots of stairs
+MY_DAY_STAIRS = 10  # floors
+MY_DAY_BEST_LEVEL = 7
+MY_DAY_BEST_DAYS = 30  # "your most active day in weeks"
+MY_DAY_BEST_MIN_DAYS = 7
+MY_DAY_BEST_MIN_STEPS = 5000
+MY_DAY_WEATHER_WALK_STEPS = 5000  # out in the rain or snow, without a usual
+MY_DAY_SLEEP_LEVEL = 8
+MY_DAY_RESTED_HOURS = 7.0  # and at least their usual
+
+# Bond connections (people.py): what the pets know about each person, shared.
+NOTES_PER_VISIT = 2  # private lines said at one look; the rest wait
+LOOK_LINES = 3  # lines at one look, the card's own and the notes together
+PEOPLE_WEATHER_DAYS = 4  # days of the house's weather kept
+SEASON_TROPICS_LATITUDE = 23.5  # nearer the equator: no season talk
+ASK_LEVEL = 2  # questions ("how was your day?") from this bond level
+ASK_MORNING_FROM = 5  # "did you sleep well?" from this hour to noon
+ASK_LIKES_LEVEL = 3  # "what's your favourite weather?", then season
+ASK_LIKES_FROM, ASK_LIKES_UNTIL = 11, 16
+ASK_LIKES_TRIES = 2  # an unanswered one-time question: asked once more...
+ASK_LIKES_AGAIN_DAYS = 14  # ...this many days later, then never
+ASK_DAY_FROM = 16  # "how was your day?" on its rotation day
+ASK_DREAM_BEFORE_BED_MINUTES = 180  # "what should I dream about?"
+ASK_GUESS_FROM = 17  # "rain or sun tomorrow?"
+GUESS_FROM_HOUR = 18  # the guessed day is judged from here, or the day after
+JUST_HOME_HOURS = 2.0  # "how was your day?" after coming home, within this
+ZONE_REMEMBER_HOURS = 8.0  # "back from the gym?!" if they came home within this
+ZONE_LEVEL = 3
+HOME_COLD_C = 5.0  # coming home: "was it cold out there?"
+HOME_HOT_C = 28.0  # coming home: "you must be thirsty!"
+SENDOFF_LEVEL = 3
+SENDOFF_HOURS = (6, 12)  # mornings only
+SENDOFF_PER_WEEK = 3
+ALARM_LEVEL = 3
+ALARM_EVENING_FROM = 19
+ALARM_USUAL_MIN = 5  # alarms seen before there's a "usual"
+ALARM_KEPT = 10
+ALARM_EARLY_MINUTES = 45  # this much before their usual is early
+ALARM_EARLY_WITHOUT_USUAL = 5 * 60 + 30  # before 5:30
+UP_EARLY_FROM = 3  # "you're up before the sun!" from 3 am
+DREAM_PICK_HOURS = 16.0  # last night's dream picks: made within this before waking

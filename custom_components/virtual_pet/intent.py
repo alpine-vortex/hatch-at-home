@@ -8,6 +8,7 @@ assistant can be found.
 
 from __future__ import annotations
 
+import re
 from typing import override
 
 from homeassistant.components.homeassistant import async_should_expose
@@ -68,10 +69,37 @@ REFUSED = {
     "too_tired": "is too tired to play",
     "already_clean": "is already clean",
     "not_sick": "isn't sick",
-    "unfair": "wasn't misbehaving, and that hurt its feelings",
-    "spoiled": "was only whining for attention, and now it knows that works",
+    "unfair": "wasn't misbehaving, so it's a little puzzled",
+    "spoiled": "was only fussing for attention, but it loved the praise",
     "not_needed": "doesn't need that right now",
 }
+
+
+# What a voice would read out but shouldn't: hearts, notes, stars, weather symbols,
+# emoji, and the pet's own marks (*wiggle*, toasty~).
+MARKS = re.compile(r"[*~♪♥♡★☂☀❄\u2600-\u27bf\U0001f000-\U0001faff\ufe0f]")
+
+
+def spoken_status(
+    name: str, mood: str, reason: str, traits: list[str], nickname: str | None
+) -> str:
+    """ "Hi, sunbeam! Pip is cozy: toasty by the fire." The greeting first; the
+    pet's reason without the marks a voice would read out (*, ~, ♪), and left
+    out when it only repeats the mood ("at the sitter's: at the sitter's")."""
+    said = re.sub(r"\bz+\b", "", MARKS.sub("", reason), flags=re.IGNORECASE)
+    said = re.sub(r"\s+", " ", said).strip(" .")
+    speech = f"{name} is {mood}"
+    words = set(re.findall(r"[\w']+", said.casefold()))
+    mood_words = set(re.findall(r"[\w']+", mood.casefold()))
+    # Whole words: a reason that only repeats the mood ("at the sitter's") is left out.
+    if said and not words <= mood_words and not mood_words <= words:
+        end = "" if said.endswith(("!", "?", "…")) else "."
+        speech += f": {said}{end}"
+    else:
+        speech += "."
+    if traits:
+        speech += f" Traits: {', '.join(traits)}."
+    return f"Hi, {nickname}! {speech}" if nickname else speech
 
 
 async def async_setup_intents(hass: HomeAssistant) -> None:
@@ -150,12 +178,10 @@ class StatusIntent(intent.IntentHandler):
         response = intent_obj.create_response()
         response.response_type = intent.IntentResponseType.QUERY_ANSWER
         traits = [t.replace("_", " ") for t in state.traits]
-        # Most reasons end in their own punctuation ("play with me?").
-        end = "" if reason.endswith((".", "!", "?", "~", "…")) else "."
-        speech = f"{name} is {MOOD_WORDS[mood]}: {reason}{end}"
-        if traits:
-            speech += f" Traits: {', '.join(traits)}."
-        response.async_set_speech(speech)
+        level, nickname = pet.bond_for(intent_obj.context.user_id)
+        response.async_set_speech(
+            spoken_status(name, MOOD_WORDS[mood], reason, traits, nickname)
+        )
         response.async_set_speech_slots(
             {
                 "pet": name,
@@ -170,6 +196,9 @@ class StatusIntent(intent.IntentHandler):
                 "requests": model.requests(
                     state, dt_util.utcnow().timestamp(), pet.settings
                 ),
+                # The bond with whoever is asking (1-10), and what it calls them.
+                "bond": level or None,
+                "nickname": nickname,
             }
         )
         return response
@@ -198,13 +227,16 @@ class CareIntent(intent.IntentHandler):
         action = slots[SLOT_ACTION]["value"]
         name = pet_name(pet)
         if action == LIGHTS_OUT:
-            await pet.async_set_lights_out(True)
+            await pet.async_set_lights_out(True, intent_obj.context)
             result = model.OK
         else:
             result = await pet.async_action(action, intent_obj.context)
         response = intent_obj.create_response()
         if result == model.OK:
-            response.async_set_speech(f"{name} {DONE[action]}.")
+            nickname = pet.bond_for(intent_obj.context.user_id)[1]
+            # No thanks for a scold.
+            thanks = f" Thanks, {nickname}!" if nickname and action != "scold" else ""
+            response.async_set_speech(f"{name} {DONE[action]}.{thanks}")
         else:
             response.async_set_speech(f"{name} {REFUSED.get(result, 'did nothing')}.")
         response.async_set_speech_slots(

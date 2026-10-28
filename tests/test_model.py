@@ -975,7 +975,7 @@ def test_lights_flipped_on_and_off_while_away_change_nothing():
         ),
         (
             {"type": "stage_changed", "stage": "adult", "upbringing": "devoted"},
-            "Pip is all grown up: a devoted adult.",
+            "Pip is all grown up!",
         ),
         ({"type": "stage_changed", "stage": "child"}, None),
     ],
@@ -1419,3 +1419,114 @@ def test_a_save_from_before_check_ins_loads():
         data.pop(key)
     pet = model.PetState.from_dict(data)
     assert pet.wish is None and pet.dream_seeds == [] and pet.dream is None
+
+
+# --- Bonds -------------------------------------------------------------------
+
+
+def test_bond_levels_are_slow_at_the_top():
+    assert model.bond_level(0) == 1
+    assert model.bond_level(R.BOND_LEVELS[1]) == 2
+    assert model.bond_level(10**6) == 10
+    steps = [b - a for a, b in zip(R.BOND_LEVELS, R.BOND_LEVELS[1:], strict=False)]
+    assert steps == sorted(steps)
+
+
+def test_care_and_games_have_a_daily_limit_and_a_visit_counts_once():
+    pet = hatched(at(9))
+    rng = random.Random(1)
+    for _ in range(20):
+        model.add_bond(pet, "u1", "care", "2026-10-01", rng)
+    model.add_bond(pet, "u1", "visit", "2026-10-01", rng)
+    model.add_bond(pet, "u1", "visit", "2026-10-01", rng)
+    assert pet.bonds["u1"]["points"] == R.BOND_DAILY_LIMIT + R.BOND_VISIT_POINTS
+    # A new day, a new allowance; points never go down.
+    model.add_bond(pet, "u1", "care", "2026-10-02", rng)
+    assert pet.bonds["u1"]["points"] == R.BOND_DAILY_LIMIT + R.BOND_VISIT_POINTS + 1
+
+
+def test_a_close_bond_brings_a_nickname_then_a_favourite_game():
+    pet = hatched(at(9))
+    rng = random.Random(1)
+    pet.bonds["u1"] = {"points": R.BOND_LEVELS[3] - 1, "games": {"higher_lower": 3}}
+    pet.bonds["u2"] = {"points": 0, "nickname": "sunbeam"}
+    events = model.add_bond(pet, "u1", "wish", "2026-10-01", rng)
+    assert events[0]["level"] == R.BOND_NICKNAME_LEVEL
+    nickname = pet.bonds["u1"]["nickname"]
+    assert nickname in model.NICKNAMES and nickname != "sunbeam"  # not someone else's
+    pet.bonds["u1"]["points"] = R.BOND_LEVELS[R.BOND_FAVOURITE_LEVEL - 1] - 1
+    events = model.add_bond(pet, "u1", "game", "2026-10-02", rng, "left_right")
+    assert events[0]["favourite"] == "higher_lower"  # the one they play most
+    assert pet.bonds["u1"]["nickname"] == nickname  # kept
+    pet.happiness = 50.0
+    assert model.favourite_game(pet, "u2", "higher_lower", "2026-10-02") == []
+    assert types(model.favourite_game(pet, "u1", "higher_lower", "2026-10-02")) == [
+        "bond_favourite"
+    ]
+    assert (
+        model.favourite_game(pet, "u1", "higher_lower", "2026-10-02") == []
+    )  # once a day
+    assert pet.happiness == 50.0  # flavour only: a bond never changes the stats
+
+
+def test_bonds_carry_into_the_next_generation_and_survive_a_bad_save():
+    pet = hatched(at(9))
+    pet.age_hours = 10_000.0
+    pet.bonds = {"u1": {"points": 30, "nickname": "bean"}}
+    egg, _ = model.lay_egg(pet, at(10), random.Random(1))
+    assert egg.bonds == pet.bonds and egg.bonds is not pet.bonds
+    data = pet.to_dict()
+    data["bonds"] = {"u1": {"points": "12"}, "u2": "junk"}
+    assert model.PetState.from_dict(data).bonds == {"u1": {"points": 12}}
+
+
+def test_a_wish_may_be_aimed_at_a_close_friend():
+    pet = hatched(at(9))
+    model.pick_wish(pet, "2026-10-01", Lucky(1), {"play"}, {"u1": "Sam"})
+    assert pet.wish == {
+        "kind": "play",
+        "day": "2026-10-01",
+        "granted": False,
+        "for": "u1",
+        "for_name": "Sam",
+    }
+    # Anyone may grant it.
+    assert model.grant_wish(pet, "play", at(10), "2026-10-01", 10, "Alex")
+    # Not one the house grants, nor without friends.
+    model.pick_wish(pet, "2026-10-02", Lucky(1), {"tuck_in"}, {"u1": "Sam"})
+    assert "for" not in pet.wish
+    model.pick_wish(pet, "2026-10-03", Lucky(1), {"play"}, {})
+    assert "for" not in pet.wish
+
+
+def test_friendship_days_fall_monthly_and_on_short_months():
+    assert model.friends_for("2026-09-28", "2026-10-28") == 1
+    assert model.friends_for("2026-09-28", "2026-10-27") is None
+    assert model.friends_for("2026-10-01", "2026-10-28") is None  # not a month yet
+    assert model.friends_for("2026-01-31", "2026-02-28") == 1
+    assert model.friends_for("2025-10-28", "2026-10-28") == 12
+    assert model.friends_for(None, "2026-10-28") is None
+
+
+def test_a_game_record_is_each_persons_own():
+    pet = hatched(at(9))
+    assert model.game_record(pet, "u1", "left_right", 3) == []  # sets the mark
+    assert model.game_record(pet, "u1", "left_right", 3) == []
+    assert types(model.game_record(pet, "u1", "left_right", 4)) == ["bond_record"]
+    assert model.game_record(pet, "u2", "left_right", 2) == []  # their first
+    assert pet.bonds["u1"]["best"] == {"left_right": 4}
+
+
+def test_last_nights_dream_pick_comes_true():
+    pet = hatched(at(9))
+    model.dream_seed(pet, {"kind": "game"}, at(20))
+    model.pick_dream(pet, "u1", "sea", at(21))
+    model.pick_dream(pet, "u1", "stars", at(21, 30))  # their latest choice
+    model.dream_on_waking(pet, at(7, day=2), "2026-10-02", random.Random(1))
+    assert pet.dream == {
+        "kind": "picked",
+        "pick": "stars",
+        "user": "u1",
+        "day": "2026-10-02",
+    }
+    assert pet.dream_picks == [] and pet.dream_seeds == []

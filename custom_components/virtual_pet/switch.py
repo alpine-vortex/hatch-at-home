@@ -32,7 +32,7 @@ class LightsOutSwitch(PetEntity, SwitchEntity):
         return self.pet.lights_out
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        await self.coordinator.async_set_lights_out(True)
+        await self.coordinator.async_set_lights_out(True, self._context)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self.coordinator.async_set_lights_out(False)

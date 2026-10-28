@@ -1,4 +1,4 @@
-# Handoff (2026-10-27, fifth session)
+# Handoff (2026-10-28, sixth session)
 
 Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's branch
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
@@ -23,6 +23,46 @@ tool's `list`, then `read` it): the entity mapping and options for their house, 
 house check of 2026-10-27, BirdNET notes, the file-share host and Sol's session ID.
 History was rewritten once to remove them. Scan anything from Sol or the owner for such
 details before committing it.
+
+## Start here (sixth session, 2026-10-28, before a context clear)
+
+**In flight: PR #25** (branch `ccr-a828d8c1-uv2so3` → `main`, version 0.31.0): the
+bond with each person, bond connections (twelve features), and phase 1 of the voices
+plan (every line reviewed). This session is subscribed to it; CI was running when
+the context was cleared. The owner has said (2026-10-28): **open, push and merge the
+PR when ready, and start on the next work**. So:
+
+1. When CI is green (tests, hassfest, hacs, card), merge #25 (a merge commit), then
+   release 0.31.0 (Release workflow on `main`, see "How to"). If CI is red, fix it on
+   the branch first. Unsubscribe from #25 once merged.
+2. Start **phase 2 of `docs/plan-2026-10-28-voices-and-lines.md`** on the designated
+   branch restarted from `main` (`git fetch origin main && git checkout -B
+   ccr-a828d8c1-uv2so3 origin/main`, then a force-with-lease push: it only held merged
+   history). Phase 2: A1 (each creature's sound, `_speak`, once per burst), A2
+   (typing and Animalese babble, with the second audit's row 1 and 7 fixes), A4 (the
+   favourite snack). Read the plan's draft-3 section "The second audit" first: it
+   overrides part A where they differ.
+3. The way the owner wants work done: **a full plan, an adversarial audit by a fresh
+   subagent, revise, then build**; after building, **another audit of the work**, fix,
+   test (`scripts/test`), check the card (`scripts/card-check`, now 68 checks), send
+   screenshots, then PR. Each phase is its own PR.
+4. Then phases 3 (catchphrase, birthdays), 4 (photo), 5 (baby talk), 6 (moths, its
+   own plan and audit). After those: personality types (a new plan). Gifts and
+   neighbours talking are noted in `docs/plan-2026-10-28-daily-checkins.md`.
+
+The plans to read: `docs/plan-2026-10-28-daily-checkins.md` (item 3 and its passes),
+`docs/plan-2026-10-28-bond-connections.md` (built; its audits), and
+`docs/plan-2026-10-28-voices-and-lines.md` (draft 3, phase 1 built). The owner's
+taste so far: Animal Crossing is the touchstone; flavour, never gameplay, for bonds;
+positive or quiet, never guilt, nagging or ranking people; private things only to
+their person.
+
+**Dev pets drift.** After many `card-check` runs the dev pets in `dev/config` get
+sick (weight 0, recent misses), and checks like idle life fail. Until the dev utility
+(open item 0) exists: stop HA, then in `dev/config/.storage/virtual_pet.0*` set
+`sick` false, `recent_misses` [], `health` 100, `energy` 90, `hunger` 80, `weight` 50,
+`call` null, `latched` [], and start it again. An old HA may still be running from an
+earlier session: `scripts/develop` then exits with "stop the existing instance".
 
 ## Where things stand
 
@@ -126,9 +166,61 @@ details before committing it.
   note, dream, wish, each once a day per device), `_wishMention`, the wish row, the
   `wish_granted` moment. The wish row leads the status screen (0.29.0; lower down it
   sat below the fold). `card-check` screenshots the three first-look lines and the
-  status screen. Next in the plan: the bond with each person (item 3; the owner
-  confirmed every player has their own HA login), then finds and visitors per world,
-  then pets visiting each other.
+  status screen.
+- **Daily check-ins, the bond with each person** (item 3; the owner confirmed every
+  player has their own HA login; 0.31.0, not yet released): state `bonds` (HA user ID
+  → points, today's count, visited, games per kind, nickname, favourite), from
+  `model.add_bond` (visit, care, game, wish; care and games share
+  `BOND_DAILY_LIMIT`), `bond_level` from `BOND_LEVELS`, a nickname at level 4 and the
+  favourite of their games at 6 (`favourite_game`: extra happiness). The coordinator
+  credits the person behind a button or `play_game` (`_person`: system users and
+  automations get none), and the wish to whoever granted it (`_actor`). New service
+  `virtual_pet.visit` (the card calls it on the pet on show, hourly; the server also
+  limits it hourly per person, in memory) counts the day's visit and grants the new
+  `say_hi` wish after noon. Life stage `bonds` (unrecorded): only levels, nicknames and
+  favourites; the card shows only the viewer's (`_bond`): warmer hellos at 2, a hop
+  (`greethop`, not `hop`, which the excited bounce clears) at 3, the nickname at 4,
+  hearts at 8, a "you two" row of five hearts on the status screen, and `bond_up` /
+  `bond_favourite` moments said only to their `user`. Diagnostics redact `bonds` and
+  moments' `user`, and add anonymous `bond_points`. Bonds carry into the next
+  generation (my call). Second pass (owner: flavour only, never stats): the favourite
+  game no longer adds happiness; `bond_for` gives (level, nickname); `_notify` sends
+  each nickname group its own text (`notify.to_friend`); Assist's status and care
+  replies add "Hi, sunbeam!" / "Thanks, sunbeam!" and status slots `bond`, `nickname`;
+  `friend_home` moments from person entities coming home (`person_moved` →
+  `_arrivals` → `_friends_home` in `_sense_home`, level `BOND_FRIEND_LEVEL`, once per
+  `FRIEND_HOME_EVERY_MINUTES` per person); aimed wishes (`pick_wish` `friends`, wish
+  `for` and `for_name`, `WISH_FOR_CHANCE`), drawn by the card's `_wishLine`. Third
+  pass: `virtual_pet.visit` now answers with `notes` for the caller only
+  (`_notes`: `friends_for` from bond `since`, `tucked_in` from `tucked_at`, and
+  "my day" from `wellbeing.notice`, each once a day via bond `noted`); new service
+  `virtual_pet.my_day` (bond `my_day`); `wellbeing.py` finds each person's phone
+  sensors through mobile_app's `user_id`, reads today and their 14-day median from
+  recorder statistics (hourly `change`), and keeps bike rides and runs seen today in
+  memory (`_moved`); `model.game_record` (bond `best`, `bond_record` moment); lights
+  out by a person in the evening is `tucked_in` (switch, Assist and the phone button
+  pass their context). Card: `_note`, `_maybeAskDay` / `_askDay` (a queued line can
+  carry `then`), a "my day" switch on the status screen. Unverified: real phones'
+  sensors (the companion docs' names are used: `steps`, `floors_ascended`,
+  `activity`, `detected_activity`, `health_connect_daily_steps`,
+  `health_connect_daily_floors`, `health_connect_sleep_duration`).
+  Bond connections (`docs/plan-2026-10-28-bond-connections.md`, all twelve, audited
+  by a subagent and revised before building): `people.py` is a store shared by all
+  pets (`hass.data[DOMAIN]["people"]`, `virtual_pet.people`) for what belongs to the
+  person, not the pet: likes, `asked` (a morning and a later slot a day), `noted`
+  (person lines, once by whichever pet they look at first), `zone`, `arrived`,
+  `sendoffs`, `alarms`, `guess`, `my_day`, and the house's `weather` by day.
+  `hass.data[DOMAIN]["pets"]` lists the loaded pets (`_closest_pet` sends the
+  send-off). `visit` answers `{notes (≤ NOTES_PER_VISIT, best first), ask}`;
+  `choose_question` picks the question (rotation by date for the later slot);
+  answers come by the websocket command `virtual_pet/answer` (no bus event). Calls
+  are `time-sensitive` on phones, send-offs `passive`; focus/DND are not read.
+  `model.pick_dream` / `dream_on_waking` make a picked dream; diagnostics redact its
+  `user`. A code audit before the PR found 17 problems, all fixed but one (new person
+  entities and phone sensors are noticed only after a reload); see the plan's last
+  section. `card-check` (now 62 checks) covers the visit, a close bond's
+  greeting, the status row and the level-up line. Next in the plan: finds and
+  visitors per world, then pets visiting each other.
 - **Thanksgiving** (owner, 2026-10-28: "must do", the same all-out treatment as
   Halloween; tududi task due 20 November). Built on 2026-10-28, released in 0.30.0:
   `SEASONS` grew general fields (documented above the list: `corner`, `sweet`, `flyer`
@@ -204,14 +296,21 @@ details before committing it.
 - **Adults** exist for every creature (the last four arrived in 0.21.0). Long adults
   are drawn back up with `species.json` `"scale": {"adult": …}` (1.05–1.2; the bat
   needs none).
-- **Tests:** 273, run with `scripts/test` (ruff, format check, pytest).
+- **Tests:** 368, run with `scripts/test` (ruff, format check, pytest).
   `tests/conftest.py` seeds the coordinator's rng (`PET_SEED=n` picks another).
-  `scripts/card-check` (Playwright, 32 checks) drives the card against
+  `scripts/card-check` (Playwright, 62 checks) drives the card against
   `scripts/develop`; it onboards a fresh instance and creates pets by itself.
 - **CI:** `.github/workflows/validate.yml` (HACS action, hassfest, tests) is green.
   License MIT; Tiny5 keeps its OFL.
 
 ## Open items, in priority order
+
+0. **Dev utility (owner, 2026-10-28, to do later):** a way to restore a test pet to
+   full health and/or reset it to defaults. The dev pets in `dev/config` drift after
+   many `card-check` runs (energy, weight, recent misses: sickness by neglect), which
+   breaks checks like idle life; today that means stopping HA and editing
+   `.storage/virtual_pet.*` by hand. A debug service (admin, like `fast_forward`) or a
+   `scripts/` helper.
 
 1. **Assist on the owner's HA:** ask them to try it (an LLM agent, and the sentences
    file) and report what it says; tune the wording from that.

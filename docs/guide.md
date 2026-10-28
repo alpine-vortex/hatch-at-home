@@ -97,9 +97,11 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 - **Every day** there's something new when you look in:
   - **A wish of the day**, picked when it wakes up, only from what your house can grant: play
     a game together, a snack after lunch, a bubble bath, "good job!", being tucked in
-    tonight, watching the sunset together (someone home at sunset), and, when you have
+    tonight, watching the sunset together (someone home at sunset), someone coming to
+    say hi in the afternoon (opening the card after noon), and, when you have
     them mapped, some music, TV together, a chore treat, or seeing the rain on a day the
-    forecast says rain. It's on the status screen and the pet mentions it now and then;
+    forecast says rain. It's on the status screen and the pet mentions it once more later
+    (never again after bedtime, when it can't come true);
     granting it brings a sparkle and a little happiness. A missed wish costs nothing:
     tomorrow brings a new one.
   - **A dream**: it may dream about something from the day before (a show it watched,
@@ -107,6 +109,79 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     looks in that morning.
   - **While you were out**: open the card after a few hours away and it tells you what
     happened ("while you were out, I napped, watched the rain and played a game!").
+- **A bond with each person.** The pet gets to know everyone who signs in to Home
+  Assistant with their own login, separately (a shared wall-tablet login counts as one
+  person). Looking in once a day, caring for it, playing games and granting its wish
+  bring you closer; care and games count up to a daily limit, so there's no need to
+  rush, and a bond never goes down, even after days away. Ten levels, slow near the
+  top (about a week to level 5, a month or so to 10). Closer, it greets you more
+  warmly (level 2), hops when you look in (3), picks a nickname for you ("hi,
+  sunbeam!", 4), has a favourite game with you and says so when you play it (6), and
+  floats hearts just for you (8). Once it has a nickname for you, your phone
+  notifications and Assist use it too ("Pip is hungry, sunbeam!", "Thanks,
+  sunbeam!"). From level 3 it cheers when you come home ("Sam's home!!", and "welcome
+  home!" when you next look in; this needs your person entity linked to your login),
+  and some days its wish is for you ("I hope Sam plays a game with me today!"; anyone
+  can still grant it). It also:
+  - remembers when you met, and says so each month ("we've been friends for a
+    month! ♥");
+  - cheers when you beat your own best at a game, which it keeps for each person;
+  - says goodnight when you tuck it in in the evening (lights out by hand from 6 pm),
+    and thanks you the next morning;
+  - asks you things now and then (from level 2), at most one question in the morning
+    and one later, per person, however many pets and screens you have: "did you
+    sleep well?", "how was your day?" (always after you come back from work or
+    school), "what should I dream about tonight?" (and the next morning it dreamed
+    it: "I dreamed about the sea, like you said! ♥"), "rain or sun tomorrow?" (judged
+    the next evening, no score), and once each "what's your favourite weather?" and
+    "...season?". It remembers favourites, tonight's dream and your guess; the rest
+    of your answers stay on your screen;
+  - remembers your favourites: "it's snowing, your favourite!! ❄", "it's autumn, your
+    favourite! ♥" once a season (no season talk in the tropics), "Thanksgiving in
+    your favourite season! ♥";
+  - says what it's like out there when you come home ("it's wet out there! come
+    get cozy ☂", "brr, was it cold out there?");
+  - greets you sleepily if you look in before sunrise ("mmh... you're up before the
+    sun... zzz ♥").
+
+  At most two of these lines at one look; the rest wait for your next one.
+
+  A bond never changes the pet's stats: it's flavour. The status screen shows "you
+  two" in five hearts.
+- **My day** (opt in on the status screen, for yourself only): the pet notices your
+  good days from the phones you signed in to the Home Assistant app with. It only
+  ever says something when a day stands out for the better, and only to you, at most
+  once a day; never a quiet day, a short night, a heart rate or a weight. The closer
+  your bond, the more it notices: a 10,000-step day (level 2), more steps than your
+  own usual by this time of day (4), a bike ride, a run or lots of stairs (5), your
+  most active day in weeks (7), and a good night's sleep, at least your usual (8).
+  It reads the companion app's steps, floors and activity sensors (iOS) and Health
+  Connect's daily steps, floors and sleep (Android); Android's plain step counter
+  works through Home Assistant's long-term statistics. "Usual" is your own median
+  over the last two weeks, from that history; the pet stores none of it. With "my
+  day" on, it also notices:
+  - a walk in the rain or snow ("you walked in the rain?! so brave!", level 4);
+  - coming back from a zone you made, when its name has gym, work, office, school,
+    college, university or park in it ("back from the gym?! so strong!", level 3;
+    other zones are never named);
+  - an early alarm tomorrow on an Android phone (the Next alarm sensor, which is
+    off by default in the app): "early start tomorrow? sleep well ♥", from 19:00,
+    when it's at least 45 minutes before your usual (level 3);
+  - a send-off on your phone on a notable morning as you leave ("Pip says: rain
+    today, take an umbrella, sunbeam ☂"), with "notify me" on, at most three times a
+    week, from the pet you're closest to, and silent (level 3).
+
+  On a wall tablet or any screen the whole family looks at but one person is signed
+  in to, turn on "shared screen" on its status page (it's saved in that browser
+  only): it shows nothing personal there, no names, notes, questions, bond or "my
+  day", and doesn't count as anyone's visit.
+
+  "My day" is one switch per person, for every pet. Phone focus modes and Do Not
+  Disturb are left to your phone: the pet's calls and sickness are time-sensitive
+  (they may come through a focus you allow), everything else waits like any other
+  notification. Each person only ever sees their own bond. Care through Assist counts for
+  whoever is signed in; automations build no bond. A new generation keeps the household's bonds. (The card tells the pet who
+  looked in with `virtual_pet.visit`, counted at most hourly.)
 - **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
   off): from 20 to 31 October it's **Halloween**. Bunting hangs across the scene, a
   jack-o'-lantern with a new carved face each day sits by the pet and glows at night (it
@@ -127,8 +202,8 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   over in a V. The costume of the day is a pilgrim hat, a leaf crown, a feather band or
   an acorn cap; a turkey wanders by now and then ("gobble?!"); snacks are pumpkin pie;
   the countdown runs ("3 sleeps till Thanksgiving!"); and on the day the first visit
-  gets "happy thanksgiving!", a plate, and a thank-you to whoever has looked after the
-  pet most lately. All cosmetic.
+  gets "happy Thanksgiving! ♥", a plate, and a thank-you to everyone who looks after
+  it ("thank you all for taking care of me ♥"). All cosmetic.
 - Tap the screen for the status page: hearts and meters, weight, care misses and
   ignored whines, traits (n/4) and the one it's learning next, upbringing, the next
   egg, the notify-me and sounds switches, recent care, and a link to the journal. Tap
@@ -141,7 +216,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   from automations and voice too. A button glows when the pet needs it, for example
   Feed when it's hungry. Medicine is greyed out unless it's sick.
 - The pet reacts to what happens to it, even when nobody pressed anything: a missed
-  call ("...nobody came"), hatching ("hello!"), growing up, a new trait, a good
+  call (gently: "...oh, there you are ♥"), hatching ("hello!"), growing up, a new trait, a good
   morning, a fair scolding. In its child stage, each creature also has its own
   reactions, like the squirrel stuffing its cheeks with a snack or the kitten's
   zoomies after play.
@@ -423,7 +498,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   only changes this browser, and the pet stays quiet while it sleeps and from 21:00
   to 08:00.
 - **A welcome for every new pet.** Adding a pet through the integration tells the
-  whole house: "Pip has been welcomed into the home." It goes to every phone with
+  whole house: "Pip, a new virtual pet, just moved in! Say hi ♥" It goes to every phone with
   the Home Assistant app, whether or not anyone tapped "notify me", and to the
   notifications in the sidebar. A new generation laid as an egg isn't a new pet,
   and restarts never welcome again.
@@ -509,7 +584,17 @@ names are included.
 `virtual_pet_tv_off_late`, `virtual_pet_news` (with `headline`, and `topic` if given),
 `virtual_pet_first_snow`, `virtual_pet_first_frost`,
 `virtual_pet_trait_learned` and `virtual_pet_trait_deepened` (with `trait`, `level`), `virtual_pet_egg_laid` (with `generation`,
-`parent_species`, `inherited_trait`), `virtual_pet_welcomed` (once, when the pet is added).
+`parent_species`, `inherited_trait`), `virtual_pet_welcomed` (once, when the pet is added),
+`virtual_pet_wish_made` and `virtual_pet_wish_granted` (with `kind`),
+`virtual_pet_bond_up` (with `user`, the HA user ID, `level`, and `nickname` or
+`favourite` when the level brings one), `virtual_pet_bond_favourite` (with `user` and
+`game`), `virtual_pet_friend_home` (with `user`: a close friend came home),
+`virtual_pet_bond_record` (with `user`, `game`, `wins`: a new personal best),
+`virtual_pet_tucked_in` (with `user`). What it notices about someone's day, where
+they've been, their alarm and their answers are never an event: they go only to
+that person, in `virtual_pet.visit`'s response, and answers come in through the
+websocket command `virtual_pet/answer`, which (unlike a service call) puts nothing
+on the event bus.
 
 Events fired during a fast-forward carry `simulated: true`.
 

@@ -256,6 +256,297 @@ async function main() {
   check("greets the viewer by first name", greeting.includes(USER.name), greeting);
   await shot("04a-greeting");
 
+  // The bond: looking in starts one for the viewer (virtual_pet.visit).
+  const me = await evaluate(() => document.querySelector("home-assistant").hass.user.id);
+  const bondOf = () => evaluate(({ e, me }) =>
+    document.querySelector("home-assistant").hass.states[e].attributes.bonds?.[me], { e: pet["sensor.life_stage"], me });
+  let bond = null;
+  for (let i = 0; i < 20 && !bond; i++) {
+    await page.waitForTimeout(500);
+    bond = await bondOf();
+  }
+  check("looking in starts a bond", bond?.level >= 1, JSON.stringify(bond));
+  // A close bond: the nickname, a hop and hearts, and five hearts on the status screen.
+  await inject(pet["sensor.life_stage"], { attributes: { bonds: { [me]: { level: 8, nickname: "sunbeam" } } } });
+  await evaluate(() => Object.keys(localStorage)
+    .filter((k) => k.startsWith("hatch-greet-")).forEach((k) => localStorage.removeItem(k)));
+  await calm();
+  await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    window.__greetHop = false; // the hop is short: watch for it rather than poll
+    new MutationObserver(() => {
+      if (s.pet.classList.contains("greethop")) window.__greetHop = true;
+    }).observe(s.pet, { attributes: true, attributeFilter: ["class"] });
+    s.greeted = false;
+    s.sayUntil = 0;
+  });
+  let close = {};
+  for (let i = 0; i < 20 && !close.hearts; i++) {
+    await page.waitForTimeout(150);
+    close = await cur().evaluate((slide) => ({
+      hearts: slide.querySelectorAll(".bondhearts img").length,
+      hop: window.__greetHop,
+      said: slide.querySelector(".bubble").textContent,
+    }));
+  }
+  check("a close bond greets with a hop and hearts", close.hearts === 4 && close.hop &&
+    (close.said.includes("sunbeam") || close.said.includes(USER.name)), JSON.stringify(close));
+  await shot("04b-close-bond");
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(500);
+  const bondRow = cur().locator(".status .row", { hasText: "you two" });
+  check("the status screen shows the viewer's bond",
+    await bondRow.count() === 1 && await bondRow.locator(".hearts").getAttribute("aria-label") === "bond level 8 of 10",
+    await bondRow.count() ? await bondRow.innerText() : "no row");
+  await shot("04c-bond-status");
+  // "My day" is each person's own switch.
+  await cur().locator(".bell.myday").click();
+  await page.waitForTimeout(1200);
+  const myDay = await page.locator("hatch-pet-card").evaluate((el) => el._myDay);
+  // Theirs alone: never on the life stage sensor every user can read.
+  check("my day turns on for this person, privately",
+    myDay === true && !("my_day" in ((await bondOf()) || {})));
+  await cur().locator(".bell.myday").click(); // off again
+  await page.waitForTimeout(800);
+  // A shared screen shows nothing personal: no bond row, no "my day", no visit,
+  // a greeting without a name.
+  await cur().locator(".bell.shared").click();
+  await page.waitForTimeout(400);
+  const sharedView = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    let visited = false;
+    const real = el._hass.callService.bind(el._hass);
+    el._hass.callService = (d, svc, ...rest) => { if (svc === "visit") visited = true; return real(d, svc, ...rest); };
+    s.visitedAt = 0;
+    el._visit(s);
+    el._hass.callService = real;
+    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-greet-")) localStorage.removeItem(k);
+    s.greeted = false; s.sayUntil = 0;
+    const free = el._free;
+    el._free = () => true;
+    el._greet(s);
+    el._free = free;
+    const status = s.status.innerText;
+    return { visited, said: s.bubble.textContent, bondRow: /you two|my day/.test(status) };
+  });
+  // The status screen still works with it on (no "notify me" row to wire up).
+  const sharedStatus = await cur().evaluate((sl) => sl.querySelector(".screen").classList.contains("show-status") &&
+    !!sl.querySelector(".bell.shared") && !/notify me/.test(sl.querySelector(".status").innerText));
+  await cur().locator(".bell.shared").click(); // personal again
+  await page.waitForTimeout(400);
+  // On a shared screen the bond's moments say nothing personal either.
+  const sharedMoments = await page.locator("hatch-pet-card").evaluate((el, me) => {
+    localStorage.setItem("hatch-shared-screen", "on");
+    const s = el._slides[el._index];
+    s.queue = [];
+    const before = s.bubble.textContent;
+    for (const type of ["bond_up", "bond_record", "tucked_in", "bond_favourite"]) {
+      el._moment(s, { type, user: me, level: 4, nickname: "sunbeam", game: "left_right", wins: 4, at: type });
+    }
+    el._moment(s, { type: "friend_home", user: "someone-else", at: new Date().toISOString() });
+    const out = { queued: s.queue.map((q) => q.text), bubble: s.bubble.textContent, before };
+    s.queue = [];
+    localStorage.setItem("hatch-shared-screen", "off");
+    return out;
+  }, me);
+  check("a shared screen's moments name nobody", sharedMoments.queued.join() === "someone's home!! ♥" &&
+    sharedMoments.bubble === sharedMoments.before, JSON.stringify(sharedMoments));
+  check("a shared screen shows nothing personal", sharedStatus && !sharedView.visited && !sharedView.bondRow &&
+    !sharedView.said.includes(USER.name) && !sharedView.said.includes("sunbeam"), JSON.stringify(sharedView));
+  // The server's update replaced the close bond injected above: inject it again.
+  await inject(pet["sensor.life_stage"], { attributes: { bonds: { [me]: { level: 8, nickname: "sunbeam" } } } });
+  await page.waitForTimeout(300);
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(300);
+  // A level-up is said only to the person whose bond grew.
+  const levelUp = (user) => page.locator("hatch-pet-card").evaluate((el, user) => {
+    const s = el._slides[el._index];
+    s.queue = [];
+    s.sayUntil = 0;
+    el._moment(s, { type: "bond_up", user, level: 4, nickname: "sunbeam" });
+    return s.queue.map((q) => q.text);
+  }, user);
+  const mine = await levelUp(me);
+  const theirs = await levelUp("someone-else");
+  check("a bond level-up is said only to its person",
+    mine[0] === "can I call you sunbeam? ♥" && theirs.length === 0, `${mine} / ${theirs}`);
+  // A wish aimed at a close friend: spoken to them, about them to anyone else.
+  const aimed = await page.locator("hatch-pet-card").evaluate((el, me) => {
+    const s = el._slides[el._index];
+    const toMe = el._wishLine({ kind: "play", for: me, for_name: "Dev" }, s);
+    const ofThem = el._wishLine({ kind: "play", for: "someone-else", for_name: "Sam" }, s);
+    return [toMe[0], toMe[1], ofThem[0], ofThem[1]];
+  }, me);
+  check("a wish can be aimed at a close friend", aimed.join(" | ") ===
+    "will you play a game with me today, sunbeam? | play a game with you | " +
+    "I hope Sam plays a game with me today! | play a game with Sam", aimed.join(" | "));
+  // A question gives way to a game.
+  const gaveWay = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    el._ask(s, "how_day");
+    const before = !!s.screen.querySelector(".askday");
+    el._clearAsk(s); // what starting a game does
+    return before && !s.screen.querySelector(".askday") && !s.asking;
+  });
+  check("a question gives way to a game", gaveWay);
+  // Screen readers hear plain words: no hearts or notes; a bare heart is "thank you!".
+  const heard = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const out = [];
+    for (const line of ["you're the best ♥", "♥", "♪ la la la ♪"]) {
+      s.sayUntil = Date.now() + 3000;
+      s.bubble.textContent = line;
+      await new Promise((r) => setTimeout(r, 50));
+      out.push(s.live.textContent);
+    }
+    return out;
+  });
+  check("screen readers hear plain words", heard.join("|") === "you're the best|thank you!|la la la", heard.join("|"));
+  // A long title is cut to fit.
+  const cut = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    el._moment(s, { type: "watching", title: "The Great British Bake Off: Christmas Special", at: new Date().toISOString() });
+    return s.bubble.textContent;
+  });
+  check("long titles are cut to fit the bubble", cut.length <= 48 && cut.includes("…"), `${cut} (${cut.length})`);
+  // A close friend coming home: "you're home!!" to them, by name to anyone else.
+  await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
+  await evaluate(() => document.querySelector("home-assistant").hass.callApi("POST", "states/person.sam_check",
+    { state: "home", attributes: { user_id: "someone-else", friendly_name: "Sam Check" } }));
+  await page.waitForTimeout(500);
+  const cheers = await page.locator("hatch-pet-card").evaluate((el, me) => {
+    const s = el._slides[el._index];
+    const person = Object.values(el._hass.states).find((st) => st.entity_id.startsWith("person.") &&
+      st.attributes.user_id === me);
+    const out = [];
+    const at = new Date().toISOString(); // the same arrival twice: cheered once
+    for (const user of [me, me, "someone-else"]) {
+      s.queue = [];
+      el._moment(s, { type: "friend_home", user, at });
+      out.push(s.queue[0]?.text || "");
+    }
+    return { out, person: person?.attributes.friendly_name };
+  }, me);
+  // What the pet tells only you: a friendship month, last night's tuck-in, a
+  // busy day; a record and a goodnight, to their person only.
+  const secret = await page.locator("hatch-pet-card").evaluate((el, me) => {
+    const s = el._slides[el._index];
+    s.queue = [];
+    el._note(s, { kind: "friends_for", months: 1 });
+    el._note(s, { kind: "steps", steps: 11000 });
+    el._note(s, { kind: "stairs", floors: 12 });
+    el._moment(s, { type: "bond_record", user: me, game: "left_right", wins: 4, at: "x" });
+    el._moment(s, { type: "bond_record", user: "someone-else", game: "left_right", wins: 5, at: "y" });
+    el._moment(s, { type: "tucked_in", user: me, at: "z" });
+    const out = [...s.queue.map((q) => q.text), s.bubble.textContent]; // the goodnight replaces, not queues
+    s.queue = [];
+    return out;
+  }, me);
+  check("private notes, records and goodnights are said to their person",
+    secret[0] === "we've been friends for a month! ♥" && secret[1] === "11,000 steps?! you've been busy!" &&
+    secret[2] === "12 floors of stairs?! you're a climber!" && secret[3] === "new best at left or right! 4/5 ♥" &&
+    secret[4] === "thank you for tucking me in, sunbeam ♥" && secret.length === 5,
+    secret.join(" | "));
+  // "How was your day?": three answers, a warm reply, and it goes away.
+  const askBox = cur().locator(".askday");
+  await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    s.bubble.textContent = "how was your day?";
+    s.sayUntil = Date.now() + 20000;
+    el._ask(s, "how_day");
+  });
+  const answers = await askBox.locator("button").allInnerTexts();
+  await shot("04d-ask-day");
+  await askBox.locator('button[data-answer="tough"]').click();
+  await page.waitForTimeout(300);
+  const reply = await bubble();
+  check("it asks how your day was, and answers kindly", answers.join() === "great,ok,tough" &&
+    /snuggle|cuddle/.test(reply) && await askBox.count() === 0, `${answers.join()} -> ${reply}`);
+  await shot("04e-ask-day-answer");
+  // A remembered answer goes to the server as a websocket command, not a service.
+  const kept = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const sent = [];
+    const real = el._hass.callWS.bind(el._hass);
+    el._hass.callWS = (msg) => { sent.push(msg); return real(msg); };
+    el._ask(s, "fav_weather");
+    s.screen.querySelector('.askday button[data-answer="snow"]').click();
+    await new Promise((r) => setTimeout(r, 600));
+    el._hass.callWS = real;
+    return { sent, said: s.bubble.textContent };
+  });
+  check("a favourite is kept through the answer command",
+    kept.sent.length === 1 && kept.sent[0].type === "virtual_pet/answer" && kept.sent[0].question === "fav_weather" &&
+    kept.sent[0].answer === "snow" && kept.said === "snow!! ❄ I'll remember", JSON.stringify(kept));
+  // The new lines: a dream someone picked, a guess, a zone, the season, coming home wet.
+  const lines = await page.locator("hatch-pet-card").evaluate((el, me) => {
+    const s = el._slides[el._index];
+    s.queue = [];
+    el._note(s, { kind: "dream", pick: "sea", yours: true });
+    el._note(s, { kind: "dream", pick: "sea", yours: false });
+    el._note(s, { kind: "guess", guess: "rain", outcome: "wrong" });
+    el._note(s, { kind: "back_from", place: "gym" });
+    el._note(s, { kind: "season", season: "autumn", holiday: "thanksgiving" });
+    el._note(s, { kind: "rain_walk", steps: 8000 });
+    localStorage.removeItem(`hatch-welcomed-${me}`);
+    el._moment(s, { type: "friend_home", user: me, weather: "wet", at: new Date().toISOString() });
+    const out = s.queue.map((q) => q.text);
+    s.queue = [];
+    return out;
+  }, me);
+  // Asleep, queued lines wait (they're said once on the server's side); only a
+  // question is dropped. The sleepy hello is said straight away.
+  const asleepQueue = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const was = s.asleep;
+    s.asleep = true;
+    s.queue = [{ text: "can I call you sunbeam? ♥", ms: 4000 }];
+    s.sayUntil = 0;
+    el._sayQueued(s);
+    const kept = s.queue.length;
+    el._note(s, { kind: "up_early" });
+    const hello = s.bubble.textContent;
+    s.asleep = was;
+    s.queue = [];
+    return { kept, hello };
+  });
+  check("asleep, lines wait and the sleepy hello is said", asleepQueue.kept === 1 &&
+    asleepQueue.hello === "mmh... you're up before the sun... zzz ♥", JSON.stringify(asleepQueue));
+  // The first look: welcome home first, three lines at most; a closed wish isn't said.
+  const look = await page.locator("hatch-pet-card").evaluate((el, me) => {
+    const s = el._slides[el._index];
+    const stageId = s.ids["sensor.life_stage"];
+    const careId = s.ids["sensor.last_care"];
+    const real = el._hass.states;
+    const now = new Date().toISOString();
+    const fake = { ...real,
+      [stageId]: { ...real[stageId], attributes: { ...real[stageId].attributes,
+        dream: { kind: "flying" }, wish: { kind: "play", granted: false, open: false } } },
+      [careId]: { ...real[careId], attributes: { ...real[careId].attributes,
+        moments: [{ type: "friend_home", user: me, weather: "cold", at: now }] } } };
+    el._hass = { ...el._hass, states: fake };
+    for (const k of Object.keys(localStorage)) {
+      if (/^hatch-(dream|wish|welcomed)-/.test(k)) localStorage.removeItem(k);
+    }
+    localStorage.setItem(`hatch-seen-${s.ids.device}`, String(Date.now() - 5 * 3600 * 1000));
+    s.lookedFirst = false; s.queue = [];
+    el._firstLook(s);
+    const out = s.queue.map((q) => q.text);
+    s.queue = [];
+    el._hass = { ...el._hass, states: real };
+    return out;
+  }, me);
+  check("the first look: welcome first, three lines at most, no closed wish",
+    look.length === 3 && look[0].startsWith("welcome home") && look[1] === "brr, was it cold out there?" &&
+    !look.some((l) => /play a game/.test(l)), look.join(" | "));
+  check("the new private lines read right", lines[0] === "I dreamed about the sea, like you said! ♥" &&
+    lines[1] === "I dreamed about the sea..." && lines[2] === "oh, sunny after all! good guess though ♥" &&
+    lines[3] === "back from the gym?! so strong!" && lines[4] === "Thanksgiving in your favourite season! ♥" &&
+    /rain/.test(lines[5]) && lines[7] === "it's wet out there! come get cozy ☂", lines.join(" | "));
+  check("a friend coming home is cheered, by name to others", /^(you're home!! ♥|yay, you're back! ♥)$/.test(cheers.out[0]) &&
+    cheers.out[1] === "" && /^(Sam's home!!|ooh, Sam is back!)$/.test(cheers.out[2]),
+  `${cheers.out.join(" | ")} (person ${cheers.person})`);
+
   // Idle life: something small happens on its own within a minute.
   const idleSign = () => cur().evaluate((slide) => {
     const pet = slide.querySelector(".pet");
@@ -264,6 +555,16 @@ async function main() {
       (/_(?!content|excited|cozy|bored|sleepy|hungry|dirty|sick|asleep|calling)[a-z_]+_\d\.png/
         .test(pet.getAttribute("src") || "") && "pose") || "";
   });
+  // A question from the visit holds the bubble for a minute (no idle chatter over
+  // it): note it, and take it away for this check.
+  const hadQuestion = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const asked = !!s.screen.querySelector(".askday") || (s.queue || []).some((q) => q.then);
+    el._clearAsk(s);
+    s.sayUntil = 0;
+    return asked;
+  });
+  console.log(`note: a question was ${hadQuestion ? "" : "not "}open before the idle check`);
   const quietBubble = await bubble();
   let idle = "";
   // The first idle move is due 10-35 s in, but it's skipped if the pet is busy
@@ -367,7 +668,7 @@ async function main() {
 
   // 4. Moments make the pet react.
   for (const [type, extra, expect] of [
-    ["care_miss", { reason: "hunger" }, "nobody came"],
+    ["care_miss", { reason: "hunger" }, "there you are"],
     ["stage_changed", { stage: "teen", from: "child" }, "teen now"],
     ["trait_learned", { trait: "music_lover", level: 1 }, "new trait"],
     ["sunset", {}, "sun|sky"],
@@ -578,8 +879,8 @@ async function main() {
     el._seasonTreat(s, season);
     return [first, s.bubble.textContent, !!s.screen.querySelector(".costume .pop img[src*=plate]")];
   });
-  check("on the day, the pet gives thanks", thanks[0] === "happy thanksgiving! ♥" &&
-    thanks[1] === "thank you for taking care of me, Dev ♥" && thanks[2], thanks.join(" | "));
+  check("on the day, the pet gives thanks", thanks[0] === "happy Thanksgiving! ♥" &&
+    thanks[1] === "thank you all for taking care of me ♥" && thanks[2], thanks.join(" | "));
   await shot("05-thanksgiving-thanks");
   await card.evaluate((el) => { el.setConfig({ ...el._config, seasonal: false }); el.hass = el._hass; });
   await page.waitForTimeout(800);
