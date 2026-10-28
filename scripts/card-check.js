@@ -1256,6 +1256,143 @@ async function main() {
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
 
+  // 4b. A best friend's photo (phase 4). The viewer's photos come from the
+  // virtual_pet/photos command, stubbed here with two generations.
+  const PHOTOS = [
+    { generation: 1, name: "Checkfrog", species: "treefrog", stage: "teen", on: "2026-03-07",
+      traits: ["storm_watcher", "music_lover", "helper"] },
+    { generation: 2, name: "Checkbird", species: "bird", stage: "adult", on: "2026-10-28",
+      traits: ["moon_child", "snow_child", "fireside"] },
+  ];
+  const stubPhotos = (photos) => page.locator("hatch-pet-card").evaluate((el, photos) => {
+    window.__realWS ??= el._hass.callWS.bind(el._hass);
+    el._hass.callWS = (msg) => (msg.type === "virtual_pet/photos" ? Promise.resolve({ photos }) : window.__realWS(msg));
+  }, photos);
+  const unstub = () => page.locator("hatch-pet-card").evaluate((el) => {
+    if (window.__realWS) el._hass.callWS = window.__realWS;
+  });
+  await stubPhotos(PHOTOS);
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(500);
+  await cur().locator(".jlink").click();
+  await cur().locator(".status .print img").nth(1).waitFor({ timeout: 10000 }).catch(() => {});
+  const prints = await cur().locator(".status .print").evaluateAll((els) => els.map((f) => ({
+    src: f.querySelector("img").getAttribute("src"), alt: f.querySelector("img").alt,
+    label: f.querySelector("button").getAttribute("aria-label"), gen: f.querySelector("button").dataset.gen,
+  })));
+  check("the journal shows a print per generation, oldest first",
+    prints.length === 2 && prints.every((p) => p.src.startsWith("blob:")) && prints[0].gen === "1" &&
+    prints[1].label === "save the photo of Checkbird, generation 2" && /photo of Checkfrog, best friends, .*2026/.test(prints[0].alt),
+    JSON.stringify(prints.map((p) => p.alt)));
+  await shot("05b-photos-row");
+  // The canvas: drawn with every image and the font in, the sprite really there
+  // (its area differs from the same photo drawn without it), and the backdrop.
+  const canvasCheck = await page.locator("hatch-pet-card").evaluate(async (el, photo) => {
+    const a = await el._renderPhoto(photo);
+    const b = await el._renderPhoto(photo, { sprite: false });
+    const px = (c, x, y) => [...c.getContext("2d").getImageData(x * 2, y * 2, 1, 1).data];
+    let differ = 0;
+    for (let y = 160; y < 280; y += 4) {
+      for (let x = 100; x < 200; x += 4) if (px(a, x, y).join() !== px(b, x, y).join()) differ++;
+    }
+    const sky = px(a, 150, 30); // the backdrop, above the pet
+    return { differ, sky, cream: px(a, 4, 4), font: document.fonts.check("22px Tiny5"), size: [a.width, a.height] };
+  }, PHOTOS[1]);
+  check("a photo has the pet, its backdrop and its frame", canvasCheck.differ > 40 && canvasCheck.font &&
+    canvasCheck.sky.join() !== canvasCheck.cream.join() && canvasCheck.sky[3] === 255 &&
+    canvasCheck.size.join() === "600,760", JSON.stringify(canvasCheck));
+  // Screenshots of three prints, each with traits on its head, in the air and on the ground.
+  const printsOut = await page.locator("hatch-pet-card").evaluate(async (el, photos) => {
+    const out = [];
+    for (const photo of photos) out.push((await el._renderPhoto(photo)).toDataURL("image/png"));
+    return out;
+  }, [...PHOTOS, { generation: 3, name: "Checkmew", species: "kitten", stage: "teen", on: "2026-12-24",
+    traits: ["early_bird", "social_butterfly", "player"] }]);
+  printsOut.forEach((url, i) => fs.writeFileSync(path.join(OUT, `05c-photo-${["treefrog", "bird", "kitten"][i]}.png`),
+    Buffer.from(url.split(",")[1], "base64")));
+  // "save" with no share sheet: the picture in a dialog, to press and hold, and a download link.
+  const saved = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const share = navigator.share;
+    const canShare = navigator.canShare;
+    Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
+    Object.defineProperty(navigator, "canShare", { value: undefined, configurable: true });
+    s.status.querySelector('.psave[data-gen="2"]').click();
+    await new Promise((r) => setTimeout(r, 300));
+    const dialog = el.shadowRoot.querySelector(".photo-dialog");
+    const link = dialog?.querySelector(".pdownload");
+    const out = {
+      open: !!dialog?.open, modal: !!dialog?.matches(":modal"), img: dialog?.querySelector(".pbig").src.startsWith("blob:"),
+      hint: dialog?.querySelector("p").textContent, download: link?.download, hidden: link?.hidden,
+    };
+    Object.defineProperty(navigator, "share", { value: share, configurable: true });
+    Object.defineProperty(navigator, "canShare", { value: canShare, configurable: true });
+    return out;
+  });
+  check("save without a share sheet shows the picture to press and hold, and a download",
+    saved.open && saved.modal && saved.img && saved.hint === "press and hold the picture to save it" &&
+    saved.download === "Checkbird-best-friends.png" && saved.hidden === false, JSON.stringify(saved));
+  await page.screenshot({ path: path.join(OUT, "05d-photo-save.png") });
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  const closed = await page.locator("hatch-pet-card").evaluate((el) => ({
+    open: el.shadowRoot.querySelector(".photo-dialog").open,
+    focus: el.shadowRoot.activeElement?.dataset?.gen,
+  }));
+  check("the dialog closes with Escape, back on its save", !closed.open && closed.focus === "2", JSON.stringify(closed));
+  // In a companion app the download link is hidden for real (computed style, not the property).
+  const inApp = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const share = navigator.share;
+    const canShare = navigator.canShare;
+    Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
+    Object.defineProperty(navigator, "canShare", { value: undefined, configurable: true });
+    Object.defineProperty(navigator, "userAgent", { value: "Mozilla/5.0 Home Assistant/2026.10", configurable: true });
+    el._slides[el._index].status.querySelector('.psave[data-gen="2"]').click();
+    await new Promise((r) => setTimeout(r, 300));
+    const link = el.shadowRoot.querySelector(".photo-dialog .pdownload");
+    const out = { display: getComputedStyle(link).display, hidden: link.hidden };
+    el.shadowRoot.querySelector(".photo-dialog").close();
+    delete navigator.userAgent; // back to the prototype's
+    Object.defineProperty(navigator, "share", { value: share, configurable: true });
+    Object.defineProperty(navigator, "canShare", { value: canShare, configurable: true });
+    return out;
+  });
+  check("in the companion app the download link is not displayed", inApp.hidden && inApp.display === "none", JSON.stringify(inApp));
+  // A shared screen shows no photo, and forgets them.
+  const shared = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const urls = [...(s.photos?.values() || [])].map((p) => p.url);
+    localStorage.setItem("hatch-shared-screen", "off");
+    s.journal = false;
+    el._renderStatus(s, []);
+    s.status.querySelector(".bell.shared").click(); // on
+    s.journal = true;
+    el._loadPhotos(s);
+    await el._renderJournal(s);
+    await new Promise((r) => setTimeout(r, 400));
+    const out = { prints: s.status.querySelectorAll(".print").length, kept: s.photos, urls: urls.length };
+    // A revoked URL no longer loads.
+    out.revoked = await fetch(urls[0]).then(() => false, () => true);
+    localStorage.setItem("hatch-shared-screen", "off");
+    return out;
+  });
+  check("a shared screen shows no photos and forgets them", shared.prints === 0 && shared.kept === null &&
+    shared.urls === 2 && shared.revoked, JSON.stringify(shared));
+  await unstub();
+  // The note at the next look.
+  const photoLine = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    s.queue = [];
+    el._note(s, { kind: "photo" });
+    const out = s.queue.map((q) => q.text);
+    s.queue = [];
+    return out;
+  });
+  check("the pet says it made you something", photoLine.join() === "I made you something! it's in your journal ♥",
+    photoLine.join());
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(400);
+
   // 5. The egg wiggles, then cracks, before it hatches.
   // A pet update can replace the injected egg, so inject until it shows (or 3 tries).
   for (const [minutes, frames] of [[12, "egg_wiggle"], [4, "egg_crack"]]) {
