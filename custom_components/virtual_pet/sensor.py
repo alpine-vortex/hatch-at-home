@@ -151,8 +151,20 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "notify_users",
             "upbringing_score",
             "games",
+            "wish",
+            "dream",
         }
     )
+
+    @staticmethod
+    def _today_only(
+        record: dict[str, Any] | None, keys: tuple[str, ...]
+    ) -> dict[str, Any] | None:
+        """Today's wish or dream (by the house's date), with only what the card
+        needs."""
+        if not record or record.get("day") != dt_util.now().date().isoformat():
+            return None
+        return {k: record[k] for k in keys if k in record}
 
     def __init__(self, coordinator: PetCoordinator) -> None:
         super().__init__(coordinator, "life_stage")
@@ -187,6 +199,10 @@ class LifeStageSensor(PetEntity, SensorEntity):
                 for t, p in model.trait_progress(self.pet).items()
             },
             "roster": list(self.coordinator.roster),
+            # Daily check-ins: today's wish and this morning's dream, for the card
+            # (who granted the wish stays on the server).
+            "wish": self._today_only(self.pet.wish, ("kind", "granted")),
+            "dream": self._today_only(self.pet.dream, ("kind", "title")),
             "hatches_at": self._hatches_at(),
             "next_world": self.coordinator.next_world_name,
             # The creature picked for the next hatch, by name; None: a surprise.

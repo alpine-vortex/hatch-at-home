@@ -39,10 +39,12 @@ from .const import (
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
     CONF_DASHBOARD,
+    CONF_MUSIC,
     CONF_NEXT_WORLD,
     CONF_PRIVACY,
     CONF_SITTER_SETTLES,
     CONF_SPECIES,
+    CONF_TV,
     CONF_WAKE_TIME,
     CONF_WEATHER,
     CONF_WORLD,
@@ -54,6 +56,7 @@ from .const import (
     STORE_VERSION,
 )
 from .home import (
+    RAINY,
     SNOWY,
     DayForecast,
     HomeEffect,
@@ -98,8 +101,16 @@ MOMENTS = {
     "news",
     "weather",
     "forecast",
+    "wish_granted",
 }
 MOMENTS_KEPT = 10
+# Moments a dream can be about, by the dream's kind. (Not news: it stays
+# cosmetic, and changes nothing that's saved.)
+DREAM_OF = {
+    "first_snow": "snow_started",
+    "wish_granted": "wish",
+    "trait_learned": "trait",
+}
 
 
 class PetStore(Store[dict[str, Any]]):
@@ -286,6 +297,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._advance(now)
         self._sense_home(now)  # time-based signals: motion going quiet, away
         self._want_forecast(now)
+        self._fire(self._daily_wish(now))
         return self.state
 
     # --- The house ----------------------------------------------------------
@@ -462,6 +474,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if self.presence.greeting(now):
             effect.flags.insert(0, "greeting")
         self._fire(self._passing_moments(readings, now))
+        if self._awake():
+            # The house can grant the day's wish, and give the pet things to dream of.
+            for trigger, on in (
+                ("music", readings.music),
+                ("tv", readings.tv),
+                ("rain", is_raining(readings)),
+            ):
+                if on:
+                    self._fire(self._grant(trigger, None, now))
+            if "full_moon" in effect.flags and not any(
+                s["kind"] == "moon" for s in self.state.dream_seeds
+            ):
+                model.dream_seed(self.state, {"kind": "moon"}, now)
         self.debug["home"] = {
             "readings": {k: v for k, v in vars(readings).items() if v is not None},
             "flags": effect.flags,
@@ -498,6 +523,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if awake and readings.outdoor_c is not None and readings.outdoor_c <= 0:
             events += model.season_first(state, "frost", now, settings.tz)
         events += self._forecast_talk(readings, now, awake, minute >= wake)
+        if readings.company and any(e["type"] == "sunset" for e in events):
+            events += self._grant("sunset", None, now)  # watched it together
         return [self._degrees(e) for e in events]
 
     def _forecast_talk(
@@ -626,13 +653,115 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 del self.moments[MOMENTS_KEPT:]
         if events:
             self.debug["last_events"] = [e["type"] for e in events][-10:]
+        if simulated or self.state is None:
+            return
         morning = any(
             e["type"] == "good_morning"
             or (e["type"] == "woke_up" and e.get("how") == "morning")
             for e in events
         )
-        if morning and not simulated:
+        if any(e["type"] == "woke_up" and e.get("how") == "morning" for e in events):
+            self._dream()
+        if morning:
             self._holiday_morning()
+            self._fire(self._daily_wish(self._now()))
+        self._check_ins(events)
+
+    # --- Daily check-ins: the wish of the day, and dreams ----------------------
+
+    def _awake(self) -> bool:
+        state = self.state
+        return (
+            state is not None
+            and not state.away
+            and not state.asleep
+            and model.life_stage(state) != "egg"
+        )
+
+    def _today(self, now: float) -> tuple[str, int]:
+        local = dt_util.as_local(dt_util.utc_from_timestamp(now))
+        return local.date().isoformat(), local.hour
+
+    def wish_options(self) -> set[str]:
+        """The wishes this house can grant."""
+        options = self.config_entry.options
+        wishes = set(model.ALWAYS_WISHES)
+        if options.get(CONF_MUSIC):
+            wishes.add("music")
+        if options.get(CONF_TV):
+            wishes.add("tv")
+        if options.get(CONF_CHORES):
+            wishes.add("chore")
+        today = self._today(self._now())[0]
+        if (forecast := self.forecast.get(today)) and forecast.condition in RAINY:
+            wishes.add("rain")  # only on a day the forecast says it will rain
+        return wishes
+
+    def _daily_wish(self, now: float) -> list[model.Event]:
+        """Today's wish, once the pet is up for the day (a morning moment, or the
+        first tick after wake time)."""
+        if not self._awake() or self.state is None:
+            return []
+        settings = self.settings
+        if model.in_sleep_hours(now, settings):
+            return []
+        today, _ = self._today(now)
+        events = model.pick_wish(self.state, today, self.rng, self.wish_options())
+        if events:
+            self._save()
+        return events
+
+    def _grant(self, trigger: str, by: str | None, now: float) -> list[model.Event]:
+        assert self.state is not None
+        today, hour = self._today(now)
+        events = model.grant_wish(self.state, trigger, now, today, hour, by)
+        if events:
+            self._save()
+        return events
+
+    def _dream(self) -> None:
+        """Waking in the morning: what it dreamed of (shown at the first look)."""
+        assert self.state is not None
+        now = self._now()
+        if model.life_stage(self.state) == "egg":
+            return
+        if model.dream_on_waking(self.state, now, self._today(now)[0], self.rng):
+            self._save()
+
+    def _check_ins(self, events: list[model.Event]) -> None:
+        """Care, games and moments: they may grant the wish, and are things to
+        dream about."""
+        state = self.state
+        assert state is not None
+        now = self._now()
+        granted: list[model.Event] = []
+        by = state.care_log[0].get("by") if state.care_log else None
+        care = {"play": "play", "snack": "snack", "clean": "bath", "praise": "praise"}
+        for e in events:
+            kind = e["type"]
+            if kind == "care" and e.get("result") == model.OK and e["action"] in care:
+                granted += self._grant(care[e["action"]], by, now)
+            elif kind == "game_finished":
+                granted += self._grant("play", by, now)
+                if e.get("won"):
+                    model.dream_seed(state, {"kind": "game"}, now)
+            elif kind == "chore_treat":
+                granted += self._grant("chore", None, now)
+                model.dream_seed(state, {"kind": "chore"}, now)
+            elif kind == "fell_asleep" and e.get("how") == "lights":
+                granted += self._grant("tuck_in", None, now)
+            elif kind in ("watching", "listening") and e.get("title"):
+                model.dream_seed(state, {"kind": kind, "title": e["title"]}, now)
+            elif kind == "weather" and e.get("change") in (
+                "rain_started",
+                "rainbow",
+                "snow_started",
+            ):
+                model.dream_seed(state, {"kind": e["change"]}, now)
+            elif kind in DREAM_OF:
+                model.dream_seed(state, {"kind": DREAM_OF[kind]}, now)
+        if granted:
+            self._fire(granted)
 
     def _holiday_morning(self) -> None:
         """On a holiday, the pet's first morning moment greets it on the phones
