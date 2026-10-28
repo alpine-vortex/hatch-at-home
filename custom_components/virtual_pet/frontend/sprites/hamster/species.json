@@ -10,5 +10,14 @@
   "words": {"food": "seeds", "home": "nest"},
   "reactions": {"feed": "cheeks", "snack": "cheeks", "play": "wheel", "won": "wheel", "scold": "stand_up"},
   "head": {"baby": [158, 100], "child": [160, 72], "teen": [166, 48], "adult": [194, 72]},
-  "hat": {"baby": [122, 116], "child": [121, 84], "teen": [118, 68], "adult": [152, 88]}
+  "hat": {
+    "baby": [122, 116],
+    "baby_excited": [117, 80],
+    "baby_hungry": [100, 96],
+    "child": [121, 84],
+    "child_watch_tv": [97, 92],
+    "teen": [118, 68],
+    "adult": [152, 88],
+    "adult_dirty": [134, 52]
+  }
 }

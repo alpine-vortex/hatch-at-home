@@ -2522,6 +2522,7 @@ class HatchPetCard extends HTMLElement {
         return;
       }
     }
+    if (this._hatSpot(s) === null) return; // a pose no hat can sit on: wait for the next
     const treatDay = season.treat && today.getMonth() + 1 === season.treat[0] && today.getDate() === season.treat[1];
     if (treatDay && !s.treated) {
       s.treated = true;
@@ -2598,12 +2599,14 @@ class HatchPetCard extends HTMLElement {
     return low;
   }
 
-  // species.json "hat" for the pose on show ("adult_calling"), else for the stage:
+  // species.json "hat" for the pose on show ("adult_dirty"), else for the stage:
   // a pose that sits the creature up carries its head well above the stage's point
-  // (the opossum calls and frets sitting up).
+  // (the opossum frets sitting up). null: no hat fits the pose (its frames bounce
+  // between a leap and a crouch), so the costume waits for another pose.
   _hatSpot(s) {
     const pose = (this._frames(s)[0] || "").replace(/_\d+$/, "");
-    return s.species.hat?.[pose] || s.species.hat?.[s.drawn];
+    const hat = s.species.hat || {};
+    return pose in hat ? hat[pose] : hat[s.drawn];
   }
 
   // The hat sits on top of the head, brim sunk in a little.

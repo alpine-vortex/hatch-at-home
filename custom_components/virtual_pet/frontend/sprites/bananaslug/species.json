@@ -93,21 +93,20 @@
     ]
   },
   "hat": {
-    "baby": [
-      152,
-      156
-    ],
-    "child": [
-      174,
-      152
-    ],
-    "teen": [
-      200,
-      140
-    ],
-    "adult": [
-      210,
-      160
-    ]
+    "baby": [152, 156],
+    "child": [174, 152],
+    "child_dirty": [182, 136],
+    "child_excited": [168, 132],
+    "child_mask": null,
+    "child_shiver": [170, 132],
+    "child_squint": [162, 128],
+    "child_sweat": [178, 128],
+    "child_watch_tv": [140, 152],
+    "teen": [200, 140],
+    "teen_dirty": [200, 120],
+    "teen_excited": [188, 116],
+    "adult": [210, 160],
+    "adult_dirty": [208, 148],
+    "adult_excited": null
   }
 }

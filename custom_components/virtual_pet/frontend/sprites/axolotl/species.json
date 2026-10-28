@@ -32,5 +32,11 @@
   "words": { "food": "bloodworms", "home": "pond" },
   "reactions": { "play": "float", "won": "gill_flutter", "praise": "smile", "snack": "smile" },
   "head": { "baby": [170, 144], "child": [184, 124], "teen": [192, 104], "adult": [198, 132] },
-  "hat": { "baby": [148, 148], "child": [160, 132], "teen": [166, 112], "adult": [176, 140] }
+  "hat": {
+    "baby": [148, 148],
+    "child": [160, 132],
+    "child_watch_tv": [116, 132],
+    "teen": [166, 112],
+    "adult": [176, 140]
+  }
 }

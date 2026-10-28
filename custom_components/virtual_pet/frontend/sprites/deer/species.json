@@ -30,5 +30,13 @@
   "words": { "food": "acorns", "home": "thicket" },
   "reactions": { "feed": "nibble", "snack": "nibble", "chore_treat": "nibble", "won": "pronk", "scold": "flag" },
   "head": { "baby": [162, 84], "child": [178, 60], "teen": [202, 28], "adult": [152, 28] },
-  "hat": { "baby": [136, 104], "child": [144, 88], "teen": [180, 52], "adult": [178, 66] }
+  "hat": {
+    "baby": [136, 104],
+    "child": [144, 88],
+    "child_watch_tv": [108, 76],
+    "teen": [180, 52],
+    "teen_dirty": [162, 70],
+    "adult": [178, 66],
+    "adult_hungry": [194, 94]
+  }
 }

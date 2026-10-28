@@ -32,5 +32,11 @@
   "words": { "food": "crickets", "home": "burrow" },
   "reactions": { "won": "wave", "praise": "wave", "scold": "hair_flick" },
   "head": { "baby": [101, 130], "child": [96, 116], "teen": [90, 88], "adult": [80, 96] },
-  "hat": { "baby": [148, 150], "child": [158, 142], "teen": [166, 112], "adult": [180, 140] }
+  "hat": {
+    "baby": [148, 150],
+    "child": [158, 142],
+    "child_watch_tv": [124, 142],
+    "teen": [166, 112],
+    "adult": [180, 140]
+  }
 }

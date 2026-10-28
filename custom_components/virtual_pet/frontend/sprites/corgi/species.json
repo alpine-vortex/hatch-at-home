@@ -11,5 +11,20 @@
   "words": {"food": "kibble", "home": "bed"},
   "reactions": {"play": "ball_fetch", "won": "ball_fetch", "praise": "sploot", "scold": "head_tilt"},
   "head": {"baby": [150, 132], "child": [182, 88], "teen": [204, 64], "adult": [204, 76]},
-  "hat": {"baby": [150, 132], "child": [152, 108], "teen": [168, 92], "adult": [171, 100]}
+  "hat": {
+    "baby": [150, 132],
+    "child": [152, 108],
+    "child_dance": [132, 88],
+    "child_dirty": [164, 80],
+    "child_excited": null,
+    "child_mask": [156, 80],
+    "child_squint": [148, 80],
+    "child_sweat": [152, 76],
+    "child_watch_tv": [104, 100],
+    "teen": [168, 92],
+    "teen_dirty": [164, 64],
+    "teen_excited": null,
+    "adult": [171, 100],
+    "adult_excited": null
+  }
 }

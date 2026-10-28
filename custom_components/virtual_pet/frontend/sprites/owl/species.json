@@ -91,5 +91,9 @@
       148,
       32
     ]
+  },
+  "hat": {
+    "child_watch_tv": [88, 68],
+    "adult_hungry": [122, 32]
   }
 }

@@ -10,5 +10,16 @@
   "words": {"food": "dandelions", "home": "burrow"},
   "reactions": {"play": "dig", "feed": "munch", "snack": "munch", "scold": "hide"},
   "head": {"baby": [124, 144], "child": [130, 124], "teen": [122, 96], "adult": [124, 100]},
-  "hat": {"baby": [168, 148], "child": [184, 136], "teen": [196, 116], "adult": [206, 140]}
+  "hat": {
+    "baby": [168, 148],
+    "baby_excited": [164, 112],
+    "child": [184, 136],
+    "child_excited": [174, 104],
+    "child_watch_tv": [128, 140],
+    "teen": [196, 116],
+    "teen_excited": [190, 76],
+    "adult": [206, 140],
+    "adult_dirty": [206, 124],
+    "adult_excited": [196, 80]
+  }
 }

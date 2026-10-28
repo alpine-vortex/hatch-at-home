@@ -32,5 +32,10 @@
   "backgrounds": { "day": "bg_vivarium", "night": "bg_night", "rain": "bg_rain", "dim": "bg_dim" },
   "words": { "food": "mealworms", "home": "vivarium" },
   "reactions": { "feed": "eye_lick", "snack": "eye_lick", "play": "tail_wiggle", "won": "tail_wiggle" },
-  "head": { "baby": [178, 144], "child": [180, 132], "teen": [196, 104], "adult": [208, 136] }
+  "head": { "baby": [178, 144], "child": [180, 132], "teen": [196, 104], "adult": [208, 136] },
+  "hat": {
+    "child_watch_tv": [136, 124],
+    "teen_hungry": [162, 132],
+    "adult_hungry": [188, 144]
+  }
 }

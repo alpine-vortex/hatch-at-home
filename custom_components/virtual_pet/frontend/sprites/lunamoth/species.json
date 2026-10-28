@@ -29,5 +29,8 @@
   "backgrounds": { "day": "bat/bg_day", "night": "bat/bg_night", "rain": "bat/bg_rain", "dim": "bat/bg_night" },
   "words": { "food": "leaves", "home": "cocoon" },
   "reactions": { "play": "glow", "won": "wing_spread", "praise": "wing_spread" },
-  "head": { "baby": [162, 140], "child": [178, 120], "teen": [128, 72], "adult": [128, 96] }
+  "head": { "baby": [162, 140], "child": [178, 120], "teen": [128, 72], "adult": [128, 96] },
+  "hat": {
+    "child_watch_tv": [122, 124]
+  }
 }

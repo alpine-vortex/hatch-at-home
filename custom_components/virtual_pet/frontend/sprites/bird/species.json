@@ -29,5 +29,10 @@
   "backgrounds": { "day": "bg_day", "night": "bg_night", "rain": "bg_rain", "dim": "bg_dim" },
   "words": { "food": "berries", "home": "nest" },
   "reactions": { "play": "birdwatch", "won": "birdwatch" },
-  "head": { "baby": [148, 72], "child": [158, 44], "teen": [170, 12], "adult": [200, 56] }
+  "head": { "baby": [148, 72], "child": [158, 44], "teen": [170, 12], "adult": [200, 56] },
+  "hat": {
+    "child_watch_tv": [112, 104],
+    "adult_dirty": [160, 32],
+    "adult_hungry": [156, 56]
+  }
 }

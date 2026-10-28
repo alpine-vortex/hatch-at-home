@@ -11,5 +11,13 @@
   "words": {"food": "berries", "home": "den"},
   "reactions": {"play": "pounce", "won": "pounce", "praise": "tail_wrap", "scold": "yip"},
   "head": {"baby": [174, 108], "child": [192, 88], "teen": [154, 60], "adult": [162, 68]},
-  "hat": {"baby": [151, 124], "child": [167, 104], "teen": [179, 80], "adult": [187, 88]}
+  "hat": {
+    "baby": [151, 124],
+    "child": [167, 104],
+    "child_watch_tv": [119, 132],
+    "teen": [179, 80],
+    "teen_excited": null,
+    "adult": [187, 88],
+    "adult_excited": null
+  }
 }

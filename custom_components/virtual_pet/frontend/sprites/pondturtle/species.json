@@ -11,5 +11,9 @@
   "words": {"food": "snails", "home": "log"},
   "reactions": {"play": "swim", "won": "swim", "praise": "bask", "scold": "tuck"},
   "head": {"baby": [174, 160], "child": [176, 132], "teen": [192, 112], "adult": [208, 132]},
-  "murk": "treefrog/murk"
+  "murk": "treefrog/murk",
+  "hat": {
+    "child_watch_tv": [128, 132],
+    "teen_hungry": [164, 120]
+  }
 }

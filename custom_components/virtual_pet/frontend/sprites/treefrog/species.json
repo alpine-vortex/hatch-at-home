@@ -33,5 +33,8 @@
   "backgrounds": { "day": "bg_day", "night": "bg_night", "rain": "bg_rain", "dim": "bg_night" },
   "words": { "food": "flies", "home": "lily pad" },
   "reactions": { "feed": "tongue", "snack": "tongue", "won": "croak", "praise": "croak" },
-  "head": { "baby": [160, 148], "child": [154, 116], "teen": [168, 72], "adult": [182, 96] }
+  "head": { "baby": [160, 148], "child": [154, 116], "teen": [168, 72], "adult": [182, 96] },
+  "hat": {
+    "child_watch_tv": [116, 112]
+  }
 }

@@ -11,5 +11,10 @@
   "words": {"food": "fish", "home": "rock"},
   "reactions": {"praise": "banana", "won": "flipper_clap", "play": "flipper_clap", "scold": "splash"},
   "head": {"baby": [158, 132], "child": [170, 120], "teen": [176, 88], "adult": [194, 116]},
-  "murk": "otter/murk"
+  "murk": "otter/murk",
+  "hat": {
+    "child_watch_tv": [124, 108],
+    "teen_excited": [138, 64],
+    "adult_excited": [154, 96]
+  }
 }
