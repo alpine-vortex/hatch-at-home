@@ -303,12 +303,12 @@ array, and the half rule picks between that array and today's `lines`. The gates
 ### The lines (proposal)
 
 Every line is **a proposal for the owner**: 2-3 per type per moment (owner,
-2026-10-28), 310 lines in all. `{n}` is the person's first name, capped at 16 as
-`_greet` does, or their nickname; `{food}` is the favourite snack. Keys follow
-phase 5's where they exist. All of them pass the scan above (checked by script:
-longest 40 characters with `{n}` at 16 and `{food}` at 15; no `?`, no banned word,
-no triple word, no person-credit in the wish lines, no superlative or time word in
-the hellos).
+2026-10-28), 307 lines in all (the three upbringing lines are one each, as decided).
+`{n}` is the person's first name, capped at 16 as `_greet` does, or their nickname;
+`{food}` is the favourite snack. Keys follow phase 5's where they exist. All of them
+pass the scan above (checked by script: longest 40 characters with `{n}` at 16 and
+`{food}` at 15; no `?`, no banned word, no triple word, no person-credit in the wish
+lines, no superlative or time word in the hellos).
 
 **Reveal (`stage_changed` teen, queued after "I'm a teen now!")** (`reveal`)
 
@@ -419,7 +419,7 @@ the hellos).
 | Type | Line 1 | Line 2 | Line 3 |
 | --- | --- | --- | --- |
 | mellow | mmh... morning already... | five more minutes... ♪ | morning... slow and easy |
-| sweet | good morning! hello, day ♥ | morning! ♥ a fresh new day | morning! I tidied up ♥ |
+| sweet | good morning! hope you slept well | morning! ♥ a fresh new day | morning! I tidied up ♥ |
 | bouncy | morning!! let's go! | up and hopping! | morning! ready, set, go! |
 | starry | morning! a brand new show ★ | rise and shine! ★ | morning! ♪ la la ♪ |
 | old soul | morning. the kettle's on | morning. a fine day for it | hm. morning, then. |
@@ -507,11 +507,11 @@ the hellos).
 
 **Upbringing lines** (adults, any type; at most weekly)
 
-| Upbringing | Line 1 | Line 2 |
-| --- | --- | --- |
-| devoted | you always looked after me ♥ | I grew up so loved ♥ |
-| steady | I turned out just right ♪ | I grew up just fine ♪ |
-| scrappy | I'm a bit of a rascal, hehe ♥ | a little rascal, that's me ♥ |
+| Upbringing | Line |
+| --- | --- |
+| devoted | you always looked after me ♥ |
+| steady | I turned out just right ♪ |
+| scrappy | I'm a bit of a rascal, hehe ♥ |
 
 
 Notes on the lines:
@@ -526,6 +526,8 @@ Notes on the lines:
 - **Wish granted:** today's normal pool includes "my wish came true! thank you ♥",
   which still shows on the other half of the coin. It thanks nobody in particular,
   so it is left as it is; the owner may want to look at it.
+- **Good morning:** "hope you slept well" is a wish, not a question about the
+  person's sleep (no `?`, reads no sensor).
 - **Idle:** the sleepy, hungry and dirty idle lines stay normal: they're the pet's
   body, not its manner.
 - **Mood line** (P2b): only for the `content` and `excited` reason keys (the two
@@ -770,7 +772,7 @@ upbringing lines are their own small PR; fancy gets a fourth leaning
 `_greet` does; the LLM voice notes are softened; bond-8 lines are warm and never
 superlative ("glad it's you ♥").
 
-**Still for the owner: the lines.** All 310 are in "The lines (proposal)". Mark
+**Still for the owner: the lines.** All 307 are in "The lines (proposal)". Mark
 the ones to change.
 
 ## The audit of draft 1 (18 findings) and what changed
@@ -800,8 +802,6 @@ corrections are in their rows, and none was rejected.
 | 17 | `stage_changed` carries `personality` on the bus. Verified (coordinator.py:777-785; notify.py:141 keys off `upbringing`) | A sentence where the event is described; no change |
 | 18 | Missing acceptance criteria (old/new card and server, version, translations) | An "Acceptance, every phase" paragraph under the phases |
 
-Also changed while writing draft 2 (not in the audit): good morning's "hope you
-slept well" was swapped for "good morning! hello, day ♥" (it was about the
-person's sleep, which the scan's rules keep out); the kindred-pairs example line was
-removed (lines for visits are written with item 5); the scan also keeps
+Also changed while writing draft 2 (not in the audit): the kindred-pairs example
+line was removed (lines for visits are written with item 5); the scan also keeps
 time-of-day words out of the hellos (`_greet` fires at any hour).
