@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hatch at Home · Shell finishes</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px; color: #30291f; background: #f2eee4;
+    font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 1120px; margin: auto; }
+  h1 { margin: 0 0 6px; font: 700 clamp(24px, 4vw, 34px)/1.15 system-ui, sans-serif; }
+  .intro { margin: 0 0 24px; color: #62594c; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 22px; }
+  article { min-width: 0; padding: 16px; border-radius: 18px; background: #fffdf7;
+    box-shadow: 0 4px 18px #392c1718; }
+  h2 { margin: 0 0 2px; font-size: 17px; }
+  .kind { margin: 0 0 14px; color: #746a5c; font-size: 13px; }
+  .device { width: min(100%, 230px); margin: auto; display: flex; align-items: center; flex-direction: column; }
+  .body { position: relative; width: 100%; padding: 18px 16px 19px; border-radius: 38% 38% 31% 31% / 17% 17% 13% 13%; }
+  .bezel { position: relative; z-index: 1; width: 100%; padding: 9px; border: 1px solid #0002; border-radius: 18px;
+    background: var(--bezel); box-shadow: inset 0 3px 0 #0002; }
+  .screen { position: relative; width: 100%; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 12px;
+    background: linear-gradient(#95b6a3 0 50%, #637e67 50% 100%); box-shadow: inset 0 0 0 3px #0005; }
+  .sun { position: absolute; top: 12%; right: 12%; width: 15%; aspect-ratio: 1; border-radius: 50%; background: #f8e49d; }
+  .hill { position: absolute; bottom: 0; left: -8%; width: 116%; height: 42%; border-radius: 50% 50% 0 0; background: #54785f; }
+  .pet { position: absolute; z-index: 1; bottom: 8%; left: 50%; width: 22%; height: 29%; transform: translateX(-50%);
+    border-radius: 48% 48% 38% 38%; background: #f4d594; box-shadow: inset 0 -5px 0 #d7ae69; }
+  .pet::before { content: "••"; position: absolute; top: 25%; left: 23%; color: #423c32; font-size: 10px; letter-spacing: 2px; }
+  .pet::after { content: ""; position: absolute; bottom: -10%; left: 12%; width: 76%; height: 20%; border-radius: 50%; background: #d7ae69; }
+  .buttons { display: flex; justify-content: center; gap: 18px; padding: 17px 0 3px; }
+  .button { width: 16%; aspect-ratio: 1; border-radius: 50%; border: 1px solid #70432d55; background: #fff4df;
+    box-shadow: 0 4px 0 #0003, inset 0 2px 2px #fff9; }
+  .label { position: relative; z-index: 1; margin-top: 3px; color: var(--ink); font: 11px Tiny5, monospace;
+    text-align: center; letter-spacing: .08em; }
+  .woodland .body { background-color: #e8834a; background-image: radial-gradient(ellipse at 50% 4%, #fff9dc77, transparent 34%),
+    linear-gradient(112deg, #ffffff2e, transparent 22% 72%, #702a1f20), linear-gradient(180deg,#f49a55,#e8834a 48%,#d76a35);
+    box-shadow: inset 0 2px 0 #ffffffb3, inset 0 -9px 0 #6f2b1252, 0 12px 18px #20150535; }
+  .aqua .body { border-radius: 30% 30% 24% 24% / 14% 14% 10% 10%; background-color: #36b9c2;
+    background-image: radial-gradient(ellipse at 50% 3%, #ffffffd1, transparent 31%), linear-gradient(108deg,#ffffff42,transparent 25% 68%,#00445329),
+      linear-gradient(180deg,#80e3df,#36b9c2 48%,#168d9c); box-shadow: inset 0 2px 0 #ffffffc7,inset 0 -9px 0 #00495252,0 12px 18px #20150535; }
+  .aqua .button:nth-child(1) { background: #ffd9dc; } .aqua .button:nth-child(2) { background: #fff0b7; }
+  .aqua .button:nth-child(3) { background: #dcd4ff; }
+  .grove .body { border-radius: 45% 45% 28% 28% / 18% 18% 13% 13%; background-color: #74bd62;
+    background-image: radial-gradient(circle at 12% 23%,#ffec8f 0 3px,transparent 4px), radial-gradient(circle at 88% 37%,#ffec8fb0 0 3px,transparent 4px),
+      radial-gradient(circle at 16% 73%,#ffec8f94 0 2px,transparent 3px),radial-gradient(circle at 84% 81%,#ffec8f94 0 2px,transparent 3px),
+      linear-gradient(135deg,#ffffff6b,transparent 43%),linear-gradient(160deg,#a9df68,#74bd62 58%,#4e965c);
+    box-shadow: inset 0 0 0 4px #ebffa45c,inset 0 -9px 0 #2d663859,0 12px 18px #20150535; }
+  .grove .button { background: #fff0a8; } .grove .button:nth-child(2) { background: #ffd1b5; }
+  .celestial .body { border-radius: 32px; background-color: #6255bb;
+    background-image: radial-gradient(circle at 13% 16%,#fff4bb 0 2px,transparent 3px),radial-gradient(circle at 87% 24%,#fff4bb 0 2px,transparent 3px),
+      radial-gradient(circle at 9% 66%,#ffffffe0 0 1.5px,transparent 2.5px),radial-gradient(circle at 91% 75%,#ffffffd1 0 1.5px,transparent 2.5px),
+      radial-gradient(ellipse at 50% 4%,#ffffff47,transparent 34%),linear-gradient(145deg,#777be0,#6255bb 55%,#413c91);
+    box-shadow: inset 0 0 0 4px #d5ceff47,inset 0 -9px 0 #24205c66,0 12px 18px #20150535; }
+  .celestial .button { background: #f4d7fa; } .celestial .button:nth-child(2) { background: #d4e7ff; }
+  .dune .body { border-radius: 24px; background-color: #d8b07a;
+    background-image: radial-gradient(ellipse at 50% 4%,#fff6d6b3,transparent 33%),linear-gradient(112deg,#ffffff42,transparent 24% 70%,#784e1e24),
+      linear-gradient(180deg,#ecc88f,#d8b07a 50%,#c39257); box-shadow: inset 0 2px 0 #fffae4cc,inset 0 -9px 0 #70481c52,0 12px 18px #20150535; }
+  .dune .button { background: #fbefd0; } .dune .button:nth-child(2) { background: #f3d6a6; }
+  @media (max-width: 520px) { body { padding: 18px 12px; } .grid { gap: 12px; }
+    article { padding: 12px; } .device { width: min(100%, 210px); } }
+</style>
+<main>
+  <h1>Shell finish preview</h1>
+  <p class="intro">Five world-matched finishes. Each preserves the card’s 4:3 screen opening and keeps the pet scene inside it.</p>
+  <section class="grid" aria-label="Shell options">
+    <article><h2>Woodland lacquer</h2><p class="kind">Realistic · warm orange, molded gloss</p>
+      <div class="device woodland" style="--bezel:#f3ead7;--ink:#714126"><div class="body"><div class="bezel"><div class="screen"><i class="sun"></i><i class="hill"></i><i class="pet"></i></div></div><div class="buttons"><i class="button"></i><i class="button"></i><i class="button"></i></div><div class="label">hatch · woods</div></div></div>
+    </article>
+    <article><h2>Tidepool gloss</h2><p class="kind">Realistic · aqua shell, pastel buttons</p>
+      <div class="device aqua" style="--bezel:#d9f2e9;--ink:#146678"><div class="body"><div class="bezel"><div class="screen"><i class="sun"></i><i class="hill"></i><i class="pet"></i></div></div><div class="buttons"><i class="button"></i><i class="button"></i><i class="button"></i></div><div class="label">hatch · tide</div></div></div>
+    </article>
+    <article><h2>Storybook grove</h2><p class="kind">Stylized · playful leaf-green shell</p>
+      <div class="device grove" style="--bezel:#e8f0cb;--ink:#396747"><div class="body"><div class="bezel"><div class="screen"><i class="sun"></i><i class="hill"></i><i class="pet"></i></div></div><div class="buttons"><i class="button"></i><i class="button"></i><i class="button"></i></div><div class="label">hatch · terra</div></div></div>
+    </article>
+    <article><h2>Starlight dream</h2><p class="kind">Stylized · fantasy violet with star flecks</p>
+      <div class="device celestial" style="--bezel:#e6e3f4;--ink:#49418b"><div class="body"><div class="bezel"><div class="screen"><i class="sun"></i><i class="hill"></i><i class="pet"></i></div></div><div class="buttons"><i class="button"></i><i class="button"></i><i class="button"></i></div><div class="label">hatch · night</div></div></div>
+    </article>
+    <article><h2>Dune gloss</h2><p class="kind">Realistic · warm sand shell, molded highlights</p>
+      <div class="device dune" style="--bezel:#5b4632;--ink:#f3e3c4"><div class="body"><div class="bezel"><div class="screen"><i class="sun"></i><i class="hill"></i><i class="pet"></i></div></div><div class="buttons"><i class="button"></i><i class="button"></i><i class="button"></i></div><div class="label">hatch · night</div></div></div>
+    </article>
+  </section>
+</main>
+</html>

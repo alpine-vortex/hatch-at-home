@@ -1052,6 +1052,75 @@ const STYLE = `
     box-shadow: inset 0 -9px 0 var(--d-dark), inset 0 5px 0 rgba(255,255,255,.28), 0 16px 34px rgba(20,15,5,.32);
     display: flex; flex-direction: column; align-items: center; gap: 12px; }
   .body { position: relative; }
+  /* Shell finishes skin the molded plastic around the bezel. They deliberately
+     leave .bezel and .screen geometry alone: the screen is a fixed opening. */
+  .finish-woodland .body {
+    background-color: var(--d-shell);
+    background-image: radial-gradient(ellipse at 50% 4%, rgba(255,249,220,.46), transparent 34%),
+      linear-gradient(112deg, rgba(255,255,255,.18), transparent 22% 72%, rgba(112,42,13,.12)),
+      linear-gradient(180deg, #f49a55 0%, var(--d-shell) 48%, #d76a35 100%);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.7), inset 0 -9px 0 rgba(111,43,18,.32),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-woodland .bezel { box-shadow: inset 0 3px 0 rgba(255,255,255,.48),
+    inset 0 -3px 0 rgba(96,48,25,.12), 0 2px 0 rgba(117,63,34,.16); }
+  .finish-aqua .body {
+    background-color: var(--d-shell);
+    background-image: radial-gradient(ellipse at 50% 3%, rgba(255,255,255,.82), transparent 31%),
+      linear-gradient(108deg, rgba(255,255,255,.26), transparent 25% 68%, rgba(0,68,83,.16)),
+      linear-gradient(180deg, #80e3df 0%, #36b9c2 48%, #168d9c 100%);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.78), inset 0 -9px 0 rgba(0,73,82,.32),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-aqua .bezel { box-shadow: inset 0 3px 0 rgba(255,255,255,.72),
+    inset 0 -3px 0 rgba(17,95,104,.16), 0 2px 0 rgba(17,95,104,.2); }
+  .finish-aqua .toy:nth-child(4n + 1) .cap { background: #ffd9dc; }
+  .finish-aqua .toy:nth-child(4n + 2) .cap { background: #fff0b7; }
+  .finish-aqua .toy:nth-child(4n + 3) .cap { background: #dcd4ff; }
+  .finish-aqua .toy:nth-child(4n) .cap { background: #c8f1d8; }
+  .finish-grove .body {
+    background-color: var(--d-shell);
+    background-image: radial-gradient(circle at 12% 23%, rgba(255,236,143,.78) 0 3px, transparent 4px),
+      radial-gradient(circle at 88% 37%, rgba(255,236,143,.68) 0 3px, transparent 4px),
+      radial-gradient(circle at 16% 73%, rgba(255,236,143,.58) 0 2px, transparent 3px),
+      radial-gradient(circle at 84% 81%, rgba(255,236,143,.58) 0 2px, transparent 3px),
+      linear-gradient(135deg, rgba(255,255,255,.42), transparent 43%),
+      linear-gradient(160deg, #a9df68, #74bd62 58%, #4e965c);
+    box-shadow: inset 0 0 0 4px rgba(235,255,164,.36), inset 0 -9px 0 rgba(45,102,56,.35),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-grove .toy .cap { background: #fff0a8; }
+  .finish-grove .toy:nth-child(3n + 2) .cap { background: #ffd1b5; }
+  .finish-celestial .body {
+    background-color: var(--d-shell);
+    background-image: radial-gradient(circle at 13% 16%, #fff4bb 0 2px, transparent 3px),
+      radial-gradient(circle at 87% 24%, #fff4bb 0 2px, transparent 3px),
+      radial-gradient(circle at 9% 66%, rgba(255,255,255,.88) 0 1.5px, transparent 2.5px),
+      radial-gradient(circle at 91% 75%, rgba(255,255,255,.82) 0 1.5px, transparent 2.5px),
+      radial-gradient(ellipse at 50% 4%, rgba(255,255,255,.28), transparent 34%),
+      linear-gradient(145deg, #777be0, #6255bb 55%, #413c91);
+    box-shadow: inset 0 0 0 4px rgba(213,206,255,.28), inset 0 -9px 0 rgba(36,32,92,.4),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-celestial .toy .cap { background: #f4d7fa; }
+  .finish-celestial .toy:nth-child(3n + 2) .cap { background: #d4e7ff; }
+  .finish-dune .body {
+    background-color: var(--d-shell);
+    background-image: radial-gradient(ellipse at 50% 4%, rgba(255,246,214,.7), transparent 33%),
+      radial-gradient(circle at 10% 82%, rgba(150,104,52,.16) 0 2px, transparent 3px),
+      radial-gradient(circle at 90% 70%, rgba(150,104,52,.14) 0 2px, transparent 3px),
+      linear-gradient(112deg, rgba(255,255,255,.26), transparent 24% 70%, rgba(120,78,30,.14)),
+      linear-gradient(180deg, #ecc88f 0%, var(--d-shell) 50%, #c39257 100%);
+    box-shadow: inset 0 2px 0 rgba(255,250,228,.8), inset 0 -9px 0 rgba(112,72,28,.32),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-dune .bezel { box-shadow: inset 0 3px 0 rgba(255,244,214,.38),
+    inset 0 -3px 0 rgba(40,26,12,.2), 0 2px 0 rgba(112,72,28,.2); }
+  .finish-dune .toy .cap { background: #fbefd0; }
+  .finish-dune .toy:nth-child(3n + 2) .cap { background: #f3d6a6; }
+  /* A finish only tints idle buttons: the lit/asleep (.on) and wanted states keep their own look. */
+  .device[class*="finish-"] .toy.wanted .cap { background: #ffe9a8; }
+  .device[class*="finish-"] .toy.on .cap { background: #3a2a1a; color: #ffe9a8; }
   /* Sol's trim (worlds.json "trim"), drawn at each piece's own size (see _trim) and
      placed to suit each shell: over the top edge, on the plate, at the bottom corners. */
   .trim-top, .trim-top2, .trim-corner { position: absolute; pointer-events: none;
@@ -2149,7 +2218,9 @@ class HatchPetCard extends HTMLElement {
     const color = shell.color || "#e8834a";
     const dev = s.device;
     const shape = ["tank", "house", "porthole", "pad", "moon"].includes(shell.shape) ? shell.shape : "egg";
-    dev.className = `device ${shape}`;
+    const finish = ["woodland", "aqua", "grove", "celestial", "dune"].includes(shell.finish)
+      ? `finish-${shell.finish}` : "";
+    dev.className = `device ${shape}${finish ? ` ${finish}` : ""}`;
     dev.querySelector(".roof").style.display = shape === "house" ? "" : "none";
     dev.querySelector(".crescent").style.display = shape === "moon" ? "" : "none";
     dev.querySelector(".loop").style.display = shape === "egg" ? "" : "none";
