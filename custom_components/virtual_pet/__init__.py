@@ -23,6 +23,7 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
 from . import notify, rates as R
@@ -119,10 +120,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
     # The version in the URL makes browsers fetch the new card after an update.
     add_extra_js_url(hass, f"{FRONTEND_URL}/{CARD_FILENAME}?v={VERSION}")
-    # What the pets know about each person, shared; and the loaded pets.
+    # What the pets know about each person, shared; the loaded pets; and the
+    # re-call notification each person gets for all of them.
     people = People(hass)
     await people.async_load()
-    hass.data[DOMAIN] = {"people": people, "pets": {}}
+    hass.data[DOMAIN] = {"people": people, "pets": {}, "recalls": notify.Recalls()}
     websocket_api.async_register_command(hass, websocket_answer)
     websocket_api.async_register_command(hass, websocket_forget_birthday)
     websocket_api.async_register_command(hass, websocket_birthday_phone)
@@ -441,14 +443,47 @@ async def async_setup_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
     hass.data[DOMAIN]["pets"][entry.entry_id] = coordinator
+    recalls: notify.Recalls = hass.data[DOMAIN]["recalls"]
+    for send in recalls.clear_stale(
+        list(coordinator.state.notify_users) if coordinator.state else [],
+        _recall_sender(hass),
+    ):
+        hass.async_create_background_task(send, f"{DOMAIN} notify")
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.async_start_home()
     return True
 
 
+def _recall_sender(hass: HomeAssistant) -> notify.Send:
+    """Clears the re-call notification with no pet to send it."""
+
+    async def send(users: list[str], text: str) -> None:
+        await notify.send(hass, users, text, notify.RECALL_TAG)
+
+    return send
+
+
+def _refresh_recalls(hass: HomeAssistant) -> None:
+    """A removed pet no longer asks in anyone's re-call notification (the
+    last one too: no pet left to send it)."""
+    data = hass.data.get(DOMAIN, {})
+    recalls: notify.Recalls | None = data.get("recalls")
+    if recalls is None:
+        return
+    pets: dict[str, PetCoordinator] = data["pets"]
+    asking = [a for pet in pets.values() if (a := pet.asking()) is not None]
+    for send in recalls.update(
+        asking, None, dt_util.utcnow().timestamp(), _recall_sender(hass)
+    ):
+        hass.async_create_background_task(send, f"{DOMAIN} notify")
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
     """Put the pet away. The coordinator saves itself on shutdown."""
-    hass.data[DOMAIN]["pets"].pop(entry.entry_id, None)
+    pets: dict[str, PetCoordinator] = hass.data[DOMAIN]["pets"]
+    pets.pop(entry.entry_id, None)
+    if pets:  # a reload of the only pet (options) keeps its bundle
+        _refresh_recalls(hass)
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
@@ -458,4 +493,5 @@ async def async_remove_entry(hass: HomeAssistant, entry: PetConfigEntry) -> None
     for key in ("missing_entities", "world_not_ready", "save_damaged"):
         ir.async_delete_issue(hass, DOMAIN, f"{key}_{entry.entry_id}")
     persistent_notification.async_dismiss(hass, f"{DOMAIN}_{entry.entry_id}_welcome")
+    _refresh_recalls(hass)
     await PetStore(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}").async_remove()

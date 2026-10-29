@@ -2162,6 +2162,8 @@ async def test_a_send_off_on_a_rainy_morning_a_few_times_a_week(
         bonds={me.id: {"points": model.R.BOND_LEVELS[4], "nickname": "sunbeam"}},
     )
     await setup(hass)
+    await hass.async_block_till_done()
+    phone.clear()  # the setup's clear of an old re-call notification
     coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
 
     async def leave_and_return() -> None:
@@ -2859,6 +2861,8 @@ async def test_a_birthday_on_the_phone_once_by_nickname(
         bonds={me.id: {"points": model.R.BOND_LEVELS[4], "nickname": "sunbeam"}},
     )
     config = await setup(hass)
+    await hass.async_block_till_done()
+    phone.clear()  # the setup's clear of an old re-call notification
     coordinator = config.runtime_data
     person = coordinator.people.person(me.id)
     person["birthday"] = "10-28"
@@ -2912,6 +2916,10 @@ async def test_one_birthday_message_across_pets_from_the_closest(
         assert await hass.config_entries.async_setup(config.entry_id)
         await hass.async_block_till_done()
         pets.append(config.runtime_data)
+    # A re-call notification from before the restart is cleared, once.
+    assert [c.data["message"] for c in phone] == ["clear_notification"]
+    assert phone[0].data["data"]["tag"] == "virtual_pet_recalls"
+    phone.clear()
     pets[0].people.person(me.id).update(birthday="10-28", birthday_phone=True)
     for pet in pets:  # each pet's own morning
         pet._birthday_morning()
@@ -3118,6 +3126,212 @@ async def test_lights_out_refused_when_rested(
     assert hass.states.get("switch.pip_lights_out").state == STATE_OFF
     log = hass.states.get("sensor.pip_last_care").attributes["log"]
     assert log[0]["action"] == "lights_out" and log[0]["result"] == "not_sleepy"
+
+
+async def _notified(
+    hass: HomeAssistant, pets: tuple[str, ...] = ("sensor.pip_mood",)
+) -> list[ServiceCall]:
+    me = await hass.auth.async_create_user("Me")
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": me.id, "device_name": "My Phone"}
+    ).add_to_hass(hass)
+    phone = async_mock_service(hass, "notify", "mobile_app_my_phone")
+    for pet in pets:
+        await hass.services.async_call(
+            DOMAIN,
+            "notify_me",
+            {"entity_id": pet, "enabled": True},
+            blocking=True,
+            context=Context(user_id=me.id),
+        )
+    return phone
+
+
+async def test_an_old_latch_recalls_once_in_the_bundle_as_a_normal_push(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    # A save from before re-calls: missed and latched, no latched_at.
+    hass_storage[STORE_KEY] = hatched_pet(now, hunger=20.0, latched=["hunger"])
+    await setup(hass)
+    phone = await _notified(hass)
+    for _ in range(47):  # nearly 4 hours: nothing yet
+        await settle(hass, freezer, 5 * 60)
+    assert phone == []
+    for _ in range(3):
+        await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert [c.data["message"] for c in phone] == ["Pip is hungry!"]
+    data = phone[0].data["data"]
+    assert data["tag"] == "virtual_pet_recalls"
+    assert "push" not in data and "actions" not in data  # normal, no buttons
+    # Fed: the bundle names no pet still asking, so it goes.
+    await press(hass, "button.pip_feed")
+    await hass.async_block_till_done()
+    assert phone[-1].data["message"] == "clear_notification"
+    assert phone[-1].data["data"]["tag"] == "virtual_pet_recalls"
+
+
+async def test_a_poop_call_sends_no_push(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, poops=[now - 25 * 60])
+    await setup(hass)
+    phone = await _notified(hass)
+    for _ in range(3):
+        await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert hass.states.get("binary_sensor.pip_calling").state == "on"
+    assert phone == []
+
+
+async def test_falling_ill_sends_one_push(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    from custom_components.virtual_pet import rates as R
+
+    misses = [now - i * 3600 for i in range(R.SICK_MISSES)]
+    hass_storage[STORE_KEY] = hatched_pet(now, recent_misses=misses)
+    await setup(hass)
+    phone = await _notified(hass)
+    await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert hass.states.get("binary_sensor.pip_calling").state == "on"
+    assert [c.data["message"] for c in phone] == ["Pip feels sick. Medicine?"]
+
+
+async def test_a_poop_call_taking_over_clears_the_call_on_the_phone(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    # A plea to play is on the phone (with Scold); a poop call, more urgent,
+    # replaces it with no event of its own and sends no push.
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=20.0, poops=[now - 24 * 60])
+    await setup(hass)
+    phone = await _notified(hass)
+    await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert [c.data["message"] for c in phone] == ["Pip wants to play!"]
+    await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert phone[-1].data["message"] == "clear_notification"
+    assert phone[-1].data["data"]["tag"] == "virtual_pet_test_pet_call"
+    assert len(phone) == 2
+
+
+async def test_a_sickness_woken_by_hand_sends_one_push(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    # Fell ill asleep: told at the wake. A hand wake tells it in its own
+    # batch, and the sick call follows on the next tick (the 0b audit's probe3).
+    hass_storage[STORE_KEY] = hatched_pet(
+        now,
+        lights_out=True,
+        asleep=True,
+        napping=True,
+        sick=True,
+        sick_unannounced="poop",
+    )
+    await setup(hass)
+    phone = await _notified(hass)
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.pip_lights_out"}, blocking=True
+    )
+    await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert hass.states.get("binary_sensor.pip_calling").state == "on"
+    assert [c.data["message"] for c in phone] == ["Pip feels sick. Medicine?"]
+
+
+async def test_removing_the_last_pet_clears_its_recall_bundle(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, hunger=20.0, latched=["hunger"], latched_at={"hunger": now - 5 * 3600}
+    )
+    config = await setup(hass)
+    phone = await _notified(hass)
+    await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert [c.data["message"] for c in phone] == ["Pip is hungry!"]
+    # A reload (an options change) keeps it: the pet still asks.
+    assert await hass.config_entries.async_reload(config.entry_id)
+    await hass.async_block_till_done()
+    assert len(phone) == 1
+    assert await hass.config_entries.async_remove(config.entry_id)
+    await hass.async_block_till_done()
+    assert phone[-1].data["message"] == "clear_notification"
+    assert phone[-1].data["data"]["tag"] == "virtual_pet_recalls"
+
+
+async def test_two_pets_left_unfed_are_named_together(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    # Mochi's need was missed an hour after Pip's. Pip re-calls first, and
+    # the bundle names Mochi too: it is still asking on the card.
+    await hass.config.async_set_time_zone("UTC")
+    for entry_id, name, missed in (
+        ("test_pet", "Pip", now - 5 * 3600),
+        ("other_pet", "Mochi", now - 4 * 3600 + 30 * 60),
+    ):
+        hass_storage[f"{DOMAIN}.{entry_id}"] = {
+            **hatched_pet(
+                now, hunger=20.0, latched=["hunger"], latched_at={"hunger": missed}
+            ),
+            "key": f"{DOMAIN}.{entry_id}",
+        }
+        hass_storage[f"{DOMAIN}.{entry_id}"]["data"]["name"] = name
+        config = MockConfigEntry(
+            domain=DOMAIN,
+            title=name,
+            data={CONF_NAME: name, "new_pet": True},
+            entry_id=entry_id,
+        )
+        config.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(config.entry_id)
+        await hass.async_block_till_done()
+    phone = await _notified(hass, ("sensor.pip_mood", "sensor.mochi_mood"))
+    await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert [c.data["message"] for c in phone] == ["Mochi and Pip would like a visit"]
+    # Mochi's own re-call opens within the 4 hours: no second buzz.
+    for _ in range(12):
+        await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert len(phone) == 1
+    # Past both re-calls' 20 minutes they still ask on the card, so it stays
+    # until neither does.
+    for _ in range(3):
+        await settle(hass, freezer, 5 * 60)
+    assert hass.states.get("binary_sensor.pip_calling").state == "off"
+    await press(hass, "button.pip_feed")
+    await settle(hass, freezer, 5 * 60)
+    assert len(phone) == 1
+    await press(hass, "button.mochi_feed")
+    await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert phone[-1].data["message"] == "clear_notification"
+    assert phone[-1].data["data"]["tag"] == "virtual_pet_recalls"
+    assert len(phone) == 2
 
 
 # --- Dropped games (Wave 0 PR 0f) ---------------------------------------------------

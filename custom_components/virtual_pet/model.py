@@ -80,6 +80,7 @@ _FLOATS = {
     "cool_until": 0.0,
     "last_praise": 0.0,
     "last_excite": 0.0,
+    "last_recall_at": 0.0,
 }
 _RANGES = {
     "age_hours": (0.0, math.inf),
@@ -134,6 +135,10 @@ def _str_map(v: Any) -> dict[str, str]:
 
 def _int_map(v: Any) -> dict[str, int]:
     return {k: int(x) for k, x in _mapping(v).items() if _str(k) and _num(x)}
+
+
+def _float_map(v: Any) -> dict[str, float]:
+    return {k: float(x) for k, x in _mapping(v).items() if _str(k) and _num(x)}
 
 
 def _records(v: Any, **need: Any) -> list[dict[str, Any]]:
@@ -241,6 +246,7 @@ class Call:
     reason: str  # one of CALL_PRIORITY, or "fake"
     started: float
     deadline: float
+    recall: bool = False  # a latched need asking again (RECALL_HOURS)
 
 
 @dataclass
@@ -283,6 +289,8 @@ class PetState:
     cool_until: float = 0.0  # enjoying the fan
     call: Call | None = None
     latched: list[str] = field(default_factory=list)  # called, not re-armed
+    latched_at: dict[str, float] = field(default_factory=dict)  # last missed
+    last_recall_at: float = 0.0  # one re-call clock per pet
     care_misses: int = 0
     discipline_misses: int = 0
     recent_misses: list[float] = field(default_factory=list)
@@ -403,6 +411,16 @@ class PetState:
         kwargs["latched"] = [
             r for r in _strings(kwargs.get("latched")) if r in CALL_PRIORITY
         ]
+        # A latch from before re-calls counts from the save's own clock, which
+        # catch_up moves to the load: it may call again RECALL_HOURS after the
+        # update (the release notes say so).
+        # None later than the save itself: a damaged one can't hush re-calls.
+        saved = kwargs["last_updated"]
+        since = _float_map(kwargs.get("latched_at"))
+        kwargs["latched_at"] = {
+            r: min(since.get(r, saved), saved) for r in kwargs["latched"]
+        }
+        kwargs["last_recall_at"] = min(kwargs["last_recall_at"], saved)
         seen = {
             k: float(v)
             for k, v in _mapping(kwargs.get("trait_hours")).items()
@@ -416,7 +434,10 @@ class PetState:
         if isinstance(call, dict) and call.get("reason") in reasons:
             if _num(call.get("started")) and _num(call.get("deadline")):
                 kwargs["call"] = Call(
-                    call["reason"], float(call["started"]), float(call["deadline"])
+                    call["reason"],
+                    float(call["started"]),
+                    float(call["deadline"]),
+                    call.get("recall") is True,
                 )
         kwargs["game"] = _game(kwargs.get("game"))
         opening, opening_at = (
@@ -593,6 +614,8 @@ def shift_times(state: PetState, delta: float) -> None:
         state.call.deadline += delta
     if state.stayed_up_since is not None:
         state.stayed_up_since += delta
+    state.latched_at = {r: at + delta for r, at in state.latched_at.items()}
+    state.last_recall_at += delta
     state.last_praise += delta
     state.last_excite += delta
     state.kept_up_until += delta
@@ -849,13 +872,14 @@ def _wake(
     call.deadline = max(call.deadline, t + R.RESUME_MIN_MINUTES * 60)
     if how == "morning":
         # The phones were cleared when it fell asleep: ask again, quietly.
-        events.append(
-            {
-                "type": "call_started",
-                "reason": "happiness" if call.reason == "fake" else call.reason,
-                "resumed": True,
-            }
-        )
+        event: Event = {
+            "type": "call_started",
+            "reason": "happiness" if call.reason == "fake" else call.reason,
+            "resumed": True,
+        }
+        if call.recall:
+            event["recall"] = True
+        events.append(event)
 
 
 def _decay(state: PetState, hours: float, t: float, settings: Settings) -> None:
@@ -988,9 +1012,26 @@ def _rearmed(state: PetState, reason: str) -> bool:
     return getattr(state, reason) > high
 
 
+def _latch(state: PetState, reason: str, t: float) -> None:
+    """Missed: no new call about this until it re-arms, but a re-call
+    RECALL_HOURS from now if it still holds."""
+    if reason not in state.latched:
+        state.latched.append(reason)
+    state.latched_at[reason] = t
+
+
+def still_asking(state: PetState, t: float) -> list[str]:
+    """Needs missed and still unmet, most urgent first: the pet keeps asking
+    about them on the card, and re-calls about them."""
+    return [
+        r for r in CALL_PRIORITY if r in state.latched and _call_condition(state, r, t)
+    ]
+
+
 def _unlatch(state: PetState, reason: str) -> None:
     if reason in state.latched:
         state.latched.remove(reason)
+    state.latched_at.pop(reason, None)
 
 
 def _calls(
@@ -1028,12 +1069,19 @@ def _calls(
             if call.reason == "fake":
                 state.discipline_misses += 1
                 events.append({"type": "discipline_miss"})
+            elif call.recall:
+                # One neglect is one miss: a missed re-call only waits
+                # another RECALL_HOURS.
+                _latch(state, call.reason, t)
+                events.append(
+                    {"type": "call_expired", "reason": call.reason, "recall": True}
+                )
             else:
                 state.care_misses += 1
                 state.recent_misses.append(t)
                 # One neglect is one miss: no new call about this until it
-                # recovers past the re-arm level.
-                state.latched.append(call.reason)
+                # recovers past the re-arm level, bar a re-call.
+                _latch(state, call.reason, t)
                 events.append(
                     {
                         "type": "care_miss",
@@ -1049,6 +1097,21 @@ def _calls(
     for reason in CALL_PRIORITY:
         if reason not in state.latched and _call_condition(state, reason, t):
             _start_call(state, reason, t, events)
+            return
+
+    # A missed need still unmet asks again, the one waiting longest first (so
+    # each gets its turn; first mate, 0b audit), at most once per RECALL_HOURS
+    # per pet. It stays latched: answering it or missing it again is not a
+    # new miss.
+    wait = R.RECALL_HOURS * 3600
+    if t - state.last_recall_at >= wait:
+        due = [
+            r for r in still_asking(state, t) if t - state.latched_at.get(r, t) >= wait
+        ]
+        if due:
+            reason = min(due, key=lambda r: state.latched_at.get(r, t))
+            state.last_recall_at = t
+            _start_call(state, reason, t, events, recall=True)
             return
 
     if (
@@ -1259,13 +1322,19 @@ def sitter_settles(state: PetState) -> bool:
     return False
 
 
-def _start_call(state: PetState, reason: str, t: float, events: list[Event]) -> None:
-    state.call = Call(reason, t, t + R.CALL_WINDOW_MINUTES * 60)
+def _start_call(
+    state: PetState, reason: str, t: float, events: list[Event], recall: bool = False
+) -> None:
+    state.call = Call(reason, t, t + R.CALL_WINDOW_MINUTES * 60, recall)
     # A fake call looks like a plea to play from outside; the status screen
     # (happiness is fine) is how a player catches it.
-    events.append(
-        {"type": "call_started", "reason": "happiness" if reason == "fake" else reason}
-    )
+    event: Event = {
+        "type": "call_started",
+        "reason": "happiness" if reason == "fake" else reason,
+    }
+    if recall:
+        event["recall"] = True  # notifies bundled, as a normal push
+    events.append(event)
 
 
 # --- Care actions -----------------------------------------------------------

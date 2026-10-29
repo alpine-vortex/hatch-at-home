@@ -2664,6 +2664,184 @@ def test_a_later_versions_keys_go_on_to_the_next_generation():
     assert egg.to_dict()["from_later"] == {"x": 1}
 
 
+# --- Re-calls (Wave 0 PR 0b) --------------------------------------------------
+
+
+def _missed_hunger(start: float) -> model.PetState:
+    """A hunger call missed, the pet still hungry."""
+    pet = hatched(start, hunger=20.0)
+    run(pet, start + 30 * MIN)
+    assert pet.care_misses == 1 and pet.call is None and "hunger" in pet.latched
+    return pet
+
+
+def test_a_missed_call_calls_again_after_4_hours_if_still_needed():
+    start = at(9)
+    pet = _missed_hunger(start)
+    missed = pet.latched_at["hunger"]
+    events = run(pet, missed + R.RECALL_HOURS * HOUR - MIN)
+    assert "call_started" not in types(events)
+    events = run(pet, missed + R.RECALL_HOURS * HOUR)
+    assert {"type": "call_started", "reason": "hunger", "recall": True} in events
+    assert pet.call is not None and pet.call.recall
+    # A first call doesn't carry the flag at all.
+    assert all("recall" not in e for e in run(hatched(start, hunger=20.0), start + MIN))
+
+
+def test_a_missed_recall_is_not_another_care_miss():
+    start = at(9)
+    pet = _missed_hunger(start)
+    first = pet.latched_at["hunger"] + R.RECALL_HOURS * HOUR
+    run(pet, first)
+    events = run(pet, first + 30 * MIN)
+    assert {"type": "call_expired", "reason": "hunger", "recall": True} in events
+    assert "care_miss" not in types(events)
+    assert pet.care_misses == 1 and "hunger" in pet.latched
+    # It waits another 4 hours from that miss.
+    expired = pet.latched_at["hunger"]
+    assert "call_started" not in types(run(pet, expired + R.RECALL_HOURS * HOUR - MIN))
+    assert pet.call is None
+    run(pet, expired + R.RECALL_HOURS * HOUR)
+    assert pet.call is not None and pet.call.recall
+
+
+def test_a_recalled_need_once_answered_stays_latched_till_it_rearms():
+    start = at(9)
+    pet = _missed_hunger(start)
+    run(pet, pet.latched_at["hunger"] + R.RECALL_HOURS * HOUR)
+    pet.hunger = 30.0  # fed a little: answered, but not past the re-arm level
+    events = run(pet, pet.last_updated + MIN)
+    assert "call_answered" in types(events)
+    assert "hunger" in pet.latched and pet.care_misses == 1
+    pet.hunger = 60.0  # past 40: it calls afresh next time
+    run(pet, pet.last_updated + MIN)
+    assert "hunger" not in pet.latched and "hunger" not in pet.latched_at
+
+
+def test_no_recall_once_the_need_is_met():
+    start = at(9)
+    pet = _missed_hunger(start)
+    pet.hunger = 60.0
+    events = run(pet, start + 5 * HOUR)
+    assert "call_started" not in types(events)
+    assert pet.latched == [] and pet.latched_at == {}
+
+
+def test_two_needs_latched_together_recall_4_hours_apart_the_more_urgent_first():
+    start = at(9)
+    pet = hatched(start, hunger=20.0, happiness=20.0)
+    pet.latched = ["happiness", "hunger"]
+    pet.latched_at = {"happiness": start - 5 * HOUR, "hunger": start - 5 * HOUR}
+    events = run(pet, start + MIN)
+    assert {"type": "call_started", "reason": "hunger", "recall": True} in events
+    first = pet.last_recall_at
+    events = run(pet, first + R.RECALL_HOURS * HOUR + MIN)
+    starts = [e for e in events if e["type"] == "call_started"]
+    assert starts == [{"type": "call_started", "reason": "happiness", "recall": True}]
+    # Not before the pet's clock allowed it.
+    assert pet.call.started >= first + R.RECALL_HOURS * HOUR
+
+
+def test_recalls_go_longest_waiting_first_so_every_need_gets_its_turn():
+    # Three needs left unmet (the 0b audit's probe1b): before, hunger and
+    # happiness took turns and the third never asked again.
+    start = at(9)
+    pet = hatched(start, hunger=20.0, happiness=20.0, energy=10.0)
+    pet.latched = ["hunger", "energy", "happiness"]
+    pet.latched_at = {
+        "happiness": start - 7 * HOUR,
+        "energy": start - 6 * HOUR,
+        "hunger": start - 5 * HOUR,
+    }
+    asked = []
+    t = start
+    while t < start + 2 * 24 * HOUR:
+        t += 5 * MIN
+        pet.hunger, pet.happiness, pet.energy = 20.0, 20.0, 10.0  # nobody comes
+        pet.asleep = pet.napping = False
+        events = run(pet, t)
+        asked += [
+            e["reason"]
+            for e in events
+            if e["type"] == "call_started" and e.get("recall") and not e.get("resumed")
+        ]
+    assert asked[:3] == ["happiness", "energy", "hunger"]  # oldest first
+    assert asked[3:6] == asked[:3]  # and round again, each in turn
+
+
+def test_a_sick_pet_asks_for_medicine_every_4_hours():
+    start = at(9)
+    pet = hatched(start, sick=True)
+    run(pet, start + 30 * MIN)
+    assert "sick" in pet.latched and pet.care_misses == 1
+    run(pet, pet.latched_at["sick"] + R.RECALL_HOURS * HOUR)
+    assert pet.call is not None and pet.call.reason == "sick" and pet.call.recall
+
+
+def test_recalls_pause_while_away_and_shift_with_the_clock():
+    start = at(9)
+    pet = _missed_hunger(start)
+    pet.last_recall_at = start - HOUR
+    missed = pet.latched_at["hunger"]
+    model.shift_times(pet, 3 * 24 * HOUR)
+    assert pet.latched_at["hunger"] == missed + 3 * 24 * HOUR
+    assert pet.last_recall_at == start - HOUR + 3 * 24 * HOUR
+
+
+def test_an_old_save_loads_with_its_latches_dated_to_the_update():
+    saved = at(9)
+    old = model.PetState.new("Pip", saved - 30 * HOUR).to_dict()
+    old.update(last_updated=saved, age_hours=30.0, hunger=10.0, latched=["hunger"])
+    for key in ("latched_at", "last_recall_at"):
+        old.pop(key)
+    old["call"] = {"reason": "dirty", "started": saved, "deadline": saved + 600}
+    # Three days off, then the update loads it, and the downtime is frozen.
+    load = saved + 3 * 24 * HOUR
+    pet = model.PetState.from_dict(old, now=load)
+    model.catch_up(pet, load)
+    assert pet.latched_at == {"hunger": load}
+    assert pet.last_recall_at == 3 * 24 * HOUR  # 0 on the save's clock
+    assert pet.call is not None and not pet.call.recall
+    pet.call = None
+    pet.poops = []
+    events = run(pet, load + R.RECALL_HOURS * HOUR - MIN)
+    assert "call_started" not in types(events)
+    events = run(pet, load + R.RECALL_HOURS * HOUR)
+    assert {"type": "call_started", "reason": "hunger", "recall": True} in events
+
+
+def test_recall_fields_survive_a_save_and_bad_ones_are_dropped():
+    start = at(9)
+    pet = _missed_hunger(start)
+    run(pet, pet.latched_at["hunger"] + R.RECALL_HOURS * HOUR)
+    back = model.PetState.from_dict(pet.to_dict(), now=pet.last_updated)
+    assert back.call == pet.call and back.call.recall
+    assert back.latched_at == pet.latched_at
+    assert back.last_recall_at == pet.last_recall_at
+    data = pet.to_dict()
+    data["latched_at"] = {"hunger": "soon", "dirty": 5.0, 3: 1.0}
+    data["last_recall_at"] = "never"
+    data["call"]["recall"] = "yes"
+    back = model.PetState.from_dict(data, now=pet.last_updated)
+    # A latch with no good date counts from the save; one with no latch goes.
+    assert back.latched_at == {"hunger": pet.last_updated}
+    assert back.last_recall_at == 0.0
+    assert back.call is not None and not back.call.recall
+
+
+def test_a_save_dated_in_the_future_cant_hush_recalls():
+    start = at(9)
+    pet = _missed_hunger(start)
+    data = pet.to_dict()
+    data["latched_at"] = {"hunger": pet.last_updated + 365 * 24 * HOUR}
+    data["last_recall_at"] = pet.last_updated + 365 * 24 * HOUR
+    back = model.PetState.from_dict(data, now=pet.last_updated)
+    assert back.latched_at == {"hunger": pet.last_updated}
+    assert back.last_recall_at == pet.last_updated
+    run(back, pet.last_updated + R.RECALL_HOURS * HOUR)
+    assert back.call is not None and back.call.recall
+
+
 def test_a_full_pet_refuses_a_snack():
     now = at(14)
     pet = hatched(now, hunger=R.FEED_FULL_AT, happiness=50)

@@ -276,6 +276,18 @@ def ping_kind(event: dict) -> str:
     return "resumed" if event.get("resumed") else "first"
 
 
+def card_only(event: dict, batch: list[dict]) -> bool:
+    """What PR 0b keeps off the phones (notify.pushes): a poop call (owner,
+    Wave 0 Q4), and a sick call that came with became_sick (one push per
+    sickness)."""
+    if event["type"] != "call_started":
+        return False
+    sick_told = any(e["type"] == "became_sick" for e in batch)
+    return event.get("reason") == "dirty" or (
+        event.get("reason") == "sick" and sick_told
+    )
+
+
 def _avg(s: M.PetState, total: str, samples: str, scale: float) -> float | None:
     n = getattr(s, samples, 0)
     return round(scale * getattr(s, total) / n, 1) if n else None
@@ -299,7 +311,11 @@ def run(policy: Policy, seed: int) -> dict[str, object]:
             continue
         if hatched_at is None:
             hatched_at = t
-        pings += [(t, ping_kind(e)) for e in events if e["type"] in NOTIFYING]
+        pings += [
+            (t, ping_kind(e), card_only(e, events))
+            for e in events
+            if e["type"] in NOTIFYING
+        ]
         for e in events:
             if e["type"] == "care_miss" and e.get("reason") == "energy":
                 counts["energy_misses"] += 1
@@ -318,7 +334,7 @@ def run(policy: Policy, seed: int) -> dict[str, object]:
     out.update(
         pings=pings,
         notify_day=round(len(pings) / days, 1),
-        recall_day=round(sum(kind == "recall" for _, kind in pings) / days, 1),
+        recall_day=round(sum(p[1] == "recall" for p in pings) / days, 1),
         happy_calls_day=round(counts["happy_calls"] / days, 2),
         whines_day=round(counts["whines"] / days, 2),
         energy_misses=counts["energy_misses"],
@@ -430,27 +446,36 @@ RECALL_GAP = 4 * 3600  # options (a) and (c): at most one re-call ping per 4 h
 HOUSE_BUDGET = 2  # option (b): re-call pings per person per day, all pets
 
 
-def house_pings(timelines: list[list[tuple[float, str]]], option: str) -> list[str]:
+def house_pings(
+    timelines: list[list[tuple[float, str, bool]]], option: str
+) -> list[str]:
     """The pings one person gets, by kind, from every pet in the house.
 
     today/a: as the model sends them (a: the model's own re-call rule).
     b: re-calls past HOUSE_BUDGET a day, house-wide, go to the card only.
     c: re-calls bundled into one ping naming every pet still asking, at most
        one per RECALL_GAP across the house.
-    d: re-calls go to the card only."""
-    merged = sorted((t, kind) for line in timelines for t, kind in line)
+    d: re-calls go to the card only.
+    0b: what ships (c, plus no poop pushes and one push per sickness)."""
+    merged = sorted(p for line in timelines for p in line)
     sent: list[str] = []
     budget: dict[int, int] = {}
     last_bundle = -math.inf
-    for t, kind in merged:
-        if kind != "recall" or option in ("today", "a"):
+    for t, kind, quiet in merged:
+        if option == "0b":
+            if quiet:
+                continue
+            option_now = "c"
+        else:
+            option_now = option
+        if kind != "recall" or option_now in ("today", "a"):
             sent.append(kind)
-        elif option == "b":
+        elif option_now == "b":
             day = int(t // 86400)
             if budget.get(day, 0) < HOUSE_BUDGET:
                 budget[day] = budget.get(day, 0) + 1
                 sent.append(kind)
-        elif option == "c" and t - last_bundle >= RECALL_GAP:
+        elif option_now == "c" and t - last_bundle >= RECALL_GAP:
             last_bundle = t
             sent.append(kind)
     return sent
@@ -459,7 +484,7 @@ def house_pings(timelines: list[list[tuple[float, str]]], option: str) -> list[s
 def notify_table(houses: int) -> None:
     """Pings per person per day of childhood (14 days), for 1, 2 and 4 pets
     raised the same way. Each pet is its own seed."""
-    options = ("a", "b", "c", "d")
+    options = ("a", "b", "c", "d", "0b")
     print(
         "phone pings per person per day: mean (min-max over houses); first+resumed / re-call"
     )

@@ -11,12 +11,16 @@ gave them.
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable, Coroutine
+from dataclasses import dataclass, field
 from datetime import date, timedelta
+import math
 from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.util import slugify
 
+from . import rates as R
 from .const import LOGGER
 
 CALLS = {
@@ -97,6 +101,99 @@ CALL_OVER_EVENTS = {
 def call_tag(pet_id: str) -> str:
     """The tag shared by a pet's call notifications."""
     return f"virtual_pet_{pet_id}_call"
+
+
+def pushes(event: dict[str, Any], batch: list[dict[str, Any]]) -> bool:
+    """Whether a call event goes to the pet's own call notification. A
+    poop call stays on the card and the sensors (owner, Wave 0 Q4); a sick
+    call that came with became_sick is already on the phone; a re-call goes
+    in the house's bundle (Recalls)."""
+    if event["type"] != "call_started":
+        return True
+    if event.get("recall") or event.get("reason") == "dirty":
+        return False
+    return not (
+        event.get("reason") == "sick" and any(e["type"] == "became_sick" for e in batch)
+    )
+
+
+# Re-calls (a missed need asking again) go to each person in one bundled
+# notification for every pet of theirs still asking (owner, Wave 0 Q1).
+RECALL_TAG = "virtual_pet_recalls"
+
+
+def visit(names: list[str]) -> str:
+    """The bundle's text for two or more pets (copy W4)."""
+    return f"{', '.join(names[:-1])} and {names[-1]} would like a visit"
+
+
+@dataclass
+class Asking:
+    """A pet still asking (a need it missed still holds), as the bundle
+    names it."""
+
+    pet_id: str
+    name: str
+    text: str  # its usual call text, for what it asks about now
+    users: list[str]  # who get its notifications
+    nickname: Callable[[str], str | None]  # its nickname for a person
+
+
+Send = Callable[[list[str], str], Coroutine[Any, Any, None]]
+
+
+@dataclass
+class Recalls:
+    """The house's re-call bundle, keyed by person: at most one push per
+    RECALL_HOURS each, sent when one of their pets re-calls, a normal one
+    with no buttons, naming every pet of theirs still asking. Answering one
+    pet doesn't rewrite it (that would buzz again); it is cleared once none
+    of its pets is still asking. Memory only: a restart clears it once per
+    person (fresh)."""
+
+    last_sent: dict[str, float] = field(default_factory=dict)
+    shown: dict[str, set[str]] = field(default_factory=dict)  # pet IDs named
+    fresh: set[str] = field(default_factory=set)  # cleared or sent since start
+
+    def clear_stale(
+        self, users: list[str], send: Send
+    ) -> list[Coroutine[Any, Any, None]]:
+        """Clear a bundle left on these people's phones from before a
+        restart, once each (never one sent since)."""
+        stale = [user for user in users if user not in self.fresh]
+        self.fresh.update(stale)
+        return [send(stale, "clear_notification")] if stale else []
+
+    def update(
+        self, asking: list[Asking], started: str | None, now: float, send: Send
+    ) -> list[Coroutine[Any, Any, None]]:
+        """The sends for the house as it is now. started: the pet whose
+        re-call just began, if any."""
+        open_ids = {a.pet_id for a in asking}
+        sends = []
+        for user, pets in list(self.shown.items()):
+            if not pets & open_ids:
+                del self.shown[user]
+                sends.append(send([user], "clear_notification"))
+        new = next((a for a in asking if a.pet_id == started), None)
+        if new is None:
+            return sends
+        for user in new.users:
+            if now - self.last_sent.get(user, -math.inf) < R.RECALL_HOURS * 3600:
+                continue  # it stays on the card until the next bundle
+            theirs = sorted(
+                (a for a in asking if user in a.users), key=lambda a: a.name
+            )
+            if len(theirs) == 1:
+                nickname = new.nickname(user)
+                text = to_friend(new.text, nickname) if nickname else new.text
+            else:
+                text = visit([a.name for a in theirs])
+            self.last_sent[user] = now
+            self.fresh.add(user)
+            self.shown[user] = {a.pet_id for a in theirs}
+            sends.append(send([user], text))
+        return sends
 
 
 def actions(event: dict[str, Any], pet_id: str) -> list[dict[str, str]]:

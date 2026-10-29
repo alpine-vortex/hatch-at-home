@@ -178,8 +178,9 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 
   "My day" is one switch per person, for every pet. Phone focus modes and Do Not
   Disturb are left to your phone: the pet's calls and sickness are time-sensitive
-  (they may come through a focus you allow), everything else waits like any other
-  notification. Each person only ever sees their own bond. Care through Assist counts for
+  (they may come through a focus you allow); a need asking again is an ordinary
+  notification, and poop calls stay on the card. Everything else waits like any
+  other notification. Each person only ever sees their own bond. Care through Assist counts for
   whoever is signed in; automations build no bond. A new generation keeps the household's bonds. (The card tells the pet who
   looked in with `virtual_pet.visit`, counted at most hourly.)
 - **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
@@ -385,8 +386,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 - **Calls:** when hunger or happiness drops below 25, energy below 20, a poop
   sits for 30 minutes, or it gets sick, the pet calls. You have 20 minutes to
   answer (feed, play, lights out, clean, medicine). A missed call is a
-  **care miss**. After a miss, it won't call about the same thing again until
-  that stat recovers above 40, so one forgotten meal is one miss, not twenty.
+  **care miss**. After a miss, it won't count another miss for it until the stat
+  recovers above 40, but if the need lasts it asks again every 4 hours.
 - **Fake calls:** now and then it whines when nothing is really wrong. *Scold*
   raises discipline. *Praise* during a fake call spoils it. Scolding for
   nothing makes it sad. Ignoring a fake call is not a care miss.
@@ -519,9 +520,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   Thanksgiving ("Happy Thanksgiving! Pip is thankful for you 🦃") on your phone, through
   the Home Assistant app. It only changes them for whoever is signed in; each person
   chooses for themselves. Automations can use `virtual_pet.notify_me` the same way.
-  A call's notification has buttons that answer it (Feed, Clean, Medicine, Lights
-  out; Play or Scold for a plea to play), and it clears itself once the call is
-  answered or missed. Fast-forward never notifies.
+  A call's notification has buttons that answer it (Feed, Medicine, Lights out; Play
+  or Scold for a plea to play), and it clears itself once the call is answered or
+  missed. A need asking again is an ordinary notification, and poop calls stay on
+  the card. Fast-forward never notifies.
 - **Sounds:** off until you turn them on. On the status screen, tap "sounds here"
   for little chirps when the pet calls, hatches, learns a trait or wins a game. It
   only changes this browser, and the pet stays quiet while it sleeps and from 21:00
@@ -648,7 +650,9 @@ actions:
 Fired on the HA event bus, each with `pet_id` (the config entry ID). No person
 names are included.
 
-`virtual_pet_call_started`, `virtual_pet_call_answered`, `virtual_pet_care_miss`,
+`virtual_pet_call_started` (with `recall: true` when a missed need asks again),
+`virtual_pet_call_answered`, `virtual_pet_care_miss`, `virtual_pet_call_expired` (a
+missed re-call, which isn't a care miss),
 `virtual_pet_discipline_miss`, `virtual_pet_pooped`, `virtual_pet_became_sick`,
 `virtual_pet_recovered`, `virtual_pet_fell_asleep`, `virtual_pet_woke_up`,
 `virtual_pet_stage_changed` (with `personality` on becoming a teen, `upbringing` on reaching adulthood), `virtual_pet_care`, `virtual_pet_hatched`,
