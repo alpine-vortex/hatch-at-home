@@ -288,6 +288,16 @@ async def test_egg_hatches_into_a_roster_species(
     assert attrs["raised"] == [species]
 
 
+async def test_fast_forwarded_hatch_keeps_the_real_birthday(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory
+) -> None:
+    freezer.move_to("2026-10-26 23:50:00+00:00")
+    await setup(hass)
+    await hass.services.async_call(DOMAIN, "fast_forward", {"hours": 1}, blocking=True)
+    attrs = hass.states.get("sensor.pip_life_stage").attributes
+    assert attrs["hatched_on"] == "2026-10-26"  # not the simulated midnight's date
+
+
 async def test_phase2_pet_becomes_a_woodland_bird(
     hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
 ) -> None:

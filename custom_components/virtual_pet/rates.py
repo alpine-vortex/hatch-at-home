@@ -95,7 +95,7 @@ GAME_IDLE_MINUTES = 3  # an unfinished game is dropped after this
 CHORE_TREAT_HUNGER = 10.0
 CHORE_TREAT_HAPPINESS = 10.0
 CHORE_TREATS_PER_DAY = 5
-CHORE_TREATS_WAITING = 3  # kept for it while it sleeps or is away
+CHORE_TREATS_WAITING = CHORE_TREATS_PER_DAY  # all kept while it sleeps or is away
 
 # --- Poop -------------------------------------------------------------------
 

@@ -2849,7 +2849,7 @@ class HatchPetCard extends HTMLElement {
         say("ok, ok... ♪");
         break;
       case "call_answered":
-        if (m.reason === "fake") { // only a fair scold answers a fake call
+        if (m.reason === "fake" && m.answer !== "spoiled") { // only a fair scold sulks
           say("ok... sorry");
           this._animate(s, s.pet, "sulk", 800);
         }

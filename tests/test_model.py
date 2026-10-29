@@ -300,6 +300,67 @@ def test_scold_fake_call_raises_discipline():
     assert pet.call is None
 
 
+def test_playing_answers_a_fake_call_like_praise():
+    start = at(9)
+    pet = hatched(start, happiness=50.0, discipline=50.0)
+    pet.call = model.Call("fake", start, start + 20 * MIN)
+    result, events = model.apply_action(pet, "play", start + MIN, NoLuck())
+    assert result == "spoiled"
+    assert pet.call is None
+    assert pet.discipline == 50.0 + R.PRAISE_WHINING_DISCIPLINE
+    assert pet.happiness > 50.0
+    assert {"type": "call_answered", "reason": "fake", "answer": "spoiled"} in events
+    later = run(pet, start + 30 * MIN)
+    assert "discipline_miss" not in types(later) and pet.discipline_misses == 0
+
+
+def test_a_scolded_fake_call_says_it_was_a_scold():
+    start = at(9)
+    pet = hatched(start)
+    pet.call = model.Call("fake", start, start + 20 * MIN)
+    _, events = model.apply_action(pet, "scold", start + MIN, NoLuck())
+    assert {"type": "call_answered", "reason": "fake", "answer": "scold"} in events
+    pet.call = model.Call("fake", start, start + 20 * MIN)
+    _, events = model.apply_action(pet, "praise", start + 2 * MIN, NoLuck())
+    assert {"type": "call_answered", "reason": "fake", "answer": "spoiled"} in events
+
+
+def test_sick_unannounced_survives_a_save_and_bad_values_are_dropped():
+    pet = hatched(at(9))
+    pet.sick, pet.sick_unannounced = True, "neglect"
+    assert model.PetState.from_dict(pet.to_dict()).sick_unannounced == "neglect"
+    data = pet.to_dict()
+    data["sick_unannounced"] = 7
+    assert model.PetState.from_dict(data).sick_unannounced is None
+    del data["sick_unannounced"]  # a save from before the field
+    assert model.PetState.from_dict(data).sick_unannounced is None
+
+
+def test_every_answer_to_a_fake_call_clears_its_notification():
+    from custom_components.virtual_pet import notify
+
+    for action in ("scold", "praise", "play"):
+        start = at(9)
+        pet = hatched(start)
+        pet.call = model.Call("fake", start, start + 20 * MIN)
+        _, events = model.apply_action(pet, action, start + MIN, NoLuck())
+        assert pet.call is None
+        assert any(e["type"] in notify.CALL_OVER_EVENTS for e in events), action
+
+
+def test_sickness_while_asleep_is_told_on_waking():
+    start = at(23, 30)
+    pet = hatched(start, health=R.SICK_BELOW_HEALTH - 1)
+    pet.asleep = True
+    pet.wake_at = at(7, day=2)
+    events = run(pet, at(1, day=2))
+    assert pet.sick and "became_sick" not in types(events)
+    events = run(pet, at(7, 10, day=2))
+    assert types(events).count("became_sick") == 1
+    assert "woke_up" in types(events)
+    assert model.apply_action(pet, "medicine", pet.last_updated, NoLuck())[0] == "ok"
+
+
 def test_scolding_for_nothing_is_unfair():
     pet = hatched(at(9), happiness=50.0)
     result, _ = model.apply_action(pet, "scold", at(9), NoLuck())
@@ -827,8 +888,9 @@ def test_relearning_an_inherited_trait_deepens_it_to_at_most_three_stars():
         {"sun_lover": 3},
     )
     capped.trait_hours = dict(pet.trait_hours)
-    live(capped, at(12, 10), house("sunny"))
+    events = live(capped, at(12, 10), house("sunny"))
     assert model.trait_level(capped, "sun_lover") == 3
+    assert "trait_deepened" not in types(events) and capped.inherited == {}
 
 
 def test_effects_grow_with_the_level():
@@ -1430,8 +1492,10 @@ def test_chores_earn_treats_up_to_a_daily_limit():
     assert pet.hunger == 50.0 + 2 * R.CHORE_TREAT_HUNGER
     assert pet.care_log[0]["action"] == "chore_treat"
     assert model.chores_done(pet, 10, start + HOUR) == R.CHORE_TREATS_PER_DAY - 2
-    assert pet.treats_waiting == R.CHORE_TREATS_WAITING  # the rest are capped
-    model.give_treats(pet, start + HOUR)
+    assert pet.treats_waiting == R.CHORE_TREATS_PER_DAY - 2  # every one is kept
+    assert (
+        len(types(model.give_treats(pet, start + HOUR))) == R.CHORE_TREATS_PER_DAY - 2
+    )
     assert model.chores_done(pet, 1, start + 2 * HOUR) == 0  # the day's limit
     assert model.chores_done(pet, 1, start + 25 * HOUR) == 1  # a new day
 
@@ -1445,6 +1509,24 @@ def test_chore_treats_wait_for_it_to_wake_up():
     events = model.advance(pet, at(7, 10, day=2), SETTINGS, NoLuck(), max_gap=None)
     assert "chore_treat" in types(events)
     assert pet.treats_waiting == 0
+
+
+def test_every_chore_treat_earned_is_delivered_after_sleep():
+    pet = hatched(at(23, 30))
+    pet.asleep = True
+    pet.wake_at = at(7, day=2)
+    assert model.chores_done(pet, 9, at(23, 40)) == R.CHORE_TREATS_PER_DAY
+    events = model.advance(pet, at(7, 10, day=2), SETTINGS, NoLuck(), max_gap=None)
+    assert types(events).count("chore_treat") == R.CHORE_TREATS_PER_DAY
+
+
+def test_every_chore_treat_earned_is_delivered_after_away():
+    pet = hatched(at(9))
+    pet.away = True
+    assert model.chores_done(pet, 5, at(9)) == 5
+    assert model.give_treats(pet, at(10)) == []
+    pet.away = False
+    assert types(model.give_treats(pet, at(11))) == ["chore_treat"] * 5
 
 
 def test_old_saves_without_weight_start_in_the_middle():
