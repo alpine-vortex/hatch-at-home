@@ -38,11 +38,13 @@ sturdier idle-life card check). Pre-released: **0.34.0b1** (PR #31, the photo), 
 owner approved; owner art sign-off 2026-10-28, open calls accepted: the firefly adult's
 legs, the ball python child's unused climb, the hermit crab's hat on its shell, the
 duckling's 1.2 adult scale). **There will be no 0.34.0** (owner, 2026-10-28):
-after the owner's phone test, the next full release is **0.35.0**, with all three.
+**0.35.0 is the full release** with all of it plus privacy P1 (PR #45, 2026-10-28). The
+phone test is no longer a gate (owner): it's a running list in the owner's tududi task.
+Decisions taken up front for the rest: `docs/decisions-2026-10-28.md`.
 
-**Privacy P1 is built as 0.35.0b4** (crew branch
-`crew/hatch-at-home-s2434-privacy-p1-damaged-saves-salva`, 2026-10-28; from
-`docs/plan-2026-10-28-privacy-hardening.md` draft 2; awaiting its tier-2 audit and PR).
+**Privacy P1 is merged and released in 0.35.0** (PR #45, 2026-10-28; from
+`docs/plan-2026-10-28-privacy-hardening.md` draft 2, plus all 12 of its tier-2 audit's
+findings, the missing-save wording and the catchphrase keep button fitting two rows).
 F5: `PetState.from_dict(data, default_name, now)` type-checks every known key and keeps
 unknown ones (`state.unknown`, merged back by `to_dict`); a non-object root raises
 `model.DamagedSave`, and any load error falls to `PetState.salvage` (name, generation,
