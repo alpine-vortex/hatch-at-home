@@ -1777,7 +1777,7 @@ def test_dropping_a_guessed_game_is_a_loss_without_wish_record_or_bond():
     _guessed_left_right(pet)
     info, events = model.start_game(pet, "higher_lower", at(9, 1), Deal(5))
     assert info["game"] == "higher_lower" and info["round"] == 0
-    assert pet.games == {"left_right": {"played": 1, "won": 0}}
+    assert pet.games == {"left_right": {"played": 1, "won": 0, "dropped": 1}}
     assert pet.happiness == 50.0 + R.GAME_LOSE_HAPPINESS
     assert pet.energy == 80.0 + R.PLAY_ENERGY
     assert events == [
@@ -1796,7 +1796,7 @@ def test_dropping_through_play_game_of_another_kind_counts_too():
     model.start_game(pet, "higher_lower", at(9), Deal(5, 6))
     model.play_game(pet, "higher", at(9, 1), Deal(6), kind="higher_lower")
     _, events = model.play_game(pet, "left", at(9, 2), Always("left"))
-    assert pet.games["higher_lower"] == {"played": 1, "won": 0}
+    assert pet.games["higher_lower"] == {"played": 1, "won": 0, "dropped": 1}
     assert [e.get("dropped") for e in events if e["type"] == "game_finished"] == [True]
 
 
@@ -1814,7 +1814,11 @@ def test_the_idle_drop_and_sleep_count_a_guessed_game():
     pet = hatched(start)
     _guessed_left_right(pet, start)
     events = run(pet, start + (R.GAME_IDLE_MINUTES + 1) * MIN)
-    assert pet.game is None and pet.games["left_right"] == {"played": 1, "won": 0}
+    assert pet.game is None and pet.games["left_right"] == {
+        "played": 1,
+        "won": 0,
+        "dropped": 1,
+    }
     assert [e["dropped"] for e in events if e["type"] == "game_finished"] == [True]
     pet = hatched(start)
     _guessed_left_right(pet, start)
@@ -1837,8 +1841,84 @@ def test_a_dropped_loss_answers_a_happiness_call():
     _guessed_left_right(pet)
     pet.call = model.Call("happiness", at(9), at(9, 20))
     pet.happiness = R.CALL_THRESHOLDS["happiness"][0] - R.GAME_LOSE_HAPPINESS + 1
-    events = model.drop_game(pet, at(9, 1))
+    events = model.drop_game(pet, at(9, 1), switched=True)
     assert pet.call is None and "call_answered" in types(events)
+
+
+def test_a_drop_nobody_caused_answers_no_call():
+    for happiness in (10.0, 30.0):
+        pet = hatched(at(9), happiness=happiness)
+        _guessed_left_right(pet)
+        pet.call = model.Call("happiness", at(9), at(9, 20))
+        pet.happiness = R.CALL_THRESHOLDS["happiness"][0] - R.GAME_LOSE_HAPPINESS + 1
+        events = model.drop_game(pet, at(9, 1))
+        assert pet.call is not None and "call_answered" not in types(events)
+
+
+def test_a_passive_drop_writes_no_care_log_entry():
+    pet = hatched(at(9))
+    _guessed_left_right(pet)
+    model.drop_game(pet, at(9, 5))
+    assert pet.care_log == []
+    pet = hatched(at(9))
+    _guessed_left_right(pet)
+    model.start_game(pet, "higher_lower", at(9, 5), Deal(5), by="sam")
+    assert pet.care_log[0]["result"] == "lost" and pet.care_log[0]["by"] == "sam"
+
+
+def test_a_game_call_switching_games_spoils_an_open_whine():
+    pet = hatched(at(9))
+    model.start_game(pet, "left_right", at(9), NoLuck())
+    model.play_game(pet, "left", at(9), Always("left"))
+    pet.call = model.Call("fake", at(9, 1), at(9, 20))
+    info, events = model.play_game(
+        pet, "higher", at(9, 2), Deal(5), kind="higher_lower"
+    )
+    assert info == {"result": "no_game"}
+    assert pet.call is None
+    assert {"type": "call_answered", "reason": "fake", "answer": "spoiled"} in events
+
+
+def test_a_refused_game_call_leaves_a_whine_open():
+    pet = hatched(at(9), energy=5.0)
+    pet.call = model.Call("fake", at(9), at(9, 20))
+    model.play_game(pet, "left", at(9, 1), NoLuck())
+    assert pet.call is not None
+
+
+def test_dropped_games_count_for_the_win_rate_but_not_the_player_trait():
+    pet = hatched(at(9))
+    for i in range(3):
+        _guessed_left_right(pet, at(9, i * 10))
+        model.start_game(pet, "higher_lower", at(9, i * 10 + 1), Deal(5))
+        model.start_game(pet, "left_right", at(9, i * 10 + 2), NoLuck())
+    assert pet.games["left_right"]["played"] == 3
+    assert model.games_played(pet) == 3 - 3
+    assert model.trait_progress(pet)["player"] == 0.0
+
+
+def test_a_higher_or_lower_game_without_a_valid_number_is_not_kept():
+    data = hatched(at(9)).to_dict()
+    for number in (None, 0, 10):
+        data["game"] = {
+            "started": at(9),
+            "last_at": at(9),
+            "kind": "higher_lower",
+            "number": number,
+            "rounds": 1,
+        }
+        assert model.PetState.from_dict(data).game is None
+    data["game"]["number"] = 4
+    assert model.PetState.from_dict(data).game.number == 4
+
+
+def test_a_bad_higher_or_lower_guess_does_not_count_a_round():
+    pet = hatched(at(9))
+    model.start_game(pet, "higher_lower", at(9), Deal(5))
+    pet.game.number = None
+    with pytest.raises(AssertionError):
+        model.play_game(pet, "higher", at(9, 1), Deal(5), kind="higher_lower")
+    assert pet.game.rounds == 0 and pet.game.last_at == at(9)
 
 
 def test_a_dropped_higher_or_lower_opening_is_kept_for_30_minutes():

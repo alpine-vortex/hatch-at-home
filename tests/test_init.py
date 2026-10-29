@@ -3069,3 +3069,62 @@ async def test_lights_out_refused_when_rested(
     assert hass.states.get("switch.pip_lights_out").state == STATE_OFF
     log = hass.states.get("sensor.pip_last_care").attributes["log"]
     assert log[0]["action"] == "lights_out" and log[0]["result"] == "not_sleepy"
+
+
+# --- Dropped games (Wave 0 PR 0f) ---------------------------------------------------
+
+
+async def test_a_switch_drop_grants_no_wish_bond_record_or_favourite(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.state.wish = {"kind": "play", "granted": False}
+    finished = async_capture_events(hass, f"{DOMAIN}_game_finished")
+    # One guess, then walk off to the other game.
+    await hass.services.async_call(
+        DOMAIN,
+        "play_game",
+        {"entity_id": "button.pip_feed", "guess": "left"},
+        blocking=True,
+        return_response=True,
+        context=Context(user_id=me.id),
+    )
+    await hass.services.async_call(
+        DOMAIN,
+        "play_game",
+        {"entity_id": "button.pip_feed", "game": "higher_lower"},
+        blocking=True,
+        return_response=True,
+        context=Context(user_id=me.id),
+    )
+    state = coordinator.state
+    assert [e.data.get("dropped") for e in finished] == [True]
+    assert state.games["left_right"]["played"] == 1
+    assert state.wish["granted"] is False
+    assert not state.bonds.get(me.id, {}).get("games")
+    assert not state.bonds.get(me.id, {}).get("best")
+    assert not state.favourites
+    assert state.care_log[0]["by"] == "Me" and state.care_log[0]["result"] == "lost"
+
+
+async def test_going_away_mid_game_drops_it_as_a_loss(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.state.wish = {"kind": "play", "granted": False}
+    await game(hass, guess="left")
+    finished = async_capture_events(hass, f"{DOMAIN}_game_finished")
+    coordinator.presence.update = lambda *args, **kwargs: True  # everyone left
+    coordinator._sense_home(coordinator._now())
+    await hass.async_block_till_done()
+    state = coordinator.state
+    assert state.away and state.game is None
+    assert [e.data.get("dropped") for e in finished] == [True]
+    assert state.games["left_right"]["played"] == 1
+    assert state.wish["granted"] is False and not state.favourites
+    assert not state.care_log  # nobody caused the drop, so nothing to react to

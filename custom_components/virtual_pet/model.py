@@ -166,6 +166,8 @@ def _game(v: Any) -> Game | None:
     if not (_num(v.get("started")) and _num(v.get("last_at"))):
         return None
     number = v.get("number")
+    if v.get("kind") == "higher_lower" and not (_num(number) and int(number) in NUMBERS):
+        return None  # nothing to guess against
     return Game(
         started=float(v["started"]),
         last_at=float(v["last_at"]),
@@ -426,7 +428,7 @@ class PetState:
             kind: {
                 k: int(n) if isinstance(n, int | float) else 0
                 for k, n in {"played": 0, "won": 0, **counts}.items()
-                if k in ("played", "won")
+                if k in ("played", "won", "dropped")
             }
             for kind, counts in _mapping(kwargs.get("games")).items()
             if isinstance(counts, dict)
@@ -1101,8 +1103,11 @@ def game_counts(state: PetState) -> dict[str, dict[str, int]]:
 
 
 def games_played(state: PetState) -> int:
-    """Every game this pet has finished, of any kind."""
-    return sum(counts["played"] for counts in state.games.values())
+    """Every game this pet has finished, of any kind. A dropped game stays in
+    "played" (for the win rate) but isn't finished, so it doesn't count here."""
+    return sum(
+        counts["played"] - counts.get("dropped", 0) for counts in state.games.values()
+    )
 
 
 def trait_level(state: PetState, trait: str) -> int:
@@ -1592,7 +1597,7 @@ def start_game(
         # and number, so starting over can't fish for an easy opening.
         game.last_at = now
         return _round_info(game), events
-    events += drop_game(state, now)  # switched games
+    events += drop_game(state, now, by, switched=True)
     game = state.game = Game(started=now, last_at=now, kind=kind)
     if kind == "higher_lower":
         kept = state.opening
@@ -1608,11 +1613,16 @@ def start_game(
     return _round_info(game), events
 
 
-def drop_game(state: PetState, now: float, by: str | None = None) -> list[Event]:
+def drop_game(
+    state: PetState, now: float, by: str | None = None, switched: bool = False
+) -> list[Event]:
     """Drop the game in progress (switched away from, idle, asleep, away). One
     with a guess counts as a loss: played, its energy, the losing happiness, and
     a game_finished marked dropped (no wish, record or bond). A Higher or Lower
-    opening with no guess costs nothing, but is kept so a restart can't reroll it."""
+    opening with no guess costs nothing, but is kept so a restart can't reroll it.
+    Only a person switching games (switched) makes it care: its happiness may
+    answer a call and it is logged. A drop nobody caused (idle, asleep, away)
+    answers nothing, so it can't test whether a call is real, and isn't logged."""
     game, state.game = state.game, None
     if game is None:
         return []
@@ -1627,17 +1637,19 @@ def drop_game(state: PetState, now: float, by: str | None = None) -> list[Event]
     state.weight = _clamp(state.weight + R.WEIGHT_GAME)
     counts = state.games.setdefault(game.kind, {"played": 0, "won": 0})
     counts["played"] += 1
-    _log(
-        state,
-        {
-            "at": now,
-            "action": "game",
-            "by": by,
-            "result": "lost",
-            "score": f"{game.wins}/{game.rounds}",
-            "game": game.kind,
-        },
-    )
+    counts["dropped"] = counts.get("dropped", 0) + 1
+    if switched or by is not None:
+        _log(
+            state,
+            {
+                "at": now,
+                "action": "game",
+                "by": by,
+                "result": "lost",
+                "score": f"{game.wins}/{game.rounds}",
+                "game": game.kind,
+            },
+        )
     events: list[Event] = [
         {
             "type": "game_finished",
@@ -1647,7 +1659,8 @@ def drop_game(state: PetState, now: float, by: str | None = None) -> list[Event]
             "dropped": True,
         }
     ]
-    _resolve_call(state, now, events, state.happiness > happiness_before)
+    if switched:
+        _resolve_call(state, now, events, state.happiness > happiness_before)
     return events
 
 
@@ -1679,12 +1692,15 @@ def play_game(
         raise ValueError(f"{guess} is not a guess in {kind}")
     events: list[Event] = []
     game = state.game
+    refusal = _refuse_play(state)
+    if refusal is None or (
+        refusal == "too_tired" and game is not None and game.kind == kind
+    ):
+        _spoil_whine(state, events)  # any game call that isn't refused
     if game is not None and (game.kind != kind or state.away or state.asleep):
         # Switched games, or left unfinished when it went away or to sleep.
-        events += drop_game(state, now, by)
+        events += drop_game(state, now, by, switched=game.kind != kind)
         game = None
-    if game is not None:
-        _spoil_whine(state, events)
     if game is None:
         if kind != "left_right":
             # Nothing to guess against yet; the card starts the game first.
@@ -1695,10 +1711,11 @@ def play_game(
             return info, events
         game = state.game
         assert game is not None
+    if kind == "higher_lower":
+        assert game.number is not None
     game.rounds += 1
     game.last_at = now
     if kind == "higher_lower":
-        assert game.number is not None
         shown = game.number
         game.number = rng.choice([n for n in NUMBERS if n != shown])
         correct = (game.number > shown) == (guess == "higher")
