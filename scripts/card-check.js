@@ -1107,15 +1107,13 @@ async function main() {
     return asked;
   });
   console.log(`note: a question was ${hadQuestion ? "" : "not "}open before the idle check`);
-  // A call (a need, or a whine) keeps idle life away by design: show the pet
-  // content for this check, as if it had been answered (the integration's next
-  // update, minutes away, puts the real mood back).
-  if (await evaluate((id) => document.querySelector("home-assistant").hass.states[id]?.state === "calling",
-    pet["sensor.mood"])) {
-    console.log("note: the pet was calling; shown content for the idle check");
-    await inject(pet["sensor.mood"], { state: "content" });
-    await page.waitForTimeout(800);
-  }
+  // A call (a need, a whine, the lonely call at low happiness) keeps idle life
+  // away by design, and the card reads it from binary_sensor.calling, not the
+  // mood: whatever the pet's stats have drifted to by now, show it content and
+  // not calling for this check, as if it had been answered (the integration's
+  // next update, minutes away, puts the real state back).
+  await calm();
+  await page.waitForTimeout(800);
   const quietBubble = await bubble();
   let idle = "";
   // The first idle move is due 10-35 s in, but it's skipped if the pet is busy
@@ -2513,7 +2511,7 @@ async function main() {
               bonds: level === null ? {} : { [me]: { level } } } };
           };
         },
-        random: (r) => { Math.random = r === null ? realRandom : () => r; },
+        random: (r) => { Math.random = r === null ? realRandom : typeof r === "function" ? r : () => r; },
         shared: (on) => localStorage.setItem("hatch-shared-screen", on ? "on" : "off"),
         baby: (on) => localStorage.setItem(`hatch-baby-talk-${me}`, on ? "on" : "off"),
         greet: () => {
@@ -2616,8 +2614,18 @@ async function main() {
 
     // Hellos: a shared screen says the nameless ones and never a bond line (its
     // bond injected at 8 all the same); signed in, a bond line only at 2+ and 8+.
+    // A greeting is a coin toss (its own line or a normal one) and then a pick,
+    // so a bond line shows up only some of the time: seed the dice (mulberry32)
+    // so the same runs happen every time, and "no bond-8 line" can't be luck.
     const hellos = await typeAs(async (el, s, t, types) => {
       const out = {};
+      let seed = 0x2f6e2b1;
+      t.random(() => {
+        seed = (seed + 0x6d2b79f5) | 0;
+        let x = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+        return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+      });
       for (const type of types) {
         const run = (n) => Array.from({ length: n }, () => t.greet());
         t.shared(true);
