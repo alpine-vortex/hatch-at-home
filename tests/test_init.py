@@ -2143,6 +2143,47 @@ async def test_a_hospital_is_never_named(
     assert not any(n["kind"] == "back_from" for n in response["notes"])
 
 
+async def test_the_last_zone_is_kept_only_while_my_day_is_on(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 17:00:00+00:00")
+    me = await friend(hass, 0)
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    person = coordinator.people.person(me.id)
+
+    async def go(place: str) -> None:
+        hass.states.async_set("person.sam", place, {"user_id": me.id})
+        await settle(hass, freezer, 60)
+
+    async def my_day(enabled: bool) -> None:
+        await hass.services.async_call(
+            DOMAIN,
+            "my_day",
+            {"entity_id": "sensor.pip_mood", "enabled": enabled},
+            blocking=True,
+            context=Context(user_id=me.id),
+        )
+
+    # Off (the default): the zone is not kept.
+    for place in ("not_home", "Gym"):
+        await go(place)
+    assert "zone" not in person
+    # On: it is.
+    await my_day(True)
+    await go("not_home")
+    await go("Gym")
+    assert person["zone"]["name"] == "Gym"
+    # Turning it off drops it, saved at once.
+    await my_day(False)
+    assert "zone" not in person
+    stored = hass_storage["virtual_pet.people"]["data"]["people"][me.id]
+    assert "zone" not in stored and stored["my_day"] is False
+
+
 async def test_a_send_off_on_a_rainy_morning_a_few_times_a_week(
     hass: HomeAssistant,
     hass_storage: dict[str, Any],

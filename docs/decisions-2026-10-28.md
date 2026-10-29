@@ -8,8 +8,8 @@ plan's open question is answered here, this file wins.
 - The phone test is no longer a release gate. It's a running list of things to try on
   the iPhone and Android apps (the owner's tududi task), followed up later.
 - **0.35.0** ships as a full release once privacy P1 is merged.
-- After that, each merged PR ships as a beta; a full release when a wave (or the
-  privacy series) finishes.
+- No beta per merged PR; one release at the end of the current work (owner,
+  2026-10-28, replacing "each merged PR a beta").
 - The photo dialog's Android line ("you can save it from a computer") ships now
   rather than waiting for the phone test.
 
@@ -39,6 +39,12 @@ plan's open question is answered here, this file wins.
   rats, quail eggs; fox mice, blackberries, beetles. Others unchanged.
 - The optional 12-frame adult-reactions art slice is drawn for the Douglas squirrel first.
 - The README redo (Tamagotchi box style, no spoilers) happens at the very end.
+
+## Privacy and the card
+- Q11: the last zone is kept only while "my day" is on (owner: first mate's
+  recommendation).
+- The discipline bar keeps its label (owner: first mate's recommendation; the guide
+  says it's today's).
 
 ## How the crew works with the owner
 - The first mate approves all wording, the pet's lines included, in the existing

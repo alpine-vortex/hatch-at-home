@@ -563,9 +563,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 self._arrivals.append(user)
                 self._home_debouncer.async_schedule_call()
             elif new.state != "not_home":
-                # A zone they made (work, the gym): remembered, privately.
-                person["zone"] = {"name": new.state, "at": now}
-                self.people.save()
+                # A zone they made (work, the gym): remembered, privately, and
+                # only while "my day" is on (the one place it is ever used).
+                if self.people.my_day(user):
+                    person["zone"] = {"name": new.state, "at": now}
+                    self.people.save()
             if old.state == STATE_HOME:
                 person["left"] = now  # a zone counts only if entered after this
                 self.people.save()
@@ -1629,8 +1631,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     async def async_set_my_day(self, user: str, enabled: bool) -> None:
         """Let the pets notice this person's day (steps, sleep, where they've
         been...), or stop. One switch per person, for every pet."""
-        self.people.person(user)["my_day"] = enabled
-        self.people.save()
+        person = self.people.person(user)
+        person["my_day"] = enabled
+        if enabled:
+            self.people.save()
+        else:
+            person.pop("zone", None)  # kept only while "my day" is on
+            await self.people.async_save_now()
         for pet in self.hass.data[DOMAIN]["pets"].values():
             if pet.state is not None:
                 pet.async_set_updated_data(pet.state)
