@@ -700,6 +700,10 @@ tier 1.
   questions.
 
 **PR 1c: preferences and sound samples (rest of F05, F09).** Size **S**, tier 1.
+- **Privacy P3a supersedes the visit-reply fields** (owner Q1, 2026-10-28). `mine` on the
+  privacy plan's channel carries `my_day`, `baby_talk`, `birthday_phone` and
+  `birthday_kept`, pushed on change. Once P3a-card lands, the card reads them from there
+  and the visit reply's fields below are redundant. 1c still ships first, as written.
 - `coordinator.async_visit`: the too-soon (1075-1080) and asleep (1085-1092) replies
   carry `my_day`, `birthday_kept` and `birthday_phone`, like the counted one.
   `birthday_*` stay out on a shared screen as now (the card skips the visit there).
