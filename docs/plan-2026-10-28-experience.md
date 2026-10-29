@@ -174,7 +174,7 @@ audit after it).
   changes come before PR 1a (the card side of the same games).
 - **Privacy P1** (`_dropSlide`, the observer: privacy F6) is merged. Wave 1's game
   timers must also be cleared when a slide is dropped, so PR 1a builds on it (and goes
-  after 0f). PR 1b and 1c don't touch slide teardown and can go any time.
+  after 0f). PR 1b and 1c don't touch slide teardown; 1a and 1c may build in parallel, 1b after 1c.
 - **Privacy P2** (forget my data) and **PR 1b** share the confirm guard. **P2 built it
   first** (0.36.0b1; see PR 1b), so 1b adopts it.
 - **Privacy P3a** (the channel) and **P3c** (media pushes) go before Wave 2 (the queue
@@ -672,41 +672,72 @@ side.
 
 ### Wave 1: reliability (PR 0f before 1a)
 
+**Plan review folded in (2026-10-28, scout report of worker s2463 against main
+`39ec87b`; first mate's decisions recorded below).** All card line numbers are
+`hatch-pet-card.js` on that main; server ones name the file. **Build order: 1a and 1c may
+build in parallel; 1b after 1c** (1b and 1c both touch `_visit` / the status handlers;
+all three edit the one card file and CHANGELOG/version, so expect trivial merge
+conflicts, not logic ones).
+
 **PR 1a: games carry on, old timers die (F01, F02; balance minors 6, 7).** Size
 **S-M**, tier 1. **Card only**, on top of PR 0f.
-- **Owner (A2): carry on.** `_pickGame` makes the same no-guess start call for Left or
-  Right that Higher or Lower makes (`_playCall(s, {game: kind})`). The reply carries
-  the running game (PR 0f): the card shows "round 3/5 · 1 right" and carries on, or a
-  fresh round 1 if there was none. While waiting, the buttons are `aria-disabled`, as
-  Higher or Lower's are (3853-3855).
+- **Owner (A2): carry on.** `_pickGame` (4030-4067) makes the same no-guess start call for
+  Left or Right that Higher or Lower makes (`_playCall(s, {game: kind})`). The reply
+  carries the running game (PR 0f; `_round_info`, model 1866-1877, `start_game`
+  1673-1708): the card **adopts `info.round` and `info.wins`** instead of the hard reset
+  `s.game = {round: 0, wins: 0}` and "round 1/5" (4044-4048), on **both** paths (Higher or
+  Lower ignores them today, 4061-4067). The score line reads
+  `round ${round + 1}/5 · ${wins} right`, or a fresh round 1 if there was no game. A start
+  reply is never `done` (the server clears finished games). The per-round `last_result`
+  is not in `_round_info`, so what carries on is the round and the wins, not "the first
+  result". While waiting, Left or Right gets the same `busy` path and `aria-disabled`
+  buttons as Higher or Lower's start (4057-4063).
 - **Checked (corrected from draft 1):** an abandoned game was **not** "for nothing" on
   `afd56b9`: restarting a losing game until a win farmed `bond_record`'s "new record"
   line (model 1664-1671), bond `game` points and a favourite (coordinator 1683-1691),
   and a `dream_seed` (coordinator 895-897). Carrying on (A2) and PR 0f's "a dropped game
   with a guess is a loss" close that.
-- Every delayed game callback captures the game object and returns unless
-  `s.game === g`: `_guess`'s 900 ms timeout, Catch's kickoff (3844), and
-  `_catchResolve`'s (already does). `_guess` (3910) reads `s.game.round` only after
-  that check, so a game closed mid-request can't throw. `_endGame` and the slide
-  teardown from P1 clear the timers they own (`s.gameTimers`).
+- **The timers (1a-1, 1a-3).** `s.gameTimers` **does not exist yet; 1a adds it**: a
+  `Set` on the slide, into which go the 900 ms guess timeout (4129-4141), Catch's
+  kickoff (4051) and `_catchResolve`'s timeout (4748); `_endGame` clears it. The slide
+  teardown needs no change: `_dropSlide` (1864) and `disconnectedCallback` (1501-1515)
+  already call `_endGame`. On top of the set, every delayed callback captures the game
+  object and returns unless `s.game === g`. The real bug is in `_guess`'s 900 ms timeout,
+  which tests only `!s.game`: a *new* game started inside the window gets `busy = false`,
+  its score overwritten, and is **ended** if the old reply was `done`. The fix:
+  `const g = s.game` before the await and `if (s.game !== g) return` in the timeout.
+  (The part after the await is already safe: `_playCall` returns null when
+  `s.game !== game`, 4090.)
 - **Two viewers** share one server game (one `state.game`). Opening it on a second
-  device now shows the real score instead of wiping it. A reply whose `round` is not the
+  device now shows the real score instead of wiping it. **C1 applies only to Higher or
+  Lower and Left or Right** (Catch is client-only). A reply whose `round` is not the
   card's `round + 1` means someone else guessed meanwhile: the card ends its game with
-  a line (copy C1), not a wrong score.
+  a line (copy C1), not a wrong score. **Accepted (first mate, 1a-7):** a retry after a
+  lost reply (the server is at r+1, the card at r) shows C1 wrongly; it is rare and the
+  card cannot tell.
+- **Catch has no carry-on (first mate, Q2).** It is client-only: nothing to carry. PR 4f
+  later gives Catch server rewards, so its checks will be rewritten then.
 - **Tests:** card-check: stop a Left or Right game after one guess, reopen within 3 min,
-  and the score reads round 2 of 5 with the first result kept; the same for Higher or
-  Lower, with the same number; stop during the 900 ms window and start Higher or
-  Lower, and the new game is untouched; open Catch, close and reopen it inside 900 ms,
-  and exactly one round runs; a second browser guessing mid-game ends the first
-  browser's game with C1; a game closed during a pending guess throws nothing.
+  and the score reads round 2 of 5 with the wins kept; the same for Higher or Lower,
+  with the same number; stop during the 900 ms window and start Higher or Lower, and the
+  new game is untouched; **card-check sets `experimental_catch: true`** (Catch is hidden
+  without it, 77-80, `_games` 3979) for: open Catch, close and reopen it inside 900 ms,
+  and exactly one round runs (this tests the kickoff timer only); two viewers: **a
+  second `page` in the same context** (tabs share storage and the HA user, card-check
+  113-114, 2484; no second login), play one round on page B, then guess on page A with
+  A's now-stale round: A ends with C1; a game closed during a pending guess throws
+  nothing.
 - **Done =** the checks pass, and no `setTimeout` in the game code runs against a
   game other than the one it was made for.
 
-**PR 1b: taps, one confirm guard, answers that wait (F07, F06, A1, A7).** Size **S-M**,
-tier 1.
-- `_call`: a per-button in-flight flag. A second tap while one is pending does nothing
-  except the press feedback, and other buttons stay live. `.pending` and `.failed`
-  stay as they are.
+**PR 1b: taps and answers that wait (F07, F06, A1, A7).** Size **S** (re-sized from S-M:
+the guard is merged; first mate, X-1), tier 1. **Builds after 1c.** The visit hook is
+not in `_visit` (see below), so 1b and 1c no longer fight over `_visit`.
+- `_call` (3956): a per-button in-flight flag. A second tap while one is pending does
+  nothing except the press feedback (`_tapped`, 3937, fires the feedback before the
+  flag check: keep that order), and other buttons stay live. `.pending` and `.failed`
+  stay as they are. `_call` also serves `lay_egg` (via `_press`, after `_confirmed`) and
+  the lights toggle (4796-4800, a service call): the flag covers both.
 - **One shared confirm guard** for every irreversible control: `_confirmTap(button, s,
   run)`. The first tap arms it ("sure? tap again"); a tap less than `CONFIRM_GAP_MS`
   (600) after arming is ignored; a tap from 600 ms to `CONFIRM_MS` (4 s) confirms;
@@ -720,54 +751,95 @@ tier 1.
     `this._confirmed(s, key, button, redraw)`, which arms the button in place and
     redraws when the window closes. **One difference from the rule above:** the 600 ms
     is measured from the *previous* tap, not from arming, so a fast triple tap (0, 300,
-    650 ms) doesn't confirm either; the 4 s window still runs from arming. Card checks:
-    "forgetting takes two taps, and a fast double tap is one" and "laying an egg takes
-    two taps, with a pause between". 1b keeps the in-flight flag and the answers, and
-    checks the guard on the three controls as its test line says.
-- **Answers (owner A7: a failed save is not a try).** `_ask` with `keep` keeps the
+    650 ms) doesn't confirm either; the 4 s window still runs from arming. **The guard
+    is already tested** ("forgetting takes two taps, and a fast double tap is one" and
+    "laying an egg takes two taps, with a pause between", card-check 716-730), so 1b adds
+    only the **1 s second-tap case** on the three controls.
+- **Answers (owner A7: a failed save is not a try).** The try is *already spent* when
+  the question is **asked** (`mark_once`, people 411-417, called from `_question`), not
+  when it is answered, so a failed save cannot give the try back on the server. What
+  the stash does is land the answer before the question comes again (14 days later,
+  `ASK_LIKES_AGAIN_DAYS`, rates 334). `_ask` (2859, 2905-2912) with `keep` keeps the
   optimistic reply (the charm), then:
-  - on failure, retries the `virtual_pet/answer` call once, quietly, after 3 s;
-  - if that fails too, and the question is one of the four **once-questions** (whose try
-    is counted: `fav_weather`, `fav_season`, `birthday`, `catchphrase`), keeps
-    `{question, answer, at}` in `localStorage` for this person and device, and sends it
-    before anything else at the next visit. `async_answer` (coordinator 1424-1468)
-    stores those with no open-ask check (the catchphrase while the same generation's
-    ask is unanswered), so **no server change**: a late answer is an answered question,
-    and the try never mattered;
+  - on failure, retries the `virtual_pet/answer` call once, quietly, after 3 s. The
+    retry timer and the bubble are guarded by `s.ids?.[...] === entity`: after
+    `_dropSlide` or a pet switch the retry may still send, but never writes the bubble
+    or C2 on a different slide. This applies to `dream` and `guess` too;
+  - if that fails too, and the question is a **once-question** (`fav_weather`,
+    `fav_season`, `catchphrase`), keeps `{question, answer, at}` in `localStorage`
+    under **`hatch-answers-<hass.user.id>`**, never on a shared screen (`sharedScreen()`,
+    183). **A birthday is never stashed (first mate, 1b-1 / owner Q1):** a failed
+    birthday save simply asks again later, as today. `forget_me` (`.forgetme`,
+    3432-3458) removes the key (and `forget_birthday`, 3418-3425, has nothing to remove);
+  - **the resend runs when the card gets `hass` with a user** (first mate, 1b-5), not in
+    `_visit`, which is skipped on a shared screen and rate-limited to hourly
+    (2795-2800). It sends the stored answers one by one. **An error `not_asked` or
+    `invalid_answer` drops the stored answer** (the first attempt may have reached the
+    server and only its reply been lost; the server raises `ValueError` → `not_asked`,
+    `__init__.py` 300-325, coordinator `async_answer` 1564-1600); a transport error keeps
+    it. The server's open-ask check applies to the catchphrase (same generation, `asked`
+    and not `answered`), so a catchphrase stashed across a new generation is dropped the
+    same way; there is none for the likes (**"no server change"** holds);
   - `dream` and `guess` are **not** resent: they are about tonight and tomorrow
-    (`pick_dream` for now, `guess` for `P.tomorrow(today)`, 1464-1467), so a late
-    answer would land on the wrong day. They aren't once-questions, so no try is lost;
+    (`pick_dream` for now, `guess` for `P.tomorrow(today)`), so a late answer would land
+    on the wrong day. They aren't once-questions, so no try is lost;
   - a stored answer older than `ASK_LIKES_AGAIN_DAYS` (14) is dropped (the question may
     come again by then);
   - the bubble says C2 only when the retry also failed. It promises nothing.
-- **Tests:** card-check: a double tap on feed sends one `button.press`; on each of the
-  three guarded controls, a double tap under 600 ms does nothing and a second tap at 1 s
-  confirms; with `virtual_pet/answer` stubbed to fail twice, the bubble shows C2, the
-  answer is in `localStorage`, and the next visit sends it first; a failed `dream`
-  answer isn't stored; pytest: a late `fav_weather` answer is stored.
+- **Tests:** card-check: a double tap on feed sends one `button.press`; **lights tapped
+  twice sends one service call**; on each of the three guarded controls, a second tap at
+  1 s confirms; with `virtual_pet/answer` stubbed to fail twice, the bubble shows C2, the
+  answer is in `localStorage` under the user's key, and it is sent when the card next gets
+  `hass` with a user; **a stashed answer answered `not_asked` is dropped**; a retry that
+  fires after the slide was dropped writes no bubble; a failed `dream` answer isn't
+  stored; **a failed birthday is not stored**; **a shared screen stores nothing**;
+  **`forget_me` removes the key**. pytest: a late `fav_weather` answer is stored (no
+  open-ask check for the likes, 1584-1590); a late `catchphrase` after it was answered
+  raises.
 - **Done =** the definition of done's "no duplicate effect from fast taps" and "visible
   failure" hold for every care button, the three guarded controls and the six kept
-  questions.
+  questions (`keep: true`: `fav_weather`, `fav_season`, `dream`, `guess`, `birthday`,
+  `catchphrase`, 632-660).
 
-**PR 1c: preferences and sound samples (rest of F05, F09).** Size **S**, tier 1.
-- `coordinator.async_visit`: the too-soon (1075-1080) and asleep (1085-1092) replies
-  carry `my_day`, `birthday_kept` and `birthday_phone`, like the counted one.
-  `birthday_*` stay out on a shared screen as now (the card skips the visit there).
+**PR 1c: preferences and sound samples (rest of F05, F09).** Size **S**, tier 1. May
+build in parallel with 1a.
+- `coordinator.async_visit`: the too-soon (1215-1221) and asleep (1237-1244) replies
+  carry `my_day`, `birthday_kept` and `birthday_phone` (and `baby_talk`, already in
+  the counted reply, 1277-1279), like the counted one. `birthday_*` stay out on a shared
+  screen as now (`_visit` returns early at 2798, before the request).
 - **Status before any reply:** until a visit reply has set `_myDay` (a reload, or a
   failed visit), the "my day" row shows "…" and the birthday rows are hidden, never
-  "off" (3196, `!!this._myDay`).
-- **Owner (Q3):** the two samples go through `_maySample(s)`: the asleep, lights-out and
-  quiet-hours rules of `_mayPlay` (which checks `lightsOut`, 2827), without "on show"
-  (the person is on the status view). **The tap must still unlock audio**
-  (`audio.resume()`, and `playChirp`'s context creation, inside the gesture): only the
-  sound is skipped, or phones lose sound for good. A short status note says why (C3).
+  "off" (`_renderStatus` 3341, `!!this._myDay`). `_myDay` is card-wide and `undefined`
+  before any reply; after `forget_me` the card sets it to `false` on purpose (3442): that
+  is *not* "unknown", keep it.
+- **Owner (Q3):** the two samples (`playChirp("win")`, 3392, and the baby-talk sample,
+  3478) go through `_maySample(s)`: **`_mayPlay`'s rules** (2961-2966: the asleep,
+  lights-out and quiet-hours rules, the `s === this._slides[this._index]` check and
+  `visibilityState === "visible"`, all true on a tap), without "on show". **The tap must
+  still unlock audio** (`unlockAudio()` and `audio.resume()`, inside the gesture, for
+  *both* samples): only the sound is skipped, or phones lose sound for good. A short
+  status note says why (C3, **approved by the first mate**, with three variants: quiet
+  hours, asleep, and daytime lights out; see section 5).
 - **Tests:** pytest: a too-soon and an asleep visit both return the three fields for a
-  person who has them. Card-check: the "my day" row reads "…" before the first reply; a
+  person who has them. Card-check: the "my day" row reads "…" before the first reply
+  (hold the reply by delaying the `visit` service in the `callService` wrapper); a
   second browser opening within the hour shows "my day: on" for a person who has it on;
-  at a stubbed 22:00, turning "sounds here" on plays nothing and shows C3, and a chirp
-  after a stubbed 09:00 plays.
+  at a stubbed 22:00 (stub `Date` with `page.addInitScript` or the clock, since a reload
+  resets it; `QUIET_HOURS` read `new Date().getHours()`, 2963; precedent card-check 488),
+  turning "sounds here" on plays nothing and shows C3, and a chirp after a stubbed 09:00
+  plays; with lights out by day and with the pet asleep, the sample is skipped with the
+  matching C3 line.
+- **Phone test, not a gate (first mate):** that "phones lose sound for good" when a tap
+  skips the unlock goes on the phone-test list (tududi). It can't be verified on this
+  host, and the phone test is no longer a gate.
 - **Done =** status rows never show a default in place of the person's real setting,
   and no sample plays at night or while the pet sleeps.
+
+**First mate's decisions (2026-10-28), from the Wave 1 review:** birthday never stashed
+(1b-1 / Q1); Catch has no carry-on and card-check sets `experimental_catch` (1a-5 / Q2);
+1a adds `s.gameTimers` and identity checks (1a-1); the retry-after-lost-reply C1 misfire
+is accepted and C1 is for Higher or Lower and Left or Right only (1a-7); the stash resend
+runs on `hass` with a user (1b-5); 1b is size S (X-1); C1-C3 approved.
 
 ### Wave 2: event fidelity (after privacy P3a and P3c; 2b after P3b)
 
@@ -1120,7 +1192,7 @@ axolotl and moth adults are being redrawn now (A9).
 | 0g | Fast-forward helper, chores, tuck-in, snacks (M5, m1, m2, m4) | S | 1 | — |
 | 0h | Hearts, server clock, one refusal line (m8-m10) | S | 1 | — |
 | 1a | Games carry on, old timers die (F01, F02, m6, m7) | S-M | 1 | 0f (privacy P1 merged) |
-| 1b | Taps coalesced, one confirm guard, answers that wait (F07, F06, A1, A7) | S-M | 1 | — (P2 adopts the guard) |
+| 1b | Taps coalesced, one confirm guard, answers that wait (F07, F06, A1, A7) | S | 1 | 1c (build order); the guard is merged |
 | 1c | Preferences on every visit, quiet samples (F05, F09) | S | 1 | — |
 | 2a | Classes on the existing queue, bursts, catch-up (F08) | M | 1 | privacy P3a, P3c |
 | 2b | Feeling poorly, all better (O03) | S | 1 | 2a, privacy P3b |
@@ -1150,9 +1222,9 @@ that asks the person for something), which the copy test runs over C1-C16 and W1
 | W2 | Guide, fake calls (0d) | "A whine and a real plea to play often look alike: the hearts are the best clue." (owner Q2: "often look alike") | guide | — |
 | W3 | Assist, lights out refused (0a) | "<name> isn't sleepy yet." (`REFUSED["not_sleepy"]` = "isn't sleepy yet") | Assist | — |
 | W4 | Bundled re-call push, if the owner picks (c) (0b) | two pets: "<A> and <B> would like a visit"; three or more: "<A>, <B> and <C> would like a visit"; one pet: its usual call text (no new copy) | notification | — |
-| C1 | Someone else played this game meanwhile | "oh! someone else is playing with me" | normal | no |
-| C2 | A kept answer failed to save, twice | "hm, that one slipped away ♪" | normal | no |
-| C3 | Sound sample skipped (status feedback) | "sounds are on: quiet till morning ♪" (asleep: "sounds are on: shh, it's sleeping") | normal | no |
+| C1 | Someone else played this game meanwhile (Higher or Lower, Left or Right) | "oh! someone else is playing with me" **(approved, first mate)** | normal | no |
+| C2 | A kept answer failed to save, twice | "hm, that one slipped away ♪" **(approved, first mate)** | normal | no |
+| C3 | Sound sample skipped (status feedback) | **(approved, first mate)** quiet hours: "sounds are on: quiet till morning ♪"; asleep: "sounds are on: shh, it's sleeping"; lights out by day: "sounds are on: shh, it's napping" | normal | no |
 | C4 | Two kinds of care at once | "<first> and <second>! ♥" (e.g. "snacks and a bath! ♥") | normal | no |
 | C5 | Catch-up milestone on the next look | stage: "guess what? I'm a <stage> now!"; trait: "I learned something: <trait>!"; hatched: "hello! I hatched while you were away" | `_lines` | no |
 | C6 | `became_sick` | "I don't feel so good..." | `_lines` | no |
