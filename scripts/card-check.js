@@ -1055,6 +1055,116 @@ async function main() {
   check("catch keeps a best score",
     Number(await evaluate(() => localStorage.getItem("hatch-best-catch"))) >= expected);
 
+  // 3a. Games carry on (Wave 1 PR 1a): stopping a game and reopening it within
+  // the server's window picks up the same round and wins; old timers die with
+  // their game.
+  {
+    const score = () => cur().locator(".gscore").innerText();
+    const open = async (kind) => {
+      await inject(pet["sensor.energy"], { state: "80" });
+      await page.waitForTimeout(500);
+      await button(2).click();
+      await page.waitForTimeout(500);
+      await cur().locator(`.gpick [data-game="${kind}"]`).click();
+      await page.waitForTimeout(1000);
+    };
+    const stop = async () => {
+      await cur().locator(".gx").click();
+      await page.waitForTimeout(300);
+    };
+    await page.waitForTimeout(4500); // let the catch result line clear
+    for (const kind of ["left_right", "higher_lower"]) {
+      await open(kind);
+      const fresh = await score();
+      await cur().locator(".gl").click();
+      await page.waitForTimeout(1400);
+      const played = await score();
+      const number = await cur().locator(".gnum").getAttribute("data-n");
+      await stop();
+      await open(kind);
+      const back = await score();
+      check(`${kind}: a fresh game reads round 1 of 5`, /^round 1\/5/.test(fresh), fresh);
+      check(`${kind}: reopened, the score reads round 2 of 5 with the wins kept`,
+        /^round 2\/5 · \d right$/.test(back) && back === played, `${played} -> ${back}`);
+      if (kind === "higher_lower") {
+        check("higher or lower: the number is kept",
+          (await cur().locator(".gnum").getAttribute("data-n")) === number);
+      }
+      await stop();
+    }
+
+    // Stop inside the 900 ms window and start again: the new game is untouched.
+    await open("higher_lower");
+    await cur().locator(".gl").click();
+    await page.waitForTimeout(300);
+    await stop();
+    check("stopping a game clears its timers",
+      await page.locator("hatch-pet-card").evaluate((el) => el._slides[el._index].gameTimers.size === 0));
+    await button(2).click();
+    await page.waitForTimeout(400);
+    await cur().locator('.gpick [data-game="higher_lower"]').click();
+    await page.waitForTimeout(1500);
+    const fresh2 = await page.locator("hatch-pet-card").evaluate((el) => {
+      const s = el._slides[el._index];
+      return { busy: s.game?.busy, score: s.gameScore.textContent, timers: s.gameTimers.size };
+    });
+    check("a game started inside the old window is untouched",
+      fresh2.busy === false && /^round \d\/5 · \d right$/.test(fresh2.score) && fresh2.timers === 0,
+      JSON.stringify(fresh2));
+    await stop();
+
+    // A game closed during a pending guess throws nothing.
+    const errorsBefore = errors.length;
+    await open("left_right");
+    await cur().locator(".gl").click();
+    await page.locator("hatch-pet-card").evaluate((el) => { const s = el._slides[el._index]; el._endGame(s, null); });
+    await page.waitForTimeout(1600);
+    check("a game closed during a pending guess throws nothing", errors.length === errorsBefore,
+      errors.slice(errorsBefore).join(" | "));
+
+    // Catch (experimental_catch is on above): close and reopen inside 900 ms,
+    // and exactly one round runs (the kickoff timer only).
+    await open("catch");
+    await page.locator("hatch-pet-card").evaluate((el) => {
+      const s = el._slides[el._index];
+      window.__catchRounds = 0;
+      const was = el._catchRound.bind(el);
+      el._catchRound = (x) => { window.__catchRounds += x === s && x.game?.kind === "catch" ? 1 : 0; return was(x); };
+      el._endGame(s, null);
+    });
+    await page.waitForTimeout(100);
+    await button(2).click();
+    await page.waitForTimeout(300);
+    await cur().locator('.gpick [data-game="catch"]').click();
+    await page.waitForTimeout(1500);
+    check("catch reopened inside 900 ms runs one round",
+      (await evaluate(() => window.__catchRounds)) === 1, String(await evaluate(() => window.__catchRounds)));
+    await stop();
+
+    // Two viewers share one server game: a stale guess ends with the line.
+    const tab = await context.newPage();
+    tab.on("pageerror", (e) => errors.push(`tab 2: ${e}`));
+    await tab.goto(`${HA}/pet-bench/pet`);
+    await tab.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
+    await tab.waitForTimeout(16000); // the frontend reloads itself once
+    await tab.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+    await tab.waitForTimeout(1500);
+    const curB = () => tab.locator("hatch-pet-card .slide:not(.away-slide)");
+    await open("left_right"); // A: round 1 of a new game
+    await curB().locator(".toy").nth(2).click();
+    await tab.waitForTimeout(500);
+    await curB().locator('.gpick [data-game="left_right"]').click();
+    await tab.waitForTimeout(1000);
+    await curB().locator(".gl").click(); // B plays a round
+    await tab.waitForTimeout(1400);
+    await cur().locator(".gl").click(); // A guesses from its stale round
+    await page.waitForTimeout(1200);
+    const said = await bubble();
+    check("two viewers: a stale guess ends with the someone-else line",
+      said === "oh! someone else is playing with me" && (await cur().locator(".game").isHidden()), said);
+    await tab.close();
+  }
+
   // 4. Moments make the pet react.
   for (const [type, extra, expect] of [
     ["care_miss", { reason: "hunger" }, "there you are"],
