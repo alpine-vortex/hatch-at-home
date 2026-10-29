@@ -4042,31 +4042,48 @@ class HatchPetCard extends HTMLElement {
     } catch (err) {
       // no storage: the picker just won't remember
     }
-    s.game = { kind, round: 0, wins: 0, busy: false };
+    const g = s.game = { kind, round: 0, wins: 0, busy: false };
+    s.pet.classList.remove("go-left", "go-right");
     this._gameView(s, kind);
     s.gameScore.textContent = "round 1/5";
     if (kind === "catch") {
       this._write(s, "catch it! tap its side as it reaches me", 60000);
       s.gameBox.querySelector(".gl").focus({ preventScroll: true });
-      setTimeout(() => this._catchRound(s), 900);
+      this._gameLater(s, g, 900, () => this._catchRound(s));
       return;
     }
+    // The server keeps the game: a start while one of this kind runs carries
+    // on (same round, wins and number), so the card adopts what it replies.
+    g.busy = true;
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+    s.gameScore.textContent = "thinking…";
+    const info = await this._playCall(s, { game: kind });
+    if (!info) return;
+    g.busy = false;
+    g.round = info.round;
+    g.wins = info.wins;
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
+    s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
     if (kind === "left_right") {
       this._write(s, "left or right? guess where I'll go!");
     } else {
-      // Higher or Lower shows its first number before the first guess.
-      s.game.busy = true;
-      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
-      s.gameScore.textContent = "thinking…";
-      const info = await this._playCall(s, { game: kind });
-      if (!info) return;
-      s.game.busy = false;
-      s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
+      // Higher or Lower shows its number before the next guess.
       this._showNumber(s, info.number);
       this._write(s, "will the next one be higher or lower?");
     }
     s.sayUntil = Date.now() + 60000;
     s.gameBox.querySelector(".gl").focus({ preventScroll: true });
+  }
+
+  // A delayed step of game `g`: dropped if the game ended or was replaced, and
+  // cleared with the game (_endGame).
+  _gameLater(s, g, ms, fn) {
+    const timers = s.gameTimers ??= new Set();
+    const id = setTimeout(() => {
+      timers.delete(id);
+      if (s.game === g) fn();
+    }, ms);
+    timers.add(id);
   }
 
   _showNumber(s, n) {
@@ -4109,13 +4126,19 @@ class HatchPetCard extends HTMLElement {
     }
     const game = GAMES.find((g) => g.key === kind);
     const guess = game.guesses[side === "left" ? 0 : 1];
-    s.game.busy = true;
+    const g = s.game;
+    g.busy = true;
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
     s.gameScore.textContent = "thinking…";
     const info = await this._playCall(s, { game: kind, guess });
     if (!info) return;
-    s.game.round = info.round;
-    s.game.wins = info.wins;
+    if (info.round !== g.round + 1) {
+      // Another viewer guessed on the same server game meanwhile.
+      this._endGame(s, "oh! someone else is playing with me");
+      return;
+    }
+    g.round = info.round;
+    g.wins = info.wins;
     if (kind === "higher_lower") {
       this._showNumber(s, info.number);
       this._animate(s, s.gameNum, "flip", 300);
@@ -4126,20 +4149,19 @@ class HatchPetCard extends HTMLElement {
       this._write(s, info.correct ? "yes! you found me" : `nope, I went ${info.went}!`);
     }
     s.gameScore.textContent = `round ${info.round}/${info.rounds} · ${info.wins} right`;
-    setTimeout(() => {
+    this._gameLater(s, g, 900, () => {
       s.pet.classList.remove("go-left", "go-right");
-      if (!s.game) return;
       if (info.done) {
         if (info.won) this._chirp(s, "win");
         this._endGame(s, info.won ? `${info.wins}/${info.rounds}! you win ♪` :
           `${info.wins}/${info.rounds}... again sometime?`);
         return;
       }
-      s.game.busy = false;
+      g.busy = false;
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
       this._write(s, kind === "higher_lower" ? "higher or lower?" : "again! left or right?");
-    }, 900);
+    });
   }
 
   // --- Seasons --------------------------------------------------------------
@@ -4745,9 +4767,8 @@ class HatchPetCard extends HTMLElement {
     this._write(s, line);
     if (ok) this._pounce(s);
     s.gameScore.textContent = `round ${g.round}/${CATCH.rounds} · ${g.wins} caught`;
-    setTimeout(() => {
+    this._gameLater(s, g, 1000, () => {
       s.pet.classList.remove("go-left", "go-right");
-      if (s.game !== g) return;
       if (g.round < CATCH.rounds) {
         this._catchRound(s);
         return;
@@ -4761,7 +4782,7 @@ class HatchPetCard extends HTMLElement {
       }
       if (g.wins >= CATCH.winAt) this._chirp(s, "win");
       this._endGame(s, `${g.wins}/${CATCH.rounds} caught${g.wins >= CATCH.winAt ? "! ♪" : "..."} · best ${best}/${CATCH.rounds}`);
-    }, 1000);
+    });
   }
 
   // A catch: the species' own "won" pose where one is drawn (child), else a hop.
@@ -4781,6 +4802,8 @@ class HatchPetCard extends HTMLElement {
     cancelAnimationFrame(s.game?.cur?.raf);
     s.catchEl.hidden = true;
     s.game = null;
+    s.gameTimers?.forEach(clearTimeout);
+    s.gameTimers?.clear();
     // Focus inside the game goes back to the play button, not the page's start.
     const focused = s.gameBox.contains(this.shadowRoot?.activeElement);
     s.gameBox.hidden = true;
