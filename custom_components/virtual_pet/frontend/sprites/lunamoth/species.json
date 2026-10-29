@@ -30,7 +30,7 @@
   "words": { "food": "leaves", "home": "branch", "teen": { "food": "moonlight", "home": "tree" }, "adult": { "food": "moonlight", "home": "tree" } },
   "voice": { "sound": "fwip", "catchphrase": "flutter", "pitch": 660, "pace": 30, "likes": ["walnut leaves", "birch leaves", "sweetgum leaves"] },
   "reactions": { "play": "glow", "won": "wing_spread", "praise": "wing_spread" },
-  "head": { "baby": [162, 140], "child": [178, 120], "teen": [128, 72], "adult": [128, 96] },
+  "head": { "baby": [162, 140], "child": [178, 120], "teen": [128, 72], "adult": [128, 72] },
   "hat": {
     "child_watch_tv": [122, 124]
   }
