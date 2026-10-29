@@ -1198,15 +1198,17 @@ def test_discipline_makes_whining_rarer_but_never_stops_it():
 
 
 @pytest.mark.parametrize(
-    ("misses", "discipline", "grade"),
-    [(0, 40.0, "devoted"), (2, 30.0, "steady"), (5, 0.0, "scrappy")],
+    ("well", "misses", "discipline", "grade"),
+    [(1.0, 0, 40.0, "devoted"), (0.8, 4, 30.0, "steady"), (0.4, 10, 0.0, "scrappy")],
 )
-def test_upbringing_is_decided_on_growing_up(misses, discipline, grade):
+def test_upbringing_is_decided_on_growing_up(well, misses, discipline, grade):
     adult = dict(R.STAGE_STARTS)["adult"]
     start = at(9)
-    pet = hatched(start, age_hours=adult - 0.1, discipline=discipline)
+    pet = hatched(start, age_hours=adult - 0.1)
     pet.personality = "sweet"  # settled at teen
-    pet.care_misses = misses
+    pet.care_misses = pet.counted_misses = misses
+    pet.discipline_sum, pet.discipline_samples = discipline * 200, 200
+    pet.wellbeing_sum, pet.wellbeing_samples = well * 200, 200
     pet.hunger = pet.happiness = 99.0
     assert model.upbringing(pet) == grade  # on track before the day comes
     events = run(pet, start + 10 * MIN)
