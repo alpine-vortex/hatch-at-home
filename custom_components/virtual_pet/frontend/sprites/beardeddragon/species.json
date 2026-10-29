@@ -20,6 +20,7 @@
     "dirty"
   ],
   "frames": 2,
+  "scale": { "adult": 1.15 },
   "extras": {
     "squint": "child_squint",
     "shiver": "child_shiver",
