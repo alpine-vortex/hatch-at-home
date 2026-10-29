@@ -93,7 +93,12 @@
     stage.style.width = `${shot.width}px`;
     Math.random = mulberry32(shot.seed ?? 7);
 
-    WORLDS = JSON.parse(await (await realFetch(`${BASE}/worlds.json`)).text());
+    // The card keeps the first worlds object it fetched, so refill that one in place.
+    const fresh = JSON.parse(await (await realFetch(`${BASE}/worlds.json`)).text());
+    if (WORLDS) {
+      for (const k of Object.keys(WORLDS)) delete WORLDS[k];
+      Object.assign(WORLDS, fresh);
+    } else WORLDS = fresh;
     const world = WORLDS[shot.pets[0].world];
     if (world && shot.shell) {
       world.shell = { ...world.shell, ...shot.shell };

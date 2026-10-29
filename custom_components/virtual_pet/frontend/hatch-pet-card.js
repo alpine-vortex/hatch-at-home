@@ -943,6 +943,167 @@ function deviceInk(hex) {
   return `rgb(${ink.join(",")})`;
 }
 
+// --- The moulded shell -------------------------------------------------------
+// Every part of a shell (body, bezel, lid, feet, loop, roof, crescent, the caps) is
+// cut on the creature's on-screen pixel grid: --px CSS px a cell, a whole number of
+// device pixels. mouldCells sorts a part's cells into tones; the part gets a
+// clip-path for its stepped outline and an SVG of see-through light and shade over
+// its plastic. The plastic itself (the world's colour, or a finish) stays CSS, so
+// any shell colour works.
+const TONE = { plain: 1, line: 2, lit: 3, glint: 4, shade: 5, dither: 6, deep: 7, seam: 8, side: 9 };
+const TONE_PAINT = [
+  [TONE.line, "rgba(34,20,10,.86)"], [TONE.lit, "rgba(255,255,255,.34)"], [TONE.glint, "rgba(255,255,255,.75)"],
+  [TONE.shade, "rgba(24,12,4,.2)"], [TONE.dither, "rgba(24,12,4,.2)"], [TONE.deep, "rgba(24,12,4,.34)"],
+  [TONE.seam, "rgba(24,12,4,.24)"],
+];
+const MOULDS = new Map(); // cut parts, by kind and size
+
+// Inside a w x h box with CSS corner radii ([h, v] per corner, top-left first).
+function inRound(x, y, w, h, rad) {
+  if (x < 0 || y < 0 || x > w || y > h) return false;
+  const f = Math.min(1, w / (rad[0][0] + rad[1][0] || 1), w / (rad[3][0] + rad[2][0] || 1),
+    h / (rad[0][1] + rad[3][1] || 1), h / (rad[1][1] + rad[2][1] || 1));
+  const c = rad.map(([a, b]) => [a * f, b * f]);
+  const corner = (cx, cy, [a, b], sx, sy) => !a || !b || sx * (x - cx) < 0 || sy * (y - cy) < 0 ||
+    ((x - cx) / a) ** 2 + ((y - cy) / b) ** 2 <= 1;
+  return corner(c[0][0], c[0][1], c[0], -1, -1) && corner(w - c[1][0], c[1][1], c[1], 1, -1) &&
+    corner(w - c[2][0], h - c[2][1], c[2], 1, 1) && corner(c[3][0], h - c[3][1], c[3], -1, 1);
+}
+
+// An element's corner radii, in cells of size g.
+function cssRadii(el, w, h, g) {
+  const st = getComputedStyle(el);
+  return ["TopLeft", "TopRight", "BottomRight", "BottomLeft"].map((k) => {
+    const [a, b = a] = st[`border${k}Radius`].split(" ");
+    const v = (s, size) => (s.endsWith("%") ? (parseFloat(s) / 100) * size : parseFloat(s) || 0) / g;
+    return [v(a, w), v(b, h)];
+  });
+}
+
+// Sort a W x H grid of cells into tones; inside(x, y) takes a cell's centre. Raised
+// plastic is lit along its top and left and shaded, then dithered, along its bottom
+// and right; sunk plastic (a recess) the other way round. With core(x, y), the
+// cells around the core are a recess's lip: in shadow above, lit below. glint adds
+// a highlight at the top left, seam a parting line that many cells in, veins(x, y)
+// lines of its own.
+function mouldCells(W, H, inside, { sunk = false, glint = false, seam = 0, core = null, veins = null } = {}) {
+  const ins = new Uint8Array(W * H);
+  let x0 = W, x1 = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!inside(x + 0.5, y + 0.5)) continue;
+    ins[y * W + x] = core && !core(x + 0.5, y + 0.5) ? 2 : 1;
+    x0 = Math.min(x0, x); x1 = Math.max(x1, x);
+  }
+  const at = (x, y) => x >= 0 && y >= 0 && x < W && y < H && ins[y * W + x] === 1;
+  const run = (x, y, dx, dy) => { let n = 0; while (n < 12 && at(x + dx * (n + 1), y + dy * (n + 1))) n++; return n; };
+  const out = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x;
+    if (ins[i] === 2) { out[i] = x / W + y / H < 1 ? TONE.deep : TONE.lit; continue; }
+    if (!ins[i]) continue;
+    const u = run(x, y, 0, -1), d = run(x, y, 0, 1), l = run(x, y, -1, 0), r = run(x, y, 1, 0);
+    if (!u || !d || !l || !r) { out[i] = TONE.line; continue; }
+    let t = TONE.plain;
+    const near = Math.min(u, d, l, r) - 1; // plain cells between this one and the outline
+    if (sunk) t = u === 1 || l === 1 ? TONE.deep : d === 1 || r === 1 ? TONE.lit : t;
+    else {
+      if (u <= 2 || l === 1) t = TONE.lit;
+      else if (d <= 2 || r === 1) t = TONE.shade;
+      else if (d <= 4 && (x + y) % 2 === 0) t = TONE.dither;
+      const fx = (x - x0) / (x1 - x0 + 1);
+      if (glint && (u === 3 || u === 4) && fx > 0.16 && fx < (u === 3 ? 0.34 : 0.3)) t = TONE.glint;
+      if (glint && u === 3 && fx > 0.37 && fx < 0.4) t = TONE.glint;
+      if (seam && near === seam) t = TONE.seam;
+      else if (seam && near === seam + 1 && (d === seam + 2 || r === seam + 2)) t = TONE.lit;
+      if (veins && near > seam + 1 && veins(x + 0.5, y + 0.5)) t = TONE.seam;
+    }
+    out[i] = t;
+  }
+  return out;
+}
+
+// A button cap n cells across, raised depth cells off its socket: the face, its side
+// below (TONE.side, which CSS paints) and the outline round both.
+function capCells(n, depth, rad) {
+  const W = n, H = n + depth;
+  const face = (x, y) => inRound(x, y, n, n, rad);
+  const ins = (x, y) => x >= 0 && y >= 0 && x < W && y < H &&
+    Array.from({ length: depth + 1 }, (_, k) => k).some((k) => face(x + 0.5, y + 0.5 - k));
+  const onFace = (x, y) => face(x + 0.5, y + 0.5);
+  const run = (x, y, dy) => { let k = 0; while (k < 12 && onFace(x, y + dy * (k + 1))) k++; return k; };
+  const out = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (!ins(x, y)) continue;
+    const i = y * W + x;
+    if (!ins(x - 1, y) || !ins(x + 1, y) || !ins(x, y - 1) || !ins(x, y + 1)) out[i] = TONE.line;
+    else if (!onFace(x, y)) out[i] = TONE.side;
+    else {
+      const u = run(x, y, -1), d = run(x, y, 1);
+      out[i] = u <= 1 ? TONE.lit : u === 2 && x > n * 0.22 && x < n * 0.42 ? TONE.glint
+        : d === 0 ? TONE.shade : TONE.plain;
+    }
+  }
+  return out;
+}
+
+// The cells that pass test, as one SVG path (runs along a row, merged down the rows
+// while they repeat), scaled by g and shifted by (ox, oy).
+function cellsPath(cells, W, H, test, g = 1, ox = 0, oy = 0) {
+  const f = (v, o) => +(v * g + o).toFixed(3);
+  let d = "", prev = null, top = 0, runs = [];
+  const flush = (bottom) => {
+    for (let k = 0; k < runs.length; k += 2) {
+      d += `M${f(runs[k], ox)} ${f(top, oy)}H${f(runs[k + 1], ox)}V${f(bottom, oy)}H${f(runs[k], ox)}Z`;
+    }
+  };
+  for (let y = 0; y <= H; y++) {
+    const row = [];
+    for (let x = 0; y < H && x < W; x++) {
+      if (!test(cells[y * W + x])) continue;
+      const start = x;
+      while (x < W && test(cells[y * W + x])) x++;
+      row.push(start, x);
+    }
+    const key = row.join();
+    if (key !== prev) { if (prev !== null) flush(y); prev = key; runs = row; top = y; }
+  }
+  return d;
+}
+
+// The light and shade over a part, as a CSS image a cell per SVG unit.
+function toneImage(cells, W, H) {
+  const paths = TONE_PAINT.map(([t, paint]) => {
+    const d = cellsPath(cells, W, H, (v) => v === t);
+    return d ? `<path fill='${paint}' d='${d}'/>` : "";
+  }).join("");
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${W} ${H}' preserveAspectRatio='none' ` +
+    `shape-rendering='crispEdges'>${paths}</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+// Shell hardware stand-ins, code-drawn in the art's greys (50% is the shell colour,
+// hard-light; see art/shell-parts/REQUEST.md). A PNG of the same size can replace
+// each: the slot only needs its --art.
+const HW_GREY = { "#": 34, c: 72, d: 104, m: 128, l: 176, w: 236 };
+const HW_ART = {
+  screw: [".###.", "#llc#", "#lcm#", "#cmd#", ".###."],
+  slot: ["#.", "#.", "#.", "#.", "l."],
+  stripes: ["d", ".", "d"],
+  fleck: [".l.", "lwl", ".l."],
+  glare: ["......ww", ".....ww.", "....ww..", "...ww...", "..ww...w", ".ww...w.", "ww...w..", "w...w..."],
+};
+const hwArt = (rows) => {
+  let rects = "";
+  rows.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch === ".") return;
+    const v = HW_GREY[ch];
+    rects += `<rect x='${x}' y='${y}' width='1' height='1' fill='rgb(${v},${v},${v})'/>`;
+  }));
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${rows[0].length} ${rows.length}' ` +
+    `shape-rendering='crispEdges'>${rects}</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+};
+
 // A trait's flair sprite as a small icon (its first frame or big variant).
 function traitIcon(trait) {
   const f = FLAIR[trait];
@@ -1040,129 +1201,126 @@ const STYLE = `
 
   /* One device */
   .device { display: flex; flex-direction: column; align-items: center; font-family: 'Tiny5', monospace; }
-  .loop { width: 34px; height: 22px; border: 6px solid var(--d-dark); border-bottom: none;
-    border-radius: 20px 20px 0 0; margin-bottom: -12px; }
-  .lid { width: 92%; height: 20px; background: var(--d-dark); border-radius: 10px 10px 4px 4px;
-    box-shadow: inset 0 4px 0 rgba(255,255,255,.18); display: flex; justify-content: center;
+  /* The moulded shell (_mould): each part's plastic is a .mould cut on the grid
+     (--px a cell), its own colour in CSS with the cut light and shade (--tones) over
+     it. The parts themselves only give the size and shape. */
+  .mould { position: absolute; left: 0; top: 0; z-index: -1; pointer-events: none;
+    background: var(--d-dark); }
+  .mould::after { content: ""; position: absolute; inset: 0; background: var(--tones) 0 0 / 100% 100%; }
+  .loop, .roof, .feet span, .bezel { isolation: isolate; }
+  .loop { position: relative; width: 46px; height: 28px; margin-bottom: -12px; }
+  .lid { width: 92%; height: 20px; border-radius: 10px 10px 4px 4px; display: flex; justify-content: center;
     align-items: center; gap: 6px; }
-  .lid span { width: 12%; height: 4px; border-radius: 2px; background: rgba(0,0,0,.25); }
-  /* The lid sits over the body's top bevel, which on a pale shell reads as a gap. */
+  .lid span { width: 12%; height: calc(var(--px, 2px) * 2); background: rgba(24,12,4,.34);
+    box-shadow: 0 var(--px, 2px) 0 rgba(255,255,255,.22); }
+  /* The lid sits over the body's top edge. */
   .lid { position: relative; z-index: 1; margin-bottom: -5px; }
   .feet { width: 82%; display: flex; justify-content: space-between; }
-  .feet span { width: 34px; height: 10px; background: var(--d-dark); border-radius: 0 0 6px 6px; }
+  .feet span { position: relative; width: 34px; height: 10px; border-radius: 0 0 6px 6px; }
   /* House: a pitched roof with a chimney, sitting on the body like a cottage. */
   .roof { position: relative; width: 108%; height: 64px; margin-bottom: -2px; }
-  .roof::before { content: ""; position: absolute; right: 20%; top: 6px; width: 22px; height: 40px;
-    background: var(--d-dark); box-shadow: inset 0 5px 0 rgba(255,255,255,.18); }
-  .roof::after { content: ""; position: absolute; inset: 0; background: var(--d-dark);
-    clip-path: polygon(50% 0, 100% 100%, 0 100%); }
   .compact .roof { height: 46px; }
-  /* Porthole: a riveted brass ring around a rounded window. */
+  /* Porthole: a riveted ring (the rivets are cut with the bezel) around a rounded window. */
   .porthole .body { border-radius: 40px; padding: 22px 18px 26px; }
-  .porthole .bezel { padding: 14px; border-radius: 30% / 38%;
-    background-image: radial-gradient(circle at 50% 7px, var(--d-dark) 0 3px, transparent 4px),
-      radial-gradient(circle at 50% calc(100% - 7px), var(--d-dark) 0 3px, transparent 4px),
-      radial-gradient(circle at 7px 50%, var(--d-dark) 0 3px, transparent 4px),
-      radial-gradient(circle at calc(100% - 7px) 50%, var(--d-dark) 0 3px, transparent 4px),
-      radial-gradient(circle at calc(8.8% + 5px) calc(11% + 5px), var(--d-dark) 0 3px, transparent 4px),
-      radial-gradient(circle at calc(91.2% - 5px) calc(11% + 5px), var(--d-dark) 0 3px, transparent 4px),
-      radial-gradient(circle at calc(8.8% + 5px) calc(89% - 5px), var(--d-dark) 0 3px, transparent 4px),
-      radial-gradient(circle at calc(91.2% - 5px) calc(89% - 5px), var(--d-dark) 0 3px, transparent 4px); }
+  .porthole .bezel { padding: 14px; border-radius: 30% / 38%; }
   .porthole .screen { border-radius: 28% / 36%; }
   .porthole .bubble { left: 13%; top: 10%; }
   .porthole .attention { right: 13%; top: 9%; }
-  .porthole .toy .cap { border-radius: 50%; box-shadow: 0 5px 0 var(--d-btn-shadow), inset 0 0 0 3px var(--d-bezel); }
-  /* Pad: a lily pad, veins fanning from the notch at the top. */
-  .pad .body { border-radius: 50% / 30%; padding: 40px 22px 40px;
-    background-image: repeating-conic-gradient(from 90deg at 50% 0, transparent 0 13deg,
-      rgba(0,0,0,.08) 13deg 14.5deg); }
-  .pad .body::before { content: ""; position: absolute; top: -1px; left: 50%; width: 46px;
-    height: 34px; margin-left: -23px; background: var(--hp-backdrop);
-    clip-path: polygon(0 0, 100% 0, 50% 100%); }
-  .pad .toy .cap { border-radius: 50%; }
+  /* Pad: a lily pad, its notch and veins cut with the body. */
+  .pad .body { border-radius: 50% / 30%; padding: 40px 22px 40px; }
   .pad .buttons { width: 86%; }
   /* Moon: a crescent riding on top of a rounded body sprinkled with stars. */
   .crescent { width: 64px; height: 64px; border-radius: 50%; margin: 0 0 -26px 26px;
-    box-shadow: inset -15px 7px 0 0 var(--d-bezel); transform: rotate(-20deg); position: relative; z-index: 1; }
-  .moon .body { border-radius: 34px; padding: 30px 18px 24px;
-    background-image: radial-gradient(circle at 12% 20%, rgba(255,255,255,.55) 0 1.5px, transparent 2.5px),
-      radial-gradient(circle at 88% 14%, rgba(255,255,255,.45) 0 1.5px, transparent 2.5px),
-      radial-gradient(circle at 6% 62%, rgba(255,255,255,.4) 0 1.5px, transparent 2.5px),
-      radial-gradient(circle at 94% 56%, rgba(255,255,255,.5) 0 1.5px, transparent 2.5px),
-      radial-gradient(circle at 4% 86%, rgba(255,255,255,.35) 0 1.5px, transparent 2.5px),
-      radial-gradient(circle at 96% 90%, rgba(255,255,255,.45) 0 1.5px, transparent 2.5px); }
-  .moon .toy .cap { border-radius: 50%; }
+    position: relative; z-index: 1; }
+  .crescent > .mould { background: var(--d-bezel); }
+  .moon .body { border-radius: 34px; padding: 30px 18px 24px; }
+  .moon .body > .mould {
+    --star: linear-gradient(rgba(255,255,255,.6), rgba(255,255,255,.6));
+    background: var(--star) round(12%, var(--px)) round(20%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--star) round(88%, var(--px)) round(14%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--star) round(6%, var(--px)) round(62%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--star) round(94%, var(--px)) round(56%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--star) round(5%, var(--px)) round(86%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--star) round(95%, var(--px)) round(90%, var(--px)) / var(--px) var(--px) no-repeat, var(--d-shell); }
   .murk { inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .8s; }
-  .body { width: 100%; box-sizing: border-box; background: var(--d-shell);
-    box-shadow: inset 0 -9px 0 var(--d-dark), inset 0 5px 0 rgba(255,255,255,.28), 0 16px 34px rgba(20,15,5,.32);
+  .body { width: 100%; box-sizing: border-box; box-shadow: 0 16px 34px rgba(20,15,5,.32);
     display: flex; flex-direction: column; align-items: center; gap: 12px; }
-  .body { position: relative; }
-  /* Shell finishes skin the molded plastic around the bezel. They deliberately
-     leave .bezel and .screen geometry alone: the screen is a fixed opening. */
-  .finish-woodland .body {
-    background-color: var(--d-shell);
-    background-image: radial-gradient(ellipse at 50% 4%, rgba(255,249,220,.46), transparent 34%),
-      linear-gradient(112deg, rgba(255,255,255,.18), transparent 22% 72%, rgba(112,42,13,.12)),
-      linear-gradient(180deg, #f49a55 0%, var(--d-shell) 48%, #d76a35 100%);
-    box-shadow: inset 0 2px 0 rgba(255,255,255,.7), inset 0 -9px 0 rgba(111,43,18,.32),
-      0 16px 34px rgba(20,15,5,.32);
-  }
-  .finish-woodland .bezel { box-shadow: inset 0 3px 0 rgba(255,255,255,.48),
-    inset 0 -3px 0 rgba(96,48,25,.12), 0 2px 0 rgba(117,63,34,.16); }
-  .finish-aqua .body {
-    background-color: var(--d-shell);
-    background-image: radial-gradient(ellipse at 50% 3%, rgba(255,255,255,.82), transparent 31%),
-      linear-gradient(108deg, rgba(255,255,255,.26), transparent 25% 68%, rgba(0,68,83,.16)),
-      linear-gradient(180deg, #80e3df 0%, #36b9c2 48%, #168d9c 100%);
-    box-shadow: inset 0 2px 0 rgba(255,255,255,.78), inset 0 -9px 0 rgba(0,73,82,.32),
-      0 16px 34px rgba(20,15,5,.32);
-  }
-  .finish-aqua .bezel { box-shadow: inset 0 3px 0 rgba(255,255,255,.72),
-    inset 0 -3px 0 rgba(17,95,104,.16), 0 2px 0 rgba(17,95,104,.2); }
+  .body { position: relative; isolation: isolate; }
+  .body > .mould { background: var(--d-shell); }
+  /* Shell finishes recolour the moulded plastic, in hard bands on the grid; the cut
+     light and shade stay over them. They leave .bezel and .screen geometry alone:
+     the screen is a fixed opening. A speck is a square of whole cells. */
+  .device { --sq: calc(var(--px) * 2); }
+  .finish-woodland .body > .mould {
+    background: linear-gradient(180deg, #f49a55 0 round(down, 20%, var(--px)), var(--d-shell) 0 round(down, 72%, var(--px)),
+      #e07a40 0 round(down, 86%, var(--px)), #d76a35 0); }
+  .finish-aqua .body > .mould {
+    background: linear-gradient(180deg, #80e3df 0 round(down, 16%, var(--px)), #52cbcf 0 round(down, 32%, var(--px)),
+      #36b9c2 0 round(down, 68%, var(--px)), #1fa0ae 0 round(down, 84%, var(--px)), #168d9c 0); }
   .finish-aqua .toy:nth-child(4n + 1) .cap { background: #ffd9dc; }
   .finish-aqua .toy:nth-child(4n + 2) .cap { background: #fff0b7; }
   .finish-aqua .toy:nth-child(4n + 3) .cap { background: #dcd4ff; }
   .finish-aqua .toy:nth-child(4n) .cap { background: #c8f1d8; }
-  .finish-grove .body {
-    background-color: var(--d-shell);
-    background-image: radial-gradient(circle at 12% 23%, rgba(255,236,143,.78) 0 3px, transparent 4px),
-      radial-gradient(circle at 88% 37%, rgba(255,236,143,.68) 0 3px, transparent 4px),
-      radial-gradient(circle at 16% 73%, rgba(255,236,143,.58) 0 2px, transparent 3px),
-      radial-gradient(circle at 84% 81%, rgba(255,236,143,.58) 0 2px, transparent 3px),
-      linear-gradient(135deg, rgba(255,255,255,.42), transparent 43%),
-      linear-gradient(160deg, #a9df68, #74bd62 58%, #4e965c);
-    box-shadow: inset 0 0 0 4px rgba(235,255,164,.36), inset 0 -9px 0 rgba(45,102,56,.35),
-      0 16px 34px rgba(20,15,5,.32);
-  }
+  .finish-grove .body > .mould { --sun: linear-gradient(#ffec8f, #ffec8f);
+    background: var(--sun) round(12%, var(--px)) round(23%, var(--px)) / var(--sq) var(--sq) no-repeat,
+      var(--sun) round(88%, var(--px)) round(37%, var(--px)) / var(--sq) var(--sq) no-repeat,
+      var(--sun) round(16%, var(--px)) round(73%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--sun) round(84%, var(--px)) round(81%, var(--px)) / var(--px) var(--px) no-repeat,
+      linear-gradient(180deg, #a9df68 0 round(down, 22%, var(--px)), #8dcd64 0 round(down, 46%, var(--px)),
+        #74bd62 0 round(down, 78%, var(--px)), #4e965c 0); }
   .finish-grove .toy .cap { background: #fff0a8; }
   .finish-grove .toy:nth-child(3n + 2) .cap { background: #ffd1b5; }
-  .finish-celestial .body {
-    background-color: var(--d-shell);
-    background-image: radial-gradient(circle at 13% 16%, #fff4bb 0 2px, transparent 3px),
-      radial-gradient(circle at 87% 24%, #fff4bb 0 2px, transparent 3px),
-      radial-gradient(circle at 9% 66%, rgba(255,255,255,.88) 0 1.5px, transparent 2.5px),
-      radial-gradient(circle at 91% 75%, rgba(255,255,255,.82) 0 1.5px, transparent 2.5px),
-      radial-gradient(ellipse at 50% 4%, rgba(255,255,255,.28), transparent 34%),
-      linear-gradient(145deg, #777be0, #6255bb 55%, #413c91);
-    box-shadow: inset 0 0 0 4px rgba(213,206,255,.28), inset 0 -9px 0 rgba(36,32,92,.4),
-      0 16px 34px rgba(20,15,5,.32);
-  }
+  .finish-celestial .body > .mould { --star: linear-gradient(#fff4bb, #fff4bb); --dot: linear-gradient(#fff, #fff);
+    background: var(--star) round(13%, var(--px)) round(16%, var(--px)) / var(--sq) var(--sq) no-repeat,
+      var(--star) round(87%, var(--px)) round(24%, var(--px)) / var(--sq) var(--sq) no-repeat,
+      var(--dot) round(9%, var(--px)) round(66%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--dot) round(91%, var(--px)) round(75%, var(--px)) / var(--px) var(--px) no-repeat,
+      linear-gradient(180deg, #777be0 0 round(down, 24%, var(--px)), #6255bb 0 round(down, 74%, var(--px)), #413c91 0); }
   .finish-celestial .toy .cap { background: #f4d7fa; }
   .finish-celestial .toy:nth-child(3n + 2) .cap { background: #d4e7ff; }
-  .finish-dune .body {
-    background-color: var(--d-shell);
-    background-image: radial-gradient(ellipse at 50% 4%, rgba(255,246,214,.7), transparent 33%),
-      radial-gradient(circle at 10% 82%, rgba(150,104,52,.16) 0 2px, transparent 3px),
-      radial-gradient(circle at 90% 70%, rgba(150,104,52,.14) 0 2px, transparent 3px),
-      linear-gradient(112deg, rgba(255,255,255,.26), transparent 24% 70%, rgba(120,78,30,.14)),
-      linear-gradient(180deg, #ecc88f 0%, var(--d-shell) 50%, #c39257 100%);
-    box-shadow: inset 0 2px 0 rgba(255,250,228,.8), inset 0 -9px 0 rgba(112,72,28,.32),
-      0 16px 34px rgba(20,15,5,.32);
-  }
-  .finish-dune .bezel { box-shadow: inset 0 3px 0 rgba(255,244,214,.38),
-    inset 0 -3px 0 rgba(40,26,12,.2), 0 2px 0 rgba(112,72,28,.2); }
+  .finish-dune .body > .mould { --grain: linear-gradient(rgba(150,104,52,.32), rgba(150,104,52,.32));
+    background: var(--grain) round(10%, var(--px)) round(82%, var(--px)) / var(--sq) var(--sq) no-repeat,
+      var(--grain) round(90%, var(--px)) round(70%, var(--px)) / var(--sq) var(--sq) no-repeat,
+      linear-gradient(180deg, #ecc88f 0 round(down, 20%, var(--px)), var(--d-shell) 0 round(down, 74%, var(--px)),
+        #cc9d62 0 round(down, 88%, var(--px)), #c39257 0); }
   .finish-dune .toy .cap { background: #fbefd0; }
   .finish-dune .toy:nth-child(3n + 2) .cap { background: #f3d6a6; }
+  /* 1990s special editions (any world, any shape). Clear: see-through plastic, the
+     board and its glare showing; the outlines and the cut shade keep it solid. */
+  .finish-clear .body > .mould { background: color-mix(in srgb, var(--d-shell) 34%, transparent); }
+  .finish-clear .bezel > .mould::before { background: color-mix(in srgb, var(--d-bezel) 78%, transparent); }
+  .finish-clear .crescent > .mould { background: color-mix(in srgb, var(--d-bezel) 50%, transparent); }
+  .finish-clear .loop > .mould, .finish-clear .lid > .mould, .finish-clear .feet .mould,
+  .finish-clear .roof > .mould { background: color-mix(in srgb, var(--d-dark) 48%, transparent); }
+  .finish-clear .body { box-shadow: none; }
+  .finish-clear .hw.guts, .finish-clear .hw.glare { display: block; }
+  .finish-clear .toy .cap { background: color-mix(in srgb, #e6f8ec 72%, transparent); }
+  /* Glitter: sparkle in the plastic, a few flecks twinkling slowly. */
+  .finish-glitter .body > .mould { background: color-mix(in srgb, var(--d-shell) 80%, #fff2c9); }
+  .finish-glitter .loop > .mould, .finish-glitter .lid > .mould, .finish-glitter .feet .mould,
+  .finish-glitter .roof > .mould { background: color-mix(in srgb, var(--d-dark) 76%, #ffe9ad); }
+  .finish-glitter .hw.flecks { display: block; }
+  .finish-glitter .toy .cap { background: #fff0ce; }
+  /* Glow: pale green by day; at night (or in a dark theme) the plastic itself lights up. */
+  .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 52%, #d4f0b4); }
+  .finish-glow .loop > .mould, .finish-glow .lid > .mould, .finish-glow .feet .mould,
+  .finish-glow .roof > .mould { background: color-mix(in srgb, var(--d-dark) 55%, #bfe4a0); }
+  .finish-glow .toy .cap { background: #e7f3c8; }
+  .finish-glow .toy:nth-child(3n + 2) .cap { background: #d5e8ae; }
+  .finish-glow:has(.screen.night) .body > .mould, .finish-glow:has(.screen.dim) .body > .mould {
+    background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
+  .finish-glow:has(.screen.night) .body, .finish-glow:has(.screen.dim) .body {
+    box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
+  .finish-glow:has(.screen.night) :is(.loop, .lid, .roof) > .mould, .finish-glow:has(.screen.night) .feet .mould,
+  .finish-glow:has(.screen.dim) :is(.loop, .lid, .roof) > .mould, .finish-glow:has(.screen.dim) .feet .mould {
+    background: #9fdc7c; }
+  .finish-glow:has(.screen.night) .crescent > .mould, .finish-glow:has(.screen.dim) .crescent > .mould { background: #d3f7ad; }
+  @media (prefers-color-scheme: dark) {
+    .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
+    .finish-glow .body { box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
+    .finish-glow :is(.loop, .lid, .roof) > .mould, .finish-glow .feet .mould { background: #9fdc7c; }
+    .finish-glow .crescent > .mould { background: #d3f7ad; }
+  }
   /* A finish only tints idle buttons: the lit/asleep (.on) and wanted states keep their own look. */
   .device[class*="finish-"] .toy.wanted .cap { background: #ffe9a8; }
   .device[class*="finish-"] .toy.on .cap { background: #3a2a1a; color: #ffe9a8; }
@@ -1200,7 +1358,7 @@ const STYLE = `
   .compact .trim-corner { display: none; }
   .egg .body { border-radius: 50% 50% 46% 46% / 30% 30% 18% 18%; padding: 36px 20px 40px; }
   .egg .buttons { width: 88%; }
-  .tank .body { border-radius: 18px; padding: 16px 18px 22px; }
+  .tank .body { border-radius: 18px; padding: 16px 18px 36px; }
   .house .body { border-radius: 0 0 10px 10px; padding: 18px 18px 38px; }
   .label { font-size: 14px; letter-spacing: .12em; color: var(--d-ink); }
   .request { position: absolute; right: 14px; bottom: 14px; z-index: 2; min-height: 44px;
@@ -1209,8 +1367,10 @@ const STYLE = `
     font: 400 14px 'Tiny5', monospace; box-shadow: 3px 3px 0 #3a2a1a;
     animation: pulse 1.6s ease-in-out infinite; }
   .request.show { display: flex; }
-  .bezel { position: relative; width: 100%; box-sizing: border-box; background: var(--d-bezel); border-radius: 20px;
-    padding: 9px; box-shadow: inset 0 3px 0 rgba(0,0,0,.12); }
+  .bezel { position: relative; width: 100%; box-sizing: border-box; border-radius: 20px; padding: 9px; }
+  .bezel > .mould { background: none; }
+  .bezel > .mould::before { content: ""; position: absolute; inset: 0; background: var(--d-bezel); clip-path: var(--core); }
+  .bezel > .screen { z-index: 1; }
   .screen { position: relative; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden;
     background: #2b2f3a; box-shadow: inset 0 0 0 3px rgba(0,0,0,.35); cursor: pointer; }
   .screen img { position: absolute; image-rendering: pixelated; user-select: none;
@@ -1429,41 +1589,115 @@ const STYLE = `
   .screen.lit:not(.night):not(.dim):not(.faded):not(.raining) .bg { filter: brightness(1.07); }
   .screen.lit.dim .bg, .screen.lit.faded .bg { filter: brightness(.9) saturate(.75); }
   .screen.lit.dim .pet, .screen.lit.dim .ghost { filter: brightness(.9); }
-  /* Its button: a 44 px target, transparent, around a small part of the shell drawn
-     in the shell's own colours (::before). Each spot keeps the target clear of the
-     screen, the buttons and the label, and inside the slide. */
+  /* Its button: a 44 px target, transparent, around a small domed cap cut on the grid
+     (::before, see _mould) with a bulb on it in the shell's dark tone (::after). Each
+     spot (--bx, --by: the cap's centre) keeps the target clear of the screen, the
+     buttons and the label, and inside the slide. */
   .backlight { position: absolute; z-index: 1; width: 44px; height: 44px; padding: 0; border: none;
-    border-radius: 8px; background: none; cursor: pointer; }
-  .backlight::before { content: ""; position: absolute; left: 50%; top: 50%; width: 10px; height: 10px;
-    translate: -50% -50%; border-radius: 50%; background: var(--d-dark);
-    box-shadow: inset 0 2px 0 rgba(255,255,255,.3), 0 2px 0 rgba(0,0,0,.25); }
-  .backlight:active::before { translate: -50% calc(-50% + 1px); }
-  .device:has(.screen.lit) .backlight::before { background: #4fe3c1; box-shadow: 0 0 6px 1px rgba(79,227,193,.8); }
-  /* Egg: a nub on the shoulder, just above the screen's right corner. */
-  .egg .backlight { right: -18px; top: -34px; }
-  .egg .backlight::before { width: 10px; height: 18px; border-radius: 5px; left: 60%; top: 62%; }
+    border-radius: 8px; background: none; cursor: pointer; --bx: 50%; --by: 50%; }
+  .backlight::before, .backlight::after { content: ""; position: absolute;
+    left: calc(var(--bx) - var(--px, 2px) * 4.5); top: calc(var(--by) - var(--px, 2px) * 5); }
+  .backlight::before { width: calc(var(--px, 2px) * 9); height: calc(var(--px, 2px) * 11);
+    background: var(--bl-tones) 0 0 / 100% 100%, #fff7ec; clip-path: var(--bl-clip); }
+  .backlight::after { width: calc(var(--px, 2px) * 5); height: calc(var(--px, 2px) * 7);
+    margin: var(--px, 2px) 0 0 calc(var(--px, 2px) * 2); background: var(--d-dark);
+    -webkit-mask: var(--hw-bulb) 0 0 / 100% 100%; mask: var(--hw-bulb) 0 0 / 100% 100%; }
+  .backlight:active::before, .backlight:active::after { translate: 0 var(--px, 2px); }
+  .device:has(.screen.lit) .backlight::before { background: var(--bl-tones) 0 0 / 100% 100%, #dffbf2; }
+  .device:has(.screen.lit) .backlight::after { background: #1fbf9a; }
+  /* Egg: on the shoulder, just above the screen's right corner. */
+  .egg .backlight { right: -18px; top: -34px; --bx: 60%; --by: 62%; }
   .compact .egg .backlight { right: -14px; }
-  /* Tank: the lid's right grip, a little raised. */
-  .lid .backlight { left: calc(62% + 6px - 22px); top: -4px; }
-  .lid .backlight::before { top: 14px; width: 30px; max-width: 70%; height: 6px; border-radius: 3px;
-    background: rgba(255,255,255,.32); box-shadow: 0 1px 0 rgba(0,0,0,.3); }
+  /* Tank: on the lid's right grip. */
+  .lid .backlight { left: calc(62% + 6px - 22px); top: -4px; --by: 14px; }
   .lid:has(.backlight) span:nth-of-type(3) { visibility: hidden; }
-  /* House: a little lamp on the chimney (over the roof's triangle). */
-  .roof .backlight { right: calc(20% - 11px); top: 0; }
-  .roof .backlight::before { width: 12px; height: 12px; top: 22px; background: #ffe9a8;
-    box-shadow: inset 0 -2px 0 rgba(0,0,0,.2), 0 0 0 2px rgba(0,0,0,.22); }
-  /* Porthole: the top-right rivet, bigger and raised. */
-  .porthole .backlight { left: calc(91.2% - 8px); top: calc(11% - 31px); }
-  .porthole .backlight::before { left: 3px; top: 36px; }
-  /* Pad: a dewdrop on the upper right rim. */
+  /* House: on the chimney (over the roof's triangle). */
+  .roof .backlight { right: calc(20% - 11px); top: 0; --by: 22px; }
+  /* Porthole: the top-right rivet's place on the ring. */
+  .porthole .backlight { left: calc(91.2% - 8px); top: calc(11% - 31px); --bx: 3px; --by: 36px; }
+  /* Pad: on the upper right rim. */
   .pad .backlight { right: 18%; top: 4px; }
-  .pad .backlight::before { width: 10px; height: 12px; border-radius: 50% 50% 50% 50% / 60% 60% 42% 42%;
-    background: radial-gradient(circle at 35% 30%, #fff 0 18%, rgba(214,244,255,.9) 30%, rgba(120,190,220,.75));
-    box-shadow: 0 1px 0 rgba(0,0,0,.22); }
-  /* Moon: a star on the crescent (turned upright again). */
-  .crescent .backlight { left: 0; top: 10px; rotate: 20deg; }
-  .crescent .backlight::before { width: 14px; height: 14px; border-radius: 0; background: #fff4bb; box-shadow: none;
-    clip-path: polygon(50% 0, 63% 35%, 100% 38%, 71% 60%, 82% 100%, 50% 77%, 18% 100%, 29% 60%, 0 38%, 37% 35%); }
+  /* Moon: on the crescent. */
+  .crescent .backlight { left: 0; top: 10px; }
+  /* Shell hardware (HW_ART; art/shell-parts/REQUEST.md): each slot is its greyscale
+     --art, tinted from the shell by hard-light and cut out by the art's own alpha.
+     Places are rounded to the grid, from the top left of the part. */
+  .hw { position: absolute; display: none; z-index: -1; pointer-events: none; image-rendering: pixelated;
+    --tint: var(--d-shell); --art: none; background: var(--art) 0 0 / 100% 100%, var(--tint);
+    background-blend-mode: hard-light, normal;
+    -webkit-mask: var(--art) 0 0 / 100% 100%; mask: var(--art) 0 0 / 100% 100%; }
+  /* Screws at the corners of the boxy shells (the egg and the pad snap shut). */
+  .hw.screws { inset: calc(var(--px) * 4); --s: calc(var(--px) * 5); --a: var(--hw-screw);
+    background: var(--a) 0 0 / var(--s) var(--s) no-repeat, var(--a) 100% 0 / var(--s) var(--s) no-repeat,
+      var(--a) 0 100% / var(--s) var(--s) no-repeat, var(--a) 100% 100% / var(--s) var(--s) no-repeat, var(--tint);
+    background-blend-mode: hard-light, hard-light, hard-light, hard-light, normal;
+    -webkit-mask: var(--a) 0 0 / var(--s) var(--s) no-repeat, var(--a) 100% 0 / var(--s) var(--s) no-repeat,
+      var(--a) 0 100% / var(--s) var(--s) no-repeat, var(--a) 100% 100% / var(--s) var(--s) no-repeat;
+    mask: var(--a) 0 0 / var(--s) var(--s) no-repeat, var(--a) 100% 0 / var(--s) var(--s) no-repeat,
+      var(--a) 0 100% / var(--s) var(--s) no-repeat, var(--a) 100% 100% / var(--s) var(--s) no-repeat; }
+  :is(.tank, .house, .porthole, .moon) .hw.screws { display: block; }
+  .porthole .hw.screws { inset: calc(var(--px) * 7); }
+  .moon .hw.screws { inset: calc(var(--px) * 6) calc(var(--px) * 5); }
+  /* The egg mark between two speaker grilles, bottom centre, --hw-b cells up. */
+  .body { --hw-b: 8; }
+  .tank .body { --hw-b: 7; } .pad .body { --hw-b: 9; }
+  .hw.logo, .hw.grille { display: block; top: round(down, 100% - var(--px) * (var(--hw-b) + 9), var(--px)); }
+  .hw.logo { --art: var(--hw-logo); width: calc(var(--px) * 7); height: calc(var(--px) * 9);
+    left: round(down, 50% - var(--px) * 3.5, var(--px)); }
+  .hw.grille { --art: var(--hw-slot); width: calc(var(--px) * 10); height: calc(var(--px) * 5);
+    margin-top: calc(var(--px) * 2); background-size: calc(var(--px) * 2) 100%, auto; background-repeat: repeat-x;
+    -webkit-mask-size: calc(var(--px) * 2) 100%; mask-size: calc(var(--px) * 2) 100%;
+    -webkit-mask-repeat: repeat-x; mask-repeat: repeat-x; }
+  .hw.grille.left { left: round(down, 50% - var(--px) * 15.5, var(--px)); }
+  .hw.grille.right { left: round(down, 50% + var(--px) * 5.5, var(--px)); }
+  /* Printed stripes across the top of the bezel (the porthole's ring has rivets). */
+  .hw.stripes { display: block; --art: var(--hw-stripes); --tint: var(--d-bezel); top: var(--px);
+    left: round(18%, var(--px)); width: round(down, 64%, var(--px)); height: calc(var(--px) * 3);
+    background-size: var(--px) 100%, auto; background-repeat: repeat-x;
+    -webkit-mask-size: var(--px) 100%; mask-size: var(--px) 100%; -webkit-mask-repeat: repeat-x; mask-repeat: repeat-x; }
+  .porthole .hw.stripes { display: none; }
+  /* The power light, left of the screen; dark with the lights out. */
+  .hw.light { display: block; --art: var(--hw-light-on); --tint: #e8584a; left: calc(var(--px) * -7);
+    top: round(down, 50% - var(--px) * 2.5, var(--px)); width: calc(var(--px) * 5); height: calc(var(--px) * 5); }
+  .device:has(.screen.dim) .hw.light { --art: var(--hw-light-off); }
+  /* Clear: the board inside, seen through the plastic, and a glare on it. */
+  .hw.guts { left: round(14%, var(--px)); width: round(down, 72%, var(--px)); top: round(58%, var(--px));
+    height: round(down, 32%, var(--px)); -webkit-mask: none; mask: none;
+    background: repeating-linear-gradient(180deg, transparent 0 calc(var(--px) * 5), rgba(178,232,190,.4) 0 calc(var(--px) * 6)),
+      rgba(46,107,74,.42);
+    box-shadow: inset 0 0 0 var(--px) rgba(178,232,190,.6); }
+  .hw.glare { --art: var(--hw-glare); --tint: #fff; opacity: .6; width: calc(var(--px) * 8); height: calc(var(--px) * 8);
+    top: round(7%, var(--px)); left: round(down, 84% - var(--px) * 8, var(--px)); }
+  /* Glitter: three sets of flecks, each twinkling slowly on its own beat. */
+  .hw.flecks { inset: 0; background: var(--tint); --f: calc(var(--px) * 3); --a: var(--hw-fleck);
+    filter: drop-shadow(var(--px) var(--px) 0 rgba(48,24,64,.45)); animation: twinkle 3.2s step-end infinite; }
+  .hw.flecks.a { --tint: #fff6c8;
+    -webkit-mask: var(--a) round(30%, var(--px)) round(4%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(8%, var(--px)) round(40%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(93%, var(--px)) round(66%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(62%, var(--px)) round(96%, var(--px)) / var(--f) var(--f) no-repeat;
+    mask: var(--a) round(30%, var(--px)) round(4%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(8%, var(--px)) round(40%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(93%, var(--px)) round(66%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(62%, var(--px)) round(96%, var(--px)) / var(--f) var(--f) no-repeat; }
+  .hw.flecks.b { --tint: #ffd2e6; animation-duration: 4.4s; animation-delay: -1.3s;
+    -webkit-mask: var(--a) round(70%, var(--px)) round(5%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(5%, var(--px)) round(72%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(94%, var(--px)) round(30%, var(--px)) / var(--f) var(--f) no-repeat;
+    mask: var(--a) round(70%, var(--px)) round(5%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(5%, var(--px)) round(72%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(94%, var(--px)) round(30%, var(--px)) / var(--f) var(--f) no-repeat; }
+  .hw.flecks.c { --tint: #c8f6e6; animation-duration: 5.6s; animation-delay: -2.1s;
+    -webkit-mask: var(--a) round(46%, var(--px)) round(3%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(92%, var(--px)) round(48%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(6%, var(--px)) round(55%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(36%, var(--px)) round(95%, var(--px)) / var(--f) var(--f) no-repeat;
+    mask: var(--a) round(46%, var(--px)) round(3%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(92%, var(--px)) round(48%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(6%, var(--px)) round(55%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(36%, var(--px)) round(95%, var(--px)) / var(--f) var(--f) no-repeat; }
+  @keyframes twinkle { 0% { opacity: 1; } 40% { opacity: .25; } 55% { opacity: 1; } }
+  .slide.away-slide .hw.flecks, ha-card.offscreen .hw.flecks { animation-play-state: paused; }
   @media (prefers-contrast: more) { ha-card.lcd-on .lcd, ha-card.lcd-on .ghost { display: none; } }
   /* Idle life. */
   .pet { transition: translate .25s ease-out, rotate .2s ease-out; }
@@ -1585,15 +1819,24 @@ const STYLE = `
   .row .picon { width: 18px; height: 18px; }
   .hearts { display: flex; gap: 3px; }
   .hearts img { width: 18px; height: 18px; image-rendering: pixelated; }
-  .toy .cap { width: 46px; height: 46px; display: flex; align-items: center; justify-content: center;
-    background: #fff7ec; color: #3a2a1a; box-shadow: 0 5px 0 var(--d-btn-shadow);
-    transition: transform .08s, box-shadow .08s, background .2s; }
-  .egg .toy .cap { border-radius: 50%; }
-  .tank .toy .cap { border-radius: 14px; }
-  .house .toy .cap { border-radius: 10px 10px 4px 4px; }
+  /* A cap is a domed button cut on the grid (_mould): its face is the cap's own
+     background, its side (below the box) and the light on it are pseudo-elements, and
+     it sinks two cells when pressed. */
+  .toy { gap: calc(var(--px, 2px) * 3 + 2px); }
+  .toy .cap { position: relative; width: calc(var(--px, 2px) * var(--cap-n, 23));
+    height: calc(var(--px, 2px) * var(--cap-n, 23)); display: flex; align-items: center; justify-content: center;
+    background: #fff7ec; color: #3a2a1a; clip-path: var(--cap-clip); transition: transform .08s, background .2s; }
+  .toy .cap::before, .toy .cap::after { content: ""; position: absolute; left: 0; top: 0; width: 100%;
+    height: calc(var(--px, 2px) * (var(--cap-n, 23) + 3)); z-index: -1; pointer-events: none; }
+  .toy .cap::before { background: var(--d-btn-shadow); clip-path: var(--cap-side); }
+  .toy .cap::after { background: var(--cap-tones) 0 0 / 100% 100%; }
+  .toy .cap > * { position: relative; }
   /* Pressed: held down for at least 160 ms so even a quick tap reads as a press. */
-  .toy:active .cap, .toy.pressed .cap { transform: translateY(4px);
-    box-shadow: 0 1px 0 var(--d-btn-shadow); transition-duration: .04s; }
+  .toy:active .cap, .toy.pressed .cap { transform: translateY(calc(var(--px, 2px) * 2));
+    clip-path: var(--cap-clip-dn); transition-duration: .04s; }
+  .toy:active .cap::before, .toy.pressed .cap::before { clip-path: var(--cap-side-dn); }
+  .toy:active .cap::after, .toy.pressed .cap::after { background-image: var(--cap-tones-dn);
+    height: calc(var(--px, 2px) * (var(--cap-n, 23) + 1)); }
   .toy.pending .cap { animation: waiting .9s ease-in-out infinite; }
   @keyframes waiting { 50% { filter: brightness(.9); } }
   .toy.failed .cap { animation: shake .35s; }
@@ -1628,11 +1871,14 @@ const STYLE = `
     100% { transform: translateY(-70px) scale(1); opacity: 0; } }
   .pet.perk { animation: perk .3s ease-out; }
   @keyframes perk { 40% { transform: translateY(-6%) scale(1.04, .96); } }
-  .toy.wanted .cap { background: #ffe9a8;
-    box-shadow: 0 5px 0 var(--d-btn-shadow), 0 0 0 4px #fff3c4, 0 0 16px 5px #ffd76a; }
+  .toy.wanted .cap { background: #ffe9a8; }
+  /* Wanted: a ring of light round the cap, cut on the grid too. */
+  .toy.wanted::before { content: ""; position: absolute; top: calc(var(--px) * -2); left: 50%; z-index: -1;
+    width: calc(var(--px) * (var(--cap-n) + 4)); height: calc(var(--px) * (var(--cap-n) + 7));
+    translate: calc(var(--px) * (var(--cap-n) + 4) / -2) 0; background: #ffd76a; clip-path: var(--cap-halo);
+    pointer-events: none; }
   .toy.on .cap { background: #3a2a1a; color: #ffe9a8; }
   .toy[disabled] { opacity: .45; cursor: default; }
-  .compact .toy .cap { width: 38px; height: 38px; }
   .compact .toy { font-size: 12px; }
   .compact .egg .body { padding: 28px 14px 32px; }
   .warn { padding: 16px; color: var(--error-color, #c00); background: var(--card-background-color); }
@@ -1844,6 +2090,11 @@ class HatchPetCard extends HTMLElement {
       </ha-card>`;
     this._card = root.querySelector("ha-card");
     this._card.classList.toggle("lcd-on", lcdOn());
+    // The shell hardware's art (see HW_ART and art/shell-parts/REQUEST.md).
+    const ui = (name) => `url("${BASE}/ui/${name}.png?v=${VERSION}")`;
+    for (const [k, rows] of Object.entries(HW_ART)) this._card.style.setProperty(`--hw-${k}`, hwArt(rows));
+    for (const k of ["logo", "plate", "light_on", "light_off"]) this._card.style.setProperty(`--hw-${k.replace("_", "-")}`, ui(`shell_${k}`));
+    this._card.style.setProperty("--hw-bulb", ui("backlight_bulb"));
     this._viewport = root.querySelector(".viewport");
     this._track = root.querySelector(".track");
     this._dots = root.querySelector(".dots");
@@ -1906,11 +2157,14 @@ class HatchPetCard extends HTMLElement {
     slide.className = "slide";
     slide.innerHTML = `
       <div class="device">
-        <div class="roof"></div><div class="crescent"></div><div class="loop"></div><div class="lid"><span></span><span></span><span></span></div>
-        <div class="body">
+        <div class="roof"><i class="mould"></i></div><div class="crescent"><i class="mould"></i></div><div class="loop"><i class="mould"></i></div><div class="lid"><i class="mould"></i><span></span><span></span><span></span></div>
+        <div class="body"><i class="mould"></i>
+          <i class="hw screws"></i><i class="hw guts"></i><i class="hw glare"></i>
+          <i class="hw grille left"></i><i class="hw grille right"></i><i class="hw logo"></i>
+          <i class="hw flecks a"></i><i class="hw flecks b"></i><i class="hw flecks c"></i>
           <img class="trim-top" alt=""><img class="trim-top2" alt="">
           <span class="label"></span>
-          <div class="bezel"><div class="screen">
+          <div class="bezel"><i class="mould"></i><i class="hw stripes"></i><i class="hw light"></i><div class="screen">
             <img class="bg" alt="">
             <img class="awaysign" alt=""><div class="awaylabel"></div>
             <div class="season"></div>
@@ -1944,7 +2198,7 @@ class HatchPetCard extends HTMLElement {
           <div class="buttons"></div>
           <img class="trim-corner left" alt=""><img class="trim-corner right" alt="">
         </div>
-        <div class="feet"><span></span><span></span></div>
+        <div class="feet"><span><i class="mould"></i></span><span><i class="mould"></i></span></div>
       </div>`;
     const q = (sel) => slide.querySelector(sel);
     const s = {
@@ -1960,6 +2214,7 @@ class HatchPetCard extends HTMLElement {
     // (its width depends on the shell's padding as well as the slide's).
     s.lcdSize = new ResizeObserver(() => this._lcdPitch(s));
     s.lcdSize.observe(s.screen);
+    s.lcdSize.observe(q(".body")); // and the shell is cut again when it changes size
     // The backlight: a real button on the shell (each shape has its spot, see
     // _renderSlide). Card only: it lights the screen and nothing else.
     s.backlight = document.createElement("button");
@@ -2343,6 +2598,128 @@ class HatchPetCard extends HTMLElement {
     s.screen.style.setProperty("--lcd-line", `${line}px`);
     s.screen.style.setProperty("--lcd-x", `${left % pitch}px`);
     s.screen.style.setProperty("--lcd-y", `${top % pitch}px`);
+    // The shell's grid: one cell per art pixel too, but always whole device pixels.
+    const px = Math.max(1, Math.round(((w * 0.465) / 64) * dpr)) / dpr;
+    if (px !== s.px) {
+      s.px = px;
+      s.device.style.setProperty("--px", `${px}px`);
+    }
+    this._mould(s);
+  }
+
+  // Cut each part of the shell on the grid, from its laid-out size (see mouldCells).
+  // Parts and caps are cached by kind and size, so a call with nothing changed is cheap.
+  _mould(s) {
+    const g = s.px;
+    const dev = s.device;
+    if (!g || !dev.offsetWidth) return;
+    const shape = s.shape || "egg";
+    const cut = (key, make) => {
+      if (!MOULDS.has(key)) {
+        if (MOULDS.size > 300) MOULDS.clear();
+        MOULDS.set(key, make());
+      }
+      return MOULDS.get(key);
+    };
+    for (const m of dev.querySelectorAll(".mould")) {
+      const part = m.parentElement;
+      const w = part.offsetWidth, h = part.offsetHeight;
+      if (!w || !h) continue;
+      const kind = ["body", "bezel", "loop", "lid", "roof", "crescent"].find((k) => part.classList.contains(k)) || "foot";
+      const lip = kind === "bezel" ? 2 : 0;
+      const W = Math.max(1, Math.round(w / g)) + lip * 2, H = Math.max(1, Math.round(h / g)) + lip * 2;
+      const key = `${kind}|${shape}|${W}|${H}|${g}`;
+      if (m.dataset.key === key) continue;
+      m.dataset.key = key;
+      const { clip, tones, core } = cut(key, () => {
+        const rad = cssRadii(part, w, h, g);
+        const w0 = W - lip * 2, h0 = H - lip * 2;
+        let inside = (x, y) => inRound(x, y, W, H, rad), opts = {};
+        if (kind === "body") {
+          opts = { glint: true, seam: 3 };
+          // The lily pad's notch, and its veins fanning from it.
+          if (shape === "pad") {
+            const notch = 23 / g, deep = 34 / g;
+            inside = (x, y) => inRound(x, y, W, H, rad) && !(y < deep && Math.abs(x - W / 2) < notch * (1 - y / deep));
+            opts.veins = (x, y) => {
+              const a = (Math.atan2(y, x - W / 2) * 180) / Math.PI;
+              const k = (((a - 90 - 13.75) % 14.5) + 14.5) % 14.5;
+              return Math.min(k, 14.5 - k) * (Math.PI / 180) * Math.hypot(x - W / 2, y) < 0.5;
+            };
+          }
+        } else if (kind === "bezel") {
+          inside = (x, y) => inRound(x, y, W, H, rad.map(([a, b]) => [a + lip, b + lip]));
+          opts = { sunk: true, core: (x, y) => inRound(x - lip, y - lip, w0, h0, rad) };
+        } else if (kind === "loop") {
+          const t = Math.round(6 / g);
+          inside = (x, y) => inRound(x, y, W, H, rad) && !inRound(x - t, y - t, W - t * 2, H, rad.map(([a, b]) => [a - t, b - t]));
+        } else if (kind === "roof") {
+          const cw = 22 / g, cx = W * 0.8;
+          inside = (x, y) => Math.abs(x - W / 2) <= (y / H) * (W / 2) ||
+            (x > cx - cw && x < cx && y > 6 / g && y < 46 / g);
+        } else if (kind === "crescent") {
+          // A disc less the same disc moved (-15, 7) px, turned -20°.
+          const R = W / 2, a = (-20 * Math.PI) / 180;
+          const ox = (-15 * Math.cos(a) - 7 * Math.sin(a)) / g, oy = (-15 * Math.sin(a) + 7 * Math.cos(a)) / g;
+          inside = (x, y) => (x - R) ** 2 + (y - R) ** 2 <= R * R && (x - R - ox) ** 2 + (y - R - oy) ** 2 > R * R;
+        }
+        const cells = mouldCells(W, H, inside, opts);
+        // The porthole's rivets: studs of 2 x 2 cells round the ring.
+        if (kind === "bezel" && shape === "porthole") {
+          const at = [[w / 2, 7], [w / 2, h - 7], [7, h / 2], [w - 7, h / 2], [0.088 * w + 5, 0.11 * h + 5],
+            [0.912 * w - 5, 0.11 * h + 5], [0.088 * w + 5, 0.89 * h - 5], [0.912 * w - 5, 0.89 * h - 5]];
+          for (const [ax, ay] of at) {
+            const cx = Math.round(lip + ax / g) - 1, cy = Math.round(lip + ay / g) - 1;
+            [[0, 0, TONE.lit], [1, 0, TONE.line], [0, 1, TONE.line], [1, 1, TONE.line]].forEach(([dx, dy, t]) => {
+              const i = (cy + dy) * W + cx + dx;
+              if (cells[i]) cells[i] = t;
+            });
+          }
+        }
+        // A recess's lip is the shell's own plastic, in light and shade: only the core is filled.
+        const core = lip ? cells.map((v, i) => (v && inside((i % W) + 0.5, Math.floor(i / W) + 0.5) &&
+          opts.core((i % W) + 0.5, Math.floor(i / W) + 0.5) ? 1 : 0)) : null;
+        return { clip: `path("${cellsPath(cells, W, H, (v) => v > 0, g)}")`, tones: toneImage(cells, W, H),
+          core: core ? `path("${cellsPath(core, W, H, (v) => v > 0, g)}")` : "none" };
+      });
+      m.style.cssText = `left:${-lip * g}px;top:${-lip * g}px;width:${W * g}px;height:${H * g}px;` +
+        `clip-path:${clip};--tones:${tones};--core:${core}`;
+    }
+    // The button caps, all one size on a device, and the backlight's little one.
+    const n = Math.round((this._card.classList.contains("compact") ? 38 : 46) / g);
+    const capKey = `cap|${shape}|${n}|${g}`;
+    if (dev.dataset.caps !== capKey) {
+      dev.dataset.caps = capKey;
+      const caps = cut(capKey, () => {
+        const r = shape === "tank" ? [14, 14, 14, 14] : shape === "house" ? [10, 10, 4, 4] : null;
+        const rad = r ? r.map((v) => [(v / 46) * n, (v / 46) * n]) : Array(4).fill([n / 2, n / 2]);
+        const out = {};
+        for (const [tag, depth] of [["", 3], ["-dn", 1]]) {
+          const cells = capCells(n, depth, rad);
+          out[`--cap-clip${tag}`] = `path("${cellsPath(cells, n, n + depth, (v) => v > 0, g)}")`;
+          out[`--cap-side${tag}`] = `path("${cellsPath(cells, n, n + depth, (v) => v === TONE.side, g)}")`;
+          out[`--cap-tones${tag}`] = toneImage(cells, n, n + depth);
+          if (!tag) {
+            // The wanted glow: a ring two cells wide round the raised cap.
+            const W = n + 4, H = n + depth + 4, ring = new Uint8Array(W * H);
+            const has = (x, y) => x >= 0 && y >= 0 && x < n && y < n + depth && cells[y * n + x] > 0;
+            for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+              if (has(x - 2, y - 2)) continue;
+              for (let dy = -2; dy <= 2 && !ring[y * W + x]; dy++) for (let dx = -2; dx <= 2; dx++) {
+                if (Math.abs(dx) + Math.abs(dy) <= 3 && has(x - 2 + dx, y - 2 + dy)) { ring[y * W + x] = 1; break; }
+              }
+            }
+            out["--cap-halo"] = `path("${cellsPath(ring, W, H, (v) => v > 0, g)}")`;
+          }
+        }
+        const bl = capCells(9, 2, Array(4).fill([4.5, 4.5]));
+        out["--bl-clip"] = `path("${cellsPath(bl, 9, 11, (v) => v > 0, g)}")`;
+        out["--bl-tones"] = toneImage(bl.map((v) => (v === TONE.side ? TONE.deep : v)), 9, 11);
+        return out;
+      });
+      dev.style.setProperty("--cap-n", n);
+      for (const [k, v] of Object.entries(caps)) dev.style.setProperty(k, v);
+    }
   }
 
   _renderShelf() {
@@ -2461,9 +2838,10 @@ class HatchPetCard extends HTMLElement {
     const color = shell.color || "#e8834a";
     const dev = s.device;
     const shape = ["tank", "house", "porthole", "pad", "moon"].includes(shell.shape) ? shell.shape : "egg";
-    const finish = ["woodland", "aqua", "grove", "celestial", "dune"].includes(shell.finish)
+    const finish = ["woodland", "aqua", "grove", "celestial", "dune", "clear", "glitter", "glow"].includes(shell.finish)
       ? `finish-${shell.finish}` : "";
     dev.className = `device ${shape}${finish ? ` ${finish}` : ""}`;
+    s.shape = shape;
     dev.querySelector(".roof").style.display = shape === "house" ? "" : "none";
     dev.querySelector(".crescent").style.display = shape === "moon" ? "" : "none";
     dev.querySelector(".loop").style.display = shape === "egg" ? "" : "none";
@@ -2505,6 +2883,7 @@ class HatchPetCard extends HTMLElement {
     } else {
       s.label.style.width = s.label.style.height = s.label.style.paddingTop = "";
     }
+    this._mould(s); // a new shape can keep the same size, so no resize says so
 
     const mood = this._state(s, "sensor.mood");
     const stageState = this._state(s, "sensor.life_stage");
