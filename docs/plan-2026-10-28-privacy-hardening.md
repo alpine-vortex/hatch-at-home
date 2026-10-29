@@ -253,7 +253,16 @@ per-connection pushes:
   - `now` is the server's time (ISO), so the card's `recent()` (`hatch-pet-card.js:2068-2088`)
     still judges a pushed moment's `at` against the server clock, not the browser's
     (audit #18).
-- **The `_fire` split** (`coordinator.py:783-811`), driven by one table in `const.py`:
+- **The `_fire` split** (`coordinator.py:783-811`), driven by one table in `const.py`.
+  It lands in two steps (Phases):
+  - **P3a dual-writes.** `_fire` copies each D–G event (without `user`) into
+    `_private[user]` and pushes it, and copies the titled media event into
+    `_house["media"]` and pushes it. The public path (bus, `self.moments`, attributes) is
+    untouched. The new card reads only the private copies, so nothing visible changes.
+  - **P3b removes the public half** for D–G (the `PERSONAL_EVENTS` gate and the scrub),
+    and **P3c** for titles (the bus's `title`/`artist`, `tv_on`/`music_on`).
+
+  The end state:
   - `PERSONAL_EVENTS = {"bond_up", "bond_record", "bond_favourite", "friend_home",
     "tucked_in"}`.
     - These are never fired on the bus and never put in `self.moments`.
@@ -892,6 +901,15 @@ Existing tests that assert the leak, and must be rewritten:
 Grep `tests/` for `"for_name"`, `"notify_users"`, `attributes["bonds"]`, `"title"` and
 `["moments"]` to catch the rest (audit #15).
 
+**The `new_pet` marker and the existing fixtures (P1).** At `0821baf` the tests make 24
+`MockConfigEntry`s across five modules (the shared `entry()` fixture is
+`test_init.py:44`), none with `new_pet`. Under the new rule, each of those with an empty
+`hass_storage` would load as a damaged save: a `save_damaged` issue and no welcome. So P1
+gives the shared fixture and every fresh-pet entry `data={…, "new_pet": True}`, and a
+test asserts the key is gone after setup. `scripts/develop` only starts HA on
+`dev/config`: its existing pets are existing entries (no welcome is due), and a pet added
+in its UI goes through the config flow, which sets the key.
+
 New tests:
 
 1. **Two people, one non-admin** (`hass.auth.async_create_user("Other", group_ids=
@@ -932,9 +950,11 @@ New tests:
      fire no `call_service` (audit #9).
    - A TV moment still seeds a media dream (`dream_seeds` gets the title): the scrub
      copied, it didn't mutate (audit #17).
-   - Public `moments` hold `tv_on` and `music_on` with no key but `type` and `at`.
-   - A person entity linked to a login, with no bond, coming home puts `someone_home` in
-     `moments` with no key but `type` and `at`.
+   - *(P3c)* Public `moments` hold `tv_on` and `music_on` with no key but `type` and `at`.
+   - *(P3b)* A person entity linked to a login, with no bond, coming home puts
+     `someone_home` in `moments` with no key but `type` and `at`.
+   - Tests 4–6 land in P3b with the title cases (`title`, `artist`, "Bluey") marked to
+     join in P3c, so P3b's run doesn't fail on what P3c removes.
    - Fire each of D–G with someone in `notify_users`: no `notify.*` call follows.
 5. **Nothing personal on states.**
    - After the same day, walk `hass.states.async_all()` for the pet's entities and
@@ -1148,7 +1168,7 @@ separate tests-and-docs PR: that would ship P3b's removals untested for a releas
 |---|---|---|---|
 | **P1: F5 + F6 + FA + D1** | 0.35.0b4 | `from_dict` hardening and the helpers, the salvage path, the `new_pet` marker, `DamagedSave` handling with the repair issue and timestamped backup, the first-tick wrap, the `People` sanitiser and its load wrap, the observer and `_dropSlide`, `_goShared` with the cross-card broadcast, the personality gate (D1). Tests 8, plus the F6, FA (two cards, two tabs) and D1 card checks. | Independent of the channel, and the lowest risk. It makes the later moment and storage tests stand on a loader that can't crash. |
 | **P2: F3 + FB** | 0.35.0b5 | `_welcome` recipients, the `notify.py` docstring, `People.forget`, the `virtual_pet/forget_me` command, the card's "forget my data" row, and the guide (welcome, what the pets remember, the people store with no pets left). Tests 7, 10 and 11, plus the FB card check. | Small. FB's row joins the status screen's person rows and is independent of the channel. It can ride with P1 if the reviewer prefers; then P1+P2 is b4, every later version moves down one, and the old-card check uses b4. |
-| **P3a: the channel** | 0.35.0b6 | `virtual_pet/subscribe`, `virtual_pet/notify_me` and `virtual_pet/my_day`; the watcher registry in `hass.data`, `_private` and `_house`; the coordinator-listener push; the reload snapshot and `gone`; the card reading **only** the channel (`s.mine`, `s.house`), with retry and dedupe, `_wishLine` and the bell on `mine`, and the card's own handling of D–G only from private moments (it ignores them in public `moments`, which the server still fills). The old attributes and events are still published, but no card reads them, so nothing visible changes. Tests 1–3, plus the second-login, reload and restart card checks. | Additive. It can sit on a wall tablet for a day before P3b removes the old path. |
+| **P3a: the channel** | 0.35.0b6 | `virtual_pet/subscribe`, `virtual_pet/notify_me` and `virtual_pet/my_day`; the watcher registry in `hass.data`, `_private` and `_house`, **filled by a dual write in `_fire`** (D–G and the titled media event also go to the channel; the public path stays); the coordinator-listener push; the reload snapshot and `gone`; the card reading **only** the channel (`s.mine`, `s.house`), with retry and dedupe, `_wishLine` and the bell on `mine`, and the card's own handling of D–G only from private moments (it ignores them in public `moments`, which the server still fills). The old attributes and events are still published, but no card reads them, so nothing visible changes. Tests 1–3, plus the second-login, reload and restart card checks. | Additive. It can sit on a wall tablet for a day before P3b removes the old path. |
 | **P3b: the removals** | 0.35.0b7 | `sensor.py` drops `bonds`, `notify_users`, `wish.for`/`for_name`; the `_fire` split, `PERSONAL_EVENTS`, the copying scrub; `someone_home`; `model.pick_wish`; the stub migration in `card-check.js`; the rewrites of the tests that asserted the leak. Docs: `guide.md` (bonds, events, Recorder, phone messages in history) and **HANDOFF's bonds paragraph** (`HANDOFF.md:238-268`; audit #16). The release note. Tests 4–6, plus the shared-screen aimed-wish, arrival and old-card checks. | Where automations break, so the release note heads this version. |
 | **P3c: F2 titles** | 0.35.0b8 | `watching`/`listening` off public `moments` and off the bus's `title`/`artist`, `tv_on`/`music_on` for the recap, `house.media` carrying the title, `dream` without `title` (`dream_on_waking` too), the debug-sensor redaction. Test 9 and test 4–6's title cases, plus the media-moment, recap and old-card (again) checks. The release note gains its titles paragraph. | Its own surface (media), reviewable alone. |
 
@@ -1318,20 +1338,20 @@ corrections are noted in their rows.
 | 2 | Subscriptions die on entry reload (`OptionsFlowWithReload`, `config_flow.py:228`; world egg `async_schedule_reload`, `coordinator.py:1753`; `async_unload_entry` pops the pet, `__init__.py:427-430`), and the card never retries. Verified; the HA-restart variant is still unverified | The watcher registry lives in `hass.data[DOMAIN]["watchers"]` by entry ID; `async_setup_entry` sends a fresh snapshot; `async_remove_entry` sends `gone`. The card retries `no_pet`/`unknown_command` at 2, 5, 15 s, then every 60 s. Test 3 reload cases; card checks for an options save and **an HA restart** (the unverified variant becomes a builder check) |
 | 3 | The push hook in `_publish()` misses the tick (`_async_update_data`, `coordinator.py:359-367`: the daily wish and the morning dream) and `async_set_updated_data`. Verified | Push from a coordinator listener (`async_add_listener`). Test 3: a morning tick pushes the aimed wish to A only, and the dream to both |
 | 4 | The recap "while you were out, I watched TV / listened to music" (`_awayNote`, card:2566-2587) loses its bits when media leaves public moments. Verified | **Changed shape from the audit's proposal:** the public list keeps a title-less record under new types `tv_on` / `music_on`, not title-less `watching` / `listening`. An old card's `case "watching"` speaks `short(m.title)` unguarded (card:2914-2918), so title-less `watching` would make a stale tablet say "ooh, undefined!". `MOMENT_BITS` gains the two types. Card check for the recap |
-| 5 | Invalid JSON, `data: null` and `{}` return `None` from `Store` and become a new egg that is **welcomed** (`coordinator.py:325-332`); a wrapper missing `data` raises `KeyError` in `Store`; a raise in the people store's load (domain `async_setup`, `__init__.py:123-125`) stops every pet. Verified (`helpers/storage.py:367-436`) | **A marker, inverted:** the config flow sets `new_pet: true` on a new entry, removed after the first save. Empty store without it: an egg, no welcome, `save_damaged`. Inverted because no entry has a marker today, so a "set at first save" marker would miss an existing pet damaged before its first load on b4. Both `store.async_load()` calls are wrapped; a damaged people wrapper starts empty with `people_damaged`. Undecodable JSON is kept apart from salvage: HA's `.corrupt.<time>` file is the backup. Test 8's `None` shapes and two-pet people case |
+| 5 | Invalid JSON, `data: null` and `{}` return `None` from `Store` and become a new egg that is **welcomed** (`coordinator.py:325-332`); a wrapper missing `data` raises `KeyError` in `Store`; a raise in the people store's load (domain `async_setup`, `__init__.py:123-125`) stops every pet. Verified (`helpers/storage.py:367-436`) | **A marker, inverted:** the config flow sets `new_pet: true` on a new entry, removed after the first save. Empty store without it: an egg, no welcome, `save_damaged`. Inverted because no entry has a marker today, so a "set at first save" marker would miss an existing pet damaged before its first load on b4. Both `store.async_load()` calls are wrapped; a damaged people wrapper starts empty with `people_damaged`. Undecodable JSON is kept apart from salvage: HA's `.corrupt.<time>` file is the backup. Test 8's `None` shapes and two-pet people case. P1 adds `new_pet: True` to the 24 test `MockConfigEntry`s that make a fresh pet |
 | 6 | A fresh egg on a non-object root is a real loss, the repair has no restore steps, and a second incident overwrites the `.damaged` key. Verified | Backups are `….damaged.<timestamp>`; the repair gives restore steps (copy table, two wordings); a one-dict list root is unwrapped. Owner's salvage (#8) keeps the rest |
 | 7 | The sanitiser's field lists omit live keys (bond `photos`, `catchphrase`, `today`, `visited`; person `alarms`, `likes`, `likes_asked`, `asked`, `once_last`, `sendoffs`, `birthday_sent`, `birthday_skipped`, `left`), and a catalog check on species would wipe the new creatures on a downgrade. Verified (`model.py:216`, 1614, 1666-1673; `coordinator.py:1416-1445`) | The rule: keep unknown keys, type-check or drop known ones, never whitelist. Both key lists are written out with types, read from their readers (correction: `asked` and `likes_asked` are dicts of day lists, `once_last` a day string, `alarms` a list of pairs, `sendoffs` a list of days). `species` and `raised` get a `str` check only. Test cases for photos plus a junk catchphrase, an unknown species, unknown keys |
 | 8 | Q9's recommendation (fail setup on a non-`DamagedSave` exception) contradicts "damaged saves never stop a pet loading", and a raising first tick makes HA retry setup forever. Verified | **Owner: salvage.** Back up, keep name, generation, species, raised, journal, memories and bonds (photos included), default the rest, raise the repair. The first tick is wrapped: it logs, raises the repair and returns the loaded state, so the first refresh can't raise `ConfigEntryNotReady` |
 | 9 | `my_day` is a recorded `call_service` with `context_user_id`, like `notify_me` (card:3309). Verified | **Owner: yes.** `virtual_pet/my_day` websocket command with the `unknown_command` fallback; inventory row O; test 4 asserts no `call_service` |
 | 10 | The shared-screen switch reaches only the card that was tapped; other cards and tabs keep personal lines (`sharedScreen()` is per browser, card:180-185; no `storage` listener). Verified | A `hatch-shared-changed` window event for the same page and a `storage` listener for other tabs; every instance runs `_goShared` and resubscribes. Two-card, two-tab FA card check |
 | 11 | Q3's drop also silences shared screens' "someone's home!! ♥" (card:3013, not 3012), which `card-check.js:398` asserts. Verified | **Owner: keep it, nameless, for any signed-in person's arrival, whatever the bond.** A new public `someone_home` moment from `person_moved`, debounced on one shared timer, on shared screens only. Check 398 is rewritten to it |
-| 12 | The versions are stale: b3 is tagged and released (`const.py:8`). The old-card check should use the tag just before the channel. Verified | **Owner: 0.35.0b4 onward.** P1 b4, P2 b5, P3a b6, P3b b7, P3c b8; `const.py` and `manifest.json` together; the old-card check serves P2's tag (b5) against P3b and P3c |
+| 12 | The versions are stale: b3 is tagged and released (`const.py:8`). The old-card check should use the tag just before the channel. Verified (`git tag`: v0.35.0b1-b3; `manifest.json` 0.35.0b3) | **Owner: 0.35.0b4 onward.** P1 b4, P2 b5, P3a b6, P3b b7, P3c b8; `const.py` and `manifest.json` together; the old-card check serves P2's tag (b5) against P3b and P3c |
 | 13 | P3 is too big for one PR, and "a split ships a card that half-reads the old attributes" is false for an additive split. Verified | **Owner: split** ("P3a/P3b/P3c or the audit's split"). The audit's split, each PR with its own tests and docs: P3a the channel and commands (card reads only the channel), P3b the removals and scrub, P3c titles. Not a separate tests-and-docs PR, which would ship P3b untested for a release |
-| 14 | The card-check stub list is stale and incomplete; 1858, 1997 and 2190 are missing. Verified (a grep at `0821baf`) | The list is replaced with the current lines, named as a floor; 1858, 1997 and 2190 called out; `_mineFor` drives the P2a hellos |
+| 14 | The card-check stub list is stale and incomplete; 1858, 1997 and 2190 are missing. Verified (a grep at `0821baf`, and 1605-1616 and 1855-1860 read) | The list is replaced with the current lines, named as a floor; 1858, 1997 and 2190 called out; `_mineFor` drives the P2a hellos |
 | 15 | The test-rewrite list misses `test_init.py:695/715`, 1746, 1911, 1985, 2017 and 2900. Verified | All listed; the photos test keeps its intent as "not in any state"; `"title"` added to the grep |
 | 16 | The doc list misses HANDOFF's bonds paragraph (`HANDOFF.md:238-268`). Verified | Added to P3b's docs |
 | 17 | The scrub must copy, not mutate: `_check_ins` reads `e["title"]` after the fire loop (`coordinator.py:903-904`). Verified | One sentence in the design; test 4: a TV moment still seeds a dream |
-| 18 | The snapshot replays `house.media` on every resubscribe, and pushed moments lose the server-clock recency check (card:2068-2088). Not re-read; accepted on the audit's reading | The card dedupes `house.media` by `at` (`s.mediaSeen`); the snapshot carries the server's `now` |
+| 18 | The snapshot replays `house.media` on every resubscribe, and pushed moments lose the server-clock recency check (card:2068-2088). Verified: `recent()` compares `at` with `sensor.last_care`'s `last_updated`, which a pushed moment doesn't have | The card dedupes `house.media` by `at` (`s.mediaSeen`); the snapshot carries the server's `now` |
 | 19 | Vague acceptance criteria: `bond_up` fires only on a level-up; test 11's staging; FA's typing case depends on audio. Verified (`model.add_bond` 1679) | Test 3 seeds points one short of a level; test 11 is staged with an `asyncio.Event`; the FA typing case runs with babble off, and on too when audio works |
 | 20 | "forget my data" leaves `hatch-greet-<user>-<device>` (card:2607). Verified | Cleared too, by prefix; the FB card check asserts it |
 
