@@ -3211,6 +3211,278 @@ async function main() {
     !samples.babbleNight || (samples.babbleNight.played === 0 && /quiet till morning/.test(samples.babbleNight.note)),
     JSON.stringify(samples.babbleNight));
 
+  // Care scenes: medicine and clean play out (about 2 s) before the screen shows
+  // the news. No call reaches the server here: each check plays its answer.
+  {
+    const card = page.locator("hatch-pet-card");
+    await card.evaluate((el) => {
+      el.__calls = [];
+      el._call = function (button, s, domain, service, entityId) {
+        this._tapped(button, s);
+        this.__calls.push(entityId);
+      };
+      el.__ends = [];
+      const end = el._sceneEnd;
+      el._sceneEnd = function (s, opts) {
+        if (s.scene) this.__ends.push({ kind: s.scene.kind, at: performance.now() - s.scene.start });
+        return end.call(this, s, opts);
+      };
+    });
+    const now = () => new Date().toISOString();
+    const put = async (p, key, patch) => {
+      if (p[key]) await inject(p[key], patch);
+    };
+    // A pet awake and calm that needs this care (or doesn't).
+    const sceneState = async (p, kind, due = true) => {
+      await put(p, "binary_sensor.asleep", { state: "off" });
+      await put(p, "switch.lights_out", { state: "off" });
+      await put(p, "binary_sensor.calling", { state: "off" });
+      const sick = due && kind === "medicine";
+      await put(p, "sensor.mood", { state: sick ? "sick" : "content",
+        attributes: { flags: due ? [sick ? "sick" : "dirty"] : [], requests: [] } });
+      await put(p, "sensor.poop", { state: due && kind === "clean" ? "2" : "0" });
+      await put(p, `button.${kind}`, { state: "unknown" }); // medicine's is only there while sick
+      await page.waitForTimeout(600);
+      await card.evaluate((el) => {
+        const s = el._slides[el._index];
+        s.sayUntil = 0; s.poseUntil = 0; s.propUntil = 0; s.prop.style.display = "none";
+        s.pet.classList.remove("look", "wander-l", "wander-r", "hop");
+      });
+    };
+    // The server's answer: cured or cleaned, and the care in the log.
+    const answer = async (p, kind, result = "ok") => {
+      if (result === "ok") {
+        await put(p, "sensor.mood", { state: "content", attributes: { flags: [], requests: [] } });
+        await put(p, "sensor.poop", { state: "0" });
+      }
+      await put(p, "sensor.last_care", { attributes: { log: [{ action: kind, result, by: "Dev Person", at: now() }] } });
+    };
+    const careButton = (kind) => cur().locator(".toy", { hasText: kind === "medicine" ? "meds" : "clean" });
+    const look = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const live = (k) => el._hass.states[s.ids[k]];
+      return {
+        scene: s.scene?.kind || null, answered: !!s.scene?.answered, calls: el.__calls.length,
+        end: el.__ends[el.__ends.length - 1] || null, fade: s.sceneFade?.kind || null,
+        liveFlags: (live("sensor.mood")?.attributes.flags || []).join(),
+        livePoop: live("sensor.poop")?.state, heldPoop: el._state(s, "sensor.poop")?.state,
+        sick: /_sick_/.test((s.frames || []).join()) || /_sick_/.test(s.pet.getAttribute("src") || ""),
+        poops: s.poops.filter((p) => p.style.display !== "none").length,
+        props: s.screen.querySelectorAll(".scene, .scene-spark").length,
+        status: s.screen.classList.contains("show-status"), line: s.bubble.textContent,
+        prop: s.prop.style.display !== "none" ? s.prop.getAttribute("src") : "",
+      };
+    });
+    const waitEnd = async () => {
+      for (let i = 0; i < 40 && (await look()).scene; i++) await page.waitForTimeout(100);
+      await page.waitForTimeout(400); // the redraw after it
+      return look();
+    };
+
+    // Medicine: the pill, the sick pet held on screen, then the cured one.
+    await sceneState(pet, "medicine");
+    await careButton("medicine").click();
+    const medStart = await look();
+    await answer(pet, "medicine");
+    await page.waitForTimeout(700);
+    const medHeld = await look();
+    await shot("care-medicine-mid");
+    const medEnd = await waitEnd();
+    check("medicine: a scene starts at the tap, and the call goes out then",
+      medStart.scene === "medicine" && medStart.calls === 1 && medStart.props > 0, JSON.stringify(medStart));
+    check("medicine: the screen keeps the sick pet while the scene plays",
+      medHeld.scene === "medicine" && medHeld.answered && medHeld.liveFlags === "" && medHeld.sick, JSON.stringify(medHeld));
+    check("medicine: then shows the cured pet, after about 2 s",
+      !medEnd.scene && !medEnd.sick && medEnd.props === 0 && medEnd.end?.at >= 1500 && medEnd.end?.at <= 2600 &&
+      !/not sick/.test(medEnd.line), JSON.stringify(medEnd));
+
+    // Clean: the broom sweeps left to right; each mess goes as it passes.
+    await sceneState(pet, "clean");
+    await careButton("clean").click();
+    await answer(pet, "clean");
+    await page.waitForTimeout(500);
+    const cleanHeld = await look();
+    const sweep = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const sc = s.scene;
+      if (!sc) return null;
+      sc.paused = true;
+      const left = () => s.poops.filter((p) => p.style.display !== "none" && !p.classList.contains("scene-gone")).length;
+      const counts = [];
+      for (let t = 0; t <= 1800; t += 50) {
+        el._sceneRender(s, t);
+        counts.push(left());
+      }
+      el._sceneRender(s, performance.now() - sc.start);
+      sc.paused = false;
+      return { counts, broom: !!s.screen.querySelector(".scene-broom"), dust: !!s.screen.querySelector(".scene-dust") };
+    });
+    await shot("care-clean-mid");
+    const cleanEnd = await waitEnd();
+    const counts = sweep?.counts || [];
+    check("clean: the mess stays on screen though the server has cleared it",
+      cleanHeld.scene === "clean" && cleanHeld.livePoop === "0" && cleanHeld.heldPoop === "2" && cleanHeld.poops === 2,
+      JSON.stringify(cleanHeld));
+    check("clean: a broom and its dust sweep the mess away one by one",
+      sweep?.broom && sweep?.dust && counts[0] === 2 && counts[counts.length - 1] === 0 && counts.includes(1) &&
+      counts.every((n, i) => i === 0 || n <= counts[i - 1]), counts.join(""));
+    check("clean: then a clean room with its sparkle, after about 2 s",
+      !cleanEnd.scene && cleanEnd.poops === 0 && cleanEnd.props === 0 && cleanEnd.end?.at >= 1500 &&
+      cleanEnd.end?.at <= 2600 && !/already clean/.test(cleanEnd.line), JSON.stringify(cleanEnd));
+
+    // Interruptions end the scene at once, on the news.
+    await sceneState(pet, "medicine");
+    await careButton("medicine").click();
+    await answer(pet, "medicine");
+    await page.waitForTimeout(500);
+    await cur().locator(".screen").click({ position: { x: 30, y: 40 } });
+    await page.waitForTimeout(400);
+    const tapCut = await look();
+    check("a tap on the screen mid-scene ends it on the cured pet (no status)",
+      !tapCut.scene && tapCut.end?.at < 1500 && !tapCut.sick && !tapCut.status && tapCut.props === 0, JSON.stringify(tapCut));
+    await sceneState(pet, "clean");
+    const callsBefore = (await look()).calls;
+    await careButton("clean").click();
+    await page.waitForTimeout(300);
+    await careButton("clean").click();
+    await page.waitForTimeout(300);
+    const againCut = await look();
+    check("a second tap on clean ends its scene and isn't sent again",
+      !againCut.scene && againCut.calls === callsBefore + 1 && againCut.props === 0, JSON.stringify(againCut));
+    await answer(pet, "clean");
+    await page.waitForTimeout(500);
+    await sceneState(pet, "medicine");
+    await careButton("medicine").click();
+    await page.waitForTimeout(300);
+    const swipeTitle = (await page.locator("hatch-pet-card .title").innerText()).trim();
+    await page.locator("hatch-pet-card .nav.next").click();
+    const swipeCut = await card.evaluate((el) => el._slides.every((s) => !s.scene && !s.screen.querySelector(".scene")));
+    await page.locator("hatch-pet-card .nav.prev").click();
+    await page.waitForTimeout(700);
+    check("moving to another pet mid-scene ends it", swipeCut &&
+      (await page.locator("hatch-pet-card .title").innerText()).trim() === swipeTitle);
+    await answer(pet, "medicine");
+    await page.waitForTimeout(500);
+
+    // Refusals are answered as before: no scene.
+    await sceneState(pet, "medicine", false);
+    await careButton("medicine").click();
+    const refused = await look();
+    check("medicine for a pet that isn't sick plays no scene", !refused.scene && refused.props === 0, JSON.stringify(refused));
+    await sceneState(pet, "clean", false);
+    await careButton("clean").click();
+    check("clean with nothing to clean plays no scene", !(await look()).scene);
+
+    // Reduced motion: no walking or sweeping; the news fades in when it comes.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const calmRuns = {};
+    for (const kind of ["medicine", "clean"]) {
+      await sceneState(pet, kind);
+      await card.evaluate((el) => {
+        const s = el._slides[el._index];
+        window.__faded = false;
+        s.pet.animate = function (...args) {
+          window.__faded = true;
+          return Element.prototype.animate.apply(this, args);
+        };
+      });
+      await careButton(kind).click();
+      const tapped = await look();
+      await answer(pet, kind);
+      await page.waitForTimeout(800);
+      const shown = await look();
+      calmRuns[kind] = { tapped, shown, faded: await evaluate(() => window.__faded) };
+      await card.evaluate((el) => { delete el._slides[el._index].pet.animate; });
+    }
+    await page.emulateMedia({ reducedMotion: null });
+    for (const [kind, r] of Object.entries(calmRuns)) {
+      check(`reduced motion: ${kind} shows the end state with a short fade, no scene`,
+        !r.tapped.scene && r.tapped.fade === kind && r.tapped.props === 0 && r.faded && !r.shown.sick && r.shown.poops === 0,
+        JSON.stringify({ ...r.tapped, faded: r.faded }));
+    }
+
+    // 330 px, on the other pet's slide: both scenes fit the screen.
+    await page.setViewportSize({ width: 330, height: 860 });
+    await page.locator("hatch-pet-card .nav.next").click();
+    await page.waitForTimeout(900);
+    const other = await ids();
+    await hush();
+    const fits = {};
+    for (const kind of ["medicine", "clean"]) {
+      await sceneState(other, kind);
+      await careButton(kind).click();
+      await answer(other, kind);
+      await page.waitForTimeout(kind === "medicine" ? 900 : 700);
+      fits[kind] = await card.evaluate((el) => {
+        const s = el._slides[el._index];
+        const box = s.screen.getBoundingClientRect();
+        const inside = (r) => r.left >= box.left - 1 && r.right <= box.right + 1 && r.bottom <= box.bottom + 1;
+        const sc = s.scene;
+        if (!sc) return null;
+        if (sc.kind === "medicine") {
+          return { pill: inside(sc.pill.getBoundingClientRect()), step: sc.step > 0,
+            pet: s.pet.getBoundingClientRect().right <= box.right + 1, sick: /_sick_/.test(s.frames.join()) };
+        }
+        return { broom: !!sc.tool.getAttribute("src"), held: el._state(s, "sensor.poop").state === "2" };
+      });
+      await shot(`care-${kind}-330`);
+      await waitEnd();
+    }
+    check("at 330 px the medicine scene fits (pill and pet on screen)",
+      fits.medicine?.pill && fits.medicine?.step && fits.medicine?.pet && fits.medicine?.sick, JSON.stringify(fits.medicine));
+    check("at 330 px the clean scene plays on another pet's slide",
+      fits.clean?.broom && fits.clean?.held, JSON.stringify(fits.clean));
+    await page.setViewportSize({ width: 420, height: 860 });
+    await page.locator("hatch-pet-card .nav.prev").click();
+    await page.waitForTimeout(900);
+
+    // Frame strips for three body plans: a bird, a low tortoise, an octopus on
+    // a water world (the net and its bubbles instead of the broom).
+    const life = pet["sensor.life_stage"];
+    const lifeBefore = await evaluate((e) => document.querySelector("home-assistant").hass.states[e].attributes, life);
+    const strips = {};
+    for (const [species, world] of [["bird", "woodland"], ["tortoise", "terrarium"], ["octopus", "tidepool"]]) {
+      await inject(life, { attributes: { species, world } });
+      for (let i = 0; i < 30; i++) {
+        if (await card.evaluate((el, sp) => el._slides[el._index].species && el._slides[el._index].speciesId === sp, species)) break;
+        await page.waitForTimeout(200);
+      }
+      for (const kind of ["medicine", "clean"]) {
+        await sceneState(pet, kind);
+        await careButton(kind).click();
+        const times = kind === "medicine" ? [0, 600, 1100, 1600, 2000] : [100, 600, 1000, 1500, 1950];
+        const got = [];
+        for (const [n, t] of times.entries()) {
+          const at = await card.evaluate((el, t) => {
+            const s = el._slides[el._index];
+            if (!s.scene) return null;
+            s.scene.paused = true;
+            s.scene.ms = Infinity;
+            el._sceneRender(s, t);
+            return { net: !!s.screen.querySelector(".scene-net"), murk: s.murk.style.maskImage };
+          }, t);
+          await page.waitForTimeout(250); // new frames load
+          await cur().locator(".screen").screenshot({ path: path.join(OUT, `scene-${kind}-${species}-${n}.png`) });
+          got.push(at);
+        }
+        await card.evaluate((el) => el._sceneEnd(el._slides[el._index]));
+        await answer(pet, kind);
+        await page.waitForTimeout(400);
+        strips[`${kind}-${species}`] = got;
+      }
+    }
+    await inject(life, { attributes: lifeBefore });
+    await page.waitForTimeout(800);
+    const octo = strips["clean-octopus"] || [];
+    check("on a water world the net clears the murk in step (octopus)",
+      octo.every((a) => a?.net) && octo.map((a) => Number(/transparent (-?[\d.]+)%/.exec(a?.murk || "")?.[1]))
+        .every((x, i, xs) => i === 0 || x > xs[i - 1]), JSON.stringify(octo.map((a) => a?.murk)));
+    check("both scenes play for a bird, a tortoise and an octopus",
+      Object.values(strips).length === 6 && Object.values(strips).every((g) => g.every(Boolean)),
+      Object.keys(strips).join(" "));
+    await calm();
+  }
+
   const editor = await evaluate(async () => {
     const hass = document.querySelector("home-assistant").hass;
     const el = document.createElement("hatch-pet-card-editor");

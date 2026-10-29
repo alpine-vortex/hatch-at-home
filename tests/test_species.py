@@ -42,6 +42,10 @@ def test_every_referenced_sprite_exists(species: str) -> None:
     for prop in (sp.get("props") or {}).values():
         names += prop if isinstance(prop, list) else [prop]
     names += list((sp.get("backgrounds") or {}).values())
+    # Care-scene frames (the card's _sceneFrames): {"eat": [stages] or true}.
+    for act, stages in (sp.get("acts") or {}).items():
+        drawn = sp["stages"] if stages is True else stages
+        names += [f"{stage}_{act}_{i}" for stage in drawn for i in (1, 2)]
     if sp.get("murk"):
         names.append(sp["murk"])
     missing = [n for n in names if not png(species, n).exists()]
