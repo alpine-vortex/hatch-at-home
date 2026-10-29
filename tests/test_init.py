@@ -3034,3 +3034,38 @@ async def test_one_baby_talk_switch_for_every_pet(
         pets.append(config.runtime_data)
     await pets[0].async_set_baby_talk(me.id, True)
     assert (await pets[1].async_visit(me.id))["baby_talk"] is True  # one store
+
+
+async def test_calling_is_off_while_asleep_and_the_switch_shows_sleep(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    stored = hatched_pet(now, hunger=24.0, energy=60.0, asleep=True, napping=True)
+    stored["data"]["call"] = {
+        "reason": "hunger",
+        "started": now - 60,
+        "deadline": now + 600,
+    }
+    stored["data"]["latched"] = []
+    hass_storage[STORE_KEY] = stored
+    await setup(hass)
+    calling = hass.states.get("binary_sensor.pip_calling")
+    assert calling.state == STATE_OFF
+    assert "deadline" not in calling.attributes
+    mood = hass.states.get("sensor.pip_mood")
+    assert "calling" not in mood.attributes["flags"]
+    # Dozed, collapsed or put to bed by the house: the switch shows it asleep.
+    assert hass.states.get("switch.pip_lights_out").state == STATE_ON
+
+
+async def test_lights_out_refused_when_rested(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, energy=100.0)
+    await setup(hass)
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": "switch.pip_lights_out"}, blocking=True
+    )
+    assert hass.states.get("binary_sensor.pip_asleep").state == STATE_OFF
+    assert hass.states.get("switch.pip_lights_out").state == STATE_OFF
+    log = hass.states.get("sensor.pip_last_care").attributes["log"]
+    assert log[0]["action"] == "lights_out" and log[0]["result"] == "not_sleepy"

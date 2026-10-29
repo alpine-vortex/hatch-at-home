@@ -256,14 +256,120 @@ def test_no_calls_while_asleep():
     assert "call_started" not in types(events)
 
 
-def test_energy_call_answered_by_lights_out():
+def test_energy_call_stays_open_through_an_immediate_hand_wake():
     start = at(13)
     pet = hatched(start, energy=19.0)
     run(pet, start + 5 * MIN)
     assert pet.call and pet.call.reason == "energy"
-    events = model.set_lights_out(pet, True, start + 5 * MIN, SETTINGS)
+    model.set_lights_out(pet, True, start + 5 * MIN, SETTINGS)
+    assert pet.asleep and pet.call is not None
+    events = model.set_lights_out(pet, False, start + 5 * MIN, SETTINGS)
+    assert not pet.asleep and pet.call is not None
+    assert "call_answered" not in types(events)
+
+
+def test_energy_call_answered_once_energy_passes_40_asleep():
+    start = at(13)
+    pet = hatched(start, energy=19.0)
+    run(pet, start + 5 * MIN)
+    model.set_lights_out(pet, True, start + 5 * MIN, SETTINGS)
+    events = run(pet, start + 5 * MIN + 30 * MIN)
+    assert pet.energy < 40 and pet.call is not None
+    assert "call_answered" not in types(events)
+    events = run(pet, start + 5 * HOUR)
+    assert pet.energy > 40
     assert {"type": "call_answered", "reason": "energy"} in events
     assert pet.call is None
+
+
+def _hungry_call(start: float) -> model.PetState:
+    pet = hatched(start, hunger=20.0)
+    run(pet, start + MIN)
+    assert pet.call and pet.call.reason == "hunger"
+    return pet
+
+
+def test_call_pauses_over_sleep_with_the_same_time_left():
+    start = at(22, 30)
+    pet = _hungry_call(start)
+    left = pet.call.deadline - pet.last_updated
+    model.set_lights_out(pet, True, pet.last_updated, SETTINGS)
+    run(pet, at(23, 30))
+    assert pet.call is not None
+    assert pet.call.deadline - pet.last_updated == pytest.approx(left)
+    assert "care_miss" not in types(run(pet, at(23, 45)))
+
+
+def test_morning_wake_tops_up_and_resends_a_paused_call():
+    start = at(22, 30)
+    pet = _hungry_call(start)
+    model.set_lights_out(pet, True, pet.last_updated, SETTINGS)
+    pet.call.deadline = pet.last_updated + MIN  # 1 minute left
+    events = run(pet, at(7, 0, day=2) + MIN)
+    resumed = [e for e in events if e["type"] == "call_started"]
+    assert len(resumed) == 1 and resumed[0]["resumed"] is True
+    assert pet.call is not None and pet.call.reason == "hunger"
+    left = pet.call.deadline - pet.last_updated
+    assert left >= R.RESUME_MIN_MINUTES * 60 - 60
+
+
+def test_nap_end_tops_up_but_sends_nothing():
+    start = at(10)
+    pet = _hungry_call(start)
+    pet.energy = 30.0
+    model.set_lights_out(pet, True, pet.last_updated, SETTINGS)
+    pet.call.deadline = pet.last_updated + MIN
+    events = run(pet, start + 10 * HOUR)
+    assert "woke_up" in types(events)
+    assert "call_started" not in types(events)
+
+
+def test_hand_wake_gives_no_top_up_and_no_resend():
+    start = at(10)
+    pet = _hungry_call(start)
+    pet.energy = 30.0
+    model.set_lights_out(pet, True, pet.last_updated, SETTINGS)
+    pet.call.deadline = pet.last_updated + MIN
+    deadline = pet.call.deadline
+    events = model.set_lights_out(pet, False, pet.last_updated, SETTINGS)
+    assert "call_started" not in types(events)
+    assert pet.call.deadline == deadline
+
+
+def test_calling_flag_off_while_asleep():
+    start = at(10)
+    pet = _hungry_call(start)
+    pet.energy = 30.0
+    model.set_lights_out(pet, True, pet.last_updated, SETTINGS)
+    assert "calling" not in model.mood(pet, pet.last_updated, SETTINGS)[1]
+
+
+def test_lights_out_refused_when_rested_by_day():
+    start = at(10)
+    pet = hatched(start, energy=100.0)
+    events = model.set_lights_out(pet, True, start, SETTINGS)
+    assert not pet.asleep and not pet.lights_out
+    assert {"type": "care", "action": "lights_out", "result": "not_sleepy"} in events
+    assert pet.care_log[0]["result"] == "not_sleepy"
+
+
+def test_lights_out_refused_when_flipped_away_and_dropped_on_return():
+    start = at(10)
+    pet = hatched(start, energy=100.0)
+    pet.away = True
+    model.set_lights_out(pet, True, start, SETTINGS)
+    pet.away = False
+    events = model.come_home(pet, start + HOUR, SETTINGS)
+    assert not pet.asleep and not pet.lights_out and events == []
+
+
+def test_lights_out_naps_when_tired_or_near_bedtime():
+    pet = hatched(at(10), energy=50.0)
+    model.set_lights_out(pet, True, at(10), SETTINGS)
+    assert pet.asleep and pet.napping
+    late = hatched(at(22, 30), energy=100.0)
+    model.set_lights_out(late, True, at(22, 30), SETTINGS)
+    assert late.asleep
 
 
 def test_neglect_makes_it_sick_and_medicine_cures():

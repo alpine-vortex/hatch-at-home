@@ -290,3 +290,15 @@ async def test_no_thanks_for_a_scold(hass: HomeAssistant, pip: MockConfigEntry) 
         hass, "VirtualPetCare", context=Context(user_id=me.id), action="scold"
     )
     assert "Thanks" not in speech(response)
+
+
+async def test_lights_out_refused_says_not_sleepy(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, energy=100.0)
+    assert await async_setup_component(hass, "homeassistant", {})
+    assert await async_setup_component(hass, "intent", {})
+    await setup(hass)
+    response = await ask(hass, "VirtualPetCare", action="lights_out")
+    assert speech(response) == "Pip isn't sleepy yet."
+    assert response.speech_slots["result"] == "not_sleepy"
