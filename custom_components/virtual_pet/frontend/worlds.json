@@ -12,7 +12,8 @@
     "shell": {
       "shape": "egg",
       "color": "#e8834a",
-      "bezel": "#f3ead7"
+      "bezel": "#f3ead7",
+      "finish": "woodland"
     },
     "backdrop": "#2f4a3a",
     "ground": "#25392d",
@@ -43,7 +44,8 @@
     "shell": {
       "shape": "tank",
       "color": "#d8b07a",
-      "bezel": "#5b4632"
+      "bezel": "#5b4632",
+      "finish": "grove"
     },
     "backdrop": "#ead6b0",
     "ground": "#dcc192",
@@ -102,7 +104,8 @@
     "shell": {
       "shape": "porthole",
       "color": "#3f7f8c",
-      "bezel": "#d9c79a"
+      "bezel": "#d9c79a",
+      "finish": "aqua"
     },
     "backdrop": "#22414a",
     "ground": "#1a3239",
@@ -133,7 +136,8 @@
     "shell": {
       "shape": "pad",
       "color": "#6f9e4f",
-      "bezel": "#eef0d6"
+      "bezel": "#eef0d6",
+      "finish": "grove"
     },
     "backdrop": "#2e4630",
     "ground": "#243826",
@@ -164,7 +168,8 @@
     "shell": {
       "shape": "moon",
       "color": "#3d4a8a",
-      "bezel": "#e6e3f4"
+      "bezel": "#e6e3f4",
+      "finish": "celestial"
     },
     "backdrop": "#151b38",
     "ground": "#0f1429",
