@@ -2900,6 +2900,131 @@ async function main() {
     forgot.after.baby === false && (forgot.after.counted === false || (forgot.after.kept === false && forgot.after.myDay === false)),
     JSON.stringify(forgot));
   // 6. The card editor loads and offers the pets.
+  // 5d. Preferences on every visit, quiet samples (Wave 1, PR 1c).
+  // "my day" reads "…" until a visit reply sets it, never "off".
+  const unknown = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const log = () => el._state(s, "sensor.last_care")?.attributes.log || [];
+    const saved = el._myDay;
+    el._bond = () => ({ level: 8, nickname: "sunbeam" });
+    el._myDay = undefined;
+    s.statusHtml = null;
+    el._renderStatus(s, log());
+    const row = [...s.status.querySelectorAll(".row")].find((r) => /my day/.test(r.textContent));
+    const out = { text: row?.textContent.trim(), button: !!s.status.querySelector(".bell.myday") };
+    el._myDay = false; // after "forget my data": a known "off"
+    s.statusHtml = null;
+    el._renderStatus(s, log());
+    out.off = s.status.querySelector(".bell.myday")?.textContent;
+    el._myDay = saved;
+    s.statusHtml = null;
+    return out;
+  });
+  check("my day reads … before any visit reply, and off once it is known false",
+    /…/.test(unknown.text || "") && !unknown.button && unknown.off === "off", JSON.stringify(unknown));
+  // A held visit reply: the row stays "…" until the reply comes.
+  const held = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const log = () => el._state(s, "sensor.last_care")?.attributes.log || [];
+    const real = el._hass.callService.bind(el._hass);
+    let release;
+    const gate = new Promise((r) => { release = r; });
+    el._hass.callService = async (d, svc, ...rest) => {
+      const res = real(d, svc, ...rest);
+      if (svc === "visit") await gate;
+      return res;
+    };
+    el._myDay = undefined;
+    s.visitedAt = 0;
+    el._visit(s);
+    await wait(300);
+    s.statusHtml = null;
+    el._renderStatus(s, log());
+    const during = !!s.status.querySelector(".bell.myday");
+    release();
+    for (let i = 0; i < 40 && el._myDay === undefined; i++) await wait(50);
+    el._hass.callService = real;
+    s.statusHtml = null;
+    el._renderStatus(s, log());
+    return { during, after: el._myDay, button: !!s.status.querySelector(".bell.myday") };
+  });
+  check("the my day row waits for the held visit reply, then shows the real setting",
+    !held.during && typeof held.after === "boolean" && held.button, JSON.stringify(held));
+  // A second browser inside the hour shows "my day: on" for a person who has it on.
+  await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    await el._hass.callService("virtual_pet", "my_day", { entity_id: s.ids["sensor.life_stage"], enabled: true });
+  });
+  const second = await context.newPage();
+  second.on("pageerror", (e) => errors.push(`tab 3: ${e}`));
+  await second.goto(`${HA}/pet-bench/pet`);
+  await second.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
+  await second.waitForTimeout(16000);
+  await second.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+  const reopened = await second.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let i = 0; i < 80 && el._myDay === undefined; i++) await wait(100);
+    return el._myDay;
+  });
+  check("a second browser within the hour shows my day on for a person who has it on",
+    reopened === true, String(reopened));
+  await second.close();
+  await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    await el._hass.callService("virtual_pet", "my_day", { entity_id: s.ids["sensor.life_stage"], enabled: false });
+    el._myDay = false;
+  });
+  // Quiet samples: _mayPlay's rules, and the tap still unlocks audio.
+  const samples = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const log = () => el._state(s, "sensor.last_care")?.attributes.log || [];
+    const realHours = Date.prototype.getHours;
+    const saved = { asleep: s.asleep, lightsOut: s.lightsOut };
+    const OsC = window.OscillatorNode.prototype.start;
+    let started = 0;
+    window.OscillatorNode.prototype.start = function (...a) { started++; return OsC.apply(this, a); };
+    const tap = async (setup, bell) => {
+      Object.assign(s, { asleep: false, lightsOut: false });
+      Date.prototype.getHours = realHours;
+      setup();
+      localStorage.setItem("hatch-sounds", "off");
+      localStorage.setItem("hatch-babble", "off");
+      s.statusHtml = null;
+      el._renderStatus(s, log());
+      const before = started;
+      s.status.querySelector(bell).click();
+      await wait(400);
+      return { played: started - before, note: s.status.querySelector(".status-feedback")?.textContent || "" };
+    };
+    const out = {};
+    out.night = await tap(() => { Date.prototype.getHours = () => 22; }, ".bell.sound");
+    out.morning = await tap(() => { Date.prototype.getHours = () => 9; }, ".bell.sound");
+    out.asleep = await tap(() => { Date.prototype.getHours = () => 12; s.asleep = true; }, ".bell.sound");
+    out.lights = await tap(() => { Date.prototype.getHours = () => 12; s.lightsOut = true; s.asleep = true; }, ".bell.sound");
+    if (s.species?.voice) {
+      out.babbleNight = await tap(() => { Date.prototype.getHours = () => 22; }, ".bell.babble");
+    }
+    Date.prototype.getHours = realHours;
+    window.OscillatorNode.prototype.start = OsC;
+    Object.assign(s, saved);
+    localStorage.setItem("hatch-sounds", "off");
+    localStorage.setItem("hatch-babble", "off");
+    s.statusHtml = null;
+    return out;
+  });
+  check("sounds here at 22:00 plays nothing and says quiet till morning",
+    samples.night.played === 0 && samples.night.note === "sounds are on: quiet till morning ♪", JSON.stringify(samples.night));
+  check("sounds here at 09:00 plays the chirp", samples.morning.played > 0 && samples.morning.note === "", JSON.stringify(samples.morning));
+  check("sounds here while the pet sleeps is skipped with its line",
+    samples.asleep.played === 0 && samples.asleep.note === "sounds are on: shh, it's sleeping", JSON.stringify(samples.asleep));
+  check("sounds here with lights out by day (asleep too) says napping",
+    samples.lights.played === 0 && samples.lights.note === "sounds are on: shh, it's napping", JSON.stringify(samples.lights));
+  check("the baby-talk sample is quiet at night too",
+    !samples.babbleNight || (samples.babbleNight.played === 0 && /quiet till morning/.test(samples.babbleNight.note)),
+    JSON.stringify(samples.babbleNight));
+
   const editor = await evaluate(async () => {
     const hass = document.querySelector("home-assistant").hass;
     const el = document.createElement("hatch-pet-card-editor");

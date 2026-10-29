@@ -1213,7 +1213,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 "notes": [],
                 "ask": None,
                 "counted": False,
-                "baby_talk": self.people.baby_talk(user),
+                **self._visit_prefs(user),
             }
         self._advance(now)
         if not self._awake():
@@ -1225,7 +1225,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 "notes": notes,
                 "ask": None,
                 "counted": False,
-                "baby_talk": self.people.baby_talk(user),
+                **self._visit_prefs(user),
             }
         self._visits[user] = now
         events = self._bond(user, "visit")
@@ -1268,16 +1268,23 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         ask = self._question(user, now, came_home, notes) if fits else None
         self._save()
         self._publish()
-        # "my day" goes to this person only (a state attribute is everyone's).
-        fresh = self.people.data["people"].get(user, {})
         return {
             "notes": notes,
             "ask": ask,
             "counted": True,
+            "made_room": made_room,
+            **self._visit_prefs(user),
+        }
+
+    def _visit_prefs(self, user: str) -> dict[str, Any]:
+        """The person's own settings, on every visit reply (counted or not), so a
+        second device never shows a default. They go to this person only (a state
+        attribute is everyone's)."""
+        fresh = self.people.data["people"].get(user, {})
+        return {
             "my_day": self.people.my_day(user),
             "birthday_kept": bool(fresh.get("birthday")),
             "birthday_phone": bool(fresh.get("birthday_phone")),
-            "made_room": made_room,
             "baby_talk": self.people.baby_talk(user),
         }
 
