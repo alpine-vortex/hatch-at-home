@@ -300,6 +300,17 @@ def test_call_pauses_over_sleep_with_the_same_time_left():
     assert "care_miss" not in types(run(pet, at(23, 45)))
 
 
+def test_call_open_on_waking_with_the_same_time_left():
+    pet = _hungry_call(at(10))
+    pet.energy = 50.0
+    left = pet.call.deadline - pet.last_updated
+    model.set_lights_out(pet, True, pet.last_updated, SETTINGS)
+    run(pet, at(11))
+    model.set_lights_out(pet, False, pet.last_updated, SETTINGS)
+    assert not pet.asleep and pet.call is not None
+    assert pet.call.deadline - pet.last_updated == pytest.approx(left)
+
+
 def test_morning_wake_tops_up_and_resends_a_paused_call():
     start = at(22, 30)
     pet = _hungry_call(start)
@@ -316,12 +327,15 @@ def test_morning_wake_tops_up_and_resends_a_paused_call():
 def test_nap_end_tops_up_but_sends_nothing():
     start = at(10)
     pet = _hungry_call(start)
-    pet.energy = 30.0
+    pet.energy = 90.0
     model.set_lights_out(pet, True, pet.last_updated, SETTINGS)
     pet.call.deadline = pet.last_updated + MIN
-    events = run(pet, start + 10 * HOUR)
-    assert "woke_up" in types(events)
+    events: list[model.Event] = []
+    while "woke_up" not in types(events):
+        events = run(pet, pet.last_updated + 5 * MIN)
     assert "call_started" not in types(events)
+    assert pet.call is not None
+    assert pet.call.deadline - pet.last_updated >= R.RESUME_MIN_MINUTES * 60 - 1
 
 
 def test_hand_wake_gives_no_top_up_and_no_resend():
