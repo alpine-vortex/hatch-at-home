@@ -2892,7 +2892,7 @@ async function main() {
     out.night = await tap(() => { Date.prototype.getHours = () => 22; }, ".bell.sound");
     out.morning = await tap(() => { Date.prototype.getHours = () => 9; }, ".bell.sound");
     out.asleep = await tap(() => { Date.prototype.getHours = () => 12; s.asleep = true; }, ".bell.sound");
-    out.lights = await tap(() => { Date.prototype.getHours = () => 12; s.lightsOut = true; }, ".bell.sound");
+    out.lights = await tap(() => { Date.prototype.getHours = () => 12; s.lightsOut = true; s.asleep = true; }, ".bell.sound");
     if (s.species?.voice) {
       out.babbleNight = await tap(() => { Date.prototype.getHours = () => 22; }, ".bell.babble");
     }
@@ -2909,7 +2909,7 @@ async function main() {
   check("sounds here at 09:00 plays the chirp", samples.morning.played > 0 && samples.morning.note === "", JSON.stringify(samples.morning));
   check("sounds here while the pet sleeps is skipped with its line",
     samples.asleep.played === 0 && samples.asleep.note === "sounds are on: shh, it's sleeping", JSON.stringify(samples.asleep));
-  check("sounds here with lights out by day is skipped with its line",
+  check("sounds here with lights out by day (asleep too) says napping",
     samples.lights.played === 0 && samples.lights.note === "sounds are on: shh, it's napping", JSON.stringify(samples.lights));
   check("the baby-talk sample is quiet at night too",
     !samples.babbleNight || (samples.babbleNight.played === 0 && /quiet till morning/.test(samples.babbleNight.note)),

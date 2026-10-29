@@ -2972,8 +2972,8 @@ class HatchPetCard extends HTMLElement {
     if (this._mayPlay(s)) return null;
     const hour = new Date().getHours();
     if (hour >= QUIET_HOURS[0] || hour < QUIET_HOURS[1]) return "sounds are on: quiet till morning ♪";
+    if (s.lightsOut) return "sounds are on: shh, it's napping"; // lights out puts it to sleep too
     if (s.asleep) return "sounds are on: shh, it's sleeping";
-    if (s.lightsOut) return "sounds are on: shh, it's napping";
     return "";
   }
 
