@@ -94,6 +94,7 @@ GAME_WIN_HAPPINESS = 30.0  # left/right is luck: a game pays at least like Play
 SKILL_GAME_WIN_HAPPINESS = 21.0
 GAME_LOSE_HAPPINESS = 12.0
 GAME_IDLE_MINUTES = 3  # an unfinished game is dropped after this
+OPENING_KEEP_MINUTES = 30  # a dropped Higher or Lower opening is shown again
 
 # --- Chores: a done to-do item earns the pet a treat --------------------------
 
@@ -223,7 +224,7 @@ TRAIT_FLAG_HOURS: dict[str, tuple[str, float]] = {
 TRAIT_EARLY_BIRD_MORNINGS = 7  # mornings the house stirred soon after wake time
 TRAIT_EARLY_BIRD_WINDOW_MINUTES = 60  # "soon": the first stir within this of wake time
 TRAIT_HELPER_CHORES = 10  # chore treats handed over
-TRAIT_PLAYER_GAMES = 15  # games finished
+TRAIT_PLAYER_GAMES = 15  # games played to the end (a dropped one does not count)
 EARLY_BIRD_MORNING_MINUTES = 120  # an early bird is happier this long after wake time
 HELPER_TREAT_HAPPINESS = 4.0  # a helper's extra per chore treat (at ★)
 PLAYER_WIN_HAPPINESS = 4.0  # a player's extra per won game (at ★)

@@ -576,6 +576,9 @@ side.
   `start_game` (both paths go through it) and at the top of `play_game` for a game
   already running: `PRAISE_WHINING_DISCIPLINE`, `call_answered` with
   `answer: "spoiled"`, the card's "hehe, whining works" line (card 405).
+- **Built (checked against 0a/0c/0d, nothing broke):** `model.drop_game` does the loss,
+  the event and the kept opening; the saved fields are `opening` and `opening_at`; going
+  away calls it from the coordinator's presence step. The care log gets a `lost` entry.
 - **Tests:** pytest: reopening Left or Right after one guess returns round 1 and the
   win; reopening Higher or Lower returns the same number; switching after a guess adds a
   played, unwon game and a `dropped` `game_finished` with no wish; switching before a
