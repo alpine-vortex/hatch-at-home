@@ -86,7 +86,7 @@ save it from a computer" in the Android app (`inAndroidApp()`). Guide: the welco
 the pets remember about you" under Privacy, the no-pets sentence, the birthday line.
 Tests in `tests/test_forget.py` and `tests/test_welcome.py`; card checks in "5c" and
 next to the birthday and photo checks. **Still open: Q11** (keep `zone` only while "my
-day" is on); P2 leaves it as it is. `scripts/test` 591, `scripts/card-check` 140/140.
+day" is on); P2 leaves it as it is. `scripts/test` 591, `scripts/card-check` 141/141.
 
 **Phase 4 of the voices plan, the photo (A7), is merged and pre-released as
 0.34.0b1** (PR #31, 2026-10-28; from `docs/plan-2026-10-28-phase4-photo.md` draft 2,

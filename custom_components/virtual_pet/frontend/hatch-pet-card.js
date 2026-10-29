@@ -3376,7 +3376,10 @@ class HatchPetCard extends HTMLElement {
           redrawStatus(); // first: a redraw replaces the message's line
           this._statusMessage(s, "Forgotten. I won't ask again.");
         })
-        .catch(() => this._statusMessage(s, "That didn't work. Try again."));
+        .catch(() => {
+          redrawStatus(); // "forget" again, not "sure?"
+          this._statusMessage(s, "That didn't work. Try again.");
+        });
     });
     // "forget my data": this person's record in the people store, for every
     // pet (not their bonds), and this browser's copies of it.
@@ -3405,7 +3408,10 @@ class HatchPetCard extends HTMLElement {
           redrawStatus(); // first: a redraw replaces the message's line
           this._statusMessage(s, "Forgotten. The pets start fresh with you ♥");
         })
-        .catch(() => this._statusMessage(s, "That didn't work. Try again."));
+        .catch(() => {
+          redrawStatus(); // "forget" again, not "sure?"
+          this._statusMessage(s, "That didn't work. Try again.");
+        });
     });
     s.status.querySelector(".bell.babble")?.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -3438,6 +3444,7 @@ class HatchPetCard extends HTMLElement {
     s.confirmRedraw = redraw;
     button.textContent = "sure? tap again"; // in place: a redraw would drop focus
     button.setAttribute("aria-label", CONFIRM_ARIA[key]);
+    s.statusHtml = null; // the screen no longer matches it: the next redraw writes
     clearTimeout(s.confirmTimer);
     s.confirmTimer = setTimeout(redraw, s.confirm.at + CONFIRM_MS + 50 - Date.now());
     return false;

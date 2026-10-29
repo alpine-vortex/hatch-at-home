@@ -2664,6 +2664,39 @@ async function main() {
     s.sayUntil = 0;
     return out;
   }, me);
+  // An armed "forget" goes back to "forget" when its window closes with nothing
+  // else changed, and after a confirm that failed.
+  const lapse = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const log = () => el._state(s, "sensor.last_care")?.attributes.log || [];
+    const button = () => s.status.querySelector(".bell.forgetme");
+    const look = () => ({ text: button()?.textContent, aria: button()?.getAttribute("aria-label") });
+    s.confirm = null;
+    s.statusHtml = null;
+    el._renderStatus(s, log());
+    button().click();
+    const armed = look();
+    await wait(4300);
+    const lapsed = look();
+    const realWS = el._hass.callWS;
+    const sent = [];
+    el._hass.callWS = (msg) => {
+      sent.push(msg.type);
+      return msg.type === "virtual_pet/forget_me" ? Promise.reject(new Error("no")) : realWS.call(el._hass, msg);
+    };
+    button().click();
+    await wait(700);
+    button().click();
+    await wait(300);
+    el._hass.callWS = realWS;
+    return { armed, lapsed, failed: look(), sent, message: s.status.querySelector(".status-feedback")?.textContent };
+  });
+  const unarmed = "forget my data: your birthday, answers and settings for every pet; your bonds stay";
+  check("an armed forget goes back to forget when its window closes, and after a failure",
+    lapse.armed.text === "sure? tap again" && lapse.lapsed.text === "forget" && lapse.lapsed.aria === unarmed &&
+    lapse.sent.join() === "virtual_pet/forget_me" && lapse.message === "That didn't work. Try again." &&
+    lapse.failed.text === "forget" && lapse.failed.aria === unarmed, JSON.stringify(lapse));
   check("forget my data is a personal row, after baby talk",
     !forgot.shared && forgot.label === "my dataforget" && forgot.order === "baby talk,my data,sounds here" &&
     forgot.aria === "forget my data: your birthday, answers and settings for every pet; your bonds stay",
