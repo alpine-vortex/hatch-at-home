@@ -2164,6 +2164,10 @@ async function main() {
       const out = {};
       el._seasonFlyer = el._seasonVisitor = () => {};
       el._costume = (slide, season, line, catchy) => { out.line = line; out.catchy = catchy; };
+      // The week before a holiday its countdown speaks first (once a slide) and
+      // would hold every tick below: not this check's.
+      const counted = s.counted;
+      s.counted = true;
       try {
         for (const key of ["halloween", "thanksgiving"]) {
           el._config = { ...config, seasonal: key };
@@ -2184,6 +2188,7 @@ async function main() {
         }
       } finally {
         [el._seasonFlyer, el._seasonVisitor, el._costume] = fly;
+        s.counted = counted;
         el._config = config;
         t.cache(null);
       }
