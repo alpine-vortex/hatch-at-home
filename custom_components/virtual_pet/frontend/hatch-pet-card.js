@@ -240,6 +240,7 @@ function playChirp(name) {
 // or on the ground at its feet. One trait per place per moment; traits sharing a
 // place take turns. "frames": a 2-frame animation (_1, _2); "pair": two
 // variants (_1 big, _2 small); otherwise one image.
+const FEED_FULL_AT = 95; // rates.py FEED_FULL_AT: a meal is refused above this
 const TRAIT_CAP = 4; // rates.py TRAIT_CAP, until the server says (life_stage trait_cap)
 const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
 const FLAIR_MS = 4200; // how long a moment lasts
@@ -887,8 +888,25 @@ function traitLabel(trait, level, inherited) {
 // Games finished, all kinds together (the journal's game counts).
 const gamesPlayed = (games) => Object.values(games || {}).reduce((n, c) => n + (c.played || 0), 0);
 
+// The server's clock, as an offset from this device's. It is read from
+// something fresh: the time_fired of a state event (see _watchServerClock), and
+// later the snapshot's `now` (P3a calls noteServerTime with it). Never from a
+// sensor's last_updated, which can be an hour old after a reload. Until a
+// reading arrives the device clock is used as it is.
+const SKEW_CAP_MS = 24 * 3600 * 1000; // a reading further off than this is not believed
+let serverOffset = 0; // server time minus device time, ms
+function noteServerTime(iso) {
+  const at = new Date(iso).getTime();
+  if (!Number.isFinite(at)) return;
+  const offset = at - Date.now();
+  if (Math.abs(offset) <= SKEW_CAP_MS) serverOffset = offset;
+}
+const serverNow = () => Date.now() + serverOffset;
+const SERVER_CLOCK_EVERY_MS = 3600000; // one reading an hour, per connection
+const SERVER_CLOCK = new WeakMap(); // connection -> { at: last reading (device ms), busy }
+
 function timeAgo(iso) {
-  const minutes = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  const minutes = Math.round((serverNow() - new Date(iso).getTime()) / 60000);
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.round(minutes / 60);
@@ -1426,7 +1444,34 @@ class HatchPetCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    this._watchServerClock(hass);
     this._update();
+  }
+
+  // Every state event carries the server's own time_fired: one reading gives
+  // the clock offset (noteServerTime), then the subscription is dropped (a
+  // standing one would stream every state change in the house to this tab).
+  // Read again after an hour, or on a new connection; shared by all cards.
+  _watchServerClock(hass) {
+    const conn = hass?.connection;
+    if (!conn?.subscribeEvents) return;
+    const seen = SERVER_CLOCK.get(conn);
+    if (seen && (seen.busy || Date.now() - seen.at < SERVER_CLOCK_EVERY_MS)) return;
+    const mark = { at: seen?.at ?? 0, busy: true };
+    SERVER_CLOCK.set(conn, mark);
+    let unsub = null;
+    let done = false;
+    const finish = () => { if (unsub) unsub(); };
+    Promise.resolve(conn.subscribeEvents((ev) => {
+      if (done) return;
+      done = true;
+      noteServerTime(ev?.time_fired);
+      Object.assign(mark, { at: Date.now(), busy: false });
+      finish();
+    }, "state_changed")).then((fn) => {
+      unsub = fn;
+      if (done) finish();
+    }).catch(() => { mark.busy = false; }); // a later card tries again
   }
 
   // A hidden tab: lines are said whole, and babbles stop.
@@ -2224,7 +2269,7 @@ class HatchPetCard extends HTMLElement {
   _say(s, mood, away) {
     if (away) return "";
     if (s.hatchesAt) {
-      const minutes = Math.max(1, Math.ceil((new Date(s.hatchesAt) - Date.now()) / 60000));
+      const minutes = Math.max(1, Math.ceil((new Date(s.hatchesAt) - serverNow()) / 60000));
       if (minutes <= 1) return "crack... crack...";
       return minutes < 60 ? `hatching in about ${minutes} min` : `hatching in about ${Math.round(minutes / 60)} h`;
     }
@@ -2249,7 +2294,7 @@ class HatchPetCard extends HTMLElement {
   // Minutes until the egg hatches, or null.
   _eggMinutes(stageState) {
     const at = stageState?.state === "egg" ? stageState.attributes.hatches_at : null;
-    return at ? (new Date(at) - Date.now()) / 60000 : null;
+    return at ? (new Date(at) - serverNow()) / 60000 : null;
   }
 
   _petFrames(sp, stage, mood, calling, eggMinutes, flags = []) {
@@ -3211,9 +3256,10 @@ class HatchPetCard extends HTMLElement {
       const v = Number.parseFloat(this._state(s, `sensor.${key}`)?.state);
       return Number.isFinite(v) ? v : null;
     };
-    const hearts = (v) => {
+    const hearts = (v, full = Infinity) => {
       if (v === null) return "–";
-      const halves = Math.ceil(v / 12.5); // 4 hearts, in halves
+      // 4 hearts, in halves, to the nearest; a pet the server calls full is full.
+      const halves = v >= full ? 8 : Math.round(v / 12.5);
       const img = (n) => `<img src="${BASE}/ui/stat_heart_${n}.png?v=${VERSION}" alt="">`;
       let out = "";
       for (let i = 0; i < 4; i++) {
@@ -3276,7 +3322,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
         ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
-      ${row("icon_feed", "hunger", hearts(value("hunger")))}
+      ${row("icon_feed", "hunger", hearts(value("hunger"), FEED_FULL_AT))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}
       ${row("stat_health", "health", bar(value("health")))}
@@ -4045,8 +4091,9 @@ class HatchPetCard extends HTMLElement {
     }
     if (s.game !== game) return null; // stopped while waiting
     if (!info || info.result !== "ok") {
-      const refusal = REFUSALS[info?.result];
-      this._endGame(s, refusal ? this._lines(s, `REFUSALS.${info.result}`, refusal).text : "not now");
+      // A known refusal is said once, by _react, from the care log; only an
+      // unknown result gets a line here.
+      this._endGame(s, REFUSALS[info?.result] ? null : "not now");
       return null;
     }
     return info;
