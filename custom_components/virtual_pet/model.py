@@ -55,6 +55,13 @@ class DamagedSave(ValueError):
     """A save whose root isn't a pet at all (a string, a number, a list)."""
 
 
+def is_pet_root(data: Any) -> bool:
+    """A save root a pet can be read from: an object, or one in a list."""
+    return isinstance(data, dict) or (
+        isinstance(data, list) and len(data) == 1 and isinstance(data[0], dict)
+    )
+
+
 # --- Reading a save that may be damaged --------------------------------------
 # Each known key is type-checked or defaulted; a wrong type never stops a load.
 
@@ -322,10 +329,10 @@ class PetState:
         type-checked, so a damaged but readable save still loads. Keys this
         version doesn't know are kept for the next save (a downgrade keeps a
         later version's). A root that isn't a pet at all raises DamagedSave."""
-        if isinstance(data, list) and len(data) == 1 and isinstance(data[0], dict):
-            data = data[0]  # one pet, wrapped in a list by a hand edit
-        if not isinstance(data, dict):
+        if not is_pet_root(data):
             raise DamagedSave(f"the save is a {type(data).__name__}, not a pet")
+        if isinstance(data, list):
+            data = data[0]  # one pet, wrapped in a list by a hand edit
         known = {f.name for f in fields(cls)}
         kwargs = {k: v for k, v in data.items() if k in known}
         unknown = {k: v for k, v in data.items() if k not in known}
@@ -446,9 +453,10 @@ class PetState:
         """What can still be read from a save from_dict couldn't load: its name,
         family, journal, memories and bonds, each on its own. The rest starts
         fresh, as a new egg's would. Never raises."""
-        if isinstance(data, list) and len(data) == 1 and isinstance(data[0], dict):
+        if not is_pet_root(data):
+            data = {}
+        elif isinstance(data, list):
             data = data[0]
-        data = data if isinstance(data, dict) else {}
         state = cls.new(default_name, now)
         if isinstance(data.get("name"), str):
             state.name = data["name"]

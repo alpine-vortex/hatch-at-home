@@ -355,7 +355,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 LOGGER.warning("%s's save file is damaged: %r", title, err)
                 self.state = model.PetState.salvage(data, title, now)
                 downtime = 0.0
-                await self._damaged(data, salvaged=True)
+                # Nothing of a pet in a non-object root: the egg's wording.
+                await self._damaged(data, salvaged=model.is_pet_root(data))
             LOGGER.debug("Caught up %.1f min of downtime (frozen)", downtime / 60)
             self.debug["last_catch_up_minutes"] = round(downtime / 60, 1)
             if self.state.species is None and old_species:
