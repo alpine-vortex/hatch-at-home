@@ -3,15 +3,22 @@
 **DRAFT 2, 2026-10-28.** A build plan only: no code changes here. The build is review tier 2.
 
 **Status:** P1 (F5, F6, FA, D1) merged and released in 0.35.0 (PR #45). **P2 (F3, FB)
-built as 0.36.0b1** on crew branch `crew/hatch-at-home-s2443-privacy-p2-the-welcome-forget`
-(2026-10-28), awaiting its tier-2 audit and PR; it also carries the shared confirm guard
-(experience plan PR 1b adopts it) and the photo dialog's Android line. The versions moved
-on (owner, 2026-10-28: no beta per merged PR; one release at the end of the current
-work, replacing "each merged PR a beta"), so **the old-card check in P3b and P3c serves
-`v0.36.0b1`, P2's tag, not `v0.35.0b5`**. Q11 is decided (owner: first mate's
-recommendation): `zone` is kept only while "my day" is on, dropped when it is turned off
-and on load of an old save.
-P3a, P3b and P3c not started.
+merged (PR #48)**, with the shared confirm guard (experience plan PR 1b adopts it) and the
+photo dialog's Android line. `main` is at 0.36.0b1, which was never tagged. Versions
+(owner, 2026-10-28): no beta per merged PR; **no per-PR version bump, and one release at
+the end of the current work takes the version**. So **the old-card check serves
+`git show v0.35.0:custom_components/virtual_pet/frontend/hatch-pet-card.js`**, the last
+*released* card and the one a stale tablet realistically runs. Q11 is decided (owner: first
+mate's recommendation): `zone` is kept only while "my day" is on, dropped when it is turned
+off and on load of an old save.
+P3a, P3b and P3c not started. **P3a is split into P3a-server and P3a-card** (see
+"Decisions of the P3a plan review" below).
+
+**P3a plan review folded in (2026-10-28).** A scout reviewed this plan's P3a against
+`origin/main` at `39ec87b` (12 plan defects, 6 nits, all 18 folded in below; findings are
+cited as "review #N"). The review report is archived with crew worker
+`hatch-at-home-s2464`. **Line numbers throughout are stale: re-grep at build; names win
+over numbers.**
 
 **Draft 2** folds in the adversarial audit of draft 1 (scout `hatch-at-home-s2430`, 20
 findings) and the owner's answers of 2026-10-28. Every audit claim was checked against
@@ -38,7 +45,7 @@ this plan:
 - **FB (medium):** removing the last pet keeps the people store, and the guide doesn't
   say so.
 
-Line numbers are for `origin/main` at `0821baf` (0.35.0b3; P2a, PR #37, and the seventeen
+Line numbers are for `origin/main` at `0821baf` (0.35.0b3, stale since: re-grep at build, names win over numbers; P2a, PR #37, and the seventeen
 new creatures, PR #38, are merged).
 
 - **Python is unchanged since the audit's `53ee630`**, except `const.py`'s version.
@@ -84,7 +91,7 @@ is in "Decided (2026-10-28) and still open".
 - **Shared screens keep a nameless "someone's home!! ♥"** for any signed-in person's
   arrival, whatever the bond (audit #11).
 - **"my day" becomes a websocket command**, like "notify me" (audit #9).
-- **P3 is split in three** (audit #13), and the versions run from 0.35.0b4 (audit #12, Q6).
+- **P3 is split in three** (audit #13); P3a is split again into server and card (review, owner Q2). No per-PR versions: one release at the end (review #10; supersedes audit #12, Q6).
 - **P1 also hides the personality before the teen stage** (functional check D1).
 
 ## Ground rules for this plan
@@ -151,7 +158,7 @@ can read today. The **Reads** column names every consumer found by grepping
 | J | `sensor.life_stage` attr | `dream.title` (a show or song it dreamed of) | `coordinator._check_ins` 903-904 seeds it; `model.dream_on_waking` copies the seed; `sensor.py` 228 | Card `DREAMS.watching` / `DREAMS.listening` 713-715, said in `_firstLook`. card-check 1160. |
 | K | `sensor.last_care` attr | `log[].by` (HA user's display name) | `model._log` 1102, 1242, 1332; `coordinator._who` 1809-1814 | Card status log lines (`by …`, hidden on a shared screen). `tests/test_init.py:168, 1096`, `tests/test_assist.py:134`. **Not in the owner's F1 list: Q4.** |
 | M | recorder (`call_service`) | `notify_me` service data `{entity_id, enabled}` plus `context_user_id` | The card's `_setNotify` 3353-3374 calls `callService("virtual_pet", "notify_me", …)` | The recorder's `events` table. It is the same fact as B, kept in history. |
-| N | recorder (`call_service`) | `notify.mobile_app_*` service data `{message, data}`: the text carries the person's nickname (`notify.to_friend`, 159-164), and a birthday or "my day" send-off says whose day it is | `coordinator._notify` 1571-1581, `_birthday_morning` 1500-1539, `notify.send_off` 176; sent by `notify.send` 245-250 | The recorder's `events` table. **Kept, disclosed in the guide** (owner, 2026-10-28). |
+| N | recorder (`call_service`) | `notify.mobile_app_*` service data `{message, data}`: the text carries the person's nickname (`notify.to_friend`, 159-164), and a birthday or "my day" send-off says whose day it is | `coordinator._notify` 1571-1581, `_birthday_morning` 1500-1539, `notify.send_off` 176; sent by `notify.send` 245-250; also the Wave 0 re-call bundle (`notify.Recalls`, `_recall_sender`, `clear_stale` at setup, `coordinator.update_recalls`): each recorded call shows its recipient has "notify me" on, the same fact as B and M. No code change | The recorder's `events` table. **Kept, disclosed in the guide** (owner, 2026-10-28). |
 | O | recorder (`call_service`) | `my_day` service data `{entity_id, enabled}` plus `context_user_id` | The card's "my day" button calls `callService("virtual_pet", "my_day", …)` (card:3309) | The recorder's `events` table: who turned on presence-based day tracking. Fixed like M. |
 | L | bus | `virtual_pet_welcomed` `{pet_id}` | `coordinator._welcome` 1597-1608 | Already clean. Kept. |
 
@@ -245,14 +252,26 @@ per-connection pushes:
 - **`PetCoordinator._private`**, `{user: deque(maxlen=MOMENTS_KEPT)}`, holds each person's
   recent private moments, in memory, with `at`.
   - It is lost on restart, like `self.moments` today.
-- **`PetCoordinator._house`** holds the latest media moment `{type, title, artist?, at}`
-  and today's media dream title. It is in memory only.
+- **`PetCoordinator._house`** holds the latest media moment `{type, title, artist?, at}`.
+  It is in memory only. **`house.dream` is not stored:** `_push_watchers` and the snapshot
+  build it from `state.dream` (today only, `kind` + `title`, media kinds `watching` and
+  `listening` only; any other dream gives `null`, since `stage.dream` carries it). So
+  nothing new is kept in memory, a restart loses nothing the sensor would have kept, and
+  Test 3's "a morning wake pushes `house.dream` to both" follows from the listener
+  (review #11).
   - The card dedupes `house.media` by its `at` (audit #18). A snapshot replays the current
     one on every resubscribe (toggle, reconnect, reload), and the card must not say
     "ooh, Bluey!" again for one it has already said.
 - **The snapshot.**
   - `mine` is `{"bond": {level, nickname?, favourite?} | null, "notify_me": bool,
-    "wish_for_you": bool}`.
+    "wish_for_you": bool, "my_day": bool, "baby_talk": bool, "birthday_phone": bool,
+    "birthday_kept": bool}` (owner Q1, 2026-10-28: `mine` carries the person's own
+    switches, pushed on change; review #7).
+    - The four switches are read from the same per-person state the visit reply reads
+      today. `async_set_my_day` and `forget_me` already call `async_set_updated_data`, so
+      the listener pushes a change for free.
+    - Once P3a-card lands, this channel supersedes the visit reply's switch fields (the
+      experience plan's Wave 1 1c still ships first).
     - It is built from `state.bonds[user]` (the same shape `sensor.py` builds today),
       `user in state.notify_users`, and `state.wish.get("for") == user` on today's open
       wish.
@@ -266,10 +285,12 @@ per-connection pushes:
     (audit #18).
 - **The `_fire` split** (`coordinator.py:783-811`), driven by one table in `const.py`.
   It lands in two steps (Phases):
-  - **P3a dual-writes.** `_fire` copies each D–G event (without `user`) into
+  - **`_private`/`_house` are filled only when `not simulated`**, like `self.moments`
+    (a fast-forward fires `simulated` events; review #14).
+  - **P3a (server) dual-writes.** `_fire` copies each D–G event (without `user`) into
     `_private[user]` and pushes it, and copies the titled media event into
     `_house["media"]` and pushes it. The public path (bus, `self.moments`, attributes) is
-    untouched. The new card reads only the private copies, so nothing visible changes.
+    untouched. The P3a-card consumer reads only the private copies. P3a-server changes no card.
   - **P3b removes the public half** for D–G (the `PERSONAL_EVENTS` gate and the scrub),
     and **P3c** for titles (the bus's `title`/`artist`, `tv_on`/`music_on`).
 
@@ -294,7 +315,10 @@ per-connection pushes:
       `_moment` ignores an unknown type.
     - The new card's `MOMENT_BITS` gains `tv_on: "watched TV"` and `music_on: "listened to
       music"`. `_moment` has no case for them: the live line comes from `house.media`.
-  - **`someone_home`, a new public moment** (owner, 2026-10-28; audit #11).
+  - **`someone_home`, a new public moment** (owner, 2026-10-28; audit #11). **It moves
+    into P3a** (server half in P3a-server, the card's case in P3a-card; review #6). It is
+    additive, so the shared screen keeps its arrival line when the card stops reading
+    public `friend_home`.
     - `person_moved` (`coordinator.py:438-463`) already sees every arrival of a person
       entity linked to a login. Each arrival also makes `{"type": "someone_home"}`: no
       user, no name, no weather, whatever the bond. It is debounced like `friend_home`
@@ -366,13 +390,24 @@ per-connection pushes:
   - The call is `this._hass.connection.subscribeMessage(cb, {type: "virtual_pet/subscribe",
     entity_id, shared: sharedScreen()})`. It keeps the unsubscribe promise on
     `s.unsub`.
-  - `subscribeMessage` resubscribes by itself after a reconnect.
+  - **Subscribe with `{resubscribe: false}`** (review #3). home-assistant-js-websocket's
+    own reconnect resubscribes with no `.catch` and never calls the card back, so a
+    resubscribe that gets `unknown_command`/`no_pet` (HA still setting up `virtual_pet`
+    after a restart) would die silently and the bond would be gone until a page reload.
+    The card instead listens on `this._hass.connection.addEventListener("ready", …)` and
+    resubscribes every slide through its own retry ladder (below). It removes the listener
+    in `disconnectedCallback`.
   - Resubscribe (unsub, then subscribe again):
     - when the slide's pet changes (`_forget`);
     - when the shared-screen toggle flips;
     - when the card reconnects (`connectedCallback`);
     - when the shared-screen switch changes in another card or tab (FA, below).
   - Unsubscribe in `_dropSlide` and `disconnectedCallback`.
+  - **`_forget` clears all channel state** before it resubscribes (review #4):
+    `s.mine`, `s.house`, `s.subscribed`, `s.subscribeFailed`, `s.privateSeen`,
+    `s.mediaSeen`, `s.privateMoments` and the clock offset. Otherwise, with `s.subscribed`
+    still true, the first-look gate is open and the new pet's first look and greet run on
+    the old pet's `mine` (wrong nickname, aimed wish, bond hearts).
   - **Retry, never give up** (audit #2). A subscribe that fails with `no_pet` or
     `unknown_command` (mid-reload, or the websocket back before `virtual_pet` is set up
     after an HA restart) is retried after 2 s, 5 s and 15 s, then every 60 s, while the
@@ -383,7 +418,10 @@ per-connection pushes:
 - **On the snapshot:**
   - It sets `s.mine` (`null` on a shared screen even if the server sent one) and
     `s.house`.
-  - It records private moments' `at` keys in `s.privateSeen`, and `house.media.at` in
+  - It keeps the snapshot's `moments`, and each later `{"moment": …}` push, in
+    **`s.privateMoments`** (capped at `MOMENTS_KEPT`), deduped by `` `${at}|${type}` ``,
+    the card's existing `momentKey` (review #15). `_firstLook` reads this list.
+  - It records private moments' `at|type` keys in `s.privateSeen`, and `house.media.at` in
     `s.mediaSeen`, so a replayed snapshot after a reconnect or reload doesn't repeat them
     (audit #18).
   - It keeps the snapshot's server `now` as the clock offset that `recent()` uses for
@@ -397,7 +435,19 @@ per-connection pushes:
     said before the bond arrives. A 3 s timeout sets `s.subscribeFailed`, so a slow
     server doesn't block the look for good.
   - `_greet` (P2a's warm and hearts hellos read `_bond`) has the same gate.
-- **Moments.** Private and house moments go through the existing `_moment(s, m)` (2838).
+  - **`_visit` is gated too** (review #9), on `s.lookedFirst` (or the same
+    `subscribed || subscribeFailed` gate). The visit runs right after the snapshot on the
+    same tick and tells the server what is queued (`queued`); un-gated, it goes out with
+    `queued: 0` before the first-look lines are queued, and being hourly it can't correct
+    that.
+- **The public filter** (review #5). `m.user` checks are dropped from `_moment`, so the
+  filter lives upstream, in the render's diff of `attributes.moments`: its public loop
+  **skips `PERSONAL` (D–G) and `watching`/`listening`**. Those come only from the channel
+  (`house.media`), otherwise the pet says "ooh, Bluey!" twice while the server still fills
+  both. `_awayNote`'s `MOMENT_BITS.watching`/`listening` keep reading public moments until
+  P3c. What the removals change visibly lands on the card in P3a-card: the decided
+  removals of names (Q3, `WISHES_FOR[k][0]`), not "nothing visible changes".
+- **Moments.** Private and house moments go through the existing `_moment(s, m)`.
   - `m.user` checks are dropped. A private moment is the viewer's by construction.
   - The `if (sharedScreen()) break;` guards stay.
   - `case "friend_home"` keeps only the "you're home!!" branch. The `_personName` branch
@@ -410,8 +460,8 @@ per-connection pushes:
   - `MOMENT_BITS` (in `_awayNote`) gains `tv_on: "watched TV"` and
     `music_on: "listened to music"`. The `watching` and `listening` keys stay for house
     moments.
-  - `_firstLook`'s welcome-home reads `s.mine`'s private moments, not
-    `attributes.moments` (2471-2478).
+  - `_firstLook`'s welcome-home reads `s.privateMoments`, not
+    `attributes.moments`.
   - `case "watching"` and `case "listening"` are unchanged. They now get `m.title` from
     the house push.
   - Add a guard: `if (!m.title) break;`.
@@ -431,9 +481,14 @@ per-connection pushes:
     `notify_me` service. It keeps doing that, and also sets `s.mine.notify_me = enabled`
     at once, so a redraw before the push doesn't flip it back.
   - The `mine` push that follows `async_set_notify`'s `_publish()` confirms it.
+- **The switches** (`my_day`, `baby_talk`, `birthday_phone`, `birthday_kept`) are read
+  from `s.mine`, so the "my day" row and the birthday rows no longer wait for a visit
+  reply (owner Q1). Until the first snapshot the row shows "…" and the birthday rows are
+  hidden, as experience plan PR 1c has it.
 - **"my day"** (card:3309) does the same: `callWS({type: "virtual_pet/my_day", entity_id,
   enabled})`, with the same `unknown_command` fallback to the service (audit #9).
 - **Dream.** `_firstLook` uses `s.house?.dream || stage.dream`.
+- **The card-check migration is part of P3a-card** (review #1), not P3b: see Card checks.
 
 ### Compatibility: old card with new server, and the reverse
 
@@ -937,7 +992,8 @@ New tests:
    - Seed A's bond one point short of a level (`bond_up` fires only on a level-up,
      `model.add_bond` 1679). A care press by A then sends A a `moment` `bond_up`.
    - User B's subscription receives nothing for it.
-   - `notify_me` sends A a new `mine.notify_me`, and `virtual_pet/my_day` a `mine` push.
+   - `notify_me` sends A a new `mine.notify_me`, and `virtual_pet/my_day` a `mine` push
+     with `my_day` flipped (the four switches are in `mine`; review #7).
    - **The tick pushes** (audit #3): a morning tick that aims the daily wish at A pushes
      `mine.wish_for_you: true` to A only, and a morning wake with a media seed pushes
      `house.dream` to both.
@@ -947,6 +1003,9 @@ New tests:
      subscribe sent while the entry is unloaded gets `no_pet`. Remove the entry: the
      subscription gets `{"gone": true}`. `hass.data[DOMAIN]["watchers"]` holds only
      `(user, shared, send)` tuples, never a coordinator.
+4a. **The commands** (P3a-server; review #8). `virtual_pet/notify_me` and
+   `virtual_pet/my_day`: each sets the state, puts nothing on the bus, makes no
+   `call_service`, and gives `no_pet` for an unknown entity.
 4. **Nothing personal on the bus.**
    - Use `async_capture_events(hass, MATCH_ALL)`, or one capture per `virtual_pet_*` type.
    - Run a scripted day: visit, care, game record, favourite game, lights-out tuck-in, a
@@ -1062,19 +1121,28 @@ Then `scripts/card-check` drives Chromium through Playwright, logged in as `dev`
 the crew host can.
 
 - **Move every `bonds`, `user:`, `for:`/`for_name` and `title` stub in `card-check.js`
-  to the new channel** (audit #14). At `0821baf` they are at 308, 316, 390, 392, 398, 403,
-  422-423, 454, 688-690, 742, 776, 950, 1173, 1609-1615 and 1631, and three easily missed
-  ones:
-  - **1858**, the baby-talk screenshot (`tucked_in` with `user`);
-  - **1997**, the P2a personality hellos, which inject `bonds` per level;
-  - **2190**, the personality checks (`bonds: {}`).
-
-  Re-grep at build time: the list is a floor, not the scope.
+  to the new channel, in P3a-card** (review #1; audit #14). The card stops reading
+  `attributes.bonds`, `wish.for` and public D–G at P3a-card, so these checks break there
+  unless migrated in the same PR. Examples: "a bond level-up is said only to its person",
+  "a wish can be aimed at a close friend" (rewritten to the decided end state:
+  `WISHES_FOR[k][0]` deleted, so the aimed wish says "you"), the `_firstLook` welcome-home
+  injected into `last_care.moments`, and the `bonds` stubs of the P2a hellos and
+  personality checks. **Re-grep at build; names win over numbers.** The list is a floor,
+  not the scope: every `bonds`, `user:`, `for`/`for_name`, `friend_home` and `title` stub.
   - Add a card test hook: `el._mineFor(s, mine)` and `el._houseFor(s, house)` set
-    `s.mine` and `s.house` and redraw. **`_mineFor` drives the P2a bond-level hellos**
-    (1997): left on `bonds`, those checks would pass vacuously or fail.
+    `s.mine` and `s.house` and redraw. **`_mineFor` drives the P2a bond-level hellos**:
+    left on `bonds`, those checks would pass vacuously or fail.
   - Moments are passed to `el._moment(s, m)` without `user`.
-- **Shared screens' arrival line** (card-check 398, rewritten, not deleted; audit #11).
+  - P3b keeps only the pytest rewrites of tests that asserted the leak, and any
+    server-side checks.
+- **Bond lost across a pet switch** (review #4). Slide 1 switches from a bonded pet to an
+  unbonded one: no bond row or nickname appears before the new snapshot arrives.
+- **One media line** (review #5). A public titled `watching` moment plus the `house.media`
+  push for it gives exactly one line.
+- **The bell and "my day" fall back** (review #8). With `callWS` stubbed to reject
+  `unknown_command`, the bell and "my day" fall back to `callService`.
+- **Shared screens' arrival line** (the "a shared screen's moments name nobody" check,
+  rewritten, not deleted; audit #11; in P3a-card, review #6).
   On a shared screen, `el._moment(s, {type: "someone_home", at})` queues exactly
   "someone's home!! ♥". On a personal screen it queues nothing. A private `friend_home`
   on the arriver's own card queues "you're home!!" and no "someone's home".
@@ -1082,13 +1150,19 @@ the crew host can.
   `music_on` since the last look, `_awayNote` says "while you were out, I watched TV and
   listened to music!".
 - **An options save keeps the bond** (audit #2). Open the card (bond row "you two"
-  showing), save the pet's options over the websocket, and wait: "you two" is back
+  showing), save the pet's options over the websocket (`config_entries/options/flow`
+  with `handler: entry_id`, then `config_entries/options/flow/<flow_id>` with the current
+  options; or call `homeassistant.reload_config_entry`, the same reload path; review #16),
+  and wait: "you two" is back
   within 5 s, with no page reload.
 - **An HA restart keeps the bond** (audit #2's unverified variant). With the card open,
   restart the dev HA. Once it is back, "you two" returns within 90 s with no page reload
-  (the retry's 60 s step plus start-up). If home-assistant-js-websocket's own
-  resubscribe on reconnect gets `unknown_command` and drops the subscription, this
-  check is what finds it; the card's retry must cover it.
+  (the retry's 60 s step plus start-up). The card subscribes with `resubscribe: false`
+  and resubscribes on the connection's `ready` event through its own retry ladder
+  (review #3); this check is the acceptance test. **Unverified mechanism** (review #17):
+  `scripts/develop` `exec`s `hass` directly and card-check has no restart precedent, so
+  the builder confirms that `homeassistant.restart` re-execs under `scripts/develop`, or
+  the check restarts the process itself.
 - **D1: personality** (P1). A child with a stubbed `personality` shows no "personality"
   status row and no personality on the current generation's journal line. A teen shows
   both.
@@ -1098,12 +1172,23 @@ the crew host can.
     `config/auth_provider/homeassistant/create`
     (`{user_id, username: "other", password: …}`).
   - Open a second browser context on the same dashboard.
-  - Build a bond for `dev` through real visits and fast-forward. Then check:
+  - **Stage the bond by seeding** (review #12): before `scripts/develop` starts, write
+    dev's bond (level at or above friend, with a nickname) into the pet's store and a
+    `person.dev` with `user_id` set to dev's user into `dev/config/.storage`. Real visits
+    don't work: a visit counts once a day, and fast-forward fires `simulated` events with
+    no bond moments. An **aimed** wish needs that close-friend bond plus the linked
+    `person` entity. The aimed-wish case may instead use `_mineFor`.
+  - Then check:
     - **Other's card shows no bond row, no nickname, no "you two".**
     - **Other's card shows the plain wish when dev's wish is aimed.**
     - **The "notify me" bell reflects Other's own setting.**
-    - **Other's page holds no string of dev's anywhere.** Run `JSON.stringify`
-      over `hass.states` for the pet's entities, looking for dev's ID and nickname.
+    - **Other's subscription payloads carry no string of dev's.** At P3a (review #2) the
+      sensor still publishes `bonds`, `notify_users` and `wish.for`, so a `hass.states`
+      scan must fail. Assert on what the **card** holds: every `s.mine`/`s.house` and
+      every subscription payload (wrap `subscribeMessage`'s callback), and that the
+      status, bubble and live region have no dev string (ID or nickname).
+    - **P3b adds the `hass.states` assertion:** `JSON.stringify` over `hass.states` for
+      the pet's entities, looking for dev's ID and nickname.
 - **Shared screen, aimed wish** (the audit's missing check).
   - Turn the shared screen on, with today's wish aimed at `dev`.
   - The status wish row and the first-look bubble show the plain wish (`WISHES[kind]`)
@@ -1113,9 +1198,11 @@ the crew host can.
   - Wait for the bubble: "ooh, <title>!" (or one of its lines).
   - Then assert that the life-stage and last-care attributes don't contain the title.
 - **An old card against the new server** (stale tablet).
-  - Load **the last card before the channel**, P2's tag (`git show v0.35.0b5:…/hatch-pet-card.js`),
-    served with `page.route`, against P3b's dev server, and again against P3c's (audit
-    #12).
+  - Load **the last released card**, `git show
+    v0.35.0:custom_components/virtual_pet/frontend/hatch-pet-card.js` (review #10;
+    0.36.0b1 was never tagged), served with `page.route`, against P3b's dev server, and
+    again against P3c's. Optionally also serve the pre-P3a `main` SHA, recorded in the
+    P3a-card PR.
   - Assert there are no console errors and no "undefined" in the bubble or status across
     a TV moment (with its `tv_on`), a music moment, a media dream, an aimed wish, and a
     `someone_home` on a shared screen.
@@ -1127,7 +1214,8 @@ the crew host can.
     - the slide's photo object URLs were revoked;
     - the dialog is closed;
     - `s.game` is null;
-    - `s.unsub` was called.
+    - `s.unsub` was called (only meaningful once the subscription exists, P3a-card;
+      review #8).
   - Remove the card from the DOM: `disconnect` was called. Re-insert it: `observe` was
     called again.
 
@@ -1155,7 +1243,7 @@ the crew host can.
     dashboard and a second tab (same context, so the same `localStorage`). Press "shared
     screen" on the first card only. Within a second, the second card and the second tab
     meet the same assertions, and their subscriptions were resent with `shared: true`
-    (wrap `subscribeMessage`).
+    (wrap `subscribeMessage`; first meaningful from P3a-card, review #8).
 - **FB: "forget my data".**
   - The row is absent on a shared screen.
   - One tap shows "sure? tap again" and sends nothing (wrap `callWS`).
@@ -1167,25 +1255,25 @@ the crew host can.
 
 ## Phases and PRs
 
-All of it goes in the 0.35.0 beta series, from **0.35.0b4** (owner, 2026-10-28; audit #12:
-b3 is already tagged and released). Each PR bumps `const.py` and `manifest.json` together
-(a test checks they match), as its last commit.
+**No per-PR version bumps** (owner, 2026-10-28; review #10): one release at the end of the
+current work takes the version. P1 and P2 are merged (#45, #48).
 
-P3 is split in three (owner, 2026-10-28, "or the audit's split"; audit #13). This plan
+P3 is split in three, and P3a again in two (owner Q2, 2026-10-28; first split: "or the audit's split"; audit #13). This plan
 uses the audit's split, in which **each PR carries its own tests and docs**, rather than a
 separate tests-and-docs PR: that would ship P3b's removals untested for a release.
 
-| PR | Version | Contents | Why this order |
-|---|---|---|---|
-| **P1: F5 + F6 + FA + D1** | 0.35.0b4 | `from_dict` hardening and the helpers, the salvage path, the `new_pet` marker, `DamagedSave` handling with the repair issue and timestamped backup, the first-tick wrap, the `People` sanitiser and its load wrap, the observer and `_dropSlide`, `_goShared` with the cross-card broadcast, the personality gate (D1). Tests 8, plus the F6, FA (two cards, two tabs) and D1 card checks. | Independent of the channel, and the lowest risk. It makes the later moment and storage tests stand on a loader that can't crash. |
-| **P2: F3 + FB** | 0.35.0b5 | `_welcome` recipients, the `notify.py` docstring, `People.forget`, the `virtual_pet/forget_me` command, the card's "forget my data" row, and the guide (welcome, what the pets remember, the people store with no pets left). Tests 7, 10 and 11, plus the FB card check. | Small. FB's row joins the status screen's person rows and is independent of the channel. It can ride with P1 if the reviewer prefers; then P1+P2 is b4, every later version moves down one, and the old-card check uses b4. |
-| **P3a: the channel** | 0.35.0b6 | `virtual_pet/subscribe`, `virtual_pet/notify_me` and `virtual_pet/my_day`; the watcher registry in `hass.data`, `_private` and `_house`, **filled by a dual write in `_fire`** (D–G and the titled media event also go to the channel; the public path stays); the coordinator-listener push; the reload snapshot and `gone`; the card reading **only** the channel (`s.mine`, `s.house`), with retry and dedupe, `_wishLine` and the bell on `mine`, and the card's own handling of D–G only from private moments (it ignores them in public `moments`, which the server still fills). The old attributes and events are still published, but no card reads them, so nothing visible changes. Tests 1–3, plus the second-login, reload and restart card checks. | Additive. It can sit on a wall tablet for a day before P3b removes the old path. |
-| **P3b: the removals** | 0.35.0b7 | `sensor.py` drops `bonds`, `notify_users`, `wish.for`/`for_name`; the `_fire` split, `PERSONAL_EVENTS`, the copying scrub; `someone_home`; `model.pick_wish`; the stub migration in `card-check.js`; the rewrites of the tests that asserted the leak. Docs: `guide.md` (bonds, events, Recorder, phone messages in history) and **HANDOFF's bonds paragraph** (`HANDOFF.md:238-268`; audit #16). The release note. Tests 4–6, plus the shared-screen aimed-wish, arrival and old-card checks. | Where automations break, so the release note heads this version. |
-| **P3c: F2 titles** | 0.35.0b8 | `watching`/`listening` off public `moments` and off the bus's `title`/`artist`, `tv_on`/`music_on` for the recap, `house.media` carrying the title, `dream` without `title` (`dream_on_waking` too), the debug-sensor redaction. Test 9 and test 4–6's title cases, plus the media-moment, recap and old-card (again) checks. The release note gains its titles paragraph. | Its own surface (media), reviewable alone. |
+| PR | Contents | Why this order |
+|---|---|---|
+| **P1: F5 + F6 + FA + D1** (merged, #45) | `from_dict` hardening and the helpers, the salvage path, the `new_pet` marker, `DamagedSave` handling with the repair issue and timestamped backup, the first-tick wrap, the `People` sanitiser and its load wrap, the observer and `_dropSlide`, `_goShared` with the cross-card broadcast, the personality gate (D1). Tests 8, plus the F6, FA (two cards, two tabs) and D1 card checks. | Independent of the channel, and the lowest risk. |
+| **P2: F3 + FB** (merged, #48) | `_welcome` recipients, the `notify.py` docstring, `People.forget`, the `virtual_pet/forget_me` command, the card's "forget my data" row, and the guide. Tests 7, 10 and 11, plus the FB card check. | Small and independent of the channel. |
+| **P3a-server: the channel's server half** | `virtual_pet/subscribe`, `virtual_pet/notify_me` and `virtual_pet/my_day`; the watcher registry in `hass.data`, `_private` and `_house`, **filled by a dual write in `_fire`** (D–G and the titled media event also go to the channel; the public path stays; not for `simulated`); `mine` with the four switches; `house.dream` built from `state.dream`; the coordinator-listener push; the reload snapshot and `gone`; `someone_home` (`person_moved` plus the public moment; additive). Tests 1–3 plus the command tests (4a). **No card change**, so `card-check` is untouched. | Additive. It can be built in parallel with all of Wave 1; the one overlap is Wave 1 PR 1c's edit to `async_visit`'s short replies (a small textual conflict). |
+| **P3a-card: the channel's consumer** | The card reading **only** the channel (`s.mine`, `s.house`, `s.privateMoments`): subscribe with `resubscribe: false`, the `ready` resubscribe through the retry ladder, dedupe; the `_forget` reset; the public filter (skips D–G and `watching`/`listening`); the `_visit` gate; `_wishLine`, the bell, "my day" and the switches on `mine`; the `someone_home` case; **the whole card-check stub migration (moved from P3b)** with `_mineFor`/`_houseFor`. Card checks: second login (seeded, payload-based), reload, restart, bond-lost-on-switch, one media line, the `unknown_command` fallbacks, FA `shared: true` and F6 `s.unsub`. | After P3a-server. Conflicts with Wave 1 PR 1c (`_visit` reply handling, the "my day" row, `_setMyDay`, the "…" status): 1c ships first and P3a-card rebases. Light conflict with PR 1a in `_dropSlide`/`_forget` (game timers vs channel reset). |
+| **P3b: the removals** | `sensor.py` drops `bonds`, `notify_users`, `wish.for`/`for_name`; the `_fire` split, `PERSONAL_EVENTS`, the copying scrub; `model.pick_wish`; the rewrites of the pytest tests that asserted the leak. Docs: `guide.md` (bonds, events, Recorder, phone messages in history) and **HANDOFF's bonds paragraph**. Tests 4–6, plus the `hass.states` second-login assertion, the shared-screen aimed-wish and the old-card checks. (The card-check stub migration and `someone_home` moved to P3a.) | Where automations break. |
+| **P3c: F2 titles** | `watching`/`listening` off public `moments` and off the bus's `title`/`artist`, `tv_on`/`music_on` for the recap, `house.media` carrying the title, `dream` without `title` (`dream_on_waking` too), the debug-sensor redaction. Test 9 and test 4–6's title cases, plus the media-moment, recap and old-card (again) checks. The release note gains its titles paragraph. | Its own surface (media), reviewable alone. |
 
 Each PR runs `scripts/test` and `scripts/card-check`. The P3 PRs are the tier-2 builds.
 
-## Release note (draft, for P3b's version; P3c adds its titles paragraph)
+## Release note (draft, for the single end-of-work release; P3c adds its titles paragraph)
 
 > **Privacy: your bond with a pet is now yours alone.**
 >
@@ -1297,8 +1385,8 @@ if an answer looks misplaced.
    trace. The guide says so in one sentence.
 5. **Who gets the welcome on their phone. Decided: the union of `notify_users` over the
    house's other pets.** The first pet welcomes in the sidebar only.
-6. **Version. Decided: 0.35.0b4 onward** (audit #12). P1 b4, P2 b5, P3a b6, P3b b7, P3c
-   b8. See Phases.
+6. **Version. Superseded** (owner, 2026-10-28; review #10): no per-PR bumps, one release
+   at the end of the current work. P1 and P2 are merged. See Phases.
 7. **Existing `wish.for_name` in saves. Decided: leave it.**
 8. **Should `virtual_pet/subscribe` refuse a user with no person entity? Decided: no.**
 9. **F5: what happens when validation itself fails? Decided: salvage** (audit #5, #8). See
@@ -1356,7 +1444,7 @@ corrections are noted in their rows.
 | 9 | `my_day` is a recorded `call_service` with `context_user_id`, like `notify_me` (card:3309). Verified | **Owner: yes.** `virtual_pet/my_day` websocket command with the `unknown_command` fallback; inventory row O; test 4 asserts no `call_service` |
 | 10 | The shared-screen switch reaches only the card that was tapped; other cards and tabs keep personal lines (`sharedScreen()` is per browser, card:180-185; no `storage` listener). Verified | A `hatch-shared-changed` window event for the same page and a `storage` listener for other tabs; every instance runs `_goShared` and resubscribes. Two-card, two-tab FA card check |
 | 11 | Q3's drop also silences shared screens' "someone's home!! ♥" (card:3013, not 3012), which `card-check.js:398` asserts. Verified | **Owner: keep it, nameless, for any signed-in person's arrival, whatever the bond.** A new public `someone_home` moment from `person_moved`, debounced on one shared timer, on shared screens only. Check 398 is rewritten to it |
-| 12 | The versions are stale: b3 is tagged and released (`const.py:8`). The old-card check should use the tag just before the channel. Verified (`git tag`: v0.35.0b1-b3; `manifest.json` 0.35.0b3) | **Owner: 0.35.0b4 onward.** P1 b4, P2 b5, P3a b6, P3b b7, P3c b8; `const.py` and `manifest.json` together; the old-card check serves P2's tag (b5) against P3b and P3c |
+| 12 | The versions are stale: b3 is tagged and released (`const.py:8`). The old-card check should use the tag just before the channel. Verified (`git tag`: v0.35.0b1-b3; `manifest.json` 0.35.0b3) | **Superseded by review #10:** no per-PR bumps, one release at the end; the old-card check serves `v0.35.0` against P3b and P3c |
 | 13 | P3 is too big for one PR, and "a split ships a card that half-reads the old attributes" is false for an additive split. Verified | **Owner: split** ("P3a/P3b/P3c or the audit's split"). The audit's split, each PR with its own tests and docs: P3a the channel and commands (card reads only the channel), P3b the removals and scrub, P3c titles. Not a separate tests-and-docs PR, which would ship P3b untested for a release |
 | 14 | The card-check stub list is stale and incomplete; 1858, 1997 and 2190 are missing. Verified (a grep at `0821baf`, and 1605-1616 and 1855-1860 read) | The list is replaced with the current lines, named as a floor; 1858, 1997 and 2190 called out; `_mineFor` drives the P2a hellos |
 | 15 | The test-rewrite list misses `test_init.py:695/715`, 1746, 1911, 1985, 2017 and 2900. Verified | All listed; the photos test keeps its intent as "not in any state"; `"title"` added to the grep |
@@ -1375,7 +1463,7 @@ corrections are noted in their rows.
 | Q3 drop "<name>'s home!!" on other people's personal cards | Q3 | Recorded as decided; the shared-screen line stays (#11) |
 | Q4 keep the care log's by-names, documented | Q4 | Recorded as decided |
 | Q5 welcome phones = union of other pets' notify-me lists, first pet sidebar only | Q5 | Recorded as decided |
-| Q6 / audit #12 versions 0.35.0b4 onward | Q6 | Phases table |
+| Q6 / audit #12 versions 0.35.0b4 onward | Q6 | Superseded: one release at the end (review #10) |
 | Q7 leave old `for_name` | Q7 | Recorded as decided |
 | Q8 no person entity required | Q8 | Recorded as decided |
 | Q9 salvage | Q9 | F5 rewritten |
@@ -1386,3 +1474,25 @@ corrections are noted in their rows.
 | D1 personality hidden before teen | new section D1 | P1: card:3193 and card:3434 (not 3455, the shared renderer for past generations) |
 
 **Copy approved (owner, 2026-10-28):** the copy table above as written.
+
+## Decisions of the P3a plan review (2026-10-28)
+
+The owner delegated these to the first mate, who took the scout's recommendations.
+Review #N is the scout's finding number; all 18 proposed fixes are applied above.
+
+- **Q1: yes.** `mine` carries the person's own switches (`my_day`, `baby_talk`,
+  `birthday_phone`, `birthday_kept`), pushed on change. The experience plan's Wave 1 1c
+  section notes that the channel supersedes 1c's visit-reply fields once P3a-card lands
+  (1c still ships first).
+- **Q2: split P3a.** P3a-server (commands, registry, `_private`/`_house`, dual write,
+  listener push, snapshot, `gone`; Tests 1–3 plus the command tests; no card change) and
+  P3a-card (the consumer, the `ready` resubscribe with `resubscribe: false`, the `_forget`
+  reset, the public filter including `watching`/`listening`, the `_visit` gate, the
+  card-check migration moved from P3b). P3b and P3c stay.
+- **#6:** `someone_home` moves into P3a (additive), so the shared screen keeps its arrival
+  line.
+- **#10:** no per-PR version bumps; one release at the end. P1 and P2 are merged (#45,
+  #48). The old-card check serves `git show v0.35.0:…/hatch-pet-card.js`.
+- **#12:** the second-login bond is staged by seeding dev's bond and a `person.dev` with
+  `user_id` in `dev/config/.storage` before start.
+- **#13:** stale line numbers get one rule, "re-grep at build; names win over numbers".
