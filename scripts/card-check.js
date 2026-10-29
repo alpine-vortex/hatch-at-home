@@ -1758,12 +1758,21 @@ async function main() {
         el._react(s, { action: "feed", result });
         return s.bubble.textContent;
       });
-      // The game's own refusal (a play that ends at once) goes through the same table.
+      // The game's own refusal (a play that ends at once) goes through the same
+      // table, and is said once: _playCall stays quiet, _react (the care log) speaks.
       const realCall = el._hass.callService;
+      const realWrite = el._write;
+      const written = [];
+      el._write = function (slide, line, ...rest) { written.push(line); return realWrite.call(this, slide, line, ...rest); };
       el._hass = { ...el._hass, callService: async () => ({ response: { result: "too_tired" } }) };
       s.game = { kind: "left_right" };
+      s.sayUntil = 0;
       await el._playCall(s, { guess: "left" });
-      out.refusal.push(s.bubble.textContent);
+      out.refusalCall = written.length;
+      el._react(s, { action: "play", result: "too_tired" });
+      out.refusalLines = written.filter((x) => x === "too sleepy to play").length;
+      out.refusalTotal = written.length;
+      el._write = realWrite;
       el._hass = { ...el._hass, callService: realCall };
       out.wish = el._wishSaid(s, { kind: "snack" }, ["I'd love a snack after lunch!"]);
       out.aimed = el._wishSaid(s, { kind: "snack", for: "x", for_name: "Alex" }, ["I hope Alex brings me a snack after lunch!"]);
@@ -1786,8 +1795,54 @@ async function main() {
       lines.home[0]?.text === "you're home! yay yay ♥" && lines.bond[0]?.text === "yay, you! ♥" &&
       lines.miss === "oh! hi hi ♥" && /^night night, \S+ ♥$/.test(lines.tucked), JSON.stringify(lines));
     check("a baby's refusals and wish; an aimed wish keeps its words",
-      lines.refusal.join("|") === "tummy full!|too sleepy to play|I'm not sick!|too sleepy to play" && lines.wish === "wish... snack after lunch" &&
+      lines.refusal.join("|") === "tummy full!|too sleepy to play|I'm not sick!" && lines.wish === "wish... snack after lunch" &&
       lines.aimed === "I hope Alex brings me a snack after lunch!", JSON.stringify(lines));
+    check("a refused game says its refusal line once",
+      lines.refusalCall === 0 && lines.refusalLines === 1 && lines.refusalTotal === 1, JSON.stringify(lines));
+    // Hearts: to the nearest half, and full once the server calls the pet full.
+    const heartRows = await babyAs(async (el, s) => {
+      const realState = el._state;
+      const out = {};
+      for (const hunger of [34, 96]) {
+        el._state = function (slide, key) {
+          return key === "sensor.hunger" ? { state: String(hunger), attributes: {} } : realState.call(this, slide, key);
+        };
+        el._renderStatus(s, []);
+        const srcs = [...s.screen.querySelector(".hearts").querySelectorAll("img")].map((i) => i.getAttribute("src"));
+        out[hunger] = srcs.map((x) => /stat_heart_(\w+)\.png/.exec(x)[1]).join(",");
+      }
+      el._state = realState;
+      return out;
+    });
+    check("hunger 34 shows one full heart and a half, 96 shows four (full at the server's FEED_FULL_AT)",
+      heartRows[34] === "full,half,empty,empty" && heartRows[96] === "full,full,full,full", JSON.stringify(heartRows));
+    // The clock: a device 10 min fast reads the server's countdown after one state event.
+    const clock = await babyAs(async (el, s) => {
+      const realNow = Date.now;
+      const realHass = el._hass;
+      const server = realNow();
+      const hatchesAt = s.hatchesAt;
+      const out = {};
+      let fire;
+      const fresh = (conn) => ({ ...realHass, connection: conn });
+      try {
+        s.hatchesAt = new Date(server + 30 * 60000).toISOString();
+        Date.now = () => realNow() + 10 * 60000;
+        out.before = el._say(s, null, false);
+        el._hass = fresh({ subscribeEvents: (cb) => { fire = cb; return Promise.resolve(() => {}); } });
+        el._watchServerClock(el._hass);
+        fire({ time_fired: new Date(server).toISOString() });
+        out.after = el._say(s, null, false);
+      } finally {
+        Date.now = realNow;
+        fire?.({ time_fired: new Date().toISOString() }); // back to an honest device clock
+        s.hatchesAt = hatchesAt;
+        el._hass = realHass;
+      }
+      return out;
+    });
+    check("device clock 10 min fast: the hatch countdown reads the server's after one state event",
+      clock.before === "hatching in about 20 min" && clock.after === "hatching in about 30 min", JSON.stringify(clock));
     check("no catchphrase on a baby line, and the count doesn't move",
       lines.granted[0]?.opts?.catch === false && lines.favourite[0]?.opts?.catch === false && lines.count === 2 &&
       !lines.spoken.some((x) => lines.phrase && x.includes(lines.phrase)), JSON.stringify(lines));
