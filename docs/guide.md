@@ -260,6 +260,15 @@ pet; it's only how the screen looks.
   sleeping pet glows under it (it stays asleep). It only lights the screen: it
   doesn't turn the lights on, wake the pet or tell Home Assistant anything. With
   sounds on it clicks, except at night and while the pet sleeps.
+- **The infrared link.** With two or more pets on one card, now and then (once a day
+  at most for any pair, 10-25 minutes after you open the page) the pet on show and
+  the one next to it visit: a small red beam hops along the tops of the devices,
+  the screen shows a band of dots for a moment, and then both pets stand on the
+  host's background, wave and hop, say hello and part. The visiting pet's own slide
+  shows a little "♪" meanwhile. It's a surprise, not a button; nothing is counted or
+  remembered, and it never happens while either pet is asleep, calling, playing,
+  mid-care or the status is open. A swipe ends it at once; with reduced motion the
+  pets just appear together, speak and go. With sounds on it chirps.
 
 ## What you get
 
