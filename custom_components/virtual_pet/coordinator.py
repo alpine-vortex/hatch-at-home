@@ -1644,8 +1644,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     async def async_set_baby_talk(self, user: str, enabled: bool) -> None:
         """Simpler words from babies and children on this person's cards. One
-        switch per person, for every pet; no entity shows it, so nothing to
-        republish (the card learns it from the visit reply)."""
+        switch per person, for every pet; no entity shows it (the card learns
+        it from the visit reply and from its private channel)."""
         self.people.person(user)["baby_talk"] = enabled
         self.people.save()
         self._push_everywhere()
