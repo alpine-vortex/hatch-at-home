@@ -1808,7 +1808,8 @@ async function main() {
           return key === "sensor.hunger" ? { state: String(hunger), attributes: {} } : realState.call(this, slide, key);
         };
         el._renderStatus(s, []);
-        const srcs = [...s.screen.querySelector(".hearts").querySelectorAll("img")].map((i) => i.getAttribute("src"));
+        const row = [...s.screen.querySelectorAll(".row")].find((r) => r.children[1]?.textContent === "hunger");
+        const srcs = [...row.querySelectorAll(".hearts img")].map((i) => i.getAttribute("src"));
         out[hunger] = srcs.map((x) => /stat_heart_(\w+)\.png/.exec(x)[1]).join(",");
       }
       el._state = realState;
@@ -1853,7 +1854,8 @@ async function main() {
       return out;
     });
     check("device clock 10 min fast: the hatch countdown reads the server's after one state event",
-      clock.before === "hatching in about 20 min" && clock.after === "hatching in about 30 min" &&
+      /^hatching in about 2[01] min$/.test(clock.before) // 20, or 21 with a few seconds of offset left over
+       && clock.after === "hatching in about 30 min" &&
       clock.unsubscribed === 1 && clock.again === 0, JSON.stringify(clock));
     check("no catchphrase on a baby line, and the count doesn't move",
       lines.granted[0]?.opts?.catch === false && lines.favourite[0]?.opts?.catch === false && lines.count === 2 &&
