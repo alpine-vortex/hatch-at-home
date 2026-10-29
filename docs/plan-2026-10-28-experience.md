@@ -554,6 +554,20 @@ card and the `calling` sensor, which an automation can notify on.
   devoted (scrappy, 44-47) with a real happiness call a day (3.1-3.4); care_bot, which
   feeds, cleans, doses and praises but never plays, not devoted (scrappy, 28-29: its
   happiness sits under 10 most waking hours); praise spam ≤ 16 (14).
+- **Re-read against 0a-0d, 0f, 0g and 0b (the 0e builder, 2026-10-28):** no assumption
+  broke; every band passes on 10 seeds. As built, where the section left a choice:
+  0f's dropped game (`drop_game`) is not care, so praise after it teaches nothing;
+  praise that spoils a whine still takes its place in the window and the day; "days
+  since hatching" counts today and is at least 1 (`_days_lived`), so a baby's misses
+  aren't divided by a fraction of a day; the old score is kept as literals
+  (`_old_grade`: 6 a miss, 0.7 care) since this PR changes the rates. **An old adult
+  with no upbringing** gets the same capped floor as a growing pet, so no save loads
+  a grade below the old rule's (a pytest grid over babies, children, teens and such
+  adults, misses 0-10, discipline 0-100). A journal record's damaged `upbringing` is
+  dropped; `last_praise` is dropped from the save. The sim's `act` passes the
+  settings (the praise day is a local day). Numbers moved slightly from the
+  prototype: praise_bot's real happiness calls 2.8-3.1 a day (band ≥ 1), twice a day
+  24.5-27.0, sleeper 17.8, responder_miss1 65.2-77.3.
 
 **PR 0f: games can't be quit or rerolled for free; card Play spoils a whine (M3, M4,
 and A2's server side).** Size **M**, tier 2 (saved game fields). Before PR 1a, its card

@@ -11,7 +11,7 @@ from __future__ import annotations
 import calendar
 import copy
 from dataclasses import asdict, dataclass, field, fields
-from datetime import date, datetime, time, timedelta, tzinfo
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 import math
 import random
 from typing import Any
@@ -67,6 +67,15 @@ def is_pet_root(data: Any) -> bool:
 # --- Reading a save that may be damaged --------------------------------------
 # Each known key is type-checked or defaulted; a wrong type never stops a load.
 
+# PR 0e's timestamps: each moves with shift_times, none later than the save.
+UPBRINGING_TIMES = (
+    "last_sample_at",
+    "miss_day_at",
+    "last_care_at",
+    "praised_care",
+    "praise_window_at",
+    "praise_day_at",
+)
 _FLOATS = {
     "age_hours": 0.0,
     "hunger": 80.0,
@@ -78,19 +87,29 @@ _FLOATS = {
     "kept_up_until": 0.0,
     "cozy_until": 0.0,
     "cool_until": 0.0,
-    "last_praise": 0.0,
     "last_excite": 0.0,
     "last_recall_at": 0.0,
+    "discipline_sum": 0.0,
+    "wellbeing_sum": 0.0,
+    **{key: 0.0 for key in UPBRINGING_TIMES},
 }
 _RANGES = {
     "age_hours": (0.0, math.inf),
     **{s: (0.0, 100.0) for s in STATS},
+    "discipline_sum": (0.0, math.inf),
+    "wellbeing_sum": (0.0, math.inf),
 }
 _INTS = {  # key: (default, lowest)
     "care_misses": (0, 0),
     "discipline_misses": (0, 0),
     "generation": (1, 1),
     "treats_waiting": (0, 0),
+    "discipline_samples": (0, 0),
+    "wellbeing_samples": (0, 0),
+    "counted_misses": (0, 0),
+    "miss_day_count": (0, 0),
+    "praise_count": (0, 0),
+    "praise_day_count": (0, 0),
 }
 
 
@@ -157,6 +176,8 @@ def _retired(record: dict[str, Any]) -> dict[str, Any]:
     out = dict(record)
     out["traits"] = _strings(record.get("traits"))
     out["levels"] = _int_map(record.get("levels"))
+    if out.get("upbringing", UPBRINGINGS[0]) not in UPBRINGINGS:
+        del out["upbringing"]  # damaged: not shown
     out["games"] = {
         k: c for k, c in _mapping(record.get("games")).items() if isinstance(c, dict)
     }
@@ -294,7 +315,25 @@ class PetState:
     care_misses: int = 0
     discipline_misses: int = 0
     recent_misses: list[float] = field(default_factory=list)
-    last_praise: float = 0.0
+    # Upbringing, sampled each waking hour from hatching to adulthood.
+    discipline_sum: float = 0.0
+    discipline_samples: int = 0
+    wellbeing_sum: float = 0.0  # samples it was well (0 or 1 each)
+    wellbeing_samples: int = 0
+    last_sample_at: float = 0.0
+    counted_misses: int = 0  # at most MISSES_COUNTED_PER_DAY a local day
+    miss_day_at: float = 0.0  # the first miss of the day it's counting
+    miss_day_count: int = 0
+    # Grown before the score was reworked: the grade it had then, capped at
+    # steady, until its first counted miss after (no pet drops a grade
+    # because the rules changed).
+    upbringing_floor: str | None = None
+    last_care_at: float = 0.0  # care that met a need: praise after it teaches
+    praised_care: float = 0.0  # the care praise last paid discipline for
+    praise_window_at: float = 0.0  # the praise window began
+    praise_count: int = 0  # presses in it
+    praise_day_at: float = 0.0  # the first praise of the day it's counting
+    praise_day_count: int = 0  # presses that gave happiness that day
     last_excite: float = 0.0
     away: bool = False
     care_log: list[dict[str, Any]] = field(default_factory=list)
@@ -421,6 +460,14 @@ class PetState:
             r: min(since.get(r, saved), saved) for r in kwargs["latched"]
         }
         kwargs["last_recall_at"] = min(kwargs["last_recall_at"], saved)
+        for key in UPBRINGING_TIMES:
+            kwargs[key] = min(kwargs[key], saved)
+        # A sum its samples couldn't reach is damaged: the average starts over.
+        for key, most in (("discipline", 100.0), ("wellbeing", 1.0)):
+            if kwargs[f"{key}_sum"] > most * kwargs[f"{key}_samples"]:
+                kwargs[f"{key}_sum"], kwargs[f"{key}_samples"] = 0.0, 0
+        floor = kwargs.get("upbringing_floor")
+        kwargs["upbringing_floor"] = _capped(floor) if floor in UPBRINGINGS else None
         seen = {
             k: float(v)
             for k, v in _mapping(kwargs.get("trait_hours")).items()
@@ -490,10 +537,14 @@ class PetState:
         except ValueError:
             kwargs["hatched_on"] = None  # damaged: worked out again at load
         state = cls(**kwargs)
+        unknown.pop("last_praise", None)  # replaced by the praise window (PR 0e)
         state.unknown = unknown
+        if "discipline_samples" not in data and life_stage(state) != "egg":
+            _migrate_upbringing(state)
         if state.upbringing is None and life_stage(state) == "adult":
             # Grew up before upbringings existed: judge it on its record so far.
             state.upbringing = upbringing(state)
+            state.upbringing_floor = None
         if state.personality is None and life_stage(state) in ("teen", "adult"):
             # Became a teen before personalities existed: settled now, quietly.
             state.personality = personality_for(state)
@@ -616,7 +667,8 @@ def shift_times(state: PetState, delta: float) -> None:
         state.stayed_up_since += delta
     state.latched_at = {r: at + delta for r, at in state.latched_at.items()}
     state.last_recall_at += delta
-    state.last_praise += delta
+    for key in UPBRINGING_TIMES:
+        setattr(state, key, getattr(state, key) + delta)
     state.last_excite += delta
     state.kept_up_until += delta
     state.cozy_until += delta
@@ -709,6 +761,7 @@ def _step(
             changed["personality"] = state.personality
         if stage == "adult":
             state.upbringing = upbringing(state)
+            state.upbringing_floor = None
             changed["upbringing"] = state.upbringing
         events.append(changed)
     if stage == "egg":
@@ -722,7 +775,9 @@ def _step(
     _decay(state, hours, t1, settings)
     _digest(state, t1, events)
     _sickness(state, hours, t1, rng, events)
-    _calls(state, t1, hours, rng, events)
+    _calls(state, t1, hours, rng, events, settings.tz)
+    if stage != "adult":
+        _sample(state, t1)
 
 
 def _hatch(
@@ -1040,6 +1095,7 @@ def _calls(
     hours: float,
     rng: random.Random,
     events: list[Event],
+    tz: tzinfo = UTC,
 ) -> None:
     for reason in list(state.latched):
         if _rearmed(state, reason):
@@ -1078,6 +1134,7 @@ def _calls(
                 )
             else:
                 state.care_misses += 1
+                _count_miss(state, t, tz)
                 state.recent_misses.append(t)
                 # One neglect is one miss: no new call about this until it
                 # recovers past the re-arm level, bar a re-call.
@@ -1355,19 +1412,108 @@ def requests(state: PetState, now: float, settings: Settings) -> list[str]:
 # --- Upbringing ---------------------------------------------------------------
 
 
+def _count_miss(state: PetState, t: float, tz: tzinfo) -> None:
+    """A care miss for the upbringing: at most MISSES_COUNTED_PER_DAY a local
+    day. The first one counted ends an old pet's floor."""
+    if not _same_day(state.miss_day_at, t, tz):
+        state.miss_day_at, state.miss_day_count = t, 0
+    if state.miss_day_count < R.MISSES_COUNTED_PER_DAY:
+        state.miss_day_count += 1
+        state.counted_misses += 1
+        state.upbringing_floor = None
+
+
+def _same_day(a: float, b: float, tz: tzinfo) -> bool:
+    return datetime.fromtimestamp(a, tz).date() == datetime.fromtimestamp(b, tz).date()
+
+
 def upbringing_score(state: PetState) -> float:
-    """0-100 from how it was raised: care misses cost the most, discipline helps."""
-    care = max(0.0, 100.0 - R.UPBRINGING_MISS_COST * state.care_misses)
+    """0-100 from how it was raised: mostly how well it was kept (waking hours
+    well, and misses, a few a day at most), the rest its discipline averaged
+    over growing up. With no samples yet: today's discipline, and wellbeing
+    estimated from its misses."""
+    n = state.discipline_samples
+    discipline = state.discipline_sum / n if n else state.discipline
+    n = state.wellbeing_samples
+    well = state.wellbeing_sum / n if n else _wellbeing_estimate(state)
+    misses = max(0.0, 100.0 - R.UPBRINGING_MISS_COST * state.counted_misses)
+    share = R.UPBRINGING_MISS_SHARE
+    care = (1 - share) * 100.0 * well + share * misses
     weight = R.UPBRINGING_CARE_WEIGHT
-    return weight * care + (1 - weight) * state.discipline
+    return weight * care + (1 - weight) * discipline
+
+
+def _grade(score: float) -> str:
+    return next(name for name, low in R.UPBRINGING_GRADES if score >= low)
+
+
+def _capped(grade: str) -> str:
+    """A floor is at most steady: uncapped, it would carry an exploit's
+    devoted grade from the old rules forward."""
+    return grade if grade != "devoted" else "steady"
+
+
+def _better(a: str, b: str | None) -> str:
+    return a if b is None or UPBRINGINGS.index(a) <= UPBRINGINGS.index(b) else b
 
 
 def upbringing(state: PetState) -> str:
-    """The adult's upbringing, or the one it's on track for while growing up."""
+    """The adult's upbringing, or the one it's on track for while growing up:
+    the better of the score's grade and a standing floor."""
     if state.upbringing is not None:
         return state.upbringing
-    score = upbringing_score(state)
-    return next(name for name, low in R.UPBRINGING_GRADES if score >= low)
+    return _better(_grade(upbringing_score(state)), state.upbringing_floor)
+
+
+def _days_lived(state: PetState) -> int:
+    """Days since hatching, counting today (at least 1)."""
+    hours = state.age_hours - dict(R.STAGE_STARTS)["baby"]
+    return max(1, math.ceil(hours / 24))
+
+
+def _wellbeing_estimate(state: PetState) -> float:
+    """0-1: the share of waking hours it was well, guessed from its misses."""
+    return _clamp(1 - 0.06 * state.care_misses / _days_lived(state), 0.0, 1.0)
+
+
+def _migrate_upbringing(state: PetState) -> None:
+    """A pet hatched before the score was reworked (PR 0e). Growing up, its
+    hours so far count at half weight, from today's discipline and a
+    wellbeing estimate, and it keeps the grade the old rule gave it, capped
+    at steady, until its first counted miss. An adult keeps its upbringing."""
+    days = _days_lived(state)
+    state.counted_misses = min(state.care_misses, R.MISSES_COUNTED_PER_DAY * days)
+    if life_stage(state) == "adult":
+        if state.upbringing is None:
+            state.upbringing_floor = _capped(_old_grade(state))
+        return
+    hours = max(0.0, state.age_hours - dict(R.STAGE_STARTS)["baby"])
+    samples = round(hours * 2 / 3 / 2)  # awake about two thirds, half weight
+    state.discipline_samples = state.wellbeing_samples = samples
+    state.discipline_sum = state.discipline * samples
+    state.wellbeing_sum = samples * _wellbeing_estimate(state)
+    state.upbringing_floor = _capped(_old_grade(state))
+
+
+def _old_grade(state: PetState) -> str:
+    """The grade before PR 0e: 6 care points a miss, 70% care, 30% today's
+    discipline."""
+    care = max(0.0, 100.0 - 6.0 * state.care_misses)
+    return _grade(0.7 * care + 0.3 * state.discipline)
+
+
+def _sample(state: PetState, t: float) -> None:
+    """Once a waking hour while growing up: its discipline, and whether it's
+    well (not sick, every meter at UPBRINGING_WELL_MIN or more)."""
+    if state.asleep or t - state.last_sample_at < 3600:
+        return
+    state.last_sample_at = t
+    state.discipline_sum += state.discipline
+    state.discipline_samples += 1
+    meters = (state.hunger, state.happiness, state.energy, state.health)
+    well = not state.sick and min(meters) >= R.UPBRINGING_WELL_MIN
+    state.wellbeing_sum += well
+    state.wellbeing_samples += 1
 
 
 # --- Personality ----------------------------------------------------------------
@@ -1514,15 +1660,32 @@ def apply_action(
     """
     events: list[Event] = []
     happiness_before = state.happiness
+    needed = _meets_need(state, action)
     if action in REQUEST_ACTIONS:
         result = _answer_request(state, action, now, settings, events)
     else:
-        result = _do_action(state, action, now, rng, events)
+        tz = settings.tz if settings is not None else UTC
+        result = _do_action(state, action, now, rng, events, tz)
+    if needed and result == OK:
+        state.last_care_at = now
     _log(state, {"at": now, "action": action, "by": by, "result": result})
     events.append({"type": "care", "action": action, "result": result})
     if result == OK:
         _resolve_call(state, now, events, state.happiness > happiness_before)
     return result, events
+
+
+def _meets_need(state: PetState, action: str) -> bool:
+    """Whether this care, done now, meets a need: praise just after it teaches
+    (a meal when hungry, a clean with poop there, play when bored, medicine
+    when sick)."""
+    if action == "feed":
+        return state.hunger < 60
+    if action == "clean":
+        return bool(state.poops)
+    if action == "play":
+        return state.happiness < 60
+    return action == "medicine" and state.sick
 
 
 def _answer_request(
@@ -1551,6 +1714,7 @@ def _do_action(
     now: float,
     rng: random.Random,
     events: list[Event],
+    tz: tzinfo = UTC,
 ) -> str:
     if state.away:
         return "away"
@@ -1634,23 +1798,45 @@ def _do_action(
         return "unfair"
 
     if action == "praise":
+        state.happiness = _clamp(state.happiness + _praise_gain(state, now, tz))
         if state.call is not None and state.call.reason == "fake":
             # Rewarding the whining teaches it to whine.
             state.discipline = _clamp(state.discipline + R.PRAISE_WHINING_DISCIPLINE)
-            state.happiness = _clamp(state.happiness + R.PRAISE_HAPPINESS)
             state.call = None
             events.append(
                 {"type": "call_answered", "reason": "fake", "answer": "spoiled"}
             )
             return "spoiled"
-        state.happiness = _clamp(state.happiness + R.PRAISE_HAPPINESS)
-        if now - state.last_praise >= R.PRAISE_COOLDOWN_MINUTES * 60:
+        care = state.last_care_at
+        if (
+            care
+            and now - care <= R.PRAISE_AFTER_CARE_MINUTES * 60
+            and state.praised_care != care
+        ):
+            # Praise right after good care teaches, once per care.
             state.discipline = _clamp(state.discipline + R.PRAISE_DISCIPLINE)
-        state.last_praise = now
+            state.praised_care = care
         state.last_excite = now
         return OK
 
     raise ValueError(f"unknown action {action}")
+
+
+def _praise_gain(state: PetState, now: float, tz: tzinfo) -> float:
+    """Happiness from one more praise: less each press within a window, and
+    little once the day's first few have given some."""
+    if now - state.praise_window_at >= R.PRAISE_COOLDOWN_MINUTES * 60:
+        state.praise_window_at, state.praise_count = now, 0
+    if not _same_day(state.praise_day_at, now, tz):
+        state.praise_day_at, state.praise_day_count = now, 0
+    gains = R.PRAISE_WINDOW_GAINS
+    gain = gains[state.praise_count] if state.praise_count < len(gains) else 0.0
+    state.praise_count += 1
+    if state.praise_day_count >= R.PRAISE_FULL_PER_DAY:
+        return min(gain, R.PRAISE_TIRED_HAPPINESS)
+    if gain:
+        state.praise_day_count += 1
+    return gain
 
 
 def _log(state: PetState, entry: dict[str, Any]) -> None:
@@ -1833,6 +2019,8 @@ def play_game(
     if won:
         happiness += R.PLAYER_WIN_HAPPINESS * _scale(state, "player")
     happiness_before = state.happiness
+    if _meets_need(state, "play"):
+        state.last_care_at = now  # a finished game is play
     state.happiness = _clamp(state.happiness + happiness)
     state.energy = _clamp(state.energy + R.PLAY_ENERGY)
     state.hunger = _clamp(state.hunger + R.PLAY_HUNGER)

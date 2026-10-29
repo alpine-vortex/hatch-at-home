@@ -56,7 +56,7 @@ def shown_call(s: M.PetState) -> str | None:
 
 
 def act(s: M.PetState, action: str, t: float, rng: random.Random) -> str:
-    return M.apply_action(s, action, t, rng)[0]
+    return M.apply_action(s, action, t, rng, settings=SETTINGS)[0]
 
 
 def answer(s: M.PetState, t: float, rng: random.Random, suspicious: bool) -> bool:
