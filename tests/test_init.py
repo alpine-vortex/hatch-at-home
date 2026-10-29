@@ -2792,6 +2792,31 @@ async def test_a_close_friend_gives_it_a_catchphrase_once_a_generation(
     assert coordinator.state.bonds == {}
 
 
+async def test_a_late_answer_lands_for_a_like_but_not_for_a_spent_catchphrase(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_admin_user: Any,
+) -> None:
+    # The card resends a kept answer on a later visit: the first send may have
+    # arrived and only its reply been lost.
+    me = hass_admin_user.id
+    hass_storage[STORE_KEY] = hatched_pet(
+        dt_util.utcnow().timestamp(),
+        species="squirrel",
+        bonds={me: {"points": model.R.BOND_LEVELS[model.R.CATCHPHRASE_LEVEL - 1]}},
+    )
+    coordinator = (await setup(hass)).runtime_data
+    # A like has no open-ask check: late or twice, it is stored.
+    await coordinator.async_answer(me, "fav_weather", "snow")
+    await coordinator.async_answer(me, "fav_weather", "snow")
+    assert coordinator.people.person(me)["likes"] == {"fav_weather": "snow"}
+    # A catchphrase answered once is spent: a late copy is refused.
+    coordinator._catch_ask(me)["asked"].append("2026-10-28")
+    await coordinator.async_answer(me, "catchphrase", "yay")
+    with pytest.raises(ValueError):
+        await coordinator.async_answer(me, "catchphrase", "yay")
+
+
 async def test_a_hatchling_waits_to_ask_for_a_catchphrase(
     hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
 ) -> None:
