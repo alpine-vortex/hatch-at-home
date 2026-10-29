@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 import copy
 from datetime import datetime, timedelta
 import random
@@ -38,7 +39,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from . import model, notify, people as P, rates as R, wellbeing
+from . import channel, model, notify, people as P, rates as R, wellbeing
 from .backup import (
     NOTHING,
     async_backup,
@@ -66,6 +67,8 @@ from .const import (
     DEFAULT_ZONE,
     DOMAIN,
     LOGGER,
+    MEDIA_EVENTS,
+    PERSONAL_EVENTS,
     STORE_MINOR_VERSION,
     STORE_VERSION,
 )
@@ -124,6 +127,7 @@ MOMENTS = {
     "bond_record",
     "tucked_in",
     "favourite_snack",
+    "someone_home",
 }
 MOMENTS_KEPT = 10
 # The visit's celebration lines (one a look, and always a place for it).
@@ -201,6 +205,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.debug: dict[str, Any] = {}
         # Recent events for the card to react to, newest first (not saved).
         self.moments: list[dict[str, Any]] = []
+        # The private channel (virtual_pet/subscribe), in memory only: each
+        # person's own recent moments (bonds), the house's latest media moment
+        # (with its title), and what each watcher was last sent, by token.
+        self._private: dict[str, deque[dict[str, Any]]] = {}
+        self._house: dict[str, dict[str, Any]] = {}
+        self._sent: dict[object, tuple[dict[str, Any] | None, dict[str, Any]]] = {}
         # A call notification is on the phones (cleared when the call is over).
         self._call_notified = False
         # This sickness is on the phones already (became_sick, until it
@@ -229,6 +239,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # pet last cheered for each (in memory).
         self._arrivals: list[str] = []
         self._cheered: dict[str, float] = {}
+        self._someone_cheered = -1e12  # anyone at all, for shared screens
         # "My day": a bike ride or a run today, per person (in memory).
         self._moved: dict[str, tuple[str, set[str]]] = {}
         # The house's weather now (rain, snow, sun, storm) and outdoors in °C.
@@ -730,7 +741,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.people.saw_weather(self._today(now)[0], kinds)
         arrivals, self._arrivals = self._arrivals, []
         if self._awake():
-            self._fire(self._friends_home(arrivals, now))
+            self._fire(
+                self._someone_home(arrivals, now) + self._friends_home(arrivals, now)
+            )
         self._fire(self._passing_moments(readings, now))
         if self._awake():
             # The house can grant the day's wish, and give the pet things to dream of.
@@ -914,9 +927,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 data["simulated"] = True
             self.hass.bus.async_fire(f"{DOMAIN}_{event['type']}", data)
             self._notify(event, simulated, events)
-            if not simulated and event["type"] in MOMENTS:
-                self.moments.insert(0, {**event, "at": dt_util.utcnow().isoformat()})
+            if simulated:
+                continue
+            at = dt_util.utcnow().isoformat()
+            if event["type"] in MOMENTS:
+                self.moments.insert(0, {**event, "at": at})
                 del self.moments[MOMENTS_KEPT:]
+            self._to_channel(event, at)
         if events:
             self.debug["last_events"] = [e["type"] for e in events][-10:]
         if simulated or self.state is None:
@@ -1114,6 +1131,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 event["weather"] = weather
             events.append(event)
         return events
+
+    def _someone_home(self, arrivals: list[str], now: float) -> list[model.Event]:
+        """Someone signed in came home, whoever they are: a moment with no name,
+        for shared screens (one timer for everyone)."""
+        if not arrivals:
+            return []
+        if now - self._someone_cheered < R.FRIEND_HOME_EVERY_MINUTES * 60:
+            return []
+        self._someone_cheered = now
+        return [{"type": "someone_home"}]
 
     def _home_weather(self) -> str | None:
         """What it's like out there, for someone coming in (the house's
@@ -1582,6 +1609,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             else:
                 raise ValueError("Not a birthday")
             self.people.save()
+            self._push_everywhere()  # birthday_kept changed
             return
         if answer not in P.ANSWERS.get(question, ()):
             raise ValueError(f"{answer} isn't an answer to {question}")
@@ -1614,18 +1642,21 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             model.pick_dream(self.state, user, answer, self._now())
             self._save()
         self.people.save()
+        self._push_everywhere()  # a birthday kept
 
     async def async_set_birthday_phone(self, user: str, enabled: bool) -> None:
         """Whether this person's phone hears "happy birthday" on the day."""
         self.people.person(user)["birthday_phone"] = enabled
         self.people.save()
+        self._push_everywhere()
 
     async def async_set_baby_talk(self, user: str, enabled: bool) -> None:
         """Simpler words from babies and children on this person's cards. One
-        switch per person, for every pet; no entity shows it, so nothing to
-        republish (the card learns it from the visit reply)."""
+        switch per person, for every pet; no entity shows it (the card learns
+        it from the visit reply and from its private channel)."""
         self.people.person(user)["baby_talk"] = enabled
         self.people.save()
+        self._push_everywhere()
 
     async def async_forget_birthday(self, user: str) -> None:
         """Forget someone's birthday, and don't ask again."""
@@ -1634,6 +1665,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         person.pop("birthday_phone", None)
         person["birthday_skipped"] = True
         self.people.save()
+        self._push_everywhere()
 
     async def async_set_my_day(self, user: str, enabled: bool) -> None:
         """Let the pets notice this person's day (steps, sleep, where they've
@@ -1866,6 +1898,144 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.state.notify_users = users
         self._save()
         self._publish()
+
+    # --- The private channel: each person's own view (virtual_pet/subscribe) ---
+
+    def _watchers(self) -> dict[object, channel.Watcher]:
+        return channel.of(self.hass, self.pet_id)
+
+    def _open_wish(self) -> dict[str, Any] | None:
+        """Today's wish (the house's date) while it can still come true, as the
+        life-stage sensor judges it."""
+        wish = self.state.wish if self.state else None
+        if not wish or wish.get("day") != dt_util.now().date().isoformat():
+            return None
+        if wish.get("granted"):
+            return None
+        if wish.get("kind") in model.DAYTIME_WISHES and model.in_sleep_hours(
+            self._now(), self.settings
+        ):
+            return None
+        return wish
+
+    def _mine(self, user: str) -> dict[str, Any]:
+        """What only this person sees: their bond, and their own switches. Read,
+        never created: an open card mustn't bring back a forgotten record."""
+        state = self.state
+        bond = state.bonds.get(user) if state else None
+        person = self.people.data["people"].get(user, {})
+        wish = self._open_wish()
+        return {
+            "bond": {
+                "level": model.bond_level(bond["points"]),
+                **{k: bond[k] for k in ("nickname", "favourite") if bond.get(k)},
+            }
+            if bond
+            else None,
+            "notify_me": state is not None and user in state.notify_users,
+            "wish_for_you": wish is not None and wish.get("for") == user,
+            "my_day": self.people.my_day(user),
+            "baby_talk": self.people.baby_talk(user),
+            "birthday_phone": bool(person.get("birthday_phone")),
+            "birthday_kept": bool(person.get("birthday")),
+        }
+
+    def _house_view(self) -> dict[str, Any]:
+        """What every screen sees, shared ones too: the latest show or song, and
+        this morning's dream of one (other dreams are on the sensor)."""
+        dream = self.state.dream if self.state else None
+        if (
+            dream
+            and dream.get("day") == dt_util.now().date().isoformat()
+            and dream.get("kind") in MEDIA_EVENTS
+            and dream.get("title")
+        ):
+            seen = {"kind": dream["kind"], "title": dream["title"]}
+        else:
+            seen = None
+        return {"media": self._house.get("media"), "dream": seen}
+
+    def channel_snapshot(
+        self, token: object, user: str, shared: bool
+    ) -> dict[str, Any]:
+        """Everything a watcher sees, at once (on subscribe, and after a reload).
+        A shared screen gets no one's own view."""
+        mine = None if shared else self._mine(user)
+        house = self._house_view()
+        self._sent[token] = (mine, house)
+        moments = [] if shared else list(self._private.get(user, ()))
+        if house["media"]:
+            moments.append(house["media"])
+        return {
+            "mine": mine,
+            "house": house,
+            "moments": moments,
+            "now": dt_util.utcnow().isoformat(),
+        }
+
+    def async_start_channel(self) -> None:
+        """Push on every update, and send the watchers already open (a card
+        open across a reload) a fresh snapshot."""
+        self.config_entry.async_on_unload(self.async_add_listener(self._push_watchers))
+        for token, (user, shared, send) in list(self._watchers().items()):
+            send(self.channel_snapshot(token, user, shared))
+
+    def _current(self) -> bool:
+        """This is the pet's live coordinator (not one a reload replaced)."""
+        return self.hass.data.get(DOMAIN, {}).get("pets", {}).get(self.pet_id) is self
+
+    @callback
+    def _push_watchers(self) -> None:
+        """Each watcher gets what changed since its last send: its own view, the
+        house's, or both."""
+        if self.state is None or not self._current():
+            return
+        watchers = self._watchers()
+        for token in [t for t in self._sent if t not in watchers]:
+            del self._sent[token]
+        house = self._house_view()
+        for token, (user, shared, send) in list(watchers.items()):
+            if token not in self._sent:
+                send(self.channel_snapshot(token, user, shared))
+                continue
+            mine = None if shared else self._mine(user)
+            sent_mine, sent_house = self._sent[token]
+            changed: dict[str, Any] = {}
+            if mine != sent_mine:
+                changed["mine"] = mine
+            if house != sent_house:
+                changed["house"] = house
+            if changed:
+                self._sent[token] = (mine, house)
+                send(changed)
+
+    def _push_everywhere(self) -> None:
+        """A person's own switch changed (one for every pet): every pet's
+        channel tells them."""
+        pets: dict[str, PetCoordinator] = self.hass.data[DOMAIN]["pets"]
+        for pet in pets.values():
+            pet._push_watchers()
+
+    def _to_channel(self, event: model.Event, at: str) -> None:
+        """A bond moment goes to its person's own channel (without who), and a
+        titled media moment to every channel. The public copy is unchanged."""
+        kind = event["type"]
+        live = self._current()
+        if kind in PERSONAL_EVENTS and (user := event.get("user")):
+            moment = {k: v for k, v in event.items() if k != "user"} | {"at": at}
+            private = self._private.setdefault(user, deque(maxlen=MOMENTS_KEPT))
+            private.appendleft(moment)
+            if live:
+                for who, shared, send in list(self._watchers().values()):
+                    if who == user and not shared:
+                        send({"moment": moment})
+        elif kind in MEDIA_EVENTS and event.get("title"):
+            moment = {k: event[k] for k in ("type", "title", "artist") if k in event}
+            self._house["media"] = moment | {"at": at}
+            if live:
+                for _, _, send in list(self._watchers().values()):
+                    send({"moment": self._house["media"]})
+                self._push_watchers()
 
     def _save(self) -> None:
         state = self.state

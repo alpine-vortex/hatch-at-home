@@ -79,3 +79,15 @@ CONF_MOON_ILLUMINATION = "moon_illumination"  # 0-1 or %
 CONF_MOON_ALTITUDE = "moon_altitude"  # degrees; above 0 means up
 CONF_CHORES = "chores"  # to-do lists; a done item earns the pet a treat
 CONF_DASHBOARD = "dashboard"  # the path a tap on the pet's notifications opens
+
+# The private channel (virtual_pet/subscribe). Bond moments are one person's:
+# each goes to that person's own channel. Media moments, with their titles, go
+# to every channel, shared screens too (the house's, not anyone's).
+PERSONAL_EVENTS = {
+    "bond_up",
+    "bond_record",
+    "bond_favourite",
+    "friend_home",
+    "tucked_in",
+}
+MEDIA_EVENTS = {"watching", "listening"}
