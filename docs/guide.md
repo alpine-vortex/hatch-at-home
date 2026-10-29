@@ -81,6 +81,12 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 
 - Each pet stands in its device on its world's backdrop. Use the arrows, the dots or a
   swipe to move to the next device.
+- **Power-on:** the first time a browser shows the card, the screen starts like a
+  new toy: a pale-green screen with the HATCH logo and a blinking "▶ tap to start".
+  A tap fills in the logo and cuts to the pet (with a rising beep if you turned
+  sounds on, outside quiet hours and while the pet is awake); with no tap it starts by itself after about
+  five seconds, silently. It shows once per browser, and again only after an update
+  that asks for it. Reduced motion skips the fill.
 - The screen shows the pet, its scene and a speech bubble. The bubble says what's on
   its mind, or why it refused something ("I'm full!").
 - **Play** offers two games (three with Catch). It opens a picker that starts on the
@@ -230,6 +236,30 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   bouncing for a few seconds, then it hops now and then while it's still excited.
 - It says hi to whoever is looking, by first name ("morning, Alex!"), at most every few
   hours. The name comes from your Home Assistant account and stays in your browser.
+
+### Little touches
+
+The device behaves a little like a real handheld's screen. None of this changes the
+pet; it's only how the screen looks.
+
+- **The LCD grid.** A faint dot-matrix grid lies over the scene, one cell per pixel
+  the creature is drawn in (one per four on a low-resolution screen, where a finer
+  grid would shimmer). Weather, the speech bubble, the games and the status screen
+  sit in front of it, so words stay crisp. "screen effects here" on the status
+  screen turns it off for this browser; it's also off when the browser asks for
+  more contrast.
+- **Ghosting.** Like a slow old LCD, the screen leaves a fading trace of the pet:
+  its last frame for a moment when it moves, and a short smear when it wanders or
+  dashes aside in a game. Only on the pet you're looking at, never in Catch, and
+  never with reduced motion. The same "screen effects here" switch turns it off.
+- **The backlight.** Every device has a little button on its shell: a nub on the
+  egg's shoulder, the tank lid's right grip, a lamp on the house's chimney, the
+  porthole's top-right rivet, a dewdrop on the lily pad's rim and a star on the
+  moon. Tap it ("Light up the screen") and the screen glows blue-green for three
+  seconds, then fades; tap again to keep it lit. It shows best at night, when a
+  sleeping pet glows under it (it stays asleep). It only lights the screen: it
+  doesn't turn the lights on, wake the pet or tell Home Assistant anything. With
+  sounds on it clicks, except at night and while the pet sleeps.
 
 ## What you get
 

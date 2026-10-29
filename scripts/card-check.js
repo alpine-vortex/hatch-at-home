@@ -112,6 +112,17 @@ async function main() {
   const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
   // A context of its own, so a check can open a second tab on the same storage.
   const context = await browser.newContext({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1) });
+  // The boot screen shows once per browser: every page here starts as if it had
+  // been shown, except the boot checks' (they set the session flag and clear it).
+  const bootVersion = /const BOOT_VERSION = "([^"]*)"/.exec(
+    fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8"))?.[1];
+  await context.addInitScript((v) => {
+    try {
+      if (!sessionStorage.getItem("cc-boot-test") && v) localStorage.setItem("hatch-booted", v);
+    } catch (err) {
+      // no storage
+    }
+  }, bootVersion);
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -127,6 +138,10 @@ async function main() {
   const signedIn = () => page.waitForFunction(
     () => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
   await signedIn();
+  // Screen effects (the LCD grid, ghosting) are on by default; the checks run
+  // with them off so their screenshots and pixel samples don't drift. Only the
+  // device-charm steps near the end turn them on.
+  await page.evaluate(() => localStorage.setItem("hatch-lcd", "off"));
   await page.goto(`${HA}/pet-bench/pet`);
   await signedIn();
   await page.waitForTimeout(16000); // the frontend reloads itself once after the first load
@@ -1142,15 +1157,13 @@ async function main() {
     return asked;
   });
   console.log(`note: a question was ${hadQuestion ? "" : "not "}open before the idle check`);
-  // A call (a need, or a whine) keeps idle life away by design: show the pet
-  // content for this check, as if it had been answered (the integration's next
-  // update, minutes away, puts the real mood back).
-  if (await evaluate((id) => document.querySelector("home-assistant").hass.states[id]?.state === "calling",
-    pet["sensor.mood"])) {
-    console.log("note: the pet was calling; shown content for the idle check");
-    await inject(pet["sensor.mood"], { state: "content" });
-    await page.waitForTimeout(800);
-  }
+  // A call (a need, a whine, the lonely call at low happiness) keeps idle life
+  // away by design, and the card reads it from binary_sensor.calling, not the
+  // mood: whatever the pet's stats have drifted to by now, show it content and
+  // not calling for this check, as if it had been answered (the integration's
+  // next update, minutes away, puts the real state back).
+  await calm();
+  await page.waitForTimeout(800);
   const quietBubble = await bubble();
   let idle = "";
   // The first idle move is due 10-35 s in, but it's skipped if the pet is busy
@@ -2214,6 +2227,10 @@ async function main() {
       s.moodState = "content"; // awake and free, whatever the hour (a dev pet sleeps at night)
       el._seasonFlyer = el._seasonVisitor = () => {};
       el._costume = (slide, season, line, catchy) => { out.line = line; out.catchy = catchy; };
+      // The week before a holiday its countdown speaks first (once a slide) and
+      // would hold every tick below: not this check's.
+      const counted = s.counted;
+      s.counted = true;
       try {
         for (const key of ["halloween", "thanksgiving"]) {
           el._config = { ...config, seasonal: key };
@@ -2234,6 +2251,7 @@ async function main() {
         }
       } finally {
         [el._seasonFlyer, el._seasonVisitor, el._costume] = fly;
+        s.counted = counted;
         el._config = config;
         s.moodState = mood;
         t.cache(null);
@@ -2567,7 +2585,7 @@ async function main() {
           };
           s.mine = { ...(keptMine || {}), bond: level === null ? null : { level } }; // as the channel has it
         },
-        random: (r) => { Math.random = r === null ? realRandom : () => r; },
+        random: (r) => { Math.random = r === null ? realRandom : typeof r === "function" ? r : () => r; },
         shared: (on) => localStorage.setItem("hatch-shared-screen", on ? "on" : "off"),
         baby: (on) => localStorage.setItem(`hatch-baby-talk-${me}`, on ? "on" : "off"),
         greet: () => {
@@ -2671,8 +2689,18 @@ async function main() {
 
     // Hellos: a shared screen says the nameless ones and never a bond line (its
     // bond injected at 8 all the same); signed in, a bond line only at 2+ and 8+.
+    // A greeting is a coin toss (its own line or a normal one) and then a pick,
+    // so a bond line shows up only some of the time: seed the dice (mulberry32)
+    // so the same runs happen every time, and "no bond-8 line" can't be luck.
     const hellos = await typeAs(async (el, s, t, types) => {
       const out = {};
+      let seed = 0x2f6e2b1;
+      t.random(() => {
+        seed = (seed + 0x6d2b79f5) | 0;
+        let x = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        x = (x + Math.imul(x ^ (x >>> 7), 61 | x)) ^ x;
+        return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+      });
       for (const type of types) {
         const run = (n) => Array.from({ length: n }, () => t.greet());
         t.shared(true);
@@ -3557,6 +3585,412 @@ async function main() {
     if (await cur().locator(".screen.show-status").count()) await page.locator("hatch-pet-card .statusbtn").click();
   }
 
+  // Device charm, Part 1: the LCD quirks (docs/plan-2026-10-29-device-charm.md).
+  const worlds = Object.keys(JSON.parse(fs.readFileSync(
+    path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8")));
+  // Show the pet on show in another world's shell (its life_stage says so), or back.
+  const inWorld = (key) => card.evaluate(async (el, key) => {
+    if (!el.__worldless) el.__worldless = el._state;
+    const real = el.__worldless;
+    el._state = key ? function (slide, k) {
+      const st = real.call(this, slide, k);
+      return k === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, world: key } } : st;
+    } : real;
+    if (!key) delete el.__worldless;
+    el._redraw();
+    await new Promise((r) => setTimeout(r, 700));
+    const s = el._slides[el._index];
+    return { device: s.device.className, slideW: el._slideW, compact: el._card.classList.contains("compact") };
+  }, key);
+  const setLcd = (on) => card.evaluate((el, on) => {
+    localStorage.setItem("hatch-lcd", on ? "on" : "off");
+    el._card.classList.toggle("lcd-on", on);
+  }, on);
+  // A crop of the page, with every animation on the screen held still.
+  const holdStill = (hold) => card.evaluate((el, hold) => {
+    el._slides[el._index].screen.getAnimations({ subtree: true }).forEach((a) => (hold ? a.pause() : a.play()));
+  }, hold);
+  const crop = async (sel, inset) => {
+    const box = await cur().locator(sel).first().boundingBox();
+    return page.screenshot({ clip: { x: box.x + inset * box.width, y: box.y + inset * box.height,
+      width: box.width * (1 - 2 * inset), height: box.height * (1 - 2 * inset) } });
+  };
+  // The same crop with the grid off, then on: identical when the grid is under it.
+  // The words are hidden for it: anything animating under the grid puts the layers
+  // above it on the compositor, where Chrome draws text with greyscale smoothing
+  // instead of subpixel (same contrast, different pixels).
+  const under = async (sel, inset) => {
+    await holdStill(true);
+    await card.evaluate((el) => {
+      const st = document.createElement("style");
+      st.className = "check-notext";
+      st.textContent = ".screen, .screen * { color: transparent !important; text-shadow: none !important; }";
+      el.shadowRoot.append(st);
+    });
+    await setLcd(false);
+    const off = await crop(sel, inset);
+    await setLcd(true);
+    const on = await crop(sel, inset);
+    await card.evaluate((el) => el.shadowRoot.querySelector(".check-notext").remove());
+    await holdStill(false);
+    // At most 3 levels apart (compositing rounds a little); a grid line would be ~20.
+    return off.equals(on) || await evaluate(async ([a, b]) => {
+      const pixels = async (src) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${src}`;
+        await img.decode();
+        const c = document.createElement("canvas");
+        c.width = img.width;
+        c.height = img.height;
+        const g = c.getContext("2d");
+        g.drawImage(img, 0, 0);
+        return g.getImageData(0, 0, c.width, c.height).data;
+      };
+      const [pa, pb] = [await pixels(a), await pixels(b)];
+      return pa.length === pb.length && pa.every((v, i) => Math.abs(v - pb[i]) <= 3);
+    }, [off.toString("base64"), on.toString("base64")]);
+  };
+
+  // The "screen effects here" row: on by default, per browser.
+  await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
+  await page.waitForTimeout(400);
+  const fxRow = async () => ({ pressed: await cur().locator(".bell.lcdfx").getAttribute("aria-pressed"),
+    stored: await evaluate(() => localStorage.getItem("hatch-lcd")),
+    on: await card.evaluate((el) => el._card.classList.contains("lcd-on")) });
+  const fxSeeded = await fxRow();
+  await card.evaluate((el) => {
+    localStorage.removeItem("hatch-lcd");
+    const s = el._slides[el._index];
+    s.statusHtml = null;
+    el._renderStatus(s, el._state(s, "sensor.last_care")?.attributes.log || []);
+  });
+  await page.waitForTimeout(300);
+  const fxDefault = await fxRow();
+  await cur().locator(".bell.lcdfx").click();
+  await page.waitForTimeout(300);
+  const fxOff = await fxRow();
+  await cur().locator(".bell.lcdfx").click();
+  await page.waitForTimeout(300);
+  const fxOn = await fxRow();
+  check("screen effects here: on by default, off and on again for this browser",
+    fxSeeded.pressed === "false" && !fxSeeded.on && fxDefault.pressed === "true" &&
+    fxOff.pressed === "false" && fxOff.stored === "off" && !fxOff.on &&
+    fxOn.pressed === "true" && fxOn.stored === "on" && fxOn.on,
+    JSON.stringify({ fxSeeded, fxDefault, fxOff, fxOn }));
+  await cur().locator(".status .row", { hasText: "screen effects here" }).scrollIntoViewIfNeeded();
+  await shot("d1-lcd-row");
+  check("the grid is off on the status screen",
+    await cur().locator(".lcd").evaluate((n) => getComputedStyle(n).display) === "none" &&
+    await under(".status", 0.25));
+  await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
+  await page.waitForTimeout(400);
+
+  for (const width of [420, 330]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.waitForTimeout(600);
+    const bad = [];
+    let layout = null;
+    for (const key of worlds) {
+      layout = await inWorld(key);
+      const grid = await card.evaluate((el) => {
+        const s = el._slides[el._index];
+        const lcd = s.screen.querySelector(".lcd");
+        const css = getComputedStyle(lcd);
+        const a = lcd.getBoundingClientRect();
+        const b = s.screen.getBoundingClientRect();
+        return { display: css.display, image: /repeating-linear-gradient/.test(css.backgroundImage),
+          pitch: parseFloat(s.screen.style.getPropertyValue("--lcd-pitch")) * (window.devicePixelRatio || 1),
+          fills: Math.abs(a.width - b.width) < 1 && Math.abs(a.height - b.height) < 1,
+          clipped: getComputedStyle(s.screen).overflow === "hidden" };
+      });
+      await card.evaluate((el) => el._write(el._slides[el._index], "screen effects!", 60000));
+      await page.waitForTimeout(1200);
+      const bubbleOk = await under(".bubble", 0.12);
+      await shot(`d1-lcd-${width}-${key}`);
+      if (grid.display !== "block" || !grid.image || !(grid.pitch >= 3) || !grid.fills || !grid.clipped || !bubbleOk) {
+        bad.push({ key, ...grid, bubbleOk });
+      }
+    }
+    check(`the LCD grid covers the scene on all six shells at ${width} px, under the bubble`,
+      bad.length === 0, JSON.stringify({ layout, bad }));
+    // Under the game too.
+    const picked = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const real = el._state;
+      el._state = function (slide, k) { // rested enough to play
+        const st = real.call(this, slide, k);
+        return k === "sensor.energy" && st ? { ...st, state: "80" } : st;
+      };
+      s.asleep = false;
+      el._startGame(s, s.buttons.play);
+      el._state = real;
+      await new Promise((r) => setTimeout(r, 500));
+      return { picking: !!s.game?.picking, game: s.game, said: s.bubble.textContent };
+    });
+    check(`the LCD grid is under the game picker at ${width} px`,
+      picked.picking && await under(".gpick button", 0.2), JSON.stringify(picked));
+    await shot(`d1-lcd-${width}-game`);
+    await card.evaluate((el) => el._endGame(el._slides[el._index], null));
+    await page.waitForTimeout(300);
+  }
+  // Night, for the screenshots.
+  await card.evaluate((el) => el._slides[el._index].screen.classList.add("night"));
+  await shot("d1-lcd-night");
+  await inWorld(null);
+  await page.setViewportSize({ width: 420, height: 860 });
+  await setLcd(false);
+  await page.waitForTimeout(600);
+
+  // Ghosting (1b): a frame swap and a wander leave a fading trace, on the pet on show only.
+  await setLcd(true);
+  const ghostRun = (opts) => card.evaluate(async (el, { catchGame }) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const op = () => Number(getComputedStyle(s.ghost).opacity);
+    const out = { pets: s.screen.querySelectorAll(".pet").length, ghostIsPet: s.ghost.classList.contains("pet") };
+    const savedGame = s.game;
+    if (catchGame) s.game = { kind: "catch" };
+    // No tick of the card's own while sampling (its idle life moves the pet too).
+    const realTick = el._tick;
+    el._tick = () => {};
+    await wait(1500); // an idle move already under way finishes
+    s.pet.classList.remove("wander-l", "wander-r", "look");
+    await wait(1200);
+    // A clean frame swap: the pet awake, still, with two different frames.
+    s.pet.classList.remove("hop", "greethop", "look", "dance", "shiver");
+    s.screen.classList.remove("breezy", "windy");
+    s.pet.getAnimations().forEach((a) => a.cancel());
+    s.ghostUntil = 0;
+    const realFrames = el._frames;
+    el._frames = () => [s.frames[0], s.frames.find((f) => f !== s.frames[0]) || s.frames[0]];
+    s.frame = 0;
+    el._show(s, s.pet, el._frames(s)[0]);
+    el._ticks = 1; // the next tick swaps even while asleep
+    const before = s.pet.getAttribute("src");
+    realTick.call(el);
+    el._frames = realFrames;
+    out.swapped = before !== s.pet.getAttribute("src");
+    out.frameSrc = s.ghost.getAttribute("src") === before;
+    await wait(20);
+    out.frameJust = op();
+    await wait(300);
+    out.frameLater = op();
+    // A wander: the ghost trails the pet at 30% and catches up.
+    s.pet.classList.add("wander-l");
+    await wait(150);
+    out.trail = op();
+    out.lag = [s.pet, s.ghost].map((n) => new DOMMatrix(getComputedStyle(n).transform).m41 ||
+      parseFloat(getComputedStyle(n).translate) || 0);
+    await wait(1400);
+    out.trailLater = op();
+    s.pet.classList.remove("wander-l");
+    await wait(1200);
+    out.back = op();
+    s.game = savedGame;
+    delete el._tick; // the card's own again
+    return out;
+  }, opts);
+  for (const width of [420, 330]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.waitForTimeout(600);
+    const g = await ghostRun({});
+    check(`ghosting at ${width} px: the old frame fades from the pet, gone by 300 ms`,
+      g.swapped && g.frameJust > 0 && g.frameSrc && g.frameLater === 0, JSON.stringify(g));
+    check(`ghosting at ${width} px: a wander leaves a 30% trail that catches up`,
+      Math.abs(g.trail - 0.3) < 0.01 && g.trailLater === 0 && g.back === 0, JSON.stringify(g));
+    check(`ghosting at ${width} px: the ghost is not a second pet`, g.pets === 1 && !g.ghostIsPet, JSON.stringify(g));
+  }
+  const inCatch = await ghostRun({ catchGame: true });
+  check("ghosting stays hidden in Catch",
+    inCatch.frameJust === 0 && inCatch.trail === 0, JSON.stringify(inCatch));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const calmGhost = await ghostRun({});
+  check("ghosting never shows with reduced motion",
+    calmGhost.frameJust === 0 && calmGhost.trail === 0, JSON.stringify(calmGhost));
+  await page.emulateMedia({ reducedMotion: null });
+  await setLcd(false);
+  const offGhost = await ghostRun({});
+  check("ghosting is off with screen effects off",
+    offGhost.frameJust === 0 && offGhost.trail === 0, JSON.stringify(offGhost));
+  // Screenshots, held mid-fade.
+  await setLcd(true);
+  const ghostShot = async (name, move) => {
+    await card.evaluate(async (el, move) => {
+      const s = el._slides[el._index];
+      s.pet.getAnimations().forEach((a) => a.cancel());
+      s.ghostUntil = 0;
+      if (move) {
+        s.pet.classList.add("wander-r");
+      } else { // a frame swap, as in ghostRun
+        const realFrames = el._frames;
+        el._frames = () => [s.frames[0], s.frames.find((f) => f !== s.frames[0]) || s.frames[0]];
+        s.frame = 0;
+        el._show(s, s.pet, el._frames(s)[0]);
+        el._ticks = 1;
+        el._tick();
+        el._frames = realFrames;
+      }
+      await new Promise((r) => setTimeout(r, move ? 450 : 40));
+      s.screen.getAnimations({ subtree: true }).forEach((a) => a.pause());
+    }, move);
+    await shot(name);
+    await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.screen.getAnimations({ subtree: true }).forEach((a) => a.play());
+      s.pet.classList.remove("wander-r");
+    });
+    await page.waitForTimeout(1500);
+  };
+  await ghostShot("d2-ghost-trail", true);
+  await ghostShot("d2-ghost-frame", false);
+  await setLcd(false);
+  await page.setViewportSize({ width: 420, height: 860 });
+  await page.waitForTimeout(600);
+
+  // The backlight (1c): a button on each shell. Its 44 px target gets the taps,
+  // and without it they'd land on the shell: not the screen, a toy, the label or
+  // the request, and not past the slide's sides (the gap to the next device).
+  // The one exception is the compact egg, whose label plate leaves no room: its
+  // target overlaps the plate's end (decoration, not a control).
+  const reach = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const root = el.shadowRoot;
+    const b = s.backlight;
+    const box = b.getBoundingClientRect();
+    const slide = s.el.getBoundingClientRect();
+    const out = { size: [Math.round(box.width), Math.round(box.height)], self: 0, missed: 0, under: {},
+      inside: box.left >= slide.left - 0.5 && box.right <= slide.right + 0.5,
+      label: b.getAttribute("aria-label"), title: b.title };
+    const points = [];
+    for (let i = 4; i <= 40; i += 4) for (let j = 4; j <= 40; j += 4) points.push([box.left + i, box.top + j]);
+    for (const [x, y] of points) root.elementFromPoint(x, y) === b ? out.self++ : out.missed++;
+    b.style.pointerEvents = "none";
+    for (const [x, y] of points) {
+      const h = root.elementFromPoint(x, y);
+      const k = h?.closest(".screen") ? "screen" : h?.closest(".toy") ? "toy" : h?.closest(".label") ? "label" :
+        h?.closest(".request") ? "request" : h?.closest(".slide") === s.el || h?.closest(".viewport") ? "shell" : "other";
+      out.under[k] = (out.under[k] || 0) + 1;
+    }
+    b.style.pointerEvents = "";
+    return out;
+  });
+  // Service calls and the pet's own websocket messages, on the connection itself
+  // (the hass object is replaced at every state change).
+  const calls = () => card.evaluate((el) => {
+    el.__calls = [];
+    const conn = el._hass.connection;
+    if (!conn.__realSend) {
+      conn.__realSend = conn.sendMessagePromise;
+      conn.sendMessagePromise = function (msg, ...a) {
+        if (msg?.type === "call_service" || /^virtual_pet\//.test(msg?.type || "")) el.__calls?.push(msg.type);
+        return conn.__realSend.call(this, msg, ...a);
+      };
+    }
+  });
+  const glow = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { lit: s.screen.classList.contains("lit"),
+      opacity: Number(getComputedStyle(s.screen.querySelector(".glow")).opacity), calls: el.__calls,
+      lights: el._state(s, "switch.lights_out")?.state, asleep: s.asleep };
+  });
+  for (const width of [420, 330]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.waitForTimeout(600);
+    const bad = [];
+    let layout = null;
+    for (const key of worlds) {
+      layout = await inWorld(key);
+      const r = await reach();
+      const egg = layout.device.split(" ").includes("egg");
+      const clear = Object.keys(r.under).every((k) => k === "shell" || (k === "label" && egg && layout.compact));
+      if (r.size.join() !== "44,44" || r.missed || !r.inside || !clear || r.label !== "Backlight" || r.title !== "Light up the screen") {
+        bad.push({ key, ...r });
+      }
+    }
+    check(`the backlight button is reachable on all six shells at ${width} px, clear of the screen, toys and label`,
+      bad.length === 0, JSON.stringify({ layout, bad }));
+    // A tap at night lights the screen for 3 s; nothing is sent to Home Assistant.
+    await card.evaluate((el) => el._slides[el._index].screen.classList.add("night"));
+    await calls();
+    const lightsBefore = (await glow()).lights;
+    await cur().locator(".backlight").click();
+    await page.waitForTimeout(100);
+    const lit = await glow();
+    await page.waitForTimeout(3900);
+    const after = await glow();
+    check(`a backlight tap at ${width} px lights the screen, gone by 4 s, nothing sent`,
+      lit.lit && lit.opacity > 0.5 && !after.lit && after.opacity === 0 && after.calls.length === 0 &&
+      after.lights === lightsBefore, JSON.stringify({ lit, after }));
+  }
+  // Keyboard, a second tap, and the sleeping pet under the glow.
+  await cur().locator(".backlight").focus();
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(100);
+  const byKey = await glow();
+  await page.waitForTimeout(2000);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(2000);
+  const again = await glow();
+  await page.waitForTimeout(1700);
+  check("the backlight works from the keyboard, and a second tap starts the 3 s again",
+    byKey.lit && again.lit && !(await glow()).lit, JSON.stringify({ byKey, again }));
+  const asleepGlow = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const was = { asleep: s.asleep };
+    s.screen.classList.add("dim");
+    s.asleep = true;
+    const frame = s.pet.getAttribute("src");
+    el._backlight(s);
+    await new Promise((r) => setTimeout(r, 800)); // the scene's filter eases over .6 s
+    const out = { bg: getComputedStyle(s.bg).filter, asleep: s.asleep, frame: s.pet.getAttribute("src") === frame,
+      said: s.bubble.textContent };
+    Object.assign(s, was);
+    return out;
+  });
+  check("under the backlight a sleeping pet stays asleep and its scene brightens",
+    asleepGlow.asleep && /brightness\(0\.9\)/.test(asleepGlow.bg), JSON.stringify(asleepGlow));
+  await page.waitForTimeout(3100);
+  // Screenshots: lit at night on every shell, and by day; off with reduced motion.
+  for (const key of worlds) {
+    await inWorld(key);
+    await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.screen.classList.add("night");
+      el._backlight(s);
+    });
+    await page.waitForTimeout(150);
+    await shot(`d3-backlight-${key}`);
+  }
+  await inWorld(null);
+  await card.evaluate((el) => el._backlight(el._slides[el._index]));
+  await page.waitForTimeout(150);
+  await shot("d3-backlight-day");
+  await page.waitForTimeout(3800);
+  await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.screen.classList.add("dim");
+    el._backlight(s);
+  });
+  await page.waitForTimeout(800);
+  await shot("d3-backlight-asleep");
+  await card.evaluate((el) => el._redraw());
+  await page.waitForTimeout(3800);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await card.evaluate((el) => el._backlight(el._slides[el._index]));
+  await page.waitForTimeout(3050);
+  const calmOff = await glow();
+  check("with reduced motion the backlight goes straight off", !calmOff.lit && calmOff.opacity === 0, JSON.stringify(calmOff));
+  await shot("d3-backlight-reduced-motion-off");
+  await page.emulateMedia({ reducedMotion: null });
+  await card.evaluate((el) => {
+    const conn = el._hass.connection;
+    if (conn.__realSend) conn.sendMessagePromise = conn.__realSend;
+    delete conn.__realSend;
+    delete el.__calls;
+  });
+  await page.setViewportSize({ width: 420, height: 860 });
+  await page.waitForTimeout(600);
+
   const editor = await evaluate(async () => {
     const hass = document.querySelector("home-assistant").hass;
     const el = document.createElement("hatch-pet-card-editor");
@@ -3576,6 +4010,118 @@ async function main() {
   });
   check("card editor renders a form", editor.form && editor.rendered);
   check("card editor saves the picked pets", Array.isArray(editor.config?.devices), JSON.stringify(editor.config));
+
+  // 3a. The power-on boot screen, at two widths. A page of its own, flagged so the
+  // seeded "already booted" doesn't apply; Date.getHours and the oscillator count
+  // are stubbed per step.
+  for (const width of [420, 330]) {
+    const bp = await context.newPage();
+    await bp.setViewportSize({ width, height: 860 });
+    await bp.addInitScript(() => {
+      window.__osc = 0;
+      const start = window.OscillatorNode.prototype.start;
+      window.OscillatorNode.prototype.start = function (...a) { window.__osc++; return start.apply(this, a); };
+    });
+    const fresh = async (reduced = false) => {
+      await bp.emulateMedia({ reducedMotion: reduced ? "reduce" : null });
+      await bp.goto(`${HA}/pet-bench/pet`);
+      await bp.evaluate(() => {
+        sessionStorage.setItem("cc-boot-test", "1");
+        localStorage.removeItem("hatch-booted");
+        localStorage.setItem("hatch-sounds", "off");
+      });
+      await bp.reload();
+      await bp.waitForSelector("hatch-pet-card .slide .boot", { state: "visible", timeout: 60000 });
+      await bp.waitForTimeout(1000); // HA's loading logo clears the page a moment later
+    };
+    const visible = (sel) => bp.locator(sel).evaluateAll((els) => els.filter((e) => e.offsetParent && getComputedStyle(e).visibility !== "hidden").length);
+    const bootShots = path.join(OUT, `boot-${width}`);
+    const bshot = (name) => bp.locator("hatch-pet-card .slide:not(.away-slide) .device").screenshot({ path: `${bootShots}-${name}.png` });
+    const hours = (h) => bp.evaluate((h) => { Date.prototype.getHours = () => h; }, h);
+    const tap = () => bp.locator("hatch-pet-card .slide:not(.away-slide) .boot").click({ force: true });
+    const gone = async (ms) => { // no boot screen showing (polled: the card is in shadow DOM)
+      for (const end = Date.now() + ms; Date.now() < end;) {
+        if (await visible("hatch-pet-card .boot") === 0) return true;
+        await bp.waitForTimeout(50);
+      }
+      return false;
+    };
+
+    // Fresh storage: the boot screen on every slide, buttons hidden, no sound before the tap.
+    await fresh();
+    const total = await bp.locator("hatch-pet-card .slide").count();
+    check(`boot screen on every slide of a fresh browser (${width}px)`,
+      total >= 2 && await visible("hatch-pet-card .slide .boot") === total, `${await visible("hatch-pet-card .slide .boot")}/${total}`);
+    check(`boot screen shows the tap line and hides the buttons (${width}px)`,
+      (await bp.locator("hatch-pet-card .slide:not(.away-slide) .boot").innerText()).includes("▶ tap to start") &&
+      await visible("hatch-pet-card .slide:not(.away-slide) .toy") === 0);
+    check(`boot screen starts no sound before the tap (${width}px)`, await bp.evaluate(() => window.__osc) === 0);
+    await bp.locator("hatch-pet-card").evaluate((el) => { // count the pet speaking up
+      el.__greets = 0;
+      const greet = el._greet;
+      el._greet = function (...a) { el.__greets++; return greet.apply(this, a); };
+    });
+    await bp.waitForTimeout(2000);
+    check(`boot screen holds the speaking back (${width}px)`,
+      await bp.locator("hatch-pet-card").evaluate((el) => el.__greets === 0));
+    // A private moment from the channel waits for the boot too, then is said once.
+    const heldBack = await bp.locator("hatch-pet-card").evaluate((el) => {
+      el.__moments = [];
+      const moment = el._moment;
+      el._moment = function (s, m) { el.__moments.push(m.type); return moment.call(this, s, m); };
+      el._channel(el._slides[el._index], { moment: { type: "friend_home", at: new Date().toISOString() } }, el._hass.user.id);
+      return el.__moments.length;
+    });
+    check(`boot screen holds a private moment back (${width}px)`, heldBack === 0, `${heldBack} said`);
+    await bshot("day");
+    // The tap: sounds on at 10:00 plays the beep, the pet shows, the status stays shut.
+    await hours(10);
+    await bp.evaluate(() => localStorage.setItem("hatch-sounds", "on"));
+    await bp.locator("hatch-pet-card").evaluate((el) => Object.assign(el._slides[el._index], { asleep: false, lightsOut: false }));
+    await tap();
+    await bp.waitForTimeout(250);
+    await bshot("filling");
+    check(`boot tap at 10:00 with sounds on plays the power-on beep (${width}px)`, await bp.evaluate(() => window.__osc) >= 3);
+    const wentAway = await gone(3000);
+    const toys = await visible("hatch-pet-card .slide:not(.away-slide) .toy");
+    const statusShut = await bp.locator("hatch-pet-card .slide:not(.away-slide) .screen.show-status").count() === 0;
+    check(`boot tap shows the pet and leaves the status shut (${width}px)`,
+      wentAway && toys > 0 && statusShut, `gone ${wentAway}, buttons ${toys}, status shut ${statusShut}`);
+    await bp.waitForTimeout(2500);
+    check(`the first look runs after the boot (${width}px)`,
+      await bp.locator("hatch-pet-card").evaluate((el) => el.__greets > 0));
+    const saidAfter = await bp.locator("hatch-pet-card").evaluate((el) => el.__moments.join(","));
+    check(`the held private moment is said once after the boot (${width}px)`, saidAfter === "friend_home", saidAfter);
+    // A second load: no boot screen.
+    await bp.reload();
+    await bp.waitForSelector("hatch-pet-card .slide", { timeout: 60000 });
+    await bp.waitForTimeout(1500);
+    check(`a second load shows no boot screen (${width}px)`, await visible("hatch-pet-card .slide .boot") === 0);
+    // Nobody taps: the pet shows by itself in about 5 s, silently.
+    await fresh();
+    const t0 = Date.now() - 1000; // fresh() settled for a second after the screen showed
+    const auto = await gone(6000);
+    check(`boot with no tap finishes by itself in 6 s, silently (${width}px)`,
+      auto && Date.now() - t0 < 6000 && await bp.evaluate(() => window.__osc) === 0, `${Date.now() - t0} ms`);
+    // Sounds on at 22:00: the tap works, the beep stays quiet.
+    await fresh();
+    await hours(22);
+    await bp.evaluate(() => localStorage.setItem("hatch-sounds", "on"));
+    await tap();
+    check(`boot tap at 22:00 plays nothing (${width}px)`, await gone(3000) && await bp.evaluate(() => window.__osc) === 0);
+    // Reduced motion: no fill, straight to the pet.
+    await fresh(true);
+    await bp.waitForTimeout(1000);
+    await bshot("reduced");
+    await tap();
+    check(`boot tap under reduced motion goes straight to the pet (${width}px)`, await gone(300));
+    await bp.evaluate(() => {
+      sessionStorage.removeItem("cc-boot-test");
+      localStorage.setItem("hatch-sounds", "off");
+    });
+    await bp.emulateMedia({ reducedMotion: null });
+    await bp.close();
+  }
 
   check("no errors in the browser console", errors.length === 0, errors.slice(0, 3).join(" | "));
 

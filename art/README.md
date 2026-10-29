@@ -173,3 +173,16 @@ needs new drawings is listed in `art/redraw-2026-10-28.md`.
 every world to five. How they're made, the checklist for each set and what the probes
 taught us are in `docs/design-worlds.md` ("The 2026-10-28 creatures"). Probe sheets
 are in `art/<id>/<id>_probe.png`.
+
+## Shared action and weather effects
+
+Creature-agnostic four-frame reaction, care-action, flair and weather loops are in
+[`effects/`](effects/README.md). They are draft assets kept separate from the live
+frontend; the preview and atlas cutter are included there.
+
+## World visitors
+
+Small creature-agnostic visitor sprites for all six worlds are in
+[`visitors/`](visitors/README.md): four visitors per world, each with idle, two
+movement and interaction frames. They are draft art and are not installed in the
+frontend.

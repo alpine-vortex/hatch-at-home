@@ -98,8 +98,31 @@ const CHIRPS = { // [frequency Hz, length s] notes, played one after another
   spooky: [[660, 0.12], [622, 0.12], [587, 0.12], [523, 0.26]],
   harvest: [[523, 0.1], [659, 0.1], [784, 0.1], [659, 0.1], [784, 0.22]],
   birthday: [[523, 0.12], [523, 0.1], [587, 0.22], [523, 0.22], [698, 0.22], [659, 0.4]],
+  click: [[1760, 0.04]], // the backlight
+  boot: [[523, 0.08], [784, 0.08], [1047, 0.2]],
 };
 let audio = null; // one AudioContext for every card on the page
+
+// Power-on: the first time this browser shows the card (and again after a card
+// update that bumps BOOT_VERSION, only when a release should "power on"), the
+// screens show a boot screen that waits for a tap. The tap unlocks the sound.
+const BOOT_KEY = "hatch-booted";
+const BOOT_VERSION = "1";
+const BOOT_WAIT_MS = 5000; // nobody taps (a wall tablet): it finishes by itself, silently
+const BOOT_FILL_MS = 600; // the logo fills in, then the screen cuts to the pet
+
+// True once per page load, and only if this browser hasn't booted this version.
+function claimBoot() {
+  if (claimBoot.done) return false;
+  claimBoot.done = true;
+  try {
+    if (localStorage.getItem(BOOT_KEY) === BOOT_VERSION) return false;
+    localStorage.setItem(BOOT_KEY, BOOT_VERSION);
+  } catch (err) {
+    // no storage: it shows once per page load
+  }
+  return true;
+}
 
 // Voices (species.json "voice"): now and then a line opens with the creature's
 // sound ("tweet! hi, Sam!"), never twice within VOICE_QUIET_MS, so a burst of
@@ -165,6 +188,17 @@ function babble(text, voice) {
     t += step;
   }
   return oscs;
+}
+
+// Screen effects (the LCD grid, ghosting): on unless turned off for this browser.
+const LCD_KEY = "hatch-lcd";
+
+function lcdOn() {
+  try {
+    return localStorage.getItem(LCD_KEY) !== "off";
+  } catch (err) {
+    return true;
+  }
 }
 
 function soundsOn() {
@@ -794,6 +828,7 @@ function graphemes(text) {
 const degrees = (n) => (Number.isFinite(n) ? `${n}°`.replace("-", "−") : "");
 // How long the happy bounce lasts when the pet gets excited.
 const BOUNCE_MS = 10000;
+const BACKLIGHT_MS = 3000; // a tap on the shell's backlight button lights the screen this long
 const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
 
 // The same bands as rates.py (WEIGHT_LIGHT_BELOW, WEIGHT_HEAVY_ABOVE).
@@ -1067,6 +1102,75 @@ const STYLE = `
     box-shadow: inset 0 -9px 0 var(--d-dark), inset 0 5px 0 rgba(255,255,255,.28), 0 16px 34px rgba(20,15,5,.32);
     display: flex; flex-direction: column; align-items: center; gap: 12px; }
   .body { position: relative; }
+  /* Shell finishes skin the molded plastic around the bezel. They deliberately
+     leave .bezel and .screen geometry alone: the screen is a fixed opening. */
+  .finish-woodland .body {
+    background-color: var(--d-shell);
+    background-image: radial-gradient(ellipse at 50% 4%, rgba(255,249,220,.46), transparent 34%),
+      linear-gradient(112deg, rgba(255,255,255,.18), transparent 22% 72%, rgba(112,42,13,.12)),
+      linear-gradient(180deg, #f49a55 0%, var(--d-shell) 48%, #d76a35 100%);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.7), inset 0 -9px 0 rgba(111,43,18,.32),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-woodland .bezel { box-shadow: inset 0 3px 0 rgba(255,255,255,.48),
+    inset 0 -3px 0 rgba(96,48,25,.12), 0 2px 0 rgba(117,63,34,.16); }
+  .finish-aqua .body {
+    background-color: var(--d-shell);
+    background-image: radial-gradient(ellipse at 50% 3%, rgba(255,255,255,.82), transparent 31%),
+      linear-gradient(108deg, rgba(255,255,255,.26), transparent 25% 68%, rgba(0,68,83,.16)),
+      linear-gradient(180deg, #80e3df 0%, #36b9c2 48%, #168d9c 100%);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.78), inset 0 -9px 0 rgba(0,73,82,.32),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-aqua .bezel { box-shadow: inset 0 3px 0 rgba(255,255,255,.72),
+    inset 0 -3px 0 rgba(17,95,104,.16), 0 2px 0 rgba(17,95,104,.2); }
+  .finish-aqua .toy:nth-child(4n + 1) .cap { background: #ffd9dc; }
+  .finish-aqua .toy:nth-child(4n + 2) .cap { background: #fff0b7; }
+  .finish-aqua .toy:nth-child(4n + 3) .cap { background: #dcd4ff; }
+  .finish-aqua .toy:nth-child(4n) .cap { background: #c8f1d8; }
+  .finish-grove .body {
+    background-color: var(--d-shell);
+    background-image: radial-gradient(circle at 12% 23%, rgba(255,236,143,.78) 0 3px, transparent 4px),
+      radial-gradient(circle at 88% 37%, rgba(255,236,143,.68) 0 3px, transparent 4px),
+      radial-gradient(circle at 16% 73%, rgba(255,236,143,.58) 0 2px, transparent 3px),
+      radial-gradient(circle at 84% 81%, rgba(255,236,143,.58) 0 2px, transparent 3px),
+      linear-gradient(135deg, rgba(255,255,255,.42), transparent 43%),
+      linear-gradient(160deg, #a9df68, #74bd62 58%, #4e965c);
+    box-shadow: inset 0 0 0 4px rgba(235,255,164,.36), inset 0 -9px 0 rgba(45,102,56,.35),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-grove .toy .cap { background: #fff0a8; }
+  .finish-grove .toy:nth-child(3n + 2) .cap { background: #ffd1b5; }
+  .finish-celestial .body {
+    background-color: var(--d-shell);
+    background-image: radial-gradient(circle at 13% 16%, #fff4bb 0 2px, transparent 3px),
+      radial-gradient(circle at 87% 24%, #fff4bb 0 2px, transparent 3px),
+      radial-gradient(circle at 9% 66%, rgba(255,255,255,.88) 0 1.5px, transparent 2.5px),
+      radial-gradient(circle at 91% 75%, rgba(255,255,255,.82) 0 1.5px, transparent 2.5px),
+      radial-gradient(ellipse at 50% 4%, rgba(255,255,255,.28), transparent 34%),
+      linear-gradient(145deg, #777be0, #6255bb 55%, #413c91);
+    box-shadow: inset 0 0 0 4px rgba(213,206,255,.28), inset 0 -9px 0 rgba(36,32,92,.4),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-celestial .toy .cap { background: #f4d7fa; }
+  .finish-celestial .toy:nth-child(3n + 2) .cap { background: #d4e7ff; }
+  .finish-dune .body {
+    background-color: var(--d-shell);
+    background-image: radial-gradient(ellipse at 50% 4%, rgba(255,246,214,.7), transparent 33%),
+      radial-gradient(circle at 10% 82%, rgba(150,104,52,.16) 0 2px, transparent 3px),
+      radial-gradient(circle at 90% 70%, rgba(150,104,52,.14) 0 2px, transparent 3px),
+      linear-gradient(112deg, rgba(255,255,255,.26), transparent 24% 70%, rgba(120,78,30,.14)),
+      linear-gradient(180deg, #ecc88f 0%, var(--d-shell) 50%, #c39257 100%);
+    box-shadow: inset 0 2px 0 rgba(255,250,228,.8), inset 0 -9px 0 rgba(112,72,28,.32),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-dune .bezel { box-shadow: inset 0 3px 0 rgba(255,244,214,.38),
+    inset 0 -3px 0 rgba(40,26,12,.2), 0 2px 0 rgba(112,72,28,.2); }
+  .finish-dune .toy .cap { background: #fbefd0; }
+  .finish-dune .toy:nth-child(3n + 2) .cap { background: #f3d6a6; }
+  /* A finish only tints idle buttons: the lit/asleep (.on) and wanted states keep their own look. */
+  .device[class*="finish-"] .toy.wanted .cap { background: #ffe9a8; }
+  .device[class*="finish-"] .toy.on .cap { background: #3a2a1a; color: #ffe9a8; }
   /* Sol's trim (worlds.json "trim"), drawn at each piece's own size (see _trim) and
      placed to suit each shell: over the top edge, on the plate, at the bottom corners. */
   .trim-top, .trim-top2, .trim-corner { position: absolute; pointer-events: none;
@@ -1272,7 +1376,7 @@ const STYLE = `
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
-  .screen.show-status .flash, .screen.show-status .speck,
+  .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
   .screen.show-status .bondhearts { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
@@ -1301,6 +1405,71 @@ const STYLE = `
     background: #fff; opacity: 0; }
   .screen.stormy .flash { display: block; animation: lightning 9s linear infinite; }
   @keyframes lightning { 0%, 89%, 92%, 95%, 100% { opacity: 0; } 90% { opacity: .75; } 94% { opacity: .5; } }
+  /* The LCD: a faint dot-matrix grid over the scene, one cell per creature art
+     pixel (see _lcdPitch), under the weather, the bubble, the game and the status. */
+  .lcd { position: absolute; inset: 0; pointer-events: none; display: none;
+    background-color: rgba(255,228,170,.035);
+    background-image:
+      repeating-linear-gradient(0deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px)),
+      repeating-linear-gradient(90deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px));
+    background-position: var(--lcd-x, 0) var(--lcd-y, 0); }
+  ha-card.lcd-on .lcd { display: block; }
+  /* Ghosting (_ghostFrame, _ghostTrail): the pet's geometry, not its class. */
+  .ghost { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%;
+    opacity: 0; display: none; transition: translate .25s ease-out .12s; }
+  ha-card.lcd-on .ghost { display: block; }
+  .ghost.wander-l { translate: -16% 0; transition-duration: .9s; }
+  .ghost.wander-r { translate: 16% 0; transition-duration: .9s; }
+  .ghost.go-left { translate: -60% 0; }
+  .ghost.go-right { translate: 60% 0; }
+  .screen.dim .ghost { filter: brightness(.8); }
+  /* The backlight (_backlight): an Indiglo glow over the scene, under the bubble.
+     It comes on at once and fades out; the dimmed scene brightens under it. */
+  .glow { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen;
+    background: radial-gradient(ellipse at 50% 55%, #4fe3c1 0%, rgba(79,227,193,.8) 45%, rgba(79,227,193,.35) 100%);
+    transition: opacity .6s ease-out; }
+  .screen.lit .glow { opacity: .55; transition: none; }
+  /* By day a real backlight barely shows: a faint lift, not a mint wash. */
+  .screen.lit:not(.night):not(.dim):not(.faded) .glow { opacity: .14; }
+  .screen.lit:not(.night):not(.dim):not(.faded):not(.raining) .bg { filter: brightness(1.07); }
+  .screen.lit.dim .bg, .screen.lit.faded .bg { filter: brightness(.9) saturate(.75); }
+  .screen.lit.dim .pet, .screen.lit.dim .ghost { filter: brightness(.9); }
+  /* Its button: a 44 px target, transparent, around a small part of the shell drawn
+     in the shell's own colours (::before). Each spot keeps the target clear of the
+     screen, the buttons and the label, and inside the slide. */
+  .backlight { position: absolute; z-index: 1; width: 44px; height: 44px; padding: 0; border: none;
+    border-radius: 8px; background: none; cursor: pointer; }
+  .backlight::before { content: ""; position: absolute; left: 50%; top: 50%; width: 10px; height: 10px;
+    translate: -50% -50%; border-radius: 50%; background: var(--d-dark);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.3), 0 2px 0 rgba(0,0,0,.25); }
+  .backlight:active::before { translate: -50% calc(-50% + 1px); }
+  .device:has(.screen.lit) .backlight::before { background: #4fe3c1; box-shadow: 0 0 6px 1px rgba(79,227,193,.8); }
+  /* Egg: a nub on the shoulder, just above the screen's right corner. */
+  .egg .backlight { right: -18px; top: -34px; }
+  .egg .backlight::before { width: 10px; height: 18px; border-radius: 5px; left: 60%; top: 62%; }
+  .compact .egg .backlight { right: -14px; }
+  /* Tank: the lid's right grip, a little raised. */
+  .lid .backlight { left: calc(62% + 6px - 22px); top: -4px; }
+  .lid .backlight::before { top: 14px; width: 30px; max-width: 70%; height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,.32); box-shadow: 0 1px 0 rgba(0,0,0,.3); }
+  .lid:has(.backlight) span:nth-of-type(3) { visibility: hidden; }
+  /* House: a little lamp on the chimney (over the roof's triangle). */
+  .roof .backlight { right: calc(20% - 11px); top: 0; }
+  .roof .backlight::before { width: 12px; height: 12px; top: 22px; background: #ffe9a8;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.2), 0 0 0 2px rgba(0,0,0,.22); }
+  /* Porthole: the top-right rivet, bigger and raised. */
+  .porthole .backlight { left: calc(91.2% - 8px); top: calc(11% - 31px); }
+  .porthole .backlight::before { left: 3px; top: 36px; }
+  /* Pad: a dewdrop on the upper right rim. */
+  .pad .backlight { right: 18%; top: 4px; }
+  .pad .backlight::before { width: 10px; height: 12px; border-radius: 50% 50% 50% 50% / 60% 60% 42% 42%;
+    background: radial-gradient(circle at 35% 30%, #fff 0 18%, rgba(214,244,255,.9) 30%, rgba(120,190,220,.75));
+    box-shadow: 0 1px 0 rgba(0,0,0,.22); }
+  /* Moon: a star on the crescent (turned upright again). */
+  .crescent .backlight { left: 0; top: 10px; rotate: 20deg; }
+  .crescent .backlight::before { width: 14px; height: 14px; border-radius: 0; background: #fff4bb; box-shadow: none;
+    clip-path: polygon(50% 0, 63% 35%, 100% 38%, 71% 60%, 82% 100%, 50% 77%, 18% 100%, 29% 60%, 0 38%, 37% 35%); }
+  @media (prefers-contrast: more) { ha-card.lcd-on .lcd, ha-card.lcd-on .ghost { display: none; } }
   /* Idle life. */
   .pet { transition: translate .25s ease-out, rotate .2s ease-out; }
   .pet.look { rotate: y 180deg; }
@@ -1338,6 +1507,22 @@ const STYLE = `
     display: none; flex-direction: column; gap: 4px; font-size: 13px; overflow: auto; }
   .screen.show-status .status { display: flex; }
   .screen.show-status .bubble { display: none; }
+  /* Power-on: a plain pale-green LCD with the logo, over everything on the screen. */
+  .boot { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; margin: 0; padding: 0; border: 0;
+    border-radius: inherit; cursor: pointer; font: 400 14px 'Tiny5', monospace; color: #2f3a24;
+    background: linear-gradient(rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px,
+      linear-gradient(90deg, rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px, #c6d4a0; }
+  .boot[hidden] { display: none; }
+  .booting .buttons, .booting .request { visibility: hidden; }
+  .boot .logo { position: relative; font-size: 46px; line-height: 1; letter-spacing: 2px; }
+  .boot .logo span { display: block; text-shadow: 2px 2px 0 rgba(47,58,36,.35); }
+  .boot .logo .ink { color: #9aaa72; }
+  .boot .logo .fill { position: absolute; inset: 0; color: #2f3a24; clip-path: inset(0 100% 0 0);
+    transition: clip-path ${BOOT_FILL_MS}ms steps(8); }
+  .boot.filling .logo .fill { clip-path: inset(0); }
+  .boot .go { animation: bootblink 1.2s steps(1) infinite; }
+  @keyframes bootblink { 50% { opacity: 0; } }
   /* The pet's request waits while the status screen or a game is up (it covered them). */
   .screen.show-status + .request, .screen:has(> .game:not([hidden])) + .request { display: none !important; }
   /* With a game up, the bubble leaves room for its close button. */
@@ -1728,10 +1913,10 @@ class HatchPetCard extends HTMLElement {
           if (!s.mediaSeen) s.mediaSeen = new Set();
           if (!s.mediaSeen.has(m.at)) {
             s.mediaSeen.add(m.at);
-            if (fresh) this._moment(s, m);
+            if (fresh) this._channelMoment(s, m);
           }
         } else if (this._keepMoment(s, m) && fresh) {
-          this._moment(s, m);
+          this._channelMoment(s, m);
         }
       }
       if (!("mine" in msg) && !("house" in msg)) return; // a moment draws nothing
@@ -1742,6 +1927,13 @@ class HatchPetCard extends HTMLElement {
     }
     s.statusHtml = null;
     this._redraw(s);
+  }
+
+  // A channel moment is said now, or after the boot screen (only the speaking
+  // waits, as _greet does).
+  _channelMoment(s, m) {
+    if (this._booting) (s.bootMoments ||= []).push(m);
+    else this._moment(s, m);
   }
 
   // A private moment, kept for the first look (newest first): false if it was
@@ -1834,6 +2026,7 @@ class HatchPetCard extends HTMLElement {
         </div>
       </ha-card>`;
     this._card = root.querySelector("ha-card");
+    this._card.classList.toggle("lcd-on", lcdOn());
     this._viewport = root.querySelector(".viewport");
     this._track = root.querySelector(".track");
     this._dots = root.querySelector(".dots");
@@ -1906,12 +2099,15 @@ class HatchPetCard extends HTMLElement {
             <div class="season"></div>
             <img class="poop p0" alt="mess"><img class="poop p1" alt="mess"><img class="poop p2" alt="mess">
             <img class="perch" alt="">
+            <img class="ghost" alt="">
             <img class="pet" alt="">
             <img class="prop" alt="">
             <img class="murk" alt="">
             <div class="rain"></div>
             <div class="flash"></div>
             <div class="breeze"><span></span><span></span><span></span></div>
+            <div class="lcd"></div>
+            <div class="glow"></div>
             <img class="attention" alt="wants attention">
             <div class="bubble"></div>
             <div class="sr" role="status"></div>
@@ -1926,6 +2122,7 @@ class HatchPetCard extends HTMLElement {
               <button class="gx" aria-label="Stop the game">✕</button>
             </div>
             <div class="status"></div>
+            <button class="boot" hidden><span class="logo"><span class="ink">HATCH</span><span class="fill" aria-hidden="true">HATCH</span></span><span class="go">▶ tap to start</span></button>
           </div><button class="request"></button></div>
           <div class="buttons"></div>
           <img class="trim-corner left" alt=""><img class="trim-corner right" alt="">
@@ -1936,12 +2133,27 @@ class HatchPetCard extends HTMLElement {
     const s = {
       el: slide, device: q(".device"), label: q(".label"), screen: q(".screen"), bg: q(".bg"),
       awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), pet: q(".pet"), prop: q(".prop"),
-      perch: q(".perch"),
+      perch: q(".perch"), ghost: q(".ghost"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
       catchEl: q(".gcatch"), live: q(".sr[role=status]"), seasonBox: q(".season"),
     };
+    // The LCD grid: one cell per creature art pixel, measured on the screen itself
+    // (its width depends on the shell's padding as well as the slide's).
+    s.lcdSize = new ResizeObserver(() => this._lcdPitch(s));
+    s.lcdSize.observe(s.screen);
+    // The backlight: a real button on the shell (each shape has its spot, see
+    // _renderSlide). Card only: it lights the screen and nothing else.
+    s.backlight = document.createElement("button");
+    s.backlight.className = "backlight";
+    s.backlight.setAttribute("aria-label", "Backlight");
+    s.backlight.title = "Light up the screen";
+    s.backlight.addEventListener("click", (e) => {
+      if (s !== this._slides[this._index]) return; // a neighbour's: the tap brings it forward
+      e.stopPropagation();
+      this._backlight(s);
+    });
     slide.querySelectorAll("img").forEach((img) => img.addEventListener("error", () => {
       const src = img.getAttribute("src");
       if (src && !WARNED.has(src)) {
@@ -1949,11 +2161,17 @@ class HatchPetCard extends HTMLElement {
         console.warn("hatch-pet-card: missing sprite", src);
       }
     }));
-    // The perch moves where the pet moves (wandering, the game) and grows with it.
+    // The perch moves where the pet moves (wandering, the game) and grows with it;
+    // so does the ghost, a beat behind (see _ghostTrail).
     const PERCH_MOVES = ["wander-l", "wander-r", "go-left", "go-right"];
     new MutationObserver(() => {
-      for (const c of PERCH_MOVES) s.perch.classList.toggle(c, s.pet.classList.contains(c));
-      s.perch.style.scale = s.pet.style.scale;
+      const moved = PERCH_MOVES.some((c) => s.ghost.classList.contains(c) !== s.pet.classList.contains(c));
+      for (const c of PERCH_MOVES) {
+        s.perch.classList.toggle(c, s.pet.classList.contains(c));
+        s.ghost.classList.toggle(c, s.pet.classList.contains(c));
+      }
+      s.perch.style.scale = s.ghost.style.scale = s.pet.style.scale;
+      if (moved) this._ghostTrail(s);
     }).observe(s.pet, { attributes: true, attributeFilter: ["class", "style"] });
     // What the pet says to someone (a refusal, a game's result, a moment) is read
     // out by screen readers; its idle chatter isn't. Only the pet on show.
@@ -1989,6 +2207,13 @@ class HatchPetCard extends HTMLElement {
       if (key === "lay_egg" && !this._confirmed(s, key, s.request, () => this._redraw(s))) return;
       this._press(s, key);
     });
+    // The boot screen takes the tap (a button, so a key works too) and nothing under it.
+    s.boot = q(".boot");
+    s.boot.hidden = !this._booting;
+    s.boot.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._bootEnd(true);
+    });
     // A tap on the screen is a shortcut for the Status button; it holds buttons of its
     // own (the game, the bell, the journal), so it isn't a button itself.
     s.screen.addEventListener("click", () => {
@@ -2021,6 +2246,53 @@ class HatchPetCard extends HTMLElement {
     s.buttons.lights = lights;
     this._track.append(slide);
     return s;
+  }
+
+  // --- Power-on --------------------------------------------------------------
+
+  _bootStart() {
+    this._booting = true;
+    this._card.classList.add("booting");
+    this._slides.forEach((x) => { x.boot.hidden = false; });
+    this._bootTimer = setTimeout(() => this._bootEnd(false), BOOT_WAIT_MS);
+  }
+
+  // A tap ends it with the beep (if this browser has sounds on and the pet may
+  // make one); no tap for BOOT_WAIT_MS ends it silently. The logo fills in, then
+  // the screen cuts to the pet.
+  _bootEnd(tapped) {
+    if (!this._booting || this._bootEnding) return;
+    this._bootEnding = true;
+    clearTimeout(this._bootTimer);
+    if (tapped) {
+      try {
+        unlockAudio();
+      } catch (err) {
+        // no WebAudio
+      }
+      this._chirp(this._slides[this._index], "boot");
+    }
+    const finish = () => {
+      this._booting = false;
+      this._bootEnding = false;
+      this._card.classList.remove("booting");
+      this._slides.forEach((x) => {
+        x.boot.hidden = true;
+        x.boot.classList.remove("filling");
+      });
+      // The channel's moments that came in meanwhile, said now.
+      this._slides.forEach((x) => {
+        const held = x.bootMoments || [];
+        x.bootMoments = [];
+        held.forEach((m) => this._moment(x, m));
+      });
+    };
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      finish();
+      return;
+    }
+    this._slides.forEach((x) => x.boot.classList.add("filling"));
+    setTimeout(finish, BOOT_FILL_MS);
   }
 
   // --- Updating --------------------------------------------------------------
@@ -2064,6 +2336,10 @@ class HatchPetCard extends HTMLElement {
     }
     while (this._slides.length < devices.length) this._slides.push(this._buildSlide());
     while (this._slides.length > devices.length) this._dropSlide(this._slides.pop());
+    if (!this._bootChecked) {
+      this._bootChecked = true;
+      if (claimBoot()) this._bootStart();
+    }
     this._index = Math.min(this._index, devices.length - 1);
 
     for (let i = 0; i < devices.length; i++) {
@@ -2119,6 +2395,7 @@ class HatchPetCard extends HTMLElement {
     this._forget(s); // its game, timers, photos and dialog go with it
     s.unsub?.();
     s.unsub = null;
+    s.lcdSize?.disconnect();
     s.el.remove();
   }
 
@@ -2147,6 +2424,8 @@ class HatchPetCard extends HTMLElement {
     // Its other timers, and what each would have tidied away.
     clearTimeout(s.breezeTimer);
     s.screen?.classList.remove("breezy");
+    clearTimeout(s.litTimer);
+    s.screen?.classList.remove("lit");
     clearTimeout(s.flairTimer);
     s.screen?.querySelector(".flair")?.remove();
     clearTimeout(s.statusMessageTimer);
@@ -2169,6 +2448,7 @@ class HatchPetCard extends HTMLElement {
     s.privateSeen = new Set();
     s.mediaSeen = new Set();
     s.privateMoments = [];
+    s.bootMoments = [];
     s.retries = 0;
     s.gone = false;
   }
@@ -2192,6 +2472,7 @@ class HatchPetCard extends HTMLElement {
       slide.statusHtml = null;
       slide.drawnSig = null;
       slide.mine = null; // and the channel asked again, as a shared screen
+      slide.bootMoments = []; // a held moment may be personal
       this._subscribe(slide, true);
     }
     this._redraw();
@@ -2252,6 +2533,24 @@ class HatchPetCard extends HTMLElement {
     }
     for (const s of this._slides) s.el.style.width = `${this._slideW}px`;
     this._renderShelf();
+  }
+
+  // The pet is 62% of the screen high and square, so 46.5% of it wide, and 64 art
+  // pixels across. Where a cell would be under 3 device pixels the grid moirés,
+  // so it takes one cell per 2 × 2 art pixels there. Lines line up with the pet's.
+  _lcdPitch(s) {
+    const w = s.screen.clientWidth;
+    if (!w) return;
+    const dpr = window.devicePixelRatio || 1;
+    let pitch = (w * 0.465) / 64;
+    if (pitch * dpr < 3) pitch = Math.max(3, Math.round(pitch * 2 * dpr)) / dpr; // whole device pixels
+    const line = Math.max(1, Math.round(pitch * dpr * 0.25)) / dpr;
+    const left = w * (0.5 - 0.2325);
+    const top = w * 0.75 * (1 - 0.04 - 0.62);
+    s.screen.style.setProperty("--lcd-pitch", `${pitch}px`);
+    s.screen.style.setProperty("--lcd-line", `${line}px`);
+    s.screen.style.setProperty("--lcd-x", `${left % pitch}px`);
+    s.screen.style.setProperty("--lcd-y", `${top % pitch}px`);
   }
 
   _renderShelf() {
@@ -2370,12 +2669,22 @@ class HatchPetCard extends HTMLElement {
     const color = shell.color || "#e8834a";
     const dev = s.device;
     const shape = ["tank", "house", "porthole", "pad", "moon"].includes(shell.shape) ? shell.shape : "egg";
-    dev.className = `device ${shape}`;
+    const finish = ["woodland", "aqua", "grove", "celestial", "dune"].includes(shell.finish)
+      ? `finish-${shell.finish}` : "";
+    dev.className = `device ${shape}${finish ? ` ${finish}` : ""}`;
     dev.querySelector(".roof").style.display = shape === "house" ? "" : "none";
     dev.querySelector(".crescent").style.display = shape === "moon" ? "" : "none";
     dev.querySelector(".loop").style.display = shape === "egg" ? "" : "none";
     dev.querySelector(".lid").style.display = shape === "tank" ? "" : "none";
     dev.querySelector(".feet").style.display = shape === "tank" ? "" : "none";
+    // The backlight's spot: a nub by the egg's screen, the tank lid's right grip, a
+    // lamp on the chimney, a rivet, a dewdrop on the pad's rim, a star on the moon.
+    const spot = { egg: ".bezel", tank: ".lid", house: ".roof", porthole: ".bezel", pad: ".body", moon: ".crescent" };
+    const holder = dev.querySelector(spot[shape]);
+    if (s.backlight.parentElement !== holder) {
+      if (shape === "tank") holder.insertBefore(s.backlight, holder.lastElementChild);
+      else holder.append(s.backlight);
+    }
     dev.style.setProperty("--d-shell", color);
     dev.style.setProperty("--d-dark", shade(color, 0.72));
     dev.style.setProperty("--d-ink", deviceInk(color));
@@ -2607,8 +2916,10 @@ class HatchPetCard extends HTMLElement {
       const frames = this._frames(s);
       const seen = Math.abs(i - this._index) <= 1; // the pet on show and the peeking ones
       if (seen && frames.length && !(s.asleep && this._ticks % 2)) {
+        const was = s.pet.getAttribute("src");
         s.frame = (s.frame + 1) % frames.length;
         this._show(s, s.pet, frames[s.frame]);
+        if (was && was !== s.pet.getAttribute("src")) this._ghostFrame(s, was);
       }
       if (s.propUntil && Date.now() > s.propUntil) {
         this._show(s, s.prop, null);
@@ -2616,11 +2927,13 @@ class HatchPetCard extends HTMLElement {
       }
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
       if (s === this._slides[this._index]) {
-        this._greet(s);
+        if (!this._booting) this._greet(s); // the boot screen waits: only the speaking does
         this._firstLook(s); // before the visit: it tells the server what's queued
         this._visit(s);
-        this._sayQueued(s);
-        this._wishMention(s);
+        if (!this._booting) {
+          this._sayQueued(s);
+          this._wishMention(s);
+        }
         this._seen(s);
         this._idle(s);
         this._flairTick(s);
@@ -2633,6 +2946,50 @@ class HatchPetCard extends HTMLElement {
         if (s.bubble.textContent !== text) this._write(s, text);
       }
     });
+  }
+
+  // Ghosting: a slow LCD leaves a fading trace where the pet was. Only the pet on
+  // show, with screen effects on, never with reduced motion or more contrast, and
+  // never in Catch (a reflex game needs a clean pet). The fades are Web Animations,
+  // which the reduced-motion CSS rule doesn't reach: hence the checks here.
+  _ghosting(s) {
+    const media = (q) => window.matchMedia?.(q).matches;
+    return s === this._slides[this._index] && this._visible && !document.hidden &&
+      this._card.classList.contains("lcd-on") && s.pet.style.display !== "none" &&
+      s.game?.kind !== "catch" && !media("(prefers-reduced-motion: reduce)") &&
+      !media("(prefers-contrast: more)");
+  }
+
+  // A frame swap: the old frame fades from 35% to nothing. Not while the pet is
+  // turned or mid-animation (a hop, a sway, a move), where the trace would sit
+  // where the pet isn't.
+  _ghostFrame(s, src) {
+    if (!this._ghosting(s) || s.pet.classList.contains("look") || s.pet.getAnimations().length ||
+      s.ghostUntil > Date.now()) return;
+    s.ghost.setAttribute("src", src);
+    s.ghost.animate([{ opacity: 0.35 }, { opacity: 0 }], { duration: 180, easing: "linear" });
+  }
+
+  // A wander or a game move: the ghost follows the pet 120 ms behind (its CSS
+  // transition-delay), at 30%, leaving a short smear that catches up.
+  _ghostTrail(s) {
+    s.ghost.getAnimations().forEach((a) => a.cancel());
+    if (!this._ghosting(s)) return;
+    const move = parseFloat(getComputedStyle(s.pet).transitionDuration) * 1000 || 250;
+    const duration = move + 120 + 180;
+    s.ghost.setAttribute("src", s.pet.getAttribute("src"));
+    s.ghost.animate([{ opacity: 0.3 }, { opacity: 0.3, offset: (move + 120) / duration }, { opacity: 0 }],
+      { duration });
+    s.ghostUntil = Date.now() + duration;
+  }
+
+  // The backlight: the screen glows for a while; a second tap starts the while
+  // again. Nothing else changes (no lights out, no waking, no line).
+  _backlight(s) {
+    clearTimeout(s.litTimer);
+    s.screen.classList.add("lit");
+    this._chirp(s, "click");
+    s.litTimer = setTimeout(() => s.screen.classList.remove("lit"), BACKLIGHT_MS);
   }
 
   // Nothing else is going on: is the pet free for a small idle behaviour?
@@ -3653,6 +4010,7 @@ class HatchPetCard extends HTMLElement {
       ${sharedScreen() ? "" : row(null, "my data", forgetButton("forgetme", "forget_me", "forget my data: your birthday, answers and settings for every pet; your bonds stay"))}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       ${s.species?.voice ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`) : ""}
+      ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>
@@ -3708,6 +4066,18 @@ class HatchPetCard extends HTMLElement {
       }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       if (skipped) this._statusMessage(s, skipped);
+    });
+    s.status.querySelector(".bell.lcdfx").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const on = !lcdOn();
+      try {
+        localStorage.setItem(LCD_KEY, on ? "on" : "off");
+      } catch (err) {
+        return; // no storage: the effects stay as they are
+      }
+      this._card.classList.toggle("lcd-on", on);
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
     s.status.querySelector(".bell.bdayphone")?.addEventListener("click", (e) => {
       e.stopPropagation();
