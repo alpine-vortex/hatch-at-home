@@ -322,6 +322,22 @@ Poop (`dirty`) calls send no push (owner, Wave 0 Q4); that change lands here too
   under (b)-(d)): careful ≤ 4 (1.8-2.7), casual ≤ 6 (4.2-5.5), neglect and sleeper ≤ 6.5
   (6.0-6.2, 4.1-4.3). `--notify` prints the house push table below; the owner's pick
   sets its target.
+- **Re-read against 0a, 0c and 0d (the 0b builder, 2026-10-28):** one assumption broke.
+  `responder_miss1` **steady** needs 0e's score: on 0a-0d the score is still
+  `0.7 × (100 − 6 × misses) + 0.3 × discipline`, and its 10-14 misses make it scrappy
+  (11-31) with or without re-calls, as `casual` is. 0b turns its **min health** green
+  (54-78, was 1 on all 10 seeds); **steady** stays in 0e's Sim Done, which already lists
+  it (66-76). As built: a re-call keeps its reason latched while it is open, so
+  answering it without passing the re-arm level leaves it latched (no fresh first call,
+  so no new miss); a missed re-call fires `call_expired` (`recall: true`, not a moment
+  on the card); `recall` is on an event only when true, so first calls are unchanged on
+  the bus. `--notify` gains a `0b` column: (c) plus no poop pushes and one push per
+  sickness, the pushes a person really gets.
+- **Release-notes line (drafted by the 0b builder; the owner approves the words):**
+  "A need left unanswered now asks again every 4 hours while it lasts, in one quiet
+  notification for all your pets; poop calls stay on the card, and falling ill sends one
+  notification, not two. If a pet already had a need left unanswered before this
+  update, expect one round of these reminders about 4 hours after updating."
 
 **Wave 0 Q1: how should re-calls reach phones? (evaluated for the owner)**
 

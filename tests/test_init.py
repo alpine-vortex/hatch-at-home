@@ -3069,3 +3069,80 @@ async def test_lights_out_refused_when_rested(
     assert hass.states.get("switch.pip_lights_out").state == STATE_OFF
     log = hass.states.get("sensor.pip_last_care").attributes["log"]
     assert log[0]["action"] == "lights_out" and log[0]["result"] == "not_sleepy"
+
+
+async def _notified(hass: HomeAssistant) -> list[ServiceCall]:
+    me = await hass.auth.async_create_user("Me")
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": me.id, "device_name": "My Phone"}
+    ).add_to_hass(hass)
+    phone = async_mock_service(hass, "notify", "mobile_app_my_phone")
+    await hass.services.async_call(
+        DOMAIN,
+        "notify_me",
+        {"entity_id": "sensor.pip_mood", "enabled": True},
+        blocking=True,
+        context=Context(user_id=me.id),
+    )
+    return phone
+
+
+async def test_an_old_latch_recalls_once_in_the_bundle_as_a_normal_push(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    # A save from before re-calls: missed and latched, no latched_at.
+    hass_storage[STORE_KEY] = hatched_pet(now, hunger=20.0, latched=["hunger"])
+    await setup(hass)
+    phone = await _notified(hass)
+    for _ in range(47):  # nearly 4 hours: nothing yet
+        await settle(hass, freezer, 5 * 60)
+    assert phone == []
+    for _ in range(3):
+        await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert [c.data["message"] for c in phone] == ["Pip is hungry!"]
+    data = phone[0].data["data"]
+    assert data["tag"] == "virtual_pet_recalls"
+    assert "push" not in data and "actions" not in data  # normal, no buttons
+    # Fed: the bundle names no pet still asking, so it goes.
+    await press(hass, "button.pip_feed")
+    await hass.async_block_till_done()
+    assert phone[-1].data["message"] == "clear_notification"
+    assert phone[-1].data["data"]["tag"] == "virtual_pet_recalls"
+
+
+async def test_a_poop_call_sends_no_push(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, poops=[now - 25 * 60])
+    await setup(hass)
+    phone = await _notified(hass)
+    for _ in range(3):
+        await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert hass.states.get("binary_sensor.pip_calling").state == "on"
+    assert phone == []
+
+
+async def test_falling_ill_sends_one_push(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    from custom_components.virtual_pet import rates as R
+
+    misses = [now - i * 3600 for i in range(R.SICK_MISSES)]
+    hass_storage[STORE_KEY] = hatched_pet(now, recent_misses=misses)
+    await setup(hass)
+    phone = await _notified(hass)
+    await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert hass.states.get("binary_sensor.pip_calling").state == "on"
+    assert [c.data["message"] for c in phone] == ["Pip feels sick. Medicine?"]

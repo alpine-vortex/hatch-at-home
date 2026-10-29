@@ -115,6 +115,9 @@ POOP_SICK_HAZARD = 0.08  # chance per hour, per old poop, of getting sick
 
 CALL_WINDOW_MINUTES = 20
 RESUME_MIN_MINUTES = 10  # a call paused by sleep has at least this long on waking
+# A missed need still unmet asks again this long after the miss, at most once
+# per this long per pet (balance_sim.py: responder_miss1 stays healthy).
+RECALL_HOURS = 4.0
 # reason: (calls below, re-arms above)
 CALL_THRESHOLDS: dict[str, tuple[float, float]] = {
     "hunger": (25.0, 40.0),

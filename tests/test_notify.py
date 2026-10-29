@@ -110,3 +110,77 @@ def test_send_offs_read_well():
     assert (
         notify.send_off("hot", "Pip", None) == "Pip says: it's a hot one, stay cool! ☀"
     )
+
+
+def test_poop_calls_recalls_and_a_sickness_told_already_send_no_call_push():
+    def call(reason: str, **extra: object) -> dict:
+        return {"type": "call_started", "reason": reason, **extra}
+
+    sick = {"type": "became_sick", "cause": "poop"}
+    assert notify.pushes(call("hunger"), [call("hunger")])
+    assert not notify.pushes(call("dirty"), [call("dirty")])
+    assert not notify.pushes(call("hunger", recall=True), [])
+    assert notify.pushes(sick, [sick, call("sick")])
+    assert not notify.pushes(call("sick"), [sick, call("sick")])
+    assert notify.pushes(call("sick"), [call("sick")])
+    assert notify.pushes({"type": "care_miss"}, [])
+
+
+def _asking(pet_id: str, name: str, users: list[str], nick: str | None = None):
+    return notify.Asking(pet_id, name, f"{name} is hungry!", users, lambda user: nick)
+
+
+class _Phone:
+    def __init__(self) -> None:
+        self.sent: list[tuple[list[str], str]] = []
+
+    def send(self, users: list[str], text: str):
+        self.sent.append((users, text))
+        return asyncio.sleep(0)
+
+
+def _run(sends: list) -> None:
+    async def all_of() -> None:
+        await asyncio.gather(*sends)
+
+    asyncio.run(all_of())
+
+
+def test_a_recall_bundle_names_every_pet_still_asking():
+    recalls, phone = notify.Recalls(), _Phone()
+    pip = _asking("pip", "Pip", ["me"], nick="sunbeam")
+    _run(recalls.update([pip], "pip", 0.0, phone.send))
+    assert phone.sent == [(["me"], "Pip is hungry, sunbeam!")]  # one pet: its call
+    mochi, bo = _asking("mochi", "Mochi", ["me"]), _asking("bo", "Bo", ["me", "you"])
+    later = notify.R.RECALL_HOURS * 3600
+    _run(recalls.update([pip, mochi], "mochi", later, phone.send))
+    assert phone.sent[-1] == (["me"], "Mochi and Pip would like a visit")
+    _run(recalls.update([pip, mochi, bo], "bo", 2 * later, phone.send))
+    assert phone.sent[-2:] == [
+        (["me"], "Bo, Mochi and Pip would like a visit"),
+        (["you"], "Bo is hungry!"),
+    ]
+
+
+def test_a_recall_bundle_waits_4_hours_and_clears_once_nobody_asks():
+    recalls, phone = notify.Recalls(), _Phone()
+    pip, mochi = _asking("pip", "Pip", ["me"]), _asking("mochi", "Mochi", ["me"])
+    _run(recalls.update([pip], "pip", 0.0, phone.send))
+    # Another pet asks within 4 h: it stays on the card, no new buzz.
+    _run(recalls.update([pip, mochi], "mochi", 3600.0, phone.send))
+    assert len(phone.sent) == 1
+    # Pip was the only pet the bundle named: answered, the bundle clears.
+    _run(recalls.update([mochi], None, 3700.0, phone.send))
+    assert phone.sent[-1] == (["me"], "clear_notification")
+    assert recalls.shown == {}
+
+
+def test_answering_one_pet_doesnt_rewrite_the_bundle():
+    recalls, phone = notify.Recalls(), _Phone()
+    pip, mochi = _asking("pip", "Pip", ["me"]), _asking("mochi", "Mochi", ["me"])
+    _run(recalls.update([pip, mochi], "pip", 0.0, phone.send))
+    assert phone.sent == [(["me"], "Mochi and Pip would like a visit")]
+    _run(recalls.update([mochi], None, 60.0, phone.send))
+    assert len(phone.sent) == 1  # no rewrite, no buzz
+    _run(recalls.update([], None, 120.0, phone.send))
+    assert phone.sent[-1] == (["me"], "clear_notification")

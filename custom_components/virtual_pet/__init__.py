@@ -119,10 +119,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
     # The version in the URL makes browsers fetch the new card after an update.
     add_extra_js_url(hass, f"{FRONTEND_URL}/{CARD_FILENAME}?v={VERSION}")
-    # What the pets know about each person, shared; and the loaded pets.
+    # What the pets know about each person, shared; the loaded pets; and the
+    # re-call notification each person gets for all of them.
     people = People(hass)
     await people.async_load()
-    hass.data[DOMAIN] = {"people": people, "pets": {}}
+    hass.data[DOMAIN] = {"people": people, "pets": {}, "recalls": notify.Recalls()}
     websocket_api.async_register_command(hass, websocket_answer)
     websocket_api.async_register_command(hass, websocket_forget_birthday)
     websocket_api.async_register_command(hass, websocket_birthday_phone)
@@ -448,7 +449,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
     """Put the pet away. The coordinator saves itself on shutdown."""
-    hass.data[DOMAIN]["pets"].pop(entry.entry_id, None)
+    pets = hass.data[DOMAIN]["pets"]
+    pets.pop(entry.entry_id, None)
+    if pets:  # a removed pet no longer asks in anyone's re-call notification
+        next(iter(pets.values())).update_recalls()
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 

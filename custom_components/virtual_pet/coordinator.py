@@ -893,7 +893,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             if simulated:
                 data["simulated"] = True
             self.hass.bus.async_fire(f"{DOMAIN}_{event['type']}", data)
-            self._notify(event, simulated)
+            self._notify(event, simulated, events)
             if not simulated and event["type"] in MOMENTS:
                 self.moments.insert(0, {**event, "at": dt_util.utcnow().isoformat()})
                 del self.moments[MOMENTS_KEPT:]
@@ -901,6 +901,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.debug["last_events"] = [e["type"] for e in events][-10:]
         if simulated or self.state is None:
             return
+        started = any(e["type"] == "call_started" and e.get("recall") for e in events)
+        self.update_recalls(self.pet_id if started else None)
         morning = any(
             e["type"] == "good_morning"
             or (e["type"] == "woke_up" and e.get("how") == "morning")
@@ -1661,9 +1663,58 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._holiday_on = today
         self._fire([{"type": "holiday", "holiday": kind}])
 
-    def _notify(self, event: model.Event, simulated: bool) -> None:
+    def asking(self) -> notify.Asking | None:
+        """This pet in the house's re-call bundle, if a re-call is open."""
+        state = self.state
+        call = state.call if state is not None else None
+        if (
+            state is None
+            or call is None
+            or not call.recall
+            or call.reason == "dirty"  # poop calls send no push (Wave 0 Q4)
+            or state.asleep
+            or not state.notify_users
+        ):
+            return None
+        return notify.Asking(
+            self.pet_id,
+            state.name,
+            notify.message(
+                {"type": "call_started", "reason": call.reason},
+                state.name,
+                self.species_names,
+            )
+            or state.name,
+            list(state.notify_users),
+            lambda user: self.bond_for(user)[1],
+        )
+
+    def update_recalls(self, started: str | None = None) -> None:
+        """Bring the house's re-call bundle up to date with every pet."""
+        recalls: notify.Recalls | None = self.hass.data[DOMAIN].get("recalls")
+        if recalls is None:
+            return
+        pets: dict[str, PetCoordinator] = self.hass.data[DOMAIN]["pets"]
+        asking = [a for p in pets.values() if (a := p.asking()) is not None]
+        for send in recalls.update(asking, started, self._now(), self._send_recall):
+            self.config_entry.async_create_background_task(
+                self.hass, send, f"{DOMAIN} notify"
+            )
+
+    async def _send_recall(self, users: list[str], text: str) -> None:
+        # A normal push with no buttons (several pets); a tap opens the dashboard.
+        await notify.send(self.hass, users, text, notify.RECALL_TAG, url=self.dashboard)
+
+    def _notify(
+        self,
+        event: model.Event,
+        simulated: bool,
+        batch: list[model.Event] | None = None,
+    ) -> None:
         """Tell the users who opted in, on their phones. Never for fast-forward."""
         if simulated or self.state is None or not self.state.notify_users:
+            return
+        if not notify.pushes(event, batch or [event]):
             return
         users = list(self.state.notify_users)
         if event["type"] in notify.CALL_OVER_EVENTS and self._call_notified:
