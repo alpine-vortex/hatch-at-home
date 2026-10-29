@@ -473,6 +473,16 @@ const REFUSALS = {
 const PROP_FOR = { game: "play", chore_treat: "snack" };
 // Sol's shared props, for every species that has no own ("../ui/" leaves sprites/).
 const FALLBACK_PROPS = { scold: "../ui/prop_scold", praise: "../ui/prop_praise", fan: "../ui/prop_fan" };
+// Care scenes (_sceneStart): how long each plays, in ms from the tap.
+const SCENE_MS = { medicine: 2200, clean: 2300 };
+// Their props, two frames each (art/props/cut_clean_props.py). A species may bring
+// its own in species.json "props" under the same key.
+const SCENE_PROPS = {
+  broom: ["../ui/prop_broom_1", "../ui/prop_broom_2"],
+  dust: ["../ui/prop_dust_1", "../ui/prop_dust_2"],
+  net: ["../ui/prop_net_1", "../ui/prop_net_2"],
+  bubbles: ["../ui/prop_bubbles_1", "../ui/prop_bubbles_2"],
+};
 // Missing sprites are reported once each in the console.
 const WARNED = new Set();
 
@@ -1643,6 +1653,17 @@ const STYLE = `
   .warn { padding: 16px; color: var(--error-color, #c00); background: var(--card-background-color); }
 `;
 
+// Care scenes (_sceneStart): their props come and go with the scene and are placed
+// each frame by _sceneRender; art is sized by its art pixels (_sceneArt).
+const SCENE_STYLE = `
+  .screen img.scene { left: 0; bottom: 3%; height: 0; }
+  .screen img.scene-pill { left: 74%; bottom: 6%; height: 22%; }
+  .screen .scene-gone { visibility: hidden; }
+  .scene-spark { position: absolute; width: 6%; aspect-ratio: 1; opacity: 0; pointer-events: none;
+    background: #fff6c8; filter: drop-shadow(0 0 2px #ffd76a);
+    clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+`;
+
 class HatchPetCard extends HTMLElement {
   static getStubConfig() {
     return {};
@@ -2007,7 +2028,7 @@ class HatchPetCard extends HTMLElement {
   _build() {
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `
-      <style>${STYLE}</style>
+      <style>${STYLE}${SCENE_STYLE}</style>
       <ha-card>
         <div class="head">
           <div><div class="title-row"><img class="emblem" alt=""><div class="title"></div></div>
@@ -2403,6 +2424,8 @@ class HatchPetCard extends HTMLElement {
   // pet's (a game, an armed "sure?", the moments already seen) carries over.
   _forget(s) {
     if (s.game) this._endGame(s, null);
+    this._sceneEnd(s, { quiet: true });
+    s.sceneOwes = s.sceneFade = null;
     this._stopTyping(s);
     s.voicedAt = 0;
     s.confirm = null;
@@ -2511,13 +2534,18 @@ class HatchPetCard extends HTMLElement {
 
   _state(s, key) {
     const id = s.ids?.[key];
-    return id ? this._hass.states[id] : undefined;
+    if (!id) return undefined;
+    const held = s.scene?.held; // a care scene shows the pet as it was at the tap
+    return held && key in held ? held[key] : this._hass.states[id];
   }
 
   _go(index) {
     const n = this._slides.length;
     if (!n) return;
-    this._slides.forEach((x) => this._stopTyping(x));
+    this._slides.forEach((x) => {
+      this._stopTyping(x);
+      this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
+    });
     this._index = (index + n) % n;
     this._renderShelf();
   }
@@ -2915,7 +2943,7 @@ class HatchPetCard extends HTMLElement {
       if (s.excitedSince && Date.now() - s.excitedSince >= BOUNCE_MS) s.pet.classList.remove("hop");
       const frames = this._frames(s);
       const seen = Math.abs(i - this._index) <= 1; // the pet on show and the peeking ones
-      if (seen && frames.length && !(s.asleep && this._ticks % 2)) {
+      if (seen && frames.length && !s.scene && !(s.asleep && this._ticks % 2)) {
         const was = s.pet.getAttribute("src");
         s.frame = (s.frame + 1) % frames.length;
         this._show(s, s.pet, frames[s.frame]);
@@ -2955,7 +2983,7 @@ class HatchPetCard extends HTMLElement {
   _ghosting(s) {
     const media = (q) => window.matchMedia?.(q).matches;
     return s === this._slides[this._index] && this._visible && !document.hidden &&
-      this._card.classList.contains("lcd-on") && s.pet.style.display !== "none" &&
+      this._card.classList.contains("lcd-on") && s.pet.style.display !== "none" && !s.scene &&
       s.game?.kind !== "catch" && !media("(prefers-reduced-motion: reduce)") &&
       !media("(prefers-contrast: more)");
   }
@@ -2995,7 +3023,7 @@ class HatchPetCard extends HTMLElement {
   // Nothing else is going on: is the pet free for a small idle behaviour?
   _free(s) {
     const now = Date.now();
-    return s.species && !s.asleep && !s.calling && !s.game && IDLE_MOODS.has(s.moodState) &&
+    return s.species && !s.asleep && !s.calling && !s.game && !s.scene && IDLE_MOODS.has(s.moodState) &&
       !s.screen.classList.contains("show-status") &&
       !(s.sayUntil > now) && !(s.poseUntil > now) && !(s.propUntil > now) &&
       !(s.flairUntil > now) && !(s.movingUntil > now);
@@ -3587,6 +3615,7 @@ class HatchPetCard extends HTMLElement {
 
   // The frames to draw now: a reaction pose while one runs, else the mood's.
   _frames(s) {
+    if (s.scene) return s.scene.frames || s.frames || [];
     return s.poseUntil && Date.now() < s.poseUntil ? s.poseFrames : s.frames || [];
   }
 
@@ -3866,6 +3895,7 @@ class HatchPetCard extends HTMLElement {
 
   _react(s, entry) {
     s.screen.querySelector(".costume")?.remove(); // care takes the stage
+    if (this._sceneAnswered(s, entry)) return;
     if (entry.action === "chore_treat") {
       this._write(s, "a treat! someone did a chore ♪", 3500);
     }
@@ -4696,7 +4726,262 @@ class HatchPetCard extends HTMLElement {
   _press(s, action) {
     const id = s.ids?.[`button.${action}`];
     const button = action in s.buttons ? s.buttons[action] : s.request;
-    if (id) this._call(button, s, "button", "press", id);
+    if (s.scene) {
+      // A second tap on the same care ends its scene and isn't sent again.
+      const same = s.scene.kind === action;
+      this._sceneEnd(s);
+      if (same) {
+        this._tapped(button, s);
+        return;
+      }
+    }
+    if (!id) return;
+    this._sceneStart(s, action);
+    this._call(button, s, "button", "press", id);
+  }
+
+  // --- Care scenes ----------------------------------------------------------
+  // Medicine and clean play as a little scene of about 2 s, not a click. The call
+  // goes out at the tap as ever, but the screen keeps showing the pet as it was
+  // (_state holds the slide's states, all but last_care) until the scene ends,
+  // then draws the news. One clock: _sceneRender(s, t) sets everything from the
+  // time since the tap, so an interruption just ends it (_sceneEnd).
+
+  // Start one if this care will work; refusals stay as they are (the server says no).
+  _sceneStart(s, kind) {
+    if (!SCENE_MS[kind] || !s.species || s.game || s.screen.classList.contains("show-status")) return;
+    const mood = this._state(s, "sensor.mood");
+    const stage = this._state(s, "sensor.life_stage")?.state;
+    if (!mood || mood.state === "away" || stage === "egg" || s.asleep || s.lightsOut) return;
+    const due = kind === "medicine" ? (mood.attributes.flags || []).includes("sick")
+      : Number(this._state(s, "sensor.poop")?.state || 0) > 0;
+    if (!due) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      s.sceneFade = { kind, until: Date.now() + 10000 }; // no scene: the news fades in
+      return;
+    }
+    const held = {};
+    for (const [key, id] of Object.entries(s.ids || {})) {
+      if (key !== "sensor.last_care" && key !== "device") held[key] = this._hass.states[id];
+    }
+    const sc = { kind, held, start: performance.now(), ms: SCENE_MS[kind], els: [], frames: null };
+    const add = (tag, cls) => {
+      const el = document.createElement(tag);
+      el.className = cls;
+      if (tag === "img") el.alt = "";
+      s.screen.insertBefore(el, s.screen.querySelector(".rain"));
+      sc.els.push(el);
+      return el;
+    };
+    const box = s.screen.getBoundingClientRect();
+    const pet = s.pet.getBoundingClientRect();
+    sc.cheer = this._sceneFrames(s, "cheer");
+    if (kind === "medicine") {
+      sc.pill = add("img", "scene scene-pill");
+      sc.pill.setAttribute("src", spriteSrc(s.speciesId, s.species.props?.medicine || "bird/medicine"));
+      // It steps up until its front (most of the way across its frame) is at the pill.
+      const pill = sc.pill.getBoundingClientRect();
+      const front = pet.left + pet.width * 0.72;
+      sc.step = Math.max(0, Math.min(box.width * 0.22, pill.left + pill.width / 2 - front));
+      sc.eat = this._sceneFrames(s, "eat");
+      const extras = s.drawn === "child" && s.species.extras?.squint;
+      const excited = s.species.moods?.includes("excited") && s.drawn &&
+        Array.from({ length: s.species.frames || 1 }, (_, i) => `${s.drawn}_excited_${i + 1}`);
+      sc.cheer ||= extras ? [].concat(extras) : excited || null;
+      // A few sparkles about its head, where it stands.
+      sc.sparks = [[0.22, 0.2], [0.78, 0.12], [0.66, 0.42]].map(([x, y]) => {
+        const el = add("div", "scene-spark");
+        el.style.left = `${pet.left - box.left + pet.width * x}px`;
+        el.style.top = `${pet.top - box.top + pet.height * y}px`;
+        return el;
+      });
+    } else {
+      sc.water = s.world?.mess === "murk";
+      const own = (key) => [].concat(s.species.props?.[key] || SCENE_PROPS[key]);
+      sc.toolArt = own(sc.water ? "net" : "broom");
+      if (!sc.water) sc.dustArt = own("dust");
+      if (sc.water) sc.bubbleArt = own("bubbles");
+      if (sc.dustArt) sc.dust = add("img", "scene scene-dust");
+      sc.tool = add("img", `scene scene-${sc.water ? "net" : "broom"}`);
+      if (sc.bubbleArt) sc.bubbles = add("img", "scene scene-bubbles");
+      // Each mess on show goes as the broom (or net) passes its middle.
+      sc.mess = s.poops.filter((el) => el.style.display !== "none").map((el) => {
+        const r = el.getBoundingClientRect();
+        return { el, x: r.left - box.left + r.width / 2 };
+      });
+      sc.murk = s.murk.style.display !== "none" && Number(s.murk.style.opacity) > 0;
+    }
+    s.scene = sc;
+    for (const el of [s.pet, s.perch]) el.style.transition = "none";
+    // A tap on the screen ends it (and doesn't open the status).
+    sc.stop = (e) => {
+      e.stopImmediatePropagation();
+      this._sceneEnd(s);
+    };
+    s.screen.addEventListener("click", sc.stop, true);
+    this._sceneRender(s, 0);
+    const loop = () => {
+      if (s.scene !== sc) return;
+      const t = performance.now() - sc.start;
+      if (t >= sc.ms) {
+        this._sceneEnd(s);
+        return;
+      }
+      if (!sc.paused) this._sceneRender(s, t); // paused: a check seeks it instead
+      sc.raf = requestAnimationFrame(loop);
+    };
+    sc.raf = requestAnimationFrame(loop);
+  }
+
+  // A species' own care frames, when its art has them: species.json "acts", like
+  // {"eat": ["baby", "teen", "adult"], "cheer": true} (true: every stage), drawn as
+  // <stage>_eat_1 and <stage>_eat_2. Else null, and the scene uses what all have.
+  _sceneFrames(s, act) {
+    const stages = s.species?.acts?.[act];
+    const st = s.drawn;
+    if (!st || !(stages === true || (Array.isArray(stages) && stages.includes(st)))) return null;
+    return [`${st}_${act}_1`, `${st}_${act}_2`];
+  }
+
+  // Scene art on the creatures' grid: its PNG is 4 screen px per art px, and an
+  // art px is 1/64 of the pet's 62% of the screen's height.
+  _sceneArt(s, img, sprite) {
+    const src = spriteSrc(s.speciesId, sprite);
+    if (img.getAttribute("src") === src) return;
+    img.onload = () => {
+      img.style.height = `${(img.naturalHeight / 4) * 62 / 64}%`;
+    };
+    img.setAttribute("src", src);
+  }
+
+  _sceneRender(s, t) {
+    const sc = s.scene;
+    const sw = s.screen.clientWidth;
+    const sh = s.screen.clientHeight;
+    const ramp = (a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
+    const ease = (a, b) => {
+      const k = ramp(a, b);
+      return k * k * (3 - 2 * k);
+    };
+    let frames = null;
+    if (sc.kind === "medicine") {
+      // Notice the pill, step up, lean in and take it, step back, a happy hop.
+      const step = sc.step * (ease(350, 850) - ease(1500, 1900));
+      const hop = -0.06 * sh * Math.sin(Math.PI * ramp(1450, 1750));
+      s.pet.style.translate = `${step}px ${hop}px`;
+      s.perch.style.translate = `${step}px 0`;
+      s.pet.style.rotate = `${(sc.eat ? 4 : 9) * (ease(850, 1000) - ease(1250, 1400))}deg`;
+      const gulp = ease(1000, 1250);
+      sc.pill.style.opacity = String(1 - gulp);
+      sc.pill.style.scale = String((0.3 + 0.7 * ease(0, 200)) * (1 - 0.7 * gulp));
+      sc.pill.style.translate = `${-0.3 * sc.step * gulp}px 0`;
+      if (t >= 850 && t < 1400) frames = sc.eat;
+      if (t >= 1400) frames = sc.cheer;
+      sc.sparks.forEach((el, i) => {
+        const k = ramp(1450 + i * 150, 2050 + i * 150);
+        el.style.opacity = k > 0 && k < 1 ? String(1 - k * k) : "0";
+        el.style.scale = String(0.4 + k);
+      });
+    } else {
+      // The broom (on water worlds, a net) crosses the floor left to right.
+      const sweep = ramp(0, 1800);
+      this._sceneArt(s, sc.tool, sc.toolArt[Math.floor(t / 180) % sc.toolArt.length]);
+      const tw = sc.tool.getBoundingClientRect().width || sw * 0.25;
+      const left = -tw + (sw + tw) * sweep;
+      const point = left + tw / 2;
+      sc.tool.style.left = `${left}px`;
+      sc.tool.style.display = sweep < 1 ? "" : "none";
+      if (sc.water) sc.tool.style.translate = `0 ${Math.sin(t / 150) * 0.02 * sh}px`;
+      if (sc.dust) {
+        // Dust kicks up behind it.
+        this._sceneArt(s, sc.dust, sc.dustArt[Math.floor(t / 220) % sc.dustArt.length]);
+        sc.dust.style.left = `${left - sc.dust.getBoundingClientRect().width * 0.55}px`;
+        sc.dust.style.opacity = String(0.9 * ramp(60, 260) * (1 - ramp(1650, 2000)));
+      }
+      for (const { el, x } of sc.mess) {
+        const k = Math.min(1, Math.max(0, (point - x) / (0.05 * sw)));
+        el.style.opacity = String(1 - k);
+        el.classList.toggle("scene-gone", k >= 1);
+      }
+      if (sc.murk) {
+        // The water clears behind the net, with a soft edge.
+        const p = Math.min(106, Math.max(-6, (point / sw) * 100));
+        s.murk.style.maskImage = `linear-gradient(90deg, transparent ${p - 6}%, #000 ${p + 6}%)`;
+      }
+      if (sc.bubbles) {
+        // Then bubbles rise where the water was cleared.
+        const k = ramp(1600, 2300);
+        this._sceneArt(s, sc.bubbles, sc.bubbleArt[Math.floor(t / 200) % sc.bubbleArt.length]);
+        sc.bubbles.style.left = `${sw * 0.62}px`;
+        sc.bubbles.style.translate = `0 ${-0.35 * sh * k}px`;
+        sc.bubbles.style.opacity = String(k > 0 ? 1 - ramp(2000, 2300) : 0);
+      }
+      if (t >= 1800 && !sc.shone) {
+        sc.shone = true;
+        const prop = s.species.props?.clean;
+        if (prop) {
+          this._show(s, s.prop, prop);
+          s.propUntil = Date.now() + 1500;
+        }
+        this._sparkle(s);
+      }
+      if (t >= 1800) frames = sc.cheer;
+    }
+    sc.frames = frames;
+    const shown = frames || s.frames;
+    if (shown?.length) this._show(s, s.pet, shown[Math.floor(t / 300) % shown.length]);
+  }
+
+  // End it, wherever it got to, and draw the pet as it is now.
+  _sceneEnd(s, { quiet = false } = {}) {
+    const sc = s.scene;
+    if (!sc) return;
+    cancelAnimationFrame(sc.raf);
+    s.scene = null;
+    s.screen.removeEventListener("click", sc.stop, true);
+    sc.els.forEach((el) => el.remove());
+    for (const el of [s.pet, s.perch]) el.style.translate = el.style.rotate = el.style.transition = "";
+    for (const el of s.poops) {
+      el.style.opacity = "";
+      el.classList.remove("scene-gone");
+    }
+    if (sc.murk) {
+      // What the net cleared stays clear: no fading back in from the held murk.
+      s.murk.style.transition = "none";
+      s.murk.style.opacity = "0";
+      s.murk.style.maskImage = "";
+      setTimeout(() => { s.murk.style.transition = ""; }, 50);
+    }
+    // The server's answer may come after this: it's shown, not acted again.
+    if (!sc.answered) s.sceneOwes = { kind: sc.kind, until: Date.now() + 10000 };
+    s.frame = 0;
+    if (!quiet) this._redraw(s);
+  }
+
+  // The server's answer to a scene's tap (_react). The scene shows an "ok" itself;
+  // a refusal ends it, said as ever. Under reduced motion the news fades in.
+  _sceneAnswered(s, entry) {
+    const ok = entry.result === "ok";
+    if (s.scene?.kind === entry.action) {
+      if (ok) {
+        s.scene.answered = true;
+        return true;
+      }
+      this._sceneEnd(s);
+      return false;
+    }
+    const now = Date.now();
+    if (s.sceneOwes?.kind === entry.action && now < s.sceneOwes.until) {
+      s.sceneOwes = null;
+      return ok;
+    }
+    if (s.sceneFade?.kind === entry.action && now < s.sceneFade.until) {
+      s.sceneFade = null;
+      if (ok) {
+        for (const el of [s.pet, s.prop]) el.animate?.([{ opacity: 0.2 }, { opacity: 1 }], { duration: 350 });
+      }
+    }
+    return false;
   }
 
   // --- Games ----------------------------------------------------------------

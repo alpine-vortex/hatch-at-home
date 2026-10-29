@@ -186,3 +186,14 @@ Small creature-agnostic visitor sprites for all six worlds are in
 [`visitors/`](visitors/README.md): four visitors per world, each with idle, two
 movement and interaction frames. They are draft art and are not installed in the
 frontend.
+
+## Care-scene props (2026-10-29)
+
+`props/source/broom.png` and `props/source/water_clean.png` are the owner's 2×2
+sheets for the clean scene: a broom in two tilts and a dust puff in two frames; a
+fish net with murk in it in two tilts and rising bubbles in two frames.
+`props/cut_clean_props.py` cuts them into `frontend/ui/prop_{broom,dust,net,bubbles}_{1,2}.png`
+(the grey keyed out everywhere, as it shows through the net's mesh; snapped to
+the sheets' ~12.8 px art-pixel grid; one palette per sheet; 4 px per art pixel).
+`storyboards/` holds the medicine and clean storyboards the scenes follow (visual
+references only).
