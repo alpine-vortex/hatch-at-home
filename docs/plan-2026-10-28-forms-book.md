@@ -691,3 +691,7 @@ option in the options flow, off by default, and `async_remove_entry` copies an
 allow-listed summary to a house-wide store only when it is on. Changes: Decided 7, the
 Multi-device bullet, the "Deleted devices" section, server test 13, PR 1's scope, one
 copy row (two words rows). **Nothing in this audit table's findings changes.**
+
+**Copy approved (owner, 2026-10-28):** the copy table above as written, including the
+two option labels and helpers. On a shared screen the new-page line shows and the dot
+doesn't (first-mate default, shown to the owner).
