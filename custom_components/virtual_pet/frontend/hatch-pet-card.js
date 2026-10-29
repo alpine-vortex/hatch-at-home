@@ -1079,6 +1079,9 @@ function cellsPath(cells, W, H, test, g = 1, ox = 0, oy = 0) {
   return d;
 }
 
+// A clip-path of those cells; none at all is an empty clip, not an invalid path.
+const clipPath = (d) => (d ? `path("${d}")` : "inset(50%)");
+
 // The light and shade over a part, as a CSS image a cell per SVG unit.
 function toneImage(cells, W, H) {
   const paths = TONE_PAINT.map(([t, paint]) => {
@@ -1097,7 +1100,7 @@ const HW_GREY = { "#": 34, c: 72, d: 104, m: 128, l: 176, w: 236 };
 const HW_ART = {
   screw: [".###.", "#llc#", "#lcm#", "#cmd#", ".###."],
   slot: ["#.", "#.", "#.", "#.", "l."],
-  stripes: ["d", ".", "d"],
+  stripes: ["c", ".", "c"],
   fleck: ["..l..", "..w..", "lwwwl", "..w..", "..l.."],
   glare: ["......ww", ".....ww.", "....ww..", "...ww...", "..ww...w", ".ww...w.", "ww...w..", "w...w..."],
 };
@@ -1256,6 +1259,7 @@ const STYLE = `
     position: relative; z-index: 1; }
   .crescent > .mould { background: var(--d-bezel); }
   .moon .body { border-radius: 34px; padding: 30px 18px 24px; }
+  @supports (width: round(1px, 1px)) {
   .moon .body > .mould {
     --star: linear-gradient(rgba(255,255,255,.6), rgba(255,255,255,.6));
     background: var(--star) round(12%, var(--px)) round(20%, var(--px)) / var(--px) var(--px) no-repeat,
@@ -1264,6 +1268,7 @@ const STYLE = `
       var(--star) round(94%, var(--px)) round(56%, var(--px)) / var(--px) var(--px) no-repeat,
       var(--star) round(5%, var(--px)) round(86%, var(--px)) / var(--px) var(--px) no-repeat,
       var(--star) round(95%, var(--px)) round(90%, var(--px)) / var(--px) var(--px) no-repeat, var(--d-shell); }
+  }
   .murk { inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .8s; }
   .body { width: 100%; box-sizing: border-box; box-shadow: 0 16px 34px rgba(20,15,5,.32);
     display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -1273,16 +1278,21 @@ const STYLE = `
      light and shade stay over them. They leave .bezel and .screen geometry alone:
      the screen is a fixed opening. A speck is a square of whole cells. */
   .device { --sq: calc(var(--px) * 2); }
+  @supports (width: round(1px, 1px)) {
   .finish-woodland .body > .mould {
     background: linear-gradient(180deg, #f49a55 0 round(down, 20%, var(--px)), var(--d-shell) 0 round(down, 72%, var(--px)),
       #e07a40 0 round(down, 86%, var(--px)), #d76a35 0); }
+  }
+  @supports (width: round(1px, 1px)) {
   .finish-aqua .body > .mould {
     background: linear-gradient(180deg, #80e3df 0 round(down, 16%, var(--px)), #52cbcf 0 round(down, 32%, var(--px)),
       #36b9c2 0 round(down, 68%, var(--px)), #1fa0ae 0 round(down, 84%, var(--px)), #168d9c 0); }
+  }
   .finish-aqua .toy:nth-child(4n + 1) .cap { background: #ffd9dc; }
   .finish-aqua .toy:nth-child(4n + 2) .cap { background: #fff0b7; }
   .finish-aqua .toy:nth-child(4n + 3) .cap { background: #dcd4ff; }
   .finish-aqua .toy:nth-child(4n) .cap { background: #c8f1d8; }
+  @supports (width: round(1px, 1px)) {
   .finish-grove .body > .mould { --sun: linear-gradient(#ffec8f, #ffec8f);
     background: var(--sun) round(12%, var(--px)) round(23%, var(--px)) / var(--sq) var(--sq) no-repeat,
       var(--sun) round(88%, var(--px)) round(37%, var(--px)) / var(--sq) var(--sq) no-repeat,
@@ -1290,21 +1300,26 @@ const STYLE = `
       var(--sun) round(84%, var(--px)) round(81%, var(--px)) / var(--px) var(--px) no-repeat,
       linear-gradient(180deg, #a9df68 0 round(down, 22%, var(--px)), #8dcd64 0 round(down, 46%, var(--px)),
         #74bd62 0 round(down, 78%, var(--px)), #4e965c 0); }
+  }
   .finish-grove .toy .cap { background: #fff0a8; }
   .finish-grove .toy:nth-child(3n + 2) .cap { background: #ffd1b5; }
+  @supports (width: round(1px, 1px)) {
   .finish-celestial .body > .mould { --star: linear-gradient(#fff4bb, #fff4bb); --dot: linear-gradient(#fff, #fff);
     background: var(--star) round(13%, var(--px)) round(16%, var(--px)) / var(--sq) var(--sq) no-repeat,
       var(--star) round(87%, var(--px)) round(24%, var(--px)) / var(--sq) var(--sq) no-repeat,
       var(--dot) round(9%, var(--px)) round(66%, var(--px)) / var(--px) var(--px) no-repeat,
       var(--dot) round(91%, var(--px)) round(75%, var(--px)) / var(--px) var(--px) no-repeat,
       linear-gradient(180deg, #777be0 0 round(down, 24%, var(--px)), #6255bb 0 round(down, 74%, var(--px)), #413c91 0); }
+  }
   .finish-celestial .toy .cap { background: #f4d7fa; }
   .finish-celestial .toy:nth-child(3n + 2) .cap { background: #d4e7ff; }
+  @supports (width: round(1px, 1px)) {
   .finish-dune .body > .mould { --grain: linear-gradient(rgba(150,104,52,.32), rgba(150,104,52,.32));
     background: var(--grain) round(10%, var(--px)) round(82%, var(--px)) / var(--sq) var(--sq) no-repeat,
       var(--grain) round(90%, var(--px)) round(70%, var(--px)) / var(--sq) var(--sq) no-repeat,
       linear-gradient(180deg, #ecc88f 0 round(down, 20%, var(--px)), var(--d-shell) 0 round(down, 74%, var(--px)),
         #cc9d62 0 round(down, 88%, var(--px)), #c39257 0); }
+  }
   .finish-dune .toy .cap { background: #fbefd0; }
   .finish-dune .toy:nth-child(3n + 2) .cap { background: #f3d6a6; }
   /* 1990s special editions (any world, any shape). Clear: see-through plastic, the
@@ -1617,9 +1632,9 @@ const STYLE = `
      spot (--bx, --by: the cap's centre) keeps the target clear of the screen, the
      buttons and the label, and inside the slide. */
   .backlight { position: absolute; z-index: 1; width: 44px; height: 44px; padding: 0; border: none;
-    border-radius: 8px; background: none; cursor: pointer; --bx: 50%; --by: 50%; }
+    border-radius: 8px; background: none; cursor: pointer; --bx: 22px; --by: 22px; }
   .backlight::before, .backlight::after { content: ""; position: absolute;
-    left: calc(var(--bx) - var(--px, 2px) * 4.5); top: calc(var(--by) - var(--px, 2px) * 5); }
+    left: round(var(--bx) - var(--px, 2px) * 4.5, var(--dpx, 1px)); top: round(var(--by) - var(--px, 2px) * 5, var(--dpx, 1px)); }
   .backlight::before { width: calc(var(--px, 2px) * 9); height: calc(var(--px, 2px) * 11);
     background: var(--bl-tones) 0 0 / 100% 100%, #fff7ec; clip-path: var(--bl-clip); }
   .backlight::after { width: calc(var(--px, 2px) * 5); height: calc(var(--px, 2px) * 7);
@@ -1629,7 +1644,7 @@ const STYLE = `
   .device:has(.screen.lit) .backlight::before { background: var(--bl-tones) 0 0 / 100% 100%, #dffbf2; }
   .device:has(.screen.lit) .backlight::after { background: #1fbf9a; }
   /* Egg: on the shoulder, just above the screen's right corner. */
-  .egg .backlight { right: -18px; top: -34px; --bx: 60%; --by: 62%; }
+  .egg .backlight { right: -18px; top: -34px; --bx: 26px; --by: 27px; }
   .compact .egg .backlight { right: -14px; }
   /* Tank: on the lid's right grip. */
   .lid .backlight { left: calc(62% + 6px - 22px); top: -4px; --by: 14px; }
@@ -1683,6 +1698,8 @@ const STYLE = `
   .hw.light { display: block; --art: var(--hw-light-on); --tint: #e8584a; left: calc(var(--px) * -7);
     top: round(down, 50% - var(--px) * 2.5, var(--px)); width: calc(var(--px) * 5); height: calc(var(--px) * 5); }
   .device:has(.screen.dim) .hw.light { --art: var(--hw-light-off); }
+  @supports not (width: round(1px, 1px)) { .hw { display: none !important; } } /* placed on the grid with round() */
+  .compact .egg .hw.light { display: none; } /* no margin left beside a narrow egg's screen */
   /* Clear: the board behind the screen, seen through the plastic round the bezel,
      and a glare on the plastic. */
   .hw.guts { inset: calc(var(--px) * -5); z-index: -2; -webkit-mask: none; mask: none; --gold: rgba(236,200,104,.6);
@@ -1927,9 +1944,9 @@ const STYLE = `
   @keyframes perk { 40% { transform: translateY(-6%) scale(1.04, .96); } }
   .toy.wanted .cap { background: #ffe9a8; }
   /* Wanted: a ring of light round the cap, cut on the grid too. */
-  .toy.wanted::before { content: ""; position: absolute; top: calc(var(--px) * -2); left: 50%; z-index: -1;
-    width: calc(var(--px) * (var(--cap-n) + 4)); height: calc(var(--px) * (var(--cap-n) + 7));
-    translate: calc(var(--px) * (var(--cap-n) + 4) / -2) 0; background: #ffd76a; clip-path: var(--cap-halo);
+  .toy.wanted::before { content: ""; position: absolute; top: calc(var(--px) * -2); left: calc(var(--cap-x, 0px) - var(--px) * 2);
+    z-index: -1; width: calc(var(--px) * (var(--cap-n) + 4)); height: calc(var(--px) * (var(--cap-n) + 7));
+    background: #ffd76a; clip-path: var(--cap-halo);
     pointer-events: none; }
   .toy.on .cap { background: #3a2a1a; color: #ffe9a8; }
   .toy[disabled] { opacity: .45; cursor: default; }
@@ -2153,6 +2170,11 @@ class HatchPetCard extends HTMLElement {
     this._card.style.setProperty("--glitter", glitterTile());
     this._viewport = root.querySelector(".viewport");
     this._track = root.querySelector(".track");
+    // Once a slide comes to rest, its shell's parts are put back on whole device pixels.
+    this._track.addEventListener("transitionend", (e) => {
+      const s = this._slides[this._index];
+      if (s?.px && (e.target === this._track || e.target === s.el)) this._mould(s);
+    });
     this._dots = root.querySelector(".dots");
     root.querySelector(".statusbtn").addEventListener("click", () => {
       const s = this._slides[this._index];
@@ -2671,6 +2693,11 @@ class HatchPetCard extends HTMLElement {
     const dev = s.device;
     if (!g || !dev.offsetWidth) return;
     const shape = s.shape || "egg";
+    // Each cut part starts on a whole device pixel, wherever its box landed: lids,
+    // feet, roofs and caps are sized in percentages and grid columns.
+    const dpr = window.devicePixelRatio || 1;
+    const over = (v) => v - Math.round(v * dpr) / dpr;
+    dev.style.setProperty("--dpx", `${1 / dpr}px`);
     const cut = (key, make) => {
       if (!MOULDS.has(key)) {
         if (MOULDS.size > 300) MOULDS.clear();
@@ -2686,8 +2713,14 @@ class HatchPetCard extends HTMLElement {
       const lip = kind === "bezel" ? 2 : 0;
       const W = Math.max(1, Math.round(w / g)) + lip * 2, H = Math.max(1, Math.round(h / g)) + lip * 2;
       const key = `${kind}|${shape}|${W}|${H}|${g}|${this._card.classList.contains("compact")}`;
-      if (m.dataset.key === key) continue;
+      const box = part.getBoundingClientRect();
+      const at = `left:${-lip * g - over(box.left)}px;top:${-lip * g - over(box.top)}px;`;
+      if (m.dataset.key === key) {
+        if (m.dataset.at !== at) { m.dataset.at = at; m.style.left = `${-lip * g - over(box.left)}px`; m.style.top = `${-lip * g - over(box.top)}px`; }
+        continue;
+      }
       m.dataset.key = key;
+      m.dataset.at = at;
       const { clip, tones, core } = cut(key, () => {
         const rad = cssRadii(part, w, h, g);
         const w0 = W - lip * 2, h0 = H - lip * 2;
@@ -2751,10 +2784,10 @@ class HatchPetCard extends HTMLElement {
         // A recess's lip is the shell's own plastic, in light and shade: only the core is filled.
         const core = lip ? cells.map((v, i) => (v && inside((i % W) + 0.5, Math.floor(i / W) + 0.5) &&
           opts.core((i % W) + 0.5, Math.floor(i / W) + 0.5) ? 1 : 0)) : null;
-        return { clip: `path("${cellsPath(cells, W, H, (v) => v > 0, g)}")`, tones: toneImage(cells, W, H),
-          core: core ? `path("${cellsPath(core, W, H, (v) => v > 0, g)}")` : "none" };
+        return { clip: clipPath(cellsPath(cells, W, H, (v) => v > 0, g)), tones: toneImage(cells, W, H),
+          core: core ? clipPath(cellsPath(core, W, H, (v) => v > 0, g)) : "none" };
       });
-      m.style.cssText = `left:${-lip * g}px;top:${-lip * g}px;width:${W * g}px;height:${H * g}px;` +
+      m.style.cssText = `${at}width:${W * g}px;height:${H * g}px;` +
         `clip-path:${clip};--tones:${tones};--core:${core}`;
     }
     // The button caps, all one size on a device, and the backlight's little one.
@@ -2768,8 +2801,8 @@ class HatchPetCard extends HTMLElement {
         const out = {};
         for (const [tag, depth] of [["", 3], ["-dn", 1]]) {
           const cells = capCells(n, depth, rad);
-          out[`--cap-clip${tag}`] = `path("${cellsPath(cells, n, n + depth, (v) => v > 0, g)}")`;
-          out[`--cap-side${tag}`] = `path("${cellsPath(cells, n, n + depth, (v) => v === TONE.side, g)}")`;
+          out[`--cap-clip${tag}`] = clipPath(cellsPath(cells, n, n + depth, (v) => v > 0, g));
+          out[`--cap-side${tag}`] = clipPath(cellsPath(cells, n, n + depth, (v) => v === TONE.side, g));
           out[`--cap-tones${tag}`] = toneImage(cells, n, n + depth);
           if (!tag) {
             // The wanted glow: a ring two cells wide round the raised cap.
@@ -2781,16 +2814,29 @@ class HatchPetCard extends HTMLElement {
                 if (Math.abs(dx) + Math.abs(dy) <= 3 && has(x - 2 + dx, y - 2 + dy)) { ring[y * W + x] = 1; break; }
               }
             }
-            out["--cap-halo"] = `path("${cellsPath(ring, W, H, (v) => v > 0, g)}")`;
+            out["--cap-halo"] = clipPath(cellsPath(ring, W, H, (v) => v > 0, g));
           }
         }
         const bl = capCells(9, 2, Array(4).fill([4.5, 4.5]));
-        out["--bl-clip"] = `path("${cellsPath(bl, 9, 11, (v) => v > 0, g)}")`;
+        out["--bl-clip"] = clipPath(cellsPath(bl, 9, 11, (v) => v > 0, g));
         out["--bl-tones"] = toneImage(bl.map((v) => (v === TONE.side ? TONE.deep : v)), 9, 11);
         return out;
       });
       dev.style.setProperty("--cap-n", n);
       for (const [k, v] of Object.entries(caps)) dev.style.setProperty(k, v);
+    }
+    for (const cap of dev.querySelectorAll(".toy .cap")) {
+      const r = cap.getBoundingClientRect();
+      const x = r.left - (parseFloat(cap.style.left) || 0), y = r.top - (parseFloat(cap.style.top) || 0);
+      cap.style.left = `${-over(x)}px`;
+      cap.style.top = `${-over(y)}px`;
+      // The wanted ring is drawn by the toy, round the cap where it now sits.
+      cap.parentElement.style.setProperty("--cap-x", `${x - over(x) - cap.parentElement.getBoundingClientRect().left}px`);
+    }
+    const b = s.backlight, br = b.getBoundingClientRect();
+    if (br.width) {
+      const [tx, ty] = (b.style.translate || "0px 0px").split(" ").map((v) => parseFloat(v) || 0);
+      b.style.translate = `${-over(br.left - tx)}px ${-over(br.top - ty)}px`;
     }
   }
 
@@ -2800,7 +2846,13 @@ class HatchPetCard extends HTMLElement {
     const vw = this._viewport.clientWidth;
     const w = this._slideW || Math.min(330, vw - 56);
     for (const slide of this._slides) slide.el.style.width = `${w}px`;
-    this._track.style.transform = `translateX(${(vw - w) / 2 - this._index * (w + 16)}px)`;
+    // On whole device pixels, so the pet and the shell's grid stay crisp.
+    const dpr = window.devicePixelRatio || 1;
+    const vr = this._viewport.getBoundingClientRect();
+    const tx = Math.round((vr.left + (vw - w) / 2) * dpr) / dpr - vr.left - this._index * (w + 16);
+    const ty = Math.round(vr.top * dpr) / dpr - vr.top;
+    this._track.style.transform = `translate(${tx}px, ${ty}px)`;
+    if (s.px) requestAnimationFrame(() => this._mould(s)); // the parts' places moved with it
     this._slides.forEach((slide, i) => {
       const current = i === this._index;
       slide.el.classList.toggle("away-slide", !current);

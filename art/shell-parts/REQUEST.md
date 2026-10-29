@@ -23,7 +23,7 @@ of the same size replaces either one.
 
 To swap one in: save it under `custom_components/virtual_pet/frontend/ui/`.
 Then point the slot's `--hw-<name>` at it, either where the card sets the
-variables in `_render` (look for `--hw-`) or in the slot's own CSS rule.
+variables in `_build` (look for `--hw-`) or in the slot's own CSS rule.
 
 ## The slots
 
