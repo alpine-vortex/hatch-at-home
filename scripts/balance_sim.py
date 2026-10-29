@@ -103,8 +103,8 @@ CASUAL_VISITS = (8, 12, 17, 21)  # local hours a casual player opens the card
 
 
 def casual(s: M.PetState, t: float, rng: random.Random) -> None:
-    """Opens the card four times a day and sees to whatever is up. Calls in
-    between go unanswered."""
+    """Opens the card four times a day and sees to whatever is up, a nap
+    included if it looks worn out. Calls in between go unanswered."""
     local = datetime.fromtimestamp(t, SETTINGS.tz)
     if local.hour not in CASUAL_VISITS or local.minute >= TICK // 60 or s.asleep:
         return
@@ -117,7 +117,7 @@ def casual(s: M.PetState, t: float, rng: random.Random) -> None:
         act(s, "feed", t, rng)
     if s.happiness < 60 and s.energy > 20:
         act(s, "play", t, rng)
-    if local.hour == CASUAL_VISITS[-1]:
+    if local.hour == CASUAL_VISITS[-1] or s.energy < 30:
         M.set_lights_out(s, True, t, SETTINGS)
 
 

@@ -63,7 +63,7 @@ on the real package (its `vp/` copy is identical to main's `model.py`, `rates.py
 | Strategy (`balance_sim.py`) | Care misses | Discipline | Upbringing | At adulthood |
 |---|---|---|---|---|
 | careful (looks every 5 min, feeds and plays ahead, praises after a real call) | 0 | 28-79 (by seed) | steady or devoted | weight 0-1, light from day 4-5 |
-| casual (opens the card at 8, 12, 17 and 21) | 72 | 0 | scrappy | health 1 at times; weight 0 |
+| casual (opens the card at 8, 12, 17 and 21; naps it if worn out) | 44-50 | 0 | scrappy | weight 0; min health 43-66 |
 | neglect | 17 | 0 | scrappy | health 1, sick |
 | responder (answers only calls, correctly) | 0 | 0 | steady (70) | weight 2-3 |
 | responder, lets the first call a day go | 14 | 0 | scrappy | starving, health 1 (M2) |
@@ -102,10 +102,10 @@ on the real package (its `vp/` copy is identical to main's `model.py`, `rates.py
 
 **New from the re-run (not in the audit): the auditor's "sloppy" strategy never misses
 a call**, so its row equalled "good". The new **casual** strategy, a person who opens
-the card four times a day, gets **72 misses in 14 days**: 40 poop calls (three a day,
-each 30 min after a poop, with a 20-minute window), 14 afternoon energy calls (a child
-runs out of energy about 17:00) and 15 sicknesses from old poop. Neglect gets only 17,
-because missed calls latch (M2). So today a person who checks in four times a day
+the card four times a day, gets **44-50 misses in 14 days** (seed 1: 34 poop calls,
+each 30 min after a poop with a 20-minute window, about three a day; 8 sicknesses from
+old poop; one energy and one hunger call). Neglect gets only 17, because missed calls
+latch (M2). So today a person who checks in four times a day
 raises a worse pet, by the numbers, than nobody at all. Wave 0 must fix this, and the
 owner's "at most 2 missed calls a day counted" alone doesn't (open question N1).
 
@@ -162,10 +162,15 @@ audit after it).
 
 ### Ordering against the plans in flight
 
-- **Wave 0 goes first.** It is server balance, mostly in `model.py` and `rates.py`, and
-  touches no file the privacy and forms-book work is changing, except: PR 0f's server
-  game changes come before PR 1a (the card side of the same games), and PR 0h's card
-  fixes are three small edits anywhere.
+- **Wave 0 goes first**, with one exception. It is server balance, mostly in
+  `model.py` and `rates.py`. But privacy P1 (crew branch
+  `crew/hatch-at-home-s2434-privacy-p1-damaged-saves-salva`, checked at `709948d`)
+  rewrites `PetState.from_dict` and adds the validation helpers (`_float`, `_int`,
+  `_numbers`, `_records`, `_game` and others) every new saved field must use. So **the
+  three Wave 0 PRs that change the save (0b, 0e, 0f) go after P1 merges** and validate
+  their fields with its helpers; 0a, 0c, 0d, 0g and 0h don't touch the save and can go
+  at once. PR 0f's server game changes come before PR 1a (the card side of the same
+  games); PR 0h's card fixes are three small edits anywhere.
 - **Privacy P1** (`_dropSlide`, the observer: privacy F6) is being built now. Wave 1's
   game timers must also be cleared when a slide is dropped, so **PR 1a goes after P1
   merges** (and after 0f). PR 1b and 1c don't touch slide teardown and can go any time.
@@ -239,8 +244,8 @@ the same PR, since praise is half of how discipline is earned.
   for another `RECALL_HOURS`. One neglect stays one miss; the pet keeps asking.
 - A re-call is an ordinary `call_started` (it notifies, like the first).
 - Sick: the same rule (a sick pet asks for medicine every 4 h until cured).
-- Saved: `latched_at: dict[str, float]` beside `latched` (model 102). `from_dict`
-  gives an existing latch `latched_at = now` (so an old latch re-calls 4 h after the
+- Saved: `latched_at: dict[str, float]` beside `latched` (model 102), validated with
+  P1's helpers. `from_dict` gives an existing latch `latched_at = now` (so an old latch re-calls 4 h after the
   update), and `shift_times` shifts it.
 - **Tests:** pytest: a missed hunger call re-calls after 4 h if still hungry, not
   before; missing the re-call doesn't add to `care_misses`; an old save loads with
@@ -249,10 +254,12 @@ the same PR, since praise is half of how discipline is earned.
 
 **PR 0c: weight and game rewards, retuned (M1, M6).** Size **S**, tier 1.
 - Start from the audit's numbers: `WEIGHT_BURN` 0.7 → **0.45**, `WEIGHT_FEED` 4 →
-  **5**, and Left or Right's win `GAME_WIN_HAPPINESS` 25 → **30**, so a lost game (10)
-  averages above plain Play (20) over a 49% game: 0.49 × 30 + 0.51 × 10 ≈ 19.8, which
-  is still under 20. So also **`GAME_LOSE_HAPPINESS` 10 → 12** (≈ 20.8). Then tune by
-  the sim, not by hand.
+  **5**.
+- **M6, a game must pay at least what Play does (20).** Left or Right is won 49% of the
+  time. Raising the win alone, `GAME_WIN_HAPPINESS` 25 → 30, isn't enough:
+  0.49 × 30 + 0.51 × 10 ≈ 19.8. With **`GAME_LOSE_HAPPINESS` 10 → 12** as well, it
+  averages ≈ 20.8, just above Play. And **`WEIGHT_GAME` -4 → -3**, the same as Play (a
+  game is play), so it costs no more weight. Then tune by the sim, not by hand.
 - The "could use a proper meal" hint (`_WEIGHT_REASONS`) must be actionable: with the
   retune a meal at hunger < 95 gains weight; confirm by the sim that careful never sits
   in "light" long enough to need a snack.
@@ -266,11 +273,16 @@ tier 1.
   key (card 492) is dropped; phase 5's scan exception for `call_fake` goes with it.
   Already disguised, checked: the `call_started` event (933), the binary sensor (83),
   the sentence (1942-1943) and the notification's buttons (notify 73-80).
-- **Overlapping ranges.** Whines may start at `happiness >= 25` (today every stat > 50);
-  hunger, energy and health still > 50, not sick, no poop. And a real happiness call may
-  also start, at a low rate (proposal 0.1 an hour), while `25 <= happiness < 40` ("a bit
-  lonely"). So between 25 and 40 either can happen, and above 40 only a whine. A
-  careful person reading the hearts is right most of the time, never always.
+- **Overlapping ranges.** A whine's gate becomes **the same gate a real happiness call
+  passes**: no higher-priority `CALL_PRIORITY` condition holds (not sick, no poop old
+  enough to call, hunger ≥ 25, energy ≥ 20), and `happiness >= 25`. Today it also needs
+  every stat > 50 and no poop at all (`_wants_to_whine` 754-760), so a happiness-type
+  call at hunger 30, or with a fresh poop, is always real: that tell goes. And a real
+  happiness call may also start, at a low rate (proposal 0.1 an hour), while
+  `25 <= happiness < 40` ("a bit lonely"). So happiness is the only difference left:
+  between 25 and 40 either can happen, above 40 only a whine, below 25 only a real
+  call. A careful person reading the hearts is right most of the time, never always.
+  The sim checks that whines in a less healthy pet don't swamp the casual player.
 - A wrong scold of a real call keeps today's cost (`unfair`, 1219). A whine spoiled by
   play keeps #41's rule.
 - **Minor 3:** a higher-priority real need replaces an open whine, or an open real call
@@ -278,7 +290,7 @@ tier 1.
   event beyond the new `call_started`.
 - The guide (674) already says a fake looks the same; add one sentence on the overlap.
 - **Tests:** pytest: a whine's `reason_key` is `call_happiness`; a whine can start at
-  happiness 30; a hunger call replaces an open whine with no `discipline_miss`; the
+  happiness 30, at hunger 30, and with a fresh poop; a hunger call replaces an open whine with no `discipline_miss`; the
   card-check line test covers `reason.call_happiness` only.
 - **Sim:** careful and responder now guess (scold at happiness ≥ 50, else play). **Sim
   Done:** careful still devoted with no care misses; no strategy reads `call.reason`.
@@ -302,7 +314,8 @@ tier 1.
 - **Praise (C2).** Happiness from praise diminishes inside a 30-minute window: 8, 4, 2,
   then 0. It still answers a happiness call (it is attention). `last_praise` is
   replaced by the window's start and its count.
-- **Saved fields** (all with defaults, so older saves load): `discipline_sum`,
+- **Saved fields** (all with defaults, so older saves load; validated with P1's
+  helpers): `discipline_sum`,
   `discipline_samples`, `last_sample_at`; `counted_misses`, `miss_day`,
   `miss_day_count`; `last_real_answer_at`, `praised_answer` (the call it was given
   for); `praise_window_at`, `praise_count`.
@@ -333,7 +346,7 @@ Wave 1a, which is its card side.
   nothing.
 - **No reroll (M4):** a Higher or Lower opening is kept until it is guessed, or for
   `OPENING_KEEP_MINUTES` (proposal 30) after it was dropped unguessed. Saved: the kept
-  opening and its time.
+  opening and its time, beside P1's `_game` validation.
 - **M3, reconciled with #41:** the first game call while a whine is open answers it as
   `spoiled`, as button Play does since #41 (1184-1191): `PRAISE_WHINING_DISCIPLINE`,
   the `call_answered` event with `answer: "spoiled"`, and the card's existing "hehe,
@@ -415,20 +428,24 @@ tier 1.
 - **Answers (owner A7: a failed save is not a try).** `_ask` with `keep` keeps the
   optimistic reply (the charm), then:
   - on failure, retries the `virtual_pet/answer` call once, quietly, after 3 s;
-  - if that fails too, keeps `{question, answer, at}` in `localStorage` for this person
-    and device, and sends it before anything else at the next visit. `async_answer`
-    (coordinator 1424-1460) accepts a late answer for the five non-catchphrase
-    questions with no open-ask check, and for the catchphrase while the same generation's
-    ask is unanswered, so **no server change**: a saved-late answer is an answered
-    question, and the try never mattered. The builder confirms that by test;
+  - if that fails too, and the question is one of the four **once-questions** (whose try
+    is counted: `fav_weather`, `fav_season`, `birthday`, `catchphrase`), keeps
+    `{question, answer, at}` in `localStorage` for this person and device, and sends it
+    before anything else at the next visit. `async_answer` (coordinator 1424-1468)
+    stores those with no open-ask check (the catchphrase while the same generation's
+    ask is unanswered), so **no server change**: a late answer is an answered question,
+    and the try never mattered;
+  - `dream` and `guess` are **not** resent: they are about tonight and tomorrow
+    (`pick_dream` for now, `guess` for `P.tomorrow(today)`, 1464-1467), so a late
+    answer would land on the wrong day. They aren't once-questions, so no try is lost;
   - a stored answer older than `ASK_LIKES_AGAIN_DAYS` (14) is dropped (the question may
     come again by then);
   - the bubble says C2 only when the retry also failed. It promises nothing.
 - **Tests:** card-check: a double tap on feed sends one `button.press`; on each of the
   three guarded controls, a double tap under 600 ms does nothing and a second tap at 1 s
   confirms; with `virtual_pet/answer` stubbed to fail twice, the bubble shows C2, the
-  answer is in `localStorage`, and the next visit sends it first; pytest: a late
-  `fav_weather` answer is stored.
+  answer is in `localStorage`, and the next visit sends it first; a failed `dream`
+  answer isn't stored; pytest: a late `fav_weather` answer is stored.
 - **Done =** the definition of done's "no duplicate effect from fast taps" and "visible
   failure" hold for every care button, the three guarded controls and the six kept
   questions.
@@ -796,11 +813,11 @@ axolotl and moth adults are being redrawn now (A9).
 | PR | What | Size | Tier | Waits on |
 |---|---|---|---|---|
 | 0a | Sleep pauses calls; naps need tiredness; the switch shows sleep (C1, m5) | S-M | 1 | — |
-| 0b | A missed call calls again after 4 h (M2) | S | 2 | 0a |
+| 0b | A missed call calls again after 4 h (M2) | S | 2 | 0a, privacy P1 |
 | 0c | Weight and game rewards retuned (M1, M6) | S | 1 | 0b |
 | 0d | Fake calls disguised; real needs first (C3, m3) | S-M | 1 | 0c |
-| 0e | Upbringing measures care; praise can't be farmed (C4, C2) | M | 2 | 0d, N1 |
-| 0f | Games: carry on, a drop is a loss, no reroll, Play spoils a whine (M3, M4, A2) | M | 2 | — (before 1a) |
+| 0e | Upbringing measures care; praise can't be farmed (C4, C2) | M | 2 | 0d, privacy P1, N1 |
+| 0f | Games: carry on, a drop is a loss, no reroll, Play spoils a whine (M3, M4, A2) | M | 2 | privacy P1 (before 1a) |
 | 0g | Fast-forward wake, chores, tuck-in, snacks (M5, m1, m2, m4) | S | 1 | — |
 | 0h | Hearts, server clock, one refusal line (m8-m10) | S | 1 | — |
 | 1a | Games carry on, old timers die (F01, F02, m6, m7) | S-M | 1 | privacy P1, 0f |
@@ -889,8 +906,8 @@ the meal's existing "full" line; no new copy.
 
 | # | Question | Recommendation |
 |---|---|---|
-| N1 | **What should a casual player raise?** A person who opens the card four times a day misses about five calls a day today (three are poop calls), and with "at most 2 a day counted" at 6 points each, 13 days of childhood cost 156 points: scrappy, the same as neglect (whose misses also reach the cap once M2's re-calls land). | **Steady.** Lower `UPBRINGING_MISS_COST` (start at 2), and make the care half part misses, part an **hourly wellbeing sample** while awake (share of hours with no meter at 0 and not sick), the same sampling as discipline's. Tune so careful is devoted, casual steady and neglect scrappy on every seed (the sim's bands). No new stat on screen. |
-| N2 | Poop calls are most of a casual player's misses (three a day, 20-minute window, 30 min after each poop). Keep them as calls? | **Keep them**, but let N1 absorb the cost (the cap and the lower cost). Revisit only if the casual band can't be met. |
+| N1 | **What should a casual player raise?** A person who opens the card four times a day misses three to four calls a day today (most are poop calls), and with "at most 2 a day counted" at 6 points each, 13 days of childhood cost 156 points: scrappy, the same as neglect (whose misses also reach the cap once M2's re-calls land). | **Steady.** Lower `UPBRINGING_MISS_COST` (start at 2), and make the care half part misses, part an **hourly wellbeing sample** while awake (share of hours with no meter at 0 and not sick), the same sampling as discipline's. Tune so careful is devoted, casual steady and neglect scrappy on every seed (the sim's bands). No new stat on screen. |
+| N2 | Poop calls are most of a casual player's misses (about three a day, 20-minute window, 30 min after each poop; with the sickness old poop brings, about 80%). Keep them as calls? | **Keep them**, but let N1 absorb the cost (the cap and the lower cost). Revisit only if the casual band can't be met. |
 
 ## 7. QA beyond the PRs
 
@@ -929,7 +946,7 @@ part: M5's "same for `stayed_up_since`" (`shift_times` already shifts it, model
 | 5 | 1a turned a display bug into a free restart that farms records, bond points and dream seeds; a second viewer would wipe the first's game. Verified (model 1664-1671, coordinator 1683-1691, 895-897) | Owner A2: carry on, both games. PR 0f makes the server carry on and count a dropped game with a guess as a loss; 1a is card-only and shows the real score; draft 1's "Checked" claim corrected in 1a |
 | 6 | Q10's `egg_laid` milestone was dropped the moment it was written. Verified | Owner A6: `lay_egg` copies the milestones, `egg_laid` last, into the generation's journal record (PR 4a) |
 | 7 | 4a's plumbing: `_unrecorded_attributes`, `shift_times`, P1's validation. Verified (sensor 145-166; `shift_times` shifts `chore_treats` only) | All three added to 4a, which now waits on P1; `memories` gets the `shift_times` fix too; tests added |
-| 8 | "As the server already allows" was false: four kept questions are once-questions whose try is counted when sent. Verified (coordinator 1389-1391, people 282-290) | Owner A7: a failed save isn't a try. PR 1b retries once, then keeps the answer locally and sends it at the next visit; `async_answer` accepts a late answer, so no server change. C2 promises nothing |
+| 8 | "As the server already allows" was false: four kept questions are once-questions whose try is counted when sent. Verified (coordinator 1389-1391, people 282-290) | Owner A7: a failed save isn't a try. PR 1b retries once, then keeps a once-question's answer locally and sends it at the next visit; `async_answer` accepts a late one, so no server change. `dream` and `guess` aren't resent (they'd land on the wrong day) and cost no try. C2 promises nothing |
 | 9 | 2b's `chore_treat` is already built; `recovered` is any medicine `ok`. Verified (card 3069-3071, 409; model 1200-1208) | `chore_treat` and C7 dropped; C8 on medicine `ok`; 2b adds only `became_sick` (size S) |
 | 10 | Q1 overrides the forms book's decision 10 without changing the forms book; matching by entity id breaks on rename. Verified (forms book 37) | Cross-plan change 3: decision 10 house-wide, `_bookOf`/seeding/"raised here" rules, pets found by platform plus `world`/`roster`. The P3a note moved to cross-plan change 2 |
 | 11 | 4b could offer creatures the server rejects; no row on "surprise me"; names vs ids. Verified (coordinator 288-296, 1755-1762; card 3192) | The offer is the select's options ∩ raised; "hatch one next" hidden with `next_world`; the row always shows for adults; names through the select's options; C15 added |
@@ -955,5 +972,5 @@ part: M5's "same for `stayed_up_since`" (`shift_times` already shifts it, model
 | Q1-Q13 | Recorded as decided, as recommended, except Q9 (a mix of games, chosen freely) and Q11 (superseded by A9) |
 | A1-A10 | Recorded as decided (section 6) and built into 1a, 1b, 3b, 4a, 4b, 4c, 4d, 4e and 4f |
 | The balance audit | New **Wave 0** (PRs 0a-0h), first in the order; its minors 6 and 7 are Wave 1a; M3 reconciled with #41 (the game path, not button Play); M5's `stayed_up_since` half rejected |
-| `scripts/balance_sim.py` | Added in this PR, from the auditor's `sim.py`-`sim4.py`, on the real package. Two changes from the originals: strategies decide from what the sensors show (so C3 can fool them), and a real **casual** strategy replaces "sloppy", which never missed a call. Today it fails 32 bands, as expected |
+| `scripts/balance_sim.py` | Added in this PR, from the auditor's `sim.py`-`sim4.py`, on the real package. Two changes from the originals: strategies decide from what the sensors show (so C3 can fool them), and a real **casual** strategy replaces "sloppy", which never missed a call. Today it fails 29 bands, as expected |
 | Casual play | New finding from the re-run; open questions N1 and N2 |
