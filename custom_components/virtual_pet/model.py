@@ -51,6 +51,183 @@ UPBRINGINGS = tuple(name for name, _ in R.UPBRINGING_GRADES)
 OK = "ok"
 
 
+class DamagedSave(ValueError):
+    """A save whose root isn't a pet at all (a string, a number, a list)."""
+
+
+def is_pet_root(data: Any) -> bool:
+    """A save root a pet can be read from: an object, or one in a list."""
+    return isinstance(data, dict) or (
+        isinstance(data, list) and len(data) == 1 and isinstance(data[0], dict)
+    )
+
+
+# --- Reading a save that may be damaged --------------------------------------
+# Each known key is type-checked or defaulted; a wrong type never stops a load.
+
+_FLOATS = {
+    "age_hours": 0.0,
+    "hunger": 80.0,
+    "happiness": 80.0,
+    "energy": 80.0,
+    "health": 100.0,
+    "discipline": 0.0,
+    "weight": R.WEIGHT_START,
+    "kept_up_until": 0.0,
+    "cozy_until": 0.0,
+    "cool_until": 0.0,
+    "last_praise": 0.0,
+    "last_excite": 0.0,
+}
+_RANGES = {
+    "age_hours": (0.0, math.inf),
+    **{s: (0.0, 100.0) for s in STATS},
+}
+_INTS = {  # key: (default, lowest)
+    "care_misses": (0, 0),
+    "discipline_misses": (0, 0),
+    "generation": (1, 1),
+    "treats_waiting": (0, 0),
+}
+
+
+def _num(v: Any) -> bool:
+    """A finite number (not a bool)."""
+    return isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _str(v: Any) -> bool:
+    return isinstance(v, str)
+
+
+def _float(v: Any, default: Any, low: float = -math.inf, high: float = math.inf) -> Any:
+    return float(min(max(v, low), high)) if _num(v) else default
+
+
+def _int(v: Any, default: int, low: int | None = None) -> int:
+    if not _num(v):
+        return default
+    return int(v) if low is None else max(low, int(v))
+
+
+def _opt_str(v: Any) -> str | None:
+    return v if isinstance(v, str) else None
+
+
+def _mapping(v: Any) -> dict[Any, Any]:
+    return v if isinstance(v, dict) else {}
+
+
+def _numbers(v: Any) -> list[float]:
+    return [float(x) for x in v if _num(x)] if isinstance(v, list) else []
+
+
+def _strings(v: Any) -> list[str]:
+    return [x for x in v if isinstance(x, str)] if isinstance(v, list) else []
+
+
+def _str_map(v: Any) -> dict[str, str]:
+    return {k: x for k, x in _mapping(v).items() if _str(k) and _str(x)}
+
+
+def _int_map(v: Any) -> dict[str, int]:
+    return {k: int(x) for k, x in _mapping(v).items() if _str(k) and _num(x)}
+
+
+def _records(v: Any, **need: Any) -> list[dict[str, Any]]:
+    """The dicts in a list that carry what their readers index."""
+    if not isinstance(v, list):
+        return []
+    return [
+        r
+        for r in v
+        if isinstance(r, dict) and all(check(r.get(k)) for k, check in need.items())
+    ]
+
+
+def _retired(record: dict[str, Any]) -> dict[str, Any]:
+    """A journal record (a retired parent) with the shapes the card reads."""
+    out = dict(record)
+    out["traits"] = _strings(record.get("traits"))
+    out["levels"] = _int_map(record.get("levels"))
+    out["games"] = {
+        k: c for k, c in _mapping(record.get("games")).items() if isinstance(c, dict)
+    }
+    return out
+
+
+def _game(v: Any) -> Game | None:
+    """A game in progress, or None if it's damaged or a kind this version
+    doesn't know."""
+    if not isinstance(v, dict) or v.get("kind", "left_right") not in GAMES:
+        return None
+    if not (_num(v.get("started")) and _num(v.get("last_at"))):
+        return None
+    number = v.get("number")
+    return Game(
+        started=float(v["started"]),
+        last_at=float(v["last_at"]),
+        rounds=_int(v.get("rounds"), 0, 0),
+        wins=_int(v.get("wins"), 0, 0),
+        kind=v.get("kind", "left_right"),
+        number=int(number) if _num(number) else None,
+    )
+
+
+def _bond(bond: dict[str, Any]) -> dict[str, Any]:
+    """One bond as loaded: every key in use type-checked, a damaged one
+    dropped; keys this version doesn't know kept as they are."""
+    out = dict(bond)
+    points = bond.get("points")
+    if isinstance(points, str) and points.strip().lstrip("-").isdecimal():
+        points = int(points)  # an old hand edit: "12"
+    out["points"] = _int(points, 0)
+    checks: dict[str, Any] = {
+        "nickname": _str,
+        "favourite": _str,
+        "since": _str,
+        "day": _str,
+        "tucked_at": _num,
+    }
+    for key, check in checks.items():
+        if key in out and not check(out[key]):
+            del out[key]
+    for key in ("games", "best"):
+        if key in out:
+            out[key] = _int_map(out[key])
+    if "noted" in out:  # read only by != comparisons; "tucked" is a float
+        out["noted"] = {
+            k: x
+            for k, x in _mapping(out["noted"]).items()
+            if _str(k) and (_str(x) or _num(x))
+        }
+    if "today" in out:
+        out["today"] = _int(out["today"], 0, 0)
+    if "visited" in out:  # add_bond reads it without a default on the same day
+        out["visited"] = out["visited"] is True
+    if "photos" in out:
+        out["photos"] = _photos(out["photos"])
+    ask = out.get("catchphrase")
+    if "catchphrase" in out and not (
+        isinstance(ask, dict) and isinstance(ask.get("asked"), list)
+    ):
+        del out["catchphrase"]  # a broken question is asked afresh
+    return out
+
+
+def bonds_from(v: Any) -> dict[str, dict[str, Any]]:
+    """Every bond that can be read; a damaged one is dropped alone."""
+    out = {}
+    for user, bond in _mapping(v).items():
+        if not isinstance(bond, dict):
+            continue
+        try:
+            out[str(user)] = _bond(bond)
+        except Exception:  # noqa: BLE001 - one bad bond never costs the others
+            continue
+    return out
+
+
 @dataclass
 class Call:
     """An attention call the player has CALL_WINDOW_MINUTES to answer."""
@@ -149,59 +326,106 @@ class PetState:
     hatched_on: str | None = None  # local date it hatched: its birthday
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize for the Store."""
-        return asdict(self)
+        """Serialize for the Store, with any keys this version doesn't know."""
+        return {**getattr(self, "unknown", {}), **asdict(self)}
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> PetState:
-        """Load from the Store, ignoring unknown keys and defaulting new ones."""
+    def from_dict(
+        cls, data: Any, default_name: str = "Pet", now: float | None = None
+    ) -> PetState:
+        """Load from the Store: defaults for new keys, and every known key
+        type-checked, so a damaged but readable save still loads. Keys this
+        version doesn't know are kept for the next save (a downgrade keeps a
+        later version's). A root that isn't a pet at all raises DamagedSave."""
+        if not is_pet_root(data):
+            raise DamagedSave(f"the save is a {type(data).__name__}, not a pet")
+        if isinstance(data, list):
+            data = data[0]  # one pet, wrapped in a list by a hand edit
         known = {f.name for f in fields(cls)}
         kwargs = {k: v for k, v in data.items() if k in known}
+        unknown = {k: v for k, v in data.items() if k not in known}
+        now = _float(now, 0.0) if now is not None else 0.0
+        if not isinstance(kwargs.get("name"), str):
+            kwargs["name"] = default_name
+        for key, default in _FLOATS.items():
+            kwargs[key] = _float(kwargs.get(key), default, *_RANGES.get(key, ()))
+        kwargs["last_updated"] = _float(kwargs.get("last_updated"), now)
+        kwargs["born"] = _float(
+            kwargs.get("born"), kwargs["last_updated"] - kwargs["age_hours"] * 3600
+        )
+        for key, (default, low) in _INTS.items():
+            kwargs[key] = _int(kwargs.get(key), default, low)
+        for key in ("sick", "asleep", "napping", "lights_out", "away"):
+            kwargs[key] = kwargs.get(key) is True
+        if not isinstance(kwargs.get("lights_before_away"), bool):
+            kwargs["lights_before_away"] = None
+        for key in ("stayed_up_since", "wake_at"):
+            kwargs[key] = _float(kwargs.get(key), None)
+        for key in ("species", "inherited_from"):
+            kwargs[key] = _opt_str(kwargs.get(key))
+        for key in ("poops", "digesting", "recent_misses", "chore_treats"):
+            kwargs[key] = _numbers(kwargs.get(key))
+        for key in ("raised", "notify_users"):
+            kwargs[key] = _strings(kwargs.get(key))
+        kwargs["traits"] = [t for t in _strings(kwargs.get("traits")) if t in TRAITS]
+        kwargs["care_log"] = _records(kwargs.get("care_log"), at=_num, action=_str)
+        kwargs["journal"] = [_retired(r) for r in _records(kwargs.get("journal"))]
+        kwargs["memories"] = _records(kwargs.get("memories"), at=_num, kind=_str)
+        kwargs["dream_seeds"] = _records(kwargs.get("dream_seeds"), at=_num, kind=_str)
+        kwargs["dream_picks"] = _records(
+            kwargs.get("dream_picks"), user=_str, pick=_str, at=_num
+        )
+        kwargs["inherited"] = {
+            t: n
+            for t, n in _mapping(kwargs.get("inherited")).items()
+            if isinstance(n, int) and not isinstance(n, bool)
+        }
+        kwargs["firsts"] = _str_map(kwargs.get("firsts"))
+        for key in ("wish", "dream"):
+            day = kwargs.get(key)
+            ok = isinstance(day, dict) and all(
+                isinstance(day.get(k), str) for k in ("kind", "day")
+            )
+            kwargs[key] = day if ok else None
         # Drop anything a newer or older version knew about and this one doesn't.
         reasons = set(CALL_PRIORITY) | {"fake"}
         # A whine never latches (only real needs do).
-        kwargs["latched"] = [r for r in kwargs.get("latched", []) if r in CALL_PRIORITY]
-        seen = dict(kwargs.get("trait_hours") or {})
+        kwargs["latched"] = [
+            r for r in _strings(kwargs.get("latched")) if r in CALL_PRIORITY
+        ]
+        seen = {
+            k: float(v)
+            for k, v in _mapping(kwargs.get("trait_hours")).items()
+            if _num(v)
+        }
         if "music" in seen:  # 0.9-0.11 counted music hours under this name
             seen["dancing"] = seen.get("dancing", 0.0) + seen.pop("music")
-            kwargs["trait_hours"] = seen
+        kwargs["trait_hours"] = seen
         call = kwargs.get("call")
-        if call is not None:
-            call_keys = {f.name for f in fields(Call)}
-            call = {k: v for k, v in call.items() if k in call_keys}
-            try:
-                kwargs["call"] = Call(**call) if call.get("reason") in reasons else None
-            except TypeError:
-                kwargs["call"] = None  # incomplete: the next tick calls again
-        game = kwargs.get("game")
-        if game is not None:
-            game_keys = {f.name for f in fields(Game)}
-            try:
-                kwargs["game"] = Game(
-                    **{k: v for k, v in game.items() if k in game_keys}
+        kwargs["call"] = None  # damaged or incomplete: the next tick calls again
+        if isinstance(call, dict) and call.get("reason") in reasons:
+            if _num(call.get("started")) and _num(call.get("deadline")):
+                kwargs["call"] = Call(
+                    call["reason"], float(call["started"]), float(call["deadline"])
                 )
-            except TypeError:
-                kwargs["game"] = None
-            if kwargs["game"] is not None and kwargs["game"].kind not in GAMES:
-                kwargs["game"] = None  # a game this version doesn't know
+        kwargs["game"] = _game(kwargs.get("game"))
         kwargs["games"] = {
             kind: {
                 k: int(n) if isinstance(n, int | float) else 0
                 for k, n in {"played": 0, "won": 0, **counts}.items()
                 if k in ("played", "won")
             }
-            for kind, counts in (kwargs.get("games") or {}).items()
+            for kind, counts in _mapping(kwargs.get("games")).items()
             if isinstance(counts, dict)
         }
         kwargs["temperament"] = {
             t: float(f)
-            for t, f in (kwargs.get("temperament") or {}).items()
-            if t in TRAITS and isinstance(f, int | float)
+            for t, f in _mapping(kwargs.get("temperament")).items()
+            if t in TRAITS and _num(f)
         }
-        levels = kwargs.get("trait_levels")
         kwargs["trait_levels"] = {
             t: n
-            for t, n in (levels if isinstance(levels, dict) else {}).items()
+            for t, n in _mapping(kwargs.get("trait_levels")).items()
             if isinstance(n, int) and not isinstance(n, bool) and 1 <= n <= 3
         }
         if not isinstance(kwargs.get("egg_choice"), str):
@@ -212,22 +436,14 @@ class PetState:
             kwargs["upbringing"] = None
         if kwargs.get("personality") not in PERSONALITIES:
             kwargs["personality"] = None
-        kwargs["bonds"] = {
-            str(user): {
-                **bond,
-                "points": int(bond.get("points") or 0),
-                **({"photos": _photos(bond["photos"])} if "photos" in bond else {}),
-            }
-            for user, bond in (kwargs.get("bonds") or {}).items()
-            if isinstance(bond, dict)
-        }
-        favourites = kwargs.get("favourites")
-        kwargs["favourites"] = {
-            k: v
-            for k, v in (favourites if isinstance(favourites, dict) else {}).items()
-            if isinstance(k, str) and isinstance(v, str)
-        }
-        for key in ("favourite_said", "catchphrase", "hatched_on", "sick_unannounced"):
+        kwargs["bonds"] = bonds_from(kwargs.get("bonds"))
+        kwargs["favourites"] = _str_map(kwargs.get("favourites"))
+        for key in (
+            "favourite_said",
+            "catchphrase",
+            "hatched_on",
+            "sick_unannounced",
+        ):
             if not isinstance(kwargs.get(key), str):
                 kwargs[key] = None
         try:
@@ -236,12 +452,40 @@ class PetState:
         except ValueError:
             kwargs["hatched_on"] = None  # damaged: worked out again at load
         state = cls(**kwargs)
+        state.unknown = unknown
         if state.upbringing is None and life_stage(state) == "adult":
             # Grew up before upbringings existed: judge it on its record so far.
             state.upbringing = upbringing(state)
         if state.personality is None and life_stage(state) in ("teen", "adult"):
             # Became a teen before personalities existed: settled now, quietly.
             state.personality = personality_for(state)
+        return state
+
+    @classmethod
+    def salvage(cls, data: Any, default_name: str, now: float) -> PetState:
+        """What can still be read from a save from_dict couldn't load: its name,
+        family, journal, memories and bonds, each on its own. The rest starts
+        fresh, as a new egg's would. Never raises."""
+        if not is_pet_root(data):
+            data = {}
+        elif isinstance(data, list):
+            data = data[0]
+        state = cls.new(default_name, now)
+        if isinstance(data.get("name"), str):
+            state.name = data["name"]
+        readers: dict[str, Any] = {
+            "generation": lambda v: _int(v, 1, 1),
+            "species": _opt_str,
+            "raised": _strings,
+            "journal": lambda v: [_retired(r) for r in _records(v)],
+            "memories": lambda v: _records(v, at=_num, kind=_str),
+            "bonds": bonds_from,
+        }
+        for key, read in readers.items():
+            try:
+                setattr(state, key, read(data.get(key)))
+            except Exception:  # noqa: BLE001 - salvage what can be, field by field
+                continue
         return state
 
     @classmethod
@@ -1058,6 +1302,7 @@ def lay_egg(
     egg.notify_users = list(state.notify_users)
     egg.bonds = copy.deepcopy(state.bonds)  # the family stays close to the device
     egg.firsts = dict(state.firsts)  # the household's season, not the pet's
+    egg.unknown = dict(getattr(state, "unknown", {}))  # a later version's keys
     egg.memories = list(state.memories)
     # Chore treats earned today wait for the hatchling, and count toward today's limit.
     egg.chore_treats = list(state.chore_treats)

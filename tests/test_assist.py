@@ -111,7 +111,10 @@ async def test_unknown_and_ambiguous_pets(
     with pytest.raises(intent.IntentHandleError, match="called Moss"):
         await ask(hass, "VirtualPetStatus", pet="Moss")
     moss = MockConfigEntry(
-        domain=DOMAIN, title="Moss", data={CONF_NAME: "Moss"}, entry_id="moss"
+        domain=DOMAIN,
+        title="Moss",
+        data={CONF_NAME: "Moss", "new_pet": True},
+        entry_id="moss",
     )
     moss.add_to_hass(hass)
     assert await hass.config_entries.async_setup(moss.entry_id)

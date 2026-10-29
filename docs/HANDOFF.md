@@ -38,7 +38,36 @@ sturdier idle-life card check). Pre-released: **0.34.0b1** (PR #31, the photo), 
 owner approved; owner art sign-off 2026-10-28, open calls accepted: the firefly adult's
 legs, the ball python child's unused climb, the hermit crab's hat on its shell, the
 duckling's 1.2 adult scale). **There will be no 0.34.0** (owner, 2026-10-28):
-after the owner's phone test, the next full release is **0.35.0**, with all three.
+**0.35.0 is the full release** with all of it plus privacy P1 (PR #45, 2026-10-28). The
+phone test is no longer a gate (owner): it's a running list in the owner's tududi task.
+Decisions taken up front for the rest: `docs/decisions-2026-10-28.md`.
+
+**Privacy P1 is merged and released in 0.35.0** (PR #45, 2026-10-28; from
+`docs/plan-2026-10-28-privacy-hardening.md` draft 2, plus all 12 of its tier-2 audit's
+findings, the missing-save wording and the catchphrase keep button fitting two rows).
+F5: `PetState.from_dict(data, default_name, now)` type-checks every known key and keeps
+unknown ones (`state.unknown`, merged back by `to_dict`); a non-object root raises
+`model.DamagedSave`, and any load error falls to `PetState.salvage` (name, generation,
+species, raised, journal, memories, bonds). `backup.async_backup` copies the file to
+`.storage/<key>.damaged.<YYYYMMDD-HHMMSS>`; repairs `save_damaged` (two wordings:
+`save_damaged` / `save_damaged_egg`, persistent) and `people_damaged`. **The config
+flow now sets `new_pet: true`** and `async_load` welcomes only an empty store with it
+(removed after the first save); an empty store without it is a damaged pet: an egg, no
+welcome. **Test entries for a fresh pet need `"new_pet": True`.** The first tick after a
+load can't fail setup. `people.People.async_load` sanitises each record (`_person`).
+F6: `this._io` kept, disconnected and re-observed; `_dropSlide` runs `_forget`, which now
+also clears the breeze, flair and status-message timers. FA: `_goShared()` on every
+slide, and the `hatch-shared-changed` window event plus a `storage` listener so other
+cards and tabs follow. D1: the personality row and the current journal line only for a
+teen or adult. Tests in `tests/test_damaged.py`; card checks "5b" (FA, F6) and the D1
+lines in "4c". **Its tier-2 audit's 12 findings are fixed** (crew branch
+`crew/hatch-at-home-s2440-privacy-p1-fix-loop-every-audi`): a bond's `noted` keeps
+numbers (`noted.tucked` is the float `tucked_at`); a `catch_up` that raises keeps what
+`from_dict` read (no salvage); `save_damaged`/`people_damaged` clear on a clean load
+once the backup they name is gone; a third wording, `save_damaged_missing` (no file,
+no `.corrupt`, no marker; owner-approved); load failures log only the error type.
+The catchphrase's keep button is 12px and may wrap inside itself, so every creature's
+five choices fit two rows (checked for all 30). `scripts/test` 585, `scripts/card-check` 134/134 (the catchphrase rows checked full size and compact).
 
 **Phase 4 of the voices plan, the photo (A7), is merged and pre-released as
 0.34.0b1** (PR #31, 2026-10-28; from `docs/plan-2026-10-28-phase4-photo.md` draft 2,

@@ -2,6 +2,10 @@
 
 **DRAFT 2, 2026-10-28.** A build plan only: no code changes here. The build is review tier 2.
 
+**Status:** P1 (F5, F6, FA, D1) built as 0.35.0b4 on crew branch
+`crew/hatch-at-home-s2434-privacy-p1-damaged-saves-salva` (2026-10-28), awaiting its tier-2
+audit and PR. P2, P3a, P3b and P3c not started.
+
 **Draft 2** folds in the adversarial audit of draft 1 (scout `hatch-at-home-s2430`, 20
 findings) and the owner's answers of 2026-10-28. Every audit claim was checked against
 `origin/main` at `0821baf` before it was folded in. All 20 held, with small corrections

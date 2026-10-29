@@ -49,6 +49,7 @@ from .const import (
     CONF_MOON_PHASE,
     CONF_MOTION,
     CONF_MUSIC,
+    CONF_NEW_PET,
     CONF_NEXT_WORLD,
     CONF_PRIVACY,
     CONF_RAIN,
@@ -166,7 +167,11 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
             dashboard = notify.dashboard_path(user_input.get(CONF_DASHBOARD))
             return self.async_create_entry(
                 title=name,
-                data={CONF_NAME: name, CONF_WORLD: user_input[CONF_WORLD]},
+                data={
+                    CONF_NAME: name,
+                    CONF_WORLD: user_input[CONF_WORLD],
+                    CONF_NEW_PET: True,  # welcomed once its first save is made
+                },
                 options={CONF_DASHBOARD: dashboard} if dashboard else {},
             )
         options = await self._world_options()

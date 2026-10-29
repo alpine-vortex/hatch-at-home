@@ -110,7 +110,9 @@ async function main() {
 
   // Audio may start without a tap here, so the babble checks can hear it play.
   const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
-  const page = await browser.newPage({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1) });
+  // A context of its own, so a check can open a second tab on the same storage.
+  const context = await browser.newContext({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1) });
+  const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => {
@@ -575,6 +577,76 @@ async function main() {
     s.voicedAt = Date.now() + 1e9;
     s.sayUntil = 0;
     return out;
+  });
+  // Every creature's own catchphrase fits the same two rows (the longest,
+  // "slow and steady", made "keep" wrap onto a third).
+  const sprites = path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "sprites");
+  const allPhrases = fs.readdirSync(sprites)
+    .filter((id) => fs.existsSync(path.join(sprites, id, "species.json")))
+    .map((id) => [id, JSON.parse(fs.readFileSync(path.join(sprites, id, "species.json"), "utf8")).voice?.catchphrase]);
+  const everyPhrase = await page.locator("hatch-pet-card").evaluate(async (el, phrases) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    const bad = [];
+    // At full size, then compact (a narrow phone column).
+    const measure = (layout) => {
+      const area = s.screen.getBoundingClientRect();
+      for (const [id, phrase] of phrases.filter(([, p]) => p)) {
+        el._state = function (slide, key) {
+          const st = real.call(this, slide, key);
+          return key === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, catchphrase: phrase } } : st;
+        };
+        el._ask(s, "catchphrase");
+        const buttons = [...s.screen.querySelectorAll(".askday button")];
+        const rows = new Set(buttons.map((b) => Math.round(b.getBoundingClientRect().top))).size;
+        const box = s.screen.querySelector(".askday").getBoundingClientRect();
+        const keep = buttons.at(-1).getBoundingClientRect();
+        const inside = box.left >= area.left && box.right <= area.right && keep.right <= area.right;
+        if (rows !== 2 || !inside || buttons.at(-1).textContent !== `keep "${phrase}"`) {
+          bad.push({ layout, id, phrase, rows, inside, widths: buttons.map((b) => Math.round(b.getBoundingClientRect().width)), area: Math.round(area.width) });
+        }
+        el._clearAsk(s);
+      }
+      return Math.round(area.width);
+    };
+    const widths = {};
+    const width = el.style.width;
+    try {
+      widths.full = measure("full");
+      el.style.width = "300px";
+      await new Promise((r) => setTimeout(r, 300));
+      el._layout();
+      await new Promise((r) => setTimeout(r, 300));
+      const compact = el._card.classList.contains("compact");
+      widths.compact = compact ? measure("compact") : `not compact (${el._slideW})`;
+    } finally {
+      el._state = real;
+      el.style.width = width;
+      await new Promise((r) => setTimeout(r, 300));
+      el._layout();
+      await new Promise((r) => setTimeout(r, 300));
+    }
+    s.asking = false;
+    return { count: phrases.filter(([, p]) => p).length, longest: phrases.map(([, p]) => p || "").sort((a, b) => b.length - a.length)[0], widths, bad };
+  }, allPhrases);
+  check("every creature's catchphrase keeps the five choices in two rows, full size and compact",
+    everyPhrase.count >= 30 && typeof everyPhrase.widths.compact === "number" && everyPhrase.bad.length === 0,
+    JSON.stringify(everyPhrase));
+  // A picture of the longest one's box.
+  await page.locator("hatch-pet-card").evaluate((el, phrase) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    el._state = function (slide, key) {
+      const st = real.call(this, slide, key);
+      return key === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, catchphrase: phrase } } : st;
+    };
+    try { el._ask(s, "catchphrase"); } finally { el._state = real; }
+  }, everyPhrase.longest);
+  await shot("04f-catchphrase-longest");
+  await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    el._clearAsk(s);
+    s.asking = false;
   });
   const p = catchy.phrase;
   check("its catchphrase ends every third line that names nobody, never a question",
@@ -1929,6 +2001,20 @@ async function main() {
       / · devoted · sweet( |$)/.test(journal[1]) && / · devoted · old soul( |$)/.test(journal[2]) && /\(now\)/.test(journal[2]),
       JSON.stringify(journal));
     await shot("07d-personality-journal");
+    // D1: a personality in a younger pet's save (a downgrade, a hand edit) isn't shown.
+    const child = await asPet("child", { personality: "fancy" });
+    check("D1: a child with a personality in its save shows no personality row", typeRow(child).length === 0,
+      JSON.stringify(typeRow(child)));
+    const childJournal = (await asPet("child", { personality: "fancy", generation: 2,
+      journal: [record(1, "Checkold", { upbringing: "steady", personality: "sweet" })] }, true))
+      .filter((line) => /^gen \d/.test(line));
+    check("D1: nor on its own journal line, while its parent's stays",
+      childJournal.length === 2 && / · sweet( |$)/.test(childJournal[0]) && !/fancy/.test(childJournal[1]),
+      JSON.stringify(childJournal));
+    const teenJournal = (await asPet("teen", { personality: "fancy", generation: 2, journal: [] }, true))
+      .filter((line) => /^gen \d/.test(line));
+    check("D1: a teen's journal line shows it", teenJournal.length === 1 && / · fancy( |$)/.test(teenJournal[0]),
+      JSON.stringify(teenJournal));
     await unstubState();
     await page.locator("hatch-pet-card .statusbtn").click();
     await page.waitForTimeout(400);
@@ -2242,6 +2328,215 @@ async function main() {
       src = (await cur().locator(".pet").getAttribute("src")) || "";
     }
     check(`egg shows ${frames}`, src.includes(frames), src.split("/").slice(-1)[0]);
+  }
+
+  // 5b. FA: turning on "shared screen" clears every personal line, typed or
+  // typing, on every slide of every card on the page and in every tab (privacy P1).
+  {
+    const me = await evaluate(() => document.querySelector("home-assistant").hass.user.id);
+    const card = page.locator("hatch-pet-card").first();
+    // Every card instance gets a close bond: nickname "sunbeam", level 8.
+    const personal = (el) => {
+      el._bond = function () { return sharedScreen() ? null : { level: 8, nickname: "sunbeam" }; };
+    };
+    // A second tab on the same browser (same localStorage), with its own personal line.
+    const tab = await context.newPage();
+    tab.on("pageerror", (e) => errors.push(`tab 2: ${e}`));
+    await tab.goto(`${HA}/pet-bench/pet`);
+    await tab.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
+    await tab.waitForTimeout(16000); // the frontend reloads itself once
+    await tab.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+    // The page's helpers (sharedScreen is the card module's; mirror it here).
+    const setup = String.raw`
+      window.sharedScreen = () => localStorage.getItem("hatch-shared-screen") === "on";
+      window.__personal = ${personal.toString()};
+      window.__say = (el, s) => {
+        el._speak(s, "hi, sunbeam! hi ${USER.name}, my sunbeam friend, so good to see you here", 60000);
+        el._bondHearts(s);
+      };
+      window.__look = (el) => el._slides.map((s) => ({
+        bubble: s.bubble.textContent, live: s.live.textContent, typing: !!s.typing, babbling: !!s.babbling,
+        hearts: s.screen.querySelectorAll(".bondhearts").length,
+        status: /you two|my day|notify me/.test(s.status.textContent),
+      }));`;
+    await evaluate(setup);
+    await tab.evaluate(setup);
+    await tab.locator("hatch-pet-card").evaluate((el) => {
+      el.setConfig({ ...el._config, seasonal: false }); // no costume line mid-check
+      el.hass = el._hass;
+      window.__personal(el);
+      el._slides.forEach((s) => { s.voicedAt = Date.now() + 1e9; });
+      const s = el._slides[el._index];
+      window.__say(el, s);
+    });
+    // A second card on this page.
+    await card.evaluate(async (el) => {
+      localStorage.setItem("hatch-shared-screen", "off");
+      const two = document.createElement("hatch-pet-card");
+      two.id = "fa-second";
+      two.style.cssText = "position:fixed;left:0;top:0;width:400px;z-index:-1";
+      two.setConfig({ ...el._config, seasonal: false });
+      document.body.append(two);
+      two.hass = el._hass;
+      for (let i = 0; i < 40 && !two._slides?.[0]?.species; i++) await new Promise((r) => setTimeout(r, 250));
+      for (const c of [el, two]) {
+        window.__personal(c);
+        c._slides.forEach((s) => { s.voicedAt = Date.now() + 1e9; });
+      }
+    });
+    const round = async (typing) => {
+      const before = await card.evaluate(async (el, typing) => {
+        localStorage.setItem("hatch-shared-screen", "off");
+        const two = document.getElementById("fa-second");
+        const s = el._slides[el._index];
+        const other = el._slides.find((x) => x !== s);
+        s.screen.classList.remove("show-status");
+        // The other slide: its status drawn personally, its bond hearts showing.
+        other.statusHtml = null;
+        el._renderStatus(other, []);
+        el._bondHearts(other);
+        window.__say(two, two._slides[two._index]);
+        window.__say(el, s);
+        const out = { typing: !!s.typing, said: s.bubble.textContent, live: s.live.textContent,
+          otherStatus: /you two/.test(other.status.textContent), babble: localStorage.getItem("hatch-babble") };
+        if (!typing) el._stopTyping(s, false);
+        // The status opens on this slide (as a tap does) and its switch is pressed.
+        el._renderStatus(s, []);
+        s.status.querySelector(".bell.shared").click();
+        return out;
+      }, typing);
+      await page.waitForTimeout(1500); // a tick or two
+      const after = await card.evaluate((el) => ({
+        one: window.__look(el), two: window.__look(document.getElementById("fa-second")),
+        message: el._slides[el._index].status.querySelector(".status-feedback")?.textContent,
+      }));
+      const inTab = await tab.locator("hatch-pet-card").evaluate((el) => window.__look(el));
+      const clean = (looks) => looks.every((l) => !/sunbeam/.test(l.bubble + l.live) &&
+        !l.bubble.includes(USER.name) && !l.live.includes(USER.name) &&
+        !l.typing && !l.babbling && !l.hearts && !l.status);
+      return { before, after, inTab, clean: clean(after.one) && clean(after.two) && clean(inTab) };
+    };
+    // Its own tab's line, said fresh before each round.
+    const sayInTab = () => tab.locator("hatch-pet-card").evaluate((el) => window.__say(el, el._slides[el._index]));
+    const typingRound = await round(true);
+    check("FA: shared screen clears a personal line still typing, on every slide, card and tab",
+      typingRound.before.said.includes("sunbeam") && typingRound.before.live.includes("sunbeam") &&
+      typingRound.before.otherStatus && typingRound.clean &&
+      typingRound.after.message === "Nothing personal on this screen now.",
+      JSON.stringify({ ...typingRound, typedWhenPressed: typingRound.before.typing }));
+    await sayInTab();
+    const doneRound = await round(false);
+    check("FA: and a personal line already typed out", doneRound.before.said.includes("sunbeam") && doneRound.clean,
+      JSON.stringify(doneRound));
+    await card.locator(".slide:not(.away-slide) .device").screenshot({ path: path.join(OUT, "08a-shared-cleared.png") });
+    // Closing the status changes nothing: the next line is the mood's own.
+    const closed = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      s.screen.classList.remove("show-status");
+      await new Promise((r) => setTimeout(r, 1500));
+      return { looks: window.__look(el), index: el._index };
+    });
+    check("FA: the status closed, still nothing personal, and the pet says its idle line",
+      closed.looks.every((l) => !/sunbeam/.test(l.bubble + l.live) && !l.hearts) &&
+      closed.looks[closed.index].bubble.length > 0,
+      JSON.stringify(closed));
+    // Personal again: other cards and tabs follow, with their status redrawn.
+    await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      el._renderStatus(s, []);
+      s.status.querySelector(".bell.shared").click();
+    });
+    await page.waitForTimeout(800);
+    const back = await card.evaluate((el) => {
+      const two = document.getElementById("fa-second");
+      const s = two._slides[0];
+      s.statusHtml = null;
+      two._renderStatus(s, []);
+      return { shared: localStorage.getItem("hatch-shared-screen"), you: /you two/.test(s.status.textContent) };
+    });
+    check("FA: turning it off again makes every card personal", back.shared === "off" && back.you, JSON.stringify(back));
+    // A visit reply that lands after the switch queues no personal note or question.
+    const late = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const hass = el._hass;
+      const real = hass.callService;
+      let answer;
+      hass.callService = () => new Promise((r) => { answer = r; });
+      Object.assign(s, { visitedAt: 0, queue: [], asking: false });
+      try {
+        el._visit(s);
+      } finally {
+        hass.callService = real;
+      }
+      const asked = !!answer;
+      localStorage.setItem("hatch-shared-screen", "on");
+      el._goShared();
+      answer?.({ response: { counted: true, notes: [{ kind: "friends_for", months: 3 }], ask: "catchphrase" } });
+      await new Promise((r) => setTimeout(r, 50));
+      const out = { asked, queue: (s.queue || []).map((q) => q.text), asking: !!s.asking };
+      localStorage.setItem("hatch-shared-screen", "off");
+      return out;
+    });
+    check("FA: a visit reply arriving after the switch queues nothing personal",
+      late.asked && late.queue.length === 0 && !late.asking, JSON.stringify(late));
+    await tab.close();
+
+    // F6: a slide that goes is torn down like a forgotten one, and the card's
+    // observer is disconnected when it leaves the page and re-observed after.
+    const f6 = await card.evaluate(async () => {
+      const two = document.getElementById("fa-second");
+      const io = { observe: 0, disconnect: 0 };
+      const proto = IntersectionObserver.prototype;
+      const real = { observe: proto.observe, disconnect: proto.disconnect, revoke: URL.revokeObjectURL };
+      proto.observe = function (...a) { io.observe++; return real.observe.apply(this, a); };
+      proto.disconnect = function (...a) { io.disconnect++; return real.disconnect.apply(this, a); };
+      const revoked = [];
+      URL.revokeObjectURL = (u) => { revoked.push(u); return real.revoke(u); };
+      const out = {};
+      try {
+        const devices = Object.values(two._hass.entities).filter((e) => e.platform === "virtual_pet")
+          .map((e) => e.device_id).filter((d, i, all) => d && all.indexOf(d) === i);
+        two.setConfig({ ...two._config, devices: devices.slice(0, 2) });
+        two.hass = two._hass;
+        for (let i = 0; i < 40 && two._slides.length < 2; i++) await new Promise((r) => setTimeout(r, 250));
+        const s = two._slides[1];
+        const url = URL.createObjectURL(new Blob(["x"], { type: "image/png" }));
+        s.photos = new Map([[1, { url, name: "a.png", photo: { name: "Old", species: "bird", stage: "adult", on: "2026-01-02" } }]]);
+        two._photoDialog(s, 1);
+        out.dialogOpened = !!two.shadowRoot.querySelector(".photo-dialog")?.open;
+        s.game = {};
+        let unsubbed = false;
+        s.unsub = () => { unsubbed = true; };
+        s.screen.classList.add("breezy");
+        s.breezeTimer = setTimeout(() => {}, 60000);
+        two.setConfig({ ...two._config, devices: devices.slice(0, 1) });
+        two.hass = two._hass;
+        for (let i = 0; i < 40 && two._slides.length > 1; i++) await new Promise((r) => setTimeout(r, 250));
+        Object.assign(out, {
+          slides: two._slides.length, revoked: revoked.includes(url),
+          dialogClosed: !two.shadowRoot.querySelector(".photo-dialog")?.open,
+          game: s.game, unsubbed, unsubCleared: s.unsub === null, breezy: s.screen.classList.contains("breezy"),
+        });
+        const before = { ...io };
+        two._slides[0].unsub = () => {};
+        two.remove();
+        out.disconnected = io.disconnect > before.disconnect;
+        out.unsubClearedOnLeave = two._slides[0].unsub === null;
+        document.body.append(two);
+        out.observed = io.observe > before.observe;
+        two.remove();
+      } finally {
+        proto.observe = real.observe;
+        proto.disconnect = real.disconnect;
+        URL.revokeObjectURL = real.revoke;
+      }
+      return out;
+    });
+    check("F6: a dropped slide ends its game, revokes its photos, closes the dialog and unsubscribes",
+      f6.slides === 1 && f6.dialogOpened && f6.dialogClosed && f6.revoked && f6.game === null && f6.unsubbed && f6.unsubCleared && f6.unsubClearedOnLeave && !f6.breezy,
+      JSON.stringify(f6));
+    check("F6: the card's observer disconnects when it leaves the page and observes again when back",
+      f6.disconnected && f6.observed, JSON.stringify(f6));
   }
 
   // 6. The card editor loads and offers the pets.

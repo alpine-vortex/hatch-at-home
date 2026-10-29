@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import UTC, datetime
+import math
 import random
 
 import pytest
@@ -2009,3 +2010,131 @@ def test_reason_key_follows_the_branch_that_won():
     pet = hatched(now)
     pet.call = model.Call("hunger", now, now + 20 * MIN)
     assert keyed(pet, now, rainy)[3] == "call_hunger"
+
+
+# --- Damaged saves (F5) ----------------------------------------------------------
+
+
+def test_a_damaged_save_keeps_what_it_can():
+    data = hatched(at(9)).to_dict()
+    photo = {"name": "Old", "species": "bird", "stage": "adult", "on": "2026-01-02"}
+    data.update(
+        species="a_creature_from_later",  # never checked against the catalog
+        sick_unannounced=3,
+        hunger="x",
+        happiness=250,
+        latched=None,
+        call="bad",
+        bonds={
+            "u1": {
+                "points": 9,
+                "photos": {"1": photo},
+                "catchphrase": "x",
+                "nickname": 4,
+                "today": "x",
+                "later": [1],
+            }
+        },
+        journal=[{"name": "Old", "traits": "x", "levels": [1]}, "x"],
+    )
+    pet = model.PetState.from_dict(data)
+    assert pet.species == "a_creature_from_later"
+    assert pet.sick_unannounced is None
+    assert (pet.hunger, pet.happiness) == (80.0, 100.0)
+    assert pet.latched == [] and pet.call is None
+    bond = pet.bonds["u1"]
+    assert bond["photos"]["1"]["name"] == "Old"
+    assert "catchphrase" not in bond and "nickname" not in bond
+    assert bond["today"] == 0 and bond["later"] == [1]
+    assert pet.journal == [{"name": "Old", "traits": [], "levels": {}, "games": {}}]
+    pet = model.PetState.from_dict({**data, "sick_unannounced": "hunger"})
+    assert pet.sick_unannounced == "hunger"
+
+
+def test_a_save_needs_a_pet_at_its_root():
+    data = hatched(at(9)).to_dict()
+    assert model.PetState.from_dict([data]).age_hours == data["age_hours"]
+    for root in ("junk", 3, None, [data, data], ["x"]):
+        with pytest.raises(model.DamagedSave):
+            model.PetState.from_dict(root)
+
+
+def test_missing_times_are_worked_out():
+    data = hatched(at(9)).to_dict()
+    del data["name"], data["born"], data["last_updated"]
+    pet = model.PetState.from_dict(data, "Pip", at(10))
+    assert pet.name == "Pip"
+    assert pet.last_updated == at(10)  # no catch-up for the gap
+    assert pet.born == at(10) - pet.age_hours * 3600
+
+
+def test_salvage_keeps_the_family_and_the_bonds():
+    data = {
+        "name": "Bean",
+        "generation": "x",
+        "species": "deer",
+        "journal": [{"name": "Old"}],
+        "bonds": {"u1": {"points": 4}, "u2": "x"},
+        "hunger": 3.0,
+    }
+    pet = model.PetState.salvage(data, "Pip", at(9))
+    assert (pet.name, pet.generation, pet.species) == ("Bean", 1, "deer")
+    assert pet.bonds == {"u1": {"points": 4}} and pet.journal[0]["name"] == "Old"
+    assert pet.hunger == 80.0 and pet.born == at(9)
+    assert model.PetState.salvage("junk", "Pip", at(9)).name == "Pip"
+
+
+def test_a_lived_in_save_loads_unchanged():
+    """The stricter load keeps everything the model itself writes."""
+    pet = hatched(at(9))
+    pet.age_hours = 10_000.0
+    rng = random.Random(3)
+    for day in ("2026-10-01", "2026-10-02", "2026-10-03"):
+        model.add_bond(pet, "u1", "visit", day, rng)
+        model.add_bond(pet, "u1", "game", day, rng, "left_right")
+    pet.bonds["u1"]["points"] = R.BOND_LEVELS[-1] + 5
+    pet.species = "bird"
+    model.add_bond(pet, "u1", "game", "2026-10-04", rng, "higher_lower")
+    model.game_record(pet, "u1", "left_right", 3)
+    model.game_record(pet, "u1", "left_right", 5)
+    model.favourite_game(pet, "u1", "left_right", "2026-10-04")
+    pet.bonds["u1"]["tucked_at"] = at(22)
+    # The tuck-in note's key is the float tucked_at (coordinator).
+    pet.bonds["u1"]["noted"] = {"birthday_friends": "2026", "tucked": at(22)}
+    model.take_photo(pet, "u1", "2026-10-04")
+    model.apply_action(pet, "feed", at(10), NoLuck(), "Sam")
+    model.season_first(pet, "snow", at(9, day=3), UTC)
+    model.pick_wish(pet, "2026-10-04", Lucky(1), {"play"}, {"u1": "Sam"})
+    model.pick_dream(pet, "u1", "stars", at(20))
+    pet.dream_seeds.append({"kind": "watching", "title": "Bluey", "at": at(19)})
+    model.dream_on_waking(pet, at(7, day=5), "2026-10-05", random.Random(0))
+    pet.sick_unannounced = "hunger"
+    pet, _ = model.lay_egg(pet, at(12, day=5), random.Random(1))
+    data = pet.to_dict()
+    assert data["journal"] and data["bonds"]["u1"]["photos"] and data["memories"]
+    assert model.PetState.from_dict(data).to_dict() == data
+
+
+def test_a_tuck_in_note_survives_a_load():
+    data = hatched(at(9)).to_dict()
+    noted = {"tucked": 12345.5, "photo": "2", "bad": [1], "nan": math.nan}
+    data["bonds"] = {"u1": {"points": 3, "noted": noted}}
+    loaded = model.PetState.from_dict(data).bonds["u1"]["noted"]
+    assert loaded == {"tucked": 12345.5, "photo": "2"}
+
+
+def test_a_dream_seed_needs_its_kind():
+    data = hatched(at(9)).to_dict()
+    data["dream_seeds"] = [{"at": at(8)}, {"kind": "watching", "at": at(8)}]
+    assert model.PetState.from_dict(data).dream_seeds == [
+        {"kind": "watching", "at": at(8)}
+    ]
+
+
+def test_a_later_versions_keys_go_on_to_the_next_generation():
+    data = hatched(at(9)).to_dict()
+    pet = model.PetState.from_dict({**data, "from_later": {"x": 1}})
+    pet.age_hours = 10_000.0
+    egg, _ = model.lay_egg(pet, at(12), random.Random(1))
+    assert egg is not pet
+    assert egg.to_dict()["from_later"] == {"x": 1}
