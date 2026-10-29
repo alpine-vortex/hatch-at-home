@@ -2863,7 +2863,18 @@ async function main() {
     await tab.goto(`${HA}/pet-bench/pet`);
     await tab.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
     await tab.waitForTimeout(16000); // the frontend reloads itself once
-    await tab.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+    await tab.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 }).catch(async (err) => {
+      // What the tab shows instead, for the next person chasing this.
+      await tab.screenshot({ path: path.join(OUT, "05b-tab2-timeout.png") }).catch(() => {});
+      const why = await tab.locator("hatch-pet-card").first().evaluate((el) => {
+        const btn = el.shadowRoot?.querySelector(".statusbtn");
+        const s = el._slides?.[el._index];
+        return { url: location.href, slides: el._slides?.length, booting: el._booting,
+          stage: s && el._state(s, "sensor.life_stage")?.state, statusbtn: !!btn, shown: !!btn?.offsetParent };
+      }, null, { timeout: 5000 }).catch((e) => `no card: ${String(e).split("\n")[0]}`);
+      console.log(`note: tab 2 never showed the status button: ${JSON.stringify(why)}`);
+      throw err;
+    });
     // The page's helpers (sharedScreen is the card module's; mirror it here).
     const setup = String.raw`
       window.sharedScreen = () => localStorage.getItem("hatch-shared-screen") === "on";
