@@ -2310,7 +2310,7 @@ class HatchPetCard extends HTMLElement {
     const color = shell.color || "#e8834a";
     const dev = s.device;
     const shape = ["tank", "house", "porthole", "pad", "moon"].includes(shell.shape) ? shell.shape : "egg";
-    const finish = ["woodland", "aqua", "grove", "celestial", "dune"].includes(shell.finish)
+    const finish = ["woodland", "aqua", "grove", "celestial", "dune", "clear", "glitter", "glow"].includes(shell.finish)
       ? `finish-${shell.finish}` : "";
     dev.className = `device ${shape}${finish ? ` ${finish}` : ""}`;
     dev.querySelector(".roof").style.display = shape === "house" ? "" : "none";
