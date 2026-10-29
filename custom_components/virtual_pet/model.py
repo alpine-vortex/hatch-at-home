@@ -166,6 +166,10 @@ def _game(v: Any) -> Game | None:
     if not (_num(v.get("started")) and _num(v.get("last_at"))):
         return None
     number = v.get("number")
+    if v.get("kind") == "higher_lower" and not (
+        _num(number) and int(number) in NUMBERS
+    ):
+        return None  # nothing to guess against
     return Game(
         started=float(v["started"]),
         last_at=float(v["last_at"]),
@@ -302,6 +306,10 @@ class PetState:
     upbringing: str | None = None  # decided on reaching adulthood (UPBRINGINGS)
     personality: str | None = None  # settled on becoming a teen (PERSONALITIES)
     game: Game | None = None
+    # Higher or Lower's number on show when its game was dropped unguessed, and
+    # when: the next start shows it again for OPENING_KEEP_MINUTES (no reroll).
+    opening: int | None = None
+    opening_at: float | None = None
     games: dict[str, dict[str, int]] = field(default_factory=dict)  # kind -> counts
     sick_unannounced: str | None = (
         None  # cause, if it fell sick asleep (told on waking)
@@ -411,11 +419,18 @@ class PetState:
                     call["reason"], float(call["started"]), float(call["deadline"])
                 )
         kwargs["game"] = _game(kwargs.get("game"))
+        opening, opening_at = (
+            kwargs.get("opening"),
+            _float(kwargs.get("opening_at"), None),
+        )
+        kwargs["opening"], kwargs["opening_at"] = (None, None)
+        if _num(opening) and int(opening) in NUMBERS and opening_at is not None:
+            kwargs["opening"], kwargs["opening_at"] = int(opening), opening_at
         kwargs["games"] = {
             kind: {
                 k: int(n) if isinstance(n, int | float) else 0
                 for k, n in {"played": 0, "won": 0, **counts}.items()
-                if k in ("played", "won")
+                if k in ("played", "won", "dropped")
             }
             for kind, counts in _mapping(kwargs.get("games")).items()
             if isinstance(counts, dict)
@@ -571,6 +586,8 @@ def shift_times(state: PetState, delta: float) -> None:
     if state.game is not None:
         state.game.started += delta
         state.game.last_at += delta
+    if state.opening_at is not None:
+        state.opening_at += delta
     if state.call is not None:
         state.call.started += delta
         state.call.deadline += delta
@@ -675,7 +692,7 @@ def _step(
         return
 
     if state.game and t1 - state.game.last_at >= R.GAME_IDLE_MINUTES * 60:
-        state.game = None  # nobody finished it
+        events += drop_game(state, t1)  # nobody finished it
     _sleep(state, t1, settings, events)
     _give_treats(state, t1, events)
     _learn(state, hours, t1, settings, events)
@@ -778,7 +795,7 @@ def _fall_asleep(
     up too long) or "collapsed" (out of energy)."""
     state.asleep = True
     state.napping = napping
-    state.game = None
+    events += drop_game(state, t)
     state.stayed_up_since = None
     state.wake_at = None if napping else next_wake(t, settings)
     # An open call pauses with the pet (see _calls and _wake), whatever it is.
@@ -1088,8 +1105,11 @@ def game_counts(state: PetState) -> dict[str, dict[str, int]]:
 
 
 def games_played(state: PetState) -> int:
-    """Every game this pet has finished, of any kind."""
-    return sum(counts["played"] for counts in state.games.values())
+    """Every game this pet has finished, of any kind. A dropped game stays in
+    "played" (for the win rate) but isn't finished, so it doesn't count here."""
+    return sum(
+        counts["played"] - counts.get("dropped", 0) for counts in state.games.values()
+    )
 
 
 def trait_level(state: PetState, trait: str) -> int:
@@ -1572,16 +1592,86 @@ def start_game(
         _log(state, {"at": now, "action": "game", "by": by, "result": refusal})
         events.append({"type": "care", "action": "game", "result": refusal})
         return {"result": refusal}, events
+    _spoil_whine(state, events)
     game = state.game
-    if game is not None and game.kind == kind and game.rounds == 0:
-        # Not guessed yet: the same opening, so starting over can't fish for
-        # an easy first number.
+    if game is not None and game.kind == kind:
+        # Carry on with the same game, guessed or not: the same round, score
+        # and number, so starting over can't fish for an easy opening.
         game.last_at = now
         return _round_info(game), events
+    events += drop_game(state, now, by, switched=True)
     game = state.game = Game(started=now, last_at=now, kind=kind)
     if kind == "higher_lower":
-        game.number = rng.choice(NUMBERS)
+        kept = state.opening
+        if (
+            kept is not None
+            and state.opening_at is not None
+            and now - state.opening_at < R.OPENING_KEEP_MINUTES * 60
+        ):
+            game.number = kept
+        else:
+            game.number = rng.choice(NUMBERS)
+        state.opening = state.opening_at = None
     return _round_info(game), events
+
+
+def drop_game(
+    state: PetState, now: float, by: str | None = None, switched: bool = False
+) -> list[Event]:
+    """Drop the game in progress (switched away from, idle, asleep, away). One
+    with a guess counts as a loss: played, its energy, the losing happiness, and
+    a game_finished marked dropped (no wish, record or bond). A Higher or Lower
+    opening with no guess costs nothing, but is kept so a restart can't reroll it.
+    Only a person switching games (switched) makes it care: its happiness may
+    answer a call and it is logged. A drop nobody caused (idle, asleep, away)
+    answers nothing, so it can't test whether a call is real, and isn't logged."""
+    game, state.game = state.game, None
+    if game is None:
+        return []
+    if game.rounds == 0:
+        if game.kind == "higher_lower" and game.number is not None:
+            state.opening, state.opening_at = game.number, now
+        return []
+    happiness_before = state.happiness
+    state.happiness = _clamp(state.happiness + R.GAME_LOSE_HAPPINESS)
+    state.energy = _clamp(state.energy + R.PLAY_ENERGY)
+    state.hunger = _clamp(state.hunger + R.PLAY_HUNGER)
+    state.weight = _clamp(state.weight + R.WEIGHT_GAME)
+    counts = state.games.setdefault(game.kind, {"played": 0, "won": 0})
+    counts["played"] += 1
+    counts["dropped"] = counts.get("dropped", 0) + 1
+    if switched or by is not None:
+        _log(
+            state,
+            {
+                "at": now,
+                "action": "game",
+                "by": by,
+                "result": "lost",
+                "score": f"{game.wins}/{game.rounds}",
+                "game": game.kind,
+            },
+        )
+    events: list[Event] = [
+        {
+            "type": "game_finished",
+            "game": game.kind,
+            "won": False,
+            "wins": game.wins,
+            "dropped": True,
+        }
+    ]
+    if switched:
+        _resolve_call(state, now, events, state.happiness > happiness_before)
+    return events
+
+
+def _spoil_whine(state: PetState, events: list[Event]) -> None:
+    """A game played for a fake call gives the whining what it wanted."""
+    if state.call is not None and state.call.reason == "fake":
+        state.discipline = _clamp(state.discipline + R.PRAISE_WHINING_DISCIPLINE)
+        state.call = None
+        events.append({"type": "call_answered", "reason": "fake", "answer": "spoiled"})
 
 
 def play_game(
@@ -1604,23 +1694,30 @@ def play_game(
         raise ValueError(f"{guess} is not a guess in {kind}")
     events: list[Event] = []
     game = state.game
-    if game is not None and game.kind != kind:
-        game = state.game = None  # switched games: the old one is dropped
-    if game is not None and (state.away or state.asleep):
-        state.game = game = None  # left unfinished when it went away or to sleep
+    refusal = _refuse_play(state)
+    if refusal is None or (
+        refusal == "too_tired" and game is not None and game.kind == kind
+    ):
+        _spoil_whine(state, events)  # any game call that isn't refused
+    if game is not None and (game.kind != kind or state.away or state.asleep):
+        # Switched games, or left unfinished when it went away or to sleep.
+        events += drop_game(state, now, by, switched=game.kind != kind)
+        game = None
     if game is None:
         if kind != "left_right":
             # Nothing to guess against yet; the card starts the game first.
             return {"result": "no_game"}, events
-        info, events = start_game(state, kind, now, rng, by)
+        info, started = start_game(state, kind, now, rng, by)
+        events += started
         if info["result"] != OK:
             return info, events
         game = state.game
         assert game is not None
+    if kind == "higher_lower":
+        assert game.number is not None
     game.rounds += 1
     game.last_at = now
     if kind == "higher_lower":
-        assert game.number is not None
         shown = game.number
         game.number = rng.choice([n for n in NUMBERS if n != shown])
         correct = (game.number > shown) == (guess == "higher")
