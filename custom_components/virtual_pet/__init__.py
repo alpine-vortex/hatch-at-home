@@ -14,6 +14,7 @@ from homeassistant.core import (
     ServiceCall,
     ServiceResponse,
     SupportsResponse,
+    callback,
 )
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
@@ -26,7 +27,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
-from . import notify, rates as R
+from . import channel, notify, rates as R
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_ENABLED,
@@ -124,13 +125,23 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     # re-call notification each person gets for all of them.
     people = People(hass)
     await people.async_load()
-    hass.data[DOMAIN] = {"people": people, "pets": {}, "recalls": notify.Recalls()}
+    # Who watches each pet on the private channel (virtual_pet/subscribe), by
+    # config entry: in memory, and outliving a reload's coordinator.
+    hass.data[DOMAIN] = {
+        "people": people,
+        "pets": {},
+        "recalls": notify.Recalls(),
+        "watchers": {},
+    }
     websocket_api.async_register_command(hass, websocket_answer)
     websocket_api.async_register_command(hass, websocket_forget_birthday)
     websocket_api.async_register_command(hass, websocket_birthday_phone)
     websocket_api.async_register_command(hass, websocket_baby_talk)
     websocket_api.async_register_command(hass, websocket_photos)
     websocket_api.async_register_command(hass, websocket_forget_me)
+    websocket_api.async_register_command(hass, websocket_subscribe)
+    websocket_api.async_register_command(hass, websocket_notify_me)
+    websocket_api.async_register_command(hass, websocket_my_day)
 
     async def fast_forward(call: ServiceCall) -> ServiceResponse:
         entries: list[PetConfigEntry] = hass.config_entries.async_loaded_entries(DOMAIN)
@@ -436,6 +447,90 @@ async def websocket_photos(
     connection.send_result(msg["id"], {"photos": pet.photos(connection.user.id)})
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/subscribe",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("shared"): bool,
+    }
+)
+@callback
+def websocket_subscribe(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The private channel: the signed-in person's own view of a pet (their
+    bond, their switches, their moments) and the house's, pushed to this
+    connection alone as it changes. A shared screen gets the house's only."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:  # also mid-reload: the card asks again
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    user, shared = connection.user.id, msg["shared"]
+
+    @callback
+    def send(payload: dict) -> None:
+        connection.send_message(websocket_api.event_message(msg["id"], payload))
+
+    token, connection.subscriptions[msg["id"]] = channel.add(
+        hass, pet.pet_id, user, shared, send
+    )
+    connection.send_result(msg["id"])
+    send(pet.channel_snapshot(token, user, shared))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/notify_me",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_notify_me(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The signed-in person's phone hears this pet, or stops. A websocket
+    command, so who opted in isn't recorded (the service stays, for
+    automations)."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    await pet.async_set_notify(connection.user.id, msg["enabled"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/my_day",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_my_day(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Let the pets notice the signed-in person's day, or stop. A websocket
+    command, so who turned it on isn't recorded (the service stays, for
+    automations)."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    await pet.async_set_my_day(connection.user.id, msg["enabled"])
+    connection.send_result(msg["id"])
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
     """Wake the pet up."""
     coordinator = PetCoordinator(hass, entry)
@@ -443,6 +538,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
     hass.data[DOMAIN]["pets"][entry.entry_id] = coordinator
+    coordinator.async_start_channel()  # a card open across a reload: a snapshot
     recalls: notify.Recalls = hass.data[DOMAIN]["recalls"]
     for send in recalls.clear_stale(
         list(coordinator.state.notify_users) if coordinator.state else [],
@@ -493,5 +589,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: PetConfigEntry) -> None
     for key in ("missing_entities", "world_not_ready", "save_damaged"):
         ir.async_delete_issue(hass, DOMAIN, f"{key}_{entry.entry_id}")
     persistent_notification.async_dismiss(hass, f"{DOMAIN}_{entry.entry_id}_welcome")
+    if DOMAIN in hass.data:
+        channel.gone(hass, entry.entry_id)
     _refresh_recalls(hass)
     await PetStore(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}").async_remove()
