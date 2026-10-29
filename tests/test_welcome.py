@@ -55,21 +55,34 @@ def sidebar(hass: HomeAssistant) -> dict[str, Any]:
     return persistent_notification._async_get_or_create_notifications(hass)
 
 
-async def test_a_new_pet_is_welcomed_on_every_phone(
+def welcome(name: str) -> str:
+    return WELCOME.replace("Pip", name)
+
+
+async def notify_me(hass: HomeAssistant, name: str, entity_id: str) -> None:
+    """A person turns "notify me" on for a pet."""
+    user = next(u for u in await hass.auth.async_get_users() if u.name == name)
+    await hass.services.async_call(
+        DOMAIN,
+        "notify_me",
+        {"entity_id": entity_id, "enabled": True},
+        blocking=True,
+        context=Context(user_id=user.id),
+    )
+    await hass.async_block_till_done()
+
+
+async def test_the_first_pet_is_welcomed_in_the_sidebar_only(
     hass: HomeAssistant, phones: dict[str, list]
 ) -> None:
     welcomed = async_capture_events(hass, f"{DOMAIN}_welcomed")
     entry = await add_pet(hass, dashboard="lovelace-pets/shelf/")
     assert entry.options == {"dashboard": "/lovelace-pets/shelf"}
-    for name in ("Me", "Other"):  # everyone, though nobody tapped "notify me"
-        assert [c.data["message"] for c in phones[name]] == [WELCOME]
-        data = phones[name][0].data["data"]
-        assert data["url"] == data["clickAction"] == "/lovelace-pets/shelf"
-        assert data["tag"] == f"{DOMAIN}_{entry.entry_id}_welcome"
+    assert phones["Me"] == phones["Other"] == []  # nobody asked to hear yet
     note = sidebar(hass)[f"{DOMAIN}_{entry.entry_id}_welcome"]
     assert note["message"].startswith(WELCOME)
     assert "(/lovelace-pets/shelf)" in note["message"]
-    assert [e.data["pet_id"] for e in welcomed] == [entry.entry_id]
+    assert [e.data for e in welcomed] == [{"pet_id": entry.entry_id}]  # no names
 
     # Removing the pet takes its welcome out of the sidebar.
     assert await hass.config_entries.async_remove(entry.entry_id)
@@ -77,21 +90,47 @@ async def test_a_new_pet_is_welcomed_on_every_phone(
     assert f"{DOMAIN}_{entry.entry_id}_welcome" not in sidebar(hass)
 
 
+async def test_a_new_pet_is_welcomed_on_the_phones_that_asked(
+    hass: HomeAssistant, phones: dict[str, list]
+) -> None:
+    """Only people with "notify me" on for another pet here hear of a new one."""
+    welcomed = async_capture_events(hass, f"{DOMAIN}_welcomed")
+    await add_pet(hass)
+    await notify_me(hass, "Me", "sensor.pip_mood")
+    for calls in phones.values():
+        calls.clear()
+    moss = await add_pet(hass, name="Moss", dashboard="lovelace-pets/shelf/")
+    assert [c.data["message"] for c in phones["Me"]] == [welcome("Moss")]
+    assert phones["Other"] == []
+    data = phones["Me"][0].data["data"]
+    assert data["url"] == data["clickAction"] == "/lovelace-pets/shelf"
+    assert data["tag"] == f"{DOMAIN}_{moss.entry_id}_welcome"
+    assert f"{DOMAIN}_{moss.entry_id}_welcome" in sidebar(hass)
+    assert [e.data for e in welcomed][-1] == {"pet_id": moss.entry_id}
+    assert all(set(e.data) == {"pet_id"} for e in welcomed)
+
+
 async def test_without_a_dashboard_the_welcome_has_no_link(
     hass: HomeAssistant, phones: dict[str, list]
 ) -> None:
     entry = await add_pet(hass)
     assert entry.options == {}
-    assert "url" not in phones["Me"][0].data["data"]
     note = sidebar(hass)[f"{DOMAIN}_{entry.entry_id}_welcome"]
     assert note["message"] == WELCOME
+    await notify_me(hass, "Me", "sensor.pip_mood")
+    phones["Me"].clear()
+    await add_pet(hass, name="Moss")
+    assert "url" not in phones["Me"][0].data["data"]
 
 
 async def test_restarts_and_reloads_never_welcome_again(
     hass: HomeAssistant, phones: dict[str, list]
 ) -> None:
-    entry = await add_pet(hass)
-    assert await hass.config_entries.async_reload(entry.entry_id)
+    await add_pet(hass)
+    await notify_me(hass, "Me", "sensor.pip_mood")
+    phones["Me"].clear()
+    moss = await add_pet(hass, name="Moss")
+    assert await hass.config_entries.async_reload(moss.entry_id)
     await hass.async_block_till_done()
     assert len(phones["Me"]) == 1
 

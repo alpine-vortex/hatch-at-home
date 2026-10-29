@@ -1701,7 +1701,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
 
     def _welcome(self) -> None:
-        """A new pet: tell the whole house, on every phone and in the sidebar."""
+        """A new pet: a note in the sidebar, and on the phones of people who
+        turned "notify me" on for another pet here (the first pet in a house
+        welcomes in the sidebar only). The event names nobody."""
         text = notify.welcome(self.config_entry.title)
         link = f"\n\n[Open the pet shelf]({self.dashboard})" if self.dashboard else ""
         persistent_notification.async_create(
@@ -1710,7 +1712,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             title="Virtual Pet",
             notification_id=f"{DOMAIN}_{self.pet_id}_welcome",
         )
-        self._send(None, text, f"{DOMAIN}_{self.pet_id}_welcome")
+        pets: dict[str, PetCoordinator] = self.hass.data[DOMAIN]["pets"]
+        users = sorted(
+            {
+                user
+                for pet in pets.values()
+                if pet is not self and pet.state is not None
+                for user in pet.state.notify_users
+            }
+        )
+        if users:  # never None: that's every phone in the house
+            self._send(users, text, f"{DOMAIN}_{self.pet_id}_welcome")
         self.hass.bus.async_fire(f"{DOMAIN}_welcomed", {"pet_id": self.pet_id})
 
     async def async_notification_button(self, key: str, context: Context) -> None:

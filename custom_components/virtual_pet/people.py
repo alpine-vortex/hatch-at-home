@@ -147,6 +147,13 @@ class People:
     async def async_save_now(self) -> None:
         await self._store.async_save(self.data)
 
+    async def forget(self, user: str) -> None:
+        """Erase one person's record ("forget my data"), saved at once: a
+        restart inside the save delay must not bring it back. Their lock stays
+        (a visit may hold it); the household's weather is no one's."""
+        self.data["people"].pop(user, None)
+        await self.async_save_now()
+
     def person(self, user: str) -> dict[str, Any]:
         return self.data["people"].setdefault(user, {})
 
