@@ -124,6 +124,9 @@ class PetState:
     personality: str | None = None  # settled on becoming a teen (PERSONALITIES)
     game: Game | None = None
     games: dict[str, dict[str, int]] = field(default_factory=dict)  # kind -> counts
+    sick_unannounced: str | None = (
+        None  # cause, if it fell sick asleep (told on waking)
+    )
     treats_waiting: int = 0  # chore treats it gets when it's next awake and home
     chore_treats: list[float] = field(default_factory=list)  # when each was earned
     firsts: dict[str, str] = field(default_factory=dict)  # kind -> season it was seen
@@ -224,7 +227,7 @@ class PetState:
             for k, v in (favourites if isinstance(favourites, dict) else {}).items()
             if isinstance(k, str) and isinstance(v, str)
         }
-        for key in ("favourite_said", "catchphrase", "hatched_on"):
+        for key in ("favourite_said", "catchphrase", "hatched_on", "sick_unannounced"):
             if not isinstance(kwargs.get(key), str):
                 kwargs[key] = None
         try:
@@ -550,6 +553,9 @@ def _wake(state: PetState, events: list[Event], how: str) -> None:
     state.lights_out = False
     state.wake_at = None
     events.append({"type": "woke_up", "how": how})
+    if state.sick and state.sick_unannounced:
+        events.append({"type": "became_sick", "cause": state.sick_unannounced})
+    state.sick_unannounced = None
 
 
 def _decay(state: PetState, hours: float, t: float, settings: Settings) -> None:
@@ -651,7 +657,11 @@ def _sickness(
             cause = "weight"
     if cause:
         state.sick = True
-        events.append({"type": "became_sick", "cause": cause})
+        if state.asleep:
+            # No alert it can't act on: it's told when the pet wakes.
+            state.sick_unannounced = cause
+        else:
+            events.append({"type": "became_sick", "cause": cause})
 
 
 def _call_condition(state: PetState, reason: str, t: float) -> bool:
@@ -820,9 +830,13 @@ def _learn(
         if progress < 1.0:
             continue
         if trait in state.inherited:
-            level = min(state.inherited.pop(trait) + 1, R.TRAIT_MAX_LEVEL)
+            before = state.inherited.pop(trait)
+            level = min(before + 1, R.TRAIT_MAX_LEVEL)
             state.trait_levels[trait] = level
-            events.append({"type": "trait_deepened", "trait": trait, "level": level})
+            if level > before:
+                events.append(
+                    {"type": "trait_deepened", "trait": trait, "level": level}
+                )
         elif trait not in state.traits and len(state.traits) < R.TRAIT_CAP:
             state.traits.append(trait)
             state.trait_levels[trait] = 1
@@ -1167,6 +1181,14 @@ def _do_action(
         state.hunger = _clamp(state.hunger + R.PLAY_HUNGER)
         state.weight = _clamp(state.weight + R.WEIGHT_PLAY)
         state.last_excite = now
+        if state.call is not None and state.call.reason == "fake":
+            # Played with, it has what it whined for: same as praising it.
+            state.discipline = _clamp(state.discipline + R.PRAISE_WHINING_DISCIPLINE)
+            state.call = None
+            events.append(
+                {"type": "call_answered", "reason": "fake", "answer": "spoiled"}
+            )
+            return "spoiled"
         return OK
 
     if action == "clean":
@@ -1189,7 +1211,9 @@ def _do_action(
         if state.call is not None and state.call.reason == "fake":
             state.discipline = _clamp(state.discipline + R.SCOLD_DISCIPLINE)
             state.call = None
-            events.append({"type": "call_answered", "reason": "fake"})
+            events.append(
+                {"type": "call_answered", "reason": "fake", "answer": "scold"}
+            )
             return OK
         state.happiness = _clamp(state.happiness + R.SCOLD_UNFAIR_HAPPINESS)
         return "unfair"
@@ -1200,6 +1224,9 @@ def _do_action(
             state.discipline = _clamp(state.discipline + R.PRAISE_WHINING_DISCIPLINE)
             state.happiness = _clamp(state.happiness + R.PRAISE_HAPPINESS)
             state.call = None
+            events.append(
+                {"type": "call_answered", "reason": "fake", "answer": "spoiled"}
+            )
             return "spoiled"
         state.happiness = _clamp(state.happiness + R.PRAISE_HAPPINESS)
         if now - state.last_praise >= R.PRAISE_COOLDOWN_MINUTES * 60:
