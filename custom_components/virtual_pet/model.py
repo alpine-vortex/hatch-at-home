@@ -188,7 +188,6 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
         "since": _str,
         "day": _str,
         "tucked_at": _num,
-        "visited": lambda v: isinstance(v, bool),
     }
     for key, check in checks.items():
         if key in out and not check(out[key]):
@@ -200,6 +199,8 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
         out["noted"] = _str_map(out["noted"])
     if "today" in out:
         out["today"] = _int(out["today"], 0, 0)
+    if "visited" in out:  # add_bond reads it without a default on the same day
+        out["visited"] = out["visited"] is True
     if "photos" in out:
         out["photos"] = _photos(out["photos"])
     ask = out.get("catchphrase")

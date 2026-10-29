@@ -2081,3 +2081,33 @@ def test_salvage_keeps_the_family_and_the_bonds():
     assert pet.bonds == {"u1": {"points": 4}} and pet.journal[0]["name"] == "Old"
     assert pet.hunger == 80.0 and pet.born == at(9)
     assert model.PetState.salvage("junk", "Pip", at(9)).name == "Pip"
+
+
+def test_a_lived_in_save_loads_unchanged():
+    """The stricter load keeps everything the model itself writes."""
+    pet = hatched(at(9))
+    pet.age_hours = 10_000.0
+    rng = random.Random(3)
+    for day in ("2026-10-01", "2026-10-02", "2026-10-03"):
+        model.add_bond(pet, "u1", "visit", day, rng)
+        model.add_bond(pet, "u1", "game", day, rng, "left_right")
+    pet.bonds["u1"]["points"] = R.BOND_LEVELS[-1] + 5
+    pet.species = "bird"
+    model.add_bond(pet, "u1", "game", "2026-10-04", rng, "higher_lower")
+    model.game_record(pet, "u1", "left_right", 3)
+    model.game_record(pet, "u1", "left_right", 5)
+    model.favourite_game(pet, "u1", "left_right", "2026-10-04")
+    pet.bonds["u1"]["tucked_at"] = at(22)
+    pet.bonds["u1"]["noted"] = {"birthday_friends": "2026"}
+    model.take_photo(pet, "u1", "2026-10-04")
+    model.apply_action(pet, "feed", at(10), NoLuck(), "Sam")
+    model.season_first(pet, "snow", at(9, day=3), UTC)
+    model.pick_wish(pet, "2026-10-04", Lucky(1), {"play"}, {"u1": "Sam"})
+    model.pick_dream(pet, "u1", "stars", at(20))
+    pet.dream_seeds.append({"kind": "watching", "title": "Bluey", "at": at(19)})
+    model.dream_on_waking(pet, at(7, day=5), "2026-10-05", random.Random(0))
+    pet.sick_unannounced = "hunger"
+    pet, _ = model.lay_egg(pet, at(12, day=5), random.Random(1))
+    data = pet.to_dict()
+    assert data["journal"] and data["bonds"]["u1"]["photos"] and data["memories"]
+    assert model.PetState.from_dict(data).to_dict() == data

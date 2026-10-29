@@ -1433,6 +1433,7 @@ class HatchPetCard extends HTMLElement {
       if (s.game) this._endGame(s, null);
       this._stopTyping(s);
       this._dropPhotos(s);
+      s.unsub?.();
     }
   }
 

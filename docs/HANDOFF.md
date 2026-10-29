@@ -58,7 +58,7 @@ also clears the breeze, flair and status-message timers. FA: `_goShared()` on ev
 slide, and the `hatch-shared-changed` window event plus a `storage` listener so other
 cards and tabs follow. D1: the personality row and the current journal line only for a
 teen or adult. Tests in `tests/test_damaged.py`; card checks "5b" (FA, F6) and the D1
-lines in "4c". `scripts/test` 573, `scripts/card-check` 132/133 (the catchphrase "two rows" check fails on main
+lines in "4c". `scripts/test` 574, `scripts/card-check` 132/133 (the catchphrase "two rows" check fails on main
 too, 3 rows).
 
 **Phase 4 of the voices plan, the photo (A7), is merged and pre-released as
