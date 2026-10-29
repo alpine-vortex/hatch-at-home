@@ -293,7 +293,10 @@ decisions file's earlier line "sends one phone notification per re-call" is supe
 Poop (`dirty`) calls send no push (owner, Wave 0 Q4); that change lands here too.
 - A latched reason may call again `RECALL_HOURS` (4) after its miss, while its
   condition still holds. **One clock per pet (finding 2):** at most one re-call per
-  `RECALL_HOURS` per pet, for the most urgent latched need (`CALL_PRIORITY`). A missed
+  `RECALL_HOURS` per pet, for the latched need **waiting longest** (oldest
+  `latched_at`; a tie goes to the most urgent, `CALL_PRIORITY`), so every latched need
+  gets its turn (first mate, 0b audit finding 5: most urgent first starved the third
+  need). A missed
   re-call is **not** another care miss: it re-latches for another `RECALL_HOURS`. One
   neglect stays one miss; the pet keeps asking on the card and the sensors.
 - **Telling a re-call apart (finding 17):** `latched_at[reason]` is kept until the
@@ -313,7 +316,7 @@ Poop (`dirty`) calls send no push (owner, Wave 0 Q4); that change lands here too
   latch may re-call 4 h after the update: **the release notes say so** (households with
   latched needs get a first round of re-calls). `shift_times` (556) shifts both times.
 - **Tests:** pytest: a missed hunger call re-calls after 4 h if still hungry, not
-  before; two latched needs re-call 4 h apart, the more urgent first; missing the
+  before; two latched needs re-call 4 h apart, the longest waiting first; missing the
   re-call doesn't add to `care_misses`; a re-call event carries `recall: true`; a
   sickness sends one push; an old save loads with `latched_at` filled.
 - **Sim Done:** `responder_miss1` min health ≥ 20 and steady (prototype: 57-76, steady
@@ -338,6 +341,16 @@ Poop (`dirty`) calls send no push (owner, Wave 0 Q4); that change lands here too
   notification for all your pets; poop calls stay on the card, and falling ill sends one
   notification, not two. If a pet already had a need left unanswered before this
   update, expect one round of these reminders about 4 hours after updating."
+- **After the tier-2 audit (fixes on the 0b branch, 2026-10-28):** the bundle names, when
+  sent, every pet of that person's still asking (a latched need that still holds, poop
+  aside), not only pets whose 20-minute re-call is open, and clears once none of them is
+  (finding 1: two neglected pets' re-calls share the person's 4-hour cycle, so only the
+  first was ever named). Re-calls go longest waiting first (finding 5). The coordinator
+  remembers a sickness already on the phones (`became_sick` until `recovered` or asleep),
+  so a hand wake also sends one push (finding 2). Setup clears each subscriber's bundle
+  left from before a restart (finding 4); removing the last pet clears it too (finding
+  10); `from_dict` clamps `latched_at` and `last_recall_at` to `last_updated` (finding
+  8). The guide's Calls and notification paragraphs say a need asks again.
 
 **Wave 0 Q1: how should re-calls reach phones? (evaluated for the owner)**
 

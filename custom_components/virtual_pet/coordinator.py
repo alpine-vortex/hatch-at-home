@@ -203,6 +203,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.moments: list[dict[str, Any]] = []
         # A call notification is on the phones (cleared when the call is over).
         self._call_notified = False
+        # This sickness is on the phones already (became_sick, until it
+        # recovers or sleeps): its sick call, even a tick later after a hand
+        # wake, sends nothing more.
+        self._sick_told = False
         # The house: nothing is read until HA has fully started.
         self.home = HomeEffect()
         self.house_moments = HouseMoments()
@@ -901,7 +905,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.debug["last_events"] = [e["type"] for e in events][-10:]
         if simulated or self.state is None:
             return
-        started = any(e["type"] == "call_started" and e.get("recall") for e in events)
+        started = any(
+            e["type"] == "call_started"
+            and e.get("recall")
+            and e.get("reason") != "dirty"  # poop calls send no push (Wave 0 Q4)
+            for e in events
+        )
         self.update_recalls(self.pet_id if started else None)
         morning = any(
             e["type"] == "good_morning"
@@ -1664,23 +1673,27 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._fire([{"type": "holiday", "holiday": kind}])
 
     def asking(self) -> notify.Asking | None:
-        """This pet in the house's re-call bundle, if a re-call is open."""
+        """This pet in the house's re-call bundle, if a need it missed still
+        holds (it keeps asking on the card). Poop calls send no push (Wave 0
+        Q4), so a pet asking only for a clean isn't named."""
         state = self.state
-        call = state.call if state is not None else None
-        if (
-            state is None
-            or call is None
-            or not call.recall
-            or call.reason == "dirty"  # poop calls send no push (Wave 0 Q4)
-            or state.asleep
-            or not state.notify_users
-        ):
+        if state is None or state.asleep or not state.notify_users:
             return None
+        reasons = [r for r in model.still_asking(state, self._now()) if r != "dirty"]
+        if not reasons:
+            return None
+        call = state.call
+        # One pet named alone reads as its re-call: what it asks about now.
+        reason = (
+            call.reason
+            if call and call.recall and call.reason in reasons
+            else reasons[0]
+        )
         return notify.Asking(
             self.pet_id,
             state.name,
             notify.message(
-                {"type": "call_started", "reason": call.reason},
+                {"type": "call_started", "reason": reason},
                 state.name,
                 self.species_names,
             )
@@ -1712,10 +1725,18 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         batch: list[model.Event] | None = None,
     ) -> None:
         """Tell the users who opted in, on their phones. Never for fast-forward."""
+        if event["type"] in ("recovered", "fell_asleep"):  # off the phones
+            self._sick_told = False
         if simulated or self.state is None or not self.state.notify_users:
             return
         users = list(self.state.notify_users)
-        if not notify.pushes(event, batch or [event]):
+        told = (
+            self._sick_told
+            and event["type"] == "call_started"
+            and event.get("reason") == "sick"
+            and not event.get("resumed")
+        )
+        if told or not notify.pushes(event, batch or [event]):
             if (
                 event["type"] == "call_started"
                 and event.get("reason") != "sick"  # became_sick told it just now
@@ -1735,6 +1756,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return
         if event["type"] in notify.CALL_EVENTS:
             self._call_notified = True
+            if event["type"] == "became_sick":
+                self._sick_told = True
             tag = notify.call_tag(self.pet_id)
         else:
             tag = f"{DOMAIN}_{self.pet_id}_{event['type']}"

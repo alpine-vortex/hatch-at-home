@@ -23,6 +23,7 @@ from homeassistant.helpers import (
 )
 from homeassistant.helpers.service import async_register_admin_service
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.util import dt as dt_util
 import voluptuous as vol
 
 from . import notify, rates as R
@@ -442,17 +443,38 @@ async def async_setup_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
     entry.runtime_data = coordinator
     hass.data[DOMAIN]["pets"][entry.entry_id] = coordinator
+    recalls: notify.Recalls = hass.data[DOMAIN]["recalls"]
+    for send in recalls.clear_stale(
+        list(coordinator.state.notify_users) if coordinator.state else [],
+        _recall_sender(hass),
+    ):
+        hass.async_create_background_task(send, f"{DOMAIN} notify")
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     coordinator.async_start_home()
     return True
 
 
+def _recall_sender(hass: HomeAssistant) -> notify.Send:
+    """Clears the re-call notification with no pet to send it."""
+
+    async def send(users: list[str], text: str) -> None:
+        await notify.send(hass, users, text, notify.RECALL_TAG)
+
+    return send
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
     """Put the pet away. The coordinator saves itself on shutdown."""
-    pets = hass.data[DOMAIN]["pets"]
+    pets: dict[str, PetCoordinator] = hass.data[DOMAIN]["pets"]
     pets.pop(entry.entry_id, None)
-    if pets:  # a removed pet no longer asks in anyone's re-call notification
-        next(iter(pets.values())).update_recalls()
+    # A removed pet no longer asks in anyone's re-call notification (the
+    # last one too: no pet left to send it).
+    recalls: notify.Recalls = hass.data[DOMAIN]["recalls"]
+    asking = [a for pet in pets.values() if (a := pet.asking()) is not None]
+    for send in recalls.update(
+        asking, None, dt_util.utcnow().timestamp(), _recall_sender(hass)
+    ):
+        hass.async_create_background_task(send, f"{DOMAIN} notify")
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 

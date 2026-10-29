@@ -406,10 +406,13 @@ class PetState:
         # A latch from before re-calls counts from the save's own clock, which
         # catch_up moves to the load: it may call again RECALL_HOURS after the
         # update (the release notes say so).
+        # None later than the save itself: a damaged one can't hush re-calls.
+        saved = kwargs["last_updated"]
         since = _float_map(kwargs.get("latched_at"))
         kwargs["latched_at"] = {
-            r: since.get(r, kwargs["last_updated"]) for r in kwargs["latched"]
+            r: min(since.get(r, saved), saved) for r in kwargs["latched"]
         }
+        kwargs["last_recall_at"] = min(kwargs["last_recall_at"], saved)
         seen = {
             k: float(v)
             for k, v in _mapping(kwargs.get("trait_hours")).items()
@@ -979,6 +982,14 @@ def _latch(state: PetState, reason: str, t: float) -> None:
     state.latched_at[reason] = t
 
 
+def still_asking(state: PetState, t: float) -> list[str]:
+    """Needs missed and still unmet, most urgent first: the pet keeps asking
+    about them on the card, and re-calls about them."""
+    return [
+        r for r in CALL_PRIORITY if r in state.latched and _call_condition(state, r, t)
+    ]
+
+
 def _unlatch(state: PetState, reason: str) -> None:
     if reason in state.latched:
         state.latched.remove(reason)
@@ -1050,20 +1061,20 @@ def _calls(
             _start_call(state, reason, t, events)
             return
 
-    # A missed need still unmet asks again, the most urgent first, at most
-    # once per RECALL_HOURS per pet. It stays latched: answering it or
-    # missing it again is not a new miss.
+    # A missed need still unmet asks again, the one waiting longest first (so
+    # each gets its turn; first mate, 0b audit), at most once per RECALL_HOURS
+    # per pet. It stays latched: answering it or missing it again is not a
+    # new miss.
     wait = R.RECALL_HOURS * 3600
     if t - state.last_recall_at >= wait:
-        for reason in CALL_PRIORITY:
-            if (
-                reason in state.latched
-                and t - state.latched_at.get(reason, t) >= wait
-                and _call_condition(state, reason, t)
-            ):
-                state.last_recall_at = t
-                _start_call(state, reason, t, events, recall=True)
-                return
+        due = [
+            r for r in still_asking(state, t) if t - state.latched_at.get(r, t) >= wait
+        ]
+        if due:
+            reason = min(due, key=lambda r: state.latched_at.get(r, t))
+            state.last_recall_at = t
+            _start_call(state, reason, t, events, recall=True)
+            return
 
     if (
         "happiness" not in state.latched

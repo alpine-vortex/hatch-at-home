@@ -2480,7 +2480,7 @@ def test_no_recall_once_the_need_is_met():
     assert pet.latched == [] and pet.latched_at == {}
 
 
-def test_two_latched_needs_recall_4_hours_apart_the_more_urgent_first():
+def test_two_needs_latched_together_recall_4_hours_apart_the_more_urgent_first():
     start = at(9)
     pet = hatched(start, hunger=20.0, happiness=20.0)
     pet.latched = ["happiness", "hunger"]
@@ -2493,6 +2493,33 @@ def test_two_latched_needs_recall_4_hours_apart_the_more_urgent_first():
     assert starts == [{"type": "call_started", "reason": "happiness", "recall": True}]
     # Not before the pet's clock allowed it.
     assert pet.call.started >= first + R.RECALL_HOURS * HOUR
+
+
+def test_recalls_go_longest_waiting_first_so_every_need_gets_its_turn():
+    # Three needs left unmet (the 0b audit's probe1b): before, hunger and
+    # happiness took turns and the third never asked again.
+    start = at(9)
+    pet = hatched(start, hunger=20.0, happiness=20.0, energy=10.0)
+    pet.latched = ["hunger", "energy", "happiness"]
+    pet.latched_at = {
+        "happiness": start - 7 * HOUR,
+        "energy": start - 6 * HOUR,
+        "hunger": start - 5 * HOUR,
+    }
+    asked = []
+    t = start
+    while t < start + 2 * 24 * HOUR:
+        t += 5 * MIN
+        pet.hunger, pet.happiness, pet.energy = 20.0, 20.0, 10.0  # nobody comes
+        pet.asleep = pet.napping = False
+        events = run(pet, t)
+        asked += [
+            e["reason"]
+            for e in events
+            if e["type"] == "call_started" and e.get("recall") and not e.get("resumed")
+        ]
+    assert asked[:3] == ["happiness", "energy", "hunger"]  # oldest first
+    assert asked[3:6] == asked[:3]  # and round again, each in turn
 
 
 def test_a_sick_pet_asks_for_medicine_every_4_hours():
@@ -2553,3 +2580,16 @@ def test_recall_fields_survive_a_save_and_bad_ones_are_dropped():
     assert back.latched_at == {"hunger": pet.last_updated}
     assert back.last_recall_at == 0.0
     assert back.call is not None and not back.call.recall
+
+
+def test_a_save_dated_in_the_future_cant_hush_recalls():
+    start = at(9)
+    pet = _missed_hunger(start)
+    data = pet.to_dict()
+    data["latched_at"] = {"hunger": pet.last_updated + 365 * 24 * HOUR}
+    data["last_recall_at"] = pet.last_updated + 365 * 24 * HOUR
+    back = model.PetState.from_dict(data, now=pet.last_updated)
+    assert back.latched_at == {"hunger": pet.last_updated}
+    assert back.last_recall_at == pet.last_updated
+    run(back, pet.last_updated + R.RECALL_HOURS * HOUR)
+    assert back.call is not None and back.call.recall

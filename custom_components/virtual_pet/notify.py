@@ -129,11 +129,12 @@ def visit(names: list[str]) -> str:
 
 @dataclass
 class Asking:
-    """A pet with an open re-call, as the bundle names it."""
+    """A pet still asking (a need it missed still holds), as the bundle
+    names it."""
 
     pet_id: str
     name: str
-    text: str  # its usual call text
+    text: str  # its usual call text, for what it asks about now
     users: list[str]  # who get its notifications
     nickname: Callable[[str], str | None]  # its nickname for a person
 
@@ -144,12 +145,24 @@ Send = Callable[[list[str], str], Coroutine[Any, Any, None]]
 @dataclass
 class Recalls:
     """The house's re-call bundle, keyed by person: at most one push per
-    RECALL_HOURS each, a normal one with no buttons, naming every pet of
-    theirs with an open re-call. Answering one pet doesn't rewrite it (that
-    would buzz again); it is cleared once none of its pets is still asking."""
+    RECALL_HOURS each, sent when one of their pets re-calls, a normal one
+    with no buttons, naming every pet of theirs still asking. Answering one
+    pet doesn't rewrite it (that would buzz again); it is cleared once none
+    of its pets is still asking. Memory only: a restart clears it once per
+    person (fresh)."""
 
     last_sent: dict[str, float] = field(default_factory=dict)
     shown: dict[str, set[str]] = field(default_factory=dict)  # pet IDs named
+    fresh: set[str] = field(default_factory=set)  # cleared or sent since start
+
+    def clear_stale(
+        self, users: list[str], send: Send
+    ) -> list[Coroutine[Any, Any, None]]:
+        """Clear a bundle left on these people's phones from before a
+        restart, once each (never one sent since)."""
+        stale = [user for user in users if user not in self.fresh]
+        self.fresh.update(stale)
+        return [send(stale, "clear_notification")] if stale else []
 
     def update(
         self, asking: list[Asking], started: str | None, now: float, send: Send
@@ -177,6 +190,7 @@ class Recalls:
             else:
                 text = visit([a.name for a in theirs])
             self.last_sent[user] = now
+            self.fresh.add(user)
             self.shown[user] = {a.pet_id for a in theirs}
             sends.append(send([user], text))
         return sends

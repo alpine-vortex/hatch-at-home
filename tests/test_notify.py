@@ -184,3 +184,43 @@ def test_answering_one_pet_doesnt_rewrite_the_bundle():
     assert len(phone.sent) == 1  # no rewrite, no buzz
     _run(recalls.update([], None, 120.0, phone.send))
     assert phone.sent[-1] == (["me"], "clear_notification")
+
+
+@pytest.mark.parametrize("offset_hours", [0, 1, 2, 3])
+def test_two_neglected_pets_get_named_together(offset_hours: int):
+    # The 0b audit's probe2: two pets left unfed for two days, Mochi's need
+    # missed offset_hours after Pip's, ticking a minute apart. Each pet's
+    # re-calls run on the person's own 4-hour cycle, so a bundle naming only
+    # pets with an open re-call named the first one, every time.
+    import random
+
+    from custom_components.virtual_pet import model as M
+
+    def pet(name: str) -> M.PetState:
+        return M.PetState.from_dict(
+            {"name": name, "age_hours": 100, "last_updated": 0.0, "hunger": 10}
+            | {"latched": ["hunger"]},
+            now=0.0,
+        )
+
+    pets = {"pip": pet("Pip"), "mochi": pet("Mochi")}
+    pets["mochi"].latched_at["hunger"] = offset_hours * 3600.0
+    rng, recalls, phone = random.Random(0), notify.Recalls(), _Phone()
+    t = 0.0
+    for _ in range(60 * 48):
+        for pet_id, state in pets.items():
+            state.hunger = 10  # nobody feeds
+            events: list = []
+            M._calls(state, t + (pet_id == "mochi"), 1 / 60, rng, events)
+            started = any(
+                e.get("recall") for e in events if e["type"] == "call_started"
+            )
+            asking = [
+                _asking(p, s.name, ["me"])
+                for p, s in pets.items()
+                if M.still_asking(s, t)
+            ]
+            _run(recalls.update(asking, pet_id if started else None, t, phone.send))
+        t += 60
+    texts = [text for _, text in phone.sent]
+    assert texts and set(texts) == {"Mochi and Pip would like a visit"}
