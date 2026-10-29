@@ -1,6 +1,6 @@
 # Plan: device charm (LCD quirks, the infrared link, power-on)
 
-**DRAFT 1, 2026-10-29.** A plan for the owner's review: nothing here is built. Three
+**DRAFT 1, 2026-10-29** (revised the same day after a review pass: boot order, the ghost's class, the boot timeout, restart detection, the link's rate). A plan for the owner's review: nothing here is built. Three
 ideas from the owner, in one plan because they share pieces: an overlay layer inside
 the screen, the per-browser settings rows, the reduced-motion rule and the sound
 gate. Each part ships on its own and in any order, except where a PR says "after".
@@ -54,7 +54,9 @@ From `docs/HANDOFF.md`, `docs/decisions-2026-10-28.md` and the earlier plans:
 
 A `div.lcd` inside `.screen`, after `.flash` and before `.attention` in the markup,
 `position: absolute; inset: 0; pointer-events: none; z-index: auto`. That puts it over
-the scene (background, season, mess, pet, prop, rain) and **under** the attention mark,
+the background, season, mess, pet and prop, **under** the weather effects (`.rain` z 1
+and `.flash` z 2 paint above any `auto` layer whatever the DOM order, which is fine:
+rain and lightning are in front of the glass anyway), and under the attention mark,
 the bubble, the game and the status, so words stay crisp and buttons work.
 
 - **The look.** Two `repeating-linear-gradient`s (rows and columns) of a 1 px dark
@@ -76,17 +78,23 @@ the bubble, the game and the status, so words stay crisp and buttons work.
 - **Checks**: card-check at 420 and 330 px on all six shells (the porthole and moon
   corners), with a bubble, the game and the status open: the grid is under all three
   and absent from the status. Screenshot contrast of the bubble text unchanged.
+  **The existing checks run with `hatch-lcd` off** (seeded in card-check's setup), so
+  their screenshots and pixel samples don't drift; only the new steps turn it on.
 
 ### 1b. Ghosting when the pet moves (M)
 
 Real LCDs are slow: a moved pixel leaves a fading trace. Two pieces, both only on the
 slide on show, both off under reduced motion and with the setting off.
 
-1. **Frame ghost.** A second `<img class="pet ghost">` right under `.pet`. When
-   `_tick` swaps a frame, the ghost takes the **old** frame and fades from 35% to 0
-   over about 180 ms. It shares the pet's classes and style through the perch's
-   MutationObserver (extend `PERCH_MOVES`' observer to copy to both), so it sits where
-   the pet sits.
+1. **Frame ghost.** A second `<img class="ghost">` placed just **after** `.perch`
+   and before `.pet` in the markup, so it paints under the pet. **It must not carry
+   the `pet` class**: `q(".pet")` in `_buildSlide` would find it first, and it would
+   pick up every `.pet` rule (`hop`, `greethop`, the `breezy` sway, `.dim .pet`,
+   `look`, the transitions), plus `_headTop`/`_headTopAll` and card-check's `.pet`
+   selectors. `.ghost` copies `.pet`'s geometry rule (1177) in its own selector, and
+   the perch's MutationObserver (1825-1829) copies to it only the move classes
+   (`PERCH_MOVES`) and `scale`, as it does for the perch. When `_tick` swaps a frame,
+   the ghost takes the **old** frame and fades from 35% to 0 over about 180 ms.
 2. **Move trail.** For a wander or a game move, the ghost's `translate` transition
    runs about 120 ms behind the pet's (`transition-delay`), at 30% opacity, so the
    pet leaves a short smear that catches up. Nothing new to time: the existing
@@ -111,7 +119,7 @@ tight egg/pad widths rule it out, and a screen tap is taken). Where it sits per 
 |---|---|
 | egg (woodland) | a small round nub on the right edge of the body, level with the screen |
 | tank (terrarium) | the lid's right grip (the lid already has three `span`s) |
-| house (hearth) | a little lamp on the chimney (`.roof::before`) |
+| house (hearth) | a little lamp on the chimney (a real element over the chimney: `.roof::before` is a pseudo-element and can't be a button) |
 | porthole (tidepool) | one of the brass rivets, slightly raised |
 | pad (pond) | a dewdrop on the right rim |
 | moon (nightsky) | a star on the crescent |
@@ -133,7 +141,9 @@ tap while lit restarts the 3 s.
 - **Sound.** A tiny click (`CHIRPS.click`, one 40 ms note) only through `_chirp`, so
   never at night or while asleep: in practice, never when it matters.
 - **Checks**: each shell at 420 and 330 px, compact and full: the button is reachable,
-  its 44 px target doesn't overlap a toy or the label; a tap at night shows the glow,
+  its 44 px target doesn't overlap a toy or the label, and doesn't spill into the
+  16 px gap between slides (a tap there would land on the neighbour's "bring
+  forward" click); a tap at night shows the glow,
   it's gone by 4 s, `switch.lights_out` untouched (no service call recorded); keyboard
   Enter works.
 
@@ -151,11 +161,15 @@ know each other's slide or timing.
 
 ### 2a. The visit (M)
 
-1. **When.** At most once a day per pair of pets (`oncePerDay("link-<a>-<b>")`, the
-   pair sorted), and only when the pet on show and a neighbour (the slide next to it)
-   are both free: awake, not away, not an egg, no call, no game, status closed
-   (`_free`, 2489, for both). It starts on a random idle tick, like the flair (one
-   chance in about 40 per tick while both are free), so it comes as a surprise. Owner
+1. **When.** At most once a day per pair of pets, and only when the pet on show and a
+   neighbour (the slide next to it) are both free: awake, not away, not an egg, no
+   call, no game, status closed (`_free`, 2489, for both), and nothing queued (the
+   first look's lines and `s.queue` empty). The rate is set in **time**, not ticks (the
+   tick is 700 ms, 1608): a `LINK_AFTER_MS = [600000, 1500000]` timer, 10-25 minutes of
+   the card being open with both free, drawn fresh at each page load, like
+   `FLAIR_EVERY_MS`. So it's a surprise for someone who lingers, not a routine on
+   opening. `oncePerDay("link-<a>-<b>")` (the pair sorted) is called **only when the
+   timer has passed and both are free**, because calling it uses up the day. Owner
    question Q3: also a **manual** trigger (a long-press on the backlight button, or a
    "visit" row on the status screen).
 2. **The beam (about 1.5 s).** On wide layouts where the neighbour peeks in, a dashed
@@ -179,8 +193,12 @@ know each other's slide or timing.
    unaware. If the person swipes during the visit, the visit ends at once (no
    leftover sprites).
 
-- **Guest art.** Loaded through `spriteSrc(species, "<stage>_excited_<n>")` with its
-  own stage and `scale` (duckling 1.2). Costumes and hats stay off the guest.
+- **Guest art.** The guest's frames come from `_petFrames(sp, stage, "excited", ...)`
+  (2427), which handles the drawn stage (`stage_fallback`, the last stage drawn), not
+  a raw `<stage>_excited_<n>`; then `spriteSrc`, with the guest's own `scale`
+  (duckling 1.2). Every one of the 29 species with a `species.json` lists `excited`
+  in its moods (checked on main; the beetle has none and isn't in the roster).
+  Costumes and hats stay off the guest.
 - **Not** in the journal, not counted, no friendship level. Owner question Q4: a
   "first met <name>" memory in the journal would need the server (memories live in the
   save); v1 stays card-only.
@@ -219,18 +237,25 @@ tap is what unlocks the sound.
    and `_mayPlay` allows, then the logo "fills in" left to right in about 600 ms and
    the screen cuts to the pet. Under reduced motion: no fill, straight to the pet.
    The tap does nothing else (it doesn't open the status).
-4. **Order.** While the boot screen is up, `_greet`, `_firstLook` and the queue wait;
-   `_visit` doesn't (it's the server's count, and a visit is not a line said). The
-   first look's lines play after the boot, so nothing is missed.
-5. **Sounds are off by default**, so most first boots are silent. Owner question Q8:
+4. **It never waits forever.** A wall tablet nobody taps would hide the pet for good,
+   so with no tap the boot finishes **on its own after about 5 s**, silently (the fill,
+   then the pet). A tap inside those 5 s gets the beep.
+5. **Order.** `_firstLook` and `_visit` run as they do now and in the same order
+   (`_tick` 2470-2471: the first look tells the server what's queued before the
+   visit). While the boot screen is up, only the **speaking** waits: `_greet`,
+   `_sayQueued` and `_wishMention`. The first look's lines are already queued, so they
+   play after the boot and nothing is missed.
+6. **Sounds are off by default**, so most first boots are silent. Owner question Q8:
    should the boot screen offer "sounds on?" (two buttons, the tap choosing) so the
    beep has a chance on first use? Recommended **no**: it's a settings question at the
    worst moment; the beep comes for those who turned sounds on.
 
 - **Checks**: fresh storage shows the boot screen on all slides, no beep scheduled
   before the tap (no oscillator started), the tap shows the pet and queues the first
-  look; a second load shows no boot screen; with sounds on at 10:00 the boot chirp
-  plays; at 22:00 it doesn't.
+  look; with no tap the pet shows by 6 s, silently; a second load shows no boot
+  screen; with sounds on at 10:00 the boot chirp plays; at 22:00 it doesn't. **D4
+  seeds `hatch-booted` in card-check's setup**, or every existing check would start on
+  the boot screen; only the new steps clear it.
 
 ### 3b. The low-battery face after HA restarts (S server, S card)
 
@@ -238,14 +263,20 @@ tap is what unlocks the sound.
 (the websocket reconnects either way). The server knows: `async_load` measures the
 downtime. So:
 
-- **Server**: the coordinator keeps `self._powered_on = {"at": <load time ISO>,
-  "away_minutes": <downtime, rounded>}`, set in `async_load`. `_house_view` adds it as
+- **Server**: in `async_load`, the coordinator notes whether HA itself is starting:
+  `restart = self.hass.state is not CoreState.running` (`CoreState` is already
+  imported and used the same way in `async_start_home`, 487). A restart sets
+  `self._powered_on = {"at": <load time ISO>, "away_minutes": <downtime, rounded>}`;
+  an integration reload (HA already running) keeps none. `_house_view` adds it as
   `house.powered_on`. It goes out in the snapshot (on subscribe, and to open cards after
   a reload), shared screens included, and is never in a state attribute, so it leaves
-  no trace in HA's history. Tests: a load after a stored `last_updated` an hour ago
-  gives `away_minutes: 60`; a fresh pet gives `0`.
-- **Which count.** A restart counts when `away_minutes >= 2` (a reload of the
-  integration or a quick restart is under that and is skipped). Owner question Q9.
+  no trace in HA's history. Tests: a load with HA starting gives a `powered_on`; a load
+  with HA running (a reload) gives none; `away_minutes` from a stored `last_updated`
+  an hour back is about 60.
+- **Why not a downtime threshold.** `last_updated` moves on the 5-minute tick, so a
+  30-second restart can measure anywhere from 0 to 5 minutes, and so can a reload.
+  HA's own state is the reliable signal. `away_minutes` rides along only in case a
+  later line wants it (v1 says nothing about time away). Owner question Q9.
 - **Card**: keeps the last `powered_on.at` it reacted to per pet
   (`hatch-power-<pet>`). A newer one, on a pet that's awake and on show, plays the gag
   once; a card that has never seen one just stores it (no gag on first install).
@@ -269,7 +300,7 @@ Then the battery shows full for a second and goes. No mention of time away, no
   in `ui/`; a tiny ask for the art session if the CSS version looks thin.
 - **Checks**: a stubbed snapshot with a new `powered_on.at`: the battery shows, the line
   is queued, it's gone by 6 s, and a second snapshot with the same `at` does nothing;
-  asleep defers it; `away_minutes: 1` does nothing.
+  asleep defers it; a snapshot with no `powered_on` does nothing.
 
 ## The PRs
 
@@ -313,5 +344,5 @@ Persona variants (`PERSONA`, 538) can come later; v1 uses one set for all.
 | Q6 | A drawn **wave** pose for every species (60 frames), or excited frames and hops? | Excited frames and hops now; the wave only if the hops look thin. |
 | Q7 | Boot screen: once per **browser**, once a day, or every page load? | Once per browser (and on a big update you choose). |
 | Q8 | Offer "sounds on?" on the boot screen? | No. |
-| Q9 | Does an **integration reload** or a restart under 2 minutes count for the low-battery face? | No: restarts of 2 minutes or more only. |
+| Q9 | Should an **integration reload** (not a full HA restart) also show the low-battery face? | No: HA restarts only. |
 | Q10 | Backlight buttons drawn in CSS, or pixel art from the art session? | CSS first; art if they look plain. |
