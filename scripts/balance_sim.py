@@ -500,8 +500,9 @@ def weight_in(low: float, high: float) -> Callable[[dict], bool]:
     return lambda r: low <= r["weight"] <= high
 
 
-# Phone pings per pet per day of childhood, the first calls and the model's
-# re-calls together (PR 0b's band; the owner's re-call pick may lower it).
+# Calls started per pet per day of childhood (call_started and became_sick,
+# first calls and re-calls together): what option (a) would push. PR 0b's band;
+# under the owner's re-call pick the phone pushes may be fewer (--notify).
 NOTIFY_MAX = {"careful": 4, "casual": 6, "neglect": 6.5, "sleeper": 6.5}
 
 BANDS: dict[str, list[tuple[str, Callable[[dict], bool]]]] = {
@@ -548,7 +549,7 @@ BANDS: dict[str, list[tuple[str, Callable[[dict], bool]]]] = {
 }
 for _name, _most in NOTIFY_MAX.items():
     BANDS[_name].append(
-        (f"<= {_most} pings a day", lambda r, m=_most: r["notify_day"] <= m)
+        (f"<= {_most} calls started a day", lambda r, m=_most: r["notify_day"] <= m)
     )
 
 

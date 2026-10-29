@@ -255,7 +255,10 @@ praise is half of how discipline is earned.
   sleep hours refuses unless `energy < NAP_WAKE_ENERGY` (95) or
   `minutes_to_bedtime <= NAP_INTO_NIGHT_MINUTES` (60). The check sits in `_apply_lights`
   (2087), so a flip made while away is checked when `come_home` applies it (finding
-  16). An egg put to bed still sleeps on hatching (accepted: a hatchling is tired).
+  16). `set_lights_out` sets `lights_out` before it calls `_apply_lights`, so a refusal
+  resets `lights_out` to off and `_apply_lights` returns `not_sleepy` for the caller to
+  pass on. A flip refused at `come_home` is dropped silently (nobody is there to hear
+  it): the pet comes home awake. An egg put to bed still sleeps on hatching (accepted: a hatchling is tired).
   The pause, not the gate, closes the laundering exploit; the gate stops a rested pet
   being put down for nothing.
 - **Refusal (finding 15):** a refusal writes the `care_log` entry
@@ -311,9 +314,11 @@ until the owner picks.
   re-call doesn't add to `care_misses`; a re-call event carries `recall: true`; a
   sickness sends one push; an old save loads with `latched_at` filled.
 - **Sim Done:** `responder_miss1` min health ≥ 20 and steady (prototype: 57-76, steady
-  66-76; main: 1); pings per pet per day: careful ≤ 4 (1.8-2.7), casual ≤ 6 (4.2-5.5),
-  neglect and sleeper ≤ 6.5 (6.0-6.2, 4.1-4.3). `--notify` prints the house table below;
-  the owner's pick sets its target.
+  66-76; main: 1); **calls started per pet per day** (the sim's `notify_day`: every
+  `call_started` and `became_sick`, which is what option (a) would push, not the pushes
+  under (b)-(d)): careful ≤ 4 (1.8-2.7), casual ≤ 6 (4.2-5.5), neglect and sleeper ≤ 6.5
+  (6.0-6.2, 4.1-4.3). `--notify` prints the house push table below; the owner's pick
+  sets its target.
 
 **Wave 0 Q1: how should re-calls reach phones? (evaluated for the owner)**
 
@@ -474,15 +479,22 @@ card and the `calling` sensor, which an automation can notify on.
     where `estimate = clamp(1 − 0.06 × care_misses / days since hatching, 0, 1)`
     (finding 11).
   - `counted_misses = min(care_misses, 2 × days since hatching)`.
-  - **No pet drops a grade because the rules changed:** `upbringing_floor` is the
-    grade today's instant score gives at the migration, and the grade at adulthood is
-    the better of it and the new one.
+  - **No pet drops a grade because the rules changed** (decisions file; this is the
+    plan's reading of it): `upbringing_floor` is the grade today's instant score gives
+    at the migration, **capped at steady**, and it **lapses at the first counted miss
+    after the update**. The grade at adulthood is the better of the floor (if it
+    stands) and the new one. Uncapped, the floor would carry today's exploits forward:
+    launder + praise scores devoted (100) on main, so a child being laundered on update
+    day would stay devoted while it starves. A careful child loses nothing: it scores
+    devoted under the new rules anyway (93-98).
   - Eggs start fresh. Adults keep their upbringing. **An adult save with no upbringing
     (finding 27)** gets one from `from_dict` (458), and with no samples the score falls
     back to today's discipline and the wellbeing estimate, never a divide by zero.
 - **Tests:** pytest: the migration for an egg; a child with 10 misses on day 3 (→ 6
-  counted, samples at half weight); a careful child mid-childhood keeps its grade (the
-  floor); an adult (unchanged); an old adult save with no upbringing loads with one;
+  counted, samples at half weight); a careful child mid-childhood keeps its grade; a
+  launder + praise child migrated mid-childhood (old score 100) that keeps laundering
+  ends scrappy (the floor is capped at steady and lapses at its first counted miss); an
+  adult (unchanged); an old adult save with no upbringing loads with one;
   praise five times in a minute gives 14 happiness and no discipline; the fourth window
   of a day gives at most 1; praise 5 minutes after a meal at hunger 40 gives discipline
   once, after a meal at hunger 80 none; three misses on one day count two; away 3 days
@@ -1198,7 +1210,7 @@ narrower than stated (row 14). The owner answered Q2 and Q3; Q1 is evaluated in 
 | 9 | C2 isn't closed: one praise per 30 minutes keeps happiness up with no play (praise_bot ≥ 93). Verified | 0e: after the day's first 3 praises, at most 1 happiness each; band: praise_bot still gets a real happiness call a day (3.1-3.4). **Rejected in part:** the audit's "then 2" is 4 an hour, exactly the decay |
 | 10 | N1's misses term ranks casual below neglect (28-30 counted vs 16-20); only wellbeing orders them. Verified | 0e: misses are 0.2 of the care half at 2 points each; the care weight is 0.75; wellbeing is "not sick and every meter ≥ 10". Casual 56-61 (steady, margin 6), neglect 13.7. **Rejected in part:** the audit's 0.4 share left casual at 50.0-52.9, and its finer measure ("no open call, meters ≥ 25") put casual at 74-79 wellbeing, scrappy. N1's sentence is corrected (section 6) |
 | 11 | 0e's saved fields and migration leave out the wellbeing sample. Verified | 0e: `wellbeing_sum`, `wellbeing_samples`; migration estimate `1 − 0.06 × misses a day`, clamped, at Q3's half weight; a pytest |
-| 12 | The migration bakes in discipline earned under the old rules at full weight. Verified | **Owner Q3: half weight.** Plus the decisions file's "no pet drops a grade because the rules changed": `upbringing_floor` from today's instant score; a careful child keeps its grade (pytest) |
+| 12 | The migration bakes in discipline earned under the old rules at full weight. Verified | **Owner Q3: half weight.** Plus the decisions file's "no pet drops a grade because the rules changed", read as `upbringing_floor` from today's instant score, capped at steady and lapsing at the first counted miss after the update (uncapped, launder + praise would keep its devoted 100 from main); pytests for a careful child and a laundered one |
 | 13 | `shift_times` misses 0e's and 0f's timestamps; `miss_day` is a date. Verified (model 556-584) | 0e and 0f list every new timestamp in `shift_times`; `miss_day_at` is a timestamp; pytest for 3 days away |
 | 14 | 0a's sensor plumbing has no acceptance criteria (calling while asleep; a deadline written every tick; the `calling` flag). Verified, **narrower:** `deadline` is already in `_unrecorded_attributes` (binary_sensor 59), so it writes no recorder history, only a state write every tick | 0a: calling off while asleep, no deadline attribute, no `calling` flag; all three tested |
 | 15 | Assist and the button report a refused nap as success (intent 229-231). Verified | 0a: `async_set_lights_out` returns the result; `REFUSED` gets `not_sleepy` (W3); a `care_log` entry; the notification button is never refused |
@@ -1208,7 +1220,7 @@ narrower than stated (row 14). The owner answered Q2 and Q3; Q1 is evaluated in 
 | 19 | The sim never plays card games. Verified | `careful_games` and `casual_games` in the sim (this PR); 0c and 0f bands |
 | 20 | 0g's fast-forward band can't turn green from a coordinator fix (the sim calls `advance` itself). Verified | 0g: `model.fast_forward`, used by the coordinator and the sim (this PR's sim already prefers it) |
 | 21 | The ordering contradicts itself, and 0e doesn't wait on 0f. Verified | Order 0a → 0c → 0d, then 0b and 0f, then 0e; P1 is merged, so nothing waits on it; section 3 and section 4 fixed |
-| 22 | The bands don't match the owner's decisions (casual steady exactly; no notification, responder_praise or praise-only bands; 10 seeds; adult whines). Verified | All added to the sim (this PR): casual steady, responder_miss1 steady, pings per pet, responder_praise, praise_bot's happiness call, launder's energy misses, a scrappy adult ≤ 3 whines a day, 10 seeds in `--check` |
+| 22 | The bands don't match the owner's decisions (casual steady exactly; no notification, responder_praise or praise-only bands; 10 seeds; adult whines). Verified | All added to the sim (this PR): casual steady, responder_miss1 steady, calls started per pet a day, responder_praise, praise_bot's happiness call, launder's energy misses, a scrappy adult ≤ 3 whines a day, 10 seeds in `--check` |
 | 23 | 0h's hearts: rounding down shows a full pet as not full. Verified (card 3192) | 0h: nearest half, full at `FEED_FULL_AT`; card-check 34 → 1, 96 → 4 |
 | 24 | 0h's clock: `last_updated` isn't fresh. Verified | 0h: offset from a state event's `time_fired`, then P3a's `now`; device clock with a capped skew until then |
 | 25 | 0e: the card doesn't explain the new score. Verified | 0e: the bar is "today", "growing up" uses the new score, tested |
