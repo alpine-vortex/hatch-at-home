@@ -285,9 +285,9 @@ praise is half of how discipline is earned.
   and responder unchanged or better.
 
 **PR 0b: a missed call can call again (M2).** Size **S-M**, tier 2 (saved fields).
-**Waits on the owner's pick of how re-calls notify** (Wave 0 Q1, evaluated below). The
-decisions file's earlier line "sends one phone notification per re-call" is superseded
-until the owner picks.
+**The owner picked (c), bundled, for how re-calls notify** (Wave 0 Q1, evaluated below). The
+decisions file's earlier line "sends one phone notification per re-call" is superseded.
+Poop (`dirty`) calls send no push (owner, Wave 0 Q4); that change lands here too.
 - A latched reason may call again `RECALL_HOURS` (4) after its miss, while its
   condition still holds. **One clock per pet (finding 2):** at most one re-call per
   `RECALL_HOURS` per pet, for the most urgent latched need (`CALL_PRIORITY`). A missed
@@ -1003,7 +1003,7 @@ axolotl and moth adults are being redrawn now (A9).
 | 0a | Sleep pauses calls (energy too, until really rested); naps need tiredness; the switch shows sleep (C1, m5) | S-M | 1 | — |
 | 0c | Weight (with a restoring term) and game rewards retuned (M1, M6) | S | 1 | 0a |
 | 0d | Fake calls disguised; only care answers a happiness call; real needs first (C3, m3) | S-M | 1 | 0c |
-| 0b | A missed call calls again after 4 h, one clock per pet; one push per sickness (M2) | S-M | 2 | 0d, **the owner's re-call pick (Wave 0 Q1)** |
+| 0b | A missed call calls again after 4 h, one clock per pet; one push per sickness (M2) | S-M | 2 | 0d; re-calls bundled (owner, Wave 0 Q1); poop calls don't push (owner, Wave 0 Q4) |
 | 0f | Games: carry on, a drop is a loss, no reroll, Play spoils a whine (M3, M4, A2) | M | 2 | 0d (before 1a) |
 | 0e | Upbringing measures care; praise can't be farmed; migration at half weight (C4, C2) | M | 2 | 0b, 0f (last in Wave 0) |
 | 0g | Fast-forward helper, chores, tuck-in, snacks (M5, m1, m2, m4) | S | 1 | — |
@@ -1105,8 +1105,8 @@ the meal's existing "full" line; no new copy.
 
 | # | Question | Recommendation |
 |---|---|---|
-| Wave 0 Q1 | **How should re-calls reach phones** with several pets? (a) per pet, one per 4 h; (b) a house budget a day; (c) one bundled push per 4 h naming every pet still asking; (d) card only. Numbers in PR 0b: 4 neglected pets get 24.4 pushes a day under (a), 7.6 (b), 10.3 (c), 5.6 (d); careful and casual players get no re-calls under any option. | **(c), bundled**, as a normal push (W4). PR 0b waits on this. |
-| Wave 0 Q4 | **Poop calls on phones?** A casual player's pet sends 4.9 pushes a day; 2.5 are poop calls (N2 kept them as calls). A casual 4-pet house gets about 20 a day today, 16.6 with 0b's one-push-per-sickness fix, and about 6.7 if poop calls stayed on the card and the sensors but sent no push. | Owner's call; no PR changes it until then. If yes, a small change to notify (a `dirty` call doesn't push), in 0b or after it. |
+| Wave 0 Q1 | **How should re-calls reach phones** with several pets? (a) per pet, one per 4 h; (b) a house budget a day; (c) one bundled push per 4 h naming every pet still asking; (d) card only. Numbers in PR 0b: 4 neglected pets get 24.4 pushes a day under (a), 7.6 (b), 10.3 (c), 5.6 (d); careful and casual players get no re-calls under any option. | **Owner: (c), bundled**, as a normal push (W4). |
+| Wave 0 Q4 | **Poop calls on phones?** A casual player's pet sends 4.9 pushes a day; 2.5 are poop calls (N2 kept them as calls). A casual 4-pet house gets about 20 a day today, 16.6 with 0b's one-push-per-sickness fix, and about 6.7 if poop calls stayed on the card and the sensors but sent no push. | **Owner: yes, card only.** A `dirty` call sends no push; it lands in 0b. |
 
 ## 7. QA beyond the PRs
 
