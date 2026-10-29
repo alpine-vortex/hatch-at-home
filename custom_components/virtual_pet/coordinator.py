@@ -1792,11 +1792,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         now = self._now()
         self._advance(now)
         seconds = hours * 3600
+        was_egg = model.life_stage(self.state) == "egg"
         events = model.advance(
             self.state, now + seconds, self.settings, self.rng, max_gap=None
         )
         # Pull the simulated future back to the real present.
         model.shift_times(self.state, -seconds)
+        if was_egg and self.state.hatched_on is not None:
+            # hatched_on is a date, so shift_times can't move it: redo it from
+            # the rebased hatch time, in the configured time zone.
+            hatch = self.state.born + dict(R.STAGE_STARTS)["baby"] * 3600 - seconds
+            self.state.hatched_on = (
+                datetime.fromtimestamp(hatch, self.settings.tz).date().isoformat()
+            )
         self._fire(events, simulated=True)
         self._pick_favourite()
         self._save()
