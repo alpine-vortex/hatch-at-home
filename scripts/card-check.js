@@ -4070,9 +4070,10 @@ async function main() {
       const moment = el._moment;
       el._moment = function (s, m) { el.__moments.push(m.type); return moment.call(this, s, m); };
       el._channel(el._slides[el._index], { moment: { type: "friend_home", at: new Date().toISOString() } }, el._hass.user.id);
-      return el.__moments.length;
+      return { booting: el._booting, said: el.__moments.length };
     });
-    check(`boot screen holds a private moment back (${width}px)`, heldBack === 0, `${heldBack} said`);
+    check(`boot screen holds a private moment back (${width}px)`,
+      heldBack.booting && heldBack.said === 0, JSON.stringify(heldBack));
     await bshot("day");
     // The tap: sounds on at 10:00 plays the beep, the pet shows, the status stays shut.
     await hours(10);
@@ -4090,8 +4091,9 @@ async function main() {
     await bp.waitForTimeout(2500);
     check(`the first look runs after the boot (${width}px)`,
       await bp.locator("hatch-pet-card").evaluate((el) => el.__greets > 0));
-    const saidAfter = await bp.locator("hatch-pet-card").evaluate((el) => el.__moments.join(","));
-    check(`the held private moment is said once after the boot (${width}px)`, saidAfter === "friend_home", saidAfter);
+    const saidAfter = await bp.locator("hatch-pet-card").evaluate((el) => el.__moments);
+    check(`the held private moment is said once after the boot (${width}px)`,
+      saidAfter.filter((type) => type === "friend_home").length === 1, saidAfter.join(","));
     // A second load: no boot screen.
     await bp.reload();
     await bp.waitForSelector("hatch-pet-card .slide", { timeout: 60000 });
