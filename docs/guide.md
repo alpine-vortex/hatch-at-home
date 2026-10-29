@@ -352,6 +352,20 @@ the pet comes home.
 | --- | --- | --- |
 | Keep presence private | on | An empty house shows the pet napping, never at the sitter's (care while it's away is refused as "asleep"), and the pet never says who came or went. Turn it off to see "at the sitter's". |
 
+**What the pets remember about you.** Your birthday, your answers to its questions,
+your alarm times, the last zone you came back from, and your "baby talk", "my day"
+and "birthday on my phone" switches are kept for you alone, for every pet. They stay
+when you remove a pet, even the last one, so they're there if you set it up again.
+**"forget my data"** on the status screen (not on a shared screen) erases all of
+that, for you only, at once. Your bond with each pet, its photos and its nickname
+for you stay. So does whether you get notifications: turn "notify me" off for that.
+The pets start fresh with you, and they note again when you next come home. To
+erase everyone's, an admin can stop Home Assistant and delete
+`.storage/virtual_pet.people`.
+
+With no pets left there's no card, so no "forget my data" button. An admin can
+delete `.storage/virtual_pet.people` then, with Home Assistant stopped.
+
 If an entity named in these settings is later renamed or removed, Settings →
 **Repairs** says which ones, so you can pick the new ones here.
 
@@ -537,12 +551,14 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   "notify me" on, your phone hears it once that morning from the pet you're closest
   to, by its nickname for you. Like every phone message, that one is in Home
   Assistant's history, where admins can see it; that's why it starts off. "forget my birthday" on the
-  status screen forgets it and stops asking.
+  status screen (two taps) forgets it and stops asking; "forget my data" forgets
+  everything the pets remember about you (see Privacy).
 - **A photo, for best friends.** At bond level 10, once a pet is a teen, it makes
   you a framed photo of itself as it was that day ("I made you something! it's in
   your journal ♥"), once per generation. It's in your journal under "photos", seen
   only by you and never on a shared screen, a sensor or a phone message. Tap "save"
-  to share it or keep it.
+  to share it or keep it. The Android app can't save it, so there the picture says
+  you can save it from a computer.
 - **Baby talk.** Turn "baby talk" on (status screen; off by default) and, while a
   pet is a baby or a child, its common lines get simpler: "hungy!" for a baby's
   hungry call, "hi hi, Sam!", "yay yay!". Babies get the most changes, children a
@@ -554,11 +570,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   on one device reaches the others at their next visit, up to an hour later. Only
   the card changes: phone messages, Assist, the journal and the status screen keep
   their words, and a shared screen has no switch and no baby talk.
-- **A welcome for every new pet.** Adding a pet through the integration tells the
-  whole house: "Pip, a new virtual pet, just moved in! Say hi ♥" It goes to every phone with
-  the Home Assistant app, whether or not anyone tapped "notify me", and to the
-  notifications in the sidebar. A new generation laid as an egg isn't a new pet,
-  and restarts never welcome again.
+- **A welcome for every new pet.** Adding a pet puts a note in the sidebar's
+  notifications: "Pip, a new virtual pet, just moved in! Say hi ♥". It also goes to
+  the phones of anyone who has "notify me" on for another pet in the house. A new
+  generation laid as an egg isn't a new pet, and restarts never welcome again.
 - **Dashboard to open:** when you add a pet (or later, in its options under
   Notifications), pick the dashboard that tapping its notifications opens, the
   welcome included, or type a path like `/lovelace/pets`.
