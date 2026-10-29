@@ -49,6 +49,8 @@ UPBRINGINGS = tuple(name for name, _ in R.UPBRINGING_GRADES)
 
 # Results an action can come back with. "ok" means it did something.
 OK = "ok"
+NOT_SLEEPY = "not_sleepy"
+LIGHTS_OUT = "lights_out"
 
 
 class DamagedSave(ValueError):
@@ -733,12 +735,12 @@ def _sleep(state: PetState, t: float, settings: Settings, events: list[Event]) -
             elif state.energy >= R.NAP_WAKE_ENERGY and (
                 minutes_to_bedtime(t, settings) > R.NAP_INTO_NIGHT_MINUTES
             ):
-                _wake(state, events, "rested")
+                _wake(state, events, "rested", t)
             return
         if state.wake_at is None:
             state.wake_at = next_wake(t, settings)
         if t >= state.wake_at:
-            _wake(state, events, "morning")
+            _wake(state, events, "morning", t)
         return
     if state.energy <= R.COLLAPSE_ENERGY:
         # Worn out: it drops off where it stands. A nap by day, the night's
@@ -779,19 +781,18 @@ def _fall_asleep(
     state.game = None
     state.stayed_up_since = None
     state.wake_at = None if napping else next_wake(t, settings)
-    if state.call is not None:
-        if state.call.reason == "energy":
-            events.append({"type": "call_answered", "reason": "energy"})
-        else:
-            # Calls pause for sleep; it will ask again after waking.
-            _unlatch(state, state.call.reason)
-        state.call = None
+    # An open call pauses with the pet (see _calls and _wake), whatever it is.
     events.append({"type": "fell_asleep", "napping": napping, "how": how})
 
 
-def _wake(state: PetState, events: list[Event], how: str) -> None:
+def _wake(
+    state: PetState, events: list[Event], how: str, t: float | None = None
+) -> None:
     """how: "morning" (wake time), "rested" (a nap ended), "lights" (woken by
-    hand) or "night" (woken by hand during sleep hours, which costs a little)."""
+    hand) or "night" (woken by hand during sleep hours, which costs a little).
+
+    A natural wake (t given) ends an energy call and gives any other paused
+    call at least RESUME_MIN_MINUTES; the morning one is also sent again."""
     state.asleep = False
     state.napping = False
     state.lights_out = False
@@ -800,6 +801,23 @@ def _wake(state: PetState, events: list[Event], how: str) -> None:
     if state.sick and state.sick_unannounced:
         events.append({"type": "became_sick", "cause": state.sick_unannounced})
     state.sick_unannounced = None
+    call = state.call
+    if call is None or t is None or how not in ("morning", "rested"):
+        return
+    if call.reason == "energy":
+        state.call = None
+        events.append({"type": "call_answered", "reason": "energy"})
+        return
+    call.deadline = max(call.deadline, t + R.RESUME_MIN_MINUTES * 60)
+    if how == "morning":
+        # The phones were cleared when it fell asleep: ask again, quietly.
+        events.append(
+            {
+                "type": "call_started",
+                "reason": "happiness" if call.reason == "fake" else call.reason,
+                "resumed": True,
+            }
+        )
 
 
 def _decay(state: PetState, hours: float, t: float, settings: Settings) -> None:
@@ -945,6 +963,15 @@ def _calls(
             _unlatch(state, reason)
 
     if state.asleep:
+        call = state.call
+        if call is not None:
+            call.deadline += hours * 3600  # a call pauses while it sleeps
+            if (
+                call.reason == "energy"
+                and state.energy > R.CALL_THRESHOLDS["energy"][1]
+            ):
+                state.call = None  # real rest answers it
+                events.append({"type": "call_answered", "reason": "energy"})
         return
 
     call = state.call
@@ -2071,7 +2098,10 @@ def set_lights_out(
         state.lights_out = on  # applied when it comes home
         return events
     state.lights_out = on
-    _apply_lights(state, now, settings, events)
+    result = _apply_lights(state, now, settings, events)
+    if result != OK:
+        _log(state, {"at": now, "action": LIGHTS_OUT, "by": None, "result": result})
+        events.append({"type": "care", "action": LIGHTS_OUT, "result": result})
     return events
 
 
@@ -2080,17 +2110,27 @@ def come_home(state: PetState, now: float, settings: Settings) -> list[Event]:
     events: list[Event] = []
     before, state.lights_before_away = state.lights_before_away, None
     if before is not None and before != state.lights_out:
-        _apply_lights(state, now, settings, events)
+        _apply_lights(state, now, settings, events)  # a refusal is dropped
     return events
 
 
 def _apply_lights(
     state: PetState, now: float, settings: Settings, events: list[Event]
-) -> None:
+) -> str:
+    """Make the pet match state.lights_out; the result code ("ok", or
+    "not_sleepy" when a nap was refused, which also puts lights_out back off)."""
     on = state.lights_out
     if life_stage(state) == "egg":
-        return  # remembered: the hatchling goes straight to sleep
+        return OK  # remembered: the hatchling goes straight to sleep
     if on and not state.asleep:
+        night = in_sleep_hours(now, settings)
+        if (
+            not night
+            and state.energy >= R.NAP_WAKE_ENERGY
+            and minutes_to_bedtime(now, settings) > R.NAP_INTO_NIGHT_MINUTES
+        ):
+            state.lights_out = False
+            return NOT_SLEEPY
         _fall_asleep(state, not in_sleep_hours(now, settings), events, now, settings)
     elif not on and state.asleep:
         night = in_sleep_hours(now, settings)
@@ -2099,6 +2139,7 @@ def _apply_lights(
             state.stayed_up_since = now
             state.kept_up_until = now + R.FALL_ASLEEP_ANYWAY_MINUTES * 60
         _wake(state, events, "night" if night else "lights")
+    return OK
 
 
 # --- Mood -------------------------------------------------------------------
@@ -2126,7 +2167,7 @@ def mood_keyed(
         flags.append("sick")
     if state.asleep:
         flags.append("asleep")
-    if state.call is not None:
+    if state.call is not None and not state.asleep:
         flags.append("calling")
     if state.hunger < R.HUNGRY_BELOW:
         flags.append("hungry")

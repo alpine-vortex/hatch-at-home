@@ -33,7 +33,7 @@ BINARY_SENSORS = [
     PetBinaryDescription(
         key="calling",
         translation_key="calling",
-        is_on_fn=lambda pet: pet.call is not None,
+        is_on_fn=lambda pet: pet.call is not None and not pet.asleep,
     ),
     PetBinaryDescription(
         key="sick", translation_key="sick", is_on_fn=lambda pet: pet.sick
@@ -78,6 +78,7 @@ class PetBinarySensor(PetEntity, BinarySensorEntity):
             self.entity_description.key != "calling"
             or self.pet.call is None
             or self.pet.away  # frozen while away: it would move on every tick
+            or self.pet.asleep  # paused: it would move on every tick
         ):
             return None
         # The reason stays off this sensor so a fake call looks real here.

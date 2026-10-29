@@ -281,8 +281,11 @@ praise is half of how discipline is earned.
   at energy 50 it naps; at 22:30 it sleeps whatever the energy; the switch is on while
   dozed; Assist says W3.
 - **Sim Done:** `launder` scrappy with no fewer energy misses than `neglect` (prototype:
-  score 13.6, 14 energy misses each); `sleeper` scrappy (17.5; main: steady 70); careful
-  and responder unchanged or better.
+  score 13.6, 14 energy misses each); `sleeper` pushes drop from 123 a day on main to
+  under 1 (0.3-0.4) and its grade does not rise; careful and responder unchanged or
+  better. **`sleeper` scrappy (17.5) moves to 0e's Sim Done:** on 0a alone sleeper is
+  steady 57.4 (main: steady 70), because each need latches after one miss (3 misses)
+  and scrappy needs at least 5; it needs 0b's re-calls plus 0e's score.
 
 **PR 0b: a missed call can call again (M2).** Size **S-M**, tier 2 (saved fields).
 **The owner picked (c), bundled, for how re-calls notify** (Wave 0 Q1, evaluated below). The
@@ -503,7 +506,7 @@ card and the `calling` sensor, which an automation can notify on.
   careful_games devoted (92-98); casual **steady** exactly (56-61); casual_games steady
   (56-60); responder steady or better (72-87); responder_praise steady or better
   (75-97); responder_miss1 steady (66-76); neglect (13.7), launder (13.6), launder +
-  praise (13.3), sleeper (17.5) and twice a day (25-32) scrappy; praise_bot not
+  praise (13.3), sleeper (17.5; moved here from 0a, which needs 0b's re-calls) and twice a day (25-32) scrappy; praise_bot not
   devoted (scrappy, 44-47) with a real happiness call a day (3.1-3.4); care_bot, which
   feeds, cleans, doses and praises but never plays, not devoted (scrappy, 28-29: its
   happiness sits under 10 most waking hours); praise spam ≤ 16 (14).

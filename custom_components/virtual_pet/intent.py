@@ -72,6 +72,7 @@ REFUSED = {
     "unfair": "wasn't misbehaving, so it's a little puzzled",
     "spoiled": "was only fussing for attention, but it loved the praise",
     "not_needed": "doesn't need that right now",
+    model.NOT_SLEEPY: "isn't sleepy yet",
 }
 
 
@@ -227,8 +228,7 @@ class CareIntent(intent.IntentHandler):
         action = slots[SLOT_ACTION]["value"]
         name = pet_name(pet)
         if action == LIGHTS_OUT:
-            await pet.async_set_lights_out(True, intent_obj.context)
-            result = model.OK
+            result = await pet.async_set_lights_out(True, intent_obj.context)
         else:
             result = await pet.async_action(action, intent_obj.context)
         response = intent_obj.create_response()

@@ -126,10 +126,10 @@ class MoodSensor(PetEntity, SensorEntity):
             "requests": model.requests(
                 self.pet, dt_util.utcnow().timestamp(), self.coordinator.settings
             ),
-            # Not while away: frozen, it would move on every tick.
+            # Not while away or asleep: paused, it would move on every tick.
             "call_deadline": (
                 dt_util.utc_from_timestamp(call.deadline).isoformat()
-                if call and not self.pet.away
+                if call and not self.pet.away and not self.pet.asleep
                 else None
             ),
         }

@@ -29,7 +29,7 @@ class LightsOutSwitch(PetEntity, SwitchEntity):
 
     @property
     def is_on(self) -> bool:
-        return self.pet.lights_out
+        return self.pet.asleep
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self.coordinator.async_set_lights_out(True, self._context)
