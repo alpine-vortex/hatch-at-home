@@ -2,7 +2,8 @@
 
 Each user turns them on for a pet from the card (service virtual_pet.notify_me).
 They go to that user's phones through the Home Assistant app (mobile_app).
-The one exception is the welcome when a pet is added, which goes to every phone.
+The welcome when a pet is added goes to the sidebar, and to the phones of people
+who get another pet's notifications.
 Messages never name anyone; a person's own phones may get the nickname the pet
 gave them.
 """

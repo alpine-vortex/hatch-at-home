@@ -128,6 +128,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_birthday_phone)
     websocket_api.async_register_command(hass, websocket_baby_talk)
     websocket_api.async_register_command(hass, websocket_photos)
+    websocket_api.async_register_command(hass, websocket_forget_me)
 
     async def fast_forward(call: ServiceCall) -> ServiceResponse:
         entries: list[PetConfigEntry] = hass.config_entries.async_loaded_entries(DOMAIN)
@@ -340,6 +341,25 @@ async def websocket_forget_birthday(
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
     await pet.async_forget_birthday(connection.user.id)
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command({vol.Required("type"): f"{DOMAIN}/forget_me"})
+@websocket_api.async_response
+async def websocket_forget_me(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Forget my data: the signed-in person's record in the people store (their
+    birthday, answers and settings for every pet), theirs only. Bonds stay. A
+    websocket command, so nothing about it is on the event bus or recorded."""
+    people: People = hass.data[DOMAIN]["people"]
+    user = connection.user.id
+    async with people.lock(user):  # a visit that's running finishes first
+        await people.forget(user)
+    for pet in hass.data[DOMAIN]["pets"].values():
+        pet._moved.pop(user, None)  # today's moves go with the rest
+        if pet.state is not None:
+            pet.async_set_updated_data(pet.state)
     connection.send_result(msg["id"])
 
 

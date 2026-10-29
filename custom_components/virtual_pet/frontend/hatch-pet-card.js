@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.35.0";
+const VERSION = "0.36.0b1";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -764,7 +764,33 @@ const REQUEST_LABELS = { blanket: "blanket?", fan: "fan?", lay_egg: "lay an egg?
 const REQUEST_ARIA = {
   lay_egg: "Lay an egg: the pet retires to the journal and a new egg takes its place",
 };
-const CONFIRM_MS = 4000; // laying an egg ends this pet's turn, so it takes two taps
+// Two taps for anything that can't be undone (lay an egg, forget my birthday,
+// forget my data). The first arms it; the second confirms only within
+// CONFIRM_MS of arming, and only after CONFIRM_GAP_MS since the tap before it,
+// so a fast double (or triple) tap is one tap. Kept on the slide by control: a
+// redraw keeps it, and arming one control can't confirm another.
+const CONFIRM_MS = 4000;
+const CONFIRM_GAP_MS = 600;
+function confirmTap(s, key, now = Date.now()) {
+  const c = s.confirm;
+  if (c?.key === key && now - c.at < CONFIRM_MS) {
+    if (now - c.last >= CONFIRM_GAP_MS) {
+      s.confirm = null;
+      return true;
+    }
+    c.last = now; // too soon after the last tap: the same tap, still armed
+    return false;
+  }
+  s.confirm = { key, at: now, last: now };
+  return false;
+}
+const confirmArmed = (s, key) => s.confirm?.key === key && Date.now() - s.confirm.at < CONFIRM_MS;
+// Their armed words: the button's text, and its aria-label.
+const CONFIRM_ARIA = {
+  lay_egg: "Sure? Press again to lay an egg",
+  forget_birthday: "Sure? Press again to forget my birthday",
+  forget_me: "Sure? Press again to forget my data",
+};
 
 const STAGE_LABELS = { egg: "Egg", baby: "Baby", child: "Child", teen: "Teen", adult: "Adult" };
 
@@ -810,6 +836,8 @@ const PHOTO = { w: 300, h: 380, px: 2, pic: 268, edge: 16 };
 const PHOTO_GROUND = { helper: 1.35, couch_potato: 1.35, player: -1.35, homebody: -1.3, fireside: 1.3, fog_wanderer: -0.6 };
 const PHOTO_GROUND_DY = { fog_wanderer: 4, homebody: 4, player: 0 }; // x ks below the feet, as the shelf has them
 const inCompanionApp = () => /Home Assistant\//.test(navigator.userAgent || "");
+// The Android app can't save a picture from its page (no share, no long-press save).
+const inAndroidApp = () => inCompanionApp() && /Android/i.test(navigator.userAgent || "");
 // "2026-10-28" as that day where the viewer is (not midnight UTC).
 function localDay(iso, locale) {
   const [y, m, d] = String(iso).split("-").map(Number);
@@ -1293,7 +1321,7 @@ const STYLE = `
   .photo-dialog .pbig { display: block; width: 100%; height: auto; -webkit-touch-callout: default; user-select: auto; }
   .photo-dialog p { margin: 8px 0 4px; }
   .photo-dialog a { display: block; margin: 4px 0 8px; color: inherit; word-break: break-all; }
-  .photo-dialog a[hidden] { display: none; }
+  .photo-dialog a[hidden], .photo-dialog p[hidden] { display: none; }
   .jlist .gt { padding-left: 10px; }
   .ticon { width: 14px; height: 14px; object-fit: contain; vertical-align: -3px; margin-right: 2px;
     image-rendering: pixelated; }
@@ -1658,15 +1686,8 @@ class HatchPetCard extends HTMLElement {
     s.request.addEventListener("click", () => {
       const key = s.request.dataset.key;
       if (!key) return;
-      if (key === "lay_egg" && !(Date.now() < s.confirmUntil)) {
-        this._tapped(s.request, s);
-        s.confirmUntil = Date.now() + CONFIRM_MS;
-        s.request.textContent = "sure? tap again";
-        s.request.setAttribute("aria-label", "Sure? Press again to lay an egg");
-        setTimeout(() => this._redraw(s), CONFIRM_MS + 50);
-        return;
-      }
-      s.confirmUntil = 0;
+      if (key === "lay_egg") this._tapped(s.request, s);
+      if (key === "lay_egg" && !this._confirmed(s, key, s.request, () => this._redraw(s))) return;
       this._press(s, key);
     });
     // A tap on the screen is a shortcut for the Status button; it holds buttons of its
@@ -1807,7 +1828,8 @@ class HatchPetCard extends HTMLElement {
     if (s.game) this._endGame(s, null);
     this._stopTyping(s);
     s.voicedAt = 0;
-    s.confirmUntil = 0;
+    s.confirm = null;
+    clearTimeout(s.confirmTimer);
     s.lastMoment = s.lastLogAt = undefined;
     s.greeted = false;
     s.excitedSince = 0;
@@ -1846,6 +1868,7 @@ class HatchPetCard extends HTMLElement {
       slide.live.textContent = "";
       slide.screen.querySelector(".bondhearts")?.remove();
       slide.journal = false;
+      slide.confirm = null; // an armed "forget" is a personal row
       slide.status.innerHTML = ""; // drawn again, without its personal rows
       slide.statusHtml = null;
       slide.drawnSig = null;
@@ -2173,9 +2196,9 @@ class HatchPetCard extends HTMLElement {
     s.request.classList.toggle("show", !!wanted && !away && !asleep);
     if (wanted) {
       s.request.dataset.key = wanted;
-      const confirming = wanted === "lay_egg" && Date.now() < s.confirmUntil;
+      const confirming = wanted === "lay_egg" && confirmArmed(s, wanted);
       s.request.textContent = confirming ? "sure? tap again" : REQUEST_LABELS[wanted] || `${wanted}?`;
-      s.request.setAttribute("aria-label", confirming ? "Sure? Press again to lay an egg"
+      s.request.setAttribute("aria-label", confirming ? CONFIRM_ARIA.lay_egg
         : REQUEST_ARIA[wanted] || `Give the pet a ${wanted}`);
     }
 
@@ -2769,7 +2792,7 @@ class HatchPetCard extends HTMLElement {
       const bond = this._bond(s);
       const name = (bond?.level >= BOND.nickname && bond.nickname) || short(this._hass.user?.name?.trim().split(/\s+/)[0], 16);
       if (!note.quiet && name) line = `happy birthday, ${name}!! ♥`;
-      (s.queue ??= []).push({ text: line, ms: 5000, then: () => {
+      (s.queue ??= []).push({ text: line, ms: 5000, personal: true, then: () => {
         if (!note.quiet) this._chirp(s, "birthday");
         this._sparkle(s);
       } });
@@ -2779,7 +2802,7 @@ class HatchPetCard extends HTMLElement {
       this._speak(s, line, 5000);
       return;
     }
-    this._queue(s, line, 5000);
+    this._queue(s, line, 5000, { personal: true });
     if (note.kind === "friends_for") {
       this._sparkle(s);
       if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) this._bondHearts(s);
@@ -3236,6 +3259,11 @@ class HatchPetCard extends HTMLElement {
       `${e.result && e.result !== "ok" ? ` (${escape(e.result.replace("_", " "))}${e.score ? ` ${escape(e.score)}` : ""})` : ""}</div>`);
     const row = (iconName, label, value) =>
       `<div class="row">${iconName ? ic(iconName) : "<span></span>"}<span>${label}</span>${value}</div>`;
+    // A two-tap "forget", armed or not (confirmTap).
+    const forgetButton = (cls, key, aria) => {
+      const sure = confirmArmed(s, key);
+      return `<span><button class="bell ${cls}" aria-label="${sure ? CONFIRM_ARIA[key] : aria}">${sure ? "sure? tap again" : "forget"}</button></span>`;
+    };
     const adult = this._state(s, "sensor.life_stage")?.state === "adult";
     const teenOrAdult = adult || this._state(s, "sensor.life_stage")?.state === "teen";
     const isEgg = this._state(s, "sensor.life_stage")?.state === "egg";
@@ -3264,9 +3292,10 @@ class HatchPetCard extends HTMLElement {
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell notify" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       ${bond ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!this._myDay}">${this._myDay ? "on" : "off"}</button></span>`) : ""}
-      ${this._birthdayKept && !sharedScreen() ? row(null, "my birthday", `<span><button class="bell forgetbday" aria-label="forget my birthday">forget</button></span>`) +
+      ${this._birthdayKept && !sharedScreen() ? row(null, "my birthday", forgetButton("forgetbday", "forget_birthday", "forget my birthday")) +
         row(null, "birthday on my phone", `<span><button class="bell bdayphone" aria-label="birthday on my phone: a happy birthday message on your phone on the day" aria-pressed="${!!this._birthdayPhone}">${this._birthdayPhone ? "on" : "off"}</button></span>`) : ""}
       ${sharedScreen() ? "" : row(null, "baby talk", `<span><button class="bell babytalk" aria-label="baby talk: simpler words while a pet is a baby or child" aria-pressed="${babyTalk(this._hass.user?.id)}">${babyTalk(this._hass.user?.id) ? "on" : "off"}</button></span>`)}
+      ${sharedScreen() ? "" : row(null, "my data", forgetButton("forgetme", "forget_me", "forget my data: your birthday, answers and settings for every pet; your bonds stay"))}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       ${s.species?.voice ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`) : ""}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
@@ -3336,17 +3365,57 @@ class HatchPetCard extends HTMLElement {
       this._tapped(e.currentTarget);
       this._setBabyTalk(s, !babyTalk(this._hass.user?.id), e.currentTarget);
     });
+    const redrawStatus = () => this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     s.status.querySelector(".bell.forgetbday")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);
+      if (!this._confirmed(s, "forget_birthday", e.currentTarget, redrawStatus)) return;
       this._hass.callWS({ type: "virtual_pet/forget_birthday", entity_id: s.ids?.["sensor.life_stage"] })
         .then(() => {
           this._birthdayKept = false;
           this._birthdayPhone = false;
+          redrawStatus(); // first: a redraw replaces the message's line
           this._statusMessage(s, "Forgotten. I won't ask again.");
-          this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
         })
-        .catch(() => this._statusMessage(s, "That didn't work. Try again."));
+        .catch(() => {
+          redrawStatus(); // "forget" again, not "sure?"
+          this._statusMessage(s, "That didn't work. Try again.");
+        });
+    });
+    // "forget my data": this person's record in the people store, for every
+    // pet (not their bonds), and this browser's copies of it.
+    s.status.querySelector(".bell.forgetme")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      if (!this._confirmed(s, "forget_me", e.currentTarget, redrawStatus)) return;
+      const user = this._hass.user?.id;
+      this._hass.callWS({ type: "virtual_pet/forget_me" })
+        .then(() => {
+          setBabyTalk(user, false);
+          this._myDay = false;
+          this._birthdayKept = false;
+          this._birthdayPhone = false;
+          for (const slide of this._slides || []) { // lines told only to them
+            if (slide.queue) slide.queue = slide.queue.filter((q) => !q.personal && !q.opts?.personal && !q.ask);
+          }
+          try {
+            localStorage.removeItem(`hatch-welcomed-${user}`);
+            const greets = [];
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              if (key?.startsWith(`hatch-greet-${user}-`)) greets.push(key);
+            }
+            greets.forEach((key) => localStorage.removeItem(key));
+          } catch (err) {
+            // no storage (a private window): nothing kept here
+          }
+          redrawStatus(); // first: a redraw replaces the message's line
+          this._statusMessage(s, "Forgotten. The pets start fresh with you ♥");
+        })
+        .catch(() => {
+          redrawStatus(); // "forget" again, not "sure?"
+          this._statusMessage(s, "That didn't work. Try again.");
+        });
     });
     s.status.querySelector(".bell.babble")?.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -3368,6 +3437,21 @@ class HatchPetCard extends HTMLElement {
       }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
+  }
+
+  // A tap on a two-tap control (confirmTap): true when it confirms. Otherwise
+  // the button says "sure? tap again" until the window closes, then redraw().
+  _confirmed(s, key, button, redraw) {
+    const was = s.confirm?.key;
+    if (confirmTap(s, key)) return true;
+    if (was && was !== key) s.confirmRedraw?.(); // the other one disarmed
+    s.confirmRedraw = redraw;
+    button.textContent = "sure? tap again"; // in place: a redraw would drop focus
+    button.setAttribute("aria-label", CONFIRM_ARIA[key]);
+    s.statusHtml = null; // the screen no longer matches it: the next redraw writes
+    clearTimeout(s.confirmTimer);
+    s.confirmTimer = setTimeout(redraw, s.confirm.at + CONFIRM_MS + 50 - Date.now());
+    return false;
   }
 
   // "My day" is per person too: steps, stairs and sleep from their own phones.
@@ -3735,7 +3819,7 @@ class HatchPetCard extends HTMLElement {
       dialog = document.createElement("dialog");
       dialog.className = "photo-dialog";
       dialog.innerHTML = `<img class="pbig" alt=""><p>press and hold the picture to save it</p>` +
-        `<a class="pdownload"></a><button class="bell pclose">close</button>`;
+        `<p class="pcomputer" hidden>you can save it from a computer</p><a class="pdownload"></a><button class="bell pclose">close</button>`;
       // It stops every tap: nothing behind it reacts. A tap outside it closes it.
       dialog.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -3763,6 +3847,7 @@ class HatchPetCard extends HTMLElement {
     link.download = p.name;
     link.textContent = p.name;
     link.hidden = inCompanionApp(); // the apps don't download; press and hold there
+    dialog.querySelector(".pcomputer").hidden = !inAndroidApp();
     this._photoFor = { s, gen };
     if (!dialog.open) {
       if (dialog.showModal) dialog.showModal();

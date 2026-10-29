@@ -69,6 +69,25 @@ no `.corrupt`, no marker; owner-approved); load failures log only the error type
 The catchphrase's keep button is 12px and may wrap inside itself, so every creature's
 five choices fit two rows (checked for all 30). `scripts/test` 585, `scripts/card-check` 134/134 (the catchphrase rows checked full size and compact).
 
+**Privacy P2 is built as 0.36.0b1** (crew branch
+`crew/hatch-at-home-s2443-privacy-p2-the-welcome-forget`, 2026-10-28; awaiting its tier-2
+audit and PR). F3: `_welcome` sends to the sorted union of the *other* loaded pets'
+`notify_users`, and only if it's non-empty (`notify.send(None, …)` would be every
+phone), so the first pet welcomes in the sidebar only; `virtual_pet_welcomed` stays
+`{pet_id}`. FB: the people store is kept when the last pet is removed (on purpose, now
+documented); `People.forget(user)` pops the record and saves at once;
+`virtual_pet/forget_me` (`{type}` only, any signed-in user, under `people.lock(user)`,
+then every pet's `async_set_updated_data`). Card: the "my data" row (personal screens
+only, after "baby talk"), and **one confirm guard** for lay an egg, forget my birthday
+(a single tap until now) and forget my data: `confirmTap(s, key)` / `confirmArmed`,
+`CONFIRM_GAP_MS` 600 from the previous tap, `CONFIRM_MS` 4 s from arming, armed state on
+the slide (`s.confirm`), `_confirmed()` arms in place. The photo dialog adds "you can
+save it from a computer" in the Android app (`inAndroidApp()`). Guide: the welcome, "What
+the pets remember about you" under Privacy, the no-pets sentence, the birthday line.
+Tests in `tests/test_forget.py` and `tests/test_welcome.py`; card checks in "5c" and
+next to the birthday and photo checks. **Still open: Q11** (keep `zone` only while "my
+day" is on); P2 leaves it as it is. `scripts/test` 591, `scripts/card-check` 141/141.
+
 **Phase 4 of the voices plan, the photo (A7), is merged and pre-released as
 0.34.0b1** (PR #31, 2026-10-28; from `docs/plan-2026-10-28-phase4-photo.md` draft 2,
 plus its tier-2 audit's fixes). **Owed: the phone test** (owner, 2026-10-28: not
@@ -305,7 +324,9 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   pets (`hass.data[DOMAIN]["people"]`, `virtual_pet.people`) for what belongs to the
   person, not the pet: likes, `asked` (a morning and a later slot a day), `noted`
   (person lines, once by whichever pet they look at first), `zone`, `arrived`,
-  `sendoffs`, `alarms`, `guess`, `my_day`, and the house's `weather` by day.
+  `sendoffs`, `alarms`, `guess`, `my_day`, and the house's `weather` by day. It
+  outlives the pets (removing the last one keeps it); `virtual_pet/forget_me` erases
+  one person's record (privacy P2).
   `hass.data[DOMAIN]["pets"]` lists the loaded pets (`_closest_pet` sends the
   send-off). `visit` answers `{notes (≤ NOTES_PER_VISIT, best first), ask}`;
   `choose_question` picks the question (rotation by date for the later slot);
@@ -545,3 +566,5 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
 - Commit attribution: no `Co-Authored-By` trailer; keep the `Claude-Session:` line.
 - Say plainly what's verified and what isn't; the owner is often on a phone.
 - Log finished work in tududi (Development area, tag `done-by-claude`).
+
+**Known (privacy P2):** a second card on the same dashboard, or another open device, keeps showing the old "my day" and birthday rows after "forget my data" until its next counted visit (audit finding 3). Q11 (zone storage) is still open.

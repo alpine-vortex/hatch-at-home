@@ -1210,6 +1210,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # One look at a time per person: two pets on one dashboard visited
         # together must not both say the same person line.
         async with self.people.lock(user):
+            # Read again under the lock: a "forget my data" may have run while
+            # the auth lookup above was awaited, and must not be undone here.
+            person = self.people.data["people"].get(user, {})
             # At most NOTES_PER_VISIT, and no more than the look has room for
             # (FIRST_LOOK_LINES, minus what the card already queued).
             room = min(R.NOTES_PER_VISIT, max(0, R.LOOK_LINES - queued))
@@ -1236,13 +1239,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._save()
         self._publish()
         # "my day" goes to this person only (a state attribute is everyone's).
+        fresh = self.people.data["people"].get(user, {})
         return {
             "notes": notes,
             "ask": ask,
             "counted": True,
             "my_day": self.people.my_day(user),
-            "birthday_kept": bool(person.get("birthday")),
-            "birthday_phone": bool(person.get("birthday_phone")),
+            "birthday_kept": bool(fresh.get("birthday")),
+            "birthday_phone": bool(fresh.get("birthday_phone")),
             "made_room": made_room,
             "baby_talk": self.people.baby_talk(user),
         }
@@ -1701,7 +1705,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
 
     def _welcome(self) -> None:
-        """A new pet: tell the whole house, on every phone and in the sidebar."""
+        """A new pet: a note in the sidebar, and on the phones of people who
+        turned "notify me" on for another pet here (the first pet in a house
+        welcomes in the sidebar only). The event names nobody."""
         text = notify.welcome(self.config_entry.title)
         link = f"\n\n[Open the pet shelf]({self.dashboard})" if self.dashboard else ""
         persistent_notification.async_create(
@@ -1710,7 +1716,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             title="Virtual Pet",
             notification_id=f"{DOMAIN}_{self.pet_id}_welcome",
         )
-        self._send(None, text, f"{DOMAIN}_{self.pet_id}_welcome")
+        pets: dict[str, PetCoordinator] = self.hass.data[DOMAIN]["pets"]
+        users = sorted(
+            {
+                user
+                for pet in pets.values()
+                if pet is not self and pet.state is not None
+                for user in pet.state.notify_users
+            }
+        )
+        if users:  # never None: that's every phone in the house
+            self._send(users, text, f"{DOMAIN}_{self.pet_id}_welcome")
         self.hass.bus.async_fire(f"{DOMAIN}_welcomed", {"pet_id": self.pet_id})
 
     async def async_notification_button(self, key: str, context: Context) -> None:

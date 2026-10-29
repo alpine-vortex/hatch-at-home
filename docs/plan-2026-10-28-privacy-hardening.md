@@ -2,9 +2,14 @@
 
 **DRAFT 2, 2026-10-28.** A build plan only: no code changes here. The build is review tier 2.
 
-**Status:** P1 (F5, F6, FA, D1) built as 0.35.0b4 on crew branch
-`crew/hatch-at-home-s2434-privacy-p1-damaged-saves-salva` (2026-10-28), awaiting its tier-2
-audit and PR. P2, P3a, P3b and P3c not started.
+**Status:** P1 (F5, F6, FA, D1) merged and released in 0.35.0 (PR #45). **P2 (F3, FB)
+built as 0.36.0b1** on crew branch `crew/hatch-at-home-s2443-privacy-p2-the-welcome-forget`
+(2026-10-28), awaiting its tier-2 audit and PR; it also carries the shared confirm guard
+(experience plan PR 1b adopts it) and the photo dialog's Android line. The versions moved
+on (owner, 2026-10-28: each merged PR a beta after 0.35.0), so **the old-card check in P3b
+and P3c serves `v0.36.0b1`, P2's tag, not `v0.35.0b5`**. Q11 (`zone` only with "my day"
+on) is still open: P2 leaves it as it is, which the approved guide copy describes.
+P3a, P3b and P3c not started.
 
 **Draft 2** folds in the adversarial audit of draft 1 (scout `hatch-at-home-s2430`, 20
 findings) and the owner's answers of 2026-10-28. Every audit claim was checked against

@@ -175,8 +175,8 @@ audit after it).
 - **Privacy P1** (`_dropSlide`, the observer: privacy F6) is merged. Wave 1's game
   timers must also be cleared when a slide is dropped, so PR 1a builds on it (and goes
   after 0f). PR 1b and 1c don't touch slide teardown and can go any time.
-- **Privacy P2** (forget my data) and **PR 1b** share the confirm guard: 1b lands first
-  and P2 uses it; if P2 is first, 1b moves P2's row onto the guard.
+- **Privacy P2** (forget my data) and **PR 1b** share the confirm guard. **P2 built it
+  first** (0.36.0b1; see PR 1b), so 1b adopts it.
 - **Privacy P3a** (the channel) and **P3c** (media pushes) go before Wave 2 (the queue
   reads both streams).
 - **Privacy P3b** (the `_fire` scrub) goes before PR 2b (a new public moment must pass
@@ -613,6 +613,17 @@ tier 1.
   after 4 s it disarms. This fixes "any second tap within 4 s confirms". It guards
   **laying an egg** (1642-1654), **"forget my birthday"** (owner A1: today a single tap,
   3267-3277) and **privacy P2's "forget my data"** (cross-plan change 1).
+  - **Built in privacy P2 (0.36.0b1, 2026-10-28), so 1b adopts it rather than writing
+    it** (owner, via the P2 brief). The card has `confirmTap(s, key)` and
+    `confirmArmed(s, key)` (module functions, armed state on the slide by control key:
+    `lay_egg`, `forget_birthday`, `forget_me`), `CONFIRM_ARIA`, and
+    `this._confirmed(s, key, button, redraw)`, which arms the button in place and
+    redraws when the window closes. **One difference from the rule above:** the 600 ms
+    is measured from the *previous* tap, not from arming, so a fast triple tap (0, 300,
+    650 ms) doesn't confirm either; the 4 s window still runs from arming. Card checks:
+    "forgetting takes two taps, and a fast double tap is one" and "laying an egg takes
+    two taps, with a pause between". 1b keeps the in-flight flag and the answers, and
+    checks the guard on the three controls as its test line says.
 - **Answers (owner A7: a failed save is not a try).** `_ask` with `keep` keeps the
   optimistic reply (the charm), then:
   - on failure, retries the `virtual_pet/answer` call once, quietly, after 3 s;

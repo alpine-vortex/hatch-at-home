@@ -713,9 +713,22 @@ async function main() {
     out.forgetShared = !!s.status.querySelector(".bell.forgetbday, .bell.bdayphone");
     localStorage.setItem("hatch-shared-screen", "off");
     el._renderStatus(s, []);
+    // Two taps (the confirm guard): the first arms it, a fast second is the
+    // same tap, and one after a pause confirms.
+    const sent = [];
+    const realWS = el._hass.callWS.bind(el._hass);
+    el._hass.callWS = (msg) => { sent.push(msg.type); return realWS(msg); };
+    s.status.querySelector(".bell.forgetbday").click();
+    out.armed = s.status.querySelector(".bell.forgetbday")?.textContent;
+    await wait(100);
+    s.status.querySelector(".bell.forgetbday").click();
+    await wait(300);
+    out.fastDouble = { kept: el._birthdayKept, sent: sent.length };
+    await wait(400); // 700 ms after the last tap
     s.status.querySelector(".bell.forgetbday").click();
     for (let i = 0; i < 40 && el._birthdayKept; i++) await wait(50);
-    out.forgotten = !el._birthdayKept;
+    el._hass.callWS = realWS;
+    out.forgotten = !el._birthdayKept && sent.join() === "virtual_pet/forget_birthday";
     s.voicedAt = Date.now() + 1e9;
     return out;
   });
@@ -729,8 +742,37 @@ async function main() {
     bday.confetti && /season_party_hat/.test(bday.hat) && /party hat on! ♪$/.test(bday.said), JSON.stringify(bday));
   check("your birthday can be forgotten, never shown on a shared screen",
     bday.forget && !bday.forgetShared && bday.forgotten, JSON.stringify(bday));
+  check("forgetting takes two taps, and a fast double tap is one",
+    bday.armed === "sure? tap again" && bday.fastDouble.kept && bday.fastDouble.sent === 0, JSON.stringify(bday));
   check("the birthday phone message is off until you turn it on",
     bday.phoneOff === "false" && bday.phoneOn === "true", JSON.stringify(bday));
+  // Laying an egg shares the guard: a fast double tap lays nothing.
+  const egg = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const pressed = [];
+    const press = el._press;
+    const redraw = el._redraw;
+    el._press = (slide, key) => pressed.push(key);
+    el._redraw = () => {};
+    const was = s.request.dataset.key;
+    s.request.dataset.key = "lay_egg";
+    s.confirm = null;
+    s.request.click();
+    const armed = s.request.textContent;
+    await wait(150);
+    s.request.click();
+    const fast = pressed.length;
+    await wait(700);
+    s.request.click();
+    el._press = press;
+    el._redraw = redraw;
+    s.request.dataset.key = was ?? "";
+    if (!was) delete s.request.dataset.key;
+    return { armed, fast, pressed };
+  });
+  check("laying an egg takes two taps, with a pause between",
+    egg.armed === "sure? tap again" && egg.fast === 0 && egg.pressed.join() === "lay_egg", JSON.stringify(egg));
   // A close friend coming home: "you're home!!" to them, by name to anyone else.
   await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
   await evaluate(() => document.querySelector("home-assistant").hass.callApi("POST", "states/person.sam_check",
@@ -1409,6 +1451,7 @@ async function main() {
     const out = {
       open: !!dialog?.open, modal: !!dialog?.matches(":modal"), img: dialog?.querySelector(".pbig").src.startsWith("blob:"),
       hint: dialog?.querySelector("p").textContent, download: link?.download, hidden: link?.hidden,
+      computer: getComputedStyle(dialog?.querySelector(".pcomputer")).display,
     };
     Object.defineProperty(navigator, "share", { value: share, configurable: true });
     Object.defineProperty(navigator, "canShare", { value: canShare, configurable: true });
@@ -1416,7 +1459,8 @@ async function main() {
   });
   check("save without a share sheet shows the picture to press and hold, and a download",
     saved.open && saved.modal && saved.img && saved.hint === "press and hold the picture to save it" &&
-    saved.download === "Checkbird-best-friends.png" && saved.hidden === false, JSON.stringify(saved));
+    saved.download === "Checkbird-best-friends.png" && saved.hidden === false && saved.computer === "none",
+    JSON.stringify(saved));
   await page.screenshot({ path: path.join(OUT, "05d-photo-save.png") });
   await page.keyboard.press("Escape");
   await page.waitForTimeout(300);
@@ -1443,6 +1487,28 @@ async function main() {
     return out;
   });
   check("in the companion app the download link is not displayed", inApp.hidden && inApp.display === "none", JSON.stringify(inApp));
+  // The Android app can't save it from the page: the dialog says so; the iPhone app's doesn't.
+  const appLine = (ua) => page.locator("hatch-pet-card").evaluate(async (el, ua) => {
+    const share = navigator.share;
+    const canShare = navigator.canShare;
+    Object.defineProperty(navigator, "share", { value: undefined, configurable: true });
+    Object.defineProperty(navigator, "canShare", { value: undefined, configurable: true });
+    Object.defineProperty(navigator, "userAgent", { value: ua, configurable: true });
+    el._slides[el._index].status.querySelector('.psave[data-gen="2"]').click();
+    await new Promise((r) => setTimeout(r, 300));
+    const line = el.shadowRoot.querySelector(".photo-dialog .pcomputer");
+    const out = { display: getComputedStyle(line).display, text: line.textContent };
+    el.shadowRoot.querySelector(".photo-dialog").close();
+    delete navigator.userAgent;
+    Object.defineProperty(navigator, "share", { value: share, configurable: true });
+    Object.defineProperty(navigator, "canShare", { value: canShare, configurable: true });
+    return out;
+  }, ua);
+  const android = await appLine("Mozilla/5.0 (Linux; Android 15; Pixel 8) Home Assistant/2026.10.1-1");
+  const iphone = await appLine("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Home Assistant/2026.10");
+  check("the Android app's photo dialog says to save it from a computer; the iPhone app's doesn't",
+    android.display !== "none" && android.text === "you can save it from a computer" && iphone.display === "none",
+    JSON.stringify({ android, iphone }));
   // A shared screen shows no photo, and forgets them.
   const shared = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const s = el._slides[el._index];
@@ -2539,6 +2605,114 @@ async function main() {
       f6.disconnected && f6.observed, JSON.stringify(f6));
   }
 
+  // 5c. "forget my data" (privacy P2): personal screens only, two taps, then the
+  // pets start fresh with you, here and on the server. Late in the run: its real
+  // visits redraw the sensors over the stubs that earlier checks inject.
+  const forgot = await page.locator("hatch-pet-card").evaluate(async (el, me) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const id = s.ids["sensor.life_stage"];
+    const log = () => el._state(s, "sensor.last_care")?.attributes.log || [];
+    const visit = async () => {
+      await el._hass.callService("virtual_pet", "fast_forward", { hours: 1 });
+      const res = await el._hass.callService("virtual_pet", "visit", { entity_id: id, queued: 0 }, undefined, false, true);
+      return res?.response || {};
+    };
+    const out = {};
+    await el._hass.callWS({ type: "virtual_pet/answer", entity_id: id, question: "birthday", answer: "03-14" });
+    await el._hass.callWS({ type: "virtual_pet/baby_talk", entity_id: id, enabled: true });
+    const before = await visit();
+    out.before = { counted: before.counted, kept: before.birthday_kept, baby: before.baby_talk };
+    localStorage.setItem("hatch-shared-screen", "on");
+    el._renderStatus(s, log());
+    out.shared = !!s.status.querySelector(".bell.forgetme");
+    localStorage.setItem("hatch-shared-screen", "off");
+    el._birthdayKept = true;
+    el._myDay = true;
+    localStorage.setItem(`hatch-welcomed-${me}`, "1");
+    localStorage.setItem(`hatch-greet-${me}-dev-a`, "1");
+    localStorage.setItem(`hatch-greet-${me}-dev-b`, "1");
+    localStorage.setItem("hatch-greet-someone-else-dev-a", "1");
+    s.statusHtml = null;
+    el._renderStatus(s, log());
+    const button = () => s.status.querySelector(".bell.forgetme");
+    out.label = button()?.closest(".row")?.textContent.trim();
+    out.aria = button()?.getAttribute("aria-label");
+    out.order = [...s.status.querySelectorAll(".row")].map((r) => r.children[1]?.textContent)
+      .filter((t) => ["baby talk", "my data", "sounds here"].includes(t)).join();
+    const sent = [];
+    const realWS = el._hass.callWS.bind(el._hass);
+    el._hass.callWS = (msg) => { sent.push(msg.type); return realWS(msg); };
+    button().click();
+    await wait(200);
+    out.one = { text: button()?.textContent, aria: button()?.getAttribute("aria-label"), sent: sent.length };
+    await wait(500);
+    button().click();
+    for (let i = 0; i < 40 && el._birthdayKept; i++) await wait(50);
+    el._hass.callWS = realWS;
+    out.sent = sent;
+    out.message = s.status.querySelector(".status-feedback")?.textContent;
+    out.bdayRows = !!s.status.querySelector(".bell.forgetbday, .bell.bdayphone");
+    out.babyTalk = s.status.querySelector(".bell.babytalk")?.getAttribute("aria-pressed");
+    out.myDay = el._myDay;
+    out.myDayRow = s.status.querySelector(".bell.myday")?.getAttribute("aria-pressed") ?? "none";
+    out.storage = Object.keys(localStorage).filter((k) => k === `hatch-welcomed-${me}` || k.startsWith(`hatch-greet-${me}-`));
+    out.othersKept = localStorage.getItem("hatch-greet-someone-else-dev-a") === "1";
+    const after = await visit();
+    out.after = { counted: after.counted, kept: after.birthday_kept, baby: after.baby_talk, myDay: after.my_day };
+    localStorage.removeItem("hatch-greet-someone-else-dev-a");
+    s.sayUntil = 0;
+    return out;
+  }, me);
+  // An armed "forget" goes back to "forget" when its window closes with nothing
+  // else changed, and after a confirm that failed.
+  const lapse = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const log = () => el._state(s, "sensor.last_care")?.attributes.log || [];
+    const button = () => s.status.querySelector(".bell.forgetme");
+    const look = () => ({ text: button()?.textContent, aria: button()?.getAttribute("aria-label") });
+    s.confirm = null;
+    s.statusHtml = null;
+    el._renderStatus(s, log());
+    button().click();
+    const armed = look();
+    await wait(4300);
+    const lapsed = look();
+    const realWS = el._hass.callWS;
+    const sent = [];
+    el._hass.callWS = (msg) => {
+      sent.push(msg.type);
+      return msg.type === "virtual_pet/forget_me" ? Promise.reject(new Error("no")) : realWS.call(el._hass, msg);
+    };
+    button().click();
+    await wait(700);
+    button().click();
+    await wait(300);
+    el._hass.callWS = realWS;
+    return { armed, lapsed, failed: look(), sent, message: s.status.querySelector(".status-feedback")?.textContent };
+  });
+  const unarmed = "forget my data: your birthday, answers and settings for every pet; your bonds stay";
+  check("an armed forget goes back to forget when its window closes, and after a failure",
+    lapse.armed.text === "sure? tap again" && lapse.lapsed.text === "forget" && lapse.lapsed.aria === unarmed &&
+    lapse.sent.join() === "virtual_pet/forget_me" && lapse.message === "That didn't work. Try again." &&
+    lapse.failed.text === "forget" && lapse.failed.aria === unarmed, JSON.stringify(lapse));
+  check("forget my data is a personal row, after baby talk",
+    !forgot.shared && forgot.label === "my dataforget" && forgot.order === "baby talk,my data,sounds here" &&
+    forgot.aria === "forget my data: your birthday, answers and settings for every pet; your bonds stay",
+    JSON.stringify(forgot));
+  check("one tap on forget my data only asks",
+    forgot.one.text === "sure? tap again" && forgot.one.aria === "Sure? Press again to forget my data" &&
+    forgot.one.sent === 0, JSON.stringify(forgot.one));
+  check("the second tap forgets you, here and on the server",
+    // A visit within the hour isn't counted (fast_forward doesn't move the clock),
+    // and then says only baby talk: that it's off proves the server forgot.
+    (forgot.before.counted === false || forgot.before.kept === true) && forgot.before.baby === true &&
+    forgot.sent.join() === "virtual_pet/forget_me" && forgot.message === "Forgotten. The pets start fresh with you ♥" &&
+    !forgot.bdayRows && forgot.babyTalk === "false" && !forgot.myDay && forgot.myDayRow !== "true" &&
+    forgot.storage.length === 0 && forgot.othersKept &&
+    forgot.after.baby === false && (forgot.after.counted === false || (forgot.after.kept === false && forgot.after.myDay === false)),
+    JSON.stringify(forgot));
   // 6. The card editor loads and offers the pets.
   const editor = await evaluate(async () => {
     const hass = document.querySelector("home-assistant").hass;
