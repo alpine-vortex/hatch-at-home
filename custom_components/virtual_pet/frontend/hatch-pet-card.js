@@ -98,8 +98,30 @@ const CHIRPS = { // [frequency Hz, length s] notes, played one after another
   spooky: [[660, 0.12], [622, 0.12], [587, 0.12], [523, 0.26]],
   harvest: [[523, 0.1], [659, 0.1], [784, 0.1], [659, 0.1], [784, 0.22]],
   birthday: [[523, 0.12], [523, 0.1], [587, 0.22], [523, 0.22], [698, 0.22], [659, 0.4]],
+  boot: [[523, 0.08], [784, 0.08], [1047, 0.2]],
 };
 let audio = null; // one AudioContext for every card on the page
+
+// Power-on: the first time this browser shows the card (and again after a card
+// update that bumps BOOT_VERSION, only when a release should "power on"), the
+// screens show a boot screen that waits for a tap. The tap unlocks the sound.
+const BOOT_KEY = "hatch-booted";
+const BOOT_VERSION = "1";
+const BOOT_WAIT_MS = 5000; // nobody taps (a wall tablet): it finishes by itself, silently
+const BOOT_FILL_MS = 600; // the logo fills in, then the screen cuts to the pet
+
+// True once per page load, and only if this browser hasn't booted this version.
+function claimBoot() {
+  if (claimBoot.done) return false;
+  claimBoot.done = true;
+  try {
+    if (localStorage.getItem(BOOT_KEY) === BOOT_VERSION) return false;
+    localStorage.setItem(BOOT_KEY, BOOT_VERSION);
+  } catch (err) {
+    // no storage: it shows once per page load
+  }
+  return true;
+}
 
 // Voices (species.json "voice"): now and then a line opens with the creature's
 // sound ("tweet! hi, Sam!"), never twice within VOICE_QUIET_MS, so a burst of
@@ -1168,6 +1190,22 @@ const STYLE = `
     padding: 9px; box-shadow: inset 0 3px 0 rgba(0,0,0,.12); }
   .screen { position: relative; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden;
     background: #2b2f3a; box-shadow: inset 0 0 0 3px rgba(0,0,0,.35); cursor: pointer; }
+  /* Power-on: a plain pale-green LCD with the logo, over everything on the screen. */
+  .boot { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; margin: 0; padding: 0; border: 0;
+    border-radius: inherit; cursor: pointer; font: 400 14px 'Tiny5', monospace; color: #2f3a24;
+    background: linear-gradient(rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px,
+      linear-gradient(90deg, rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px, #c6d4a0; }
+  .boot[hidden] { display: none; }
+  .booting .buttons { visibility: hidden; }
+  .boot .logo { position: relative; font-size: 46px; line-height: 1; letter-spacing: 2px; }
+  .boot .logo span { display: block; text-shadow: 2px 2px 0 rgba(47,58,36,.35); }
+  .boot .logo .ink { color: #9aaa72; }
+  .boot .logo .fill { position: absolute; inset: 0; color: #2f3a24; clip-path: inset(0 100% 0 0);
+    transition: clip-path ${BOOT_FILL_MS}ms steps(8); }
+  .boot.filling .logo .fill { clip-path: inset(0); }
+  .boot .go { animation: bootblink 1.2s steps(1) infinite; }
+  @keyframes bootblink { 50% { opacity: 0; } }
   .screen img { position: absolute; image-rendering: pixelated; user-select: none;
     -webkit-user-drag: none; pointer-events: none; }
   .bg { inset: 0; width: 100%; height: 100%; object-fit: cover; transition: filter .6s; }
@@ -1798,6 +1836,7 @@ class HatchPetCard extends HTMLElement {
               <button class="gx" aria-label="Stop the game">✕</button>
             </div>
             <div class="status"></div>
+            <button class="boot" hidden><span class="logo"><span class="ink">HATCH</span><span class="fill" aria-hidden="true">HATCH</span></span><span class="go">▶ tap to start</span></button>
           </div><button class="request"></button></div>
           <div class="buttons"></div>
           <img class="trim-corner left" alt=""><img class="trim-corner right" alt="">
@@ -1809,7 +1848,7 @@ class HatchPetCard extends HTMLElement {
       el: slide, device: q(".device"), label: q(".label"), screen: q(".screen"), bg: q(".bg"),
       awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), pet: q(".pet"), prop: q(".prop"),
       perch: q(".perch"),
-      attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
+      attention: q(".attention"), bubble: q(".bubble"), status: q(".status"), boot: q(".boot"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
       catchEl: q(".gcatch"), live: q(".sr[role=status]"), seasonBox: q(".season"),
@@ -1861,6 +1900,12 @@ class HatchPetCard extends HTMLElement {
       if (key === "lay_egg" && !this._confirmed(s, key, s.request, () => this._redraw(s))) return;
       this._press(s, key);
     });
+    // The boot screen takes the tap (a button, so a key works too) and nothing under it.
+    s.boot.hidden = !this._booting;
+    s.boot.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._bootEnd(true);
+    });
     // A tap on the screen is a shortcut for the Status button; it holds buttons of its
     // own (the game, the bell, the journal), so it isn't a button itself.
     s.screen.addEventListener("click", () => {
@@ -1893,6 +1938,47 @@ class HatchPetCard extends HTMLElement {
     s.buttons.lights = lights;
     this._track.append(slide);
     return s;
+  }
+
+  // --- Power-on --------------------------------------------------------------
+
+  _bootStart() {
+    this._booting = true;
+    this._card.classList.add("booting");
+    this._slides.forEach((x) => { x.boot.hidden = false; });
+    this._bootTimer = setTimeout(() => this._bootEnd(false), BOOT_WAIT_MS);
+  }
+
+  // A tap ends it with the beep (if this browser has sounds on and the pet may
+  // make one); no tap for BOOT_WAIT_MS ends it silently. The logo fills in, then
+  // the screen cuts to the pet.
+  _bootEnd(tapped) {
+    if (!this._booting || this._bootEnding) return;
+    this._bootEnding = true;
+    clearTimeout(this._bootTimer);
+    if (tapped) {
+      try {
+        unlockAudio();
+      } catch (err) {
+        // no WebAudio
+      }
+      this._chirp(this._slides[this._index], "boot");
+    }
+    const finish = () => {
+      this._booting = false;
+      this._bootEnding = false;
+      this._card.classList.remove("booting");
+      this._slides.forEach((x) => {
+        x.boot.hidden = true;
+        x.boot.classList.remove("filling");
+      });
+    };
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      finish();
+      return;
+    }
+    this._slides.forEach((x) => x.boot.classList.add("filling"));
+    setTimeout(finish, BOOT_FILL_MS);
   }
 
   // --- Updating --------------------------------------------------------------
@@ -1936,6 +2022,10 @@ class HatchPetCard extends HTMLElement {
     }
     while (this._slides.length < devices.length) this._slides.push(this._buildSlide());
     while (this._slides.length > devices.length) this._dropSlide(this._slides.pop());
+    if (!this._bootChecked) {
+      this._bootChecked = true;
+      if (claimBoot()) this._bootStart();
+    }
     this._index = Math.min(this._index, devices.length - 1);
 
     for (let i = 0; i < devices.length; i++) {
@@ -2466,11 +2556,13 @@ class HatchPetCard extends HTMLElement {
       }
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
       if (s === this._slides[this._index]) {
-        this._greet(s);
+        if (!this._booting) this._greet(s); // the boot screen waits: only the speaking does
         this._firstLook(s); // before the visit: it tells the server what's queued
         this._visit(s);
-        this._sayQueued(s);
-        this._wishMention(s);
+        if (!this._booting) {
+          this._sayQueued(s);
+          this._wishMention(s);
+        }
         this._seen(s);
         this._idle(s);
         this._flairTick(s);

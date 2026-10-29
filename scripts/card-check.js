@@ -112,6 +112,17 @@ async function main() {
   const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
   // A context of its own, so a check can open a second tab on the same storage.
   const context = await browser.newContext({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1) });
+  // The boot screen shows once per browser: every page here starts as if it had
+  // been shown, except the boot checks' (they set the session flag and clear it).
+  const bootVersion = /const BOOT_VERSION = "([^"]*)"/.exec(
+    fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8"))?.[1];
+  await context.addInitScript((v) => {
+    try {
+      if (!sessionStorage.getItem("cc-boot-test") && v) localStorage.setItem("hatch-booted", v);
+    } catch (err) {
+      // no storage
+    }
+  }, bootVersion);
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -3230,6 +3241,107 @@ async function main() {
   });
   check("card editor renders a form", editor.form && editor.rendered);
   check("card editor saves the picked pets", Array.isArray(editor.config?.devices), JSON.stringify(editor.config));
+
+  // 3a. The power-on boot screen, at two widths. A page of its own, flagged so the
+  // seeded "already booted" doesn't apply; Date.getHours and the oscillator count
+  // are stubbed per step.
+  for (const width of [420, 330]) {
+    const bp = await context.newPage();
+    await bp.setViewportSize({ width, height: 860 });
+    await bp.addInitScript(() => {
+      window.__osc = 0;
+      const start = window.OscillatorNode.prototype.start;
+      window.OscillatorNode.prototype.start = function (...a) { window.__osc++; return start.apply(this, a); };
+    });
+    const fresh = async (reduced = false) => {
+      await bp.emulateMedia({ reducedMotion: reduced ? "reduce" : null });
+      await bp.goto(`${HA}/pet-bench/pet`);
+      await bp.evaluate(() => {
+        sessionStorage.setItem("cc-boot-test", "1");
+        localStorage.removeItem("hatch-booted");
+        localStorage.setItem("hatch-sounds", "off");
+      });
+      await bp.reload();
+      await bp.waitForSelector("hatch-pet-card .slide .boot", { state: "visible", timeout: 60000 });
+      await bp.waitForTimeout(1000); // HA's loading logo clears the page a moment later
+    };
+    const visible = (sel) => bp.locator(sel).evaluateAll((els) => els.filter((e) => e.offsetParent && getComputedStyle(e).visibility !== "hidden").length);
+    const bootShots = path.join(OUT, `boot-${width}`);
+    const bshot = (name) => bp.locator("hatch-pet-card .slide:not(.away-slide) .device").screenshot({ path: `${bootShots}-${name}.png` });
+    const hours = (h) => bp.evaluate((h) => { Date.prototype.getHours = () => h; }, h);
+    const tap = () => bp.locator("hatch-pet-card .slide:not(.away-slide) .boot").click({ force: true });
+    const gone = async (ms) => { // no boot screen showing (polled: the card is in shadow DOM)
+      for (const end = Date.now() + ms; Date.now() < end;) {
+        if (await visible("hatch-pet-card .boot") === 0) return true;
+        await bp.waitForTimeout(50);
+      }
+      return false;
+    };
+
+    // Fresh storage: the boot screen on every slide, buttons hidden, no sound before the tap.
+    await fresh();
+    const total = await bp.locator("hatch-pet-card .slide").count();
+    check(`boot screen on every slide of a fresh browser (${width}px)`,
+      total >= 2 && await visible("hatch-pet-card .slide .boot") === total, `${await visible("hatch-pet-card .slide .boot")}/${total}`);
+    check(`boot screen shows the tap line and hides the buttons (${width}px)`,
+      (await bp.locator("hatch-pet-card .slide:not(.away-slide) .boot").innerText()).includes("▶ tap to start") &&
+      await visible("hatch-pet-card .slide:not(.away-slide) .toy") === 0);
+    check(`boot screen starts no sound before the tap (${width}px)`, await bp.evaluate(() => window.__osc) === 0);
+    await bp.locator("hatch-pet-card").evaluate((el) => { // count the pet speaking up
+      el.__greets = 0;
+      const greet = el._greet;
+      el._greet = function (...a) { el.__greets++; return greet.apply(this, a); };
+    });
+    await bp.waitForTimeout(2000);
+    check(`boot screen holds the speaking back (${width}px)`,
+      await bp.locator("hatch-pet-card").evaluate((el) => el.__greets === 0));
+    await bshot("day");
+    // The tap: sounds on at 10:00 plays the beep, the pet shows, the status stays shut.
+    await hours(10);
+    await bp.evaluate(() => localStorage.setItem("hatch-sounds", "on"));
+    await bp.locator("hatch-pet-card").evaluate((el) => Object.assign(el._slides[el._index], { asleep: false, lightsOut: false }));
+    await tap();
+    await bp.waitForTimeout(250);
+    await bshot("filling");
+    check(`boot tap at 10:00 with sounds on plays the power-on beep (${width}px)`, await bp.evaluate(() => window.__osc) >= 3);
+    const wentAway = await gone(3000);
+    const toys = await visible("hatch-pet-card .slide:not(.away-slide) .toy");
+    const statusShut = await bp.locator("hatch-pet-card .slide:not(.away-slide) .screen.show-status").count() === 0;
+    check(`boot tap shows the pet and leaves the status shut (${width}px)`,
+      wentAway && toys > 0 && statusShut, `gone ${wentAway}, buttons ${toys}, status shut ${statusShut}`);
+    await bp.waitForTimeout(2500);
+    check(`the first look runs after the boot (${width}px)`,
+      await bp.locator("hatch-pet-card").evaluate((el) => el.__greets > 0));
+    // A second load: no boot screen.
+    await bp.reload();
+    await bp.waitForSelector("hatch-pet-card .slide", { timeout: 60000 });
+    await bp.waitForTimeout(1500);
+    check(`a second load shows no boot screen (${width}px)`, await visible("hatch-pet-card .slide .boot") === 0);
+    // Nobody taps: the pet shows by itself in about 5 s, silently.
+    await fresh();
+    const t0 = Date.now();
+    const auto = await gone(7000);
+    check(`boot with no tap finishes by itself, silently (${width}px)`,
+      auto && Date.now() - t0 < 7000 && await bp.evaluate(() => window.__osc) === 0, `${Date.now() - t0} ms`);
+    // Sounds on at 22:00: the tap works, the beep stays quiet.
+    await fresh();
+    await hours(22);
+    await bp.evaluate(() => localStorage.setItem("hatch-sounds", "on"));
+    await tap();
+    check(`boot tap at 22:00 plays nothing (${width}px)`, await gone(3000) && await bp.evaluate(() => window.__osc) === 0);
+    // Reduced motion: no fill, straight to the pet.
+    await fresh(true);
+    await bp.waitForTimeout(1000);
+    await bshot("reduced");
+    await tap();
+    check(`boot tap under reduced motion goes straight to the pet (${width}px)`, await gone(300));
+    await bp.evaluate(() => {
+      sessionStorage.removeItem("cc-boot-test");
+      localStorage.setItem("hatch-sounds", "off");
+    });
+    await bp.emulateMedia({ reducedMotion: null });
+    await bp.close();
+  }
 
   check("no errors in the browser console", errors.length === 0, errors.slice(0, 3).join(" | "));
   await browser.close();
