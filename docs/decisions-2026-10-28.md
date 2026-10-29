@@ -1,0 +1,50 @@
+# Decisions taken up front (owner, 2026-10-28)
+
+Answers to the decisions the remaining work was expected to need, so the crew can
+build without stopping. The plans they belong to stay the source of detail; where a
+plan's open question is answered here, this file wins.
+
+## Releases
+- The phone test is no longer a release gate. It's a running list of things to try on
+  the iPhone and Android apps (the owner's tududi task), followed up later.
+- **0.35.0** ships as a full release once privacy P1 is merged.
+- After that, each merged PR ships as a beta; a full release when a wave (or the
+  privacy series) finishes.
+- The photo dialog's Android line ("you can save it from a computer") ships now
+  rather than waiting for the phone test.
+
+## Balance (experience plan, Wave 0)
+- A daytime nap needs tiredness (energy below the nap threshold) or to be within an
+  hour of bedtime; otherwise "not sleepy yet ♪". The house still puts it to bed at night.
+- A missed need calls again after 4 hours and sends one phone notification per re-call,
+  only to people with "notify me" on.
+- Upbringing rework: pets that are babies or children when it lands blend from now
+  (their averaging starts from today's discipline and care); no pet drops a grade
+  because the rules changed.
+- Snacks are refused when the pet is full, with the existing "I'm full!".
+
+## The pet, games and settings
+- A pat gives one light haptic buzz where supported.
+- Catch rewards like the other games (happiness and energy scaled by the score) and
+  keeps a per-pet best score in the journal.
+- The slower game is **memory pairs** (flip cards to match the pet's things, limited
+  flips). A design note comes to the owner before it's built; best play wins 70-80%.
+- Settings open from a gear button on the status screen.
+
+## Diets, art, README
+- "No mammals" is a per-pet option in the integration's options, on by default.
+  Realistic favourite snacks when it's off: owl mice, voles, moths; ball python mice,
+  rats, quail eggs; fox mice, blackberries, beetles. Others unchanged.
+- The optional 12-frame adult-reactions art slice is drawn for the Douglas squirrel first.
+- The README redo (Tamagotchi box style, no spoilers) happens at the very end.
+
+## How the crew works with the owner
+- The first mate approves functional wording (errors, retries, button and
+  screen-reader labels, guide text) in the existing style. Anything the pet says,
+  and all art, goes to the owner.
+- Audit findings with a clear fix that matches recorded decisions are fixed without
+  asking; only genuinely new design choices go to the owner.
+- The remaining personality pieces (P2b idle and mood lines, P3 idle manner, P4
+  Assist) build after Wave 2.
+- Push notifications to the owner for: art probes to approve, full releases, and
+  questions that block work.
