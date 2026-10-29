@@ -1373,3 +1373,5 @@ corrections are noted in their rows.
 | Q12 accept; the guide notes an admin can delete the people store once no pets remain | **audit OQ2** | A guide sentence (FB, copy table) |
 | (no answer) | **Q11** (`zone` only with "my day" on) | **Still open**, with its recommendation; P2's builder asks |
 | D1 personality hidden before teen | new section D1 | P1: card:3193 and card:3434 (not 3455, the shared renderer for past generations) |
+
+**Copy approved (owner, 2026-10-28):** the copy table above as written.
