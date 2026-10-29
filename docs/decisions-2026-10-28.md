@@ -39,9 +39,15 @@ plan's open question is answered here, this file wins.
 - The README redo (Tamagotchi box style, no spoilers) happens at the very end.
 
 ## How the crew works with the owner
-- The first mate approves functional wording (errors, retries, button and
-  screen-reader labels, guide text) in the existing style. Anything the pet says,
-  and all art, goes to the owner.
+- The first mate approves all wording, the pet's lines included, in the existing
+  voice and rules (positive or quiet, no guilt or nagging, no ranking, wishes credit
+  nobody) (owner, 2026-10-28, revised the same day). A PR that adds many new pet
+  lines gets a short summary for the owner to skim afterwards; nothing waits on it.
+  Art (probes and look) still goes to the owner.
+- Balance: fake-call disguise accepted as unsure only while happiness is 25-40 (the
+  guide says whines and real pleas "often look alike"); hours lived before the
+  upbringing rework count at half weight. Re-call phone notifications: undecided; the
+  owner asked for an evaluation with several pets before choosing.
 - Audit findings with a clear fix that matches recorded decisions are fixed without
   asking; only genuinely new design choices go to the owner.
 - The remaining personality pieces (P2b idle and mood lines, P3 idle manner, P4
