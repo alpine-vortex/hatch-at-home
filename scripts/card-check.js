@@ -110,7 +110,9 @@ async function main() {
 
   // Audio may start without a tap here, so the babble checks can hear it play.
   const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
-  const page = await browser.newPage({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1) });
+  // A context of its own, so a check can open a second tab on the same storage.
+  const context = await browser.newContext({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1) });
+  const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
   page.on("console", (m) => {
@@ -2268,7 +2270,7 @@ async function main() {
       el._bond = function () { return sharedScreen() ? null : { level: 8, nickname: "sunbeam" }; };
     };
     // A second tab on the same browser (same localStorage), with its own personal line.
-    const tab = await page.context().newPage({ viewport: { width: 420, height: 860 } });
+    const tab = await context.newPage();
     tab.on("pageerror", (e) => errors.push(`tab 2: ${e}`));
     await tab.goto(`${HA}/pet-bench/pet`);
     await tab.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
@@ -2290,6 +2292,8 @@ async function main() {
     await evaluate(setup);
     await tab.evaluate(setup);
     await tab.locator("hatch-pet-card").evaluate((el) => {
+      el.setConfig({ ...el._config, seasonal: false }); // no costume line mid-check
+      el.hass = el._hass;
       window.__personal(el);
       el._slides.forEach((s) => { s.voicedAt = Date.now() + 1e9; });
       const s = el._slides[el._index];
@@ -2354,7 +2358,7 @@ async function main() {
     const doneRound = await round(false);
     check("FA: and a personal line already typed out", doneRound.before.said.includes("sunbeam") && doneRound.clean,
       JSON.stringify(doneRound));
-    await shot("08a-shared-cleared");
+    await card.locator(".slide:not(.away-slide) .device").screenshot({ path: path.join(OUT, "08a-shared-cleared.png") });
     // Closing the status changes nothing: the next line is the mood's own.
     const closed = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
