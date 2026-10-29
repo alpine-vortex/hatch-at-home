@@ -1093,17 +1093,6 @@ function toneImage(cells, W, H) {
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
-// Shell hardware stand-ins, code-drawn in the art's greys (50% is the shell colour,
-// hard-light; see art/shell-parts/REQUEST.md). A PNG of the same size can replace
-// each: the slot only needs its --art.
-const HW_GREY = { "#": 34, c: 72, d: 104, m: 128, l: 176, w: 236 };
-const HW_ART = {
-  screw: [".###.", "#llc#", "#lcm#", "#cmd#", ".###."],
-  slot: ["#.", "#.", "#.", "#.", "l."],
-  stripes: ["c", ".", "c"],
-  fleck: ["..l..", "..w..", "lwwwl", "..w..", "..l.."],
-  glare: ["......ww", ".....ww.", "....ww..", "...ww...", "..ww...w", ".ww...w.", "ww...w..", "w...w..."],
-};
 // Glitter in the plastic: a tile of single-cell flecks, each with a dark cell beside
 // it so it shows on a pale shell too. Tiled at the grid's size by CSS.
 const glitterTile = () => {
@@ -1117,18 +1106,6 @@ const glitterTile = () => {
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${W} ${H}' shape-rendering='crispEdges'>${rects}</svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 };
-const hwArt = (rows) => {
-  let rects = "";
-  rows.forEach((row, y) => [...row].forEach((ch, x) => {
-    if (ch === ".") return;
-    const v = HW_GREY[ch];
-    rects += `<rect x='${x}' y='${y}' width='1' height='1' fill='rgb(${v},${v},${v})'/>`;
-  }));
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${rows[0].length} ${rows.length}' ` +
-    `shape-rendering='crispEdges'>${rects}</svg>`;
-  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-};
-
 // A trait's flair sprite as a small icon (its first frame or big variant).
 function traitIcon(trait) {
   const f = FLAIR[trait];
@@ -1657,7 +1634,7 @@ const STYLE = `
   .pad .backlight { right: 18%; top: 4px; }
   /* Moon: on the crescent. */
   .crescent .backlight { left: 0; top: 10px; }
-  /* Shell hardware (HW_ART; art/shell-parts/REQUEST.md): each slot is its greyscale
+  /* Shell hardware (ui/shell_*.png; art/shell-parts/REQUEST.md): each slot is its greyscale
      --art, tinted from the shell by hard-light and cut out by the art's own alpha.
      Places are rounded to the grid, from the top left of the part. */
   .hw { position: absolute; display: none; z-index: -1; pointer-events: none; image-rendering: pixelated;
@@ -2162,10 +2139,10 @@ class HatchPetCard extends HTMLElement {
       </ha-card>`;
     this._card = root.querySelector("ha-card");
     this._card.classList.toggle("lcd-on", lcdOn());
-    // The shell hardware's art (see HW_ART and art/shell-parts/REQUEST.md).
+    // The shell hardware's art: ui/shell_<part>.png, drawn by art/shell-parts/make_parts.py (see REQUEST.md there).
     const ui = (name) => `url("${BASE}/ui/${name}.png?v=${VERSION}")`;
-    for (const [k, rows] of Object.entries(HW_ART)) this._card.style.setProperty(`--hw-${k}`, hwArt(rows));
-    for (const k of ["logo", "plate", "light_on", "light_off"]) this._card.style.setProperty(`--hw-${k.replace("_", "-")}`, ui(`shell_${k}`));
+    for (const k of ["screw", "slot", "stripes", "fleck", "glare", "logo", "plate", "light_on", "light_off"])
+      this._card.style.setProperty(`--hw-${k.replace("_", "-")}`, ui(`shell_${k}`));
     this._card.style.setProperty("--hw-bulb", ui("backlight_bulb"));
     this._card.style.setProperty("--glitter", glitterTile());
     this._viewport = root.querySelector(".viewport");
