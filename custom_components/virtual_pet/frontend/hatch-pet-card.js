@@ -1686,6 +1686,7 @@ class HatchPetCard extends HTMLElement {
     s.request.addEventListener("click", () => {
       const key = s.request.dataset.key;
       if (!key) return;
+      if (key === "lay_egg") this._tapped(s.request, s);
       if (key === "lay_egg" && !this._confirmed(s, key, s.request, () => this._redraw(s))) return;
       this._press(s, key);
     });
@@ -2791,7 +2792,7 @@ class HatchPetCard extends HTMLElement {
       const bond = this._bond(s);
       const name = (bond?.level >= BOND.nickname && bond.nickname) || short(this._hass.user?.name?.trim().split(/\s+/)[0], 16);
       if (!note.quiet && name) line = `happy birthday, ${name}!! ♥`;
-      (s.queue ??= []).push({ text: line, ms: 5000, then: () => {
+      (s.queue ??= []).push({ text: line, ms: 5000, personal: true, then: () => {
         if (!note.quiet) this._chirp(s, "birthday");
         this._sparkle(s);
       } });
@@ -2801,7 +2802,7 @@ class HatchPetCard extends HTMLElement {
       this._speak(s, line, 5000);
       return;
     }
-    this._queue(s, line, 5000);
+    this._queue(s, line, 5000, { personal: true });
     if (note.kind === "friends_for") {
       this._sparkle(s);
       if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) this._bondHearts(s);
@@ -3394,6 +3395,9 @@ class HatchPetCard extends HTMLElement {
           this._myDay = false;
           this._birthdayKept = false;
           this._birthdayPhone = false;
+          for (const slide of this._slides || []) { // lines told only to them
+            if (slide.queue) slide.queue = slide.queue.filter((q) => !q.personal && !q.opts?.personal && !q.ask);
+          }
           try {
             localStorage.removeItem(`hatch-welcomed-${user}`);
             const greets = [];

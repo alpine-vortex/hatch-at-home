@@ -359,12 +359,14 @@ when you remove a pet, even the last one, so they're there if you set it up agai
 **"forget my data"** on the status screen (not on a shared screen) erases all of
 that, for you only, at once. Your bond with each pet, its photos and its nickname
 for you stay. So does whether you get notifications: turn "notify me" off for that.
+So does a "forget my birthday": they still won't ask. Messages already sent to your
+phone, and switch changes, stay in Home Assistant's history until it clears them.
 The pets start fresh with you, and they note again when you next come home. To
 erase everyone's, an admin can stop Home Assistant and delete
-`.storage/virtual_pet.people`.
+`.storage/virtual_pet.people` (and any `virtual_pet.people.damaged.*` copies).
 
 With no pets left there's no card, so no "forget my data" button. An admin can
-delete `.storage/virtual_pet.people` then, with Home Assistant stopped.
+delete `.storage/virtual_pet.people` (and any `virtual_pet.people.damaged.*` copies) then, with Home Assistant stopped.
 
 If an entity named in these settings is later renamed or removed, Settings →
 **Repairs** says which ones, so you can pick the new ones here.
