@@ -194,6 +194,12 @@ async def test_pushes_go_to_their_person_only(
         events = await pushed(mine_client)
         assert [e["mine"][kind] for e in events] == [True], kind
         assert await pushed(theirs_client) == []
+    # Answering the birthday question is pushed at once, to me alone.
+    answer = {**entity, "question": "birthday", "answer": "07-01"}
+    assert (await command(mine_client, "answer", **answer))["success"]
+    events = await pushed(mine_client)
+    assert [e["mine"]["birthday_kept"] for e in events] == [True]
+    assert await pushed(theirs_client) == []
     # Forgetting my data turns them off, and an open card doesn't bring it back.
     assert (await command(mine_client, "forget_me"))["success"]
     (event,) = await pushed(mine_client)
@@ -219,7 +225,7 @@ async def test_pushes_go_to_their_person_only(
     # A fast-forward's simulated moments stay off the channel.
     coordinator._fire([{"type": "bond_up", "user": me, "level": 3}], simulated=True)
     assert await pushed(mine_client) == []
-    assert list(coordinator._private[me]) == [moment]
+    assert me not in coordinator._private  # forgotten earlier, and not refilled
 
 
 async def test_the_channel_outlives_a_reload_and_hears_the_pet_go(
@@ -335,3 +341,42 @@ async def test_someone_home_names_nobody(
     moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
     assert moments[0]["type"] == "friend_home"
     assert len(fired) == 1
+
+
+async def test_a_moment_from_before_the_pet_is_live_reaches_the_snapshot(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_admin_user: Any,
+) -> None:
+    me = hass_admin_user.id
+    hass_storage[STORE_KEY] = hatched_pet(now, bonds={me: {"points": LEVELS[4]}})
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    # Not the live coordinator (a load in progress): it keeps the moment, sends none.
+    del hass.data[DOMAIN]["pets"][coordinator.pet_id]
+    coordinator._to_channel({"type": "bond_up", "user": me, "level": 6}, "t")
+    coordinator._to_channel({"type": "watching", "title": "Bluey"}, "t")
+    hass.data[DOMAIN]["pets"][coordinator.pet_id] = coordinator
+    snapshot = coordinator.channel_snapshot(object(), me, False)
+    assert {"type": "bond_up", "level": 6, "at": "t"} in snapshot["moments"]
+    assert snapshot["house"]["media"]["title"] == "Bluey"
+
+
+async def test_forget_my_data_clears_my_private_moments(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+) -> None:
+    me = hass_admin_user.id
+    hass_storage[STORE_KEY] = hatched_pet(now, bonds={me: {"points": LEVELS[4]}})
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator._to_channel({"type": "bond_up", "user": me, "level": 6}, "t")
+    coordinator._to_channel({"type": "bond_up", "user": "other", "level": 2}, "t")
+    client = await hass_ws_client(hass)
+    assert (await command(client, "forget_me"))["success"]
+    assert me not in coordinator._private
+    assert len(coordinator._private["other"]) == 1

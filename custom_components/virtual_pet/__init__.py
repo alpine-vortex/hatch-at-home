@@ -371,6 +371,7 @@ async def websocket_forget_me(
         await people.forget(user)
     for pet in hass.data[DOMAIN]["pets"].values():
         pet._moved.pop(user, None)  # today's moves go with the rest
+        pet._private.pop(user, None)  # and their private moments
         if pet.state is not None:
             pet.async_set_updated_data(pet.state)
     connection.send_result(msg["id"])

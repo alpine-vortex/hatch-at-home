@@ -1602,6 +1602,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             else:
                 raise ValueError("Not a birthday")
             self.people.save()
+            self._push_everywhere()  # birthday_kept changed
             return
         if answer not in P.ANSWERS.get(question, ()):
             raise ValueError(f"{answer} isn't an answer to {question}")
@@ -2011,22 +2012,23 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     def _to_channel(self, event: model.Event, at: str) -> None:
         """A bond moment goes to its person's own channel (without who), and a
         titled media moment to every channel. The public copy is unchanged."""
-        if not self._current():
-            return
         kind = event["type"]
+        live = self._current()
         if kind in PERSONAL_EVENTS and (user := event.get("user")):
             moment = {k: v for k, v in event.items() if k != "user"} | {"at": at}
             private = self._private.setdefault(user, deque(maxlen=MOMENTS_KEPT))
             private.appendleft(moment)
-            for who, shared, send in list(self._watchers().values()):
-                if who == user and not shared:
-                    send({"moment": moment})
+            if live:
+                for who, shared, send in list(self._watchers().values()):
+                    if who == user and not shared:
+                        send({"moment": moment})
         elif kind in MEDIA_EVENTS and event.get("title"):
             moment = {k: event[k] for k in ("type", "title", "artist") if k in event}
             self._house["media"] = moment | {"at": at}
-            for _, _, send in list(self._watchers().values()):
-                send({"moment": self._house["media"]})
-            self._push_watchers()
+            if live:
+                for _, _, send in list(self._watchers().values()):
+                    send({"moment": self._house["media"]})
+                self._push_watchers()
 
     def _save(self) -> None:
         state = self.state
