@@ -1140,17 +1140,20 @@ async def test_diagnostics_hide_the_house_and_the_people(
         now,
         notify_users=["user-1"],
         care_log=[{"at": now, "action": "feed", "by": "Alex", "result": "ok"}],
+        from_later={"friend": "user-2"},  # a later version's key, after a downgrade
     )
     config = await setup_with_house(
         hass, weather="weather.home", tv=["media_player.tv"]
     )
     diag = await async_get_config_entry_diagnostics(hass, config)
+    assert diag["pet"]["from_later"] == "**REDACTED**"
     assert diag["options"]["weather"] == "**REDACTED**"
     assert diag["options"]["tv"] == "**REDACTED**"
     assert diag["pet"]["notify_users"] == "**REDACTED**"
     assert diag["pet"]["care_log"][0]["by"] == "**REDACTED**"
     assert diag["now"]["stage"] == "child"
     assert "Alex" not in str(diag) and "user-1" not in str(diag)
+    assert "user-2" not in str(diag)
 
     # Nor what the house was doing: what's on, the news, who's home.
     pet = config.runtime_data

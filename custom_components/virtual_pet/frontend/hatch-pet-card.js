@@ -1434,6 +1434,7 @@ class HatchPetCard extends HTMLElement {
       this._stopTyping(s);
       this._dropPhotos(s);
       s.unsub?.();
+      s.unsub = null;
     }
   }
 
@@ -1792,6 +1793,7 @@ class HatchPetCard extends HTMLElement {
   _dropSlide(s) {
     this._forget(s); // its game, timers, photos and dialog go with it
     s.unsub?.();
+    s.unsub = null;
     s.el.remove();
   }
 
@@ -2732,6 +2734,7 @@ class HatchPetCard extends HTMLElement {
           // so the morning's lines come soon after it wakes.
           s.visitedAt = Date.now() - VISIT_EVERY_MS + VISIT_RETRY_MS;
         }
+        if (sharedScreen()) return; // switched while the reply was on its way
         if (typeof reply.my_day === "boolean") this._myDay = reply.my_day;
         if (typeof reply.baby_talk === "boolean") setBabyTalk(this._hass.user?.id, reply.baby_talk);
         if (typeof reply.birthday_kept === "boolean") this._birthdayKept = reply.birthday_kept;

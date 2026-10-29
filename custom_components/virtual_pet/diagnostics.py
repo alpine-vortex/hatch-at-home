@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.diagnostics import async_redact_data
+from homeassistant.components.diagnostics import REDACTED, async_redact_data
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 
@@ -61,6 +61,15 @@ REDACT_OPTIONS = {
 REDACT_STATE = {"by", "notify_users", "bonds", "user", "for", "for_name"}
 
 
+def _saved(pet: model.PetState) -> dict[str, Any]:
+    """The save, with every key this version doesn't know redacted: a later
+    version's (after a downgrade) may be private, and nothing here says so."""
+    saved = pet.to_dict()
+    for key in getattr(pet, "unknown", {}):
+        saved[key] = REDACTED
+    return saved
+
+
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: PetConfigEntry
 ) -> dict[str, Any]:
@@ -76,7 +85,7 @@ async def async_get_config_entry_diagnostics(
         "roster": list(coordinator.roster),
         "options": async_redact_data(dict(entry.options), REDACT_OPTIONS),
         # PRIVATE_READINGS: the titles a dream can be about.
-        "pet": async_redact_data(pet.to_dict(), REDACT_STATE | PRIVATE_READINGS),
+        "pet": async_redact_data(_saved(pet), REDACT_STATE | PRIVATE_READINGS),
         # For tuning, without saying whose: each person's points, highest first.
         "bond_points": sorted((b["points"] for b in pet.bonds.values()), reverse=True),
         "now": {

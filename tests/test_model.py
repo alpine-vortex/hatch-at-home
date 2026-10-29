@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from datetime import UTC, datetime
+import math
 import random
 
 import pytest
@@ -2098,7 +2099,8 @@ def test_a_lived_in_save_loads_unchanged():
     model.game_record(pet, "u1", "left_right", 5)
     model.favourite_game(pet, "u1", "left_right", "2026-10-04")
     pet.bonds["u1"]["tucked_at"] = at(22)
-    pet.bonds["u1"]["noted"] = {"birthday_friends": "2026"}
+    # The tuck-in note's key is the float tucked_at (coordinator).
+    pet.bonds["u1"]["noted"] = {"birthday_friends": "2026", "tucked": at(22)}
     model.take_photo(pet, "u1", "2026-10-04")
     model.apply_action(pet, "feed", at(10), NoLuck(), "Sam")
     model.season_first(pet, "snow", at(9, day=3), UTC)
@@ -2111,3 +2113,28 @@ def test_a_lived_in_save_loads_unchanged():
     data = pet.to_dict()
     assert data["journal"] and data["bonds"]["u1"]["photos"] and data["memories"]
     assert model.PetState.from_dict(data).to_dict() == data
+
+
+def test_a_tuck_in_note_survives_a_load():
+    data = hatched(at(9)).to_dict()
+    noted = {"tucked": 12345.5, "photo": "2", "bad": [1], "nan": math.nan}
+    data["bonds"] = {"u1": {"points": 3, "noted": noted}}
+    loaded = model.PetState.from_dict(data).bonds["u1"]["noted"]
+    assert loaded == {"tucked": 12345.5, "photo": "2"}
+
+
+def test_a_dream_seed_needs_its_kind():
+    data = hatched(at(9)).to_dict()
+    data["dream_seeds"] = [{"at": at(8)}, {"kind": "watching", "at": at(8)}]
+    assert model.PetState.from_dict(data).dream_seeds == [
+        {"kind": "watching", "at": at(8)}
+    ]
+
+
+def test_a_later_versions_keys_go_on_to_the_next_generation():
+    data = hatched(at(9)).to_dict()
+    pet = model.PetState.from_dict({**data, "from_later": {"x": 1}})
+    pet.age_hours = 10_000.0
+    egg, _ = model.lay_egg(pet, at(12), random.Random(1))
+    assert egg is not pet
+    assert egg.to_dict()["from_later"] == {"x": 1}

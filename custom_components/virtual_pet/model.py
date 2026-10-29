@@ -195,8 +195,12 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
     for key in ("games", "best"):
         if key in out:
             out[key] = _int_map(out[key])
-    if "noted" in out:
-        out["noted"] = _str_map(out["noted"])
+    if "noted" in out:  # read only by != comparisons; "tucked" is a float
+        out["noted"] = {
+            k: x
+            for k, x in _mapping(out["noted"]).items()
+            if _str(k) and (_str(x) or _num(x))
+        }
     if "today" in out:
         out["today"] = _int(out["today"], 0, 0)
     if "visited" in out:  # add_bond reads it without a default on the same day
@@ -367,7 +371,7 @@ class PetState:
         kwargs["care_log"] = _records(kwargs.get("care_log"), at=_num, action=_str)
         kwargs["journal"] = [_retired(r) for r in _records(kwargs.get("journal"))]
         kwargs["memories"] = _records(kwargs.get("memories"), at=_num, kind=_str)
-        kwargs["dream_seeds"] = _records(kwargs.get("dream_seeds"), at=_num)
+        kwargs["dream_seeds"] = _records(kwargs.get("dream_seeds"), at=_num, kind=_str)
         kwargs["dream_picks"] = _records(
             kwargs.get("dream_picks"), user=_str, pick=_str, at=_num
         )
@@ -1298,6 +1302,7 @@ def lay_egg(
     egg.notify_users = list(state.notify_users)
     egg.bonds = copy.deepcopy(state.bonds)  # the family stays close to the device
     egg.firsts = dict(state.firsts)  # the household's season, not the pet's
+    egg.unknown = dict(getattr(state, "unknown", {}))  # a later version's keys
     egg.memories = list(state.memories)
     # Chore treats earned today wait for the hatchling, and count toward today's limit.
     egg.chore_treats = list(state.chore_treats)

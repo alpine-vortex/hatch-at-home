@@ -39,7 +39,12 @@ from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import TemperatureConverter
 
 from . import model, notify, people as P, rates as R, wellbeing
-from .backup import NOTHING, async_backup
+from .backup import (
+    NOTHING,
+    async_backup,
+    async_clear_if_restored,
+    async_kept_backup,
+)
 from .const import (
     CONF_AWAY_AFTER,
     CONF_BEDTIME,
@@ -130,6 +135,13 @@ DREAM_OF = {
     "wish_granted": "wish",
     "trait_learned": "trait",
 }
+
+
+def _log_damage(message: str, title: str, err: BaseException) -> None:
+    """A load or first-tick failure: the error's type at warning, since its
+    text can carry a key such as a user ID; the traceback only at debug."""
+    LOGGER.warning(message + ": %s", title, type(err).__name__)
+    LOGGER.debug(message, title, exc_info=err)
 
 
 class PetStore(Store[dict[str, Any]]):
@@ -332,7 +344,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         try:
             data = await self.store.async_load()
         except Exception as err:  # noqa: BLE001 - a wrapper Store can't read
-            LOGGER.warning("%s's save file couldn't be read: %r", title, err)
+            _log_damage("%s's save file couldn't be read", title, err)
         if data is None and self.config_entry.data.get(CONF_NEW_PET):
             # Only adding the integration makes a save file; laying an egg
             # reuses this one, so this is a new pet in the house.
@@ -349,14 +361,27 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         else:
             try:
                 self.state = model.PetState.from_dict(data, title, now)
-                downtime = now - self.state.last_updated
-                model.catch_up(self.state, now)
             except Exception as err:  # noqa: BLE001 - salvage, never fail setup
-                LOGGER.warning("%s's save file is damaged: %r", title, err)
+                _log_damage("%s's save file is damaged", title, err)
                 self.state = model.PetState.salvage(data, title, now)
                 downtime = 0.0
                 # Nothing of a pet in a non-object root: the egg's wording.
                 await self._damaged(data, salvaged=model.is_pet_root(data))
+            else:
+                downtime = now - self.state.last_updated
+                before = copy.deepcopy(self.state)
+                try:
+                    model.catch_up(self.state, now)
+                except Exception as err:  # noqa: BLE001 - keep all that was read
+                    _log_damage("%s couldn't catch up", title, err)
+                    self.state = before
+                    self.state.last_updated = now  # the time away is skipped
+                    downtime = 0.0
+                    await self._damaged(data, salvaged=True)
+                else:
+                    await async_clear_if_restored(
+                        self.hass, f"save_damaged_{self.pet_id}"
+                    )
             LOGGER.debug("Caught up %.1f min of downtime (frozen)", downtime / 60)
             self.debug["last_catch_up_minutes"] = round(downtime / 60, 1)
             if self.state.species is None and old_species:
@@ -380,26 +405,30 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._save()
         self._first_saved()
 
-    async def _damaged(self, data: Any, *, salvaged: bool) -> None:
+    async def _damaged(self, data: Any, *, salvaged: bool, again: bool = False) -> None:
         """Back the damaged file up, save what was kept over it at once, and
-        raise the repair (salvaged, or started again as an egg)."""
+        raise the repair (salvaged, started again as an egg, or the file was
+        missing). With again (the first tick failing, as it may on every
+        restart), a repair whose backup is still there is left as it is."""
         assert self.state is not None
+        issue_id = f"save_damaged_{self.pet_id}"
+        if again and self._damage_backup is None:
+            self._damage_backup = await async_kept_backup(self.hass, issue_id)
+            if self._damage_backup is not None:
+                await self.store.async_save(self.state.to_dict())
+                return
         if self._damage_backup is None:
-            self._damage_backup = (
-                await async_backup(self.hass, self.store.key, STORE_VERSION, data)
-                or f"{self.store.key}.corrupt.<time>"
+            self._damage_backup = await async_backup(
+                self.hass, self.store.key, STORE_VERSION, data
             )
         await self.store.async_save(self.state.to_dict())
-        self._issue(
-            "save_damaged",
-            True,
-            {
-                "pet": self.config_entry.title,
-                "backup": self._damage_backup,
-                "entry_id": self.pet_id,
-            },
-            translation_key="save_damaged" if salvaged else "save_damaged_egg",
-        )
+        placeholders = {"pet": self.config_entry.title, "entry_id": self.pet_id}
+        if self._damage_backup is None:  # no file, nothing read, no .corrupt copy
+            key = "save_damaged_missing"
+        else:
+            placeholders["backup"] = self._damage_backup
+            key = "save_damaged" if salvaged else "save_damaged_egg"
+        self._issue("save_damaged", True, placeholders, translation_key=key)
 
     def _first_saved(self) -> None:
         """The pet has a save file now: no longer a new pet to welcome."""
@@ -417,11 +446,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             before = copy.deepcopy(self.state)
             try:
                 return self._tick()
-            except Exception:
-                LOGGER.exception("%s couldn't be woken up", self.config_entry.title)
+            except Exception as err:  # noqa: BLE001 - keep the pet as loaded
+                _log_damage("%s couldn't be woken up", self.config_entry.title, err)
                 self.state = before
                 assert before is not None
-                await self._damaged(before.to_dict(), salvaged=True)
+                await self._damaged(before.to_dict(), salvaged=True, again=True)
                 return before
         return self._tick()
 
@@ -457,8 +486,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         translation_key: str | None = None,
     ) -> None:
         """Raise or clear one of this pet's repair issues (Settings → Repairs).
-        A damaged save's stays across restarts until it's dismissed or the pet
-        is removed: the backup it names is still there."""
+        A damaged save's stays across restarts until it's dismissed, the pet
+        is removed, or its backup is renamed back and the save loads cleanly."""
         issue_id = f"{key}_{self.pet_id}"
         if not active:
             ir.async_delete_issue(self.hass, DOMAIN, issue_id)

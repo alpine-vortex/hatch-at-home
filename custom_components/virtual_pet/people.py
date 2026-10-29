@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import date, timedelta
+from pathlib import Path
 import statistics
 from typing import Any
 
@@ -24,7 +25,7 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 
 from . import model, rates as R
-from .backup import NOTHING, async_backup
+from .backup import NOTHING, async_backup, async_clear_if_restored
 from .const import DOMAIN, LOGGER
 
 STORE_KEY = f"{DOMAIN}.people"
@@ -97,14 +98,19 @@ class People:
         try:
             loaded = await self._store.async_load()
         except Exception as err:  # noqa: BLE001 - a wrapper Store can't read
-            LOGGER.warning("The people store couldn't be read: %r", err)
+            LOGGER.warning("The people store couldn't be read: %s", type(err).__name__)
+            LOGGER.debug("The people store couldn't be read", exc_info=err)
             await self._damaged(NOTHING)
             return
         if loaded is None:
-            return  # none yet
+            path = Path(self._hass.config.path(".storage", STORE_KEY))
+            if await self._hass.async_add_executor_job(path.is_file):
+                await self._damaged(NOTHING)  # "data": null, or an outer {}
+            return  # otherwise none yet
         if not isinstance(loaded, dict):
             await self._damaged(loaded)
             return
+        await async_clear_if_restored(self._hass, "people_damaged")
         weather = loaded.get("weather")
         self.data = {
             "people": {

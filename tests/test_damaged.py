@@ -24,7 +24,7 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.virtual_pet import backup, model, rates as R
 from custom_components.virtual_pet.coordinator import PetCoordinator
-from custom_components.virtual_pet.people import STORE_KEY as PEOPLE_KEY
+from custom_components.virtual_pet.people import STORE_KEY as PEOPLE_KEY, People
 
 from .test_init import STORE_KEY, hatched_pet
 
@@ -380,3 +380,139 @@ async def test_a_damaged_people_file_stops_no_pet(
     assert copy.read_text() == '{"version": 1}'
     found = issue(hass, "people_damaged")
     assert found.translation_placeholders == {"backup": copy.name}
+
+
+async def test_a_save_simply_missing_says_so(
+    hass: HomeAssistant,
+    now: float,
+    freezer: FrozenDateTimeFactory,
+    hass_storage: dict[str, Any],
+    storage_dir: Path,
+) -> None:
+    """No file, no .corrupt copy, no new_pet marker: the third wording."""
+    entry = await load(hass)
+    await runs(hass, entry, freezer)
+    assert hass.states.get("sensor.pip_life_stage").state == "egg"
+    assert not welcomed(hass)
+    found = issue(hass)
+    assert found.translation_key == "save_damaged_missing"
+    assert found.translation_placeholders == {"pet": "Pip", "entry_id": "test_pet"}
+    assert not list(storage_dir.glob(f"{STORE_KEY}.damaged.*"))
+    strings = json.loads((Path(backup.__file__).parent / "strings.json").read_text())[
+        "issues"
+    ]["save_damaged_missing"]
+    assert strings == {
+        "title": "{pet}'s save file was damaged",
+        "description": "{pet}'s save file is missing, so {pet} started again as an "
+        "egg. No copy of the old file was left to restore.",
+    }
+    # Nothing to restore, so a clean load later keeps it until it's dismissed.
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert issue(hass).translation_key == "save_damaged_missing"
+
+
+async def test_a_catch_up_that_fails_keeps_the_pet_as_read(
+    hass: HomeAssistant,
+    now: float,
+    freezer: FrozenDateTimeFactory,
+    hass_storage: dict[str, Any],
+    storage_dir: Path,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(
+        now - 3600, hunger=40.0, generation=3, care_misses=4
+    )
+    with patch.object(model, "catch_up", side_effect=RuntimeError("a bug")):
+        entry = await load(hass)
+    state = entry.runtime_data.state
+    assert (state.generation, state.care_misses, state.hunger) == (3, 4, 40.0)
+    assert state.last_updated == now  # the time away skipped, not caught up
+    assert issue(hass).translation_key == "save_damaged"
+    assert list(storage_dir.glob(f"{STORE_KEY}.damaged.*"))
+    await runs(hass, entry, freezer)
+    assert hass.states.get("sensor.pip_life_stage").state != "egg"
+
+
+async def test_a_restored_save_clears_its_repair(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any], storage_dir: Path
+) -> None:
+    hass_storage[STORE_KEY] = damage(now, "hunger", "x")
+    with patch.object(model.PetState, "from_dict", side_effect=RuntimeError("bug")):
+        entry = await load(hass)
+    [copy] = storage_dir.glob(f"{STORE_KEY}.damaged.*")
+    # A clean load with the backup still there: a salvaged pet, still told.
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert issue(hass).translation_placeholders["backup"] == copy.name
+    # Renamed back over the save, as the steps say: the repair goes.
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    copy.unlink()
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert issue(hass) is None
+
+
+async def test_a_first_tick_failing_every_restart_backs_up_once(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    storage_dir: Path,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, hunger=40.0)
+    with patch.object(PetCoordinator, "_tick", side_effect=RuntimeError("boom")):
+        entry = await load(hass)
+        [first] = storage_dir.glob(f"{STORE_KEY}.damaged.*")
+        for _ in range(2):
+            assert await hass.config_entries.async_reload(entry.entry_id)
+            await hass.async_block_till_done()
+    assert list(storage_dir.glob(f"{STORE_KEY}.damaged.*")) == [first]
+    assert issue(hass).translation_placeholders["backup"] == first.name
+
+
+async def test_the_log_names_no_user(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    storage_dir: Path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    secret = "user-id-0123456789abcdef"
+    with patch.object(model.PetState, "from_dict", side_effect=KeyError(secret)):
+        await load(hass)
+    warnings = [r for r in caplog.records if r.levelname == "WARNING"]
+    assert any("KeyError" in r.getMessage() for r in warnings)
+    assert not any(secret in r.getMessage() for r in warnings)
+    assert all(r.exc_info is None for r in warnings)
+
+
+async def test_an_empty_people_wrapper_is_damage_but_no_file_is_none_yet(
+    hass: HomeAssistant, hass_storage: dict[str, Any], storage_dir: Path
+) -> None:
+    await People(hass).async_load()
+    assert issue(hass, "people_damaged") is None  # no file: none yet
+    raw = '{"version": 1, "key": "virtual_pet.people", "data": null}'
+    (storage_dir / PEOPLE_KEY).write_text(raw)
+    hass_storage[PEOPLE_KEY] = {"version": 1, "key": PEOPLE_KEY, "data": None}
+    await People(hass).async_load()
+    [copy] = storage_dir.glob(f"{PEOPLE_KEY}.damaged.*")
+    assert copy.read_text() == raw
+    assert issue(hass, "people_damaged").translation_placeholders == {
+        "backup": copy.name
+    }
+
+
+async def test_a_restored_people_file_clears_its_repair(
+    hass: HomeAssistant, hass_storage: dict[str, Any], storage_dir: Path
+) -> None:
+    (storage_dir / PEOPLE_KEY).write_text('{"version": 1}')
+    hass_storage[PEOPLE_KEY] = {"version": 1}  # Store can't read it
+    await People(hass).async_load()
+    [copy] = storage_dir.glob(f"{PEOPLE_KEY}.damaged.*")
+    hass_storage[PEOPLE_KEY] = people({"people": {}, "weather": {}})
+    await People(hass).async_load()  # the backup still there: still told
+    assert issue(hass, "people_damaged") is not None
+    copy.unlink()  # renamed back
+    await People(hass).async_load()
+    assert issue(hass, "people_damaged") is None
