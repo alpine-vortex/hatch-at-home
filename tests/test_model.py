@@ -2662,3 +2662,24 @@ def test_a_later_versions_keys_go_on_to_the_next_generation():
     egg, _ = model.lay_egg(pet, at(12), random.Random(1))
     assert egg is not pet
     assert egg.to_dict()["from_later"] == {"x": 1}
+
+
+def test_a_full_pet_refuses_a_snack():
+    now = at(14)
+    pet = hatched(now, hunger=R.FEED_FULL_AT, happiness=50)
+    result, events = model.apply_action(pet, "snack", now, NoLuck())
+    assert result == "full"
+    assert pet.hunger == R.FEED_FULL_AT and pet.happiness == 50
+    assert not pet.digesting
+    pet.hunger = R.FEED_FULL_AT - 1
+    assert model.apply_action(pet, "snack", now, NoLuck())[0] == model.OK
+
+
+def test_fast_forward_wakes_a_sleeper_at_the_next_morning():
+    now = at(20)
+    pet = hatched(now, hunger=90, happiness=90, energy=90)
+    events = model.fast_forward(pet, now, 30, SETTINGS, random.Random(0))
+    assert isinstance(events, list)
+    assert pet.asleep and not pet.napping  # 30 h on from 20:00 is 02:00
+    assert pet.wake_at == model.next_wake(now, SETTINGS)
+    assert pet.wake_at - now <= 24 * HOUR

@@ -1772,6 +1772,11 @@ async function main() {
       el._react(s, { action: "play", result: "too_tired" });
       out.refusalLines = written.filter((x) => x === "too sleepy to play").length;
       out.refusalTotal = written.length;
+      written.length = 0;
+      s.sayUntil = 0;
+      el._react(s, { action: "snack", result: "full" }); // a snack refused when full
+      out.snackFull = written.filter((x) => x === "tummy full!").length;
+      out.snackTotal = written.length;
       el._write = realWrite;
       el._hass = { ...el._hass, callService: realCall };
       out.wish = el._wishSaid(s, { kind: "snack" }, ["I'd love a snack after lunch!"]);
@@ -1797,6 +1802,8 @@ async function main() {
     check("a baby's refusals and wish; an aimed wish keeps its words",
       lines.refusal.join("|") === "tummy full!|too sleepy to play|I'm not sick!" && lines.wish === "wish... snack after lunch" &&
       lines.aimed === "I hope Alex brings me a snack after lunch!", JSON.stringify(lines));
+    check("a refused snack says the full line once",
+      lines.snackFull === 1 && lines.snackTotal === 1, JSON.stringify(lines));
     check("a refused game says its refusal line once",
       lines.refusalCall === 0 && lines.refusalLines === 1 && lines.refusalTotal === 1, JSON.stringify(lines));
     // Hearts: to the nearest half, and full once the server calls the pet full.
