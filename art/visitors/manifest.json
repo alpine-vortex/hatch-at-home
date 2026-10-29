@@ -1,0 +1,266 @@
+{
+  "raccoon": {
+    "world": "woodland",
+    "poses": {
+      "idle": "frames/woodland/raccoon_idle.png",
+      "walk_a": "frames/woodland/raccoon_walk_a.png",
+      "walk_b": "frames/woodland/raccoon_walk_b.png",
+      "interact": "frames/woodland/raccoon_interact.png"
+    },
+    "source": "source/woodland.png",
+    "row": 1
+  },
+  "hedgehog": {
+    "world": "woodland",
+    "poses": {
+      "idle": "frames/woodland/hedgehog_idle.png",
+      "walk_a": "frames/woodland/hedgehog_walk_a.png",
+      "walk_b": "frames/woodland/hedgehog_walk_b.png",
+      "interact": "frames/woodland/hedgehog_interact.png"
+    },
+    "source": "source/woodland.png",
+    "row": 2
+  },
+  "chipmunk": {
+    "world": "woodland",
+    "poses": {
+      "idle": "frames/woodland/chipmunk_idle.png",
+      "walk_a": "frames/woodland/chipmunk_walk_a.png",
+      "walk_b": "frames/woodland/chipmunk_walk_b.png",
+      "interact": "frames/woodland/chipmunk_interact.png"
+    },
+    "source": "source/woodland.png",
+    "row": 3
+  },
+  "blue_jay": {
+    "world": "woodland",
+    "poses": {
+      "idle": "frames/woodland/blue_jay_idle.png",
+      "walk_a": "frames/woodland/blue_jay_walk_a.png",
+      "walk_b": "frames/woodland/blue_jay_walk_b.png",
+      "interact": "frames/woodland/blue_jay_interact.png"
+    },
+    "source": "source/woodland.png",
+    "row": 4
+  },
+  "horned_lizard": {
+    "world": "terrarium",
+    "poses": {
+      "idle": "frames/terrarium/horned_lizard_idle.png",
+      "walk_a": "frames/terrarium/horned_lizard_walk_a.png",
+      "walk_b": "frames/terrarium/horned_lizard_walk_b.png",
+      "interact": "frames/terrarium/horned_lizard_interact.png"
+    },
+    "source": "source/terrarium.png",
+    "row": 1
+  },
+  "desert_mouse": {
+    "world": "terrarium",
+    "poses": {
+      "idle": "frames/terrarium/desert_mouse_idle.png",
+      "walk_a": "frames/terrarium/desert_mouse_walk_a.png",
+      "walk_b": "frames/terrarium/desert_mouse_walk_b.png",
+      "interact": "frames/terrarium/desert_mouse_interact.png"
+    },
+    "source": "source/terrarium.png",
+    "row": 2
+  },
+  "scorpion": {
+    "world": "terrarium",
+    "poses": {
+      "idle": "frames/terrarium/scorpion_idle.png",
+      "walk_a": "frames/terrarium/scorpion_walk_a.png",
+      "walk_b": "frames/terrarium/scorpion_walk_b.png",
+      "interact": "frames/terrarium/scorpion_interact.png"
+    },
+    "source": "source/terrarium.png",
+    "row": 3
+  },
+  "cricket": {
+    "world": "terrarium",
+    "poses": {
+      "idle": "frames/terrarium/cricket_idle.png",
+      "walk_a": "frames/terrarium/cricket_walk_a.png",
+      "walk_b": "frames/terrarium/cricket_walk_b.png",
+      "interact": "frames/terrarium/cricket_interact.png"
+    },
+    "source": "source/terrarium.png",
+    "row": 4
+  },
+  "house_sparrow": {
+    "world": "hearth",
+    "poses": {
+      "idle": "frames/hearth/house_sparrow_idle.png",
+      "walk_a": "frames/hearth/house_sparrow_walk_a.png",
+      "walk_b": "frames/hearth/house_sparrow_walk_b.png",
+      "interact": "frames/hearth/house_sparrow_interact.png"
+    },
+    "source": "source/hearth.png",
+    "row": 1
+  },
+  "ladybug": {
+    "world": "hearth",
+    "poses": {
+      "idle": "frames/hearth/ladybug_idle.png",
+      "walk_a": "frames/hearth/ladybug_walk_a.png",
+      "walk_b": "frames/hearth/ladybug_walk_b.png",
+      "interact": "frames/hearth/ladybug_interact.png"
+    },
+    "source": "source/hearth.png",
+    "row": 2
+  },
+  "painted_lady": {
+    "world": "hearth",
+    "poses": {
+      "idle": "frames/hearth/painted_lady_idle.png",
+      "walk_a": "frames/hearth/painted_lady_walk_a.png",
+      "walk_b": "frames/hearth/painted_lady_walk_b.png",
+      "interact": "frames/hearth/painted_lady_interact.png"
+    },
+    "source": "source/hearth.png",
+    "row": 3
+  },
+  "house_mouse": {
+    "world": "hearth",
+    "poses": {
+      "idle": "frames/hearth/house_mouse_idle.png",
+      "walk_a": "frames/hearth/house_mouse_walk_a.png",
+      "walk_b": "frames/hearth/house_mouse_walk_b.png",
+      "interact": "frames/hearth/house_mouse_interact.png"
+    },
+    "source": "source/hearth.png",
+    "row": 4
+  },
+  "sea_turtle": {
+    "world": "tidepool",
+    "poses": {
+      "idle": "frames/tidepool/sea_turtle_idle.png",
+      "walk_a": "frames/tidepool/sea_turtle_walk_a.png",
+      "walk_b": "frames/tidepool/sea_turtle_walk_b.png",
+      "interact": "frames/tidepool/sea_turtle_interact.png"
+    },
+    "source": "source/tidepool.png",
+    "row": 1
+  },
+  "moon_jellyfish": {
+    "world": "tidepool",
+    "poses": {
+      "idle": "frames/tidepool/moon_jellyfish_idle.png",
+      "walk_a": "frames/tidepool/moon_jellyfish_walk_a.png",
+      "walk_b": "frames/tidepool/moon_jellyfish_walk_b.png",
+      "interact": "frames/tidepool/moon_jellyfish_interact.png"
+    },
+    "source": "source/tidepool.png",
+    "row": 2
+  },
+  "seahorse": {
+    "world": "tidepool",
+    "poses": {
+      "idle": "frames/tidepool/seahorse_idle.png",
+      "walk_a": "frames/tidepool/seahorse_walk_a.png",
+      "walk_b": "frames/tidepool/seahorse_walk_b.png",
+      "interact": "frames/tidepool/seahorse_interact.png"
+    },
+    "source": "source/tidepool.png",
+    "row": 3
+  },
+  "shrimp": {
+    "world": "tidepool",
+    "poses": {
+      "idle": "frames/tidepool/shrimp_idle.png",
+      "walk_a": "frames/tidepool/shrimp_walk_a.png",
+      "walk_b": "frames/tidepool/shrimp_walk_b.png",
+      "interact": "frames/tidepool/shrimp_interact.png"
+    },
+    "source": "source/tidepool.png",
+    "row": 4
+  },
+  "blue_darner": {
+    "world": "pond",
+    "poses": {
+      "idle": "frames/pond/blue_darner_idle.png",
+      "walk_a": "frames/pond/blue_darner_walk_a.png",
+      "walk_b": "frames/pond/blue_darner_walk_b.png",
+      "interact": "frames/pond/blue_darner_interact.png"
+    },
+    "source": "source/pond.png",
+    "row": 1
+  },
+  "water_strider": {
+    "world": "pond",
+    "poses": {
+      "idle": "frames/pond/water_strider_idle.png",
+      "walk_a": "frames/pond/water_strider_walk_a.png",
+      "walk_b": "frames/pond/water_strider_walk_b.png",
+      "interact": "frames/pond/water_strider_interact.png"
+    },
+    "source": "source/pond.png",
+    "row": 2
+  },
+  "koi": {
+    "world": "pond",
+    "poses": {
+      "idle": "frames/pond/koi_idle.png",
+      "walk_a": "frames/pond/koi_walk_a.png",
+      "walk_b": "frames/pond/koi_walk_b.png",
+      "interact": "frames/pond/koi_interact.png"
+    },
+    "source": "source/pond.png",
+    "row": 3
+  },
+  "tadpole": {
+    "world": "pond",
+    "poses": {
+      "idle": "frames/pond/tadpole_idle.png",
+      "walk_a": "frames/pond/tadpole_walk_a.png",
+      "walk_b": "frames/pond/tadpole_walk_b.png",
+      "interact": "frames/pond/tadpole_interact.png"
+    },
+    "source": "source/pond.png",
+    "row": 4
+  },
+  "flying_squirrel": {
+    "world": "nightsky",
+    "poses": {
+      "idle": "frames/nightsky/flying_squirrel_idle.png",
+      "walk_a": "frames/nightsky/flying_squirrel_walk_a.png",
+      "walk_b": "frames/nightsky/flying_squirrel_walk_b.png",
+      "interact": "frames/nightsky/flying_squirrel_interact.png"
+    },
+    "source": "source/nightsky.png",
+    "row": 1
+  },
+  "striped_skunk": {
+    "world": "nightsky",
+    "poses": {
+      "idle": "frames/nightsky/striped_skunk_idle.png",
+      "walk_a": "frames/nightsky/striped_skunk_walk_a.png",
+      "walk_b": "frames/nightsky/striped_skunk_walk_b.png",
+      "interact": "frames/nightsky/striped_skunk_interact.png"
+    },
+    "source": "source/nightsky.png",
+    "row": 2
+  },
+  "nightjar": {
+    "world": "nightsky",
+    "poses": {
+      "idle": "frames/nightsky/nightjar_idle.png",
+      "walk_a": "frames/nightsky/nightjar_walk_a.png",
+      "walk_b": "frames/nightsky/nightjar_walk_b.png",
+      "interact": "frames/nightsky/nightjar_interact.png"
+    },
+    "source": "source/nightsky.png",
+    "row": 3
+  },
+  "stag_beetle": {
+    "world": "nightsky",
+    "poses": {
+      "idle": "frames/nightsky/stag_beetle_idle.png",
+      "walk_a": "frames/nightsky/stag_beetle_walk_a.png",
+      "walk_b": "frames/nightsky/stag_beetle_walk_b.png",
+      "interact": "frames/nightsky/stag_beetle_interact.png"
+    },
+    "source": "source/nightsky.png",
+    "row": 4
+  }
+}

@@ -179,3 +179,10 @@ are in `art/<id>/<id>_probe.png`.
 Creature-agnostic four-frame reaction, care-action, flair and weather loops are in
 [`effects/`](effects/README.md). They are draft assets kept separate from the live
 frontend; the preview and atlas cutter are included there.
+
+## World visitors
+
+Small creature-agnostic visitor sprites for all six worlds are in
+[`visitors/`](visitors/README.md): four visitors per world, each with idle, two
+movement and interaction frames. They are draft art and are not installed in the
+frontend.
