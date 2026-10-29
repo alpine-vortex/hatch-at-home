@@ -1803,7 +1803,7 @@ async function main() {
     const heartRows = await babyAs(async (el, s) => {
       const realState = el._state;
       const out = {};
-      for (const hunger of [34, 96]) {
+      for (const hunger of [30, 34, 96]) {
         el._state = function (slide, key) {
           return key === "sensor.hunger" ? { state: String(hunger), attributes: {} } : realState.call(this, slide, key);
         };
@@ -1814,8 +1814,8 @@ async function main() {
       el._state = realState;
       return out;
     });
-    check("hunger 34 shows one full heart and a half, 96 shows four (full at the server's FEED_FULL_AT)",
-      heartRows[34] === "full,half,empty,empty" && heartRows[96] === "full,full,full,full", JSON.stringify(heartRows));
+    check("hunger 30 shows one heart (round, not ceil), 34 one and a half, 96 four (full at the server's FEED_FULL_AT)",
+      heartRows[30] === "full,empty,empty,empty" && heartRows[34] === "full,half,empty,empty" && heartRows[96] === "full,full,full,full", JSON.stringify(heartRows));
     // The clock: a device 10 min fast reads the server's countdown after one state event.
     const clock = await babyAs(async (el, s) => {
       const realNow = Date.now;
@@ -1824,25 +1824,37 @@ async function main() {
       const hatchesAt = s.hatchesAt;
       const out = {};
       let fire;
+      let subscribes = 0;
+      let unsubbed = 0;
       const fresh = (conn) => ({ ...realHass, connection: conn });
       try {
         s.hatchesAt = new Date(server + 30 * 60000).toISOString();
         Date.now = () => realNow() + 10 * 60000;
         out.before = el._say(s, null, false);
-        el._hass = fresh({ subscribeEvents: (cb) => { fire = cb; return Promise.resolve(() => {}); } });
+        el._hass = fresh({ subscribeEvents: (cb) => { subscribes++; fire = cb; return Promise.resolve(() => { unsubbed++; }); } });
         el._watchServerClock(el._hass);
+        await new Promise((r) => setTimeout(r, 0));
         fire({ time_fired: new Date(server).toISOString() });
+        await new Promise((r) => setTimeout(r, 0));
         out.after = el._say(s, null, false);
+        out.unsubscribed = unsubbed;
+        // A second card on the same connection within the hour does not read again.
+        const before = subscribes;
+        el._watchServerClock(el._hass);
+        out.again = subscribes - before;
       } finally {
         Date.now = realNow;
-        fire?.({ time_fired: new Date().toISOString() }); // back to an honest device clock
+        fire?.({ time_fired: new Date().toISOString() }); // (ignored: one reading) back to an honest clock below
+        el._hass = fresh({ subscribeEvents: (cb) => { cb({ time_fired: new Date().toISOString() }); return Promise.resolve(() => {}); } });
+        el._watchServerClock(el._hass);
         s.hatchesAt = hatchesAt;
         el._hass = realHass;
       }
       return out;
     });
     check("device clock 10 min fast: the hatch countdown reads the server's after one state event",
-      clock.before === "hatching in about 20 min" && clock.after === "hatching in about 30 min", JSON.stringify(clock));
+      clock.before === "hatching in about 20 min" && clock.after === "hatching in about 30 min" &&
+      clock.unsubscribed === 1 && clock.again === 0, JSON.stringify(clock));
     check("no catchphrase on a baby line, and the count doesn't move",
       lines.granted[0]?.opts?.catch === false && lines.favourite[0]?.opts?.catch === false && lines.count === 2 &&
       !lines.spoken.some((x) => lines.phrase && x.includes(lines.phrase)), JSON.stringify(lines));

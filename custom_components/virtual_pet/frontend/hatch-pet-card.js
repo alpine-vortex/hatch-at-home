@@ -901,7 +901,8 @@ function noteServerTime(iso) {
   if (Math.abs(offset) <= SKEW_CAP_MS) serverOffset = offset;
 }
 const serverNow = () => Date.now() + serverOffset;
-const SERVER_CLOCK_WATCHED = new WeakSet(); // connections already listening
+const SERVER_CLOCK_EVERY_MS = 3600000; // one reading an hour, per connection
+const SERVER_CLOCK = new WeakMap(); // connection -> { at: last reading (device ms), busy }
 
 function timeAgo(iso) {
   const minutes = Math.round((serverNow() - new Date(iso).getTime()) / 60000);
@@ -1446,14 +1447,30 @@ class HatchPetCard extends HTMLElement {
     this._update();
   }
 
-  // Every state event carries the server's own time_fired: the next one gives
-  // the clock offset (noteServerTime), once per connection for all cards.
+  // Every state event carries the server's own time_fired: one reading gives
+  // the clock offset (noteServerTime), then the subscription is dropped (a
+  // standing one would stream every state change in the house to this tab).
+  // Read again after an hour, or on a new connection; shared by all cards.
   _watchServerClock(hass) {
     const conn = hass?.connection;
-    if (!conn?.subscribeEvents || SERVER_CLOCK_WATCHED.has(conn)) return;
-    SERVER_CLOCK_WATCHED.add(conn);
-    Promise.resolve(conn.subscribeEvents((ev) => noteServerTime(ev?.time_fired), "state_changed"))
-      .catch(() => SERVER_CLOCK_WATCHED.delete(conn));
+    if (!conn?.subscribeEvents) return;
+    const seen = SERVER_CLOCK.get(conn);
+    if (seen && (seen.busy || Date.now() - seen.at < SERVER_CLOCK_EVERY_MS)) return;
+    const mark = { at: seen?.at ?? 0, busy: true };
+    SERVER_CLOCK.set(conn, mark);
+    let unsub = null;
+    let done = false;
+    const finish = () => { if (unsub) unsub(); };
+    Promise.resolve(conn.subscribeEvents((ev) => {
+      if (done) return;
+      done = true;
+      noteServerTime(ev?.time_fired);
+      Object.assign(mark, { at: Date.now(), busy: false });
+      finish();
+    }, "state_changed")).then((fn) => {
+      unsub = fn;
+      if (done) finish();
+    }).catch(() => { mark.busy = false; }); // a later card tries again
   }
 
   // A hidden tab: lines are said whole, and babbles stop.

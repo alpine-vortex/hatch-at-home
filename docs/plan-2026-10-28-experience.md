@@ -558,7 +558,7 @@ side.
 **PR 0h: card display fixes (minors 8, 9, 10).** Size **S**, tier 1.
 - **Minor 8 (finding 23):** hearts round to the **nearest** half (card 3192, today
   `Math.ceil`), and show full at `hunger >= FEED_FULL_AT`, so a pet the server calls
-  full shows 4 hearts: 34 shows 1 heart, 96 shows 4.
+  full shows 4 hearts: 30 shows 1 heart, 34 shows 1.5, 96 shows 4.
 - **Minor 9 (finding 24):** the hatch countdown (2203) and "time ago" (`timeAgo`, 861)
   use a server-time offset taken from something fresh: the `time_fired` of the next
   state event over the websocket, and P3a's snapshot `now` once it lands. Not
@@ -566,7 +566,7 @@ side.
   reload. Until a fresh reading arrives, the device clock is used with the skew capped.
 - **Minor 10:** a refused game says its refusal line once (drop the `_pickGame` line and
   leave it to `_react`, 3136).
-- **Tests:** card-check: 34 shows one heart and 96 four; with the device clock 10 min
+- **Tests:** card-check: 30 shows one heart, 34 one and a half and 96 four; with the device clock 10 min
   fast, the countdown matches the server's after one state event; a refused game writes
   one line.
 
@@ -1232,7 +1232,7 @@ narrower than stated (row 14). The owner answered Q2 and Q3; Q1 is evaluated in 
 | 20 | 0g's fast-forward band can't turn green from a coordinator fix (the sim calls `advance` itself). Verified | 0g: `model.fast_forward`, used by the coordinator and the sim (this PR's sim already prefers it) |
 | 21 | The ordering contradicts itself, and 0e doesn't wait on 0f. Verified | Order 0a → 0c → 0d, then 0b and 0f, then 0e; P1 is merged, so nothing waits on it; section 3 and section 4 fixed |
 | 22 | The bands don't match the owner's decisions (casual steady exactly; no notification, responder_praise or praise-only bands; 10 seeds; adult whines). Verified | All added to the sim (this PR): casual steady, responder_miss1 steady, calls started per pet a day, responder_praise, praise_bot's happiness call, launder's energy misses, a scrappy adult ≤ 3 whines a day, 10 seeds in `--check` |
-| 23 | 0h's hearts: rounding down shows a full pet as not full. Verified (card 3192) | 0h: nearest half, full at `FEED_FULL_AT`; card-check 34 → 1, 96 → 4 |
+| 23 | 0h's hearts: rounding down shows a full pet as not full. Verified (card 3192) | 0h: nearest half, full at `FEED_FULL_AT`; card-check 30 → 1, 34 → 1.5, 96 → 4 |
 | 24 | 0h's clock: `last_updated` isn't fresh. Verified | 0h: offset from a state event's `time_fired`, then P3a's `now`; device clock with a capped skew until then |
 | 25 | 0e: the card doesn't explain the new score. Verified | 0e: the bar is "today", "growing up" uses the new score, tested |
 | 26 | 0a's Done fails: an energy call is still laundered (686 calls, 0 misses). Verified | 0a: an energy call is answered only once energy passes 40 asleep or at a natural wake (no saved field, unlike the audit's "30 minutes asleep"); launder 14 energy misses = neglect's, scrappy |
