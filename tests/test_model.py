@@ -309,9 +309,31 @@ def test_playing_answers_a_fake_call_like_praise():
     assert pet.call is None
     assert pet.discipline == 50.0 + R.PRAISE_WHINING_DISCIPLINE
     assert pet.happiness > 50.0
-    assert {"type": "call_answered", "reason": "fake"} in events
+    assert {"type": "call_answered", "reason": "fake", "answer": "spoiled"} in events
     later = run(pet, start + 30 * MIN)
     assert "discipline_miss" not in types(later) and pet.discipline_misses == 0
+
+
+def test_a_scolded_fake_call_says_it_was_a_scold():
+    start = at(9)
+    pet = hatched(start)
+    pet.call = model.Call("fake", start, start + 20 * MIN)
+    _, events = model.apply_action(pet, "scold", start + MIN, NoLuck())
+    assert {"type": "call_answered", "reason": "fake", "answer": "scold"} in events
+    pet.call = model.Call("fake", start, start + 20 * MIN)
+    _, events = model.apply_action(pet, "praise", start + 2 * MIN, NoLuck())
+    assert {"type": "call_answered", "reason": "fake", "answer": "spoiled"} in events
+
+
+def test_sick_unannounced_survives_a_save_and_bad_values_are_dropped():
+    pet = hatched(at(9))
+    pet.sick, pet.sick_unannounced = True, "neglect"
+    assert model.PetState.from_dict(pet.to_dict()).sick_unannounced == "neglect"
+    data = pet.to_dict()
+    data["sick_unannounced"] = 7
+    assert model.PetState.from_dict(data).sick_unannounced is None
+    del data["sick_unannounced"]  # a save from before the field
+    assert model.PetState.from_dict(data).sick_unannounced is None
 
 
 def test_every_answer_to_a_fake_call_clears_its_notification():

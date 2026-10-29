@@ -227,7 +227,7 @@ class PetState:
             for k, v in (favourites if isinstance(favourites, dict) else {}).items()
             if isinstance(k, str) and isinstance(v, str)
         }
-        for key in ("favourite_said", "catchphrase", "hatched_on"):
+        for key in ("favourite_said", "catchphrase", "hatched_on", "sick_unannounced"):
             if not isinstance(kwargs.get(key), str):
                 kwargs[key] = None
         try:
@@ -1185,7 +1185,9 @@ def _do_action(
             # Played with, it has what it whined for: same as praising it.
             state.discipline = _clamp(state.discipline + R.PRAISE_WHINING_DISCIPLINE)
             state.call = None
-            events.append({"type": "call_answered", "reason": "fake"})
+            events.append(
+                {"type": "call_answered", "reason": "fake", "answer": "spoiled"}
+            )
             return "spoiled"
         return OK
 
@@ -1209,7 +1211,9 @@ def _do_action(
         if state.call is not None and state.call.reason == "fake":
             state.discipline = _clamp(state.discipline + R.SCOLD_DISCIPLINE)
             state.call = None
-            events.append({"type": "call_answered", "reason": "fake"})
+            events.append(
+                {"type": "call_answered", "reason": "fake", "answer": "scold"}
+            )
             return OK
         state.happiness = _clamp(state.happiness + R.SCOLD_UNFAIR_HAPPINESS)
         return "unfair"
@@ -1220,7 +1224,9 @@ def _do_action(
             state.discipline = _clamp(state.discipline + R.PRAISE_WHINING_DISCIPLINE)
             state.happiness = _clamp(state.happiness + R.PRAISE_HAPPINESS)
             state.call = None
-            events.append({"type": "call_answered", "reason": "fake"})
+            events.append(
+                {"type": "call_answered", "reason": "fake", "answer": "spoiled"}
+            )
             return "spoiled"
         state.happiness = _clamp(state.happiness + R.PRAISE_HAPPINESS)
         if now - state.last_praise >= R.PRAISE_COOLDOWN_MINUTES * 60:
