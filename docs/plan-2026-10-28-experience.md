@@ -1,11 +1,15 @@
 # Plan: the experience review (13 defects, 8 opportunities) and a balance wave
 
-**DRAFT 2, 2026-10-28.** A plan for the owner's review: nothing here is built. Draft 1
+**DRAFT 3, 2026-10-28.** A plan for the owner's review: nothing here is built. Draft 1
 was audited adversarially (25 findings, all checked against main and folded in), the
 owner answered its questions (Q1-Q13 and the audit's A1-A10), and a separate gameplay
-balance audit added **Wave 0: balance**, which goes first. The last section, "The audit
-of draft 1 (25 findings) and what changed", **wins** where it differs from the
-sections above it. Code changes in this PR: only the new `scripts/balance_sim.py`.
+balance audit added **Wave 0: balance**, which goes first. **Draft 3 rewrites Wave 0**
+after its own adversarial audit (27 findings, all folded in and prototyped; every sim
+band passes on 10 seeds) and evaluates how re-calls should reach phones in a house of
+several pets (Wave 0 Q1, in PR 0b). "The audit of draft 1 (25 findings) and what
+changed" **wins** where it differs from the sections above it, and "The Wave 0 audit
+(27 findings) and what changed", the last section, wins for Wave 0. Code changes in
+these PRs: only `scripts/balance_sim.py` (added in draft 2, extended in draft 3).
 
 The source is an outside "deep interaction, feature, animation and quality review" of
 2026-10-28 at `0821baf` (0.35.0b3). It reports 13 defects (F01-F13) and 8 opportunities
@@ -17,7 +21,7 @@ numbers are used as they are.
 **Line numbers are for `origin/main` at `afd56b9`** (PR #39-#41 merged). Since `0821baf`
 the card has changed by one line (2849), so the review's card references still hold;
 `coordinator.py` is unchanged above line 1792; `model.py` has moved (cited fresh here).
-Privacy P1 (0.35.0b4) is being finished on a crew branch; nothing of it is on main yet.
+Privacy P1 has since merged (0.35.0, #45); Wave 0 cites main at `8904a0a`.
 
 ## The owner's taste (the rules every phase keeps)
 
@@ -162,18 +166,15 @@ audit after it).
 
 ### Ordering against the plans in flight
 
-- **Wave 0 goes first**, with one exception. It is server balance, mostly in
-  `model.py` and `rates.py`. But privacy P1 (crew branch
-  `crew/hatch-at-home-s2434-privacy-p1-damaged-saves-salva`, checked at `709948d`)
-  rewrites `PetState.from_dict` and adds the validation helpers (`_float`, `_int`,
-  `_numbers`, `_records`, `_game` and others) every new saved field must use. So **the
-  three Wave 0 PRs that change the save (0b, 0e, 0f) go after P1 merges** and validate
-  their fields with its helpers; 0a, 0c, 0d, 0g and 0h don't touch the save and can go
-  at once. PR 0f's server game changes come before PR 1a (the card side of the same
-  games); PR 0h's card fixes are three small edits anywhere.
-- **Privacy P1** (`_dropSlide`, the observer: privacy F6) is being built now. Wave 1's
-  game timers must also be cleared when a slide is dropped, so **PR 1a goes after P1
-  merges** (and after 0f). PR 1b and 1c don't touch slide teardown and can go any time.
+- **Wave 0 goes first.** It is server balance, mostly in `model.py` and `rates.py`.
+  Privacy P1 is merged (0.35.0), so the three Wave 0 PRs that change the save (0b, 0e,
+  0f) validate their fields with its helpers (`_float`, `_int`, `_numbers`,
+  `_records`, `_game` and others). Wave 0's own order: 0a → 0c → 0d, then 0b (after the
+  owner's re-call pick) and 0f, then 0e last; 0g and 0h any time. PR 0f's server game
+  changes come before PR 1a (the card side of the same games).
+- **Privacy P1** (`_dropSlide`, the observer: privacy F6) is merged. Wave 1's game
+  timers must also be cleared when a slide is dropped, so PR 1a builds on it (and goes
+  after 0f). PR 1b and 1c don't touch slide teardown and can go any time.
 - **Privacy P2** (forget my data) and **PR 1b** share the confirm guard: 1b lands first
   and P2 uses it; if P2 is first, 1b moves P2's row onto the guard.
 - **Privacy P3a** (the channel) and **P3c** (media pushes) go before Wave 2 (the queue
@@ -184,20 +185,33 @@ audit after it).
   PR 4g (older generations).
 - **Privacy P2** (the "forget my data" row) and **P3a** (the bell and "my day" over the
   socket) go before PR 4c: all three edit `_renderStatus`.
-- **Privacy P1** goes before PR 4a (its `from_dict` validation helpers).
+- **Privacy P1** (merged) provides PR 4a's `from_dict` validation helpers.
 
 ### Wave 0: balance (first)
 
-From the balance audit and the owner's decisions on it (2026-10-28). Every PR here:
+From the balance audit, the owner's decisions on it (2026-10-28) and **Wave 0's own
+adversarial audit** (27 findings, 9 high; all folded in here, and its table, "The Wave 0
+audit (27 findings) and what changed" near the end of this plan, wins). **Line numbers
+in Wave 0 are for main at `8904a0a`** (0.35.0: privacy P1 is merged), not `afd56b9`.
 
-- runs `scripts/balance_sim.py --check` (`.venv/bin/python`, about 2 s). Its **Done
-  includes the 14-day simulation**: careful, casual, neglect, responder, responder who
-  misses a call a day, and the auditor's exploits (launder, praise_bot, launder +
-  praise, walking away from games, rerolling openings, praise spam, fast-forward).
-  Each PR names the bands it must turn green, and **no band that passed before may
-  fail after**. The bands are in the script (`BANDS` and the exploit checks) and
-  summarised in each PR below. The tuned numbers go in `rates.py` with a one-line
-  comment naming the sim;
+**Draft 3's rules and numbers are prototyped.** Everything in 0a-0g below was built in a
+scratch copy of the package (not in this PR) and `scripts/balance_sim.py --check` was run
+against it (`BALANCE_SIM_ROOT=<copy>`): **every band passes on all 10 seeds**, the
+exploits included. On main the same check fails 161 bands. The builders start from these
+numbers, and the sim decides. The prototype's diff, its patch script and the sim output
+are in the crew worker's evidence folder
+(`~/.local/state/crew/workers/hatch-at-home-s2444/evidence/`).
+
+Every PR here:
+
+- runs `scripts/balance_sim.py --check` (`.venv/bin/python`, 10 seeds, about 8 s). Its
+  **Done includes the 14-day simulation** of every strategy in `STRATEGIES`: careful
+  (also with card games), casual (also with card games), twice a day, neglect,
+  responder, responder who praises, responder who misses a call a day, and the exploits
+  (launder, sleeper, praise_bot, care_bot, launder + praise, walking away from games,
+  rerolling openings, praise spam, fast-forward, a scrappy adult's whines). Each PR
+  names the bands it must turn green, and **no band that passed before may fail
+  after**. The tuned numbers go in `rates.py` with a one-line comment naming the sim;
 - keeps the strategies honest: they decide from what a person can see (the meters and
   the call as the sensors show it), so once C3 lands a careful player sometimes scolds a
   real call, as a person would. A PR that changes what a strategy can see updates the
@@ -205,184 +219,358 @@ From the balance audit and the owner's decisions on it (2026-10-28). Every PR he
 - adds pytest cases for the rule itself (the sim is the balance check, not the unit
   test).
 
-The order differs from the audit's suggested one on purpose: **the upbringing rework
-(0e) comes after every change that moves how many calls are missed** (0a, 0b, 0c, 0d),
-because its thresholds are tuned against those counts. C2's praise farm is closed in
-the same PR, since praise is half of how discipline is earned.
+**Order (finding 21):** 0a → 0c → 0d, then 0b (after the owner picks how re-calls
+notify) and 0f, then **0e last**. 0g and 0h go any time. Nothing waits on privacy P1
+any more (merged), so 0b, 0e and 0f use its validation helpers directly. 0e is last
+because it is tuned against how many calls are missed (0a-0d) and against discipline,
+which 0f moves (a game spoils a whine, -10). C2's praise farm is closed in 0e, since
+praise is half of how discipline is earned.
 
-**PR 0a: sleep pauses calls; naps need tiredness (C1, minor 5).** Size **S-M**, tier 1.
-- **Owner: pause.** `_fall_asleep` keeps `state.call` (no `_unlatch`, no
-  `state.call = None`), except an `energy` call, which sleep answers (as today, 538-539).
-  While asleep, `_calls` pushes the open call's `deadline` back by the step (`hours`,
-  which `_calls` already takes) before returning (703-704). No new saved field: the
-  call's own deadline carries it. On waking, the call is still on and has the time it
-  had left.
-- The binary sensor `calling` and the card's attention art stay off while asleep (a
-  paused call isn't asking), and no new notification fires on waking (it was notified
-  when it started). A whine pauses the same way.
-- **Owner: a nap only when tired or near bedtime.** `set_lights_out(on)` outside sleep
-  hours refuses unless `energy < NAP_WAKE_ENERGY` (95) or
-  `minutes_to_bedtime <= NAP_INTO_NIGHT_MINUTES` (60). A refusal logs
-  `{"action": "lights_out", "result": "not_sleepy"}` so the card's `_react` can say it
-  (copy W1), and returns with `lights_out` unchanged. Note: at 95, "tired" is almost
-  always true by day; **the pause, not the gate, is what closes the laundering
-  exploit**. The gate stops a fully rested pet being put down for nothing.
-- **Minor 5:** `switch.py` `is_on` reads `asleep`, not `lights_out`, so a pet that dozed,
-  collapsed or was put to bed by the house shows "on", and a refused nap snaps back to
-  "off". Pressing "off" on a sleeping pet still wakes it (the switch stays the top
-  authority, `set_lights_out`'s docstring).
-- **Tests:** pytest: a hunger call open at lights-out is still open on waking with the
-  same time left; an energy call is answered by sleep; lights-out at energy 100 at 10:00
-  returns `not_sleepy` and the pet stays awake; at energy 50 it naps; at 22:30 it sleeps
-  whatever the energy; the switch is on while dozed.
-- **Sim Done:** `launder` → scrappy (today steady); careful, responder unchanged or
-  better.
+**PR 0a: sleep pauses calls; naps need tiredness (C1, minor 5).** Size **S-M**, tier 1
+(no saved field).
+- **Owner: pause.** `_fall_asleep` (model 767-789) keeps `state.call`, every reason,
+  the energy call and a whine included: no `_unlatch`, no `state.call = None`. While
+  asleep, `_calls` (936) pushes the open call's `deadline` back by the step (`hours`)
+  before it returns (947).
+- **An energy call is answered only by real rest (finding 26):** while asleep, once
+  energy is above its re-arm level (40, `CALL_THRESHOLDS`), or at a natural wake
+  (`_wake` how `morning` or `rested`). A hand wake before that (`lights`, `night`)
+  leaves it open with its paused time, so lights out and on at once no longer answers
+  it. (Today sleep answers it at once, 782-788, and the next tick calls again: 686
+  laundered energy calls in 14 days in the audit's prototype.)
+- **A natural wake (finding 1):** a paused call gets at least `RESUME_MIN_MINUTES` (10)
+  left. At the **morning** wake it is also sent again: a `call_started` with
+  `resumed: true` (it went off the phones when it fell asleep: `fell_asleep` is in
+  `CALL_OVER_EVENTS`, notify 84-93), as a normal push, not a time-sensitive one. The
+  end of a nap gives the 10 minutes but sends nothing: re-sending at every nap's end
+  sent 10 pings a day to a pet kept napping (the sim's `sleeper`). A hand wake gives
+  neither: a top-up there would let lights out and on refill any call's window.
+- **While asleep a paused call doesn't show as asking (finding 14):** the `calling`
+  binary sensor is `call is not None and not asleep` (binary_sensor 36); it has no
+  `deadline` attribute while asleep (77-87: today it is skipped only while away; it is
+  already in `_unrecorded_attributes`, 59, so this is about a state write every tick,
+  not recorder history); `mood_keyed` drops the `calling` flag while asleep; the card's
+  attention art stays off.
+- **Owner: a nap only when tired or near bedtime.** `set_lights_out(on)` (2056) outside
+  sleep hours refuses unless `energy < NAP_WAKE_ENERGY` (95) or
+  `minutes_to_bedtime <= NAP_INTO_NIGHT_MINUTES` (60). The check sits in `_apply_lights`
+  (2087), so a flip made while away is checked when `come_home` applies it (finding
+  16). `set_lights_out` sets `lights_out` before it calls `_apply_lights`, so a refusal
+  resets `lights_out` to off and `_apply_lights` returns `not_sleepy` for the caller to
+  pass on. A flip refused at `come_home` is dropped silently (nobody is there to hear
+  it): the pet comes home awake. An egg put to bed still sleeps on hatching (accepted: a hatchling is tired).
+  The pause, not the gate, closes the laundering exploit; the gate stops a rested pet
+  being put down for nothing.
+- **Refusal (finding 15):** a refusal writes the `care_log` entry
+  `{"action": "lights_out", "result": "not_sleepy"}` and a `care` event, so the card's
+  `_react` says W1; `coordinator.async_set_lights_out` (1870) returns the result;
+  Assist (intent 229-231, which today sets `OK` whatever happens) answers with it, and
+  `REFUSED` (64) gets `not_sleepy` (copy W3). The switch snaps back to off. The
+  notification's Lights out button only shows on an energy call (energy < 20), so it is
+  never refused.
+- **Minor 5:** `switch.py` `is_on` (31-32) reads `asleep`, not `lights_out`, so a pet
+  that dozed, collapsed or was put to bed by the house shows on, and a refused nap
+  snaps back to off. Pressing off on a sleeping pet still wakes it.
+- **Tests:** pytest: a hunger call open at lights-out is open on waking with the same
+  time left; a call paused with 1 minute left gets 10 minutes and one `call_started`
+  (`resumed`) at the morning wake, 10 minutes and none at a nap's end, and neither on a
+  hand wake; an energy call stays open through an immediate hand wake and is answered
+  once energy passes 40 asleep; `calling` is off while asleep, with no `deadline`
+  attribute and no `calling` flag; lights-out at energy 100 at 10:00 returns
+  `not_sleepy` (and is logged) and the pet stays awake, also when flipped while away;
+  at energy 50 it naps; at 22:30 it sleeps whatever the energy; the switch is on while
+  dozed; Assist says W3.
+- **Sim Done:** `launder` scrappy with no fewer energy misses than `neglect` (prototype:
+  score 13.6, 14 energy misses each); `sleeper` scrappy (17.5; main: steady 70); careful
+  and responder unchanged or better.
 
-**PR 0b: a missed call can call again (M2).** Size **S**, tier 2 (a saved field).
-- A latched reason may call again `RECALL_HOURS` (proposal 4) after its miss, while its
-  condition still holds. **A missed re-call is not another care miss**: it re-latches
-  for another `RECALL_HOURS`. One neglect stays one miss; the pet keeps asking.
-- A re-call is an ordinary `call_started` (it notifies, like the first).
+**PR 0b: a missed call can call again (M2).** Size **S-M**, tier 2 (saved fields).
+**The owner picked (c), bundled, for how re-calls notify** (Wave 0 Q1, evaluated below). The
+decisions file's earlier line "sends one phone notification per re-call" is superseded.
+Poop (`dirty`) calls send no push (owner, Wave 0 Q4); that change lands here too.
+- A latched reason may call again `RECALL_HOURS` (4) after its miss, while its
+  condition still holds. **One clock per pet (finding 2):** at most one re-call per
+  `RECALL_HOURS` per pet, for the most urgent latched need (`CALL_PRIORITY`). A missed
+  re-call is **not** another care miss: it re-latches for another `RECALL_HOURS`. One
+  neglect stays one miss; the pet keeps asking on the card and the sensors.
+- **Telling a re-call apart (finding 17):** `latched_at[reason]` is kept until the
+  reason re-arms; a call started from a latched reason is a re-call, and `Call` gets a
+  `recall` field (P1 builds `Call` field by field, model 404-410; add it there). P1 has
+  `_str_map` and `_int_map` (129-135) but no float map: add `_float_map`.
+- **Its phone ping** follows the owner's Q1 pick. Whatever the pick, a re-call is a
+  **normal push, not a time-sensitive one** (notify `send` level; the "Pet calls"
+  channel is for first calls).
+- **One ping per sickness:** today a pet that falls ill sends `became_sick` and then,
+  in the same tick, a `sick` call: two pushes for one event (about 0.8 a pet a day for a
+  casual player, 1.5 for twice a day). A `sick` call started in the same tick as
+  `became_sick` sends nothing more.
 - Sick: the same rule (a sick pet asks for medicine every 4 h until cured).
-- Saved: `latched_at: dict[str, float]` beside `latched` (model 102), validated with
-  P1's helpers. `from_dict` gives an existing latch `latched_at = now` (so an old latch re-calls 4 h after the
-  update), and `shift_times` shifts it.
+- **Saved:** `latched_at: dict[str, float]`, `last_recall_at`, `Call.recall`, validated
+  with P1's helpers. `from_dict` gives an existing latch `latched_at = now`, so an old
+  latch may re-call 4 h after the update: **the release notes say so** (households with
+  latched needs get a first round of re-calls). `shift_times` (556) shifts both times.
 - **Tests:** pytest: a missed hunger call re-calls after 4 h if still hungry, not
-  before; missing the re-call doesn't add to `care_misses`; an old save loads with
-  `latched_at` filled.
-- **Sim Done:** `responder_miss1` min health ≥ 20 (today 1).
+  before; two latched needs re-call 4 h apart, the more urgent first; missing the
+  re-call doesn't add to `care_misses`; a re-call event carries `recall: true`; a
+  sickness sends one push; an old save loads with `latched_at` filled.
+- **Sim Done:** `responder_miss1` min health ≥ 20 and steady (prototype: 57-76, steady
+  66-76; main: 1); **calls started per pet per day** (the sim's `notify_day`: every
+  `call_started` and `became_sick`, which is what option (a) would push, not the pushes
+  under (b)-(d)): careful ≤ 4 (1.8-2.7), casual ≤ 6 (4.2-5.5), neglect and sleeper ≤ 6.5
+  (6.0-6.2, 4.1-4.3). `--notify` prints the house push table below; the owner's pick
+  sets its target.
+
+**Wave 0 Q1: how should re-calls reach phones? (evaluated for the owner)**
+
+`balance_sim.py --notify` raises houses of 1, 2 and 4 pets, each pet its own seed,
+everyone in the house playing the same way, and counts the pushes **one person with
+"notify me" on** gets per day of childhood (14 days; calls only happen while the pet is
+awake, so this is per waking day). Mean over 10 houses; the range was within
+about ±1 of it everywhere. Today = main; the options run on the prototype (draft 3's calls: wider
+whines, the lonely call and the morning re-send add about half a ping a pet a day).
+
+| Play | Pets | Today | 0b as written (a clock per reason) | (a) per pet, one re-call per 4 h | (b) house budget, 2 re-call pings a day | (c) bundled, one ping per 4 h for every pet still asking | (d) card only |
+|---|---|---|---|---|---|---|---|
+| careful | 1 / 2 / 4 | 1.9 / 3.8 / 7.5 | 2.4 / 4.7 / 9.4 | 2.4 / 4.7 / 9.4 | 2.4 / 4.7 / 9.4 | 2.4 / 4.7 / 9.4 | 2.4 / 4.7 / 9.4 |
+| casual (4 looks) | 1 / 2 / 4 | 4.6 / 9.3 / 18.5 | 4.9 / 9.9 / 19.7 | 4.9 / 9.9 / 19.7 | 4.9 / 9.9 / 19.7 | 4.9 / 9.9 / 19.7 | 4.9 / 9.9 / 19.7 |
+| twice a day | 1 / 2 / 4 | 5.4 / 10.7 / 21.2 | 11.7 / 23.5 / 47.1 | 8.3 / 16.5 / 32.9 | 7.5 / 13.4 / 24.6 | 8.3 / 14.0 / 25.2 | 5.7 / 11.4 / 22.6 |
+| neglect | 1 / 2 / 4 | 1.4 / 2.7 / 5.5 | 12.6 / 25.3 / 50.5 | 6.1 / 12.2 / 24.4 | 3.3 / 4.8 / 7.6 | 6.1 / 7.5 / 10.3 | 1.4 / 2.8 / 5.6 |
+
+Of those, re-call pings alone (4 pets): twice a day (a) 10.2, (b) 2.0, (c) 2.6, (d) 0;
+neglect (a) 18.8, (b) 2.0, (c) 4.7, (d) 0. Careful and casual players get **no
+re-calls at all** (they see to a need within 4 h), so every option gives them the same.
+
+What this shows:
+- **Re-calls only matter for a pet nobody has seen to for 4 hours.** (a) multiplies
+  with the number of pets: 4 neglected pets send 24 a day. (b) and (c) stay flat as
+  pets are added; (d) adds nothing.
+- **The bulk of a busy house's pushes are first calls, not re-calls.** A casual
+  4-pet house gets about 20 a day today and under every option. Per pet, a casual
+  player's 4.9 a day are: poop calls 2.5, sickness 1.5 (half of it the double push
+  0b now removes), whines 0.7, the rest 0.2. With the sickness fix, casual 4 pets drop
+  to about 16.6; with poop calls on the card only as well, to about 6.7 (new question
+  Q4 below).
+- Build cost: (a) and (d) live in one pet's coordinator. (b) and (c) need a small
+  house-wide notifier shared by every pet entry (`hass.data[DOMAIN]`), keyed by person,
+  because each pet is its own config entry with its own `notify_users` and its own call
+  tag (`virtual_pet_<id>_call`).
+
+**Recommendation: (c), bundled.** One push, at most every 4 h per person, naming every
+pet of theirs with an open re-call ("Pip and Mochi would like a visit", copy W4; with
+one pet, that pet's usual call text, no new copy), sent as a normal push. It costs a
+1-pet house nothing over (a) and caps re-call pings at about 4-5 a day **whatever the
+number of pets**, while a person who relies on the phone still hears that something
+went unanswered, which (d) drops. (b) is a little lower but arbitrary (the third need
+of the day is never sent, whichever pet it is). Bundle rules: the bundle has its own
+tag per person (`virtual_pet_recalls`); answering one pet doesn't rewrite it (a rewrite
+would buzz again); it is cleared once none of its pets has an open re-call; it has no
+buttons (several pets), and a tap opens the dashboard. If the owner prefers the
+quietest option, (d) is the cheapest to build and still keeps the pet asking on the
+card and the `calling` sensor, which an automation can notify on.
 
 **PR 0c: weight and game rewards, retuned (M1, M6).** Size **S**, tier 1.
-- Start from the audit's numbers: `WEIGHT_BURN` 0.7 → **0.45**, `WEIGHT_FEED` 4 →
-  **5**.
-- **M6, a game must pay at least what Play does (20).** Left or Right is won 49% of the
-  time. Raising the win alone, `GAME_WIN_HAPPINESS` 25 → 30, isn't enough:
-  0.49 × 30 + 0.51 × 10 ≈ 19.8. With **`GAME_LOSE_HAPPINESS` 10 → 12** as well, it
-  averages ≈ 20.8, just above Play. And **`WEIGHT_GAME` -4 → -3**, the same as Play (a
-  game is play), so it costs no more weight. Then tune by the sim, not by hand.
-- The "could use a proper meal" hint (`_WEIGHT_REASONS`) must be actionable: with the
-  retune a meal at hunger < 95 gains weight; confirm by the sim that careful never sits
-  in "light" long enough to need a snack.
-- **Tests:** pytest for the new constants' signs; a game's expected happiness ≥ Play's.
-- **Sim Done:** careful weight 40-60 and never light; responder and casual weight 30-70.
+- **Weight (finding 3):** `WEIGHT_BURN` 0.7 → **0.5**, `WEIGHT_FEED` 4 → **4.75**, and a
+  **restoring term**: above 50, burn grows with weight, `WEIGHT_BURN × (1 + 0.1 ×
+  (weight − 50))` per awake hour (`WEIGHT_RESTORE` 0.1). Without it weight is an open
+  integrator: 0.05 of burn moves the 14-day result by about 30, the audit's 0.45 / 5
+  put careful at 66-72, and 0.5 / 4.75 alone, with 0e's praise in, put careful at
+  74-79 and a no-play automation at 98-99. With it, every style lands near 50 (below).
+- **M6, a game must pay at least what Play does (20).** `GAME_WIN_HAPPINESS` 25 → 30,
+  `GAME_LOSE_HAPPINESS` 10 → 12 (Left or Right: 0.49 × 30 + 0.51 × 12 ≈ 20.8), and
+  **`SKILL_GAME_WIN_HAPPINESS` 20 → 21** (finding 4: Higher or Lower is won about 92%
+  of the time, 0.92 × 20 + 0.08 × 12 = 19.4, below Play; at 21 it is 20.3).
+  `WEIGHT_GAME` -4 → -3, the same as Play.
+- The "could use a proper meal" hint (`_WEIGHT_REASONS`) stays actionable: careful is
+  never light in the sim.
+- **Sim (finding 19):** `careful_games` and `casual_games` play every other Play as a
+  whole game of Left or Right, as the card's Play button does.
+- **Tests:** pytest for the new constants' signs; each game's expected happiness ≥
+  Play's (both games, at their win rates); the restoring term at weight 50 and 70.
+- **Sim Done:** careful weight 40-60 and never light; careful_games 40-60; responder,
+  casual and casual_games 30-70; praise_bot ≤ 75. Prototype, with 0c alone: careful
+  54-57, careful_games 53-58, casual 46-50, responder 44-48, praise_bot 56-57; with all
+  of Wave 0: careful 51-56, careful_games 50-54, casual 43-51, casual_games 44-55,
+  responder 42-48, praise_bot 56-57.
 
-**PR 0d: fake calls truly disguised; real needs first (C3, minor 3).** Size **S-M**,
-tier 1.
-- **Owner: truly disguise.** A whine publishes `reason_key` `call_happiness` (model
-  1961-1963: the key for `fake` is `happiness`), so the card's `reason.call_fake` line
-  key (card 492) is dropped; phase 5's scan exception for `call_fake` goes with it.
-  Already disguised, checked: the `call_started` event (933), the binary sensor (83),
-  the sentence (1942-1943) and the notification's buttons (notify 73-80).
-- **Overlapping ranges.** A whine's gate becomes **the same gate a real happiness call
-  passes**: no higher-priority `CALL_PRIORITY` condition holds (not sick, no poop old
-  enough to call, hunger ≥ 25, energy ≥ 20), and `happiness >= 25`. Today it also needs
-  every stat > 50 and no poop at all (`_wants_to_whine` 754-760), so a happiness-type
-  call at hunger 30, or with a fresh poop, is always real: that tell goes. And a real
-  happiness call may also start, at a low rate (proposal 0.1 an hour), while
-  `25 <= happiness < 40` ("a bit lonely"). So happiness is the only difference left:
-  between 25 and 40 either can happen, above 40 only a whine, below 25 only a real
-  call. A careful person reading the hearts is right most of the time, never always.
-  The sim checks that whines in a less healthy pet don't swamp the casual player.
-- A wrong scold of a real call keeps today's cost (`unfair`, 1219). A whine spoiled by
-  play keeps #41's rule.
-- **Minor 3:** a higher-priority real need replaces an open whine, or an open real call
-  of lower priority (`CALL_PRIORITY`, model 46): the old call ends with no miss and no
+**PR 0d: fake calls disguised; real needs first (C3, minor 3).** Size **S-M**, tier 1.
+- **Owner: disguise, accepted as "unsure only while happiness is 25-40"** (owner,
+  2026-10-28). A whine publishes `reason_key` `call_happiness` (`_reason` 2205: the key
+  for `fake` is `happiness`), so the card's `reason.call_fake` line key (card 494) is
+  dropped, and phase 5's scan exception for `call_fake` with it. Already disguised: the
+  `call_started` event (`_start_call` 1172), the binary sensor, the sentence and the
+  notification's buttons (notify 73-80).
+- **Overlapping ranges.** A whine's gate becomes the gate a real happiness call passes:
+  no `CALL_PRIORITY` condition holds (not sick, no poop old enough to call, hunger ≥ 25,
+  energy ≥ 20, happiness ≥ 25). Today it also needs every stat > 50 and no poop at all
+  (`_wants_to_whine` 998-1006). And a real **"a bit lonely"** happiness call may start,
+  at `LONELY_CALL_RATE` 0.1 an hour, while `25 <= happiness < 40`. Between 25 and 40
+  either can happen; above 40 only a whine; below 25 only a real call.
+- **What answers a happiness call (findings 5, 6).** A real happiness call is answered
+  only by a **care action that raises happiness** and leaves it at least at the call
+  level (25): play, a finished game, praise, a snack, a blanket or the fan. It is never
+  closed by a passive gain (the house bonus, a trait, a chore treat), so a free house
+  bonus no longer tells a whine from a real call, and the lonely call (which starts
+  above 25) doesn't answer itself on the next tick. In code: `_calls` no longer closes
+  a happiness call on its condition (952-954), and `_resolve_call` (2049) checks the
+  gain. A whine stays as it is: play, a game and praise spoil it, scolding answers it,
+  and **a snack spoils it too** (so a snack is never a safe probe that only answers a
+  real call). A missed lonely call is a care miss that latches and re-calls like any
+  other.
+- A wrong scold of a real call keeps today's cost (`unfair`).
+- **Minor 3:** a more urgent real need replaces an open whine, or an open real call of
+  lower priority (`CALL_PRIORITY`, model 46): the old call ends with no miss and no
   event beyond the new `call_started`.
-- The guide (674) already says a fake looks the same; add one sentence on the overlap.
+- **The guide (W2):** whines and real pleas "often look alike"; the hearts are the
+  best clue.
 - **Tests:** pytest: a whine's `reason_key` is `call_happiness`; a whine can start at
-  happiness 30, at hunger 30, and with a fresh poop; a hunger call replaces an open whine with no `discipline_miss`; the
-  card-check line test covers `reason.call_happiness` only.
-- **Sim:** careful and responder now guess (scold at happiness ≥ 50, else play). **Sim
-  Done:** careful still devoted with no care misses; no strategy reads `call.reason`.
+  happiness 30, at hunger 30, and with a fresh poop; a lonely call starts only at
+  25-40 and is still open after a house bonus lifts happiness past 40; play answers it;
+  a snack during a whine spoils it; a hunger call replaces an open whine with no
+  `discipline_miss`; the card-check line test covers `reason.call_happiness` only.
+- **Sim:** careful and responder guess (scold at happiness ≥ 50, else play). The sim
+  counts lonely calls among casual's misses. **Sim Done:** careful devoted with no care
+  misses; casual's misses don't jump (prototype 44-49, main 44-50); a scrappy adult
+  whines at most 3 times an awake day (finding 22: the wider gate times
+  `SCRAPPY_WHINE_FACTOR`; prototype worst seed 2.0); no strategy reads `call.reason`.
 
 **PR 0e: upbringing that measures care; praise that can't be farmed (C4, C2).** Size
-**M**, **tier 2** (saved state and a migration).
-- **Owner: rework upbringing.**
-  - **Discipline averaged over childhood**: sampled each hour while awake, from
-    hatching to adulthood; `upbringing_score` uses the average, not the value at the
-    moment it grows up.
-  - **Discipline earned from good care**: praise within `PRAISE_AFTER_CARE_MINUTES`
-    (proposal 10) of a care action that answered a real call gives
-    `PRAISE_DISCIPLINE`, once per call. Scolding a whine stays +discipline. Praise at
-    any other time gives none.
-  - **At most 2 missed calls a day counted** (local date, in the settings' time zone).
-    `care_misses` keeps the raw count for status and journals; the score reads
-    `counted_misses`.
-  - **The care half**: see open question N1. With today's 6 points a counted miss, a
-    2-a-day cap still puts a four-looks-a-day player at scrappy, level with neglect. The
-    recommendation: lower the cost and add an hourly wellbeing sample, tuned by the sim.
-- **Praise (C2).** Happiness from praise diminishes inside a 30-minute window: 8, 4, 2,
-  then 0. It still answers a happiness call (it is attention). `last_praise` is
-  replaced by the window's start and its count.
-- **Saved fields** (all with defaults, so older saves load; validated with P1's
-  helpers): `discipline_sum`,
-  `discipline_samples`, `last_sample_at`; `counted_misses`, `miss_day`,
-  `miss_day_count`; `last_real_answer_at`, `praised_answer` (the call it was given
-  for); `praise_window_at`, `praise_count`.
-- **Migration** (in `from_dict`, for a pet that is hatched and not yet adult):
-  `discipline_sum = discipline × samples` and `discipline_samples` = the awake hours
-  lived so far (about two thirds of `age_hours` since hatching), so the average starts
-  at today's discipline, weighted by the time already lived; `counted_misses =
-  min(care_misses, 2 × days since hatching)`. Eggs start fresh. **Adults are
-  untouched**: their upbringing is already set.
-- **Tests:** pytest: the migration for an egg, a child with 10 misses on day 3 (→ 6
-  counted), and an adult (unchanged); praise five times in a minute gives 14 happiness
-  and no discipline; praise 5 min after a feed that answered a hunger call gives
-  discipline once; three misses on one day count two.
-- **Sim Done:** careful devoted on every seed; casual steady or better; responder steady
-  or better; neglect, launder and launder + praise scrappy; praise_bot not devoted;
-  praise spam ≤ 16 happiness.
+**M**, **tier 2** (saved state and a migration). Last in Wave 0.
+- **The score (findings 7, 8, 10):**
+  `score = 0.75 × care + 0.25 × average discipline`, with
+  `care = 0.8 × wellbeing + 0.2 × max(0, 100 − 2 × counted misses)`.
+  - **Average discipline:** sampled each hour while awake, from hatching to adulthood.
+  - **Wellbeing:** sampled with it: the share of waking hours with the pet **not sick
+    and every meter (hunger, happiness, energy, health) at 10 or more**. (N1's "no
+    meter at 0" barely separated careful, 97-99, from casual, 84-91; the audit's "no
+    open call and every meter ≥ 25" put casual at 74-79, scrappy.)
+  - **Counted misses:** at most 2 a day (local date, the settings' time zone).
+    `care_misses` keeps the raw count for status and journals.
+  - Rates: `UPBRINGING_CARE_WEIGHT` 0.7 → **0.75**, `UPBRINGING_MISS_COST` 6 → **2**,
+    new `UPBRINGING_MISS_SHARE` **0.2**, `UPBRINGING_WELL_MIN` 10, `MISSES_COUNTED_PER_DAY`
+    2. Grades unchanged (devoted ≥ 80, steady ≥ 50).
+- **Discipline from good care (finding 8):** praise within `PRAISE_AFTER_CARE_MINUTES`
+  (10) of a care action that **met a need** gives `PRAISE_DISCIPLINE` (2), once per
+  action, whether or not a call was open: a meal at hunger < 60, a clean with poop
+  there, play or a finished game at happiness < 60, medicine when sick. Praise at any
+  other time gives none; scolding a whine stays +25. (Paying only after an answered
+  call made waiting for calls the best play: the audit's responder who praises
+  averaged 75-87 discipline, careful 25-70.)
+- **Praise happiness (C2, finding 9):** inside a 30-minute window 8, 4, 2, then 0; and
+  after the day's first `PRAISE_FULL_PER_DAY` (3) praises that gave happiness, at most
+  `PRAISE_TIRED_HAPPINESS` (1) each. (The audit's "then 2" doesn't close it: one press
+  per 30 minutes at 2 is 4 an hour, exactly the decay.) Praise still answers a happiness
+  call when it lifts happiness to 25 or more.
+- **The card (finding 25):** the discipline bar stays "today"; the status's "growing
+  up: <grade>" uses the new score.
+- **Saved fields** (all defaulted; P1's `_FLOATS` (68) and `_INTS` (86) and helpers):
+  `discipline_sum`, `discipline_samples`, `wellbeing_sum`, `wellbeing_samples`,
+  `last_sample_at`; `counted_misses`, `miss_day_at` (a timestamp, not a date, finding
+  13), `miss_day_count`; `last_care_at`, `praised_care`; `praise_window_at`,
+  `praise_count`, `praise_day_at`, `praise_day_count`; `upbringing_floor`.
+  `last_praise` (read only by the model) is replaced by the window.
+- **`shift_times` (finding 13)** shifts every new timestamp: `last_sample_at`,
+  `miss_day_at`, `last_care_at`, `praised_care`, `praise_window_at`, `praise_day_at`.
+- **Migration** (in `from_dict`, for a pet hatched and not yet adult; owner Q3 and the
+  decisions file):
+  - The hours lived before the update count at **half weight**: with `h` the awake
+    hours lived (about two thirds of the hours since hatching),
+    `discipline_samples = wellbeing_samples = round(h / 2)`,
+    `discipline_sum = discipline × samples`, and `wellbeing_sum = samples × estimate`,
+    where `estimate = clamp(1 − 0.06 × care_misses / days since hatching, 0, 1)`
+    (finding 11).
+  - `counted_misses = min(care_misses, 2 × days since hatching)`.
+  - **No pet drops a grade because the rules changed** (decisions file; this is the
+    plan's reading of it): `upbringing_floor` is the grade today's instant score gives
+    at the migration, **capped at steady**, and it **lapses at the first counted miss
+    after the update**. The grade at adulthood is the better of the floor (if it
+    stands) and the new one. Uncapped, the floor would carry today's exploits forward:
+    launder + praise scores devoted (100) on main, so a child being laundered on update
+    day would stay devoted while it starves. A careful child loses nothing: it scores
+    devoted under the new rules anyway (93-98).
+  - Eggs start fresh. Adults keep their upbringing. **An adult save with no upbringing
+    (finding 27)** gets one from `from_dict` (458), and with no samples the score falls
+    back to today's discipline and the wellbeing estimate, never a divide by zero.
+- **Tests:** pytest: the migration for an egg; a child with 10 misses on day 3 (→ 6
+  counted, samples at half weight); a careful child mid-childhood keeps its grade; a
+  launder + praise child migrated mid-childhood (old score 100) that keeps laundering
+  ends scrappy (the floor is capped at steady and lapses at its first counted miss); an
+  adult (unchanged); an old adult save with no upbringing loads with one;
+  praise five times in a minute gives 14 happiness and no discipline; the fourth window
+  of a day gives at most 1; praise 5 minutes after a meal at hunger 40 gives discipline
+  once, after a meal at hunger 80 none; three misses on one day count two; away 3 days
+  takes no catch-up sample and expires no praise window.
+- **Sim Done** (prototype, 10 seeds): careful devoted on every seed (93-98);
+  careful_games devoted (92-98); casual **steady** exactly (56-61); casual_games steady
+  (56-60); responder steady or better (72-87); responder_praise steady or better
+  (75-97); responder_miss1 steady (66-76); neglect (13.7), launder (13.6), launder +
+  praise (13.3), sleeper (17.5) and twice a day (25-32) scrappy; praise_bot not
+  devoted (scrappy, 44-47) with a real happiness call a day (3.1-3.4); care_bot, which
+  feeds, cleans, doses and praises but never plays, not devoted (scrappy, 28-29: its
+  happiness sits under 10 most waking hours); praise spam ≤ 16 (14).
 
 **PR 0f: games can't be quit or rerolled for free; card Play spoils a whine (M3, M4,
-and A2's server side).** Size **M**, tier 2 (saved game fields). Coordinated with
-Wave 1a, which is its card side.
+and A2's server side).** Size **M**, tier 2 (saved game fields). Before PR 1a, its card
+side.
 - **A2, carry on (owner):** a start of the same kind within `GAME_IDLE_MINUTES` returns
   the running game, guessed or not: `round`, `wins` and, for Higher or Lower, the
-  number on show. This replaces draft 1's "start fresh". For Higher or Lower it is a
-  change: `start_game` (1272-1281) today replaces a guessed game.
-- **A dropped game with a guess is a loss (M4):** switching kinds (1303-1305), the
-  3-minute idle drop, going to sleep or away. It counts in `games.played`, costs the
-  game's energy, and gives the losing happiness. A game with no guess yet costs
+  number on show. `start_game` (1503) today replaces a guessed game.
+- **A dropped game with a guess is a loss (M4, finding 18):** on **both** switch paths
+  (`start_game` of another kind, and `play_game` of another kind, 1549-1552), the
+  3-minute idle drop in `_step`, going to sleep, and going away. It counts in
+  `games.played`, costs the game's energy and gives the losing happiness. It fires
+  `game_finished` with `dropped: true`, which grants no play wish (coordinator 1000-1003),
+  no game record and no bond (the idle drop has no person: `by` is None), and its
+  happiness answers a happiness call like any care. A game with no guess yet costs
   nothing.
-- **No reroll (M4):** a Higher or Lower opening is kept until it is guessed, or for
-  `OPENING_KEEP_MINUTES` (proposal 30) after it was dropped unguessed. Saved: the kept
-  opening and its time, beside P1's `_game` validation.
-- **M3, reconciled with #41:** the first game call while a whine is open answers it as
-  `spoiled`, as button Play does since #41 (1184-1191): `PRAISE_WHINING_DISCIPLINE`,
-  the `call_answered` event with `answer: "spoiled"`, and the card's existing "hehe,
-  whining works" line (card 403). The game then goes on as normal.
+- **No reroll (M4):** a Higher or Lower opening dropped unguessed is kept for
+  `OPENING_KEEP_MINUTES` (30) and shown again by the next start. Saved: the kept number
+  and its time (shifted by `shift_times`), beside P1's `_game` validation.
+- **M3, reconciled with #41:** the first game call while a whine is open spoils it, in
+  `start_game` (both paths go through it) and at the top of `play_game` for a game
+  already running: `PRAISE_WHINING_DISCIPLINE`, `call_answered` with
+  `answer: "spoiled"`, the card's "hehe, whining works" line (card 405).
 - **Tests:** pytest: reopening Left or Right after one guess returns round 1 and the
-  win; reopening Higher or Lower returns the same number; switching after a guess adds
-  a played, unwon game; switching before a guess doesn't; the opening survives a switch
-  and returns; a game started during a whine spoils it.
-- **Sim Done:** walking away doesn't raise the win rate (≤ honest + 3 points); no sure
-  Higher or Lower opening by restarting.
+  win; reopening Higher or Lower returns the same number; switching after a guess adds a
+  played, unwon game and a `dropped` `game_finished` with no wish; switching before a
+  guess doesn't; the idle drop and sleep count it too; the opening survives a switch and
+  returns; a game started during a whine spoils it.
+- **Sim Done:** walking away doesn't raise the win rate (≤ honest + 3 points; prototype
+  0.50 against 0.49, main 0.72); no sure Higher or Lower opening by restarting
+  (prototype: never in 50 tries; main: after 2).
 
 **PR 0g: odds and ends on the server (M5, minors 1, 2, 4).** Size **S**, tier 1.
-- **M5:** after `fast_forward`'s rebase (coordinator 1800), if the pet is asleep and not
-  napping, `wake_at = next_wake(now)`. (`stayed_up_since` is already shifted.)
+- **M5 (finding 20):** a model helper `fast_forward(state, now, hours, settings, rng)`
+  advances, rebases with `shift_times`, and then, if the pet is asleep and not
+  napping, sets `wake_at = next_wake(now)`. `coordinator.async_fast_forward`
+  (1895-1916) and the sim's `fast_forward_wake` both call it (the sim uses it once it
+  exists). `stayed_up_since` is already shifted.
 - **Minor 1:** the coordinator remembers the to-do items it has paid for today, per list
   (`_chores_paid`, in memory beside `_chores_done`), so un-ticking and re-ticking one
   item pays once. The 5-a-day cap stays.
-- **Minor 2:** "tuck me in" is granted only by lights-out from `TUCK_IN_EVENING_HOUR`
-  (18:00) to 03:00 local, the hours the trait already uses (rates 290).
-- **Minor 4:** a snack is refused at `hunger >= FEED_FULL_AT` (95), with the meal's
-  refusal (`full`) and its line. No daily cap (a cap would be a new rule to learn).
+- **Minor 2:** the "tuck me in" wish (coordinator 1007-1008, any `how == "lights"`
+  today) is granted only by lights-out from `TUCK_IN_EVENING_HOUR` (18:00) to 03:00
+  local, the hours `async_set_lights_out` already uses for the bond (1879-1880).
+- **Minor 4 (owner):** a snack is refused at `hunger >= FEED_FULL_AT` (95), with the
+  meal's refusal (`full`) and its line. No daily cap.
 - **Tests:** pytest for each; card-check: a refused snack shows the "full" line once.
-- **Sim Done:** fast-forward wakes within 12 h.
+- **Sim Done:** fast-forward wakes within 12 h (prototype 11.0; main 35).
 
 **PR 0h: card display fixes (minors 8, 9, 10).** Size **S**, tier 1.
-- **Minor 8:** hearts round down to the half below (`Math.floor`, card 3123): hunger 34
-  shows 1 heart, not 1.5.
-- **Minor 9:** the hatch countdown (2135) and "time ago" (859-866) count from the
-  server's time: the sensor's `last_updated` today, P3a's snapshot `now` once it lands,
-  plus local elapsed time since that reading.
-- **Minor 10:** a refused game says its refusal line once (drop the `_pickGame` line at
-  3888 and leave it to `_react`, 3106).
-- **Tests:** card-check: 34 shows one heart; with the device clock 10 min fast, the
-  countdown matches the server's; a refused game writes one line.
+- **Minor 8 (finding 23):** hearts round to the **nearest** half (card 3192, today
+  `Math.ceil`), and show full at `hunger >= FEED_FULL_AT`, so a pet the server calls
+  full shows 4 hearts: 34 shows 1 heart, 96 shows 4.
+- **Minor 9 (finding 24):** the hatch countdown (2203) and "time ago" (`timeAgo`, 861)
+  use a server-time offset taken from something fresh: the `time_fired` of the next
+  state event over the websocket, and P3a's snapshot `now` once it lands. Not
+  `last_updated`, which only moves when a sensor changes and can be an hour old after a
+  reload. Until a fresh reading arrives, the device clock is used with the skew capped.
+- **Minor 10:** a refused game says its refusal line once (drop the `_pickGame` line and
+  leave it to `_react`, 3136).
+- **Tests:** card-check: 34 shows one heart and 96 four; with the device clock 10 min
+  fast, the countdown matches the server's after one state event; a refused game writes
+  one line.
 
-### Wave 1: reliability (after privacy P1 and PR 0f for 1a)
+### Wave 1: reliability (PR 0f before 1a)
 
 **PR 1a: games carry on, old timers die (F01, F02; balance minors 6, 7).** Size
 **S-M**, tier 1. **Card only**, on top of PR 0f.
@@ -812,15 +1000,15 @@ axolotl and moth adults are being redrawn now (A9).
 
 | PR | What | Size | Tier | Waits on |
 |---|---|---|---|---|
-| 0a | Sleep pauses calls; naps need tiredness; the switch shows sleep (C1, m5) | S-M | 1 | — |
-| 0b | A missed call calls again after 4 h (M2) | S | 2 | 0a, privacy P1 |
-| 0c | Weight and game rewards retuned (M1, M6) | S | 1 | 0b |
-| 0d | Fake calls disguised; real needs first (C3, m3) | S-M | 1 | 0c |
-| 0e | Upbringing measures care; praise can't be farmed (C4, C2) | M | 2 | 0d, privacy P1, N1 |
-| 0f | Games: carry on, a drop is a loss, no reroll, Play spoils a whine (M3, M4, A2) | M | 2 | privacy P1 (before 1a) |
-| 0g | Fast-forward wake, chores, tuck-in, snacks (M5, m1, m2, m4) | S | 1 | — |
+| 0a | Sleep pauses calls (energy too, until really rested); naps need tiredness; the switch shows sleep (C1, m5) | S-M | 1 | — |
+| 0c | Weight (with a restoring term) and game rewards retuned (M1, M6) | S | 1 | 0a |
+| 0d | Fake calls disguised; only care answers a happiness call; real needs first (C3, m3) | S-M | 1 | 0c |
+| 0b | A missed call calls again after 4 h, one clock per pet; one push per sickness (M2) | S-M | 2 | 0d; re-calls bundled (owner, Wave 0 Q1); poop calls don't push (owner, Wave 0 Q4) |
+| 0f | Games: carry on, a drop is a loss, no reroll, Play spoils a whine (M3, M4, A2) | M | 2 | 0d (before 1a) |
+| 0e | Upbringing measures care; praise can't be farmed; migration at half weight (C4, C2) | M | 2 | 0b, 0f (last in Wave 0) |
+| 0g | Fast-forward helper, chores, tuck-in, snacks (M5, m1, m2, m4) | S | 1 | — |
 | 0h | Hearts, server clock, one refusal line (m8-m10) | S | 1 | — |
-| 1a | Games carry on, old timers die (F01, F02, m6, m7) | S-M | 1 | privacy P1, 0f |
+| 1a | Games carry on, old timers die (F01, F02, m6, m7) | S-M | 1 | 0f (privacy P1 merged) |
 | 1b | Taps coalesced, one confirm guard, answers that wait (F07, F06, A1, A7) | S-M | 1 | — (P2 adopts the guard) |
 | 1c | Preferences on every visit, quiet samples (F05, F09) | S | 1 | — |
 | 2a | Classes on the existing queue, bursts, catch-up (F08) | M | 1 | privacy P3a, P3c |
@@ -843,12 +1031,14 @@ Route: `_lines` = a baby-talk key (phase 5), "normal" = the same at every stage.
 `catch` = whether the catchphrase may be added. Every line passes the no-nagging scan
 (personality 279-283: no "!!!", no word repeated more than twice in a row, none of
 "still", "again", "why", "never", "pleas", "sad", "cry", "alone", "forgot", and no `?`
-that asks the person for something), which the copy test runs over C1-C16 and W1-W2.
+that asks the person for something), which the copy test runs over C1-C16 and W1-W4.
 
 | # | Where | Proposal | Route | catch |
 |---|---|---|---|---|
 | W1 | Lights out refused, not tired (0a) | "not sleepy yet ♪" | `_lines` (baby "no sleepy!") | no |
-| W2 | Guide, fake calls (0d) | "A whine and a real plea to play can look alike: the hearts are the best clue, never a sure one." | guide | — |
+| W2 | Guide, fake calls (0d) | "A whine and a real plea to play often look alike: the hearts are the best clue." (owner Q2: "often look alike") | guide | — |
+| W3 | Assist, lights out refused (0a) | "<name> isn't sleepy yet." (`REFUSED["not_sleepy"]` = "isn't sleepy yet") | Assist | — |
+| W4 | Bundled re-call push, if the owner picks (c) (0b) | two pets: "<A> and <B> would like a visit"; three or more: "<A>, <B> and <C> would like a visit"; one pet: its usual call text (no new copy) | notification | — |
 | C1 | Someone else played this game meanwhile | "oh! someone else is playing with me" | normal | no |
 | C2 | A kept answer failed to save, twice | "hm, that one slipped away ♪" | normal | no |
 | C3 | Sound sample skipped (status feedback) | "sounds are on: quiet till morning ♪" (asleep: "sounds are on: shh, it's sleeping") | normal | no |
@@ -901,13 +1091,22 @@ the meal's existing "full" line; no new copy.
 | Balance C3 | Fake calls | **Truly disguise** them: the same key and overlapping ranges. |
 | Balance C4 | Upbringing | **Rework**: averaged discipline, discipline from good care, praise farming limited, at most 2 missed calls a day counted; tier 2 with a migration. |
 | Balance M1, M2, M6, minors | Retune | **Retune with sims**, each change checked by a 14-day simulation. |
+| Wave 0 Q2 | A disguise unsure only while happiness is 25-40? | **Accepted**; the guide says whines and real pleas "often look alike" (W2). |
+| Wave 0 Q3 | Discipline earned under the old rules? | **Hours lived before the update count at half weight**; and no pet drops a grade because the rules changed (decisions file). |
 
 ### Still open (new in draft 2)
 
 | # | Question | Recommendation |
 |---|---|---|
-| N1 | **What should a casual player raise?** A person who opens the card four times a day misses three to four calls a day today (most are poop calls), and with "at most 2 a day counted" at 6 points each, 13 days of childhood cost 156 points: scrappy, the same as neglect (whose misses also reach the cap once M2's re-calls land). | **Steady.** Lower `UPBRINGING_MISS_COST` (start at 2), and make the care half part misses, part an **hourly wellbeing sample** while awake (share of hours with no meter at 0 and not sick), the same sampling as discipline's. Tune so careful is devoted, casual steady and neglect scrappy on every seed (the sim's bands). No new stat on screen. |
+| N1 | **What should a casual player raise?** A person who opens the card four times a day misses three to four calls a day today (most are poop calls), and with "at most 2 a day counted" at 6 points each, 13 days of childhood cost 156 points: scrappy, the same as neglect. (Corrected in draft 3: neglect's misses don't reach the cap; its calls latch, and a missed re-call isn't another miss, so neglect counts fewer misses than casual. Only wellbeing orders them: Wave 0 audit row 10.) | **Steady.** Lower `UPBRINGING_MISS_COST` (start at 2), and make the care half part misses, part an **hourly wellbeing sample** while awake (share of hours with no meter at 0 and not sick), the same sampling as discipline's. Tune so careful is devoted, casual steady and neglect scrappy on every seed (the sim's bands). No new stat on screen. |
 | N2 | Poop calls are most of a casual player's misses (about three a day, 20-minute window, 30 min after each poop; with the sickness old poop brings, about 80%). Keep them as calls? | **Keep them**, but let N1 absorb the cost (the cap and the lower cost). Revisit only if the casual band can't be met. |
+
+### Still open (new in draft 3)
+
+| # | Question | Recommendation |
+|---|---|---|
+| Wave 0 Q1 | **How should re-calls reach phones** with several pets? (a) per pet, one per 4 h; (b) a house budget a day; (c) one bundled push per 4 h naming every pet still asking; (d) card only. Numbers in PR 0b: 4 neglected pets get 24.4 pushes a day under (a), 7.6 (b), 10.3 (c), 5.6 (d); careful and casual players get no re-calls under any option. | **Owner: (c), bundled**, as a normal push (W4). |
+| Wave 0 Q4 | **Poop calls on phones?** A casual player's pet sends 4.9 pushes a day; 2.5 are poop calls (N2 kept them as calls). A casual 4-pet house gets about 20 a day today, 16.6 with 0b's one-push-per-sickness fix, and about 6.7 if poop calls stayed on the card and the sensors but sent no push. | **Owner: yes, card only.** A `dirty` call sends no push; it lands in 0b. |
 
 ## 7. QA beyond the PRs
 
@@ -985,3 +1184,57 @@ part: M5's "same for `stayed_up_since`" (`shift_times` already shifts it, model
   sentence), C2 "hm, that one slipped away ♪", C15 "a <creature> is on the way", and the
   rest of the copy table as written.
 - Wave 0 gets its own adversarial audit before it builds.
+
+## The Wave 0 audit (27 findings) and what changed
+
+An adversarial audit of draft 2's Wave 0 (scout hatch-at-home-s2442, 2026-10-28, main
+`64bd401`) found 27 problems (9 high: 1, 2, 3, 5, 7, 8, 9, 10, 26). **This table wins
+where it differs from anything above it, for Wave 0.** Every finding was checked
+against main at `8904a0a` (privacy P1 merged since the audit, so its line numbers
+moved), and the fixes were prototyped together and run through the extended
+`balance_sim.py` on 10 seeds: all bands pass. **26 findings hold as found; none is
+rejected outright.** Four of the audit's proposed numbers or rules didn't survive the
+prototype and were replaced (rows 1, 3, 9, 10: "rejected in part"), and one claim is
+narrower than stated (row 14). The owner answered Q2 and Q3; Q1 is evaluated in 0b.
+
+| # | Finding | Change |
+|---|---|---|
+| 1 | 0a: a call paused across the night resumes in silence with minutes left, and runs out (`fell_asleep` clears the phone, notify 84-93). Verified | 0a: a natural wake gives at least 10 minutes; a hand wake gives nothing. **Rejected in part:** the audit re-sent at every natural wake; a pet kept napping then sent 10 pings a day (sim `sleeper`), so only the **morning** wake re-sends, as a normal push |
+| 2 | 0b: re-calls are notification spam: a neglected pet went from 1.2 to 11.5-12.2 calls a day, each time-sensitive. Verified (0b as written: 12.6 a day on the prototype) | 0b: one re-call clock per pet, the most urgent need first; re-calls are normal pushes; a pings-per-day band. The phone side is **Wave 0 Q1**, evaluated for 1, 2 and 4 pets (0b), recommendation (c) bundled. 0b waits on the owner's pick |
+| 3 | 0c's 0.45 / 5 fails 0c's own band (careful 66-72); weight is an open integrator; praise_bot sits at 98-99. Verified | 0c: 0.5 / 4.75 **plus a restoring term** (burn × (1 + 0.1 × (weight − 50)) above 50) and a praise_bot ≤ 75 band. **Rejected in part:** 0.5 / 4.75 alone gives careful 74-79 once 0e's praise is in (praise lifts happiness, so careful plays less) |
+| 4 | M6's pytest fails for Higher or Lower: 0.92 × 20 + 0.08 × 12 = 19.4 < 20. Verified (`SKILL_GAME_WIN_HAPPINESS = PLAY_HAPPINESS`) | 0c: `SKILL_GAME_WIN_HAPPINESS` 21 (20.3); the test covers both games |
+| 5 | 0d's lonely call answers itself on the next tick (`_call_condition` is happiness < 25). Verified (model 911-920, 952-954) | 0d: a happiness call is answered only by a care action that raises happiness to 25 or more; it never closes passively; a miss latches and re-calls like any other |
+| 6 | 0d's disguise covers only happiness 25-40; a passive gain closes a real call but not a whine. Verified | **Owner Q2: accepted** (W2 "often look alike"). 0d: no happiness call closes on a passive gain; a snack spoils a whine, so it isn't a safe probe either |
+| 7 | 0e: careful can't be devoted on every seed (its discipline comes from random whines). Verified | 0e: the praise rule of row 8 and careful praising after any care it gives (the sim's `careful`, updated): careful 93-98, devoted on 10/10 |
+| 8 | 0e's discipline pays most for waiting for calls (responder_praise 75-87, careful 25-70). Verified | 0e: praise within 10 minutes of any care that met a need, once per action, call or not; `responder_praise` and `care_bot` added. Unlike the audit's prototype, care_bot (never plays) is scrappy, not steady: the wellbeing measure counts happiness under 10. Deliberate |
+| 9 | C2 isn't closed: one praise per 30 minutes keeps happiness up with no play (praise_bot ≥ 93). Verified | 0e: after the day's first 3 praises, at most 1 happiness each; band: praise_bot still gets a real happiness call a day (3.1-3.4). **Rejected in part:** the audit's "then 2" is 4 an hour, exactly the decay |
+| 10 | N1's misses term ranks casual below neglect (28-30 counted vs 16-20); only wellbeing orders them. Verified | 0e: misses are 0.2 of the care half at 2 points each; the care weight is 0.75; wellbeing is "not sick and every meter ≥ 10". Casual 56-61 (steady, margin 6), neglect 13.7. **Rejected in part:** the audit's 0.4 share left casual at 50.0-52.9, and its finer measure ("no open call, meters ≥ 25") put casual at 74-79 wellbeing, scrappy. N1's sentence is corrected (section 6) |
+| 11 | 0e's saved fields and migration leave out the wellbeing sample. Verified | 0e: `wellbeing_sum`, `wellbeing_samples`; migration estimate `1 − 0.06 × misses a day`, clamped, at Q3's half weight; a pytest |
+| 12 | The migration bakes in discipline earned under the old rules at full weight. Verified | **Owner Q3: half weight.** Plus the decisions file's "no pet drops a grade because the rules changed", read as `upbringing_floor` from today's instant score, capped at steady and lapsing at the first counted miss after the update (uncapped, launder + praise would keep its devoted 100 from main); pytests for a careful child and a laundered one |
+| 13 | `shift_times` misses 0e's and 0f's timestamps; `miss_day` is a date. Verified (model 556-584) | 0e and 0f list every new timestamp in `shift_times`; `miss_day_at` is a timestamp; pytest for 3 days away |
+| 14 | 0a's sensor plumbing has no acceptance criteria (calling while asleep; a deadline written every tick; the `calling` flag). Verified, **narrower:** `deadline` is already in `_unrecorded_attributes` (binary_sensor 59), so it writes no recorder history, only a state write every tick | 0a: calling off while asleep, no deadline attribute, no `calling` flag; all three tested |
+| 15 | Assist and the button report a refused nap as success (intent 229-231). Verified | 0a: `async_set_lights_out` returns the result; `REFUSED` gets `not_sleepy` (W3); a `care_log` entry; the notification button is never refused |
+| 16 | The nap rule is bypassed while away or as an egg. Verified (`come_home` 2078, `_apply_lights` 2087) | 0a: the check sits in `_apply_lights`; the egg case is accepted and documented |
+| 17 | 0b doesn't say how a re-call is told apart; no float map in P1; update day re-calls every old latch. Verified (`_str_map`, `_int_map` only, model 129-135; `Call` built at 404-410) | 0b: `Call.recall`, `latched_at` until re-arm, `_float_map`, release-notes line |
+| 18 | 0f doesn't say what a dropped game fires; two switch paths. Verified (model 1549-1552; `start_game` 1503) | 0f: `game_finished` with `dropped: true`, no wish, record or bond; both paths, idle, sleep and away; a whine spoiled in `start_game` and in `play_game` |
+| 19 | The sim never plays card games. Verified | `careful_games` and `casual_games` in the sim (this PR); 0c and 0f bands |
+| 20 | 0g's fast-forward band can't turn green from a coordinator fix (the sim calls `advance` itself). Verified | 0g: `model.fast_forward`, used by the coordinator and the sim (this PR's sim already prefers it) |
+| 21 | The ordering contradicts itself, and 0e doesn't wait on 0f. Verified | Order 0a → 0c → 0d, then 0b and 0f, then 0e; P1 is merged, so nothing waits on it; section 3 and section 4 fixed |
+| 22 | The bands don't match the owner's decisions (casual steady exactly; no notification, responder_praise or praise-only bands; 10 seeds; adult whines). Verified | All added to the sim (this PR): casual steady, responder_miss1 steady, calls started per pet a day, responder_praise, praise_bot's happiness call, launder's energy misses, a scrappy adult ≤ 3 whines a day, 10 seeds in `--check` |
+| 23 | 0h's hearts: rounding down shows a full pet as not full. Verified (card 3192) | 0h: nearest half, full at `FEED_FULL_AT`; card-check 34 → 1, 96 → 4 |
+| 24 | 0h's clock: `last_updated` isn't fresh. Verified | 0h: offset from a state event's `time_fired`, then P3a's `now`; device clock with a capped skew until then |
+| 25 | 0e: the card doesn't explain the new score. Verified | 0e: the bar is "today", "growing up" uses the new score, tested |
+| 26 | 0a's Done fails: an energy call is still laundered (686 calls, 0 misses). Verified | 0a: an energy call is answered only once energy passes 40 asleep or at a natural wake (no saved field, unlike the audit's "30 minutes asleep"); launder 14 energy misses = neglect's, scrappy |
+| 27 | 0e: an adult save with no upbringing has zero samples. Verified (model 456-458) | 0e: fall back to today's discipline and the wellbeing estimate; pytest |
+
+**New from the prototype (not in the audit):**
+
+- **Napping a pet whenever it wakes** (`sleeper`) gets **123 pushes a day and a steady
+  pet on main** (each nap ends its call, which calls afresh on waking). With 0a and the
+  morning-only re-send: 4.2 a day, scrappy. Added to the sim with bands.
+- **A sickness sends two pushes** (`became_sick`, then the `sick` call in the same tick).
+  0b sends one.
+- **A twice-a-day player starves the pet** (weight 2, health 1, scrappy in every seed):
+  feeding below 60 twice a day can't keep up with hunger. No band; noted for the owner,
+  since it is today's behaviour too.
+- **Most pushes in a busy house are first calls, mostly poop calls:** new question Q4.

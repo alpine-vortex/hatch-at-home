@@ -16,8 +16,10 @@ plan's open question is answered here, this file wins.
 ## Balance (experience plan, Wave 0)
 - A daytime nap needs tiredness (energy below the nap threshold) or to be within an
   hour of bedtime; otherwise "not sleepy yet ♪". The house still puts it to bed at night.
-- A missed need calls again after 4 hours and sends one phone notification per re-call,
-  only to people with "notify me" on.
+- A missed need calls again after 4 hours, only to people with "notify me" on. How the
+  re-call reaches phones (owner, Wave 0 Q1): one bundled normal push at most every
+  4 hours per person, naming every pet still asking ("Pip and Mochi would like a visit").
+- Poop calls stay on the card and the sensors but send no phone push (owner, Wave 0 Q4).
 - Upbringing rework: pets that are babies or children when it lands blend from now
   (their averaging starts from today's discipline and care); no pet drops a grade
   because the rules changed.
@@ -46,7 +48,7 @@ plan's open question is answered here, this file wins.
   Art (probes and look) still goes to the owner.
 - Balance: fake-call disguise accepted as unsure only while happiness is 25-40 (the
   guide says whines and real pleas "often look alike"); hours lived before the
-  upbringing rework count at half weight. Re-call phone notifications: undecided; the
+  upbringing rework count at half weight. Re-call phone notifications: decided after the several-pet evaluation (bundled, above); the
   owner asked for an evaluation with several pets before choosing.
 - Audit findings with a clear fix that matches recorded decisions are fixed without
   asking; only genuinely new design choices go to the owner.
