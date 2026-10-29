@@ -6,9 +6,11 @@
 built as 0.36.0b1** on crew branch `crew/hatch-at-home-s2443-privacy-p2-the-welcome-forget`
 (2026-10-28), awaiting its tier-2 audit and PR; it also carries the shared confirm guard
 (experience plan PR 1b adopts it) and the photo dialog's Android line. The versions moved
-on (owner, 2026-10-28: each merged PR a beta after 0.35.0), so **the old-card check in P3b
-and P3c serves `v0.36.0b1`, P2's tag, not `v0.35.0b5`**. Q11 (`zone` only with "my day"
-on) is still open: P2 leaves it as it is, which the approved guide copy describes.
+on (owner, 2026-10-28: no beta per merged PR; one release at the end of the current
+work, replacing "each merged PR a beta"), so **the old-card check in P3b and P3c serves
+`v0.36.0b1`, P2's tag, not `v0.35.0b5`**. Q11 is decided (owner: first mate's
+recommendation): `zone` is kept only while "my day" is on, dropped when it is turned off
+and on load of an old save.
 P3a, P3b and P3c not started.
 
 **Draft 2** folds in the adversarial audit of draft 1 (scout `hatch-at-home-s2430`, 20
@@ -1304,7 +1306,7 @@ if an answer looks misplaced.
    setup.
 10. **FB: should "forget my data" also clear the bonds? Decided: no.** It erases the people
     store record only. The label and the guide say the bonds stay.
-11. **FB: presence is kept with "my day" off. Still open.** The owner's answers have no
+11. **FB: presence is kept with "my day" off. Decided (owner, 2026-10-28: the recommendation below).** The owner's answers have no
     answer for this one (their Q11 is the placement, draft 1's Q12).
     - `person_moved` (`coordinator.py:438-463`) stores `zone` for every linked person. Its
       use in the visit's notes is behind "my day" (`_notes` 1272-1275). `_came_home`
@@ -1380,7 +1382,7 @@ corrections are noted in their rows.
 | Q10 forget-my-data doesn't clear bonds | Q10 | Recorded as decided |
 | Q11 forget row last among own rows, two-tap | **Q12** (placement) | Recorded as decided |
 | Q12 accept; the guide notes an admin can delete the people store once no pets remain | **audit OQ2** | A guide sentence (FB, copy table) |
-| (no answer) | **Q11** (`zone` only with "my day" on) | **Still open**, with its recommendation; P2's builder asks |
+| (no answer) | **Q11** (`zone` only with "my day" on) | Decided: the recommendation (owner, 2026-10-28) |
 | D1 personality hidden before teen | new section D1 | P1: card:3193 and card:3434 (not 3455, the shared renderer for past generations) |
 
 **Copy approved (owner, 2026-10-28):** the copy table above as written.

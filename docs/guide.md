@@ -354,8 +354,9 @@ the pet comes home.
 | Keep presence private | on | An empty house shows the pet napping, never at the sitter's (care while it's away is refused as "asleep"), and the pet never says who came or went. Turn it off to see "at the sitter's". |
 
 **What the pets remember about you.** Your birthday, your answers to its questions,
-your alarm times, the last zone you came back from, and your "baby talk", "my day"
-and "birthday on my phone" switches are kept for you alone, for every pet. They stay
+your alarm times, the last zone you came back from (only while "my day" is on), and
+your "baby talk", "my day" and "birthday on my phone" switches are kept for you alone,
+for every pet. They stay
 when you remove a pet, even the last one, so they're there if you set it up again.
 **"forget my data"** on the status screen (not on a shared screen) erases all of
 that, for you only, at once. Your bond with each pet, its photos and its nickname

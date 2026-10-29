@@ -156,3 +156,10 @@ def test_a_damaged_record_keeps_what_its_readers_can_use():
         "sendoffs": [],
         "later": {"kept": True},
     }
+
+
+def test_an_old_save_drops_a_zone_when_my_day_is_off():
+    zone = {"name": "Gym", "at": 1.0}
+    assert "zone" not in P._person({"zone": zone})
+    assert "zone" not in P._person({"zone": zone, "my_day": False})
+    assert P._person({"zone": zone, "my_day": True})["zone"] == zone

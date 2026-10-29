@@ -244,6 +244,8 @@ def _person(record: dict[str, Any]) -> dict[str, Any]:
     for key, ok in _PERSON_KEYS.items():
         if key in out and not ok(out[key]):
             del out[key]
+    if out.get("my_day") is not True:
+        out.pop("zone", None)  # older saves: kept only while "my day" is on
     for key in ("noted", "likes"):
         if key in out:
             out[key] = _str_dict(out[key])
