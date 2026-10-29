@@ -3109,6 +3109,36 @@ async def test_every_visit_reply_carries_baby_talk(
     assert not asleep["counted"] and asleep["baby_talk"] is True
 
 
+async def test_too_soon_and_asleep_visits_carry_the_persons_settings(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 12:00:00+00:00")
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    config = await setup(hass)
+    pet = config.runtime_data
+    await pet.async_set_my_day(me.id, True)
+    await pet.async_set_birthday_phone(me.id, True)
+    pet.people.person(me.id)["birthday"] = "05-17"
+    mine = {"my_day": True, "birthday_kept": True, "birthday_phone": True}
+    counted = await pet.async_visit(me.id)
+    assert counted["counted"] and mine.items() <= counted.items()
+    too_soon = await pet.async_visit(me.id)
+    assert not too_soon["counted"] and mine.items() <= too_soon.items()
+    await pet.async_set_lights_out(True)
+    pet._visits.clear()
+    asleep = await pet.async_visit(me.id)
+    assert not asleep["counted"] and mine.items() <= asleep.items()
+    # Someone with nothing set gets explicit false, not a missing field.
+    other = await hass.auth.async_create_user("Other", group_ids=["system-admin"])
+    bare = await pet.async_visit(other.id)
+    assert (bare["my_day"], bare["birthday_kept"], bare["birthday_phone"]) == (
+        False,
+    ) * 3
+
+
 async def test_one_baby_talk_switch_for_every_pet(
     hass: HomeAssistant, hass_storage: dict[str, Any], now: float
 ) -> None:

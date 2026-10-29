@@ -2965,6 +2965,18 @@ class HatchPetCard extends HTMLElement {
     return !s.asleep && !s.lightsOut && !late && document.visibilityState === "visible";
   }
 
+  // A sample from a settings tap: _mayPlay's rules. Returns the status note that
+  // says why it stayed quiet ("" when it was skipped for another reason), or null
+  // when it may play. The tap itself still unlocks audio (see the callers).
+  _maySample(s) {
+    if (this._mayPlay(s)) return null;
+    const hour = new Date().getHours();
+    if (hour >= QUIET_HOURS[0] || hour < QUIET_HOURS[1]) return "sounds are on: quiet till morning ♪";
+    if (s.asleep) return "sounds are on: shh, it's sleeping";
+    if (s.lightsOut) return "sounds are on: shh, it's napping";
+    return "";
+  }
+
   _sparkle(s) {
     const ring = document.createElement("span");
     ring.className = "burst big";
@@ -3338,7 +3350,8 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell notify" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
-      ${bond ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!this._myDay}">${this._myDay ? "on" : "off"}</button></span>`) : ""}
+      ${bond && this._myDay === undefined ? row(null, "my day", `<span>…</span>`) : ""}
+      ${bond && this._myDay !== undefined ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!this._myDay}">${this._myDay ? "on" : "off"}</button></span>`) : ""}
       ${this._birthdayKept && !sharedScreen() ? row(null, "my birthday", forgetButton("forgetbday", "forget_birthday", "forget my birthday")) +
         row(null, "birthday on my phone", `<span><button class="bell bdayphone" aria-label="birthday on my phone: a happy birthday message on your phone on the day" aria-pressed="${!!this._birthdayPhone}">${this._birthdayPhone ? "on" : "off"}</button></span>`) : ""}
       ${sharedScreen() ? "" : row(null, "baby talk", `<span><button class="bell babytalk" aria-label="baby talk: simpler words while a pet is a baby or child" aria-pressed="${babyTalk(this._hass.user?.id)}">${babyTalk(this._hass.user?.id) ? "on" : "off"}</button></span>`)}
@@ -3388,12 +3401,18 @@ class HatchPetCard extends HTMLElement {
         this._statusMessage(s, "This browser can't save sound settings.");
         return; // no storage: sounds stay off
       }
+      let skipped = null;
       try {
-        if (on) playChirp("win"); // a sample; this tap also unlocks audio on phones
+        if (on) {
+          unlockAudio(); // inside the tap: phones need it even when the sample is skipped
+          skipped = this._maySample(s);
+          if (skipped === null) playChirp("win"); // a sample
+        }
       } catch (err) {
         // no WebAudio: the setting stays, and stays quiet
       }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      if (skipped) this._statusMessage(s, skipped);
     });
     s.status.querySelector(".bell.bdayphone")?.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -3474,15 +3493,18 @@ class HatchPetCard extends HTMLElement {
         this._statusMessage(s, "This browser can't save sound settings.");
         return;
       }
+      let skipped = null;
       try {
         if (on) { // a sample; this tap also unlocks audio on phones
           unlockAudio();
-          audio.resume().then(() => babble(`${s.species.voice.sound} hello there`, s.species.voice));
+          skipped = this._maySample(s);
+          if (skipped === null) audio.resume().then(() => babble(`${s.species.voice.sound} hello there`, s.species.voice));
         }
       } catch (err) {
         // no WebAudio
       }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      if (skipped) this._statusMessage(s, skipped);
     });
   }
 
