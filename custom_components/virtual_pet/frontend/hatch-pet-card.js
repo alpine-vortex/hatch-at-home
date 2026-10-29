@@ -1104,6 +1104,23 @@ const STYLE = `
   }
   .finish-celestial .toy .cap { background: #f4d7fa; }
   .finish-celestial .toy:nth-child(3n + 2) .cap { background: #d4e7ff; }
+  .finish-dune .body {
+    background-color: var(--d-shell);
+    background-image: radial-gradient(ellipse at 50% 4%, rgba(255,246,214,.7), transparent 33%),
+      radial-gradient(circle at 10% 82%, rgba(150,104,52,.16) 0 2px, transparent 3px),
+      radial-gradient(circle at 90% 70%, rgba(150,104,52,.14) 0 2px, transparent 3px),
+      linear-gradient(112deg, rgba(255,255,255,.26), transparent 24% 70%, rgba(120,78,30,.14)),
+      linear-gradient(180deg, #ecc88f 0%, var(--d-shell) 50%, #c39257 100%);
+    box-shadow: inset 0 2px 0 rgba(255,250,228,.8), inset 0 -9px 0 rgba(112,72,28,.32),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-dune .bezel { box-shadow: inset 0 3px 0 rgba(255,244,214,.38),
+    inset 0 -3px 0 rgba(40,26,12,.2), 0 2px 0 rgba(112,72,28,.2); }
+  .finish-dune .toy .cap { background: #fbefd0; }
+  .finish-dune .toy:nth-child(3n + 2) .cap { background: #f3d6a6; }
+  /* A finish only tints idle buttons: the lit/asleep (.on) and wanted states keep their own look. */
+  .device[class*="finish-"] .toy.wanted .cap { background: #ffe9a8; }
+  .device[class*="finish-"] .toy.on .cap { background: #3a2a1a; color: #ffe9a8; }
   /* Sol's trim (worlds.json "trim"), drawn at each piece's own size (see _trim) and
      placed to suit each shell: over the top edge, on the plate, at the bottom corners. */
   .trim-top, .trim-top2, .trim-corner { position: absolute; pointer-events: none;
@@ -2201,7 +2218,7 @@ class HatchPetCard extends HTMLElement {
     const color = shell.color || "#e8834a";
     const dev = s.device;
     const shape = ["tank", "house", "porthole", "pad", "moon"].includes(shell.shape) ? shell.shape : "egg";
-    const finish = ["woodland", "aqua", "grove", "celestial"].includes(shell.finish)
+    const finish = ["woodland", "aqua", "grove", "celestial", "dune"].includes(shell.finish)
       ? `finish-${shell.finish}` : "";
     dev.className = `device ${shape}${finish ? ` ${finish}` : ""}`;
     dev.querySelector(".roof").style.display = shape === "house" ? "" : "none";

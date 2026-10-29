@@ -52,12 +52,16 @@
       radial-gradient(ellipse at 50% 4%,#ffffff47,transparent 34%),linear-gradient(145deg,#777be0,#6255bb 55%,#413c91);
     box-shadow: inset 0 0 0 4px #d5ceff47,inset 0 -9px 0 #24205c66,0 12px 18px #20150535; }
   .celestial .button { background: #f4d7fa; } .celestial .button:nth-child(2) { background: #d4e7ff; }
+  .dune .body { border-radius: 24px; background-color: #d8b07a;
+    background-image: radial-gradient(ellipse at 50% 4%,#fff6d6b3,transparent 33%),linear-gradient(112deg,#ffffff42,transparent 24% 70%,#784e1e24),
+      linear-gradient(180deg,#ecc88f,#d8b07a 50%,#c39257); box-shadow: inset 0 2px 0 #fffae4cc,inset 0 -9px 0 #70481c52,0 12px 18px #20150535; }
+  .dune .button { background: #fbefd0; } .dune .button:nth-child(2) { background: #f3d6a6; }
   @media (max-width: 520px) { body { padding: 18px 12px; } .grid { gap: 12px; }
     article { padding: 12px; } .device { width: min(100%, 210px); } }
 </style>
 <main>
   <h1>Shell finish preview</h1>
-  <p class="intro">Four world-matched finishes. Each preserves the card’s 4:3 screen opening and keeps the pet scene inside it.</p>
+  <p class="intro">Five world-matched finishes. Each preserves the card’s 4:3 screen opening and keeps the pet scene inside it.</p>
   <section class="grid" aria-label="Shell options">
     <article><h2>Woodland lacquer</h2><p class="kind">Realistic · warm orange, molded gloss</p>
       <div class="device woodland" style="--bezel:#f3ead7;--ink:#714126"><div class="body"><div class="bezel"><div class="screen"><i class="sun"></i><i class="hill"></i><i class="pet"></i></div></div><div class="buttons"><i class="button"></i><i class="button"></i><i class="button"></i></div><div class="label">hatch · woods</div></div></div>
@@ -70,6 +74,9 @@
     </article>
     <article><h2>Starlight dream</h2><p class="kind">Stylized · fantasy violet with star flecks</p>
       <div class="device celestial" style="--bezel:#e6e3f4;--ink:#49418b"><div class="body"><div class="bezel"><div class="screen"><i class="sun"></i><i class="hill"></i><i class="pet"></i></div></div><div class="buttons"><i class="button"></i><i class="button"></i><i class="button"></i></div><div class="label">hatch · night</div></div></div>
+    </article>
+    <article><h2>Dune gloss</h2><p class="kind">Realistic · warm sand shell, molded highlights</p>
+      <div class="device dune" style="--bezel:#5b4632;--ink:#f3e3c4"><div class="body"><div class="bezel"><div class="screen"><i class="sun"></i><i class="hill"></i><i class="pet"></i></div></div><div class="buttons"><i class="button"></i><i class="button"></i><i class="button"></i></div><div class="label">hatch · night</div></div></div>
     </article>
   </section>
 </main>
