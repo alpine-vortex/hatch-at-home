@@ -435,6 +435,16 @@ card and the `calling` sensor, which an automation can notify on.
   25-40 and is still open after a house bonus lifts happiness past 40; play answers it;
   a snack during a whine spoils it; a hunger call replaces an open whine with no
   `discipline_miss`; the card-check line test covers `reason.call_happiness` only.
+- **Built (s2451, on 0a + 0c):** no assumption broke (0a and 0c touch neither the whine
+  gate nor `_resolve_call`'s happiness path). `_calls` no longer closes a happiness call
+  on its condition; `_resolve_call` takes `raised` (happiness went up in the action).
+  `_wants_to_whine` is "no `CALL_PRIORITY` condition holds" (a latched need still blocks a
+  whine). `FAKE_CALL_MIN_STATS` is gone; `LONELY_CALL_RATE` 0.1 is new. `fake` left
+  `_CALL_REASONS` (the key maps to `call_happiness`), so card-check needs no `call_fake`
+  line. A snack spoils a whine like play does (discipline +`PRAISE_WHINING_DISCIPLINE`).
+  10 seeds, base (0a+0c) vs 0d: careful 0 care misses, devoted, 10/10 (both);
+  casual care misses 44-50 vs 44-49, casual_games 45-52 vs 45-51; scrappy adult whines
+  worst seed 0.92 vs 2.07 a day (<= 3); responder 9 steady + 1 devoted vs 10 steady.
 - **Sim:** careful and responder guess (scold at happiness ≥ 50, else play). The sim
   counts lonely calls among casual's misses. **Sim Done:** careful devoted with no care
   misses; casual's misses don't jump (prototype 44-49, main 44-50); a scrappy adult

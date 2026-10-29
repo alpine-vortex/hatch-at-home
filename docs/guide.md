@@ -390,6 +390,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 - **Fake calls:** now and then it whines while everything is fine. *Scold*
   raises discipline. *Praise* during a fake call spoils it. Scolding for
   nothing makes it sad. Ignoring a fake call is not a care miss.
+  A whine and a real plea to play often look alike: the hearts are the best clue.
 - **Discipline:** the more of it, the less the pet whines: at 100 it whines a
   quarter as often (never not at all). It fades slowly while the pet is awake,
   about 4 points a day, so the habit needs a reminder now and then.

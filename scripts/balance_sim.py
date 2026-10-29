@@ -49,7 +49,7 @@ Policy = Callable[[M.PetState, float, random.Random], None]
 def shown_call(s: M.PetState) -> str | None:
     """The call as the sensors show it: the binary sensor says a call is on,
     and the reason_key it would publish (minus "call_") says what for. A
-    whine shows whatever key the model gives fakes (today "call_fake")."""
+    whine shows the same key as a real happiness call."""
     if s.call is None:
         return None
     return M._reason(s, "calling", False)[1].removeprefix("call_")
@@ -65,7 +65,7 @@ def answer(s: M.PetState, t: float, rng: random.Random, suspicious: bool) -> boo
     reason = shown_call(s)
     if reason is None:
         return False
-    if reason == "fake" or (reason == "happiness" and suspicious and s.happiness >= 50):
+    if reason == "happiness" and suspicious and s.happiness >= 50:
         act(s, "scold", t, rng)
         return False
     if reason == "energy":
@@ -187,7 +187,7 @@ def responder_praise(s: M.PetState, t: float, rng: random.Random) -> None:
 def responder_miss1(s: M.PetState, t: float, rng: random.Random) -> None:
     """A responder who lets the first real call of each day go."""
     day = int((t - T0) // 86400)
-    if s.call is not None and shown_call(s) != "fake":
+    if s.call is not None and not (shown_call(s) == "happiness" and s.happiness >= 50):
         responder_miss1.missed.setdefault(day, s.call.started)
         if responder_miss1.missed[day] == s.call.started:
             return
