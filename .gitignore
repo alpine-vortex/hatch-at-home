@@ -17,3 +17,4 @@ art/seasonal/out/
 
 # Scratch images from image-generation tools (Codex); reviewed assets live under art/.
 generated_images/
+dev/bench/out/

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hatch card bench</title>
+<style>
+  html, body { margin: 0; background: #1c1c1c; }
+  /* HA's card chrome and the CSS variables a theme would give. */
+  body { --card-background-color: #1c1c1c; --primary-text-color: #e1e1e1; font-family: Roboto, system-ui, sans-serif; }
+  #stage { width: 420px; padding: 0; }
+</style>
+<body>
+<div id="stage"></div>
+<script>
+  // The card defines itself once HA's own element exists; stand one in.
+  customElements.define("home-assistant", class extends HTMLElement {});
+</script>
+<script src="/dev/bench/page.js"></script>
+<script src="/virtual_pet/frontend/hatch-pet-card.js"></script>
