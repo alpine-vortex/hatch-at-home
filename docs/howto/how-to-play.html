@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hatch at Home — How to Play</title>
+<style>
+@font-face{font-family:Tiny5;src:url('../../custom_components/virtual_pet/frontend/fonts/Tiny5.woff2') format('woff2');font-display:swap}
+:root{--ink:#253347;--cream:#fff9e8;--pink:#ff6d9b;--yellow:#ffd64a;--blue:#56c9e9;--green:#69c889;--purple:#8664d9;--orange:#ff9d51}
+*{box-sizing:border-box}html{background:#dfe5e4}body{margin:0;padding:24px;background-color:#dfe5e4;background-image:radial-gradient(#bdc8c5 1px,transparent 1px);background-size:14px 14px;color:var(--ink);font:16px/1.38 system-ui,-apple-system,sans-serif}
+.page{position:relative;width:600px;height:900px;margin:0 auto 26px;padding:38px 42px 40px;overflow:hidden;border:4px solid #26354a;border-radius:22px;background:var(--cream);box-shadow:0 12px 30px #25334730;page-break-after:always;break-after:page}
+.page:last-child{page-break-after:auto;break-after:auto}.pno{position:absolute;right:28px;bottom:18px;font:20px Tiny5,monospace;color:var(--ink);z-index:9}.eyebrow{font:17px Tiny5,monospace;letter-spacing:.08em;text-transform:uppercase;opacity:.82}.title{font:42px/1.03 Tiny5,monospace;letter-spacing:.01em;margin:8px 0 13px}.dek{font-size:16px;line-height:1.38;max-width:460px;margin:0 0 18px}.small{font-size:13px;line-height:1.38}.micro{font:13px Tiny5,monospace;letter-spacing:.03em}.chip{display:inline-block;padding:6px 10px;border:2px solid var(--ink);border-radius:999px;background:#fff;font:13px Tiny5,monospace;box-shadow:2px 3px 0 var(--ink);margin:2px 4px 4px 0}.rule{height:4px;border-radius:4px;background:var(--ink);opacity:.14;margin:14px 0}.card{border:3px solid var(--ink);border-radius:18px;padding:14px;background:#fff;box-shadow:4px 5px 0 #25334725}.card h3{font:20px Tiny5,monospace;margin:0 0 6px}.card p{margin:0}.row{display:flex;gap:12px;align-items:center}.col{flex:1;min-width:0}.spr{display:block;object-fit:contain;image-rendering:pixelated;filter:drop-shadow(2px 3px 0 #25334730)}.icon{width:38px;height:38px;object-fit:contain;image-rendering:pixelated;flex:none}.creature{width:140px;height:140px;flex:none}.creature.small{width:95px;height:95px}.creature.big{width:220px;height:220px}.tag{font:13px Tiny5,monospace;display:inline-block;border:2px solid var(--ink);background:var(--yellow);padding:4px 8px;border-radius:9px;transform:rotate(-2deg)}.star{position:absolute;font:34px Tiny5;color:#fff;filter:drop-shadow(2px 2px 0 var(--ink))}.dots{letter-spacing:6px;color:#fff;font:22px Tiny5}.divider{display:flex;align-items:center;gap:8px;margin:12px 0;color:#45536b;font:13px Tiny5}.divider:before,.divider:after{content:"";height:2px;background:currentColor;opacity:.25;flex:1}.list{list-style:none;padding:0;margin:0}.list li{padding:0 0 10px 22px;position:relative}.list li:before{content:"★";position:absolute;left:0;top:0;color:#ff9c41;font-size:15px}.tiny-icon{width:26px;height:26px;vertical-align:middle;image-rendering:pixelated}
+/* cover */
+.cover{background:linear-gradient(165deg,#ff875d 0%,#ffb546 40%,#ffe16a 72%,#73d9d0 72%,#69c8e1 100%);padding:35px 38px}.cover:before{content:"";position:absolute;inset:15px;border:2px dashed #fff9e8a8;border-radius:16px;pointer-events:none}.cover .title{font-size:58px;max-width:500px;margin:12px 0}.cover .subcover{font:23px Tiny5;color:#fff9e8;text-shadow:3px 3px 0 #253347;margin:0 0 4px}.cover .creature{position:absolute;width:205px;height:205px}.cover .bird{left:40px;bottom:95px}.cover .kitten{right:35px;bottom:78px;width:225px;height:225px}.cover .badge{position:absolute;left:40px;bottom:55px;padding:9px 14px;background:#fff9e8;border:3px solid var(--ink);border-radius:12px;font:17px Tiny5;box-shadow:4px 5px 0 var(--ink)}.cover .world-ribbon{position:absolute;left:30px;right:30px;bottom:20px;display:flex;justify-content:center;gap:7px;flex-wrap:wrap}.cover .world-ribbon span{font:11px Tiny5;border:2px solid var(--ink);border-radius:99px;background:#fff9e8;padding:4px 7px}
+/* page backgrounds */
+.p2{background:linear-gradient(155deg,#e8dcff,#fff4f8 70%)}.p3{background:linear-gradient(160deg,#ffe665,#fff5b6 70%)}.p4{background:linear-gradient(160deg,#61d9e2,#d5fbf3 72%)}.p5{background:linear-gradient(160deg,#ff8fb1,#ffe1e9 72%)}.p6{background:linear-gradient(160deg,#79c9ff,#e3f4ff 72%)}.p7{background:linear-gradient(160deg,#74d79b,#e2f8cf 72%)}.p8{background:linear-gradient(160deg,#8671e6,#e7e2ff 72%)}
+.world-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:12px 0}.world{border:2px solid var(--ink);border-radius:12px;padding:9px 10px;background:#fff;min-height:72px}.world b{font:15px Tiny5;display:block}.world span{font-size:11px;color:#566077}.steps{counter-reset:step;display:grid;gap:9px;margin:12px 0}.step{display:flex;gap:11px;align-items:center;background:#fff;border:2px solid var(--ink);border-radius:13px;padding:9px 11px}.step:before{counter-increment:step;content:counter(step);width:31px;height:31px;display:grid;place-items:center;background:var(--pink);border:2px solid var(--ink);border-radius:50%;font:18px Tiny5;flex:none}.control-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.control{display:flex;gap:8px;align-items:center;border:2px solid var(--ink);border-radius:13px;background:#fff;padding:8px;min-height:66px}.control b{font:15px Tiny5;display:block}.control span{font-size:11px;line-height:1.22;display:block}.callout{border:3px solid var(--ink);border-radius:17px;background:#fff5b5;padding:13px 15px;box-shadow:4px 4px 0 var(--ink);margin:12px 0}.callout strong{font:17px Tiny5}.meters{display:grid;grid-template-columns:1fr 1fr;gap:8px}.meter{border:2px solid var(--ink);border-radius:12px;background:#fff;padding:9px}.meter b{font:14px Tiny5}.bar{height:10px;border:2px solid var(--ink);border-radius:7px;margin-top:5px;background:linear-gradient(90deg,#ff6997 0 72%,#fff 72%)}.timeline{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:18px 0}.stage{position:relative;border:2px solid var(--ink);border-radius:14px;background:#fff;text-align:center;padding:12px 5px 10px;min-height:113px}.stage b{font:15px Tiny5;display:block}.stage small{font-size:11px}.stage:not(:last-child):after{content:"➜";position:absolute;right:-16px;top:42px;z-index:2;background:#ffe16a;border:2px solid var(--ink);border-radius:50%;width:25px;height:25px;display:grid;place-items:center;font-size:13px}.house-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0}.house-item{background:#fff;border:2px solid var(--ink);border-radius:13px;padding:10px;min-height:78px}.house-item b{font:14px Tiny5;display:block}.house-item span{font-size:11px;line-height:1.2}.back{position:absolute;right:-12px;bottom:55px;width:205px;height:205px;opacity:.92}.qr{display:flex;gap:10px;align-items:center;background:#fff;border:2px solid var(--ink);border-radius:14px;padding:10px}.qr .icon{width:42px;height:42px}.closing .creature{width:112px;height:112px}.care-note{font-size:11px;color:#536077;margin-top:3px}
+@media(max-width:650px){body{padding:0}.page{width:100vw;height:150vw;max-height:900px;margin:0 auto 18px;border-radius:0;border-width:0 0 3px;padding:6.3vw 7vw 7vw}.title{font-size:7vw}.cover .title{font-size:9.6vw}}
+@media print{@page{size:6.25in 9.375in;margin:0}html,body{padding:0;margin:0;background:white;-webkit-print-color-adjust:exact;print-color-adjust:exact}.page{width:600px;height:900px;margin:0;border:0;border-radius:0;box-shadow:none;break-after:page;page-break-after:always}.page:last-child{break-after:auto;page-break-after:auto}}
+</style>
+</head>
+<body>
+<section class="page cover">
+  <div class="eyebrow" style="color:#fff9e8">THE DASHBOARD PET MANUAL · NO. 01</div>
+  <div class="subcover">HATCH AT</div><h1 class="title">HOME!</h1>
+  <p style="font:20px Tiny5;max-width:420px;margin:0;color:#263347">A tiny friend. A whole little life.</p>
+  <p style="margin-top:12px;max-width:390px;font-size:15px">Your quick-start guide to hatching, caring for, and growing up with a pixel pal in Home Assistant.</p>
+  <img class="spr creature bird" src="../../custom_components/virtual_pet/frontend/sprites/bird/child_content_1.png" alt="Bird from the Woodland world">
+  <img class="spr creature kitten" src="../../custom_components/virtual_pet/frontend/sprites/kitten/child_content_1.png" alt="Kitten from the Hearth world">
+  <span class="star" style="top:274px;right:72px">✦</span><span class="star" style="top:415px;left:72px;color:#fff1a4">★</span>
+  <div class="badge">FLIP • READ • PLAY</div>
+  <div class="world-ribbon"><span>WOODLAND</span><span>HEARTH</span><span>TERRARIUM</span><span>TIDEPOOL</span><span>POND</span><span>NIGHT SKY</span></div>
+  <div class="pno">01</div>
+</section>
+
+<section class="page p2">
+  <div class="eyebrow">01 · A NEW LITTLE ROOM</div><h2 class="title">Pick a world.<br>Meet an egg.</h2>
+  <p class="dek">Every pet gets its own tiny device and a world full of possible friends. You don’t need to pick the creature first—the egg can surprise you.</p>
+  <div class="steps">
+    <div class="step"><div><b>In Home Assistant</b><br><span class="small">Settings → Devices & services → Add integration → Virtual Pet.</span></div></div>
+    <div class="step"><div><b>Name your pet & choose a world</b><br><span class="small">The world sets the device theme and the available creatures.</span></div></div>
+    <div class="step"><div><b>Add the pet shelf card</b><br><span class="small">Edit a dashboard → Add card → Hatch at Home pet shelf.</span></div></div>
+  </div>
+  <div class="world-grid">
+    <div class="world"><b>WOODLAND</b><span>Birds, forest friends & an egg-shaped toy</span></div><div class="world"><b>HEARTH</b><span>Cozy companions & a little house</span></div>
+    <div class="world"><b>TERRARIUM</b><span>Scales, shells & a sunny habitat</span></div><div class="world"><b>TIDEPOOL</b><span>Ocean pals behind a porthole</span></div>
+    <div class="world"><b>POND</b><span>Freshwater friends on a lily pad</span></div><div class="world"><b>NIGHT SKY</b><span>Nocturnal pals under a crescent moon</span></div>
+  </div>
+  <div class="row card" style="background:#fff9dc"><img class="spr creature small" src="../../custom_components/virtual_pet/frontend/sprites/bat/egg_idle_1.png" alt="Night Sky egg"><div><h3>And then?</h3><p class="small">Give the egg about 30 minutes. It hatches into a creature from that world’s available roster. Add another Virtual Pet if you want another device.</p></div></div>
+  <div class="pno">02</div>
+</section>
+
+<section class="page p3">
+  <div class="eyebrow">02 · BUTTONS ARE LITTLE PROMISES</div><h2 class="title">Care for your<br>new pal</h2>
+  <p class="dek">Tap a toy button under the screen. The pet reacts right away—and its stats change behind the scenes.</p>
+  <div class="control-grid">
+    <div class="control"><img class="icon" src="../../custom_components/virtual_pet/frontend/ui/icon_feed.png" alt=""><div><b>MEAL</b><span>Fill an empty tummy.</span></div></div>
+    <div class="control"><img class="icon" src="../../custom_components/virtual_pet/frontend/ui/icon_snack.png" alt=""><div><b>SNACK</b><span>A little treat between meals.</span></div></div>
+    <div class="control"><img class="icon" src="../../custom_components/virtual_pet/frontend/ui/icon_play.png" alt=""><div><b>PLAY</b><span>Choose a quick mini-game.</span></div></div>
+    <div class="control"><img class="icon" src="../../custom_components/virtual_pet/frontend/ui/icon_clean.png" alt=""><div><b>CLEAN</b><span>Scoop up mess; freshen the room.</span></div></div>
+    <div class="control"><img class="icon" src="../../custom_components/virtual_pet/frontend/ui/icon_medicine.png" alt=""><div><b>MEDICINE</b><span>Only lights up when your pet is sick.</span></div></div>
+    <div class="control"><img class="icon" src="../../custom_components/virtual_pet/frontend/ui/icon_praise.png" alt=""><div><b>PRAISE</b><span>Celebrate good behavior.</span></div></div>
+    <div class="control"><img class="icon" src="../../custom_components/virtual_pet/frontend/ui/icon_scold.png" alt=""><div><b>SCOLD</b><span>For a fake call, not a real need.</span></div></div>
+    <div class="control"><img class="icon" src="../../custom_components/virtual_pet/frontend/ui/icon_lights_out.png" alt=""><div><b>BEDTIME</b><span>Lights out tucks them in; tap again to wake.</span></div></div>
+  </div>
+  <div class="callout"><strong>READ THIS METER RIGHT!</strong><br><span class="small">The hunger meter measures fullness. A high number means “stuffed,” not “starving.” The status screen shows the meters and hearts.</span></div>
+  <div class="row" style="justify-content:space-between"><img class="spr creature small" src="../../custom_components/virtual_pet/frontend/sprites/axolotl/child_content_1.png" alt="Axolotl"><span class="tag">TAP → REACTION → HAPPY DANCE</span><img class="spr creature small" src="../../custom_components/virtual_pet/frontend/sprites/otter/child_content_1.png" alt="Sea otter"></div>
+  <div class="pno">03</div>
+</section>
+
+<section class="page p4">
+  <div class="eyebrow">03 · LEARN THE LITTLE SIGNALS</div><h2 class="title">What’s that<br>call about?</h2>
+  <p class="dek">Your friend can call when it needs something. Peek at the screen—the speech bubble and mood tell you what’s up.</p>
+  <div class="row card" style="background:#eafff6"><img class="spr creature" src="../../custom_components/virtual_pet/frontend/sprites/treefrog/child_calling_1.png" alt="Tree frog calling"><div><h3>It’s asking for you!</h3><p class="small">Hungry, bored, or sleepy calls stay open for about <b>20 minutes</b>. Tap the matching button to answer.</p></div></div>
+  <div class="rule"></div>
+  <div class="meters">
+    <div class="meter"><b>♥ HEARTS</b><br><span class="small">Happiness / how it feels</span><div class="bar" style="background:linear-gradient(90deg,#ff6997 0 45%,#fff 45%)"></div></div>
+    <div class="meter"><b>◉ ENERGY</b><br><span class="small">Play, rest, repeat</span><div class="bar" style="background:linear-gradient(90deg,#68cce8 0 65%,#fff 65%)"></div></div>
+    <div class="meter"><b>✦ CLEANLINESS</b><br><span class="small">Mess on screen? Clean up.</span><div class="bar" style="background:linear-gradient(90deg,#8cd47a 0 35%,#fff 35%)"></div></div>
+    <div class="meter"><b>☁ MOOD</b><br><span class="small">A quick clue, not a diagnosis</span><div class="bar" style="background:linear-gradient(90deg,#ffd05a 0 78%,#fff 78%)"></div></div>
+  </div>
+  <div class="callout" style="background:#fff"><strong>THE BUBBLE IS THE CLUE.</strong><br><span class="small">Tap the screen for the status view. If an action is refused, the pet tells you why—like “I’m full!” or “I’m not sick.”</span></div>
+  <div class="row" style="align-items:flex-end;margin-top:8px"><div class="col"><h3 style="font:20px Tiny5">Little things count, too</h3><p class="small">Clean mess, give medicine when needed, and offer praise or a fair scold. Care shapes the pet’s upbringing over time.</p></div><img class="spr creature small" src="../../custom_components/virtual_pet/frontend/sprites/deer/child_hungry_1.png" alt="Deer showing hungry mood"></div>
+  <div class="pno">04</div>
+</section>
+
+<section class="page p5">
+  <div class="eyebrow">04 · PLAYTIME!</div><h2 class="title">Two games.<br>Five turns.<br>One happy pal.</h2>
+  <p class="dek">Tap <b>Play</b> and choose a game. Each round is quick; get three right answers out of five to win.</p>
+  <div class="card" style="background:#fff; margin:14px 0">
+    <div class="row"><span class="chip" style="background:#ffe467">GAME A</span><h3>Left or right?</h3></div>
+    <div class="rule"></div><div class="row"><span style="font:38px Tiny5">←</span><p class="small">The pet hides on one side. Guess where it went!</p><span style="font:38px Tiny5">→</span></div>
+  </div>
+  <div class="card" style="background:#fff;margin:14px 0">
+    <div class="row"><span class="chip" style="background:#91e5ef">GAME B</span><h3>Higher or lower?</h3></div>
+    <div class="rule"></div><div style="text-align:center;font:44px Tiny5;color:#7453ca">7 ?</div><p class="small" style="text-align:center">Will the next number be higher or lower?</p>
+  </div>
+  <div class="callout" style="background:#fff5fb"><strong>WIN OR LOSE, IT’S PLAY THAT COUNTS.</strong><br><span class="small">Games bring your pet together with you. A win gives its happiness an extra boost. Tap ✕ if you want to stop early.</span></div>
+  <div class="row" style="justify-content:space-around;margin-top:12px"><img class="spr creature small" src="../../custom_components/virtual_pet/frontend/sprites/fox/child_excited_1.png" alt="Fox excited after play"><img class="spr creature small" src="../../custom_components/virtual_pet/frontend/sprites/bunny/child_binky_1.png" alt="Bunny doing a binky"></div>
+  <div class="pno">05</div>
+</section>
+
+<section class="page p6">
+  <div class="eyebrow">05 · FROM EGG TO OLD FRIEND</div><h2 class="title">Growing up<br>is part of it</h2>
+  <p class="dek">The days move on at their own pace. Care, play, and what your pet learns along the way help shape who it becomes.</p>
+  <div class="timeline">
+    <div class="stage"><img class="spr" style="width:54px;height:54px;margin:auto" src="../../custom_components/virtual_pet/frontend/sprites/bird/egg_idle_1.png" alt="Egg"><b>EGG</b><small>about 30 min</small></div>
+    <div class="stage"><img class="spr" style="width:54px;height:54px;margin:auto" src="../../custom_components/virtual_pet/frontend/sprites/bird/baby_content_1.png" alt="Baby bird"><b>BABY</b><small>first day</small></div>
+    <div class="stage"><img class="spr" style="width:54px;height:54px;margin:auto" src="../../custom_components/virtual_pet/frontend/sprites/bird/child_content_1.png" alt="Child bird"><b>CHILD</b><small>around day 1</small></div>
+    <div class="stage"><img class="spr" style="width:54px;height:54px;margin:auto" src="../../custom_components/virtual_pet/frontend/sprites/bird/teen_content_1.png" alt="Teen bird"><b>TEEN</b><small>around day 5</small></div>
+  </div>
+  <div class="row card" style="background:#fff"><div class="col"><h3>Then comes adult</h3><p class="small">Around day 14, your pet reaches adulthood. Its upbringing settles into a path, and its personality starts to show as a teen.</p></div><img class="spr creature small" src="../../custom_components/virtual_pet/frontend/sprites/bird/adult_content_1.png" alt="Adult bird"></div>
+  <div class="divider">A NEW GENERATION?</div>
+  <div class="row" style="align-items:flex-start"><img class="spr creature small" src="../../custom_components/virtual_pet/frontend/sprites/kitten/egg_idle_1.png" alt="Next generation egg"><p class="small">From day 21, a well adult at home can lay an egg. Choose a surprise or pick a creature for the next hatch. The journal keeps your family history.</p></div>
+  <div class="callout" style="background:#efffe9"><strong>TRAITS ARE LITTLE MEMORIES.</strong><br><span class="small">Your home and routines can teach lasting traits—like music lover, early bird, or fireside friend.</span></div>
+  <div class="pno">06</div>
+</section>
+
+<section class="page p7">
+  <div class="eyebrow">06 · HOME IS PART OF THE ADVENTURE</div><h2 class="title">Your house<br>has a fan club</h2>
+  <p class="dek">Connect optional Home Assistant things in <b>“What your pet notices”</b>. Then your little pal can react to the rhythms of your home.</p>
+  <div class="house-grid">
+    <div class="house-item"><b>☂ WEATHER</b><span>Rain, snow, sunshine and thunder change the scene or mood.</span></div>
+    <div class="house-item"><b>☼ TEMPERATURE</b><span>Too warm? A little sweat. Too chilly? A shiver and blanket request.</span></div>
+    <div class="house-item"><b>♫ MUSIC & TV</b><span>It may dance to music or watch its favorite show.</span></div>
+    <div class="house-item"><b>☾ LIGHTS</b><span>At bedtime, the room dims and your pet settles in.</span></div>
+    <div class="house-item"><b>⌂ PEOPLE</b><span>When you come home, expect a very happy hello.</span></div>
+    <div class="house-item"><b>✓ CHORES</b><span>A finished task can earn a tiny treat.</span></div>
+  </div>
+  <div class="row card" style="background:#fff9d7"><img class="spr creature" src="../../custom_components/virtual_pet/frontend/sprites/kitten/child_cozy_1.png" alt="Cozy kitten"><div><h3>All connections are optional</h3><p class="small">Your pet works without any of these. Add only the sensors and devices you want it to notice.</p></div></div>
+  <div class="callout"><strong>THUNDER CAN MAKE IT JUMP—BUT YOUR HOUSE CAN’T HURT IT.</strong><br><span class="small">Home events change scenery, mood, and requests. The pet is safe, even when the forecast is not.</span></div>
+  <img class="spr back" src="../../custom_components/virtual_pet/frontend/sprites/otter/child_hold_paws_1.png" alt="Otter holding paws">
+  <div class="pno">07</div>
+</section>
+
+<section class="page p8">
+  <div class="eyebrow">07 · YOUR LITTLE DAILY SURPRISE</div><h2 class="title">Look in.<br>There’s a story.</h2>
+  <p class="dek">A pet has a life between visits, and the card keeps the little moments easy to find.</p>
+  <div class="row card" style="background:#fff"><img class="spr creature" src="../../custom_components/virtual_pet/frontend/sprites/owl/child_content_1.png" alt="Saw-whet owl"><div><h3>Tap the screen</h3><p class="small">Open the status view for meters, age, traits, upbringing, personality, recent care, and the next egg. Tap again to return.</p></div></div>
+  <div class="house-grid" style="margin-top:12px">
+    <div class="house-item" style="background:#fff8cc"><b>★ WISH OF THE DAY</b><span>A small hope you can grant together. Missing it costs nothing.</span></div>
+    <div class="house-item" style="background:#d7f6ff"><b>☁ A DREAM</b><span>Sometimes a dream retells something from yesterday.</span></div>
+    <div class="house-item" style="background:#ffe1ee"><b>⌂ WHILE YOU WERE OUT</b><span>Catch up on naps, games, and snacks after time away.</span></div>
+    <div class="house-item" style="background:#e4dcff"><b>♥ YOUR BOND</b><span>It remembers each person who visits. A bond never goes down.</span></div>
+  </div>
+  <div class="callout" style="background:#fff"><strong>THE GENTLE RULES</strong><br><span class="small">Your pet never dies. If nobody’s home, it goes to the sitter and its needs pause. A missed call can count as a care miss, but you can always come back and care for it.</span></div>
+  <div class="row closing" style="justify-content:space-between;align-items:flex-end;margin-top:2px"><div><span class="tag" style="background:#fff">THAT’S THE BASICS!</span><p style="font:23px Tiny5;margin:12px 0 0">Now go say hello.</p></div><img class="spr creature" src="../../custom_components/virtual_pet/frontend/sprites/bat/child_content_1.png" alt="Little brown bat"></div>
+  <div class="qr"><img class="icon" src="../../custom_components/virtual_pet/frontend/ui/icon_journal.png" alt=""><div><b style="font:14px Tiny5">WANT THE DEEP-DIVE MANUAL?</b><br><span class="small">Open the full guide in the project docs for setup, sensors, entities, and every rule.</span></div></div>
+  <div class="pno">08</div>
+</section>
+</body>
+</html>
