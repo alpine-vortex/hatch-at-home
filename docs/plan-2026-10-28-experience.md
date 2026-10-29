@@ -100,6 +100,13 @@ also says). The bump goes last in each PR. Every PR runs `scripts/test` and
   `s.game === g`: `_guess`'s 900 ms timeout, Catch's kickoff (3844), and
   `_catchResolve`'s (already does). `_endGame` and the slide teardown from P1 clear the
   timers they own (`s.gameTimers`).
+- **An abandoned game counts for nothing**, as today's 3-minute idle drop already
+  does: no played or won count, no happiness, no bond point. Checked: a win's only
+  extras are `GAME_WIN_HAPPINESS` and the player trait's `PLAYER_WIN_HAPPINESS`
+  (`rates.py:220`, `model.py:1334-1350`), and the player trait counts games
+  *finished* (`TRAIT_PLAYER_GAMES`, `rates.py:217`), so walking away from a losing game
+  to start again buys at most a little happiness. The guide's games section says so
+  in a sentence.
 - Two viewers of one pet share one server game (one `state.game`). That stays as it is.
   Instead, the card copes: a reply whose `round` is not the card's `round + 1` means
   someone else played, and the card ends its game with a line (copy C1), not a wrong
@@ -152,7 +159,10 @@ also says). The bump goes last in each PR. Every PR runs `scripts/test` and
 - One queue at `_moment` and `_react`, fed by public moments, private pushes and care
   log entries alike. Each reaction gets a class:
   1. **mine**: the viewer's own care press (its `_react` reply), never overwritten for
-     its 3 s;
+     its 3 s. `button.press` returns nothing, and the log's `by` is a display name
+     (kept, privacy Q4) that two people can share. So the card keeps its own record:
+     `_press` stores `{action, at}` in `s.pressed`, and the next log entry with that
+     action within 10 s is "mine";
   2. **milestone**: `hatched`, `stage_changed`, `egg_laid`, `trait_learned`,
      `trait_deepened`, `wish_granted`, `bond_up`, `bond_record`;
   3. **care by someone else**, `call_answered`, `woke_up`, `good_morning`;
@@ -290,18 +300,27 @@ separate batch (**L**).
 - **Checked:** `state.memories` (`model.py:133`, kept 30, `MEMORIES_KEPT` 1402) holds
   only seasonal firsts today (`first_<kind>`, 1413), and the journal shows the newest
   six (`_memories`, 3709-3717). It is server-side, per pet and carried to the next
-  generation (1061): the right home for milestones.
-- Add the household's milestones to it: `hatched`, `stage_<stage>`, `trait_<trait>`,
+  generation (1061). The right kind of record, but not the same list (below).
+- The household's milestones: `hatched`, `stage_<stage>`, `trait_<trait>`,
   `egg_laid`. Never a person, never a bond, never media titles. Labels in
   `MEMORY_LABELS` (C11).
+- **Its own list, not the seasonal one.** `memories` is carried to every generation
+  and capped at 30, and a generation makes about nine milestones (hatched, three
+  stages, up to four traits, an egg), so mixing them in would push the seasonal firsts
+  out within two or three generations and fill the visible six at once. So milestones
+  go in a new `PetState.milestones` for **this generation only** (cap 12, not carried
+  by `lay_egg`; the journal record already keeps the generation's species, traits and
+  upbringing). The journal shows them on the current generation's line.
+- Fix `_memories`'s label fallback (3713): `m.kind.replace("_", " ")` replaces only the
+  first underscore. Use `replaceAll`, and give every new kind a label.
 - PR 2a's catch-up line reads the newest milestone the browser hasn't seen (its `at`
   against `hatch-seen-<device>`, 2483). It no longer depends on the 10-slot buffer.
 - The daily dream and wish stay browser-local (`oncePerDay`). A second device telling
   the same dream is fine: it's flavour, and the review says so too.
 - Not a diary: no daily entries, nothing to keep up, and the journal keeps showing six
   (newest first).
-- **Tests:** pytest: hatching and a stage change append one memory each, capped at 30,
-  carried by `lay_egg`; card-check: a stage change while the card was closed for an
+- **Tests:** pytest: hatching and a stage change append one milestone each, capped at
+  12, cleared by `lay_egg`, and `memories` is untouched; card-check: a stage change while the card was closed for an
   hour is said once on reopening and shows in the journal's memories.
 - **Done =** a milestone missed on one device can be found in the journal on any device.
 
@@ -339,29 +358,32 @@ P2 and P3a, and forms book 2a.
   of both views at 320 and 420 px.
 - **Done =** status fits a phone without scrolling past settings to read the meters.
 
-**PR 4d: one slower game (O06).** Size **M-L**. Only if the owner wants it (Q9).
-- Recommended: **Hide and seek.** The pet hides behind one of three spots on the
-  screen. The person picks a spot, and the pet answers "warmer" or "colder" (C14).
-  Three tries; finding it is a win. Turn-based, no timer, no reflexes. Server-side like
-  Left or Right (`play_game` kind `hide_seek`, `start_game` hides the pet), so it
-  counts for the bond the same way and can't be fished by reopening (PR 1a's rule).
-- Art: none for a first cut (the pet slides off-screen; three plain spot markers in
-  the screen tint). If the owner likes it, three hiding-spot props per world (6 worlds
-  × 3 = **18 props**) from the **Hatch API Art** session.
+**PR 4d: one slower game (O06).** Size **M-L**. **Only if the owner wants one, and no
+design is recommended yet** (Q9).
+- The precedent: feature-gaps C cut "Copy me" because it was too easy as drafted and
+  needed its own buttons and service shape. Any slower game meets the same two tests:
+  - **It must not be a sure win.** A first sketch here, Hide and seek (three spots,
+    three tries, warmer/colder hints), failed this: with three spots and three tries
+    you always find it. With directional hints, five spots fall to a binary search in
+    three tries. A design needs more choices than tries, or a score by tries used.
+  - **It costs UI.** Today the game box has two buttons (`.gl`, `.gr`). Three or more
+    choices need a new layout at 330 px and in compact mode, and `play_game` needs a
+    kind whose guess isn't left/right or higher/lower.
+- Like Left or Right after PR 1a, a reopen after a guess starts fresh; an abandoned game
+  counts for nothing.
 - Catch's fate (stay hidden, ship, or drop) stays the owner's, as feature-gaps C says.
   If it ships, its best score moves from browser-wide (`BEST_CATCH_KEY`) to per pet,
   as C2 planned.
-- **Tests:** pytest: three wrong picks lose, a right one wins, a reopen mid-game
-  resets; card-check: the hints show, and keyboard play works.
-- **Done =** a game a person can play with one thumb, slowly, while talking to someone.
+- Art: none for a first cut. Props, if any, come from the **Hatch API Art** session.
+- **Done =** a game a person can play with one thumb, slowly, that they can lose.
 
 **PR 4e: the counts (F13).** Size **S** plus a render pass.
 - Re-render `docs/readme/hero.png` and `collect.png` with the 30 creatures
-  (`scripts/readme/shots.js`), then update the README alt text and captions (C15), and the
-  guide's roadmap line 730 (drop "more species"; the 17 new creatures shipped in
+  (`scripts/readme/art.py`, `hero()` 257 and `collect()` 372). Then update the README
+  alt text and captions (C14), and the guide's roadmap line 730 (drop "more species"; the 17 new creatures shipped in
   0.35.0b3).
-- Better still: the README render script prints the count and the alt text from
-  `species.load_catalog`, so they can't drift again.
+- Better still: `art.py` counts the ready `species.json` files it draws and prints
+  the alt text with that number, so they can't drift again.
 - **Done =** the README and guide name the number the images show.
 
 ### F12 (art)
@@ -383,10 +405,10 @@ open question (all at once, or the axolotl and moth first) is still the owner's.
 | 3a | Reduced motion throughout (F11) | S-M | — |
 | 3b | A pat (O01) | M | 2a (for its class; can ship before with a plain `_speak`) |
 | 3c | Reactions at every stage, no art (O02) | M | — (art slice later: L) |
-| 4a | Milestones in memories (O08) | M | 2a |
+| 4a | Milestones kept per generation (O08) | M | 2a |
 | 4b | Next egg on the card (O05) | M | forms book 2a, Q8 |
 | 4c | Status and settings apart, 44 px (O07) | M | privacy P2/P3a, forms book 2a |
-| 4d | Hide and seek (O06) | M-L | Q9 |
+| 4d | A slower game, design open (O06) | M-L | Q9 |
 | 4e | README and guide counts (F13) | S | — |
 
 ## 5. Copy (proposals; the owner decides the words)
@@ -403,11 +425,10 @@ open question (all at once, or the axolotl and moth first) is still the owner's.
 | C8 | Medicine that cured it | "all better! ♪" |
 | C9 | Status "would like" row | label "would like", value e.g. "a snack", "a cuddle", "lights out" |
 | C10 | A pat | content: "hehe ♥"; excited: "again! again!"; sleepy: "mmm..."; hungry: "...is that a snack?"; sick: "thanks... ♥"; dirty: "careful, I'm muddy!"; aria-label "pat <name>" |
-| C11 | Memory labels | "hatched", "became a child/teen/adult", "learned <trait>", "laid an egg" |
+| C11 | Milestone labels (journal) | "hatched", "became a child/teen/adult", "learned <trait>", "laid an egg" |
 | C12 | Creature page, next egg | "hatch one next"; chosen: "next egg ✓" |
 | C13 | Next egg refused (read-only login) | "only someone who can change things can pick" |
-| C14 | Hide and seek | start: "count to ten! ...ready!"; "warmer!"; "colder..."; win: "you found me!"; lose: "here I am! ♪" |
-| C15 | README alt text | "…a parade of all thirty creatures"; "Collect all 30: the adult creatures of every world, with the eggs they hatch from" |
+| C14 | README alt text | "…a parade of all thirty creatures"; "Collect all 30: the adult creatures of every world, with the eggs they hatch from" |
 
 ## 6. Open questions for the owner
 
@@ -423,8 +444,8 @@ Each has a recommendation; the plan assumes it unless the owner says otherwise.
 | Q6 | O02: after the no-art reactions, send the 12-frame vertical slice to the Hatch API Art session? All 30 species would be 360 frames. | **Yes to the slice, no decision on the rest** until it has been seen on the phone. |
 | Q7 | O04: show how long the pet will wait when it calls? A missed call costs upbringing points (6 each). | **No clock anywhere.** Wants are shown in order of importance only. |
 | Q8 | O05: which creatures can be picked as the next egg on the card? The HA select offers every one (feature-gaps B). | **Raised ones plus "surprise me"** on the card; the select keeps all. That way the book's silhouettes stay a surprise. |
-| Q9 | O06: add a slower, non-reflex game (Hide and seek)? And Catch: keep hidden, ship, or drop? | **Hide and seek, yes, with no art first.** Catch: the owner's existing call; this plan doesn't change it. |
-| Q10 | O08: which milestones go in memories? | **Hatched, each stage, each trait learned, egg laid.** Nothing about people. |
+| Q9 | O06: do we want a slower, non-reflex game at all? And Catch: keep hidden, ship, or drop? | **Open: no design recommended.** "Copy me" was cut for being too easy and needing its own buttons; the first sketch here (Hide and seek) failed the same test (section 3, PR 4d). If yes, the next step is a short game design for the owner, not a build. Catch: the owner's existing call. |
+| Q10 | O08: which milestones does a generation keep (its own list, not the seasonal memories)? | **Hatched, each stage, each trait learned, egg laid.** Nothing about people. |
 | Q11 | F13: re-render the README images now, or after the forms book (whose journal screenshots may change)? | **Now** for hero and collect, which don't show the journal. |
 | Q12 | F07: a second tap within 600 ms of the first won't confirm laying an egg. Right gap? | **600 ms.** It is longer than a double tap and shorter than a deliberate second press. |
 | Q13 | O07: move the person's switches out of status to a "settings" view? | **Yes,** linked like the journal. |
