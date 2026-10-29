@@ -130,3 +130,29 @@ def test_the_later_question_rotates_by_day():
         f"2026-11-0{d}" for d in range(1, 4) if P.rotation(date(2026, 11, d)) == "guess"
     )
     assert ask(person, today=guess_day, hour=17, has_forecast=False) is None
+
+
+def test_a_damaged_record_keeps_what_its_readers_can_use():
+    record = P._person(
+        {
+            "zone": 3,
+            "noted": [],
+            "birthday": "13-40",
+            "alarms": [["2026-10-01", 420], "x", ["2026-10-02"]],
+            "asked": {"day": "2026-10-01", "morning": True},
+            "likes": {"fav_weather": "rain", "x": 1},
+            "likes_asked": {"fav_weather": ["2026-10-01", 3], "x": "y"},
+            "sendoffs": "x",
+            "my_day": "yes",
+            "later": {"kept": True},
+        }
+    )
+    assert record == {
+        "noted": {},
+        "alarms": [["2026-10-01", 420]],
+        "asked": {"day": "2026-10-01", "morning": True},
+        "likes": {"fav_weather": "rain"},
+        "likes_asked": {"fav_weather": ["2026-10-01"]},
+        "sendoffs": [],
+        "later": {"kept": True},
+    }

@@ -2009,3 +2009,75 @@ def test_reason_key_follows_the_branch_that_won():
     pet = hatched(now)
     pet.call = model.Call("hunger", now, now + 20 * MIN)
     assert keyed(pet, now, rainy)[3] == "call_hunger"
+
+
+# --- Damaged saves (F5) ----------------------------------------------------------
+
+
+def test_a_damaged_save_keeps_what_it_can():
+    data = hatched(at(9)).to_dict()
+    photo = {"name": "Old", "species": "bird", "stage": "adult", "on": "2026-01-02"}
+    data.update(
+        species="a_creature_from_later",  # never checked against the catalog
+        sick_unannounced=3,
+        hunger="x",
+        happiness=250,
+        latched=None,
+        call="bad",
+        bonds={
+            "u1": {
+                "points": 9,
+                "photos": {"1": photo},
+                "catchphrase": "x",
+                "nickname": 4,
+                "today": "x",
+                "later": [1],
+            }
+        },
+        journal=[{"name": "Old", "traits": "x", "levels": [1]}, "x"],
+    )
+    pet = model.PetState.from_dict(data)
+    assert pet.species == "a_creature_from_later"
+    assert pet.sick_unannounced is None
+    assert (pet.hunger, pet.happiness) == (80.0, 100.0)
+    assert pet.latched == [] and pet.call is None
+    bond = pet.bonds["u1"]
+    assert bond["photos"]["1"]["name"] == "Old"
+    assert "catchphrase" not in bond and "nickname" not in bond
+    assert bond["today"] == 0 and bond["later"] == [1]
+    assert pet.journal == [{"name": "Old", "traits": [], "levels": {}, "games": {}}]
+    pet = model.PetState.from_dict({**data, "sick_unannounced": "hunger"})
+    assert pet.sick_unannounced == "hunger"
+
+
+def test_a_save_needs_a_pet_at_its_root():
+    data = hatched(at(9)).to_dict()
+    assert model.PetState.from_dict([data]).age_hours == data["age_hours"]
+    for root in ("junk", 3, None, [data, data], ["x"]):
+        with pytest.raises(model.DamagedSave):
+            model.PetState.from_dict(root)
+
+
+def test_missing_times_are_worked_out():
+    data = hatched(at(9)).to_dict()
+    del data["name"], data["born"], data["last_updated"]
+    pet = model.PetState.from_dict(data, "Pip", at(10))
+    assert pet.name == "Pip"
+    assert pet.last_updated == at(10)  # no catch-up for the gap
+    assert pet.born == at(10) - pet.age_hours * 3600
+
+
+def test_salvage_keeps_the_family_and_the_bonds():
+    data = {
+        "name": "Bean",
+        "generation": "x",
+        "species": "deer",
+        "journal": [{"name": "Old"}],
+        "bonds": {"u1": {"points": 4}, "u2": "x"},
+        "hunger": 3.0,
+    }
+    pet = model.PetState.salvage(data, "Pip", at(9))
+    assert (pet.name, pet.generation, pet.species) == ("Bean", 1, "deer")
+    assert pet.bonds == {"u1": {"points": 4}} and pet.journal[0]["name"] == "Old"
+    assert pet.hunger == 80.0 and pet.born == at(9)
+    assert model.PetState.salvage("junk", "Pip", at(9)).name == "Pip"
