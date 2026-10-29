@@ -1389,7 +1389,7 @@ const STYLE = `
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
   .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
-  .screen.show-status .bondhearts { display: none !important; }
+  .screen.show-status .bondhearts, .screen.show-status .linkhearts { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
   .pet.sulk { animation: shake .35s 2; }
@@ -1669,7 +1669,7 @@ const STYLE = `
   .screen .askday button[data-answer="keep"] { font-size: 12px; white-space: normal;
     max-width: calc(100% - 72px); }
   .screen.show-status .askday { display: none; }
-  .screen .bondhearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
+  .screen .bondhearts img, .screen .linkhearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
     opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }
   @keyframes bondheart { 0% { transform: translateY(0) scale(.7); opacity: 0; } 20% { opacity: 1; }
     100% { transform: translateY(-70px) scale(1); opacity: 0; } }
@@ -1797,6 +1797,12 @@ class HatchPetCard extends HTMLElement {
     // A shared screen turned on in another card on this page, or another tab.
     window.addEventListener(SHARED_EVENT, this._onSharedEvent);
     window.addEventListener("storage", this._onSharedStorage);
+    // Shared screen turned on or off while the card was away (its listeners
+    // were off): catch up now, before a queued personal line is said.
+    if (this._slides?.length && sharedScreen() !== this._sharedSeen) {
+      if (sharedScreen()) this._goShared();
+      else this._goPersonal();
+    }
     // Back on the page: the private channel again (it closed when the card left).
     if (this._hass) {
       this._listenReady(this._hass.connection);
@@ -1853,7 +1859,7 @@ class HatchPetCard extends HTMLElement {
   _onReady = () => {
     for (const s of this._slides || []) {
       s.unsub = null;
-      this._subscribe(s, true);
+      if (!s.gone) this._subscribe(s, true); // a removed pet stays unasked
     }
   };
 
@@ -2059,6 +2065,7 @@ class HatchPetCard extends HTMLElement {
   // --- Building --------------------------------------------------------------
 
   _build() {
+    this._sharedSeen = sharedScreen(); // what the card last saw (connectedCallback)
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `
       <style>${STYLE}${SCENE_STYLE}</style>
@@ -2512,6 +2519,7 @@ class HatchPetCard extends HTMLElement {
   // Turning on "shared screen", here or in another card or tab: everything
   // personal on every slide goes, including a line still being typed out.
   _goShared() {
+    this._sharedSeen = true;
     for (const slide of this._slides || []) {
       this._clearAsk(slide);
       slide.queue = [];
@@ -2537,6 +2545,7 @@ class HatchPetCard extends HTMLElement {
   // Personal again: the status screens, and the channel asked again for the
   // viewer's own view (nothing else waits to come back).
   _goPersonal() {
+    this._sharedSeen = false;
     for (const slide of this._slides || []) {
       slide.statusHtml = null;
       slide.drawnSig = null;
@@ -3631,10 +3640,11 @@ class HatchPetCard extends HTMLElement {
   }
 
   // Hearts that float up around the pet: only for someone it's very close to.
-  _bondHearts(s) {
-    s.screen.querySelector(".bondhearts")?.remove();
+  // The infrared link's hearts are "linkhearts", so they never touch a bond's.
+  _bondHearts(s, kind = "bondhearts") {
+    s.screen.querySelector(`.${kind}`)?.remove();
     const box = document.createElement("div");
-    box.className = "bondhearts";
+    box.className = kind;
     box.setAttribute("aria-hidden", "true");
     [[-34, 0], [30, 0.35], [-8, 0.7], [16, 1.05]].forEach(([x, delay]) => {
       const img = document.createElement("img");
@@ -5675,7 +5685,7 @@ class HatchPetCard extends HTMLElement {
       if (!calm) this._animate(guest, L.img, "greethop", 1400);
     });
     at(t0 + 3400, () => {
-      if (!calm) this._bondHearts(host);
+      if (!calm && !sharedScreen()) this._bondHearts(host, "linkhearts");
     });
     at(t0 + 4000, () => {
       L.say.hidden = true;
@@ -5752,7 +5762,7 @@ class HatchPetCard extends HTMLElement {
     host.screen.classList.remove("linking");
     host.pet.classList.remove("linking", "greethop");
     host.pet.style.scale = L.hostScale;
-    host.screen.querySelector(".bondhearts")?.remove();
+    host.screen.querySelector(".linkhearts")?.remove();
     guest.pet.classList.remove("look");
     guest.movingUntil = host.movingUntil = 0;
     guest.sayUntil = 0;

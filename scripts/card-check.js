@@ -6,13 +6,22 @@
 // Needs Playwright with Chromium (preinstalled in the cloud sessions).
 //
 // Environment: HA_URL (default http://localhost:8123); SCALE=2 for sharp
-// screenshots (the README art uses them).
+// screenshots (the README art uses them). HA_CONFIG and HA_START: the
+// instance's config dir and the command that starts it, for the restart and
+// the seeded second login (section 8). Without HA_URL they default to
+// dev/config and scripts/develop: card-check stops your dev HA there and
+// starts it again in the background (its log: dev/card-check/ha-restart.log).
+// With HA_URL and without them, section 8 fails rather than skip.
 
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
 
 const HA = process.env.HA_URL || "http://localhost:8123";
+if (!process.env.HA_URL && !process.env.HA_CONFIG && !process.env.HA_START) {
+  process.env.HA_CONFIG = path.join(__dirname, "..", "dev", "config");
+  process.env.HA_START = `exec ${JSON.stringify(path.join(__dirname, "develop"))}`;
+}
 const CLIENT = `${HA}/`;
 const USER = { username: "dev", password: "devdevdev", name: "Dev" };
 const OUT = path.join(__dirname, "..", "dev", "card-check");
@@ -3008,6 +3017,32 @@ async function main() {
       return { shared: localStorage.getItem("hatch-shared-screen"), you: /you two/.test(s.status.textContent) };
     });
     check("FA: turning it off again makes every card personal", back.shared === "off" && back.you, JSON.stringify(back));
+    // A card off the page (a view switch) misses the switch's event: shared
+    // screen goes on while it's away, and it catches up when it's back.
+    const away = await card.evaluate(async (el) => {
+      const two = document.getElementById("fa-second");
+      const s = two._slides[two._index];
+      window.__personal(two);
+      window.__say(two, s);
+      s.queue = [{ text: "can I call you sunbeam? ♥", ms: 4000 }];
+      const before = { said: s.bubble.textContent, queued: s.queue.length };
+      two.remove(); // its typing line is written in whole on the way out
+      const one = el._slides[el._index];
+      el._renderStatus(one, []);
+      one.status.querySelector(".bell.shared").click();
+      const shared = localStorage.getItem("hatch-shared-screen");
+      document.body.append(two);
+      await new Promise((r) => setTimeout(r, 1500)); // a tick or two
+      const looks = window.__look(two);
+      const out = { before, shared, looks, queue: two._slides.flatMap((x) => (x.queue || []).map((q) => q.text)) };
+      one.status.querySelector(".bell.shared").click(); // and off again, for what follows
+      return out;
+    });
+    check("FA: a card away from the page when shared screen went on clears its personal lines when it's back",
+      away.before.said.includes("sunbeam") && away.shared === "on" && away.queue.every((t) => !/sunbeam/.test(t)) &&
+      away.looks.every((l) => !/sunbeam/.test(l.bubble + l.live) && !l.bubble.includes(USER.name) &&
+        !l.live.includes(USER.name) && !l.typing && !l.babbling && !l.hearts && !l.status),
+      JSON.stringify(away));
     // A visit reply that lands after the switch queues no personal note or question.
     const late = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
@@ -3416,6 +3451,10 @@ async function main() {
       const gone = { unsub: s.unsub, gone: s.gone, retry: !!s.retryTimer };
       el._subscribe(s); // a no-op now: its pet is gone
       gone.asked = !!(s.unsub || s.subPending);
+      const all = el._slides;
+      el._slides = [s]; // a new socket, for this slide alone
+      try { el._onReady(); } finally { el._slides = all; }
+      gone.askedOnReady = !!(s.unsub || s.subPending || s.retryTimer) || !s.gone;
       el._subscribe(s, true); // (and back, for the checks after)
       for (let i = 0; i < 50 && !(s.unsub && s.subscribed); i++) await new Promise((r) => setTimeout(r, 100));
       return { shared, gone, back: !!s.unsub };
@@ -3424,6 +3463,7 @@ async function main() {
       JSON.stringify(ends.shared));
     check("P3a: a removed pet's channel stops, with no retry", ends.gone.unsub === null && ends.gone.gone &&
       !ends.gone.retry && !ends.gone.asked && ends.back, JSON.stringify(ends));
+    check("P3a: a removed pet's slide isn't asked again on a new socket", ends.gone.askedOnReady === false, JSON.stringify(ends));
     // The bell and the switches read "mine".
     const bell = await card.evaluate((el) => {
       const s = el._slides[el._index];
@@ -4522,6 +4562,33 @@ async function main() {
     check(`the visit is over and nothing is left behind by 9 s (${width}px)`,
       over.left === 0 && !over.beam, JSON.stringify(over));
 
+    // The visit's hearts are its own: its end leaves a bond's hearts alone, and
+    // a shared screen gets none (bond hearts are personal there).
+    const heartsRun = (shared) => card.evaluate(async (el, shared) => {
+      localStorage.setItem("hatch-shared-screen", shared ? "on" : "off");
+      const host = el._slides[0];
+      el._linkStart(host, el._slides[1]);
+      let link = 0;
+      for (let i = 0; i < 60 && el._link && !link; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        link = host.screen.querySelectorAll(".linkhearts").length;
+      }
+      el._bondHearts(host); // a real bond's hearts, mid-visit
+      el._linkEnd();
+      const out = { link, bond: host.screen.querySelectorAll(".bondhearts").length,
+        linkAfter: host.screen.querySelectorAll(".linkhearts").length };
+      host.screen.querySelector(".bondhearts")?.remove();
+      localStorage.setItem("hatch-shared-screen", "off");
+      return out;
+    }, shared);
+    await prep();
+    const ownHearts = await heartsRun(false);
+    await prep();
+    const sharedHearts = await heartsRun(true);
+    check(`the visit's hearts are its own, and none on a shared screen (${width}px)`,
+      ownHearts.link === 1 && ownHearts.bond === 1 && ownHearts.linkAfter === 0 && sharedHearts.link === 0,
+      JSON.stringify([ownHearts, sharedHearts]));
+
     // A swipe mid-visit ends it at once.
     await prep();
     await card.evaluate((el) => el._linkStart(el._slides[0], el._slides[1]));
@@ -4591,10 +4658,12 @@ async function main() {
   // first's (privacy P3a-card). After the console check: a restart's lost
   // connection is noise there. The restart is opt-in, as card-check stops
   // and starts Home Assistant itself (HA's restart only exits under `hass`):
-  // HA_CONFIG=<this instance's config dir> HA_START="<command that starts it>".
-  // It also seeds dev's bond (level 8, "sunbeam") and an aimed wish while HA
-  // is down, and puts back what was there at the end (so the next run starts
-  // as this one did). Without them, the second login runs on the bond dev has.
+  // HA_CONFIG=<this instance's config dir> HA_START="<command that starts it>"
+  // (the dev instance's by default, see the top). It also seeds dev's bond
+  // (level 8, "sunbeam") and an aimed wish while HA is down (plan review #12),
+  // and puts back what was there at the end (so the next run starts as this
+  // one did). Without them the second-login checks would prove nothing, so
+  // that's a failure, not a skip.
   let seeded = false;
   let unseed = null;
   const seedPet = pet["sensor.life_stage"];
@@ -4668,7 +4737,8 @@ async function main() {
     check("P3a: the seeded wish is aimed at dev on dev's own card",
       back.aimed === true && /play a game with you/.test(back.wish || ""), JSON.stringify(back));
   } else {
-    console.log("SKIP  P3a: HA restart and the seeded bond (set HA_CONFIG and HA_START to run them)");
+    check("P3a: HA restart and the seeded bond can run (set HA_CONFIG and HA_START with HA_URL)", false,
+      "no HA_CONFIG/HA_START: the restart and the seeded second login didn't run");
   }
 
   // A second, non-admin login on the same dashboard.
@@ -4721,6 +4791,8 @@ async function main() {
       await el._hass.callWS({ type: "virtual_pet/notify_me", entity_id: id, enabled: true });
       for (let i = 0; i < 30 && !s.mine?.notify_me; i++) await wait(100);
       out.bellOn = status().querySelector(".bell.notify")?.getAttribute("aria-pressed");
+      out.pushed = !!s.mine?.notify_me; // a real push of Other's own view
+      out.bond = s.mine?.bond ?? null;
       await el._hass.callWS({ type: "virtual_pet/notify_me", entity_id: id, enabled: false });
       for (let i = 0; i < 30 && s.mine?.notify_me; i++) await wait(100);
       const st = status();
@@ -4743,12 +4815,15 @@ async function main() {
       JSON.stringify({ leaks, nPayloads: view.nPayloads, seeded, admin: view.admin }));
     check("P3a: a second login has no close bond and no nickname from dev",
       view.bondRow !== "bond level 8 of 10" && !view.shown.includes("sunbeam"), JSON.stringify({ bondRow: view.bondRow }));
+    const devBond = await page.locator("hatch-pet-card").evaluate((el, e) =>
+      el._slides.find((x) => x.ids?.["sensor.life_stage"] === e)?.mine?.bond ?? null, seedPet);
+    check("P3a: after a push, the second login's bond is its own, not dev's",
+      view.pushed && devBond !== null && (view.bond === null || JSON.stringify(view.bond) !== JSON.stringify(devBond)),
+      JSON.stringify({ pushed: view.pushed, other: view.bond, dev: devBond }));
     check("P3a: the bell is the second login's own setting",
       view.bell === "false" && view.bellOn === "true" && devBell === false, JSON.stringify({ ...view, held: undefined, payloads: undefined, shown: undefined, devBell }));
-    if (seeded) {
-      check("P3a: a wish aimed at dev is plain on the second login's card",
-        view.wish === "wish♡ play a game together" || /play a game together/.test(view.wish || ""), String(view.wish));
-    }
+    check("P3a: a wish aimed at dev is plain on the second login's card",
+      seeded && (view.wish === "wish♡ play a game together" || /play a game together/.test(view.wish || "")), String(view.wish));
     check("P3a: no errors in the second login's console", errors2.length === 0, errors2.slice(0, 3).join(" | "));
     await ctx2.close();
   }
