@@ -20,10 +20,12 @@ import statistics
 from typing import Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
 
-from . import rates as R
-from .const import DOMAIN
+from . import model, rates as R
+from .backup import NOTHING, async_backup
+from .const import DOMAIN, LOGGER
 
 STORE_KEY = f"{DOMAIN}.people"
 STORE_VERSION = 1
@@ -79,6 +81,7 @@ class People:
     """The shared store (hass.data[DOMAIN]["people"])."""
 
     def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
         self._store: Store[dict[str, Any]] = Store(hass, STORE_VERSION, STORE_KEY)
         self.data: dict[str, Any] = {"people": {}, "weather": {}}
         self._locks: dict[str, asyncio.Lock] = {}
@@ -88,12 +91,49 @@ class People:
         return self._locks.setdefault(user, asyncio.Lock())
 
     async def async_load(self) -> None:
-        loaded = await self._store.async_load()
-        if isinstance(loaded, dict):
-            self.data = {
-                "people": dict(loaded.get("people") or {}),
-                "weather": dict(loaded.get("weather") or {}),
-            }
+        """Load what can be read. A damaged file never stops a pet: it's backed
+        up, the pets start fresh with everyone, and a repair says how to restore
+        it. Damage inside a readable file is dropped quietly, key by key."""
+        try:
+            loaded = await self._store.async_load()
+        except Exception as err:  # noqa: BLE001 - a wrapper Store can't read
+            LOGGER.warning("The people store couldn't be read: %r", err)
+            await self._damaged(NOTHING)
+            return
+        if loaded is None:
+            return  # none yet
+        if not isinstance(loaded, dict):
+            await self._damaged(loaded)
+            return
+        weather = loaded.get("weather")
+        self.data = {
+            "people": {
+                user: _person(record)
+                for user, record in _mapping(loaded.get("people")).items()
+                if isinstance(user, str) and isinstance(record, dict)
+            },
+            "weather": {
+                day: [k for k in kinds if isinstance(k, str)]
+                for day, kinds in _mapping(weather).items()
+                if isinstance(day, str) and isinstance(kinds, list)
+            },
+        }
+
+    async def _damaged(self, data: Any) -> None:
+        backup = await async_backup(self._hass, STORE_KEY, STORE_VERSION, data)
+        ir.async_create_issue(
+            self._hass,
+            DOMAIN,
+            "people_damaged",
+            is_fixable=False,
+            is_persistent=True,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key="people_damaged",
+            translation_placeholders={
+                "backup": backup or f"{STORE_KEY}.corrupt.<time>"
+            },
+        )
+        await self.async_save_now()  # an empty store from now on, over the damage
 
     def save(self) -> None:
         self._store.async_delay_save(lambda: self.data, SAVE_DELAY)
@@ -131,6 +171,86 @@ class People:
 
     def weather_on(self, day: str) -> set[str]:
         return set(self.data["weather"].get(day, []))
+
+
+def _mapping(v: Any) -> dict[Any, Any]:
+    return v if isinstance(v, dict) else {}
+
+
+def _num(v: Any) -> bool:
+    return isinstance(v, int | float) and not isinstance(v, bool)
+
+
+def _day_lists(v: Any) -> dict[str, list[str]]:
+    return {
+        k: [d for d in days if isinstance(d, str)]
+        for k, days in _mapping(v).items()
+        if isinstance(k, str) and isinstance(days, list)
+    }
+
+
+def _str_dict(v: Any) -> dict[str, str]:
+    return {
+        k: x
+        for k, x in _mapping(v).items()
+        if isinstance(k, str) and isinstance(x, str)
+    }
+
+
+# Each key a person's record uses, and the shape its readers expect. A key that
+# doesn't match is dropped (the pets ask, or note it, again); keys this version
+# doesn't know are kept as they are.
+_PERSON_KEYS: dict[str, Any] = {
+    "arrived": _num,
+    "left": _num,
+    "zone": lambda v: (
+        isinstance(v, dict) and isinstance(v.get("name"), str) and _num(v.get("at"))
+    ),
+    "guess": lambda v: (
+        isinstance(v, dict)
+        and isinstance(v.get("day"), str)
+        and isinstance(v.get("guess"), str)
+    ),
+    "my_day": lambda v: isinstance(v, bool),
+    "baby_talk": lambda v: isinstance(v, bool),
+    "birthday_phone": lambda v: isinstance(v, bool),
+    "birthday_skipped": lambda v: isinstance(v, bool),
+    "birthday": lambda v: isinstance(v, str) and model.valid_birthday(v),
+    "birthday_sent": lambda v: isinstance(v, str),  # the year, "2026"
+    "once_last": lambda v: isinstance(v, str),  # a day
+    "asked": lambda v: isinstance(v, dict) and isinstance(v.get("day"), str),
+}
+
+
+def _person(record: dict[str, Any]) -> dict[str, Any]:
+    """One person's record as loaded, with the shapes its readers expect."""
+    out = dict(record)
+    for key, ok in _PERSON_KEYS.items():
+        if key in out and not ok(out[key]):
+            del out[key]
+    for key in ("noted", "likes"):
+        if key in out:
+            out[key] = _str_dict(out[key])
+    if "likes_asked" in out:
+        out["likes_asked"] = _day_lists(out["likes_asked"])
+    if "sendoffs" in out:
+        sendoffs = out["sendoffs"]
+        out["sendoffs"] = (
+            [d for d in sendoffs if isinstance(d, str)]
+            if isinstance(sendoffs, list)
+            else []
+        )
+    if "alarms" in out:
+        alarms = out["alarms"]
+        out["alarms"] = [
+            [a[0], int(a[1])]
+            for a in (alarms if isinstance(alarms, list) else [])
+            if isinstance(a, list)
+            and len(a) == 2
+            and isinstance(a[0], str)
+            and _num(a[1])
+        ]
+    return out
 
 
 # --- Pure rules ------------------------------------------------------------------

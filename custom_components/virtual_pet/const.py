@@ -31,6 +31,9 @@ ATTR_HOURS = "hours"
 ATTR_CONFIG_ENTRY_ID = "config_entry_id"
 
 CONF_WORLD = "world"
+# Set by the config flow on a new pet, removed once its first save is made: an
+# empty save without it is a damaged pet, never welcomed as a new one.
+CONF_NEW_PET = "new_pet"
 CONF_NEXT_WORLD = "next_world"  # chosen after hatching: the next egg's world
 DEFAULT_WORLD = "woodland"
 # Phase 2 entries stored a species instead of a world.

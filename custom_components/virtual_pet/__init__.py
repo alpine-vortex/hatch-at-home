@@ -433,8 +433,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: PetConfigEntry) -> None:
-    """Delete the pet's save file when the integration is removed."""
-    for key in ("missing_entities", "world_not_ready"):
+    """Delete the pet's save file when the integration is removed. Backups of a
+    damaged one (.damaged.*) are the owner's to delete: its repair named them."""
+    for key in ("missing_entities", "world_not_ready", "save_damaged"):
         ir.async_delete_issue(hass, DOMAIN, f"{key}_{entry.entry_id}")
     persistent_notification.async_dismiss(hass, f"{DOMAIN}_{entry.entry_id}_welcome")
     await PetStore(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}").async_remove()

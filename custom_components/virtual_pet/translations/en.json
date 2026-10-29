@@ -373,6 +373,18 @@
     "world_not_ready": {
       "title": "{pet}'s world has no creatures yet",
       "description": "{pet} lives in {world}, but none of that world's creatures are installed and ready, so its egg can't hatch. It stays an egg, safe and frozen in place, until they are. Reinstall or update the integration's files; if this keeps happening, please report it."
+    },
+    "save_damaged": {
+      "title": "{pet}'s save file was damaged",
+      "description": "Part of {pet}'s save file couldn't be read. {pet} kept its name, family, journal, memories and bonds where they could be read, and started the rest fresh. The file as it was is kept as `.storage/{backup}`. To go back to it: stop Home Assistant, fix the file, rename it to `.storage/virtual_pet.{entry_id}`, and start Home Assistant again."
+    },
+    "save_damaged_egg": {
+      "title": "{pet}'s save file was damaged",
+      "description": "{pet}'s save file couldn't be read at all, so {pet} started again as an egg. The file as it was is kept as `.storage/{backup}` (Home Assistant names an unreadable file `….corrupt.<time>`). To go back to it: stop Home Assistant, fix the file, rename it to `.storage/virtual_pet.{entry_id}`, and start Home Assistant again."
+    },
+    "people_damaged": {
+      "title": "The pets' memories of people were damaged",
+      "description": "The file where the pets keep what they know about each person (birthdays, answers, settings) couldn't be read, so they start fresh with everyone. Your pets and your bonds with them are fine. The file as it was is kept as `.storage/{backup}`. To go back to it: stop Home Assistant, fix the file, rename it to `.storage/virtual_pet.people`, and start Home Assistant again."
     }
   }
 }

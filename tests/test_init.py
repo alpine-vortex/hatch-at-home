@@ -43,7 +43,10 @@ STORE_KEY = f"{DOMAIN}.test_pet"
 
 def entry() -> MockConfigEntry:
     return MockConfigEntry(
-        domain=DOMAIN, title="Pip", data={CONF_NAME: "Pip"}, entry_id="test_pet"
+        domain=DOMAIN,
+        title="Pip",
+        data={CONF_NAME: "Pip", "new_pet": True},
+        entry_id="test_pet",
     )
 
 
@@ -293,7 +296,7 @@ async def test_phase2_pet_becomes_a_woodland_bird(
     MockConfigEntry(
         domain=DOMAIN,
         title="Pip",
-        data={CONF_NAME: "Pip", "species": "bird"},
+        data={CONF_NAME: "Pip", "species": "bird", "new_pet": True},
         entry_id="test_pet",
     ).add_to_hass(hass)
     assert await hass.config_entries.async_setup("test_pet")
@@ -356,7 +359,7 @@ async def setup_with_house(hass: HomeAssistant, **options: Any) -> MockConfigEnt
     config = MockConfigEntry(
         domain=DOMAIN,
         title="Pip",
-        data={CONF_NAME: "Pip", "world": "woodland"},
+        data={CONF_NAME: "Pip", "world": "woodland", "new_pet": True},
         entry_id="test_pet",
         options=options,
     )
@@ -1183,7 +1186,7 @@ async def test_repairs_warn_about_a_world_without_creatures(
     config = MockConfigEntry(
         domain=DOMAIN,
         title="Pip",
-        data={CONF_NAME: "Pip", "world": "atlantis"},
+        data={CONF_NAME: "Pip", "world": "atlantis", "new_pet": True},
         entry_id="test_pet",
     )
     config.add_to_hass(hass)
@@ -1247,7 +1250,11 @@ async def test_renaming_a_pet_from_before_worlds_keeps_its_world(
     config = MockConfigEntry(
         domain=DOMAIN,
         title="Pip",
-        data={CONF_NAME: "Pip", "species": "treefrog"},  # no world stored
+        data={
+            CONF_NAME: "Pip",
+            "species": "treefrog",
+            "new_pet": True,
+        },  # no world stored
         entry_id="test_pet",
     )
     config.add_to_hass(hass)
@@ -2403,7 +2410,10 @@ async def test_two_pets_looked_at_together_say_a_person_line_once(
         }
         hass_storage[f"{DOMAIN}.{entry_id}"]["data"]["name"] = name
         config = MockConfigEntry(
-            domain=DOMAIN, title=name, data={CONF_NAME: name}, entry_id=entry_id
+            domain=DOMAIN,
+            title=name,
+            data={CONF_NAME: name, "new_pet": True},
+            entry_id=entry_id,
         )
         config.add_to_hass(hass)
         assert await hass.config_entries.async_setup(config.entry_id)
@@ -2831,7 +2841,10 @@ async def test_one_birthday_message_across_pets_from_the_closest(
         }
         hass_storage[f"{DOMAIN}.{entry_id}"]["data"]["name"] = name
         config = MockConfigEntry(
-            domain=DOMAIN, title=name, data={CONF_NAME: name}, entry_id=entry_id
+            domain=DOMAIN,
+            title=name,
+            data={CONF_NAME: name, "new_pet": True},
+            entry_id=entry_id,
         )
         config.add_to_hass(hass)
         assert await hass.config_entries.async_setup(config.entry_id)
@@ -2997,7 +3010,10 @@ async def test_one_baby_talk_switch_for_every_pet(
         }
         hass_storage[f"{DOMAIN}.{entry_id}"]["data"]["name"] = name
         config = MockConfigEntry(
-            domain=DOMAIN, title=name, data={CONF_NAME: name}, entry_id=entry_id
+            domain=DOMAIN,
+            title=name,
+            data={CONF_NAME: name, "new_pet": True},
+            entry_id=entry_id,
         )
         config.add_to_hass(hass)
         assert await hass.config_entries.async_setup(config.entry_id)
