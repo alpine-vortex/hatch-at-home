@@ -36,6 +36,12 @@ fs.mkdirSync(OUT, { recursive: true });
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 420, height: 860 } });
+  // Shots show the plain card: no LCD grid, no power-on screen.
+  const bootVersion = (require("fs").readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8").match(/BOOT_VERSION = "([^"]+)"/) || [])[1];
+  await page.addInitScript((v) => {
+    localStorage.setItem("hatch-lcd", "off");
+    if (v) localStorage.setItem("hatch-booted", v);
+  }, bootVersion);
   await page.goto(`${HA}/`);
   await page.waitForSelector('input[autocomplete="username"]', { timeout: 60000 });
   await page.locator('input[autocomplete="username"]').first().fill("dev");
