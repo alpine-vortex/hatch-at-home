@@ -1021,6 +1021,34 @@ async def test_ticking_off_a_chore_gives_the_pet_a_treat(
     assert int(hass.states.get("sensor.pip_hunger").state) >= 59
 
 
+async def test_a_chore_ticked_again_pays_once_a_day(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    from homeassistant.core import SupportsResponse
+
+    done: list[dict[str, str]] = []
+
+    async def get_items(call) -> ServiceResponse:
+        return {"todo.chores": {"items": list(done)}}
+
+    hass.services.async_register(
+        "todo", "get_items", get_items, supports_response=SupportsResponse.ONLY
+    )
+    hass.states.async_set("todo.chores", "1")
+    hass_storage[STORE_KEY] = hatched_pet(now, hunger=50.0)
+    treats = async_capture_events(hass, f"{DOMAIN}_chore_treat")
+    await setup_with_house(hass, chores=["todo.chores"])
+    await hass.async_block_till_done(wait_background_tasks=True)
+    for n in range(3):  # tick, un-tick, tick again
+        done[:] = [{"uid": "1", "summary": "Dishes", "status": "completed"}]
+        hass.states.async_set("todo.chores", f"a{n}")
+        await hass.async_block_till_done(wait_background_tasks=True)
+        done.clear()
+        hass.states.async_set("todo.chores", f"b{n}")
+        await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(treats) == 1
+
+
 async def test_chores_from_a_real_todo_list(
     hass: HomeAssistant, now: float, hass_storage: dict[str, Any], tmp_path
 ) -> None:
@@ -2521,6 +2549,27 @@ async def test_tucking_it_in_grants_the_tuck_in_wish_to_them(
     )
     assert coordinator.state.wish["granted"]
     assert coordinator.state.bonds[me.id]["points"] == model.R.BOND_WISH_POINTS
+
+
+async def test_lights_out_by_day_grants_no_tuck_in_wish(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    freezer.move_to("2026-10-28 13:00:00+00:00")
+    me = await hass.auth.async_create_user("Me", group_ids=["system-admin"])
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.state.wish = {"kind": "tuck_in", "day": "2026-10-28", "granted": False}
+    await hass.services.async_call(
+        "switch",
+        "turn_on",
+        {"entity_id": "switch.pip_lights_out"},
+        blocking=True,
+        context=Context(user_id=me.id),
+    )
+    assert not coordinator.state.wish["granted"]
 
 
 async def test_a_look_has_room_for_three_lines(

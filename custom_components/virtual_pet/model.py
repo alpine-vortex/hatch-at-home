@@ -753,6 +753,27 @@ def _hatch(
         _fall_asleep(state, not in_sleep_hours(t, settings), events, t, settings)
 
 
+def fast_forward(
+    state: PetState, now: float, hours: float, settings: Settings, rng: random.Random
+) -> list[Event]:
+    """Live through `hours` right now: advance, then pull the simulated future
+    back to `now`. A pet asleep at the end wakes at the next morning's wake
+    time (shift_times leaves wake_at on the wall clock, which would be a day or
+    more away), unless it is only napping."""
+    seconds = hours * 3600
+    was_egg = life_stage(state) == "egg"
+    events = advance(state, now + seconds, settings, rng, max_gap=None)
+    shift_times(state, -seconds)
+    if was_egg and state.hatched_on is not None:
+        # hatched_on is a date, so shift_times can't move it: redo it from
+        # the rebased hatch time, in the configured time zone.
+        hatch = state.born + dict(R.STAGE_STARTS)["baby"] * 3600 - seconds
+        state.hatched_on = datetime.fromtimestamp(hatch, settings.tz).date().isoformat()
+    if state.asleep and not state.napping:
+        state.wake_at = next_wake(now, settings)
+    return events
+
+
 def next_wake(ts: float, settings: Settings) -> float:
     """The next wake time after ts, as a timestamp (DST-safe)."""
     local = datetime.fromtimestamp(ts, settings.tz)
@@ -1548,6 +1569,8 @@ def _do_action(
         return OK
 
     if action == "snack":
+        if state.hunger >= R.FEED_FULL_AT:
+            return "full"
         state.hunger = _clamp(state.hunger + R.SNACK_HUNGER)
         state.happiness = _clamp(state.happiness + R.SNACK_HAPPINESS)
         state.weight = _clamp(state.weight + R.WEIGHT_SNACK)

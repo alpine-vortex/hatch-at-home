@@ -241,6 +241,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._home_started = False
         # Completed to-do items per list, to spot newly done chores.
         self._chores_done: dict[str, set[str]] = {}
+        # Items paid for today, per list: ticking one again pays nothing.
+        self._chores_paid: dict[str, tuple[str, set[str]]] = {}
         self._chores_locks: dict[str, asyncio.Lock] = {}
         self._home_debouncer = Debouncer(
             hass,
@@ -647,11 +649,21 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return
         known = self._chores_done.get(entity_id)
         self._chores_done[entity_id] = done
-        if known is None or not (new := len(done - known)):
+        if known is None or not (fresh := done - known):
             return
         now = self._now()
+        day = self._today(now)[0]
+        paid_day, paid = self._chores_paid.get(entity_id, (day, set()))
+        if paid_day != day:
+            paid = set()
+        unpaid = sorted(fresh - paid)
+        self._chores_paid[entity_id] = (day, paid)
+        if not unpaid:
+            return
         self._advance(now)
-        if model.chores_done(self.state, new, now):
+        earned = model.chores_done(self.state, len(unpaid), now)
+        paid.update(unpaid[:earned])
+        if earned:
             self._fire(model.give_treats(self.state, now))
             self._save()
             self._publish()
@@ -1018,7 +1030,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 granted += self._grant("chore", None, now)
                 model.dream_seed(state, {"kind": "chore"}, now)
             elif kind == "fell_asleep" and e.get("how") == "lights":
-                granted += self._grant("tuck_in", None, now)
+                # Only tucking in: lights out from 18:00 to 03:00 local.
+                hour = self._today(now)[1]
+                if hour >= R.TUCK_IN_EVENING_HOUR or hour < 3:
+                    granted += self._grant("tuck_in", None, now)
             elif kind in ("watching", "listening") and e.get("title"):
                 model.dream_seed(state, {"kind": kind, "title": e["title"]}, now)
             elif kind == "weather" and e.get("change") in (
@@ -2014,20 +2029,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         assert self.state is not None
         now = self._now()
         self._advance(now)
-        seconds = hours * 3600
-        was_egg = model.life_stage(self.state) == "egg"
-        events = model.advance(
-            self.state, now + seconds, self.settings, self.rng, max_gap=None
-        )
-        # Pull the simulated future back to the real present.
-        model.shift_times(self.state, -seconds)
-        if was_egg and self.state.hatched_on is not None:
-            # hatched_on is a date, so shift_times can't move it: redo it from
-            # the rebased hatch time, in the configured time zone.
-            hatch = self.state.born + dict(R.STAGE_STARTS)["baby"] * 3600 - seconds
-            self.state.hatched_on = (
-                datetime.fromtimestamp(hatch, self.settings.tz).date().isoformat()
-            )
+        events = model.fast_forward(self.state, now, hours, self.settings, self.rng)
         self._fire(events, simulated=True)
         self._pick_favourite()
         self._save()
