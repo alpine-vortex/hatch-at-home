@@ -27,8 +27,11 @@ wording that survives in the body.**
    new-page line.
 5. Upbringing words are printed for **retired and current adults only**.
 6. The new-page line comes **once per form**.
-7. Pets of deleted devices **stay** in the book (see "Deleted devices", the one place
-   this needs a mechanism decided at build time).
+7. **Deleting a device offers a choice, and the default is to remove its pets from the
+   book.** (First relayed wrongly as "they stay"; corrected by the owner, 2026-10-28.)
+   A per-device option "keep this pet's family in the forms book if this device is
+   removed", **off by default**; on, removal copies a summary into a small house-wide
+   store the book also reads (see "Deleted devices").
 8. The "raised here" list is capped at **four, then "and more"**.
 9. Beetle: **nothing** (no art, no `species.json`, absent from the book).
 10. The list includes pets from **every same-world device on the card**: pet names and
@@ -282,34 +285,53 @@ Consequences, stated so the owner isn't surprised:
 - A device not on the card adds nothing to that card's book (same as `raised`).
   Two dashboards showing different devices can show different books. This is the
   scope's stated behaviour; no home-wide store is added (that is option D's).
-- A device deleted from HA: owner answer 7 says its pets **stay**. That is more than
-  `raised` and `journal` do today (they go with the device's store), so it needs a
-  mechanism: see "Deleted devices" below.
+- A device deleted from HA: **by default its `seen`, `raised` and `journal` go with it**
+  (as today, and owner answer 7). Only when that device's "keep" option was on do its
+  pets stay: see "Deleted devices" below.
 - No cross-person state: `seen` is the device's, not a person's, so the book can't
   rank anyone and is the same for everyone looking at the same card.
 - The new-page marker is per browser (below), not per person and not on the server.
 
-### Deleted devices (owner answer 7: they stay)
+### Deleted devices (owner answer 7: remove by default, keep by choice)
 
-Today a deleted device's `seen`, `raised` and `journal` leave with its config entry.
-"Pets of deleted devices stay" means a book page and its "raised here" lines survive a
-device being removed. The mechanism is **decided at build time**, within these limits:
+**Real hook?** Home Assistant shows no dialog when an integration entry is deleted and
+offers integrations no "ask at deletion time" hook: `async_remove_entry`
+(`__init__.py:435`) runs after the user has confirmed, with nothing to ask. The only way
+to give the choice is **before** deletion, so it is a per-device option. (If the build
+finds a real ask-at-delete hook in the HA version in use, prefer it and say so; none is
+known.)
 
-- It stores only what the book already shows: species to furthest stage, and per
-  pet `name`, `generation`, `upbringing`, `personality`, `world`. **Nothing
-  per-person**, no `bonds`, `notify_users` or user ids, and anything of it exposed as an
-  attribute is in `_unrecorded_attributes`.
-- Proposal: when a config entry is removed (`async_remove_entry`), write those
-  records to a small home-wide `Store` (`virtual_pet.book`), and the sensor of any
-  same-world device exposes them as `seen`/`journal`-shaped "kept" data. This is the
-  smallest thing that works and is **a call for the owner/first mate before PR 1 starts**
-  because it touches option D's territory (a home-wide store, which the scope deferred).
-- A browser-only alternative (the card's `hatch-book-<world>` keeps the union of stages
-  it has seen) keeps portraits but not the pets' names and not other browsers.
+- **The option:** `keep_in_book` (boolean, **default off**) in `PetOptionsFlow`
+  (`config_flow.py:228`, `OptionsFlowWithReload`), in `entry.options`, with a label and
+  helper in `strings.json` / `translations/en.json` (copy table, proposals). Off: removal
+  works exactly as today (`async_remove_entry` deletes the pet's `PetStore` and issues).
+- **When on,** `async_remove_entry`, **before** removing the pet's store, loads that
+  store with `PetState.from_dict` (so validation and backfill apply) and writes a summary
+  into the house-wide `Store` `virtual_pet.book` under a key per entry id: `world`,
+  `seen` (species to stage), and per pet `species`, `name`, `generation`, `upbringing`,
+  `personality`, from `journal` plus the current pet (its species at its current stage).
+  **Nothing per-person:** no `bonds`, `notify_users`, `wish`, `favourites`, user ids or
+  nicknames, and the summary is built by an explicit allow-list of those keys, not by
+  copying the dict. If the load fails, remove as today and keep nothing.
+- **Reading it:** every `LifeStageSensor` of the same world exposes the kept entries of
+  its world as one more attribute, `kept` (same shape as the summary, **in
+  `_unrecorded_attributes`**), and `_bookOf` takes the union: stage maxima into `forms`,
+  pets into `raisers`, de-duplicated on (species, name, generation). Nothing else in HA
+  reads the store. A card whose server lacks `kept` simply shows less.
+- A world with no remaining device shows no card, so its kept entries have nothing to
+  show them until a device of that world exists again.
+- Removing the *last* entry leaves the house-wide store (it is small, names and stages
+  only). Removing the integration entirely: the store is deleted with it (the last
+  `async_remove_entry`), so uninstalling leaves nothing behind.
+- This is a house-wide store, which the scope called option D's. It is the smallest piece
+  of it and is **only written when the owner turns the option on for a device**.
 
-Test: remove a device whose pet reached adult; the surviving device's card still shows
-that creature's adult and the pet's line.
-
+Tests (PR 1, with 12-13 in the server list): option off, remove: nothing kept and the
+store is gone as today; option on, remove an adult-reached pet: the surviving same-world
+device exposes the species at `adult` and the pet's line in `kept`, with none of the
+forbidden keys present; a different-world device does not see it; the summary is
+allow-listed (inject a `bonds` key into the store and assert it is absent); a failed
+load removes as today; the option is off by default for a new entry and an existing one.
 
 ## Card
 
@@ -511,7 +533,7 @@ random.Random(1), max_gap=None)`).
     so no moment, see Card checks).
 12. Data test (`tests/test_species.py`): for every species with a `species.json`, all
     four `<stage>_content_1.png` exist, and `stages` is the four the card draws.
-13. Deleted devices (owner answer 7): per the mechanism chosen at build time.
+13. Deleted devices (owner answer 7): the `keep_in_book` cases listed under "Deleted devices" (off by default; on keeps an allow-listed summary; `kept` is unrecorded and per-world).
 
 ### Card (`scripts/card-check.js`, `scripts/card-check`)
 
@@ -583,7 +605,7 @@ art (merged in 0.35.0b3).
 1. **PR 1: the state.** `model.py` (`seen`, `mark_seen`, `backfill_seen` with the legacy
    cap, `from_dict` validation, `_step` call, `lay_egg` carry-over), `coordinator.py`
    (second `backfill_seen` call), `sensor.py` (the attribute and its
-   `_unrecorded_attributes` entry), the deleted-devices mechanism, `docs/guide.md` (the
+   `_unrecorded_attributes` entry), the `keep_in_book` option and house-wide `virtual_pet.book` store (`config_flow.py`, `__init__.py`, `strings.json`, `translations/en.json`), the `kept` attribute, `docs/guide.md` (the
    `sensor.<pet>_life_stage` row), tests 1-13.
    **Done =** pytest passes; a dev HA's sensor shows `seen` after a restart on an old store;
    history shows no `seen`; `lay_egg` keeps the book and is not aliased; a legacy store
@@ -620,6 +642,8 @@ Guide: the "The journal" bullet describes the book, the silhouettes, the dot and
 | Line | Pip · gen 2 · devoted · shy | Upbringing for retired and current adults only; personality where known |
 | A pet still growing up | Pip · gen 3 · now | |
 | More than four | and more | Ahead of the newest four |
+| Device option: label | Keep this pet's family in the forms book | Per-device options flow (`keep_in_book`), **off by default**, because HA asks nothing when a device is deleted |
+| Device option: helper | If you remove this device later, its pets stay in the forms book. Left off, they go with it. | Also the only text about the choice; names no person |
 | Card option label / helper | Show every form / Draw every creature and form in colour | Editor checkbox, off by default |
 
 Nothing here counts, scores or names a requirement. Existing stage lines ("I'm a teen
@@ -658,6 +682,12 @@ on the event bus; anything per-person.
 | 18 | PR 2 too big. | Split into 2a, 2b, 2c. |
 | 19 | Acceptance gaps. | "Done =" for each PR now includes the two-restart test, the alias test, screenshot criteria, and shared-screen conditions. |
 
-Also folded from the owner's 15 answers: all now under "Decided" above. The only
-mechanism left to choose at build time is for owner answer 7 (pets of deleted devices
-stay), see "Deleted devices".
+Also folded from the owner's 15 answers: all now under "Decided" above.
+
+**Update (owner, 2026-10-28, answer 7 corrected).** The first mate relayed 7 wrongly
+("they stay"). The real decision: deleting a device offers a choice and the **default is
+to remove the pets from the book**. HA has no delete-time dialog, so it is a per-device
+option in the options flow, off by default, and `async_remove_entry` copies an
+allow-listed summary to a house-wide store only when it is on. Changes: Decided 7, the
+Multi-device bullet, the "Deleted devices" section, server test 13, PR 1's scope, one
+copy row (two words rows). **Nothing in this audit table's findings changes.**
