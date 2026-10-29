@@ -98,6 +98,7 @@ const CHIRPS = { // [frequency Hz, length s] notes, played one after another
   spooky: [[660, 0.12], [622, 0.12], [587, 0.12], [523, 0.26]],
   harvest: [[523, 0.1], [659, 0.1], [784, 0.1], [659, 0.1], [784, 0.22]],
   birthday: [[523, 0.12], [523, 0.1], [587, 0.22], [523, 0.22], [698, 0.22], [659, 0.4]],
+  click: [[1760, 0.04]], // the backlight
 };
 let audio = null; // one AudioContext for every card on the page
 
@@ -790,6 +791,7 @@ function graphemes(text) {
 const degrees = (n) => (Number.isFinite(n) ? `${n}°`.replace("-", "−") : "");
 // How long the happy bounce lasts when the pet gets excited.
 const BOUNCE_MS = 10000;
+const BACKLIGHT_MS = 3000; // a tap on the shell's backlight button lights the screen this long
 const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
 
 // The same bands as rates.py (WEIGHT_LIGHT_BELOW, WEIGHT_HEAVY_ABOVE).
@@ -1337,7 +1339,7 @@ const STYLE = `
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
-  .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd,
+  .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
   .screen.show-status .bondhearts { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
@@ -1384,6 +1386,49 @@ const STYLE = `
   .ghost.go-left { translate: -60% 0; }
   .ghost.go-right { translate: 60% 0; }
   .screen.dim .ghost { filter: brightness(.8); }
+  /* The backlight (_backlight): an Indiglo glow over the scene, under the bubble.
+     It comes on at once and fades out; the dimmed scene brightens under it. */
+  .glow { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen;
+    background: radial-gradient(ellipse at 50% 55%, #4fe3c1 0%, rgba(79,227,193,.8) 45%, rgba(79,227,193,.35) 100%);
+    transition: opacity .6s ease-out; }
+  .screen.lit .glow { opacity: .55; transition: none; }
+  .screen.lit.dim .bg, .screen.lit.faded .bg { filter: brightness(.9) saturate(.75); }
+  .screen.lit.dim .pet, .screen.lit.dim .ghost { filter: brightness(.9); }
+  /* Its button: a 44 px target, transparent, around a small part of the shell drawn
+     in the shell's own colours (::before). Each spot keeps the target clear of the
+     screen, the buttons and the label, and inside the slide. */
+  .backlight { position: absolute; z-index: 1; width: 44px; height: 44px; padding: 0; border: none;
+    border-radius: 8px; background: none; cursor: pointer; }
+  .backlight::before { content: ""; position: absolute; left: 50%; top: 50%; width: 10px; height: 10px;
+    translate: -50% -50%; border-radius: 50%; background: var(--d-dark);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.3), 0 2px 0 rgba(0,0,0,.25); }
+  .backlight:active::before { translate: -50% calc(-50% + 1px); }
+  .device:has(.screen.lit) .backlight::before { background: #4fe3c1; box-shadow: 0 0 6px 1px rgba(79,227,193,.8); }
+  /* Egg: a nub on the shoulder, just above the screen's right corner. */
+  .egg .backlight { right: -18px; top: -34px; }
+  .egg .backlight::before { width: 10px; height: 18px; border-radius: 5px; left: 60%; top: 62%; }
+  .compact .egg .backlight { right: -14px; }
+  /* Tank: the lid's right grip, a little raised. */
+  .lid .backlight { left: calc(62% + 6px - 22px); top: -4px; }
+  .lid .backlight::before { top: 14px; width: 30px; max-width: 70%; height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,.32); box-shadow: 0 1px 0 rgba(0,0,0,.3); }
+  .lid:has(.backlight) span:nth-of-type(3) { visibility: hidden; }
+  /* House: a little lamp on the chimney (over the roof's triangle). */
+  .roof .backlight { right: calc(20% - 11px); top: 0; }
+  .roof .backlight::before { width: 12px; height: 12px; top: 22px; background: #ffe9a8;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.2), 0 0 0 2px rgba(0,0,0,.22); }
+  /* Porthole: the top-right rivet, bigger and raised. */
+  .porthole .backlight { left: calc(91.2% - 8px); top: calc(11% - 31px); }
+  .porthole .backlight::before { left: 3px; top: 36px; }
+  /* Pad: a dewdrop on the upper right rim. */
+  .pad .backlight { right: 18%; top: 4px; }
+  .pad .backlight::before { width: 10px; height: 12px; border-radius: 50% 50% 50% 50% / 60% 60% 42% 42%;
+    background: radial-gradient(circle at 35% 30%, #fff 0 18%, rgba(214,244,255,.9) 30%, rgba(120,190,220,.75));
+    box-shadow: 0 1px 0 rgba(0,0,0,.22); }
+  /* Moon: a star on the crescent (turned upright again). */
+  .crescent .backlight { left: 0; top: 10px; rotate: 20deg; }
+  .crescent .backlight::before { width: 14px; height: 14px; border-radius: 0; background: #fff4bb; box-shadow: none;
+    clip-path: polygon(50% 0, 63% 35%, 100% 38%, 71% 60%, 82% 100%, 50% 77%, 18% 100%, 29% 60%, 0 38%, 37% 35%); }
   @media (prefers-contrast: more) { ha-card.lcd-on .lcd, ha-card.lcd-on .ghost { display: none; } }
   /* Idle life. */
   .pet { transition: translate .25s ease-out, rotate .2s ease-out; }
@@ -1817,6 +1862,7 @@ class HatchPetCard extends HTMLElement {
             <div class="flash"></div>
             <div class="breeze"><span></span><span></span><span></span></div>
             <div class="lcd"></div>
+            <div class="glow"></div>
             <img class="attention" alt="wants attention">
             <div class="bubble"></div>
             <div class="sr" role="status"></div>
@@ -1851,6 +1897,17 @@ class HatchPetCard extends HTMLElement {
     // (its width depends on the shell's padding as well as the slide's).
     s.lcdSize = new ResizeObserver(() => this._lcdPitch(s));
     s.lcdSize.observe(s.screen);
+    // The backlight: a real button on the shell (each shape has its spot, see
+    // _renderSlide). Card only: it lights the screen and nothing else.
+    s.backlight = document.createElement("button");
+    s.backlight.className = "backlight";
+    s.backlight.setAttribute("aria-label", "Backlight");
+    s.backlight.title = "Light up the screen";
+    s.backlight.addEventListener("click", (e) => {
+      if (s !== this._slides[this._index]) return; // a neighbour's: the tap brings it forward
+      e.stopPropagation();
+      this._backlight(s);
+    });
     slide.querySelectorAll("img").forEach((img) => img.addEventListener("error", () => {
       const src = img.getAttribute("src");
       if (src && !WARNED.has(src)) {
@@ -2062,6 +2119,8 @@ class HatchPetCard extends HTMLElement {
     // Its other timers, and what each would have tidied away.
     clearTimeout(s.breezeTimer);
     s.screen?.classList.remove("breezy");
+    clearTimeout(s.litTimer);
+    s.screen?.classList.remove("lit");
     clearTimeout(s.flairTimer);
     s.screen?.querySelector(".flair")?.remove();
     clearTimeout(s.statusMessageTimer);
@@ -2288,6 +2347,14 @@ class HatchPetCard extends HTMLElement {
     dev.querySelector(".loop").style.display = shape === "egg" ? "" : "none";
     dev.querySelector(".lid").style.display = shape === "tank" ? "" : "none";
     dev.querySelector(".feet").style.display = shape === "tank" ? "" : "none";
+    // The backlight's spot: a nub by the egg's screen, the tank lid's right grip, a
+    // lamp on the chimney, a rivet, a dewdrop on the pad's rim, a star on the moon.
+    const spot = { egg: ".bezel", tank: ".lid", house: ".roof", porthole: ".bezel", pad: ".body", moon: ".crescent" };
+    const holder = dev.querySelector(spot[shape]);
+    if (s.backlight.parentElement !== holder) {
+      if (shape === "tank") holder.insertBefore(s.backlight, holder.lastElementChild);
+      else holder.append(s.backlight);
+    }
     dev.style.setProperty("--d-shell", color);
     dev.style.setProperty("--d-dark", shade(color, 0.72));
     dev.style.setProperty("--d-ink", deviceInk(color));
@@ -2582,6 +2649,15 @@ class HatchPetCard extends HTMLElement {
     s.ghost.animate([{ opacity: 0.3 }, { opacity: 0.3, offset: (move + 120) / duration }, { opacity: 0 }],
       { duration });
     s.ghostUntil = Date.now() + duration;
+  }
+
+  // The backlight: the screen glows for a while; a second tap starts the while
+  // again. Nothing else changes (no lights out, no waking, no line).
+  _backlight(s) {
+    clearTimeout(s.litTimer);
+    s.screen.classList.add("lit");
+    this._chirp(s, "click");
+    s.litTimer = setTimeout(() => s.screen.classList.remove("lit"), BACKLIGHT_MS);
   }
 
   // Nothing else is going on: is the pet free for a small idle behaviour?

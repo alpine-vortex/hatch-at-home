@@ -246,6 +246,14 @@ pet; it's only how the screen looks.
   its last frame for a moment when it moves, and a short smear when it wanders or
   dashes aside in a game. Only on the pet you're looking at, never in Catch, and
   never with reduced motion. The same "screen effects here" switch turns it off.
+- **The backlight.** Every device has a little button on its shell: a nub on the
+  egg's shoulder, the tank lid's right grip, a lamp on the house's chimney, the
+  porthole's top-right rivet, a dewdrop on the lily pad's rim and a star on the
+  moon. Tap it ("Light up the screen") and the screen glows blue-green for three
+  seconds, then fades; tap again to keep it lit. It shows best at night, when a
+  sleeping pet glows under it (it stays asleep). It only lights the screen: it
+  doesn't turn the lights on, wake the pet or tell Home Assistant anything. With
+  sounds on it clicks, except at night and while the pet sleeps.
 
 ## What you get
 

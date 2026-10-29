@@ -3263,11 +3263,22 @@ async function main() {
     const on = await crop(sel, inset);
     await card.evaluate((el) => el.shadowRoot.querySelector(".check-notext").remove());
     await holdStill(false);
-    if (process.env.LCD_DEBUG && !off.equals(on)) {
-      fs.writeFileSync(path.join(OUT, `under-off-${results.length}.png`), off);
-      fs.writeFileSync(path.join(OUT, `under-on-${results.length}.png`), on);
-    }
-    return off.equals(on);
+    // At most 3 levels apart (compositing rounds a little); a grid line would be ~20.
+    return off.equals(on) || await evaluate(async ([a, b]) => {
+      const pixels = async (src) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${src}`;
+        await img.decode();
+        const c = document.createElement("canvas");
+        c.width = img.width;
+        c.height = img.height;
+        const g = c.getContext("2d");
+        g.drawImage(img, 0, 0);
+        return g.getImageData(0, 0, c.width, c.height).data;
+      };
+      const [pa, pb] = [await pixels(a), await pixels(b)];
+      return pa.length === pb.length && pa.every((v, i) => Math.abs(v - pb[i]) <= 3);
+    }, [off.toString("base64"), on.toString("base64")]);
   };
 
   // The "screen effects here" row: on by default, per browser.
@@ -3463,6 +3474,150 @@ async function main() {
   await ghostShot("d2-ghost-trail", true);
   await ghostShot("d2-ghost-frame", false);
   await setLcd(false);
+  await page.setViewportSize({ width: 420, height: 860 });
+  await page.waitForTimeout(600);
+
+  // The backlight (1c): a button on each shell. Its 44 px target gets the taps,
+  // and without it they'd land on the shell: not the screen, a toy, the label or
+  // the request, and not past the slide's sides (the gap to the next device).
+  // The one exception is the compact egg, whose label plate leaves no room: its
+  // target overlaps the plate's end (decoration, not a control).
+  const reach = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const root = el.shadowRoot;
+    const b = s.backlight;
+    const box = b.getBoundingClientRect();
+    const slide = s.el.getBoundingClientRect();
+    const out = { size: [Math.round(box.width), Math.round(box.height)], self: 0, missed: 0, under: {},
+      inside: box.left >= slide.left - 0.5 && box.right <= slide.right + 0.5,
+      label: b.getAttribute("aria-label"), title: b.title };
+    const points = [];
+    for (let i = 4; i <= 40; i += 4) for (let j = 4; j <= 40; j += 4) points.push([box.left + i, box.top + j]);
+    for (const [x, y] of points) root.elementFromPoint(x, y) === b ? out.self++ : out.missed++;
+    b.style.pointerEvents = "none";
+    for (const [x, y] of points) {
+      const h = root.elementFromPoint(x, y);
+      const k = h?.closest(".screen") ? "screen" : h?.closest(".toy") ? "toy" : h?.closest(".label") ? "label" :
+        h?.closest(".request") ? "request" : h?.closest(".slide") === s.el || h?.closest(".viewport") ? "shell" : "other";
+      out.under[k] = (out.under[k] || 0) + 1;
+    }
+    b.style.pointerEvents = "";
+    return out;
+  });
+  // Service calls and the pet's own websocket messages, on the connection itself
+  // (the hass object is replaced at every state change).
+  const calls = () => card.evaluate((el) => {
+    el.__calls = [];
+    const conn = el._hass.connection;
+    if (!conn.__realSend) {
+      conn.__realSend = conn.sendMessagePromise;
+      conn.sendMessagePromise = function (msg, ...a) {
+        if (msg?.type === "call_service" || /^virtual_pet\//.test(msg?.type || "")) el.__calls?.push(msg.type);
+        return conn.__realSend.call(this, msg, ...a);
+      };
+    }
+  });
+  const glow = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { lit: s.screen.classList.contains("lit"),
+      opacity: Number(getComputedStyle(s.screen.querySelector(".glow")).opacity), calls: el.__calls,
+      lights: el._state(s, "switch.lights_out")?.state, asleep: s.asleep };
+  });
+  for (const width of [420, 330]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.waitForTimeout(600);
+    const bad = [];
+    let layout = null;
+    for (const key of worlds) {
+      layout = await inWorld(key);
+      const r = await reach();
+      const egg = layout.device.split(" ").includes("egg");
+      const clear = Object.keys(r.under).every((k) => k === "shell" || (k === "label" && egg && layout.compact));
+      if (r.size.join() !== "44,44" || r.missed || !r.inside || !clear || r.label !== "Backlight" || r.title !== "Light up the screen") {
+        bad.push({ key, ...r });
+      }
+    }
+    check(`the backlight button is reachable on all six shells at ${width} px, clear of the screen, toys and label`,
+      bad.length === 0, JSON.stringify({ layout, bad }));
+    // A tap at night lights the screen for 3 s; nothing is sent to Home Assistant.
+    await card.evaluate((el) => el._slides[el._index].screen.classList.add("night"));
+    await calls();
+    const lightsBefore = (await glow()).lights;
+    await cur().locator(".backlight").click();
+    await page.waitForTimeout(100);
+    const lit = await glow();
+    await page.waitForTimeout(3900);
+    const after = await glow();
+    check(`a backlight tap at ${width} px lights the screen, gone by 4 s, nothing sent`,
+      lit.lit && lit.opacity > 0.5 && !after.lit && after.opacity === 0 && after.calls.length === 0 &&
+      after.lights === lightsBefore, JSON.stringify({ lit, after }));
+  }
+  // Keyboard, a second tap, and the sleeping pet under the glow.
+  await cur().locator(".backlight").focus();
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(100);
+  const byKey = await glow();
+  await page.waitForTimeout(2000);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(2000);
+  const again = await glow();
+  await page.waitForTimeout(1700);
+  check("the backlight works from the keyboard, and a second tap starts the 3 s again",
+    byKey.lit && again.lit && !(await glow()).lit, JSON.stringify({ byKey, again }));
+  const asleepGlow = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const was = { asleep: s.asleep };
+    s.screen.classList.add("dim");
+    s.asleep = true;
+    const frame = s.pet.getAttribute("src");
+    el._backlight(s);
+    await new Promise((r) => setTimeout(r, 800)); // the scene's filter eases over .6 s
+    const out = { bg: getComputedStyle(s.bg).filter, asleep: s.asleep, frame: s.pet.getAttribute("src") === frame,
+      said: s.bubble.textContent };
+    Object.assign(s, was);
+    return out;
+  });
+  check("under the backlight a sleeping pet stays asleep and its scene brightens",
+    asleepGlow.asleep && /brightness\(0\.9\)/.test(asleepGlow.bg), JSON.stringify(asleepGlow));
+  await page.waitForTimeout(3100);
+  // Screenshots: lit at night on every shell, and by day; off with reduced motion.
+  for (const key of worlds) {
+    await inWorld(key);
+    await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.screen.classList.add("night");
+      el._backlight(s);
+    });
+    await page.waitForTimeout(150);
+    await shot(`d3-backlight-${key}`);
+  }
+  await inWorld(null);
+  await card.evaluate((el) => el._backlight(el._slides[el._index]));
+  await page.waitForTimeout(150);
+  await shot("d3-backlight-day");
+  await page.waitForTimeout(3800);
+  await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.screen.classList.add("dim");
+    el._backlight(s);
+  });
+  await page.waitForTimeout(800);
+  await shot("d3-backlight-asleep");
+  await card.evaluate((el) => el._redraw());
+  await page.waitForTimeout(3800);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await card.evaluate((el) => el._backlight(el._slides[el._index]));
+  await page.waitForTimeout(3050);
+  const calmOff = await glow();
+  check("with reduced motion the backlight goes straight off", !calmOff.lit && calmOff.opacity === 0, JSON.stringify(calmOff));
+  await shot("d3-backlight-reduced-motion-off");
+  await page.emulateMedia({ reducedMotion: null });
+  await card.evaluate((el) => {
+    const conn = el._hass.connection;
+    if (conn.__realSend) conn.sendMessagePromise = conn.__realSend;
+    delete conn.__realSend;
+    delete el.__calls;
+  });
   await page.setViewportSize({ width: 420, height: 860 });
   await page.waitForTimeout(600);
 
