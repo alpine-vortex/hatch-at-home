@@ -1190,22 +1190,6 @@ const STYLE = `
     padding: 9px; box-shadow: inset 0 3px 0 rgba(0,0,0,.12); }
   .screen { position: relative; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden;
     background: #2b2f3a; box-shadow: inset 0 0 0 3px rgba(0,0,0,.35); cursor: pointer; }
-  /* Power-on: a plain pale-green LCD with the logo, over everything on the screen. */
-  .boot { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 14px; margin: 0; padding: 0; border: 0;
-    border-radius: inherit; cursor: pointer; font: 400 14px 'Tiny5', monospace; color: #2f3a24;
-    background: linear-gradient(rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px,
-      linear-gradient(90deg, rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px, #c6d4a0; }
-  .boot[hidden] { display: none; }
-  .booting .buttons { visibility: hidden; }
-  .boot .logo { position: relative; font-size: 46px; line-height: 1; letter-spacing: 2px; }
-  .boot .logo span { display: block; text-shadow: 2px 2px 0 rgba(47,58,36,.35); }
-  .boot .logo .ink { color: #9aaa72; }
-  .boot .logo .fill { position: absolute; inset: 0; color: #2f3a24; clip-path: inset(0 100% 0 0);
-    transition: clip-path ${BOOT_FILL_MS}ms steps(8); }
-  .boot.filling .logo .fill { clip-path: inset(0); }
-  .boot .go { animation: bootblink 1.2s steps(1) infinite; }
-  @keyframes bootblink { 50% { opacity: 0; } }
   .screen img { position: absolute; image-rendering: pixelated; user-select: none;
     -webkit-user-drag: none; pointer-events: none; }
   .bg { inset: 0; width: 100%; height: 100%; object-fit: cover; transition: filter .6s; }
@@ -1430,6 +1414,22 @@ const STYLE = `
     display: none; flex-direction: column; gap: 4px; font-size: 13px; overflow: auto; }
   .screen.show-status .status { display: flex; }
   .screen.show-status .bubble { display: none; }
+  /* Power-on: a plain pale-green LCD with the logo, over everything on the screen. */
+  .boot { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; margin: 0; padding: 0; border: 0;
+    border-radius: inherit; cursor: pointer; font: 400 14px 'Tiny5', monospace; color: #2f3a24;
+    background: linear-gradient(rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px,
+      linear-gradient(90deg, rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px, #c6d4a0; }
+  .boot[hidden] { display: none; }
+  .booting .buttons, .booting .request { visibility: hidden; }
+  .boot .logo { position: relative; font-size: 46px; line-height: 1; letter-spacing: 2px; }
+  .boot .logo span { display: block; text-shadow: 2px 2px 0 rgba(47,58,36,.35); }
+  .boot .logo .ink { color: #9aaa72; }
+  .boot .logo .fill { position: absolute; inset: 0; color: #2f3a24; clip-path: inset(0 100% 0 0);
+    transition: clip-path ${BOOT_FILL_MS}ms steps(8); }
+  .boot.filling .logo .fill { clip-path: inset(0); }
+  .boot .go { animation: bootblink 1.2s steps(1) infinite; }
+  @keyframes bootblink { 50% { opacity: 0; } }
   /* The pet's request waits while the status screen or a game is up (it covered them). */
   .screen.show-status + .request, .screen:has(> .game:not([hidden])) + .request { display: none !important; }
   /* With a game up, the bubble leaves room for its close button. */
@@ -1848,7 +1848,7 @@ class HatchPetCard extends HTMLElement {
       el: slide, device: q(".device"), label: q(".label"), screen: q(".screen"), bg: q(".bg"),
       awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), pet: q(".pet"), prop: q(".prop"),
       perch: q(".perch"),
-      attention: q(".attention"), bubble: q(".bubble"), status: q(".status"), boot: q(".boot"),
+      attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
       catchEl: q(".gcatch"), live: q(".sr[role=status]"), seasonBox: q(".season"),
@@ -1901,6 +1901,7 @@ class HatchPetCard extends HTMLElement {
       this._press(s, key);
     });
     // The boot screen takes the tap (a button, so a key works too) and nothing under it.
+    s.boot = q(".boot");
     s.boot.hidden = !this._booting;
     s.boot.addEventListener("click", (e) => {
       e.stopPropagation();

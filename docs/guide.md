@@ -84,7 +84,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 - **Power-on:** the first time a browser shows the card, the screen starts like a
   new toy: a pale-green screen with the HATCH logo and a blinking "▶ tap to start".
   A tap fills in the logo and cuts to the pet (with a rising beep if you turned
-  sounds on, and it's not quiet hours); with no tap it starts by itself after about
+  sounds on, outside quiet hours and while the pet is awake); with no tap it starts by itself after about
   five seconds, silently. It shows once per browser, and again only after an update
   that asks for it. Reduced motion skips the fill.
 - The screen shows the pet, its scene and a speech bubble. The bubble says what's on

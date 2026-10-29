@@ -3319,10 +3319,10 @@ async function main() {
     check(`a second load shows no boot screen (${width}px)`, await visible("hatch-pet-card .slide .boot") === 0);
     // Nobody taps: the pet shows by itself in about 5 s, silently.
     await fresh();
-    const t0 = Date.now();
-    const auto = await gone(7000);
-    check(`boot with no tap finishes by itself, silently (${width}px)`,
-      auto && Date.now() - t0 < 7000 && await bp.evaluate(() => window.__osc) === 0, `${Date.now() - t0} ms`);
+    const t0 = Date.now() - 1000; // fresh() settled for a second after the screen showed
+    const auto = await gone(6000);
+    check(`boot with no tap finishes by itself in 6 s, silently (${width}px)`,
+      auto && Date.now() - t0 < 6000 && await bp.evaluate(() => window.__osc) === 0, `${Date.now() - t0} ms`);
     // Sounds on at 22:00: the tap works, the beep stays quiet.
     await fresh();
     await hours(22);
