@@ -122,7 +122,7 @@ CALL_THRESHOLDS: dict[str, tuple[float, float]] = {
     "energy": (20.0, 40.0),
 }
 FAKE_CALL_RATE = 0.12  # fake calls per awake hour while everything is fine
-FAKE_CALL_MIN_STATS = 50.0  # only whines when all core stats are above this
+LONELY_CALL_RATE = 0.1  # "a bit lonely" calls per awake hour at happiness 25-40
 # Discipline makes whining rarer: at 100 it whines this much less often.
 FAKE_CALL_DISCIPLINE_DAMPING = 0.75
 

@@ -1580,7 +1580,7 @@ async function main() {
           // "la la la" is a song (the owner's line), not a word said three times.
           if (words.some((w, i) => i > 1 && w !== "la" && w === words[i - 1] && w === words[i - 2])) bad.push(`${key}: "${line}" three in a row`);
           if (line.includes("?") && !call) bad.push(`${key}: "${line}" asks`);
-          if (call && !/call_(happiness|fake)$/.test(key) && new Set(words).size < words.length) bad.push(`${key}: "${line}" repeats`);
+          if (call && !/call_happiness$/.test(key) && new Set(words).size < words.length) bad.push(`${key}: "${line}" repeats`);
           if ("squeak squeak!!".length + 1 + line.length > 60) bad.push(`${key}: "${line}" too long`);
         }
       }

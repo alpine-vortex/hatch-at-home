@@ -683,6 +683,134 @@ def test_fake_call_looks_like_a_plea_to_play():
     assert model.mood(pet, start + 5 * MIN, SETTINGS)[2] == "play with me?"
 
 
+def calls(pet: model.PetState, t: float, rng: random.Random = None) -> list:
+    events: list = []
+    model._calls(pet, t, 0.25, rng or Lucky(), events)
+    return events
+
+
+def test_a_whine_publishes_the_key_of_a_happiness_call():
+    now = at(14)
+    pet = hatched(now)
+    pet.call = model.Call("fake", now, now + 20 * MIN)
+    _, _, sentence, key = keyed(pet, now)
+    assert key == "call_happiness" and sentence == "play with me?"
+
+
+@pytest.mark.parametrize(
+    "stats", [{"happiness": 30}, {"hunger": 30}, {"energy": 25}, {"health": 40}]
+)
+def test_a_whine_starts_at_any_stats_no_real_call_holds_for(stats):
+    now = at(14)
+    pet = hatched(now, **stats)
+    pet.happiness = stats.get("happiness", 90)
+    # Lucky rolls start the lonely call first at 25-40; take it out of the way.
+    pet.latched = ["happiness"]
+    calls(pet, now)
+    assert pet.call and pet.call.reason == "fake"
+
+
+def test_a_whine_can_start_with_a_fresh_poop():
+    now = at(14)
+    pet = hatched(now)
+    pet.poops = [now - 5 * MIN]
+    calls(pet, now)
+    assert pet.call and pet.call.reason == "fake"
+
+
+def test_no_whine_while_a_real_need_holds():
+    now = at(14)
+    pet = hatched(now, hunger=20)
+    pet.latched = ["hunger"]  # a missed call: still a need, so no whine
+    calls(pet, now)
+    assert pet.call is None
+
+
+@pytest.mark.parametrize(
+    ("happiness", "starts"), [(24, False), (30, True), (39, True), (41, False)]
+)
+def test_the_lonely_call_starts_only_at_25_to_40(happiness, starts):
+    now = at(14)
+    pet = hatched(now, happiness=happiness)
+    # Below 25 it's the ordinary call; above 40 only a whine can start.
+    events = calls(pet, now)
+    assert pet.call is not None
+    assert (pet.call.reason == "happiness") == (starts or happiness < 25)
+    assert not starts or {"type": "call_started", "reason": "happiness"} in events
+
+
+def test_the_lonely_call_stays_open_after_a_house_bonus_lifts_happiness():
+    now = at(14)
+    pet = hatched(now, happiness=30)
+    calls(pet, now)
+    assert pet.call and pet.call.reason == "happiness"
+    pet.happiness = 60  # a passive gain
+    assert calls(pet, now + 5 * MIN, NoLuck()) == []
+    assert pet.call and pet.call.reason == "happiness"
+    model._give_treats(pet, now, [])
+    assert pet.call is not None
+
+
+def test_a_passive_gain_does_not_close_a_happiness_call_before_its_deadline():
+    now = at(14)
+    pet = hatched(now, happiness=10)
+    pet.call = model.Call("happiness", now, now + 20 * MIN)
+    pet.happiness = 70
+    events = calls(pet, now + 21 * MIN, NoLuck())
+    assert pet.care_misses == 1 and "happiness" in pet.latched
+    assert any(e["type"] == "care_miss" for e in events)
+
+
+def test_play_answers_the_lonely_call():
+    now = at(14)
+    pet = hatched(now, happiness=30)
+    pet.call = model.Call("happiness", now, now + 20 * MIN)
+    _, events = model.apply_action(pet, "play", now, NoLuck())
+    assert pet.call is None
+    assert {"type": "call_answered", "reason": "happiness"} in events
+
+
+def test_an_action_that_leaves_happiness_under_25_does_not_answer():
+    now = at(14)
+    pet = hatched(now, happiness=5)
+    pet.call = model.Call("happiness", now, now + 20 * MIN)
+    model.apply_action(pet, "feed", now, NoLuck())  # raises no happiness
+    assert pet.call is not None
+
+
+def test_a_snack_spoils_a_whine():
+    now = at(14)
+    pet = hatched(now, hunger=50, discipline=50)
+    pet.call = model.Call("fake", now, now + 20 * MIN)
+    result, events = model.apply_action(pet, "snack", now, NoLuck())
+    assert result == "spoiled" and pet.call is None
+    assert pet.discipline < 50 + 1 and pet.discipline_misses == 0
+    assert {"type": "call_answered", "reason": "fake", "answer": "spoiled"} in events
+
+
+def test_a_hunger_call_replaces_an_open_whine_without_a_miss():
+    now = at(14)
+    pet = hatched(now)
+    pet.call = model.Call("fake", now, now + 20 * MIN)
+    pet.hunger = 10
+    events = calls(pet, now + 5 * MIN, NoLuck())
+    assert pet.call and pet.call.reason == "hunger"
+    assert pet.discipline_misses == 0 and pet.care_misses == 0
+    assert [e["type"] for e in events] == ["call_started"]
+
+
+def test_a_more_urgent_need_replaces_a_lower_real_call_but_not_the_reverse():
+    now = at(14)
+    pet = hatched(now, happiness=10)
+    pet.call = model.Call("happiness", now, now + 20 * MIN)
+    pet.hunger = 10
+    calls(pet, now + 5 * MIN, NoLuck())
+    assert pet.call.reason == "hunger" and pet.care_misses == 0
+    pet.happiness = 5
+    calls(pet, now + 6 * MIN, NoLuck())
+    assert pet.call.reason == "hunger"
+
+
 # --- Traits ------------------------------------------------------------------
 
 

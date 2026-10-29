@@ -980,7 +980,9 @@ def _calls(
 
     call = state.call
     if call is not None:
-        if not _call_condition(state, call.reason, t):
+        if call.reason != "happiness" and not _call_condition(state, call.reason, t):
+            # A happiness call is answered only by a care action that raises
+            # happiness (_resolve_call), never by a passive gain.
             state.call = None
             events.append({"type": "call_answered", "reason": call.reason})
         elif t >= call.deadline:
@@ -1001,6 +1003,8 @@ def _calls(
                         "care_misses": state.care_misses,
                     }
                 )
+        elif _urgent_need(state, call.reason, t):
+            state.call = None  # replaced by a more urgent need: no miss
         else:
             return
 
@@ -1009,10 +1013,30 @@ def _calls(
             _start_call(state, reason, t, events)
             return
 
-    if _wants_to_whine(state) and rng.random() < 1 - math.exp(
+    if (
+        "happiness" not in state.latched
+        and R.CALL_THRESHOLDS["happiness"][0]
+        <= state.happiness
+        < R.CALL_THRESHOLDS["happiness"][1]
+        and rng.random() < 1 - math.exp(-R.LONELY_CALL_RATE * hours)
+    ):
+        _start_call(state, "happiness", t, events)
+        return
+
+    if _wants_to_whine(state, t) and rng.random() < 1 - math.exp(
         -whine_rate(state) * hours
     ):
         _start_call(state, "fake", t, events)
+
+
+def _urgent_need(state: PetState, reason: str, t: float) -> bool:
+    """Whether a real need of higher priority than this open call holds."""
+    above = (
+        CALL_PRIORITY
+        if reason == "fake"
+        else CALL_PRIORITY[: CALL_PRIORITY.index(reason)]
+    )
+    return any(r not in state.latched and _call_condition(state, r, t) for r in above)
 
 
 def whine_rate(state: PetState) -> float:
@@ -1026,15 +1050,9 @@ def whine_rate(state: PetState) -> float:
     return rate
 
 
-def _wants_to_whine(state: PetState) -> bool:
-    return (
-        not state.sick
-        and not state.poops
-        and all(
-            getattr(state, s) > R.FAKE_CALL_MIN_STATS
-            for s in ("hunger", "happiness", "energy", "health")
-        )
-    )
+def _wants_to_whine(state: PetState, t: float) -> bool:
+    """A whine passes the gate a real happiness call passes: no real need holds."""
+    return not any(_call_condition(state, r, t) for r in CALL_PRIORITY)
 
 
 # --- Traits -----------------------------------------------------------------
@@ -1385,6 +1403,7 @@ def apply_action(
     Returns a result code ("ok", or why nothing happened) and events.
     """
     events: list[Event] = []
+    happiness_before = state.happiness
     if action in REQUEST_ACTIONS:
         result = _answer_request(state, action, now, settings, events)
     else:
@@ -1392,7 +1411,7 @@ def apply_action(
     _log(state, {"at": now, "action": action, "by": by, "result": result})
     events.append({"type": "care", "action": action, "result": result})
     if result == OK:
-        _resolve_call(state, now, events)
+        _resolve_call(state, now, events, state.happiness > happiness_before)
     return result, events
 
 
@@ -1447,6 +1466,14 @@ def _do_action(
         state.last_excite = now
         if rng.random() < R.SNACK_POOP_CHANCE:
             state.digesting.append(now + R.DIGEST_MINUTES * 60)
+        if state.call is not None and state.call.reason == "fake":
+            # A snack is not a safe probe: it spoils a whine too.
+            state.discipline = _clamp(state.discipline + R.PRAISE_WHINING_DISCIPLINE)
+            state.call = None
+            events.append(
+                {"type": "call_answered", "reason": "fake", "answer": "spoiled"}
+            )
+            return "spoiled"
         return OK
 
     if action == "play":
@@ -1616,6 +1643,7 @@ def play_game(
         happiness = R.SKILL_GAME_WIN_HAPPINESS
     if won:
         happiness += R.PLAYER_WIN_HAPPINESS * _scale(state, "player")
+    happiness_before = state.happiness
     state.happiness = _clamp(state.happiness + happiness)
     state.energy = _clamp(state.energy + R.PLAY_ENERGY)
     state.hunger = _clamp(state.hunger + R.PLAY_HUNGER)
@@ -1642,7 +1670,7 @@ def play_game(
     events.append(
         {"type": "game_finished", "game": kind, "won": won, "wins": game.wins}
     )
-    _resolve_call(state, now, events)
+    _resolve_call(state, now, events, state.happiness > happiness_before)
     return info, events
 
 
@@ -2074,12 +2102,22 @@ def _give_treats(state: PetState, t: float, events: list[Event]) -> None:
         events.append({"type": "chore_treat"})
     state.treats_waiting = 0
     state.last_excite = t
-    _resolve_call(state, t, events)
+    _resolve_call(state, t, events)  # passive: a happiness call stays open
 
 
-def _resolve_call(state: PetState, now: float, events: list[Event]) -> None:
+def _resolve_call(
+    state: PetState, now: float, events: list[Event], raised: bool = False
+) -> None:
+    """Close the open call if a care action answered it. A happiness call
+    needs the action to have raised happiness to the call level."""
     call = state.call
-    if call is not None and not _call_condition(state, call.reason, now):
+    if call is None:
+        return
+    if call.reason == "happiness":
+        answered = raised and state.happiness >= R.CALL_THRESHOLDS["happiness"][0]
+    else:
+        answered = not _call_condition(state, call.reason, now)
+    if answered:
         state.call = None
         events.append({"type": "call_answered", "reason": call.reason})
 
@@ -2230,7 +2268,6 @@ _CALL_REASONS = {
     "dirty": "it's getting stinky in here",
     "energy": "so tired... sleep time?",
     "happiness": "play with me?",
-    "fake": "play with me?",
 }
 
 _MOOD_REASONS = {
@@ -2250,7 +2287,9 @@ _MOOD_REASONS = {
 def _reason(state: PetState, current: str, drowsy: bool) -> tuple[str, str]:
     """The sentence for the mood, and its key."""
     if current == "calling" and state.call is not None:
-        return _CALL_REASONS[state.call.reason], f"call_{state.call.reason}"
+        # A whine publishes the key of a real happiness call.
+        reason = "happiness" if state.call.reason == "fake" else state.call.reason
+        return _CALL_REASONS[reason], f"call_{reason}"
     if current == "sleepy":
         if drowsy:
             return "getting late, eyes drooping", "sleepy_drowsy"

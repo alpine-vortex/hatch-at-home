@@ -493,7 +493,6 @@ const BABY = {
   "reason.call_dirty": { baby: ["stinky! clean?"], child: ["it's getting stinky!"] },
   "reason.call_energy": { baby: ["sleepy... bedtime?"], child: ["so sleepy... bedtime?"] },
   "reason.call_happiness": { baby: ["play play?"] },
-  "reason.call_fake": { baby: ["play play?"] },
   "reason.sleepy_drowsy": { baby: ["sleepy..."] },
   "reason.sleepy_low": { baby: ["sleepy..."] },
   "reason.hungry": { baby: ["a little hungy"], child: ["a little hungry"] },
