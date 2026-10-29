@@ -25,6 +25,11 @@ falling back to HA.
   `data.pending = null` in `<config>/.storage/http` and start it again. The yaml
   `http:` port alone reverts to 8123 after 5 minutes.
 - Use a fresh `.storage` for a full run, because long-lived dev pets drift.
+- With `HA_URL`, also set `HA_CONFIG=<scratch>` and
+  `HA_START="exec <main>/.venv/bin/hass --config <scratch>"`. Card-check stops and
+  restarts that HA to seed dev's bond and an aimed wish (section 8). Without them
+  those checks FAIL. With no `HA_URL` they default to `dev/config` and
+  `scripts/develop`.
 - Playwright resolves with `NODE_PATH=/home/poe/github/relink/node_modules`.
 - The venv is the main checkout's `.venv`. Symlink it into a worktree, and never
   commit the link.

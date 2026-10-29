@@ -3033,10 +3033,14 @@ async function main() {
       const shared = localStorage.getItem("hatch-shared-screen");
       document.body.append(two);
       await new Promise((r) => setTimeout(r, 1500)); // a tick or two
-      const looks = window.__look(two);
-      const out = { before, shared, looks, queue: two._slides.flatMap((x) => (x.queue || []).map((q) => q.text)) };
-      one.status.querySelector(".bell.shared").click(); // and off again, for what follows
-      return out;
+      try {
+        const looks = window.__look(two);
+        return { before, shared, looks, queue: two._slides.flatMap((x) => (x.queue || []).map((q) => q.text)) };
+      } finally { // and off again, for what follows
+        localStorage.setItem("hatch-shared-screen", "off");
+        el._goPersonal();
+        two._goPersonal();
+      }
     });
     check("FA: a card away from the page when shared screen went on clears its personal lines when it's back",
       away.before.said.includes("sunbeam") && away.shared === "on" && away.queue.every((t) => !/sunbeam/.test(t)) &&
@@ -4573,13 +4577,16 @@ async function main() {
         await new Promise((r) => setTimeout(r, 100));
         link = host.screen.querySelectorAll(".linkhearts").length;
       }
-      el._bondHearts(host); // a real bond's hearts, mid-visit
-      el._linkEnd();
-      const out = { link, bond: host.screen.querySelectorAll(".bondhearts").length,
-        linkAfter: host.screen.querySelectorAll(".linkhearts").length };
-      host.screen.querySelector(".bondhearts")?.remove();
-      localStorage.setItem("hatch-shared-screen", "off");
-      return out;
+      try {
+        el._bondHearts(host); // a real bond's hearts, mid-visit
+        el._linkEnd();
+        return { link, bond: host.screen.querySelectorAll(".bondhearts").length,
+          linkAfter: host.screen.querySelectorAll(".linkhearts").length };
+      } finally {
+        el._linkEnd();
+        host.screen.querySelector(".bondhearts")?.remove();
+        localStorage.setItem("hatch-shared-screen", "off");
+      }
     }, shared);
     await prep();
     const ownHearts = await heartsRun(false);

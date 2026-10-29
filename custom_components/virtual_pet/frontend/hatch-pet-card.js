@@ -2530,6 +2530,7 @@ class HatchPetCard extends HTMLElement {
       slide.sayUntil = 0; // the next tick says the mood's line, which names nobody
       slide.live.textContent = "";
       slide.screen.querySelector(".bondhearts")?.remove();
+      slide.screen.querySelector(".linkhearts")?.remove(); // a visit's, mid-way
       slide.journal = false;
       slide.confirm = null; // an armed "forget" is a personal row
       slide.status.innerHTML = ""; // drawn again, without its personal rows
