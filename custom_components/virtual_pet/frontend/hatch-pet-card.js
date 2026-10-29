@@ -1414,6 +1414,9 @@ const STYLE = `
     background: radial-gradient(ellipse at 50% 55%, #4fe3c1 0%, rgba(79,227,193,.8) 45%, rgba(79,227,193,.35) 100%);
     transition: opacity .6s ease-out; }
   .screen.lit .glow { opacity: .55; transition: none; }
+  /* By day a real backlight barely shows: a faint lift, not a mint wash. */
+  .screen.lit:not(.night):not(.dim):not(.faded) .glow { opacity: .14; }
+  .screen.lit:not(.night):not(.dim):not(.faded):not(.raining) .bg { filter: brightness(1.07); }
   .screen.lit.dim .bg, .screen.lit.faded .bg { filter: brightness(.9) saturate(.75); }
   .screen.lit.dim .pet, .screen.lit.dim .ghost { filter: brightness(.9); }
   /* Its button: a 44 px target, transparent, around a small part of the shell drawn
