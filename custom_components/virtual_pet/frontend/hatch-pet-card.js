@@ -98,8 +98,32 @@ const CHIRPS = { // [frequency Hz, length s] notes, played one after another
   spooky: [[660, 0.12], [622, 0.12], [587, 0.12], [523, 0.26]],
   harvest: [[523, 0.1], [659, 0.1], [784, 0.1], [659, 0.1], [784, 0.22]],
   birthday: [[523, 0.12], [523, 0.1], [587, 0.22], [523, 0.22], [698, 0.22], [659, 0.4]],
+  click: [[1760, 0.04]], // the backlight
+  link: [[1319, 0.06], [0, 0.03], [1760, 0.09]], // the infrared link
+  boot: [[523, 0.08], [784, 0.08], [1047, 0.2]],
 };
 let audio = null; // one AudioContext for every card on the page
+
+// Power-on: the first time this browser shows the card (and again after a card
+// update that bumps BOOT_VERSION, only when a release should "power on"), the
+// screens show a boot screen that waits for a tap. The tap unlocks the sound.
+const BOOT_KEY = "hatch-booted";
+const BOOT_VERSION = "1";
+const BOOT_WAIT_MS = 5000; // nobody taps (a wall tablet): it finishes by itself, silently
+const BOOT_FILL_MS = 600; // the logo fills in, then the screen cuts to the pet
+
+// True once per page load, and only if this browser hasn't booted this version.
+function claimBoot() {
+  if (claimBoot.done) return false;
+  claimBoot.done = true;
+  try {
+    if (localStorage.getItem(BOOT_KEY) === BOOT_VERSION) return false;
+    localStorage.setItem(BOOT_KEY, BOOT_VERSION);
+  } catch (err) {
+    // no storage: it shows once per page load
+  }
+  return true;
+}
 
 // Voices (species.json "voice"): now and then a line opens with the creature's
 // sound ("tweet! hi, Sam!"), never twice within VOICE_QUIET_MS, so a burst of
@@ -165,6 +189,17 @@ function babble(text, voice) {
     t += step;
   }
   return oscs;
+}
+
+// Screen effects (the LCD grid, ghosting): on unless turned off for this browser.
+const LCD_KEY = "hatch-lcd";
+
+function lcdOn() {
+  try {
+    return localStorage.getItem(LCD_KEY) !== "off";
+  } catch (err) {
+    return true;
+  }
 }
 
 function soundsOn() {
@@ -267,6 +302,7 @@ function playChirp(name) {
 // variants (_1 big, _2 small); otherwise one image.
 const FEED_FULL_AT = 95; // rates.py FEED_FULL_AT: a meal is refused above this
 const TRAIT_CAP = 4; // rates.py TRAIT_CAP, until the server says (life_stage trait_cap)
+const LINK_AFTER_MS = [600000, 1500000]; // the infrared link: 10-25 min after the page loads (random)
 const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
 const FLAIR_MS = 4200; // how long a moment lasts
 const FLAIR = {
@@ -439,6 +475,16 @@ const REFUSALS = {
 const PROP_FOR = { game: "play", chore_treat: "snack" };
 // Sol's shared props, for every species that has no own ("../ui/" leaves sprites/).
 const FALLBACK_PROPS = { scold: "../ui/prop_scold", praise: "../ui/prop_praise", fan: "../ui/prop_fan" };
+// Care scenes (_sceneStart): how long each plays, in ms from the tap.
+const SCENE_MS = { medicine: 2200, clean: 2300 };
+// Their props, two frames each (art/props/cut_clean_props.py). A species may bring
+// its own in species.json "props" under the same key.
+const SCENE_PROPS = {
+  broom: ["../ui/prop_broom_1", "../ui/prop_broom_2"],
+  dust: ["../ui/prop_dust_1", "../ui/prop_dust_2"],
+  net: ["../ui/prop_net_1", "../ui/prop_net_2"],
+  bubbles: ["../ui/prop_bubbles_1", "../ui/prop_bubbles_2"],
+};
 // Missing sprites are reported once each in the console.
 const WARNED = new Set();
 
@@ -779,6 +825,7 @@ function graphemes(text) {
 const degrees = (n) => (Number.isFinite(n) ? `${n}°`.replace("-", "−") : "");
 // How long the happy bounce lasts when the pet gets excited.
 const BOUNCE_MS = 10000;
+const BACKLIGHT_MS = 3000; // a tap on the shell's backlight button lights the screen this long
 const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
 
 // The same bands as rates.py (WEIGHT_LIGHT_BELOW, WEIGHT_HEAVY_ABOVE).
@@ -1326,7 +1373,7 @@ const STYLE = `
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
-  .screen.show-status .flash, .screen.show-status .speck,
+  .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
   .screen.show-status .bondhearts { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
@@ -1355,11 +1402,106 @@ const STYLE = `
     background: #fff; opacity: 0; }
   .screen.stormy .flash { display: block; animation: lightning 9s linear infinite; }
   @keyframes lightning { 0%, 89%, 92%, 95%, 100% { opacity: 0; } 90% { opacity: .75; } 94% { opacity: .5; } }
+  /* The LCD: a faint dot-matrix grid over the scene, one cell per creature art
+     pixel (see _lcdPitch), under the weather, the bubble, the game and the status. */
+  .lcd { position: absolute; inset: 0; pointer-events: none; display: none;
+    background-color: rgba(255,228,170,.035);
+    background-image:
+      repeating-linear-gradient(0deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px)),
+      repeating-linear-gradient(90deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px));
+    background-position: var(--lcd-x, 0) var(--lcd-y, 0); }
+  ha-card.lcd-on .lcd { display: block; }
+  /* Ghosting (_ghostFrame, _ghostTrail): the pet's geometry, not its class. */
+  .ghost { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%;
+    opacity: 0; display: none; transition: translate .25s ease-out .12s; }
+  ha-card.lcd-on .ghost { display: block; }
+  .ghost.wander-l { translate: -16% 0; transition-duration: .9s; }
+  .ghost.wander-r { translate: 16% 0; transition-duration: .9s; }
+  .ghost.go-left { translate: -60% 0; }
+  .ghost.go-right { translate: 60% 0; }
+  .screen.dim .ghost { filter: brightness(.8); }
+  /* The backlight (_backlight): an Indiglo glow over the scene, under the bubble.
+     It comes on at once and fades out; the dimmed scene brightens under it. */
+  .glow { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen;
+    background: radial-gradient(ellipse at 50% 55%, #4fe3c1 0%, rgba(79,227,193,.8) 45%, rgba(79,227,193,.35) 100%);
+    transition: opacity .6s ease-out; }
+  .screen.lit .glow { opacity: .55; transition: none; }
+  /* By day a real backlight barely shows: a faint lift, not a mint wash. */
+  .screen.lit:not(.night):not(.dim):not(.faded) .glow { opacity: .14; }
+  .screen.lit:not(.night):not(.dim):not(.faded):not(.raining) .bg { filter: brightness(1.07); }
+  .screen.lit.dim .bg, .screen.lit.faded .bg { filter: brightness(.9) saturate(.75); }
+  .screen.lit.dim .pet, .screen.lit.dim .ghost { filter: brightness(.9); }
+  /* Its button: a 44 px target, transparent, around a small part of the shell drawn
+     in the shell's own colours (::before). Each spot keeps the target clear of the
+     screen, the buttons and the label, and inside the slide. */
+  .backlight { position: absolute; z-index: 1; width: 44px; height: 44px; padding: 0; border: none;
+    border-radius: 8px; background: none; cursor: pointer; }
+  .backlight::before { content: ""; position: absolute; left: 50%; top: 50%; width: 10px; height: 10px;
+    translate: -50% -50%; border-radius: 50%; background: var(--d-dark);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.3), 0 2px 0 rgba(0,0,0,.25); }
+  .backlight:active::before { translate: -50% calc(-50% + 1px); }
+  .device:has(.screen.lit) .backlight::before { background: #4fe3c1; box-shadow: 0 0 6px 1px rgba(79,227,193,.8); }
+  /* Egg: a nub on the shoulder, just above the screen's right corner. */
+  .egg .backlight { right: -18px; top: -34px; }
+  .egg .backlight::before { width: 10px; height: 18px; border-radius: 5px; left: 60%; top: 62%; }
+  .compact .egg .backlight { right: -14px; }
+  /* Tank: the lid's right grip, a little raised. */
+  .lid .backlight { left: calc(62% + 6px - 22px); top: -4px; }
+  .lid .backlight::before { top: 14px; width: 30px; max-width: 70%; height: 6px; border-radius: 3px;
+    background: rgba(255,255,255,.32); box-shadow: 0 1px 0 rgba(0,0,0,.3); }
+  .lid:has(.backlight) span:nth-of-type(3) { visibility: hidden; }
+  /* House: a little lamp on the chimney (over the roof's triangle). */
+  .roof .backlight { right: calc(20% - 11px); top: 0; }
+  .roof .backlight::before { width: 12px; height: 12px; top: 22px; background: #ffe9a8;
+    box-shadow: inset 0 -2px 0 rgba(0,0,0,.2), 0 0 0 2px rgba(0,0,0,.22); }
+  /* Porthole: the top-right rivet, bigger and raised. */
+  .porthole .backlight { left: calc(91.2% - 8px); top: calc(11% - 31px); }
+  .porthole .backlight::before { left: 3px; top: 36px; }
+  /* Pad: a dewdrop on the upper right rim. */
+  .pad .backlight { right: 18%; top: 4px; }
+  .pad .backlight::before { width: 10px; height: 12px; border-radius: 50% 50% 50% 50% / 60% 60% 42% 42%;
+    background: radial-gradient(circle at 35% 30%, #fff 0 18%, rgba(214,244,255,.9) 30%, rgba(120,190,220,.75));
+    box-shadow: 0 1px 0 rgba(0,0,0,.22); }
+  /* Moon: a star on the crescent (turned upright again). */
+  .crescent .backlight { left: 0; top: 10px; rotate: 20deg; }
+  .crescent .backlight::before { width: 14px; height: 14px; border-radius: 0; background: #fff4bb; box-shadow: none;
+    clip-path: polygon(50% 0, 63% 35%, 100% 38%, 71% 60%, 82% 100%, 50% 77%, 18% 100%, 29% 60%, 0 38%, 37% 35%); }
+  @media (prefers-contrast: more) { ha-card.lcd-on .lcd, ha-card.lcd-on .ghost { display: none; } }
   /* Idle life. */
   .pet { transition: translate .25s ease-out, rotate .2s ease-out; }
   .pet.look { rotate: y 180deg; }
   .pet.wander-l { translate: -16% 0; transition-duration: .9s; }
   .pet.wander-r { translate: 16% 0; transition-duration: .9s; }
+  /* The infrared link (_linkStart): the beam runs over the track between the two
+     devices' top edges, where the backlight buttons sit, so it takes no taps. One
+     art pixel is --u; the sprites are 32 art pixels square. */
+  .irbeam { position: absolute; pointer-events: none; z-index: 6; }
+  .irbeam img { position: absolute; image-rendering: pixelated; pointer-events: none;
+    width: calc(var(--u) * 32); height: calc(var(--u) * 32); }
+  .irbeam .head { animation: ir-fly var(--ir-ms) steps(var(--ir-steps), end) forwards; }
+  .irbeam .trail { opacity: 0; animation: ir-trail .01s steps(1, end) forwards; }
+  .irbeam .arrive { opacity: 0; animation: ir-arrive .5s steps(4, end) forwards; }
+  .irbeam.gone { opacity: 0; transition: opacity .3s steps(3, end); }
+  @keyframes ir-fly { to { translate: var(--ir-d) 0; } }
+  @keyframes ir-trail { to { opacity: 1; } }
+  @keyframes ir-arrive { 0% { opacity: 1; scale: .6; } 100% { opacity: 0; scale: 1.3; } }
+  .visit { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .visit .vband { position: absolute; left: 0; right: 0; top: 38%; height: 20%; display: flex;
+    align-items: center; justify-content: center; gap: 7%; background: color-mix(in srgb, var(--d-ink) 82%, transparent); }
+  .visit .vband i { width: 4%; aspect-ratio: 1; background: #ffe9ec; animation: ir-dots .9s steps(1, end) infinite; }
+  .visit .vband i:nth-child(2) { animation-delay: .15s; } .visit .vband i:nth-child(3) { animation-delay: .3s; }
+  .visit .vband i:nth-child(4) { animation-delay: .45s; } .visit .vband i:nth-child(5) { animation-delay: .6s; }
+  @keyframes ir-dots { 0%, 100% { opacity: .25; } 40% { opacity: 1; } }
+  .visit .vguest { position: absolute; left: 70%; bottom: 4%; height: 62%; margin-left: -23.25%;
+    transform-origin: 50% 100%; image-rendering: pixelated; animation: ir-in .5s steps(5, end) both; }
+  .visit .vguest.out { animation: ir-out .5s steps(5, end) forwards; }
+  .visit .vguest.greethop { animation: hop .7s ease-in-out 2; }
+  @keyframes ir-in { from { translate: 160% 0; } }
+  @keyframes ir-out { to { translate: 160% 0; } }
+  .visit .vsay { position: absolute; right: 5%; top: 27%; max-width: 46%; padding: 5px 9px; border-radius: 10px;
+    background: #fff; color: #2a2a2a; font-size: 13px; line-height: 1.25; }
+  .screen.linking .perch { display: none; }
+  .pet.linking { translate: -43% 0; transition-duration: .5s; }
   .speck { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff6c9;
     box-shadow: 0 0 6px 2px rgba(255,240,170,.8); top: 45%; z-index: 2; pointer-events: none;
     animation: speck 2.6s ease-in-out forwards; }
@@ -1392,6 +1534,22 @@ const STYLE = `
     display: none; flex-direction: column; gap: 4px; font-size: 13px; overflow: auto; }
   .screen.show-status .status { display: flex; }
   .screen.show-status .bubble { display: none; }
+  /* Power-on: a plain pale-green LCD with the logo, over everything on the screen. */
+  .boot { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; margin: 0; padding: 0; border: 0;
+    border-radius: inherit; cursor: pointer; font: 400 14px 'Tiny5', monospace; color: #2f3a24;
+    background: linear-gradient(rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px,
+      linear-gradient(90deg, rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px, #c6d4a0; }
+  .boot[hidden] { display: none; }
+  .booting .buttons, .booting .request { visibility: hidden; }
+  .boot .logo { position: relative; font-size: 46px; line-height: 1; letter-spacing: 2px; }
+  .boot .logo span { display: block; text-shadow: 2px 2px 0 rgba(47,58,36,.35); }
+  .boot .logo .ink { color: #9aaa72; }
+  .boot .logo .fill { position: absolute; inset: 0; color: #2f3a24; clip-path: inset(0 100% 0 0);
+    transition: clip-path ${BOOT_FILL_MS}ms steps(8); }
+  .boot.filling .logo .fill { clip-path: inset(0); }
+  .boot .go { animation: bootblink 1.2s steps(1) infinite; }
+  @keyframes bootblink { 50% { opacity: 0; } }
   /* The pet's request waits while the status screen or a game is up (it covered them). */
   .screen.show-status + .request, .screen:has(> .game:not([hidden])) + .request { display: none !important; }
   /* With a game up, the bubble leaves room for its close button. */
@@ -1512,6 +1670,17 @@ const STYLE = `
   .warn { padding: 16px; color: var(--error-color, #c00); background: var(--card-background-color); }
 `;
 
+// Care scenes (_sceneStart): their props come and go with the scene and are placed
+// each frame by _sceneRender; art is sized by its art pixels (_sceneArt).
+const SCENE_STYLE = `
+  .screen img.scene { left: 0; bottom: 3%; height: 0; }
+  .screen img.scene-pill { left: 74%; bottom: 6%; height: 22%; }
+  .screen .scene-gone { visibility: hidden; }
+  .scene-spark { position: absolute; width: 6%; aspect-ratio: 1; opacity: 0; pointer-events: none;
+    background: #fff6c8; filter: drop-shadow(0 0 2px #ffd76a);
+    clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+`;
+
 class HatchPetCard extends HTMLElement {
   static getStubConfig() {
     return {};
@@ -1625,6 +1794,7 @@ class HatchPetCard extends HTMLElement {
 
   disconnectedCallback() {
     clearInterval(this._timer);
+    this._linkEnd();
     this._resize?.disconnect();
     this._io?.disconnect();
     document.removeEventListener("visibilitychange", this._onHidden);
@@ -1687,7 +1857,7 @@ class HatchPetCard extends HTMLElement {
   _build() {
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `
-      <style>${STYLE}</style>
+      <style>${STYLE}${SCENE_STYLE}</style>
       <ha-card>
         <div class="head">
           <div><div class="title-row"><img class="emblem" alt=""><div class="title"></div></div>
@@ -1706,6 +1876,7 @@ class HatchPetCard extends HTMLElement {
         </div>
       </ha-card>`;
     this._card = root.querySelector("ha-card");
+    this._card.classList.toggle("lcd-on", lcdOn());
     this._viewport = root.querySelector(".viewport");
     this._track = root.querySelector(".track");
     this._dots = root.querySelector(".dots");
@@ -1778,12 +1949,15 @@ class HatchPetCard extends HTMLElement {
             <div class="season"></div>
             <img class="poop p0" alt="mess"><img class="poop p1" alt="mess"><img class="poop p2" alt="mess">
             <img class="perch" alt="">
+            <img class="ghost" alt="">
             <img class="pet" alt="">
             <img class="prop" alt="">
             <img class="murk" alt="">
             <div class="rain"></div>
             <div class="flash"></div>
             <div class="breeze"><span></span><span></span><span></span></div>
+            <div class="lcd"></div>
+            <div class="glow"></div>
             <img class="attention" alt="wants attention">
             <div class="bubble"></div>
             <div class="sr" role="status"></div>
@@ -1798,6 +1972,7 @@ class HatchPetCard extends HTMLElement {
               <button class="gx" aria-label="Stop the game">✕</button>
             </div>
             <div class="status"></div>
+            <button class="boot" hidden><span class="logo"><span class="ink">HATCH</span><span class="fill" aria-hidden="true">HATCH</span></span><span class="go">▶ tap to start</span></button>
           </div><button class="request"></button></div>
           <div class="buttons"></div>
           <img class="trim-corner left" alt=""><img class="trim-corner right" alt="">
@@ -1808,12 +1983,27 @@ class HatchPetCard extends HTMLElement {
     const s = {
       el: slide, device: q(".device"), label: q(".label"), screen: q(".screen"), bg: q(".bg"),
       awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), pet: q(".pet"), prop: q(".prop"),
-      perch: q(".perch"),
+      perch: q(".perch"), ghost: q(".ghost"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
       catchEl: q(".gcatch"), live: q(".sr[role=status]"), seasonBox: q(".season"),
     };
+    // The LCD grid: one cell per creature art pixel, measured on the screen itself
+    // (its width depends on the shell's padding as well as the slide's).
+    s.lcdSize = new ResizeObserver(() => this._lcdPitch(s));
+    s.lcdSize.observe(s.screen);
+    // The backlight: a real button on the shell (each shape has its spot, see
+    // _renderSlide). Card only: it lights the screen and nothing else.
+    s.backlight = document.createElement("button");
+    s.backlight.className = "backlight";
+    s.backlight.setAttribute("aria-label", "Backlight");
+    s.backlight.title = "Light up the screen";
+    s.backlight.addEventListener("click", (e) => {
+      if (s !== this._slides[this._index]) return; // a neighbour's: the tap brings it forward
+      e.stopPropagation();
+      this._backlight(s);
+    });
     slide.querySelectorAll("img").forEach((img) => img.addEventListener("error", () => {
       const src = img.getAttribute("src");
       if (src && !WARNED.has(src)) {
@@ -1821,11 +2011,17 @@ class HatchPetCard extends HTMLElement {
         console.warn("hatch-pet-card: missing sprite", src);
       }
     }));
-    // The perch moves where the pet moves (wandering, the game) and grows with it.
+    // The perch moves where the pet moves (wandering, the game) and grows with it;
+    // so does the ghost, a beat behind (see _ghostTrail).
     const PERCH_MOVES = ["wander-l", "wander-r", "go-left", "go-right"];
     new MutationObserver(() => {
-      for (const c of PERCH_MOVES) s.perch.classList.toggle(c, s.pet.classList.contains(c));
-      s.perch.style.scale = s.pet.style.scale;
+      const moved = PERCH_MOVES.some((c) => s.ghost.classList.contains(c) !== s.pet.classList.contains(c));
+      for (const c of PERCH_MOVES) {
+        s.perch.classList.toggle(c, s.pet.classList.contains(c));
+        s.ghost.classList.toggle(c, s.pet.classList.contains(c));
+      }
+      s.perch.style.scale = s.ghost.style.scale = s.pet.style.scale;
+      if (moved) this._ghostTrail(s);
     }).observe(s.pet, { attributes: true, attributeFilter: ["class", "style"] });
     // What the pet says to someone (a refusal, a game's result, a moment) is read
     // out by screen readers; its idle chatter isn't. Only the pet on show.
@@ -1861,6 +2057,13 @@ class HatchPetCard extends HTMLElement {
       if (key === "lay_egg" && !this._confirmed(s, key, s.request, () => this._redraw(s))) return;
       this._press(s, key);
     });
+    // The boot screen takes the tap (a button, so a key works too) and nothing under it.
+    s.boot = q(".boot");
+    s.boot.hidden = !this._booting;
+    s.boot.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._bootEnd(true);
+    });
     // A tap on the screen is a shortcut for the Status button; it holds buttons of its
     // own (the game, the bell, the journal), so it isn't a button itself.
     s.screen.addEventListener("click", () => {
@@ -1893,6 +2096,47 @@ class HatchPetCard extends HTMLElement {
     s.buttons.lights = lights;
     this._track.append(slide);
     return s;
+  }
+
+  // --- Power-on --------------------------------------------------------------
+
+  _bootStart() {
+    this._booting = true;
+    this._card.classList.add("booting");
+    this._slides.forEach((x) => { x.boot.hidden = false; });
+    this._bootTimer = setTimeout(() => this._bootEnd(false), BOOT_WAIT_MS);
+  }
+
+  // A tap ends it with the beep (if this browser has sounds on and the pet may
+  // make one); no tap for BOOT_WAIT_MS ends it silently. The logo fills in, then
+  // the screen cuts to the pet.
+  _bootEnd(tapped) {
+    if (!this._booting || this._bootEnding) return;
+    this._bootEnding = true;
+    clearTimeout(this._bootTimer);
+    if (tapped) {
+      try {
+        unlockAudio();
+      } catch (err) {
+        // no WebAudio
+      }
+      this._chirp(this._slides[this._index], "boot");
+    }
+    const finish = () => {
+      this._booting = false;
+      this._bootEnding = false;
+      this._card.classList.remove("booting");
+      this._slides.forEach((x) => {
+        x.boot.hidden = true;
+        x.boot.classList.remove("filling");
+      });
+    };
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      finish();
+      return;
+    }
+    this._slides.forEach((x) => x.boot.classList.add("filling"));
+    setTimeout(finish, BOOT_FILL_MS);
   }
 
   // --- Updating --------------------------------------------------------------
@@ -1936,6 +2180,10 @@ class HatchPetCard extends HTMLElement {
     }
     while (this._slides.length < devices.length) this._slides.push(this._buildSlide());
     while (this._slides.length > devices.length) this._dropSlide(this._slides.pop());
+    if (!this._bootChecked) {
+      this._bootChecked = true;
+      if (claimBoot()) this._bootStart();
+    }
     this._index = Math.min(this._index, devices.length - 1);
 
     for (let i = 0; i < devices.length; i++) {
@@ -1990,6 +2238,7 @@ class HatchPetCard extends HTMLElement {
     this._forget(s); // its game, timers, photos and dialog go with it
     s.unsub?.();
     s.unsub = null;
+    s.lcdSize?.disconnect();
     s.el.remove();
   }
 
@@ -1997,6 +2246,8 @@ class HatchPetCard extends HTMLElement {
   // pet's (a game, an armed "sure?", the moments already seen) carries over.
   _forget(s) {
     if (s.game) this._endGame(s, null);
+    this._sceneEnd(s, { quiet: true });
+    s.sceneOwes = s.sceneFade = null;
     this._stopTyping(s);
     s.voicedAt = 0;
     s.confirm = null;
@@ -2018,6 +2269,8 @@ class HatchPetCard extends HTMLElement {
     // Its other timers, and what each would have tidied away.
     clearTimeout(s.breezeTimer);
     s.screen?.classList.remove("breezy");
+    clearTimeout(s.litTimer);
+    s.screen?.classList.remove("lit");
     clearTimeout(s.flairTimer);
     s.screen?.querySelector(".flair")?.remove();
     clearTimeout(s.statusMessageTimer);
@@ -2078,13 +2331,19 @@ class HatchPetCard extends HTMLElement {
 
   _state(s, key) {
     const id = s.ids?.[key];
-    return id ? this._hass.states[id] : undefined;
+    if (!id) return undefined;
+    const held = s.scene?.held; // a care scene shows the pet as it was at the tap
+    return held && key in held ? held[key] : this._hass.states[id];
   }
 
   _go(index) {
     const n = this._slides.length;
     if (!n) return;
-    this._slides.forEach((x) => this._stopTyping(x));
+    this._slides.forEach((x) => {
+      this._stopTyping(x);
+      this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
+    });
+    this._linkEnd(); // a swipe ends the visit at once
     this._index = (index + n) % n;
     this._renderShelf();
   }
@@ -2100,6 +2359,24 @@ class HatchPetCard extends HTMLElement {
     }
     for (const s of this._slides) s.el.style.width = `${this._slideW}px`;
     this._renderShelf();
+  }
+
+  // The pet is 62% of the screen high and square, so 46.5% of it wide, and 64 art
+  // pixels across. Where a cell would be under 3 device pixels the grid moirés,
+  // so it takes one cell per 2 × 2 art pixels there. Lines line up with the pet's.
+  _lcdPitch(s) {
+    const w = s.screen.clientWidth;
+    if (!w) return;
+    const dpr = window.devicePixelRatio || 1;
+    let pitch = (w * 0.465) / 64;
+    if (pitch * dpr < 3) pitch = Math.max(3, Math.round(pitch * 2 * dpr)) / dpr; // whole device pixels
+    const line = Math.max(1, Math.round(pitch * dpr * 0.25)) / dpr;
+    const left = w * (0.5 - 0.2325);
+    const top = w * 0.75 * (1 - 0.04 - 0.62);
+    s.screen.style.setProperty("--lcd-pitch", `${pitch}px`);
+    s.screen.style.setProperty("--lcd-line", `${line}px`);
+    s.screen.style.setProperty("--lcd-x", `${left % pitch}px`);
+    s.screen.style.setProperty("--lcd-y", `${top % pitch}px`);
   }
 
   _renderShelf() {
@@ -2226,6 +2503,14 @@ class HatchPetCard extends HTMLElement {
     dev.querySelector(".loop").style.display = shape === "egg" ? "" : "none";
     dev.querySelector(".lid").style.display = shape === "tank" ? "" : "none";
     dev.querySelector(".feet").style.display = shape === "tank" ? "" : "none";
+    // The backlight's spot: a nub by the egg's screen, the tank lid's right grip, a
+    // lamp on the chimney, a rivet, a dewdrop on the pad's rim, a star on the moon.
+    const spot = { egg: ".bezel", tank: ".lid", house: ".roof", porthole: ".bezel", pad: ".body", moon: ".crescent" };
+    const holder = dev.querySelector(spot[shape]);
+    if (s.backlight.parentElement !== holder) {
+      if (shape === "tank") holder.insertBefore(s.backlight, holder.lastElementChild);
+      else holder.append(s.backlight);
+    }
     dev.style.setProperty("--d-shell", color);
     dev.style.setProperty("--d-dark", shade(color, 0.72));
     dev.style.setProperty("--d-ink", deviceInk(color));
@@ -2456,9 +2741,11 @@ class HatchPetCard extends HTMLElement {
       if (s.excitedSince && Date.now() - s.excitedSince >= BOUNCE_MS) s.pet.classList.remove("hop");
       const frames = this._frames(s);
       const seen = Math.abs(i - this._index) <= 1; // the pet on show and the peeking ones
-      if (seen && frames.length && !(s.asleep && this._ticks % 2)) {
+      if (seen && frames.length && !s.scene && !(s.asleep && this._ticks % 2)) {
+        const was = s.pet.getAttribute("src");
         s.frame = (s.frame + 1) % frames.length;
         this._show(s, s.pet, frames[s.frame]);
+        if (was && was !== s.pet.getAttribute("src")) this._ghostFrame(s, was);
       }
       if (s.propUntil && Date.now() > s.propUntil) {
         this._show(s, s.prop, null);
@@ -2466,16 +2753,19 @@ class HatchPetCard extends HTMLElement {
       }
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
       if (s === this._slides[this._index]) {
-        this._greet(s);
+        if (!this._booting) this._greet(s); // the boot screen waits: only the speaking does
         this._firstLook(s); // before the visit: it tells the server what's queued
         this._visit(s);
-        this._sayQueued(s);
-        this._wishMention(s);
+        if (!this._booting) {
+          this._sayQueued(s);
+          this._wishMention(s);
+        }
         this._seen(s);
         this._idle(s);
         this._flairTick(s);
         this._seasonTick(s);
         this._partyTick(s);
+        this._linkTick(s);
       }
       if (!s.sayUntil && s.species) {
         const mood = this._state(s, "sensor.mood");
@@ -2485,10 +2775,54 @@ class HatchPetCard extends HTMLElement {
     });
   }
 
+  // Ghosting: a slow LCD leaves a fading trace where the pet was. Only the pet on
+  // show, with screen effects on, never with reduced motion or more contrast, and
+  // never in Catch (a reflex game needs a clean pet). The fades are Web Animations,
+  // which the reduced-motion CSS rule doesn't reach: hence the checks here.
+  _ghosting(s) {
+    const media = (q) => window.matchMedia?.(q).matches;
+    return s === this._slides[this._index] && this._visible && !document.hidden && !s.linking &&
+      this._card.classList.contains("lcd-on") && s.pet.style.display !== "none" && !s.scene &&
+      s.game?.kind !== "catch" && !media("(prefers-reduced-motion: reduce)") &&
+      !media("(prefers-contrast: more)");
+  }
+
+  // A frame swap: the old frame fades from 35% to nothing. Not while the pet is
+  // turned or mid-animation (a hop, a sway, a move), where the trace would sit
+  // where the pet isn't.
+  _ghostFrame(s, src) {
+    if (!this._ghosting(s) || s.pet.classList.contains("look") || s.pet.getAnimations().length ||
+      s.ghostUntil > Date.now()) return;
+    s.ghost.setAttribute("src", src);
+    s.ghost.animate([{ opacity: 0.35 }, { opacity: 0 }], { duration: 180, easing: "linear" });
+  }
+
+  // A wander or a game move: the ghost follows the pet 120 ms behind (its CSS
+  // transition-delay), at 30%, leaving a short smear that catches up.
+  _ghostTrail(s) {
+    s.ghost.getAnimations().forEach((a) => a.cancel());
+    if (!this._ghosting(s)) return;
+    const move = parseFloat(getComputedStyle(s.pet).transitionDuration) * 1000 || 250;
+    const duration = move + 120 + 180;
+    s.ghost.setAttribute("src", s.pet.getAttribute("src"));
+    s.ghost.animate([{ opacity: 0.3 }, { opacity: 0.3, offset: (move + 120) / duration }, { opacity: 0 }],
+      { duration });
+    s.ghostUntil = Date.now() + duration;
+  }
+
+  // The backlight: the screen glows for a while; a second tap starts the while
+  // again. Nothing else changes (no lights out, no waking, no line).
+  _backlight(s) {
+    clearTimeout(s.litTimer);
+    s.screen.classList.add("lit");
+    this._chirp(s, "click");
+    s.litTimer = setTimeout(() => s.screen.classList.remove("lit"), BACKLIGHT_MS);
+  }
+
   // Nothing else is going on: is the pet free for a small idle behaviour?
   _free(s) {
     const now = Date.now();
-    return s.species && !s.asleep && !s.calling && !s.game && IDLE_MOODS.has(s.moodState) &&
+    return s.species && !s.asleep && !s.calling && !s.game && !s.scene && IDLE_MOODS.has(s.moodState) &&
       !s.screen.classList.contains("show-status") &&
       !(s.sayUntil > now) && !(s.poseUntil > now) && !(s.propUntil > now) &&
       !(s.flairUntil > now) && !(s.movingUntil > now);
@@ -3079,6 +3413,8 @@ class HatchPetCard extends HTMLElement {
 
   // The frames to draw now: a reaction pose while one runs, else the mood's.
   _frames(s) {
+    if (s.scene) return s.scene.frames || s.frames || [];
+    if (s.linking && s.linkFrames?.length) return s.linkFrames;
     return s.poseUntil && Date.now() < s.poseUntil ? s.poseFrames : s.frames || [];
   }
 
@@ -3359,6 +3695,7 @@ class HatchPetCard extends HTMLElement {
 
   _react(s, entry) {
     s.screen.querySelector(".costume")?.remove(); // care takes the stage
+    if (this._sceneAnswered(s, entry)) return;
     if (entry.action === "chore_treat") {
       this._write(s, "a treat! someone did a chore ♪", 3500);
     }
@@ -3501,6 +3838,7 @@ class HatchPetCard extends HTMLElement {
       ${sharedScreen() ? "" : row(null, "my data", forgetButton("forgetme", "forget_me", "forget my data: your birthday, answers and settings for every pet; your bonds stay"))}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       ${s.species?.voice ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`) : ""}
+      ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>
@@ -3556,6 +3894,18 @@ class HatchPetCard extends HTMLElement {
       }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       if (skipped) this._statusMessage(s, skipped);
+    });
+    s.status.querySelector(".bell.lcdfx").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const on = !lcdOn();
+      try {
+        localStorage.setItem(LCD_KEY, on ? "on" : "off");
+      } catch (err) {
+        return; // no storage: the effects stay as they are
+      }
+      this._card.classList.toggle("lcd-on", on);
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
     s.status.querySelector(".bell.bdayphone")?.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -4140,7 +4490,262 @@ class HatchPetCard extends HTMLElement {
   _press(s, action) {
     const id = s.ids?.[`button.${action}`];
     const button = action in s.buttons ? s.buttons[action] : s.request;
-    if (id) this._call(button, s, "button", "press", id);
+    if (s.scene) {
+      // A second tap on the same care ends its scene and isn't sent again.
+      const same = s.scene.kind === action;
+      this._sceneEnd(s);
+      if (same) {
+        this._tapped(button, s);
+        return;
+      }
+    }
+    if (!id) return;
+    this._sceneStart(s, action);
+    this._call(button, s, "button", "press", id);
+  }
+
+  // --- Care scenes ----------------------------------------------------------
+  // Medicine and clean play as a little scene of about 2 s, not a click. The call
+  // goes out at the tap as ever, but the screen keeps showing the pet as it was
+  // (_state holds the slide's states, all but last_care) until the scene ends,
+  // then draws the news. One clock: _sceneRender(s, t) sets everything from the
+  // time since the tap, so an interruption just ends it (_sceneEnd).
+
+  // Start one if this care will work; refusals stay as they are (the server says no).
+  _sceneStart(s, kind) {
+    if (!SCENE_MS[kind] || !s.species || s.game || s.screen.classList.contains("show-status")) return;
+    const mood = this._state(s, "sensor.mood");
+    const stage = this._state(s, "sensor.life_stage")?.state;
+    if (!mood || mood.state === "away" || stage === "egg" || s.asleep || s.lightsOut) return;
+    const due = kind === "medicine" ? (mood.attributes.flags || []).includes("sick")
+      : Number(this._state(s, "sensor.poop")?.state || 0) > 0;
+    if (!due) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      s.sceneFade = { kind, until: Date.now() + 10000 }; // no scene: the news fades in
+      return;
+    }
+    const held = {};
+    for (const [key, id] of Object.entries(s.ids || {})) {
+      if (key !== "sensor.last_care" && key !== "device") held[key] = this._hass.states[id];
+    }
+    const sc = { kind, held, start: performance.now(), ms: SCENE_MS[kind], els: [], frames: null };
+    const add = (tag, cls) => {
+      const el = document.createElement(tag);
+      el.className = cls;
+      if (tag === "img") el.alt = "";
+      s.screen.insertBefore(el, s.screen.querySelector(".rain"));
+      sc.els.push(el);
+      return el;
+    };
+    const box = s.screen.getBoundingClientRect();
+    const pet = s.pet.getBoundingClientRect();
+    sc.cheer = this._sceneFrames(s, "cheer");
+    if (kind === "medicine") {
+      sc.pill = add("img", "scene scene-pill");
+      sc.pill.setAttribute("src", spriteSrc(s.speciesId, s.species.props?.medicine || "bird/medicine"));
+      // It steps up until its front (most of the way across its frame) is at the pill.
+      const pill = sc.pill.getBoundingClientRect();
+      const front = pet.left + pet.width * 0.72;
+      sc.step = Math.max(0, Math.min(box.width * 0.22, pill.left + pill.width / 2 - front));
+      sc.eat = this._sceneFrames(s, "eat");
+      const extras = s.drawn === "child" && s.species.extras?.squint;
+      const excited = s.species.moods?.includes("excited") && s.drawn &&
+        Array.from({ length: s.species.frames || 1 }, (_, i) => `${s.drawn}_excited_${i + 1}`);
+      sc.cheer ||= extras ? [].concat(extras) : excited || null;
+      // A few sparkles about its head, where it stands.
+      sc.sparks = [[0.22, 0.2], [0.78, 0.12], [0.66, 0.42]].map(([x, y]) => {
+        const el = add("div", "scene-spark");
+        el.style.left = `${pet.left - box.left + pet.width * x}px`;
+        el.style.top = `${pet.top - box.top + pet.height * y}px`;
+        return el;
+      });
+    } else {
+      sc.water = s.world?.mess === "murk";
+      const own = (key) => [].concat(s.species.props?.[key] || SCENE_PROPS[key]);
+      sc.toolArt = own(sc.water ? "net" : "broom");
+      if (!sc.water) sc.dustArt = own("dust");
+      if (sc.water) sc.bubbleArt = own("bubbles");
+      if (sc.dustArt) sc.dust = add("img", "scene scene-dust");
+      sc.tool = add("img", `scene scene-${sc.water ? "net" : "broom"}`);
+      if (sc.bubbleArt) sc.bubbles = add("img", "scene scene-bubbles");
+      // Each mess on show goes as the broom (or net) passes its middle.
+      sc.mess = s.poops.filter((el) => el.style.display !== "none").map((el) => {
+        const r = el.getBoundingClientRect();
+        return { el, x: r.left - box.left + r.width / 2 };
+      });
+      sc.murk = s.murk.style.display !== "none" && Number(s.murk.style.opacity) > 0;
+    }
+    s.scene = sc;
+    for (const el of [s.pet, s.perch]) el.style.transition = "none";
+    // A tap on the screen ends it (and doesn't open the status).
+    sc.stop = (e) => {
+      e.stopImmediatePropagation();
+      this._sceneEnd(s);
+    };
+    s.screen.addEventListener("click", sc.stop, true);
+    this._sceneRender(s, 0);
+    const loop = () => {
+      if (s.scene !== sc) return;
+      const t = performance.now() - sc.start;
+      if (t >= sc.ms) {
+        this._sceneEnd(s);
+        return;
+      }
+      if (!sc.paused) this._sceneRender(s, t); // paused: a check seeks it instead
+      sc.raf = requestAnimationFrame(loop);
+    };
+    sc.raf = requestAnimationFrame(loop);
+  }
+
+  // A species' own care frames, when its art has them: species.json "acts", like
+  // {"eat": ["baby", "teen", "adult"], "cheer": true} (true: every stage), drawn as
+  // <stage>_eat_1 and <stage>_eat_2. Else null, and the scene uses what all have.
+  _sceneFrames(s, act) {
+    const stages = s.species?.acts?.[act];
+    const st = s.drawn;
+    if (!st || !(stages === true || (Array.isArray(stages) && stages.includes(st)))) return null;
+    return [`${st}_${act}_1`, `${st}_${act}_2`];
+  }
+
+  // Scene art on the creatures' grid: its PNG is 4 screen px per art px, and an
+  // art px is 1/64 of the pet's 62% of the screen's height.
+  _sceneArt(s, img, sprite) {
+    const src = spriteSrc(s.speciesId, sprite);
+    if (img.getAttribute("src") === src) return;
+    img.onload = () => {
+      img.style.height = `${(img.naturalHeight / 4) * 62 / 64}%`;
+    };
+    img.setAttribute("src", src);
+  }
+
+  _sceneRender(s, t) {
+    const sc = s.scene;
+    const sw = s.screen.clientWidth;
+    const sh = s.screen.clientHeight;
+    const ramp = (a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
+    const ease = (a, b) => {
+      const k = ramp(a, b);
+      return k * k * (3 - 2 * k);
+    };
+    let frames = null;
+    if (sc.kind === "medicine") {
+      // Notice the pill, step up, lean in and take it, step back, a happy hop.
+      const step = sc.step * (ease(350, 850) - ease(1500, 1900));
+      const hop = -0.06 * sh * Math.sin(Math.PI * ramp(1450, 1750));
+      s.pet.style.translate = `${step}px ${hop}px`;
+      s.perch.style.translate = `${step}px 0`;
+      s.pet.style.rotate = `${(sc.eat ? 4 : 9) * (ease(850, 1000) - ease(1250, 1400))}deg`;
+      const gulp = ease(1000, 1250);
+      sc.pill.style.opacity = String(1 - gulp);
+      sc.pill.style.scale = String((0.3 + 0.7 * ease(0, 200)) * (1 - 0.7 * gulp));
+      sc.pill.style.translate = `${-0.3 * sc.step * gulp}px 0`;
+      if (t >= 850 && t < 1400) frames = sc.eat;
+      if (t >= 1400) frames = sc.cheer;
+      sc.sparks.forEach((el, i) => {
+        const k = ramp(1450 + i * 150, 2050 + i * 150);
+        el.style.opacity = k > 0 && k < 1 ? String(1 - k * k) : "0";
+        el.style.scale = String(0.4 + k);
+      });
+    } else {
+      // The broom (on water worlds, a net) crosses the floor left to right.
+      const sweep = ramp(0, 1800);
+      this._sceneArt(s, sc.tool, sc.toolArt[Math.floor(t / 180) % sc.toolArt.length]);
+      const tw = sc.tool.getBoundingClientRect().width || sw * 0.25;
+      const left = -tw + (sw + tw) * sweep;
+      const point = left + tw / 2;
+      sc.tool.style.left = `${left}px`;
+      sc.tool.style.display = sweep < 1 ? "" : "none";
+      if (sc.water) sc.tool.style.translate = `0 ${Math.sin(t / 150) * 0.02 * sh}px`;
+      if (sc.dust) {
+        // Dust kicks up behind it.
+        this._sceneArt(s, sc.dust, sc.dustArt[Math.floor(t / 220) % sc.dustArt.length]);
+        sc.dust.style.left = `${left - sc.dust.getBoundingClientRect().width * 0.55}px`;
+        sc.dust.style.opacity = String(0.9 * ramp(60, 260) * (1 - ramp(1650, 2000)));
+      }
+      for (const { el, x } of sc.mess) {
+        const k = Math.min(1, Math.max(0, (point - x) / (0.05 * sw)));
+        el.style.opacity = String(1 - k);
+        el.classList.toggle("scene-gone", k >= 1);
+      }
+      if (sc.murk) {
+        // The water clears behind the net, with a soft edge.
+        const p = Math.min(106, Math.max(-6, (point / sw) * 100));
+        s.murk.style.maskImage = `linear-gradient(90deg, transparent ${p - 6}%, #000 ${p + 6}%)`;
+      }
+      if (sc.bubbles) {
+        // Then bubbles rise where the water was cleared.
+        const k = ramp(1600, 2300);
+        this._sceneArt(s, sc.bubbles, sc.bubbleArt[Math.floor(t / 200) % sc.bubbleArt.length]);
+        sc.bubbles.style.left = `${sw * 0.62}px`;
+        sc.bubbles.style.translate = `0 ${-0.35 * sh * k}px`;
+        sc.bubbles.style.opacity = String(k > 0 ? 1 - ramp(2000, 2300) : 0);
+      }
+      if (t >= 1800 && !sc.shone) {
+        sc.shone = true;
+        const prop = s.species.props?.clean;
+        if (prop) {
+          this._show(s, s.prop, prop);
+          s.propUntil = Date.now() + 1500;
+        }
+        this._sparkle(s);
+      }
+      if (t >= 1800) frames = sc.cheer;
+    }
+    sc.frames = frames;
+    const shown = frames || s.frames;
+    if (shown?.length) this._show(s, s.pet, shown[Math.floor(t / 300) % shown.length]);
+  }
+
+  // End it, wherever it got to, and draw the pet as it is now.
+  _sceneEnd(s, { quiet = false } = {}) {
+    const sc = s.scene;
+    if (!sc) return;
+    cancelAnimationFrame(sc.raf);
+    s.scene = null;
+    s.screen.removeEventListener("click", sc.stop, true);
+    sc.els.forEach((el) => el.remove());
+    for (const el of [s.pet, s.perch]) el.style.translate = el.style.rotate = el.style.transition = "";
+    for (const el of s.poops) {
+      el.style.opacity = "";
+      el.classList.remove("scene-gone");
+    }
+    if (sc.murk) {
+      // What the net cleared stays clear: no fading back in from the held murk.
+      s.murk.style.transition = "none";
+      s.murk.style.opacity = "0";
+      s.murk.style.maskImage = "";
+      setTimeout(() => { s.murk.style.transition = ""; }, 50);
+    }
+    // The server's answer may come after this: it's shown, not acted again.
+    if (!sc.answered) s.sceneOwes = { kind: sc.kind, until: Date.now() + 10000 };
+    s.frame = 0;
+    if (!quiet) this._redraw(s);
+  }
+
+  // The server's answer to a scene's tap (_react). The scene shows an "ok" itself;
+  // a refusal ends it, said as ever. Under reduced motion the news fades in.
+  _sceneAnswered(s, entry) {
+    const ok = entry.result === "ok";
+    if (s.scene?.kind === entry.action) {
+      if (ok) {
+        s.scene.answered = true;
+        return true;
+      }
+      this._sceneEnd(s);
+      return false;
+    }
+    const now = Date.now();
+    if (s.sceneOwes?.kind === entry.action && now < s.sceneOwes.until) {
+      s.sceneOwes = null;
+      return ok;
+    }
+    if (s.sceneFade?.kind === entry.action && now < s.sceneFade.until) {
+      s.sceneFade = null;
+      if (ok) {
+        for (const el of [s.pet, s.prop]) el.animate?.([{ opacity: 0.2 }, { opacity: 1 }], { duration: 350 });
+      }
+    }
+    return false;
   }
 
   // --- Games ----------------------------------------------------------------
@@ -4686,6 +5291,201 @@ class HatchPetCard extends HTMLElement {
       this._speak(s, pick(greet), 3000);
       this._animate(s, s.pet, "perk", 320);
     }, 3400);
+  }
+
+  // --- The infrared link ------------------------------------------------------
+  // Flavour only: once a day, per pair, the pet on show and the slide next to it
+  // visit. Nothing is counted or remembered (Q4), and no button starts one (Q3).
+
+  _linkName(s) {
+    const d = this._hass?.devices?.[s.ids?.device];
+    return d?.name_by_user || d?.name || "friend";
+  }
+
+  // Free for a visit: the idle checks, no egg, nothing waiting to be said.
+  _linkFree(s) {
+    return !!s && this._free(s) && !s.queue?.length &&
+      this._state(s, "sensor.life_stage")?.state !== "egg";
+  }
+
+  // The neighbour (either side, in a random order) that is free and has not
+  // visited this pet today. Uses up the pair's day: call it only to start one.
+  _linkPick(host) {
+    if (!this._linkFree(host) || !host.lookedFirst) return null;
+    const sides = [1, -1].sort(() => Math.random() - 0.5);
+    for (const side of sides) {
+      const guest = this._slides[this._index + side];
+      if (!this._linkFree(guest)) continue;
+      const pair = [host.ids?.device, guest.ids?.device].sort().join("-");
+      if (oncePerDay(`link-${pair}`)) return guest;
+    }
+    return null;
+  }
+
+  _linkTick(host) {
+    const L = this._link;
+    // A pet that falls asleep, calls, starts a game or a care scene, or opens the status ends it.
+    if (L && (L.host.asleep || L.guest.asleep || L.host.calling || L.host.game || L.host.scene ||
+      L.host.screen.classList.contains("show-status"))) this._linkEnd();
+    if (this._booting || this._link || this._slides.length < 2) return;
+    const now = Date.now();
+    const [lo, hi] = LINK_AFTER_MS;
+    this._linkAt ??= now + lo + Math.random() * (hi - lo);
+    if (now < this._linkAt) return;
+    const guest = this._linkPick(host);
+    if (!guest) return;
+    this._linkAt = now + lo + Math.random() * (hi - lo);
+    this._linkStart(host, guest);
+  }
+
+  // One visit: the beam, the visit screen, the two lines, the guest's own slide.
+  // Returns false when one is already on.
+  _linkStart(host, guest) {
+    if (this._link) return false;
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const L = this._link = { host, guest, timers: [], hostScale: host.pet.style.scale };
+    const at = (ms, fn) => L.timers.push(setTimeout(() => this._link === L && fn(), ms));
+    const hostName = this._linkName(host);
+    const guestName = this._linkName(guest);
+    const toRight = this._slides.indexOf(guest) > this._slides.indexOf(host);
+    const k = 0.7; // the pets stand at 70% of their size on the visit screen
+    const gs = guest.species;
+    const gStage = guest.drawn || "adult";
+    const gScale = (gs?.scale?.[gStage] || 1) * k;
+    const gFrames = gs ? this._petFrames(gs, gStage, "excited", false, null, []) : [];
+    L.beamMs = calm ? 0 : 1500;
+    this._moving(host, 9000);
+    this._chirp(host, "link");
+    if (!calm) this._linkBeam(host, guest, toRight);
+    // the guest's own slide: looking at the host, with a small note
+    this._moving(guest, 6500);
+    if (toRight) this._look(guest, 6500);
+    this._speak(guest, "♪", 6500);
+    // the visit screen
+    at(L.beamMs ? 1400 : 0, () => {
+      host.linking = true;
+      const box = document.createElement("div");
+      box.className = "visit";
+      box.setAttribute("aria-hidden", "true");
+      if (!calm) box.innerHTML = '<div class="vband"><i></i><i></i><i></i><i></i><i></i></div>';
+      host.screen.append(box);
+      L.box = box;
+    });
+    const t0 = calm ? 200 : 2500;
+    at(t0, () => {
+      L.box.querySelector(".vband")?.remove();
+      host.screen.classList.add("linking");
+      host.linkFrames = this._petFrames(host.species, host.drawn || "adult", "excited", false, null, []);
+      host.pet.classList.add("linking");
+      host.pet.style.scale = String((Number(L.hostScale) || 1) * k);
+      const img = document.createElement("img");
+      img.className = "vguest";
+      img.alt = "";
+      img.style.scale = `${-gScale} ${gScale}`; // mirrored, to face the host
+      this._show(guest, img, gFrames[0]);
+      L.box.append(img);
+      L.img = img;
+      let f = 0;
+      L.swap = setInterval(() => gFrames.length && this._show(guest, img, gFrames[++f % gFrames.length]), 700);
+      this._queue(host, this._pick(["hi, {guest}!", "oh! {guest}! hello hello ♪"]).replace("{guest}", guestName), 3400);
+      const say = document.createElement("div");
+      say.className = "vsay";
+      say.hidden = true;
+      L.box.append(say);
+      L.say = say;
+    });
+    at(t0 + 1200, () => {
+      if (!calm) this._animate(host, host.pet, "greethop", 1400);
+    });
+    at(t0 + 1800, () => {
+      L.say.textContent = this._pick(["hi hi, {host}! ♪", "*waves* hi, {host}!"]).replace("{host}", hostName);
+      L.say.hidden = false;
+      if (!calm) this._animate(guest, L.img, "greethop", 1400);
+    });
+    at(t0 + 3400, () => {
+      if (!calm) this._bondHearts(host);
+    });
+    at(t0 + 4000, () => {
+      L.say.hidden = true;
+      L.img.classList.add("out");
+    });
+    at(t0 + (calm ? 3600 : 4600), () => this._linkEnd());
+    return true;
+  }
+
+  _pick(list) {
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
+  // The beam: a red head with ripples flies along the tops of the devices, a
+  // dotted trail behind it, and a burst where it arrives. Pixel-stepped, in art
+  // pixels of the pets' scale (a screen is 64 of them across the pet's 46.5%).
+  _linkBeam(host, guest, toRight) {
+    const L = this._link;
+    const track = this._track.getBoundingClientRect();
+    const a = host.device.getBoundingClientRect();
+    const b = guest.device.getBoundingClientRect();
+    const u = Math.max(1, Math.round(host.screen.clientWidth * 0.00727 * 4) / 4);
+    const x0 = a.left + a.width / 2 - track.left;
+    const x1 = b.left + b.width / 2 - track.left;
+    const dist = x1 - x0;
+    const step = 2 * u;
+    const n = Math.max(2, Math.round(Math.abs(dist) / step));
+    const ms = 1100;
+    const beam = document.createElement("div");
+    beam.className = "irbeam";
+    beam.setAttribute("aria-hidden", "true");
+    beam.style.cssText = `left:0;top:${a.top - track.top - 16 * u + 3}px;width:1px;height:1px;--u:${u}px;` +
+      `--ir-ms:${ms}ms;--ir-steps:${n};--ir-d:${n * step * (toRight ? 1 : -1)}px`;
+    const img = (name, cls, cx, cell) => {
+      const el = document.createElement("img");
+      el.className = cls;
+      el.alt = "";
+      el.src = `${BASE}/ui/${name}.png?v=${VERSION}`;
+      el.style.left = `${cx - cell * u}px`;
+      return el;
+    };
+    // heads sit 12.5 px into the cell facing right, 19.5 facing left
+    const head = img("ir_head_1", "head", x0, toRight ? 12.5 : 19.5);
+    if (!toRight) head.style.scale = "-1 1"; // translate and scale are separate properties
+    for (let d = 5 * u; d < Math.abs(dist) - 4 * u; d += 5 * u) {
+      const dot = img("ir_dot", "trail", x0 + d * (toRight ? 1 : -1), 16);
+      dot.style.animationDelay = `${Math.round((d / Math.abs(dist)) * ms)}ms`;
+      beam.append(dot);
+    }
+    const arrive = img("ir_burst", "arrive", x1, 16);
+    arrive.style.animationDelay = `${ms}ms`;
+    beam.append(arrive, head);
+    this._track.append(beam);
+    L.beam = beam;
+    let f = 0;
+    L.flap = setInterval(() => head.setAttribute("src", `${BASE}/ui/ir_head_${(++f % 2) + 1}.png?v=${VERSION}`), 200);
+    L.timers.push(setTimeout(() => beam.classList.add("gone"), ms + 500));
+    L.timers.push(setTimeout(() => beam.remove(), ms + 900));
+  }
+
+  // The visit is over (or cut short): leave nothing behind.
+  _linkEnd() {
+    const L = this._link;
+    if (!L) return;
+    this._link = null;
+    L.timers.forEach(clearTimeout);
+    clearInterval(L.swap);
+    clearInterval(L.flap);
+    L.beam?.remove();
+    L.box?.remove();
+    const { host, guest } = L;
+    host.linking = false;
+    host.linkFrames = null;
+    host.screen.classList.remove("linking");
+    host.pet.classList.remove("linking", "greethop");
+    host.pet.style.scale = L.hostScale;
+    host.screen.querySelector(".bondhearts")?.remove();
+    guest.pet.classList.remove("look");
+    guest.movingUntil = host.movingUntil = 0;
+    guest.sayUntil = 0;
+    this._stopTyping?.(guest);
+    guest.bubble.textContent = "";
   }
 
   // --- Trait flair ----------------------------------------------------------

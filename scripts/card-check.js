@@ -112,6 +112,17 @@ async function main() {
   const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
   // A context of its own, so a check can open a second tab on the same storage.
   const context = await browser.newContext({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1) });
+  // The boot screen shows once per browser: every page here starts as if it had
+  // been shown, except the boot checks' (they set the session flag and clear it).
+  const bootVersion = /const BOOT_VERSION = "([^"]*)"/.exec(
+    fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8"))?.[1];
+  await context.addInitScript((v) => {
+    try {
+      if (!sessionStorage.getItem("cc-boot-test") && v) localStorage.setItem("hatch-booted", v);
+    } catch (err) {
+      // no storage
+    }
+  }, bootVersion);
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -127,6 +138,10 @@ async function main() {
   const signedIn = () => page.waitForFunction(
     () => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
   await signedIn();
+  // Screen effects (the LCD grid, ghosting) are on by default; the checks run
+  // with them off so their screenshots and pixel samples don't drift. Only the
+  // device-charm steps near the end turn them on.
+  await page.evaluate(() => localStorage.setItem("hatch-lcd", "off"));
   await page.goto(`${HA}/pet-bench/pet`);
   await signedIn();
   await page.waitForTimeout(16000); // the frontend reloads itself once after the first load
@@ -2160,6 +2175,10 @@ async function main() {
       const out = {};
       el._seasonFlyer = el._seasonVisitor = () => {};
       el._costume = (slide, season, line, catchy) => { out.line = line; out.catchy = catchy; };
+      // The week before a holiday its countdown speaks first (once a slide) and
+      // would hold every tick below: not this check's.
+      const counted = s.counted;
+      s.counted = true;
       try {
         for (const key of ["halloween", "thanksgiving"]) {
           el._config = { ...config, seasonal: key };
@@ -2180,6 +2199,7 @@ async function main() {
         }
       } finally {
         [el._seasonFlyer, el._seasonVisitor, el._costume] = fly;
+        s.counted = counted;
         el._config = config;
         t.cache(null);
       }
@@ -3211,6 +3231,683 @@ async function main() {
     !samples.babbleNight || (samples.babbleNight.played === 0 && /quiet till morning/.test(samples.babbleNight.note)),
     JSON.stringify(samples.babbleNight));
 
+  // Device charm, Part 1: the LCD quirks (docs/plan-2026-10-29-device-charm.md).
+  const worlds = Object.keys(JSON.parse(fs.readFileSync(
+    path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8")));
+  // Show the pet on show in another world's shell (its life_stage says so), or back.
+  const inWorld = (key) => card.evaluate(async (el, key) => {
+    if (!el.__worldless) el.__worldless = el._state;
+    const real = el.__worldless;
+    el._state = key ? function (slide, k) {
+      const st = real.call(this, slide, k);
+      return k === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, world: key } } : st;
+    } : real;
+    if (!key) delete el.__worldless;
+    el._redraw();
+    await new Promise((r) => setTimeout(r, 700));
+    const s = el._slides[el._index];
+    return { device: s.device.className, slideW: el._slideW, compact: el._card.classList.contains("compact") };
+  }, key);
+  const setLcd = (on) => card.evaluate((el, on) => {
+    localStorage.setItem("hatch-lcd", on ? "on" : "off");
+    el._card.classList.toggle("lcd-on", on);
+  }, on);
+  // A crop of the page, with every animation on the screen held still.
+  const holdStill = (hold) => card.evaluate((el, hold) => {
+    el._slides[el._index].screen.getAnimations({ subtree: true }).forEach((a) => (hold ? a.pause() : a.play()));
+  }, hold);
+  const crop = async (sel, inset) => {
+    const box = await cur().locator(sel).first().boundingBox();
+    return page.screenshot({ clip: { x: box.x + inset * box.width, y: box.y + inset * box.height,
+      width: box.width * (1 - 2 * inset), height: box.height * (1 - 2 * inset) } });
+  };
+  // The same crop with the grid off, then on: identical when the grid is under it.
+  // The words are hidden for it: anything animating under the grid puts the layers
+  // above it on the compositor, where Chrome draws text with greyscale smoothing
+  // instead of subpixel (same contrast, different pixels).
+  const under = async (sel, inset) => {
+    await holdStill(true);
+    await card.evaluate((el) => {
+      const st = document.createElement("style");
+      st.className = "check-notext";
+      st.textContent = ".screen, .screen * { color: transparent !important; text-shadow: none !important; }";
+      el.shadowRoot.append(st);
+    });
+    await setLcd(false);
+    const off = await crop(sel, inset);
+    await setLcd(true);
+    const on = await crop(sel, inset);
+    await card.evaluate((el) => el.shadowRoot.querySelector(".check-notext").remove());
+    await holdStill(false);
+    // At most 3 levels apart (compositing rounds a little); a grid line would be ~20.
+    return off.equals(on) || await evaluate(async ([a, b]) => {
+      const pixels = async (src) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${src}`;
+        await img.decode();
+        const c = document.createElement("canvas");
+        c.width = img.width;
+        c.height = img.height;
+        const g = c.getContext("2d");
+        g.drawImage(img, 0, 0);
+        return g.getImageData(0, 0, c.width, c.height).data;
+      };
+      const [pa, pb] = [await pixels(a), await pixels(b)];
+      return pa.length === pb.length && pa.every((v, i) => Math.abs(v - pb[i]) <= 3);
+    }, [off.toString("base64"), on.toString("base64")]);
+  };
+
+  // The "screen effects here" row: on by default, per browser.
+  await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
+  await page.waitForTimeout(400);
+  const fxRow = async () => ({ pressed: await cur().locator(".bell.lcdfx").getAttribute("aria-pressed"),
+    stored: await evaluate(() => localStorage.getItem("hatch-lcd")),
+    on: await card.evaluate((el) => el._card.classList.contains("lcd-on")) });
+  const fxSeeded = await fxRow();
+  await card.evaluate((el) => {
+    localStorage.removeItem("hatch-lcd");
+    const s = el._slides[el._index];
+    s.statusHtml = null;
+    el._renderStatus(s, el._state(s, "sensor.last_care")?.attributes.log || []);
+  });
+  await page.waitForTimeout(300);
+  const fxDefault = await fxRow();
+  await cur().locator(".bell.lcdfx").click();
+  await page.waitForTimeout(300);
+  const fxOff = await fxRow();
+  await cur().locator(".bell.lcdfx").click();
+  await page.waitForTimeout(300);
+  const fxOn = await fxRow();
+  check("screen effects here: on by default, off and on again for this browser",
+    fxSeeded.pressed === "false" && !fxSeeded.on && fxDefault.pressed === "true" &&
+    fxOff.pressed === "false" && fxOff.stored === "off" && !fxOff.on &&
+    fxOn.pressed === "true" && fxOn.stored === "on" && fxOn.on,
+    JSON.stringify({ fxSeeded, fxDefault, fxOff, fxOn }));
+  await cur().locator(".status .row", { hasText: "screen effects here" }).scrollIntoViewIfNeeded();
+  await shot("d1-lcd-row");
+  check("the grid is off on the status screen",
+    await cur().locator(".lcd").evaluate((n) => getComputedStyle(n).display) === "none" &&
+    await under(".status", 0.25));
+  await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
+  await page.waitForTimeout(400);
+
+  for (const width of [420, 330]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.waitForTimeout(600);
+    const bad = [];
+    let layout = null;
+    for (const key of worlds) {
+      layout = await inWorld(key);
+      const grid = await card.evaluate((el) => {
+        const s = el._slides[el._index];
+        const lcd = s.screen.querySelector(".lcd");
+        const css = getComputedStyle(lcd);
+        const a = lcd.getBoundingClientRect();
+        const b = s.screen.getBoundingClientRect();
+        return { display: css.display, image: /repeating-linear-gradient/.test(css.backgroundImage),
+          pitch: parseFloat(s.screen.style.getPropertyValue("--lcd-pitch")) * (window.devicePixelRatio || 1),
+          fills: Math.abs(a.width - b.width) < 1 && Math.abs(a.height - b.height) < 1,
+          clipped: getComputedStyle(s.screen).overflow === "hidden" };
+      });
+      await card.evaluate((el) => el._write(el._slides[el._index], "screen effects!", 60000));
+      await page.waitForTimeout(1200);
+      const bubbleOk = await under(".bubble", 0.12);
+      await shot(`d1-lcd-${width}-${key}`);
+      if (grid.display !== "block" || !grid.image || !(grid.pitch >= 3) || !grid.fills || !grid.clipped || !bubbleOk) {
+        bad.push({ key, ...grid, bubbleOk });
+      }
+    }
+    check(`the LCD grid covers the scene on all six shells at ${width} px, under the bubble`,
+      bad.length === 0, JSON.stringify({ layout, bad }));
+    // Under the game too.
+    const picked = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const real = el._state;
+      el._state = function (slide, k) { // rested enough to play
+        const st = real.call(this, slide, k);
+        return k === "sensor.energy" && st ? { ...st, state: "80" } : st;
+      };
+      s.asleep = false;
+      el._startGame(s, s.buttons.play);
+      el._state = real;
+      await new Promise((r) => setTimeout(r, 500));
+      return { picking: !!s.game?.picking, game: s.game, said: s.bubble.textContent };
+    });
+    check(`the LCD grid is under the game picker at ${width} px`,
+      picked.picking && await under(".gpick button", 0.2), JSON.stringify(picked));
+    await shot(`d1-lcd-${width}-game`);
+    await card.evaluate((el) => el._endGame(el._slides[el._index], null));
+    await page.waitForTimeout(300);
+  }
+  // Night, for the screenshots.
+  await card.evaluate((el) => el._slides[el._index].screen.classList.add("night"));
+  await shot("d1-lcd-night");
+  await inWorld(null);
+  await page.setViewportSize({ width: 420, height: 860 });
+  await setLcd(false);
+  await page.waitForTimeout(600);
+
+  // Ghosting (1b): a frame swap and a wander leave a fading trace, on the pet on show only.
+  await setLcd(true);
+  const ghostRun = (opts) => card.evaluate(async (el, { catchGame }) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const op = () => Number(getComputedStyle(s.ghost).opacity);
+    const out = { pets: s.screen.querySelectorAll(".pet").length, ghostIsPet: s.ghost.classList.contains("pet") };
+    const savedGame = s.game;
+    if (catchGame) s.game = { kind: "catch" };
+    // No tick of the card's own while sampling (its idle life moves the pet too).
+    const realTick = el._tick;
+    el._tick = () => {};
+    await wait(1500); // an idle move already under way finishes
+    s.pet.classList.remove("wander-l", "wander-r", "look");
+    await wait(1200);
+    // A clean frame swap: the pet awake, still, with two different frames.
+    s.pet.classList.remove("hop", "greethop", "look", "dance", "shiver");
+    s.screen.classList.remove("breezy", "windy");
+    s.pet.getAnimations().forEach((a) => a.cancel());
+    s.ghostUntil = 0;
+    const realFrames = el._frames;
+    el._frames = () => [s.frames[0], s.frames.find((f) => f !== s.frames[0]) || s.frames[0]];
+    s.frame = 0;
+    el._show(s, s.pet, el._frames(s)[0]);
+    el._ticks = 1; // the next tick swaps even while asleep
+    const before = s.pet.getAttribute("src");
+    realTick.call(el);
+    el._frames = realFrames;
+    out.swapped = before !== s.pet.getAttribute("src");
+    out.frameSrc = s.ghost.getAttribute("src") === before;
+    await wait(20);
+    out.frameJust = op();
+    await wait(300);
+    out.frameLater = op();
+    // A wander: the ghost trails the pet at 30% and catches up.
+    s.pet.classList.add("wander-l");
+    await wait(150);
+    out.trail = op();
+    out.lag = [s.pet, s.ghost].map((n) => new DOMMatrix(getComputedStyle(n).transform).m41 ||
+      parseFloat(getComputedStyle(n).translate) || 0);
+    await wait(1400);
+    out.trailLater = op();
+    s.pet.classList.remove("wander-l");
+    await wait(1200);
+    out.back = op();
+    s.game = savedGame;
+    delete el._tick; // the card's own again
+    return out;
+  }, opts);
+  for (const width of [420, 330]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.waitForTimeout(600);
+    const g = await ghostRun({});
+    check(`ghosting at ${width} px: the old frame fades from the pet, gone by 300 ms`,
+      g.swapped && g.frameJust > 0 && g.frameSrc && g.frameLater === 0, JSON.stringify(g));
+    check(`ghosting at ${width} px: a wander leaves a 30% trail that catches up`,
+      Math.abs(g.trail - 0.3) < 0.01 && g.trailLater === 0 && g.back === 0, JSON.stringify(g));
+    check(`ghosting at ${width} px: the ghost is not a second pet`, g.pets === 1 && !g.ghostIsPet, JSON.stringify(g));
+  }
+  const inCatch = await ghostRun({ catchGame: true });
+  check("ghosting stays hidden in Catch",
+    inCatch.frameJust === 0 && inCatch.trail === 0, JSON.stringify(inCatch));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const calmGhost = await ghostRun({});
+  check("ghosting never shows with reduced motion",
+    calmGhost.frameJust === 0 && calmGhost.trail === 0, JSON.stringify(calmGhost));
+  await page.emulateMedia({ reducedMotion: null });
+  await setLcd(false);
+  const offGhost = await ghostRun({});
+  check("ghosting is off with screen effects off",
+    offGhost.frameJust === 0 && offGhost.trail === 0, JSON.stringify(offGhost));
+  // Screenshots, held mid-fade.
+  await setLcd(true);
+  const ghostShot = async (name, move) => {
+    await card.evaluate(async (el, move) => {
+      const s = el._slides[el._index];
+      s.pet.getAnimations().forEach((a) => a.cancel());
+      s.ghostUntil = 0;
+      if (move) {
+        s.pet.classList.add("wander-r");
+      } else { // a frame swap, as in ghostRun
+        const realFrames = el._frames;
+        el._frames = () => [s.frames[0], s.frames.find((f) => f !== s.frames[0]) || s.frames[0]];
+        s.frame = 0;
+        el._show(s, s.pet, el._frames(s)[0]);
+        el._ticks = 1;
+        el._tick();
+        el._frames = realFrames;
+      }
+      await new Promise((r) => setTimeout(r, move ? 450 : 40));
+      s.screen.getAnimations({ subtree: true }).forEach((a) => a.pause());
+    }, move);
+    await shot(name);
+    await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.screen.getAnimations({ subtree: true }).forEach((a) => a.play());
+      s.pet.classList.remove("wander-r");
+    });
+    await page.waitForTimeout(1500);
+  };
+  await ghostShot("d2-ghost-trail", true);
+  await ghostShot("d2-ghost-frame", false);
+  await setLcd(false);
+  await page.setViewportSize({ width: 420, height: 860 });
+  await page.waitForTimeout(600);
+
+  // The backlight (1c): a button on each shell. Its 44 px target gets the taps,
+  // and without it they'd land on the shell: not the screen, a toy, the label or
+  // the request, and not past the slide's sides (the gap to the next device).
+  // The one exception is the compact egg, whose label plate leaves no room: its
+  // target overlaps the plate's end (decoration, not a control).
+  const reach = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const root = el.shadowRoot;
+    const b = s.backlight;
+    const box = b.getBoundingClientRect();
+    const slide = s.el.getBoundingClientRect();
+    const out = { size: [Math.round(box.width), Math.round(box.height)], self: 0, missed: 0, under: {},
+      inside: box.left >= slide.left - 0.5 && box.right <= slide.right + 0.5,
+      label: b.getAttribute("aria-label"), title: b.title };
+    const points = [];
+    for (let i = 4; i <= 40; i += 4) for (let j = 4; j <= 40; j += 4) points.push([box.left + i, box.top + j]);
+    for (const [x, y] of points) root.elementFromPoint(x, y) === b ? out.self++ : out.missed++;
+    b.style.pointerEvents = "none";
+    for (const [x, y] of points) {
+      const h = root.elementFromPoint(x, y);
+      const k = h?.closest(".screen") ? "screen" : h?.closest(".toy") ? "toy" : h?.closest(".label") ? "label" :
+        h?.closest(".request") ? "request" : h?.closest(".slide") === s.el || h?.closest(".viewport") ? "shell" : "other";
+      out.under[k] = (out.under[k] || 0) + 1;
+    }
+    b.style.pointerEvents = "";
+    return out;
+  });
+  // Service calls and the pet's own websocket messages, on the connection itself
+  // (the hass object is replaced at every state change).
+  const calls = () => card.evaluate((el) => {
+    el.__calls = [];
+    const conn = el._hass.connection;
+    if (!conn.__realSend) {
+      conn.__realSend = conn.sendMessagePromise;
+      conn.sendMessagePromise = function (msg, ...a) {
+        if (msg?.type === "call_service" || /^virtual_pet\//.test(msg?.type || "")) el.__calls?.push(msg.type);
+        return conn.__realSend.call(this, msg, ...a);
+      };
+    }
+  });
+  const glow = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { lit: s.screen.classList.contains("lit"),
+      opacity: Number(getComputedStyle(s.screen.querySelector(".glow")).opacity), calls: el.__calls,
+      lights: el._state(s, "switch.lights_out")?.state, asleep: s.asleep };
+  });
+  for (const width of [420, 330]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.waitForTimeout(600);
+    const bad = [];
+    let layout = null;
+    for (const key of worlds) {
+      layout = await inWorld(key);
+      const r = await reach();
+      const egg = layout.device.split(" ").includes("egg");
+      const clear = Object.keys(r.under).every((k) => k === "shell" || (k === "label" && egg && layout.compact));
+      if (r.size.join() !== "44,44" || r.missed || !r.inside || !clear || r.label !== "Backlight" || r.title !== "Light up the screen") {
+        bad.push({ key, ...r });
+      }
+    }
+    check(`the backlight button is reachable on all six shells at ${width} px, clear of the screen, toys and label`,
+      bad.length === 0, JSON.stringify({ layout, bad }));
+    // A tap at night lights the screen for 3 s; nothing is sent to Home Assistant.
+    await card.evaluate((el) => el._slides[el._index].screen.classList.add("night"));
+    await calls();
+    const lightsBefore = (await glow()).lights;
+    await cur().locator(".backlight").click();
+    await page.waitForTimeout(100);
+    const lit = await glow();
+    await page.waitForTimeout(3900);
+    const after = await glow();
+    check(`a backlight tap at ${width} px lights the screen, gone by 4 s, nothing sent`,
+      lit.lit && lit.opacity > 0.5 && !after.lit && after.opacity === 0 && after.calls.length === 0 &&
+      after.lights === lightsBefore, JSON.stringify({ lit, after }));
+  }
+  // Keyboard, a second tap, and the sleeping pet under the glow.
+  await cur().locator(".backlight").focus();
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(100);
+  const byKey = await glow();
+  await page.waitForTimeout(2000);
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(2000);
+  const again = await glow();
+  await page.waitForTimeout(1700);
+  check("the backlight works from the keyboard, and a second tap starts the 3 s again",
+    byKey.lit && again.lit && !(await glow()).lit, JSON.stringify({ byKey, again }));
+  const asleepGlow = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const was = { asleep: s.asleep };
+    s.screen.classList.add("dim");
+    s.asleep = true;
+    const frame = s.pet.getAttribute("src");
+    el._backlight(s);
+    await new Promise((r) => setTimeout(r, 800)); // the scene's filter eases over .6 s
+    const out = { bg: getComputedStyle(s.bg).filter, asleep: s.asleep, frame: s.pet.getAttribute("src") === frame,
+      said: s.bubble.textContent };
+    Object.assign(s, was);
+    return out;
+  });
+  check("under the backlight a sleeping pet stays asleep and its scene brightens",
+    asleepGlow.asleep && /brightness\(0\.9\)/.test(asleepGlow.bg), JSON.stringify(asleepGlow));
+  await page.waitForTimeout(3100);
+  // Screenshots: lit at night on every shell, and by day; off with reduced motion.
+  for (const key of worlds) {
+    await inWorld(key);
+    await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.screen.classList.add("night");
+      el._backlight(s);
+    });
+    await page.waitForTimeout(150);
+    await shot(`d3-backlight-${key}`);
+  }
+  await inWorld(null);
+  await card.evaluate((el) => el._backlight(el._slides[el._index]));
+  await page.waitForTimeout(150);
+  await shot("d3-backlight-day");
+  await page.waitForTimeout(3800);
+  await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.screen.classList.add("dim");
+    el._backlight(s);
+  });
+  await page.waitForTimeout(800);
+  await shot("d3-backlight-asleep");
+  await card.evaluate((el) => el._redraw());
+  await page.waitForTimeout(3800);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await card.evaluate((el) => el._backlight(el._slides[el._index]));
+  await page.waitForTimeout(3050);
+  const calmOff = await glow();
+  check("with reduced motion the backlight goes straight off", !calmOff.lit && calmOff.opacity === 0, JSON.stringify(calmOff));
+  await shot("d3-backlight-reduced-motion-off");
+  await page.emulateMedia({ reducedMotion: null });
+  await card.evaluate((el) => {
+    const conn = el._hass.connection;
+    if (conn.__realSend) conn.sendMessagePromise = conn.__realSend;
+    delete conn.__realSend;
+    delete el.__calls;
+  });
+  await page.setViewportSize({ width: 420, height: 860 });
+  await page.waitForTimeout(600);
+  // Care scenes: medicine and clean play out (about 2 s) before the screen shows
+  // the news. No call reaches the server here: each check plays its answer.
+  {
+    const card = page.locator("hatch-pet-card");
+    await card.evaluate((el) => {
+      el.__calls = [];
+      el._call = function (button, s, domain, service, entityId) {
+        this._tapped(button, s);
+        this.__calls.push(entityId);
+      };
+      el.__ends = [];
+      const end = el._sceneEnd;
+      el._sceneEnd = function (s, opts) {
+        if (s.scene) this.__ends.push({ kind: s.scene.kind, at: performance.now() - s.scene.start });
+        return end.call(this, s, opts);
+      };
+    });
+    const now = () => new Date().toISOString();
+    const put = async (p, key, patch) => {
+      if (p[key]) await inject(p[key], patch);
+    };
+    // A pet awake and calm that needs this care (or doesn't).
+    const sceneState = async (p, kind, due = true) => {
+      await put(p, "binary_sensor.asleep", { state: "off" });
+      await put(p, "switch.lights_out", { state: "off" });
+      await put(p, "binary_sensor.calling", { state: "off" });
+      const sick = due && kind === "medicine";
+      await put(p, "sensor.mood", { state: sick ? "sick" : "content",
+        attributes: { flags: due ? [sick ? "sick" : "dirty"] : [], requests: [] } });
+      await put(p, "sensor.poop", { state: due && kind === "clean" ? "2" : "0" });
+      await put(p, `button.${kind}`, { state: "unknown" }); // medicine's is only there while sick
+      await page.waitForTimeout(600);
+      await card.evaluate((el) => {
+        const s = el._slides[el._index];
+        s.sayUntil = 0; s.poseUntil = 0; s.propUntil = 0; s.prop.style.display = "none";
+        s.pet.classList.remove("look", "wander-l", "wander-r", "hop");
+      });
+    };
+    // The server's answer: cured or cleaned, and the care in the log.
+    const answer = async (p, kind, result = "ok") => {
+      if (result === "ok") {
+        await put(p, "sensor.mood", { state: "content", attributes: { flags: [], requests: [] } });
+        await put(p, "sensor.poop", { state: "0" });
+      }
+      await put(p, "sensor.last_care", { attributes: { log: [{ action: kind, result, by: "Dev Person", at: now() }] } });
+    };
+    const careButton = (kind) => cur().locator(".toy", { hasText: kind === "medicine" ? "meds" : "clean" });
+    const look = () => card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const live = (k) => el._hass.states[s.ids[k]];
+      return {
+        scene: s.scene?.kind || null, answered: !!s.scene?.answered, calls: el.__calls.length,
+        end: el.__ends[el.__ends.length - 1] || null, fade: s.sceneFade?.kind || null,
+        liveFlags: (live("sensor.mood")?.attributes.flags || []).join(),
+        livePoop: live("sensor.poop")?.state, heldPoop: el._state(s, "sensor.poop")?.state,
+        sick: /_sick_/.test((s.frames || []).join()) || /_sick_/.test(s.pet.getAttribute("src") || ""),
+        poops: s.poops.filter((p) => p.style.display !== "none").length,
+        props: s.screen.querySelectorAll(".scene, .scene-spark").length,
+        status: s.screen.classList.contains("show-status"), line: s.bubble.textContent,
+        prop: s.prop.style.display !== "none" ? s.prop.getAttribute("src") : "",
+      };
+    });
+    const waitEnd = async () => {
+      for (let i = 0; i < 40 && (await look()).scene; i++) await page.waitForTimeout(100);
+      await page.waitForTimeout(400); // the redraw after it
+      return look();
+    };
+
+    // Medicine: the pill, the sick pet held on screen, then the cured one.
+    await sceneState(pet, "medicine");
+    await careButton("medicine").click();
+    const medStart = await look();
+    await answer(pet, "medicine");
+    await page.waitForTimeout(700);
+    const medHeld = await look();
+    await shot("care-medicine-mid");
+    const medEnd = await waitEnd();
+    check("medicine: a scene starts at the tap, and the call goes out then",
+      medStart.scene === "medicine" && medStart.calls === 1 && medStart.props > 0, JSON.stringify(medStart));
+    check("medicine: the screen keeps the sick pet while the scene plays",
+      medHeld.scene === "medicine" && medHeld.answered && medHeld.liveFlags === "" && medHeld.sick, JSON.stringify(medHeld));
+    check("medicine: then shows the cured pet, after about 2 s",
+      !medEnd.scene && !medEnd.sick && medEnd.props === 0 && medEnd.end?.at >= 1500 && medEnd.end?.at <= 2600 &&
+      !/not sick/.test(medEnd.line), JSON.stringify(medEnd));
+
+    // Clean: the broom sweeps left to right; each mess goes as it passes.
+    await sceneState(pet, "clean");
+    await careButton("clean").click();
+    await answer(pet, "clean");
+    await page.waitForTimeout(500);
+    const cleanHeld = await look();
+    const sweep = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const sc = s.scene;
+      if (!sc) return null;
+      sc.paused = true;
+      const left = () => s.poops.filter((p) => p.style.display !== "none" && !p.classList.contains("scene-gone")).length;
+      const counts = [];
+      for (let t = 0; t <= 1800; t += 50) {
+        el._sceneRender(s, t);
+        counts.push(left());
+      }
+      el._sceneRender(s, performance.now() - sc.start);
+      sc.paused = false;
+      return { counts, broom: !!s.screen.querySelector(".scene-broom"), dust: !!s.screen.querySelector(".scene-dust") };
+    });
+    await shot("care-clean-mid");
+    const cleanEnd = await waitEnd();
+    const counts = sweep?.counts || [];
+    check("clean: the mess stays on screen though the server has cleared it",
+      cleanHeld.scene === "clean" && cleanHeld.livePoop === "0" && cleanHeld.heldPoop === "2" && cleanHeld.poops === 2,
+      JSON.stringify(cleanHeld));
+    check("clean: a broom and its dust sweep the mess away one by one",
+      sweep?.broom && sweep?.dust && counts[0] === 2 && counts[counts.length - 1] === 0 && counts.includes(1) &&
+      counts.every((n, i) => i === 0 || n <= counts[i - 1]), counts.join(""));
+    check("clean: then a clean room with its sparkle, after about 2 s",
+      !cleanEnd.scene && cleanEnd.poops === 0 && cleanEnd.props === 0 && cleanEnd.end?.at >= 1500 &&
+      cleanEnd.end?.at <= 2600 && !/already clean/.test(cleanEnd.line), JSON.stringify(cleanEnd));
+
+    // Interruptions end the scene at once, on the news.
+    await sceneState(pet, "medicine");
+    await careButton("medicine").click();
+    await answer(pet, "medicine");
+    await page.waitForTimeout(500);
+    await cur().locator(".screen").click({ position: { x: 30, y: 40 } });
+    await page.waitForTimeout(400);
+    const tapCut = await look();
+    check("a tap on the screen mid-scene ends it on the cured pet (no status)",
+      !tapCut.scene && tapCut.end?.at < 1500 && !tapCut.sick && !tapCut.status && tapCut.props === 0, JSON.stringify(tapCut));
+    await sceneState(pet, "clean");
+    const callsBefore = (await look()).calls;
+    await careButton("clean").click();
+    await page.waitForTimeout(300);
+    await careButton("clean").click();
+    await page.waitForTimeout(300);
+    const againCut = await look();
+    check("a second tap on clean ends its scene and isn't sent again",
+      !againCut.scene && againCut.calls === callsBefore + 1 && againCut.props === 0, JSON.stringify(againCut));
+    await answer(pet, "clean");
+    await page.waitForTimeout(500);
+    await sceneState(pet, "medicine");
+    await careButton("medicine").click();
+    await page.waitForTimeout(300);
+    const swipeTitle = (await page.locator("hatch-pet-card .title").innerText()).trim();
+    await page.locator("hatch-pet-card .nav.next").click();
+    const swipeCut = await card.evaluate((el) => el._slides.every((s) => !s.scene && !s.screen.querySelector(".scene")));
+    await page.locator("hatch-pet-card .nav.prev").click();
+    await page.waitForTimeout(700);
+    check("moving to another pet mid-scene ends it", swipeCut &&
+      (await page.locator("hatch-pet-card .title").innerText()).trim() === swipeTitle);
+    await answer(pet, "medicine");
+    await page.waitForTimeout(500);
+
+    // Refusals are answered as before: no scene.
+    await sceneState(pet, "medicine", false);
+    await careButton("medicine").click();
+    const refused = await look();
+    check("medicine for a pet that isn't sick plays no scene", !refused.scene && refused.props === 0, JSON.stringify(refused));
+    await sceneState(pet, "clean", false);
+    await careButton("clean").click();
+    check("clean with nothing to clean plays no scene", !(await look()).scene);
+
+    // Reduced motion: no walking or sweeping; the news fades in when it comes.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const calmRuns = {};
+    for (const kind of ["medicine", "clean"]) {
+      await sceneState(pet, kind);
+      await card.evaluate((el) => {
+        const s = el._slides[el._index];
+        window.__faded = false;
+        s.pet.animate = function (...args) {
+          window.__faded = true;
+          return Element.prototype.animate.apply(this, args);
+        };
+      });
+      await careButton(kind).click();
+      const tapped = await look();
+      await answer(pet, kind);
+      await page.waitForTimeout(800);
+      const shown = await look();
+      calmRuns[kind] = { tapped, shown, faded: await evaluate(() => window.__faded) };
+      await card.evaluate((el) => { delete el._slides[el._index].pet.animate; });
+    }
+    await page.emulateMedia({ reducedMotion: null });
+    for (const [kind, r] of Object.entries(calmRuns)) {
+      check(`reduced motion: ${kind} shows the end state with a short fade, no scene`,
+        !r.tapped.scene && r.tapped.fade === kind && r.tapped.props === 0 && r.faded && !r.shown.sick && r.shown.poops === 0,
+        JSON.stringify({ ...r.tapped, faded: r.faded }));
+    }
+
+    // 330 px, on the other pet's slide: both scenes fit the screen.
+    await page.setViewportSize({ width: 330, height: 860 });
+    await page.locator("hatch-pet-card .nav.next").click();
+    await page.waitForTimeout(900);
+    const other = await ids();
+    await hush();
+    const fits = {};
+    for (const kind of ["medicine", "clean"]) {
+      await sceneState(other, kind);
+      await careButton(kind).click();
+      await answer(other, kind);
+      await page.waitForTimeout(kind === "medicine" ? 900 : 700);
+      fits[kind] = await card.evaluate((el) => {
+        const s = el._slides[el._index];
+        const box = s.screen.getBoundingClientRect();
+        const inside = (r) => r.left >= box.left - 1 && r.right <= box.right + 1 && r.bottom <= box.bottom + 1;
+        const sc = s.scene;
+        if (!sc) return null;
+        if (sc.kind === "medicine") {
+          return { pill: inside(sc.pill.getBoundingClientRect()), step: sc.step > 0,
+            pet: s.pet.getBoundingClientRect().right <= box.right + 1, sick: /_sick_/.test(s.frames.join()) };
+        }
+        return { broom: !!sc.tool.getAttribute("src"), held: el._state(s, "sensor.poop").state === "2" };
+      });
+      await shot(`care-${kind}-330`);
+      await waitEnd();
+    }
+    check("at 330 px the medicine scene fits (pill and pet on screen)",
+      fits.medicine?.pill && fits.medicine?.step && fits.medicine?.pet && fits.medicine?.sick, JSON.stringify(fits.medicine));
+    check("at 330 px the clean scene plays on another pet's slide",
+      fits.clean?.broom && fits.clean?.held, JSON.stringify(fits.clean));
+    await page.setViewportSize({ width: 420, height: 860 });
+    await page.locator("hatch-pet-card .nav.prev").click();
+    await page.waitForTimeout(900);
+
+    // Frame strips for three body plans: a bird, a low tortoise, an octopus on
+    // a water world (the net and its bubbles instead of the broom).
+    const life = pet["sensor.life_stage"];
+    const lifeBefore = await evaluate((e) => document.querySelector("home-assistant").hass.states[e].attributes, life);
+    const strips = {};
+    for (const [species, world] of [["bird", "woodland"], ["tortoise", "terrarium"], ["octopus", "tidepool"]]) {
+      await inject(life, { attributes: { species, world } });
+      for (let i = 0; i < 30; i++) {
+        if (await card.evaluate((el, sp) => el._slides[el._index].species && el._slides[el._index].speciesId === sp, species)) break;
+        await page.waitForTimeout(200);
+      }
+      for (const kind of ["medicine", "clean"]) {
+        await sceneState(pet, kind);
+        await careButton(kind).click();
+        const times = kind === "medicine" ? [0, 600, 1100, 1600, 2000] : [100, 600, 1000, 1500, 1950];
+        const got = [];
+        for (const [n, t] of times.entries()) {
+          const at = await card.evaluate((el, t) => {
+            const s = el._slides[el._index];
+            if (!s.scene) return null;
+            s.scene.paused = true;
+            s.scene.ms = Infinity;
+            el._sceneRender(s, t);
+            return { net: !!s.screen.querySelector(".scene-net"), murk: s.murk.style.maskImage };
+          }, t);
+          await page.waitForTimeout(250); // new frames load
+          await cur().locator(".screen").screenshot({ path: path.join(OUT, `scene-${kind}-${species}-${n}.png`) });
+          got.push(at);
+        }
+        await card.evaluate((el) => el._sceneEnd(el._slides[el._index]));
+        await answer(pet, kind);
+        await page.waitForTimeout(400);
+        strips[`${kind}-${species}`] = got;
+      }
+    }
+    await inject(life, { attributes: lifeBefore });
+    await page.waitForTimeout(800);
+    const octo = strips["clean-octopus"] || [];
+    check("on a water world the net clears the murk in step (octopus)",
+      octo.every((a) => a?.net) && octo.map((a) => Number(/transparent (-?[\d.]+)%/.exec(a?.murk || "")?.[1]))
+        .every((x, i, xs) => i === 0 || x > xs[i - 1]), JSON.stringify(octo.map((a) => a?.murk)));
+    check("both scenes play for a bird, a tortoise and an octopus",
+      Object.values(strips).length === 6 && Object.values(strips).every((g) => g.every(Boolean)),
+      Object.keys(strips).join(" "));
+    await calm();
+  }
+
   const editor = await evaluate(async () => {
     const hass = document.querySelector("home-assistant").hass;
     const el = document.createElement("hatch-pet-card-editor");
@@ -3230,6 +3927,285 @@ async function main() {
   });
   check("card editor renders a form", editor.form && editor.rendered);
   check("card editor saves the picked pets", Array.isArray(editor.config?.devices), JSON.stringify(editor.config));
+
+  // 3a. The power-on boot screen, at two widths. A page of its own, flagged so the
+  // seeded "already booted" doesn't apply; Date.getHours and the oscillator count
+  // are stubbed per step.
+  for (const width of [420, 330]) {
+    const bp = await context.newPage();
+    await bp.setViewportSize({ width, height: 860 });
+    await bp.addInitScript(() => {
+      window.__osc = 0;
+      const start = window.OscillatorNode.prototype.start;
+      window.OscillatorNode.prototype.start = function (...a) { window.__osc++; return start.apply(this, a); };
+    });
+    const fresh = async (reduced = false) => {
+      await bp.emulateMedia({ reducedMotion: reduced ? "reduce" : null });
+      await bp.goto(`${HA}/pet-bench/pet`);
+      await bp.evaluate(() => {
+        sessionStorage.setItem("cc-boot-test", "1");
+        localStorage.removeItem("hatch-booted");
+        localStorage.setItem("hatch-sounds", "off");
+      });
+      await bp.reload();
+      await bp.waitForSelector("hatch-pet-card .slide .boot", { state: "visible", timeout: 60000 });
+      await bp.waitForTimeout(1000); // HA's loading logo clears the page a moment later
+    };
+    const visible = (sel) => bp.locator(sel).evaluateAll((els) => els.filter((e) => e.offsetParent && getComputedStyle(e).visibility !== "hidden").length);
+    const bootShots = path.join(OUT, `boot-${width}`);
+    const bshot = (name) => bp.locator("hatch-pet-card .slide:not(.away-slide) .device").screenshot({ path: `${bootShots}-${name}.png` });
+    const hours = (h) => bp.evaluate((h) => { Date.prototype.getHours = () => h; }, h);
+    const tap = () => bp.locator("hatch-pet-card .slide:not(.away-slide) .boot").click({ force: true });
+    const gone = async (ms) => { // no boot screen showing (polled: the card is in shadow DOM)
+      for (const end = Date.now() + ms; Date.now() < end;) {
+        if (await visible("hatch-pet-card .boot") === 0) return true;
+        await bp.waitForTimeout(50);
+      }
+      return false;
+    };
+
+    // Fresh storage: the boot screen on every slide, buttons hidden, no sound before the tap.
+    await fresh();
+    const total = await bp.locator("hatch-pet-card .slide").count();
+    check(`boot screen on every slide of a fresh browser (${width}px)`,
+      total >= 2 && await visible("hatch-pet-card .slide .boot") === total, `${await visible("hatch-pet-card .slide .boot")}/${total}`);
+    check(`boot screen shows the tap line and hides the buttons (${width}px)`,
+      (await bp.locator("hatch-pet-card .slide:not(.away-slide) .boot").innerText()).includes("▶ tap to start") &&
+      await visible("hatch-pet-card .slide:not(.away-slide) .toy") === 0);
+    check(`boot screen starts no sound before the tap (${width}px)`, await bp.evaluate(() => window.__osc) === 0);
+    await bp.locator("hatch-pet-card").evaluate((el) => { // count the pet speaking up
+      el.__greets = 0;
+      const greet = el._greet;
+      el._greet = function (...a) { el.__greets++; return greet.apply(this, a); };
+    });
+    await bp.waitForTimeout(2000);
+    check(`boot screen holds the speaking back (${width}px)`,
+      await bp.locator("hatch-pet-card").evaluate((el) => el.__greets === 0));
+    await bshot("day");
+    // The tap: sounds on at 10:00 plays the beep, the pet shows, the status stays shut.
+    await hours(10);
+    await bp.evaluate(() => localStorage.setItem("hatch-sounds", "on"));
+    await bp.locator("hatch-pet-card").evaluate((el) => Object.assign(el._slides[el._index], { asleep: false, lightsOut: false }));
+    await tap();
+    await bp.waitForTimeout(250);
+    await bshot("filling");
+    check(`boot tap at 10:00 with sounds on plays the power-on beep (${width}px)`, await bp.evaluate(() => window.__osc) >= 3);
+    const wentAway = await gone(3000);
+    const toys = await visible("hatch-pet-card .slide:not(.away-slide) .toy");
+    const statusShut = await bp.locator("hatch-pet-card .slide:not(.away-slide) .screen.show-status").count() === 0;
+    check(`boot tap shows the pet and leaves the status shut (${width}px)`,
+      wentAway && toys > 0 && statusShut, `gone ${wentAway}, buttons ${toys}, status shut ${statusShut}`);
+    await bp.waitForTimeout(2500);
+    check(`the first look runs after the boot (${width}px)`,
+      await bp.locator("hatch-pet-card").evaluate((el) => el.__greets > 0));
+    // A second load: no boot screen.
+    await bp.reload();
+    await bp.waitForSelector("hatch-pet-card .slide", { timeout: 60000 });
+    await bp.waitForTimeout(1500);
+    check(`a second load shows no boot screen (${width}px)`, await visible("hatch-pet-card .slide .boot") === 0);
+    // Nobody taps: the pet shows by itself in about 5 s, silently.
+    await fresh();
+    const t0 = Date.now() - 1000; // fresh() settled for a second after the screen showed
+    const auto = await gone(6000);
+    check(`boot with no tap finishes by itself in 6 s, silently (${width}px)`,
+      auto && Date.now() - t0 < 6000 && await bp.evaluate(() => window.__osc) === 0, `${Date.now() - t0} ms`);
+    // Sounds on at 22:00: the tap works, the beep stays quiet.
+    await fresh();
+    await hours(22);
+    await bp.evaluate(() => localStorage.setItem("hatch-sounds", "on"));
+    await tap();
+    check(`boot tap at 22:00 plays nothing (${width}px)`, await gone(3000) && await bp.evaluate(() => window.__osc) === 0);
+    // Reduced motion: no fill, straight to the pet.
+    await fresh(true);
+    await bp.waitForTimeout(1000);
+    await bshot("reduced");
+    await tap();
+    check(`boot tap under reduced motion goes straight to the pet (${width}px)`, await gone(300));
+    await bp.evaluate(() => {
+      sessionStorage.removeItem("cc-boot-test");
+      localStorage.setItem("hatch-sounds", "off");
+    });
+    await bp.emulateMedia({ reducedMotion: null });
+    await bp.close();
+  }
+
+
+  // 2a. The infrared link: a visit between the pet on show and a neighbour, at two
+  // widths and with three pets. Sounds off; every visit is forced (the day's
+  // random timer is checked separately), the lines are the card's own.
+  {
+    const third = (await api("GET", "/api/config/config_entries/entry?domain=virtual_pet", access)).length < 3;
+    if (third) {
+      const flow = await api("POST", "/api/config/config_entries/flow", access, { handler: "virtual_pet" });
+      await api("POST", `/api/config/config_entries/flow/${flow.flow_id}`, access, { name: "Checkfin", world: "pond" });
+      await api("POST", "/api/services/virtual_pet/fast_forward", access, { hours: 1 });
+    }
+  }
+  for (const width of [420, 330]) {
+    const lp = await context.newPage();
+    await lp.setViewportSize({ width, height: 860 });
+    await lp.goto(`${HA}/pet-bench/pet`);
+    await lp.evaluate(() => { localStorage.setItem("hatch-sounds", "off"); localStorage.setItem("hatch-lcd", "off"); });
+    await lp.reload();
+    await lp.waitForSelector("hatch-pet-card .statusbtn", { timeout: 60000 });
+    for (let i = 0; i < 60 && await lp.locator("hatch-pet-card").evaluate((el) => (el._slides?.length || 0) < 3); i++) await lp.waitForTimeout(1000);
+    await lp.waitForTimeout(1500);
+    const card = lp.locator("hatch-pet-card");
+    const lshots = path.join(OUT, `link-${width}`);
+    // Everyone free, on this page, no leftovers from earlier pages' storage.
+    const prep = (index = 0) => card.evaluate((el, index) => {
+      for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k);
+      el._linkEnd();
+      el._linkAt = Date.now() + 1e9; // only the forced visits run
+      el._index = index;
+      el._renderShelf();
+      const realState = el._state;
+      if (!el.__linkStage) {
+        el.__linkStage = true;
+        el._state = function (slide, key) {
+          const st = realState.call(this, slide, key);
+          return key === "sensor.life_stage" && st?.state === "egg" ? { ...st, state: "adult" } : st;
+        };
+      }
+      for (const s of el._slides) {
+        Object.assign(s, { asleep: false, lightsOut: false, calling: false, game: null, moodState: "content",
+          lookedFirst: true, queue: [], sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
+        s.screen.classList.remove("show-status");
+      }
+      el._booting = false;
+    }, index);
+    const state = () => card.evaluate((el) => {
+      const [h, g] = [el._slides[el._index], el._slides[el._index + 1] || el._slides[el._index - 1]];
+      const beam = el._track.querySelector(".irbeam");
+      const head = beam?.querySelector(".head");
+      return {
+        beam: !!beam, head: head?.getBoundingClientRect().left ?? null, pe: beam && getComputedStyle(beam).pointerEvents,
+        loaded: beam ? [...beam.querySelectorAll("img")].every((i) => i.complete && i.naturalWidth > 0) : null,
+        guestImg: h.screen.querySelectorAll(".vguest").length, band: h.screen.querySelectorAll(".vband").length,
+        hostPos: h.pet.classList.contains("linking"), hop: h.pet.classList.contains("greethop") || !!h.screen.querySelector(".vguest.greethop"),
+        hostSays: h.bubble.textContent, guestSays: h.screen.querySelector(".vsay:not([hidden])")?.textContent || "",
+        guestBubble: g.bubble.textContent, hostQueue: h.queue.length,
+        left: document.querySelectorAll("x").length + el._track.querySelectorAll(".irbeam").length +
+          el._slides.reduce((n, s) => n + s.screen.querySelectorAll(".visit, .vguest").length +
+            (s.screen.classList.contains("linking") || s.pet.classList.contains("linking") ? 1 : 0), 0),
+        scale: h.pet.style.scale,
+      };
+    });
+    const strip = (name) => card.locator(".viewport").screenshot({ path: `${lshots}-${name}.png` });
+
+    // The timer: the day's visit is 10-25 minutes away, and never while the boot screen is up.
+    await prep();
+    const timer = await card.evaluate((el) => {
+      const h = el._slides[el._index];
+      el._linkAt = null; el._linkTick(h);
+      const wait = el._linkAt - Date.now();
+      el._linkAt = 0; el._booting = true; el._linkTick(h);
+      const booting = !!el._link;
+      el._booting = false;
+      return { wait, booting, started: !!el._link };
+    });
+    check(`link waits 10-25 minutes after the page loads (${width}px)`,
+      timer.wait > 590000 && timer.wait <= 1500000 && !timer.started, JSON.stringify(timer));
+    check(`link never starts under the boot screen (${width}px)`, !timer.booting);
+
+    // A full visit, with frames along the way.
+    await prep();
+    const names = await card.evaluate((el) => {
+      const nm = (s) => { const d = el._hass.devices[s.ids.device]; return d.name_by_user || d.name; };
+      return [nm(el._slides[0]), nm(el._slides[1])];
+    });
+    await card.evaluate((el) => el._linkStart(el._slides[0], el._slides[1]));
+    await lp.waitForTimeout(450);
+    const beam1 = await state();
+    await strip("1-beam-start");
+    await lp.waitForTimeout(550);
+    const beam2 = await state();
+    await strip("2-beam-flying");
+    check(`the beam flies and loads its art, taking no taps (${width}px)`,
+      beam1.beam && beam1.loaded && beam1.pe === "none" && beam2.head > beam1.head, JSON.stringify([beam1, beam2].map((b) => [b.beam, b.loaded, b.pe, b.head])));
+    await lp.waitForTimeout(600);
+    await strip("3-connecting");
+    const band = await state();
+    await lp.waitForTimeout(1100);
+    const both = await state();
+    await strip("4-visit");
+    await lp.waitForTimeout(1500);
+    await strip("5-hop");
+    const lines = await state();
+    check(`the visit screen shows a connecting band, then both pets (${width}px)`,
+      band.band === 1 && both.guestImg === 1 && both.hostPos && both.band === 0, JSON.stringify([band.band, both.guestImg, both.hostPos]));
+    check(`both pets speak, each in their own voice (${width}px)`,
+      new RegExp(`hi.*${names[1]}|${names[1]}.*hello`).test(lines.hostSays) && lines.guestSays.includes(names[0]) && lines.guestBubble.includes("♪"),
+      JSON.stringify([lines.hostSays, lines.guestSays, lines.guestBubble]));
+    await lp.waitForTimeout(1500);
+    await strip("6-farewell");
+    await lp.waitForTimeout(3500); // 9 s since the start
+    const over = await state();
+    check(`the visit is over and nothing is left behind by 9 s (${width}px)`,
+      over.left === 0 && !over.beam, JSON.stringify(over));
+
+    // A swipe mid-visit ends it at once.
+    await prep();
+    await card.evaluate((el) => el._linkStart(el._slides[0], el._slides[1]));
+    await lp.waitForTimeout(3300);
+    const midway = await state();
+    await card.evaluate((el) => el._go(1));
+    const swiped = await state();
+    check(`a swipe mid-visit leaves nothing behind (${width}px)`, midway.guestImg === 1 && swiped.left === 0 && !swiped.beam, JSON.stringify([midway.guestImg, swiped.left]));
+
+    // Not when either pet is asleep, calling or in a game, nor with a line waiting; once a day per pair.
+    await prep();
+    const gates = await card.evaluate((el) => {
+      const [a, b] = [el._slides[0], el._slides[1]];
+      const out = {};
+      const clear = () => { for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k); };
+      for (const [who, s] of [["host", a], ["guest", b]]) {
+        for (const [what, patch] of [["asleep", { asleep: true }], ["calling", { calling: true }], ["game", { game: { kind: "catch" } }], ["queue", { queue: [{ text: "x" }] }]]) {
+          const keep = Object.fromEntries(Object.keys(patch).map((k) => [k, s[k]]));
+          Object.assign(s, patch); clear();
+          out[`${who} ${what}`] = el._linkPick(a);
+          Object.assign(s, keep);
+        }
+      }
+      clear();
+      out.first = !!el._linkPick(a);
+      out.second = !!el._linkPick(a);
+      return out;
+    });
+    const blocked = Object.entries(gates).filter(([k]) => k !== "first" && k !== "second").every(([, v]) => v === null);
+    check(`no visit while either pet is asleep, calling, in a game or has a line waiting (${width}px)`, blocked, JSON.stringify(gates));
+    check(`a pair visits once a day (${width}px)`, gates.first && !gates.second, JSON.stringify([gates.first, gates.second]));
+
+    // Three pets: the pet in the middle can send the beam either way.
+    for (const toRight of [true, false]) {
+      await prep(1);
+      await card.evaluate((el, toRight) => el._linkStart(el._slides[1], el._slides[toRight ? 2 : 0]), toRight);
+      await lp.waitForTimeout(500);
+      const a = await state();
+      await lp.waitForTimeout(450);
+      const b = await state();
+      await strip(`7-three-${toRight ? "right" : "left"}`);
+      check(`with three pets the beam goes ${toRight ? "right" : "left"} to the neighbour (${width}px)`,
+        a.beam && (toRight ? b.head > a.head : b.head < a.head), JSON.stringify([a.head, b.head]));
+      await card.evaluate((el) => el._linkEnd());
+    }
+
+    // Reduced motion: no beam, no hops; the pets appear together, speak and go.
+    await prep();
+    await lp.emulateMedia({ reducedMotion: "reduce" });
+    await card.evaluate((el) => el._linkStart(el._slides[0], el._slides[1]));
+    let sawBeam = false, sawHop = false, sawBoth = false;
+    for (let i = 0; i < 24; i++) {
+      await lp.waitForTimeout(250);
+      const x = await state();
+      sawBeam ||= x.beam; sawHop ||= x.hop; sawBoth ||= x.guestImg === 1 && x.hostPos;
+    }
+    await lp.emulateMedia({ reducedMotion: null });
+    const calmEnd = await state();
+    check(`reduced motion: no beam and no hops, the pets just appear together (${width}px)`,
+      !sawBeam && !sawHop && sawBoth && calmEnd.left === 0, JSON.stringify([sawBeam, sawHop, sawBoth, calmEnd.left]));
+    await lp.close();
+  }
 
   check("no errors in the browser console", errors.length === 0, errors.slice(0, 3).join(" | "));
   await browser.close();
