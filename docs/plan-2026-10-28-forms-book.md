@@ -260,7 +260,7 @@ no new entity, no new service, no websocket command, no options.
 **Kept unrecorded.** Add `"seen"` to that sensor's `_unrecorded_attributes` frozenset
 (`sensor.py:145`, beside `raised`, `journal`, `memories`). The sensor's *state* (the
 stage) is what lands in the recorder, as today; the attributes are excluded, so a
-new page writes nothing to history. A test asserts `"seen"` is in the set (`tests/test_init.py:839`
+new page writes nothing to history. A test asserts `"seen"` is in the set (`tests/test_init.py` ~840
 already loops over the attribute keys that must stay unrecorded; add `seen` there).
 
 `diagnostics.py` dumps `pet.to_dict()` (line ~78, redacted by `REDACT_STATE`), so
