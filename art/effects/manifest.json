@@ -1,0 +1,352 @@
+{
+  "calm": {
+    "frames": [
+      "frames/calm_1.png",
+      "frames/calm_2.png",
+      "frames/calm_3.png",
+      "frames/calm_4.png"
+    ],
+    "source": "source/emotion-01.png",
+    "row": 1
+  },
+  "happy": {
+    "frames": [
+      "frames/happy_1.png",
+      "frames/happy_2.png",
+      "frames/happy_3.png",
+      "frames/happy_4.png"
+    ],
+    "source": "source/emotion-01.png",
+    "row": 2
+  },
+  "sad": {
+    "frames": [
+      "frames/sad_1.png",
+      "frames/sad_2.png",
+      "frames/sad_3.png",
+      "frames/sad_4.png"
+    ],
+    "source": "source/emotion-01.png",
+    "row": 3
+  },
+  "scared": {
+    "frames": [
+      "frames/scared_1.png",
+      "frames/scared_2.png",
+      "frames/scared_3.png",
+      "frames/scared_4.png"
+    ],
+    "source": "source/emotion-01.png",
+    "row": 4
+  },
+  "hungry": {
+    "frames": [
+      "frames/hungry_1.png",
+      "frames/hungry_2.png",
+      "frames/hungry_3.png",
+      "frames/hungry_4.png"
+    ],
+    "source": "source/emotion-02.png",
+    "row": 1
+  },
+  "surprised": {
+    "frames": [
+      "frames/surprised_1.png",
+      "frames/surprised_2.png",
+      "frames/surprised_3.png",
+      "frames/surprised_4.png"
+    ],
+    "source": "source/emotion-02.png",
+    "row": 2
+  },
+  "tired": {
+    "frames": [
+      "frames/tired_1.png",
+      "frames/tired_2.png",
+      "frames/tired_3.png",
+      "frames/tired_4.png"
+    ],
+    "source": "source/emotion-02.png",
+    "row": 3
+  },
+  "stressed": {
+    "frames": [
+      "frames/stressed_1.png",
+      "frames/stressed_2.png",
+      "frames/stressed_3.png",
+      "frames/stressed_4.png"
+    ],
+    "source": "source/emotion-02.png",
+    "row": 4
+  },
+  "proud": {
+    "frames": [
+      "frames/proud_1.png",
+      "frames/proud_2.png",
+      "frames/proud_3.png",
+      "frames/proud_4.png"
+    ],
+    "source": "source/emotion-03.png",
+    "row": 1
+  },
+  "frustrated": {
+    "frames": [
+      "frames/frustrated_1.png",
+      "frames/frustrated_2.png",
+      "frames/frustrated_3.png",
+      "frames/frustrated_4.png"
+    ],
+    "source": "source/emotion-03.png",
+    "row": 2
+  },
+  "sparkle": {
+    "frames": [
+      "frames/sparkle_1.png",
+      "frames/sparkle_2.png",
+      "frames/sparkle_3.png",
+      "frames/sparkle_4.png"
+    ],
+    "source": "source/emotion-03.png",
+    "row": 3
+  },
+  "shimmer": {
+    "frames": [
+      "frames/shimmer_1.png",
+      "frames/shimmer_2.png",
+      "frames/shimmer_3.png",
+      "frames/shimmer_4.png"
+    ],
+    "source": "source/emotion-03.png",
+    "row": 4
+  },
+  "swirl": {
+    "frames": [
+      "frames/swirl_1.png",
+      "frames/swirl_2.png",
+      "frames/swirl_3.png",
+      "frames/swirl_4.png"
+    ],
+    "source": "source/weather-motion.png",
+    "row": 1
+  },
+  "sunny": {
+    "frames": [
+      "frames/sunny_1.png",
+      "frames/sunny_2.png",
+      "frames/sunny_3.png",
+      "frames/sunny_4.png"
+    ],
+    "source": "source/weather-motion.png",
+    "row": 2
+  },
+  "drizzle": {
+    "frames": [
+      "frames/drizzle_1.png",
+      "frames/drizzle_2.png",
+      "frames/drizzle_3.png",
+      "frames/drizzle_4.png"
+    ],
+    "source": "source/weather-motion.png",
+    "row": 3
+  },
+  "rain": {
+    "frames": [
+      "frames/rain_1.png",
+      "frames/rain_2.png",
+      "frames/rain_3.png",
+      "frames/rain_4.png"
+    ],
+    "source": "source/weather-motion.png",
+    "row": 4
+  },
+  "feed": {
+    "frames": [
+      "frames/feed_1.png",
+      "frames/feed_2.png",
+      "frames/feed_3.png",
+      "frames/feed_4.png"
+    ],
+    "source": "source/care-01.png",
+    "row": 1
+  },
+  "snack": {
+    "frames": [
+      "frames/snack_1.png",
+      "frames/snack_2.png",
+      "frames/snack_3.png",
+      "frames/snack_4.png"
+    ],
+    "source": "source/care-01.png",
+    "row": 2
+  },
+  "play": {
+    "frames": [
+      "frames/play_1.png",
+      "frames/play_2.png",
+      "frames/play_3.png",
+      "frames/play_4.png"
+    ],
+    "source": "source/care-01.png",
+    "row": 3
+  },
+  "clean": {
+    "frames": [
+      "frames/clean_1.png",
+      "frames/clean_2.png",
+      "frames/clean_3.png",
+      "frames/clean_4.png"
+    ],
+    "source": "source/care-01.png",
+    "row": 4
+  },
+  "medicine": {
+    "frames": [
+      "frames/medicine_1.png",
+      "frames/medicine_2.png",
+      "frames/medicine_3.png",
+      "frames/medicine_4.png"
+    ],
+    "source": "source/care-02.png",
+    "row": 1
+  },
+  "praise": {
+    "frames": [
+      "frames/praise_1.png",
+      "frames/praise_2.png",
+      "frames/praise_3.png",
+      "frames/praise_4.png"
+    ],
+    "source": "source/care-02.png",
+    "row": 2
+  },
+  "scold": {
+    "frames": [
+      "frames/scold_1.png",
+      "frames/scold_2.png",
+      "frames/scold_3.png",
+      "frames/scold_4.png"
+    ],
+    "source": "source/care-02.png",
+    "row": 3
+  },
+  "tuck_in": {
+    "frames": [
+      "frames/tuck_in_1.png",
+      "frames/tuck_in_2.png",
+      "frames/tuck_in_3.png",
+      "frames/tuck_in_4.png"
+    ],
+    "source": "source/care-02.png",
+    "row": 4
+  },
+  "heavy_rain": {
+    "frames": [
+      "frames/heavy_rain_1.png",
+      "frames/heavy_rain_2.png",
+      "frames/heavy_rain_3.png",
+      "frames/heavy_rain_4.png"
+    ],
+    "source": "source/weather-01.png",
+    "row": 1
+  },
+  "thunderstorm": {
+    "frames": [
+      "frames/thunderstorm_1.png",
+      "frames/thunderstorm_2.png",
+      "frames/thunderstorm_3.png",
+      "frames/thunderstorm_4.png"
+    ],
+    "source": "source/weather-01.png",
+    "row": 2
+  },
+  "hail": {
+    "frames": [
+      "frames/hail_1.png",
+      "frames/hail_2.png",
+      "frames/hail_3.png",
+      "frames/hail_4.png"
+    ],
+    "source": "source/weather-01.png",
+    "row": 3
+  },
+  "snow": {
+    "frames": [
+      "frames/snow_1.png",
+      "frames/snow_2.png",
+      "frames/snow_3.png",
+      "frames/snow_4.png"
+    ],
+    "source": "source/weather-01.png",
+    "row": 4
+  },
+  "sleet": {
+    "frames": [
+      "frames/sleet_1.png",
+      "frames/sleet_2.png",
+      "frames/sleet_3.png",
+      "frames/sleet_4.png"
+    ],
+    "source": "source/weather-02.png",
+    "row": 1
+  },
+  "fog": {
+    "frames": [
+      "frames/fog_1.png",
+      "frames/fog_2.png",
+      "frames/fog_3.png",
+      "frames/fog_4.png"
+    ],
+    "source": "source/weather-02.png",
+    "row": 2
+  },
+  "wind": {
+    "frames": [
+      "frames/wind_1.png",
+      "frames/wind_2.png",
+      "frames/wind_3.png",
+      "frames/wind_4.png"
+    ],
+    "source": "source/weather-02.png",
+    "row": 3
+  },
+  "hot": {
+    "frames": [
+      "frames/hot_1.png",
+      "frames/hot_2.png",
+      "frames/hot_3.png",
+      "frames/hot_4.png"
+    ],
+    "source": "source/weather-03.png",
+    "row": 1
+  },
+  "cold": {
+    "frames": [
+      "frames/cold_1.png",
+      "frames/cold_2.png",
+      "frames/cold_3.png",
+      "frames/cold_4.png"
+    ],
+    "source": "source/weather-03.png",
+    "row": 2
+  },
+  "overcast": {
+    "frames": [
+      "frames/overcast_1.png",
+      "frames/overcast_2.png",
+      "frames/overcast_3.png",
+      "frames/overcast_4.png"
+    ],
+    "source": "source/weather-03.png",
+    "row": 3
+  },
+  "rainbow": {
+    "frames": [
+      "frames/rainbow_1.png",
+      "frames/rainbow_2.png",
+      "frames/rainbow_3.png",
+      "frames/rainbow_4.png"
+    ],
+    "source": "source/weather-03.png",
+    "row": 4
+  }
+}
