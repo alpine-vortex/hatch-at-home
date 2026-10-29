@@ -3237,21 +3237,36 @@ async function main() {
     el._card.classList.toggle("lcd-on", on);
   }, on);
   // A crop of the page, with every animation on the screen held still.
-  const holdStill = () => card.evaluate((el) => {
-    el._slides[el._index].screen.getAnimations({ subtree: true }).forEach((a) => a.pause());
-  });
+  const holdStill = (hold) => card.evaluate((el, hold) => {
+    el._slides[el._index].screen.getAnimations({ subtree: true }).forEach((a) => (hold ? a.pause() : a.play()));
+  }, hold);
   const crop = async (sel, inset) => {
     const box = await cur().locator(sel).first().boundingBox();
     return page.screenshot({ clip: { x: box.x + inset * box.width, y: box.y + inset * box.height,
       width: box.width * (1 - 2 * inset), height: box.height * (1 - 2 * inset) } });
   };
   // The same crop with the grid off, then on: identical when the grid is under it.
+  // The words are hidden for it: anything animating under the grid puts the layers
+  // above it on the compositor, where Chrome draws text with greyscale smoothing
+  // instead of subpixel (same contrast, different pixels).
   const under = async (sel, inset) => {
-    await holdStill();
+    await holdStill(true);
+    await card.evaluate((el) => {
+      const st = document.createElement("style");
+      st.className = "check-notext";
+      st.textContent = ".screen, .screen * { color: transparent !important; text-shadow: none !important; }";
+      el.shadowRoot.append(st);
+    });
     await setLcd(false);
     const off = await crop(sel, inset);
     await setLcd(true);
     const on = await crop(sel, inset);
+    await card.evaluate((el) => el.shadowRoot.querySelector(".check-notext").remove());
+    await holdStill(false);
+    if (process.env.LCD_DEBUG && !off.equals(on)) {
+      fs.writeFileSync(path.join(OUT, `under-off-${results.length}.png`), off);
+      fs.writeFileSync(path.join(OUT, `under-on-${results.length}.png`), on);
+    }
     return off.equals(on);
   };
 
@@ -3343,6 +3358,112 @@ async function main() {
   await inWorld(null);
   await page.setViewportSize({ width: 420, height: 860 });
   await setLcd(false);
+  await page.waitForTimeout(600);
+
+  // Ghosting (1b): a frame swap and a wander leave a fading trace, on the pet on show only.
+  await setLcd(true);
+  const ghostRun = (opts) => card.evaluate(async (el, { catchGame }) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const op = () => Number(getComputedStyle(s.ghost).opacity);
+    const out = { pets: s.screen.querySelectorAll(".pet").length, ghostIsPet: s.ghost.classList.contains("pet") };
+    const savedGame = s.game;
+    if (catchGame) s.game = { kind: "catch" };
+    // No tick of the card's own while sampling (its idle life moves the pet too).
+    const realTick = el._tick;
+    el._tick = () => {};
+    await wait(1500); // an idle move already under way finishes
+    s.pet.classList.remove("wander-l", "wander-r", "look");
+    await wait(1200);
+    // A clean frame swap: the pet awake, still, with two different frames.
+    s.pet.classList.remove("hop", "greethop", "look", "dance", "shiver");
+    s.screen.classList.remove("breezy", "windy");
+    s.pet.getAnimations().forEach((a) => a.cancel());
+    s.ghostUntil = 0;
+    const realFrames = el._frames;
+    el._frames = () => [s.frames[0], s.frames.find((f) => f !== s.frames[0]) || s.frames[0]];
+    s.frame = 0;
+    el._show(s, s.pet, el._frames(s)[0]);
+    el._ticks = 1; // the next tick swaps even while asleep
+    const before = s.pet.getAttribute("src");
+    realTick.call(el);
+    el._frames = realFrames;
+    out.swapped = before !== s.pet.getAttribute("src");
+    out.frameSrc = s.ghost.getAttribute("src") === before;
+    await wait(20);
+    out.frameJust = op();
+    await wait(300);
+    out.frameLater = op();
+    // A wander: the ghost trails the pet at 30% and catches up.
+    s.pet.classList.add("wander-l");
+    await wait(150);
+    out.trail = op();
+    out.lag = [s.pet, s.ghost].map((n) => new DOMMatrix(getComputedStyle(n).transform).m41 ||
+      parseFloat(getComputedStyle(n).translate) || 0);
+    await wait(1400);
+    out.trailLater = op();
+    s.pet.classList.remove("wander-l");
+    await wait(1200);
+    out.back = op();
+    s.game = savedGame;
+    delete el._tick; // the card's own again
+    return out;
+  }, opts);
+  for (const width of [420, 330]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.waitForTimeout(600);
+    const g = await ghostRun({});
+    check(`ghosting at ${width} px: the old frame fades from the pet, gone by 300 ms`,
+      g.swapped && g.frameJust > 0 && g.frameSrc && g.frameLater === 0, JSON.stringify(g));
+    check(`ghosting at ${width} px: a wander leaves a 30% trail that catches up`,
+      Math.abs(g.trail - 0.3) < 0.01 && g.trailLater === 0 && g.back === 0, JSON.stringify(g));
+    check(`ghosting at ${width} px: the ghost is not a second pet`, g.pets === 1 && !g.ghostIsPet, JSON.stringify(g));
+  }
+  const inCatch = await ghostRun({ catchGame: true });
+  check("ghosting stays hidden in Catch",
+    inCatch.frameJust === 0 && inCatch.trail === 0, JSON.stringify(inCatch));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const calmGhost = await ghostRun({});
+  check("ghosting never shows with reduced motion",
+    calmGhost.frameJust === 0 && calmGhost.trail === 0, JSON.stringify(calmGhost));
+  await page.emulateMedia({ reducedMotion: null });
+  await setLcd(false);
+  const offGhost = await ghostRun({});
+  check("ghosting is off with screen effects off",
+    offGhost.frameJust === 0 && offGhost.trail === 0, JSON.stringify(offGhost));
+  // Screenshots, held mid-fade.
+  await setLcd(true);
+  const ghostShot = async (name, move) => {
+    await card.evaluate(async (el, move) => {
+      const s = el._slides[el._index];
+      s.pet.getAnimations().forEach((a) => a.cancel());
+      s.ghostUntil = 0;
+      if (move) {
+        s.pet.classList.add("wander-r");
+      } else { // a frame swap, as in ghostRun
+        const realFrames = el._frames;
+        el._frames = () => [s.frames[0], s.frames.find((f) => f !== s.frames[0]) || s.frames[0]];
+        s.frame = 0;
+        el._show(s, s.pet, el._frames(s)[0]);
+        el._ticks = 1;
+        el._tick();
+        el._frames = realFrames;
+      }
+      await new Promise((r) => setTimeout(r, move ? 450 : 40));
+      s.screen.getAnimations({ subtree: true }).forEach((a) => a.pause());
+    }, move);
+    await shot(name);
+    await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.screen.getAnimations({ subtree: true }).forEach((a) => a.play());
+      s.pet.classList.remove("wander-r");
+    });
+    await page.waitForTimeout(1500);
+  };
+  await ghostShot("d2-ghost-trail", true);
+  await ghostShot("d2-ghost-frame", false);
+  await setLcd(false);
+  await page.setViewportSize({ width: 420, height: 860 });
   await page.waitForTimeout(600);
 
   const editor = await evaluate(async () => {

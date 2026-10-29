@@ -242,6 +242,10 @@ pet; it's only how the screen looks.
   sit in front of it, so words stay crisp. "screen effects here" on the status
   screen turns it off for this browser; it's also off when the browser asks for
   more contrast.
+- **Ghosting.** Like a slow old LCD, the screen leaves a fading trace of the pet:
+  its last frame for a moment when it moves, and a short smear when it wanders or
+  dashes aside in a game. Only on the pet you're looking at, never in Catch, and
+  never with reduced motion. The same "screen effects here" switch turns it off.
 
 ## What you get
 

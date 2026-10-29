@@ -1375,7 +1375,16 @@ const STYLE = `
       repeating-linear-gradient(90deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px));
     background-position: var(--lcd-x, 0) var(--lcd-y, 0); }
   ha-card.lcd-on .lcd { display: block; }
-  @media (prefers-contrast: more) { ha-card.lcd-on .lcd { display: none; } }
+  /* Ghosting (_ghostFrame, _ghostTrail): the pet's geometry, not its class. */
+  .ghost { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%;
+    opacity: 0; display: none; transition: translate .25s ease-out .12s; }
+  ha-card.lcd-on .ghost { display: block; }
+  .ghost.wander-l { translate: -16% 0; transition-duration: .9s; }
+  .ghost.wander-r { translate: 16% 0; transition-duration: .9s; }
+  .ghost.go-left { translate: -60% 0; }
+  .ghost.go-right { translate: 60% 0; }
+  .screen.dim .ghost { filter: brightness(.8); }
+  @media (prefers-contrast: more) { ha-card.lcd-on .lcd, ha-card.lcd-on .ghost { display: none; } }
   /* Idle life. */
   .pet { transition: translate .25s ease-out, rotate .2s ease-out; }
   .pet.look { rotate: y 180deg; }
@@ -1800,6 +1809,7 @@ class HatchPetCard extends HTMLElement {
             <div class="season"></div>
             <img class="poop p0" alt="mess"><img class="poop p1" alt="mess"><img class="poop p2" alt="mess">
             <img class="perch" alt="">
+            <img class="ghost" alt="">
             <img class="pet" alt="">
             <img class="prop" alt="">
             <img class="murk" alt="">
@@ -1831,7 +1841,7 @@ class HatchPetCard extends HTMLElement {
     const s = {
       el: slide, device: q(".device"), label: q(".label"), screen: q(".screen"), bg: q(".bg"),
       awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), pet: q(".pet"), prop: q(".prop"),
-      perch: q(".perch"),
+      perch: q(".perch"), ghost: q(".ghost"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
@@ -1848,11 +1858,17 @@ class HatchPetCard extends HTMLElement {
         console.warn("hatch-pet-card: missing sprite", src);
       }
     }));
-    // The perch moves where the pet moves (wandering, the game) and grows with it.
+    // The perch moves where the pet moves (wandering, the game) and grows with it;
+    // so does the ghost, a beat behind (see _ghostTrail).
     const PERCH_MOVES = ["wander-l", "wander-r", "go-left", "go-right"];
     new MutationObserver(() => {
-      for (const c of PERCH_MOVES) s.perch.classList.toggle(c, s.pet.classList.contains(c));
-      s.perch.style.scale = s.pet.style.scale;
+      const moved = PERCH_MOVES.some((c) => s.ghost.classList.contains(c) !== s.pet.classList.contains(c));
+      for (const c of PERCH_MOVES) {
+        s.perch.classList.toggle(c, s.pet.classList.contains(c));
+        s.ghost.classList.toggle(c, s.pet.classList.contains(c));
+      }
+      s.perch.style.scale = s.ghost.style.scale = s.pet.style.scale;
+      if (moved) this._ghostTrail(s);
     }).observe(s.pet, { attributes: true, attributeFilter: ["class", "style"] });
     // What the pet says to someone (a refusal, a game's result, a moment) is read
     // out by screen readers; its idle chatter isn't. Only the pet on show.
@@ -2503,8 +2519,10 @@ class HatchPetCard extends HTMLElement {
       const frames = this._frames(s);
       const seen = Math.abs(i - this._index) <= 1; // the pet on show and the peeking ones
       if (seen && frames.length && !(s.asleep && this._ticks % 2)) {
+        const was = s.pet.getAttribute("src");
         s.frame = (s.frame + 1) % frames.length;
         this._show(s, s.pet, frames[s.frame]);
+        if (was && was !== s.pet.getAttribute("src")) this._ghostFrame(s, was);
       }
       if (s.propUntil && Date.now() > s.propUntil) {
         this._show(s, s.prop, null);
@@ -2529,6 +2547,41 @@ class HatchPetCard extends HTMLElement {
         if (s.bubble.textContent !== text) this._write(s, text);
       }
     });
+  }
+
+  // Ghosting: a slow LCD leaves a fading trace where the pet was. Only the pet on
+  // show, with screen effects on, never with reduced motion or more contrast, and
+  // never in Catch (a reflex game needs a clean pet). The fades are Web Animations,
+  // which the reduced-motion CSS rule doesn't reach: hence the checks here.
+  _ghosting(s) {
+    const media = (q) => window.matchMedia?.(q).matches;
+    return s === this._slides[this._index] && this._visible && !document.hidden &&
+      this._card.classList.contains("lcd-on") && s.pet.style.display !== "none" &&
+      s.game?.kind !== "catch" && !media("(prefers-reduced-motion: reduce)") &&
+      !media("(prefers-contrast: more)");
+  }
+
+  // A frame swap: the old frame fades from 35% to nothing. Not while the pet is
+  // turned or mid-animation (a hop, a sway, a move), where the trace would sit
+  // where the pet isn't.
+  _ghostFrame(s, src) {
+    if (!this._ghosting(s) || s.pet.classList.contains("look") || s.pet.getAnimations().length ||
+      s.ghostUntil > Date.now()) return;
+    s.ghost.setAttribute("src", src);
+    s.ghost.animate([{ opacity: 0.35 }, { opacity: 0 }], { duration: 180, easing: "linear" });
+  }
+
+  // A wander or a game move: the ghost follows the pet 120 ms behind (its CSS
+  // transition-delay), at 30%, leaving a short smear that catches up.
+  _ghostTrail(s) {
+    s.ghost.getAnimations().forEach((a) => a.cancel());
+    if (!this._ghosting(s)) return;
+    const move = parseFloat(getComputedStyle(s.pet).transitionDuration) * 1000 || 250;
+    const duration = move + 120 + 180;
+    s.ghost.setAttribute("src", s.pet.getAttribute("src"));
+    s.ghost.animate([{ opacity: 0.3 }, { opacity: 0.3, offset: (move + 120) / duration }, { opacity: 0 }],
+      { duration });
+    s.ghostUntil = Date.now() + duration;
   }
 
   // Nothing else is going on: is the pet free for a small idle behaviour?
