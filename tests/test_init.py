@@ -843,6 +843,26 @@ async def test_options_reject_impossible_settings(
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
+async def test_growing_up_shows_the_new_score_and_the_bar_today(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    # Disciplined today, but kept poorly while growing up: the bar shows
+    # today, "growing up" the upbringing score (devoted on the old rule).
+    hass_storage[STORE_KEY] = hatched_pet(
+        now,
+        discipline=100.0,
+        discipline_sum=0.0,
+        discipline_samples=20,
+        wellbeing_sum=4.0,
+        wellbeing_samples=20,
+    )
+    await setup(hass)
+    assert float(hass.states.get("sensor.pip_discipline").state) == 100.0
+    attrs = hass.states.get("sensor.pip_life_stage").attributes
+    assert attrs["upbringing"] == "scrappy"
+    assert attrs["upbringing_score"] == 27  # 0.75 x (0.8 x 20 + 0.2 x 100)
+
+
 async def test_busy_attributes_stay_out_of_history(
     hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
 ) -> None:

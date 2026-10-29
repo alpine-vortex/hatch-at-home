@@ -503,9 +503,10 @@ card and the `calling` sensor, which an automation can notify on.
   call made waiting for calls the best play: the audit's responder who praises
   averaged 75-87 discipline, careful 25-70.)
 - **Praise happiness (C2, finding 9):** inside a 30-minute window 8, 4, 2, then 0; and
-  after the day's first `PRAISE_FULL_PER_DAY` (3) praises that gave happiness, at most
-  `PRAISE_TIRED_HAPPINESS` (1) each. (The audit's "then 2" doesn't close it: one press
-  per 30 minutes at 2 is 4 an hour, exactly the decay.) Praise still answers a happiness
+  after the day's first `PRAISE_FULL_PER_DAY` (3) praises that gave happiness,
+  `PRAISE_TIRED_HAPPINESS` (1) from a window's first press only. (The audit's "then 2"
+  doesn't close it: one press per 30 minutes at 2 is 4 an hour, exactly the decay; nor
+  does 1 a press, since two presses a window are the same 4.) Praise still answers a happiness
   call when it lifts happiness to 25 or more.
 - **The card (finding 25):** the discipline bar stays "today"; the status's "growing
   up: <grade>" uses the new score.
@@ -513,7 +514,8 @@ card and the `calling` sensor, which an automation can notify on.
   `discipline_sum`, `discipline_samples`, `wellbeing_sum`, `wellbeing_samples`,
   `last_sample_at`; `counted_misses`, `miss_day_at` (a timestamp, not a date, finding
   13), `miss_day_count`; `last_care_at`, `praised_care`; `praise_window_at`,
-  `praise_count`, `praise_day_at`, `praise_day_count`; `upbringing_floor`.
+  `praise_count`, `praise_day_at`, `praise_day_count`; `upbringing_floor`,
+  `upbringing_base` (the 0e audit fixes, below).
   `last_praise` (read only by the model) is replaced by the window.
 - **`shift_times` (finding 13)** shifts every new timestamp: `last_sample_at`,
   `miss_day_at`, `last_care_at`, `praised_care`, `praise_window_at`, `praise_day_at`.
@@ -551,9 +553,57 @@ card and the `calling` sensor, which an automation can notify on.
   (56-60); responder steady or better (72-87); responder_praise steady or better
   (75-97); responder_miss1 steady (66-76); neglect (13.7), launder (13.6), launder +
   praise (13.3), sleeper (17.5; moved here from 0a, which needs 0b's re-calls) and twice a day (25-32) scrappy; praise_bot not
-  devoted (scrappy, 44-47) with a real happiness call a day (3.1-3.4); care_bot, which
+  devoted (scrappy, 44-47) with a real happiness call a day (3.1-3.4), and so does
+  `praise_bot_x3`, pressing three times a window (the 0e audit fixes); care_bot, which
   feeds, cleans, doses and praises but never plays, not devoted (scrappy, 28-29: its
   happiness sits under 10 most waking hours); praise spam ≤ 16 (14).
+- **Re-read against 0a-0d, 0f, 0g and 0b (the 0e builder, 2026-10-28):** no assumption
+  broke; every band passes on 10 seeds. As built, where the section left a choice:
+  0f's dropped game (`drop_game`) is not care, so praise after it teaches nothing;
+  "once per action" is once per the **latest** care (`last_care_at`, as the prototype
+  the bands were tuned on): feed, then clean, then two praises teach once, not twice;
+  praise that spoils a whine still takes its place in the window and the day; "days
+  since hatching" counts today and is at least 1 (`_days_lived`), so a baby's misses
+  aren't divided by a fraction of a day; the old score is kept as literals
+  (`_old_grade`: 6 a miss, 0.7 care) since this PR changes the rates. **An old adult
+  with no upbringing** gets the same capped floor as a growing pet, so no save loads
+  a grade below the old rule's (a pytest grid over babies, children, teens and such
+  adults, misses 0-10, discipline 0-100). A journal record's damaged `upbringing` is
+  dropped; `last_praise` is dropped from the save. The sim's `act` passes the
+  settings (the praise day is a local day). Numbers moved slightly from the
+  prototype: praise_bot's real happiness calls 2.8-3.1 a day (band ≥ 1), twice a day
+  24.5-27.0, sleeper 17.8, responder_miss1 65.2-77.3.
+- **The 0e audit's fixes (first mate's calls, 2026-10-28; owner rule "no pet drops a
+  grade because the rules changed" guards drops, not rises):**
+  - **#1, the migration lifted neglected pets** (the wellbeing estimate gives a fully
+    neglected teen about 93%): a migrated pet grows up **no better than the better of
+    its old grade (capped at steady) and the grade of its samples since the update
+    alone**. `upbringing_base` saves the sums, counted misses and capped old grade at
+    the migration and is dropped at adulthood; a damaged one, or one past sums that
+    started over, is dropped on load (no cap). While growing up with no sample since
+    the update yet, the status shows no cap (a careful child keeps reading devoted on
+    update day); from the first sample it's capped, so a neglected teen's "growing up"
+    can step down to its old grade then, never below. **An old adult with no
+    upbringing gets its old grade, capped at steady**, not the estimate (above, which
+    gave it better(new, capped old)). A pytest grid: no migrated pet ends above both.
+    Fix A (seeding the estimate from the old care term) was rejected: it turns
+    migrated casual teens scrappy. **Accepted residual:** praise_bot migrated at 200 or
+    330 hours stays devoted, since its post-update discipline is the 100 its old
+    praise farming left (Q3's half weight).
+  - **#2, praise stood in for play once tired** (1 a press, so two presses a window
+    were 4 an hour): 1 on a window's first press only (above). `praise_bot_x3`: scrappy
+    29.6-31.5 with 3.35-3.57 real happiness calls a day, was steady 66.5-67.5 with 0.
+    The guide's "It can't stand in for play" now holds.
+  - **#3, a damaged far-negative timestamp crashed praise or a miss:**
+    `UPBRINGING_TIMES` are clamped to ≥ −1e10 on load (about 1653; `fromtimestamp`
+    fails below year 1); fast-forward's small negatives survive a save.
+  - **Accepted, no code:** #4, downgrading and re-upgrading is lenient (time on the
+    old build isn't counted; rare, and only ever kinder); #5, the day anchors
+    (`miss_day_at`, `praise_day_at`) shift with away, as audit row 13 says, carrying
+    at most one day's caps into the return day; #6, the floor lapses only on a counted
+    miss, as the owner's rule is worded (a sleeper migrated as a child stays steady,
+    as it was on the old rules); #7, the `upbringing_score` attribute shows the raw
+    score, so a floored pet can read steady with a low score.
 
 **PR 0f: games can't be quit or rerolled for free; card Play spoils a whine (M3, M4,
 and A2's server side).** Size **M**, tier 2 (saved game fields). Before PR 1a, its card

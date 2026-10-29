@@ -395,7 +395,13 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   A whine and a real plea to play often look alike: the hearts are the best clue.
 - **Discipline:** the more of it, the less the pet whines: at 100 it whines a
   quarter as often (never not at all). It fades slowly while the pet is awake,
-  about 4 points a day, so the habit needs a reminder now and then.
+  about 4 points a day, so the habit needs a reminder now and then. Scolding a
+  whine teaches the most; *Praise* within 10 minutes of care it needed (a meal
+  when hungry, a clean-up, play or a finished game when bored, medicine when
+  sick) teaches a little, once per care.
+- **Praise:** cheers it up, but each press within half an hour gives less (8, 4,
+  2, then nothing), and after the day's first three, only a touch. It can't
+  stand in for play.
 - **Poop:** a meal comes out about 2 hours later. Poop older than an hour slowly
   costs health and may make it sick. *Clean* flushes it.
 - **Sleep:** bedtime 23:00, wake 07:00 (change both in the options). Lights-out puts it
@@ -439,8 +445,11 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 - **Sickness:** health below 25, four care misses in a day, old poop, or being too heavy.
   Medicine cures it. **It never dies.**
 - **Upbringing:** on reaching adulthood, how it was raised sets its upbringing for
-  life. Each care miss while growing up costs 6 of 100 care points; the score is
-  70% care and 30% discipline. The status screen shows what it's on track for.
+  life. The score is 75% care and 25% its discipline, averaged over every waking
+  hour from hatching. Care is mostly the share of waking hours it was well (not
+  sick, and no meter under 10), with a little off for care misses (2 points
+  each, at most two a day). The status screen shows what it's on track for;
+  the discipline bar is today's.
 
   | Upbringing | Score | As an adult |
   | --- | --- | --- |
@@ -448,8 +457,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   | Steady | 50+ | As usual |
   | Scrappy | below 50 | Whines half as often again (it never hurts it) |
 
-  A pet with no care misses and a little discipline (35 or more) grows up devoted;
-  it takes about five misses, with no scolding, to grow up scrappy.
+  A pet kept well with a little discipline grows up devoted; seen to four
+  times a day, it grows up steady; left hungry, bored or sick much of the time,
+  scrappy. Pets that were growing up when this rule came in keep the
+  grade they were on track for, up to steady, until their next counted miss.
 - **Personality:** on becoming a teen, the pet settles into one of eight
   personalities and keeps it for life: mellow, sweet, bouncy, starry, old soul,
   fancy, charming or plucky. Any creature can be any type. It's mostly luck; each

@@ -55,9 +55,18 @@ PLAY_HUNGER = -5.0
 PLAY_MIN_ENERGY = 15.0
 MEDICINE_HEALTH = 25.0
 MEDICINE_HAPPINESS = -5.0  # it tastes bad
-PRAISE_HAPPINESS = 8.0
+# Praise can't be farmed (Wave 0 PR 0e; balance_sim's praise_bot and praise
+# spam): inside one window each press gives less, then nothing; after the
+# day's first PRAISE_FULL_PER_DAY presses that gave any, the tired gain from a
+# window's first press only.
+PRAISE_WINDOW_GAINS = (8.0, 4.0, 2.0)  # happiness, press by press in a window
+PRAISE_COOLDOWN_MINUTES = 30  # a praise window
+PRAISE_FULL_PER_DAY = 3
+PRAISE_TIRED_HAPPINESS = 1.0
+# Discipline from praise only after care that met a need, once per action
+# (balance_sim's careful vs responder_praise; PR 0e).
 PRAISE_DISCIPLINE = 2.0
-PRAISE_COOLDOWN_MINUTES = 30  # discipline from praise only once per window
+PRAISE_AFTER_CARE_MINUTES = 10
 SCOLD_DISCIPLINE = 25.0  # scolding a fake call
 SCOLD_UNFAIR_HAPPINESS = -10.0  # scolding for nothing
 PRAISE_WHINING_DISCIPLINE = -10.0  # praising a fake call
@@ -163,8 +172,15 @@ STAGE_STARTS: list[tuple[str, float]] = [
 
 # --- Upbringing: decided on reaching adulthood, kept for life ---------------
 
-UPBRINGING_MISS_COST = 6.0  # care points lost per care miss while growing up
-UPBRINGING_CARE_WEIGHT = 0.7  # the rest of the score is discipline
+# score = care weight x care + the rest x discipline averaged hour by hour;
+# care = (1 - miss share) x wellbeing + miss share x (100 - cost x counted
+# misses). Wellbeing: the share of waking hours not sick with every meter at
+# UPBRINGING_WELL_MIN or more. Tuned with balance_sim --check (PR 0e).
+UPBRINGING_CARE_WEIGHT = 0.75
+UPBRINGING_MISS_SHARE = 0.2
+UPBRINGING_MISS_COST = 2.0  # care points per counted miss
+UPBRINGING_WELL_MIN = 10.0
+MISSES_COUNTED_PER_DAY = 2  # a local day's misses past this cost nothing more
 # Highest first: the first grade whose score the pet reaches.
 UPBRINGING_GRADES: list[tuple[str, float]] = [
     ("devoted", 80.0),
