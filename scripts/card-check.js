@@ -773,6 +773,184 @@ async function main() {
   });
   check("laying an egg takes two taps, with a pause between",
     egg.armed === "sure? tap again" && egg.fast === 0 && egg.pressed.join() === "lay_egg", JSON.stringify(egg));
+  // Taps coalesce: a second tap while a call is pending does nothing.
+  const taps = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const real = el._hass.callService;
+    const sent = [];
+    el._hass.callService = async (d, svc, data) => { sent.push(`${d}.${svc}`); await wait(300); };
+    try {
+      const feed = s.buttons.feed;
+      feed.click();
+      await wait(30);
+      feed.click();
+      await wait(450);
+      const feeds = sent.filter((x) => x === "button.press").length;
+      feed.click(); // free again once the first call is done
+      await wait(450);
+      const again = sent.filter((x) => x === "button.press").length;
+      sent.length = 0;
+      s.buttons.lights.click();
+      await wait(30);
+      s.buttons.lights.click();
+      await wait(450);
+      return { feeds, again, lights: sent.filter((x) => x.startsWith("switch.")).length };
+    } finally {
+      el._hass.callService = real;
+    }
+  });
+  check("a double tap on feed sends one press, and the button is free again after",
+    taps.feeds === 1 && taps.again === 2, JSON.stringify(taps));
+  check("lights tapped twice send one service call", taps.lights === 1, JSON.stringify(taps));
+  // The confirm guard: a second tap a second after the first confirms (all three controls).
+  const slow = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const out = {};
+    const realWS = el._hass.callWS;
+    const sent = [];
+    el._hass.callWS = async (msg) => { sent.push(msg.type); return null; };
+    try {
+      el._birthdayKept = true;
+      el._birthdayPhone = false;
+      s.confirm = null;
+      el._renderStatus(s, []);
+      for (const [cls, type] of [["forgetbday", "virtual_pet/forget_birthday"], ["forgetme", "virtual_pet/forget_me"]]) {
+        s.status.querySelector(`.bell.${cls}`).click();
+        await wait(1000);
+        s.status.querySelector(`.bell.${cls}`).click();
+        await wait(150);
+        out[cls] = sent.includes(type);
+        el._birthdayKept = true;
+        el._renderStatus(s, []);
+      }
+      const pressed = [];
+      const press = el._press;
+      const redraw = el._redraw;
+      el._press = (slide, key) => pressed.push(key);
+      el._redraw = () => {};
+      const was = s.request.dataset.key;
+      s.request.dataset.key = "lay_egg";
+      s.confirm = null;
+      s.request.click();
+      await wait(1000);
+      s.request.click();
+      el._press = press;
+      el._redraw = redraw;
+      s.request.dataset.key = was ?? "";
+      if (!was) delete s.request.dataset.key;
+      out.egg = pressed.join();
+    } finally {
+      el._hass.callWS = realWS;
+      s.confirm = null;
+    }
+    return out;
+  });
+  check("on all three guarded controls a second tap a second later confirms",
+    slow.forgetbday && slow.forgetme && slow.egg === "lay_egg", JSON.stringify(slow));
+  // Answers that wait: a failed save is retried once, then kept on this device.
+  const waits = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const user = el._hass.user.id;
+    const key = `hatch-answers-${user}`;
+    const realWS = el._hass.callWS;
+    const out = {};
+    let mode = "fail"; // fail | lost | ok
+    const sent = [];
+    el._hass.callWS = async (msg) => {
+      if (msg.type !== "virtual_pet/answer") return realWS.call(el._hass, msg);
+      sent.push(`${msg.question}=${msg.answer}`);
+      if (mode === "fail") throw { code: "unknown_error" };
+      if (mode === "notasked") throw { code: "not_asked" };
+      return null;
+    };
+    const answerAs = async (kind, button) => {
+      localStorage.removeItem(key);
+      sent.length = 0;
+      el._ask(s, kind);
+      s.screen.querySelector(`.askday button[data-answer="${button}"]`).click();
+      await wait(3600);
+    };
+    try {
+      localStorage.removeItem("hatch-shared-screen");
+      await answerAs("fav_weather", "snow");
+      out.tries = sent.length;
+      out.bubble = s.bubble.textContent;
+      out.stash = JSON.parse(localStorage.getItem(key) || "[]").map((a) => `${a.question}=${a.answer}`).join();
+      // Not yet resendable on a transport error; a later hass sends it.
+      mode = "ok";
+      sent.length = 0;
+      el._resendAfter = 0;
+      el.hass = el._hass;
+      await wait(200);
+      out.resent = sent.join();
+      out.cleared = localStorage.getItem(key);
+      // A stashed answer the server did not ask for is dropped.
+      mode = "notasked";
+      localStorage.setItem(key, JSON.stringify([{ question: "fav_season", answer: "winter", at: Date.now(), entity: s.ids["sensor.life_stage"] }]));
+      el._resendAfter = 0;
+      el.hass = el._hass;
+      await wait(200);
+      out.dropped = localStorage.getItem(key);
+      // A transport error keeps it.
+      mode = "fail";
+      localStorage.setItem(key, JSON.stringify([{ question: "fav_season", answer: "winter", at: Date.now(), entity: s.ids["sensor.life_stage"] }]));
+      el._resendAfter = 0;
+      el.hass = el._hass;
+      await wait(200);
+      out.kept = !!localStorage.getItem(key);
+      // Dream, birthday: never stashed.
+      await answerAs("dream", "sea");
+      out.dream = localStorage.getItem(key);
+      await answerAs("birthday", "skip");
+      out.birthday = localStorage.getItem(key);
+      // A shared screen stores nothing.
+      localStorage.setItem("hatch-shared-screen", "on");
+      await answerAs("fav_weather", "snow");
+      out.shared = localStorage.getItem(key);
+      localStorage.setItem("hatch-shared-screen", "off");
+      // forget_me removes the key.
+      localStorage.setItem(key, JSON.stringify([{ question: "fav_season", answer: "winter", at: Date.now(), entity: "x" }]));
+      mode = "ok";
+      el._hass.callWS = async () => null;
+      el._birthdayKept = true;
+      s.confirm = null;
+      el._renderStatus(s, []);
+      s.status.querySelector(".bell.forgetme").click();
+      await wait(700);
+      s.status.querySelector(".bell.forgetme").click();
+      await wait(300);
+      out.forgotten = localStorage.getItem(key);
+      // A retry that fires after the slide moved on writes no bubble.
+      el._hass.callWS = async (msg) => { throw { code: "unknown_error" }; };
+      localStorage.removeItem(key);
+      el._ask(s, "fav_weather");
+      const id = s.ids["sensor.life_stage"];
+      s.screen.querySelector('.askday button[data-answer="snow"]').click();
+      s.bubble.textContent = "";
+      s.ids = { ...s.ids, "sensor.life_stage": "sensor.someone_else_life_stage" };
+      await wait(3600);
+      s.ids = { ...s.ids, "sensor.life_stage": id };
+      out.late = s.bubble.textContent;
+    } finally {
+      el._hass.callWS = realWS;
+      localStorage.setItem("hatch-shared-screen", "off");
+      localStorage.removeItem(key);
+    }
+    return out;
+  });
+  check("a failed save is retried once, the bubble says it slipped away, and the answer is kept for this person",
+    waits.tries === 2 && waits.bubble === "hm, that one slipped away ♪" && waits.stash === "fav_weather=snow", JSON.stringify(waits));
+  check("a kept answer is sent when the card next gets hass with a user, and cleared",
+    waits.resent === "fav_weather=snow" && waits.cleared === null, JSON.stringify(waits));
+  check("a kept answer the server did not ask for is dropped, a transport error keeps it",
+    waits.dropped === null && waits.kept === true, JSON.stringify(waits));
+  check("a dream, a birthday and a shared screen store nothing",
+    waits.dream === null && waits.birthday === null && waits.shared === null, JSON.stringify(waits));
+  check("forgetting my data removes kept answers", waits.forgotten === null, JSON.stringify(waits));
+  check("a retry after the slide changed writes no bubble", waits.late === "", JSON.stringify(waits));
   // A close friend coming home: "you're home!!" to them, by name to anyone else.
   await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
   await evaluate(() => document.querySelector("home-assistant").hass.callApi("POST", "states/person.sam_check",

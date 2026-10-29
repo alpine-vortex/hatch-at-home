@@ -213,6 +213,31 @@ function setBabyTalk(userId, on) {
   }
 }
 
+// Answers that did not get through (after a quiet retry), kept per person so a
+// once-question's try is not lost: sent again when the card next has a user.
+// Never on a shared screen, never a birthday, never a dream or a guess.
+const ANSWERS_KEY = "hatch-answers-";
+const ANSWER_RETRY_MS = 3000;
+const ANSWER_RESEND_EVERY_MS = 60000; // after a transport failure
+const ANSWER_KEEP_DAYS = 14; // ASK_LIKES_AGAIN_DAYS on the server
+const STASHED_QUESTIONS = ["fav_weather", "fav_season", "catchphrase"];
+function stashedAnswers(userId) {
+  try {
+    const list = JSON.parse(localStorage.getItem(ANSWERS_KEY + userId) || "[]");
+    return Array.isArray(list) ? list : [];
+  } catch (err) {
+    return [];
+  }
+}
+function saveStashedAnswers(userId, list) {
+  try {
+    if (list.length) localStorage.setItem(ANSWERS_KEY + userId, JSON.stringify(list));
+    else localStorage.removeItem(ANSWERS_KEY + userId);
+  } catch (err) {
+    // no storage (a private window): not kept
+  }
+}
+
 function playChirp(name) {
   const notes = CHIRPS[name];
   if (!notes) return;
@@ -1445,7 +1470,38 @@ class HatchPetCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     this._watchServerClock(hass);
+    this._resendAnswers();
     this._update();
+  }
+
+  // Answers kept on this device (a failed save, twice) go out one by one when
+  // the card has a user. The server saying it did not ask, or that it is not an
+  // answer, drops it (the first try may have arrived and only its reply been
+  // lost); any other error keeps it for later.
+  async _resendAnswers() {
+    const user = this._hass?.user?.id;
+    if (!user || this._resending || sharedScreen() || Date.now() < (this._resendAfter || 0)) return;
+    let list = stashedAnswers(user);
+    if (!list.length) return;
+    this._resending = true;
+    try {
+      const fresh = (a) => a && Date.now() - a.at < ANSWER_KEEP_DAYS * 86400000;
+      list = list.filter(fresh);
+      for (const a of [...list]) {
+        try {
+          await this._hass.callWS({ type: "virtual_pet/answer", entity_id: a.entity, question: a.question, answer: a.answer });
+        } catch (err) {
+          if (err?.code !== "not_asked" && err?.code !== "invalid_answer") {
+            this._resendAfter = Date.now() + ANSWER_RESEND_EVERY_MS;
+            break;
+          }
+        }
+        list = list.filter((x) => x !== a);
+      }
+      saveStashedAnswers(user, list);
+    } finally {
+      this._resending = false;
+    }
   }
 
   // Every state event carries the server's own time_fired: one reading gives
@@ -2902,18 +2958,34 @@ class HatchPetCard extends HTMLElement {
       if (["great", "you"].includes(answer) && !calm) this._animate(s, s.pet, "greethop", 1400);
       else if (["tough", "not really"].includes(answer) && !calm) this._bondHearts(s);
       else this._animate(s, s.pet, "perk", 320);
-      if (question.keep) {
-        // A websocket command, not a service call: answers stay off the event bus.
-        this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity,
-          question: kind, answer }).then(() => {
-          if (kind === "birthday") this._birthdayKept = answer !== "skip";
-        }).catch(() => {
-          // not kept this time: it may ask again another day
-        });
-      }
+      if (question.keep) this._keepAnswer(s, kind, answer, entity);
     });
     s.screen.append(box);
     s.askTimer = setTimeout(done, ASK_MS);
+  }
+
+  // A websocket command, not a service call: answers stay off the event bus.
+  // A failure is retried once, quietly. If that fails too, the pet says so and a
+  // once-question is kept on this device for later. The bubble is written only
+  // while the slide still shows the pet that was asked.
+  _keepAnswer(s, kind, answer, entity) {
+    const user = this._hass.user?.id;
+    const send = () => this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity, question: kind, answer });
+    const kept = () => {
+      if (kind === "birthday") this._birthdayKept = answer !== "skip";
+    };
+    send().then(kept).catch(() => {
+      setTimeout(() => {
+        send().then(kept).catch((err) => {
+          if (s.ids?.["sensor.life_stage"] === entity) this._write(s, "hm, that one slipped away ♪", 3500);
+          if (!user || !STASHED_QUESTIONS.includes(kind) || sharedScreen()) return;
+          if (err?.code === "not_asked" || err?.code === "invalid_answer") return; // the server will not take it
+          const list = stashedAnswers(user).filter((a) => a.question !== kind);
+          list.push({ question: kind, answer, at: Date.now(), entity });
+          saveStashedAnswers(user, list);
+        });
+      }, ANSWER_RETRY_MS);
+    });
   }
 
   // Hearts that float up around the pet: only for someone it's very close to.
@@ -3472,6 +3544,7 @@ class HatchPetCard extends HTMLElement {
               if (key?.startsWith(`hatch-greet-${user}-`)) greets.push(key);
             }
             greets.forEach((key) => localStorage.removeItem(key));
+            localStorage.removeItem(ANSWERS_KEY + user);
           } catch (err) {
             // no storage (a private window): nothing kept here
           }
@@ -3977,6 +4050,9 @@ class HatchPetCard extends HTMLElement {
 
   async _call(button, s, domain, service, entityId) {
     this._tapped(button, s);
+    this._inflight ??= new WeakSet();
+    if (this._inflight.has(button)) return; // one call per button at a time
+    this._inflight.add(button);
     button.classList.add("pending");
     try {
       await this._hass.callService(domain, service, { entity_id: entityId });
@@ -3985,6 +4061,7 @@ class HatchPetCard extends HTMLElement {
       setTimeout(() => button.classList.remove("failed"), 400);
       this._write(s, "hmm, that didn't work", 3500);
     } finally {
+      this._inflight.delete(button);
       button.classList.remove("pending");
     }
   }
