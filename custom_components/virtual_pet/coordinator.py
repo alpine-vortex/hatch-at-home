@@ -1705,9 +1705,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     def update_recalls(self, started: str | None = None) -> None:
         """Bring the house's re-call bundle up to date with every pet."""
         recalls: notify.Recalls | None = self.hass.data[DOMAIN].get("recalls")
-        if recalls is None:
-            return
         pets: dict[str, PetCoordinator] = self.hass.data[DOMAIN]["pets"]
+        if recalls is None or pets.get(self.config_entry.entry_id) is not self:
+            return  # loading (a reload's first tick would see an empty house)
         asking = [a for p in pets.values() if (a := p.asking()) is not None]
         for send in recalls.update(asking, started, self._now(), self._send_recall):
             self.config_entry.async_create_background_task(

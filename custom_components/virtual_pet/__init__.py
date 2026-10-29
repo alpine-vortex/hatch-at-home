@@ -463,18 +463,27 @@ def _recall_sender(hass: HomeAssistant) -> notify.Send:
     return send
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
-    """Put the pet away. The coordinator saves itself on shutdown."""
-    pets: dict[str, PetCoordinator] = hass.data[DOMAIN]["pets"]
-    pets.pop(entry.entry_id, None)
-    # A removed pet no longer asks in anyone's re-call notification (the
-    # last one too: no pet left to send it).
-    recalls: notify.Recalls = hass.data[DOMAIN]["recalls"]
+def _refresh_recalls(hass: HomeAssistant) -> None:
+    """A removed pet no longer asks in anyone's re-call notification (the
+    last one too: no pet left to send it)."""
+    data = hass.data.get(DOMAIN, {})
+    recalls: notify.Recalls | None = data.get("recalls")
+    if recalls is None:
+        return
+    pets: dict[str, PetCoordinator] = data["pets"]
     asking = [a for pet in pets.values() if (a := pet.asking()) is not None]
     for send in recalls.update(
         asking, None, dt_util.utcnow().timestamp(), _recall_sender(hass)
     ):
         hass.async_create_background_task(send, f"{DOMAIN} notify")
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
+    """Put the pet away. The coordinator saves itself on shutdown."""
+    pets: dict[str, PetCoordinator] = hass.data[DOMAIN]["pets"]
+    pets.pop(entry.entry_id, None)
+    if pets:  # a reload of the only pet (options) keeps its bundle
+        _refresh_recalls(hass)
     return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
@@ -484,4 +493,5 @@ async def async_remove_entry(hass: HomeAssistant, entry: PetConfigEntry) -> None
     for key in ("missing_entities", "world_not_ready", "save_damaged"):
         ir.async_delete_issue(hass, DOMAIN, f"{key}_{entry.entry_id}")
     persistent_notification.async_dismiss(hass, f"{DOMAIN}_{entry.entry_id}_welcome")
+    _refresh_recalls(hass)
     await PetStore(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}").async_remove()

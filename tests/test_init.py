@@ -3221,6 +3221,10 @@ async def test_removing_the_last_pet_clears_its_recall_bundle(
     await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
     assert [c.data["message"] for c in phone] == ["Pip is hungry!"]
+    # A reload (an options change) keeps it: the pet still asks.
+    assert await hass.config_entries.async_reload(config.entry_id)
+    await hass.async_block_till_done()
+    assert len(phone) == 1
     assert await hass.config_entries.async_remove(config.entry_id)
     await hass.async_block_till_done()
     assert phone[-1].data["message"] == "clear_notification"
@@ -3265,3 +3269,17 @@ async def test_two_pets_left_unfed_are_named_together(
         await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
     assert len(phone) == 1
+    # Past both re-calls' 20 minutes they still ask on the card, so it stays
+    # until neither does.
+    for _ in range(3):
+        await settle(hass, freezer, 5 * 60)
+    assert hass.states.get("binary_sensor.pip_calling").state == "off"
+    await press(hass, "button.pip_feed")
+    await settle(hass, freezer, 5 * 60)
+    assert len(phone) == 1
+    await press(hass, "button.mochi_feed")
+    await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert phone[-1].data["message"] == "clear_notification"
+    assert phone[-1].data["data"]["tag"] == "virtual_pet_recalls"
+    assert len(phone) == 2
