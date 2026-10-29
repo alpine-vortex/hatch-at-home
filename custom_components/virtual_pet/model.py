@@ -166,7 +166,9 @@ def _game(v: Any) -> Game | None:
     if not (_num(v.get("started")) and _num(v.get("last_at"))):
         return None
     number = v.get("number")
-    if v.get("kind") == "higher_lower" and not (_num(number) and int(number) in NUMBERS):
+    if v.get("kind") == "higher_lower" and not (
+        _num(number) and int(number) in NUMBERS
+    ):
         return None  # nothing to guess against
     return Game(
         started=float(v["started"]),
