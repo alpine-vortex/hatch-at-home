@@ -65,7 +65,7 @@ numbers (`noted.tucked` is the float `tucked_at`); a `catch_up` that raises keep
 once the backup they name is gone; a third wording, `save_damaged_missing` (no file,
 no `.corrupt`, no marker; owner-approved); load failures log only the error type.
 The catchphrase's keep button is 12px and may wrap inside itself, so every creature's
-five choices fit two rows (checked for all 30). `scripts/test` 584, `scripts/card-check` 134/134.
+five choices fit two rows (checked for all 30). `scripts/test` 585, `scripts/card-check` 134/134 (the catchphrase rows checked full size and compact).
 
 **Phase 4 of the voices plan, the photo (A7), is merged and pre-released as
 0.34.0b1** (PR #31, 2026-10-28; from `docs/plan-2026-10-28-phase4-photo.md` draft 2,

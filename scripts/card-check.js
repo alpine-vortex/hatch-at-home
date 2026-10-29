@@ -588,8 +588,9 @@ async function main() {
     const s = el._slides[el._index];
     const real = el._state;
     const bad = [];
-    const area = s.screen.getBoundingClientRect();
-    try {
+    // At full size, then compact (a narrow phone column).
+    const measure = (layout) => {
+      const area = s.screen.getBoundingClientRect();
       for (const [id, phrase] of phrases.filter(([, p]) => p)) {
         el._state = function (slide, key) {
           const st = real.call(this, slide, key);
@@ -602,18 +603,35 @@ async function main() {
         const keep = buttons.at(-1).getBoundingClientRect();
         const inside = box.left >= area.left && box.right <= area.right && keep.right <= area.right;
         if (rows !== 2 || !inside || buttons.at(-1).textContent !== `keep "${phrase}"`) {
-          bad.push({ id, phrase, rows, inside, widths: buttons.map((b) => Math.round(b.getBoundingClientRect().width)), area: Math.round(area.width) });
+          bad.push({ layout, id, phrase, rows, inside, widths: buttons.map((b) => Math.round(b.getBoundingClientRect().width)), area: Math.round(area.width) });
         }
         el._clearAsk(s);
       }
+      return Math.round(area.width);
+    };
+    const widths = {};
+    const width = el.style.width;
+    try {
+      widths.full = measure("full");
+      el.style.width = "300px";
+      await new Promise((r) => setTimeout(r, 300));
+      el._layout();
+      await new Promise((r) => setTimeout(r, 300));
+      const compact = el._card.classList.contains("compact");
+      widths.compact = compact ? measure("compact") : `not compact (${el._slideW})`;
     } finally {
       el._state = real;
+      el.style.width = width;
+      await new Promise((r) => setTimeout(r, 300));
+      el._layout();
+      await new Promise((r) => setTimeout(r, 300));
     }
     s.asking = false;
-    return { count: phrases.filter(([, p]) => p).length, longest: phrases.map(([, p]) => p || "").sort((a, b) => b.length - a.length)[0], bad };
+    return { count: phrases.filter(([, p]) => p).length, longest: phrases.map(([, p]) => p || "").sort((a, b) => b.length - a.length)[0], widths, bad };
   }, allPhrases);
-  check("every creature's catchphrase keeps the five choices in two rows on the screen",
-    everyPhrase.count >= 30 && everyPhrase.bad.length === 0, JSON.stringify(everyPhrase));
+  check("every creature's catchphrase keeps the five choices in two rows, full size and compact",
+    everyPhrase.count >= 30 && typeof everyPhrase.widths.compact === "number" && everyPhrase.bad.length === 0,
+    JSON.stringify(everyPhrase));
   // A picture of the longest one's box.
   await page.locator("hatch-pet-card").evaluate((el, phrase) => {
     const s = el._slides[el._index];
@@ -2500,8 +2518,10 @@ async function main() {
           game: s.game, unsubbed, unsubCleared: s.unsub === null, breezy: s.screen.classList.contains("breezy"),
         });
         const before = { ...io };
+        two._slides[0].unsub = () => {};
         two.remove();
         out.disconnected = io.disconnect > before.disconnect;
+        out.unsubClearedOnLeave = two._slides[0].unsub === null;
         document.body.append(two);
         out.observed = io.observe > before.observe;
         two.remove();
@@ -2513,7 +2533,7 @@ async function main() {
       return out;
     });
     check("F6: a dropped slide ends its game, revokes its photos, closes the dialog and unsubscribes",
-      f6.slides === 1 && f6.dialogOpened && f6.dialogClosed && f6.revoked && f6.game === null && f6.unsubbed && f6.unsubCleared && !f6.breezy,
+      f6.slides === 1 && f6.dialogOpened && f6.dialogClosed && f6.revoked && f6.game === null && f6.unsubbed && f6.unsubCleared && f6.unsubClearedOnLeave && !f6.breezy,
       JSON.stringify(f6));
     check("F6: the card's observer disconnects when it leaves the page and observes again when back",
       f6.disconnected && f6.observed, JSON.stringify(f6));

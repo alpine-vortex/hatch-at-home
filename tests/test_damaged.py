@@ -516,3 +516,20 @@ async def test_a_restored_people_file_clears_its_repair(
     copy.unlink()  # renamed back
     await People(hass).async_load()
     assert issue(hass, "people_damaged") is None
+
+
+async def test_a_catch_up_failing_every_restart_backs_up_once(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    storage_dir: Path,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now - 3600, hunger=40.0)
+    with patch.object(model, "catch_up", side_effect=RuntimeError("a bug")):
+        entry = await load(hass)
+        [first] = storage_dir.glob(f"{STORE_KEY}.damaged.*")
+        for _ in range(2):
+            assert await hass.config_entries.async_reload(entry.entry_id)
+            await hass.async_block_till_done()
+    assert list(storage_dir.glob(f"{STORE_KEY}.damaged.*")) == [first]
+    assert issue(hass).translation_placeholders["backup"] == first.name

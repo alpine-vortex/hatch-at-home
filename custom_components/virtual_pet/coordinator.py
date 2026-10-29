@@ -377,7 +377,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     self.state = before
                     self.state.last_updated = now  # the time away is skipped
                     downtime = 0.0
-                    await self._damaged(data, salvaged=True)
+                    await self._damaged(data, salvaged=True, again=True)
                 else:
                     await async_clear_if_restored(
                         self.hass, f"save_damaged_{self.pet_id}"
@@ -408,8 +408,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     async def _damaged(self, data: Any, *, salvaged: bool, again: bool = False) -> None:
         """Back the damaged file up, save what was kept over it at once, and
         raise the repair (salvaged, started again as an egg, or the file was
-        missing). With again (the first tick failing, as it may on every
-        restart), a repair whose backup is still there is left as it is."""
+        missing). With again (a catch-up or first tick failing, as it may on
+        every restart), a repair whose backup is still there is left as it is."""
         assert self.state is not None
         issue_id = f"save_damaged_{self.pet_id}"
         if again and self._damage_backup is None:
