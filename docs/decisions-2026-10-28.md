@@ -16,8 +16,9 @@ plan's open question is answered here, this file wins.
 ## Balance (experience plan, Wave 0)
 - A daytime nap needs tiredness (energy below the nap threshold) or to be within an
   hour of bedtime; otherwise "not sleepy yet ♪". The house still puts it to bed at night.
-- A missed need calls again after 4 hours and sends one phone notification per re-call,
-  only to people with "notify me" on.
+- A missed need calls again after 4 hours, only to people with "notify me" on. How the
+  re-call reaches phones is pending Wave 0 Q1 (plan draft 3 recommends one bundled
+  push per 4 hours naming every pet still asking); PR 0b waits on it.
 - Upbringing rework: pets that are babies or children when it lands blend from now
   (their averaging starts from today's discipline and care); no pet drops a grade
   because the rules changed.
