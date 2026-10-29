@@ -394,6 +394,11 @@ card and the `calling` sensor, which an automation can notify on.
   54-57, careful_games 53-58, casual 46-50, responder 44-48, praise_bot 56-57; with all
   of Wave 0: careful 51-56, careful_games 50-54, casual 43-51, casual_games 44-55,
   responder 42-48, praise_bot 56-57.
+- **Built (s2450, on 0a):** 0a left weight, burn and the games alone, so no assumption
+  here broke. With 0a and 0c in, 10 seeds: careful 54-57, careful_games 53-58, casual
+  46-50, casual_games 43-51, responder 44-48, praise_bot 56-57 (main: 29-32, 24-28, 0-3,
+  0-4, 2-6, 39-40). Pytests: signs, each game's expected happiness >= Play's, the
+  restoring term at 30, 50 and 70.
 
 **PR 0d: fake calls disguised; real needs first (C3, minor 3).** Size **S-M**, tier 1.
 - **Owner: disguise, accepted as "unsure only while happiness is 25-40"** (owner,
