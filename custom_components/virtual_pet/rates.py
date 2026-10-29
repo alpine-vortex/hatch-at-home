@@ -94,6 +94,7 @@ GAME_WIN_HAPPINESS = 30.0  # left/right is luck: a game pays at least like Play
 SKILL_GAME_WIN_HAPPINESS = 21.0
 GAME_LOSE_HAPPINESS = 12.0
 GAME_IDLE_MINUTES = 3  # an unfinished game is dropped after this
+OPENING_KEEP_MINUTES = 30  # a dropped Higher or Lower opening is shown again
 
 # --- Chores: a done to-do item earns the pet a treat --------------------------
 

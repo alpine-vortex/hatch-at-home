@@ -653,7 +653,7 @@ names are included.
 `virtual_pet_recovered`, `virtual_pet_fell_asleep`, `virtual_pet_woke_up`,
 `virtual_pet_stage_changed` (with `personality` on becoming a teen, `upbringing` on reaching adulthood), `virtual_pet_care`, `virtual_pet_hatched`,
 `virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`,
-`virtual_pet_game_finished` (with `game`, `won`, `wins`), `virtual_pet_chore_treat`,
+`virtual_pet_game_finished` (with `game`, `won`, `wins`; `dropped: true` for a game left unfinished after a guess, which counts as a loss and grants no wish, record or bond), `virtual_pet_chore_treat`,
 `virtual_pet_sunrise`, `virtual_pet_sunset`, `virtual_pet_good_morning`,
 `virtual_pet_watching` and `virtual_pet_listening` (with `title`, and `artist` for music),
 `virtual_pet_tv_off_late`, `virtual_pet_news` (with `headline`, and `topic` if given),

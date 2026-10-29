@@ -1686,10 +1686,10 @@ def test_starting_over_before_a_guess_keeps_the_number():
     # Starting again can't fish for an easy first number (1 or 9)...
     again, _ = model.start_game(pet, "higher_lower", at(9, 1), deal)
     assert again["number"] == 5 and pet.game.last_at == at(9, 1)
-    # ...but after a guess, or from another game, it's a new game.
+    # ...and after a guess it carries on too: the real round and number.
     model.play_game(pet, "higher", at(9, 2), deal, kind="higher_lower")
-    fresh, _ = model.start_game(pet, "higher_lower", at(9, 3), deal)
-    assert fresh["number"] == 7 and pet.game.rounds == 0
+    carried, _ = model.start_game(pet, "higher_lower", at(9, 3), deal)
+    assert carried["round"] == 1 and carried["number"] == pet.game.number == 1
 
 
 def test_a_guess_from_the_other_game_is_an_error():
@@ -1759,6 +1759,173 @@ def test_an_unfinished_game_is_dropped():
     assert pet.game is None
     info, _ = model.play_game(pet, "left", start + HOUR, NoLuck())
     assert info["round"] == 1  # a fresh game
+
+
+def _guessed_left_right(pet, when=None, wins=True):
+    model.play_game(pet, "left", when or at(9), Always("left" if wins else "right"))
+
+
+def test_reopening_left_or_right_carries_on_with_the_score():
+    pet = hatched(at(9))
+    _guessed_left_right(pet)
+    info, _ = model.start_game(pet, "left_right", at(9, 1), NoLuck())
+    assert (info["round"], info["wins"]) == (1, 1) and pet.game.last_at == at(9, 1)
+
+
+def test_dropping_a_guessed_game_is_a_loss_without_wish_record_or_bond():
+    pet = hatched(at(9), happiness=50.0, energy=80.0)
+    _guessed_left_right(pet)
+    info, events = model.start_game(pet, "higher_lower", at(9, 1), Deal(5))
+    assert info["game"] == "higher_lower" and info["round"] == 0
+    assert pet.games == {"left_right": {"played": 1, "won": 0}}
+    assert pet.happiness == 50.0 + R.GAME_LOSE_HAPPINESS
+    assert pet.energy == 80.0 + R.PLAY_ENERGY
+    assert events == [
+        {
+            "type": "game_finished",
+            "game": "left_right",
+            "won": False,
+            "wins": 1,
+            "dropped": True,
+        }
+    ]
+
+
+def test_dropping_through_play_game_of_another_kind_counts_too():
+    pet = hatched(at(9))
+    model.start_game(pet, "higher_lower", at(9), Deal(5, 6))
+    model.play_game(pet, "higher", at(9, 1), Deal(6), kind="higher_lower")
+    _, events = model.play_game(pet, "left", at(9, 2), Always("left"))
+    assert pet.games["higher_lower"] == {"played": 1, "won": 0}
+    assert [e.get("dropped") for e in events if e["type"] == "game_finished"] == [True]
+
+
+def test_dropping_before_a_guess_costs_nothing():
+    pet = hatched(at(9))
+    model.start_game(pet, "left_right", at(9), NoLuck())
+    before = (pet.happiness, pet.energy)
+    _, events = model.start_game(pet, "higher_lower", at(9, 1), Deal(5))
+    assert pet.games == {} and (pet.happiness, pet.energy) == before
+    assert "game_finished" not in types(events)
+
+
+def test_the_idle_drop_and_sleep_count_a_guessed_game():
+    start = at(9)
+    pet = hatched(start)
+    _guessed_left_right(pet, start)
+    events = run(pet, start + (R.GAME_IDLE_MINUTES + 1) * MIN)
+    assert pet.game is None and pet.games["left_right"] == {"played": 1, "won": 0}
+    assert [e["dropped"] for e in events if e["type"] == "game_finished"] == [True]
+    pet = hatched(start)
+    _guessed_left_right(pet, start)
+    events = model.set_lights_out(pet, True, start + 60, SETTINGS)
+    assert pet.asleep and pet.games["left_right"]["played"] == 1
+    assert types(events).index("game_finished") < types(events).index("fell_asleep")
+
+
+def test_going_away_drops_a_guessed_game():
+    pet = hatched(at(9))
+    _guessed_left_right(pet)
+    events = model.drop_game(pet, at(9, 1))
+    assert pet.game is None and pet.games["left_right"]["played"] == 1
+    assert events[0]["dropped"] is True
+    assert model.drop_game(pet, at(9, 2)) == []
+
+
+def test_a_dropped_loss_answers_a_happiness_call():
+    pet = hatched(at(9), happiness=10.0)
+    _guessed_left_right(pet)
+    pet.call = model.Call("happiness", at(9), at(9, 20))
+    pet.happiness = R.CALL_THRESHOLDS["happiness"][0] - R.GAME_LOSE_HAPPINESS + 1
+    events = model.drop_game(pet, at(9, 1))
+    assert pet.call is None and "call_answered" in types(events)
+
+
+def test_a_dropped_higher_or_lower_opening_is_kept_for_30_minutes():
+    pet = hatched(at(9))
+    model.start_game(pet, "higher_lower", at(9), Deal(1))
+    model.start_game(pet, "left_right", at(9, 1), NoLuck())  # walk away
+    again, _ = model.start_game(pet, "higher_lower", at(9, 20), Deal())
+    assert again["number"] == 1 and pet.opening is None
+    # Dropped again, but this time it sits past the keep time.
+    model.start_game(pet, "left_right", at(9, 21), NoLuck())
+    late = at(9, 21) + (R.OPENING_KEEP_MINUTES + 1) * MIN
+    fresh, _ = model.start_game(pet, "higher_lower", late, Deal(7))
+    assert fresh["number"] == 7
+
+
+def test_a_guessed_opening_is_spent():
+    pet = hatched(at(9))
+    deal = Deal(1, 9)
+    model.start_game(pet, "higher_lower", at(9), deal)
+    model.play_game(pet, "higher", at(9, 1), Deal(5), kind="higher_lower")
+    model.start_game(pet, "left_right", at(9, 2), NoLuck())
+    assert pet.opening is None
+
+
+def test_the_kept_opening_is_saved_validated_and_shifted():
+    pet = hatched(at(9))
+    pet.opening, pet.opening_at = 3, at(9)
+    loaded = model.PetState.from_dict(pet.to_dict())
+    assert (loaded.opening, loaded.opening_at) == (3, at(9))
+    model.shift_times(loaded, 600)
+    assert loaded.opening_at == at(9) + 600
+    for bad in (
+        {"opening": 12, "opening_at": at(9)},
+        {"opening": 3},
+        {"opening": "x", "opening_at": 1},
+    ):
+        loaded = model.PetState.from_dict({**pet.to_dict(), "opening_at": None, **bad})
+        assert (loaded.opening, loaded.opening_at) == (None, None)
+
+
+def test_an_old_save_with_a_game_open_carries_on():
+    pet = hatched(at(9))
+    data = pet.to_dict()
+    for key in ("opening", "opening_at"):
+        data.pop(key, None)
+    data["game"] = {"started": at(9), "last_at": at(9), "rounds": 2, "wins": 1}
+    loaded = model.PetState.from_dict(data)
+    info, _ = model.start_game(loaded, "left_right", at(9, 1), NoLuck())
+    assert (info["round"], info["wins"]) == (2, 1) and loaded.opening is None
+    data["game"] = {
+        "started": at(9),
+        "last_at": at(9),
+        "kind": "higher_lower",
+        "number": 4,
+    }
+    loaded = model.PetState.from_dict(data)
+    assert model.start_game(loaded, "higher_lower", at(9, 1), Deal())[0]["number"] == 4
+
+
+def test_a_game_spoils_a_whine():
+    for starter in ("start", "play", "carry"):
+        pet = hatched(at(9), discipline=50.0)
+        if starter == "carry":
+            _guessed_left_right(pet)
+        pet.call = model.Call("fake", at(9), at(9, 20))
+        if starter == "play":
+            _, events = model.play_game(pet, "left", at(9, 1), Always("left"))
+        else:
+            _, events = model.start_game(pet, "left_right", at(9, 1), NoLuck())
+        assert pet.call is None, starter
+        assert pet.discipline == 50.0 + R.PRAISE_WHINING_DISCIPLINE, starter
+        assert {
+            "type": "call_answered",
+            "reason": "fake",
+            "answer": "spoiled",
+        } in events
+    real = hatched(at(9), discipline=50.0)
+    real.call = model.Call("hunger", at(9), at(9, 20))
+    model.start_game(real, "left_right", at(9, 1), NoLuck())
+    assert real.call is not None and real.discipline == 50.0
+
+
+def test_a_refused_game_does_not_spoil_a_whine():
+    pet = hatched(at(9), energy=5.0, discipline=50.0)
+    pet.call = model.Call("fake", at(9), at(9, 20))
+    model.start_game(pet, "left_right", at(9, 1), NoLuck())
+    assert pet.call is not None and pet.discipline == 50.0
 
 
 def test_chores_earn_treats_up_to_a_daily_limit():

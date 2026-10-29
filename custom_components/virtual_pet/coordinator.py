@@ -683,6 +683,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         away = self.presence.update(self.watcher.people_home(now), now, self.state.away)
         if away != self.state.away:
             self.state.away = away
+            if away:
+                self._fire(model.drop_game(self.state, now))
             if (
                 away
                 and self.config_entry.options.get(CONF_SITTER_SETTLES, True)
@@ -997,7 +999,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     granted += model.favourite_snack(
                         state, self._today(now)[0], self.rng, own
                     )
-            elif kind == "game_finished":
+            elif kind == "game_finished" and not e.get("dropped"):
                 granted += self._grant("play", by, now)
                 if e.get("won"):
                     model.dream_seed(state, {"kind": "game"}, now)
@@ -1810,7 +1812,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             for event in events:
                 event["result"] = "asleep"
         for event in list(events):
-            if event["type"] == "game_finished" and person is not None:
+            if (
+                event["type"] == "game_finished"
+                and person is not None
+                and not event.get("dropped")
+            ):
                 events += self._bond(person, "game", event["game"])
                 events += model.favourite_game(
                     self.state, person, event["game"], self._today(now)[0]
