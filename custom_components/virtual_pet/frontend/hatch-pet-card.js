@@ -1118,6 +1118,98 @@ const STYLE = `
     inset 0 -3px 0 rgba(40,26,12,.2), 0 2px 0 rgba(112,72,28,.2); }
   .finish-dune .toy .cap { background: #fbefd0; }
   .finish-dune .toy:nth-child(3n + 2) .cap { background: #f3d6a6; }
+  /* Optional 1990s special editions. These use only small, hard-edged CSS
+     details, so every world can keep its shape and its own shell colour. */
+  .finish-clear .body {
+    background-color: color-mix(in srgb, var(--d-shell) 55%, rgba(183,238,208,.48) 45%);
+    background-image:
+      radial-gradient(circle at 8% 8%, rgba(42,91,72,.48) 0 1px, rgba(244,255,248,.72) 1.5px 2.5px, transparent 3px),
+      radial-gradient(circle at 92% 8%, rgba(42,91,72,.48) 0 1px, rgba(244,255,248,.72) 1.5px 2.5px, transparent 3px),
+      radial-gradient(circle at 8% 91%, rgba(42,91,72,.48) 0 1px, rgba(244,255,248,.72) 1.5px 2.5px, transparent 3px),
+      radial-gradient(circle at 92% 91%, rgba(42,91,72,.48) 0 1px, rgba(244,255,248,.72) 1.5px 2.5px, transparent 3px),
+      radial-gradient(circle at 24% 35%, rgba(34,112,89,.32) 0 1.5px, transparent 2.5px),
+      radial-gradient(circle at 76% 63%, rgba(34,112,89,.32) 0 1.5px, transparent 2.5px),
+      linear-gradient(90deg, transparent 17%, rgba(34,112,89,.15) 17% 18%, transparent 18% 82%, rgba(34,112,89,.15) 82% 83%, transparent 83%),
+      linear-gradient(0deg, transparent 29%, rgba(34,112,89,.14) 29% 30%, transparent 30% 68%, rgba(34,112,89,.14) 68% 69%, transparent 69%);
+    box-shadow: inset 0 0 0 2px rgba(235,255,244,.58), inset 0 -9px 0 rgba(45,104,79,.16),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-clear .bezel {
+    background-color: color-mix(in srgb, var(--d-bezel) 72%, #d6f3e5 28%);
+    background-image: radial-gradient(circle at 5px 5px, rgba(54,92,75,.48) 0 1.5px, rgba(255,255,255,.55) 2px, transparent 3px),
+      radial-gradient(circle at calc(100% - 5px) 5px, rgba(54,92,75,.48) 0 1.5px, rgba(255,255,255,.55) 2px, transparent 3px),
+      radial-gradient(circle at 5px calc(100% - 5px), rgba(54,92,75,.48) 0 1.5px, rgba(255,255,255,.55) 2px, transparent 3px),
+      radial-gradient(circle at calc(100% - 5px) calc(100% - 5px), rgba(54,92,75,.48) 0 1.5px, rgba(255,255,255,.55) 2px, transparent 3px);
+    box-shadow: inset 0 0 0 2px rgba(255,255,255,.42), inset 0 -3px 0 rgba(47,94,75,.12);
+  }
+  .finish-clear .loop { border-color: rgba(150,220,188,.74); }
+  .finish-clear .lid, .finish-clear .feet span,
+  .finish-clear .roof::before, .finish-clear .roof::after {
+    background-color: rgba(126,194,161,.72);
+  }
+  .finish-clear .crescent { box-shadow: inset -15px 7px 0 0 rgba(198,243,217,.68), 0 0 0 2px rgba(109,183,146,.65); }
+  .finish-clear .toy .cap { background: rgba(224,247,233,.76); }
+  .finish-glitter .body {
+    background-color: color-mix(in srgb, var(--d-shell) 78%, #fff2c9 22%);
+    background-image:
+      radial-gradient(circle at 12% 17%, #fff8d5 0 1px, transparent 1.5px),
+      radial-gradient(circle at 31% 11%, #ffd9e9 0 1.5px, transparent 2px),
+      radial-gradient(circle at 54% 20%, #fff8d5 0 1px, transparent 1.5px),
+      radial-gradient(circle at 79% 13%, #d4f8ec 0 1.5px, transparent 2px),
+      radial-gradient(circle at 89% 34%, #fff8d5 0 1px, transparent 1.5px),
+      radial-gradient(circle at 18% 48%, #d4f8ec 0 1.5px, transparent 2px),
+      radial-gradient(circle at 39% 39%, #fff8d5 0 1px, transparent 1.5px),
+      radial-gradient(circle at 70% 51%, #ffd9e9 0 1.5px, transparent 2px),
+      radial-gradient(circle at 91% 69%, #fff8d5 0 1px, transparent 1.5px),
+      radial-gradient(circle at 12% 77%, #ffd9e9 0 1.5px, transparent 2px),
+      radial-gradient(circle at 49% 84%, #d4f8ec 0 1.5px, transparent 2px),
+      radial-gradient(circle at 79% 91%, #fff8d5 0 1px, transparent 1.5px);
+    box-shadow: inset 0 0 0 3px rgba(255,255,255,.3), inset 0 -9px 0 rgba(75,47,86,.2),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-glitter .bezel { box-shadow: inset 0 0 0 2px rgba(255,255,255,.45), inset 0 -3px 0 rgba(65,49,79,.14); }
+  .finish-glitter .loop { border-color: color-mix(in srgb, var(--d-dark) 65%, #ffe9ad 35%); }
+  .finish-glitter .lid, .finish-glitter .feet span,
+  .finish-glitter .roof::before, .finish-glitter .roof::after { background-color: color-mix(in srgb, var(--d-dark) 76%, #ffe9ad 24%); }
+  .finish-glitter .crescent { box-shadow: inset -15px 7px 0 0 color-mix(in srgb, var(--d-bezel) 72%, #ffe9ad 28%); }
+  .finish-glitter .toy .cap { background: #fff0ce; }
+  .finish-glow .body {
+    background-color: color-mix(in srgb, var(--d-shell) 64%, #a8dc8a 36%);
+    background-image: radial-gradient(circle at 16% 18%, rgba(220,255,169,.7) 0 1.5px, transparent 2.5px),
+      radial-gradient(circle at 83% 31%, rgba(220,255,169,.62) 0 1.5px, transparent 2.5px),
+      radial-gradient(circle at 26% 76%, rgba(220,255,169,.55) 0 1.5px, transparent 2.5px),
+      radial-gradient(circle at 74% 84%, rgba(220,255,169,.6) 0 1.5px, transparent 2.5px);
+    box-shadow: inset 0 0 0 3px rgba(224,255,189,.32), inset 0 -9px 0 rgba(39,86,55,.28),
+      0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-glow .toy .cap { background: #e7f3c8; }
+  .finish-glow .toy:nth-child(3n + 2) .cap { background: #d5e8ae; }
+  /* The shell only brightens at night or when the viewer has dark mode on. */
+  .finish-glow:has(.screen.night) .body,
+  .finish-glow:has(.screen.dim) .body {
+    box-shadow: inset 0 0 0 3px rgba(224,255,189,.55), inset 0 -9px 0 rgba(39,86,55,.24),
+      0 0 12px rgba(173,238,126,.3), 0 16px 34px rgba(20,15,5,.32);
+  }
+  .finish-glow:has(.screen.night) .loop,
+  .finish-glow:has(.screen.dim) .loop { border-color: #b8e998; }
+  .finish-glow:has(.screen.night) .lid, .finish-glow:has(.screen.dim) .lid,
+  .finish-glow:has(.screen.night) .feet span, .finish-glow:has(.screen.dim) .feet span,
+  .finish-glow:has(.screen.night) .roof::before, .finish-glow:has(.screen.dim) .roof::before,
+  .finish-glow:has(.screen.night) .roof::after, .finish-glow:has(.screen.dim) .roof::after {
+    background-color: #a8d988;
+  }
+  .finish-glow:has(.screen.night) .crescent,
+  .finish-glow:has(.screen.dim) .crescent { box-shadow: inset -15px 7px 0 0 #d3f7ad, 0 0 8px rgba(173,238,126,.3); }
+  @media (prefers-color-scheme: dark) {
+    .finish-glow .body {
+      box-shadow: inset 0 0 0 3px rgba(224,255,189,.55), inset 0 -9px 0 rgba(39,86,55,.24),
+        0 0 12px rgba(173,238,126,.3), 0 16px 34px rgba(20,15,5,.32);
+    }
+    .finish-glow .loop { border-color: #b8e998; }
+    .finish-glow .lid, .finish-glow .feet span,
+    .finish-glow .roof::before, .finish-glow .roof::after { background-color: #a8d988; }
+    .finish-glow .crescent { box-shadow: inset -15px 7px 0 0 #d3f7ad, 0 0 8px rgba(173,238,126,.3); }
+  }
   /* A finish only tints idle buttons: the lit/asleep (.on) and wanted states keep their own look. */
   .device[class*="finish-"] .toy.wanted .cap { background: #ffe9a8; }
   .device[class*="finish-"] .toy.on .cap { background: #3a2a1a; color: #ffe9a8; }
