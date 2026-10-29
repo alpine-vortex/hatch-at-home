@@ -974,3 +974,14 @@ part: M5's "same for `stayed_up_since`" (`shift_times` already shifts it, model
 | The balance audit | New **Wave 0** (PRs 0a-0h), first in the order; its minors 6 and 7 are Wave 1a; M3 reconciled with #41 (the game path, not button Play); M5's `stayed_up_since` half rejected |
 | `scripts/balance_sim.py` | Added in this PR, from the auditor's `sim.py`-`sim4.py`, on the real package. Two changes from the originals: strategies decide from what the sensors show (so C3 can fool them), and a real **casual** strategy replaces "sloppy", which never missed a call. Today it fails 29 bands, as expected |
 | Casual play | New finding from the re-run; open questions N1 and N2 |
+
+## Decided after draft 2 (owner, 2026-10-28)
+
+- **N1:** a casual player (about 4 looks a day) raises a **steady** pet. Lower the cost per
+  miss and blend an hourly wellbeing sample into the care half, tuned by the sims so careful
+  play ends devoted, casual steady and neglect scrappy.
+- **N2:** poop calls stay as calls; N1's retune absorbs their cost.
+- **Copy approved:** W1 "not sleepy yet ♪" (baby "no sleepy!"), W2 (the guide's fake-call
+  sentence), C2 "hm, that one slipped away ♪", C15 "a <creature> is on the way", and the
+  rest of the copy table as written.
+- Wave 0 gets its own adversarial audit before it builds.
