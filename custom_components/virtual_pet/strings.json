@@ -380,7 +380,7 @@
     },
     "save_damaged_egg": {
       "title": "{pet}'s save file was damaged",
-      "description": "{pet}'s save file couldn't be read at all, so {pet} started again as an egg. The file as it was is kept as `.storage/{backup}` (Home Assistant names an unreadable file `….corrupt.<time>`). To go back to it: stop Home Assistant, fix the file, rename it to `.storage/virtual_pet.{entry_id}`, and start Home Assistant again."
+      "description": "{pet}'s save file couldn't be read at all, so {pet} started again as an egg. The file as it was is kept as `.storage/{backup}` (Home Assistant adds `.corrupt` and the time to the name of a file it can't read). To go back to it: stop Home Assistant, fix the file, rename it to `.storage/virtual_pet.{entry_id}`, and start Home Assistant again."
     },
     "save_damaged_missing": {
       "title": "{pet}'s save file was damaged",
