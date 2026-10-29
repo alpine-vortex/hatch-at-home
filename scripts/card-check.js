@@ -578,6 +578,58 @@ async function main() {
     s.sayUntil = 0;
     return out;
   });
+  // Every creature's own catchphrase fits the same two rows (the longest,
+  // "slow and steady", made "keep" wrap onto a third).
+  const sprites = path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "sprites");
+  const allPhrases = fs.readdirSync(sprites)
+    .filter((id) => fs.existsSync(path.join(sprites, id, "species.json")))
+    .map((id) => [id, JSON.parse(fs.readFileSync(path.join(sprites, id, "species.json"), "utf8")).voice?.catchphrase]);
+  const everyPhrase = await page.locator("hatch-pet-card").evaluate(async (el, phrases) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    const bad = [];
+    const area = s.screen.getBoundingClientRect();
+    try {
+      for (const [id, phrase] of phrases.filter(([, p]) => p)) {
+        el._state = function (slide, key) {
+          const st = real.call(this, slide, key);
+          return key === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, catchphrase: phrase } } : st;
+        };
+        el._ask(s, "catchphrase");
+        const buttons = [...s.screen.querySelectorAll(".askday button")];
+        const rows = new Set(buttons.map((b) => Math.round(b.getBoundingClientRect().top))).size;
+        const box = s.screen.querySelector(".askday").getBoundingClientRect();
+        const keep = buttons.at(-1).getBoundingClientRect();
+        const inside = box.left >= area.left && box.right <= area.right && keep.right <= area.right;
+        if (rows !== 2 || !inside || buttons.at(-1).textContent !== `keep "${phrase}"`) {
+          bad.push({ id, phrase, rows, inside, widths: buttons.map((b) => Math.round(b.getBoundingClientRect().width)), area: Math.round(area.width) });
+        }
+        el._clearAsk(s);
+      }
+    } finally {
+      el._state = real;
+    }
+    s.asking = false;
+    return { count: phrases.filter(([, p]) => p).length, longest: phrases.map(([, p]) => p || "").sort((a, b) => b.length - a.length)[0], bad };
+  }, allPhrases);
+  check("every creature's catchphrase keeps the five choices in two rows on the screen",
+    everyPhrase.count >= 30 && everyPhrase.bad.length === 0, JSON.stringify(everyPhrase));
+  // A picture of the longest one's box.
+  await page.locator("hatch-pet-card").evaluate((el, phrase) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    el._state = function (slide, key) {
+      const st = real.call(this, slide, key);
+      return key === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, catchphrase: phrase } } : st;
+    };
+    try { el._ask(s, "catchphrase"); } finally { el._state = real; }
+  }, everyPhrase.longest);
+  await shot("04f-catchphrase-longest");
+  await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    el._clearAsk(s);
+    s.asking = false;
+  });
   const p = catchy.phrase;
   check("its catchphrase ends every third line that names nobody, never a question",
     !!p && catchy.said[0] === `${snd}! the sun's up!` && catchy.said[1] === `${snd}? is this Bluey?` &&
@@ -2385,6 +2437,30 @@ async function main() {
       return { shared: localStorage.getItem("hatch-shared-screen"), you: /you two/.test(s.status.textContent) };
     });
     check("FA: turning it off again makes every card personal", back.shared === "off" && back.you, JSON.stringify(back));
+    // A visit reply that lands after the switch queues no personal note or question.
+    const late = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const hass = el._hass;
+      const real = hass.callService;
+      let answer;
+      hass.callService = () => new Promise((r) => { answer = r; });
+      Object.assign(s, { visitedAt: 0, queue: [], asking: false });
+      try {
+        el._visit(s);
+      } finally {
+        hass.callService = real;
+      }
+      const asked = !!answer;
+      localStorage.setItem("hatch-shared-screen", "on");
+      el._goShared();
+      answer?.({ response: { counted: true, notes: [{ kind: "friends_for", months: 3 }], ask: "catchphrase" } });
+      await new Promise((r) => setTimeout(r, 50));
+      const out = { asked, queue: (s.queue || []).map((q) => q.text), asking: !!s.asking };
+      localStorage.setItem("hatch-shared-screen", "off");
+      return out;
+    });
+    check("FA: a visit reply arriving after the switch queues nothing personal",
+      late.asked && late.queue.length === 0 && !late.asking, JSON.stringify(late));
     await tab.close();
 
     // F6: a slide that goes is torn down like a forgotten one, and the card's
@@ -2421,7 +2497,7 @@ async function main() {
         Object.assign(out, {
           slides: two._slides.length, revoked: revoked.includes(url),
           dialogClosed: !two.shadowRoot.querySelector(".photo-dialog")?.open,
-          game: s.game, unsubbed, breezy: s.screen.classList.contains("breezy"),
+          game: s.game, unsubbed, unsubCleared: s.unsub === null, breezy: s.screen.classList.contains("breezy"),
         });
         const before = { ...io };
         two.remove();
@@ -2437,7 +2513,7 @@ async function main() {
       return out;
     });
     check("F6: a dropped slide ends its game, revokes its photos, closes the dialog and unsubscribes",
-      f6.slides === 1 && f6.dialogOpened && f6.dialogClosed && f6.revoked && f6.game === null && f6.unsubbed && !f6.breezy,
+      f6.slides === 1 && f6.dialogOpened && f6.dialogClosed && f6.revoked && f6.game === null && f6.unsubbed && f6.unsubCleared && !f6.breezy,
       JSON.stringify(f6));
     check("F6: the card's observer disconnects when it leaves the page and observes again when back",
       f6.disconnected && f6.observed, JSON.stringify(f6));

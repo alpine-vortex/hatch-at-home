@@ -1350,6 +1350,10 @@ const STYLE = `
     border-radius: 14px; border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a;
     box-shadow: 0 4px 0 #3a2a1a; transition: transform .08s, box-shadow .08s; }
   .screen .askday button:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
+  /* Keeping its catchphrase can be a long label ("slow and steady"): smaller, and
+     wrapping inside the button if it must, so the five choices stay in two rows. */
+  .screen .askday button[data-answer="keep"] { font-size: 12px; white-space: normal;
+    max-width: calc(100% - 72px); }
   .screen.show-status .askday { display: none; }
   .screen .bondhearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
     opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }
