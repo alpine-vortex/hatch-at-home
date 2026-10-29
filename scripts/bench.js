@@ -159,6 +159,8 @@ async function runShots(browser, base, shots, outDir, workers) {
         await page.clock.setFixedTime(new Date(shot.time));
         await page.setViewportSize({ width: shot.width + 40, height: 900 });
         await page.evaluate((storage) => { localStorage.clear(); for (const [k, v] of Object.entries(storage || {})) localStorage.setItem(k, v); }, shot.storage);
+        // The card claims its boot screen once per page load: a shot that wants it needs a fresh page.
+        if (!shot.booted) await page.goto(`${base}/`);
         await page.evaluate((s) => window.bench.mount(s), shot);
         const inCard = { screen: ".slide:not(.away-slide) .screen", device: ".slide:not(.away-slide) .device" }[shot.clip];
         const file = path.join(outDir, `${shot.name}.png`);

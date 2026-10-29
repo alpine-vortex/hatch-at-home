@@ -54,11 +54,13 @@ A shot (all optional):
 | `seed` | `Math.random` seed (default 7) |
 | `group`, `label` | contact-sheet file and caption |
 
-Per-browser settings: `booted` (default true) seeds `hatch-booted=1` so a
-boot screen never covers the shot; `--boot` asks for it. `lcd` seeds
-`hatch-lcd`. **The card at the time of writing does not read either key yet**
-(other work in flight adds them), so check the key names against the card
-when that lands; `storage` seeds any other value meanwhile.
+Per-browser settings (localStorage, seeded per shot): `booted` (default true)
+sets `hatch-booted` so the power-on boot screen never covers the shot; `--boot`
+(or `"booted": false`) shows it (the page reloads for that shot, since the card
+shows it once per page load). `lcd` sets `hatch-lcd`: `"off"` turns the LCD
+grid and ghosting off, anything else leaves them on. `storage` seeds any other
+key. If the card changes these keys or values, update `normalize` in
+`scripts/bench.js`.
 
 ## What is pinned
 
