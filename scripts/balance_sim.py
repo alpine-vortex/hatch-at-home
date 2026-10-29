@@ -211,7 +211,7 @@ def sleeper(s: M.PetState, t: float, rng: random.Random) -> None:
         M.set_lights_out(s, True, t, SETTINGS)
 
 
-def praise_bot(s: M.PetState, t: float, rng: random.Random) -> None:
+def praise_bot(s: M.PetState, t: float, rng: random.Random, presses: int = 1) -> None:
     """An automation: feeds, cleans and doses as needed, praises every 30 min."""
     if s.asleep:
         return
@@ -222,7 +222,13 @@ def praise_bot(s: M.PetState, t: float, rng: random.Random) -> None:
     if s.sick:
         act(s, "medicine", t, rng)
     if int(t) % 1800 < TICK:
-        act(s, "praise", t, rng)
+        for _ in range(presses):
+            act(s, "praise", t, rng)
+
+
+def praise_bot_x3(s: M.PetState, t: float, rng: random.Random) -> None:
+    """praise_bot pressing three times each half hour (a double-tapper too)."""
+    praise_bot(s, t, rng, presses=3)
 
 
 def care_bot(s: M.PetState, t: float, rng: random.Random) -> None:
@@ -260,6 +266,7 @@ STRATEGIES: dict[str, Policy] = {
     "launder": launder,
     "sleeper": sleeper,
     "praise_bot": praise_bot,
+    "praise_bot_x3": praise_bot_x3,
     "care_bot": care_bot,
     "launder_praise": launder_praise,
 }
@@ -567,6 +574,10 @@ BANDS: dict[str, list[tuple[str, Callable[[dict], bool]]]] = {
     "praise_bot": [
         ("not devoted", at_most("steady")),
         ("weight <= 75", lambda r: r["weight"] <= 75),
+        ("a real happiness call a day", lambda r: r["happy_calls_day"] >= 1),
+    ],
+    "praise_bot_x3": [
+        ("not devoted", at_most("steady")),
         ("a real happiness call a day", lambda r: r["happy_calls_day"] >= 1),
     ],
     "care_bot": [("not devoted", at_most("steady"))],

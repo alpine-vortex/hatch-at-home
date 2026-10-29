@@ -98,6 +98,8 @@ _RANGES = {
     **{s: (0.0, 100.0) for s in STATS},
     "discipline_sum": (0.0, math.inf),
     "wellbeing_sum": (0.0, math.inf),
+    # Fast-forward moves them below 0; far below, a date can't be read.
+    **{key: (-1e10, math.inf) for key in UPBRINGING_TIMES},
 }
 _INTS = {  # key: (default, lowest)
     "care_misses": (0, 0),
@@ -328,6 +330,10 @@ class PetState:
     # steady, until its first counted miss after (no pet drops a grade
     # because the rules changed).
     upbringing_floor: str | None = None
+    # Migrated while growing up: its sums at the update and its old grade,
+    # capped at steady. It grows up no better than the better of that grade
+    # and the one its samples since give (the update lifts no pet either).
+    upbringing_base: dict[str, Any] | None = None
     last_care_at: float = 0.0  # care that met a need: praise after it teaches
     praised_care: float = 0.0  # the care praise last paid discipline for
     praise_window_at: float = 0.0  # the praise window began
@@ -468,6 +474,7 @@ class PetState:
                 kwargs[f"{key}_sum"], kwargs[f"{key}_samples"] = 0.0, 0
         floor = kwargs.get("upbringing_floor")
         kwargs["upbringing_floor"] = _capped(floor) if floor in UPBRINGINGS else None
+        kwargs["upbringing_base"] = _base(kwargs.get("upbringing_base"), kwargs)
         seen = {
             k: float(v)
             for k, v in _mapping(kwargs.get("trait_hours")).items()
@@ -542,9 +549,9 @@ class PetState:
         if "discipline_samples" not in data and life_stage(state) != "egg":
             _migrate_upbringing(state)
         if state.upbringing is None and life_stage(state) == "adult":
-            # Grew up before upbringings existed: judge it on its record so far.
-            state.upbringing = upbringing(state)
-            state.upbringing_floor = None
+            # Grew up with no upbringing saved: judge it on its record so far.
+            state.upbringing = upbringing(state, final=True)
+            state.upbringing_floor = state.upbringing_base = None
         if state.personality is None and life_stage(state) in ("teen", "adult"):
             # Became a teen before personalities existed: settled now, quietly.
             state.personality = personality_for(state)
@@ -760,8 +767,8 @@ def _step(
             state.personality = personality_for(state)
             changed["personality"] = state.personality
         if stage == "adult":
-            state.upbringing = upbringing(state)
-            state.upbringing_floor = None
+            state.upbringing = upbringing(state, final=True)
+            state.upbringing_floor = state.upbringing_base = None
             changed["upbringing"] = state.upbringing
         events.append(changed)
     if stage == "egg":
@@ -1436,7 +1443,11 @@ def upbringing_score(state: PetState) -> float:
     discipline = state.discipline_sum / n if n else state.discipline
     n = state.wellbeing_samples
     well = state.wellbeing_sum / n if n else _wellbeing_estimate(state)
-    misses = max(0.0, 100.0 - R.UPBRINGING_MISS_COST * state.counted_misses)
+    return _score(discipline, well, state.counted_misses)
+
+
+def _score(discipline: float, well: float, counted_misses: float) -> float:
+    misses = max(0.0, 100.0 - R.UPBRINGING_MISS_COST * counted_misses)
     share = R.UPBRINGING_MISS_SHARE
     care = (1 - share) * 100.0 * well + share * misses
     weight = R.UPBRINGING_CARE_WEIGHT
@@ -1457,12 +1468,55 @@ def _better(a: str, b: str | None) -> str:
     return a if b is None or UPBRINGINGS.index(a) <= UPBRINGINGS.index(b) else b
 
 
-def upbringing(state: PetState) -> str:
+def _worse(a: str, b: str | None) -> str:
+    return a if b is None or UPBRINGINGS.index(a) >= UPBRINGINGS.index(b) else b
+
+
+def upbringing(state: PetState, final: bool = False) -> str:
     """The adult's upbringing, or the one it's on track for while growing up:
-    the better of the score's grade and a standing floor."""
+    the better of the score's grade and a standing floor, no better than a
+    migrated pet's cap. final: growing up now."""
     if state.upbringing is not None:
         return state.upbringing
-    return _better(_grade(upbringing_score(state)), state.upbringing_floor)
+    grade = _better(_grade(upbringing_score(state)), state.upbringing_floor)
+    return _worse(grade, _update_cap(state, final))
+
+
+_BASE_KEYS = (
+    "discipline_sum",
+    "discipline_samples",
+    "wellbeing_sum",
+    "wellbeing_samples",
+    "counted_misses",
+)
+
+
+def _base(v: Any, now: dict[str, Any]) -> dict[str, Any] | None:
+    """A saved upbringing_base, or None if damaged or past the sums it was
+    taken from (sums that started over)."""
+    if not isinstance(v, dict) or v.get("grade") not in UPBRINGINGS:
+        return None
+    if not all(_num(v.get(k)) and 0 <= v[k] <= now[k] for k in _BASE_KEYS):
+        return None
+    return {**{k: float(v[k]) for k in _BASE_KEYS}, "grade": _capped(v["grade"])}
+
+
+def _update_cap(state: PetState, final: bool) -> str | None:
+    """A migrated pet's best grade: the better of its old one and the grade
+    its samples since the update give. Growing up with none since: its old
+    grade; still growing with none yet: no cap so far (None)."""
+    base = state.upbringing_base
+    if base is None:
+        return None
+    n = state.wellbeing_samples - base["wellbeing_samples"]
+    if n <= 0 or state.discipline_samples <= base["discipline_samples"]:
+        return base["grade"] if final else None
+    discipline = (state.discipline_sum - base["discipline_sum"]) / (
+        state.discipline_samples - base["discipline_samples"]
+    )
+    well = (state.wellbeing_sum - base["wellbeing_sum"]) / n
+    misses = state.counted_misses - base["counted_misses"]
+    return _better(base["grade"], _grade(_score(discipline, well, misses)))
 
 
 def _days_lived(state: PetState) -> int:
@@ -1480,12 +1534,14 @@ def _migrate_upbringing(state: PetState) -> None:
     """A pet hatched before the score was reworked (PR 0e). Growing up, its
     hours so far count at half weight, from today's discipline and a
     wellbeing estimate, and it keeps the grade the old rule gave it, capped
-    at steady, until its first counted miss. An adult keeps its upbringing."""
+    at steady, until its first counted miss; it grows up no better than the
+    better of that grade and its hours since (upbringing_base). An adult
+    keeps its upbringing; one with none gets the old rule's, capped."""
     days = _days_lived(state)
     state.counted_misses = min(state.care_misses, R.MISSES_COUNTED_PER_DAY * days)
     if life_stage(state) == "adult":
         if state.upbringing is None:
-            state.upbringing_floor = _capped(_old_grade(state))
+            state.upbringing = _capped(_old_grade(state))
         return
     hours = max(0.0, state.age_hours - dict(R.STAGE_STARTS)["baby"])
     samples = round(hours * 2 / 3 / 2)  # awake about two thirds, half weight
@@ -1493,6 +1549,10 @@ def _migrate_upbringing(state: PetState) -> None:
     state.discipline_sum = state.discipline * samples
     state.wellbeing_sum = samples * _wellbeing_estimate(state)
     state.upbringing_floor = _capped(_old_grade(state))
+    state.upbringing_base = {
+        **{key: getattr(state, key) for key in _BASE_KEYS},
+        "grade": state.upbringing_floor,
+    }
 
 
 def _old_grade(state: PetState) -> str:
@@ -1824,16 +1884,18 @@ def _do_action(
 
 def _praise_gain(state: PetState, now: float, tz: tzinfo) -> float:
     """Happiness from one more praise: less each press within a window, and
-    little once the day's first few have given some."""
+    once the day's first few have given some, a little from a window's first
+    press only (two presses an hour, at the tired gain, are under the decay)."""
     if now - state.praise_window_at >= R.PRAISE_COOLDOWN_MINUTES * 60:
         state.praise_window_at, state.praise_count = now, 0
     if not _same_day(state.praise_day_at, now, tz):
         state.praise_day_at, state.praise_day_count = now, 0
     gains = R.PRAISE_WINDOW_GAINS
+    first = state.praise_count == 0
     gain = gains[state.praise_count] if state.praise_count < len(gains) else 0.0
     state.praise_count += 1
     if state.praise_day_count >= R.PRAISE_FULL_PER_DAY:
-        return min(gain, R.PRAISE_TIRED_HAPPINESS)
+        return R.PRAISE_TIRED_HAPPINESS if first else 0.0
     if gain:
         state.praise_day_count += 1
     return gain

@@ -57,7 +57,8 @@ MEDICINE_HEALTH = 25.0
 MEDICINE_HAPPINESS = -5.0  # it tastes bad
 # Praise can't be farmed (Wave 0 PR 0e; balance_sim's praise_bot and praise
 # spam): inside one window each press gives less, then nothing; after the
-# day's first PRAISE_FULL_PER_DAY presses that gave any, at most the tired gain.
+# day's first PRAISE_FULL_PER_DAY presses that gave any, the tired gain from a
+# window's first press only.
 PRAISE_WINDOW_GAINS = (8.0, 4.0, 2.0)  # happiness, press by press in a window
 PRAISE_COOLDOWN_MINUTES = 30  # a praise window
 PRAISE_FULL_PER_DAY = 3

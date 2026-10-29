@@ -24,6 +24,7 @@ NEW_KEYS = (
     "counted_misses",
     "miss_day_count",
     "upbringing_floor",
+    "upbringing_base",
     "praise_count",
     "praise_day_count",
     *model.UPBRINGING_TIMES,
@@ -142,6 +143,47 @@ def test_the_fourth_praise_window_of_a_day_gives_at_most_one():
     assert pet.happiness == 10 + 3 * 8 + R.PRAISE_TIRED_HAPPINESS + 8
 
 
+def test_once_tired_only_a_windows_first_praise_gives_any():
+    """Two presses an hour at the tired gain would match the decay."""
+    now = at(9)
+    pet = hatched(now, happiness=10.0)
+    for n in range(3):
+        model.apply_action(pet, "praise", now + n * 31 * MIN, NoLuck())
+    tired = pet.happiness
+    later = now + 3 * 31 * MIN
+    for n in range(3):
+        model.apply_action(pet, "praise", later + n * 10, NoLuck())
+    assert pet.happiness == tired + R.PRAISE_TIRED_HAPPINESS
+
+
+@pytest.mark.parametrize("key", model.UPBRINGING_TIMES)
+def test_a_far_negative_timestamp_loads_and_runs(key):
+    """A damaged -1e20 is clamped on load: praise and a missed call still run."""
+    now = at(9)
+    data = hatched(now, hunger=50.0).to_dict()
+    data[key] = -1e20
+    pet = model.PetState.from_dict(data, now=now)
+    assert getattr(pet, key) >= -1e10
+    model.apply_action(pet, "feed", now, NoLuck(), settings=SETTINGS)
+    model.apply_action(pet, "praise", now, NoLuck(), settings=SETTINGS)
+    pet.hunger = 5.0
+    misses = pet.care_misses
+    model.advance(pet, now + 3 * HOUR, SETTINGS, NoLuck())
+    assert pet.care_misses > misses and pet.counted_misses >= 1
+
+
+def test_fast_forward_timestamps_below_zero_survive_a_save():
+    now = at(9)
+    pet = hatched(now)
+    pet.praise_day_at = pet.miss_day_at = 100.0
+    model.fast_forward(pet, now, 3.0, SETTINGS, NoLuck())
+    assert pet.praise_day_at < 0
+    loaded = model.PetState.from_dict(pet.to_dict(), now=pet.last_updated)
+    assert loaded.praise_day_at == pet.praise_day_at
+    assert loaded.miss_day_at == pet.miss_day_at
+    model.apply_action(loaded, "praise", loaded.last_updated, NoLuck())
+
+
 def test_praise_teaches_once_after_a_meal_that_met_a_need():
     now = at(9)
     hungry = hatched(now, hunger=40.0, discipline=0.0)
@@ -246,14 +288,19 @@ def test_an_old_adult_keeps_its_upbringing():
     assert loaded.discipline_samples == 0
 
 
-def test_an_old_adult_with_no_upbringing_gets_one():
-    pet = hatched(at(9), age_hours=400.0, discipline=60.0)
-    pet.care_misses = 3
+@pytest.mark.parametrize(
+    ("misses", "discipline", "grade"),
+    [(3, 60.0, "steady"), (0, 100.0, "steady"), (17, 0.0, "scrappy")],
+)
+def test_an_old_adult_with_no_upbringing_gets_its_old_grade(misses, discipline, grade):
+    """The old rule's grade, capped at steady: no estimate lifts it."""
+    pet = hatched(at(9), age_hours=400.0, discipline=discipline)
+    pet.care_misses = misses
     data = old_save(pet)
     del data["upbringing"]
     loaded = model.PetState.from_dict(data)
-    assert loaded.upbringing == "devoted"  # today's discipline, estimated care
-    assert loaded.upbringing_floor is None
+    assert loaded.upbringing == grade
+    assert loaded.upbringing_floor is None and loaded.upbringing_base is None
     assert loaded.discipline_samples == 0
 
 
@@ -269,7 +316,80 @@ def test_no_old_pet_loads_a_grade_lower_than_before(age):
             data["upbringing"] = None
             loaded = model.PetState.from_dict(data)
             before = old_grade(misses, discipline)
+            if age >= ADULT:  # the old rule's, capped at steady
+                before = model._capped(before)
             assert at_least(model.upbringing(loaded), before), (misses, discipline)
+
+
+def post_update_grade(pet: model.PetState, base: dict) -> str | None:
+    """The grade from the samples since the update alone (None: none)."""
+    n = pet.wellbeing_samples - base["wellbeing_samples"]
+    if n <= 0:
+        return None
+    discipline = (pet.discipline_sum - base["discipline_sum"]) / n
+    well = (pet.wellbeing_sum - base["wellbeing_sum"]) / n
+    misses = pet.counted_misses - base["counted_misses"]
+    care = 0.8 * 100 * well + 0.2 * max(0.0, 100.0 - 2 * misses)
+    return model._grade(0.75 * care + 0.25 * discipline)
+
+
+GRID_POLICIES = ("careful", "casual", "neglect", "launder_praise", "care_bot")
+
+
+@pytest.mark.parametrize("age", [60.0, 200.0, 330.0])
+def test_no_migrated_pet_grows_up_above_its_old_and_its_post_update_grade(age):
+    """The update lifts no pet: grown up, it's no better than the better of
+    its old grade (capped) and the grade of its hours since the update."""
+    strategies = sim().STRATEGIES
+    ended = {}
+    for name in GRID_POLICIES:
+        policy = strategies[name]
+        start = at(9)
+        pet = hatched(start, age_hours=BABY)
+        rng = random.Random(1)
+        t = start
+        while pet.age_hours < age:  # its life before the update
+            t += 5 * MIN
+            model.advance(pet, t, SETTINGS, rng)
+            policy(pet, t, rng)
+        old = model._capped(model._old_grade(pet))
+        loaded = model.PetState.from_dict(old_save(pet), now=t)
+        base = {
+            key: getattr(loaded, key)
+            for key in (
+                "discipline_sum",
+                "wellbeing_sum",
+                "wellbeing_samples",
+                "counted_misses",
+            )
+        }
+        while model.life_stage(loaded) != "adult":
+            t += 5 * MIN
+            model.advance(loaded, t, SETTINGS, rng)
+            policy(loaded, t, rng)
+        best = model._better(old, post_update_grade(loaded, base))
+        assert at_least(best, loaded.upbringing), (name, old, loaded.upbringing)
+        assert loaded.upbringing_base is None
+        ended[name] = loaded.upbringing
+    assert ended["neglect"] == "scrappy"
+
+
+def test_a_damaged_upbringing_base_is_dropped():
+    pet = hatched(at(9), age_hours=200.0, discipline=50.0)
+    loaded = model.PetState.from_dict(old_save(pet))
+    assert loaded.upbringing_base is not None
+    data = loaded.to_dict()
+    for damaged in (
+        "x",
+        {"grade": "legendary"},
+        {**data["upbringing_base"], "wellbeing_sum": "x"},
+    ):
+        data["upbringing_base"] = damaged
+        assert model.PetState.from_dict(data).upbringing_base is None
+    # Sums that started over: past the base, so no base.
+    data["upbringing_base"] = loaded.upbringing_base
+    data["wellbeing_sum"] = data["wellbeing_samples"] + 1.0
+    assert model.PetState.from_dict(data).upbringing_base is None
 
 
 def test_retired_journal_records_keep_their_grade_and_drop_damage():
