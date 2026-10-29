@@ -387,9 +387,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   answer (feed, play, lights out, clean, medicine). A missed call is a
   **care miss**. After a miss, it won't call about the same thing again until
   that stat recovers above 40, so one forgotten meal is one miss, not twenty.
-- **Fake calls:** now and then it whines while everything is fine. *Scold*
+- **Fake calls:** now and then it whines when nothing is really wrong. *Scold*
   raises discipline. *Praise* during a fake call spoils it. Scolding for
   nothing makes it sad. Ignoring a fake call is not a care miss.
+  A whine and a real plea to play often look alike: the hearts are the best clue.
 - **Discipline:** the more of it, the less the pet whines: at 100 it whines a
   quarter as often (never not at all). It fades slowly while the pet is awake,
   about 4 points a day, so the habit needs a reminder now and then.
