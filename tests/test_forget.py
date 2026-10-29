@@ -194,3 +194,55 @@ async def test_a_visit_finishes_before_its_person_is_forgotten(
     assert (await client.receive_json())["success"]
     assert ada.id not in people.data["people"]  # nothing half-written survives
     assert ada.id not in hass_storage[PEOPLE_KEY]["data"]["people"]
+
+
+async def test_a_forget_during_the_auth_lookup_is_not_undone_by_the_visit(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    ada, token = await a_user(hass)
+    hass_storage[PEOPLE_KEY] = people_store(
+        {ada.id: {**RECORD, "birthday_phone": True}}
+    )
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    config = await setup(hass)
+    pet = config.runtime_data
+    people = hass.data[DOMAIN]["people"]
+    entered, release = asyncio.Event(), asyncio.Event()
+    who = pet._who_id
+
+    async def held(user: str) -> Any:
+        entered.set()
+        await release.wait()  # before the visit takes people.lock
+        return await who(user)
+
+    pet._who_id = held
+    visit = hass.async_create_task(look(hass, ada.id))
+    await entered.wait()
+    client = await hass_ws_client(hass, token)
+    await client.send_json_auto_id({"type": "virtual_pet/forget_me"})
+    assert (await client.receive_json())["success"]
+    assert ada.id not in people.data["people"]
+    release.set()
+    reply = await visit
+    assert reply["counted"]
+    assert not reply["birthday_kept"]
+    assert not reply["birthday_phone"]
+    assert not people.data["people"].get(ada.id, {}).get("birthday")
+
+
+async def test_a_birthday_refusal_survives_forget_my_data(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    ada, token = await a_user(hass)
+    hass_storage[PEOPLE_KEY] = people_store(
+        {ada.id: {**RECORD, "birthday_skipped": True}}
+    )
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    await setup(hass)
+    client = await hass_ws_client(hass, token)
+    await client.send_json_auto_id({"type": "virtual_pet/forget_me"})
+    assert (await client.receive_json())["success"]
+    assert hass.data[DOMAIN]["people"].data["people"][ada.id] == {
+        "birthday_skipped": True
+    }
+    assert saved_people(hass_storage)[ada.id] == {"birthday_skipped": True}

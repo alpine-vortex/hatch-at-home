@@ -566,3 +566,5 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
 - Commit attribution: no `Co-Authored-By` trailer; keep the `Claude-Session:` line.
 - Say plainly what's verified and what isn't; the owner is often on a phone.
 - Log finished work in tududi (Development area, tag `done-by-claude`).
+
+**Known (privacy P2):** a second card on the same dashboard, or another open device, keeps showing the old "my day" and birthday rows after "forget my data" until its next counted visit (audit finding 3). Q11 (zone storage) is still open.

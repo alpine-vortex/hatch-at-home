@@ -1210,6 +1210,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # One look at a time per person: two pets on one dashboard visited
         # together must not both say the same person line.
         async with self.people.lock(user):
+            # Read again under the lock: a "forget my data" may have run while
+            # the auth lookup above was awaited, and must not be undone here.
+            person = self.people.data["people"].get(user, {})
             # At most NOTES_PER_VISIT, and no more than the look has room for
             # (FIRST_LOOK_LINES, minus what the card already queued).
             room = min(R.NOTES_PER_VISIT, max(0, R.LOOK_LINES - queued))
@@ -1236,13 +1239,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._save()
         self._publish()
         # "my day" goes to this person only (a state attribute is everyone's).
+        fresh = self.people.data["people"].get(user, {})
         return {
             "notes": notes,
             "ask": ask,
             "counted": True,
             "my_day": self.people.my_day(user),
-            "birthday_kept": bool(person.get("birthday")),
-            "birthday_phone": bool(person.get("birthday_phone")),
+            "birthday_kept": bool(fresh.get("birthday")),
+            "birthday_phone": bool(fresh.get("birthday_phone")),
             "made_room": made_room,
             "baby_talk": self.people.baby_talk(user),
         }
