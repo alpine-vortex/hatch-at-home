@@ -15,7 +15,10 @@ import pathlib
 
 from PIL import Image
 
-OUT = pathlib.Path(__file__).resolve().parents[2] / "custom_components/virtual_pet/frontend/ui"
+OUT = (
+    pathlib.Path(__file__).resolve().parents[2]
+    / "custom_components/virtual_pet/frontend/ui"
+)
 GREY = {"#": 34, "c": 72, "d": 104, "m": 128, "l": 176, "w": 236}
 
 MARKS = {
@@ -75,7 +78,9 @@ def main():
         for y, row in enumerate(rows):
             for x, ch in enumerate(row):
                 if ch != ".":
-                    im.putpixel((x, y), (GREY[ch] if name != "backlight_bulb" else 34, 255))
+                    im.putpixel(
+                        (x, y), (GREY[ch] if name != "backlight_bulb" else 34, 255)
+                    )
         im.save(OUT / f"{name}.png")
         print(OUT / f"{name}.png", im.size)
 

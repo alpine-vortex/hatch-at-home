@@ -927,6 +927,13 @@ function shade(hex, amount) {
   return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
 }
 
+// a over b, weight w of a, as #rrggbb.
+function mixHex(a, b, w) {
+  const n = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const [p, q] = [n(a), n(b)];
+  return `#${p.map((v, i) => Math.round(v * w + q[i] * (1 - w)).toString(16).padStart(2, "0")).join("")}`;
+}
+
 // The caption ink for a shell: its own colour, darker, and on a dark shell a
 // light tint, whichever first reads at 4.5:1 (WCAG AA for small text).
 function deviceInk(hex) {
@@ -1089,8 +1096,21 @@ const HW_ART = {
   screw: [".###.", "#llc#", "#lcm#", "#cmd#", ".###."],
   slot: ["#.", "#.", "#.", "#.", "l."],
   stripes: ["d", ".", "d"],
-  fleck: [".l.", "lwl", ".l."],
+  fleck: ["..l..", "..w..", "lwwwl", "..w..", "..l.."],
   glare: ["......ww", ".....ww.", "....ww..", "...ww...", "..ww...w", ".ww...w.", "ww...w..", "w...w..."],
+};
+// Glitter in the plastic: a tile of single-cell flecks, each with a dark cell beside
+// it so it shows on a pale shell too. Tiled at the grid's size by CSS.
+const glitterTile = () => {
+  const W = 29, H = 23, colours = ["#fff8d5", "#ffd9e9", "#d4f8ec", "#ffffff"];
+  let rects = "";
+  for (let k = 0; k < 7; k++) {
+    const x = (k * 13 + 5) % W, y = (k * 17 + 3) % H;
+    rects += `<rect x='${x}' y='${y}' width='1' height='1' fill='${colours[k % 4]}'/>` +
+      `<rect x='${(x + 1) % W}' y='${(y + 1) % H}' width='1' height='1' fill='rgba(48,24,64,.35)'/>`;
+  }
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${W} ${H}' shape-rendering='crispEdges'>${rects}</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 };
 const hwArt = (rows) => {
   let rects = "";
@@ -1296,7 +1316,8 @@ const STYLE = `
   .finish-clear .hw.guts, .finish-clear .hw.glare { display: block; }
   .finish-clear .toy .cap { background: color-mix(in srgb, #e6f8ec 72%, transparent); }
   /* Glitter: sparkle in the plastic, a few flecks twinkling slowly. */
-  .finish-glitter .body > .mould { background: color-mix(in srgb, var(--d-shell) 80%, #fff2c9); }
+  .finish-glitter .body > .mould { background: var(--glitter) 0 0 / calc(var(--px) * 29) calc(var(--px) * 23),
+    color-mix(in srgb, var(--d-shell) 80%, #fff2c9); }
   .finish-glitter .loop > .mould, .finish-glitter .lid > .mould, .finish-glitter .feet .mould,
   .finish-glitter .roof > .mould { background: color-mix(in srgb, var(--d-dark) 76%, #ffe9ad); }
   .finish-glitter .hw.flecks { display: block; }
@@ -1660,16 +1681,17 @@ const STYLE = `
   .hw.light { display: block; --art: var(--hw-light-on); --tint: #e8584a; left: calc(var(--px) * -7);
     top: round(down, 50% - var(--px) * 2.5, var(--px)); width: calc(var(--px) * 5); height: calc(var(--px) * 5); }
   .device:has(.screen.dim) .hw.light { --art: var(--hw-light-off); }
-  /* Clear: the board inside, seen through the plastic, and a glare on it. */
-  .hw.guts { left: round(14%, var(--px)); width: round(down, 72%, var(--px)); top: round(58%, var(--px));
-    height: round(down, 32%, var(--px)); -webkit-mask: none; mask: none;
-    background: repeating-linear-gradient(180deg, transparent 0 calc(var(--px) * 5), rgba(178,232,190,.4) 0 calc(var(--px) * 6)),
-      rgba(46,107,74,.42);
-    box-shadow: inset 0 0 0 var(--px) rgba(178,232,190,.6); }
+  /* Clear: the board behind the screen, seen through the plastic round the bezel,
+     and a glare on the plastic. */
+  .hw.guts { inset: calc(var(--px) * -5); z-index: -2; -webkit-mask: none; mask: none; --gold: rgba(236,200,104,.6);
+    background: repeating-linear-gradient(180deg, transparent 0 calc(var(--px) * 5), var(--gold) 0 calc(var(--px) * 6)),
+      repeating-linear-gradient(90deg, transparent 0 calc(var(--px) * 13), var(--gold) 0 calc(var(--px) * 14)),
+      rgba(40,128,84,.55);
+    box-shadow: inset 0 0 0 var(--px) var(--gold); }
   .hw.glare { --art: var(--hw-glare); --tint: #fff; opacity: .6; width: calc(var(--px) * 8); height: calc(var(--px) * 8);
     top: round(7%, var(--px)); left: round(down, 84% - var(--px) * 8, var(--px)); }
   /* Glitter: three sets of flecks, each twinkling slowly on its own beat. */
-  .hw.flecks { inset: 0; background: var(--tint); --f: calc(var(--px) * 3); --a: var(--hw-fleck);
+  .hw.flecks { inset: 0; background: var(--tint); --f: calc(var(--px) * 5); --a: var(--hw-fleck);
     filter: drop-shadow(var(--px) var(--px) 0 rgba(48,24,64,.45)); animation: twinkle 3.2s step-end infinite; }
   .hw.flecks.a { --tint: #fff6c8;
     -webkit-mask: var(--a) round(30%, var(--px)) round(4%, var(--px)) / var(--f) var(--f) no-repeat,
@@ -2095,6 +2117,7 @@ class HatchPetCard extends HTMLElement {
     for (const [k, rows] of Object.entries(HW_ART)) this._card.style.setProperty(`--hw-${k}`, hwArt(rows));
     for (const k of ["logo", "plate", "light_on", "light_off"]) this._card.style.setProperty(`--hw-${k.replace("_", "-")}`, ui(`shell_${k}`));
     this._card.style.setProperty("--hw-bulb", ui("backlight_bulb"));
+    this._card.style.setProperty("--glitter", glitterTile());
     this._viewport = root.querySelector(".viewport");
     this._track = root.querySelector(".track");
     this._dots = root.querySelector(".dots");
@@ -2159,12 +2182,12 @@ class HatchPetCard extends HTMLElement {
       <div class="device">
         <div class="roof"><i class="mould"></i></div><div class="crescent"><i class="mould"></i></div><div class="loop"><i class="mould"></i></div><div class="lid"><i class="mould"></i><span></span><span></span><span></span></div>
         <div class="body"><i class="mould"></i>
-          <i class="hw screws"></i><i class="hw guts"></i><i class="hw glare"></i>
+          <i class="hw screws"></i><i class="hw glare"></i>
           <i class="hw grille left"></i><i class="hw grille right"></i><i class="hw logo"></i>
           <i class="hw flecks a"></i><i class="hw flecks b"></i><i class="hw flecks c"></i>
           <img class="trim-top" alt=""><img class="trim-top2" alt="">
           <span class="label"></span>
-          <div class="bezel"><i class="mould"></i><i class="hw stripes"></i><i class="hw light"></i><div class="screen">
+          <div class="bezel"><i class="hw guts"></i><i class="mould"></i><i class="hw stripes"></i><i class="hw light"></i><div class="screen">
             <img class="bg" alt="">
             <img class="awaysign" alt=""><div class="awaylabel"></div>
             <div class="season"></div>
@@ -2628,7 +2651,7 @@ class HatchPetCard extends HTMLElement {
       const kind = ["body", "bezel", "loop", "lid", "roof", "crescent"].find((k) => part.classList.contains(k)) || "foot";
       const lip = kind === "bezel" ? 2 : 0;
       const W = Math.max(1, Math.round(w / g)) + lip * 2, H = Math.max(1, Math.round(h / g)) + lip * 2;
-      const key = `${kind}|${shape}|${W}|${H}|${g}`;
+      const key = `${kind}|${shape}|${W}|${H}|${g}|${this._card.classList.contains("compact")}`;
       if (m.dataset.key === key) continue;
       m.dataset.key = key;
       const { clip, tones, core } = cut(key, () => {
@@ -2664,6 +2687,21 @@ class HatchPetCard extends HTMLElement {
           inside = (x, y) => (x - R) ** 2 + (y - R) ** 2 <= R * R && (x - R - ox) ** 2 + (y - R - oy) ** 2 > R * R;
         }
         const cells = mouldCells(W, H, inside, opts);
+        // The screen sits sunk in the bezel: a ring of shadow above and left of the
+        // opening, light below and right, on the bezel round the glass.
+        if (kind === "bezel") {
+          const scr = part.querySelector(".screen");
+          const sx = scr.offsetLeft / g + lip, sy = scr.offsetTop / g + lip;
+          const sw = scr.offsetWidth / g, sh = scr.offsetHeight / g, srad = cssRadii(scr, scr.offsetWidth, scr.offsetHeight, g);
+          const inScreen = (x, y) => inRound(x - sx, y - sy, sw, sh, srad);
+          for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+            const i = y * W + x;
+            if (cells[i] !== TONE.plain || inScreen(x + 0.5, y + 0.5)) continue;
+            const near = [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [-1, -1], [1, -1], [-1, 1]]
+              .find(([dx, dy]) => inScreen(x + 0.5 + dx, y + 0.5 + dy));
+            if (near) cells[i] = (x + 0.5 - sx) / sw + (y + 0.5 - sy) / sh < 1 ? TONE.deep : TONE.lit;
+          }
+        }
         // The porthole's rivets: studs of 2 x 2 cells round the ring.
         if (kind === "bezel" && shape === "porthole") {
           const at = [[w / 2, 7], [w / 2, h - 7], [7, h / 2], [w - 7, h / 2], [0.088 * w + 5, 0.11 * h + 5],
@@ -2857,7 +2895,10 @@ class HatchPetCard extends HTMLElement {
     }
     dev.style.setProperty("--d-shell", color);
     dev.style.setProperty("--d-dark", shade(color, 0.72));
-    dev.style.setProperty("--d-ink", deviceInk(color));
+    // Clear plastic shows the backdrop through it: the captions are inked for the mix.
+    const seen = finish === "finish-clear" && /^#[0-9a-f]{6}$/i.test(world.backdrop || "")
+      ? mixHex(color, world.backdrop, 0.34) : color;
+    dev.style.setProperty("--d-ink", deviceInk(seen));
     dev.style.setProperty("--d-btn-shadow", shade(color, 0.6));
     dev.style.setProperty("--d-bezel", shell.bezel || "#f3ead7");
     s.label.textContent = world.label || world.name;
