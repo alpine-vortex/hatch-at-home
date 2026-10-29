@@ -256,14 +256,134 @@ def test_no_calls_while_asleep():
     assert "call_started" not in types(events)
 
 
-def test_energy_call_answered_by_lights_out():
+def test_energy_call_stays_open_through_an_immediate_hand_wake():
     start = at(13)
     pet = hatched(start, energy=19.0)
     run(pet, start + 5 * MIN)
     assert pet.call and pet.call.reason == "energy"
-    events = model.set_lights_out(pet, True, start + 5 * MIN, SETTINGS)
+    model.set_lights_out(pet, True, start + 5 * MIN, SETTINGS)
+    assert pet.asleep and pet.call is not None
+    events = model.set_lights_out(pet, False, start + 5 * MIN, SETTINGS)
+    assert not pet.asleep and pet.call is not None
+    assert "call_answered" not in types(events)
+
+
+def test_energy_call_answered_once_energy_passes_40_asleep():
+    start = at(13)
+    pet = hatched(start, energy=19.0)
+    run(pet, start + 5 * MIN)
+    model.set_lights_out(pet, True, start + 5 * MIN, SETTINGS)
+    events = run(pet, start + 5 * MIN + 30 * MIN)
+    assert pet.energy < 40 and pet.call is not None
+    assert "call_answered" not in types(events)
+    events = run(pet, start + 5 * HOUR)
+    assert pet.energy > 40
     assert {"type": "call_answered", "reason": "energy"} in events
     assert pet.call is None
+
+
+def _hungry_call(start: float) -> model.PetState:
+    pet = hatched(start, hunger=20.0)
+    run(pet, start + MIN)
+    assert pet.call and pet.call.reason == "hunger"
+    return pet
+
+
+def test_call_pauses_over_sleep_with_the_same_time_left():
+    start = at(22, 30)
+    pet = _hungry_call(start)
+    left = pet.call.deadline - pet.last_updated
+    model.set_lights_out(pet, True, pet.last_updated, SETTINGS)
+    run(pet, at(23, 30))
+    assert pet.call is not None
+    assert pet.call.deadline - pet.last_updated == pytest.approx(left)
+    assert "care_miss" not in types(run(pet, at(23, 45)))
+
+
+def test_call_open_on_waking_with_the_same_time_left():
+    pet = _hungry_call(at(10))
+    pet.energy = 50.0
+    left = pet.call.deadline - pet.last_updated
+    model.set_lights_out(pet, True, pet.last_updated, SETTINGS)
+    run(pet, at(11))
+    model.set_lights_out(pet, False, pet.last_updated, SETTINGS)
+    assert not pet.asleep and pet.call is not None
+    assert pet.call.deadline - pet.last_updated == pytest.approx(left)
+
+
+def test_morning_wake_tops_up_and_resends_a_paused_call():
+    start = at(22, 30)
+    pet = _hungry_call(start)
+    model.set_lights_out(pet, True, pet.last_updated, SETTINGS)
+    pet.call.deadline = pet.last_updated + MIN  # 1 minute left
+    events = run(pet, at(7, 0, day=2) + MIN)
+    resumed = [e for e in events if e["type"] == "call_started"]
+    assert len(resumed) == 1 and resumed[0]["resumed"] is True
+    assert pet.call is not None and pet.call.reason == "hunger"
+    left = pet.call.deadline - pet.last_updated
+    assert left >= R.RESUME_MIN_MINUTES * 60 - 60
+
+
+def test_nap_end_tops_up_but_sends_nothing():
+    start = at(10)
+    pet = _hungry_call(start)
+    pet.energy = 90.0
+    model.set_lights_out(pet, True, pet.last_updated, SETTINGS)
+    pet.call.deadline = pet.last_updated + MIN
+    events: list[model.Event] = []
+    while "woke_up" not in types(events):
+        events = run(pet, pet.last_updated + 5 * MIN)
+    assert "call_started" not in types(events)
+    assert pet.call is not None
+    assert pet.call.deadline - pet.last_updated >= R.RESUME_MIN_MINUTES * 60 - 1
+
+
+def test_hand_wake_gives_no_top_up_and_no_resend():
+    start = at(10)
+    pet = _hungry_call(start)
+    pet.energy = 30.0
+    model.set_lights_out(pet, True, pet.last_updated, SETTINGS)
+    pet.call.deadline = pet.last_updated + MIN
+    deadline = pet.call.deadline
+    events = model.set_lights_out(pet, False, pet.last_updated, SETTINGS)
+    assert "call_started" not in types(events)
+    assert pet.call.deadline == deadline
+
+
+def test_calling_flag_off_while_asleep():
+    start = at(10)
+    pet = _hungry_call(start)
+    pet.energy = 30.0
+    model.set_lights_out(pet, True, pet.last_updated, SETTINGS)
+    assert "calling" not in model.mood(pet, pet.last_updated, SETTINGS)[1]
+
+
+def test_lights_out_refused_when_rested_by_day():
+    start = at(10)
+    pet = hatched(start, energy=100.0)
+    events = model.set_lights_out(pet, True, start, SETTINGS)
+    assert not pet.asleep and not pet.lights_out
+    assert {"type": "care", "action": "lights_out", "result": "not_sleepy"} in events
+    assert pet.care_log[0]["result"] == "not_sleepy"
+
+
+def test_lights_out_refused_when_flipped_away_and_dropped_on_return():
+    start = at(10)
+    pet = hatched(start, energy=100.0)
+    pet.away = True
+    model.set_lights_out(pet, True, start, SETTINGS)
+    pet.away = False
+    events = model.come_home(pet, start + HOUR, SETTINGS)
+    assert not pet.asleep and not pet.lights_out and events == []
+
+
+def test_lights_out_naps_when_tired_or_near_bedtime():
+    pet = hatched(at(10), energy=50.0)
+    model.set_lights_out(pet, True, at(10), SETTINGS)
+    assert pet.asleep and pet.napping
+    late = hatched(at(22, 30), energy=100.0)
+    model.set_lights_out(late, True, at(22, 30), SETTINGS)
+    assert late.asleep
 
 
 def test_neglect_makes_it_sick_and_medicine_cures():
@@ -1363,8 +1483,37 @@ def test_higher_or_lower_starts_with_a_number_then_plays_five_rounds():
     } in events
 
 
-def test_a_skill_win_pays_like_plain_play_and_less_than_luck():
-    assert R.SKILL_GAME_WIN_HAPPINESS == R.PLAY_HAPPINESS < R.GAME_WIN_HAPPINESS
+def test_a_skill_win_pays_a_little_over_play_and_less_than_luck():
+    assert R.PLAY_HAPPINESS < R.SKILL_GAME_WIN_HAPPINESS < R.GAME_WIN_HAPPINESS
+
+
+def test_new_weight_constants_have_the_right_signs():
+    assert R.WEIGHT_BURN > 0 and R.WEIGHT_FEED > 0 and R.WEIGHT_RESTORE > 0
+    assert R.WEIGHT_PLAY < 0 and R.WEIGHT_GAME < 0
+    assert R.WEIGHT_GAME == R.WEIGHT_PLAY
+
+
+def test_a_game_pays_at_least_what_play_does():
+    # Left or Right: about even odds. Higher or Lower: a good player wins ~92%.
+    luck = 0.49 * R.GAME_WIN_HAPPINESS + 0.51 * R.GAME_LOSE_HAPPINESS
+    skill = 0.92 * R.SKILL_GAME_WIN_HAPPINESS + 0.08 * R.GAME_LOSE_HAPPINESS
+    assert luck >= R.PLAY_HAPPINESS
+    assert skill >= R.PLAY_HAPPINESS
+
+
+def test_weight_burn_is_plain_at_50_and_restoring_above():
+    start = at(9)
+    plain = hatched(start, hunger=100.0, weight=50.0)
+    run(plain, start + HOUR)
+    assert plain.weight == pytest.approx(50.0 - R.WEIGHT_BURN, abs=0.01)
+    heavy = hatched(start, hunger=100.0, weight=70.0)
+    run(heavy, start + HOUR)
+    burn = R.WEIGHT_BURN * (1 + R.WEIGHT_RESTORE * 20)
+    assert burn == pytest.approx(3 * R.WEIGHT_BURN)
+    assert heavy.weight == pytest.approx(70.0 - burn, abs=0.3)
+    light = hatched(start, hunger=100.0, weight=30.0)
+    run(light, start + HOUR)
+    assert light.weight == pytest.approx(30.0 - R.WEIGHT_BURN)
 
 
 def test_losing_higher_or_lower_still_counts():

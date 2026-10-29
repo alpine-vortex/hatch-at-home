@@ -68,12 +68,16 @@ WAKE_IN_NIGHT_HAPPINESS = -5.0  # turning lights-out off during sleep hours
 # games bring it down.
 
 WEIGHT_START = 50.0
-WEIGHT_FEED = 4.0
+WEIGHT_FEED = 4.75
 WEIGHT_SNACK = 6.0
 WEIGHT_PLAY = -3.0
-WEIGHT_GAME = -4.0
+WEIGHT_GAME = -3.0
 WEIGHT_CHORE_TREAT = 2.0
-WEIGHT_BURN = 0.7  # per awake hour
+WEIGHT_BURN = 0.5  # per awake hour
+# Above 50 the burn grows with weight: burn x (1 + WEIGHT_RESTORE x (weight - 50)).
+# Without it weight is an open integrator and a small change in burn or feed
+# moves a fortnight's result by tens of points.
+WEIGHT_RESTORE = 0.1
 WEIGHT_STARVING = -1.0  # per hour while hunger is 0
 WEIGHT_HEAVY_ABOVE = 75.0  # heavy: no health regen, and a risk of getting sick
 WEIGHT_LIGHT_BELOW = 25.0  # light: no health regen until it's fed up again
@@ -83,11 +87,12 @@ WEIGHT_HEAVY_SICK_HAZARD = 0.02  # chance per hour of getting sick while heavy
 
 GAME_ROUNDS = 5
 GAME_WIN_AT = 3  # right guesses out of GAME_ROUNDS
-GAME_WIN_HAPPINESS = 25.0  # left/right is luck: a win pays more than plain play
+GAME_WIN_HAPPINESS = 30.0  # left/right is luck: a game pays at least like Play
 # Higher or Lower is mostly skill (a good player wins ~92% of games), so a win
-# pays like plain play; at 25 it would be the best happiness button there is.
-SKILL_GAME_WIN_HAPPINESS = PLAY_HAPPINESS
-GAME_LOSE_HAPPINESS = 10.0
+# pays just over plain play, so its expected payout (0.92 x 21 + 0.08 x 12 =
+# 20.3) is not below Play's 20; at 30 it would be the best happiness button.
+SKILL_GAME_WIN_HAPPINESS = 21.0
+GAME_LOSE_HAPPINESS = 12.0
 GAME_IDLE_MINUTES = 3  # an unfinished game is dropped after this
 
 # --- Chores: a done to-do item earns the pet a treat --------------------------
@@ -109,6 +114,7 @@ POOP_SICK_HAZARD = 0.08  # chance per hour, per old poop, of getting sick
 # --- Calls ------------------------------------------------------------------
 
 CALL_WINDOW_MINUTES = 20
+RESUME_MIN_MINUTES = 10  # a call paused by sleep has at least this long on waking
 # reason: (calls below, re-arms above)
 CALL_THRESHOLDS: dict[str, tuple[float, float]] = {
     "hunger": (25.0, 40.0),

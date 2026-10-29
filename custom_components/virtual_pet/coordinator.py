@@ -1685,7 +1685,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         buttons = notify.actions(event, self.pet_id)
         # A call may break through a focus mode the person allows; the rest wait
         # like any notification while their phone is in focus or do not disturb.
-        level = "time-sensitive" if event["type"] in notify.CALL_EVENTS else None
+        level = (
+            "time-sensitive"
+            if event["type"] in notify.CALL_EVENTS and not event.get("resumed")
+            else None
+        )
         for nickname, group in by_nickname.items():
             personal = notify.to_friend(text, nickname) if nickname else text
             self._send(group, personal, tag, buttons, level)
@@ -1885,7 +1889,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     async def async_set_lights_out(
         self, on: bool, context: Context | None = None
-    ) -> None:
+    ) -> str:
         """Flip the lights-out switch. Someone putting it to bed in the evening
         tucked it in: it says goodnight to them, and thanks them in the morning."""
         assert self.state is not None
@@ -1907,6 +1911,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._actor = None
         self._save()
         self._publish()
+        return next(
+            (
+                e["result"]
+                for e in events
+                if e["type"] == "care" and e["action"] == model.LIGHTS_OUT
+            ),
+            model.OK,
+        )
 
     async def async_fast_forward(self, hours: float) -> dict[str, Any]:
         """Debug: live through N hours right now, at normal rates."""

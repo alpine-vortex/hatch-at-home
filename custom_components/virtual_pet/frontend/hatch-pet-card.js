@@ -407,6 +407,7 @@ const REFUSALS = {
   no_game: "let's start over",
   egg: "...",
   away: "I'm at the sitter's!",
+  not_sleepy: "not sleepy yet ♪",
 };
 
 // Actions that borrow another action's prop sprite.
@@ -485,6 +486,7 @@ const BABY = {
   "WISHES.tuck_in": { baby: ["wish... tuck me in tonight"] },
   "REFUSALS.full": { baby: ["tummy full!"] },
   "REFUSALS.too_tired": { baby: ["too sleepy to play"] },
+  "REFUSALS.not_sleepy": { baby: ["no sleepy!"] },
   // The mood line (sensor.mood reason_key): one line each, as it's redrawn
   // every tick. Statements, except the calls. home_* and weight_* stay normal.
   "reason.call_hunger": { baby: ["hungy!"], child: ["tummy rumbly!"] },
