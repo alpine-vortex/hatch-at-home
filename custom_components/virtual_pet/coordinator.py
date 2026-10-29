@@ -1714,9 +1714,18 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """Tell the users who opted in, on their phones. Never for fast-forward."""
         if simulated or self.state is None or not self.state.notify_users:
             return
-        if not notify.pushes(event, batch or [event]):
-            return
         users = list(self.state.notify_users)
+        if not notify.pushes(event, batch or [event]):
+            if (
+                event["type"] == "call_started"
+                and event.get("reason") != "sick"  # became_sick told it just now
+                and self._call_notified
+            ):
+                # A poop call or re-call took over from a call on the phones
+                # (a more urgent need ends a call with no event): clear it.
+                self._call_notified = False
+                self._send(users, "clear_notification", notify.call_tag(self.pet_id))
+            return
         if event["type"] in notify.CALL_OVER_EVENTS and self._call_notified:
             # The call is over: take its notification off the phones.
             self._call_notified = False

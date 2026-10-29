@@ -3146,3 +3146,24 @@ async def test_falling_ill_sends_one_push(
     await hass.async_block_till_done()
     assert hass.states.get("binary_sensor.pip_calling").state == "on"
     assert [c.data["message"] for c in phone] == ["Pip feels sick. Medicine?"]
+
+
+async def test_a_poop_call_taking_over_clears_the_call_on_the_phone(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    # A plea to play is on the phone (with Scold); a poop call, more urgent,
+    # replaces it with no event of its own and sends no push.
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=20.0, poops=[now - 24 * 60])
+    await setup(hass)
+    phone = await _notified(hass)
+    await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert [c.data["message"] for c in phone] == ["Pip wants to play!"]
+    await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert phone[-1].data["message"] == "clear_notification"
+    assert phone[-1].data["data"]["tag"] == "virtual_pet_test_pet_call"
+    assert len(phone) == 2

@@ -648,7 +648,9 @@ actions:
 Fired on the HA event bus, each with `pet_id` (the config entry ID). No person
 names are included.
 
-`virtual_pet_call_started`, `virtual_pet_call_answered`, `virtual_pet_care_miss`,
+`virtual_pet_call_started` (with `recall: true` when a missed need asks again),
+`virtual_pet_call_answered`, `virtual_pet_care_miss`, `virtual_pet_call_expired` (a
+missed re-call, which isn't a care miss),
 `virtual_pet_discipline_miss`, `virtual_pet_pooped`, `virtual_pet_became_sick`,
 `virtual_pet_recovered`, `virtual_pet_fell_asleep`, `virtual_pet_woke_up`,
 `virtual_pet_stage_changed` (with `personality` on becoming a teen, `upbringing` on reaching adulthood), `virtual_pet_care`, `virtual_pet_hatched`,
