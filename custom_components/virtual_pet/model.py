@@ -832,7 +832,11 @@ def _decay(state: PetState, hours: float, t: float, settings: Settings) -> None:
         state.happiness -= R.HAPPINESS_DECAY * easy * hours
         state.energy -= R.ENERGY_DECAY * hours
         state.discipline -= R.DISCIPLINE_DECAY * hours
-        state.weight -= R.WEIGHT_BURN * hours
+        state.weight -= (
+            R.WEIGHT_BURN
+            * (1 + R.WEIGHT_RESTORE * max(0.0, state.weight - R.WEIGHT_START))
+            * hours
+        )
 
     # The house only ever adds, and never more than the cap per stat.
     if not state.asleep:

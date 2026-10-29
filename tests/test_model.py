@@ -1483,8 +1483,37 @@ def test_higher_or_lower_starts_with_a_number_then_plays_five_rounds():
     } in events
 
 
-def test_a_skill_win_pays_like_plain_play_and_less_than_luck():
-    assert R.SKILL_GAME_WIN_HAPPINESS == R.PLAY_HAPPINESS < R.GAME_WIN_HAPPINESS
+def test_a_skill_win_pays_a_little_over_play_and_less_than_luck():
+    assert R.PLAY_HAPPINESS < R.SKILL_GAME_WIN_HAPPINESS < R.GAME_WIN_HAPPINESS
+
+
+def test_new_weight_constants_have_the_right_signs():
+    assert R.WEIGHT_BURN > 0 and R.WEIGHT_FEED > 0 and R.WEIGHT_RESTORE > 0
+    assert R.WEIGHT_PLAY < 0 and R.WEIGHT_GAME < 0
+    assert R.WEIGHT_GAME == R.WEIGHT_PLAY
+
+
+def test_a_game_pays_at_least_what_play_does():
+    # Left or Right: about even odds. Higher or Lower: a good player wins ~92%.
+    luck = 0.49 * R.GAME_WIN_HAPPINESS + 0.51 * R.GAME_LOSE_HAPPINESS
+    skill = 0.92 * R.SKILL_GAME_WIN_HAPPINESS + 0.08 * R.GAME_LOSE_HAPPINESS
+    assert luck >= R.PLAY_HAPPINESS
+    assert skill >= R.PLAY_HAPPINESS
+
+
+def test_weight_burn_is_plain_at_50_and_restoring_above():
+    start = at(9)
+    plain = hatched(start, hunger=100.0, weight=50.0)
+    run(plain, start + HOUR)
+    assert plain.weight == pytest.approx(50.0 - R.WEIGHT_BURN, abs=0.01)
+    heavy = hatched(start, hunger=100.0, weight=70.0)
+    run(heavy, start + HOUR)
+    burn = R.WEIGHT_BURN * (1 + R.WEIGHT_RESTORE * 20)
+    assert burn == pytest.approx(3 * R.WEIGHT_BURN)
+    assert heavy.weight == pytest.approx(70.0 - burn, abs=0.3)
+    light = hatched(start, hunger=100.0, weight=30.0)
+    run(light, start + HOUR)
+    assert light.weight == pytest.approx(30.0 - R.WEIGHT_BURN)
 
 
 def test_losing_higher_or_lower_still_counts():
