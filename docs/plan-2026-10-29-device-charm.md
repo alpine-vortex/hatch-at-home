@@ -1,6 +1,6 @@
 # Plan: device charm (LCD quirks, the infrared link, power-on)
 
-**DRAFT 1, 2026-10-29** (revised the same day after a review pass: boot order, the ghost's class, the boot timeout, restart detection, the link's rate). A plan for the owner's review: nothing here is built. Three
+**DRAFT 1, 2026-10-29; owner answered Q1-Q10 the same day (all recommendations taken)** (revised the same day after a review pass: boot order, the ghost's class, the boot timeout, restart detection, the link's rate). A plan for the owner's review: nothing here is built. Three
 ideas from the owner, in one plan because they share pieces: an overlay layer inside
 the screen, the per-browser settings rows, the reduced-motion rule and the sound
 gate. Each part ships on its own and in any order, except where a PR says "after".
@@ -332,7 +332,10 @@ owner, 2026-10-28).
 
 Persona variants (`PERSONA`, 538) can come later; v1 uses one set for all.
 
-## Open questions for the owner
+## Owner answers (2026-10-29)
+
+The owner took every recommendation below ("all recommended", 2026-10-29). The
+Recommendation column is now the decision.
 
 | # | Question | Recommendation |
 |---|---|---|
