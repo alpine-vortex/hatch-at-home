@@ -126,6 +126,9 @@
     // Date is pinned, so a line would never finish typing: write each whole.
     slides.forEach((x) => card._stopTyping(x));
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    // The shelf and slides come to rest at once: a shot mid-slide is off the pixel grid.
+    for (const a of root.getAnimations()) if (a instanceof CSSTransition) a.finish();
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     await settled(card);
     return true;
   }
