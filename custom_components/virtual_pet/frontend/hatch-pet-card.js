@@ -99,6 +99,7 @@ const CHIRPS = { // [frequency Hz, length s] notes, played one after another
   harvest: [[523, 0.1], [659, 0.1], [784, 0.1], [659, 0.1], [784, 0.22]],
   birthday: [[523, 0.12], [523, 0.1], [587, 0.22], [523, 0.22], [698, 0.22], [659, 0.4]],
   click: [[1760, 0.04]], // the backlight
+  link: [[1319, 0.06], [0, 0.03], [1760, 0.09]], // the infrared link
   boot: [[523, 0.08], [784, 0.08], [1047, 0.2]],
 };
 let audio = null; // one AudioContext for every card on the page
@@ -301,6 +302,7 @@ function playChirp(name) {
 // variants (_1 big, _2 small); otherwise one image.
 const FEED_FULL_AT = 95; // rates.py FEED_FULL_AT: a meal is refused above this
 const TRAIT_CAP = 4; // rates.py TRAIT_CAP, until the server says (life_stage trait_cap)
+const LINK_AFTER_MS = [600000, 1500000]; // the infrared link: 10-25 min after the page loads (random)
 const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
 const FLAIR_MS = 4200; // how long a moment lasts
 const FLAIR = {
@@ -1470,6 +1472,36 @@ const STYLE = `
   .pet.look { rotate: y 180deg; }
   .pet.wander-l { translate: -16% 0; transition-duration: .9s; }
   .pet.wander-r { translate: 16% 0; transition-duration: .9s; }
+  /* The infrared link (_linkStart): the beam runs over the track between the two
+     devices' top edges, where the backlight buttons sit, so it takes no taps. One
+     art pixel is --u; the sprites are 32 art pixels square. */
+  .irbeam { position: absolute; pointer-events: none; z-index: 6; }
+  .irbeam img { position: absolute; image-rendering: pixelated; pointer-events: none;
+    width: calc(var(--u) * 32); height: calc(var(--u) * 32); }
+  .irbeam .head { animation: ir-fly var(--ir-ms) steps(var(--ir-steps), end) forwards; }
+  .irbeam .trail { opacity: 0; animation: ir-trail .01s steps(1, end) forwards; }
+  .irbeam .arrive { opacity: 0; animation: ir-arrive .5s steps(4, end) forwards; }
+  .irbeam.gone { opacity: 0; transition: opacity .3s steps(3, end); }
+  @keyframes ir-fly { to { translate: var(--ir-d) 0; } }
+  @keyframes ir-trail { to { opacity: 1; } }
+  @keyframes ir-arrive { 0% { opacity: 1; scale: .6; } 100% { opacity: 0; scale: 1.3; } }
+  .visit { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .visit .vband { position: absolute; left: 0; right: 0; top: 38%; height: 20%; display: flex;
+    align-items: center; justify-content: center; gap: 7%; background: color-mix(in srgb, var(--d-ink) 82%, transparent); }
+  .visit .vband i { width: 4%; aspect-ratio: 1; background: #ffe9ec; animation: ir-dots .9s steps(1, end) infinite; }
+  .visit .vband i:nth-child(2) { animation-delay: .15s; } .visit .vband i:nth-child(3) { animation-delay: .3s; }
+  .visit .vband i:nth-child(4) { animation-delay: .45s; } .visit .vband i:nth-child(5) { animation-delay: .6s; }
+  @keyframes ir-dots { 0%, 100% { opacity: .25; } 40% { opacity: 1; } }
+  .visit .vguest { position: absolute; left: 70%; bottom: 4%; height: 62%; margin-left: -23.25%;
+    transform-origin: 50% 100%; image-rendering: pixelated; animation: ir-in .5s steps(5, end) both; }
+  .visit .vguest.out { animation: ir-out .5s steps(5, end) forwards; }
+  .visit .vguest.greethop { animation: hop .7s ease-in-out 2; }
+  @keyframes ir-in { from { translate: 160% 0; } }
+  @keyframes ir-out { to { translate: 160% 0; } }
+  .visit .vsay { position: absolute; right: 5%; top: 27%; max-width: 46%; padding: 5px 9px; border-radius: 10px;
+    background: #fff; color: #2a2a2a; font-size: 13px; line-height: 1.25; }
+  .screen.linking .perch { display: none; }
+  .pet.linking { translate: -43% 0; transition-duration: .5s; }
   .speck { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff6c9;
     box-shadow: 0 0 6px 2px rgba(255,240,170,.8); top: 45%; z-index: 2; pointer-events: none;
     animation: speck 2.6s ease-in-out forwards; }
@@ -1762,6 +1794,7 @@ class HatchPetCard extends HTMLElement {
 
   disconnectedCallback() {
     clearInterval(this._timer);
+    this._linkEnd();
     this._resize?.disconnect();
     this._io?.disconnect();
     document.removeEventListener("visibilitychange", this._onHidden);
@@ -2310,6 +2343,7 @@ class HatchPetCard extends HTMLElement {
       this._stopTyping(x);
       this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
     });
+    this._linkEnd(); // a swipe ends the visit at once
     this._index = (index + n) % n;
     this._renderShelf();
   }
@@ -2731,6 +2765,7 @@ class HatchPetCard extends HTMLElement {
         this._flairTick(s);
         this._seasonTick(s);
         this._partyTick(s);
+        this._linkTick(s);
       }
       if (!s.sayUntil && s.species) {
         const mood = this._state(s, "sensor.mood");
@@ -2746,7 +2781,7 @@ class HatchPetCard extends HTMLElement {
   // which the reduced-motion CSS rule doesn't reach: hence the checks here.
   _ghosting(s) {
     const media = (q) => window.matchMedia?.(q).matches;
-    return s === this._slides[this._index] && this._visible && !document.hidden &&
+    return s === this._slides[this._index] && this._visible && !document.hidden && !s.linking &&
       this._card.classList.contains("lcd-on") && s.pet.style.display !== "none" && !s.scene &&
       s.game?.kind !== "catch" && !media("(prefers-reduced-motion: reduce)") &&
       !media("(prefers-contrast: more)");
@@ -3379,6 +3414,7 @@ class HatchPetCard extends HTMLElement {
   // The frames to draw now: a reaction pose while one runs, else the mood's.
   _frames(s) {
     if (s.scene) return s.scene.frames || s.frames || [];
+    if (s.linking && s.linkFrames?.length) return s.linkFrames;
     return s.poseUntil && Date.now() < s.poseUntil ? s.poseFrames : s.frames || [];
   }
 
@@ -5255,6 +5291,201 @@ class HatchPetCard extends HTMLElement {
       this._speak(s, pick(greet), 3000);
       this._animate(s, s.pet, "perk", 320);
     }, 3400);
+  }
+
+  // --- The infrared link ------------------------------------------------------
+  // Flavour only: once a day, per pair, the pet on show and the slide next to it
+  // visit. Nothing is counted or remembered (Q4), and no button starts one (Q3).
+
+  _linkName(s) {
+    const d = this._hass?.devices?.[s.ids?.device];
+    return d?.name_by_user || d?.name || "friend";
+  }
+
+  // Free for a visit: the idle checks, no egg, nothing waiting to be said.
+  _linkFree(s) {
+    return !!s && this._free(s) && !s.queue?.length &&
+      this._state(s, "sensor.life_stage")?.state !== "egg";
+  }
+
+  // The neighbour (either side, in a random order) that is free and has not
+  // visited this pet today. Uses up the pair's day: call it only to start one.
+  _linkPick(host) {
+    if (!this._linkFree(host) || !host.lookedFirst) return null;
+    const sides = [1, -1].sort(() => Math.random() - 0.5);
+    for (const side of sides) {
+      const guest = this._slides[this._index + side];
+      if (!this._linkFree(guest)) continue;
+      const pair = [host.ids?.device, guest.ids?.device].sort().join("-");
+      if (oncePerDay(`link-${pair}`)) return guest;
+    }
+    return null;
+  }
+
+  _linkTick(host) {
+    const L = this._link;
+    // A pet that falls asleep, calls, starts a game or a care scene, or opens the status ends it.
+    if (L && (L.host.asleep || L.guest.asleep || L.host.calling || L.host.game || L.host.scene ||
+      L.host.screen.classList.contains("show-status"))) this._linkEnd();
+    if (this._booting || this._link || this._slides.length < 2) return;
+    const now = Date.now();
+    const [lo, hi] = LINK_AFTER_MS;
+    this._linkAt ??= now + lo + Math.random() * (hi - lo);
+    if (now < this._linkAt) return;
+    const guest = this._linkPick(host);
+    if (!guest) return;
+    this._linkAt = now + lo + Math.random() * (hi - lo);
+    this._linkStart(host, guest);
+  }
+
+  // One visit: the beam, the visit screen, the two lines, the guest's own slide.
+  // Returns false when one is already on.
+  _linkStart(host, guest) {
+    if (this._link) return false;
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const L = this._link = { host, guest, timers: [], hostScale: host.pet.style.scale };
+    const at = (ms, fn) => L.timers.push(setTimeout(() => this._link === L && fn(), ms));
+    const hostName = this._linkName(host);
+    const guestName = this._linkName(guest);
+    const toRight = this._slides.indexOf(guest) > this._slides.indexOf(host);
+    const k = 0.7; // the pets stand at 70% of their size on the visit screen
+    const gs = guest.species;
+    const gStage = guest.drawn || "adult";
+    const gScale = (gs?.scale?.[gStage] || 1) * k;
+    const gFrames = gs ? this._petFrames(gs, gStage, "excited", false, null, []) : [];
+    L.beamMs = calm ? 0 : 1500;
+    this._moving(host, 9000);
+    this._chirp(host, "link");
+    if (!calm) this._linkBeam(host, guest, toRight);
+    // the guest's own slide: looking at the host, with a small note
+    this._moving(guest, 6500);
+    if (toRight) this._look(guest, 6500);
+    this._speak(guest, "♪", 6500);
+    // the visit screen
+    at(L.beamMs ? 1400 : 0, () => {
+      host.linking = true;
+      const box = document.createElement("div");
+      box.className = "visit";
+      box.setAttribute("aria-hidden", "true");
+      if (!calm) box.innerHTML = '<div class="vband"><i></i><i></i><i></i><i></i><i></i></div>';
+      host.screen.append(box);
+      L.box = box;
+    });
+    const t0 = calm ? 200 : 2500;
+    at(t0, () => {
+      L.box.querySelector(".vband")?.remove();
+      host.screen.classList.add("linking");
+      host.linkFrames = this._petFrames(host.species, host.drawn || "adult", "excited", false, null, []);
+      host.pet.classList.add("linking");
+      host.pet.style.scale = String((Number(L.hostScale) || 1) * k);
+      const img = document.createElement("img");
+      img.className = "vguest";
+      img.alt = "";
+      img.style.scale = `${-gScale} ${gScale}`; // mirrored, to face the host
+      this._show(guest, img, gFrames[0]);
+      L.box.append(img);
+      L.img = img;
+      let f = 0;
+      L.swap = setInterval(() => gFrames.length && this._show(guest, img, gFrames[++f % gFrames.length]), 700);
+      this._queue(host, this._pick(["hi, {guest}!", "oh! {guest}! hello hello ♪"]).replace("{guest}", guestName), 3400);
+      const say = document.createElement("div");
+      say.className = "vsay";
+      say.hidden = true;
+      L.box.append(say);
+      L.say = say;
+    });
+    at(t0 + 1200, () => {
+      if (!calm) this._animate(host, host.pet, "greethop", 1400);
+    });
+    at(t0 + 1800, () => {
+      L.say.textContent = this._pick(["hi hi, {host}! ♪", "*waves* hi, {host}!"]).replace("{host}", hostName);
+      L.say.hidden = false;
+      if (!calm) this._animate(guest, L.img, "greethop", 1400);
+    });
+    at(t0 + 3400, () => {
+      if (!calm) this._bondHearts(host);
+    });
+    at(t0 + 4000, () => {
+      L.say.hidden = true;
+      L.img.classList.add("out");
+    });
+    at(t0 + (calm ? 3600 : 4600), () => this._linkEnd());
+    return true;
+  }
+
+  _pick(list) {
+    return list[Math.floor(Math.random() * list.length)];
+  }
+
+  // The beam: a red head with ripples flies along the tops of the devices, a
+  // dotted trail behind it, and a burst where it arrives. Pixel-stepped, in art
+  // pixels of the pets' scale (a screen is 64 of them across the pet's 46.5%).
+  _linkBeam(host, guest, toRight) {
+    const L = this._link;
+    const track = this._track.getBoundingClientRect();
+    const a = host.device.getBoundingClientRect();
+    const b = guest.device.getBoundingClientRect();
+    const u = Math.max(1, Math.round(host.screen.clientWidth * 0.00727 * 4) / 4);
+    const x0 = a.left + a.width / 2 - track.left;
+    const x1 = b.left + b.width / 2 - track.left;
+    const dist = x1 - x0;
+    const step = 2 * u;
+    const n = Math.max(2, Math.round(Math.abs(dist) / step));
+    const ms = 1100;
+    const beam = document.createElement("div");
+    beam.className = "irbeam";
+    beam.setAttribute("aria-hidden", "true");
+    beam.style.cssText = `left:0;top:${a.top - track.top - 16 * u + 3}px;width:1px;height:1px;--u:${u}px;` +
+      `--ir-ms:${ms}ms;--ir-steps:${n};--ir-d:${n * step * (toRight ? 1 : -1)}px`;
+    const img = (name, cls, cx, cell) => {
+      const el = document.createElement("img");
+      el.className = cls;
+      el.alt = "";
+      el.src = `${BASE}/ui/${name}.png?v=${VERSION}`;
+      el.style.left = `${cx - cell * u}px`;
+      return el;
+    };
+    // heads sit 12.5 px into the cell facing right, 19.5 facing left
+    const head = img("ir_head_1", "head", x0, toRight ? 12.5 : 19.5);
+    if (!toRight) head.style.scale = "-1 1"; // translate and scale are separate properties
+    for (let d = 5 * u; d < Math.abs(dist) - 4 * u; d += 5 * u) {
+      const dot = img("ir_dot", "trail", x0 + d * (toRight ? 1 : -1), 16);
+      dot.style.animationDelay = `${Math.round((d / Math.abs(dist)) * ms)}ms`;
+      beam.append(dot);
+    }
+    const arrive = img("ir_burst", "arrive", x1, 16);
+    arrive.style.animationDelay = `${ms}ms`;
+    beam.append(arrive, head);
+    this._track.append(beam);
+    L.beam = beam;
+    let f = 0;
+    L.flap = setInterval(() => head.setAttribute("src", `${BASE}/ui/ir_head_${(++f % 2) + 1}.png?v=${VERSION}`), 200);
+    L.timers.push(setTimeout(() => beam.classList.add("gone"), ms + 500));
+    L.timers.push(setTimeout(() => beam.remove(), ms + 900));
+  }
+
+  // The visit is over (or cut short): leave nothing behind.
+  _linkEnd() {
+    const L = this._link;
+    if (!L) return;
+    this._link = null;
+    L.timers.forEach(clearTimeout);
+    clearInterval(L.swap);
+    clearInterval(L.flap);
+    L.beam?.remove();
+    L.box?.remove();
+    const { host, guest } = L;
+    host.linking = false;
+    host.linkFrames = null;
+    host.screen.classList.remove("linking");
+    host.pet.classList.remove("linking", "greethop");
+    host.pet.style.scale = L.hostScale;
+    host.screen.querySelector(".bondhearts")?.remove();
+    guest.pet.classList.remove("look");
+    guest.movingUntil = host.movingUntil = 0;
+    guest.sayUntil = 0;
+    this._stopTyping?.(guest);
+    guest.bubble.textContent = "";
   }
 
   // --- Trait flair ----------------------------------------------------------

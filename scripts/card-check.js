@@ -4029,6 +4029,184 @@ async function main() {
     await bp.close();
   }
 
+
+  // 2a. The infrared link: a visit between the pet on show and a neighbour, at two
+  // widths and with three pets. Sounds off; every visit is forced (the day's
+  // random timer is checked separately), the lines are the card's own.
+  {
+    const third = (await api("GET", "/api/config/config_entries/entry?domain=virtual_pet", access)).length < 3;
+    if (third) {
+      const flow = await api("POST", "/api/config/config_entries/flow", access, { handler: "virtual_pet" });
+      await api("POST", `/api/config/config_entries/flow/${flow.flow_id}`, access, { name: "Checkfin", world: "pond" });
+      await api("POST", "/api/services/virtual_pet/fast_forward", access, { hours: 1 });
+    }
+  }
+  for (const width of [420, 330]) {
+    const lp = await context.newPage();
+    await lp.setViewportSize({ width, height: 860 });
+    await lp.goto(`${HA}/pet-bench/pet`);
+    await lp.evaluate(() => { localStorage.setItem("hatch-sounds", "off"); localStorage.setItem("hatch-lcd", "off"); });
+    await lp.reload();
+    await lp.waitForSelector("hatch-pet-card .statusbtn", { timeout: 60000 });
+    for (let i = 0; i < 60 && await lp.locator("hatch-pet-card").evaluate((el) => (el._slides?.length || 0) < 3); i++) await lp.waitForTimeout(1000);
+    await lp.waitForTimeout(1500);
+    const card = lp.locator("hatch-pet-card");
+    const lshots = path.join(OUT, `link-${width}`);
+    // Everyone free, on this page, no leftovers from earlier pages' storage.
+    const prep = (index = 0) => card.evaluate((el, index) => {
+      for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k);
+      el._linkEnd();
+      el._linkAt = Date.now() + 1e9; // only the forced visits run
+      el._index = index;
+      el._renderShelf();
+      const realState = el._state;
+      if (!el.__linkStage) {
+        el.__linkStage = true;
+        el._state = function (slide, key) {
+          const st = realState.call(this, slide, key);
+          return key === "sensor.life_stage" && st?.state === "egg" ? { ...st, state: "adult" } : st;
+        };
+      }
+      for (const s of el._slides) {
+        Object.assign(s, { asleep: false, lightsOut: false, calling: false, game: null, moodState: "content",
+          lookedFirst: true, queue: [], sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
+        s.screen.classList.remove("show-status");
+      }
+      el._booting = false;
+    }, index);
+    const state = () => card.evaluate((el) => {
+      const [h, g] = [el._slides[el._index], el._slides[el._index + 1] || el._slides[el._index - 1]];
+      const beam = el._track.querySelector(".irbeam");
+      const head = beam?.querySelector(".head");
+      return {
+        beam: !!beam, head: head?.getBoundingClientRect().left ?? null, pe: beam && getComputedStyle(beam).pointerEvents,
+        loaded: beam ? [...beam.querySelectorAll("img")].every((i) => i.complete && i.naturalWidth > 0) : null,
+        guestImg: h.screen.querySelectorAll(".vguest").length, band: h.screen.querySelectorAll(".vband").length,
+        hostPos: h.pet.classList.contains("linking"), hop: h.pet.classList.contains("greethop") || !!h.screen.querySelector(".vguest.greethop"),
+        hostSays: h.bubble.textContent, guestSays: h.screen.querySelector(".vsay:not([hidden])")?.textContent || "",
+        guestBubble: g.bubble.textContent, hostQueue: h.queue.length,
+        left: document.querySelectorAll("x").length + el._track.querySelectorAll(".irbeam").length +
+          el._slides.reduce((n, s) => n + s.screen.querySelectorAll(".visit, .vguest").length +
+            (s.screen.classList.contains("linking") || s.pet.classList.contains("linking") ? 1 : 0), 0),
+        scale: h.pet.style.scale,
+      };
+    });
+    const strip = (name) => card.locator(".viewport").screenshot({ path: `${lshots}-${name}.png` });
+
+    // The timer: the day's visit is 10-25 minutes away, and never while the boot screen is up.
+    await prep();
+    const timer = await card.evaluate((el) => {
+      const h = el._slides[el._index];
+      el._linkAt = null; el._linkTick(h);
+      const wait = el._linkAt - Date.now();
+      el._linkAt = 0; el._booting = true; el._linkTick(h);
+      const booting = !!el._link;
+      el._booting = false;
+      return { wait, booting, started: !!el._link };
+    });
+    check(`link waits 10-25 minutes after the page loads (${width}px)`,
+      timer.wait > 590000 && timer.wait <= 1500000 && !timer.started, JSON.stringify(timer));
+    check(`link never starts under the boot screen (${width}px)`, !timer.booting);
+
+    // A full visit, with frames along the way.
+    await prep();
+    const names = await card.evaluate((el) => {
+      const nm = (s) => { const d = el._hass.devices[s.ids.device]; return d.name_by_user || d.name; };
+      return [nm(el._slides[0]), nm(el._slides[1])];
+    });
+    await card.evaluate((el) => el._linkStart(el._slides[0], el._slides[1]));
+    await lp.waitForTimeout(450);
+    const beam1 = await state();
+    await strip("1-beam-start");
+    await lp.waitForTimeout(550);
+    const beam2 = await state();
+    await strip("2-beam-flying");
+    check(`the beam flies and loads its art, taking no taps (${width}px)`,
+      beam1.beam && beam1.loaded && beam1.pe === "none" && beam2.head > beam1.head, JSON.stringify([beam1, beam2].map((b) => [b.beam, b.loaded, b.pe, b.head])));
+    await lp.waitForTimeout(600);
+    await strip("3-connecting");
+    const band = await state();
+    await lp.waitForTimeout(1100);
+    const both = await state();
+    await strip("4-visit");
+    await lp.waitForTimeout(1500);
+    await strip("5-hop");
+    const lines = await state();
+    check(`the visit screen shows a connecting band, then both pets (${width}px)`,
+      band.band === 1 && both.guestImg === 1 && both.hostPos && both.band === 0, JSON.stringify([band.band, both.guestImg, both.hostPos]));
+    check(`both pets speak, each in their own voice (${width}px)`,
+      new RegExp(`hi.*${names[1]}|${names[1]}.*hello`).test(lines.hostSays) && lines.guestSays.includes(names[0]) && lines.guestBubble.includes("♪"),
+      JSON.stringify([lines.hostSays, lines.guestSays, lines.guestBubble]));
+    await lp.waitForTimeout(1500);
+    await strip("6-farewell");
+    await lp.waitForTimeout(3500); // 9 s since the start
+    const over = await state();
+    check(`the visit is over and nothing is left behind by 9 s (${width}px)`,
+      over.left === 0 && !over.beam, JSON.stringify(over));
+
+    // A swipe mid-visit ends it at once.
+    await prep();
+    await card.evaluate((el) => el._linkStart(el._slides[0], el._slides[1]));
+    await lp.waitForTimeout(3300);
+    const midway = await state();
+    await card.evaluate((el) => el._go(1));
+    const swiped = await state();
+    check(`a swipe mid-visit leaves nothing behind (${width}px)`, midway.guestImg === 1 && swiped.left === 0 && !swiped.beam, JSON.stringify([midway.guestImg, swiped.left]));
+
+    // Not when either pet is asleep, calling or in a game, nor with a line waiting; once a day per pair.
+    await prep();
+    const gates = await card.evaluate((el) => {
+      const [a, b] = [el._slides[0], el._slides[1]];
+      const out = {};
+      const clear = () => { for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k); };
+      for (const [who, s] of [["host", a], ["guest", b]]) {
+        for (const [what, patch] of [["asleep", { asleep: true }], ["calling", { calling: true }], ["game", { game: { kind: "catch" } }], ["queue", { queue: [{ text: "x" }] }]]) {
+          const keep = Object.fromEntries(Object.keys(patch).map((k) => [k, s[k]]));
+          Object.assign(s, patch); clear();
+          out[`${who} ${what}`] = el._linkPick(a);
+          Object.assign(s, keep);
+        }
+      }
+      clear();
+      out.first = !!el._linkPick(a);
+      out.second = !!el._linkPick(a);
+      return out;
+    });
+    const blocked = Object.entries(gates).filter(([k]) => k !== "first" && k !== "second").every(([, v]) => v === null);
+    check(`no visit while either pet is asleep, calling, in a game or has a line waiting (${width}px)`, blocked, JSON.stringify(gates));
+    check(`a pair visits once a day (${width}px)`, gates.first && !gates.second, JSON.stringify([gates.first, gates.second]));
+
+    // Three pets: the pet in the middle can send the beam either way.
+    for (const toRight of [true, false]) {
+      await prep(1);
+      await card.evaluate((el, toRight) => el._linkStart(el._slides[1], el._slides[toRight ? 2 : 0]), toRight);
+      await lp.waitForTimeout(500);
+      const a = await state();
+      await lp.waitForTimeout(450);
+      const b = await state();
+      await strip(`7-three-${toRight ? "right" : "left"}`);
+      check(`with three pets the beam goes ${toRight ? "right" : "left"} to the neighbour (${width}px)`,
+        a.beam && (toRight ? b.head > a.head : b.head < a.head), JSON.stringify([a.head, b.head]));
+      await card.evaluate((el) => el._linkEnd());
+    }
+
+    // Reduced motion: no beam, no hops; the pets appear together, speak and go.
+    await prep();
+    await lp.emulateMedia({ reducedMotion: "reduce" });
+    await card.evaluate((el) => el._linkStart(el._slides[0], el._slides[1]));
+    let sawBeam = false, sawHop = false, sawBoth = false;
+    for (let i = 0; i < 24; i++) {
+      await lp.waitForTimeout(250);
+      const x = await state();
+      sawBeam ||= x.beam; sawHop ||= x.hop; sawBoth ||= x.guestImg === 1 && x.hostPos;
+    }
+    await lp.emulateMedia({ reducedMotion: null });
+    const calmEnd = await state();
+    check(`reduced motion: no beam and no hops, the pets just appear together (${width}px)`,
+      !sawBeam && !sawHop && sawBoth && calmEnd.left === 0, JSON.stringify([sawBeam, sawHop, sawBoth, calmEnd.left]));
+    await lp.close();
+  }
+
   check("no errors in the browser console", errors.length === 0, errors.slice(0, 3).join(" | "));
   await browser.close();
 
