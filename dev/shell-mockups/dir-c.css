@@ -1,0 +1,32 @@
+/* Direction C: hybrid. Shares A's moulding (shine, seam, recess, glass, domed caps:
+   the .mock-c selectors in dir-a.css) and swaps A's CSS hardware for pixel sprites. */
+.mock-c .mx-px { display: block; inset: 0; z-index: -1; image-rendering: pixelated; }
+/* Pixel screws on the boxy shells. */
+.mock-c .mx-screws { display: block; inset: 8px; z-index: -1; image-rendering: pixelated;
+  background: var(--px-screw) 0 0 / var(--px-screw-w) var(--px-screw-h) no-repeat,
+    var(--px-screw) 100% 0 / var(--px-screw-w) var(--px-screw-h) no-repeat,
+    var(--px-screw) 0 100% / var(--px-screw-w) var(--px-screw-h) no-repeat,
+    var(--px-screw) 100% 100% / var(--px-screw-w) var(--px-screw-h) no-repeat; }
+.mock-c .egg .mx-screws, .mock-c .pad .mx-screws { display: none; }
+.mock-c .moon .mx-screws { inset: 12px 10px; }
+/* A pixel egg mark between two pixel speaker grilles, bottom centre. */
+.mock-c .mx-logo { display: block; left: 50%; bottom: 10px; width: var(--px-logo-w); height: var(--px-logo-h);
+  transform: translateX(-50%); z-index: -1; background: var(--px-logo) 0 0 / 100% 100%; image-rendering: pixelated; }
+.mock-c .mx-grille { display: block; left: 50%; bottom: 12px; width: 84px; height: var(--px-slot-h); margin-left: -42px; z-index: -1;
+  image-rendering: pixelated;
+  background: var(--px-slot) 0 0 / var(--px-slot-w) var(--px-slot-h) repeat-x;
+  -webkit-mask: linear-gradient(90deg, #000 0 30px, transparent 30px 54px, #000 54px); mask: linear-gradient(90deg, #000 0 30px, transparent 30px 54px, #000 54px); }
+.mock-c .tank .body { padding-bottom: 36px; }
+.mock-c .egg .mx-grille, .mock-c .porthole .mx-grille, .mock-c .moon .mx-grille { bottom: 18px; }
+.mock-c .egg .mx-logo, .mock-c .porthole .mx-logo, .mock-c .moon .mx-logo { bottom: 16px; }
+.mock-c .pad .mx-grille { bottom: 20px; } .mock-c .pad .mx-logo { bottom: 18px; }
+/* Printed bezel trim: pixel stripes across the top, a pixel power light at the left. */
+.mock-c .mx-ring { background: var(--px-stripe) 18% 1px / var(--px-stripe-w) var(--px-stripe-h) repeat-x,
+  linear-gradient(180deg, rgba(255,255,255,.28), transparent 40%, rgba(0,0,0,.06));
+  background-size: var(--px-stripe-w) var(--px-stripe-h), auto;
+  image-rendering: pixelated;
+  -webkit-mask: linear-gradient(90deg, transparent 0 16%, #000 16% 84%, transparent 84%) 0 0 / 100% 9px no-repeat,
+    linear-gradient(#000, #000) 0 9px / 100% 100% no-repeat; }
+.mock-c .bezel::after { content: ""; position: absolute; left: 2px; top: 50%; width: var(--px-led-w); height: var(--px-led-h);
+  margin-top: -3px; background: var(--px-led) 0 0 / 100% 100%; image-rendering: pixelated; z-index: 2; pointer-events: none; }
+.mock-c .porthole .bezel::after { left: 4px; }

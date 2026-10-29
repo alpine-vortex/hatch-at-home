@@ -1,0 +1,18 @@
+/* Direction B: the pixel frame sketch (dir-b.js paints it). The CSS only clears
+   the plastic so the drawn frame shows; a real build would swap the canvas for
+   hand-drawn frame art (see the report for the art count). */
+.mock-b .device { position: relative; }
+.mock-b canvas.mx-frame { position: absolute; z-index: 0; image-rendering: pixelated; pointer-events: none; }
+.mock-b .body, .mock-b .device[class*="finish-"] .body { background: none !important; box-shadow: none !important; }
+.mock-b .pad .body::before { display: none; }
+.mock-b .lid, .mock-b .feet span, .mock-b .roof::before, .mock-b .roof::after { background: transparent !important; box-shadow: none !important; }
+.mock-b .loop { border-color: transparent !important; }
+.mock-b .crescent { box-shadow: none !important; }
+.mock-b .lid span { display: none; }
+.mock-b .bezel, .mock-b .device[class*="finish-"] .bezel { background: transparent !important; box-shadow: none !important; }
+.mock-b .screen { border-radius: 4px; }
+.mock-b .porthole .screen { border-radius: 24% / 32%; }
+.mock-b .toy .cap, .mock-b .device[class*="finish-"] .toy .cap { width: 48px; height: 48px; border-radius: 0 !important;
+  box-shadow: none !important; background-image: var(--px-cap) !important; background-size: 100% 100% !important;
+  image-rendering: pixelated; -webkit-mask: var(--px-capmask) 0 0 / 100% 100%; mask: var(--px-capmask) 0 0 / 100% 100%; }
+.mock-b .compact .toy .cap { width: 40px; height: 40px; }

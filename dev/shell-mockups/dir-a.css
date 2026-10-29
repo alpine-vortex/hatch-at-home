@@ -1,0 +1,83 @@
+/* Direction A: polished toy plastic, all CSS.
+   Rule of the road: never touch .body's background-image or box-shadow (the world
+   finishes own those), nor anything inside .screen (the LCD grid and backlight).
+   Every moulded effect sits on an added node or a pseudo-element on top. */
+.mx { display: none; position: absolute; pointer-events: none; }
+.mock-a .body, .mock-c .body { isolation: isolate; }
+
+/* Moulded depth and a soft specular, over whatever the finish painted. */
+.mock-a .mx-shine, .mock-c .mx-shine { display: block; inset: 0; z-index: -1; border-radius: inherit;
+  background:
+    radial-gradient(ellipse 36% 10% at 30% 6%, rgba(255,255,255,.8), rgba(255,255,255,.3) 55%, transparent 100%),
+    radial-gradient(ellipse 9% 22% at 7% 34%, rgba(255,255,255,.22), transparent 100%),
+    linear-gradient(90deg, rgba(0,0,0,.13), transparent 9% 91%, rgba(0,0,0,.16)),
+    linear-gradient(180deg, rgba(255,255,255,.16), transparent 26% 74%, rgba(0,0,0,.12));
+  box-shadow: inset 0 3px 2px -1px rgba(255,255,255,.7), inset 0 -4px 3px -1px rgba(0,0,0,.2),
+    inset 3px 0 3px -2px rgba(255,255,255,.35), inset -3px 0 3px -2px rgba(0,0,0,.18); }
+/* The parting seam where the two halves of the mould meet. */
+.mock-a .mx-seam, .mock-c .mx-seam { display: block; inset: 5px; z-index: -1; border-radius: inherit;
+  border: 1px solid rgba(0,0,0,.16); box-shadow: 0 1px 0 rgba(255,255,255,.28), inset 0 1px 0 rgba(255,255,255,.18); }
+.mock-a.compact .mx-seam, .compact .mock-a .mx-seam { inset: 4px; }
+
+/* The screen sits in a recess: a lip on the shell, then an inner shadow on the glass. */
+.mock-a .bezel::before, .mock-c .bezel::before { content: ""; position: absolute; inset: -4px; z-index: -1;
+  border-radius: 24px; pointer-events: none;
+  background: linear-gradient(180deg, rgba(0,0,0,.2), rgba(255,255,255,.35));
+  box-shadow: 0 1px 0 rgba(255,255,255,.45); }
+.mock-a .porthole .bezel::before, .mock-c .porthole .bezel::before { border-radius: 32% / 40%; inset: -5px; }
+.mock-a .mx-glass, .mock-c .mx-glass { display: block; z-index: 3; inset: 9px; border-radius: 12px;
+  box-shadow: inset 0 4px 6px rgba(0,0,0,.42), inset 0 0 0 2px rgba(0,0,0,.38), inset 0 -1px 0 3px rgba(255,255,255,.06);
+  background: linear-gradient(128deg, rgba(255,255,255,.16), rgba(255,255,255,.04) 22%, transparent 23%); }
+.mock-a .porthole .mx-glass, .mock-c .porthole .mx-glass { inset: 14px; border-radius: 28% / 36%; }
+/* The bezel itself: a printed ring, a little lighter at the top. */
+.mock-a .mx-ring, .mock-c .mx-ring { display: block; inset: 0; z-index: 0; border-radius: inherit;
+  background: linear-gradient(180deg, rgba(255,255,255,.28), transparent 40%, rgba(0,0,0,.06));
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+.mock-a .bezel > .screen, .mock-c .bezel > .screen { z-index: 1; }
+
+/* Screws on the boxy shells. Organic ones (egg, pad) are snapped shut, no screws. */
+.mock-a .mx-screws { display: block; inset: 9px; z-index: -1;
+  --screw: rgba(0,0,0,.42) 0 1px, rgba(0,0,0,.08) 1.2px 2.2px, rgba(255,255,255,.7) 2.4px 3px, rgba(0,0,0,.28) 3.3px 4.4px, transparent 4.8px;
+  background:
+    radial-gradient(circle at 6px 6px, var(--screw)), radial-gradient(circle at calc(100% - 6px) 6px, var(--screw)),
+    radial-gradient(circle at 6px calc(100% - 6px), var(--screw)), radial-gradient(circle at calc(100% - 6px) calc(100% - 6px), var(--screw)); }
+.mock-a .egg .mx-screws, .mock-a .pad .mx-screws { display: none; }
+.mock-a .moon .mx-screws { inset: 14px 12px; }
+.mock-a .house .mx-screws { inset: 8px 8px 10px; }
+
+/* Speaker grille and a debossed egg mark, bottom centre. */
+.mock-a .mx-grille { display: block; left: 50%; bottom: 13px; width: 86px; height: 10px; margin-left: -43px; z-index: -1;
+  background:
+    radial-gradient(ellipse 2.6px 4.4px at 50% 50%, rgba(0,0,0,.42) 0 90%, transparent 100%) 0 0 / 11px 10px repeat-x;
+  filter: drop-shadow(0 1px 0 rgba(255,255,255,.45));
+  -webkit-mask: linear-gradient(90deg, #000 0 33px, transparent 33px 53px, #000 53px); mask: linear-gradient(90deg, #000 0 33px, transparent 33px 53px, #000 53px); }
+.mock-a .mx-logo { display: block; left: 50%; bottom: 10px; width: 12px; height: 15px; margin-left: -6px; z-index: -1;
+  border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: rgba(0,0,0,.12); box-shadow: inset 0 2px 1px rgba(0,0,0,.28), 0 1px 0 rgba(255,255,255,.45); }
+.mock-a .tank .body { padding-bottom: 36px; }
+.mock-a .egg .mx-grille, .mock-a .egg .mx-logo { bottom: 16px; }
+.mock-a .pad .mx-grille, .mock-a .pad .mx-logo { bottom: 18px; }
+.mock-a .porthole .mx-grille, .mock-a .porthole .mx-logo,
+.mock-a .moon .mx-grille, .mock-a .moon .mx-logo { bottom: 16px; }
+
+/* Button caps: domed, with a glint and a socket ring, that sink when pressed. */
+.mock-a .toy .cap, .mock-c .toy .cap { position: relative;
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.8), inset 0 -4px 2px rgba(0,0,0,.12),
+    0 5px 0 var(--d-btn-shadow), 0 5px 0 3px rgba(0,0,0,.16), 0 0 0 3px rgba(0,0,0,.12); }
+.mock-a .toy .cap::after, .mock-c .toy .cap::after { content: ""; position: absolute; top: 5px; left: 22%;
+  width: 32%; height: 18%; border-radius: 50%; background: rgba(255,255,255,.55); pointer-events: none; }
+.mock-a .tank .toy .cap::after, .mock-c .tank .toy .cap::after,
+.mock-a .house .toy .cap::after, .mock-c .house .toy .cap::after { border-radius: 4px; top: 4px; left: 14%; }
+.mock-a .toy:active .cap, .mock-a .toy.pressed .cap, .mock-c .toy:active .cap, .mock-c .toy.pressed .cap {
+  box-shadow: inset 0 2px 2px rgba(0,0,0,.18), 0 1px 0 var(--d-btn-shadow), 0 1px 0 3px rgba(0,0,0,.16), 0 0 0 3px rgba(0,0,0,.12); }
+
+/* The add-on parts get the same moulding. */
+.mock-a .lid, .mock-c .lid { background-image: linear-gradient(180deg, rgba(255,255,255,.3), transparent 45%, rgba(0,0,0,.18));
+  box-shadow: inset 0 2px 0 rgba(255,255,255,.35), 0 2px 2px rgba(0,0,0,.2); }
+.mock-a .lid span, .mock-c .lid span { height: 5px; box-shadow: inset 0 2px 1px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.25); }
+.mock-a .feet span, .mock-c .feet span { background-image: linear-gradient(180deg, rgba(0,0,0,.25), transparent 50%); }
+.mock-a .roof::after, .mock-c .roof::after { background-image: linear-gradient(160deg, rgba(255,255,255,.32), transparent 38%, rgba(0,0,0,.14)),
+  repeating-linear-gradient(180deg, transparent 0 9px, rgba(0,0,0,.12) 9px 11px); }
+.mock-a .roof::before, .mock-c .roof::before { background-image: linear-gradient(90deg, rgba(255,255,255,.22), transparent 50%, rgba(0,0,0,.16)); }
+.mock-a .loop, .mock-c .loop { filter: drop-shadow(0 1px 0 rgba(255,255,255,.35)) drop-shadow(0 -1px 0 rgba(0,0,0,.18)); }
+.mock-a .crescent, .mock-c .crescent { filter: drop-shadow(-1px 2px 1px rgba(0,0,0,.28)); }
