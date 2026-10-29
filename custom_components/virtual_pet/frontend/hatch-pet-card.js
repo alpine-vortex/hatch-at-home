@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.35.0b3";
+const VERSION = "0.35.0b4";
 const BASE = "/virtual_pet/frontend";
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
@@ -178,6 +178,8 @@ function soundsOn() {
 // A shared screen (a wall tablet signed in as one person): this browser shows
 // nothing personal, no names, notes, questions or bond, and makes no visits.
 const SHARED_KEY = "hatch-shared-screen";
+// Fired on window when the switch flips, so every card on the page follows.
+const SHARED_EVENT = "hatch-shared-changed";
 function sharedScreen() {
   try {
     return localStorage.getItem(SHARED_KEY) === "on";
@@ -1403,6 +1405,10 @@ class HatchPetCard extends HTMLElement {
     this._timer = setInterval(() => this._tick(), 700);
     if (this._card) document.addEventListener("visibilitychange", this._onHidden);
     if (this._resize && this._viewport) this._resize.observe(this._viewport);
+    if (this._io && this._card) this._io.observe(this._card);
+    // A shared screen turned on in another card on this page, or another tab.
+    window.addEventListener(SHARED_EVENT, this._onSharedEvent);
+    window.addEventListener("storage", this._onSharedStorage);
     if (!document.querySelector("[data-hatch-font]")) {
       // Tiny5 (SIL OFL), served by the integration so it works offline. It
       // stays legible at button-label sizes, where most pixel fonts blur.
@@ -1417,7 +1423,10 @@ class HatchPetCard extends HTMLElement {
   disconnectedCallback() {
     clearInterval(this._timer);
     this._resize?.disconnect();
+    this._io?.disconnect();
     document.removeEventListener("visibilitychange", this._onHidden);
+    window.removeEventListener(SHARED_EVENT, this._onSharedEvent);
+    window.removeEventListener("storage", this._onSharedStorage);
     // A game (Catch's animation loop above all) stops with the card, and so
     // does a line typing out.
     for (const s of this._slides || []) {
@@ -1539,12 +1548,13 @@ class HatchPetCard extends HTMLElement {
     this._resize = new ResizeObserver(() => this._layout());
     this._resize.observe(this._viewport);
     this._visible = true;
-    new IntersectionObserver((entries) => {
+    this._io = new IntersectionObserver((entries) => {
       this._visible = entries.some((e) => e.isIntersecting);
       this._card.classList.toggle("offscreen", !this._visible); // pauses the loops
       if (!this._visible) this._slides.forEach((x) => this._stopTyping(x));
       if (this._visible && this._dirty) this._update(); // catch up on what was skipped
-    }).observe(this._card);
+    });
+    this._io.observe(this._card);
     this._slides = [];
   }
 
@@ -1779,7 +1789,8 @@ class HatchPetCard extends HTMLElement {
   }
 
   _dropSlide(s) {
-    this._stopTyping(s);
+    this._forget(s); // its game, timers, photos and dialog go with it
+    s.unsub?.();
     s.el.remove();
   }
 
@@ -1804,7 +1815,57 @@ class HatchPetCard extends HTMLElement {
     s.lookedFirst = false;
     s.wishDay = null;
     this._dropPhotos(s);
+    // Its other timers, and what each would have tidied away.
+    clearTimeout(s.breezeTimer);
+    s.screen?.classList.remove("breezy");
+    clearTimeout(s.flairTimer);
+    s.screen?.querySelector(".flair")?.remove();
+    clearTimeout(s.statusMessageTimer);
+    const note = s.status?.querySelector(".status-feedback");
+    if (note) { note.hidden = true; note.textContent = ""; }
   }
+
+  // Turning on "shared screen", here or in another card or tab: everything
+  // personal on every slide goes, including a line still being typed out.
+  _goShared() {
+    for (const slide of this._slides || []) {
+      this._clearAsk(slide);
+      slide.queue = [];
+      this._dropPhotos(slide);
+      this._stopTyping(slide); // writes the whole line in, so it's cleared after
+      slide.bubble.textContent = "";
+      slide.plain = undefined;
+      slide.sayUntil = 0; // the next tick says the mood's line, which names nobody
+      slide.live.textContent = "";
+      slide.screen.querySelector(".bondhearts")?.remove();
+      slide.journal = false;
+      slide.status.innerHTML = ""; // drawn again, without its personal rows
+      slide.statusHtml = null;
+      slide.drawnSig = null;
+    }
+    this._redraw();
+  }
+
+  // Personal again: only the status screens change (nothing waits to come back).
+  _goPersonal() {
+    for (const slide of this._slides || []) {
+      slide.statusHtml = null;
+      slide.drawnSig = null;
+    }
+    this._redraw();
+  }
+
+  _onSharedEvent = (e) => {
+    if (e.detail?.from === this) return; // the card that was tapped already did
+    if (e.detail?.on) this._goShared();
+    else this._goPersonal();
+  };
+
+  _onSharedStorage = (e) => {
+    if (e.key !== SHARED_KEY) return;
+    if (sharedScreen()) this._goShared();
+    else this._goPersonal();
+  };
 
   // Take an open question off the screen (a game, another pet on this slide).
   _clearAsk(s) {
@@ -3168,6 +3229,7 @@ class HatchPetCard extends HTMLElement {
     const row = (iconName, label, value) =>
       `<div class="row">${iconName ? ic(iconName) : "<span></span>"}<span>${label}</span>${value}</div>`;
     const adult = this._state(s, "sensor.life_stage")?.state === "adult";
+    const teenOrAdult = adult || this._state(s, "sensor.life_stage")?.state === "teen";
     const isEgg = this._state(s, "sensor.life_stage")?.state === "egg";
     // The creature picked for the next egg (if any), and its world if that changes.
     const nextEgg = [stageAttrs.next_egg?.toLowerCase(), stageAttrs.next_world && `in ${stageAttrs.next_world}`]
@@ -3190,7 +3252,7 @@ class HatchPetCard extends HTMLElement {
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
-      ${stageAttrs.personality ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
+      ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell notify" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       ${bond ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!this._myDay}">${this._myDay ? "on" : "off"}</button></span>`) : ""}
@@ -3226,9 +3288,11 @@ class HatchPetCard extends HTMLElement {
         this._statusMessage(s, "This browser can't save that setting.");
         return;
       }
-      if (on) this._slides.forEach((slide) => { this._clearAsk(slide); slide.queue = []; this._dropPhotos(slide); });
-      this._statusMessage(s, on ? "Nothing personal on this screen now." : "This screen is personal again.");
+      if (on) this._goShared();
+      else this._goPersonal();
+      window.dispatchEvent(new CustomEvent(SHARED_EVENT, { detail: { on, from: this } }));
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      this._statusMessage(s, on ? "Nothing personal on this screen now." : "This screen is personal again.");
     });
     s.status.querySelector(".bell.sound").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -3431,7 +3495,9 @@ class HatchPetCard extends HTMLElement {
       traits: stage.traits || [], levels: stage.trait_levels || {}, inherited: stage.inherited_trait,
       games: stage.games || {},
       upbringing: this._state(s, "sensor.life_stage")?.state === "adult" ? stage.upbringing : null,
-      personality: stage.personality,
+      // Settled only on becoming a teen: a younger one's (a downgrade, a hand
+      // edit) isn't shown.
+      personality: ["teen", "adult"].includes(this._state(s, "sensor.life_stage")?.state) ? stage.personality : null,
       current: true,
     };
     const past = [...(stage.journal || []), now].slice(-4);
