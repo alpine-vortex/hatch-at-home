@@ -557,6 +557,8 @@ card and the `calling` sensor, which an automation can notify on.
 - **Re-read against 0a-0d, 0f, 0g and 0b (the 0e builder, 2026-10-28):** no assumption
   broke; every band passes on 10 seeds. As built, where the section left a choice:
   0f's dropped game (`drop_game`) is not care, so praise after it teaches nothing;
+  "once per action" is once per the **latest** care (`last_care_at`, as the prototype
+  the bands were tuned on): feed, then clean, then two praises teach once, not twice;
   praise that spoils a whine still takes its place in the window and the day; "days
   since hatching" counts today and is at least 1 (`_days_lived`), so a baby's misses
   aren't divided by a fraction of a day; the old score is kept as literals
