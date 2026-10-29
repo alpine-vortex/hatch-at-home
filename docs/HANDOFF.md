@@ -58,8 +58,14 @@ also clears the breeze, flair and status-message timers. FA: `_goShared()` on ev
 slide, and the `hatch-shared-changed` window event plus a `storage` listener so other
 cards and tabs follow. D1: the personality row and the current journal line only for a
 teen or adult. Tests in `tests/test_damaged.py`; card checks "5b" (FA, F6) and the D1
-lines in "4c". `scripts/test` 574, `scripts/card-check` 132/133 (the catchphrase "two rows" check fails on main
-too, 3 rows).
+lines in "4c". **Its tier-2 audit's 12 findings are fixed** (crew branch
+`crew/hatch-at-home-s2440-privacy-p1-fix-loop-every-audi`): a bond's `noted` keeps
+numbers (`noted.tucked` is the float `tucked_at`); a `catch_up` that raises keeps what
+`from_dict` read (no salvage); `save_damaged`/`people_damaged` clear on a clean load
+once the backup they name is gone; a third wording, `save_damaged_missing` (no file,
+no `.corrupt`, no marker; owner-approved); load failures log only the error type.
+The catchphrase's keep button is 12px and may wrap inside itself, so every creature's
+five choices fit two rows (checked for all 30). `scripts/test` 584, `scripts/card-check` 134/134.
 
 **Phase 4 of the voices plan, the photo (A7), is merged and pre-released as
 0.34.0b1** (PR #31, 2026-10-28; from `docs/plan-2026-10-28-phase4-photo.md` draft 2,
