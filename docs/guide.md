@@ -231,6 +231,18 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 - It says hi to whoever is looking, by first name ("morning, Alex!"), at most every few
   hours. The name comes from your Home Assistant account and stays in your browser.
 
+### Little touches
+
+The device behaves a little like a real handheld's screen. None of this changes the
+pet; it's only how the screen looks.
+
+- **The LCD grid.** A faint dot-matrix grid lies over the scene, one cell per pixel
+  the creature is drawn in (one per four on a low-resolution screen, where a finer
+  grid would shimmer). Weather, the speech bubble, the games and the status screen
+  sit in front of it, so words stay crisp. "screen effects here" on the status
+  screen turns it off for this browser; it's also off when the browser asks for
+  more contrast.
+
 ## What you get
 
 One device named after your pet, with the entities below. To rename the pet or move

@@ -127,6 +127,10 @@ async function main() {
   const signedIn = () => page.waitForFunction(
     () => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
   await signedIn();
+  // Screen effects (the LCD grid, ghosting) are on by default; the checks run
+  // with them off so their screenshots and pixel samples don't drift. Only the
+  // device-charm steps near the end turn them on.
+  await page.evaluate(() => localStorage.setItem("hatch-lcd", "off"));
   await page.goto(`${HA}/pet-bench/pet`);
   await signedIn();
   await page.waitForTimeout(16000); // the frontend reloads itself once after the first load
@@ -3210,6 +3214,136 @@ async function main() {
   check("the baby-talk sample is quiet at night too",
     !samples.babbleNight || (samples.babbleNight.played === 0 && /quiet till morning/.test(samples.babbleNight.note)),
     JSON.stringify(samples.babbleNight));
+
+  // Device charm, Part 1: the LCD quirks (docs/plan-2026-10-29-device-charm.md).
+  const worlds = Object.keys(JSON.parse(fs.readFileSync(
+    path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8")));
+  // Show the pet on show in another world's shell (its life_stage says so), or back.
+  const inWorld = (key) => card.evaluate(async (el, key) => {
+    if (!el.__worldless) el.__worldless = el._state;
+    const real = el.__worldless;
+    el._state = key ? function (slide, k) {
+      const st = real.call(this, slide, k);
+      return k === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, world: key } } : st;
+    } : real;
+    if (!key) delete el.__worldless;
+    el._redraw();
+    await new Promise((r) => setTimeout(r, 700));
+    const s = el._slides[el._index];
+    return { device: s.device.className, slideW: el._slideW, compact: el._card.classList.contains("compact") };
+  }, key);
+  const setLcd = (on) => card.evaluate((el, on) => {
+    localStorage.setItem("hatch-lcd", on ? "on" : "off");
+    el._card.classList.toggle("lcd-on", on);
+  }, on);
+  // A crop of the page, with every animation on the screen held still.
+  const holdStill = () => card.evaluate((el) => {
+    el._slides[el._index].screen.getAnimations({ subtree: true }).forEach((a) => a.pause());
+  });
+  const crop = async (sel, inset) => {
+    const box = await cur().locator(sel).first().boundingBox();
+    return page.screenshot({ clip: { x: box.x + inset * box.width, y: box.y + inset * box.height,
+      width: box.width * (1 - 2 * inset), height: box.height * (1 - 2 * inset) } });
+  };
+  // The same crop with the grid off, then on: identical when the grid is under it.
+  const under = async (sel, inset) => {
+    await holdStill();
+    await setLcd(false);
+    const off = await crop(sel, inset);
+    await setLcd(true);
+    const on = await crop(sel, inset);
+    return off.equals(on);
+  };
+
+  // The "screen effects here" row: on by default, per browser.
+  await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
+  await page.waitForTimeout(400);
+  const fxRow = async () => ({ pressed: await cur().locator(".bell.lcdfx").getAttribute("aria-pressed"),
+    stored: await evaluate(() => localStorage.getItem("hatch-lcd")),
+    on: await card.evaluate((el) => el._card.classList.contains("lcd-on")) });
+  const fxSeeded = await fxRow();
+  await card.evaluate((el) => {
+    localStorage.removeItem("hatch-lcd");
+    const s = el._slides[el._index];
+    s.statusHtml = null;
+    el._renderStatus(s, el._state(s, "sensor.last_care")?.attributes.log || []);
+  });
+  await page.waitForTimeout(300);
+  const fxDefault = await fxRow();
+  await cur().locator(".bell.lcdfx").click();
+  await page.waitForTimeout(300);
+  const fxOff = await fxRow();
+  await cur().locator(".bell.lcdfx").click();
+  await page.waitForTimeout(300);
+  const fxOn = await fxRow();
+  check("screen effects here: on by default, off and on again for this browser",
+    fxSeeded.pressed === "false" && !fxSeeded.on && fxDefault.pressed === "true" &&
+    fxOff.pressed === "false" && fxOff.stored === "off" && !fxOff.on &&
+    fxOn.pressed === "true" && fxOn.stored === "on" && fxOn.on,
+    JSON.stringify({ fxSeeded, fxDefault, fxOff, fxOn }));
+  await cur().locator(".status .row", { hasText: "screen effects here" }).scrollIntoViewIfNeeded();
+  await shot("d1-lcd-row");
+  check("the grid is off on the status screen",
+    await cur().locator(".lcd").evaluate((n) => getComputedStyle(n).display) === "none" &&
+    await under(".status", 0.25));
+  await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
+  await page.waitForTimeout(400);
+
+  for (const width of [420, 330]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.waitForTimeout(600);
+    const bad = [];
+    let layout = null;
+    for (const key of worlds) {
+      layout = await inWorld(key);
+      const grid = await card.evaluate((el) => {
+        const s = el._slides[el._index];
+        const lcd = s.screen.querySelector(".lcd");
+        const css = getComputedStyle(lcd);
+        const a = lcd.getBoundingClientRect();
+        const b = s.screen.getBoundingClientRect();
+        return { display: css.display, image: /repeating-linear-gradient/.test(css.backgroundImage),
+          pitch: parseFloat(s.screen.style.getPropertyValue("--lcd-pitch")) * (window.devicePixelRatio || 1),
+          fills: Math.abs(a.width - b.width) < 1 && Math.abs(a.height - b.height) < 1,
+          clipped: getComputedStyle(s.screen).overflow === "hidden" };
+      });
+      await card.evaluate((el) => el._write(el._slides[el._index], "screen effects!", 60000));
+      await page.waitForTimeout(1200);
+      const bubbleOk = await under(".bubble", 0.12);
+      await shot(`d1-lcd-${width}-${key}`);
+      if (grid.display !== "block" || !grid.image || !(grid.pitch >= 3) || !grid.fills || !grid.clipped || !bubbleOk) {
+        bad.push({ key, ...grid, bubbleOk });
+      }
+    }
+    check(`the LCD grid covers the scene on all six shells at ${width} px, under the bubble`,
+      bad.length === 0, JSON.stringify({ layout, bad }));
+    // Under the game too.
+    const picked = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const real = el._state;
+      el._state = function (slide, k) { // rested enough to play
+        const st = real.call(this, slide, k);
+        return k === "sensor.energy" && st ? { ...st, state: "80" } : st;
+      };
+      s.asleep = false;
+      el._startGame(s, s.buttons.play);
+      el._state = real;
+      await new Promise((r) => setTimeout(r, 500));
+      return { picking: !!s.game?.picking, game: s.game, said: s.bubble.textContent };
+    });
+    check(`the LCD grid is under the game picker at ${width} px`,
+      picked.picking && await under(".gpick button", 0.2), JSON.stringify(picked));
+    await shot(`d1-lcd-${width}-game`);
+    await card.evaluate((el) => el._endGame(el._slides[el._index], null));
+    await page.waitForTimeout(300);
+  }
+  // Night, for the screenshots.
+  await card.evaluate((el) => el._slides[el._index].screen.classList.add("night"));
+  await shot("d1-lcd-night");
+  await inWorld(null);
+  await page.setViewportSize({ width: 420, height: 860 });
+  await setLcd(false);
+  await page.waitForTimeout(600);
 
   const editor = await evaluate(async () => {
     const hass = document.querySelector("home-assistant").hass;

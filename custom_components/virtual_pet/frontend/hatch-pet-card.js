@@ -167,6 +167,17 @@ function babble(text, voice) {
   return oscs;
 }
 
+// Screen effects (the LCD grid, ghosting): on unless turned off for this browser.
+const LCD_KEY = "hatch-lcd";
+
+function lcdOn() {
+  try {
+    return localStorage.getItem(LCD_KEY) !== "off";
+  } catch (err) {
+    return true;
+  }
+}
+
 function soundsOn() {
   try {
     return localStorage.getItem(SOUND_KEY) === "on";
@@ -1326,7 +1337,7 @@ const STYLE = `
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
-  .screen.show-status .flash, .screen.show-status .speck,
+  .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd,
   .screen.show-status .bondhearts { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
@@ -1355,6 +1366,16 @@ const STYLE = `
     background: #fff; opacity: 0; }
   .screen.stormy .flash { display: block; animation: lightning 9s linear infinite; }
   @keyframes lightning { 0%, 89%, 92%, 95%, 100% { opacity: 0; } 90% { opacity: .75; } 94% { opacity: .5; } }
+  /* The LCD: a faint dot-matrix grid over the scene, one cell per creature art
+     pixel (see _lcdPitch), under the weather, the bubble, the game and the status. */
+  .lcd { position: absolute; inset: 0; pointer-events: none; display: none;
+    background-color: rgba(255,228,170,.035);
+    background-image:
+      repeating-linear-gradient(0deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px)),
+      repeating-linear-gradient(90deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px));
+    background-position: var(--lcd-x, 0) var(--lcd-y, 0); }
+  ha-card.lcd-on .lcd { display: block; }
+  @media (prefers-contrast: more) { ha-card.lcd-on .lcd { display: none; } }
   /* Idle life. */
   .pet { transition: translate .25s ease-out, rotate .2s ease-out; }
   .pet.look { rotate: y 180deg; }
@@ -1706,6 +1727,7 @@ class HatchPetCard extends HTMLElement {
         </div>
       </ha-card>`;
     this._card = root.querySelector("ha-card");
+    this._card.classList.toggle("lcd-on", lcdOn());
     this._viewport = root.querySelector(".viewport");
     this._track = root.querySelector(".track");
     this._dots = root.querySelector(".dots");
@@ -1784,6 +1806,7 @@ class HatchPetCard extends HTMLElement {
             <div class="rain"></div>
             <div class="flash"></div>
             <div class="breeze"><span></span><span></span><span></span></div>
+            <div class="lcd"></div>
             <img class="attention" alt="wants attention">
             <div class="bubble"></div>
             <div class="sr" role="status"></div>
@@ -1814,6 +1837,10 @@ class HatchPetCard extends HTMLElement {
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
       catchEl: q(".gcatch"), live: q(".sr[role=status]"), seasonBox: q(".season"),
     };
+    // The LCD grid: one cell per creature art pixel, measured on the screen itself
+    // (its width depends on the shell's padding as well as the slide's).
+    s.lcdSize = new ResizeObserver(() => this._lcdPitch(s));
+    s.lcdSize.observe(s.screen);
     slide.querySelectorAll("img").forEach((img) => img.addEventListener("error", () => {
       const src = img.getAttribute("src");
       if (src && !WARNED.has(src)) {
@@ -1990,6 +2017,7 @@ class HatchPetCard extends HTMLElement {
     this._forget(s); // its game, timers, photos and dialog go with it
     s.unsub?.();
     s.unsub = null;
+    s.lcdSize?.disconnect();
     s.el.remove();
   }
 
@@ -2100,6 +2128,24 @@ class HatchPetCard extends HTMLElement {
     }
     for (const s of this._slides) s.el.style.width = `${this._slideW}px`;
     this._renderShelf();
+  }
+
+  // The pet is 62% of the screen high and square, so 46.5% of it wide, and 64 art
+  // pixels across. Where a cell would be under 3 device pixels the grid moirés,
+  // so it takes one cell per 2 × 2 art pixels there. Lines line up with the pet's.
+  _lcdPitch(s) {
+    const w = s.screen.clientWidth;
+    if (!w) return;
+    const dpr = window.devicePixelRatio || 1;
+    let pitch = (w * 0.465) / 64;
+    if (pitch * dpr < 3) pitch = Math.max(3, Math.round(pitch * 2 * dpr)) / dpr; // whole device pixels
+    const line = Math.max(1, Math.round(pitch * dpr * 0.25)) / dpr;
+    const left = w * (0.5 - 0.2325);
+    const top = w * 0.75 * (1 - 0.04 - 0.62);
+    s.screen.style.setProperty("--lcd-pitch", `${pitch}px`);
+    s.screen.style.setProperty("--lcd-line", `${line}px`);
+    s.screen.style.setProperty("--lcd-x", `${left % pitch}px`);
+    s.screen.style.setProperty("--lcd-y", `${top % pitch}px`);
   }
 
   _renderShelf() {
@@ -3501,6 +3547,7 @@ class HatchPetCard extends HTMLElement {
       ${sharedScreen() ? "" : row(null, "my data", forgetButton("forgetme", "forget_me", "forget my data: your birthday, answers and settings for every pet; your bonds stay"))}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       ${s.species?.voice ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`) : ""}
+      ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>
@@ -3556,6 +3603,18 @@ class HatchPetCard extends HTMLElement {
       }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       if (skipped) this._statusMessage(s, skipped);
+    });
+    s.status.querySelector(".bell.lcdfx").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const on = !lcdOn();
+      try {
+        localStorage.setItem(LCD_KEY, on ? "on" : "off");
+      } catch (err) {
+        return; // no storage: the effects stay as they are
+      }
+      this._card.classList.toggle("lcd-on", on);
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
     s.status.querySelector(".bell.bdayphone")?.addEventListener("click", (e) => {
       e.stopPropagation();
