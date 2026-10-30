@@ -271,3 +271,17 @@ reproduces the shipped set at 64). Redraws on top: the bat adult (R7, f9c6c40, `
 moth's cream face mask (bdc85f2) is carried over from the shipped frame. Then `outline.py`, then the marks (the bat
 and moth adult Z and ! moved to where main has them, the opossum adult "!"), then `palette.py`. Head and hat points
 unchanged.
+
+## Woodland on the 128 grid (2026-10-30)
+
+Every character frame of the robin, squirrel, deer, fox and banana slug (487 frames, including the Woodland egg and
+the shipped waves) is re-cut at 2 px per art pixel from the same raw sheets, in the plan's overlay order. No image
+calls; props, backgrounds and species.json unchanged. Base cut: the robin and squirrel with the cutter they shipped
+with (the package `cut.py`; it reproduces both sets at 64), the rest `cut_creature` / `cut_adult`. Redraws on top: the
+deer teen/adult calling and dirty (probes5) and teen sick/dirty (fix7), the fox child sick (fix7), the squirrel teen
+excited R6 redraw, its eat and cheer frames and the shipped waves (fox, squirrel, deer baby) from their react sheets.
+Hand fixes carried from the shipped frames: the deer child's face mask, the squirrel child cheeks/hungry/shiver
+foot removals (the pixels edited on main, moved onto the new cut) and the squirrel baby cozy/sleepy rescale. Then
+`outline.py`, then the marks at main's exact positions (the fox asleep Z, the deer teen/adult "!", the banana slug's
+marks), then `palette.py`. One speck of the squirrel teen_sick_2 tail tip on row 0 was erased. Head and hat points
+unchanged.

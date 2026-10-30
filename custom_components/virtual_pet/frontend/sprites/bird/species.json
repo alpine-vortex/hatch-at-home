@@ -35,5 +35,6 @@
     "child_watch_tv": [112, 104],
     "adult_dirty": [160, 32],
     "adult_hungry": [156, 56]
-  }
+  },
+  "waves": {"baby": ["baby_wave_1", "baby_wave_2"], "teen": ["teen_wave_1", "teen_wave_2"], "adult": ["adult_wave_1", "adult_wave_2"]}
 }
