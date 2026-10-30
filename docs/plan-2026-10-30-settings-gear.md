@@ -98,8 +98,8 @@ first because it is the new thing, and "this screen" last, nearest to `shared sc
   open when the pet has *reached* the stage (`stage_rank >= n`), so adults keep it.
 - **Storage and push (shipped, slice 2):** `PetState.shell_finish: str | None` (None =
   world default), persisted with the pet, type-checked on load (not a string: None; a
-  string this version doesn't know is kept, so a downgrade loses nothing), salvaged
-  from a damaged save. It stays through growing up; a new egg starts on None (Q4), and
+  string this version doesn't know is kept, so a downgrade loses nothing); a salvaged
+  save starts on the default, like a new egg. It stays through growing up; a new egg starts on None (Q4), and
   `lay_egg` drops it from `egg.unknown`. The finish list and the unlocks live on the
   server: `rates.SHELL_FINISHES` (the card's `FINISHES` keys in order; a test checks
   the card's and the bench's copies match) and `rates.SHELL_UNLOCKS` (the six
@@ -155,7 +155,7 @@ Each slice ships alone, ends green on `scripts/test`, and a bench look.
    logged), the `shell_locked` exception string. Tests (`tests/test_shell.py`, plus
    test_model, test_channel's `no_pet` loop and `test_busy_attributes_stay_out_of_history`):
    the card's and bench's finish lists match the server's; round-trip, damaged values,
-   an unknown key kept and shown as None, salvage; unlocks per stage; a new egg on the
+   an unknown key kept and shown as None, salvage on the default; unlocks per stage; a new egg on the
    default; service set/locked/unknown/clear and a reload; a second pet keeps its own;
    ws set/locked/invalid with no `call_service` event and no user on the state change;
    attributes equal across a tick.

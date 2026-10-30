@@ -2879,8 +2879,9 @@ def test_the_shell_finish_survives_a_save_and_bad_values_are_dropped():
     # A finish a later version draws is kept for it (a downgrade loses nothing).
     data["shell_finish"] = "holo"
     assert model.PetState.from_dict(data).to_dict()["shell_finish"] == "holo"
-    data["species"] = 3  # damaged elsewhere: salvage still keeps the shell
-    assert model.PetState.salvage(data, "Pip", at(9)).shell_finish == "holo"
+    # Salvage starts as a new egg's would: on its world's own (no locked shell).
+    data["shell_finish"] = "glitter"
+    assert model.PetState.salvage(data, "Pip", at(9)).shell_finish is None
 
 
 def test_the_show_off_shells_open_at_teen_and_stay_open():

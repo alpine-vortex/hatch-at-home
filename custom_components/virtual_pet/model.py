@@ -576,7 +576,6 @@ class PetState:
         readers: dict[str, Any] = {
             "generation": lambda v: _int(v, 1, 1),
             "species": _opt_str,
-            "shell_finish": _opt_str,
             "raised": _strings,
             "journal": lambda v: [_retired(r) for r in _records(v)],
             "memories": lambda v: _records(v, at=_num, kind=_str),
