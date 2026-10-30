@@ -257,50 +257,58 @@ tap is what unlocks the sound.
   seeds `hatch-booted` in card-check's setup**, or every existing check would start on
   the boot screen; only the new steps clear it.
 
-### 3b. The low-battery face after HA restarts (S server, S card)
+### 3b. The low-battery face after HA restarts (S server, S card): shipped as D5
 
 **Detecting a restart.** The card can't tell a restart from a Wi-Fi blip on its own
-(the websocket reconnects either way). The server knows: `async_load` measures the
-downtime. So:
+(the websocket reconnects either way). The server knows:
 
-- **Server**: in `async_load`, the coordinator notes whether HA itself is starting:
-  `restart = self.hass.state is not CoreState.running` (`CoreState` is already
-  imported and used the same way in `async_start_home`, 487). A restart sets
-  `self._powered_on = {"at": <load time ISO>, "away_minutes": <downtime, rounded>}`;
-  an integration reload (HA already running) keeps none. `_house_view` adds it as
-  `house.powered_on`. It goes out in the snapshot (on subscribe, and to open cards after
-  a reload), shared screens included, and is never in a state attribute, so it leaves
-  no trace in HA's history. Tests: a load with HA starting gives a `powered_on`; a load
-  with HA running (a reload) gives none; `away_minutes` from a stored `last_updated`
-  an hour back is about 60.
+- **Server**: in `async_load`, when a save loaded and caught up normally (not a new
+  egg, a salvage or a catch-up failure) and `self.hass.state is not CoreState.running`
+  (HA itself is starting), the coordinator sets `self._powered_on` to the load time
+  (ISO). `_house_view` adds `house.powered_on = {"at": ...}` only then. An integration
+  reload (HA already running) sets none (Q9; so a pet whose entry is disabled and
+  re-enabled shows nothing, and a reload after a restart drops the key from the next
+  push). It goes out in the snapshot (on subscribe, and to open cards after a reload),
+  shared screens included on purpose (a lobby tablet learns when HA last restarted),
+  and is never in a state attribute or the diagnostics. No `away_minutes` in v1: downtime
+  is frozen, nothing consumes it. Tests: `tests/test_power_on.py`.
 - **Why not a downtime threshold.** `last_updated` moves on the 5-minute tick, so a
   30-second restart can measure anywhere from 0 to 5 minutes, and so can a reload.
-  HA's own state is the reliable signal. `away_minutes` rides along only in case a
-  later line wants it (v1 says nothing about time away). Owner question Q9.
-- **Card**: keeps the last `powered_on.at` it reacted to per pet
-  (`hatch-power-<pet>`). A newer one, on a pet that's awake and on show, plays the gag
-  once; a card that has never seen one just stores it (no gag on first install).
+  HA's own state is the reliable signal.
+- **Card** (`_powerNews`, from the snapshot branch and the `house` push branch of
+  `_channel`): compares `house.powered_on.at` with localStorage `hatch-power-<device>`
+  in one synchronous read-compare-write (so of two slides or tabs on one pet only one
+  gags). A newer one is stored first; a browser with no stored marker only stores
+  (no gag on first install; the boot screen comes first). It then gags only if the
+  server's now minus `at` is under 15 minutes. No `powered_on` means no news and
+  never clears the marker.
+- **Deferral.** `s.powerPending = at`, re-checked each tick by `_powerTick` on the pet
+  on show: waits while asleep, calling, in a game, a scene, a link, the status screen,
+  the boot screen or an egg; dropped 12 hours after `at`. Cleared on slide teardown,
+  pet switch (`_forget`) and `gone`. A call, a game or sleep starting mid-gag aborts it
+  (battery off, unsaid lines dropped).
 
-**The gag (about 4 s).** The screen flickers once (two 80 ms blanks; none under
-reduced motion), a pixel **battery icon** with one bar blinks in the top-left corner,
-and the pet shows its **sleepy** frames with one line, then perks up:
+**The gag (about 4 s).** The screen blanks twice (80 ms each, none under reduced
+motion), a CSS pixel battery (`.batt`: empty frame, one bar, full) blinks one bar in
+the top-left corner, and the pet shows its **sleepy** frames with one line; at 2.2 s
+it perks up with the second line and the battery shows full until about 4.2 s. Under
+reduced motion: no blanks, no blink, a static one-bar battery for the whole gag.
+One line per moment, picked at random:
 
-| Moment | Line (first mate approves) |
+| Moment | Line |
 |---|---|
 | battery blinking | "w-whoa... did someone pull my battery?" / "low batt... ♪ ... oh! we're back" |
 | perking up | "all charged! hi! ♥" / "power's back! ♪" |
 
-Then the battery shows full for a second and goes. No mention of time away, no
-"I was scared", no "you left me": downtime is frozen, nothing happened to the pet.
+No mention of time away, no "I was scared", no "you left me".
 
-- **Not** while asleep (it waits for the next awake look while the stored marker is
-  still newer, at most 12 h; after that it's dropped), not during a call or a game,
-  not on the boot screen (the boot comes first; a fresh browser never sees the gag).
-- **Art.** The battery is a CSS pixel icon or a 3-state sprite (empty, one bar, full)
-  in `ui/`; a tiny ask for the art session if the CSS version looks thin.
-- **Checks**: a stubbed snapshot with a new `powered_on.at`: the battery shows, the line
-  is queued, it's gone by 6 s, and a second snapshot with the same `at` does nothing;
-  asleep defers it; a snapshot with no `powered_on` does nothing.
+- **Checks (shipped)**: `scripts/card-check` 7b at 420 and 330, through
+  `_channel(s, {moments:[], house:{powered_on:{at}}, now})`: first store without a
+  gag; battery, sleepy frame and line; perk-up; gone by 6 s; the same `at` again does
+  nothing; a stale `at` stores but doesn't gag; no `powered_on` leaves the key alone;
+  asleep defers, over 12 h drops; a call mid-gag aborts; two slides, one gag; two
+  flickers; reduced motion. Section 8 asserts the snapshot after a real HA restart
+  carries a new `powered_on`. The bench pins it: `--power battery|line`.
 
 ## The PRs
 
