@@ -1,7 +1,7 @@
 # Decisions taken up front (owner, 2026-10-28)
 
-Answers to the decisions the remaining work was expected to need, so the crew can
-build without stopping. The plans they belong to stay the source of detail; where a
+Answers to the decisions the remaining work was expected to need, so the work can
+go ahead without stopping. The plans they belong to stay the source of detail; where a
 plan's open question is answered here, this file wins.
 
 ## Releases
@@ -24,6 +24,9 @@ plan's open question is answered here, this file wins.
   (their averaging starts from today's discipline and care); no pet drops a grade
   because the rules changed.
 - Snacks are refused when the pet is full, with the existing "I'm full!".
+- Fake-call disguise is accepted as unsure only while happiness is 25-40 (the guide
+  says whines and real pleas "often look alike"). Hours lived before the upbringing
+  rework count at half weight.
 
 ## The pet, games and settings
 - A pat gives one light haptic buzz where supported.
@@ -46,19 +49,6 @@ plan's open question is answered here, this file wins.
 - The discipline bar keeps its label (owner: first mate's recommendation; the guide
   says it's today's).
 
-## How the crew works with the owner
-- The first mate approves all wording, the pet's lines included, in the existing
-  voice and rules (positive or quiet, no guilt or nagging, no ranking, wishes credit
-  nobody) (owner, 2026-10-28, revised the same day). A PR that adds many new pet
-  lines gets a short summary for the owner to skim afterwards; nothing waits on it.
-  Art (probes and look) still goes to the owner.
-- Balance: fake-call disguise accepted as unsure only while happiness is 25-40 (the
-  guide says whines and real pleas "often look alike"); hours lived before the
-  upbringing rework count at half weight. Re-call phone notifications: decided after the several-pet evaluation (bundled, above); the
-  owner asked for an evaluation with several pets before choosing.
-- Audit findings with a clear fix that matches recorded decisions are fixed without
-  asking; only genuinely new design choices go to the owner.
+## Order
 - The remaining personality pieces (P2b idle and mood lines, P3 idle manner, P4
   Assist) build after Wave 2.
-- Push notifications to the owner for: art probes to approve, full releases, and
-  questions that block work.

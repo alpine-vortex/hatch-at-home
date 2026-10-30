@@ -25,7 +25,7 @@ Privacy P1 has since merged (0.35.0, #45); Wave 0 cites main at `8904a0a`.
 
 ## The owner's taste (the rules every phase keeps)
 
-From `docs/HANDOFF.md` ("Start here") and the earlier plans:
+From the earlier plans:
 
 - **Animal Crossing is the touchstone.** Flavour, never gameplay pressure.
 - **Positive or quiet**: never guilt, nagging, ranking people or anxious timers.

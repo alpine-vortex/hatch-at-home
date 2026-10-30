@@ -438,4 +438,4 @@ look good, or wait for Sol's art (the owner's call at the time).
 7. **D's art:** in (Sol's flair sprites, the lit night-owl frame, the decoy bee).
 
 Each release: `scripts/test`, `scripts/card-check` where the card changes,
-screenshots to the owner, and then the release workflow as in the HANDOFF.
+screenshots to the owner, and then the release workflow as in `AGENTS.md`.

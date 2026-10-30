@@ -11,7 +11,7 @@ function names are the stable anchors.
 
 ## The owner's taste (the rules every part keeps)
 
-From `docs/HANDOFF.md`, `docs/decisions-2026-10-28.md` and the earlier plans:
+From `docs/decisions-2026-10-28.md` and the earlier plans:
 
 - **Animal Crossing is the touchstone.** Flavour only: nothing here changes a stat, a
   mood, a trait, a call or a care result, and nothing is counted.

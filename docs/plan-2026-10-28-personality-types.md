@@ -685,7 +685,7 @@ the LLM prompt names the types; the formatted prompt contains no `{`.
 can't advance time, and the dev pets are babies or whatever they drifted to. The
 checks **stub the sensor attributes in-page** (`stage`, `personality`, the journal
 list), as phase 5's checks inject stage and mood; the alternative, editing
-`dev/config/.storage/virtual_pet.0*` with HA stopped (HANDOFF, "Dev pets drift"),
+`dev/config/.storage/virtual_pet.0*` with HA stopped (`AGENTS.md`, "Dev pets drift"),
 is for a manual look only. The reveal can't be checked live (nothing crosses 120 h
 in a check): it is checked with a **synthetic `stage_changed` moment** fed to
 `_moment`.
