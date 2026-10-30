@@ -1688,6 +1688,9 @@ const STYLE = `
     background: var(--art) 0 0 / 100% 100%; -webkit-mask: none; mask: none; }
   .hw.battery { --art: var(--hw-battery); width: calc(var(--px) * 24); height: calc(var(--px) * 12);
     top: round(down, 100% - var(--px) * (var(--hw-b) + 11), var(--px)); left: round(down, 50% + var(--px) * 18.5, var(--px)); }
+  /* No room for the seam where the bottom-corner trim sits on it (a compact card has none),
+     nor beside the curve of the pad, or of a narrow egg. */
+  .device.has-corner .hw.battery, .pad .hw.battery, .compact .egg .hw.battery { display: none; }
   /* Printed stripes across the top of the bezel (the porthole's ring has rivets). */
   .hw.stripes { display: block; --art: var(--hw-stripes); --tint: var(--d-bezel); top: var(--px);
     left: round(18%, var(--px)); width: round(down, 64%, var(--px)); height: calc(var(--px) * 3);
@@ -3230,6 +3233,7 @@ class HatchPetCard extends HTMLElement {
       img.style.visibility = trim.top ? "" : "hidden";
       if (trim.top) this._trim(img, uiSrc(trim.top), topScale);
     });
+    dev.classList.toggle("has-corner", !!trim.corner && !this._card.classList.contains("compact"));
     dev.querySelectorAll(".trim-corner").forEach((img) => {
       img.style.display = trim.corner ? "" : "none";
       if (trim.corner) this._trim(img, uiSrc(trim.corner), 1);
