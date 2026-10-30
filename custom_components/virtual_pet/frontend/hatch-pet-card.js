@@ -6336,6 +6336,21 @@ class HatchPetCard extends HTMLElement {
     return pose in hat ? hat[pose] : hat[s.drawn];
   }
 
+  // Where the hat's brim top sits: {x, top} in sprite pixels, null when the head
+  // can't be measured. A [x, y, "exact"] entry seats it at y with no scan (a point
+  // alone can only push a hat lower, never lift it); a [x, y] entry is the lower
+  // of y and the frames' head top; no entry scans the head point.
+  _hatSeat(s) {
+    const own = this._hatSpot(s);
+    const head = s.species?.head?.[s.drawn];
+    if (Array.isArray(own) && own[2] === "exact") return { x: own[0], top: own[1] };
+    const p = own || head;
+    if (!p) return null;
+    const scanned = this._headTopAll(s, p[0], p[1]);
+    const top = own ? Math.max(own[1], scanned ?? own[1]) : scanned;
+    return top === null ? null : { x: p[0], top };
+  }
+
   // The hat sits on top of the head, brim sunk in a little.
   _costume(s, season, line, catchy = true) {
     const head = s.species?.head?.[s.drawn];
@@ -6349,8 +6364,7 @@ class HatchPetCard extends HTMLElement {
     const k = r.height / 256;
     // With a hat point, the lower of it and the frames' top in its column (another
     // mood's frames can carry the head lower).
-    const scanned = own ? this._headTopAll(s, own[0], own[1]) : this._headTopAll(s, head[0], head[1]);
-    const top = own ? Math.max(own[1], scanned ?? own[1]) : scanned;
+    const top = this._hatSeat(s)?.top ?? null;
     // Today's costume for this pet (the hat, without a list).
     const suits = (season.costumes || []).filter((c) => !c.skip?.includes(s.speciesId));
     const costume = dailyPick(suits.length ? suits : [{ art: "hat", sink: 7, width: 64 }], s.ids?.device);

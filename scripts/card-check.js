@@ -1578,11 +1578,9 @@ async function main() {
     const at = el._flairAnchors(s);
     const sr = s.screen.getBoundingClientRect();
     const r = s.pet.getBoundingClientRect();
-    // The real top of the head in the frame on show (or the species' hat point).
-    const [hx, hy] = el._hatSpot(s) || s.species.head[s.drawn];
-    // The lowest top across the idle frames: on every frame the hat must sit on the head.
-    const scanned = el._headTopAll(s, hx, hy);
-    const top = el._hatSpot(s) ? Math.max(hy, scanned ?? hy) : scanned;
+    // The seat the card itself uses: the lowest top across the idle frames, the hat
+    // point, or an exact point.
+    const top = el._hatSeat(s)?.top ?? null;
     return {
       pieces: [...s.seasonBox.querySelectorAll("img")].map((i) => i.className).join(" ").split(" "),
       hatBottom: hat && hat.bottom - sr.top, headTop: r.top - sr.top + top * (r.height / 256),
@@ -1597,6 +1595,29 @@ async function main() {
       spooky.hatBottom < spooky.fy && spooky.said === "boo!",
     `hat bottom ${Math.round(spooky.hatBottom)} vs head top ${Math.round(spooky.headTop)}`);
   await shot("05-halloween");
+  // An [x, y, "exact"] hat point seats the brim at y itself: no scan, no lowering.
+  // Seat the pose on show at y 60 (far above any head scan would put it).
+  const exact = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    s.sayUntil = 0; s.flairUntil = 0;
+    const pose = (el._frames(s)[0] || "").replace(/_\d+$/, "");
+    const was = s.species.hat;
+    s.species.hat = { ...(was || {}), [pose]: [120, 60, "exact"] };
+    try {
+      const seat = el._hatSeat(s);
+      const costume = el.constructor.seasons.find((x) => x.key === "halloween").costumes[0];
+      el._costume(s, { key: "halloween", costumes: [costume] }, "boo!");
+      await new Promise((r) => setTimeout(r, 400));
+      const hat = s.screen.querySelector(".costume .hat").getBoundingClientRect();
+      const r = s.pet.getBoundingClientRect();
+      const k = r.height / 256;
+      return { seat, brim: hat.bottom, want: r.top + (60 + costume.sink) * k, left: hat.left + hat.width / 2, wantX: r.left + 120 * k };
+    } finally { s.species.hat = was; }
+  });
+  check("an exact hat point seats the brim at y",
+    exact.seat?.top === 60 && exact.seat?.x === 120 && Math.abs(exact.brim - exact.want) < 1.5 &&
+      Math.abs(exact.left - exact.wantX) < 1.5,
+    JSON.stringify(exact));
   // No costume while the pet is off its spot (a wander or a look): the hat
   // would be left hovering where the pet was.
   const movingBlocks = await card.evaluate(async (el) => {
@@ -1652,8 +1673,7 @@ async function main() {
     const [hx, hy] = s.species.hat?.[s.drawn] || s.species.head[s.drawn];
     el._headTopAll(s, hx, hy);
     await new Promise((r) => setTimeout(r, 600));
-    const scanned = el._headTopAll(s, hx, hy);
-    const top = s.species.hat?.[s.drawn] ? Math.max(hy, scanned ?? hy) : scanned;
+    const top = el._hatSeat(s)?.top ?? null;
     const r = s.pet.getBoundingClientRect();
     const sr = s.screen.getBoundingClientRect();
     const headTop = r.top - sr.top + top * (r.height / 256);

@@ -223,6 +223,10 @@ async function runShots(browser, base, shots, outDir, workers) {
         }, inCard);
         await page.screenshot({ path: file, clip });
         shot.file = file;
+        if (shot.costume) {
+          const info = await page.evaluate(() => window.bench.info);
+          fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
+        }
       } catch (err) {
         failures.push(`${shot.name}: ${err.message.split("\n")[0]}`);
         contexts.clear(); // a fresh page for the next shot
