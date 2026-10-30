@@ -209,3 +209,18 @@ the body, despeckles lone light pixels and closes the outline in one dark colour
 Silhouette, palette and effects are unchanged. No image model and no new drawings were
 used. `bowl_food.png` and `play.png` (128 px props) were left alone. A clean redraw is
 planned.
+
+## Terrarium on the 128 grid (2026-10-29, slice 2 pilot)
+
+Per `docs/plan-2026-10-29-sprite-grid-128.md`, every character frame of the leopard gecko, bearded dragon,
+Russian tortoise and ball python (baby, child, teen, adult and the gecko's egg: 374 frames) is re-cut from the
+same raw sheets at 2 px per art pixel. No image calls, no new drawings. Props, backgrounds and species.json are
+unchanged (props stay at 64). The tarantula was already on 2 px and is not re-cut.
+
+Overlay order, as the plan sets it: base cut (`cut.py` gecko mode for the gecko, as its set was first made;
+`cut_creature`/`cut_adult` for the others; the dragon from its v1 sheets, replacing the grain stopgap), then
+the redraws on top (the dragon's baby/child/teen asleep curls, 37ec5c0), then `rescale.py` (gecko baby/child
+sick at 0.83/0.79, as 2598fec), then `outline.py` on the fresh cuts, then the marks last (the crisp Z and !
+of 072d84a, and the gecko teen "!" of bb5a9ff with its call dashes kept), then `palette.py`. Head points and
+hat points are unchanged. The gecko's egg comes out 8 px shorter than the old one (the cutter's egg crop has
+changed since it shipped); same width and look.
