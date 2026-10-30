@@ -4705,6 +4705,10 @@ async function main() {
       const s = el._slides.find((x) => x.species && x.drawn && x.ids?.device &&
         el._eggMinutes(el._state(x, "sensor.life_stage")) === null);
       if (!s) return { noSlide: true };
+      // The real pet may be asleep or calling (the redraw sets both from its sensors): pin them.
+      const pin = { asleep: false, calling: false };
+      const real = { asleep: s.asleep, calling: s.calling };
+      for (const k of Object.keys(pin)) Object.defineProperty(s, k, { configurable: true, get: () => pin[k], set() {} });
       const key = `hatch-power-${s.ids.device}`;
       const iso = (ms) => new Date(Date.now() + ms).toISOString();
       const snap = (at) => el._channel(s, { mine: s.mine, moments: [], house: { media: null, dream: null,
@@ -4713,13 +4717,17 @@ async function main() {
       const reset = () => {
         el._powerEnd(s);
         s.powerPending = null;
-        s.asleep = false;
-        s.calling = false;
+        pin.asleep = pin.calling = false;
         localStorage.removeItem(key);
       };
       // eslint-disable-next-line no-new-func
-      return new Function("el", "s", "key", "iso", "snap", "sleep", "reset", "arg", `return (async () => { ${fn} })()`)(
-        el, s, key, iso, snap, sleep, reset, arg);
+      try {
+        return await new Function("el", "s", "key", "iso", "snap", "sleep", "reset", "pin", "arg", `return (async () => { ${fn} })()`)(
+          el, s, key, iso, snap, sleep, reset, pin, arg);
+      } finally {
+        el._powerEnd(s);
+        for (const k of Object.keys(pin)) Object.defineProperty(s, k, { configurable: true, writable: true, value: real[k] });
+      }
     }, { fn, arg });
     const w = `(${width}px)`;
 
@@ -4775,10 +4783,10 @@ async function main() {
       snap(iso(-3600000));
       const at = iso(-1000);
       snap(at);
-      s.asleep = true;
+      pin.asleep = true;
       el._powerTick(s);
       const asleep = { pending: s.powerPending === at, power: !!s.power };
-      s.asleep = false;
+      pin.asleep = false;
       el._powerTick(s);
       const awake = { pending: s.powerPending, power: !!s.power };
       el._powerEnd(s);
@@ -4797,7 +4805,7 @@ async function main() {
       el._powerTick(s);
       await sleep(400);
       const on = !!s.power && !s.batt.hidden;
-      s.calling = true; // a call starts mid-gag
+      pin.calling = true; // a call starts mid-gag
       el._powerTick(s);
       const aborted = { power: !!s.power, hidden: s.batt.hidden, sayUntil: s.sayUntil };
       await sleep(2600);
