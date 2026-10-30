@@ -20,5 +20,6 @@
     "teen": [118, 68],
     "adult": [152, 88],
     "adult_dirty": [134, 52]
-  }
+  },
+  "waves": {"baby": ["baby_wave_1", "baby_wave_2"], "teen": ["teen_wave_1", "teen_wave_2"], "adult": ["adult_wave_1", "adult_wave_2"]}
 }
