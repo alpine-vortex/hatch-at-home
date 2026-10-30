@@ -285,3 +285,14 @@ foot removals (the pixels edited on main, moved onto the new cut) and the squirr
 `outline.py`, then the marks at main's exact positions (the fox asleep Z, the deer teen/adult "!", the banana slug's
 marks), then `palette.py`. One speck of the squirrel teen_sick_2 tail tip on row 0 was erased. Head and hat points
 unchanged.
+
+## Closed feet at 128 (2026-10-30, tier-2 audit)
+
+The audit found open bottoms in a few 128 frames. Two causes, no image calls:
+- Kitten teen content/excited and child sleepy: the paws hang past the sheet's row line, and the cutter's 2 px
+  grid-line split dropped them as neighbour slivers, so the cut ended flat mid-leg. Re-cut with the paws rejoined
+  (the cutter's opt-in `CELLS_REJOIN`): their tops now match the 64 frames again.
+- Kitten adult and corgi teen waves, hamster teen content, gecko egg idle/wiggle: at 128 the light paw or shell fill
+  wins the bottom art pixel where the sheet's thin dark line won it at 64, and `outline.py` leaves the feet line alone.
+  The bottom art pixel of each light column now takes the frame's outline colour (`close_bottom.py`).
+Then `outline.py` and `palette.py`.
