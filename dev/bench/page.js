@@ -86,6 +86,26 @@
     }
   }
 
+  // The infrared link greeting, caught as the visit screen opens (reduced motion:
+  // no beam, so it opens at once). `link.waves` is put on both species as a fake
+  // species.json "waves" key; leave it out for a species without any.
+  async function linkGreeting(card, link) {
+    const [host, guest] = card._slides;
+    if (link.waves) for (const s of [host, guest]) s.species = { ...s.species, waves: link.waves };
+    const mm = window.matchMedia.bind(window);
+    window.matchMedia = (q) => (String(q).includes("reduced-motion") ? { matches: true, addListener() {}, addEventListener() {} } : mm(q));
+    card._linkStart(host, guest);
+    window.matchMedia = mm;
+    for (const t = Date.now() + 3000; !(host.linkFrames && card._link?.img?.getAttribute("src")) && Date.now() < t;) await new Promise((r) => setTimeout(r, 25));
+    // Past the sprite check (150 ms), before the guest's first swap (700 ms), unless
+    // `link.wait` waits for it: a wave that fails to load is dropped at that swap.
+    await new Promise((r) => setTimeout(r, link.wait ?? 150));
+    card._show(host, host.pet, host.linkFrames[0]);
+    await settled(card);
+    // The guest steps in and the host shifts over: bring both to rest.
+    for (const a of card.shadowRoot.getAnimations()) if (a.effect.getComputedTiming().iterations !== Infinity) a.finish();
+  }
+
   async function mount(shot) {
     await customElements.whenDefined("hatch-pet-card");
     const stage = document.getElementById("stage");
@@ -121,6 +141,7 @@
     const cur = slides[card._index];
     if (shot.say !== undefined) card._write(cur, shot.say, 1e9);
     const root = card.shadowRoot;
+    if (shot.link) await linkGreeting(card, shot.link);
     if (shot.view === "status") root.querySelector(".statusbtn").click();
     if (shot.view === "games") card._startGame(cur, cur.buttons.play); // the button itself can be disabled
     // Date is pinned, so a line would never finish typing: write each whole.
