@@ -3506,6 +3506,31 @@ class HatchPetCard extends HTMLElement {
     img.style.display = "";
   }
 
+  // The finish the shell wears: the world's own (worlds.json shell.finish).
+  _shellKey(s) {
+    return s.world.shell?.finish;
+  }
+
+  // Put a finish on the shell: its class and the ink for its captions. Called by
+  // _renderSlide and by the picker's preview; touches nothing else on the device.
+  _dress(s, key) {
+    const dev = s.device;
+    const color = s.world.shell?.color || "#e8834a";
+    const known = Object.hasOwn(FINISHES, key);
+    const look = known ? FINISHES[key] : {};
+    for (const c of [...dev.classList]) if (c.startsWith("finish-")) dev.classList.remove(c);
+    if (known) dev.classList.add(`finish-${key}`);
+    // The captions are inked for the plastic under them; see-through plastic shows the
+    // backdrop, so they are inked for the mix.
+    const face = look.face ? look.face(color) : color;
+    dev.style.setProperty("--d-face", face);
+    const seen = look.seen && /^#[0-9a-f]{6}$/i.test(s.world.backdrop || "")
+      ? mixHex(look.seen(color), s.world.backdrop, look.see) : look.seen ? look.seen(color) : face;
+    dev.style.setProperty("--d-ink", look.ink || deviceInk(seen));
+    if (look.top) dev.style.setProperty("--d-ink-top", deviceInk(look.top(color))); // a label on another colour
+    else dev.style.removeProperty("--d-ink-top");
+  }
+
   _renderSlide(s) {
     const sp = s.species;
     const world = s.world;
@@ -3513,9 +3538,7 @@ class HatchPetCard extends HTMLElement {
     const color = shell.color || "#e8834a";
     const dev = s.device;
     const shape = ["tank", "house", "porthole", "pad", "moon"].includes(shell.shape) ? shell.shape : "egg";
-    const look = Object.hasOwn(FINISHES, shell.finish) ? FINISHES[shell.finish] : {};
-    const finish = Object.hasOwn(FINISHES, shell.finish) ? `finish-${shell.finish}` : "";
-    dev.className = `device ${shape}${finish ? ` ${finish}` : ""}`;
+    dev.className = `device ${shape}`;
     s.shape = shape;
     dev.querySelector(".roof").style.display = shape === "house" ? "" : "none";
     dev.querySelector(".crescent").style.display = shape === "moon" ? "" : "none";
@@ -3532,14 +3555,7 @@ class HatchPetCard extends HTMLElement {
     }
     dev.style.setProperty("--d-shell", color);
     dev.style.setProperty("--d-dark", shade(color, 0.72));
-    // The captions are inked for the plastic under them; see-through plastic shows the
-    // backdrop, so they are inked for the mix.
-    const face = look.face ? look.face(color) : color;
-    dev.style.setProperty("--d-face", face);
-    const seen = look.seen && /^#[0-9a-f]{6}$/i.test(world.backdrop || "")
-      ? mixHex(look.seen(color), world.backdrop, look.see) : look.seen ? look.seen(color) : face;
-    dev.style.setProperty("--d-ink", look.ink || deviceInk(seen));
-    if (look.top) dev.style.setProperty("--d-ink-top", deviceInk(look.top(color))); // a label on another colour
+    this._dress(s, this._shellKey(s));
     dev.style.setProperty("--d-btn-shadow", shade(color, 0.6));
     dev.style.setProperty("--d-bezel", shell.bezel || "#f3ead7");
     s.label.textContent = world.label || world.name;
