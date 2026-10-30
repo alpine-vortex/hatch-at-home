@@ -5,6 +5,11 @@
 
 const VERSION = "0.36.0b1";
 const BASE = "/virtual_pet/frontend";
+// The world's grid: cells across the pet's box (46.5% of the screen's width).
+// The shell (--px), the LCD and the link beam are cut on it, and the props, UI
+// and hats are drawn on it (4 frame px a cell). It is not the creatures' grid:
+// they are on 64 or 128 (2 frame px a cell), whichever their frames are cut on.
+const WORLD_GRID = 64;
 
 // Outline icons for the shelf's own arrows; everything on a device is pixel art.
 const ICON_PATHS = {
@@ -969,10 +974,10 @@ function deviceInk(hex) {
 
 // --- The moulded shell -------------------------------------------------------
 // Every part of a shell (body, bezel, lid, feet, loop, roof, crescent, the caps) is
-// cut on the creature's on-screen pixel grid: --px CSS px a cell, a whole number of
-// device pixels. mouldCells sorts a part's cells into tones; the part gets a
-// clip-path for its stepped outline and an SVG of see-through light and shade over
-// its plastic. The plastic itself (the world's colour, or a finish) stays CSS, so
+// cut on the world's on-screen pixel grid (WORLD_GRID): --px CSS px a cell, a
+// whole number of device pixels. mouldCells sorts a part's cells into tones; the
+// part gets a clip-path for its stepped outline and an SVG of see-through light
+// and shade over its plastic. The plastic itself (the world's colour, or a finish) stays CSS, so
 // any shell colour works.
 const TONE = { plain: 1, line: 2, lit: 3, glint: 4, shade: 5, dither: 6, deep: 7, seam: 8, side: 9 };
 const TONE_PAINT = [
@@ -1705,8 +1710,8 @@ const STYLE = `
     background: #fff; opacity: 0; }
   .screen.stormy .flash { display: block; animation: lightning 9s linear infinite; }
   @keyframes lightning { 0%, 89%, 92%, 95%, 100% { opacity: 0; } 90% { opacity: .75; } 94% { opacity: .5; } }
-  /* The LCD: a faint dot-matrix grid over the scene, one cell per creature art
-     pixel (see _lcdPitch), under the weather, the bubble, the game and the status. */
+  /* The LCD: a faint dot-matrix grid over the scene, one cell per world art pixel
+     (WORLD_GRID, see _lcdPitch), under the weather, the bubble, the game and the status. */
   .lcd { position: absolute; inset: 0; pointer-events: none; display: none;
     background-color: rgba(255,228,170,.035);
     background-image:
@@ -1865,7 +1870,7 @@ const STYLE = `
   .pet.wander-r { translate: 16% 0; transition-duration: .9s; }
   /* The infrared link (_linkStart): the beam runs over the track between the two
      devices' top edges, where the backlight buttons sit, so it takes no taps. One
-     art pixel is --u; the sprites are 32 art pixels square. */
+     world art pixel is --u; the sprites are 32 of them square. */
   .irbeam { position: absolute; pointer-events: none; z-index: 6; }
   .irbeam img { position: absolute; image-rendering: pixelated; pointer-events: none;
     width: calc(var(--u) * 32); height: calc(var(--u) * 32); }
@@ -2603,7 +2608,7 @@ class HatchPetCard extends HTMLElement {
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
       catchEl: q(".gcatch"), live: q(".sr[role=status]"), seasonBox: q(".season"),
     };
-    // The LCD grid: one cell per creature art pixel, measured on the screen itself
+    // The LCD grid: one cell per world art pixel, measured on the screen itself
     // (its width depends on the shell's padding as well as the slide's).
     s.lcdSize = new ResizeObserver(() => this._lcdPitch(s));
     s.lcdSize.observe(s.screen);
@@ -3011,14 +3016,15 @@ class HatchPetCard extends HTMLElement {
     this._renderShelf();
   }
 
-  // The pet is 62% of the screen high and square, so 46.5% of it wide, and 64 art
-  // pixels across. Where a cell would be under 3 device pixels the grid moirés,
-  // so it takes one cell per 2 × 2 art pixels there. Lines line up with the pet's.
+  // The pet is 62% of the screen high and square, so 46.5% of it wide, and
+  // WORLD_GRID cells across: one per art pixel of a creature on the 64 grid, one
+  // per 2 × 2 on the 128 grid. Where a cell would be under 3 device pixels the
+  // grid moirés, so it doubles there. Lines line up with the pet's box.
   _lcdPitch(s) {
     const w = s.screen.clientWidth;
     if (!w) return;
     const dpr = window.devicePixelRatio || 1;
-    let pitch = (w * 0.465) / 64;
+    let pitch = (w * 0.465) / WORLD_GRID;
     if (pitch * dpr < 3) pitch = Math.max(3, Math.round(pitch * 2 * dpr)) / dpr; // whole device pixels
     const line = Math.max(1, Math.round(pitch * dpr * 0.25)) / dpr;
     const left = w * (0.5 - 0.2325);
@@ -3027,8 +3033,8 @@ class HatchPetCard extends HTMLElement {
     s.screen.style.setProperty("--lcd-line", `${line}px`);
     s.screen.style.setProperty("--lcd-x", `${left % pitch}px`);
     s.screen.style.setProperty("--lcd-y", `${top % pitch}px`);
-    // The shell's grid: one cell per art pixel too, but always whole device pixels.
-    const px = Math.max(1, Math.round(((w * 0.465) / 64) * dpr)) / dpr;
+    // The shell's grid: the same world grid, but always whole device pixels.
+    const px = Math.max(1, Math.round(((w * 0.465) / WORLD_GRID) * dpr)) / dpr;
     if (px !== s.px) {
       s.px = px;
       s.device.style.setProperty("--px", `${px}px`);
@@ -5535,8 +5541,9 @@ class HatchPetCard extends HTMLElement {
     return [`${st}_${act}_1`, `${st}_${act}_2`];
   }
 
-  // Scene art on the creatures' grid: its PNG is 4 screen px per art px, and an
-  // art px is 1/64 of the pet's 62% of the screen's height.
+  // Scene art (props) on the world's grid: its PNG is 4 frame px per art px, and
+  // an art px is 1/64 of the pet's 62% of the screen's height. That is the
+  // pet's frame scale (256 frame px), whichever grid the creature is drawn on.
   _sceneArt(s, img, sprite) {
     const src = spriteSrc(s.speciesId, sprite);
     if (img.getAttribute("src") === src) return;
@@ -6348,14 +6355,14 @@ class HatchPetCard extends HTMLElement {
   }
 
   // The beam: a red head with ripples flies along the tops of the devices, a
-  // dotted trail behind it, and a burst where it arrives. Pixel-stepped, in art
-  // pixels of the pets' scale (a screen is 64 of them across the pet's 46.5%).
+  // dotted trail behind it, and a burst where it arrives. Pixel-stepped, in world
+  // art pixels (WORLD_GRID of them across the pet's 46.5% of the screen).
   _linkBeam(host, guest, toRight) {
     const L = this._link;
     const track = this._track.getBoundingClientRect();
     const a = host.device.getBoundingClientRect();
     const b = guest.device.getBoundingClientRect();
-    const u = Math.max(1, Math.round(host.screen.clientWidth * 0.00727 * 4) / 4);
+    const u = Math.max(1, Math.round(((host.screen.clientWidth * 0.465) / WORLD_GRID) * 4) / 4);
     const x0 = a.left + a.width / 2 - track.left;
     const x1 = b.left + b.width / 2 - track.left;
     const dist = x1 - x0;

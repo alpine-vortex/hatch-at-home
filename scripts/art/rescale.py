@@ -1,4 +1,4 @@
-"""Shrink a frame drawn too big for its stage, on the 4 px art grid.
+"""Shrink a frame drawn too big for its stage, on its own art grid (grid.py).
 
 Usage: rescale.py <sprite folder> <name>=<factor> ...   (rewrites in place)
 Scales about the middle of the sprite with the feet fixed on their line, so the
@@ -10,10 +10,9 @@ too small goes back to the artist instead.
 import os
 import sys
 
+from grid import coarsest
 import numpy as np
 from PIL import Image
-
-G = 4
 
 
 def rescale(a: np.ndarray, f: float) -> np.ndarray:
@@ -36,5 +35,9 @@ for arg in sys.argv[2:]:
     if float(f) > 1:
         sys.exit(f"{name}: only shrinking is supported")
     p = os.path.join(folder, name + ".png")
-    a = np.array(Image.open(p).convert("RGBA"))[::G, ::G]
-    Image.fromarray(rescale(a, float(f)).repeat(G, 0).repeat(G, 1)).save(p)
+    full = np.array(Image.open(p).convert("RGBA"))
+    g = coarsest(full)
+    if g == 1:
+        sys.exit(f"{name}: not on a 2 or 4 px art grid")
+    a = full[::g, ::g]
+    Image.fromarray(rescale(a, float(f)).repeat(g, 0).repeat(g, 1)).save(p)

@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
+from collections import Counter
+import importlib.util
 import json
 from pathlib import Path
 import re
 
+import numpy as np
 from PIL import Image
 import pytest
 
-SPRITES = (
-    Path(__file__).parent.parent / "custom_components/virtual_pet/frontend/sprites"
-)
+ROOT = Path(__file__).parent.parent
+SPRITES = ROOT / "custom_components/virtual_pet/frontend/sprites"
+_spec = importlib.util.spec_from_file_location("grid", ROOT / "scripts/art/grid.py")
+grid = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(grid)
+CHARACTER = ("baby_", "child_", "teen_", "adult_", "egg_")
 WORLDS = json.loads((SPRITES.parent / "worlds.json").read_text())
 READY = sorted(
     p.parent.name
@@ -96,9 +102,59 @@ def test_every_stage_has_a_head_point_on_the_creature(species: str) -> None:
         # Something of the pet within a few art pixels below the point.
         assert any(
             alpha.getpixel((min(255, max(0, x + dx)), y + dy)) > 40
-            for dx in range(-24, 25, 4)
-            for dy in range(0, 33, 4)
+            for dx in range(-24, 25, 2)
+            for dy in range(0, 33, 2)
         ), f"{species} {stage} {x},{y} isn't on the creature"
+
+
+def grid_problems(frames: dict[str, Image.Image]) -> list[str]:
+    """What breaks one species' grid rule; [] when its frames pass.
+
+    Every creature frame is 256 x 256, and every one is coarsest on 4 px (the 64
+    art-pixel grid) or every one on 2 px (the 128 grid): a species is never half
+    migrated. Coarsest, because a 4 px frame also fits 2 px.
+    """
+    out = [f"{n} is {im.size}" for n, im in frames.items() if im.size != (256, 256)]
+    grids = {n: grid.coarsest(im) for n, im in frames.items()}
+    main = Counter(grids.values()).most_common(1)[0][0] if grids else None
+    if main not in (4, 2):
+        main = None
+    out += [
+        f"{n} on {g} px, species on {main} px" for n, g in grids.items() if g != main
+    ]
+    return out
+
+
+@pytest.mark.parametrize("species", READY)
+def test_every_creature_frame_is_on_the_species_art_grid(species: str) -> None:
+    """Stage moods, _2 frames, extras, waves, care scenes and eggs alike."""
+    frames = {
+        p.stem: Image.open(p)
+        for p in sorted((SPRITES / species).glob("*.png"))
+        if p.name.startswith(CHARACTER)
+    }
+    assert frames
+    assert grid_problems(frames) == []
+
+
+def test_the_grid_rule_fails_a_64_frame_in_a_128_species() -> None:
+    """The gate can fail: one leftover 4 px frame among 2 px ones."""
+    rng = np.random.default_rng(0)
+
+    def noise(px: int) -> Image.Image:
+        cells = rng.integers(0, 256, (256 // px, 256 // px, 4), np.uint8)
+        cells[..., 3] = 255
+        return Image.fromarray(cells.repeat(px, 0).repeat(px, 1), "RGBA")
+
+    frames = {f"adult_content_{i}": noise(2) for i in (1, 2)}
+    frames["egg_idle_1"] = noise(2)
+    assert grid_problems(frames) == []
+    frames["adult_content_2"] = noise(4)
+    assert grid_problems(frames) == ["adult_content_2 on 4 px, species on 2 px"]
+    frames["adult_content_2"] = noise(2).crop((0, 0, 128, 128))
+    assert grid_problems(frames) == ["adult_content_2 is (128, 128)"]
+    frames["adult_content_2"] = noise(1)
+    assert grid_problems(frames) == ["adult_content_2 on 1 px, species on 2 px"]
 
 
 def test_every_trait_has_flair_art() -> None:

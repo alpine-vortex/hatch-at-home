@@ -5,10 +5,12 @@ Usage: outline.py <species folder> [...]
 Some generated creatures come out with gaps in their outline, mostly along
 cream feet, chests and tail tips, so on a phone the silhouette blurs into the
 scene. For every stage sprite ({baby,child,teen,adult}_*.png) this adds one art
-pixel (4 px) of the sprite's own outline colour just outside each light edge
-pixel. Edges that are already dark are left alone, so nothing gets a doubled
-outline. Small detached marks (sparkles, 'z', '!') are skipped, and nothing is
-added below the feet line (y=224). Props and backgrounds aren't touched.
+pixel of the sprite's own outline colour just outside each light edge pixel. The
+art pixel is measured per file (4 px on the 64 grid, 2 px on the 128 grid, see
+grid.py); a frame on neither is skipped with a warning. Edges that are already
+dark are left alone, so nothing gets a doubled outline. Small detached marks
+(sparkles, 'z', '!') are skipped, and nothing is added below the feet line
+(y=224). Props and backgrounds aren't touched.
 
 Running it again changes nothing. Prints how many art pixels it added per file.
 """
@@ -17,12 +19,13 @@ from collections import Counter
 from pathlib import Path
 import sys
 
+from grid import coarsest
 import numpy as np
 from PIL import Image
 
-GRID = 4  # art pixel size in the 256 px frame
-BASE = 224 // GRID  # feet line, in art pixels
-MIN_PART = 25  # art pixels; smaller detached bits are effects, not body
+FEET = 224  # feet line, in frame px
+MIN_PART = 25  # art pixels on the 4 px grid (scaled by area on finer grids);
+# smaller detached bits are effects, not body
 DARK = 200  # r+g+b below this counts as outline
 STAGES = ("baby_", "child_", "teen_", "adult_")
 
@@ -55,14 +58,15 @@ def parts(mask):
     return lab, sizes
 
 
-def outline(im):
-    """Return (new image, art pixels added)."""
+def outline(im, grid):
+    """Return (new image, art pixels added), working on art pixels of grid px."""
     full = np.array(im.convert("RGBA"))
-    art = full[::GRID, ::GRID].copy()
+    art = full[::grid, ::grid].copy()
     solid = art[:, :, 3] > 40
     lum = art[:, :, :3].astype(int).sum(2)
     lab, sizes = parts(solid)
-    body = np.isin(lab, [i for i, z in enumerate(sizes) if i and z >= MIN_PART])
+    min_part = MIN_PART * (4 // grid) ** 2
+    body = np.isin(lab, [i for i, z in enumerate(sizes) if i and z >= min_part])
     pad = np.pad(body, 1)
     edge = body & ~(pad[:-2, 1:-1] & pad[2:, 1:-1] & pad[1:-1, :-2] & pad[1:-1, 2:])
     inks = Counter(tuple(art[y, x, :3]) for y, x in zip(*np.nonzero(edge & (lum < DARK))))
@@ -81,10 +85,10 @@ def outline(im):
         for dx in (0, 1, 2):
             near_fx |= fx[dy:dy + solid.shape[0], dx:dx + solid.shape[1]]
     ring &= ~near_fx
-    ring[BASE:, :] = False
+    ring[FEET // grid:, :] = False
     if not ring.any():
         return im, 0
-    big = np.kron(ring, np.ones((GRID, GRID), bool))
+    big = np.kron(ring, np.ones((grid, grid), bool))
     full[big, :3] = ink
     full[big, 3] = 255
     return Image.fromarray(full, "RGBA"), int(ring.sum())
@@ -99,7 +103,11 @@ def main(folders):
             im = Image.open(path)
             if im.size != (256, 256):
                 continue
-            new, added = outline(im)
+            grid = coarsest(im)
+            if grid == 1:
+                print(f"{path}: not on a 2 or 4 px art grid, skipped")
+                continue
+            new, added = outline(im, grid)
             if added:
                 new.save(path)
                 total += added

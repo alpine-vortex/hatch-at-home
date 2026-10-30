@@ -2,7 +2,9 @@
 
 Usage: check.py <new sprite folder> [<current folder, to show NEW/CHANGED>]
 Flags wrong sizes, feet off y=224, sprites touching the top, and mood frame
-pairs whose size jumps more than 8 px (a pulse unless the pose moves).
+pairs whose size jumps more than 8 px (a pulse unless the pose moves). Reports
+the art grid (grid.py) of the creature frames, and flags a frame whose grid isn't
+the species' (the grid most of them are on): a half-migrated species.
 """
 
 import collections
@@ -10,6 +12,7 @@ import os
 import re
 import sys
 
+from grid import coarsest
 import numpy as np
 from PIL import Image
 
@@ -22,6 +25,16 @@ def bbox(p):
     ys, xs = np.nonzero(a > 16)
     return (xs.min(), ys.min(), xs.max(), ys.max()) if len(xs) else None
 
+
+CHARACTER = ("baby_", "child_", "teen_", "adult_", "egg_")
+grids = {
+    f: coarsest(Image.open(os.path.join(new, f)))
+    for f in sorted(os.listdir(new))
+    if f.endswith(".png") and f.startswith(CHARACTER)
+}
+counts = collections.Counter(grids.values())
+species_grid = counts.most_common(1)[0][0] if counts else None
+print("-- art grid of the creature frames:", dict(sorted(counts.items(), reverse=True)))
 
 groups = collections.defaultdict(dict)
 for f in sorted(os.listdir(new)):
@@ -41,7 +54,9 @@ for f in sorted(os.listdir(new)):
         exp = (256, 256)
         if im.size not in [(256, 256), (128, 128)]:
             note.append(f"SIZE {im.size}")
-        is_character = f.startswith(("baby_", "child_", "teen_", "adult_", "egg_"))
+        is_character = f.startswith(CHARACTER)
+        if is_character and grids[f] != species_grid:
+            note.append(f"GRID {grids[f]} px (species {species_grid} px)")
         if (
             is_character
             and im.size == (256, 256)
