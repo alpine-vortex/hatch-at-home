@@ -247,3 +247,27 @@ adult (0e7fd39, with the Z of 2bc5b7f), the duckling's audit redraws (37ec5c0), 
 The tree frog's hand-painted cream face mask (bdc85f2) is carried over from the shipped frame onto the new cut.
 Then `outline.py`, then the marks (the crisp Z on the pond turtle baby/child asleep, 072d84a, and the duckling
 adult asleep), then `palette.py`. Head and hat points unchanged.
+
+## Tidepool on the 128 grid (2026-10-30)
+
+Every character frame of the sea otter, giant Pacific octopus, harbor seal, hermit crab and tufted puffin
+(464 frames, including the otter's Tidepool egg and the hermit crab's claw wave) is re-cut at 2 px per art pixel
+from the same raw sheets, in the plan's overlay order. No image calls; props, backgrounds and species.json
+unchanged. Base cut `cut_creature` / `cut_adult` (each reproduces the shipped set at 64). Redraws on top: the hermit
+crab baby sick (37ec5c0), the Tidepool egg from its kit sheet. The octopus recolours of bb5a9ff (baby content and
+excited in the pale salmon of its other baby moods, `child_colour_shift_2` blue-violet) are carried over from the
+shipped frames colour by colour. The octopus's old slivers (erased by hand at 64) don't come back: `slivers.py`
+finds none. Then `outline.py`, then the marks (the crisp Z and ! on every seal stage and the puffin baby, 072d84a),
+then `palette.py`. Head and hat points unchanged.
+
+## Night Sky on the 128 grid (2026-10-30)
+
+Every character frame of the bat, luna moth, saw-whet owl, firefly and opossum (464 frames, including the bat's
+Night Sky egg and its waves) is re-cut at 2 px per art pixel from the same raw sheets, in the plan's overlay order.
+No image calls; props, backgrounds and species.json unchanged. Base cut `cut_creature` / `cut_adult` (each
+reproduces the shipped set at 64). Redraws on top: the bat adult (R7, f9c6c40, `cut_bat7.py`), the luna moth adult
+(03e1e83, redraw5 at the scale that reproduces it), the opossum teen sick and four-legged adult calling/dirty
+(37ec5c0, e570173), the bat's waves from their react sheets (ddeb07e), the Night Sky egg from its kit sheet. The luna
+moth's cream face mask (bdc85f2) is carried over from the shipped frame. Then `outline.py`, then the marks (the bat
+and moth adult Z and ! moved to where main has them, the opossum adult "!"), then `palette.py`. Head and hat points
+unchanged.
