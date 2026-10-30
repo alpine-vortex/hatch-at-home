@@ -148,6 +148,8 @@ Each slice ships alone, ends green on `scripts/test`, and a bench look.
      to the gear. The gear, the back row and the headings `stopPropagation`.
    - Sections: `for you` (absent on a shared screen, heading too) and `this screen`,
      dotted headings, upper-cased by CSS. No FOR <PET> heading until slice 3.
+   - New strings awaiting the first mate's sign-off (review #15): gear aria-label
+     `settings`, back row `‹ settings`, headings `for you` and `this screen`.
    - Card-check: every moved check opens the sheet (`s.settings=true` or a gear
      click) and resets it after; each negative is paired with a positive in the same
      view; the cross-tab look checks personal rows in whichever view is up. New: gear

@@ -4815,8 +4815,9 @@ class HatchPetCard extends HTMLElement {
       s.status.scrollTop = 0; // a new view starts at its top
       s.status.querySelector(".gear")?.focus({ preventScroll: true });
     });
-    // A heading is not a button: a tap on it leaves the sheet open.
-    s.status.querySelectorAll(".sec").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
+    // A heading (or the back row beside its button) is not a button: a tap on it
+    // leaves the sheet open.
+    s.status.querySelectorAll(".sec, .shead").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
     s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);

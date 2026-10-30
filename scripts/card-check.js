@@ -275,7 +275,10 @@ async function main() {
   // A heading is not a button: tapping it leaves the sheet up.
   await cur().locator(".status .sec").first().click();
   await page.waitForTimeout(300);
-  check("tapping a heading leaves the sheet open",
+  const headBox = await cur().locator(".status .shead").boundingBox();
+  await page.mouse.click(headBox.x + headBox.width - 6, headBox.y + headBox.height / 2); // beside the back row
+  await page.waitForTimeout(300);
+  check("tapping a heading or the back row's empty end leaves the sheet open",
     await cur().locator(".screen.show-status .sback").count() === 1);
   // Sounds start off and turn on for this browser only.
   const sound = cur().locator(".bell.sound");
@@ -447,6 +450,10 @@ async function main() {
   await page.waitForTimeout(800);
   // A shared screen shows nothing personal: no bond row, no "my day", no visit,
   // a greeting without a name.
+  const PERSONAL_BELLS = [".bell.notify", ".bell.myday", ".bell.babytalk", ".bell.forgetme", ".bell.forgetbday", ".bell.bdayphone"]
+    .map((q) => `.status ${q}`).join(", ");
+  const personalSheet = await cur().evaluate((sl) => !!sl.querySelector(".status .bell.notify") &&
+    !!sl.querySelector(".status .bell.myday"));
   await cur().locator(".bell.shared").click();
   await page.waitForTimeout(400);
   const sharedView = await page.locator("hatch-pet-card").evaluate((el) => {
@@ -474,8 +481,12 @@ async function main() {
       bondRow: /you two/.test(status) || /my day/.test(sheet) };
   });
   // The sheet still works with it on (no "notify me" row to wire up).
-  const sharedStatus = await cur().evaluate((sl) => sl.querySelector(".screen").classList.contains("show-status") &&
-    !!sl.querySelector(".sback") && !!sl.querySelector(".bell.shared") && !/notify me/.test(sl.querySelector(".status").innerText));
+  const sharedSheet = await cur().evaluate((sl, q) => ({ open: sl.querySelector(".screen").classList.contains("show-status"),
+    sheet: !!sl.querySelector(".sback"), shared: !!sl.querySelector(".bell.shared"),
+    personal: [...sl.querySelectorAll(q)].map((b) => b.className) }), PERSONAL_BELLS);
+  const sharedStatus = sharedSheet.open && sharedSheet.sheet && sharedSheet.shared;
+  check("the settings sheet on a shared screen keeps this screen's rows and has none of the viewer's switches",
+    personalSheet && sharedStatus && sharedSheet.personal.length === 0, JSON.stringify({ personalSheet, ...sharedSheet }));
   await cur().locator(".bell.shared").click(); // personal again
   await page.waitForTimeout(400);
   // On a shared screen the bond's moments say nothing personal either, and an
