@@ -39,5 +39,6 @@
     "child_watch_tv": [116, 132],
     "teen": [166, 112],
     "adult": [204, 140]
-  }
+  },
+  "waves": {"baby": ["baby_wave_1", "baby_wave_2"], "teen": ["teen_wave_1", "teen_wave_2"], "adult": ["adult_wave_1", "adult_wave_2"]}
 }
