@@ -6,13 +6,22 @@
 // Needs Playwright with Chromium (preinstalled in the cloud sessions).
 //
 // Environment: HA_URL (default http://localhost:8123); SCALE=2 for sharp
-// screenshots (the README art uses them).
+// screenshots (the README art uses them). HA_CONFIG and HA_START: the
+// instance's config dir and the command that starts it, for the restart and
+// the seeded second login (section 8). Without HA_URL they default to
+// dev/config and scripts/develop: card-check stops your dev HA there and
+// starts it again in the background (its log: dev/card-check/ha-restart.log).
+// With HA_URL and without them, section 8 fails rather than skip.
 
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
 
 const HA = process.env.HA_URL || "http://localhost:8123";
+if (!process.env.HA_URL && !process.env.HA_CONFIG && !process.env.HA_START) {
+  process.env.HA_CONFIG = path.join(__dirname, "..", "dev", "config");
+  process.env.HA_START = `exec ${JSON.stringify(path.join(__dirname, "develop"))}`;
+}
 const CLIENT = `${HA}/`;
 const USER = { username: "dev", password: "devdevdev", name: "Dev" };
 const OUT = path.join(__dirname, "..", "dev", "card-check");
@@ -319,10 +328,15 @@ async function main() {
   check("greets the viewer by first name", greeting.includes(USER.name), greeting);
   await shot("04a-greeting");
 
-  // The bond: looking in starts one for the viewer (virtual_pet.visit).
+  // The bond: looking in starts one for the viewer (virtual_pet.visit), and
+  // the private channel brings it to this card alone.
   const me = await evaluate(() => document.querySelector("home-assistant").hass.user.id);
-  const bondOf = () => evaluate(({ e, me }) =>
-    document.querySelector("home-assistant").hass.states[e].attributes.bonds?.[me], { e: pet["sensor.life_stage"], me });
+  const bondOf = () => page.locator("hatch-pet-card").evaluate((el) => el._slides[el._index].mine?.bond);
+  // What the channel would have said: this viewer's bond (and switches) on the slide on show.
+  const mineFor = (patch) => page.locator("hatch-pet-card").evaluate((el, patch) => {
+    const s = el._slides[el._index];
+    el._mineFor(s, { ...(s.mine || {}), ...patch });
+  }, patch);
   let bond = null;
   for (let i = 0; i < 20 && !bond; i++) {
     await page.waitForTimeout(500);
@@ -330,7 +344,7 @@ async function main() {
   }
   check("looking in starts a bond", bond?.level >= 1, JSON.stringify(bond));
   // A close bond: the nickname, a hop and hearts, and five hearts on the status screen.
-  await inject(pet["sensor.life_stage"], { attributes: { bonds: { [me]: { level: 8, nickname: "sunbeam" } } } });
+  await mineFor({ bond: { level: 8, nickname: "sunbeam" } });
   await evaluate(() => Object.keys(localStorage)
     .filter((k) => k.startsWith("hatch-greet-")).forEach((k) => localStorage.removeItem(k)));
   await calm();
@@ -397,52 +411,72 @@ async function main() {
     !!sl.querySelector(".bell.shared") && !/notify me/.test(sl.querySelector(".status").innerText));
   await cur().locator(".bell.shared").click(); // personal again
   await page.waitForTimeout(400);
-  // On a shared screen the bond's moments say nothing personal either.
-  const sharedMoments = await page.locator("hatch-pet-card").evaluate((el, me) => {
+  // On a shared screen the bond's moments say nothing personal either, and an
+  // arrival is the house's nameless "someone's home" (a personal card says
+  // nothing for it; the arriver's own card has "you're home!!").
+  const sharedMoments = await page.locator("hatch-pet-card").evaluate((el) => {
     localStorage.setItem("hatch-shared-screen", "on");
     const s = el._slides[el._index];
     s.queue = [];
     const before = s.bubble.textContent;
-    for (const type of ["bond_up", "bond_record", "tucked_in", "bond_favourite"]) {
-      el._moment(s, { type, user: me, level: 4, nickname: "sunbeam", game: "left_right", wins: 4, at: type });
+    for (const type of ["bond_up", "bond_record", "tucked_in", "bond_favourite", "friend_home"]) {
+      el._moment(s, { type, level: 4, nickname: "sunbeam", game: "left_right", wins: 4, at: new Date().toISOString() });
     }
-    el._moment(s, { type: "friend_home", user: "someone-else", at: new Date().toISOString() });
+    el._moment(s, { type: "someone_home", at: new Date().toISOString() });
     const out = { queued: s.queue.map((q) => q.text), bubble: s.bubble.textContent, before };
     s.queue = [];
     localStorage.setItem("hatch-shared-screen", "off");
+    el._moment(s, { type: "someone_home", at: new Date().toISOString() });
+    out.personal = s.queue.map((q) => q.text);
+    s.queue = [];
     return out;
-  }, me);
+  });
   check("a shared screen's moments name nobody", sharedMoments.queued.join() === "someone's home!! ♥" &&
-    sharedMoments.bubble === sharedMoments.before, JSON.stringify(sharedMoments));
+    sharedMoments.bubble === sharedMoments.before && sharedMoments.personal.length === 0, JSON.stringify(sharedMoments));
   check("a shared screen shows nothing personal", sharedStatus && !sharedView.visited && !sharedView.bondRow &&
     !sharedView.said.includes(USER.name) && !sharedView.said.includes("sunbeam"), JSON.stringify(sharedView));
-  // The server's update replaced the close bond injected above: inject it again.
-  await inject(pet["sensor.life_stage"], { attributes: { bonds: { [me]: { level: 8, nickname: "sunbeam" } } } });
+  // A push from the server may have replaced the close bond set above: again.
+  await mineFor({ bond: { level: 8, nickname: "sunbeam" } });
   await page.waitForTimeout(300);
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(300);
-  // A level-up is said only to the person whose bond grew.
-  const levelUp = (user) => page.locator("hatch-pet-card").evaluate((el, user) => {
+  // A level-up is said only to the person whose bond grew: from their own
+  // channel. Someone else's, still on the public list until P3b, says nothing.
+  const mine = await page.locator("hatch-pet-card").evaluate((el) => {
     const s = el._slides[el._index];
     s.queue = [];
     s.sayUntil = 0;
-    el._moment(s, { type: "bond_up", user, level: 4, nickname: "sunbeam" });
-    return s.queue.map((q) => q.text);
-  }, user);
-  const mine = await levelUp(me);
-  const theirs = await levelUp("someone-else");
+    el._moment(s, { type: "bond_up", level: 4, nickname: "sunbeam" });
+    const out = s.queue.map((q) => q.text);
+    s.queue = [];
+    return out;
+  });
+  const publicMoments = await evaluate((e) =>
+    document.querySelector("home-assistant").hass.states[e].attributes.moments || [], pet["sensor.last_care"]);
+  await inject(pet["sensor.last_care"], { attributes: { moments: [
+    { type: "bond_up", user: "someone-else", level: 4, nickname: "pumpkin", at: new Date().toISOString() },
+    ...publicMoments] } });
+  await page.waitForTimeout(800);
+  const theirs = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    return [...(s.queue || []).map((q) => q.text), s.bubble.textContent].filter((t) => /pumpkin|call you/.test(t));
+  });
   check("a bond level-up is said only to its person",
     mine[0] === "can I call you sunbeam? ♥" && theirs.length === 0, `${mine} / ${theirs}`);
-  // A wish aimed at a close friend: spoken to them, about them to anyone else.
-  const aimed = await page.locator("hatch-pet-card").evaluate((el, me) => {
+  // A wish aimed at a close friend: spoken to them; anyone else sees the plain wish.
+  const aimed = await page.locator("hatch-pet-card").evaluate((el) => {
     const s = el._slides[el._index];
-    const toMe = el._wishLine({ kind: "play", for: me, for_name: "Dev" }, s);
+    const was = s.mine;
+    s.mine = { ...was, wish_for_you: true };
+    const toMe = el._wishLine({ kind: "play" }, s);
+    s.mine = { ...was, wish_for_you: false };
     const ofThem = el._wishLine({ kind: "play", for: "someone-else", for_name: "Sam" }, s);
+    s.mine = was;
     return [toMe[0], toMe[1], ofThem[0], ofThem[1]];
-  }, me);
+  });
   check("a wish can be aimed at a close friend", aimed.join(" | ") ===
     "will you play a game with me today, sunbeam? | play a game with you | " +
-    "I hope Sam plays a game with me today! | play a game with Sam", aimed.join(" | "));
+    "I wish we could play a game today! | play a game together", aimed.join(" | "));
   // A question gives way to a game.
   const gaveWay = await page.locator("hatch-pet-card").evaluate((el) => {
     const s = el._slides[el._index];
@@ -716,7 +750,9 @@ async function main() {
     s.flairUntil = 0;
     // "forget my birthday": only when one is kept, never on a shared screen.
     el._birthdayKept = true;
+    if (s.mine) s.mine.birthday_kept = true; // the channel's copy, which the card reads first
     el._birthdayPhone = false;
+    if (s.mine) s.mine.birthday_phone = false;
     el._renderStatus(s, []);
     out.forget = !!s.status.querySelector(".bell.forgetbday");
     out.phoneOff = s.status.querySelector(".bell.bdayphone")?.getAttribute("aria-pressed");
@@ -828,7 +864,9 @@ async function main() {
     el._hass.callWS = async (msg) => { sent.push(msg.type); return null; };
     try {
       el._birthdayKept = true;
+      if (s.mine) s.mine.birthday_kept = true; // the channel's copy, which the card reads first
       el._birthdayPhone = false;
+      if (s.mine) s.mine.birthday_phone = false;
       s.confirm = null;
       el._renderStatus(s, []);
       for (const [cls, type] of [["forgetbday", "virtual_pet/forget_birthday"], ["forgetme", "virtual_pet/forget_me"]]) {
@@ -838,6 +876,7 @@ async function main() {
         await wait(150);
         out[cls] = sent.includes(type);
         el._birthdayKept = true;
+        if (s.mine) s.mine.birthday_kept = true; // the channel's copy, which the card reads first
         el._renderStatus(s, []);
       }
       const pressed = [];
@@ -931,6 +970,7 @@ async function main() {
       mode = "ok";
       el._hass.callWS = async () => null;
       el._birthdayKept = true;
+      if (s.mine) s.mine.birthday_kept = true; // the channel's copy, which the card reads first
       s.confirm = null;
       el._renderStatus(s, []);
       s.status.querySelector(".bell.forgetme").click();
@@ -966,35 +1006,33 @@ async function main() {
     waits.dream === null && waits.birthday === null && waits.shared === null, JSON.stringify(waits));
   check("forgetting my data removes kept answers", waits.forgotten === null, JSON.stringify(waits));
   check("a retry after the slide changed writes no bubble", waits.late === "", JSON.stringify(waits));
-  // A close friend coming home: "you're home!!" to them, by name to anyone else.
+  // A close friend coming home: "you're home!!" to them (their own channel's
+  // friend_home), and nothing for anyone else's arrival on a personal card.
   await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
-  await evaluate(() => document.querySelector("home-assistant").hass.callApi("POST", "states/person.sam_check",
-    { state: "home", attributes: { user_id: "someone-else", friendly_name: "Sam Check" } }));
-  await page.waitForTimeout(500);
-  const cheers = await page.locator("hatch-pet-card").evaluate((el, me) => {
+  const cheers = await page.locator("hatch-pet-card").evaluate((el) => {
     const s = el._slides[el._index];
-    const person = Object.values(el._hass.states).find((st) => st.entity_id.startsWith("person.") &&
-      st.attributes.user_id === me);
     const out = [];
     const at = new Date().toISOString(); // the same arrival twice: cheered once
-    for (const user of [me, me, "someone-else"]) {
+    for (const type of ["friend_home", "friend_home", "someone_home"]) {
       s.queue = [];
-      el._moment(s, { type: "friend_home", user, at });
+      el._moment(s, { type, at });
       out.push(s.queue[0]?.text || "");
     }
-    return { out, person: person?.attributes.friendly_name };
-  }, me);
+    s.queue = [];
+    return { out };
+  });
   // What the pet tells only you: a friendship month, last night's tuck-in, a
-  // busy day; a record and a goodnight, to their person only.
+  // busy day; a record and a goodnight, to their person only. (A real push may
+  // have replaced the close bond set above.)
+  await mineFor({ bond: { level: 8, nickname: "sunbeam" } });
   const secret = await page.locator("hatch-pet-card").evaluate((el, me) => {
     const s = el._slides[el._index];
     s.queue = [];
     el._note(s, { kind: "friends_for", months: 1 });
     el._note(s, { kind: "steps", steps: 11000 });
     el._note(s, { kind: "stairs", floors: 12 });
-    el._moment(s, { type: "bond_record", user: me, game: "left_right", wins: 4, at: "x" });
-    el._moment(s, { type: "bond_record", user: "someone-else", game: "left_right", wins: 5, at: "y" });
-    el._moment(s, { type: "tucked_in", user: me, at: "z" });
+    el._moment(s, { type: "bond_record", game: "left_right", wins: 4, at: "x" });
+    el._moment(s, { type: "tucked_in", at: "z" });
     const out = [...s.queue.map((q) => q.text), s.bubble.textContent]; // the goodnight replaces, not queues
     s.queue = [];
     return out;
@@ -1046,7 +1084,7 @@ async function main() {
     el._note(s, { kind: "season", season: "autumn", holiday: "thanksgiving" });
     el._note(s, { kind: "rain_walk", steps: 8000 });
     localStorage.removeItem(`hatch-welcomed-${me}`);
-    el._moment(s, { type: "friend_home", user: me, weather: "wet", at: new Date().toISOString() });
+    el._moment(s, { type: "friend_home", weather: "wet", at: new Date().toISOString() });
     const out = s.queue.map((q) => q.text);
     s.queue = [];
     return out;
@@ -1079,9 +1117,13 @@ async function main() {
     const fake = { ...real,
       [stageId]: { ...real[stageId], attributes: { ...real[stageId].attributes,
         dream: { kind: "flying" }, wish: { kind: "play", granted: false, open: false } } },
-      [careId]: { ...real[careId], attributes: { ...real[careId].attributes,
-        moments: [{ type: "friend_home", user: me, weather: "cold", at: now }] } } };
+      [careId]: real[careId] };
     el._hass = { ...el._hass, states: fake };
+    // The arrival came over the channel while the card was closed.
+    const kept = { moments: s.privateMoments, seen: s.privateSeen };
+    s.privateMoments = [];
+    s.privateSeen = new Set();
+    el._keepMoment(s, { type: "friend_home", weather: "cold", at: now });
     for (const k of Object.keys(localStorage)) {
       if (/^hatch-(dream|wish|welcomed)-/.test(k)) localStorage.removeItem(k);
     }
@@ -1091,6 +1133,8 @@ async function main() {
     const out = s.queue.map((q) => q.text);
     s.queue = [];
     el._hass = { ...el._hass, states: real };
+    s.privateMoments = kept.moments;
+    s.privateSeen = kept.seen;
     return out;
   }, me);
   check("the first look: welcome first, three lines at most, no closed wish",
@@ -1100,9 +1144,9 @@ async function main() {
     lines[1] === "I dreamed about the sea..." && lines[2] === "oh, sunny after all! good guess though ♥" &&
     lines[3] === "back from the gym?! so strong!" && lines[4] === "Thanksgiving in your favourite season! ♥" &&
     /rain/.test(lines[5]) && lines[7] === "it's wet out there! come get cozy ☂", lines.join(" | "));
-  check("a friend coming home is cheered, by name to others", /^(you're home!! ♥|yay, you're back! ♥)$/.test(cheers.out[0]) &&
-    cheers.out[1] === "" && /^(Sam's home!!|ooh, Sam is back!)$/.test(cheers.out[2]),
-  `${cheers.out.join(" | ")} (person ${cheers.person})`);
+  check("a friend coming home is cheered, and nobody else's arrival on a personal card",
+    /^(you're home!! ♥|yay, you're back! ♥)$/.test(cheers.out[0]) && cheers.out[1] === "" && cheers.out[2] === "",
+    cheers.out.join(" | "));
 
   // Idle life: something small happens on its own within a minute.
   const idleSign = () => cur().evaluate((slide) => {
@@ -1341,6 +1385,13 @@ async function main() {
     await tab.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
     await tab.waitForTimeout(1500);
     const curB = () => tab.locator("hatch-pet-card .slide:not(.away-slide)");
+    // B looks at A's pet (A may have moved on to the one awake enough to play).
+    const titleA = (await page.locator("hatch-pet-card .title").innerText()).trim();
+    for (let i = 0; i < slides; i++) {
+      if ((await tab.locator("hatch-pet-card .title").innerText()).trim() === titleA) break;
+      await tab.locator("hatch-pet-card .nav.next").click();
+      await tab.waitForTimeout(700);
+    }
     await open("left_right"); // A: round 1 of a new game
     await curB().locator(".toy").nth(2).click();
     await tab.waitForTimeout(500);
@@ -1368,9 +1419,14 @@ async function main() {
     ["weather", { change: "rainbow" }, "rainbow"],
     ["forecast", { when: "tomorrow", kind: "warmer", high: 72 }, "warmer tomorrow: 72°"],
   ]) {
-    await inject(pet["sensor.last_care"], {
-      attributes: { moments: [{ type, ...extra, at: new Date().toISOString() }] },
-    });
+    if (type === "watching") { // the house's show: over the private channel only
+      await page.locator("hatch-pet-card").evaluate((el, m) =>
+        el._channel(el._slides[el._index], { moment: m }, el._hass.user.id), { type, ...extra, at: new Date().toISOString() });
+    } else {
+      await inject(pet["sensor.last_care"], {
+        attributes: { moments: [{ type, ...extra, at: new Date().toISOString() }] },
+      });
+    }
     await page.waitForTimeout(500);
     const said = await bubble();
     check(`reacts to ${type}`, new RegExp(expect).test(said), said);
@@ -2045,13 +2101,13 @@ async function main() {
       out.granted = t.said(() => el._moment(s, { type: "wish_granted", at }));
       out.favourite = t.said(() => el._moment(s, { type: "favourite_snack", food: "hazelnuts", at }));
       localStorage.removeItem(`hatch-welcomed-${el._hass.user.id}`);
-      out.home = t.said(() => el._moment(s, { type: "friend_home", user: el._hass.user.id, at }));
-      out.bond = t.said(() => el._moment(s, { type: "bond_up", user: el._hass.user.id, level: 3, at }));
+      out.home = t.said(() => el._moment(s, { type: "friend_home", at }));
+      out.bond = t.said(() => el._moment(s, { type: "bond_up", level: 3, at }));
       s.sayUntil = 0;
       el._moment(s, { type: "care_miss", at });
       out.miss = s.bubble.textContent;
       s.sayUntil = 0; s.voicedAt = Date.now() + 1e9;
-      el._moment(s, { type: "tucked_in", user: el._hass.user.id, at });
+      el._moment(s, { type: "tucked_in", at });
       el._stopTyping(s);
       out.tucked = s.bubble.textContent;
       out.refusal = ["full", "too_tired", "not_sick"].map((result) => {
@@ -2081,7 +2137,10 @@ async function main() {
       el._write = realWrite;
       el._hass = { ...el._hass, callService: realCall };
       out.wish = el._wishSaid(s, { kind: "snack" }, ["I'd love a snack after lunch!"]);
-      out.aimed = el._wishSaid(s, { kind: "snack", for: "x", for_name: "Alex" }, ["I hope Alex brings me a snack after lunch!"]);
+      const mine = s.mine; // aimed at this viewer (their channel says so)
+      s.mine = { ...mine, wish_for_you: true };
+      out.aimed = el._wishSaid(s, { kind: "snack" }, ["will you bring me a snack after lunch?"]);
+      s.mine = mine;
       // Said aloud: the catchphrase is not on them, and the count doesn't move.
       s.catchCount = 2; // the next catchy line would carry it
       for (const q of [...out.granted, ...out.favourite]) {
@@ -2102,7 +2161,7 @@ async function main() {
       lines.miss === "oh! hi hi ♥" && /^night night, \S+ ♥$/.test(lines.tucked), JSON.stringify(lines));
     check("a baby's refusals and wish; an aimed wish keeps its words",
       lines.refusal.join("|") === "tummy full!|too sleepy to play|I'm not sick!" && lines.wish === "wish... snack after lunch" &&
-      lines.aimed === "I hope Alex brings me a snack after lunch!", JSON.stringify(lines));
+      lines.aimed === "will you bring me a snack after lunch?", JSON.stringify(lines));
     check("a refused snack says the full line once",
       lines.snackFull === 1 && lines.snackTotal === 1, JSON.stringify(lines));
     check("a refused game says its refusal line once",
@@ -2173,6 +2232,8 @@ async function main() {
       const config = el._config;
       const fly = [el._seasonFlyer, el._seasonVisitor, el._costume];
       const out = {};
+      const mood = s.moodState;
+      s.moodState = "content"; // awake and free, whatever the hour (a dev pet sleeps at night)
       el._seasonFlyer = el._seasonVisitor = () => {};
       el._costume = (slide, season, line, catchy) => { out.line = line; out.catchy = catchy; };
       // The week before a holiday its countdown speaks first (once a slide) and
@@ -2201,6 +2262,7 @@ async function main() {
         [el._seasonFlyer, el._seasonVisitor, el._costume] = fly;
         s.counted = counted;
         el._config = config;
+        s.moodState = mood;
         t.cache(null);
       }
       return out;
@@ -2375,7 +2437,7 @@ async function main() {
     await page.locator("hatch-pet-card .nav.next").click();
     await page.waitForTimeout(1500);
     await hush();
-    await babyShot("06e-baby-other-creature", "baby", `el._moment(s, { type: "tucked_in", user: el._hass.user.id, at: new Date().toISOString() });`);
+    await babyShot("06e-baby-other-creature", "baby", `el._moment(s, { type: "tucked_in", at: new Date().toISOString() });`);
     await babyShot("06f-child-line", "child", `el._write(s, el._say(s, { state: "calling", attributes: { reason: "tummy rumbling!", reason_key: "call_hunger" } }, false), 20000);`);
     await babyShot("06g-baby-mood-line", "baby", `el._write(s, el._say(s, { state: "calling", attributes: { reason: "tummy rumbling!", reason_key: "call_hunger" } }, false), 20000);`);
     await page.locator("hatch-pet-card .nav.prev").click();
@@ -2519,6 +2581,7 @@ async function main() {
       const me = el._hass.user.id;
       const keep = { voicedAt: s.voicedAt, queue: s.queue, catchCount: s.catchCount, asleep: s.asleep, calling: s.calling };
       const kept = { shared: localStorage.getItem("hatch-shared-screen"), baby: localStorage.getItem(`hatch-baby-talk-${me}`) };
+      const keptMine = s.mine;
       const free = () => Object.assign(s, { asleep: false, calling: false, sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0,
         movingUntil: 0, queue: [], voicedAt: Date.now() + 1e9 });
       free();
@@ -2527,9 +2590,9 @@ async function main() {
           el._state = function (slide, key) {
             const st = realState.call(this, slide, key);
             if (key !== "sensor.life_stage" || !st || slide !== s) return st;
-            return { ...st, state: stage, attributes: { ...st.attributes, personality,
-              bonds: level === null ? {} : { [me]: { level } } } };
+            return { ...st, state: stage, attributes: { ...st.attributes, personality } };
           };
+          s.mine = { ...(keptMine || {}), bond: level === null ? null : { level } }; // as the channel has it
         },
         random: (r) => { Math.random = r === null ? realRandom : typeof r === "function" ? r : () => r; },
         shared: (on) => localStorage.setItem("hatch-shared-screen", on ? "on" : "off"),
@@ -2554,6 +2617,7 @@ async function main() {
       } finally {
         el._state = realState;
         Math.random = realRandom;
+        s.mine = keptMine;
         for (const [k, v] of [["hatch-shared-screen", kept.shared], [`hatch-baby-talk-${me}`, kept.baby]]) {
           if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v);
         }
@@ -2731,8 +2795,10 @@ async function main() {
       el._state = function (slide, key) {
         const st = realState.call(this, slide, key);
         if (key !== "sensor.life_stage" || !st || slide !== s) return st;
-        return { ...st, state: stage, attributes: { ...st.attributes, personality: type, bonds: {} } };
+        return { ...st, state: stage, attributes: { ...st.attributes, personality: type } };
       };
+      window.__p2Mine ??= { mine: s.mine };
+      s.mine = { ...(s.mine || {}), bond: null }; // no bond: the plain hellos
       const realRandom = Math.random;
       Math.random = () => 0.1;
       localStorage.setItem("hatch-shared-screen", what === "shared" ? "on" : "off");
@@ -2756,7 +2822,9 @@ async function main() {
     }, { type, stage, what });
     const unshow = () => page.locator("hatch-pet-card").evaluate((el) => {
       if (window.__p2State) el._state = window.__p2State;
+      if (window.__p2Mine) el._slides[el._index].mine = window.__p2Mine.mine;
       delete window.__p2State;
+      delete window.__p2Mine;
       el._slides[el._index].sayUntil = 0;
     });
     const sideBySide = [];
@@ -2793,9 +2861,10 @@ async function main() {
   {
     const me = await evaluate(() => document.querySelector("home-assistant").hass.user.id);
     const card = page.locator("hatch-pet-card").first();
-    // Every card instance gets a close bond: nickname "sunbeam", level 8.
+    // Every card instance gets a close bond: nickname "sunbeam", level 8 (as
+    // the channel's "mine" would have it, on every slide).
     const personal = (el) => {
-      el._bond = function () { return sharedScreen() ? null : { level: 8, nickname: "sunbeam" }; };
+      el._slides.forEach((s) => el._mineFor(s, { ...(s.mine || {}), bond: { level: 8, nickname: "sunbeam" } }));
     };
     // A second tab on the same browser (same localStorage), with its own personal line.
     const tab = await context.newPage();
@@ -2803,10 +2872,32 @@ async function main() {
     await tab.goto(`${HA}/pet-bench/pet`);
     await tab.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
     await tab.waitForTimeout(16000); // the frontend reloads itself once
-    await tab.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+    await tab.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 }).catch(async (err) => {
+      // What the tab shows instead, for the next person chasing this.
+      await tab.screenshot({ path: path.join(OUT, "05b-tab2-timeout.png") }).catch(() => {});
+      const why = await tab.locator("hatch-pet-card").first().evaluate((el) => {
+        const btn = el.shadowRoot?.querySelector(".statusbtn");
+        const s = el._slides?.[el._index];
+        return { url: location.href, slides: el._slides?.length, booting: el._booting,
+          stage: s && el._state(s, "sensor.life_stage")?.state, statusbtn: !!btn, shown: !!btn?.offsetParent };
+      }, null, { timeout: 5000 }).catch((e) => `no card: ${String(e).split("\n")[0]}`);
+      console.log(`note: tab 2 never showed the status button: ${JSON.stringify(why)}`);
+      throw err;
+    });
     // The page's helpers (sharedScreen is the card module's; mirror it here).
     const setup = String.raw`
       window.sharedScreen = () => localStorage.getItem("hatch-shared-screen") === "on";
+      // Every subscribe sent on this page's socket, shared or not.
+      window.__subs = [];
+      const conn = document.querySelector("home-assistant").hass.connection;
+      if (!conn.__subsWrapped) {
+        const real = conn.subscribeMessage.bind(conn);
+        conn.subscribeMessage = (cb, msg, opts) => {
+          if (msg?.type === "virtual_pet/subscribe") window.__subs.push({ shared: msg.shared, opts });
+          return real(cb, msg, opts);
+        };
+        conn.__subsWrapped = true;
+      }
       window.__personal = ${personal.toString()};
       window.__say = (el, s) => {
         el._speak(s, "hi, sunbeam! hi ${USER.name}, my sunbeam friend, so good to see you here", 60000);
@@ -2843,7 +2934,9 @@ async function main() {
       }
     });
     const round = async (typing) => {
+      await tab.evaluate(() => { window.__subs = []; });
       const before = await card.evaluate(async (el, typing) => {
+        window.__subs = [];
         localStorage.setItem("hatch-shared-screen", "off");
         const two = document.getElementById("fa-second");
         const s = el._slides[el._index];
@@ -2869,10 +2962,17 @@ async function main() {
         message: el._slides[el._index].status.querySelector(".status-feedback")?.textContent,
       }));
       const inTab = await tab.locator("hatch-pet-card").evaluate((el) => window.__look(el));
+      // Each card's slides asked the channel again, as a shared screen (no library resubscribe).
+      const subs = {
+        page: await card.evaluate((el) => ({ shared: window.__subs.filter((x) => x.shared && x.opts?.resubscribe === false).length,
+          slides: el._slides.length + document.getElementById("fa-second")._slides.length })),
+        tab: await tab.locator("hatch-pet-card").evaluate((el) => ({
+          shared: window.__subs.filter((x) => x.shared && x.opts?.resubscribe === false).length, slides: el._slides.length })),
+      };
       const clean = (looks) => looks.every((l) => !/sunbeam/.test(l.bubble + l.live) &&
         !l.bubble.includes(USER.name) && !l.live.includes(USER.name) &&
         !l.typing && !l.babbling && !l.hearts && !l.status);
-      return { before, after, inTab, clean: clean(after.one) && clean(after.two) && clean(inTab) };
+      return { before, after, inTab, subs, clean: clean(after.one) && clean(after.two) && clean(inTab) };
     };
     // Its own tab's line, said fresh before each round.
     const sayInTab = () => tab.locator("hatch-pet-card").evaluate((el) => window.__say(el, el._slides[el._index]));
@@ -2882,6 +2982,9 @@ async function main() {
       typingRound.before.otherStatus && typingRound.clean &&
       typingRound.after.message === "Nothing personal on this screen now.",
       JSON.stringify({ ...typingRound, typedWhenPressed: typingRound.before.typing }));
+    check("FA: every card and tab asks its channel again as a shared screen",
+      typingRound.subs.page.shared >= typingRound.subs.page.slides && typingRound.subs.tab.shared >= typingRound.subs.tab.slides,
+      JSON.stringify(typingRound.subs));
     await sayInTab();
     const doneRound = await round(false);
     check("FA: and a personal line already typed out", doneRound.before.said.includes("sunbeam") && doneRound.clean,
@@ -2908,11 +3011,42 @@ async function main() {
     const back = await card.evaluate((el) => {
       const two = document.getElementById("fa-second");
       const s = two._slides[0];
+      window.__personal(two); // its bond, as the personal channel brings it back
       s.statusHtml = null;
       two._renderStatus(s, []);
       return { shared: localStorage.getItem("hatch-shared-screen"), you: /you two/.test(s.status.textContent) };
     });
     check("FA: turning it off again makes every card personal", back.shared === "off" && back.you, JSON.stringify(back));
+    // A card off the page (a view switch) misses the switch's event: shared
+    // screen goes on while it's away, and it catches up when it's back.
+    const away = await card.evaluate(async (el) => {
+      const two = document.getElementById("fa-second");
+      const s = two._slides[two._index];
+      window.__personal(two);
+      window.__say(two, s);
+      s.queue = [{ text: "can I call you sunbeam? ♥", ms: 4000 }];
+      const before = { said: s.bubble.textContent, queued: s.queue.length };
+      two.remove(); // its typing line is written in whole on the way out
+      const one = el._slides[el._index];
+      el._renderStatus(one, []);
+      one.status.querySelector(".bell.shared").click();
+      const shared = localStorage.getItem("hatch-shared-screen");
+      document.body.append(two);
+      await new Promise((r) => setTimeout(r, 1500)); // a tick or two
+      try {
+        const looks = window.__look(two);
+        return { before, shared, looks, queue: two._slides.flatMap((x) => (x.queue || []).map((q) => q.text)) };
+      } finally { // and off again, for what follows
+        localStorage.setItem("hatch-shared-screen", "off");
+        el._goPersonal();
+        two._goPersonal();
+      }
+    });
+    check("FA: a card away from the page when shared screen went on clears its personal lines when it's back",
+      away.before.said.includes("sunbeam") && away.shared === "on" && away.queue.every((t) => !/sunbeam/.test(t)) &&
+      away.looks.every((l) => !/sunbeam/.test(l.bubble + l.live) && !l.bubble.includes(USER.name) &&
+        !l.live.includes(USER.name) && !l.typing && !l.babbling && !l.hearts && !l.status),
+      JSON.stringify(away));
     // A visit reply that lands after the switch queues no personal note or question.
     const late = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
@@ -2963,8 +3097,12 @@ async function main() {
         two._photoDialog(s, 1);
         out.dialogOpened = !!two.shadowRoot.querySelector(".photo-dialog")?.open;
         s.game = {};
+        // Its real subscription (the private channel), watched as it goes.
+        for (let i = 0; i < 40 && !(s.subscribed && s.unsub); i++) await new Promise((r) => setTimeout(r, 100));
+        out.realSub = !!s.subscribed && typeof s.unsub === "function";
         let unsubbed = false;
-        s.unsub = () => { unsubbed = true; };
+        const realUnsub = s.unsub;
+        s.unsub = () => { unsubbed = true; return realUnsub?.(); };
         s.screen.classList.add("breezy");
         s.breezeTimer = setTimeout(() => {}, 60000);
         two.setConfig({ ...two._config, devices: devices.slice(0, 1) });
@@ -2991,7 +3129,7 @@ async function main() {
       return out;
     });
     check("F6: a dropped slide ends its game, revokes its photos, closes the dialog and unsubscribes",
-      f6.slides === 1 && f6.dialogOpened && f6.dialogClosed && f6.revoked && f6.game === null && f6.unsubbed && f6.unsubCleared && f6.unsubClearedOnLeave && !f6.breezy,
+      f6.slides === 1 && f6.dialogOpened && f6.dialogClosed && f6.revoked && f6.game === null && f6.realSub && f6.unsubbed && f6.unsubCleared && f6.unsubClearedOnLeave && !f6.breezy,
       JSON.stringify(f6));
     check("F6: the card's observer disconnects when it leaves the page and observes again when back",
       f6.disconnected && f6.observed, JSON.stringify(f6));
@@ -3021,6 +3159,7 @@ async function main() {
     localStorage.setItem("hatch-shared-screen", "off");
     el._birthdayKept = true;
     el._myDay = true;
+    if (s.mine) Object.assign(s.mine, { birthday_kept: true, my_day: true }); // as the channel will have it
     localStorage.setItem(`hatch-welcomed-${me}`, "1");
     localStorage.setItem(`hatch-greet-${me}-dev-a`, "1");
     localStorage.setItem(`hatch-greet-${me}-dev-b`, "1");
@@ -3107,11 +3246,14 @@ async function main() {
     JSON.stringify(forgot));
   // 6. The card editor loads and offers the pets.
   // 5d. Preferences on every visit, quiet samples (Wave 1, PR 1c).
-  // "my day" reads "…" until a visit reply sets it, never "off".
+  // "my day" reads "…" until a visit reply sets it, never "off" (with no
+  // channel: an older server; the channel's "mine" is checked below).
   const unknown = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const s = el._slides[el._index];
     const log = () => el._state(s, "sensor.last_care")?.attributes.log || [];
     const saved = el._myDay;
+    const mine = s.mine;
+    s.mine = null;
     el._bond = () => ({ level: 8, nickname: "sunbeam" });
     el._myDay = undefined;
     s.statusHtml = null;
@@ -3123,6 +3265,8 @@ async function main() {
     el._renderStatus(s, log());
     out.off = s.status.querySelector(".bell.myday")?.textContent;
     el._myDay = saved;
+    s.mine = mine;
+    delete el._bond;
     s.statusHtml = null;
     return out;
   });
@@ -3141,6 +3285,9 @@ async function main() {
       if (svc === "visit") await gate;
       return res;
     };
+    const mine = s.mine;
+    s.mine = null; // no channel: the visit reply is the fallback
+    el._bond = () => ({ level: 8, nickname: "sunbeam" });
     el._myDay = undefined;
     s.visitedAt = 0;
     el._visit(s);
@@ -3153,7 +3300,10 @@ async function main() {
     el._hass.callService = real;
     s.statusHtml = null;
     el._renderStatus(s, log());
-    return { during, after: el._myDay, button: !!s.status.querySelector(".bell.myday") };
+    const out = { during, after: el._myDay, button: !!s.status.querySelector(".bell.myday") };
+    s.mine = mine;
+    delete el._bond;
+    return out;
   });
   check("the my day row waits for the held visit reply, then shows the real setting",
     !held.during && typeof held.after === "boolean" && held.button, JSON.stringify(held));
@@ -3168,10 +3318,12 @@ async function main() {
   await second.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
   await second.waitForTimeout(16000);
   await second.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+  // From the private channel's "mine" now, with no visit reply needed.
   const reopened = await second.locator("hatch-pet-card").evaluate(async (el) => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    for (let i = 0; i < 80 && el._myDay === undefined; i++) await wait(100);
-    return el._myDay;
+    const s = () => el._slides[el._index];
+    for (let i = 0; i < 80 && !s().mine; i++) await wait(100);
+    return s().mine?.my_day;
   });
   check("a second browser within the hour shows my day on for a person who has it on",
     reopened === true, String(reopened));
@@ -3230,6 +3382,263 @@ async function main() {
   check("the baby-talk sample is quiet at night too",
     !samples.babbleNight || (samples.babbleNight.played === 0 && /quiet till morning/.test(samples.babbleNight.note)),
     JSON.stringify(samples.babbleNight));
+
+  // 7. The private channel (privacy P3a-card): the viewer's bond, switches and
+  // own moments, and the house's shows, come only from virtual_pet/subscribe.
+  {
+    const card = page.locator("hatch-pet-card").first();
+    // Back to the pet the bond checks used (the viewer has a bond with it).
+    for (let i = 0; i < slides; i++) {
+      if (await card.evaluate((el, e) => el._slides[el._index].ids?.["sensor.life_stage"] === e, pet["sensor.life_stage"])) break;
+      await page.locator("hatch-pet-card .nav.next").click();
+      await page.waitForTimeout(700);
+    }
+    await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      for (let i = 0; i < 50 && !s.subscribed; i++) await new Promise((r) => setTimeout(r, 100));
+      // Every line this slide says or queues, from here on.
+      window.__spoken = [];
+      for (const name of ["_speak", "_queue"]) {
+        const real = el[name];
+        el[name] = function (slide, text, ...rest) {
+          if (slide === s && typeof text === "string") window.__spoken.push(text);
+          return real.call(this, slide, text, ...rest);
+        };
+      }
+    });
+    // One media line: the public titled moment (still published until P3c) is
+    // skipped, the channel's says it once, its house push and a replayed
+    // snapshot say nothing more. A private moment is said once too.
+    const publicNow = await evaluate((e) =>
+      document.querySelector("home-assistant").hass.states[e].attributes.moments || [], pet["sensor.last_care"]);
+    const mediaAt = new Date().toISOString();
+    const media = { type: "watching", title: "Bluey Check", at: mediaAt };
+    await inject(pet["sensor.last_care"], { attributes: { moments: [media, ...publicNow] } });
+    await page.waitForTimeout(1000);
+    const once = await card.evaluate(async (el, { media, me }) => {
+      const s = el._slides[el._index];
+      const fromPublic = window.__spoken.filter((t) => t.includes("Bluey Check")).length;
+      const kept = { mine: s.mine, house: s.house };
+      const house = { media, dream: null };
+      const record = { type: "bond_record", game: "left_right", wins: 4, at: new Date().toISOString() };
+      Object.assign(s, { sayUntil: 0, queue: [] });
+      el._channel(s, { moment: media }, me);
+      el._stopTyping(s);
+      el._channel(s, { house }, me);
+      el._channel(s, { moment: record }, me);
+      el._channel(s, { moment: record }, me); // the same one again
+      el._channel(s, { mine: kept.mine, house, moments: [record, media], now: new Date().toISOString() }, me);
+      el._channel(s, { moment: media }, me); // and the show again
+      const out = {
+        fromPublic, media: window.__spoken.filter((t) => t.includes("Bluey Check")).length,
+        record: window.__spoken.filter((t) => /new best/.test(t)).length,
+        house: s.house?.media?.title,
+      };
+      s.queue = [];
+      s.house = kept.house;
+      return out;
+    }, { media, me });
+    check("P3a: one media line: the public moment is skipped, the channel's is said once",
+      once.fromPublic === 0 && once.media === 1 && once.house === "Bluey Check", JSON.stringify(once));
+    check("P3a: a private moment is said once, not again from a replayed snapshot", once.record === 1, JSON.stringify(once));
+    await inject(pet["sensor.last_care"], { attributes: { moments: publicNow } });
+    // A shared screen drops "mine" even if a server sent one; "gone" stops the slide's channel.
+    const ends = await card.evaluate(async (el, me) => {
+      const s = el._slides[el._index];
+      const kept = s.mine;
+      localStorage.setItem("hatch-shared-screen", "on");
+      el._channel(s, { mine: { bond: { level: 8, nickname: "sunbeam" }, notify_me: true }, house: null, moments: [], now: new Date().toISOString() }, me);
+      const shared = { mine: s.mine, bond: el._bond(s) };
+      localStorage.setItem("hatch-shared-screen", "off");
+      s.mine = kept;
+      el._channel(s, { gone: true }, me);
+      const gone = { unsub: s.unsub, gone: s.gone, retry: !!s.retryTimer };
+      el._subscribe(s); // a no-op now: its pet is gone
+      gone.asked = !!(s.unsub || s.subPending);
+      const all = el._slides;
+      el._slides = [s]; // a new socket, for this slide alone
+      try { el._onReady(); } finally { el._slides = all; }
+      gone.askedOnReady = !!(s.unsub || s.subPending || s.retryTimer) || !s.gone;
+      el._subscribe(s, true); // (and back, for the checks after)
+      for (let i = 0; i < 50 && !(s.unsub && s.subscribed); i++) await new Promise((r) => setTimeout(r, 100));
+      return { shared, gone, back: !!s.unsub };
+    }, me);
+    check("P3a: a shared screen never keeps a person's own view", ends.shared.mine === null && ends.shared.bond === null,
+      JSON.stringify(ends.shared));
+    check("P3a: a removed pet's channel stops, with no retry", ends.gone.unsub === null && ends.gone.gone &&
+      !ends.gone.retry && !ends.gone.asked && ends.back, JSON.stringify(ends));
+    check("P3a: a removed pet's slide isn't asked again on a new socket", ends.gone.askedOnReady === false, JSON.stringify(ends));
+    // The bell and the switches read "mine".
+    const bell = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const kept = s.mine;
+      const read = () => {
+        s.statusHtml = null;
+        el._renderStatus(s, []);
+        return ["notify", "myday", "babytalk"].map((k) => s.status.querySelector(`.bell.${k}`)?.getAttribute("aria-pressed")).join();
+      };
+      el._mineFor(s, { ...kept, bond: { level: 3 }, notify_me: true, my_day: true, baby_talk: false });
+      const on = read();
+      el._mineFor(s, { ...kept, bond: { level: 3 }, notify_me: false, my_day: false });
+      const off = read();
+      el._mineFor(s, kept);
+      return { on, off };
+    });
+    check("P3a: the bell and my day read the person's own view", bell.on.startsWith("true,true") && bell.off.startsWith("false,false"),
+      JSON.stringify(bell));
+    // An older server: the bell and "my day" fall back to the services on
+    // unknown_command, and only then.
+    const fallback = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const hass = el._hass;
+      const real = { ws: hass.callWS, svc: hass.callService, myDay: el._myDay };
+      const mines = el._slides.map((x) => x.mine && { ...x.mine });
+      const ws = [];
+      const svc = [];
+      hass.callWS = async (msg) => { ws.push(msg.type); throw { code: "unknown_command", message: "Unknown command." }; };
+      hass.callService = async (domain, service, data) => { svc.push(`${domain}.${service}:${data.enabled}`); return {}; };
+      try {
+        s.statusHtml = null;
+        el._renderStatus(s, []);
+        await el._setNotify(s, true);
+        await el._setMyDay(s, true, document.createElement("button"));
+        hass.callWS = async (msg) => { ws.push(msg.type); throw { code: "home_assistant_error" }; };
+        await el._setNotify(s, false);
+      } finally {
+        hass.callWS = real.ws;
+        hass.callService = real.svc;
+        el._myDay = real.myDay;
+        el._slides.forEach((x, i) => { x.mine = mines[i]; });
+      }
+      return { ws, svc, message: s.status.querySelector(".status-feedback")?.textContent };
+    });
+    check("P3a: the bell and my day fall back to the services on unknown_command, and only then",
+      fallback.ws.join() === "virtual_pet/notify_me,virtual_pet/my_day,virtual_pet/notify_me" &&
+      fallback.svc.join() === "virtual_pet.notify_me:true,virtual_pet.my_day:true" &&
+      fallback.message === "That didn't work. Try again.", JSON.stringify(fallback));
+    // Retries: a subscribe refused (HA still starting, the pet mid-reload) is
+    // asked again after 2 s and 5 s (then 15 s, then every minute); the first
+    // look goes ahead meanwhile. And a new socket ("ready") asks again at once.
+    const retry = await card.evaluate(async (el) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const s = el._slides[el._index];
+      const id = s.ids["sensor.life_stage"];
+      const conn = el._hass.connection;
+      const had = Object.prototype.hasOwnProperty.call(conn, "subscribeMessage");
+      const real = conn.subscribeMessage;
+      const tries = [];
+      conn.subscribeMessage = (cb, msg, opts) => {
+        if (msg?.entity_id !== id) return real.call(conn, cb, msg, opts);
+        tries.push({ at: Date.now(), opts });
+        if (tries.length === 1) return Promise.reject({ code: "unknown_command" });
+        if (tries.length === 2) return Promise.reject({ code: "no_pet" });
+        return real.call(conn, cb, msg, opts);
+      };
+      const out = {};
+      try {
+        el._unsubscribe(s);
+        el._resetChannel(s);
+        el._subscribe(s, true);
+        await wait(300);
+        out.failedSoon = s.subscribeFailed && el._channelHeard(s);
+        for (let i = 0; i < 120 && !(s.subscribed && tries.length >= 3); i++) await wait(100);
+        out.gaps = tries.slice(1).map((t, i) => Math.round((t.at - tries[i].at) / 1000));
+        out.subscribed = s.subscribed;
+        out.noLibrary = tries.every((t) => t.opts?.resubscribe === false);
+        const before = tries.length;
+        el._onReady();
+        await wait(300);
+        out.onReady = tries.length - before;
+        for (let i = 0; i < 50 && !s.unsub; i++) await wait(100);
+      } finally {
+        if (had) conn.subscribeMessage = real;
+        else delete conn.subscribeMessage;
+      }
+      return out;
+    });
+    check("P3a: a refused subscribe is tried again on the ladder, and a new socket asks again",
+      retry.failedSoon && retry.gaps.join() === "2,5" && retry.subscribed && retry.noLibrary && retry.onReady === 1,
+      JSON.stringify(retry));
+    // A slide switched from a bonded pet to another shows nothing of the first
+    // pet's bond before the new pet's own view arrives.
+    const switched = await card.evaluate(async (el) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const devices = Object.values(el._hass.entities).filter((e) => e.platform === "virtual_pet")
+        .map((e) => e.device_id).filter((d, i, all) => d && all.indexOf(d) === i);
+      const three = document.createElement("hatch-pet-card");
+      three.style.cssText = "position:fixed;left:0;top:0;width:400px;z-index:-1";
+      three.setConfig({ ...el._config, seasonal: false, devices: [devices[0]] });
+      document.body.append(three);
+      three.hass = el._hass;
+      const s = () => three._slides?.[0];
+      for (let i = 0; i < 50 && !(s()?.species && s().subscribed); i++) await wait(100);
+      const out = { first: s()?.subscribed };
+      three._mineFor(s(), { ...(s().mine || {}), bond: { level: 8, nickname: "sunbeam" }, wish_for_you: true });
+      const conn = three._hass.connection;
+      const had = Object.prototype.hasOwnProperty.call(conn, "subscribeMessage");
+      const real = conn.subscribeMessage;
+      let release;
+      const held = new Promise((r) => { release = r; });
+      conn.subscribeMessage = async (cb, msg, opts) => { await held; return real.call(conn, cb, msg, opts); };
+      try {
+        three.setConfig({ ...three._config, devices: [devices[1]] });
+        three.hass = three._hass;
+        await wait(400);
+        const sl = s();
+        sl.lookedFirst = false;
+        three._firstLook(sl);
+        sl.statusHtml = null;
+        three._renderStatus(sl, []);
+        out.before = { mine: sl.mine, bond: three._bond(sl), subscribed: sl.subscribed, looked: sl.lookedFirst,
+          status: /you two|sunbeam/.test(sl.status.textContent), bubble: /sunbeam/.test(sl.bubble.textContent) };
+      } finally {
+        if (had) conn.subscribeMessage = real;
+        else delete conn.subscribeMessage;
+        release();
+      }
+      for (let i = 0; i < 50 && !s().subscribed; i++) await wait(100);
+      out.after = { subscribed: s().subscribed, to: s().subKey?.split("|")[0] === s().ids["sensor.life_stage"],
+        nickname: s().mine?.bond?.nickname || null };
+      three.remove();
+      return out;
+    });
+    check("P3a: switching a slide's pet drops the last pet's bond before the new view arrives",
+      switched.first && switched.before.mine === null && switched.before.bond === null && !switched.before.subscribed &&
+      !switched.before.looked && !switched.before.status && !switched.before.bubble &&
+      switched.after.subscribed && switched.after.to && switched.after.nickname !== "sunbeam", JSON.stringify(switched));
+    // An options save reloads the pet: the open card gets a fresh view on the
+    // same subscription, its bond row back within 5 s, with no page reload.
+    const entryId = await evaluate(async (e) => (await document.querySelector("home-assistant").hass
+      .callWS({ type: "config/entity_registry/get", entity_id: e })).config_entry_id, pet["sensor.life_stage"]);
+    await card.evaluate((el) => {
+      window.__hatchMark = "same page";
+      window.__snapshots = 0;
+      const real = el._channel;
+      el._channel = function (s, msg, ...rest) {
+        if (Array.isArray(msg?.moments) && s === this._slides[this._index]) window.__snapshots++;
+        return real.call(this, s, msg, ...rest);
+      };
+    });
+    await evaluate((entry_id) => document.querySelector("home-assistant").hass
+      .callService("homeassistant", "reload_config_entry", { entry_id }), entryId);
+    const reloaded = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const start = Date.now();
+      let you = false;
+      while (Date.now() - start < 5000) {
+        s.statusHtml = null;
+        el._renderStatus(s, []);
+        you = /you two/.test(s.status.textContent);
+        if (window.__snapshots && you) break;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      return { snapshots: window.__snapshots, you, ms: Date.now() - start, mark: window.__hatchMark };
+    });
+    check("P3a: an options save keeps the bond (a fresh view within 5 s, no page reload)",
+      reloaded.snapshots >= 1 && reloaded.you && reloaded.mark === "same page", JSON.stringify(reloaded));
+    await card.evaluate((el) => { for (const name of ["_speak", "_queue", "_channel"]) delete el[name]; });
+    if (await cur().locator(".screen.show-status").count()) await page.locator("hatch-pet-card .statusbtn").click();
+  }
 
   // Device charm, Part 1: the LCD quirks (docs/plan-2026-10-29-device-charm.md).
   const worlds = Object.keys(JSON.parse(fs.readFileSync(
@@ -3981,6 +4390,16 @@ async function main() {
     await bp.waitForTimeout(2000);
     check(`boot screen holds the speaking back (${width}px)`,
       await bp.locator("hatch-pet-card").evaluate((el) => el.__greets === 0));
+    // A private moment from the channel waits for the boot too, then is said once.
+    const heldBack = await bp.locator("hatch-pet-card").evaluate((el) => {
+      el.__moments = [];
+      const moment = el._moment;
+      el._moment = function (s, m) { el.__moments.push(m.type); return moment.call(this, s, m); };
+      el._channel(el._slides[el._index], { moment: { type: "friend_home", at: new Date().toISOString() } }, el._hass.user.id);
+      return { booting: el._booting, said: el.__moments.length };
+    });
+    check(`boot screen holds a private moment back (${width}px)`,
+      heldBack.booting && heldBack.said === 0, JSON.stringify(heldBack));
     await bshot("day");
     // The tap: sounds on at 10:00 plays the beep, the pet shows, the status stays shut.
     await hours(10);
@@ -3998,6 +4417,9 @@ async function main() {
     await bp.waitForTimeout(2500);
     check(`the first look runs after the boot (${width}px)`,
       await bp.locator("hatch-pet-card").evaluate((el) => el.__greets > 0));
+    const saidAfter = await bp.locator("hatch-pet-card").evaluate((el) => el.__moments);
+    check(`the held private moment is said once after the boot (${width}px)`,
+      saidAfter.filter((type) => type === "friend_home").length === 1, saidAfter.join(","));
     // A second load: no boot screen.
     await bp.reload();
     await bp.waitForSelector("hatch-pet-card .slide", { timeout: 60000 });
@@ -4144,6 +4566,36 @@ async function main() {
     check(`the visit is over and nothing is left behind by 9 s (${width}px)`,
       over.left === 0 && !over.beam, JSON.stringify(over));
 
+    // The visit's hearts are its own: its end leaves a bond's hearts alone, and
+    // a shared screen gets none (bond hearts are personal there).
+    const heartsRun = (shared) => card.evaluate(async (el, shared) => {
+      localStorage.setItem("hatch-shared-screen", shared ? "on" : "off");
+      const host = el._slides[0];
+      el._linkStart(host, el._slides[1]);
+      let link = 0;
+      for (let i = 0; i < 60 && el._link && !link; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        link = host.screen.querySelectorAll(".linkhearts").length;
+      }
+      try {
+        el._bondHearts(host); // a real bond's hearts, mid-visit
+        el._linkEnd();
+        return { link, bond: host.screen.querySelectorAll(".bondhearts").length,
+          linkAfter: host.screen.querySelectorAll(".linkhearts").length };
+      } finally {
+        el._linkEnd();
+        host.screen.querySelector(".bondhearts")?.remove();
+        localStorage.setItem("hatch-shared-screen", "off");
+      }
+    }, shared);
+    await prep();
+    const ownHearts = await heartsRun(false);
+    await prep();
+    const sharedHearts = await heartsRun(true);
+    check(`the visit's hearts are its own, and none on a shared screen (${width}px)`,
+      ownHearts.link === 1 && ownHearts.bond === 1 && ownHearts.linkAfter === 0 && sharedHearts.link === 0,
+      JSON.stringify([ownHearts, sharedHearts]));
+
     // A swipe mid-visit ends it at once.
     await prep();
     await card.evaluate((el) => el._linkStart(el._slides[0], el._slides[1]));
@@ -4208,6 +4660,184 @@ async function main() {
   }
 
   check("no errors in the browser console", errors.length === 0, errors.slice(0, 3).join(" | "));
+
+  // 8. An HA restart keeps the bond, and a second login sees nothing of the
+  // first's (privacy P3a-card). After the console check: a restart's lost
+  // connection is noise there. The restart is opt-in, as card-check stops
+  // and starts Home Assistant itself (HA's restart only exits under `hass`):
+  // HA_CONFIG=<this instance's config dir> HA_START="<command that starts it>"
+  // (the dev instance's by default, see the top). It also seeds dev's bond
+  // (level 8, "sunbeam") and an aimed wish while HA is down (plan review #12),
+  // and puts back what was there at the end (so the next run starts as this
+  // one did). Without them the second-login checks would prove nothing, so
+  // that's a failure, not a skip.
+  let seeded = false;
+  let unseed = null;
+  const seedPet = pet["sensor.life_stage"];
+  // Stop HA, change the pet's store while it's down, start it again (detached:
+  // it outlives this script) and wait until it runs. Returns a fresh token.
+  const bounce = async (token, entryId, patch) => {
+    const lock = path.join(process.env.HA_CONFIG, ".ha_run.lock");
+    const pid = JSON.parse(fs.readFileSync(lock, "utf8") || "{}").pid;
+    await api("POST", "/api/services/homeassistant/stop", token, {}).catch(() => {});
+    const alive = () => { try { process.kill(pid, 0); return true; } catch (err) { return false; } };
+    for (let i = 0; i < 120 && pid && alive(); i++) await new Promise((r) => setTimeout(r, 500));
+    const storeFile = path.join(process.env.HA_CONFIG, ".storage", `virtual_pet.${entryId}`);
+    const store = JSON.parse(fs.readFileSync(storeFile, "utf8")); // as HA left it on the way out
+    patch(store.data);
+    fs.writeFileSync(storeFile, JSON.stringify(store, null, 2));
+    const log = fs.openSync(path.join(OUT, "ha-restart.log"), "a");
+    require("child_process").spawn("bash", ["-c", process.env.HA_START], { detached: true, stdio: ["ignore", log, log] }).unref();
+    await waitForHa();
+    const next = await signIn();
+    for (let i = 0; i < 90; i++) {
+      if ((await api("GET", "/api/config", next).catch(() => ({}))).state === "RUNNING") break;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    return next;
+  };
+  if (process.env.HA_CONFIG && process.env.HA_START) {
+    const fresh = await signIn(); // the first token may have expired by now
+    const { time_zone: tz } = await api("GET", "/api/config", fresh);
+    const entryId = await evaluate(async (e) => (await document.querySelector("home-assistant").hass
+      .callWS({ type: "config/entity_registry/get", entity_id: e })).config_entry_id, seedPet);
+    const card = page.locator("hatch-pet-card").first();
+    for (let i = 0; i < slides; i++) {
+      if (await card.evaluate((el, e) => el._slides[el._index].ids?.["sensor.life_stage"] === e, seedPet)) break;
+      await page.locator("hatch-pet-card .nav.next").click();
+      await page.waitForTimeout(700);
+    }
+    await evaluate(() => { window.__hatchMark = "same page"; });
+    // Seed: dev's bond with this pet, and today's wish aimed at dev. What was
+    // there goes back at the end.
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+    let before = null;
+    const downAt = Date.now();
+    const token2 = await bounce(fresh, entryId, (data) => {
+      before = { bond: data.bonds?.[me], wish: data.wish };
+      data.bonds = { ...(data.bonds || {}), [me]: { ...(data.bonds?.[me] || {}), points: 105, nickname: "sunbeam" } };
+      data.wish = { kind: "play", day: today, granted: false, for: me, for_name: USER.name };
+    });
+    unseed = () => bounce(token2, entryId, (data) => {
+      if (before.bond === undefined) delete data.bonds?.[me];
+      else data.bonds = { ...(data.bonds || {}), [me]: before.bond };
+      data.wish = before.wish;
+    });
+    const upAt = Date.now();
+    const back = await card.evaluate(async (el, e) => {
+      const start = Date.now();
+      const s = () => el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+      while (Date.now() - start < 90000 && s()?.mine?.bond?.nickname !== "sunbeam") {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      const sl = s();
+      sl.statusHtml = null;
+      el._renderStatus(sl, []);
+      return { s: Math.round((Date.now() - start) / 1000), bond: sl.mine?.bond, aimed: sl.mine?.wish_for_you,
+        you: /you two/.test(sl.status.textContent), wish: sl.status.querySelector(".row")?.textContent.trim(),
+        mark: window.__hatchMark };
+    }, seedPet);
+    seeded = back.bond?.nickname === "sunbeam";
+    check("P3a: an HA restart keeps the bond (back within 90 s of start-up, no page reload)",
+      seeded && back.you && back.mark === "same page" && back.s <= 90,
+      JSON.stringify({ ...back, downForS: Math.round((upAt - downAt) / 1000) }));
+    check("P3a: the seeded wish is aimed at dev on dev's own card",
+      back.aimed === true && /play a game with you/.test(back.wish || ""), JSON.stringify(back));
+  } else {
+    check("P3a: HA restart and the seeded bond can run (set HA_CONFIG and HA_START with HA_URL)", false,
+      "no HA_CONFIG/HA_START: the restart and the seeded second login didn't run");
+  }
+
+  // A second, non-admin login on the same dashboard.
+  {
+    const other = { username: "other", password: "otherother1" };
+    const users = await evaluate(() => document.querySelector("home-assistant").hass.callWS({ type: "config/auth/list" }));
+    if (!users.some((u) => u.username === other.username)) {
+      const { user } = await evaluate(() => document.querySelector("home-assistant").hass
+        .callWS({ type: "config/auth/create", name: "Other", group_ids: ["system-users"] }));
+      await evaluate((arg) => document.querySelector("home-assistant").hass
+        .callWS({ type: "config/auth_provider/homeassistant/create", ...arg }), { user_id: user.id, ...other });
+    }
+    const devNickname = seeded ? "sunbeam" : await page.locator("hatch-pet-card").evaluate((el, e) =>
+      el._slides.find((x) => x.ids?.["sensor.life_stage"] === e)?.mine?.bond?.nickname || null, seedPet);
+    const ctx2 = await browser.newContext({ viewport: { width: 420, height: 860 } });
+    const page2 = await ctx2.newPage();
+    const errors2 = [];
+    page2.on("pageerror", (e) => errors2.push(String(e)));
+    await page2.goto(CLIENT);
+    await page2.waitForSelector('input[autocomplete="username"]', { timeout: 60000 });
+    await page2.locator('input[autocomplete="username"]').first().fill(other.username);
+    await page2.locator('input[type="password"]').first().fill(other.password);
+    await page2.keyboard.press("Enter");
+    await page2.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
+    await page2.goto(`${HA}/pet-bench/pet`);
+    await page2.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
+    await page2.waitForTimeout(16000); // the frontend reloads itself once
+    await page2.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+    const card2 = page2.locator("hatch-pet-card").first();
+    // Every payload of Other's channel, from a fresh subscribe on every slide.
+    await card2.evaluate(async (el) => {
+      window.__payloads = [];
+      const conn = el._hass.connection;
+      const real = conn.subscribeMessage.bind(conn);
+      conn.subscribeMessage = (cb, msg, opts) => real((m) => {
+        if (msg?.type === "virtual_pet/subscribe") window.__payloads.push(m);
+        cb(m);
+      }, msg, opts);
+      el._slides.forEach((s) => el._subscribe(s, true));
+      for (let i = 0; i < 50 && !el._slides.every((s) => s.subscribed); i++) await new Promise((r) => setTimeout(r, 100));
+    });
+    await page2.waitForTimeout(1500);
+    const view = await card2.evaluate(async (el, e) => {
+      const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+      const id = s.ids["sensor.life_stage"];
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const status = () => { s.statusHtml = null; el._renderStatus(s, []); return s.status; };
+      const out = { user: el._hass.user.id, admin: el._hass.user.is_admin };
+      out.bell = status().querySelector(".bell.notify")?.getAttribute("aria-pressed");
+      await el._hass.callWS({ type: "virtual_pet/notify_me", entity_id: id, enabled: true });
+      for (let i = 0; i < 30 && !s.mine?.notify_me; i++) await wait(100);
+      out.bellOn = status().querySelector(".bell.notify")?.getAttribute("aria-pressed");
+      out.pushed = !!s.mine?.notify_me; // a real push of Other's own view
+      out.bond = s.mine?.bond ?? null;
+      await el._hass.callWS({ type: "virtual_pet/notify_me", entity_id: id, enabled: false });
+      for (let i = 0; i < 30 && s.mine?.notify_me; i++) await wait(100);
+      const st = status();
+      out.bondRow = [...st.querySelectorAll(".row")].find((r) => /you two/.test(r.textContent))
+        ?.querySelector(".hearts")?.getAttribute("aria-label") || null;
+      out.wish = [...st.querySelectorAll(".row")].find((r) => /^wish/.test(r.textContent.trim()))?.textContent.trim() || null;
+      out.held = JSON.stringify(el._slides.map((x) => ({ mine: x.mine, house: x.house, moments: x.privateMoments })));
+      out.payloads = JSON.stringify(window.__payloads);
+      out.shown = el._slides.map((x) => { x.statusHtml = null; el._renderStatus(x, []);
+        return `${x.status.textContent}|${x.bubble.textContent}|${x.live.textContent}`; }).join("\n");
+      out.nPayloads = window.__payloads.length;
+      return out;
+    }, seedPet);
+    const devStrings = [me, devNickname].filter(Boolean);
+    const leaks = devStrings.filter((d) => view.held.includes(d) || view.payloads.includes(d) || view.shown.includes(d));
+    const devBell = await page.locator("hatch-pet-card").evaluate((el, e) =>
+      el._slides.find((x) => x.ids?.["sensor.life_stage"] === e)?.mine?.notify_me, seedPet);
+    check("P3a: a second login's card holds and shows nothing of dev's (ID, nickname)",
+      view.user !== me && view.nPayloads > 0 && leaks.length === 0,
+      JSON.stringify({ leaks, nPayloads: view.nPayloads, seeded, admin: view.admin }));
+    check("P3a: a second login has no close bond and no nickname from dev",
+      view.bondRow !== "bond level 8 of 10" && !view.shown.includes("sunbeam"), JSON.stringify({ bondRow: view.bondRow }));
+    const devBond = await page.locator("hatch-pet-card").evaluate((el, e) =>
+      el._slides.find((x) => x.ids?.["sensor.life_stage"] === e)?.mine?.bond ?? null, seedPet);
+    check("P3a: after a push, the second login's bond is its own, not dev's",
+      view.pushed && devBond !== null && (view.bond === null || JSON.stringify(view.bond) !== JSON.stringify(devBond)),
+      JSON.stringify({ pushed: view.pushed, other: view.bond, dev: devBond }));
+    check("P3a: the bell is the second login's own setting",
+      view.bell === "false" && view.bellOn === "true" && devBell === false, JSON.stringify({ ...view, held: undefined, payloads: undefined, shown: undefined, devBell }));
+    check("P3a: a wish aimed at dev is plain on the second login's card",
+      seeded && (view.wish === "wish♡ play a game together" || /play a game together/.test(view.wish || "")), String(view.wish));
+    check("P3a: no errors in the second login's console", errors2.length === 0, errors2.slice(0, 3).join(" | "));
+    await ctx2.close();
+  }
+  if (unseed) {
+    await unseed();
+    console.log("note: dev's seeded bond and wish are put back as they were");
+  }
   await browser.close();
 
   const failed = results.filter((r) => !r.ok);

@@ -520,14 +520,14 @@ const WISHES = {
   rain: ["I hope I get to see the rain today", "see the rain"],
   say_hi: ["will you come say hi this afternoon?", "a hello this afternoon"],
 };
-// A wish aimed at a close friend (life_stage wish "for", "for_name"): said of
-// them, said to them, and short for the status screen.
+// A wish aimed at a close friend (the channel's "mine.wish_for_you"): said to
+// them, and short for their status screen. Anyone else sees the plain wish.
 const WISHES_FOR = {
-  play: [(n) => `I hope ${n} plays a game with me today!`, "will you play a game with me today?", (n) => `play a game with ${n}`],
-  snack: [(n) => `I hope ${n} brings me a snack after lunch!`, "will you bring me a snack after lunch?", (n) => `a snack from ${n}`],
-  bath: [(n) => `I wish ${n} would give me a bubble bath!`, "will you give me a bubble bath today?", (n) => `a bubble bath from ${n}`],
-  praise: [(n) => `I hope ${n} says I'm good today`, "will you tell me I'm good today?", (n) => `hear "good job!" from ${n}`],
-  say_hi: [(n) => `I hope ${n} comes to say hi this afternoon!`, "will you come say hi this afternoon?", (n) => `a hello from ${n}`],
+  play: ["will you play a game with me today?", (n) => `play a game with ${n}`],
+  snack: ["will you bring me a snack after lunch?", (n) => `a snack from ${n}`],
+  bath: ["will you give me a bubble bath today?", (n) => `a bubble bath from ${n}`],
+  praise: ["will you tell me I'm good today?", (n) => `hear "good job!" from ${n}`],
+  say_hi: ["will you come say hi this afternoon?", (n) => `a hello from ${n}`],
 };
 // "will you play?" + "sunbeam" -> "will you play, sunbeam?"; "night night ♥" -> "night night, sunbeam ♥"
 const withName = (line, name) => (name ? line.replace(/([!?.]*)(\s*♥)?$/, `, ${name}$1$2`) : line);
@@ -801,11 +801,26 @@ const DREAMS = {
   feast: (d, w) => `I dreamed about a mountain of ${w?.food || "snacks"}!`,
 };
 const AWAY_NOTE_AFTER_MS = 3 * 3600 * 1000;
-// A bond with each person (life_stage "bonds", by HA user ID; only the viewer's
-// own is ever shown). What each level brings, as in rates.py: a warmer hello, a
+// A bond with each person (only the viewer's own, from the private channel's
+// "mine"). What each level brings, as in rates.py: a warmer hello, a
 // hop when they look in, the nickname it picked, its favourite of their games,
 // and hearts only for them.
 const BOND = { warm: 2, hop: 3, nickname: 4, favourite: 6, hearts: 8, max: 10 };
+// The private channel (virtual_pet/subscribe): the viewer's own view of a pet
+// and the house's, pushed to this connection only. A failed subscribe (the pet
+// mid-reload, or HA still starting) is tried again after each of these, then
+// every RETRY_LAST_MS while the slide exists; the first look waits at most
+// SUBSCRIBE_WAIT_MS for it.
+const SUBSCRIBE_RETRY_MS = [2000, 5000, 15000];
+const SUBSCRIBE_RETRY_LAST_MS = 60000;
+const SUBSCRIBE_WAIT_MS = 3000;
+const MOMENTS_KEPT = 10; // const.py MOMENTS_KEPT
+// Moments that come only over the channel: a person's own (const.py
+// PERSONAL_EVENTS) and the house's shows and songs (MEDIA_EVENTS). The public
+// list may still carry them; the card never reads them there.
+const CHANNEL_ONLY = new Set(["bond_up", "bond_record", "bond_favourite", "friend_home", "tucked_in", "watching", "listening"]);
+const MEDIA_MOMENTS = new Set(["watching", "listening"]);
+const momentKey = (m) => m && `${m.at}|${m.type}`;
 const VISIT_EVERY_MS = 3600 * 1000; // virtual_pet.visit, as the server counts it
 const VISIT_RETRY_MS = 5 * 60 * 1000; // after a visit that didn't count
 const WISH_MENTION_MS = [600000, 900000]; // between reminders of an open wish
@@ -1547,7 +1562,7 @@ const STYLE = `
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
   .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
-  .screen.show-status .bondhearts { display: none !important; }
+  .screen.show-status .bondhearts, .screen.show-status .linkhearts { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
   .pet.sulk { animation: shake .35s 2; }
@@ -1913,7 +1928,7 @@ const STYLE = `
   .screen .askday button[data-answer="keep"] { font-size: 12px; white-space: normal;
     max-width: calc(100% - 72px); }
   .screen.show-status .askday { display: none; }
-  .screen .bondhearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
+  .screen .bondhearts img, .screen .linkhearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
     opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }
   @keyframes bondheart { 0% { transform: translateY(0) scale(.7); opacity: 0; } 20% { opacity: 1; }
     100% { transform: translateY(-70px) scale(1); opacity: 0; } }
@@ -1969,6 +1984,7 @@ class HatchPetCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    this._listenReady(hass?.connection);
     this._watchServerClock(hass);
     this._resendAnswers();
     this._update();
@@ -2043,6 +2059,17 @@ class HatchPetCard extends HTMLElement {
     // A shared screen turned on in another card on this page, or another tab.
     window.addEventListener(SHARED_EVENT, this._onSharedEvent);
     window.addEventListener("storage", this._onSharedStorage);
+    // Shared screen turned on or off while the card was away (its listeners
+    // were off): catch up now, before a queued personal line is said.
+    if (this._slides?.length && sharedScreen() !== this._sharedSeen) {
+      if (sharedScreen()) this._goShared();
+      else this._goPersonal();
+    }
+    // Back on the page: the private channel again (it closed when the card left).
+    if (this._hass) {
+      this._listenReady(this._hass.connection);
+      for (const s of this._slides || []) this._subscribe(s);
+    }
     if (!document.querySelector("[data-hatch-font]")) {
       // Tiny5 (SIL OFL), served by the integration so it works offline. It
       // stays legible at button-label sizes, where most pixel fonts blur.
@@ -2062,15 +2089,198 @@ class HatchPetCard extends HTMLElement {
     document.removeEventListener("visibilitychange", this._onHidden);
     window.removeEventListener(SHARED_EVENT, this._onSharedEvent);
     window.removeEventListener("storage", this._onSharedStorage);
+    this._listenReady(null);
     // A game (Catch's animation loop above all) stops with the card, and so
-    // does a line typing out.
+    // does a line typing out, and the private channel.
     for (const s of this._slides || []) {
       if (s.game) this._endGame(s, null);
       this._stopTyping(s);
       this._dropPhotos(s);
-      s.unsub?.();
-      s.unsub = null;
+      this._unsubscribe(s);
     }
+  }
+
+  // --- The private channel (virtual_pet/subscribe) -----------------------------
+  //
+  // Each slide subscribes to its pet: the viewer's own view ("mine": their
+  // bond and switches), the house's ("house": the latest show or song, a dream
+  // of one) and moments told to this connection alone. Subscribed without the
+  // library's own resubscribe, which never says when it fails: the card does
+  // it on the connection's "ready", through its own retries.
+
+  // The connection whose reconnects resubscribe every slide (null: none).
+  _listenReady(conn) {
+    if (conn === this._readyConn) return;
+    this._readyConn?.removeEventListener?.("ready", this._onReady);
+    this._readyConn = conn?.addEventListener ? conn : null;
+    this._readyConn?.addEventListener("ready", this._onReady);
+  }
+
+  // A new socket: the old subscriptions died with the old one (nothing to
+  // unsubscribe), so every slide asks again.
+  _onReady = () => {
+    for (const s of this._slides || []) {
+      s.unsub = null;
+      if (!s.gone) this._subscribe(s, true); // a removed pet stays unasked
+    }
+  };
+
+  // Subscribe the slide to its pet, unless it already is (to the same pet, on
+  // the same kind of screen). `again`: whatever it had, ask afresh.
+  _subscribe(s, again = false) {
+    const id = s.ids?.["sensor.life_stage"];
+    const conn = this._hass?.connection;
+    if (!id || !conn?.subscribeMessage || !this.isConnected) return;
+    const shared = sharedScreen();
+    const key = `${id}|${shared}`;
+    if (!again && s.subKey === key && (s.unsub || s.subPending || s.retryTimer || s.gone)) return;
+    this._unsubscribe(s, false);
+    if (s.subKey !== key) s.retries = 0;
+    s.subKey = key;
+    s.gone = false;
+    const gen = (s.subGen = (s.subGen || 0) + 1);
+    const user = this._hass.user?.id;
+    s.subPending = true;
+    // The first look waits this long at most for the channel's first word.
+    if (!s.subscribed && !s.subscribeFailed && !s.waitTimer) {
+      s.waitTimer = setTimeout(() => {
+        s.waitTimer = null;
+        if (!s.subscribed) s.subscribeFailed = true;
+      }, SUBSCRIBE_WAIT_MS);
+    }
+    Promise.resolve(conn.subscribeMessage((msg) => {
+      if (s.subGen === gen) this._channel(s, msg, user);
+    }, { type: "virtual_pet/subscribe", entity_id: id, shared }, { resubscribe: false }))
+      .then((unsub) => {
+        if (s.subGen !== gen) { // moved on while it was asked
+          Promise.resolve(unsub?.()).catch(() => {});
+          return;
+        }
+        s.subPending = false;
+        s.unsub = () => Promise.resolve(unsub?.()).catch(() => {});
+        if (s.gone) this._unsubscribe(s, false); // gone before the reply landed
+      })
+      .catch(() => {
+        // no_pet (mid-reload), unknown_command (HA still starting, or an
+        // older server): go ahead without it, and ask again, for good.
+        if (s.subGen !== gen) return;
+        s.subPending = false;
+        s.subscribeFailed = true;
+        const n = s.retries || 0;
+        s.retries = n + 1;
+        s.retryTimer = setTimeout(() => {
+          s.retryTimer = null;
+          if (s.subGen === gen && this._slides?.includes(s)) this._subscribe(s, true);
+        }, SUBSCRIBE_RETRY_MS[n] ?? SUBSCRIBE_RETRY_LAST_MS);
+      });
+  }
+
+  // Stop the slide's subscription and its retries (`all`: and the wait for it).
+  _unsubscribe(s, all = true) {
+    s.subGen = (s.subGen || 0) + 1; // a reply still on its way is dropped
+    s.subPending = false;
+    clearTimeout(s.retryTimer);
+    s.retryTimer = null;
+    if (all) {
+      clearTimeout(s.waitTimer);
+      s.waitTimer = null;
+      s.subKey = null;
+    }
+    s.unsub?.();
+    s.unsub = null;
+  }
+
+  // The channel has spoken (or failed): the first look and hello may go.
+  _channelHeard(s) {
+    return !!(s.subscribed || s.subscribeFailed);
+  }
+
+  // One message on the slide's channel: the whole view (on subscribe, and
+  // again after the pet reloads), a part that changed, a moment, or "gone".
+  _channel(s, msg, user) {
+    if (!msg || typeof msg !== "object") return;
+    const shared = sharedScreen();
+    if (msg.gone) { // the pet was removed: nothing more will come
+      this._unsubscribe(s, false);
+      s.gone = true;
+      return;
+    }
+    if (Array.isArray(msg.moments)) {
+      // The whole view: a reset, every time. Its moments are what happened
+      // already (for the first look), so nothing in it is said now.
+      if (msg.now) noteServerTime(msg.now);
+      s.mine = shared ? null : msg.mine || null;
+      s.house = msg.house || null;
+      if (!s.privateSeen) s.privateSeen = new Set();
+      if (!s.mediaSeen) s.mediaSeen = new Set();
+      for (const m of msg.moments) {
+        if (!m?.type) continue;
+        if (MEDIA_MOMENTS.has(m.type)) s.mediaSeen.add(m.at);
+        else this._keepMoment(s, m);
+      }
+      if (s.house?.media?.at) s.mediaSeen.add(s.house.media.at);
+      s.subscribed = true;
+      s.subscribeFailed = false;
+      s.retries = 0;
+      clearTimeout(s.waitTimer);
+      s.waitTimer = null;
+    } else {
+      if ("mine" in msg) s.mine = shared ? null : msg.mine || null;
+      if ("house" in msg) s.house = msg.house || null;
+      const m = msg.moment;
+      if (m?.type) {
+        // Said only if it's new here and just happened (the server's clock).
+        const fresh = serverNow() - new Date(m.at).getTime() < 15000;
+        if (MEDIA_MOMENTS.has(m.type)) {
+          if (!s.mediaSeen) s.mediaSeen = new Set();
+          if (!s.mediaSeen.has(m.at)) {
+            s.mediaSeen.add(m.at);
+            if (fresh) this._channelMoment(s, m);
+          }
+        } else if (this._keepMoment(s, m) && fresh) {
+          this._channelMoment(s, m);
+        }
+      }
+      if (!("mine" in msg) && !("house" in msg)) return; // a moment draws nothing
+    }
+    // The viewer's own baby talk, kept for the next page load (by whose it is).
+    if (s.mine && typeof s.mine.baby_talk === "boolean" && user && user === this._hass?.user?.id) {
+      setBabyTalk(user, s.mine.baby_talk);
+    }
+    s.statusHtml = null;
+    this._redraw(s);
+  }
+
+  // A channel moment is said now, or after the boot screen (only the speaking
+  // waits, as _greet does).
+  _channelMoment(s, m) {
+    if (this._booting) (s.bootMoments ||= []).push(m);
+    else this._moment(s, m);
+  }
+
+  // A private moment, kept for the first look (newest first): false if it was
+  // already here.
+  _keepMoment(s, m) {
+    const key = momentKey(m);
+    if (!s.privateSeen) s.privateSeen = new Set();
+    if (s.privateSeen.has(key)) return false;
+    s.privateSeen.add(key);
+    s.privateMoments = [m, ...(s.privateMoments || [])]
+      .sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, MOMENTS_KEPT);
+    return true;
+  }
+
+  // For card-check: what the channel would have said.
+  _mineFor(s, mine) {
+    s.mine = mine;
+    s.statusHtml = null;
+    this._redraw(s);
+  }
+
+  _houseFor(s, house) {
+    s.house = house;
+    s.statusHtml = null;
+    this._redraw(s);
   }
 
   // --- Finding the pets --------------------------------------------------------
@@ -2117,6 +2327,7 @@ class HatchPetCard extends HTMLElement {
   // --- Building --------------------------------------------------------------
 
   _build() {
+    this._sharedSeen = sharedScreen(); // what the card last saw (connectedCallback)
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `
       <style>${STYLE}${SCENE_STYLE}</style>
@@ -2407,6 +2618,12 @@ class HatchPetCard extends HTMLElement {
         x.boot.hidden = true;
         x.boot.classList.remove("filling");
       });
+      // The channel's moments that came in meanwhile, said now.
+      this._slides.forEach((x) => {
+        const held = x.bootMoments || [];
+        x.bootMoments = [];
+        held.forEach((m) => this._moment(x, m));
+      });
     };
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       finish();
@@ -2467,6 +2684,7 @@ class HatchPetCard extends HTMLElement {
       const s = this._slides[i];
       if (s.ids && s.ids.device !== devices[i].device) this._forget(s); // another pet now
       s.ids = devices[i];
+      this._subscribe(s); // its private channel (once: a no-op after that)
       const stage = this._state(s, "sensor.life_stage");
       s.worldKey = worlds[stage?.attributes.world] ? stage.attributes.world : Object.keys(worlds)[0];
       s.world = worlds[s.worldKey];
@@ -2553,11 +2771,32 @@ class HatchPetCard extends HTMLElement {
     clearTimeout(s.statusMessageTimer);
     const note = s.status?.querySelector(".status-feedback");
     if (note) { note.hidden = true; note.textContent = ""; }
+    // The last pet's channel: nothing of it may open this one's first look
+    // (its bond, its nickname, a wish aimed at the viewer). The server clock's
+    // offset is the page's, not the pet's, so it stays.
+    this._unsubscribe(s);
+    this._resetChannel(s);
+  }
+
+  // What a slide knows from its channel, forgotten (a new pet, or a shared
+  // screen asking again).
+  _resetChannel(s) {
+    s.mine = null;
+    s.house = null;
+    s.subscribed = false;
+    s.subscribeFailed = false;
+    s.privateSeen = new Set();
+    s.mediaSeen = new Set();
+    s.privateMoments = [];
+    s.bootMoments = [];
+    s.retries = 0;
+    s.gone = false;
   }
 
   // Turning on "shared screen", here or in another card or tab: everything
   // personal on every slide goes, including a line still being typed out.
   _goShared() {
+    this._sharedSeen = true;
     for (const slide of this._slides || []) {
       this._clearAsk(slide);
       slide.queue = [];
@@ -2568,20 +2807,27 @@ class HatchPetCard extends HTMLElement {
       slide.sayUntil = 0; // the next tick says the mood's line, which names nobody
       slide.live.textContent = "";
       slide.screen.querySelector(".bondhearts")?.remove();
+      slide.screen.querySelector(".linkhearts")?.remove(); // a visit's, mid-way
       slide.journal = false;
       slide.confirm = null; // an armed "forget" is a personal row
       slide.status.innerHTML = ""; // drawn again, without its personal rows
       slide.statusHtml = null;
       slide.drawnSig = null;
+      slide.mine = null; // and the channel asked again, as a shared screen
+      slide.bootMoments = []; // a held moment may be personal
+      this._subscribe(slide, true);
     }
     this._redraw();
   }
 
-  // Personal again: only the status screens change (nothing waits to come back).
+  // Personal again: the status screens, and the channel asked again for the
+  // viewer's own view (nothing else waits to come back).
   _goPersonal() {
+    this._sharedSeen = false;
     for (const slide of this._slides || []) {
       slide.statusHtml = null;
       slide.drawnSig = null;
+      this._subscribe(slide, true);
     }
     this._redraw();
   }
@@ -3072,8 +3318,8 @@ class HatchPetCard extends HTMLElement {
       if (recent(latestAt)) this._react(s, log[0]);
       s.lastLogAt = latestAt;
     }
-    const moments = lastCare?.attributes.moments || [];
-    const momentKey = (m) => m && `${m.at}|${m.type}`;
+    // A person's own moments and the house's shows come from the channel only.
+    const moments = (lastCare?.attributes.moments || []).filter((m) => !CHANNEL_ONLY.has(m.type));
     if (s.lastMoment === undefined) s.lastMoment = momentKey(moments[0]) ?? null; // not old ones
     if (moments.length && momentKey(moments[0]) !== s.lastMoment) {
       const fresh = [];
@@ -3505,6 +3751,7 @@ class HatchPetCard extends HTMLElement {
   // The first look at this pet on this device: what happened while you were
   // out, this morning's dream and today's wish (each once a day per device).
   _firstLook(s) {
+    if (!this._channelHeard(s)) return; // the viewer's bond and wish first
     const away = this._state(s, "sensor.mood")?.state === "away";
     if (s.lookedFirst || !s.species || s.asleep || away || this._eggMinutes(this._state(s, "sensor.life_stage")) !== null) return;
     s.lookedFirst = true;
@@ -3514,9 +3761,7 @@ class HatchPetCard extends HTMLElement {
     // (the dream and wish come again at the next first look; the visit's notes
     // are budgeted on the server from what's queued here).
     const lines = [];
-    const me = this._hass.user?.id;
-    const home = (this._state(s, "sensor.last_care")?.attributes.moments || [])
-      .find((m) => m.type === "friend_home" && m.user === me);
+    const home = (s.privateMoments || []).find((m) => m.type === "friend_home");
     const at = home && new Date(home.at).getTime();
     if (at && !sharedScreen() && Date.now() - at < FRIEND_WELCOME_MS && this._welcomeDue(s, at)) {
       // A close friend who came home while the card was closed: welcome them first.
@@ -3535,9 +3780,10 @@ class HatchPetCard extends HTMLElement {
       const note = this._awayNote(s, seen);
       if (note) lines.push([note, 5500, { away: true }]);
     }
-    const dream = stage.dream && DREAMS[stage.dream.kind];
+    const dreamt = s.house?.dream || stage.dream; // a show or song's, from the house
+    const dream = dreamt && DREAMS[dreamt.kind];
     if (dream && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
-      lines.push([dream(stage.dream, this._words(s)), 5000]);
+      lines.push([dream(dreamt, this._words(s)), 5000]);
     }
     const wish = stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
     if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000]);
@@ -3559,20 +3805,24 @@ class HatchPetCard extends HTMLElement {
   }
 
   // Today's wish in the pet's words and short: [line, status text], or null.
-  // One aimed at a close friend names them, or speaks to them if they're looking.
+  // One aimed at the viewer (their own "mine") speaks to them; everyone else,
+  // and every shared screen, sees the plain wish.
   _wishLine(wish, s) {
     if (!WISHES[wish.kind]) return null;
-    const aimed = wish.for && wish.for_name && WISHES_FOR[wish.kind];
-    if (!aimed) return WISHES[wish.kind];
-    if (wish.for !== this._hass.user?.id || sharedScreen()) return [aimed[0](short(wish.for_name, 16)), aimed[2](short(wish.for_name, 16))];
+    if (!this._aimedAtMe(wish, s)) return WISHES[wish.kind];
     const bond = this._bond(s);
-    return [withName(aimed[1], bond?.level >= BOND.nickname ? bond.nickname : null), aimed[2]("you")];
+    const aimed = WISHES_FOR[wish.kind];
+    return [withName(aimed[0], bond?.level >= BOND.nickname ? bond.nickname : null), aimed[1]("you")];
+  }
+
+  _aimedAtMe(wish, s) {
+    return !!(WISHES_FOR[wish.kind] && s.mine?.wish_for_you && !sharedScreen());
   }
 
   // The wish as the pet says it: in baby talk if it's on (not an aimed wish:
   // that keeps its words; the status screen's short text never changes).
   _wishSaid(s, wish, line) {
-    if (wish.for && wish.for_name && WISHES_FOR[wish.kind]) return line[0];
+    if (this._aimedAtMe(wish, s)) return line[0];
     return this._lines(s, `WISHES.${wish.kind}`, line[0]).text;
   }
 
@@ -3642,7 +3892,7 @@ class HatchPetCard extends HTMLElement {
   }
 
   _greet(s) {
-    if (s.greeted || !this._free(s)) return;
+    if (s.greeted || !this._channelHeard(s) || !this._free(s)) return;
     s.greeted = true;
     const user = this._hass.user;
     const bond = this._bond(s);
@@ -3679,13 +3929,6 @@ class HatchPetCard extends HTMLElement {
     if (level >= BOND.hearts && !calm) this._bondHearts(s);
   }
 
-  // A person's first name, from their person entity (by HA user ID).
-  _personName(userId) {
-    const person = Object.values(this._hass.states || {})
-      .find((st) => st.entity_id.startsWith("person.") && st.attributes.user_id === userId);
-    return short((person?.attributes.friendly_name || "").trim().split(/\s+/)[0], 16) || null;
-  }
-
   // The creature's own words (food, home), for its stage (a moth isn't a
   // caterpillar): species.json "words", with per-stage overrides.
   _words(s) {
@@ -3696,16 +3939,17 @@ class HatchPetCard extends HTMLElement {
 
   // The viewer's own bond with this pet: {level, nickname?, favourite?} or null.
   _bond(s) {
-    const id = this._hass.user?.id;
     if (sharedScreen()) return null; // nobody's bond on a shared screen
-    return (id && this._state(s, "sensor.life_stage")?.attributes.bonds?.[id]) || null;
+    return s.mine?.bond || null;
   }
 
   // Tell the pet who's looking in (for the bond, and a "come say hi" wish).
   _visit(s) {
     const id = s.ids?.["sensor.life_stage"];
-    // Not before the first look has run (it needs the creature): it says what's queued.
-    if (!id || !s.species || !this._hass.user || sharedScreen() || Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
+    // Not before the first look has run (it needs the creature and the
+    // channel's first word): it says what's queued.
+    if (!id || !s.species || !this._channelHeard(s) || !this._hass.user || sharedScreen() ||
+      Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
     s.visitedAt = Date.now();
     const queued = Math.min((s.queue || []).length, 6);
     this._hass.callService("virtual_pet", "visit", { entity_id: id, queued }, undefined, false, true)
@@ -3826,7 +4070,10 @@ class HatchPetCard extends HTMLElement {
     const user = this._hass.user?.id;
     const send = () => this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity, question: kind, answer });
     const kept = () => {
-      if (kind === "birthday") this._birthdayKept = answer !== "skip";
+      if (kind === "birthday") {
+        this._birthdayKept = answer !== "skip";
+        this._setMine("birthday_kept", answer !== "skip"); // the channel's push confirms it
+      }
     };
     send().then(kept).catch(() => {
       setTimeout(() => {
@@ -3843,10 +4090,11 @@ class HatchPetCard extends HTMLElement {
   }
 
   // Hearts that float up around the pet: only for someone it's very close to.
-  _bondHearts(s) {
-    s.screen.querySelector(".bondhearts")?.remove();
+  // The infrared link's hearts are "linkhearts", so they never touch a bond's.
+  _bondHearts(s, kind = "bondhearts") {
+    s.screen.querySelector(`.${kind}`)?.remove();
     const box = document.createElement("div");
-    box.className = "bondhearts";
+    box.className = kind;
     box.setAttribute("aria-hidden", "true");
     [[-34, 0], [30, 0.35], [-8, 0.7], [16, 1.05]].forEach(([x, delay]) => {
       const img = document.createElement("img");
@@ -3912,7 +4160,8 @@ class HatchPetCard extends HTMLElement {
     setTimeout(() => ring.remove(), 600);
   }
 
-  // Something happened in HA (sensor.last_care "moments"): show it.
+  // Something happened in HA: show it. From sensor.last_care "moments", or
+  // from the private channel (the viewer's own moments, the house's shows).
   _moment(s, m) {
     const say = (text, ms = 4500) => {
       this._write(s, text, ms);
@@ -3990,12 +4239,14 @@ class HatchPetCard extends HTMLElement {
         this._look(s, 2500);
         break;
       case "watching":
+        if (!m.title) break;
         // A long title gets the short lines, so the bubble leaves the pet in view.
         const title = short(m.title);
         this._speak(s, pick([`ooh, ${title}!`, `is this ${title}?`, `${title}! I love this one`]), 4500);
         this._animate(s, s.pet, "perk", 320);
         break;
       case "listening":
+        if (!m.title) break;
         this._speak(s, m.artist && Math.random() < 0.5
           ? `♪ is this ${short(m.artist)}? ♪`
           : `♪ ${short(m.title)} ♪`);
@@ -4061,9 +4312,8 @@ class HatchPetCard extends HTMLElement {
         const granted = this._lines(s, "wish_granted", pick(["my wish came true! thank you ♥", "yay, my wish! ♥", "best day ever! ♥"]));
         this._queue(s, granted.text, 4500, { catch: !granted.baby });
         break;
-      case "bond_up": { // only the person whose bond it is sees it
+      case "bond_up": { // only the person whose bond it is gets it (the channel)
         if (sharedScreen()) break; // nothing personal on a shared screen
-        if (m.user !== this._hass.user?.id) break;
         this._sparkle(s);
         this._chirp(s, "trait");
         const game = GAMES.find((g) => g.key === m.favourite);
@@ -4075,26 +4325,24 @@ class HatchPetCard extends HTMLElement {
           : this._lines(s, "bond_up", pick(["I like you a lot, you know ♥", "we're getting close! ♥", "you're the best ♥"])).text, 5000);
         break;
       }
-      case "friend_home": { // a close friend's person entity came home
-        const me = this._hass.user?.id;
-        if (m.user === me && !sharedScreen()) {
-          if (!this._welcomeDue(s, new Date(m.at).getTime())) break;
-          this._queue(s, this._lines(s, "friend_home", pick(["you're home!! ♥", "yay, you're back! ♥"])).text, 4500);
-          if (HOME_WEATHER[m.weather]) this._queue(s, HOME_WEATHER[m.weather], 4500);
-          const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-          if (!calm) this._animate(s, s.pet, "greethop", 1400);
-          s.visitedAt = 0; // look in again now: the pet may want to ask about your day
-          this._visit(s);
-          break;
-        }
-        const name = sharedScreen() ? null : this._personName(m.user);
-        this._queue(s, name ? pick([`${name}'s home!!`, `ooh, ${name} is back!`]) : "someone's home!! ♥", 4000);
-        this._animate(s, s.pet, "perk", 320);
+      case "friend_home": { // the viewer, a close friend, came home (the channel)
+        if (sharedScreen()) break; // a shared screen has someone_home
+        if (!this._welcomeDue(s, new Date(m.at).getTime())) break;
+        this._queue(s, this._lines(s, "friend_home", pick(["you're home!! ♥", "yay, you're back! ♥"])).text, 4500);
+        if (HOME_WEATHER[m.weather]) this._queue(s, HOME_WEATHER[m.weather], 4500);
+        const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+        if (!calm) this._animate(s, s.pet, "greethop", 1400);
+        s.visitedAt = 0; // look in again now: the pet may want to ask about your day
+        this._visit(s);
         break;
       }
+      case "someone_home": // anyone signed in came home: nameless, shared screens only
+        if (!sharedScreen()) break; // their own card says "you're home!!"
+        this._queue(s, "someone's home!! ♥", 4000);
+        this._animate(s, s.pet, "perk", 320);
+        break;
       case "bond_record": { // only its person
         if (sharedScreen()) break; // nothing personal on a shared screen
-        if (m.user !== this._hass.user?.id) break;
         const game = GAMES.find((g) => g.key === m.game);
         this._sparkle(s);
         this._queue(s, `new best at ${game ? game.label : "a game"}! ${m.wins}/5 ♥`);
@@ -4102,7 +4350,6 @@ class HatchPetCard extends HTMLElement {
       }
       case "tucked_in": {
         if (sharedScreen()) break; // nothing personal on a shared screen
-        if (m.user !== this._hass.user?.id) break;
         const bond = this._bond(s);
         const name = short((bond?.level >= BOND.nickname && bond.nickname) ||
           this._hass.user?.name?.trim().split(/\s+/)[0], 16);
@@ -4111,7 +4358,7 @@ class HatchPetCard extends HTMLElement {
         break;
       }
       case "bond_favourite":
-        if (m.user === this._hass.user?.id && !sharedScreen()) {
+        if (!sharedScreen()) {
           this._queue(s, pick(["our favourite game! ♥", "I love playing this with you ♥"]));
         }
         break;
@@ -4237,8 +4484,10 @@ class HatchPetCard extends HTMLElement {
       }
       return `<span class="hearts" role="img" aria-label="bond level ${level} of ${BOND.max}">${out}</span>`;
     };
-    const notifying = (this._state(s, "sensor.life_stage")?.attributes.notify_users || [])
-      .includes(this._hass.user?.id);
+    const notifying = !!s.mine?.notify_me;
+    const myDay = this._mineSwitch(s, "my_day", this._myDay);
+    const birthdayKept = this._mineSwitch(s, "birthday_kept", this._birthdayKept);
+    const birthdayPhone = this._mineSwitch(s, "birthday_phone", this._birthdayPhone);
     const ic = (n) => pixelIcon(n, 18);
     const bar = (v) => v === null ? "–"
       : `<div class="bar" role="img" aria-label="${Math.round(v)} of 100"><div style="width:${v}%"></div></div>`;
@@ -4279,10 +4528,10 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell notify" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
-      ${bond && this._myDay === undefined ? row(null, "my day", `<span>…</span>`) : ""}
-      ${bond && this._myDay !== undefined ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!this._myDay}">${this._myDay ? "on" : "off"}</button></span>`) : ""}
-      ${this._birthdayKept && !sharedScreen() ? row(null, "my birthday", forgetButton("forgetbday", "forget_birthday", "forget my birthday")) +
-        row(null, "birthday on my phone", `<span><button class="bell bdayphone" aria-label="birthday on my phone: a happy birthday message on your phone on the day" aria-pressed="${!!this._birthdayPhone}">${this._birthdayPhone ? "on" : "off"}</button></span>`) : ""}
+      ${bond && myDay === undefined ? row(null, "my day", `<span>…</span>`) : ""}
+      ${bond && myDay !== undefined ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!myDay}">${myDay ? "on" : "off"}</button></span>`) : ""}
+      ${birthdayKept && !sharedScreen() ? row(null, "my birthday", forgetButton("forgetbday", "forget_birthday", "forget my birthday")) +
+        row(null, "birthday on my phone", `<span><button class="bell bdayphone" aria-label="birthday on my phone: a happy birthday message on your phone on the day" aria-pressed="${!!birthdayPhone}">${birthdayPhone ? "on" : "off"}</button></span>`) : ""}
       ${sharedScreen() ? "" : row(null, "baby talk", `<span><button class="bell babytalk" aria-label="baby talk: simpler words while a pet is a baby or child" aria-pressed="${babyTalk(this._hass.user?.id)}">${babyTalk(this._hass.user?.id) ? "on" : "off"}</button></span>`)}
       ${sharedScreen() ? "" : row(null, "my data", forgetButton("forgetme", "forget_me", "forget my data: your birthday, answers and settings for every pet; your bonds stay"))}
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
@@ -4297,7 +4546,7 @@ class HatchPetCard extends HTMLElement {
     s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);
-      this._setMyDay(s, !this._myDay, e.currentTarget);
+      this._setMyDay(s, !myDay, e.currentTarget);
     });
     // No "notify me" row on a shared screen.
     s.status.querySelector(".bell.notify")?.addEventListener("click", (e) => {
@@ -4359,10 +4608,11 @@ class HatchPetCard extends HTMLElement {
     s.status.querySelector(".bell.bdayphone")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);
-      const enabled = !this._birthdayPhone;
+      const enabled = !birthdayPhone;
       this._hass.callWS({ type: "virtual_pet/birthday_phone", entity_id: s.ids?.["sensor.life_stage"], enabled })
         .then(() => {
           this._birthdayPhone = enabled;
+          this._setMine("birthday_phone", enabled);
           this._statusMessage(s, enabled ? "Your phone will hear it on the day ♥" : "Only here, then.");
           this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
         })
@@ -4382,6 +4632,8 @@ class HatchPetCard extends HTMLElement {
         .then(() => {
           this._birthdayKept = false;
           this._birthdayPhone = false;
+          this._setMine("birthday_kept", false);
+          this._setMine("birthday_phone", false);
           redrawStatus(); // first: a redraw replaces the message's line
           this._statusMessage(s, "Forgotten. I won't ask again.");
         })
@@ -4403,6 +4655,7 @@ class HatchPetCard extends HTMLElement {
           this._myDay = false;
           this._birthdayKept = false;
           this._birthdayPhone = false;
+          for (const key of ["my_day", "baby_talk", "birthday_kept", "birthday_phone"]) this._setMine(key, false);
           for (const slide of this._slides || []) { // lines told only to them
             if (slide.queue) slide.queue = slide.queue.filter((q) => !q.personal && !q.opts?.personal && !q.ask);
           }
@@ -4473,11 +4726,13 @@ class HatchPetCard extends HTMLElement {
     button.classList.add("pending");
     button.setAttribute("aria-pressed", String(enabled));
     button.textContent = enabled ? "on" : "off";
+    this._setMine("my_day", enabled); // at once, so a redraw before the push keeps it
     try {
-      await this._hass.callService("virtual_pet", "my_day", { entity_id: id, enabled });
+      await this._callOwn("my_day", { entity_id: id, enabled });
       this._myDay = enabled; // one switch per person, for every pet
       this._statusMessage(s, enabled ? "I'll notice your good days! ♥" : "OK, I won't peek.");
     } catch (err) {
+      this._setMine("my_day", !enabled);
       button.setAttribute("aria-pressed", String(!enabled));
       button.textContent = !enabled ? "on" : "off";
       this._statusMessage(s, "That didn't work. Try again.");
@@ -4496,6 +4751,7 @@ class HatchPetCard extends HTMLElement {
     button.setAttribute("aria-pressed", String(enabled));
     button.textContent = enabled ? "on" : "off";
     setBabyTalk(user, enabled); // at once, so a re-render mid-call draws the new state
+    this._setMine("baby_talk", enabled);
     try {
       await this._hass.callWS({ type: "virtual_pet/baby_talk", entity_id: id, enabled });
       if (enabled) {
@@ -4510,11 +4766,35 @@ class HatchPetCard extends HTMLElement {
       }
     } catch (err) {
       setBabyTalk(user, !enabled);
+      this._setMine("baby_talk", !enabled);
       button.setAttribute("aria-pressed", String(!enabled));
       button.textContent = !enabled ? "on" : "off";
       this._statusMessage(s, "That didn't work. Try again.");
     } finally {
       button.classList.remove("pending");
+    }
+  }
+
+  // The viewer's own switches: from the channel's "mine" once it has spoken,
+  // else as the last visit reply had them (undefined: not known yet).
+  _mineSwitch(s, key, fallback) {
+    return s.mine ? !!s.mine[key] : fallback;
+  }
+
+  // A switch of the viewer's own (one per person, for every pet): every
+  // slide's copy at once; the channel's push confirms it.
+  _setMine(key, value) {
+    for (const slide of this._slides || []) if (slide.mine) slide.mine[key] = value;
+  }
+
+  // "notify me" and "my day" as websocket commands (off the event bus). A
+  // server older than this card has only the services: those, then.
+  async _callOwn(command, data) {
+    try {
+      return await this._hass.callWS({ type: `virtual_pet/${command}`, ...data });
+    } catch (err) {
+      if (err?.code !== "unknown_command") throw err;
+      return this._hass.callService("virtual_pet", command, data);
     }
   }
 
@@ -4528,10 +4808,13 @@ class HatchPetCard extends HTMLElement {
       button.setAttribute("aria-pressed", String(enabled));
       button.textContent = enabled ? "on" : "off";
     }
+    // At once, so a redraw before the push keeps it (this pet's, not every pet's).
+    if (s.mine) s.mine.notify_me = enabled;
     try {
-      await this._hass.callService("virtual_pet", "notify_me", { entity_id: id, enabled });
+      await this._callOwn("notify_me", { entity_id: id, enabled });
       this._statusMessage(s, enabled ? "I'll ping your phone!" : "Phone pings off.");
     } catch (err) {
+      if (s.mine) s.mine.notify_me = !enabled;
       if (button) {
         button.setAttribute("aria-pressed", String(!enabled));
         button.textContent = !enabled ? "on" : "off";
@@ -5852,7 +6135,7 @@ class HatchPetCard extends HTMLElement {
       if (!calm) this._animate(guest, L.img, "greethop", 1400);
     });
     at(t0 + 3400, () => {
-      if (!calm) this._bondHearts(host);
+      if (!calm && !sharedScreen()) this._bondHearts(host, "linkhearts");
     });
     at(t0 + 4000, () => {
       L.say.hidden = true;
@@ -5929,7 +6212,7 @@ class HatchPetCard extends HTMLElement {
     host.screen.classList.remove("linking");
     host.pet.classList.remove("linking", "greethop");
     host.pet.style.scale = L.hostScale;
-    host.screen.querySelector(".bondhearts")?.remove();
+    host.screen.querySelector(".linkhearts")?.remove();
     guest.pet.classList.remove("look");
     guest.movingUntil = host.movingUntil = 0;
     guest.sayUntil = 0;
