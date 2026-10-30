@@ -349,3 +349,14 @@ Recommendation column is now the decision.
 | Q8 | Offer "sounds on?" on the boot screen? | No. |
 | Q9 | Should an **integration reload** (not a full HA restart) also show the low-battery face? | No: HA restarts only. |
 | Q10 | Backlight buttons drawn in CSS, or pixel art from the art session? | CSS first; art if they look plain. |
+
+## Part 4: shell colours and patterns (owner idea, 2026-10-29; not scoped yet)
+
+Real Tamagotchi shells are loved for their colours and prints, and ours have one
+plastic per world. Add shell options. A design scout comes first and brings back
+choices for the owner: colourways (per-world palettes plus wild cards such as
+clear, glow and two-tone), patterns (speckle, stripes, hearts and stars, camo,
+world prints such as leaves, waves and constellations), who picks (per pet or per
+browser), and whether some are earned (see scope-2026-10-28-progression-unlocks.md).
+Most patterns can likely be procedural in `mouldCells`, so they need no images;
+printed motifs may need art.
