@@ -197,3 +197,15 @@ fish net with murk in it in two tilts and rising bubbles in two frames.
 the sheets' ~12.8 px art-pixel grid; one palette per sheet; 4 px per art pixel).
 `storyboards/` holds the medicine and clean storyboards the scenes follow (visual
 references only).
+
+## Bearded dragon grain cleanup (2026-10-29, stopgap)
+
+The owner found the bearded dragon set too grainy: stray single pixels and a broken
+outline. Its drawings have fine stripes, a spike fringe, a furry beard and thin toes
+that are smaller than one art pixel, so the 64×64 cut turned them to grain. As a
+stopgap, `scripts/art/grain_cleanup.py` was run over all 92 dragon frames on main
+(after art-batch-4). It merges near-duplicate shades, removes 1–2 px specks stuck to
+the body, despeckles lone light pixels and closes the outline in one dark colour.
+Silhouette, palette and effects are unchanged. No image model and no new drawings were
+used. `bowl_food.png` and `play.png` (128 px props) were left alone. A clean redraw is
+planned.
