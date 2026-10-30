@@ -143,20 +143,81 @@ first because it is the new thing, and "this screen" last, nearest to `shared sc
 - **Privacy check:** the finish is not about a person; nothing goes to history beyond one
   short string on the existing sensor. `diagnostics.py` needs no redaction. No "set by".
 
-## 5. Monochrome slot
+## 5. Monochrome slot (slice 5; reworked by the s2516 review, see the table at the end)
 
-A row in THIS SCREEN: `mono screen`: off / 4 tones / 2 tones (localStorage
-`hatch-mono`, default off, same shape as `lcdOn()` 199). `mono screen -> colour ›` opens a
-tiny view with the tone strip (`gear-mono-330.png`). Implementation sketch (slice 6):
-a class `mono-4` / `mono-2` on `.screen` (the LCD only, not the device plastic, not the
-sprites' source files) with a CSS `filter: grayscale(1) contrast() ` plus a
-`mix-blend-mode`/`color-mix` ramp to the 2-4 LCD greens (`#e9e2c6 .. #2f3a24`);
-a 4-level quantise needs an SVG `feComponentTransfer` discrete table in the card's
-shadow root (no images). Must-read check: every mood and status icon still reads in 2
-tones, so the acceptance is a bench contact sheet of all moods x stages x 2 tones
-(`--preset species --mono 2`, add the flag). Open question whether "reads" fails for
-any species: that is a review of the sheet by the owner/art, not a code gate.
-The bench seeds it through `storage` like `lcd`.
+**Scope (owner, 2026-10-30):** no Apple devices in the household, so build the true
+4-tone SVG filter; Chrome/Android/desktop only. **4 tones only** (owner Q5): the row is
+`off / on`; 2 tones are parked as a later slice (7), not built or proven here. No
+`mono screen -> colour ›` sub-view (FM 3): one toggle, no extra screen.
+
+- **Row:** `mono screen` in THIS SCREEN, a `.bell` toggle like `screen effects here`
+  (strings in 6.5). Editable on a shared screen (it is the tablet's own setting, §3).
+- **Storage and class:** localStorage `hatch-mono` = `"4"` or absent; default off.
+  `monoOn()` is **not** shaped like `lcdOn()` (that one is default-on, `!== "off"`): it
+  is `=== "4"` in the same try/catch, and a throwing `localStorage` means off. The
+  click handler mirrors the `lcdfx` one: no storage = `return`, nothing changes. The
+  class `mono` goes on **`ha-card`** (like `lcd-on`, read at build and toggled at click),
+  so every slide and both cards in a tab follow, and the beam (below) is reachable.
+  **Cross-tab decision: add a `storage` listener** for `hatch-mono` beside
+  `_onSharedStorage` (it only toggles the class; ~6 lines). A wall tablet left on one tab
+  and a phone on another is rare but the listener is cheap and card-check can test it.
+- **What goes mono (LCD) and what keeps colour (plastic):**
+  - Mono: everything inside `.screen` (scene, pet, props, marks, bubble, game, picker,
+    journal, status sheet, boot, battery) **and the IR beam** `.irbeam`. The beam is
+    appended to `this._track`, a sibling of the devices spanning two of them, so it is
+    outside `.screen`; it flies over the glass, so it is LCD (FM 2).
+  - Colour: the shell and bezel plastic, `.buttons`, `.label`, and **`.request`** (the
+    "wants attention" button: a plastic-style button, FM 2). Its only parent is `.bezel`.
+- **The filter:** an inline `<svg>` in the card's shadow root holds
+  `<filter id="hatch-mono4">`: `feColorMatrix` to luma, then `feComponentTransfer` with
+  `type="discrete"` four-step tables on R, G and B giving the four LCD tones below.
+  `ha-card.mono .screen, ha-card.mono .irbeam { filter: url(#hatch-mono4); }`. No
+  images, no JS per frame. **Known limit, not a gate:** `filter: url()` pointing into a
+  shadow root fails in Safari/WebKit, so iOS and macOS Safari show colour. There are no
+  Apple devices in the household; do not test or gate on it. Perf: the filter re-rasterises
+  the animating `.screen` (pet, rain, season, bubble typing) each frame; check on the wall
+  tablet (Chrome) once, after the bench passes.
+- **The four tones** (named from the card's own LCD palette, status and boot at card
+  2002-2022; the status panel's cream `#e9e2c6` is a fifth value that maps to the top):
+  darkest `#2f3a24`, `#6f7f4f`, `#9aaa72`, lightest `#c6d4a0`. The two mid values are the
+  ramp's choice (`#9aaa72` exists in the card; `#6f7f4f` is new). Luma thresholds even
+  quarters, tuned in the bench against the pass rule.
+- **Status, journal and boot:** remapped like everything else, not exempt. The status
+  sheet is already cream/green; cream (`#e9e2c6`) falls in the lightest quarter and maps
+  to `#c6d4a0`, a small visible shift in mono only, which is the point of the switch.
+  Nothing is drawn twice; one rule, no exemption list.
+- **Backlight:** `.glow` is a cyan `mix-blend-mode: screen` layer; inside the filtered
+  group it would flip a whole quarter. In mono `.glow` is hidden
+  (`ha-card.mono .glow { display: none }`) and `.lit` keeps its `brightness()` lift on
+  `.bg` (before the quantise), so a lit screen reads one tone lighter, not a cyan flip.
+- **Grid and ghost:** `.lcd` (alpha .08 lines) and `.ghost` (~.35 opacity) are inside
+  `.screen`, so a discrete table would snap them to a hard mesh or double the pet. In mono
+  both are hidden inside the filtered node. The grid is redrawn **after** the quantise by
+  one new overlay `.mono-grid` (a sibling of `.screen` in `.bezel`, before `.request`,
+  `pointer-events: none`), same lines and pitch vars as `.lcd` (`_lcdPitch` sets the vars
+  on it too). Ghosting is dropped in mono (an LCD afterimage is not worth a second
+  quantised layer); say so in the README. Both follow `lcd-on`: with effects off there is
+  no grid (`ha-card.lcd-on.mono .mono-grid`).
+- **State-dependent input:** day/night/dim/faded/raining/lit are `filter: brightness()`
+  on `.bg`/`.pet` (and `.murk`) *before* the parent's filter (the right order). Dim
+  (`.5`) can crush pet and background to one tone. This is the main risk and the main
+  proof: it is checked per state (below), not assumed from the species sheet.
+- **`prefers-contrast: more`** hides `.lcd`/`.ghost` (card 1933); mono keeps applying
+  and `.mono-grid` is hidden there too. Mono works with that and with effects off.
+  (Replaces "reduced motion unaffected": mono has no motion.)
+- **Bench (no fake-hass change):** `storage` already seeds any key, so `shot.mono`
+  (like `lcd`) sets `hatch-mono`, plus `--mono on` in `parseArgs`. The bench cannot pin
+  `dim`, `faded`, `lit` or `raining` (its `scene` is day/night only): add shot field
+  `classes: [...]` applied to the `.screen` (or `scene` values `dim|faded`, `lit`,
+  `raining`), per the README rule "add it to the bench". Preset `mono`: the species sheet
+  (frame 1, as `species`) plus a **state strip** (one adult, one world, woodland): day,
+  night, dim, faded, raining, lit; status sheet, journal, shell picker (slice 3), game
+  picker, bubble, boot, and the sick, dirty and attention marks; the IR beam; at 420 and
+  330. 4 tones only.
+- **Pass rule (mechanical, then an owner look):** for each shot, the pet's mean luma vs
+  its background's differ by at least N tone steps (the bench reads two crops; start at
+  1 of 4, tune once on `day`) and no shot is a single flat tone. Fail = the shot is listed.
+  Then the owner eyeballs the worst 10 by delta. Not a code gate beyond the numeric rule.
 
 ## 6. Slices (build order)
 
@@ -250,11 +311,15 @@ Each slice ships alone, ends green on `scripts/test`, and a bench look.
    left: owner wording changes to the slice-3 strings (6.3), the stage-specific locked
    note if more stages than `teen` ever unlock, and a picker sheet per stage. Slice 4 adds
    no other lines: every picker line is owned by slice 3, so 6.3 and 6.4 do not overlap.
-5. **Monochrome** (card only, after 1). The row, `hatch-mono`, the tone filter, a
-   bench flag and preset `mono`. Check: sheet of every mood at 2 and 4 tones judged by
-   the owner; reduced motion unaffected; `scripts/test`; card-check toggles it and a
-   reload keeps it, and it does not cross browsers (localStorage only).
+5. **Monochrome** (card only, after 1; reworked by the s2516 review, §5). Row `mono screen`
+   (off/on), `hatch-mono`, `monoOn()`, class on `ha-card`, `storage` listener, the SVG
+   4-tone filter on `.screen` and `.irbeam`, `.glow`/`.lcd`/`.ghost` handling and
+   `.mono-grid`, bench `mono` shot field, `classes` and preset `mono`. Check: the
+   pass rule and the owner's look at the worst 10 (§5); `scripts/test`; card-check toggles
+   it, a reload keeps it, a second tab follows through the listener, no storage stays
+   off, and it works with effects off and `prefers-contrast: more`. Strings: 6.5.
 6. **README/docs** and the `dev/bench/README.md` table (view `settings`, `mono`).
+7. **Two tones** (parked, owner Q5: "2 tones only as a later step"). Not started; needs its own pass rule, since 2 tones can merge pet and background on dim.
 
 ## 6.3 FM decisions and strings (slice 3)
 
@@ -303,6 +368,25 @@ Finish display names (24; the key, except `twotone`): "woodland", "aqua",
 celestial, dune; specials = clear, glitter, glow; prints = the other 16.
 Slice 3 owns all of the above, including the locked and shared notes; slice 4 may only
 reword them.
+
+## 6.5 Slice 5 strings (proposals for first-mate sign-off)
+
+Lowercase, the card's voice; checked against the no-nagging rules in
+`docs/plan-2026-10-28-experience.md` §5 (no `?`, none of "still, again, why, never,
+pleas, sad, cry, alone, forgot"). Existing rows have long aria-labels (card 5055), so
+this one follows them.
+
+| Where | Proposal |
+| --- | --- |
+| Row label | "mono screen" |
+| Value, on | "on" |
+| Value, off | "off" |
+| aria-label (row) | "mono screen: on, change" / "mono screen: off, change" |
+| Toggle feedback | none (the screen changes at once; no "saved" line, like effects) |
+| No storage | silent (no line exists for effects either) |
+
+Not added: no sub-view title or tone-strip caption (FM 3), no "2 tones" label (parked),
+no shared-screen note (the row stays editable there).
 
 ## 7. Owner questions (recommendation first)
 
@@ -415,3 +499,32 @@ For slices 4-5:
   them the LCD shows two whole rows of tiles at 330 (tighter compact spacing) and a bit
   more at 420. The list scrolls; a status line sits above the bar.
 - Monochrome (slice 5) should check that the swatches still read, or skip them.
+
+## Review fold (s2516)
+
+Report: 15 findings (10 player-impact, 5 nit), verdict FIX FIRST. Each was re-checked
+against the s2515 card (`origin/crew/hatch-at-home-s2515-gear-slice-3-per-pet-shell-pic`,
+2026-10-30; the report's line numbers still match). All 15 hold; #6 and #13 are adjusted.
+
+| # | Finding | Re-check | Landed |
+| --- | --- | --- | --- |
+| 1 | IR beam and `.request` outside `.screen` | holds (`_track.append(beam)` 6916; `.request` sibling in `.bezel`) | §5 what goes mono; FM 2: beam LCD, `.request` plastic |
+| 2 | `.glow` blend flips under quantise | holds (1801-1809) | §5 backlight: hide `.glow`, `.lit` via brightness; `lit` bench shot |
+| 3 | Grid/ghost quantised | holds (1783-1793) | §5 grid and ghost: `.mono-grid` after the filter, ghost dropped |
+| 4 | Dim/night/faded/raining change the input | holds (1597-1599, 1807-1809, 1980, 2137) | §5 state-dependent input; per-state shots in the pass rule |
+| 5 | Palette: two endpoints, not four | holds (1997, 2002-2022) | §5 four tones named; status/boot remapped, no exemption |
+| 6 | SVG filter in a shadow root fails in Safari; per-frame cost | holds, **adjusted**: owner has no Apple devices, so the SVG filter stays and Safari is a known limit, not a gate; the report's gradient-map fallback is dropped. Perf on the wall tablet (Chrome) kept | §5 filter, known limit |
+| 7 | 2 tones contradict Q5 | holds | Decision FM 1: 4 tones only; slice 7 parked |
+| 8 | `species` preset cannot prove states | holds (bench.js 62-80) | §5 bench: preset `mono`, state strip, pass rule |
+| 9 | Cross-tab and multiple cards | holds (only `SHARED_KEY` listens, 3204; `lcd-on` 2617, 5137) | §5 class on `ha-card`; `storage` listener decided yes |
+| 10 | `lcdOn()` shape is wrong for default-off | holds (230-236) | §5 `monoOn()` is `=== "4"`, no storage = off |
+| 11 | Slice number wrong | holds | the build slice is 5; slice 6 stays docs |
+| 12 | Reduced motion vs `prefers-contrast` | holds (1933) | §5 `prefers-contrast` and effects off |
+| 13 | Bench cannot pin lit/dim/faded | holds, **adjusted**: no fake-hass change is needed (storage seeds; the report's ask is only the shot field and `classes`) | §5 bench |
+| 14 | Copy not quoted; sub-view | holds | 6.5 strings; FM 3 drops the sub-view |
+| 15 | Naming ("color", "green") | holds | FM 4: row name `mono screen` |
+
+**Decisions (2026-10-30):** owner: no Apple devices, true 4-tone SVG filter, Safari
+shadow-root limit noted only. First mate: 1 slice 5 is 4 tones (row off/on, 2 tones
+parked); 2 beam is LCD, `.request` plastic; 3 no `colour ›` sub-view; 4 row name
+`mono screen`.
