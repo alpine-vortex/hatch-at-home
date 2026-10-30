@@ -1952,12 +1952,12 @@ const STYLE = `
     background: linear-gradient(rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px,
       linear-gradient(90deg, rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px, #c6d4a0; }
   .boot[hidden] { display: none; }
-  /* The low-battery gag: a pixel battery (empty, one bar, full) top-left; the screen blanks twice. */
-  .batt { position: absolute; top: 8px; left: 8px; z-index: 4; width: 24px; height: 12px;
-    box-sizing: border-box; border: 2px solid #2f3a24; background: #c6d4a0; display: flex; gap: 1px;
-    padding: 1px; pointer-events: none; }
+  /* The low-battery gag: a pixel battery (empty, one bar, full) top-right; the screen blanks twice. */
+  .batt { position: absolute; top: 8px; right: 12px; z-index: 4; width: 36px; height: 18px;
+    box-sizing: border-box; border: 3px solid #2f3a24; background: #c6d4a0; display: flex; gap: 3px;
+    padding: 3px; pointer-events: none; }
   .batt[hidden] { display: none; }
-  .batt::after { content: ""; position: absolute; right: -4px; top: 1px; width: 2px; height: 4px;
+  .batt::after { content: ""; position: absolute; right: -6px; top: 3px; width: 3px; height: 6px;
     background: #2f3a24; }
   .batt b { flex: 1; background: #2f3a24; visibility: hidden; }
   .batt[data-level="1"] b:first-child, .batt[data-level="3"] b { visibility: visible; }

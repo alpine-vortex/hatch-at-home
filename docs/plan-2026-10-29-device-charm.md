@@ -290,7 +290,7 @@ tap is what unlocks the sound.
 
 **The gag (about 4 s).** The screen blanks twice (80 ms each, none under reduced
 motion), a CSS pixel battery (`.batt`: empty frame, one bar, full) blinks one bar in
-the top-left corner, and the pet shows its **sleepy** frames with one line; at 2.2 s
+the top-right corner, and the pet shows its **sleepy** frames with one line; at 2.2 s
 it perks up with the second line and the battery shows full until about 4.2 s. Under
 reduced motion: no blanks, no blink, a static one-bar battery for the whole gag.
 One line per moment, picked at random:
