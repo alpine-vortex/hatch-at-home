@@ -117,8 +117,8 @@ const PRESETS = {
       const teen = { width, stage: "teen", view: "picker", shellFinish: "stripes", shellOptions: FINISHES, preview: "glitter" };
       for (const clip of ["card", "screen"]) {
         out.push({ ...egg, clip, name: `picker/${width}-egg-${clip}`, group: `picker-${clip}`, label: `${width} egg (top)` });
-        out.push({ ...egg, clip, name: `picker/${width}-egg-locked-${clip}`, group: `picker-${clip}`, label: `${width} egg, locked`, scroll: ".tile.locked" });
-        out.push({ ...teen, clip, name: `picker/${width}-teen-${clip}`, group: `picker-${clip}`, label: `${width} teen, glitter previewed`, scroll: ".tile.sel" });
+        out.push({ ...egg, clip, name: `picker/${width}-egg-locked-${clip}`, group: `picker-${clip}`, label: `${width} egg, locked`, scroll: '.sec[data-group="specials"]' });
+        out.push({ ...teen, clip, name: `picker/${width}-teen-${clip}`, group: `picker-${clip}`, label: `${width} teen, glitter previewed`, scroll: '.sec[data-group="specials"]' });
         out.push({ ...teen, clip, name: `picker/${width}-teen-now-${clip}`, group: `picker-${clip}`, label: `${width} teen, stripes now`, scroll: ".tile.now" });
       }
     }
