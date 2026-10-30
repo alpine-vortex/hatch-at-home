@@ -1121,6 +1121,78 @@ const glitterTile = () => {
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${W} ${H}' shape-rendering='crispEdges'>${rects}</svg>`;
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 };
+
+// A printed tile, a cell per character: rows of keys into paints, "." left clear.
+function printTile(rows, paints) {
+  let rects = "";
+  rows.forEach((row, y) => [...row].forEach((k, x) => {
+    if (paints[k]) rects += `<rect x='${x}' y='${y}' width='1' height='1' fill='${paints[k]}'/>`;
+  }));
+  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 ${rows[0].length} ${rows.length}' ` +
+    `shape-rendering='crispEdges'>${rects}</svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+// Shell finishes (worlds.json shell.finish): each world's own, the 1990s editions,
+// and prints any world can wear. The CSS draws them (.finish-<key>); here is what
+// the captions are inked against: `face(colour)` the plastic's main colour, set as
+// --d-face for the CSS too, or a fixed `ink`; `seen` mixes see-through plastic with
+// the backdrop first. A print's tile is --print-<key>, tiled at the grid's size.
+const PRINT_W = "rgba(255,255,255,.5)";
+const FINISHES = {
+  woodland: {}, aqua: {}, grove: {}, celestial: {}, dune: {},
+  clear: { seen: (c) => c, see: 0.34 }, glitter: {}, glow: {},
+  speckle: { face: (c) => mixHex(c, "#fff4e2", 0.62),
+    tile: [["......d.......", ".........w....", "..w...........", "...........d..", "....d.........",
+      "..........w...", "w.............", "......w....d..", "..d...........", "..........w..."],
+    { d: "rgba(48,26,12,.62)", w: "rgba(255,255,255,.85)" }] },
+  stripes: { face: (c) => c,
+    tile: [["wwww....", ".wwww...", "..wwww..", "...wwww.", "....wwww", "w....www", "ww....ww", "www....w"], { w: PRINT_W }] },
+  hearts: { face: (c) => mixHex(c, "#ffd5e4", 0.7),
+    tile: [["............", ".hh..hh.....", "hhhhhhhh....", "hhhhhhhh....", ".hhhhhh.....", "..hhhh......",
+      "...hh.......", "............", "............", "............", "............", "............"],
+    { h: "rgba(255,182,206,.9)" }] },
+  stars: { face: (c) => mixHex(c, "#3b3d99", 0.35),
+    tile: [["......y.........", "......y.........", "....yyyyy.......", ".....yyy........", ".....y.y........",
+      "................", "................", "............w...", "................", "................",
+      "..w.............", "................"], { y: "rgba(255,240,150,.95)", w: "rgba(255,255,255,.7)" }] },
+  gingham: { face: (c) => mixHex(c, "#fff5e0", 0.6),
+    tile: [["wwww....", "wwww....", "wwww....", "wwww....", "....dddd", "....dddd", "....dddd", "....dddd"],
+      { w: "rgba(255,255,255,.34)", d: "rgba(30,16,8,.2)" }] },
+  dots: { face: (c) => c,
+    tile: [["..........", ".ww.......", ".ww.......", "..........", "..........", ".......ww.", ".......ww.",
+      "..........", "..........", ".........."], { w: PRINT_W }] },
+  camo: { face: () => "#8fbe62",
+    tile: [["dddd......gggg........", "ddddd....ggggg....dd..", ".dddd.....gg.....ddd..", "......dd........dddd..",
+      "..gg..ddd....gg......k", ".gggg.......ggggg....k", ".ggg....kk...ggg......", ".......kkkk...........",
+      "..dd....kk....gggg....", ".dddd.........gggg....", "..ddd...gg....gg......", "........ggg..........."],
+    { d: "#5e9447", g: "#c4df8c", k: "#3f6a3a" }] },
+  waves: { face: (c) => mixHex(c, "#5fb6d8", 0.55),
+    tile: [["..ww....", ".w..w...", "w....w.w", "......w.", "........", "........", "........", "........"],
+      { w: "rgba(255,255,255,.55)" }] },
+  scales: { face: (c) => mixHex(c, "#4fa7c8", 0.6) },
+  leaves: { face: () => "#f6efd6",
+    tile: [[".......l....", "......lml...", ".....lmmll..", "......lml...", ".......m....", "............",
+      "..l.........", ".lml........", "lmmll.......", ".lml........", "..m.........", "............"],
+    { l: "#78b35a", m: "#4f8a43" }] },
+  paws: { face: (c) => mixHex(c, "#ffe3c2", 0.75),
+    tile: [["..........", ".w..w.....", "..........", "..www.....", ".wwwww....", ".wwwww....", "..w.w.....",
+      "..........", "..........", ".........."], { w: PRINT_W }] },
+  constellation: { face: () => "#3a3990",
+    tile: [["..............................", "....w.........................", "....:.:.:.....w.......w.......",
+      ".........:.:.w....:.:.:.......", "..............................", "..w...........................",
+      "...................y..........", "...........w..................", "..............................",
+      "..............................", "..............................", "..............................",
+      "........................w.....", "..............................", "y.............................",
+      ".............................."], { w: "#ffffff", y: "#fff0a0", ":": "rgba(255,255,255,.4)" }] },
+  rainbow: { ink: "#3b2440" },
+  twotone: { face: (c) => mixHex(c, "#fff4e6", 0.16), top: (c) => c },
+  sunset: { ink: "#3a1631" },
+  smoke: { seen: () => "#282230", see: 0.62 },
+};
+// Each print's tile as a CSS image, for --print-<key> on the card.
+const printTiles = () => Object.entries(FINISHES).filter(([, f]) => f.tile)
+  .map(([k, f]) => [`--print-${k}`, printTile(...f.tile)]);
 // A trait's flair sprite as a small icon (its first frame or big variant).
 function traitIcon(trait) {
   const f = FLAIR[trait];
@@ -1351,6 +1423,49 @@ const STYLE = `
     .finish-glow :is(.loop, .lid, .roof) > .mould, .finish-glow .feet .mould { background: #9fdc7c; }
     .finish-glow .crescent > .mould { background: #d3f7ad; }
   }
+  /* Prints any world can wear (FINISHES): a tile of whole cells (--print-<key>) over the
+     plastic's face (--d-face), tiled at the grid's size. */
+  .finish-speckle .body > .mould { background: var(--print-speckle) 0 0 / calc(var(--px) * 14) calc(var(--px) * 10), var(--d-face); }
+  .finish-stripes .body > .mould { background: var(--print-stripes) 0 0 / calc(var(--px) * 8) calc(var(--px) * 8), var(--d-face); }
+  .finish-hearts .body > .mould { background: var(--print-hearts) 0 0 / calc(var(--px) * 12) calc(var(--px) * 12), var(--d-face); }
+  .finish-stars .body > .mould { background: var(--print-stars) 0 0 / calc(var(--px) * 16) calc(var(--px) * 12), var(--d-face); }
+  .finish-gingham .body > .mould { background: var(--print-gingham) 0 0 / calc(var(--px) * 8) calc(var(--px) * 8), var(--d-face); }
+  .finish-dots .body > .mould { background: var(--print-dots) 0 0 / calc(var(--px) * 10) calc(var(--px) * 10), var(--d-face); }
+  .finish-camo .body > .mould { background: var(--print-camo) 0 0 / calc(var(--px) * 22) calc(var(--px) * 12), var(--d-face); }
+  .finish-waves .body > .mould { background: var(--print-waves) 0 0 / calc(var(--px) * 8) calc(var(--px) * 8), var(--d-face); }
+  .finish-scales .body > .mould { background: radial-gradient(circle at 50% 100%, transparent 0 calc(var(--px) * 3),
+    rgba(255,255,255,.38) 0 calc(var(--px) * 4), transparent 0) 0 0 / calc(var(--px) * 8) calc(var(--px) * 5), var(--d-face); }
+  .finish-leaves .body > .mould { background: var(--print-leaves) 0 0 / calc(var(--px) * 12) calc(var(--px) * 12), var(--d-face); }
+  .finish-paws .body > .mould { background: var(--print-paws) 0 0 / calc(var(--px) * 10) calc(var(--px) * 10), var(--d-face); }
+  .finish-constellation .body > .mould { background: var(--print-constellation) 0 0 / calc(var(--px) * 30) calc(var(--px) * 16),
+    linear-gradient(180deg, #45449f 0 var(--cut2, 40%), var(--d-face) 0); }
+  /* A print stops a cell short of a caption's letters, so no mark runs into them. */
+  :is(.finish-speckle, .finish-stripes, .finish-hearts, .finish-stars, .finish-gingham, .finish-dots, .finish-camo,
+    .finish-waves, .finish-scales, .finish-leaves, .finish-paws, .finish-constellation) .toy {
+    text-shadow: var(--px) 0 var(--d-face), calc(var(--px) * -1) 0 var(--d-face), 0 var(--px) var(--d-face),
+      0 calc(var(--px) * -1) var(--d-face); }
+  /* Bands change colour only in the gaps between the label, the bezel and the button
+     rows (_bands), so none cuts a row of buttons or its captions. */
+  .finish-rainbow .body > .mould { background: linear-gradient(180deg, #ffa3b1 0 var(--cut1), #ffd08f 0 var(--cut2),
+    #fff08f 0 var(--cut3), #a8e6a6 0 var(--cut4), #9ed4f2 0 var(--cut5), #c9aef0 0); }
+  .finish-sunset .body > .mould { background: linear-gradient(180deg, #ffd66e 0 var(--cut1), #ffbb63 0 var(--cut2),
+    #ff9f62 0 var(--cut3), #ff8a78 0 var(--cut4), #f37e98 0 var(--cut5), #c96fa8 0); }
+  /* Two-tone: the world's colour over cream, split behind the bezel. */
+  .finish-twotone .body > .mould { background: linear-gradient(180deg, var(--d-shell) 0 var(--cut2), var(--d-face) 0); }
+  .finish-twotone .label { color: var(--d-ink-top); }
+  /* Smoke: dark see-through plastic, the board behind the bezel showing through it.
+     The board is drawn in the body's own plastic, so the body's outline clips it. */
+  .finish-smoke .body > .mould { --gold: rgba(236,200,104,.6); --bp: calc(var(--bz-x) - var(--px) * 5) calc(var(--bz-y) - var(--px) * 5);
+    --bs: calc(var(--bz-w) + var(--px) * 10) calc(var(--bz-h) + var(--px) * 10);
+    background: linear-gradient(rgba(40,34,48,.62), rgba(40,34,48,.62)),
+      repeating-linear-gradient(180deg, transparent 0 calc(var(--px) * 5), var(--gold) 0 calc(var(--px) * 6)) var(--bp) / var(--bs) no-repeat,
+      repeating-linear-gradient(90deg, transparent 0 calc(var(--px) * 13), var(--gold) 0 calc(var(--px) * 14)) var(--bp) / var(--bs) no-repeat,
+      linear-gradient(rgba(40,128,84,.55), rgba(40,128,84,.55)) var(--bp) / var(--bs) no-repeat; }
+  .finish-smoke .bezel > .mould::before { background: rgba(60,56,66,.78); }
+  .finish-smoke .loop > .mould, .finish-smoke .lid > .mould, .finish-smoke .feet .mould,
+  .finish-smoke .roof > .mould, .finish-smoke .crescent > .mould { background: rgba(30,26,38,.7); }
+  .finish-smoke .body { box-shadow: none; }
+  .finish-smoke .toy .cap { background: #d9d6e2; }
   /* A finish only tints idle buttons: the lit/asleep (.on) and wanted states keep their own look. */
   .device[class*="finish-"] .toy.wanted .cap { background: #ffe9a8; }
   .device[class*="finish-"] .toy.on .cap { background: #3a2a1a; color: #ffe9a8; }
@@ -2367,6 +2482,7 @@ class HatchPetCard extends HTMLElement {
       this._card.style.setProperty(`--hw-${k.replace("_", "-")}`, ui(`shell_${k}`));
     this._card.style.setProperty("--hw-bulb", ui("backlight_bulb"));
     this._card.style.setProperty("--glitter", glitterTile());
+    for (const [k, v] of printTiles()) this._card.style.setProperty(k, v);
     this._viewport = root.querySelector(".viewport");
     this._track = root.querySelector(".track");
     // Once a slide comes to rest, its shell's parts are put back on whole device pixels.
@@ -2920,6 +3036,41 @@ class HatchPetCard extends HTMLElement {
     this._mould(s);
   }
 
+  // Where a banded finish may change colour without cutting through the label, a
+  // button row or its captions: the gaps between them and the bezel's middle, in px
+  // down the body on the grid (--cut1..5), and the bezel's box for a see-through
+  // board (--bz-*). Only a finish that uses them asks.
+  _bands(s) {
+    const dev = s.device;
+    if (!/finish-(rainbow|sunset|twotone|smoke)\b/.test(dev.className)) return;
+    const g = s.px;
+    const body = dev.querySelector(".body").getBoundingClientRect();
+    const box = (el) => el.getBoundingClientRect();
+    const bezel = box(dev.querySelector(".bezel"));
+    const label = s.label.offsetHeight ? box(s.label) : null;
+    const rows = [];
+    for (const t of dev.querySelectorAll(".buttons .toy")) {
+      const r = box(t);
+      if (!r.height) continue;
+      const row = rows.find((w) => Math.abs(w.top - r.top) < 4);
+      if (row) row.bottom = Math.max(row.bottom, r.bottom);
+      else rows.push({ top: r.top, bottom: r.bottom });
+    }
+    rows.sort((a, b) => a.top - b.top);
+    const mid = (a, b) => Math.round(((a + b) / 2 - body.top) / g) * g;
+    const first = rows[0] || { top: body.bottom, bottom: body.bottom }, last = rows.at(-1) || first;
+    const cuts = [
+      mid(label ? label.bottom : body.top, bezel.top), mid(bezel.top, bezel.bottom), mid(bezel.bottom, first.top),
+      rows[1] ? mid(first.bottom, rows[1].top) : mid(first.top, first.bottom), mid(last.bottom, body.bottom),
+    ];
+    cuts.forEach((v, i) => dev.style.setProperty(`--cut${i + 1}`, `${v}px`));
+    const at = (v) => `${Math.round(v / g) * g}px`;
+    dev.style.setProperty("--bz-x", at(bezel.left - body.left));
+    dev.style.setProperty("--bz-y", at(bezel.top - body.top));
+    dev.style.setProperty("--bz-w", at(bezel.width));
+    dev.style.setProperty("--bz-h", at(bezel.height));
+  }
+
   // Cut each part of the shell on the grid, from its laid-out size (see mouldCells).
   // Parts and caps are cached by kind and size, so a call with nothing changed is cheap.
   _mould(s) {
@@ -3024,6 +3175,7 @@ class HatchPetCard extends HTMLElement {
       m.style.cssText = `${at}width:${W * g}px;height:${H * g}px;` +
         `clip-path:${clip};--tones:${tones};--core:${core}`;
     }
+    this._bands(s);
     // The button caps, all one size on a device, and the backlight's little one.
     const n = Math.round((this._card.classList.contains("compact") ? 38 : 46) / g);
     const capKey = `cap|${shape}|${n}|${g}`;
@@ -3196,8 +3348,8 @@ class HatchPetCard extends HTMLElement {
     const color = shell.color || "#e8834a";
     const dev = s.device;
     const shape = ["tank", "house", "porthole", "pad", "moon"].includes(shell.shape) ? shell.shape : "egg";
-    const finish = ["woodland", "aqua", "grove", "celestial", "dune", "clear", "glitter", "glow"].includes(shell.finish)
-      ? `finish-${shell.finish}` : "";
+    const look = Object.hasOwn(FINISHES, shell.finish) ? FINISHES[shell.finish] : {};
+    const finish = Object.hasOwn(FINISHES, shell.finish) ? `finish-${shell.finish}` : "";
     dev.className = `device ${shape}${finish ? ` ${finish}` : ""}`;
     s.shape = shape;
     dev.querySelector(".roof").style.display = shape === "house" ? "" : "none";
@@ -3215,10 +3367,14 @@ class HatchPetCard extends HTMLElement {
     }
     dev.style.setProperty("--d-shell", color);
     dev.style.setProperty("--d-dark", shade(color, 0.72));
-    // Clear plastic shows the backdrop through it: the captions are inked for the mix.
-    const seen = finish === "finish-clear" && /^#[0-9a-f]{6}$/i.test(world.backdrop || "")
-      ? mixHex(color, world.backdrop, 0.34) : color;
-    dev.style.setProperty("--d-ink", deviceInk(seen));
+    // The captions are inked for the plastic under them; see-through plastic shows the
+    // backdrop, so they are inked for the mix.
+    const face = look.face ? look.face(color) : color;
+    dev.style.setProperty("--d-face", face);
+    const seen = look.seen && /^#[0-9a-f]{6}$/i.test(world.backdrop || "")
+      ? mixHex(look.seen(color), world.backdrop, look.see) : look.seen ? look.seen(color) : face;
+    dev.style.setProperty("--d-ink", look.ink || deviceInk(seen));
+    if (look.top) dev.style.setProperty("--d-ink-top", deviceInk(look.top(color))); // a label on another colour
     dev.style.setProperty("--d-btn-shadow", shade(color, 0.6));
     dev.style.setProperty("--d-bezel", shell.bezel || "#f3ead7");
     s.label.textContent = world.label || world.name;

@@ -13,6 +13,9 @@ const ROOT = path.join(__dirname, "..");
 const FRONTEND = path.join(ROOT, "custom_components", "virtual_pet", "frontend");
 const WORLDS = JSON.parse(fs.readFileSync(path.join(FRONTEND, "worlds.json"), "utf8"));
 const SHAPES = ["egg", "tank", "house", "porthole", "pad", "moon"];
+const FINISHES = ["woodland", "aqua", "grove", "celestial", "dune", "clear", "glitter", "glow", "speckle", "stripes",
+  "hearts", "stars", "gingham", "dots", "camo", "waves", "scales", "leaves", "paws", "constellation", "rainbow",
+  "twotone", "sunset", "smoke"];
 const PINNED_TIME = "2026-06-15T12:00:00Z"; // a plain June noon: no season, no countdown
 
 const DEFAULTS = {
@@ -58,6 +61,22 @@ const PRESETS = {
         for (const mood of sp.moods) {
           out.push({ name: `species/${id}/${stage}-${mood}`, group: `species-${id}`, label: `${stage} ${mood}`,
             species: id, world, stage, mood, clip: "screen", say: "" });
+        }
+      }
+    }
+    return out;
+  },
+  // Every shell finish on every world's own shape, day and night, at both card widths:
+  // a sheet per world. Keep FINISHES in step with the card's.
+  finishes() {
+    const out = [];
+    for (const world of Object.keys(WORLDS)) {
+      for (const finish of FINISHES) {
+        for (const width of [420, 330]) {
+          for (const scene of ["day", "night"]) {
+            out.push({ name: `finishes/${world}/${finish}-${width}-${scene}`, group: `finishes-${world}`,
+              label: `${finish} ${width} ${scene}`, world, shell: { finish }, scene, width, clip: "device" });
+          }
         }
       }
     }
@@ -161,6 +180,9 @@ async function runShots(browser, base, shots, outDir, workers) {
         await page.evaluate((storage) => { localStorage.clear(); for (const [k, v] of Object.entries(storage || {})) localStorage.setItem(k, v); }, shot.storage);
         // The card claims its boot screen once per page load: a shot that wants it needs a fresh page.
         if (!shot.booted) await page.goto(`${base}/`);
+        const motion = shot.motion === "reduce" ? "reduce" : "no-preference";
+        if (page.motion !== motion && (page.motion || motion === "reduce")) await page.emulateMedia({ reducedMotion: motion });
+        page.motion = motion;
         await page.evaluate((s) => window.bench.mount(s), shot);
         const inCard = { screen: ".slide:not(.away-slide) .screen", device: ".slide:not(.away-slide) .device" }[shot.clip];
         const file = path.join(outDir, `${shot.name}.png`);

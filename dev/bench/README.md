@@ -15,11 +15,13 @@ export NODE_PATH=/home/poe/github/relink/node_modules
 node scripts/bench.js --preset shells     # 144 shots, ~8 s
 node scripts/bench.js --preset species    # 1230 shots, ~35 s
 node scripts/bench.js --preset ui         # status, game picker, bubble
+node scripts/bench.js --preset finishes   # 576 shots: every shell finish, every world
 ```
 
 PNGs land in `dev/bench/out/` (gitignored; `--out DIR` to move it). A preset
 also writes contact sheets to `out/sheets/` (`--no-sheet` to skip): `shells-420`,
-`shells-330`, `ui`, and one `species-<id>` per species (rows run stage by stage,
+`shells-330`, `ui`, one `finishes-<world>` per world (each finish on that
+world's own shape, 420 and 330, day and night), and one `species-<id>` per species (rows run stage by stage,
 columns mood by mood). `--only TEXT` keeps only shots whose name contains TEXT.
 
 ## One-off shots
@@ -47,6 +49,7 @@ A shot (all optional):
 | `view` | `card`, `status` (status screen), `games` (game picker) |
 | `say` | text put in the bubble (`""` clears it) |
 | `clip` | `card` (whole card, default), `device` (the toy), `screen` (the LCD only) |
+| `motion` | `reduce` emulates `prefers-reduced-motion: reduce` (`--motion reduce`) |
 | `lcd`, `booted` | per-browser settings, see below |
 | `storage` | any other localStorage keys to seed |
 | `config` | extra card config (`setConfig`) |
