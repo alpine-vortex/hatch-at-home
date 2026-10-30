@@ -4370,12 +4370,25 @@ async function main() {
     const fresh = async (reduced = false) => {
       await bp.emulateMedia({ reducedMotion: reduced ? "reduce" : null });
       await bp.goto(`${HA}/pet-bench/pet`);
-      await bp.evaluate(() => {
-        sessionStorage.setItem("cc-boot-test", "1");
-        localStorage.removeItem("hatch-booted");
-        localStorage.setItem("hatch-sounds", "off");
-      });
-      await reloadFor(bp, "hatch-pet-card .slide .boot");
+      // A new tab's frontend reloads itself once. A boot the card claimed just before
+      // that reload is stored as done and never shows (it lasts BOOT_WAIT_MS, 5 s), so
+      // clear the flag and reload again until the boot screen is seen.
+      for (let attempt = 1; ; attempt++) {
+        await bp.evaluate(() => {
+          sessionStorage.setItem("cc-boot-test", "1");
+          localStorage.removeItem("hatch-booted");
+          localStorage.setItem("hatch-sounds", "off");
+        });
+        await bp.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+        await bp.reload();
+        try {
+          await bp.waitForSelector("hatch-pet-card .slide .boot", { state: "visible", timeout: 20000 });
+          break;
+        } catch (err) {
+          if (attempt === 3) throw err;
+          console.log("note: the boot screen was missed (the frontend reloaded itself), trying again");
+        }
+      }
       await bp.waitForTimeout(1000); // HA's loading logo clears the page a moment later
     };
     const visible = (sel) => bp.locator(sel).evaluateAll((els) => els.filter((e) => e.offsetParent && getComputedStyle(e).visibility !== "hidden").length);
