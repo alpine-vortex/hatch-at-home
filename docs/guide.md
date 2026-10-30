@@ -269,6 +269,16 @@ pet; it's only how the screen looks.
   remembered, and it never happens while either pet is asleep, calling, playing,
   mid-care or the status is open. A swipe ends it at once; with reduced motion the
   pets just appear together, speak and go. With sounds on it chirps.
+- **Low battery after a restart.** When Home Assistant itself restarts, the pet's
+  screen flickers once, a little battery blinks in the corner and the pet says it
+  nearly lost power, then perks up and the battery fills and goes (about four
+  seconds). It plays once per restart in each browser, only if you see the card
+  within 15 minutes of it; a pet that is asleep waits for you to wake it (up to 12
+  hours), and a call or a game cuts it short. A browser that has never shown the
+  card just starts quietly. Reloading the integration doesn't count, and nothing
+  about it is a state or in the history: the pet's time stood still, so there is no
+  "where were you". With reduced motion there is no flicker and the battery stays a
+  single bar.
 
 ## What you get
 

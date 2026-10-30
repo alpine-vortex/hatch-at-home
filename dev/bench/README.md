@@ -50,6 +50,7 @@ A shot (all optional):
 | `width` | card width in px (420, or 330 for the compact layout); `dpr` pixel ratio |
 | `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `games` (game picker) |
 | `mine` | `true` (`--mine`) or an object over it: the viewer's own view the private channel would send (a bond, notify me, my day, my birthday kept), so `you two` and the sheet's personal rows show |
+| `power` | the low-battery gag pinned mid-play: `battery` (one bar, first line) or `line` (full battery, second line) |
 | `say` | text put in the bubble (`""` clears it) |
 | `clip` | `card` (whole card, default), `device` (the toy), `screen` (the LCD only) |
 | `motion` | `reduce` emulates `prefers-reduced-motion: reduce` (`--motion reduce`) |
@@ -86,7 +87,7 @@ a screen that needs a sensor attribute this fake does not set (journal,
 bonds, wishes, photos) shows its empty state. Press-and-play flows are not
 driven: `callService`/`callWS` answer with empty replies. The bench calls a
 few card internals (`_tick`, `_frames`, `_write`, `_startGame`, `_stopTyping`,
-`_slides`, `_timer`); if the card renames one, `page.js` is the place to fix.
+`_slides`, `_timer`, `_powerGag`); if the card renames one, `page.js` is the place to fix.
 
 Files: `server.js` (static server, no dependencies), `index.html` and
 `page.js` (the page and the fake `hass`), `../../scripts/bench.js` (driver).

@@ -106,6 +106,20 @@
     for (const a of card.shadowRoot.getAnimations()) if (a.effect.getComputedTiming().iterations !== Infinity) a.finish();
   }
 
+  // The low-battery gag pinned mid-play: "battery" (one blinking bar, first line)
+  // or "line" (full battery, second line). The timers stop, the blink holds still.
+  function powerGag(card, cur, at) {
+    card._powerGag(cur);
+    cur.power.timers.forEach(clearTimeout);
+    cur.screen.classList.remove("blank");
+    cur.batt.classList.remove("blink");
+    if (at === "line") {
+      cur.batt.dataset.level = "3";
+      cur.poseUntil = 0;
+      card._write(cur, "all charged! hi! ♥", 1e9);
+    } else card._write(cur, "w-whoa... did someone pull my battery?", 1e9);
+  }
+
   async function mount(shot) {
     await customElements.whenDefined("hatch-pet-card");
     const stage = document.getElementById("stage");
@@ -142,6 +156,7 @@
     if (shot.say !== undefined) card._write(cur, shot.say, 1e9);
     const root = card.shadowRoot;
     if (shot.link) await linkGreeting(card, shot.link);
+    if (shot.power) powerGag(card, cur, shot.power);
     // The viewer's own view from the private channel (none arrives here): a bond,
     // so "you two" and "my day" show, and the switches behind the settings rows.
     if (shot.mine) {

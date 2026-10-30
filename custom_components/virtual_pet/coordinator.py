@@ -27,6 +27,7 @@ from homeassistant.core import (
     State,
     callback,
 )
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
@@ -210,6 +211,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # (with its title), and what each watcher was last sent, by token.
         self._private: dict[str, deque[dict[str, Any]]] = {}
         self._house: dict[str, dict[str, Any]] = {}
+        # Set once per HA start, when a save loaded normally (memory only).
+        self._powered_on: str | None = None
         self._sent: dict[object, tuple[dict[str, Any] | None, dict[str, Any]]] = {}
         # A call notification is on the phones (cleared when the call is over).
         self._call_notified = False
@@ -399,6 +402,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     await async_clear_if_restored(
                         self.hass, f"save_damaged_{self.pet_id}"
                     )
+                    if self.hass.state is not CoreState.running:
+                        # HA itself is starting: the card plays the power-on
+                        # gag. Not a reload, a new egg, or a damaged save.
+                        self._powered_on = dt_util.utcnow().isoformat()
             LOGGER.debug("Caught up %.1f min of downtime (frozen)", downtime / 60)
             self.debug["last_catch_up_minutes"] = round(downtime / 60, 1)
             if self.state.species is None and old_species:
@@ -1899,6 +1906,24 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._save()
         self._publish()
 
+    async def async_set_shell(self, finish: str | None) -> None:
+        """Dress the pet in a shell finish (R.SHELL_FINISHES), or its world's
+        own (None). A show-off it hasn't grown into yet is refused. Nobody is
+        recorded as the one who picked it."""
+        assert self.state is not None
+        if finish is not None and not model.shell_unlocked(self.state, finish):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="shell_locked",
+                translation_placeholders={
+                    "finish": finish,
+                    "stage": R.SHELL_UNLOCKS[finish],
+                },
+            )
+        self.state.shell_finish = finish
+        self._save()
+        self._publish()
+
     # --- The private channel: each person's own view (virtual_pet/subscribe) ---
 
     def _watchers(self) -> dict[object, channel.Watcher]:
@@ -1953,7 +1978,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             seen = {"kind": dream["kind"], "title": dream["title"]}
         else:
             seen = None
-        return {"media": self._house.get("media"), "dream": seen}
+        view: dict[str, Any] = {"media": self._house.get("media"), "dream": seen}
+        if self._powered_on:
+            view["powered_on"] = {"at": self._powered_on}
+        return view
 
     def channel_snapshot(
         self, token: object, user: str, shared: bool

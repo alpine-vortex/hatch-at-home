@@ -144,6 +144,7 @@ async function main() {
   await context.addInitScript((v) => {
     try {
       if (!sessionStorage.getItem("cc-boot-test") && v) localStorage.setItem("hatch-booted", v);
+      for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-power-")) localStorage.removeItem(k);
     } catch (err) {
       // no storage
     }
@@ -4819,6 +4820,177 @@ async function main() {
 
   check("no errors in the browser console", errors.length === 0, errors.slice(0, 3).join(" | "));
 
+  // 7b. The low-battery gag after an HA restart (D5): the card compares the house
+  // view's powered_on.at with its stored hatch-power-<pet>, through the real
+  // channel path. The real restart's snapshot is asserted in section 8.
+  for (const width of [420, 330]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.emulateMedia({ reducedMotion: null });
+    await page.waitForTimeout(300);
+    const card = page.locator("hatch-pet-card").first();
+    // One step in the page: the slide to use, and helpers that clear the browser's marker.
+    const run = (fn, arg) => card.evaluate(async (el, { fn, arg }) => {
+      const s = el._slides.find((x) => x.species && x.drawn && x.ids?.device &&
+        el._eggMinutes(el._state(x, "sensor.life_stage")) === null);
+      if (!s) return { noSlide: true };
+      // The real pet may be asleep or calling (the redraw sets both from its sensors): pin them.
+      const pin = { asleep: false, calling: false };
+      const real = { asleep: s.asleep, calling: s.calling };
+      for (const k of Object.keys(pin)) Object.defineProperty(s, k, { configurable: true, get: () => pin[k], set() {} });
+      const key = `hatch-power-${s.ids.device}`;
+      const iso = (ms) => new Date(Date.now() + ms).toISOString();
+      const snap = (at) => el._channel(s, { mine: s.mine, moments: [], house: { media: null, dream: null,
+        ...(at ? { powered_on: { at } } : {}) }, now: iso(0) }, el._hass.user.id);
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      const reset = () => {
+        el._powerEnd(s);
+        s.powerPending = null;
+        pin.asleep = pin.calling = false;
+        localStorage.removeItem(key);
+      };
+      // eslint-disable-next-line no-new-func
+      try {
+        return await new Function("el", "s", "key", "iso", "snap", "sleep", "reset", "pin", "arg", `return (async () => { ${fn} })()`)(
+          el, s, key, iso, snap, sleep, reset, pin, arg);
+      } finally {
+        el._powerEnd(s);
+        for (const k of Object.keys(pin)) Object.defineProperty(s, k, { configurable: true, writable: true, value: real[k] });
+      }
+    }, { fn, arg });
+    const w = `(${width}px)`;
+
+    let r = await run(`reset();
+      snap(iso(-1000)); // a browser that never stored one: it only stores
+      const first = { pending: s.powerPending, stored: localStorage.getItem(key), power: !!s.power };
+      const at = iso(0);
+      snap(at);
+      el._powerTick(s);
+      await sleep(350);
+      const during = { pending: s.powerPending, power: !!s.power, hidden: s.batt.hidden, level: s.batt.dataset.level,
+        line: s.plain, src: s.pet.getAttribute("src"), stored: localStorage.getItem(key) === at };
+      await sleep(2300);
+      const later = { level: s.batt.dataset.level, line: s.plain, hidden: s.batt.hidden };
+      await sleep(2200);
+      const end = { hidden: s.batt.hidden, power: !!s.power };
+      snap(at); // the same one again
+      el._powerTick(s);
+      const again = { pending: s.powerPending, power: !!s.power };
+      reset();
+      return { first, during, later, end, again, at };`);
+    const LOW = ["w-whoa... did someone pull my battery?", "low batt... ♪ ... oh! we're back"];
+    const BACK = ["all charged! hi! ♥", "power's back! ♪"];
+    check(`D5: a browser with no stored power-on only stores it, no gag ${w}`,
+      !r.noSlide && r.first.pending == null && !r.first.power && !!r.first.stored, JSON.stringify(r.first));
+    check(`D5: a new fresh power-on shows the one-bar battery and a line, sleepy ${w}`,
+      r.during?.power && !r.during.hidden && r.during.level === "1" && LOW.some((l) => r.during.line?.includes(l)) &&
+      r.during.stored && /sleepy/.test(r.during.src || ""), JSON.stringify(r.during));
+    check(`D5: then it perks up (full battery, second line) ${w}`,
+      r.later?.level === "3" && !r.later.hidden && BACK.some((l) => r.later.line?.includes(l)), JSON.stringify(r.later));
+    check(`D5: it is gone by 6 s ${w}`, r.end?.hidden && !r.end.power, JSON.stringify(r.end));
+    check(`D5: a second snapshot with the same at does nothing ${w}`,
+      r.again?.pending == null && !r.again.power, JSON.stringify(r.again));
+
+    r = await run(`reset();
+      snap(iso(-3600000)); // stored
+      const before = localStorage.getItem(key);
+      snap(iso(-1200000)); // 20 min old: newer than stored, but stale
+      const stale = { pending: s.powerPending, power: !!s.power, moved: localStorage.getItem(key) !== before };
+      const stored = localStorage.getItem(key);
+      snap(null); // no powered_on: no news
+      const none = { pending: s.powerPending, kept: localStorage.getItem(key) === stored };
+      el._channel(s, { house: { media: null, dream: null } }, el._hass.user.id); // a push without it
+      const afterPush = localStorage.getItem(key) === stored;
+      reset();
+      return { stale, none, afterPush };`);
+    check(`D5: a stale power-on (over 15 min) stores but does not gag ${w}`,
+      r.stale?.pending == null && !r.stale.power && r.stale.moved, JSON.stringify(r.stale));
+    check(`D5: no powered_on leaves the stored key alone ${w}`,
+      r.none?.pending == null && r.none.kept && r.afterPush, JSON.stringify(r));
+
+    r = await run(`reset();
+      snap(iso(-3600000));
+      const at = iso(-1000);
+      snap(at);
+      pin.asleep = true;
+      el._powerTick(s);
+      const asleep = { pending: s.powerPending === at, power: !!s.power };
+      pin.asleep = false;
+      el._powerTick(s);
+      const awake = { pending: s.powerPending, power: !!s.power };
+      el._powerEnd(s);
+      s.powerPending = iso(-13 * 3600000); // over 12 h old
+      el._powerTick(s);
+      const dropped = { pending: s.powerPending, power: !!s.power };
+      reset();
+      return { asleep, awake, dropped };`);
+    check(`D5: asleep defers the gag; awake plays it; over 12 h is dropped ${w}`,
+      r.asleep?.pending && !r.asleep.power && r.awake.power && r.awake.pending == null &&
+      r.dropped.pending == null && !r.dropped.power, JSON.stringify(r));
+
+    r = await run(`reset();
+      snap(iso(-3600000));
+      snap(iso(-1000));
+      el._powerTick(s);
+      await sleep(400);
+      const on = !!s.power && !s.batt.hidden;
+      pin.calling = true; // a call starts mid-gag
+      el._powerTick(s);
+      const aborted = { power: !!s.power, hidden: s.batt.hidden, sayUntil: s.sayUntil };
+      await sleep(2600);
+      const quiet = !LINES_BACK.some((l) => (s.plain || "").includes(l)) && s.batt.hidden;
+      reset();
+      return { on, aborted, quiet };`.replace("LINES_BACK", JSON.stringify(BACK)));
+    check(`D5: a call starting mid-gag aborts it (battery off, lines dropped) ${w}`,
+      r.on && !r.aborted.power && r.aborted.hidden && r.quiet, JSON.stringify(r));
+
+    r = await run(`reset();
+      snap(iso(-3600000));
+      const other = { ids: s.ids, house: { powered_on: { at: iso(-500) } } }; // a second slide of the same pet
+      s.house = other.house;
+      el._powerNews(other);
+      el._powerNews(s);
+      const out = { first: other.powerPending != null, second: s.powerPending != null };
+      reset();
+      return out;`);
+    check(`D5: two slides on one pet: only one gags ${w}`, r.first && !r.second, JSON.stringify(r));
+
+    // The flicker: two blanks (a mutation observer, the blanks last 80 ms).
+    r = await run(`reset();
+      snap(iso(-3600000));
+      let blanks = 0, was = false;
+      const watch = new MutationObserver(() => {
+        const now = s.screen.classList.contains("blank");
+        if (now && !was) blanks++;
+        was = now;
+      });
+      watch.observe(s.screen, { attributes: true, attributeFilter: ["class"] });
+      snap(iso(-500));
+      el._powerTick(s);
+      await sleep(900);
+      watch.disconnect();
+      reset();
+      return { blanks };`);
+    check(`D5: the screen flickers twice ${w}`, r.blanks === 2, JSON.stringify(r));
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    r = await run(`reset();
+      snap(iso(-3600000));
+      let blanks = 0;
+      const watch = new MutationObserver(() => { if (s.screen.classList.contains("blank")) blanks++; });
+      watch.observe(s.screen, { attributes: true, attributeFilter: ["class"] });
+      snap(iso(-500));
+      el._powerTick(s);
+      const levels = new Set();
+      for (let i = 0; i < 17; i++) { levels.add(s.batt.hidden ? "off" : s.batt.dataset.level + (s.batt.classList.contains("blink") ? "b" : "")); await sleep(300); }
+      watch.disconnect();
+      reset();
+      return { blanks, levels: [...levels] };`);
+    check(`D5: reduced motion: no blanks, a static one-bar battery for the whole gag ${w}`,
+      r.blanks === 0 && JSON.stringify(r.levels.sort()) === JSON.stringify(["1", "off"]), JSON.stringify(r));
+    await page.emulateMedia({ reducedMotion: null });
+  }
+
+
   // 8. An HA restart keeps the bond, and a second login sees nothing of the
   // first's (privacy P3a-card). After the console check: a restart's lost
   // connection is noise there. The restart is opt-in, as card-check stops
@@ -4866,6 +5038,8 @@ async function main() {
       await page.waitForTimeout(700);
     }
     await evaluate(() => { window.__hatchMark = "same page"; });
+    const poweredBefore = await card.evaluate((el, e) =>
+      el._slides.find((x) => x.ids?.["sensor.life_stage"] === e)?.house?.powered_on?.at ?? null, seedPet);
     // Seed: dev's bond with this pet, and today's wish aimed at dev. What was
     // there goes back at the end.
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
@@ -4893,12 +5067,15 @@ async function main() {
       el._renderStatus(sl, []);
       return { s: Math.round((Date.now() - start) / 1000), bond: sl.mine?.bond, aimed: sl.mine?.wish_for_you,
         you: /you two/.test(sl.status.textContent), wish: sl.status.querySelector(".row")?.textContent.trim(),
-        mark: window.__hatchMark };
+        mark: window.__hatchMark, powered: sl.house?.powered_on?.at ?? null };
     }, seedPet);
     seeded = back.bond?.nickname === "sunbeam";
     check("P3a: an HA restart keeps the bond (back within 90 s of start-up, no page reload)",
       seeded && back.you && back.mark === "same page" && back.s <= 90,
       JSON.stringify({ ...back, downForS: Math.round((upAt - downAt) / 1000) }));
+    check("D5: after a real HA restart the snapshot carries house.powered_on (new, just now)",
+      !!back.powered && back.powered !== poweredBefore && Math.abs(Date.now() - Date.parse(back.powered)) < 10 * 60000,
+      JSON.stringify({ before: poweredBefore, after: back.powered }));
     check("P3a: the seeded wish is aimed at dev on dev's own card",
       back.aimed === true && /play a game with you/.test(back.wish || ""), JSON.stringify(back));
   } else {

@@ -93,5 +93,6 @@
       88
     ]
   },
-  "murk": "treefrog/murk"
+  "murk": "treefrog/murk",
+  "waves": {"baby": ["baby_wave_1", "baby_wave_2"], "teen": ["teen_wave_1", "teen_wave_2"], "adult": ["adult_wave_1", "adult_wave_2"]}
 }

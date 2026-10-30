@@ -136,6 +136,13 @@ let audio = null; // one AudioContext for every card on the page
 const BOOT_KEY = "hatch-booted";
 const BOOT_VERSION = "1";
 const BOOT_WAIT_MS = 5000; // nobody taps (a wall tablet): it finishes by itself, silently
+const POWER_KEY = "hatch-power-"; // + the pet's device: the last power-on this browser reacted to
+const POWER_FRESH_MS = 15 * 60000; // the gag plays only if the server booted this recently
+const POWER_DEFER_MS = 12 * 3600000; // an asleep pet waits for it this long, counted from the boot
+const POWER_LINES = {
+  low: ["w-whoa... did someone pull my battery?", "low batt... ♪ ... oh! we're back"],
+  back: ["all charged! hi! ♥", "power's back! ♪"],
+};
 const BOOT_FILL_MS = 600; // the logo fills in, then the screen cuts to the pet
 
 // True once per page load, and only if this browser hasn't booted this version.
@@ -1966,6 +1973,17 @@ const STYLE = `
     background: linear-gradient(rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px,
       linear-gradient(90deg, rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px, #c6d4a0; }
   .boot[hidden] { display: none; }
+  /* The low-battery gag: a pixel battery (empty, one bar, full) top-right; the screen blanks twice. */
+  .batt { position: absolute; top: 8px; right: 12px; z-index: 4; width: 36px; height: 18px;
+    box-sizing: border-box; border: 3px solid #2f3a24; background: #c6d4a0; display: flex; gap: 3px;
+    padding: 3px; pointer-events: none; }
+  .batt[hidden] { display: none; }
+  .batt::after { content: ""; position: absolute; right: -6px; top: 3px; width: 3px; height: 6px;
+    background: #2f3a24; }
+  .batt b { flex: 1; background: #2f3a24; visibility: hidden; }
+  .batt[data-level="1"] b:first-child, .batt[data-level="3"] b { visibility: visible; }
+  .batt[data-level="1"].blink b:first-child { animation: bootblink .8s steps(1) infinite; }
+  .screen.blank > *:not(.batt) { visibility: hidden; }
   .booting .buttons, .booting .request { visibility: hidden; }
   .boot .logo { position: relative; font-size: 46px; line-height: 1; letter-spacing: 2px; }
   .boot .logo span { display: block; text-shadow: 2px 2px 0 rgba(47,58,36,.35); }
@@ -2265,6 +2283,8 @@ class HatchPetCard extends HTMLElement {
     for (const s of this._slides || []) {
       if (s.game) this._endGame(s, null);
       this._stopTyping(s);
+      this._powerEnd(s);
+      s.powerPending = null;
       this._dropPhotos(s);
       this._unsubscribe(s);
     }
@@ -2371,6 +2391,8 @@ class HatchPetCard extends HTMLElement {
     if (!msg || typeof msg !== "object") return;
     const shared = sharedScreen();
     if (msg.gone) { // the pet was removed: nothing more will come
+      this._powerEnd(s);
+      s.powerPending = null;
       this._unsubscribe(s, false);
       s.gone = true;
       return;
@@ -2389,6 +2411,7 @@ class HatchPetCard extends HTMLElement {
         else this._keepMoment(s, m);
       }
       if (s.house?.media?.at) s.mediaSeen.add(s.house.media.at);
+      this._powerNews(s);
       s.subscribed = true;
       s.subscribeFailed = false;
       s.retries = 0;
@@ -2396,7 +2419,10 @@ class HatchPetCard extends HTMLElement {
       s.waitTimer = null;
     } else {
       if ("mine" in msg) s.mine = shared ? null : msg.mine || null;
-      if ("house" in msg) s.house = msg.house || null;
+      if ("house" in msg) {
+        s.house = msg.house || null;
+        this._powerNews(s);
+      }
       const m = msg.moment;
       if (m?.type) {
         // Said only if it's new here and just happened (the server's clock).
@@ -2630,6 +2656,7 @@ class HatchPetCard extends HTMLElement {
               <button class="gx" aria-label="Stop the game">✕</button>
             </div>
             <div class="status"></div>
+            <i class="batt" data-level="1" aria-hidden="true" hidden><b></b><b></b><b></b></i>
             <button class="boot" hidden><span class="logo"><span class="ink">HATCH</span><span class="fill" aria-hidden="true">HATCH</span></span><span class="go">▶ tap to start</span></button>
           </div><button class="request"></button></div>
           <div class="buttons"></div>
@@ -2717,6 +2744,7 @@ class HatchPetCard extends HTMLElement {
       this._press(s, key);
     });
     // The boot screen takes the tap (a button, so a key works too) and nothing under it.
+    s.batt = q(".batt");
     s.boot = q(".boot");
     s.boot.hidden = !this._booting;
     s.boot.addEventListener("click", (e) => {
@@ -2755,6 +2783,95 @@ class HatchPetCard extends HTMLElement {
     s.buttons.lights = lights;
     this._track.append(slide);
     return s;
+  }
+
+  // --- Low battery after an HA restart ---------------------------------------
+
+  // The channel's house view carries the server's last power-on (`at`), or
+  // nothing (no news: the stored marker is never cleared). Compared with this
+  // browser's marker for the pet in one synchronous step, so of two slides or
+  // tabs only one finds it new. A browser with no marker only stores it.
+  _powerNews(s) {
+    const at = s.house?.powered_on?.at;
+    const t = Date.parse(at);
+    const device = s.ids?.device;
+    if (!at || Number.isNaN(t) || !device) return;
+    let seen = null;
+    try {
+      seen = localStorage.getItem(POWER_KEY + device);
+      if (seen !== null && t <= Date.parse(seen)) return;
+      localStorage.setItem(POWER_KEY + device, at);
+    } catch (err) {
+      return; // no storage: no gag
+    }
+    if (seen === null || serverNow() - t >= POWER_FRESH_MS) return;
+    s.powerPending = at;
+  }
+
+  // Once the pet on show is awake and free, the gag plays; an asleep pet waits
+  // (at most POWER_DEFER_MS from the boot). A call or a game cuts it short.
+  _powerTick(s) {
+    if (s.power && (s.asleep || s.calling || s.game)) this._powerEnd(s, true);
+    if (!s.powerPending || s.power) return;
+    if (serverNow() - Date.parse(s.powerPending) >= POWER_DEFER_MS) {
+      s.powerPending = null;
+      return;
+    }
+    if (this._booting || s.asleep || s.calling || s.game || s.scene || s.linking || !s.species ||
+        this._eggMinutes(this._state(s, "sensor.life_stage")) !== null ||
+        s.screen.classList.contains("show-status") || !this._visible || document.hidden) return;
+    s.powerPending = null;
+    this._powerGag(s);
+  }
+
+  _powerGag(s) {
+    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const timers = [];
+    const at = (ms, fn) => timers.push(setTimeout(fn, ms));
+    s.power = { timers };
+    const level = (n, blink) => {
+      s.batt.dataset.level = String(n);
+      s.batt.classList.toggle("blink", blink && !calm);
+    };
+    const sp = s.species;
+    if (sp?.moods?.includes("sleepy") && s.drawn) {
+      s.poseFrames = [];
+      for (let i = 1; i <= (sp.frames || 1); i++) s.poseFrames.push(`${s.drawn}_sleepy_${i}`);
+      s.poseUntil = Date.now() + 2200;
+      this._show(s, s.pet, s.poseFrames[0]);
+    }
+    level(1, true);
+    s.batt.hidden = false;
+    if (!calm) {
+      for (const t of [0, 160]) {
+        at(t, () => s.screen.classList.add("blank"));
+        at(t + 80, () => s.screen.classList.remove("blank"));
+      }
+    }
+    at(0, () => this._speak(s, pick(POWER_LINES.low), 2000));
+    at(2200, () => {
+      if (s.calling || s.game || s.asleep) return this._powerEnd(s, true);
+      s.poseUntil = 0;
+      if (!calm) level(3, false);
+      this._speak(s, pick(POWER_LINES.back), 1800);
+      this._animate(s, s.pet, "perk", 320);
+    });
+    at(4200, () => this._powerEnd(s, false));
+  }
+
+  // The gag over, or cut short: the battery goes, and so do lines not yet said.
+  _powerEnd(s, abort = true) {
+    const power = s.power;
+    if (!power) return;
+    s.power = null;
+    power.timers.forEach(clearTimeout);
+    s.screen.classList.remove("blank");
+    s.batt.hidden = true;
+    s.poseUntil = 0;
+    if (abort) { // cut short: the line in the bubble goes; a finished gag leaves its last line to run out
+      this._stopTyping(s);
+      s.sayUntil = 0;
+    }
   }
 
   // --- Power-on --------------------------------------------------------------
@@ -2914,6 +3031,8 @@ class HatchPetCard extends HTMLElement {
     if (s.game) this._endGame(s, null);
     this._sceneEnd(s, { quiet: true });
     s.sceneOwes = s.sceneFade = null;
+    this._powerEnd(s);
+    s.powerPending = null;
     this._stopTyping(s);
     s.voicedAt = 0;
     s.confirm = null;
@@ -3692,6 +3811,7 @@ class HatchPetCard extends HTMLElement {
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
       if (s === this._slides[this._index]) {
         if (!this._booting) this._greet(s); // the boot screen waits: only the speaking does
+        this._powerTick(s);
         this._firstLook(s); // before the visit: it tells the server what's queued
         this._visit(s);
         if (!this._booting) {
@@ -3984,7 +4104,7 @@ class HatchPetCard extends HTMLElement {
       if (s.queue.some((q) => q.ask)) this._clearAsk(s);
       return;
     }
-    if (!s.queue?.length || s.sayUntil > now || s.game || s.screen.classList.contains("show-status")) return;
+    if (!s.queue?.length || s.sayUntil > now || s.game || s.power || s.screen.classList.contains("show-status")) return;
     const { text, ms, then, opts } = s.queue.shift();
     this._speak(s, text, ms, opts);
     this._animate(s, s.pet, "perk", 320);

@@ -387,6 +387,10 @@ class PetState:
     # What it says at the end of things, from a close friend (None: its own).
     catchphrase: str | None = None
     hatched_on: str | None = None  # local date it hatched: its birthday
+    # Its shell finish (R.SHELL_FINISHES), picked on the card; None: its
+    # world's own. Kept as it grows up; a new egg starts on the default. A key
+    # this version doesn't know is kept (a later version's) and not shown.
+    shell_finish: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store, with any keys this version doesn't know."""
@@ -424,7 +428,7 @@ class PetState:
             kwargs["lights_before_away"] = None
         for key in ("stayed_up_since", "wake_at"):
             kwargs[key] = _float(kwargs.get(key), None)
-        for key in ("species", "inherited_from"):
+        for key in ("species", "inherited_from", "shell_finish"):
             kwargs[key] = _opt_str(kwargs.get(key))
         for key in ("poops", "digesting", "recent_misses", "chore_treats"):
             kwargs[key] = _numbers(kwargs.get(key))
@@ -619,6 +623,20 @@ def life_stage(state: PetState) -> str:
         if state.age_hours >= start:
             stage = name
     return stage
+
+
+def shell_unlocked(state: PetState, finish: str) -> bool:
+    """Whether the pet may wear this finish: the show-offs open once it has
+    reached their stage (R.SHELL_UNLOCKS), the rest from the egg."""
+    need = R.SHELL_UNLOCKS.get(finish)
+    return need is None or LIFE_STAGES.index(life_stage(state)) >= LIFE_STAGES.index(
+        need
+    )
+
+
+def shell_options(state: PetState) -> list[str]:
+    """The finishes it may wear now, in the card's order."""
+    return [f for f in R.SHELL_FINISHES if shell_unlocked(state, f)]
 
 
 def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
@@ -1668,6 +1686,7 @@ def lay_egg(
     egg.bonds = copy.deepcopy(state.bonds)  # the family stays close to the device
     egg.firsts = dict(state.firsts)  # the household's season, not the pet's
     egg.unknown = dict(getattr(state, "unknown", {}))  # a later version's keys
+    egg.unknown.pop("shell_finish", None)  # the old pet's look, not the egg's
     egg.memories = list(state.memories)
     # Chore treats earned today wait for the hatchling, and count toward today's limit.
     egg.chore_treats = list(state.chore_treats)

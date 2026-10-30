@@ -871,7 +871,13 @@ async def test_busy_attributes_stay_out_of_history(
     hass_storage[STORE_KEY] = hatched_pet(now)
     await setup(hass)
     attrs = hass.states.get("sensor.pip_life_stage").attributes
-    for key in ("journal", "trait_progress", "traits", "notify_users"):
+    for key in (
+        "journal",
+        "trait_progress",
+        "traits",
+        "notify_users",
+        "shell_finish_options",
+    ):
         assert key in attrs
         assert key in LifeStageSensor._unrecorded_attributes, key
     assert attrs["upbringing"] == "steady"  # on track: no misses, no discipline

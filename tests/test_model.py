@@ -2863,3 +2863,49 @@ def test_fast_forward_wakes_a_sleeper_at_the_next_morning():
     assert pet.asleep and not pet.napping  # 30 h on from 20:00 is 02:00
     assert pet.wake_at == model.next_wake(now, SETTINGS)
     assert pet.wake_at - now <= 24 * HOUR
+
+
+def test_the_shell_finish_survives_a_save_and_bad_values_are_dropped():
+    pet = hatched(at(9))
+    assert pet.shell_finish is None  # its world's own
+    pet.shell_finish = "stripes"
+    assert model.PetState.from_dict(pet.to_dict()).shell_finish == "stripes"
+    data = pet.to_dict()
+    for damaged in (7, ["stripes"], {"finish": "stripes"}):
+        data["shell_finish"] = damaged
+        assert model.PetState.from_dict(data).shell_finish is None, damaged
+    del data["shell_finish"]  # a save from before the field
+    assert model.PetState.from_dict(data).shell_finish is None
+    # A finish a later version draws is kept for it (a downgrade loses nothing).
+    data["shell_finish"] = "holo"
+    assert model.PetState.from_dict(data).to_dict()["shell_finish"] == "holo"
+    # Salvage starts as a new egg's would: on its world's own (no locked shell).
+    data["shell_finish"] = "glitter"
+    assert model.PetState.salvage(data, "Pip", at(9)).shell_finish is None
+
+
+def test_the_show_off_shells_open_at_teen_and_stay_open():
+    pet = hatched(at(9))
+    show_offs = set(R.SHELL_UNLOCKS)
+    assert show_offs == {"glitter", "glow", "smoke", "sunset", "constellation", "stars"}
+    for stage, start in R.STAGE_STARTS:
+        pet.age_hours = start
+        options = model.shell_options(pet)
+        teen = stage in ("teen", "adult")
+        assert set(options) == set(R.SHELL_FINISHES) - (set() if teen else show_offs)
+        assert model.shell_unlocked(pet, "glitter") is teen, stage
+        assert model.shell_unlocked(pet, "stripes"), stage
+    assert model.shell_options(pet) == list(R.SHELL_FINISHES)  # the card's order
+    pet.age_hours = dict(R.STAGE_STARTS)["teen"] - 1e-6
+    assert not model.shell_unlocked(pet, "stars")
+
+
+def test_a_new_egg_starts_on_its_worlds_own_shell():
+    pet = hatched(at(9))
+    pet.age_hours = 30 * 24.0
+    pet.shell_finish = "glitter"
+    pet.unknown = {"shell_finish": "glow", "later": 1}  # a later version's keys
+    egg, _ = model.lay_egg(pet, at(10), NoLuck())
+    assert egg.shell_finish is None
+    assert egg.to_dict()["shell_finish"] is None
+    assert "shell_finish" not in egg.unknown and egg.unknown["later"] == 1

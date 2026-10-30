@@ -31,6 +31,7 @@ from . import channel, notify, rates as R
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_ENABLED,
+    ATTR_FINISH,
     ATTR_GAME,
     ATTR_GUESS,
     ATTR_HEADLINE,
@@ -43,6 +44,7 @@ from .const import (
     SERVICE_MY_DAY,
     SERVICE_NOTIFY_ME,
     SERVICE_PLAY_GAME,
+    SERVICE_SET_SHELL,
     SERVICE_SHARE_NEWS,
     SERVICE_VISIT,
     STORE_VERSION,
@@ -70,6 +72,16 @@ NOTIFY_ME_SCHEMA = vol.Schema(
     {
         vol.Required(ATTR_ENTITY_ID): cv.entity_id,
         vol.Required(ATTR_ENABLED): cv.boolean,
+    }
+)
+# A finish the card draws, or None for the world's own. Whether the pet has
+# grown into it is the coordinator's call.
+SHELL_FINISH = vol.Any(None, vol.In(R.SHELL_FINISHES))
+SET_SHELL_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_id,
+        # Left out (as an automation's UI can't send null): the world's own.
+        vol.Optional(ATTR_FINISH, default=None): SHELL_FINISH,
     }
 )
 VISIT_SCHEMA = vol.Schema(
@@ -142,6 +154,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_subscribe)
     websocket_api.async_register_command(hass, websocket_notify_me)
     websocket_api.async_register_command(hass, websocket_my_day)
+    websocket_api.async_register_command(hass, websocket_set_shell)
 
     async def fast_forward(call: ServiceCall) -> ServiceResponse:
         entries: list[PetConfigEntry] = hass.config_entries.async_loaded_entries(DOMAIN)
@@ -211,6 +224,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         if user_id := await signed_in(call):
             await pet_of(call).async_set_my_day(user_id, call.data[ATTR_ENABLED])
 
+    async def set_shell(call: ServiceCall) -> None:
+        # For automations. A service call is logged with whoever made it; the
+        # card uses the websocket command, which isn't.
+        await pet_of(call).async_set_shell(call.data[ATTR_FINISH])
+
     async def play_game(call: ServiceCall) -> ServiceResponse:
         kind = call.data[ATTR_GAME]
         guess = call.data.get(ATTR_GUESS)
@@ -256,6 +274,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
     hass.services.async_register(
         DOMAIN, SERVICE_MY_DAY, my_day, schema=NOTIFY_ME_SCHEMA
+    )
+    hass.services.async_register(
+        DOMAIN, SERVICE_SET_SHELL, set_shell, schema=SET_SHELL_SCHEMA
     )
 
     hass.services.async_register(
@@ -529,6 +550,35 @@ async def websocket_my_day(
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
     await pet.async_set_my_day(connection.user.id, msg["enabled"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/set_shell",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("finish"): SHELL_FINISH,
+    }
+)
+@websocket_api.async_response
+async def websocket_set_shell(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Dress the pet in a shell finish, or its world's own (null). The card's
+    only way to: a websocket command, so who picked it isn't recorded (the
+    set_shell service is, and stays for automations)."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    try:
+        await pet.async_set_shell(msg["finish"])
+    except ServiceValidationError:
+        connection.send_error(msg["id"], "shell_locked", "Not grown into that yet")
+        return
     connection.send_result(msg["id"])
 
 
