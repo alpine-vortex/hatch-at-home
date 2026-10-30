@@ -209,3 +209,15 @@ the body, despeckles lone light pixels and closes the outline in one dark colour
 Silhouette, palette and effects are unchanged. No image model and no new drawings were
 used. `bowl_food.png` and `play.png` (128 px props) were left alone. A clean redraw is
 planned.
+
+## Hearth on the 128 grid (2026-10-29)
+
+Every character frame of the lop bunny, tabby kitten, corgi, Syrian hamster and ferret (472 frames, including
+the bunny's waves and the kitten's knitted egg) is re-cut at 2 px per art pixel from the same raw sheets, in the
+plan's overlay order. No image calls; props, backgrounds and species.json unchanged. Base cut `cut_creature` /
+`cut_adult` (the kitten with 48 stage colours: at 32 its teen's blue-grey blanket was cut brown). Redraws on top:
+corgi teen sick/calling/dirty and kitten adult calling/dirty (37ec5c0, with the four-legged calls of 1cf81aa and
+e570173), kitten baby calling/dirty (3dfc6c4), the bunny's waves from their react sheets (ddeb07e), the kitten egg
+from the Hearth egg sheet. Then `outline.py`, then the marks (the crisp Z and ! on every corgi and ferret stage,
+072d84a, and on the kitten adult calling; the kitten baby keeps its drawn "!"), then `palette.py`. Head and hat
+points unchanged.
