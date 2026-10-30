@@ -136,7 +136,9 @@ async function main() {
   // Audio may start without a tap here, so the babble checks can hear it play.
   const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
   // A context of its own, so a check can open a second tab on the same storage.
-  const context = await browser.newContext({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1) });
+  // No service worker: HA's caches the frontend's code, and one fetch cut short by a
+  // reload stays cached as a failed module import for every later page (see reloadFor).
+  const context = await browser.newContext({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1), serviceWorkers: "block" });
   // The boot screen shows once per browser: every page here starts as if it had
   // been shown, except the boot checks' (they set the session flag and clear it).
   const bootVersion = /const BOOT_VERSION = "([^"]*)"/.exec(
@@ -4776,7 +4778,7 @@ async function main() {
     }
     const devNickname = seeded ? "sunbeam" : await page.locator("hatch-pet-card").evaluate((el, e) =>
       el._slides.find((x) => x.ids?.["sensor.life_stage"] === e)?.mine?.bond?.nickname || null, seedPet);
-    const ctx2 = await browser.newContext({ viewport: { width: 420, height: 860 } });
+    const ctx2 = await browser.newContext({ viewport: { width: 420, height: 860 }, serviceWorkers: "block" });
     const page2 = await ctx2.newPage();
     const errors2 = [];
     page2.on("pageerror", (e) => errors2.push(String(e)));
