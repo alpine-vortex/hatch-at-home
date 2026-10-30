@@ -58,6 +58,12 @@
           inherited_trait: "sunny", journal: [past(0), past(1)], memories: [{ kind: "first_frost", at: Math.floor(now.getTime() / 1000) - 5 * 86400 }],
           ...(typeof shot.journal === "object" ? shot.journal : {}) });
       }
+      // The shell the server would send (the lead pet): its pick, the finishes it may
+      // wear and the locked ones with their stage. Left out, the card hides the row.
+      if (i === 0 && shot.shellOptions !== undefined) {
+        Object.assign(attrs, { shell_finish: shot.shellFinish ?? null, shell_finish_options: shot.shellOptions,
+          shell_locked: shot.shellLocked || {} });
+      }
       put("sensor", "life_stage", stage, attrs);
       const mood = pet.mood || "content";
       // The mood's own need shows as a flag (the button it wants lights up).
@@ -202,8 +208,19 @@
     // The seat it used is kept in bench.info (bench.js writes it beside the shot).
     window.bench.info = null;
     if (shot.costume) await dress(card, cur, shot.costume);
-    if (shot.view === "status" || shot.view === "settings") root.querySelector(".statusbtn").click();
-    if (shot.view === "settings") root.querySelector(".gear").click();
+    if (["status", "settings", "picker"].includes(shot.view)) root.querySelector(".statusbtn").click();
+    if (shot.view === "settings" || shot.view === "picker") root.querySelector(".gear").click();
+    if (shot.view === "picker") {
+      root.querySelector(".shellrow").click();
+      // `preview`: a tile tapped (its finish on the live shell, unsaved); "" is the world's own.
+      if (shot.preview !== undefined) root.querySelector(`.tile[data-finish="${shot.preview}"]`).click();
+    }
+    // `scroll`: a selector in the status box brought into view (the picker's list scrolls).
+    if (shot.scroll) {
+      const box = cur.status;
+      const el = box.querySelector(shot.scroll);
+      box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientHeight / 3;
+    }
     if (shot.view === "journal") {
       root.querySelector(".statusbtn").click();
       root.querySelector(".jlink").click();
