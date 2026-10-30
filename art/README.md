@@ -236,3 +236,14 @@ e570173), kitten baby calling/dirty (3dfc6c4), the bunny's waves from their reac
 from the Hearth egg sheet. Then `outline.py`, then the marks (the crisp Z and ! on every corgi and ferret stage,
 072d84a, and on the kitten adult calling; the kitten baby keeps its drawn "!"), then `palette.py`. Head and hat
 points unchanged.
+
+## Pond on the 128 grid (2026-10-30)
+
+Every character frame of the tree frog, axolotl, pond turtle, duckling and beaver (480 frames, including the tree
+frog's Pond egg) is re-cut at 2 px per art pixel from the same raw sheets, in the plan's overlay order. No image
+calls; props, backgrounds and species.json unchanged. Base cut `cut_creature` / `cut_adult` (each reproduces the
+shipped set at 64; the pond turtle from its smooth-shell `-batch` sheets, 5e33f86). Redraws on top: the axolotl
+adult (0e7fd39, with the Z of 2bc5b7f), the duckling's audit redraws (37ec5c0), the Pond egg from its kit sheet.
+The tree frog's hand-painted cream face mask (bdc85f2) is carried over from the shipped frame onto the new cut.
+Then `outline.py`, then the marks (the crisp Z on the pond turtle baby/child asleep, 072d84a, and the duckling
+adult asleep), then `palette.py`. Head and hat points unchanged.
