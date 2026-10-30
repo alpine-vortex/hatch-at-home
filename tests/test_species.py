@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import Counter
 import importlib.util
 import json
 from pathlib import Path
@@ -110,17 +109,15 @@ def test_every_stage_has_a_head_point_on_the_creature(species: str) -> None:
 def grid_problems(frames: dict[str, Image.Image]) -> list[str]:
     """What breaks one species' grid rule; [] when its frames pass.
 
-    Every creature frame is 256 x 256, and every one is coarsest on 4 px (the 64
-    art-pixel grid) or every one on 2 px (the 128 grid): a species is never half
-    migrated. Coarsest, because a 4 px frame also fits 2 px.
+    Every creature frame is 256 x 256 and coarsest on 2 px (the 128 art-pixel
+    grid). Coarsest, because a 4 px frame also fits 2 px: a frame that is not
+    coarsest on 2 px is a leftover 64 grid cut, or finer than the grid allows.
     """
     out = [f"{n} is {im.size}" for n, im in frames.items() if im.size != (256, 256)]
-    grids = {n: grid.coarsest(im) for n, im in frames.items()}
-    main = Counter(grids.values()).most_common(1)[0][0] if grids else None
-    if main not in (4, 2):
-        main = None
     out += [
-        f"{n} on {g} px, species on {main} px" for n, g in grids.items() if g != main
+        f"{n} on {g} px, species on 2 px"
+        for n, im in frames.items()
+        if (g := grid.coarsest(im)) != 2
     ]
     return out
 
@@ -155,6 +152,19 @@ def test_the_grid_rule_fails_a_64_frame_in_a_128_species() -> None:
     assert grid_problems(frames) == ["adult_content_2 is (128, 128)"]
     frames["adult_content_2"] = noise(1)
     assert grid_problems(frames) == ["adult_content_2 on 1 px, species on 2 px"]
+
+
+def test_the_grid_rule_fails_a_species_wholly_on_64() -> None:
+    """No 4 px escape: a species with every frame on 4 px fails too."""
+    rng = np.random.default_rng(1)
+    cells = rng.integers(0, 256, (64, 64, 4), np.uint8)
+    cells[..., 3] = 255
+    im = Image.fromarray(cells.repeat(4, 0).repeat(4, 1), "RGBA")
+    frames = {"adult_content_1": im, "egg_idle_1": im}
+    assert grid_problems(frames) == [
+        "adult_content_1 on 4 px, species on 2 px",
+        "egg_idle_1 on 4 px, species on 2 px",
+    ]
 
 
 def test_every_trait_has_flair_art() -> None:

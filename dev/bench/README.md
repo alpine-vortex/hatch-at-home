@@ -48,7 +48,8 @@ A shot (all optional):
 | `season` | `false` (default: no seasonal touches), `"auto"` (by `time`), or a season key such as `halloween` |
 | `time` | pinned clock, ISO (default `2026-06-15T12:00:00Z`; the browser runs in UTC) |
 | `width` | card width in px (420, or 330 for the compact layout); `dpr` pixel ratio |
-| `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `games` (game picker) |
+| `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `journal` (see below), `games` (game picker) |
+| `journal` | `true` (`--journal`, which also sets `view: "journal"`) or an object over the journal attributes the card reads (`raised`, `journal`, `generation`, `traits`, `memories`) |
 | `mine` | `true` (`--mine`) or an object over it: the viewer's own view the private channel would send (a bond, notify me, my day, my birthday kept), so `you two` and the sheet's personal rows show |
 | `power` | the low-battery gag pinned mid-play: `battery` (one bar, first line) or `line` (full battery, second line) |
 | `say` | text put in the bubble (`""` clears it) |
@@ -83,8 +84,13 @@ key. If the card changes these keys or values, update `normalize` in
 Looks only. There is no server logic: no mood or care rules, no privacy
 checks, no restarts, no real Home Assistant theme or fonts around the card
 (it sits on a dark page). The fake entities are the minimum the card reads;
-a screen that needs a sensor attribute this fake does not set (journal,
-bonds, wishes, photos) shows its empty state. Press-and-play flows are not
+a screen that needs a sensor attribute this fake does not set (bonds,
+wishes, photos) shows its empty state. The journal has a fixture: `--journal`
+(`journal: true` or an object over it) fills the lead pet's `life_stage` with
+every creature of the world raised, two past generations, traits and a
+memory, and opens the journal screen (`view: "journal"`). It has no photos row,
+and a roster entry with no sprites yet (the beetle) shows a broken tile, as the
+real card does. Press-and-play flows are not
 driven: `callService`/`callWS` answer with empty replies. The bench calls a
 few card internals (`_tick`, `_frames`, `_write`, `_startGame`, `_stopTyping`,
 `_slides`, `_timer`, `_powerGag`); if the card renames one, `page.js` is the place to fix.

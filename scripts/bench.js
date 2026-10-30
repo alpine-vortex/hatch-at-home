@@ -157,6 +157,7 @@ function parseArgs(argv) {
     else if (key === "lcd") opts.shot.lcd = val();
     else if (key === "boot") opts.shot.booted = false;
     else if (key === "mine") opts.shot.mine = true;
+    else if (key === "journal") Object.assign(opts.shot, { journal: true, view: "journal" });
     else if (key === "season") opts.shot.season = val() === "off" ? false : val() === "on" ? "auto" : argv[i];
     else opts.shot[key] = num.has(key) ? Number(val()) : val();
   }

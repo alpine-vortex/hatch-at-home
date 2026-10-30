@@ -163,7 +163,7 @@ feet stay on y=224.
 
 A review of every live frame found two broken adult sets (axolotl, luna moth: outline
 lost in the cut) and frames drawn at the wrong size for their stage. The axolotl and
-moth outlines were closed with `art/adults/outline_fix.py`, and the oversized gecko sick
+moth outlines were closed with `art/adults/outline_fix.py` (since retired), and the oversized gecko sick
 and squirrel baby cozy/sleepy frames were shrunk with `scripts/art/rescale.py`. What
 needs new drawings is listed in `art/redraw-2026-10-28.md`.
 
@@ -194,7 +194,7 @@ sheets for the clean scene: a broom in two tilts and a dust puff in two frames; 
 fish net with murk in it in two tilts and rising bubbles in two frames.
 `props/cut_clean_props.py` cuts them into `frontend/ui/prop_{broom,dust,net,bubbles}_{1,2}.png`
 (the grey keyed out everywhere, as it shows through the net's mesh; snapped to
-the sheets' ~12.8 px art-pixel grid; one palette per sheet; 4 px per art pixel).
+the sheets' ~12.8 px art-pixel grid; one palette per sheet; 4 px per art pixel: props stay on the 64 world grid).
 `storyboards/` holds the medicine and clean storyboards the scenes follow (visual
 references only).
 

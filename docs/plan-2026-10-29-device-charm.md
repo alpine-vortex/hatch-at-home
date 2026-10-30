@@ -35,7 +35,7 @@ From `docs/HANDOFF.md`, `docs/decisions-2026-10-28.md` and the earlier plans:
 |---|---|---|
 | The screen | `_buildSlide` 1766-1896; markup 1772-1802 | A 4:3 `.screen` (1169) with `overflow: hidden` and rounded corners (the porthole's are oval, 1026). Every layer is an `<img>` or a `div` inside it, so an overlay inherits the shape for free. |
 | Layer order | CSS 1171-1198, 1354, 1370, 1391 | Most layers have `z-index: auto` and stack by DOM order. `.rain` is 1, `.flash` 2, `.game` 3. The `.bubble` (1191) has no z-index, so **anything given a positive z-index paints over the speech bubble**. |
-| Art scale | sprites 256 × 256 | Creatures are 64 art pixels drawn as 4 × 4 blocks. Backgrounds are 512 × 384 with 1-pixel detail. No one pixel grid lines up with both. |
+| Art scale | sprites 256 × 256 | Creatures are 128 art pixels drawn as 2 × 2 blocks (since the 128 grid, 2026-10-30); props, hats and the LCD stay on the 64 world grid of 4 × 4 blocks. Backgrounds are 512 × 384 with 1-pixel detail. No one pixel grid lines up with both. |
 | Frames | `_tick` 2451-2486 (swap 2459-2462) | Two frames a mood, swapped each tick on the slide on show and its two neighbours; every other tick while asleep. |
 | Movement | `.pet.wander-l/-r` 1361, `.go-left/-right` 1385; `_idle` 2541 (wander 2563); the games 4216, 4323, 4941 | CSS `translate` transitions, not keyframes. The perch follows the pet through a MutationObserver (1825-1829). `_moving` (2499) keeps hats from being placed mid-move. |
 | Night | `_renderSlide` 2263-2281; filters 1174-1176 | `.night` dims the background to 85%; `.dim` (asleep or lights out) to 50%, the pet to 80%. |
@@ -62,8 +62,8 @@ the bubble, the game and the status, so words stay crisp and buttons work.
 - **The look.** Two `repeating-linear-gradient`s (rows and columns) of a 1 px dark
   line at about 8% opacity, plus a very faint warm tint. Sized by a custom property
   `--lcd-pitch`.
-- **The pitch.** One cell per creature art pixel, so the grid reads as the pixels the
-  creature is drawn in: `pitch = screen width × 0.465 / 64` (the pet is 62% of a 4:3
+- **The pitch.** One cell per world-grid pixel (WORLD_GRID, 64 across the pet), so a cell
+  is two creature art pixels (creatures are on 128): `pitch = screen width × 0.465 / 64` (the pet is 62% of a 4:3
   screen high and square, so 46.5% of it wide, 1177). A slide is at most 330 px
   (`_layout`, 2092), so the screen is about 276 px and the pitch **about 2 CSS px**
   (less in compact). Set in `_layout`. Where that is under 3 device pixels

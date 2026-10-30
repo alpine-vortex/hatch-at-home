@@ -211,26 +211,26 @@ species. They share the pet box and the same cutter. Decided.
 Each one comes from `git log -- sprites/<sp>/*.png`, for commits after the species'
 full-set commit.
 
-| Species | Fix (commit) | Redo at 128 |
-|---|---|---|
-| Squirrel | Middle foot removed by hand: `child_cheeks_1/2`, `child_hungry_2`, `child_shiver` (c0e5c4a, 7ca7696; `art/README.md:154-160`) | **Hand redo at 128.** A 2× upscale of the fixed 64 frames would leave these four at 64 detail beside 128 neighbours |
-| Squirrel, gecko | Oversized frames shrunk with `rescale.py`: squirrel baby cozy/sleepy, gecko sick (2598fec) | Scripted. Re-run the grid-aware `rescale.py` with the same factors, if the 128 cut is still oversized |
-| Axolotl, luna moth | Adult outlines closed by `outline_fix.py` (2598fec), then both adults redrawn (0e7fd39, 03e1e83) | Re-cut from the redraw sheets. `outline.py` closes the outline |
-| Axolotl | Adult asleep Z moved (2bc5b7f) | Hand redo (2 frames) |
-| Octopus | Slivers erased (`art/README.md:89-91`); baby content/excited colours remapped, `child_colour_shift_2` recoloured (bb5a9ff) | `slivers.py --fix` is scripted. Colour remap by hand (5 frames) |
-| Gecko, kitten | Hand-placed "!" on `teen_calling` (bb5a9ff) and the adult calling (3dfc6c4) | Hand redo at 128, or via `marks.py` once it snaps to ARTPX |
-| 10 creatures | Sleep and call marks (072d84a, `marks.py`) | Scripted: re-run `marks.py`, glyph kept at 64-chunk size, snapped to 2 px (decided) |
-| Deer, luna moth, tree frog | Visible face mask (bdc85f2) | Check the re-cut first. Hand redo only if the mask is lost |
-| Bird, deer, luna moth | One frame each (902e5de, "review and repair") | Check after the re-cut; hand redo if needed |
-| Tarantula | Light eyes on bored/sleepy (f8ae8cd) | None: already 2 px, not re-cut |
-| Kitten, bunny | Leg gap in the content_1 bob (10362ef) | None: the cutter's bob now stretches the legs (`cut_creature_g.py:61`) |
-| All new creatures | Outline closed (50ac77b) | Scripted: `outline.py`, grid-aware |
-| Bearded dragon | `art-dragon-stopgap` (c02b848): grain cleanup on all 92 frames, merged to main as a stopgap | Decided: cut v1 at 128 in the pilot; resume the paused `beardeddragon2` redraw only if it still reads grainy |
-| Deer | Adult calling/dirty and teen dirty redrawn (49fd78d); teen calling redrawn, "!" restamped 4 px higher (91f7ee7). Source `probes5/` (`cutdeer_*`), no committed cutter | Re-cut from the `probes5` source with a cutter written for it, then `marks.py` |
-| Kitten | **Baby** calling/dirty full-size redraw (3dfc6c4), not only the adult "!". Source `probes5/` | As deer |
-| Squirrel, bat | R6 squirrel `teen_excited_2`; R7 **bat adult, 20 frames** (f9c6c40), source `fix6/`, cutter `cut_bat7.py` | Re-run `cut_bat7.py` at ARTPX 2 (after the cutter fixes above); squirrel frame by hand with the squirrel set |
-| Ball python | Child redraw (8733d9c) | Looks covered by the dated `-batch` dir; confirm in the Terrarium pilot |
-| Pond turtle | Full redraw (5e33f86) | Looks covered by the dated `-batch` dir; confirm in the Pond world PR |
+| Species | Fix (commit) | Redo at 128 | Handled at 128 (2026-10-30) |
+|---|---|---|---|
+| Squirrel | Middle foot removed by hand: `child_cheeks_1/2`, `child_hungry_2`, `child_shiver` (c0e5c4a, 7ca7696; `art/README.md:154-160`) | **Hand redo at 128.** A 2× upscale of the fixed 64 frames would leave these four at 64 detail beside 128 neighbours | ✅ Woodland: foot removals moved onto the new cut (art/README.md, Woodland) |
+| Squirrel, gecko | Oversized frames shrunk with `rescale.py`: squirrel baby cozy/sleepy, gecko sick (2598fec) | Scripted. Re-run the grid-aware `rescale.py` with the same factors, if the 128 cut is still oversized | ✅ Gecko sick: Terrarium (0.83/0.79). Squirrel baby cozy/sleepy: Woodland rescale |
+| Axolotl, luna moth | Adult outlines closed by `outline_fix.py` (2598fec), then both adults redrawn (0e7fd39, 03e1e83) | Re-cut from the redraw sheets. `outline.py` closes the outline | ✅ Pond (axolotl adult 0e7fd39), Night Sky (moth adult 03e1e83); `outline.py` |
+| Axolotl | Adult asleep Z moved (2bc5b7f) | Hand redo (2 frames) | ✅ Pond: Z of 2bc5b7f |
+| Octopus | Slivers erased (`art/README.md:89-91`); baby content/excited colours remapped, `child_colour_shift_2` recoloured (bb5a9ff) | `slivers.py --fix` is scripted. Colour remap by hand (5 frames) | ✅ Tidepool: recolours carried over colour by colour; `slivers.py` finds none |
+| Gecko, kitten | Hand-placed "!" on `teen_calling` (bb5a9ff) and the adult calling (3dfc6c4) | Hand redo at 128, or via `marks.py` once it snaps to ARTPX | ✅ Gecko teen "!": Terrarium. ✅ Kitten adult calling: Hearth marks. ❓ Gecko adult calling and kitten teen_calling: no README line names them; not confirmed |
+| 10 creatures | Sleep and call marks (072d84a, `marks.py`) | Scripted: re-run `marks.py`, glyph kept at 64-chunk size, snapped to 2 px (decided) | ✅ All 10 (072d84a: ballpython, bananaslug, beardeddragon, corgi, ferret, fox, pondturtle, puffin, seal, tortoise): Terrarium, Hearth, Pond, Tidepool, Woodland marks |
+| Deer, luna moth, tree frog | Visible face mask (bdc85f2) | Check the re-cut first. Hand redo only if the mask is lost | ✅ Deer: Woodland. Moth: Night Sky. Tree frog: Pond (mask carried over) |
+| Bird, deer, luna moth | One frame each (902e5de, "review and repair") | Check after the re-cut; hand redo if needed | ❓ Not confirmed: 902e5de touched bird adult_asleep_2, deer teen_sick_1, lunamoth baby_asleep_2; no README line names them (deer teen_sick was redrawn from fix7 in Woodland, which may cover it) |
+| Tarantula | Light eyes on bored/sleepy (f8ae8cd) | None: already 2 px, not re-cut | ✅ Native 2 px, never re-cut |
+| Kitten, bunny | Leg gap in the content_1 bob (10362ef) | None: the cutter's bob now stretches the legs (`cut_creature_g.py:61`) | ✅ By the cutter's bob (Hearth base cut); frames not re-inspected |
+| All new creatures | Outline closed (50ac77b) | Scripted: `outline.py`, grid-aware | ✅ `outline.py` in every world section |
+| Bearded dragon | `art-dragon-stopgap` (c02b848): grain cleanup on all 92 frames, merged to main as a stopgap | Decided: cut v1 at 128 in the pilot; resume the paused `beardeddragon2` redraw only if it still reads grainy | ✅ Terrarium: cut from the v1 sheets, grain stopgap replaced |
+| Deer | Adult calling/dirty and teen dirty redrawn (49fd78d); teen calling redrawn, "!" restamped 4 px higher (91f7ee7). Source `probes5/` (`cutdeer_*`), no committed cutter | Re-cut from the `probes5` source with a cutter written for it, then `marks.py` | ✅ Woodland: probes5 redraws, marks at main's positions |
+| Kitten | **Baby** calling/dirty full-size redraw (3dfc6c4), not only the adult "!". Source `probes5/` | As deer | ✅ Hearth: baby calling/dirty redraw (3dfc6c4) |
+| Squirrel, bat | R6 squirrel `teen_excited_2`; R7 **bat adult, 20 frames** (f9c6c40), source `fix6/`, cutter `cut_bat7.py` | Re-run `cut_bat7.py` at ARTPX 2 (after the cutter fixes above); squirrel frame by hand with the squirrel set | ✅ Bat adult: Night Sky (`cut_bat7.py`). Squirrel teen_excited R6: Woodland |
+| Ball python | Child redraw (8733d9c) | Looks covered by the dated `-batch` dir; confirm in the Terrarium pilot | ❓ Not confirmed: Terrarium re-cut ball python from the raw sheets but its README names no child redraw (8733d9c) |
+| Pond turtle | Full redraw (5e33f86) | Looks covered by the dated `-batch` dir; confirm in the Pond world PR | ✅ Pond: cut from the smooth-shell `-batch` sheets (5e33f86) |
 
 **Overlay order** for every cut, so a later step never undoes an earlier one: base cut,
 then the redraws (`probes5`, `fix6`, `redraw5`, `fix7`, `react6`), then rescale and
@@ -269,12 +269,12 @@ gecko (86 frames cut, 98 shipped) and the bunny (missing its 6 wave frames).
 
 | # | Slice | Size | Proof | Parallel with the re-cut? |
 |---|---|---|---|---|
-| 0 | **Tools first.** Grid detection in `outline.py`, `rescale.py`, `outline_fix.py`; grid report in `check.py`; the grid test in `test_species.py` (one grid per species, 2 or 4); the head-test step 4 → 2. The coordinator's cutters: `cut_adults` ARTPX, the bob in art px, `fit_height` in ARTPX units, `cut_react` and `cut_fix7` outline at any grid (drop per-item `grid`), one env-var checkout path for every cutter (`cut_react`, `cut_fix7`, `cut_bat7`, `process_redraw5`, `cut_tarantula5`, `species_json`; refresh or delete `main_snapshot`), `marks.py`, `restamp.py`, `restamp_head.py` | S | `pytest tests/test_species.py` passes on today's sprites (29 × coarsest 4, tarantula 2). A synthetic 64 frame inside a 2 px species **fails** the grid test (the gate proves it can fail). ~~`outline.py` on the tarantula adds 0 px~~ (wrong, see the reconcile). Run the tools on a g128 test set and diff against a run at ARTPX 4 | Must land **before** any 128 sprite |
-| 1 | **Card: name the grids.** A constant for the world/shell grid (64), used by `--px`, the LCD pitch and `_linkBeam`; comments at `:1593`, `:2898`, `:5383`, `:972`, `:2490`, `:2914`, `:1753`, `:6196`. No behaviour change | S | Bench `shells` and `ui` presets byte-identical before and after (valid here only, before any sprite changes; the bench's noise made this a weaker proof, see the reconcile). `_linkBeam` on the same constant (its unit moves ¼ px at five screen widths). `card-check` D1 LCD checks pass | Yes |
-| 2 | **Pilot: Terrarium** (4 species), full sets, hand fixes, heads checked (`heads.py` as a diff, see the tools table), hat points re-checked; `palette.py` on the output; dragon cut from v1 `beardeddragon-batch` | M | `outline.py` on the four fresh Terrarium cuts only, never on the world's shipped folders (the tarantula included). `check.py`, `gaps.py`, `slivers.py` clean. The grid test. Bench `species` preset before/after sheet for the 4, plus a full-frame `sheet.py` contact sheet per species (old vs new), plus the **gecko** at `--width 330 --dpr 1` judged for outline breaks, plus the journal at dpr 1 and 2 (needs a **journal fixture added to the bench** first, since the bench shows the journal empty; or drop that proof). `costume-preview.js` (own-port `HA_URL`) + `costume_sheet.py` for every costume. `card-check` costume and birthday-hat checks as a regression gate only (own-port HA, per AGENTS.md). Owner looks at the sheet | Cutting runs alongside; this slice is the gate for the rest |
-| 3 | **Worlds 2-6**, one PR per world (5 species each), with that world's hand fixes | L total (M each) | As slice 2 for its species, including `palette.py` and the full-frame contact sheet. Merged per world; no release until the last world | Each world after the previous one is merged; the cutting can run ahead |
-| 4 | **Hand redos at 128**: squirrel four frames, axolotl Z, octopus colours, gecko and kitten "!", the masks if lost, and the deer, kitten, bat, squirrel redraws from the new table rows | S-M | Before/after crops at 4×; `gaps.py` and `slivers.py`; owner look | Inside the world PR it belongs to |
-| 5 | **Close out.** Tighten the grid test to 2 px only; update `art/README.md`, `custom_components/virtual_pet/frontend/sprites/README.md:22` ("4 px per art pixel like the creatures"), `docs/design-worlds.md` and `plan-2026-10-29-device-charm.md:38,65` (the "64 art pixels" lines); retire `art/adults/outline_fix.py` if unused | S | `pytest`; grep for "64 art" finds no stale line | After the last world |
+| 0 ✅ | **Tools first.** Grid detection in `outline.py`, `rescale.py`, `outline_fix.py`; grid report in `check.py`; the grid test in `test_species.py` (one grid per species, 2 or 4); the head-test step 4 → 2. The coordinator's cutters: `cut_adults` ARTPX, the bob in art px, `fit_height` in ARTPX units, `cut_react` and `cut_fix7` outline at any grid (drop per-item `grid`), one env-var checkout path for every cutter (`cut_react`, `cut_fix7`, `cut_bat7`, `process_redraw5`, `cut_tarantula5`, `species_json`; refresh or delete `main_snapshot`), `marks.py`, `restamp.py`, `restamp_head.py` | S | `pytest tests/test_species.py` passes on today's sprites (29 × coarsest 4, tarantula 2). A synthetic 64 frame inside a 2 px species **fails** the grid test (the gate proves it can fail). ~~`outline.py` on the tarantula adds 0 px~~ (wrong, see the reconcile). Run the tools on a g128 test set and diff against a run at ARTPX 4 | Must land **before** any 128 sprite |
+| 1 ✅ | **Card: name the grids.** A constant for the world/shell grid (64), used by `--px`, the LCD pitch and `_linkBeam`; comments at `:1593`, `:2898`, `:5383`, `:972`, `:2490`, `:2914`, `:1753`, `:6196`. No behaviour change | S | Bench `shells` and `ui` presets byte-identical before and after (valid here only, before any sprite changes; the bench's noise made this a weaker proof, see the reconcile). `_linkBeam` on the same constant (its unit moves ¼ px at five screen widths). `card-check` D1 LCD checks pass | Yes |
+| 2 ✅ | **Pilot: Terrarium** (4 species), full sets, hand fixes, heads checked (`heads.py` as a diff, see the tools table), hat points re-checked; `palette.py` on the output; dragon cut from v1 `beardeddragon-batch` | M | `outline.py` on the four fresh Terrarium cuts only, never on the world's shipped folders (the tarantula included). `check.py`, `gaps.py`, `slivers.py` clean. The grid test. Bench `species` preset before/after sheet for the 4, plus a full-frame `sheet.py` contact sheet per species (old vs new), plus the **gecko** at `--width 330 --dpr 1` judged for outline breaks, plus the journal at dpr 1 and 2 (needs a **journal fixture added to the bench** first, since the bench shows the journal empty; or drop that proof). `costume-preview.js` (own-port `HA_URL`) + `costume_sheet.py` for every costume. `card-check` costume and birthday-hat checks as a regression gate only (own-port HA, per AGENTS.md). Owner looks at the sheet | Cutting runs alongside; this slice is the gate for the rest |
+| 3 ✅ | **Worlds 2-6**, one PR per world (5 species each), with that world's hand fixes | L total (M each) | As slice 2 for its species, including `palette.py` and the full-frame contact sheet. Merged per world; no release until the last world | Each world after the previous one is merged; the cutting can run ahead |
+| 4 ✅ | **Hand redos at 128**: squirrel four frames, axolotl Z, octopus colours, gecko and kitten "!", the masks if lost, and the deer, kitten, bat, squirrel redraws from the new table rows | S-M | Before/after crops at 4×; `gaps.py` and `slivers.py`; owner look | Inside the world PR it belongs to |
+| 5 ✅ | **Close out.** Tighten the grid test to 2 px only; update `art/README.md`, `custom_components/virtual_pet/frontend/sprites/README.md:22` ("4 px per art pixel like the creatures"), `docs/design-worlds.md` and `plan-2026-10-29-device-charm.md:38,65` (the "64 art pixels" lines); retire `art/adults/outline_fix.py` if unused | S | `pytest`; grep for "64 art" finds no stale line | After the last world |
 
 **Cost.**
 
@@ -407,6 +407,24 @@ code before folding; all 20 held. #16 was re-checked at the README line; #12's f
 | 19 size check on all frames | Tests |
 | 20 visiting pets | Touch-point table (`_linkBeam` row); no fix |
 
-**Not folded:** nothing. Two items are open work, not decisions: the bench journal
+**Not folded:** nothing. Two items were open work, not decisions (the journal fixture is done, see Close-out): the bench journal
 fixture (slice 2) and a cutter for the deer and kitten `probes5` redraws (no committed
 cutter exists).
+
+## Close-out (2026-10-30)
+
+Status of slices 0-5: 0 done 2026-10-29, 92329d0; 1 done 2026-10-29, 92329d0; 2 done 2026-10-29, 01a5ab2; 3 done 2026-10-30: Hearth dd45024, Pond 4f244be, Tidepool e9181ca, Night Sky 4ed8ecb, Woodland 3a33102; 4 done 2026-10-30, inside the world re-cuts (see the hand-fix table); 5 done 2026-10-30, branch crew/hatch-at-home-s2508-128-plan-close-out-grid-test-2.
+
+- All 30 species are on the 128 grid (tarantula native). The grid test now takes
+  2 px only; a synthetic 4 px frame, alone or as a whole species, is rejected.
+- Stale creature lines ("64 art pixels", "4 px per art pixel like the creatures")
+  reworded in `sprites/README.md`, `plan-2026-10-29-device-charm.md` and
+  `art/README.md`. The world grid (`WORLD_GRID`, LCD, backgrounds, props, hats,
+  season costumes) stays at 64 on purpose.
+- `art/adults/outline_fix.py` retired: nothing ran it (`outline.py` closes outlines
+  at any grid). Dated history files still name it.
+- Hand-fix table: 18 rows ticked. Not confirmed, and not guessed: gecko adult calling
+  and kitten teen_calling "!"; the bird / deer / moth frames of 902e5de; the ball
+  python child redraw (8733d9c).
+- The bench journal fixture (open in the scope pass) is done: `--journal` in
+  `scripts/bench.js`. Gecko journal checked at width 330, dpr 1 and 2.

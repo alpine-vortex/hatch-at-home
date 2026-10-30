@@ -45,6 +45,17 @@
       const stage = pet.stage || "adult";
       const attrs = { world, roster: worlds[world].roster, species: pet.species, age_days: pet.age_days ?? 12 };
       if (stage === "egg") attrs.hatches_at = iso(pet.hatch_minutes ?? 600);
+      if (shot.journal && i === 0) {
+        // The journal's data: every creature of the world raised, the two pets before
+        // this one, a trait or two and a memory. `journal: {..}` overrides any of it.
+        const roster = worlds[world].roster;
+        const past = (k) => ({ generation: k + 1, name: ["Pip", "Mochi"][k], species: roster[(k + 1) % roster.length],
+          age_days: 31 + k * 9, upbringing: ["playful", "caring"][k], personality: ["bold", "gentle"][k], games: { catch: 3 + k },
+          traits: ["sunny"], trait_levels: { sunny: 2 } });
+        Object.assign(attrs, { raised: roster, generation: 3, traits: ["sunny", "cuddly"], trait_levels: { sunny: 1, cuddly: 3 },
+          inherited_trait: "sunny", journal: [past(0), past(1)], memories: [{ kind: "first_frost", at: Math.floor(now.getTime() / 1000) - 5 * 86400 }],
+          ...(typeof shot.journal === "object" ? shot.journal : {}) });
+      }
       put("sensor", "life_stage", stage, attrs);
       const mood = pet.mood || "content";
       // The mood's own need shows as a flag (the button it wants lights up).
@@ -165,6 +176,13 @@
     }
     if (shot.view === "status" || shot.view === "settings") root.querySelector(".statusbtn").click();
     if (shot.view === "settings") root.querySelector(".gear").click();
+    if (shot.view === "journal") {
+      root.querySelector(".statusbtn").click();
+      root.querySelector(".jlink").click();
+      // The journal loads the species names first: wait for its tiles.
+      // (Date is pinned, so count the tries instead of reading the clock.)
+      for (let n = 0; !root.querySelector(".jgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+    }
     if (shot.view === "games") card._startGame(cur, cur.buttons.play); // the button itself can be disabled
     // Date is pinned, so a line would never finish typing: write each whole.
     slides.forEach((x) => card._stopTyping(x));
