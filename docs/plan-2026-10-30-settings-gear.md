@@ -128,14 +128,36 @@ The bench seeds it through `storage` like `lcd`.
 ## 6. Slices (build order)
 
 Each slice ships alone, ends green on `scripts/test`, and a bench look.
-1. **Gear + empty sheet + move rows** (card only). Add `icon_gear`, `_settings` view,
-   split `_renderStatus` into status and `_renderSettings`; rows move unchanged.
-   Check: `scripts/test`; bench `--preset ui` plus new presets `settings` (420/330,
-   woodland/tidepool/nightsky, day/night) and `settings-shared`; card-check: open gear,
-   toggle sounds/effects, back, Status chip closes both, shared screen hides FOR YOU,
-   focus returns; existing card-check rows (notify, my day, baby talk, forget) pass from
-   their new place. Bench needs `view: "settings"` (page.js calls `_toggleStatus` +
-   `_settings`; add to the README table).
+1. **Gear + sheet + move rows** (card only). **Shipped (s2505, 2026-10-30)**, amended by
+   the adversarial review (s2504, findings 1-7 and 14-16):
+   - Gear: an inline 12x12 pixel SVG (`GEAR_ICON`, drawn at 24 px, `currentColor`),
+     not a `ui/icon_gear.png`, so no art step; Sol can replace it later. It sits alone in
+     a sticky `.shead` row at the top of the status view (no "status" title, so no
+     new copy). Hit area 34x30 px, `aria-label="settings"`. Not filled when open: the
+     sheet replaces the status view, so the gear isn't on screen then.
+   - Routing: `s.settings` per slide (like `s.journal`), checked at the top of
+     `_renderStatus`, which calls `_renderSettings(s)`. Every redraw (hass update,
+     row handlers, confirm-tap, `_goShared`/`_goPersonal`) stays in the sheet. The
+     rows and all their handlers moved into `_renderSettings`. The status view binds
+     only `.jlink` and `.gear`. The `bond &&` guard on my day is kept.
+   - The sheet renders into `s.status` only and draws its own `.status-feedback`
+     (last, inside the scroll box). `s.settings=false` where `journal` resets: the pet
+     change and `_toggleStatus` (so the Status chip, a screen tap and a game start
+     close both). `_goShared` keeps the sheet open and redraws it without FOR YOU.
+   - Focus: the gear moves it to the back row (`.sback`, "‹ settings"); back moves it
+     to the gear. The gear, the back row and the headings `stopPropagation`.
+   - Sections: `for you` (absent on a shared screen, heading too) and `this screen`,
+     dotted headings, upper-cased by CSS. No FOR <PET> heading until slice 3.
+   - Card-check: every moved check opens the sheet (`s.settings=true` or a gear
+     click) and resets it after; each negative is paired with a positive in the same
+     view; the cross-tab look checks personal rows in whichever view is up. New: gear
+     tap keeps the status up and focuses the back row, back focuses the gear, a
+     heading tap keeps the sheet, the Status chip closes both, the shared sheet keeps
+     THIS SCREEN and drops FOR YOU, a forced forget failure shows its line in the
+     sheet, the sheet at 420 and 330 reaches its last row.
+   - Bench: `view: "settings"`, a `mine` shot field (bond, notify me, my day, my
+     birthday kept), presets `settings` (420/330, woodland/tidepool/nightsky,
+     day/night) and `settings-shared`; README table and preset list.
 2. **Per-pet finish, server** (python only). `Pet.shell_finish`, sensor attribute,
    `set_shell` service + ws, `services.yaml`, `strings.json`/translations, unlock rule
    by stage. Check: `scripts/test` (model: set, unknown key, locked key, stage reached,
