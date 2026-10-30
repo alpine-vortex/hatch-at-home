@@ -170,6 +170,27 @@ STAGE_STARTS: list[tuple[str, float]] = [
     ("adult", 336.0),  # about two weeks
 ]
 
+# --- Shell finishes: the device's plastic, per pet ------------------------
+
+# Every finish the card draws (its FINISHES, in the same order; the bench keeps
+# a third copy). A pet's shell is one of these, or None for its world's own.
+SHELL_FINISHES: tuple[str, ...] = (
+    "woodland", "aqua", "grove", "celestial", "dune", "clear", "glitter", "glow",
+    "speckle", "stripes", "hearts", "stars", "gingham", "dots", "camo", "waves",
+    "scales", "leaves", "paws", "constellation", "rainbow", "twotone", "sunset",
+    "smoke",
+)  # fmt: skip
+# The show-offs are earned: open once the pet has reached this stage (and kept
+# after). Every other finish is open from the egg.
+SHELL_UNLOCKS: dict[str, str] = {
+    "glitter": "teen",
+    "glow": "teen",
+    "smoke": "teen",
+    "sunset": "teen",
+    "constellation": "teen",
+    "stars": "teen",
+}
+
 # --- Upbringing: decided on reaching adulthood, kept for life ---------------
 
 # score = care weight x care + the rest x discipline averaged hour by hour;

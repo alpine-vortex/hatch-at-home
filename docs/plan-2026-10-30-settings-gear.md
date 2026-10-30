@@ -96,17 +96,29 @@ first because it is the new thing, and "this screen" last, nearest to `shared sc
   ("teen"); tapping shows the note, never a points price, never hidden (so the pet has
   something to grow toward). Which shells are earned is the owner's pick (Q3). Rule:
   open when the pet has *reached* the stage (`stage_rank >= n`), so adults keep it.
-- **Storage and push (recommended):** a new `Pet.shell_finish: str | None` (None =
-  world default), persisted with the pet, kept on rebirth only if the owner wants (Q5).
-  Exposed as `shell_finish` (+ `shell_finish_options`, the unlocked keys) attributes on
-  `sensor.life_stage` beside `world` (`sensor.py:206`). It changes on a tap, not on a
-  tick, so no recorder churn. It is a cosmetic key, nothing personal; the writer is not
-  stored. Write path: `virtual_pet.set_shell` service + `virtual_pet/set_shell`
-  websocket (copy `my_day`, same schema shape; reject unknown or still-locked keys, reject
-  nothing for `null`). Card reads the attribute in `_renderSlide`: `shell.finish`
-  becomes `pet override ?? world.shell.finish`. Alternatives: HA option (rejected by the
-  owner, 2026-10-29), per-browser (rejected: "per pet"), house view (no such view exists;
-  wrong place for a pet-owned setting).
+- **Storage and push (shipped, slice 2):** `PetState.shell_finish: str | None` (None =
+  world default), persisted with the pet, type-checked on load (not a string: None; a
+  string this version doesn't know is kept, so a downgrade loses nothing); a salvaged
+  save starts on the default, like a new egg. It stays through growing up; a new egg starts on None (Q4), and
+  `lay_egg` drops it from `egg.unknown`. The finish list and the unlocks live on the
+  server: `rates.SHELL_FINISHES` (the card's `FINISHES` keys in order; a test checks
+  the card's and the bench's copies match) and `rates.SHELL_UNLOCKS` (the six
+  show-offs -> `teen`, Q3). `model.shell_unlocked` / `model.shell_options`: open once
+  the pet has *reached* the stage. Exposed on `sensor.life_stage` beside `world`:
+  `shell_finish` (a key this version doesn't draw shows as None) and
+  `shell_finish_options` (the keys it may wear now, card order; unrecorded). Both hold
+  still across ticks. Write paths:
+  - **The card: websocket only**, `{type: "virtual_pet/set_shell", entity_id, finish:
+    <key> | null}`. Errors: `no_pet`, `shell_locked` (not grown into it),
+    `invalid_format` (not a finish). No service fallback: a missing command means
+    "can't change the shell here", because a service call logs who made it.
+  - **Automations:** the `virtual_pet.set_shell` service (`finish` optional; left out =
+    the world's own). Its description says history records it and who ran it. A locked
+    key raises `ServiceValidationError` (`shell_locked`, placeholders `finish`, `stage`).
+  Card reads the attribute in `_renderSlide`: `shell.finish` becomes `pet override ??
+  world.shell.finish`, ignoring a key it doesn't know. Alternatives: HA option
+  (rejected by the owner, 2026-10-29), per-browser (rejected: "per pet"), house view
+  (no such view exists; wrong place for a pet-owned setting).
 - **Privacy check:** the finish is not about a person; nothing goes to history beyond one
   short string on the existing sensor. `diagnostics.py` needs no redaction. No "set by".
 
@@ -136,18 +148,25 @@ Each slice ships alone, ends green on `scripts/test`, and a bench look.
    focus returns; existing card-check rows (notify, my day, baby talk, forget) pass from
    their new place. Bench needs `view: "settings"` (page.js calls `_toggleStatus` +
    `_settings`; add to the README table).
-2. **Per-pet finish, server** (python only). `Pet.shell_finish`, sensor attribute,
-   `set_shell` service + ws, `services.yaml`, `strings.json`/translations, unlock rule
-   by stage. Check: `scripts/test` (model: set, unknown key, locked key, stage reached,
-   reload round-trip, rebirth rule; sensor attribute; service for another pet's entity),
-   no new recorder rows on a tick.
+2. **Per-pet finish, server** (shipped, s2506; python, services.yaml, strings only).
+   `PetState.shell_finish`, `SHELL_FINISHES`/`SHELL_UNLOCKS` in rates.py, the
+   `shell_finish`/`shell_finish_options` attributes, the `virtual_pet/set_shell` ws
+   command (the card's only write path) and the `set_shell` service (automations,
+   logged), the `shell_locked` exception string. Tests (`tests/test_shell.py`, plus
+   test_model, test_channel's `no_pet` loop and `test_busy_attributes_stay_out_of_history`):
+   the card's and bench's finish lists match the server's; round-trip, damaged values,
+   an unknown key kept and shown as None, salvage on the default; unlocks per stage; a new egg on the
+   default; service set/locked/unknown/clear and a reload; a second pet keeps its own;
+   ws set/locked/invalid with no `call_service` event and no user on the state change;
+   attributes equal across a tick.
 3. **Picker, card** (needs 1 and 2). Row, picker view, live preview, use/default/revert,
    locked tiles, the override in `_renderSlide`. Check: bench `finishes` still byte-same
    for no override (regression), new preset `picker` (locked + current, 420/330),
    `scripts/test`; card-check: pick, save, reload page keeps it, default clears it, a
    locked tile does not save, a *second pet* keeps its own, shared screen is read-only.
 4. **Earned-shell list and copy** (data + COPY? lines, after owner answers).
-   Check: a `shell_unlocks` table in `rates.py` plus its test; picker sheet per stage.
+   The `SHELL_UNLOCKS` table and its test already shipped in slice 2 (Q3 answered);
+   left: the COPY? lines and a picker sheet per stage.
 5. **Monochrome** (card only, after 1). The row, `hatch-mono`, the tone filter, a
    bench flag and preset `mono`. Check: sheet of every mood at 2 and 4 tones judged by
    the owner; reduced motion unaffected; `scripts/test`; card-check toggles it and a
@@ -191,6 +210,7 @@ before its slice ships.
   is a finding (scroll needed), not a mock bug.
 - Not verified: the stage names order in `model.py` for the unlock rule (`life_stage`),
   the exact `pixelIcon` registry for `icon_gear`, translations plumbing. Slice 2/1
-  workers confirm. `scripts/test` was not run (scout).
+  workers confirm. (Slice 2: stage order is `rates.STAGE_STARTS`, egg..adult;
+  translations are `strings.json` = `translations/en.json`, kept byte-identical.) `scripts/test` was not run (scout).
 - Mocks: gear-status-420, gear-sheet-420, gear-sheet-330, gear-shared-330,
   gear-picker-420, gear-mono-330 (.png), plus base-status-420 (today's status).

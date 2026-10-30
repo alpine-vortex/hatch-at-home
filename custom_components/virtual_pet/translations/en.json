@@ -273,6 +273,9 @@
     },
     "not_signed_in": {
       "message": "Only someone signed in can turn their own pet notifications on or off."
+    },
+    "shell_locked": {
+      "message": "The {finish} shell opens once the pet is a {stage}."
     }
   },
   "services": {
@@ -325,6 +328,20 @@
         "enabled": {
           "name": "Enabled",
           "description": "On to let it notice your day, off to stop."
+        }
+      }
+    },
+    "set_shell": {
+      "name": "Set shell",
+      "description": "Dresses the pet's device in a shell finish, or back in its world's own. The glitter, glow, smoke, sunset, constellation and stars shells open once the pet is a teen. Home Assistant's history records this action and who ran it; on the card, picking a shell is not recorded.",
+      "fields": {
+        "entity_id": {
+          "name": "Pet",
+          "description": "Any entity of the pet."
+        },
+        "finish": {
+          "name": "Finish",
+          "description": "The finish's key, such as stripes, hearts or camo. Leave it out for the world's own."
         }
       }
     },

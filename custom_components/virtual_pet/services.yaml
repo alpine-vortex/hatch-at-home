@@ -45,6 +45,17 @@ my_day:
       example: true
       selector:
         boolean:
+set_shell:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: virtual_pet
+    finish:
+      example: stripes
+      selector:
+        text:
 play_game:
   fields:
     entity_id:

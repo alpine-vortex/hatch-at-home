@@ -27,6 +27,7 @@ from homeassistant.core import (
     State,
     callback,
 )
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
     device_registry as dr,
     entity_registry as er,
@@ -1902,6 +1903,24 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if enabled:
             users.append(user_id)
         self.state.notify_users = users
+        self._save()
+        self._publish()
+
+    async def async_set_shell(self, finish: str | None) -> None:
+        """Dress the pet in a shell finish (R.SHELL_FINISHES), or its world's
+        own (None). A show-off it hasn't grown into yet is refused. Nobody is
+        recorded as the one who picked it."""
+        assert self.state is not None
+        if finish is not None and not model.shell_unlocked(self.state, finish):
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="shell_locked",
+                translation_placeholders={
+                    "finish": finish,
+                    "stage": R.SHELL_UNLOCKS[finish],
+                },
+            )
+        self.state.shell_finish = finish
         self._save()
         self._publish()
 
