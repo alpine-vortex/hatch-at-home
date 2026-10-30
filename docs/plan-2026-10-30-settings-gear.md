@@ -269,7 +269,7 @@ Each slice ships alone, ends green on `scripts/test`, and a bench look.
 4. Proof: style-snapshot JSON diff plus a noise-aware pixel check; "byte-same" is dropped
    from slice 3.
 
-**Slice 3 strings** (proposal, awaiting first-mate sign-off; lowercase, the card's voice,
+**Slice 3 strings** (signed off by the first mate 2026-10-30, with `err_nopet` changed from "can't find the pet to dress"; lowercase, the card's voice,
 checked against the no-nagging rules in `docs/plan-2026-10-28-experience.md` §5: no `?`,
 none of "still, again, why, never, pleas, sad, cry, alone, forgot"):
 
@@ -287,7 +287,7 @@ none of "still, again, why, never, pleas, sad, cry, alone, forgot"):
 | Locked tap note | "I get this one as a teen ♪" |
 | Shared read-only note | "ask a grown-up to change it" |
 | Saved | "shell saved ♪"; default: "back to the world's own ♪" |
-| `err_nopet` | "can't find the pet to dress" |
+| `err_nopet` | "can't find this pet" |
 | `err_locked` | "not grown into that one yet" |
 | `err_here` | "can't change the shell here" |
 | `err_generic` | "that didn't work, try later" |
