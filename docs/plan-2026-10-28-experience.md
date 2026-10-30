@@ -1025,6 +1025,13 @@ later, separate batch (**L**).
 
 ### Wave 4: progression and polish
 
+**Release scope (owner, 2026-10-30).** This release keeps only **PR 4e** (the counts and
+images) and **the rest of PR 4c**: misses/whines move to the settings sheet, and every
+status and settings control gets a 44 px hit area. The settings gear (its slice 1) already
+moved the person's and the device's rows into the sheet. **Deferred to a later release:**
+PR 4a, 4b, 4d, 4f and 4g, and the forms book (`plan-2026-10-28-forms-book.md`) that 4b,
+4c's creature-page parts and 4g wait on. Catch stays behind `experimental_catch`.
+
 **PR 4a: milestones that wait (O08).** Size **M**, tier 2 (a saved list). After privacy
 P1 and PR 2a.
 - **Checked:** `state.memories` (`model.py:133`, kept 30, `MEMORIES_KEPT` 1402) holds
