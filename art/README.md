@@ -236,3 +236,15 @@ e570173), kitten baby calling/dirty (3dfc6c4), the bunny's waves from their reac
 from the Hearth egg sheet. Then `outline.py`, then the marks (the crisp Z and ! on every corgi and ferret stage,
 072d84a, and on the kitten adult calling; the kitten baby keeps its drawn "!"), then `palette.py`. Head and hat
 points unchanged.
+
+## Night Sky on the 128 grid (2026-10-30)
+
+Every character frame of the bat, luna moth, saw-whet owl, firefly and opossum (464 frames, including the bat's
+Night Sky egg and its waves) is re-cut at 2 px per art pixel from the same raw sheets, in the plan's overlay order.
+No image calls; props, backgrounds and species.json unchanged. Base cut `cut_creature` / `cut_adult` (each
+reproduces the shipped set at 64). Redraws on top: the bat adult (R7, f9c6c40, `cut_bat7.py`), the luna moth adult
+(03e1e83, redraw5 at the scale that reproduces it), the opossum teen sick and four-legged adult calling/dirty
+(37ec5c0, e570173), the bat's waves from their react sheets (ddeb07e), the Night Sky egg from its kit sheet. The luna
+moth's cream face mask (bdc85f2) is carried over from the shipped frame. Then `outline.py`, then the marks (the bat
+and moth adult Z and ! moved to where main has them, the opossum adult "!"), then `palette.py`. Head and hat points
+unchanged.
