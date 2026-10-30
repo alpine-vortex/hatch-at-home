@@ -142,7 +142,14 @@
     if (shot.say !== undefined) card._write(cur, shot.say, 1e9);
     const root = card.shadowRoot;
     if (shot.link) await linkGreeting(card, shot.link);
-    if (shot.view === "status") root.querySelector(".statusbtn").click();
+    // The viewer's own view from the private channel (none arrives here): a bond,
+    // so "you two" and "my day" show, and the switches behind the settings rows.
+    if (shot.mine) {
+      const mine = { bond: { level: 6, nickname: null }, notify_me: true, my_day: true, birthday_kept: true, birthday_phone: false };
+      slides.forEach((s) => { s.mine = { ...mine, ...(typeof shot.mine === "object" ? shot.mine : {}) }; });
+    }
+    if (shot.view === "status" || shot.view === "settings") root.querySelector(".statusbtn").click();
+    if (shot.view === "settings") root.querySelector(".gear").click();
     if (shot.view === "games") card._startGame(cur, cur.buttons.play); // the button itself can be disabled
     // Date is pinned, so a line would never finish typing: write each whole.
     slides.forEach((x) => card._stopTyping(x));

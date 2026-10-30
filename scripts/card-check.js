@@ -256,6 +256,27 @@ async function main() {
   await shot("02b-next-egg");
   await pickEgg(options[0]); // back to a surprise
   await page.waitForTimeout(400);
+  // The gear opens the settings sheet in the same screen: the status stays up, the
+  // switches are there and the stats are not, and focus lands on its back row.
+  const statusRows = /weight/.test(await cur().locator(".status").innerText()) && !await cur().locator(".status .bell").count();
+  await cur().locator(".status .gear").click();
+  await page.waitForTimeout(300);
+  const sheet = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    return { open: s.screen.classList.contains("show-status"), back: !!s.status.querySelector(".sback"),
+      focus: el.shadowRoot.activeElement?.className, sound: !!s.status.querySelector(".bell.sound"),
+      stats: /weight|whines/.test(s.status.textContent), heads: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent) };
+  });
+  check("the status screen has a gear and no switches; the gear opens the settings sheet over it",
+    statusRows && sheet.open && sheet.back && sheet.sound && !sheet.stats, JSON.stringify(sheet));
+  check("the gear moves focus to the sheet's back row", sheet.focus === "sback", sheet.focus);
+  check("the sheet heads the viewer's rows and this screen's", sheet.heads.join("|") === "for you|this screen", sheet.heads.join("|"));
+  await shot("02c-settings");
+  // A heading is not a button: tapping it leaves the sheet up.
+  await cur().locator(".status .sec").first().click();
+  await page.waitForTimeout(300);
+  check("tapping a heading leaves the sheet open",
+    await cur().locator(".screen.show-status .sback").count() === 1);
   // Sounds start off and turn on for this browser only.
   const sound = cur().locator(".bell.sound");
   const soundBefore = await sound.getAttribute("aria-pressed");
@@ -276,7 +297,7 @@ async function main() {
   await page.waitForTimeout(300);
   // "notify me" has its own switch; a shared screen has none, and babble is still babble.
   const bells = await page.locator("hatch-pet-card").evaluate((el) => {
-    const s = el._slides[el._index];
+    const s = el._slides[el._index]; // the settings sheet is open
     const count = () => [".bell.notify", ".bell.babble"].map((q) => s.status.querySelectorAll(q).length).join("/");
     const personal = count();
     localStorage.setItem("hatch-shared-screen", "on");
@@ -287,6 +308,26 @@ async function main() {
     return { personal, shared };
   });
   check("each switch is found by its own name", bells.personal === "1/1" && bells.shared === "0/1", JSON.stringify(bells));
+  // Back to the status: focus returns to the gear.
+  await cur().locator(".status .sback").click();
+  await page.waitForTimeout(300);
+  const back = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    return { open: s.screen.classList.contains("show-status"), stats: /weight/.test(s.status.textContent),
+      focus: el.shadowRoot.activeElement?.className };
+  });
+  check("the sheet's back row returns to the status, focus on the gear",
+    back.open && back.stats && back.focus === "gear", JSON.stringify(back));
+  // The Status chip closes the sheet too, and opens on the status next time.
+  await cur().locator(".status .gear").click();
+  await page.waitForTimeout(300);
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(300);
+  const chipClosed = await cur().locator(".screen.show-status").count() === 0;
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(400);
+  check("the Status chip closes the settings sheet; it opens on the status again",
+    chipClosed && /weight/.test(await cur().locator(".status").innerText()) && !await cur().locator(".status .sback").count());
   await cur().locator(".jlink").click();
   await page.waitForTimeout(1200);
   check("journal opens", /journal/.test(await cur().locator(".status").innerText()));
@@ -393,7 +434,9 @@ async function main() {
     await bondRow.count() === 1 && await bondRow.locator(".hearts").getAttribute("aria-label") === "bond level 8 of 10",
     await bondRow.count() ? await bondRow.innerText() : "no row");
   await shot("04c-bond-status");
-  // "My day" is each person's own switch.
+  // "My day" is each person's own switch, in the settings sheet.
+  await cur().locator(".status .gear").click();
+  await page.waitForTimeout(300);
   await cur().locator(".bell.myday").click();
   await page.waitForTimeout(1200);
   const myDay = await page.locator("hatch-pet-card").evaluate((el) => el._myDay);
@@ -420,12 +463,19 @@ async function main() {
     el._free = () => true;
     el._greet(s);
     el._free = free;
+    // The sheet stays open with it on; the status behind it, drawn the same way.
+    const sheet = s.status.innerText;
+    s.settings = false;
+    el._renderStatus(s, []);
     const status = s.status.innerText;
-    return { visited, said: s.bubble.textContent, bondRow: /you two|my day/.test(status) };
+    s.settings = true;
+    el._renderStatus(s, []);
+    return { visited, said: s.bubble.textContent, sheetUp: /shared screen/.test(sheet), statusUp: /weight/.test(status),
+      bondRow: /you two/.test(status) || /my day/.test(sheet) };
   });
-  // The status screen still works with it on (no "notify me" row to wire up).
+  // The sheet still works with it on (no "notify me" row to wire up).
   const sharedStatus = await cur().evaluate((sl) => sl.querySelector(".screen").classList.contains("show-status") &&
-    !!sl.querySelector(".bell.shared") && !/notify me/.test(sl.querySelector(".status").innerText));
+    !!sl.querySelector(".sback") && !!sl.querySelector(".bell.shared") && !/notify me/.test(sl.querySelector(".status").innerText));
   await cur().locator(".bell.shared").click(); // personal again
   await page.waitForTimeout(400);
   // On a shared screen the bond's moments say nothing personal either, and an
@@ -450,7 +500,8 @@ async function main() {
   });
   check("a shared screen's moments name nobody", sharedMoments.queued.join() === "someone's home!! ♥" &&
     sharedMoments.bubble === sharedMoments.before && sharedMoments.personal.length === 0, JSON.stringify(sharedMoments));
-  check("a shared screen shows nothing personal", sharedStatus && !sharedView.visited && !sharedView.bondRow &&
+  check("a shared screen shows nothing personal", sharedStatus && sharedView.sheetUp && sharedView.statusUp &&
+    !sharedView.visited && !sharedView.bondRow &&
     !sharedView.said.includes(USER.name) && !sharedView.said.includes("sunbeam"), JSON.stringify(sharedView));
   // A push from the server may have replaced the close bond set above: again.
   await mineFor({ bond: { level: 8, nickname: "sunbeam" } });
@@ -770,6 +821,7 @@ async function main() {
     if (s.mine) s.mine.birthday_kept = true; // the channel's copy, which the card reads first
     el._birthdayPhone = false;
     if (s.mine) s.mine.birthday_phone = false;
+    s.settings = true; // the rows live in the settings sheet
     el._renderStatus(s, []);
     out.forget = !!s.status.querySelector(".bell.forgetbday");
     out.phoneOff = s.status.querySelector(".bell.bdayphone")?.getAttribute("aria-pressed");
@@ -779,6 +831,7 @@ async function main() {
     localStorage.setItem("hatch-shared-screen", "on");
     el._renderStatus(s, []);
     out.forgetShared = !!s.status.querySelector(".bell.forgetbday, .bell.bdayphone");
+    out.sharedSheet = !!s.status.querySelector(".bell.shared"); // the same sheet, not an empty one
     localStorage.setItem("hatch-shared-screen", "off");
     el._renderStatus(s, []);
     // Two taps (the confirm guard): the first arms it, a fast second is the
@@ -797,6 +850,8 @@ async function main() {
     for (let i = 0; i < 40 && el._birthdayKept; i++) await wait(50);
     el._hass.callWS = realWS;
     out.forgotten = !el._birthdayKept && sent.join() === "virtual_pet/forget_birthday";
+    s.settings = false;
+    el._renderStatus(s, []);
     s.voicedAt = Date.now() + 1e9;
     return out;
   });
@@ -809,7 +864,7 @@ async function main() {
   check("its birthday brings confetti and a party hat",
     bday.confetti && /season_party_hat/.test(bday.hat) && /party hat on! ♪$/.test(bday.said), JSON.stringify(bday));
   check("your birthday can be forgotten, never shown on a shared screen",
-    bday.forget && !bday.forgetShared && bday.forgotten, JSON.stringify(bday));
+    bday.forget && bday.sharedSheet && !bday.forgetShared && bday.forgotten, JSON.stringify(bday));
   check("forgetting takes two taps, and a fast double tap is one",
     bday.armed === "sure? tap again" && bday.fastDouble.kept && bday.fastDouble.sent === 0, JSON.stringify(bday));
   check("the birthday phone message is off until you turn it on",
@@ -885,6 +940,7 @@ async function main() {
       el._birthdayPhone = false;
       if (s.mine) s.mine.birthday_phone = false;
       s.confirm = null;
+      s.settings = true; // the forget rows live in the settings sheet
       el._renderStatus(s, []);
       for (const [cls, type] of [["forgetbday", "virtual_pet/forget_birthday"], ["forgetme", "virtual_pet/forget_me"]]) {
         s.status.querySelector(`.bell.${cls}`).click();
@@ -915,6 +971,7 @@ async function main() {
     } finally {
       el._hass.callWS = realWS;
       s.confirm = null;
+      s.settings = false;
     }
     return out;
   });
@@ -989,12 +1046,14 @@ async function main() {
       el._birthdayKept = true;
       if (s.mine) s.mine.birthday_kept = true; // the channel's copy, which the card reads first
       s.confirm = null;
+      s.settings = true; // the forget row lives in the settings sheet
       el._renderStatus(s, []);
       s.status.querySelector(".bell.forgetme").click();
       await wait(700);
       s.status.querySelector(".bell.forgetme").click();
       await wait(300);
       out.forgotten = localStorage.getItem(key);
+      s.settings = false;
       // A retry that fires after the slide moved on writes no bubble.
       el._hass.callWS = async (msg) => { throw { code: "unknown_error" }; };
       localStorage.removeItem(key);
@@ -1889,8 +1948,10 @@ async function main() {
     const urls = [...(s.photos?.values() || [])].map((p) => p.url);
     localStorage.setItem("hatch-shared-screen", "off");
     s.journal = false;
+    s.settings = true; // the switch lives in the settings sheet
     el._renderStatus(s, []);
     s.status.querySelector(".bell.shared").click(); // on
+    s.settings = false;
     s.journal = true;
     el._loadPhotos(s);
     await el._renderJournal(s);
@@ -2329,16 +2390,20 @@ async function main() {
       t.cache("on");
       t.stage("baby");
       localStorage.setItem("hatch-shared-screen", "on");
+      s.settings = true; // the row lives in the settings sheet
       el._renderStatus(s, []);
-      const out = { row: s.status.querySelectorAll(".bell.babytalk").length, line: el._lines(s, "care_miss", "normal").text };
+      const out = { row: s.status.querySelectorAll(".bell.babytalk").length, sheet: s.status.querySelectorAll(".bell.shared").length,
+        line: el._lines(s, "care_miss", "normal").text };
       localStorage.setItem("hatch-shared-screen", "off");
       el._renderStatus(s, []);
       out.personalRow = s.status.querySelectorAll(".bell.babytalk").length;
+      s.settings = false;
+      el._renderStatus(s, []);
       t.cache(null);
       return out;
     });
     check("a shared screen has no baby talk switch and says the normal lines",
-      shared.row === 0 && shared.line === "normal" && shared.personalRow === 1, JSON.stringify(shared));
+      shared.row === 0 && shared.sheet === 1 && shared.line === "normal" && shared.personalRow === 1, JSON.stringify(shared));
     // A visit reply carries the switch: an asleep (not counted) reply that says off
     // turns the cache off; the real server's reply too.
     const visit = await babyAs(async (el, s, t) => {
@@ -2372,6 +2437,7 @@ async function main() {
     const toggle = await babyAs(async (el, s, t) => {
       t.cache("off");
       t.stage("adult");
+      s.settings = true; // the switch lives in the settings sheet
       el._renderStatus(s, el._state(s, "sensor.last_care")?.attributes.log || []);
       const calls = [];
       const realWS = el._hass.callWS;
@@ -2425,6 +2491,7 @@ async function main() {
       const s = el._slides[el._index];
       localStorage.setItem("hatch-shared-screen", "off");
       localStorage.removeItem(`hatch-baby-talk-${el._hass.user.id}`);
+      s.settings = false;
       el._renderStatus(s, []);
     });
     await page.locator("hatch-pet-card .statusbtn").click();
@@ -2925,7 +2992,8 @@ async function main() {
       window.__look = (el) => el._slides.map((s) => ({
         bubble: s.bubble.textContent, live: s.live.textContent, typing: !!s.typing, babbling: !!s.babbling,
         hearts: s.screen.querySelectorAll(".bondhearts").length,
-        status: /you two|my day|notify me/.test(s.status.textContent),
+        // Personal rows in whichever view is up: the status ("you two") or the settings sheet.
+        status: /you two|my day|notify me|baby talk|my data/.test(s.status.textContent),
       }));`;
     await evaluate(setup);
     await tab.evaluate(setup);
@@ -2970,8 +3038,11 @@ async function main() {
         const out = { typing: !!s.typing, said: s.bubble.textContent, live: s.live.textContent,
           otherStatus: /you two/.test(other.status.textContent), babble: localStorage.getItem("hatch-babble") };
         if (!typing) el._stopTyping(s, false);
-        // The status opens on this slide (as a tap does) and its switch is pressed.
+        // The settings sheet opens on this slide (as the gear does), with its
+        // personal rows, and its switch is pressed.
+        s.settings = true;
         el._renderStatus(s, []);
+        out.sheetPersonal = /notify me/.test(s.status.textContent) && /my data/.test(s.status.textContent);
         s.status.querySelector(".bell.shared").click();
         return out;
       }, typing);
@@ -2979,6 +3050,8 @@ async function main() {
       const after = await card.evaluate((el) => ({
         one: window.__look(el), two: window.__look(document.getElementById("fa-second")),
         message: el._slides[el._index].status.querySelector(".status-feedback")?.textContent,
+        sheetKept: !!el._slides[el._index].status.querySelector(".sback") &&
+          !!el._slides[el._index].status.querySelector(".bell.sound"),
       }));
       const inTab = await tab.locator("hatch-pet-card").evaluate((el) => window.__look(el));
       // Each card's slides asked the channel again, as a shared screen (no library resubscribe).
@@ -2998,7 +3071,7 @@ async function main() {
     const typingRound = await round(true);
     check("FA: shared screen clears a personal line still typing, on every slide, card and tab",
       typingRound.before.said.includes("sunbeam") && typingRound.before.live.includes("sunbeam") &&
-      typingRound.before.otherStatus && typingRound.clean &&
+      typingRound.before.otherStatus && typingRound.before.sheetPersonal && typingRound.after.sheetKept && typingRound.clean &&
       typingRound.after.message === "Nothing personal on this screen now.",
       JSON.stringify({ ...typingRound, typedWhenPressed: typingRound.before.typing }));
     check("FA: every card and tab asks its channel again as a shared screen",
@@ -3023,6 +3096,7 @@ async function main() {
     // Personal again: other cards and tabs follow, with their status redrawn.
     await card.evaluate((el) => {
       const s = el._slides[el._index];
+      s.settings = true; // the switch lives in the settings sheet
       el._renderStatus(s, []);
       s.status.querySelector(".bell.shared").click();
     });
@@ -3047,8 +3121,10 @@ async function main() {
       const before = { said: s.bubble.textContent, queued: s.queue.length };
       two.remove(); // its typing line is written in whole on the way out
       const one = el._slides[el._index];
+      one.settings = true; // the switch lives in the settings sheet
       el._renderStatus(one, []);
       one.status.querySelector(".bell.shared").click();
+      one.settings = false;
       const shared = localStorage.getItem("hatch-shared-screen");
       document.body.append(two);
       await new Promise((r) => setTimeout(r, 1500)); // a tick or two
@@ -3173,8 +3249,10 @@ async function main() {
     const before = await visit();
     out.before = { counted: before.counted, kept: before.birthday_kept, baby: before.baby_talk };
     localStorage.setItem("hatch-shared-screen", "on");
+    s.settings = true; // the row lives in the settings sheet
     el._renderStatus(s, log());
     out.shared = !!s.status.querySelector(".bell.forgetme");
+    out.sharedSheet = !!s.status.querySelector(".bell.shared"); // the sheet itself is there
     localStorage.setItem("hatch-shared-screen", "off");
     el._birthdayKept = true;
     el._myDay = true;
@@ -3211,6 +3289,7 @@ async function main() {
     const after = await visit();
     out.after = { counted: after.counted, kept: after.birthday_kept, baby: after.baby_talk, myDay: after.my_day };
     localStorage.removeItem("hatch-greet-someone-else-dev-a");
+    s.settings = false;
     s.sayUntil = 0;
     return out;
   }, me);
@@ -3224,6 +3303,7 @@ async function main() {
     const look = () => ({ text: button()?.textContent, aria: button()?.getAttribute("aria-label") });
     s.confirm = null;
     s.statusHtml = null;
+    s.settings = true; // the row lives in the settings sheet
     el._renderStatus(s, log());
     button().click();
     const armed = look();
@@ -3240,15 +3320,18 @@ async function main() {
     button().click();
     await wait(300);
     el._hass.callWS = realWS;
-    return { armed, lapsed, failed: look(), sent, message: s.status.querySelector(".status-feedback")?.textContent };
+    const out = { armed, lapsed, failed: look(), sent, message: s.status.querySelector(".status-feedback")?.textContent,
+      inSheet: !!s.status.querySelector(".sback") };
+    s.settings = false;
+    return out;
   });
   const unarmed = "forget my data: your birthday, answers and settings for every pet; your bonds stay";
   check("an armed forget goes back to forget when its window closes, and after a failure",
     lapse.armed.text === "sure? tap again" && lapse.lapsed.text === "forget" && lapse.lapsed.aria === unarmed &&
     lapse.sent.join() === "virtual_pet/forget_me" && lapse.message === "That didn't work. Try again." &&
-    lapse.failed.text === "forget" && lapse.failed.aria === unarmed, JSON.stringify(lapse));
+    lapse.failed.text === "forget" && lapse.failed.aria === unarmed && lapse.inSheet, JSON.stringify(lapse));
   check("forget my data is a personal row, after baby talk",
-    !forgot.shared && forgot.label === "my dataforget" && forgot.order === "baby talk,my data,sounds here" &&
+    !forgot.shared && forgot.sharedSheet && forgot.label === "my dataforget" && forgot.order === "baby talk,my data,sounds here" &&
     forgot.aria === "forget my data: your birthday, answers and settings for every pet; your bonds stay",
     JSON.stringify(forgot));
   check("one tap on forget my data only asks",
@@ -3276,6 +3359,7 @@ async function main() {
     el._bond = () => ({ level: 8, nickname: "sunbeam" });
     el._myDay = undefined;
     s.statusHtml = null;
+    s.settings = true; // the row lives in the settings sheet
     el._renderStatus(s, log());
     const row = [...s.status.querySelectorAll(".row")].find((r) => /my day/.test(r.textContent));
     const out = { text: row?.textContent.trim(), button: !!s.status.querySelector(".bell.myday") };
@@ -3286,6 +3370,7 @@ async function main() {
     el._myDay = saved;
     s.mine = mine;
     delete el._bond;
+    s.settings = false;
     s.statusHtml = null;
     return out;
   });
@@ -3312,6 +3397,7 @@ async function main() {
     el._visit(s);
     await wait(300);
     s.statusHtml = null;
+    s.settings = true; // the row lives in the settings sheet
     el._renderStatus(s, log());
     const during = !!s.status.querySelector(".bell.myday");
     release();
@@ -3322,6 +3408,7 @@ async function main() {
     const out = { during, after: el._myDay, button: !!s.status.querySelector(".bell.myday") };
     s.mine = mine;
     delete el._bond;
+    s.settings = false;
     return out;
   });
   check("the my day row waits for the held visit reply, then shows the real setting",
@@ -3369,6 +3456,7 @@ async function main() {
       localStorage.setItem("hatch-sounds", "off");
       localStorage.setItem("hatch-babble", "off");
       s.statusHtml = null;
+      s.settings = true; // the switches live in the settings sheet
       el._renderStatus(s, log());
       const before = started;
       s.status.querySelector(bell).click();
@@ -3388,6 +3476,7 @@ async function main() {
     Object.assign(s, saved);
     localStorage.setItem("hatch-sounds", "off");
     localStorage.setItem("hatch-babble", "off");
+    s.settings = false;
     s.statusHtml = null;
     return out;
   });
@@ -3493,6 +3582,7 @@ async function main() {
       const kept = s.mine;
       const read = () => {
         s.statusHtml = null;
+        s.settings = true; // the switches live in the settings sheet
         el._renderStatus(s, []);
         return ["notify", "myday", "babytalk"].map((k) => s.status.querySelector(`.bell.${k}`)?.getAttribute("aria-pressed")).join();
       };
@@ -3501,6 +3591,7 @@ async function main() {
       el._mineFor(s, { ...kept, bond: { level: 3 }, notify_me: false, my_day: false });
       const off = read();
       el._mineFor(s, kept);
+      s.settings = false;
       return { on, off };
     });
     check("P3a: the bell and my day read the person's own view", bell.on.startsWith("true,true") && bell.off.startsWith("false,false"),
@@ -3728,6 +3819,8 @@ async function main() {
   // The "screen effects here" row: on by default, per browser.
   await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
   await page.waitForTimeout(400);
+  await cur().locator(".status .gear").click(); // the row lives in the settings sheet
+  await page.waitForTimeout(300);
   const fxRow = async () => ({ pressed: await cur().locator(".bell.lcdfx").getAttribute("aria-pressed"),
     stored: await evaluate(() => localStorage.getItem("hatch-lcd")),
     on: await card.evaluate((el) => el._card.classList.contains("lcd-on")) });
@@ -3805,6 +3898,27 @@ async function main() {
       picked.picking && await under(".gpick button", 0.2), JSON.stringify(picked));
     await shot(`d1-lcd-${width}-game`);
     await card.evaluate((el) => el._endGame(el._slides[el._index], null));
+    await page.waitForTimeout(300);
+    // The settings sheet at this width: the gear is a real tap target, the sheet
+    // opens over the status and scrolls to its last row.
+    await page.locator("hatch-pet-card .statusbtn").click();
+    await page.waitForTimeout(400);
+    const gearBox = await cur().locator(".status .gear").boundingBox();
+    await cur().locator(".status .gear").click();
+    await page.waitForTimeout(300);
+    await cur().locator(".bell.shared").scrollIntoViewIfNeeded();
+    const sheetAt = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const box = s.status.getBoundingClientRect();
+      const last = s.status.querySelector(".bell.shared").getBoundingClientRect();
+      return { open: s.screen.classList.contains("show-status"), sheet: !!s.status.querySelector(".sback"),
+        lastInside: last.top >= box.top && last.bottom <= box.bottom + 1, compact: el._card.classList.contains("compact") };
+    });
+    await shot(`02d-settings-${width}`);
+    check(`the gear opens the settings sheet at ${width} px, and the sheet reaches its last row`,
+      gearBox && gearBox.width >= 30 && gearBox.height >= 28 && sheetAt.open && sheetAt.sheet && sheetAt.lastInside,
+      JSON.stringify({ gearBox, ...sheetAt }));
+    await page.locator("hatch-pet-card .statusbtn").click();
     await page.waitForTimeout(300);
   }
   // Night, for the screenshots.
@@ -4822,12 +4936,14 @@ async function main() {
       const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
       const id = s.ids["sensor.life_stage"];
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-      const status = () => { s.statusHtml = null; el._renderStatus(s, []); return s.status; };
+      // The status, or the settings sheet (the bell).
+      const status = (settings = false) => { s.settings = settings; s.statusHtml = null; el._renderStatus(s, []); return s.status; };
+      const sheet = () => status(true);
       const out = { user: el._hass.user.id, admin: el._hass.user.is_admin };
-      out.bell = status().querySelector(".bell.notify")?.getAttribute("aria-pressed");
+      out.bell = sheet().querySelector(".bell.notify")?.getAttribute("aria-pressed");
       await el._hass.callWS({ type: "virtual_pet/notify_me", entity_id: id, enabled: true });
       for (let i = 0; i < 30 && !s.mine?.notify_me; i++) await wait(100);
-      out.bellOn = status().querySelector(".bell.notify")?.getAttribute("aria-pressed");
+      out.bellOn = sheet().querySelector(".bell.notify")?.getAttribute("aria-pressed");
       out.pushed = !!s.mine?.notify_me; // a real push of Other's own view
       out.bond = s.mine?.bond ?? null;
       await el._hass.callWS({ type: "virtual_pet/notify_me", entity_id: id, enabled: false });
@@ -4838,8 +4954,12 @@ async function main() {
       out.wish = [...st.querySelectorAll(".row")].find((r) => /^wish/.test(r.textContent.trim()))?.textContent.trim() || null;
       out.held = JSON.stringify(el._slides.map((x) => ({ mine: x.mine, house: x.house, moments: x.privateMoments })));
       out.payloads = JSON.stringify(window.__payloads);
-      out.shown = el._slides.map((x) => { x.statusHtml = null; el._renderStatus(x, []);
-        return `${x.status.textContent}|${x.bubble.textContent}|${x.live.textContent}`; }).join("\n");
+      // Both views of every slide: the status and the settings sheet.
+      out.shown = el._slides.map((x) => [false, true].map((settings) => {
+        x.settings = settings; x.statusHtml = null; el._renderStatus(x, []);
+        return `${x.status.textContent}|${x.bubble.textContent}|${x.live.textContent}`;
+      }).join("|")).join("\n");
+      el._slides.forEach((x) => { x.settings = false; x.statusHtml = null; });
       out.nPayloads = window.__payloads.length;
       return out;
     }, seedPet);
