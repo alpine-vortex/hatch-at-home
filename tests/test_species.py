@@ -39,6 +39,9 @@ def test_every_referenced_sprite_exists(species: str) -> None:
         names += frames
     for pose in (sp.get("extras") or {}).values():
         names += pose if isinstance(pose, list) else [pose]
+    for stage, frames in (sp.get("waves") or {}).items():
+        assert stage in sp["stages"] and stage != "child", f"{species} waves.{stage}"
+        names += frames
     for prop in (sp.get("props") or {}).values():
         names += prop if isinstance(prop, list) else [prop]
     names += list((sp.get("backgrounds") or {}).values())

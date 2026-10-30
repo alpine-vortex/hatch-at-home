@@ -3438,6 +3438,32 @@ class HatchPetCard extends HTMLElement {
     return frames;
   }
 
+  // The link greeting's frames: species.json "waves" for the stage (teen, adult, baby;
+  // never the child) when every sprite loads, else the excited frames. A wave that
+  // fails to load is remembered and swaps itself for excited, even mid-greeting.
+  _linkPose(sp, stage, speciesId, apply) {
+    const excited = this._petFrames(sp, stage, "excited", false, null, []);
+    const waves = stage !== "child" && sp.waves?.[stage];
+    if (!Array.isArray(waves) || !waves.length || waves.some((w) => typeof w !== "string")) return excited;
+    this._waveOk ||= new Map();
+    const key = `${speciesId}/${stage}`;
+    const known = this._waveOk.get(key);
+    if (known === false) return excited;
+    if (known === undefined) {
+      const loads = waves.map((w) => new Promise((ok) => {
+        const img = new Image();
+        img.onload = () => ok(true);
+        img.onerror = () => ok(false);
+        img.src = spriteSrc(speciesId, w);
+      }));
+      Promise.all(loads).then((r) => {
+        this._waveOk.set(key, r.every(Boolean));
+        if (!r.every(Boolean)) apply(excited);
+      });
+    }
+    return waves;
+  }
+
   _tick() {
     if (!this._slides || !this._visible || document.hidden) return;
     this._ticks = (this._ticks || 0) + 1;
@@ -6094,7 +6120,7 @@ class HatchPetCard extends HTMLElement {
     const gs = guest.species;
     const gStage = guest.drawn || "adult";
     const gScale = (gs?.scale?.[gStage] || 1) * k;
-    const gFrames = gs ? this._petFrames(gs, gStage, "excited", false, null, []) : [];
+    let gFrames = gs ? this._linkPose(gs, gStage, guest.speciesId, (f) => { gFrames = f; }) : [];
     L.beamMs = calm ? 0 : 1500;
     this._moving(host, 9000);
     this._chirp(host, "link");
@@ -6117,7 +6143,9 @@ class HatchPetCard extends HTMLElement {
     at(t0, () => {
       L.box.querySelector(".vband")?.remove();
       host.screen.classList.add("linking");
-      host.linkFrames = this._petFrames(host.species, host.drawn || "adult", "excited", false, null, []);
+      host.linkFrames = this._linkPose(host.species, host.drawn || "adult", host.speciesId, (f) => {
+        if (host.linkFrames) host.linkFrames = f;
+      });
       host.pet.classList.add("linking");
       host.pet.style.scale = String((Number(L.hostScale) || 1) * k);
       const img = document.createElement("img");
