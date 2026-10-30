@@ -83,19 +83,35 @@ first because it is the new thing, and "this screen" last, nearest to `shared sc
 ## 4. Per-pet finish picker
 
 - **Entry:** the `shell` row shows a swatch plus the current finish name; tap opens a
-  full-LCD picker view ("‹ shell for Pip").
-- **Preview:** two parts. (a) Tapping a tile applies it to the *live device* at once
-  (`dev.className` / `--d-*` via the same code as `_renderSlide` 3365-3380, no save), so
-  the real shell is the preview and nothing new is drawn. (b) `use` saves, `world default`
-  clears the override, leaving the picker without saving reverts. A tile is a 26x20 chip
+  full-LCD picker view ("‹ shell", no pet name; see FM decision 3). The row and the
+  heading exist only if the server sends `shell_finish_options` (FM decision 2).
+- **Preview:** two parts. (a) Tapping a tile applies it to the *live device* at once, no
+  save, so the real shell is the preview and nothing new is drawn. It lives in
+  `s.previewFinish`; `_renderSlide` reads `s.previewFinish ?? attribute ?? world.shell.finish`
+  and nothing touches `dev` outside it, so a hass update (mood tick, `sun.sun`, rename:
+  all rebuild `dev.className` and `--d-*`) cannot wipe it. Slice 3 first extracts
+  `_dress(s, key)` from `_renderSlide` (className, `--d-face/ink/ink-top`; it removes
+  `--d-ink-top` when the finish has no `top`, today it is never cleared). Both
+  `_renderSlide` and the tap call `_dress`. A tap swaps classes (`now`/selected) and calls
+  `_dress`; it does not re-render the view, so scroll holds and `s.statusHtml` stays stable.
+  (b) `use` saves, `world default` clears the override. Leaving without saving reverts:
+  `_closePicker(s)` clears `s.picker` and `s.previewFinish` and re-dresses, and is called
+  from every exit: back, `_toggleStatus` (Status chip, screen tap, game start), `_forget`
+  (pet change), `_goShared` (here or from another tab via SHARED_EVENT/storage). (A page
+  hide has no handler today and the preview survives it harmlessly; a ws failure is in the
+  error table, not an exit.) After a successful save, `s.shellPending = key` stays in force in
+  `_renderSlide` until the attribute equals it or 5 s pass, so closing before the sensor
+  push does not flicker; revert applies to unsaved previews only. A tile is a 26x20 chip
   with the finish's own face colour/tile (`FINISHES[k].tile`, `face(color)`), 3 per row.
 - **Tiles:** current marked `now`; the world's own default listed first as "<world>
   (default)". With 24 finishes, 3 per row, the list scrolls (mock shows 9). Group by
   `world plastics / specials / prints` with the same dotted headings.
 - **Locked (earned by stage):** shown, dimmed, dashed, with the stage that opens it
   ("teen"); tapping shows the note, never a points price, never hidden (so the pet has
-  something to grow toward). Which shells are earned is the owner's pick (Q3). Rule:
-  open when the pet has *reached* the stage (`stage_rank >= n`), so adults keep it.
+  something to grow toward). Which shells are earned is the owner's pick (Q3). The rule is
+  the server's (`model.shell_unlocked`, reached-the-stage, adults keep it); the card never
+  recomputes it. Locked = key absent from `shell_finish_options`; its stage comes from
+  `shell_locked` (FM decision 1).
 - **Storage and push (shipped, slice 2):** `PetState.shell_finish: str | None` (None =
   world default), persisted with the pet, type-checked on load (not a string: None; a
   string this version doesn't know is kept, so a downgrade loses nothing); a salvaged
@@ -107,7 +123,8 @@ first because it is the new thing, and "this screen" last, nearest to `shared sc
   the pet has *reached* the stage. Exposed on `sensor.life_stage` beside `world`:
   `shell_finish` (a key this version doesn't draw shows as None) and
   `shell_finish_options` (the keys it may wear now, card order; unrecorded). Both hold
-  still across ticks. Write paths:
+  still across ticks. **Slice 3 adds `shell_locked: {key: stage}`** beside them (the
+  keys of `SHELL_UNLOCKS` the pet has not reached; unrecorded; FM decision 1). Write paths:
   - **The card: websocket only**, `{type: "virtual_pet/set_shell", entity_id, finish:
     <key> | null}`. Errors: `no_pet`, `shell_locked` (not grown into it),
     `invalid_format` (not a finish). No service fallback: a missing command means
@@ -116,7 +133,11 @@ first because it is the new thing, and "this screen" last, nearest to `shared sc
     the world's own). Its description says history records it and who ran it. A locked
     key raises `ServiceValidationError` (`shell_locked`, placeholders `finish`, `stage`).
   Card reads the attribute in `_renderSlide`: `shell.finish` becomes `pet override ??
-  world.shell.finish`, ignoring a key it doesn't know. Alternatives: HA option
+  world.shell.finish`, ignoring a key it doesn't know. The ws call goes through
+  `callWS` directly with `s.ids["sensor.life_stage"]` (not `_callOwn`, which falls back to
+  the service); a missing id is `no_pet`. The server does not check who calls: read-only
+  on a shared screen is card-level only, and the service/ws stay open to any logged-in user
+  (by design, §3). Alternatives: HA option
   (rejected by the owner, 2026-10-29), per-browser (rejected: "per pet"), house view
   (no such view exists; wrong place for a pet-owned setting).
 - **Privacy check:** the finish is not about a person; nothing goes to history beyond one
@@ -183,19 +204,105 @@ Each slice ships alone, ends green on `scripts/test`, and a bench look.
    default; service set/locked/unknown/clear and a reload; a second pet keeps its own;
    ws set/locked/invalid with no `call_service` event and no user on the state change;
    attributes equal across a tick.
-3. **Picker, card** (needs 1 and 2). Row, picker view, live preview, use/default/revert,
-   locked tiles, the override in `_renderSlide`. Check: bench `finishes` still byte-same
-   for no override (regression), new preset `picker` (locked + current, 420/330),
-   `scripts/test`; card-check: pick, save, reload page keeps it, default clears it, a
-   locked tile does not save, a *second pet* keeps its own, shared screen is read-only.
+3. **Picker, card** (needs 1 and 2; folds the s2513 review, see the table at the end).
+   Row, picker view, live preview, use/default/revert, locked tiles, the override in
+   `_renderSlide`. Details in §4; here is what is specific to the slice.
+   - **Server (small):** `shell_locked: {key: stage}` on `sensor.life_stage` (not
+     recorded), plus a test that it equals `SHELL_UNLOCKS` minus the unlocked keys per
+     stage and holds still across a tick. No card-side unlock map.
+   - **Card:** `_dress` refactor; `s.picker`, `s.previewFinish`, `s.shellPending`;
+     `_closePicker` on all six exits; no shell row or heading when
+     `shell_finish_options` is undefined; on a shared screen the row is read-only, no
+     name in any heading, and the picker is unreachable.
+   - **Errors** (all through `_statusMessage` in the picker; the preview reverts to the
+     saved finish, the picker stays open; unknown codes get the generic line):
+
+     | Failure | Line key (quoted in the 6.3 strings) |
+     | --- | --- |
+     | `no_pet` | `err_nopet` |
+     | `shell_locked` (also refreshes the options) | `err_locked` |
+     | `invalid_format`, no `err.code`, disconnect, timeout | `err_generic` |
+     | `unknown_command` (older server) | `err_here` (no service fallback) |
+   - **Bench (slice 3 owns it):** shot fields `shellFinish`, `shellOptions`,
+     `shellLocked`, `view: "picker"` (+ `preview`), README rows, preset `picker` at
+     420/330 and stages egg/teen to show locked and current. `use`, `world default` and
+     errors are not benchable: card-check only.
+   - **Proof** (no "byte-same": the bench is not deterministic today, s2499):
+     (a) a style-snapshot JSON, `dev.className` + `--d-shell/face/ink/ink-top/dark/
+     btn-shadow/bezel` from `page.evaluate` for 24 finishes x 3 worlds, before and
+     after the `_dress` refactor; the diff must be empty. (b) pixels: `finishes` run
+     twice before and once after; a shot counts as changed only if it differs from
+     both before-runs and is not in the before-vs-before set; report the noise count.
+     Plus `scripts/test`.
+   - **Card-check** (scratch HA on its own port, fresh `.storage`, per AGENTS.md; every
+     test ends with `world default` and asserts it): pick, save, reload keeps it;
+     default clears it; locked tile (a pet below teen) does not save and shows the note
+     (unlock at teen needs a model clock: test locked-at-baby and an unlocked key only);
+     a second pet keeps its own value (name both dev pets and their stages); "leaving
+     without saving reverts" (one per exit path: back, Status chip, pet change, shared
+     switch here, shared flip in a second tab); preview survives a mood tick and a
+     `sun.sun` flip; closing right after `use` does not flicker; "never hidden" (locked
+     tiles present); shared screen read-only with no pet name, picker unreachable;
+     older-server attribute absent hides row and heading; each error line.
+
 4. **Earned-shell list and copy** (data + COPY? lines, after owner answers).
    The `SHELL_UNLOCKS` table and its test already shipped in slice 2 (Q3 answered);
-   left: the COPY? lines and a picker sheet per stage.
+   left: owner wording changes to the slice-3 strings (6.3), the stage-specific locked
+   note if more stages than `teen` ever unlock, and a picker sheet per stage. Slice 4 adds
+   no other lines: every picker line is owned by slice 3, so 6.3 and 6.4 do not overlap.
 5. **Monochrome** (card only, after 1). The row, `hatch-mono`, the tone filter, a
    bench flag and preset `mono`. Check: sheet of every mood at 2 and 4 tones judged by
    the owner; reduced motion unaffected; `scripts/test`; card-check toggles it and a
    reload keeps it, and it does not cross browsers (localStorage only).
 6. **README/docs** and the `dev/bench/README.md` table (view `settings`, `mono`).
+
+## 6.3 FM decisions and strings (slice 3)
+
+**FM decisions, 2026-10-30** (first mate, on the s2513 review's questions):
+1. The server exposes `shell_locked: {key: stage}` on `sensor.life_stage` beside
+   `shell_finish_options`; part of slice 3, with a test that it matches `SHELL_UNLOCKS`.
+   No card-side unlock map.
+2. Older server without `shell_finish_options`: hide the shell row and the pet heading
+   entirely.
+3. Shared screen: no pet name anywhere in the picker or row heading; the picker view is
+   not reachable there.
+4. Proof: style-snapshot JSON diff plus a noise-aware pixel check; "byte-same" is dropped
+   from slice 3.
+
+**Slice 3 strings** (proposal, awaiting first-mate sign-off; lowercase, the card's voice,
+checked against the no-nagging rules in `docs/plan-2026-10-28-experience.md` §5: no `?`,
+none of "still, again, why, never, pleas, sad, cry, alone, forgot"):
+
+| Where | Proposal |
+| --- | --- |
+| Row heading, personal screen | "for <pet>" (upper-cased by CSS) |
+| Row heading, shared screen | "for the pet" |
+| Row label | "shell" |
+| Picker back row | "‹ shell" |
+| Group headings | "world plastics", "specials", "prints" |
+| World's own tile | "<world> (default)" |
+| Current marker | "now" |
+| Buttons | "use", "world default" |
+| Locked tile sub-label | the stage, e.g. "teen" |
+| Locked tap note | "I get this one as a teen ♪" |
+| Shared read-only note | "ask a grown-up to change it" |
+| Saved | "shell saved ♪"; default: "back to the world's own ♪" |
+| `err_nopet` | "can't find the pet to dress" |
+| `err_locked` | "not grown into that one yet" |
+| `err_here` | "can't change the shell here" |
+| `err_generic` | "that didn't work, try later" |
+| aria: row | "shell: <name>, change" |
+| aria: tile | "<name> shell"; locked: "<name> shell, opens at <stage>" |
+| aria: use / default | "use <name> shell", "use the world's own shell" |
+| aria: back | "back to settings" |
+
+Finish display names (24; the key, except `twotone`): "woodland", "aqua",
+"grove", "celestial", "dune", "clear", "glitter", "glow", "speckle", "stripes", "hearts",
+"stars", "gingham", "dots", "camo", "waves", "scales", "leaves", "paws", "constellation",
+"rainbow", "two-tone", "sunset", "smoke". Groups: world plastics = woodland, aqua, grove,
+celestial, dune; specials = clear, glitter, glow; prints = the other 16.
+Slice 3 owns all of the above, including the locked and shared notes; slice 4 may only
+reword them.
 
 ## 7. Owner questions (recommendation first)
 
@@ -238,3 +345,30 @@ before its slice ships.
   translations are `strings.json` = `translations/en.json`, kept byte-identical.) `scripts/test` was not run (scout).
 - Mocks: gear-status-420, gear-sheet-420, gear-sheet-330, gear-shared-330,
   gear-picker-420, gear-mono-330 (.png), plus base-status-420 (today's status).
+
+## Review fold (s2513)
+
+Report: 18 findings (14 player-impact, 4 nit), verdict FIX FIRST. Each was re-checked
+against the card, the server and the bench on 2026-10-30 (code lines moved since the
+report: `_renderSlide` is about 3509, not 3365). All 18 hold except where noted.
+
+| # | Finding | Re-check | Landed |
+| --- | --- | --- | --- |
+| 1 | Preview wiped by redraw | holds (`own` joins `last_updated` and `sun.sun`) | §4 Preview: `s.previewFinish` |
+| 2 | No callable "same code" | holds | §4: `_dress` extracted first |
+| 3 | "byte-same" unprovable | holds (bench nondeterministic) | FM 4; 6.3 Proof |
+| 4 | Stale `--d-ink-top` | holds (never cleared) | §4 `_dress`; snapshot proof |
+| 5 | Revert paths unlisted | holds, **corrected**: page hide has no handler and a ws failure is not an exit; the exits are back, `_toggleStatus`, `_forget`, `_goShared` | §4 `_closePicker`; 6.3 card-check per exit |
+| 6 | Save/refresh race | holds | §4 `s.shellPending` |
+| 7 | Two sources for locked | holds | FM 1; `shell_locked` in §4, 6.3 |
+| 8 | Older server | holds (`_callOwn` falls back to service) | FM 2; §4 uses `callWS` |
+| 9 | ws errors unsurfaced | holds | 6.3 error table; strings |
+| 10 | Pet name on shared | holds | FM 3; strings |
+| 11 | Read-only is card-only | holds (`set_shell` ws has no user check) | §4 Write paths; card-check flip in second tab |
+| 12 | Copy not quoted | holds | 6.3 strings; slice 4 narrowed |
+| 13 | Bench cannot show picker | holds (fake hass has no attrs, `callWS` returns `{}`) | 6.3 Bench |
+| 14 | Card-check thin, mutates pet | holds | 6.3 card-check (scratch HA, `world default` ends each test) |
+| 15 | `stage_rank >= n` wording | holds | §4 Locked rewritten |
+| 16 | Entity-id source | holds | §4 Write paths |
+| 17 | Tile count, scroll | holds | §4 Preview: tap swaps classes only |
+| 18 | Claims without a test | holds | 6.3 card-check names both |
