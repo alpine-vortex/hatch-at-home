@@ -1393,13 +1393,21 @@ const STYLE = `
   .finish-dune .toy:nth-child(3n + 2) .cap { background: #f3d6a6; }
   /* 1990s special editions (any world, any shape). Clear: see-through plastic, the
      board and its glare showing; the outlines and the cut shade keep it solid. */
-  .finish-clear .body > .mould { background: color-mix(in srgb, var(--d-shell) 34%, transparent); }
+  .finish-clear .body > .mould { --gold: rgba(236,200,104,.6); --bp: calc(var(--bz-x) - var(--px) * 5) calc(var(--bz-y) - var(--px) * 5);
+    --bs: calc(var(--bz-w) + var(--px) * 10) calc(var(--bz-h) + var(--px) * 10);
+    background:
+      repeating-linear-gradient(180deg, transparent 0 calc(var(--px) * 5), var(--gold) 0 calc(var(--px) * 6)) var(--bp) / var(--bs) no-repeat,
+      repeating-linear-gradient(90deg, transparent 0 calc(var(--px) * 13), var(--gold) 0 calc(var(--px) * 14)) var(--bp) / var(--bs) no-repeat,
+      linear-gradient(rgba(40,128,84,.55), rgba(40,128,84,.55)) var(--bp) / var(--bs) no-repeat,
+      color-mix(in srgb, var(--d-shell) 34%, transparent); }
+  .finish-clear .body > .mould::before { content: ""; position: absolute; width: calc(var(--px) * 8); height: calc(var(--px) * 8);
+    top: round(7%, var(--px)); left: round(down, 84% - var(--px) * 8, var(--px)); opacity: .6; image-rendering: pixelated;
+    background: #fff; -webkit-mask: var(--hw-glare) 0 0 / 100% 100%; mask: var(--hw-glare) 0 0 / 100% 100%; }
   .finish-clear .bezel > .mould::before { background: color-mix(in srgb, var(--d-bezel) 78%, transparent); }
   .finish-clear .crescent > .mould { background: color-mix(in srgb, var(--d-bezel) 50%, transparent); }
   .finish-clear .loop > .mould, .finish-clear .lid > .mould, .finish-clear .feet .mould,
   .finish-clear .roof > .mould { background: color-mix(in srgb, var(--d-dark) 48%, transparent); }
   .finish-clear .body { box-shadow: none; }
-  .finish-clear .hw.guts, .finish-clear .hw.glare { display: block; }
   .finish-clear .toy .cap { background: color-mix(in srgb, #e6f8ec 72%, transparent); }
   /* Glitter: sparkle in the plastic, a few flecks twinkling slowly. */
   .finish-glitter .body > .mould { background: var(--glitter) 0 0 / calc(var(--px) * 29) calc(var(--px) * 23),
@@ -3048,7 +3056,7 @@ class HatchPetCard extends HTMLElement {
   // board (--bz-*). Only a finish that uses them asks.
   _bands(s) {
     const dev = s.device;
-    if (!/finish-(rainbow|sunset|twotone|smoke)\b/.test(dev.className)) return;
+    if (!/finish-(rainbow|sunset|twotone|smoke|clear)\b/.test(dev.className)) return;
     const g = s.px;
     const body = dev.querySelector(".body").getBoundingClientRect();
     const box = (el) => el.getBoundingClientRect();

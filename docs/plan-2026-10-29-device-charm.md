@@ -388,6 +388,7 @@ prints, constellation, rainbow bands, two-tone split, sunset bands, smoke.
   caption lines; align bands to the layout, or drop them.
 - Camo and leaves: muddy, read as dirt on woodland; speckle is almost invisible.
 - Two-tone: the diagonal edge is rough and the cream half loses the device outline.
+- Two-tone: owner kept the flat split (2026-10-29); only the rough edge and the lost outline on the cream half need fixing.
 - Fine as they are: candy stripes, gingham, polka dots, hearts, paw prints, scales, waves.
 
 **Order:** slice 1 (finish registry, the fine patterns, a bench preset) plus slice 3
