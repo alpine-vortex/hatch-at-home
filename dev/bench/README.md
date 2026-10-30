@@ -16,6 +16,8 @@ node scripts/bench.js --preset shells     # 144 shots, ~8 s
 node scripts/bench.js --preset species    # 1230 shots, ~35 s
 node scripts/bench.js --preset ui         # status, game picker, bubble
 node scripts/bench.js --preset finishes   # 576 shots: every shell finish, every world
+node scripts/bench.js --preset settings         # the gear's sheet, 420/330, day/night
+node scripts/bench.js --preset settings-shared  # the same on a shared screen
 ```
 
 PNGs land in `dev/bench/out/` (gitignored; `--out DIR` to move it). A preset
@@ -46,7 +48,8 @@ A shot (all optional):
 | `season` | `false` (default: no seasonal touches), `"auto"` (by `time`), or a season key such as `halloween` |
 | `time` | pinned clock, ISO (default `2026-06-15T12:00:00Z`; the browser runs in UTC) |
 | `width` | card width in px (420, or 330 for the compact layout); `dpr` pixel ratio |
-| `view` | `card`, `status` (status screen), `games` (game picker) |
+| `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `games` (game picker) |
+| `mine` | `true` (`--mine`) or an object over it: the viewer's own view the private channel would send (a bond, notify me, my day, my birthday kept), so `you two` and the sheet's personal rows show |
 | `power` | the low-battery gag pinned mid-play: `battery` (one bar, first line) or `line` (full battery, second line) |
 | `say` | text put in the bubble (`""` clears it) |
 | `clip` | `card` (whole card, default), `device` (the toy), `screen` (the LCD only) |

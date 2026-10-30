@@ -23,6 +23,27 @@ function pixelIcon(name, size = 24, alt = "") {
   return `<img class="picon" src="${BASE}/ui/${name}.png?v=${VERSION}" width="${size}" height="${size}" alt="${alt}">`;
 }
 
+// The settings gear: 12 art pixels, drawn at two screen pixels each.
+const GEAR_ICON = (() => {
+  const rows = [
+    "....XXXX....",
+    ".XX.XXXX.XX.",
+    ".XXXXXXXXXX.",
+    "..XXX..XXX..",
+    "XXXX....XXXX",
+    "XXX......XXX",
+    "XXX......XXX",
+    "XXXX....XXXX",
+    "..XXX..XXX..",
+    ".XXXXXXXXXX.",
+    ".XX.XXXX.XX.",
+    "....XXXX....",
+  ];
+  let d = "";
+  rows.forEach((r, y) => [...r].forEach((c, x) => { if (c === "X") d += `M${x} ${y}h1v1h-1z`; }));
+  return `<svg viewBox="0 0 12 12" width="24" height="24" shape-rendering="crispEdges" fill="currentColor" aria-hidden="true"><path d="${d}"/></svg>`;
+})();
+
 const ACTION_ICONS = {
   feed: "icon_feed", snack: "icon_snack", play: "icon_play", clean: "icon_clean",
   medicine: "icon_medicine", scold: "icon_scold", praise: "icon_praise",
@@ -1988,6 +2009,16 @@ const STYLE = `
   .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 6px 0;
     min-height: 28px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
+  /* The status view's gear and the settings sheet's back row and headings. */
+  .shead { position: sticky; top: -9px; z-index: 1; display: flex; align-items: center;
+    margin-top: -9px; padding-top: 3px; background: #e9e2c6; }
+  .gear { margin-left: auto; display: flex; align-items: center; justify-content: center;
+    min-width: 34px; min-height: 30px; padding: 3px 5px; border: none; background: none;
+    color: inherit; cursor: pointer; }
+  .sback { border: none; background: none; padding: 6px 0; min-height: 28px; color: inherit;
+    font: 400 12px 'Tiny5', monospace; text-decoration: underline; cursor: pointer; }
+  .sec { margin-top: 4px; padding-bottom: 2px; border-bottom: 2px dotted #2f3a24;
+    font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
   .bell { border: 2px solid #2f3a24; border-radius: 10px; background: none; color: inherit;
     font: 400 12px 'Tiny5', monospace; padding: 3px 10px; min-width: 44px; min-height: 26px;
     cursor: pointer; }
@@ -3011,6 +3042,7 @@ class HatchPetCard extends HTMLElement {
     s.excitedSince = 0;
     s.wasCalling = undefined; // a call already on doesn't chirp
     s.journal = false;
+    s.settings = false;
     s.statusHtml = null;
     s.drawnSig = null;
     // The last pet's private lines and question aren't this one's.
@@ -3067,7 +3099,7 @@ class HatchPetCard extends HTMLElement {
       slide.live.textContent = "";
       slide.screen.querySelector(".bondhearts")?.remove();
       slide.screen.querySelector(".linkhearts")?.remove(); // a visit's, mid-way
-      slide.journal = false;
+      slide.journal = false; // the settings sheet stays, without its personal rows
       slide.confirm = null; // an armed "forget" is a personal row
       slide.status.innerHTML = ""; // drawn again, without its personal rows
       slide.statusHtml = null;
@@ -3695,6 +3727,7 @@ class HatchPetCard extends HTMLElement {
     if (open) this._stopTyping(s); // the bubble hides: the line is said whole
     s.screen.classList.toggle("show-status", open);
     s.journal = false;
+    s.settings = false;
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     if (s === this._slides[this._index]) {
       this._card.querySelector(".statusbtn").setAttribute("aria-pressed", open ? "true" : "false");
@@ -4770,6 +4803,10 @@ class HatchPetCard extends HTMLElement {
       this._renderJournal(s);
       return;
     }
+    if (s.settings) {
+      this._renderSettings(s);
+      return;
+    }
     const value = (key) => {
       const v = Number.parseFloat(this._state(s, `sensor.${key}`)?.state);
       return Number.isFinite(v) ? v : null;
@@ -4814,10 +4851,6 @@ class HatchPetCard extends HTMLElement {
       }
       return `<span class="hearts" role="img" aria-label="bond level ${level} of ${BOND.max}">${out}</span>`;
     };
-    const notifying = !!s.mine?.notify_me;
-    const myDay = this._mineSwitch(s, "my_day", this._myDay);
-    const birthdayKept = this._mineSwitch(s, "birthday_kept", this._birthdayKept);
-    const birthdayPhone = this._mineSwitch(s, "birthday_phone", this._birthdayPhone);
     const ic = (n) => pixelIcon(n, 18);
     const bar = (v) => v === null ? "–"
       : `<div class="bar" role="img" aria-label="${Math.round(v)} of 100"><div style="width:${v}%"></div></div>`;
@@ -4826,11 +4859,6 @@ class HatchPetCard extends HTMLElement {
       `${e.result && e.result !== "ok" ? ` (${escape(e.result.replace("_", " "))}${e.score ? ` ${escape(e.score)}` : ""})` : ""}</div>`);
     const row = (iconName, label, value) =>
       `<div class="row">${iconName ? ic(iconName) : "<span></span>"}<span>${label}</span>${value}</div>`;
-    // A two-tap "forget", armed or not (confirmTap).
-    const forgetButton = (cls, key, aria) => {
-      const sure = confirmArmed(s, key);
-      return `<span><button class="bell ${cls}" aria-label="${sure ? CONFIRM_ARIA[key] : aria}">${sure ? "sure? tap again" : "forget"}</button></span>`;
-    };
     const adult = this._state(s, "sensor.life_stage")?.state === "adult";
     const teenOrAdult = adult || this._state(s, "sensor.life_stage")?.state === "teen";
     const isEgg = this._state(s, "sensor.life_stage")?.state === "egg";
@@ -4839,6 +4867,7 @@ class HatchPetCard extends HTMLElement {
       .filter(Boolean).join(" ");
     // Today's wish comes first: it changes daily, the rest is there every day.
     const html = `
+      <div class="shead">${this._gearButton()}</div>
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
         ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
@@ -4857,6 +4886,33 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
+      <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
+      <button class="jlink">journal ›</button>
+      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
+    if (!this._setStatus(s, html)) return;
+    this._journalLink(s, true);
+    this._gearLink(s);
+  }
+
+  // The settings sheet, in the status box like the journal: the viewer's own
+  // switches (none on a shared screen), then this browser's.
+  _renderSettings(s) {
+    const bond = this._bond(s);
+    const notifying = !!s.mine?.notify_me;
+    const myDay = this._mineSwitch(s, "my_day", this._myDay);
+    const birthdayKept = this._mineSwitch(s, "birthday_kept", this._birthdayKept);
+    const birthdayPhone = this._mineSwitch(s, "birthday_phone", this._birthdayPhone);
+    const row = (iconName, label, value) =>
+      `<div class="row"><span></span><span>${label}</span>${value}</div>`;
+    // A two-tap "forget", armed or not (confirmTap).
+    const forgetButton = (cls, key, aria) => {
+      const sure = confirmArmed(s, key);
+      return `<span><button class="bell ${cls}" aria-label="${sure ? CONFIRM_ARIA[key] : aria}">${sure ? "sure? tap again" : "forget"}</button></span>`;
+    };
+    // Who each part changes: the viewer (follows their login), or this browser.
+    const html = `
+      <div class="shead"><button class="sback">‹ settings</button></div>
+      ${sharedScreen() ? "" : `<div class="sec">for you</div>`}
       ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell notify" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       ${bond && myDay === undefined ? row(null, "my day", `<span>…</span>`) : ""}
       ${bond && myDay !== undefined ? row(null, "my day", `<span><button class="bell myday" aria-label="my day: let the pet notice your steps, sleep, alarm and trips" aria-pressed="${!!myDay}">${myDay ? "on" : "off"}</button></span>`) : ""}
@@ -4864,15 +4920,24 @@ class HatchPetCard extends HTMLElement {
         row(null, "birthday on my phone", `<span><button class="bell bdayphone" aria-label="birthday on my phone: a happy birthday message on your phone on the day" aria-pressed="${!!birthdayPhone}">${birthdayPhone ? "on" : "off"}</button></span>`) : ""}
       ${sharedScreen() ? "" : row(null, "baby talk", `<span><button class="bell babytalk" aria-label="baby talk: simpler words while a pet is a baby or child" aria-pressed="${babyTalk(this._hass.user?.id)}">${babyTalk(this._hass.user?.id) ? "on" : "off"}</button></span>`)}
       ${sharedScreen() ? "" : row(null, "my data", forgetButton("forgetme", "forget_me", "forget my data: your birthday, answers and settings for every pet; your bonds stay"))}
+      <div class="sec">this screen</div>
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       ${s.species?.voice ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`) : ""}
       ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
-      <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
-      <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
-    this._journalLink(s, true);
+    s.status.querySelector(".sback").addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      this._tapped(e.currentTarget);
+      s.settings = false;
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      s.status.scrollTop = 0; // a new view starts at its top
+      s.status.querySelector(".gear")?.focus({ preventScroll: true });
+    });
+    // A heading (or the back row beside its button) is not a button: a tap on it
+    // leaves the sheet open.
+    s.status.querySelectorAll(".sec, .shead").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
     s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);
@@ -5031,6 +5096,22 @@ class HatchPetCard extends HTMLElement {
       }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       if (skipped) this._statusMessage(s, skipped);
+    });
+  }
+
+  // The gear in the status view's corner: opens the settings sheet.
+  _gearButton() {
+    return `<button class="gear" aria-label="settings">${GEAR_ICON}</button>`;
+  }
+
+  _gearLink(s) {
+    s.status.querySelector(".gear").addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      this._tapped(e.currentTarget);
+      s.settings = true;
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      s.status.scrollTop = 0; // a new view starts at its top
+      s.status.querySelector(".sback")?.focus({ preventScroll: true });
     });
   }
 

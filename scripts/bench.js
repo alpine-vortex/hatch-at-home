@@ -92,6 +92,31 @@ const PRESETS = {
     }
     return out;
   },
+  // The settings sheet (the status screen's gear) with the viewer's own rows, at
+  // both card widths, day and night.
+  settings() {
+    const out = [];
+    for (const width of [420, 330]) {
+      for (const world of ["woodland", "tidepool", "nightsky"]) {
+        for (const scene of ["day", "night"]) {
+          out.push({ name: `settings/${width}/${world}-${scene}`, group: `settings-${width}`, label: `${world} ${scene}`,
+            world, scene, width, view: "settings", mine: true });
+        }
+      }
+    }
+    return out;
+  },
+  // The same sheet on a shared screen: nothing personal, only this screen's rows.
+  "settings-shared"() {
+    const out = [];
+    for (const width of [420, 330]) {
+      for (const scene of ["day", "night"]) {
+        out.push({ name: `settings-shared/${width}-${scene}`, group: "settings-shared", label: `${width} ${scene}`,
+          scene, width, view: "settings", mine: true, storage: { "hatch-shared-screen": "on" } });
+      }
+    }
+    return out;
+  },
 };
 
 // --- Shots -----------------------------------------------------------------
@@ -131,6 +156,7 @@ function parseArgs(argv) {
     else if (key === "shape" || key === "color" || key === "bezel" || key === "finish") (opts.shot.shell ||= {})[key] = val();
     else if (key === "lcd") opts.shot.lcd = val();
     else if (key === "boot") opts.shot.booted = false;
+    else if (key === "mine") opts.shot.mine = true;
     else if (key === "season") opts.shot.season = val() === "off" ? false : val() === "on" ? "auto" : argv[i];
     else opts.shot[key] = num.has(key) ? Number(val()) : val();
   }
