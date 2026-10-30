@@ -106,6 +106,22 @@ async function ensurePets(access) {
   await api("POST", "/api/services/virtual_pet/fast_forward", access, { hours: 1 });
 }
 
+// Reload once HA's frontend has finished loading, then wait for `sel`. A reload while
+// the frontend is still fetching its code can leave the page on a failed module import
+// ("Failed to fetch dynamically imported module"), so the card never appears; seen in
+// four gate runs on 2026-10-29. When that happens, reload once more.
+async function reloadFor(p, sel, timeout = 60000) {
+  await p.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+  await p.reload();
+  try {
+    await p.waitForSelector(sel, { state: "visible", timeout });
+  } catch (err) {
+    console.log(`note: ${sel} didn't show after a reload, reloading once more`);
+    await p.reload();
+    await p.waitForSelector(sel, { state: "visible", timeout });
+  }
+}
+
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });
   await waitForHa();
@@ -309,6 +325,7 @@ async function main() {
   await evaluate(() => Object.keys(localStorage)
     .filter((k) => k.startsWith("hatch-greet-")).forEach((k) => localStorage.removeItem(k)));
   await calm();
+  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
   await page.reload();
   await signedIn();
   await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
@@ -2872,7 +2889,9 @@ async function main() {
     await tab.goto(`${HA}/pet-bench/pet`);
     await tab.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
     await tab.waitForTimeout(16000); // the frontend reloads itself once
-    await tab.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 }).catch(async (err) => {
+    // That reload can catch the frontend mid-fetch and leave a failed module import
+    // (see reloadFor): if the card isn't up, reload once more before giving up.
+    await tab.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 }).catch(() => reloadFor(tab, "hatch-pet-card .statusbtn", 30000)).catch(async (err) => {
       // What the tab shows instead, for the next person chasing this.
       await tab.screenshot({ path: path.join(OUT, "05b-tab2-timeout.png") }).catch(() => {});
       const why = await tab.locator("hatch-pet-card").first().evaluate((el) => {
@@ -4356,8 +4375,7 @@ async function main() {
         localStorage.removeItem("hatch-booted");
         localStorage.setItem("hatch-sounds", "off");
       });
-      await bp.reload();
-      await bp.waitForSelector("hatch-pet-card .slide .boot", { state: "visible", timeout: 60000 });
+      await reloadFor(bp, "hatch-pet-card .slide .boot");
       await bp.waitForTimeout(1000); // HA's loading logo clears the page a moment later
     };
     const visible = (sel) => bp.locator(sel).evaluateAll((els) => els.filter((e) => e.offsetParent && getComputedStyle(e).visibility !== "hidden").length);
@@ -4421,8 +4439,7 @@ async function main() {
     check(`the held private moment is said once after the boot (${width}px)`,
       saidAfter.filter((type) => type === "friend_home").length === 1, saidAfter.join(","));
     // A second load: no boot screen.
-    await bp.reload();
-    await bp.waitForSelector("hatch-pet-card .slide", { timeout: 60000 });
+    await reloadFor(bp, "hatch-pet-card .slide");
     await bp.waitForTimeout(1500);
     check(`a second load shows no boot screen (${width}px)`, await visible("hatch-pet-card .slide .boot") === 0);
     // Nobody taps: the pet shows by itself in about 5 s, silently.
@@ -4468,8 +4485,7 @@ async function main() {
     await lp.setViewportSize({ width, height: 860 });
     await lp.goto(`${HA}/pet-bench/pet`);
     await lp.evaluate(() => { localStorage.setItem("hatch-sounds", "off"); localStorage.setItem("hatch-lcd", "off"); });
-    await lp.reload();
-    await lp.waitForSelector("hatch-pet-card .statusbtn", { timeout: 60000 });
+    await reloadFor(lp, "hatch-pet-card .statusbtn");
     for (let i = 0; i < 60 && await lp.locator("hatch-pet-card").evaluate((el) => (el._slides?.length || 0) < 3); i++) await lp.waitForTimeout(1000);
     await lp.waitForTimeout(1500);
     const card = lp.locator("hatch-pet-card");
