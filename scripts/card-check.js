@@ -3099,6 +3099,7 @@ async function main() {
       s.settings = true; // the switch lives in the settings sheet
       el._renderStatus(s, []);
       s.status.querySelector(".bell.shared").click();
+      s.settings = false; // the status again, for the bond row below
     });
     await page.waitForTimeout(800);
     const back = await card.evaluate((el) => {
@@ -3107,7 +3108,9 @@ async function main() {
       window.__personal(two); // its bond, as the personal channel brings it back
       s.statusHtml = null;
       two._renderStatus(s, []);
-      return { shared: localStorage.getItem("hatch-shared-screen"), you: /you two/.test(s.status.textContent) };
+      return { shared: localStorage.getItem("hatch-shared-screen"), you: /you two/.test(s.status.textContent),
+        bond: !!two._bond(s), view: s.journal ? "journal" : s.settings ? "settings" : "status",
+        text: s.status.textContent.replace(/\s+/g, " ").slice(0, 120) };
     });
     check("FA: turning it off again makes every card personal", back.shared === "off" && back.you, JSON.stringify(back));
     // A card off the page (a view switch) misses the switch's event: shared
