@@ -5331,12 +5331,16 @@ class HatchPetCard extends HTMLElement {
   }
 
   // Save a pick (null: the world's own) through the websocket only: no service
-  // fallback, since a service call is logged with who made it. A failure puts the
-  // shell back on its pick and keeps the picker open.
+  // fallback, since a service call is logged with who made it. The shell wears the
+  // pick from the tap (so closing before the reply doesn't flicker); a failure puts
+  // it back on the saved one and keeps the picker open.
   _saveShell(s, key) {
     const id = s.ids?.["sensor.life_stage"];
+    this._shellSettled(s);
+    s.shellPending = key;
     const failed = (code) => {
       if (s.ids?.["sensor.life_stage"] !== id) return; // another pet by now
+      if (s.shellPending === key) this._shellSettled(s);
       s.previewFinish = undefined;
       this._dress(s, this._shellKey(s));
       if (code === "shell_locked") s.statusHtml = null; // its options moved on: draw them again
@@ -5354,9 +5358,8 @@ class HatchPetCard extends HTMLElement {
       .finally(() => clearTimeout(timer))
       .then(() => {
         if (s.ids?.["sensor.life_stage"] !== id) return;
-        this._shellSettled(s);
-        s.shellPending = key;
-        s.shellPendingTimer = setTimeout(() => {
+        clearTimeout(s.shellPendingTimer);
+        if (s.shellPending === key) s.shellPendingTimer = setTimeout(() => {
           s.shellPending = undefined;
           this._redraw(s);
         }, 5000);

@@ -372,3 +372,46 @@ report: `_renderSlide` is about 3509, not 3365). All 18 hold except where noted.
 | 16 | Entity-id source | holds | §4 Write paths |
 | 17 | Tile count, scroll | holds | §4 Preview: tap swaps classes only |
 | 18 | Claims without a test | holds | 6.3 card-check names both |
+
+## Slice 3 reconcile (s2515, 2026-10-30)
+
+Shipped as planned: `shell_locked` on `sensor.life_stage` (unrecorded, holds across a
+tick, test per stage), `_dress`, `s.picker` / `s.previewFinish` / `s.shellPending`,
+`_closePicker` from back, `_toggleStatus`, `_forget` and `_goShared`, the row and
+headings, the picker, locked tiles, `use` / `world default`, the error table, shared
+read-only, the older-server hide, `callWS` only. Copy: only the 6.3 strings.
+
+Where it differs from the plan:
+- **`shellPending` starts at the `use` tap**, not after the reply. Closing the picker
+  before the websocket answered would otherwise flash the old shell. A failure clears it.
+- **The world's own finish is listed once**, as the first tile "<world> (default)".
+  It does not appear again under its group. That tile saves `null`, so `now` sits on it
+  whenever the pet has no pick, or has picked its world's own key (an automation can
+  do that). The row shows the same "<world> (default)" text for the world's own.
+  Hearth has no `shell.finish`, so its default tile is the plain world colour.
+- **Tile swatches** are drawn from a copy of each plastic's band colours
+  (`SWATCH_BANDS`, from the `.finish-<key>` CSS) plus the print tiles. A new finish or
+  a recoloured plastic must update that copy too.
+- **A card-side 10 s timeout** on the save maps to the generic line.
+- **Pixel proof:** the bench is far noisier than s2499 measured. Across 4 runs of the
+  old code, 343 of the 576 `finishes` shots differed somewhere, and a 4th old-code run
+  against 3 others still had 87 shots with pixels none of them had. So the planned
+  "2 before, 1 after" test can't separate a change from noise. Instead: per pixel, an
+  after pixel counts only if no before-run had that value there. The after runs gave
+  99 and 82 such shots, inside the same-code control's 87. The style-snapshot diff
+  (6 worlds x 24 finishes x day/night, className + 7 vars) is empty, and that is the
+  real proof.
+- **The `_forget` exit** is driven in card-check by calling `_forget` on the slide; a
+  real device swap isn't staged.
+- **Bench:** besides the planned fields, a `scroll` shot field (the picker list scrolls)
+  and two sheets, `picker-card` and `picker-screen`.
+
+For slices 4-5:
+- **The locked note is the literal "I get this one as a teen ♪"** for any stage. If a
+  stage other than teen ever unlocks something, slice 4 needs the stage-specific line.
+- **A swipe to another pet doesn't close the picker** (`_go` isn't one of the listed
+  exits). The preview stays on the slide that was left, and it is still there on
+  return. Open question for the first mate: should `_go` call `_closePicker`?
+- The LCD shows about 1.5 rows of tiles above the sticky `use` / `world default` bar
+  at both widths. The list scrolls; a status line sits above the bar.
+- Monochrome (slice 5) should check that the swatches still read, or skip them.

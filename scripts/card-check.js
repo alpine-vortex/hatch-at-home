@@ -122,6 +122,358 @@ async function reloadFor(p, sel, timeout = 60000) {
   }
 }
 
+// 2b. The pet's shell (the settings sheet's FOR <PET> row and its picker): the row,
+// locked tiles, the live preview and every way out of it, saving and a reload, a
+// second pet, a shared screen, an older server and each error line. Every test ends
+// on the world's own shell and checks it.
+async function shellChecks({ page, context, check, cur, evaluate, inject, shot, after }) {
+  const card = page.locator("hatch-pet-card");
+  // The pet on show: its name, stage, world and life stage sensor.
+  const onShow = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const st = el._hass.states[s.ids["sensor.life_stage"]];
+    return { name: el._linkName(s), stage: st.state, own: s.world.shell?.finish ?? null, world: el._worldName(s).toLowerCase(),
+      entity: s.ids["sensor.life_stage"], options: st.attributes.shell_finish_options, locked: st.attributes.shell_locked };
+  });
+  // What the shell and the picker show, on the slide with this sensor (default: on show).
+  const look = (entity = null) => card.evaluate((el, e) => {
+    const s = e ? el._slides.find((x) => x.ids?.["sensor.life_stage"] === e) : el._slides[el._index];
+    return { finish: [...s.device.classList].find((c) => c.startsWith("finish-")) || null, picker: !!s.picker,
+      preview: s.previewFinish === undefined ? "none" : s.previewFinish, tiles: s.status.querySelectorAll(".tile").length,
+      locked: [...s.status.querySelectorAll(".tile.locked")].map((t) => t.getAttribute("aria-label")),
+      sel: s.status.querySelector(".tile.sel")?.dataset.finish ?? null, now: s.status.querySelector(".tile.now")?.dataset.finish ?? null,
+      note: s.status.querySelector(".status-feedback:not([hidden])")?.textContent || "", open: s.screen.classList.contains("show-status"),
+      sheet: !!s.status.querySelector(".sback:not(.pback)"), scroll: s.status.scrollTop,
+      inkTop: s.device.style.getPropertyValue("--d-ink-top") };
+  }, entity);
+  const brief = (l) => JSON.stringify({ ...l, locked: l.locked?.length }); // a detail line, not the whole list
+  const setShell = (entity, finish) => evaluate(({ entity, finish }) => document.querySelector("home-assistant").hass
+    .callWS({ type: "virtual_pet/set_shell", entity_id: entity, finish }).then(() => null, (e) => e.code || String(e)), { entity, finish });
+  const attrOf = (entity, key = "shell_finish") => evaluate(({ e, key }) =>
+    document.querySelector("home-assistant").hass.states[e].attributes[key] ?? null, { e: entity, key });
+  const waitAttr = async (entity, want) => {
+    for (let i = 0; i < 50 && (await attrOf(entity)) !== want; i++) await page.waitForTimeout(100);
+    return attrOf(entity);
+  };
+  const ownClass = (pet) => (pet.own ? `finish-${pet.own}` : null);
+  const statusUp = async () => (await cur().locator(".screen.show-status").count()) > 0;
+  const openSheet = async () => {
+    if (!(await statusUp())) await page.locator("hatch-pet-card .statusbtn").click();
+    await page.waitForTimeout(250);
+    if (await cur().locator(".status .pback").count()) await cur().locator(".status .pback").click();
+    if (await cur().locator(".status .gear").count()) await cur().locator(".status .gear").click();
+    await page.waitForTimeout(250);
+  };
+  const openPicker = async () => {
+    await openSheet();
+    await cur().locator(".status .shellrow").click();
+    await page.waitForTimeout(300);
+  };
+  const closeStatus = async () => {
+    if (await statusUp()) await page.locator("hatch-pet-card .statusbtn").click();
+    await page.waitForTimeout(250);
+  };
+  const tap = async (key) => {
+    await cur().locator(`.status .tile[data-finish="${key}"]`).click();
+    await page.waitForTimeout(200);
+  };
+  const showPet = (entity) => card.evaluate((el, e) => el._go(el._slides.findIndex((x) => x.ids?.["sensor.life_stage"] === e)), entity);
+  // End on the world's own: cleared through the server, then checked on the shell.
+  const backToDefault = async (label, pet) => {
+    const err = await setShell(pet.entity, null);
+    const attr = await waitAttr(pet.entity, null);
+    await page.waitForTimeout(300);
+    const l = await look(pet.entity);
+    check(`shell: ${label} ends on ${pet.name}'s world's own shell`, err === null && attr === null && l.finish === ownClass(pet),
+      JSON.stringify({ err, attr, finish: l.finish }));
+  };
+
+  await closeStatus();
+  const a = await onShow();
+  const who = `${a.name} (${a.stage}, ${a.world})`;
+
+  // The row: the pet's own heading, its swatch and name, a button that opens the picker.
+  await openSheet();
+  const row = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const b = s.status.querySelector(".bell.shellrow");
+    return { aria: b?.getAttribute("aria-label"), text: b?.textContent.trim(), swatch: !!b?.querySelector(".sw") };
+  });
+  check(`shell: ${who}'s row names its shell and opens the picker`,
+    row.aria === `shell: ${a.world} (default), change` && row.text === `${a.world} (default)` && row.swatch, JSON.stringify(row));
+  await cur().locator(".status .shellrow").click();
+  await page.waitForTimeout(300);
+  const opened = await look();
+  const focus = await card.evaluate((el) => el.shadowRoot.activeElement?.className || "");
+  const finishes = 24 - (a.own ? 1 : 0) + 1; // the world's own once, first
+  check(`shell: the picker lists every finish, the world's own first and marked now (${who})`,
+    opened.picker && opened.tiles === finishes && opened.now === "" && opened.sel === "" && /pback/.test(focus),
+    brief({ ...opened, focus }));
+  await shot("02d-shell-picker");
+
+  // Locked tiles (a pet below teen): shown dimmed with their stage, never hidden; a tap
+  // says when, saves nothing and leaves the shell as it is.
+  const lockedKeys = Object.keys(a.locked || {});
+  check(`shell: ${who} is below teen, so the show-offs are locked`, lockedKeys.length === 6, JSON.stringify(a.locked));
+  check("shell: never hidden: every locked finish has a tile saying the stage that opens it",
+    lockedKeys.every((k) => opened.locked.includes(`${k === "twotone" ? "two-tone" : k} shell, opens at ${a.locked[k]}`)) &&
+      opened.locked.length === lockedKeys.length, JSON.stringify(opened.locked));
+  if (lockedKeys.length) {
+    await cur().locator(`.status .tile[data-finish="${lockedKeys[0]}"]`).scrollIntoViewIfNeeded();
+    await tap(lockedKeys[0]);
+    const l = await look();
+    check("shell: a locked tile says when and changes nothing",
+      l.note === "I get this one as a teen ♪" && l.finish === ownClass(a) && l.preview === "none" &&
+        (await attrOf(a.entity)) === null, brief(l));
+    await shot("02e-shell-locked");
+  }
+  // The server refuses a locked one too (the card never asks it for one).
+  check("shell: the server refuses a shell the pet hasn't grown into", (await setShell(a.entity, lockedKeys[0] || "glitter")) === "shell_locked");
+
+  // The live preview: a tap dresses the shell, saves nothing, keeps the list where it is.
+  await tap("twotone");
+  const two = await look();
+  await tap("camo");
+  const camo = await look();
+  check("shell: a tap previews on the live shell, unsaved, and the mark moves to it",
+    two.finish === "finish-twotone" && two.inkTop !== "" && camo.finish === "finish-camo" && camo.sel === "camo" &&
+      camo.now === "" && (await attrOf(a.entity)) === null, JSON.stringify({ two: two.finish, camo: camo.finish, sel: camo.sel }));
+  check("shell: a finish without a top colour clears the last one's (--d-ink-top)", camo.inkTop === "", camo.inkTop);
+  // ...and survives a hass update: a mood tick, then the sun going down and up.
+  const sun = await evaluate(() => { const st = document.querySelector("home-assistant").hass.states["sun.sun"]; return { state: st.state, attributes: st.attributes }; });
+  await inject(a.entity.replace("life_stage", "mood"), { attributes: { cc_tick: Date.now() } });
+  await page.waitForTimeout(500);
+  const ticked = await look();
+  await inject("sun.sun", { state: sun.state === "below_horizon" ? "above_horizon" : "below_horizon" });
+  await page.waitForTimeout(500);
+  const sunned = await look();
+  await inject("sun.sun", sun);
+  await page.waitForTimeout(300);
+  check("shell: the preview survives a mood tick and the sun's change, and the list doesn't redraw",
+    [ticked, sunned].every((l) => l.finish === "finish-camo" && l.sel === "camo" && l.picker && l.scroll === camo.scroll),
+    JSON.stringify({ ticked: ticked.finish, sunned: sunned.finish, scroll: [camo.scroll, ticked.scroll, sunned.scroll] }));
+
+  // Leaving without saving puts the shell back, by every way out.
+  const reverted = (l) => l.finish === ownClass(a) && !l.picker && l.preview === "none";
+  await cur().locator(".status .pback").click();
+  await page.waitForTimeout(250);
+  let l = await look();
+  const backFocus = await card.evaluate((el) => el.shadowRoot.activeElement?.className || "");
+  check("shell: back (‹ shell) reverts the preview, keeps the sheet and focuses the row",
+    reverted(l) && l.sheet && /shellrow/.test(backFocus), brief({ ...l, backFocus }));
+  await openPicker();
+  await tap("camo");
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(250);
+  l = await look();
+  check("shell: the Status chip reverts the preview", reverted(l) && !l.open, brief(l));
+  await openPicker();
+  await tap("camo");
+  l = await card.evaluate((el) => { // the slide getting another pet (_forget), then drawn again
+    const s = el._slides[el._index];
+    el._forget(s);
+    el._redraw(s);
+    return null;
+  });
+  await page.waitForTimeout(600);
+  l = await look();
+  check("shell: another pet in the slide (_forget) reverts the preview", reverted(l), brief(l));
+  await closeStatus();
+  // A shared screen turned on by another card here (its event) or in another tab
+  // (storage): the picker closes, the shell goes back, the sheet shows it read-only.
+  await openPicker();
+  await tap("camo");
+  await evaluate(() => {
+    localStorage.setItem("hatch-shared-screen", "on");
+    window.dispatchEvent(new CustomEvent("hatch-shared-changed", { detail: { on: true } }));
+  });
+  await page.waitForTimeout(500);
+  l = await look();
+  const shared = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const out = { heads: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent), button: !!s.status.querySelector(".shellrow"),
+      ro: s.status.querySelector(".shellro")?.textContent.trim(), note: s.status.querySelector(".shellnote")?.textContent };
+    s.picker = true; // the picker can't be reached, even asked for directly
+    el._renderStatus(s, []);
+    out.tiles = s.status.querySelectorAll(".tile").length;
+    out.picker = !!s.picker;
+    return out;
+  });
+  check("shell: a shared screen turned on here reverts the preview and closes the picker", reverted(l) && l.sheet, brief(l));
+  check("shell: on a shared screen the row is read-only, named for no one, with its note; the picker is unreachable",
+    shared.heads[0] === "for the pet" && !shared.heads.some((h) => h.includes(a.name.toLowerCase()) || h.includes(a.name)) &&
+      !shared.button && shared.ro === `${a.world} (default)` && shared.note === "ask a grown-up to change it" &&
+      shared.tiles === 0 && !shared.picker, JSON.stringify(shared));
+  await shot("02f-shell-shared");
+  await evaluate(() => {
+    localStorage.setItem("hatch-shared-screen", "off");
+    window.dispatchEvent(new CustomEvent("hatch-shared-changed", { detail: { on: false } }));
+  });
+  await page.waitForTimeout(500);
+  await openPicker();
+  await tap("camo");
+  const tab = await context.newPage();
+  await tab.goto(after.url);
+  await tab.evaluate(() => localStorage.setItem("hatch-shared-screen", "on"));
+  await page.waitForTimeout(700);
+  l = await look();
+  check("shell: a shared screen turned on in a second tab reverts the preview here", reverted(l), brief(l));
+  await tab.evaluate(() => localStorage.setItem("hatch-shared-screen", "off"));
+  await page.waitForTimeout(500);
+  await tab.close();
+  await backToDefault("the ways out", a);
+
+  // Pick, use, and a reload keeps it; `world default` clears it.
+  await openPicker();
+  await cur().locator('.status .tile[data-finish="stripes"]').scrollIntoViewIfNeeded();
+  await tap("stripes");
+  await cur().locator(".status .puse").click();
+  const savedAttr = await waitAttr(a.entity, "stripes");
+  await page.waitForTimeout(300);
+  l = await look();
+  check("shell: use saves it: the line, the sensor, `now` and the shell",
+    savedAttr === "stripes" && l.note === "shell saved ♪" && l.now === "stripes" && l.finish === "finish-stripes" && l.picker,
+    brief({ savedAttr, ...l }));
+  await after.reload();
+  await showPet(a.entity);
+  await page.waitForTimeout(500);
+  l = await look(a.entity);
+  check("shell: a reload keeps the saved shell", l.finish === "finish-stripes", brief(l));
+  await openPicker();
+  await cur().locator(".status .pdefault").click();
+  const cleared = await waitAttr(a.entity, null);
+  await page.waitForTimeout(300);
+  l = await look();
+  check("shell: world default clears it: the line, the sensor, `now` and the shell",
+    cleared === null && l.note === "back to the world's own ♪" && l.now === "" && l.finish === ownClass(a), brief({ cleared, ...l }));
+  await backToDefault("save and reload", a);
+
+  // Closing right after `use` doesn't flicker back to the old shell before the push.
+  await openPicker();
+  await cur().locator('.status .tile[data-finish="dots"]').scrollIntoViewIfNeeded();
+  await tap("dots");
+  await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    window.__shellSeen = [];
+    window.__shellObs = new MutationObserver(() => window.__shellSeen.push(s.device.className));
+    window.__shellObs.observe(s.device, { attributes: true, attributeFilter: ["class"] });
+  });
+  await cur().locator(".status .puse").click();
+  await page.locator("hatch-pet-card .statusbtn").click(); // closed before the reply
+  await waitAttr(a.entity, "dots");
+  await page.waitForTimeout(800);
+  const seen = await evaluate(() => { window.__shellObs.disconnect(); return window.__shellSeen; });
+  l = await look();
+  check("shell: closing right after use doesn't flicker",
+    seen.every((c) => c.includes("finish-dots")) && l.finish === "finish-dots", JSON.stringify({ seen: [...new Set(seen)], finish: l.finish }));
+  // The fresh pick holds until the sensor agrees, or 5 s (here the reply never reaches the server).
+  await openPicker();
+  await cur().locator('.status .tile[data-finish="waves"]').scrollIntoViewIfNeeded();
+  await tap("waves");
+  await card.evaluate((el) => {
+    const real = el._hass.callWS;
+    el.__realWS = real;
+    el._hass.callWS = (msg) => (msg.type === "virtual_pet/set_shell" ? Promise.resolve(null) : real(msg));
+  });
+  await cur().locator(".status .puse").click();
+  await closeStatus();
+  await page.waitForTimeout(1000);
+  const held = await look();
+  await page.waitForTimeout(5000);
+  const lapsed = await look();
+  await card.evaluate((el) => { el._hass.callWS = el.__realWS; });
+  check("shell: a fresh pick holds until the sensor agrees, then 5 s at most",
+    held.finish === "finish-waves" && lapsed.finish === "finish-dots", JSON.stringify({ held: held.finish, lapsed: lapsed.finish }));
+  await backToDefault("closing after use", a);
+
+  // A second pet keeps its own.
+  const other = await card.evaluate((el, e) => el._slides.findIndex((x) => x.ids?.["sensor.life_stage"] && x.ids["sensor.life_stage"] !== e), a.entity);
+  await card.evaluate((el, i) => el._go(i), other);
+  await page.waitForTimeout(500);
+  const b = await onShow();
+  await setShell(a.entity, "stripes");
+  await waitAttr(a.entity, "stripes");
+  await openPicker();
+  await cur().locator('.status .tile[data-finish="dots"]').scrollIntoViewIfNeeded();
+  await tap("dots");
+  await cur().locator(".status .puse").click();
+  await waitAttr(b.entity, "dots");
+  await page.waitForTimeout(300);
+  const [la, lb] = [await look(a.entity), await look(b.entity)];
+  check(`shell: ${a.name} (${a.stage}) and ${b.name} (${b.stage}, ${b.world}) each keep their own`,
+    (await attrOf(a.entity)) === "stripes" && (await attrOf(b.entity)) === "dots" && la.finish === "finish-stripes" && lb.finish === "finish-dots",
+    JSON.stringify({ a: la.finish, b: lb.finish }));
+  await closeStatus();
+  await backToDefault("a second pet", b);
+  await backToDefault("a second pet", a);
+  await showPet(a.entity);
+  await page.waitForTimeout(400);
+
+  // An older server (no shell_finish_options): no row, no pet heading, no picker.
+  await openSheet();
+  const older = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    el._state = function (slide, key) {
+      const st = real.call(this, slide, key);
+      if (key !== "sensor.life_stage" || !st) return st;
+      const { shell_finish_options, shell_locked, ...rest } = st.attributes;
+      return { ...st, attributes: rest };
+    };
+    s.statusHtml = null;
+    el._renderStatus(s, []);
+    const out = { heads: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent), row: !!s.status.querySelector(".shellrow, .shellro") };
+    s.picker = true;
+    el._renderStatus(s, []);
+    out.tiles = s.status.querySelectorAll(".tile").length;
+    el._state = real;
+    s.statusHtml = null;
+    el._renderStatus(s, []);
+    return out;
+  });
+  check("shell: an older server's sheet has no shell row, no pet heading and no picker",
+    older.heads.join("|") === "for you|this screen" && !older.row && older.tiles === 0, JSON.stringify(older));
+
+  // Each error line: the shell goes back to its pick and the picker stays open.
+  await openPicker();
+  const errors = [["no_pet", "can't find this pet"], ["shell_locked", "not grown into that one yet"],
+    ["invalid_format", "that didn't work, try later"], [null, "that didn't work, try later"],
+    ["unknown_command", "can't change the shell here"]];
+  const lines = [];
+  for (const [code, line] of errors) {
+    await card.evaluate((el, c) => {
+      const real = el.__realWS || el._hass.callWS;
+      el.__realWS = real;
+      el._hass.callWS = (msg) => (msg.type === "virtual_pet/set_shell" ? Promise.reject(c ? { code: c, message: c } : new Error("gone")) : real(msg));
+    }, code);
+    await tap("camo");
+    await cur().locator(".status .puse").click();
+    await page.waitForTimeout(300);
+    const e = await look();
+    lines.push({ code, note: e.note, finish: e.finish, picker: e.picker });
+    check(`shell: a ${code || "codeless"} failure says "${line}", puts the shell back and stays open`,
+      e.note === line && e.finish === ownClass(a) && e.picker && e.preview === "none", brief(e));
+  }
+  await card.evaluate((el) => { el._hass.callWS = el.__realWS; delete el.__realWS; });
+  // ...and the real server's refusal: a show-off offered by a stale list.
+  await inject(a.entity, { attributes: { shell_finish_options: [...a.options, ...lockedKeys] } });
+  await page.waitForTimeout(400);
+  await openPicker();
+  if (lockedKeys.length) {
+    await cur().locator(`.status .tile[data-finish="${lockedKeys[0]}"]`).scrollIntoViewIfNeeded();
+    await tap(lockedKeys[0]);
+    await cur().locator(".status .puse").click();
+    await page.waitForTimeout(800);
+    l = await look();
+    check("shell: the server's own refusal of a locked shell says so and puts the shell back",
+      l.note === "not grown into that one yet" && l.finish === ownClass(a) && l.picker && (await attrOf(a.entity)) === null, brief(l));
+  }
+  await closeStatus();
+  await backToDefault("the error lines", a);
+  const restored = await attrOf(a.entity, "shell_finish_options");
+  check("shell: the stale list is gone again", JSON.stringify(restored) === JSON.stringify(a.options), JSON.stringify(restored));
+}
+
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });
   await waitForHa();
@@ -266,12 +618,14 @@ async function main() {
     const s = el._slides[el._index];
     return { open: s.screen.classList.contains("show-status"), back: !!s.status.querySelector(".sback"),
       focus: el.shadowRoot.activeElement?.className, sound: !!s.status.querySelector(".bell.sound"),
-      stats: /weight|whines/.test(s.status.textContent), heads: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent) };
+      stats: /weight|whines/.test(s.status.textContent), heads: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent),
+      pet: el._linkName(s) };
   });
   check("the status screen has a gear and no switches; the gear opens the settings sheet over it",
     statusRows && sheet.open && sheet.back && sheet.sound && !sheet.stats, JSON.stringify(sheet));
   check("the gear moves focus to the sheet's back row", sheet.focus === "sback", sheet.focus);
-  check("the sheet heads the viewer's rows and this screen's", sheet.heads.join("|") === "for you|this screen", sheet.heads.join("|"));
+  check("the sheet heads the pet's rows, the viewer's and this screen's",
+    sheet.heads.join("|") === `for ${sheet.pet}|for you|this screen`, sheet.heads.join("|"));
   await shot("02c-settings");
   // A heading is not a button: tapping it leaves the sheet up.
   await cur().locator(".status .sec").first().click();
@@ -338,6 +692,19 @@ async function main() {
   await shot("03-journal");
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
+
+  // 2b. The pet's shell picker.
+  await shellChecks({ page, context, check, cur, evaluate, inject, shot, after: {
+    url: CLIENT,
+    reload: async () => {
+      await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+      await page.reload();
+      await signedIn();
+      await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+      await seasonsOff();
+      await hush();
+    },
+  } });
 
   // 3. Find a pet with the energy to play (each game costs some), wake it if
   // it's asleep (one tap), then play a whole game.
