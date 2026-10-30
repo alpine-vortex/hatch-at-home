@@ -36,5 +36,6 @@
     "child_watch_tv": [96, 76],
     "adult_bored": [162, 80],
     "adult_sleepy": [168, 60]
-  }
+  },
+  "waves": {"baby": ["baby_wave_1", "baby_wave_2"], "teen": ["teen_wave_1", "teen_wave_2"], "adult": ["adult_wave_1", "adult_wave_2"]}
 }
