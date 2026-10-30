@@ -163,6 +163,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "personality",
             "hatched_on",
             "birthday",
+            "shell_finish_options",
         }
     )
 
@@ -204,6 +205,15 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "age_days": round(self.pet.age_hours / 24, 1),
             "species": self.pet.species,
             "world": self.coordinator.world,
+            # Its shell finish (None: the world's own; a key this version
+            # doesn't draw shows as None) and those it may wear now: a show-off
+            # opens once it grows into it. Changes on a pick, not on a tick.
+            "shell_finish": (
+                self.pet.shell_finish
+                if self.pet.shell_finish in R.SHELL_FINISHES
+                else None
+            ),
+            "shell_finish_options": model.shell_options(self.pet),
             "raised": list(self.pet.raised),
             "traits": list(self.pet.traits),
             "trait_levels": {

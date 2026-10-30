@@ -299,6 +299,7 @@ async def test_the_commands_stay_off_the_bus(
     for kind, data in (
         ("notify_me", {"enabled": True}),
         ("my_day", {"enabled": True}),
+        ("set_shell", {"finish": None}),
         ("subscribe", {"shared": False}),
     ):
         reply = await command(client, kind, entity_id="sensor.nobody", **data)
