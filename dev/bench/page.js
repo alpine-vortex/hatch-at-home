@@ -5,6 +5,8 @@
 (() => {
   const BASE = "/virtual_pet/frontend";
   let WORLDS = null; // the one object the card's cache holds; reset per shot
+  let HAVE = new Set(); // species with a species.json, as the server's catalog.roster keeps
+  const rosterOf = (world) => world.roster.filter((sp) => HAVE.has(sp));
 
   // The card reads worlds.json through fetch and keeps the parsed object, so
   // serve it from here: a shot can then override one world's shell.
@@ -43,12 +45,12 @@
         states[id] = { entity_id: id, state, attributes, last_updated: iso(-30 - i) };
       };
       const stage = pet.stage || "adult";
-      const attrs = { world, roster: worlds[world].roster, species: pet.species, age_days: pet.age_days ?? 12 };
+      const attrs = { world, roster: rosterOf(worlds[world]), species: pet.species, age_days: pet.age_days ?? 12 };
       if (stage === "egg") attrs.hatches_at = iso(pet.hatch_minutes ?? 600);
       if (shot.journal && i === 0) {
         // The journal's data: every creature of the world raised, the two pets before
         // this one, a trait or two and a memory. `journal: {..}` overrides any of it.
-        const roster = worlds[world].roster;
+        const roster = rosterOf(worlds[world]);
         const past = (k) => ({ generation: k + 1, name: ["Pip", "Mochi"][k], species: roster[(k + 1) % roster.length],
           age_days: 31 + k * 9, upbringing: ["playful", "caring"][k], personality: ["bold", "gentle"][k], games: { catch: 3 + k },
           traits: ["sunny"], trait_levels: { sunny: 2 } });
@@ -144,6 +146,9 @@
       for (const k of Object.keys(WORLDS)) delete WORLDS[k];
       Object.assign(WORLDS, fresh);
     } else WORLDS = fresh;
+    const every = [...new Set(Object.values(WORLDS).flatMap((w) => w.roster || []))];
+    HAVE = new Set((await Promise.all(every.map(async (sp) =>
+      (await realFetch(`${BASE}/sprites/${sp}/species.json`)).ok ? sp : null))).filter(Boolean));
     const world = WORLDS[shot.pets[0].world];
     if (world && shot.shell) {
       world.shell = { ...world.shell, ...shot.shell };

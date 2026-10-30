@@ -423,8 +423,14 @@ Status of slices 0-5: 0 done 2026-10-29, 92329d0; 1 done 2026-10-29, 92329d0; 2 
   season costumes) stays at 64 on purpose.
 - `art/adults/outline_fix.py` retired: nothing ran it (`outline.py` closes outlines
   at any grid). Dated history files still name it.
-- Hand-fix table: 18 rows ticked. Not confirmed, and not guessed: gecko adult calling
-  and kitten teen_calling "!"; the bird / deer / moth frames of 902e5de; the ball
+- Hand-fix table: 18 rows ticked. Not confirmed, and not guessed: the bird / deer / moth frames of 902e5de; the ball
   python child redraw (8733d9c).
 - The bench journal fixture (open in the scope pass) is done: `--journal` in
   `scripts/bench.js`. Gecko journal checked at width 330, dpr 1 and 2.
+
+## Audit (s2509, 2026-10-30)
+
+- Verdict: FIX FIRST. Tally: player-impact 4, nits 9.
+- P1/P2/N1/N2 (feet) go to the art coordinator.
+- P3 (bananaslug `hat.child_excited`) and P4 (tortoise `child_cozy` hat) fixed in s2510:
+  only x moves a hat, since the card seats at max(point y, scanned head top).
