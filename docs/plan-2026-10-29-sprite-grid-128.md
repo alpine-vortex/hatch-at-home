@@ -435,3 +435,9 @@ Status of slices 0-5: 0 done 2026-10-29, 92329d0; 1 done 2026-10-29, 92329d0; 2 
 - P3 (bananaslug `hat.child_excited`) and P4 (tortoise `child_cozy` hat) fixed in s2512
   with `[x, y, "exact"]` hat points: a plain point only lowers a hat (the card seats at
   max(point y, scanned head top)), so these two poses needed a seat the scan can't override.
+- Shipped 2026-10-30: feet (P1/P2/N1/N2) in b27181d (`art-128-feet`, kitten teen specks
+  cleaned too); exact seats in 709e950. Gate: 775+ tests, `card-check` 318/318 on a fresh
+  scratch HA, costume previews OK. Owner approved both.
+- Known and accepted: a hat point is per pose, not per frame, so in one frame of each
+  two-frame pose the hat fits a little less well. The owner accepted this; a per-frame
+  seat would be new work.
