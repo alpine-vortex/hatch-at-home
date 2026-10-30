@@ -2895,6 +2895,13 @@ def test_the_show_off_shells_open_at_teen_and_stay_open():
         assert set(options) == set(R.SHELL_FINISHES) - (set() if teen else show_offs)
         assert model.shell_unlocked(pet, "glitter") is teen, stage
         assert model.shell_unlocked(pet, "stripes"), stage
+        # The rest, each with the stage that opens it: never both, never neither.
+        locked = model.shell_locked(pet)
+        assert locked == {
+            k: v for k, v in R.SHELL_UNLOCKS.items() if k not in options
+        }, stage
+        assert set(locked) | set(options) == set(R.SHELL_FINISHES), stage
+        assert not set(locked) & set(options), stage
     assert model.shell_options(pet) == list(R.SHELL_FINISHES)  # the card's order
     pet.age_hours = dict(R.STAGE_STARTS)["teen"] - 1e-6
     assert not model.shell_unlocked(pet, "stars")

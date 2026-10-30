@@ -639,6 +639,11 @@ def shell_options(state: PetState) -> list[str]:
     return [f for f in R.SHELL_FINISHES if shell_unlocked(state, f)]
 
 
+def shell_locked(state: PetState) -> dict[str, str]:
+    """The finishes it hasn't grown into yet, each with the stage that opens it."""
+    return {f: s for f, s in R.SHELL_UNLOCKS.items() if not shell_unlocked(state, f)}
+
+
 def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
     return max(low, min(high, value))
 

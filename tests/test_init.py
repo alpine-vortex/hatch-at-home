@@ -877,6 +877,7 @@ async def test_busy_attributes_stay_out_of_history(
         "traits",
         "notify_users",
         "shell_finish_options",
+        "shell_locked",
     ):
         assert key in attrs
         assert key in LifeStageSensor._unrecorded_attributes, key

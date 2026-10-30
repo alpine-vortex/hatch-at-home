@@ -93,6 +93,7 @@ async def test_the_service_dresses_the_pet_and_a_reload_keeps_it(
     assert attrs["shell_finish"] is None
     assert "glitter" not in attrs["shell_finish_options"]
     assert attrs["shell_finish_options"][:6] == list(R.SHELL_FINISHES[:6])
+    assert attrs["shell_locked"] == R.SHELL_UNLOCKS  # a child: every show-off, at teen
     await set_shell(hass, "sensor.pip_mood", finish="stripes")  # any of its entities
     assert hass.states.get(STAGE).attributes["shell_finish"] == "stripes"
     # A show-off it hasn't grown into: refused, and nothing changes.
@@ -122,6 +123,7 @@ async def test_a_teen_may_wear_a_show_off_and_another_pet_keeps_its_own(
     assert hass.states.get(STAGE).attributes["shell_finish_options"] == list(
         R.SHELL_FINISHES
     )
+    assert hass.states.get(STAGE).attributes["shell_locked"] == {}
     await set_shell(hass, STAGE, finish="glitter")
     await set_shell(hass, "sensor.moss_life_stage", finish="camo")
     assert hass.states.get(STAGE).attributes["shell_finish"] == "glitter"
@@ -157,7 +159,7 @@ async def test_the_shell_attributes_hold_still_between_picks(
     assert "shell_finish" not in LifeStageSensor._unrecorded_attributes  # one word
     await settle(hass, freezer, 5 * 60)  # a tick, no pick
     after = hass.states.get(STAGE).attributes
-    for key in ("shell_finish", "shell_finish_options"):
+    for key in ("shell_finish", "shell_finish_options", "shell_locked"):
         assert after[key] == before[key], key
     assert after["shell_finish"] == "dots"
 
