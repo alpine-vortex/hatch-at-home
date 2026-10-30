@@ -1,5 +1,7 @@
 # The forms book (build plan, DRAFT 2)
 
+**Deferred to a later release (owner, 2026-10-30)**, with Wave 4 PRs 4a, 4b, 4d, 4f and 4g.
+
 Option B of `scope-2026-10-28-progression-unlocks.md`. Its "Decided (owner,
 2026-10-28)" section is the authority, and this plan changes none of it. Draft 2
 folds in the adversarial audit of draft 1 (19 findings) and the owner's answers of
