@@ -2747,6 +2747,7 @@ async function main() {
             let catchy = new Set();
             for (let i = 0; i < 30; i++) {
               s.nextCostume = 1;
+              s.sayUntil = 0; // the real season may be mid-line (a costume line, a countdown): not this check's
               el._seasonTick(s);
               said.add(out.line);
               catchy.add(out.catchy);
