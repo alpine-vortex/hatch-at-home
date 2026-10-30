@@ -14,5 +14,6 @@
   "head": {"baby": [154, 136], "child": [170, 104], "teen": [176, 76], "adult": [180, 108]},
   "hat": {
     "child_watch_tv": [122, 132]
-  }
+  },
+  "waves": {"baby": ["baby_wave_1", "baby_wave_2"], "teen": ["teen_wave_1", "teen_wave_2"], "adult": ["adult_wave_1", "adult_wave_2"]}
 }
