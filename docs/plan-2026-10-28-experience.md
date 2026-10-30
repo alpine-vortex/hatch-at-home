@@ -1232,7 +1232,7 @@ that asks the person for something), which the copy test runs over C1-C16 and W1
 | C4 | Two kinds of care at once | "<first> and <second>! ♥" (e.g. "snacks and a bath! ♥") | normal | no |
 | C5 | Catch-up milestone on the next look | stage: "guess what? I'm a <stage> now!"; trait: "I learned something: <trait>!"; hatched: "hello! I hatched while you were away" | `_lines` | no |
 | C6 | `became_sick` | "I don't feel so good..." | `_lines` | no |
-| C8 | Medicine `ok` | "all better! ♪" | `_lines` | no |
+| C8 | Medicine `ok` | "all better! ♪" **(approved, owner 2026-10-29)** | `_lines` | no |
 | C9 | Status "would like" row | label "would like", value: "a meal", "a bath", "a nap", "medicine", "to play" | normal | — |
 | C10 | A pat | content: "hehe ♥"; excited: "hehe! ♪"; sleepy: "mmm..."; sick: "thanks... ♥"; hungry and dirty: the content line; aria-label "pat <name>" | `_lines` | **no** |
 | C11 | Milestone labels (journal) | "hatched", "became a child/teen/adult", "learned <trait>", "laid an egg" | normal | — |
