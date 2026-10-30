@@ -156,6 +156,14 @@ Each slice ships alone, ends green on `scripts/test`, and a bench look.
 
 ## 7. Owner questions (recommendation first)
 
+**Answers (2026-10-30).** Owner: Q3 (a) the show-offs (glitter, glow, smoke, sunset,
+constellation, stars) unlock at teen, the rest are open from the start; Q4 (a) the shell
+stays through growing up and a new egg starts on its world's default; Q5 (a) 4 tones with
+an off switch, 2 tones only as a later step. First mate: Q1 (a) gear top right inside the
+status screen (the recorded decision); Q2 (a) shared screens are read-only; Q6 (a) one
+scrolling sheet with three headed sections; Q7 the first mate approves every COPY? line
+before its slice ships.
+
 1. **Gear place.** (a) Top right inside the status screen, in the LCD *(recommended:
    matches the recorded decision, no header crowding)*; (b) a second chip in the header
    next to Status; (c) a corner of the device body.
