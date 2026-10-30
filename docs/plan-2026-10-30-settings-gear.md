@@ -409,9 +409,9 @@ Where it differs from the plan:
 For slices 4-5:
 - **The locked note is the literal "I get this one as a teen ♪"** for any stage. If a
   stage other than teen ever unlocks something, slice 4 needs the stage-specific line.
-- **A swipe to another pet doesn't close the picker** (`_go` isn't one of the listed
-  exits). The preview stays on the slide that was left, and it is still there on
-  return. Open question for the first mate: should `_go` call `_closePicker`?
-- The LCD shows about 1.5 rows of tiles above the sticky `use` / `world default` bar
-  at both widths. The list scrolls; a status line sits above the bar.
+- **A swipe (`_go`) closes the picker it leaves** (first mate, 2026-10-30), a fifth exit
+  with its own card-check. `use` on the world's own tile reads "use the world's own shell".
+- The back row and the `use` / `world default` bar are full-width opaque bands. Between
+  them the LCD shows two whole rows of tiles at 330 (tighter compact spacing) and a bit
+  more at 420. The list scrolls; a status line sits above the bar.
 - Monochrome (slice 5) should check that the swatches still read, or skip them.
