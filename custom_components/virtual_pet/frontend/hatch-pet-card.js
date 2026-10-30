@@ -1680,6 +1680,14 @@ const STYLE = `
     -webkit-mask-repeat: repeat-x; mask-repeat: repeat-x; }
   .hw.grille.left { left: round(down, 50% - var(--px) * 15.5, var(--px)); }
   .hw.grille.right { left: round(down, 50% + var(--px) * 5.5, var(--px)); }
+  /* The world's emblem (full colour, so no tint and no mask) left of the grille, and the
+     battery door's seam right of it, both on the grille's row. */
+  .hw.emblem, .hw.battery { display: block; }
+  .hw.emblem { --art: var(--hw-emblem); width: calc(var(--px) * 9); height: calc(var(--px) * 9);
+    top: round(down, 100% - var(--px) * (var(--hw-b) + 9), var(--px)); left: round(down, 50% - var(--px) * 27.5, var(--px));
+    background: var(--art) 0 0 / 100% 100%; -webkit-mask: none; mask: none; }
+  .hw.battery { --art: var(--hw-battery); width: calc(var(--px) * 24); height: calc(var(--px) * 12);
+    top: round(down, 100% - var(--px) * (var(--hw-b) + 11), var(--px)); left: round(down, 50% + var(--px) * 18.5, var(--px)); }
   /* Printed stripes across the top of the bezel (the porthole's ring has rivets). */
   .hw.stripes { display: block; --art: var(--hw-stripes); --tint: var(--d-bezel); top: var(--px);
     left: round(18%, var(--px)); width: round(down, 64%, var(--px)); height: calc(var(--px) * 3);
@@ -2352,7 +2360,7 @@ class HatchPetCard extends HTMLElement {
     this._card.classList.toggle("lcd-on", lcdOn());
     // The shell hardware's art: ui/shell_<part>.png, drawn by art/shell-parts/make_parts.py (see REQUEST.md there).
     const ui = (name) => `url("${BASE}/ui/${name}.png?v=${VERSION}")`;
-    for (const k of ["screw", "slot", "stripes", "fleck", "glare", "logo", "plate", "light_on", "light_off"])
+    for (const k of ["screw", "slot", "stripes", "fleck", "glare", "logo", "plate", "battery", "light_on", "light_off"])
       this._card.style.setProperty(`--hw-${k.replace("_", "-")}`, ui(`shell_${k}`));
     this._card.style.setProperty("--hw-bulb", ui("backlight_bulb"));
     this._card.style.setProperty("--glitter", glitterTile());
@@ -2426,7 +2434,7 @@ class HatchPetCard extends HTMLElement {
         <div class="roof"><i class="mould"></i></div><div class="crescent"><i class="mould"></i></div><div class="loop"><i class="mould"></i></div><div class="lid"><i class="mould"></i><span></span><span></span><span></span></div>
         <div class="body"><i class="mould"></i>
           <i class="hw screws"></i><i class="hw glare"></i>
-          <i class="hw grille left"></i><i class="hw grille right"></i><i class="hw logo"></i>
+          <i class="hw grille left"></i><i class="hw grille right"></i><i class="hw logo"></i><i class="hw emblem"></i><i class="hw battery"></i>
           <i class="hw flecks a"></i><i class="hw flecks b"></i><i class="hw flecks c"></i>
           <img class="trim-top" alt=""><img class="trim-top2" alt="">
           <span class="label"></span>
@@ -3226,6 +3234,8 @@ class HatchPetCard extends HTMLElement {
       img.style.display = trim.corner ? "" : "none";
       if (trim.corner) this._trim(img, uiSrc(trim.corner), 1);
     });
+    // The emblem is the shell's world's own, whatever colour the shell wears.
+    dev.style.setProperty("--hw-emblem", s.world.emblem ? `url("${BASE}/ui/${s.world.emblem.replace("emblem_", "emblem9_")}.png?v=${VERSION}")` : "none");
     s.label.classList.toggle("plate", !!trim.plate);
     s.label.style.backgroundImage = trim.plate ? `url(${uiSrc(trim.plate)})` : "";
     if (trim.plate) {
