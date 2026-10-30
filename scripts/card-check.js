@@ -144,6 +144,7 @@ async function main() {
   await context.addInitScript((v) => {
     try {
       if (!sessionStorage.getItem("cc-boot-test") && v) localStorage.setItem("hatch-booted", v);
+      for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-power-")) localStorage.removeItem(k);
     } catch (err) {
       // no storage
     }
@@ -4844,7 +4845,7 @@ async function main() {
       snap(iso(-500));
       el._powerTick(s);
       const levels = new Set();
-      for (let i = 0; i < 14; i++) { levels.add(s.batt.hidden ? "off" : s.batt.dataset.level + (s.batt.classList.contains("blink") ? "b" : "")); await sleep(300); }
+      for (let i = 0; i < 17; i++) { levels.add(s.batt.hidden ? "off" : s.batt.dataset.level + (s.batt.classList.contains("blink") ? "b" : "")); await sleep(300); }
       watch.disconnect();
       reset();
       return { blanks, levels: [...levels] };`);

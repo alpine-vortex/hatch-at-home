@@ -2780,7 +2780,7 @@ class HatchPetCard extends HTMLElement {
   // Once the pet on show is awake and free, the gag plays; an asleep pet waits
   // (at most POWER_DEFER_MS from the boot). A call or a game cuts it short.
   _powerTick(s) {
-    if (s.power && (s.asleep || s.calling || s.game)) this._powerEnd(s);
+    if (s.power && (s.asleep || s.calling || s.game)) this._powerEnd(s, true);
     if (!s.powerPending || s.power) return;
     if (serverNow() - Date.parse(s.powerPending) >= POWER_DEFER_MS) {
       s.powerPending = null;
@@ -2819,16 +2819,17 @@ class HatchPetCard extends HTMLElement {
     }
     at(0, () => this._speak(s, pick(POWER_LINES.low), 2000));
     at(2200, () => {
+      if (s.calling || s.game || s.asleep) return this._powerEnd(s, true);
       s.poseUntil = 0;
       if (!calm) level(3, false);
       this._speak(s, pick(POWER_LINES.back), 1800);
       this._animate(s, s.pet, "perk", 320);
     });
-    at(4200, () => this._powerEnd(s));
+    at(4200, () => this._powerEnd(s, false));
   }
 
   // The gag over, or cut short: the battery goes, and so do lines not yet said.
-  _powerEnd(s) {
+  _powerEnd(s, abort = true) {
     const power = s.power;
     if (!power) return;
     s.power = null;
@@ -2836,8 +2837,10 @@ class HatchPetCard extends HTMLElement {
     s.screen.classList.remove("blank");
     s.batt.hidden = true;
     s.poseUntil = 0;
-    this._stopTyping(s);
-    s.sayUntil = 0;
+    if (abort) { // cut short: the line in the bubble goes; a finished gag leaves its last line to run out
+      this._stopTyping(s);
+      s.sayUntil = 0;
+    }
   }
 
   // --- Power-on --------------------------------------------------------------
@@ -4068,7 +4071,7 @@ class HatchPetCard extends HTMLElement {
       if (s.queue.some((q) => q.ask)) this._clearAsk(s);
       return;
     }
-    if (!s.queue?.length || s.sayUntil > now || s.game || s.screen.classList.contains("show-status")) return;
+    if (!s.queue?.length || s.sayUntil > now || s.game || s.power || s.screen.classList.contains("show-status")) return;
     const { text, ms, then, opts } = s.queue.shift();
     this._speak(s, text, ms, opts);
     this._animate(s, s.pet, "perk", 320);
