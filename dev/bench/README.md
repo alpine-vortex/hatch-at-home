@@ -52,6 +52,7 @@ A shot (all optional):
 | `journal` | `true` (`--journal`, which also sets `view: "journal"`) or an object over the journal attributes the card reads (`raised`, `journal`, `generation`, `traits`, `memories`) |
 | `mine` | `true` (`--mine`) or an object over it: the viewer's own view the private channel would send (a bond, notify me, my day, my birthday kept), so `you two` and the sheet's personal rows show |
 | `power` | the low-battery gag pinned mid-play: `battery` (one bar, first line) or `line` (full battery, second line) |
+| `costume` | `{season, art, frame}`: the costume put on through the card's own `_costume` (frame 1 or 2 showing). `bench.js` writes the seat it used (`_frames(s)[0]`, `drawn`, `_hatSeat`) to `<name>.json` beside the PNG |
 | `say` | text put in the bubble (`""` clears it) |
 | `clip` | `card` (whole card, default), `device` (the toy), `screen` (the LCD only) |
 | `motion` | `reduce` emulates `prefers-reduced-motion: reduce` (`--motion reduce`) |
@@ -89,8 +90,8 @@ wishes, photos) shows its empty state. The journal has a fixture: `--journal`
 (`journal: true` or an object over it) fills the lead pet's `life_stage` with
 every creature of the world raised, two past generations, traits and a
 memory, and opens the journal screen (`view: "journal"`). It has no photos row,
-and a roster entry with no sprites yet (the beetle) shows a broken tile, as the
-real card does. Press-and-play flows are not
+and the roster keeps only species that have a species.json (the beetle is left
+out), as the server's `catalog.roster` does. Press-and-play flows are not
 driven: `callService`/`callWS` answer with empty replies. The bench calls a
 few card internals (`_tick`, `_frames`, `_write`, `_startGame`, `_stopTyping`,
 `_slides`, `_timer`, `_powerGag`); if the card renames one, `page.js` is the place to fix.

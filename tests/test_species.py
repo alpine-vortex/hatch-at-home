@@ -122,6 +122,45 @@ def grid_problems(frames: dict[str, Image.Image]) -> list[str]:
     return out
 
 
+def hat_problems(hat: dict, stages: list[str]) -> list[str]:
+    """What is wrong with a species.json "hat" map; [] when it reads clean.
+
+    A value is null (no hat fits the pose), [x, y] (the lower of y and the
+    scanned head top) or [x, y, "exact"] (the brim top at exactly y). x and y are
+    ints on the 256 sprite. A key is a stage or `<stage>_<mood>`.
+    """
+    out = []
+    for key, val in hat.items():
+        if key.split("_", 1)[0] not in stages:
+            out.append(f"{key}: not a stage or <stage>_<mood>")
+        if val is None:
+            continue
+        ok = (
+            isinstance(val, list)
+            and len(val) in (2, 3)
+            and all(type(v) is int and 0 <= v <= 255 for v in val[:2])
+            and (len(val) == 2 or val[2] == "exact")
+        )
+        if not ok:
+            out.append(f'{key}: {val!r} is not null, [x, y] or [x, y, "exact"]')
+    return out
+
+
+@pytest.mark.parametrize("species", READY)
+def test_hat_entries_are_null_points_or_exact_points(species: str) -> None:
+    sp = json.loads((SPRITES / species / "species.json").read_text())
+    assert hat_problems(sp.get("hat") or {}, sp["stages"]) == []
+
+
+def test_the_hat_rule_takes_the_exact_form_and_rejects_the_rest() -> None:
+    stages = ["baby", "child"]
+    good = {"baby": [1, 2], "child_cozy": [182, 157, "exact"], "child_mask": None}
+    assert hat_problems(good, stages) == []
+    for bad in ([1], [1, 2, "snug"], [1, 2, 3], [1.5, 2], [256, 2], [1, -1], "exact"):
+        assert hat_problems({"child": bad}, stages), bad
+    assert hat_problems({"childe": [1, 2]}, stages)
+
+
 @pytest.mark.parametrize("species", READY)
 def test_every_creature_frame_is_on_the_species_art_grid(species: str) -> None:
     """Stage moods, _2 frames, extras, waves, care scenes and eggs alike."""
