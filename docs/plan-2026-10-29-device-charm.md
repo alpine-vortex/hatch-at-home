@@ -360,3 +360,37 @@ world prints such as leaves, waves and constellations), who picks (per pet or pe
 browser), and whether some are earned (see scope-2026-10-28-progression-unlocks.md).
 Most patterns can likely be procedural in `mouldCells`, so they need no images;
 printed motifs may need art.
+
+### Part 4 design pass (scout s2494, 2026-10-29)
+
+Review page: https://claude.ai/artifact/WPdnAj161PoHxGcewmkfcH. The card already has 8
+finishes (5 world plastics plus clear, glitter, glow). The scout mocked 16 more, all CSS
+on `.body > .mould` with small inline SVG tiles (like `glitterTile`), no images: speckle,
+candy stripes, hearts, stars, gingham, polka dots, camo, waves, scales, leaves, paw
+prints, constellation, rainbow bands, two-tone split, sunset bands, smoke.
+
+**Owner answers (2026-10-29):**
+- Who picks: **per pet** (not the recommended per device).
+- A world keeps its own default shell; any finish can replace it.
+- **A few shells are earned by stage**, the rest open from the start (no points, no
+  chasing, per the progression-unlocks scope).
+- Picker: **wait for the settings gear** (decisions-2026-10-28: settings open from a gear
+  on the status screen). No HA-options dropdown in between.
+- Woodland mocks need work first (owner): "some rough designs", and one has a box past
+  the device edge.
+
+**First mate's review of the woodland mocks (fix before any ship):**
+- Smoke: the clear plastic shows the board as a square box wider than the curved shell
+  (the owner's "box beyond the edge"); a stray diagonal line near the top right;
+  captions vanish on the dark plastic. Clip the board to the shell and re-ink captions.
+- Constellation, stars: captions are low contrast on dark or dusty plastic.
+- Rainbow and sunset bands: the hard band edges cut through the button rows and the
+  caption lines; align bands to the layout, or drop them.
+- Camo and leaves: muddy, read as dirt on woodland; speckle is almost invisible.
+- Two-tone: the diagonal edge is rough and the cream half loses the device outline.
+- Fine as they are: candy stripes, gingham, polka dots, hearts, paw prints, scales, waves.
+
+**Order:** slice 1 (finish registry, the fine patterns, a bench preset) plus slice 3
+(the rough ones fixed or cut, 330 px, night, reduced motion), all judged on the bench in
+every world. Then the settings gear, then the per-pet choice and the earned-by-stage
+shells behind it.
