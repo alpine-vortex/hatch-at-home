@@ -341,8 +341,9 @@ What building slices 0 (the repo half) and 1 showed, against the plan above.
     frame is 256 × 256.
   - The synthetic test fails on a 4 px frame, on a 1 px frame and on a 128 × 128 frame
     placed among 2 px frames.
-  - On every shipped 4 px species, the old and new `outline.py`, `rescale.py` and
-    `outline_fix.py` give byte-identical output.
+  - The old and new tools give byte-identical output at 4 px: `outline.py` on every
+    shipped 4 px species, `rescale.py` on two frames (gecko, squirrel), and
+    `outline_fix.py` on 12 axolotl adult frames.
   - The new `outline.py` matches `outline_g.py` at `ARTPX=2` exactly on the tarantula and
     on the three `*-out-g128` cuts, which gain 0 px.
   - The old `rescale.py` re-quantised a 2 px frame to 4 px. The new one keeps it at 2 px.
