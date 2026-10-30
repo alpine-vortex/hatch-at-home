@@ -9,7 +9,8 @@ backgrounds and lost detail at dpr 1.
 This is the scope pass. It covers what changes, in what order, at what cost, and how
 each slice is proven. Nothing is changed here. The plan has had its adversarial
 review (s2497); the findings and the owner's answers are folded in (see *Decisions* and
-*Review fold (s2497)* at the end).
+*Review fold (s2497)* at the end). Slices 0 (repo half) and 1 are built (s2499); what
+they found is in *Slices 0-1 reconcile (s2499)*.
 
 Evidence: `~/github/hatch-art/grid-test-2026-10-29/`
 (`bench_today_vs_128.png`, `bench_64_128_256.png`, `side_by_side*.png`, and the
@@ -121,7 +122,7 @@ outline breaks; if they break, Q5's smoothing applies to `.pet` too.
 
 | Tool | Problem at 128 | Fix |
 |---|---|---|
-| `outline.py:23` | `GRID = 4`, samples `[::4]` (`:61`) and pastes 4 px blocks (`:87`). It would paint a 4 px outline on 2 px art, and it already would on the tarantula | Detect the grid per file (2 or 4, as the test below does). Scale `MIN_PART` by the area, as `outline_g.py:25` does. Every cutter calls **one** checkout's `scripts/art/outline.py` (see the cutter table) |
+| `outline.py:23` | `GRID = 4`, samples `[::4]` (`:61`) and pastes 4 px blocks (`:87`). It would paint a 4 px outline on 2 px art, and it already would on the tarantula | Detect the grid per file (2 or 4, as the test below does). Scale `MIN_PART` by the area, as `outline_g.py:25` does. Every cutter calls **one** checkout's `scripts/art/outline.py` (see the cutter table). **Run it on fresh cuts only**, never over a shipped folder: it rings the tarantula and changes 16 shipped species (see the reconcile) |
 | `rescale.py:16,39` | `G = 4`, samples `[::4]`: throws away half the resolution | Detect per file |
 | `art/adults/outline_fix.py:20` | `G = 4` | Detect per file, or retire it (the re-cut closes the outlines) |
 | `check.py` | Grid-blind: feet ±2 px, pair jump >8 px (`:46-70`) are frame px and fine | Add a grid report: the frame's grid, flagged if it differs from the species' |
@@ -176,9 +177,12 @@ outline breaks; if they break, Q5's smoothing applies to `.pet` too.
   frame-2-only (squirrel `child_hungry_2`, `teen_excited_2`, octopus
   `child_colour_shift_2`). Each world's proof adds a **full-frame contact sheet per
   species**, old vs new (`scripts/art/sheet.py`).
-- `shells` is byte-identical **only in slice 1**, before any sprite changes: the preset
+- `shells` could be byte-identical **only in slice 1**, before any sprite changes: the preset
   uses `clip: card` with the world's first species on screen (`bench.js:35-47`). For
-  later PRs, use `lcd: off` and a pet-less shot, or mask the screen.
+  later PRs, use `lcd: off` and a pet-less shot, or mask the screen. **But the bench
+  isn't deterministic today** (s2499): two runs of the same card differ in about a third
+  of the `shells` shots, so no byte-identity proof holds until that is fixed (see the
+  reconcile).
 
 ### What stays at 64, and why
 
@@ -265,9 +269,9 @@ gecko (86 frames cut, 98 shipped) and the bunny (missing its 6 wave frames).
 
 | # | Slice | Size | Proof | Parallel with the re-cut? |
 |---|---|---|---|---|
-| 0 | **Tools first.** Grid detection in `outline.py`, `rescale.py`, `outline_fix.py`; grid report in `check.py`; the grid test in `test_species.py` (one grid per species, 2 or 4); the head-test step 4 → 2. The coordinator's cutters: `cut_adults` ARTPX, the bob in art px, `fit_height` in ARTPX units, `cut_react` and `cut_fix7` outline at any grid (drop per-item `grid`), one env-var checkout path for every cutter (`cut_react`, `cut_fix7`, `cut_bat7`, `process_redraw5`, `cut_tarantula5`, `species_json`; refresh or delete `main_snapshot`), `marks.py`, `restamp.py`, `restamp_head.py` | S | `pytest tests/test_species.py` passes on today's sprites (29 × coarsest 4, tarantula 2). A synthetic 64 frame inside a 2 px species **fails** the grid test (the gate proves it can fail). `outline.py` on the tarantula adds 0 px. Run the tools on a g128 test set and diff against a run at ARTPX 4 | Must land **before** any 128 sprite |
-| 1 | **Card: name the grids.** A constant for the world/shell grid (64), used by `--px`, the LCD pitch and `_linkBeam`; comments at `:1593`, `:2898`, `:5383`, `:972`, `:2490`, `:2914`, `:1753`, `:6196`. No behaviour change | S | Bench `shells` and `ui` presets byte-identical before and after (valid here only, before any sprite changes). `_linkBeam` on the same constant. `card-check` D1 LCD checks pass | Yes |
-| 2 | **Pilot: Terrarium** (4 species), full sets, hand fixes, heads checked (`heads.py` as a diff, see the tools table), hat points re-checked; `palette.py` on the output; dragon cut from v1 `beardeddragon-batch` | M | `check.py`, `gaps.py`, `slivers.py` clean. The grid test. Bench `species` preset before/after sheet for the 4, plus a full-frame `sheet.py` contact sheet per species (old vs new), plus the **gecko** at `--width 330 --dpr 1` judged for outline breaks, plus the journal at dpr 1 and 2 (needs a **journal fixture added to the bench** first, since the bench shows the journal empty; or drop that proof). `costume-preview.js` (own-port `HA_URL`) + `costume_sheet.py` for every costume. `card-check` costume and birthday-hat checks as a regression gate only (own-port HA, per AGENTS.md). Owner looks at the sheet | Cutting runs alongside; this slice is the gate for the rest |
+| 0 | **Tools first.** Grid detection in `outline.py`, `rescale.py`, `outline_fix.py`; grid report in `check.py`; the grid test in `test_species.py` (one grid per species, 2 or 4); the head-test step 4 → 2. The coordinator's cutters: `cut_adults` ARTPX, the bob in art px, `fit_height` in ARTPX units, `cut_react` and `cut_fix7` outline at any grid (drop per-item `grid`), one env-var checkout path for every cutter (`cut_react`, `cut_fix7`, `cut_bat7`, `process_redraw5`, `cut_tarantula5`, `species_json`; refresh or delete `main_snapshot`), `marks.py`, `restamp.py`, `restamp_head.py` | S | `pytest tests/test_species.py` passes on today's sprites (29 × coarsest 4, tarantula 2). A synthetic 64 frame inside a 2 px species **fails** the grid test (the gate proves it can fail). ~~`outline.py` on the tarantula adds 0 px~~ (wrong, see the reconcile). Run the tools on a g128 test set and diff against a run at ARTPX 4 | Must land **before** any 128 sprite |
+| 1 | **Card: name the grids.** A constant for the world/shell grid (64), used by `--px`, the LCD pitch and `_linkBeam`; comments at `:1593`, `:2898`, `:5383`, `:972`, `:2490`, `:2914`, `:1753`, `:6196`. No behaviour change | S | Bench `shells` and `ui` presets byte-identical before and after (valid here only, before any sprite changes; the bench's noise made this a weaker proof, see the reconcile). `_linkBeam` on the same constant (its unit moves ¼ px at five screen widths). `card-check` D1 LCD checks pass | Yes |
+| 2 | **Pilot: Terrarium** (4 species), full sets, hand fixes, heads checked (`heads.py` as a diff, see the tools table), hat points re-checked; `palette.py` on the output; dragon cut from v1 `beardeddragon-batch` | M | `outline.py` on the four fresh Terrarium cuts only, never on the world's shipped folders (the tarantula included). `check.py`, `gaps.py`, `slivers.py` clean. The grid test. Bench `species` preset before/after sheet for the 4, plus a full-frame `sheet.py` contact sheet per species (old vs new), plus the **gecko** at `--width 330 --dpr 1` judged for outline breaks, plus the journal at dpr 1 and 2 (needs a **journal fixture added to the bench** first, since the bench shows the journal empty; or drop that proof). `costume-preview.js` (own-port `HA_URL`) + `costume_sheet.py` for every costume. `card-check` costume and birthday-hat checks as a regression gate only (own-port HA, per AGENTS.md). Owner looks at the sheet | Cutting runs alongside; this slice is the gate for the rest |
 | 3 | **Worlds 2-6**, one PR per world (5 species each), with that world's hand fixes | L total (M each) | As slice 2 for its species, including `palette.py` and the full-frame contact sheet. Merged per world; no release until the last world | Each world after the previous one is merged; the cutting can run ahead |
 | 4 | **Hand redos at 128**: squirrel four frames, axolotl Z, octopus colours, gecko and kitten "!", the masks if lost, and the deer, kitten, bat, squirrel redraws from the new table rows | S-M | Before/after crops at 4×; `gaps.py` and `slivers.py`; owner look | Inside the world PR it belongs to |
 | 5 | **Close out.** Tighten the grid test to 2 px only; update `art/README.md`, `custom_components/virtual_pet/frontend/sprites/README.md:22` ("4 px per art pixel like the creatures"), `docs/design-worlds.md` and `plan-2026-10-29-device-charm.md:38,65` (the "64 art pixels" lines); retire `art/adults/outline_fix.py` if unused | S | `pytest`; grep for "64 art" finds no stale line | After the last world |
@@ -305,8 +309,9 @@ gecko (86 frames cut, 98 shipped) and the bunny (missing its 6 wave frames).
 ## Risks
 
 - **Changing the shell grid by mistake.** "Every 64 becomes 128" would halve the
-  toy's hardware and finishes. Slice 1 names the constant, and the `shells` bench
-  must be byte-identical in that slice.
+  toy's hardware and finishes. Slice 1 names the constant (`WORLD_GRID`). The `shells`
+  bench was meant to be byte-identical in that slice, but the bench is noisy (see
+  the reconcile).
 - **Silent tool damage.** `outline.py`, `rescale.py`, `outline_fix.py` and
   `cut_react.py`'s outline gate assume 4 px today. Run on 128 art, they paint 4 px
   outlines, halve the resolution, or skip the outline, all without an error. Slice 0
@@ -320,6 +325,57 @@ gecko (86 frames cut, 98 shipped) and the bunny (missing its 6 wave frames).
   every world's proof.
 - **Art batches in flight.** A batch cut at 64 during the migration would mix grids.
   The grid test fails it, and new batches cut at ARTPX 2 from slice 0 onward.
+
+## Slices 0-1 reconcile (s2499)
+
+What building slices 0 (the repo half) and 1 showed, against the plan above.
+
+- **Built.**
+  - `scripts/art/grid.py`: the coarsest grid a frame fits (4, 2, or 1 when off-grid; a
+    blank frame counts as 4). `outline.py`, `rescale.py` and `check.py` use it;
+    `art/adults/outline_fix.py` keeps its own copy, since `art/` has no shared import path.
+  - `outline_fix.py`'s speck size scales by area, like `MIN_PART`.
+  - The card has `WORLD_GRID = 64`.
+- **Slice 0 proofs.**
+  - `test_species` passes. 29 species are on 4 px and the tarantula is on 2 px. Every
+    frame is 256 × 256.
+  - The synthetic test fails on a 4 px frame, on a 1 px frame and on a 128 × 128 frame
+    placed among 2 px frames.
+  - On every shipped 4 px species, the old and new `outline.py`, `rescale.py` and
+    `outline_fix.py` give byte-identical output.
+  - The new `outline.py` matches `outline_g.py` at `ARTPX=2` exactly on the tarantula and
+    on the three `*-out-g128` cuts, which gain 0 px.
+  - The old `rescale.py` re-quantised a 2 px frame to 4 px. The new one keeps it at 2 px.
+- **Wrong: "`outline.py` on the tarantula adds 0 px".** It adds 11444 art px at 2 px;
+  the old tool added 3863 at 4 px.
+  - The tarantula has no dark outline by design: its furry brown edge sums to 200 or
+    more (r+g+b), so the tool reads it as a light edge and rings it.
+  - The tool is also not a no-op on shipped art at 4 px. Old and new alike, it adds
+    pixels to 16 of the 29 ready 4 px species (the otter gains 5632), because hand fixes
+    and redraws came after it ran.
+  - So `outline.py` runs on **fresh cuts only**, at the point in the overlay order where
+    the plan puts it. Never run it over a shipped folder or a whole world. Slice 2 keeps
+    the tarantula out of it.
+- **Wrong: "the bench is deterministic"** (its README, and the slice 1 proof that relies
+  on it).
+  - Two runs of the unchanged card differ in 53 of 144 `shells` shots and 4 of 9 `ui`
+    shots. The diffs are mostly the action buttons and the pet area, up to about 3500 px
+    a shot.
+  - It isn't animation phase (`animations: "disabled"` still differs). A settle wait
+    doesn't fix it, nor one worker, nor a fresh page per shot (that was worse).
+  - Slice 1 was proven instead like this:
+    - `--px` and the LCD pitch are the same floating-point expression, `(w * 0.465) / 64`.
+    - 127 of 144 `shells` shots and 6 of 9 `ui` shots have an after-run that is
+      byte-identical to a before-run, across every width and shape.
+    - Before-vs-after diffs are the same size as before-vs-before diffs.
+  - Fixing the bench's noise is open work. Any later proof that relies on "byte-identical"
+    needs that fix first.
+- **Slightly wrong: "`0.00727` (= 0.465/64)".** It was rounded, and 0.465/64 =
+  0.007265625. On `WORLD_GRID`, `_linkBeam`'s unit moves by ¼ px at screen widths 258,
+  430, 602, 705 and 774. That is a beam-only change and not visible in the bench.
+- **Not run:** `card-check` D1 (it needs its own HA). The LCD maths is the same
+  expression, so D1 can't move. The first mate's batch gate runs it.
+- **Slice 2's assumptions:** unchanged, apart from the `outline.py` rule above.
 
 ## Review fold (s2497)
 
