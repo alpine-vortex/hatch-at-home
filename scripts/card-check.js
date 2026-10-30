@@ -4370,16 +4370,17 @@ async function main() {
     const fresh = async (reduced = false) => {
       await bp.emulateMedia({ reducedMotion: reduced ? "reduce" : null });
       await bp.goto(`${HA}/pet-bench/pet`);
-      // A new tab's frontend reloads itself once. A boot the card claimed just before
-      // that reload is stored as done and never shows (it lasts BOOT_WAIT_MS, 5 s), so
-      // clear the flag and reload again until the boot screen is seen.
+      // A new tab's frontend reloads itself once. Let that happen before the flag is
+      // cleared: a boot the card claims in that reload is stored as done and never
+      // shows to the test (it lasts BOOT_WAIT_MS, 5 s). If one is missed anyway, clear
+      // the flag and reload again until the boot screen is seen.
+      await bp.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
       for (let attempt = 1; ; attempt++) {
         await bp.evaluate(() => {
           sessionStorage.setItem("cc-boot-test", "1");
           localStorage.removeItem("hatch-booted");
           localStorage.setItem("hatch-sounds", "off");
         });
-        await bp.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
         await bp.reload();
         try {
           await bp.waitForSelector("hatch-pet-card .slide .boot", { state: "visible", timeout: 20000 });
