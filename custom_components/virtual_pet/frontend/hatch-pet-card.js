@@ -1226,6 +1226,38 @@ const FINISHES = {
 // Each print's tile as a CSS image, for --print-<key> on the card.
 const printTiles = () => Object.entries(FINISHES).filter(([, f]) => f.tile)
   .map(([k, f]) => [`--print-${k}`, printTile(...f.tile)]);
+// The shell picker's groups, in FINISHES order; the prints are the rest.
+const SHELL_GROUPS = [["world plastics", ["woodland", "aqua", "grove", "celestial", "dune"]],
+  ["specials", ["clear", "glitter", "glow"]]];
+SHELL_GROUPS.push(["prints", Object.keys(FINISHES).filter((k) => !SHELL_GROUPS.some(([, keys]) => keys.includes(k)))]);
+const finishName = (key) => (key === "twotone" ? "two-tone" : key);
+// A finish's swatch in the picker: its print over its face, or bands of its plastic
+// (the colours of its .finish-<key> CSS), drawn with the world's own colour.
+const SWATCH_BANDS = {
+  woodland: (c) => ["#f49a55", c, "#e07a40"], aqua: () => ["#80e3df", "#36b9c2", "#168d9c"],
+  grove: () => ["#a9df68", "#74bd62", "#4e965c"], celestial: () => ["#777be0", "#6255bb", "#413c91"],
+  dune: (c) => ["#ecc88f", c, "#cc9d62"], glow: (c) => [`color-mix(in srgb, ${c} 52%, #d4f0b4)`],
+  rainbow: () => ["#ffa3b1", "#ffd08f", "#fff08f", "#a8e6a6", "#9ed4f2", "#c9aef0"],
+  sunset: () => ["#ffd66e", "#ffbb63", "#ff9f62", "#ff8a78", "#f37e98", "#c96fa8"],
+  clear: (c) => [`color-mix(in srgb, ${c} 40%, transparent)`], smoke: () => ["rgba(40,34,48,.75)"],
+};
+function finishSwatch(key, color) {
+  if (!Object.hasOwn(FINISHES, key)) return color; // the world's plain plastic
+  const look = FINISHES[key];
+  const face = look.face ? look.face(color) : color;
+  if (look.tile) return `var(--print-${key}) 0 0 / ${look.tile[0][0].length * 2}px ${look.tile[0].length * 2}px, ${face}`;
+  if (key === "glitter") return `var(--glitter) 0 0 / 58px 46px, color-mix(in srgb, ${color} 80%, #fff2c9)`;
+  if (key === "twotone") return `linear-gradient(180deg, ${color} 0 50%, ${face} 0)`;
+  const bands = SWATCH_BANDS[key]?.(color) || [face];
+  const stops = bands.map((b, i) => `${b} 0 ${Math.round(((i + 1) * 100) / bands.length)}%`);
+  return `linear-gradient(180deg, ${stops.join(", ")})`;
+}
+// A failed shell save, by the server's error code; anything else is the generic line.
+const SHELL_ERRORS = {
+  no_pet: "can't find this pet",
+  shell_locked: "not grown into that one yet",
+  unknown_command: "can't change the shell here",
+};
 // A trait's flair sprite as a small icon (its first frame or big variant).
 function traitIcon(trait) {
   const f = FLAIR[trait];
@@ -2019,6 +2051,28 @@ const STYLE = `
     font: 400 12px 'Tiny5', monospace; text-decoration: underline; cursor: pointer; }
   .sec { margin-top: 4px; padding-bottom: 2px; border-bottom: 2px dotted #2f3a24;
     font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+  /* The pet's shell: a swatch and its name; on a shared screen dimmed and dashed. */
+  .sw { display: inline-block; flex: none; box-sizing: border-box; width: 26px; height: 20px;
+    border: 2px solid #2f3a24; image-rendering: pixelated; }
+  .shellrow, .shellro { display: inline-flex; align-items: center; gap: 5px; }
+  .shellrow .sw, .shellro .sw { width: 18px; height: 14px; }
+  .shellro { opacity: .6; }
+  .shellro .sw { border-style: dashed; }
+  .shellnote { font-size: 11px; }
+  /* The shell picker: three tiles a row; a locked one dimmed and dashed. */
+  .tiles { flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 4px; }
+  .tile { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; min-height: 40px;
+    padding: 2px 1px; border: 2px solid transparent; border-radius: 6px; background: none; color: inherit;
+    font: 400 11px 'Tiny5', monospace; line-height: 1.05; text-align: center; cursor: pointer; }
+  .tile .tname { max-width: 100%; overflow-wrap: anywhere; }
+  .tile .tsub { font-size: 10px; }
+  .tile .tsub:empty { display: none; }
+  .tile.sel { border-color: #2f3a24; }
+  .tile.locked .sw { opacity: .45; border-style: dashed; }
+  .tile.locked .tname { opacity: .65; }
+  .pbtns { flex: none; position: sticky; bottom: -9px; z-index: 1; display: flex; justify-content: flex-end; gap: 6px;
+    margin-bottom: -9px; padding: 4px 0 9px; background: #e9e2c6; }
+  .status-feedback.over { bottom: 30px; z-index: 2; }
   .bell { border: 2px solid #2f3a24; border-radius: 10px; background: none; color: inherit;
     font: 400 12px 'Tiny5', monospace; padding: 3px 10px; min-width: 44px; min-height: 26px;
     cursor: pointer; }
@@ -3043,6 +3097,8 @@ class HatchPetCard extends HTMLElement {
     s.wasCalling = undefined; // a call already on doesn't chirp
     s.journal = false;
     s.settings = false;
+    this._closePicker(s);
+    this._shellSettled(s);
     s.statusHtml = null;
     s.drawnSig = null;
     // The last pet's private lines and question aren't this one's.
@@ -3100,6 +3156,7 @@ class HatchPetCard extends HTMLElement {
       slide.screen.querySelector(".bondhearts")?.remove();
       slide.screen.querySelector(".linkhearts")?.remove(); // a visit's, mid-way
       slide.journal = false; // the settings sheet stays, without its personal rows
+      this._closePicker(slide); // and without the picker (read-only here)
       slide.confirm = null; // an armed "forget" is a personal row
       slide.status.innerHTML = ""; // drawn again, without its personal rows
       slide.statusHtml = null;
@@ -3506,9 +3563,30 @@ class HatchPetCard extends HTMLElement {
     img.style.display = "";
   }
 
-  // The finish the shell wears: the world's own (worlds.json shell.finish).
+  // The finish the shell wears: the picker's preview, else the pet's pick, else
+  // its world's own (worlds.json shell.finish).
   _shellKey(s) {
-    return s.world.shell?.finish;
+    const own = s.world.shell?.finish;
+    if (s.previewFinish !== undefined) return s.previewFinish ?? own;
+    return this._shellChoice(s) ?? own;
+  }
+
+  // The pet's pick (null: its world's own): one just saved, until the sensor says
+  // so or 5 s pass (so closing the picker before the push doesn't flicker), else
+  // the sensor's. A key this card doesn't draw counts as none.
+  _shellChoice(s) {
+    const key = this._state(s, "sensor.life_stage")?.attributes.shell_finish;
+    const saved = Object.hasOwn(FINISHES, key ?? "") ? key : null;
+    if (s.shellPending !== undefined) {
+      if (saved !== s.shellPending) return s.shellPending;
+      this._shellSettled(s);
+    }
+    return saved;
+  }
+
+  _shellSettled(s) {
+    s.shellPending = undefined;
+    clearTimeout(s.shellPendingTimer);
   }
 
   // Put a finish on the shell: its class and the ink for its captions. Called by
@@ -3744,6 +3822,7 @@ class HatchPetCard extends HTMLElement {
     s.screen.classList.toggle("show-status", open);
     s.journal = false;
     s.settings = false;
+    this._closePicker(s);
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     if (s === this._slides[this._index]) {
       this._card.querySelector(".statusbtn").setAttribute("aria-pressed", open ? "true" : "false");
@@ -4820,7 +4899,9 @@ class HatchPetCard extends HTMLElement {
       return;
     }
     if (s.settings) {
-      this._renderSettings(s);
+      if (s.picker && !this._shellPickable(s)) this._closePicker(s);
+      if (s.picker) this._renderPicker(s);
+      else this._renderSettings(s);
       return;
     }
     const value = (key) => {
@@ -4925,9 +5006,22 @@ class HatchPetCard extends HTMLElement {
       const sure = confirmArmed(s, key);
       return `<span><button class="bell ${cls}" aria-label="${sure ? CONFIRM_ARIA[key] : aria}">${sure ? "sure? tap again" : "forget"}</button></span>`;
     };
-    // Who each part changes: the viewer (follows their login), or this browser.
+    // The pet's shell, for everyone who sees it: only if the server offers it, and
+    // read-only (no pet name either) on a shared screen.
+    const shellOptions = this._state(s, "sensor.life_stage")?.attributes.shell_finish_options;
+    const shellName = escape(this._shellName(s, this._shellChoice(s)));
+    const shellSwatch = `<span class="sw" style="background: ${finishSwatch(this._shellKey(s), s.world.shell?.color || "#e8834a")}"></span>`;
+    const shellRows = !Array.isArray(shellOptions) ? "" : sharedScreen()
+      ? `<div class="sec">for the pet</div>
+      ${row(null, "shell", `<span class="shellro">${shellSwatch}${shellName}</span>`)}
+      <div class="shellnote">ask a grown-up to change it</div>`
+      : `<div class="sec">for ${escape(this._linkName(s))}</div>
+      ${row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`)}`;
+    // Who each part changes: the pet (everyone), the viewer (follows their login),
+    // or this browser.
     const html = `
       <div class="shead"><button class="sback">‹ settings</button></div>
+      ${shellRows}
       ${sharedScreen() ? "" : `<div class="sec">for you</div>`}
       ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell notify" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       ${bond && myDay === undefined ? row(null, "my day", `<span>…</span>`) : ""}
@@ -4953,7 +5047,15 @@ class HatchPetCard extends HTMLElement {
     });
     // A heading (or the back row beside its button) is not a button: a tap on it
     // leaves the sheet open.
-    s.status.querySelectorAll(".sec, .shead").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
+    s.status.querySelectorAll(".sec, .shead, .shellnote").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
+    s.status.querySelector(".bell.shellrow")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      s.picker = true;
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      s.status.scrollTop = 0; // a new view starts at its top
+      s.status.querySelector(".pback")?.focus({ preventScroll: true });
+    });
     s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);
@@ -5115,6 +5217,157 @@ class HatchPetCard extends HTMLElement {
     });
   }
 
+  // --- The shell picker (in the settings sheet) --------------------------------
+
+  // The picker opens only on a personal screen, and only if the server offers shells.
+  _shellPickable(s) {
+    return !sharedScreen() && Array.isArray(this._state(s, "sensor.life_stage")?.attributes.shell_finish_options);
+  }
+
+  // A pick's name: a finish, or (null, or the world's own key) the world's own.
+  _shellName(s, key) {
+    return key == null || key === s.world.shell?.finish ? `${this._worldName(s).toLowerCase()} (default)` : finishName(key);
+  }
+
+  // A tile's data-finish: "" is the world's own, listed first.
+  _tileId(s, key) {
+    return key == null || key === s.world.shell?.finish ? "" : key;
+  }
+
+  // Leave the picker: an unsaved preview goes and the shell wears its pick again.
+  // Every exit calls it: back, the status closing (_toggleStatus), another pet
+  // (_forget), a shared screen (_goShared).
+  _closePicker(s) {
+    s.picker = false;
+    s.pickerNote = null;
+    if (s.previewFinish === undefined) return;
+    s.previewFinish = undefined;
+    if (s.device && s.world) this._dress(s, this._shellKey(s));
+  }
+
+  // The picker: the world's own first, then every finish by group; a locked one shows
+  // the stage that opens it. Drawn from the saved pick only, so a hass update leaves
+  // it (and its scroll) alone; the preview's mark is put on in place (_pickerMarks).
+  _renderPicker(s) {
+    const stage = this._state(s, "sensor.life_stage")?.attributes || {};
+    const options = new Set(stage.shell_finish_options || []);
+    const locked = stage.shell_locked || {};
+    const own = s.world.shell?.finish;
+    const color = s.world.shell?.color || "#e8834a";
+    const now = this._tileId(s, this._shellChoice(s));
+    const tile = (key) => {
+      const id = this._tileId(s, key);
+      const name = this._shellName(s, key);
+      const open = key == null || options.has(key);
+      const at = open ? null : locked[key];
+      const aria = at ? `${name} shell, opens at ${at}` : `${name} shell`;
+      return `<button class="tile${id === now ? " now" : ""}${open ? "" : " locked"}" data-finish="${id}" ` +
+        `aria-label="${escape(aria)}"><span class="sw" style="background: ${finishSwatch(key ?? own, color)}"></span>` +
+        `<span class="tname">${escape(name)}</span><span class="tsub">${id === now ? "now" : at ? escape(at) : ""}</span></button>`;
+    };
+    const groups = SHELL_GROUPS.map(([head, keys], i) => `<div class="sec">${head}</div><div class="tiles">` +
+      `${i === 0 ? tile(null) : ""}${keys.filter((k) => k !== own).map(tile).join("")}</div>`).join("");
+    const html = `
+      <div class="shead"><button class="sback pback" aria-label="back to settings">‹ shell</button></div>
+      ${groups}
+      <div class="pbtns"><button class="bell puse" aria-label="use ${escape(this._shellName(s, this._shellChoice(s)))} shell">use</button>` +
+      `<button class="bell pdefault" aria-label="use the world's own shell">world default</button></div>
+      <div class="status-feedback over" role="status" aria-live="polite" hidden></div>`;
+    if (!this._setStatus(s, html)) return;
+    this._pickerMarks(s);
+    if (s.pickerNote && Date.now() < s.pickerNote.until) this._statusMessage(s, s.pickerNote.text); // a redraw dropped it
+    const log = () => this._state(s, "sensor.last_care")?.attributes.log || [];
+    s.status.querySelectorAll(".sec, .shead, .pbtns").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
+    s.status.querySelector(".pback").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      this._closePicker(s);
+      this._renderStatus(s, log());
+      s.status.scrollTop = 0;
+      s.status.querySelector(".shellrow")?.focus({ preventScroll: true });
+    });
+    s.status.querySelectorAll(".tile").forEach((t) => t.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(t);
+      if (t.classList.contains("locked")) {
+        this._pickerNote(s, "I get this one as a teen ♪");
+        return;
+      }
+      // The live shell is the preview: no save, no redraw of the view.
+      s.previewFinish = t.dataset.finish || null;
+      this._dress(s, this._shellKey(s));
+      this._pickerMarks(s);
+    }));
+    s.status.querySelector(".puse").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      this._saveShell(s, s.previewFinish !== undefined ? s.previewFinish : this._shellChoice(s));
+    });
+    s.status.querySelector(".pdefault").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      this._saveShell(s, null);
+    });
+  }
+
+  // The tile on the shell now (a preview, else the pick) is marked, and `use` names it.
+  _pickerMarks(s) {
+    if (!s.picker) return;
+    const sel = this._tileId(s, s.previewFinish !== undefined ? s.previewFinish : this._shellChoice(s));
+    let name = "";
+    s.status.querySelectorAll(".tile").forEach((t) => {
+      const on = t.dataset.finish === sel;
+      t.classList.toggle("sel", on);
+      t.setAttribute("aria-pressed", on ? "true" : "false");
+      if (on) name = t.querySelector(".tname").textContent;
+    });
+    s.status.querySelector(".puse")?.setAttribute("aria-label", `use ${name} shell`);
+  }
+
+  // A picker line that a redraw (the sensor's push after a save) puts back.
+  _pickerNote(s, text) {
+    s.pickerNote = { text, until: Date.now() + 3500 };
+    this._statusMessage(s, text);
+  }
+
+  // Save a pick (null: the world's own) through the websocket only: no service
+  // fallback, since a service call is logged with who made it. A failure puts the
+  // shell back on its pick and keeps the picker open.
+  _saveShell(s, key) {
+    const id = s.ids?.["sensor.life_stage"];
+    const failed = (code) => {
+      if (s.ids?.["sensor.life_stage"] !== id) return; // another pet by now
+      s.previewFinish = undefined;
+      this._dress(s, this._shellKey(s));
+      if (code === "shell_locked") s.statusHtml = null; // its options moved on: draw them again
+      if (s.picker) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      this._pickerMarks(s);
+      this._pickerNote(s, SHELL_ERRORS[code] || "that didn't work, try later");
+    };
+    if (!id) {
+      failed("no_pet");
+      return;
+    }
+    let timer;
+    const late = new Promise((_, reject) => { timer = setTimeout(() => reject({ code: "timeout" }), 10000); });
+    Promise.race([this._hass.callWS({ type: "virtual_pet/set_shell", entity_id: id, finish: key }), late])
+      .finally(() => clearTimeout(timer))
+      .then(() => {
+        if (s.ids?.["sensor.life_stage"] !== id) return;
+        this._shellSettled(s);
+        s.shellPending = key;
+        s.shellPendingTimer = setTimeout(() => {
+          s.shellPending = undefined;
+          this._redraw(s);
+        }, 5000);
+        s.previewFinish = undefined;
+        this._dress(s, this._shellKey(s));
+        if (s.picker) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []); // `now` moves
+        this._pickerNote(s, key === null ? "back to the world's own ♪" : "shell saved ♪");
+      })
+      .catch((err) => failed(err?.code));
+  }
+
   // The gear in the status view's corner: opens the settings sheet.
   _gearButton() {
     return `<button class="gear" aria-label="settings">${GEAR_ICON}</button>`;
@@ -5270,8 +5523,10 @@ class HatchPetCard extends HTMLElement {
     if (s.statusHtml === html) return false;
     // Keep focus on the same control (a toggle, the journal link) across the redraw.
     const active = this.shadowRoot?.activeElement;
-    const keep = s.status.contains(active) && active.className
-      ? `.${active.className.trim().split(/\s+/).join(".")}${active.dataset?.gen ? `[data-gen="${active.dataset.gen}"]` : ""}` : null;
+    const keep = !s.status.contains(active) ? null
+      : active.dataset?.finish !== undefined ? `.tile[data-finish="${active.dataset.finish}"]` // its marks move
+        : active.className
+          ? `.${active.className.trim().split(/\s+/).join(".")}${active.dataset?.gen ? `[data-gen="${active.dataset.gen}"]` : ""}` : null;
     s.statusHtml = html;
     s.status.innerHTML = html;
     if (keep) s.status.querySelector(keep)?.focus({ preventScroll: true });

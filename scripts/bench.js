@@ -16,6 +16,8 @@ const SHAPES = ["egg", "tank", "house", "porthole", "pad", "moon"];
 const FINISHES = ["woodland", "aqua", "grove", "celestial", "dune", "clear", "glitter", "glow", "speckle", "stripes",
   "hearts", "stars", "gingham", "dots", "camo", "waves", "scales", "leaves", "paws", "constellation", "rainbow",
   "twotone", "sunset", "smoke"];
+// The server's SHELL_UNLOCKS (rates.py): what a pet below teen has locked.
+const SHOW_OFFS = { glitter: "teen", glow: "teen", smoke: "teen", sunset: "teen", constellation: "teen", stars: "teen" };
 const PINNED_TIME = "2026-06-15T12:00:00Z"; // a plain June noon: no season, no countdown
 
 const DEFAULTS = {
@@ -102,6 +104,22 @@ const PRESETS = {
           out.push({ name: `settings/${width}/${world}-${scene}`, group: `settings-${width}`, label: `${world} ${scene}`,
             world, scene, width, view: "settings", mine: true });
         }
+      }
+    }
+    return out;
+  },
+  // The shell picker at both card widths: an egg (the show-offs locked, on its
+  // world's own) and a teen (every finish open, wearing stripes, glitter previewed).
+  picker() {
+    const out = [];
+    for (const width of [420, 330]) {
+      const egg = { width, stage: "egg", view: "picker", shellOptions: FINISHES.filter((k) => !SHOW_OFFS[k]), shellLocked: SHOW_OFFS };
+      const teen = { width, stage: "teen", view: "picker", shellFinish: "stripes", shellOptions: FINISHES, preview: "glitter" };
+      for (const clip of ["card", "screen"]) {
+        out.push({ ...egg, clip, name: `picker/${width}-egg-${clip}`, group: `picker-${clip}`, label: `${width} egg (top)` });
+        out.push({ ...egg, clip, name: `picker/${width}-egg-locked-${clip}`, group: `picker-${clip}`, label: `${width} egg, locked`, scroll: ".tile.locked" });
+        out.push({ ...teen, clip, name: `picker/${width}-teen-${clip}`, group: `picker-${clip}`, label: `${width} teen, glitter previewed`, scroll: ".tile.sel" });
+        out.push({ ...teen, clip, name: `picker/${width}-teen-now-${clip}`, group: `picker-${clip}`, label: `${width} teen, stripes now`, scroll: ".tile.now" });
       }
     }
     return out;
