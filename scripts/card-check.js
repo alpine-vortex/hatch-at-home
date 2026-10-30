@@ -2956,7 +2956,10 @@ async function main() {
   // typing, on every slide of every card on the page and in every tab (privacy P1).
   {
     const me = await evaluate(() => document.querySelector("home-assistant").hass.user.id);
-    const card = page.locator("hatch-pet-card").first();
+    // The page's own card gets a stable handle before a second one is added: a bare
+    // `.first()` would resolve to the second card once it is on the page.
+    await page.locator("hatch-pet-card").first().evaluate((el) => el.setAttribute("data-fa", "one"));
+    const card = page.locator('hatch-pet-card[data-fa="one"]');
     // Every card instance gets a close bond: nickname "sunbeam", level 8 (as
     // the channel's "mine" would have it, on every slide).
     const personal = (el) => {
@@ -3008,6 +3011,14 @@ async function main() {
         status: /you two|my day|notify me|baby talk|my data/.test(s.status.textContent),
       }));`;
     await evaluate(setup);
+    // The second card, and proof it is not the first: every FA step reads both through this.
+    await evaluate(() => {
+      window.__faTwo = (el) => {
+        const two = document.getElementById("fa-second");
+        if (!two || two === el || el.getAttribute("data-fa") !== "one") throw new Error("FA step: el and two are not different cards");
+        return two;
+      };
+    });
     await tab.evaluate(setup);
     await tab.locator("hatch-pet-card").evaluate((el) => {
       el.setConfig({ ...el._config, seasonal: false }); // no costume line mid-check
@@ -3037,7 +3048,7 @@ async function main() {
       const before = await card.evaluate(async (el, typing) => {
         window.__subs = [];
         localStorage.setItem("hatch-shared-screen", "off");
-        const two = document.getElementById("fa-second");
+        const two = window.__faTwo(el);
         const s = el._slides[el._index];
         const other = el._slides.find((x) => x !== s);
         s.screen.classList.remove("show-status");
@@ -3060,7 +3071,7 @@ async function main() {
       }, typing);
       await page.waitForTimeout(1500); // a tick or two
       const after = await card.evaluate((el) => ({
-        one: window.__look(el), two: window.__look(document.getElementById("fa-second")),
+        one: window.__look(el), two: window.__look(window.__faTwo(el)),
         message: el._slides[el._index].status.querySelector(".status-feedback")?.textContent,
         sheetKept: !!el._slides[el._index].status.querySelector(".sback") &&
           !!el._slides[el._index].status.querySelector(".bell.sound"),
@@ -3069,7 +3080,7 @@ async function main() {
       // Each card's slides asked the channel again, as a shared screen (no library resubscribe).
       const subs = {
         page: await card.evaluate((el) => ({ shared: window.__subs.filter((x) => x.shared && x.opts?.resubscribe === false).length,
-          slides: el._slides.length + document.getElementById("fa-second")._slides.length })),
+          slides: el._slides.length + window.__faTwo(el)._slides.length })),
         tab: await tab.locator("hatch-pet-card").evaluate((el) => ({
           shared: window.__subs.filter((x) => x.shared && x.opts?.resubscribe === false).length, slides: el._slides.length })),
       };
@@ -3115,7 +3126,7 @@ async function main() {
     });
     await page.waitForTimeout(800);
     const back = await card.evaluate((el) => {
-      const two = document.getElementById("fa-second");
+      const two = window.__faTwo(el);
       const s = two._slides[0];
       window.__personal(two); // its bond, as the personal channel brings it back
       s.statusHtml = null;
@@ -3128,7 +3139,7 @@ async function main() {
     // A card off the page (a view switch) misses the switch's event: shared
     // screen goes on while it's away, and it catches up when it's back.
     const away = await card.evaluate(async (el) => {
-      const two = document.getElementById("fa-second");
+      const two = window.__faTwo(el);
       const s = two._slides[two._index];
       window.__personal(two);
       window.__say(two, s);
@@ -3185,8 +3196,8 @@ async function main() {
 
     // F6: a slide that goes is torn down like a forgotten one, and the card's
     // observer is disconnected when it leaves the page and re-observed after.
-    const f6 = await card.evaluate(async () => {
-      const two = document.getElementById("fa-second");
+    const f6 = await card.evaluate(async (el) => {
+      const two = window.__faTwo(el);
       const io = { observe: 0, disconnect: 0 };
       const proto = IntersectionObserver.prototype;
       const real = { observe: proto.observe, disconnect: proto.disconnect, revoke: URL.revokeObjectURL };
