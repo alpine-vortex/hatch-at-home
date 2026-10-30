@@ -65,6 +65,10 @@ def test_the_server_knows_every_finish_the_card_and_bench_draw() -> None:
     listed = re.search(r"\nconst FINISHES = \[(.*?)\];", bench, re.S)
     assert listed is not None
     assert tuple(re.findall(r'"(\w+)"', listed.group(1))) == R.SHELL_FINISHES
+    # The bench's picker preset locks what the server locks.
+    show_offs = re.search(r"\nconst SHOW_OFFS = \{(.*?)\};", bench, re.S)
+    assert show_offs is not None
+    assert dict(re.findall(r'(\w+): "(\w+)"', show_offs.group(1))) == R.SHELL_UNLOCKS
     assert len(set(R.SHELL_FINISHES)) == len(R.SHELL_FINISHES)
     stages = [name for name, _ in R.STAGE_STARTS]
     assert all(

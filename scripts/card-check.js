@@ -239,6 +239,14 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     two.finish === "finish-twotone" && two.inkTop !== "" && camo.finish === "finish-camo" && camo.sel === "camo" &&
       camo.now === "" && (await attrOf(a.entity)) === null, JSON.stringify({ two: two.finish, camo: camo.finish, sel: camo.sel }));
   check("shell: a finish without a top colour clears the last one's (--d-ink-top)", camo.inkTop === "", camo.inkTop);
+  // `use` names what it saves; on the world's own tile, the world's own.
+  const useAria = () => cur().locator(".status .puse").getAttribute("aria-label");
+  const camoAria = await useAria();
+  await tap("");
+  const ownAria = await useAria();
+  await tap("camo");
+  check("shell: use is labelled for the tile on the shell, the world's own as such",
+    camoAria === "use camo shell" && ownAria === "use the world's own shell", JSON.stringify([camoAria, ownAria]));
   // ...and survives a hass update: a mood tick, then the sun going down and up.
   const sun = await evaluate(() => { const st = document.querySelector("home-assistant").hass.states["sun.sun"]; return { state: st.state, attributes: st.attributes }; });
   await inject(a.entity.replace("life_stage", "mood"), { attributes: { cc_tick: Date.now() } });
@@ -278,6 +286,17 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await page.waitForTimeout(600);
   l = await look();
   check("shell: another pet in the slide (_forget) reverts the preview", reverted(l), brief(l));
+  await closeStatus();
+  // A swipe to another pet: the picker it leaves closes, back to the sheet.
+  await openPicker();
+  await tap("camo");
+  const next = await card.evaluate((el, e) => el._slides.findIndex((x) => x.ids?.["sensor.life_stage"] && x.ids["sensor.life_stage"] !== e), a.entity);
+  await card.evaluate((el, i) => el._go(i), next);
+  await page.waitForTimeout(500);
+  l = await look(a.entity);
+  check("shell: a swipe to another pet reverts the preview and leaves the sheet up", reverted(l) && l.sheet && l.tiles === 0, brief(l));
+  await showPet(a.entity);
+  await page.waitForTimeout(500);
   await closeStatus();
   // A shared screen turned on by another card here (its event) or in another tab
   // (storage): the picker closes, the shell goes back, the sheet shows it read-only.

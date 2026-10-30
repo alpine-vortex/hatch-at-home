@@ -2061,18 +2061,33 @@ const STYLE = `
   .shellnote { font-size: 11px; }
   /* The shell picker: three tiles a row; a locked one dimmed and dashed. */
   .tiles { flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 4px; }
-  .tile { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; min-height: 40px;
-    padding: 2px 1px; border: 2px solid transparent; border-radius: 6px; background: none; color: inherit;
-    font: 400 11px 'Tiny5', monospace; line-height: 1.05; text-align: center; cursor: pointer; }
+  .tiles:last-of-type { padding-bottom: 6px; } /* the last row scrolls clear of the bar */
+  .tile { display: flex; flex-direction: column; align-items: center; gap: 0; min-width: 0;
+    padding: 1px; border: 2px solid transparent; border-radius: 6px; background: none; color: inherit;
+    font: 400 11px 'Tiny5', monospace; line-height: 1; text-align: center; cursor: pointer; }
   .tile .tname { max-width: 100%; overflow-wrap: anywhere; }
   .tile .tsub { font-size: 10px; }
   .tile .tsub:empty { display: none; }
   .tile.sel { border-color: #2f3a24; }
   .tile.locked .sw { opacity: .45; border-style: dashed; }
   .tile.locked .tname { opacity: .65; }
-  .pbtns { flex: none; position: sticky; bottom: -9px; z-index: 1; display: flex; justify-content: flex-end; gap: 6px;
-    margin-bottom: -9px; padding: 4px 0 9px; background: #e9e2c6; }
-  .status-feedback.over { bottom: 30px; z-index: 2; }
+  /* The picker's back row and button bar: full-width bands of the screen's own colour,
+     so the list scrolls out of sight under them; its headings sit closer. */
+  .status:has(.pback) { gap: 2px; }
+  .status:has(.pback) .sec { margin-top: 1px; }
+  .shead:has(.pback) { z-index: 2; margin: -9px -12px 0; padding: 0 12px; }
+  .shead:has(.pback) .sback { padding: 3px 0; min-height: 26px; }
+  .pbtns { flex: none; position: sticky; bottom: -9px; z-index: 2; display: flex; justify-content: flex-end; gap: 6px;
+    margin: 0 -12px -9px; padding: 3px 12px 7px; background: #e9e2c6; }
+  .status-feedback.over { bottom: 30px; z-index: 3; }
+  /* A narrow card: tighter still, so two whole rows of tiles show between the bands. */
+  .compact .status:has(.pback) { gap: 1px; }
+  .compact .status:has(.pback) .sec { margin-top: 0; padding-bottom: 1px; }
+  .compact .shead:has(.pback) .sback { padding: 2px 0; min-height: 22px; }
+  .compact .tile { padding: 0 1px; font-size: 10px; }
+  .compact .tile .tsub { font-size: 9px; }
+  .compact .pbtns { padding: 2px 12px 3px; }
+  .compact .pbtns .bell { min-height: 24px; padding: 2px 10px; }
   .bell { border: 2px solid #2f3a24; border-radius: 10px; background: none; color: inherit;
     font: 400 12px 'Tiny5', monospace; padding: 3px 10px; min-width: 44px; min-height: 26px;
     cursor: pointer; }
@@ -3213,6 +3228,10 @@ class HatchPetCard extends HTMLElement {
     this._slides.forEach((x) => {
       this._stopTyping(x);
       this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
+      if (x.picker) { // and leaves the shell picker unsaved: the sheet again
+        this._closePicker(x);
+        if (x.screen.classList.contains("show-status")) this._renderStatus(x, this._state(x, "sensor.last_care")?.attributes.log || []);
+      }
     });
     this._linkEnd(); // a swipe ends the visit at once
     this._index = (index + n) % n;
@@ -5235,8 +5254,8 @@ class HatchPetCard extends HTMLElement {
   }
 
   // Leave the picker: an unsaved preview goes and the shell wears its pick again.
-  // Every exit calls it: back, the status closing (_toggleStatus), another pet
-  // (_forget), a shared screen (_goShared).
+  // Every exit calls it: back, the status closing (_toggleStatus), a swipe (_go),
+  // another pet (_forget), a shared screen (_goShared).
   _closePicker(s) {
     s.picker = false;
     s.pickerNote = null;
@@ -5265,12 +5284,12 @@ class HatchPetCard extends HTMLElement {
         `aria-label="${escape(aria)}"><span class="sw" style="background: ${finishSwatch(key ?? own, color)}"></span>` +
         `<span class="tname">${escape(name)}</span><span class="tsub">${id === now ? "now" : at ? escape(at) : ""}</span></button>`;
     };
-    const groups = SHELL_GROUPS.map(([head, keys], i) => `<div class="sec">${head}</div><div class="tiles">` +
+    const groups = SHELL_GROUPS.map(([head, keys], i) => `<div class="sec" data-group="${head}">${head}</div><div class="tiles">` +
       `${i === 0 ? tile(null) : ""}${keys.filter((k) => k !== own).map(tile).join("")}</div>`).join("");
     const html = `
       <div class="shead"><button class="sback pback" aria-label="back to settings">‹ shell</button></div>
       ${groups}
-      <div class="pbtns"><button class="bell puse" aria-label="use ${escape(this._shellName(s, this._shellChoice(s)))} shell">use</button>` +
+      <div class="pbtns"><button class="bell puse" aria-label="${escape(this._useAria(s, this._shellChoice(s)))}">use</button>` +
       `<button class="bell pdefault" aria-label="use the world's own shell">world default</button></div>
       <div class="status-feedback over" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
@@ -5313,15 +5332,19 @@ class HatchPetCard extends HTMLElement {
   // The tile on the shell now (a preview, else the pick) is marked, and `use` names it.
   _pickerMarks(s) {
     if (!s.picker) return;
-    const sel = this._tileId(s, s.previewFinish !== undefined ? s.previewFinish : this._shellChoice(s));
-    let name = "";
+    const key = s.previewFinish !== undefined ? s.previewFinish : this._shellChoice(s);
+    const sel = this._tileId(s, key);
     s.status.querySelectorAll(".tile").forEach((t) => {
       const on = t.dataset.finish === sel;
       t.classList.toggle("sel", on);
       t.setAttribute("aria-pressed", on ? "true" : "false");
-      if (on) name = t.querySelector(".tname").textContent;
     });
-    s.status.querySelector(".puse")?.setAttribute("aria-label", `use ${name} shell`);
+    s.status.querySelector(".puse")?.setAttribute("aria-label", this._useAria(s, key));
+  }
+
+  // `use`'s label: the finish it saves, or the world's own.
+  _useAria(s, key) {
+    return this._tileId(s, key) === "" ? "use the world's own shell" : `use ${finishName(key)} shell`;
   }
 
   // A picker line that a redraw (the sensor's push after a save) puts back.

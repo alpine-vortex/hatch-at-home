@@ -219,7 +219,8 @@
     if (shot.scroll) {
       const box = cur.status;
       const el = box.querySelector(shot.scroll);
-      box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientHeight / 3;
+      const head = box.querySelector(".shead")?.offsetHeight || 0; // just below the sticky back row
+      box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top - head - 2;
     }
     if (shot.view === "journal") {
       root.querySelector(".statusbtn").click();
