@@ -375,7 +375,7 @@ What building slices 0 (the repo half) and 1 showed, against the plan above.
   0.007265625. On `WORLD_GRID`, `_linkBeam`'s unit moves by ¼ px at screen widths 258,
   430, 602, 705 and 774. That is a beam-only change and not visible in the bench.
 - **Not run:** `card-check` D1 (it needs its own HA). The LCD maths is the same
-  expression, so D1 can't move. The first mate's batch gate runs it.
+  expression, so D1 can't move. Flagged for the first mate's gate.
 - **Slice 2's assumptions:** unchanged, apart from the `outline.py` rule above.
 
 ## Review fold (s2497)
