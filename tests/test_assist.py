@@ -19,7 +19,9 @@ from homeassistant.util import dt as dt_util
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.virtual_pet import model
 from custom_components.virtual_pet.const import DOMAIN
+from custom_components.virtual_pet.llm import PROMPT
 
 from .test_init import STORE_KEY, hatched_pet, setup
 
@@ -302,3 +304,55 @@ async def test_lights_out_refused_says_not_sleepy(
     response = await ask(hass, "VirtualPetCare", action="lights_out")
     assert speech(response) == "Pip isn't sleepy yet."
     assert response.speech_slots["result"] == "not_sleepy"
+
+
+VOICE_NOTES = (
+    "relaxed and slow, fond of snacks and naps",
+    "kind and warm, notices the person",
+    "lively and cheerful",
+    "theatrical, loves a little song",
+    "few words, warm underneath",
+    "delighted by pretty things",
+    "grand words and compliments",
+    "protective and cheerful",
+)
+
+
+@pytest.mark.parametrize(("age", "stage"), [(200.0, "teen"), (400.0, "adult")])
+async def test_status_data_carries_the_personality(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    age: float,
+    stage: str,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, hunger=30.0, age_hours=age, born=now - age * 3600
+    )
+    assert await async_setup_component(hass, "intent", {})
+    await setup(hass)
+    response = await ask(hass, "VirtualPetStatus")
+    assert response.speech_slots["stage"] == stage
+    assert response.speech_slots["personality"] in model.PERSONALITIES
+    # The type is a voice for the LLM, not a fact to recite.
+    assert response.speech_slots["personality"] not in speech(response)
+
+
+async def test_status_has_no_personality_before_teen(
+    hass: HomeAssistant, pip: MockConfigEntry
+) -> None:
+    response = await ask(hass, "VirtualPetStatus")
+    assert response.speech_slots["personality"] is None
+    assert speech(response) == "Pip is hungry: a little peckish."
+
+
+async def test_llm_prompt_has_the_voice_notes(
+    hass: HomeAssistant, pip: MockConfigEntry
+) -> None:
+    assert await async_setup_component(hass, "llm", {})
+    api = await llm.async_get_api(hass, llm.LLM_API_ASSIST, llm_context())
+    for note in VOICE_NOTES:
+        assert note in api.api_prompt
+    assert "{" not in PROMPT.format(names="Pip")
+    assert PROMPT.endswith("never guilt, nag or worry the person.")
+    assert PROMPT.format(names="Pip") in api.api_prompt

@@ -194,6 +194,8 @@ class StatusIntent(intent.IntentHandler):
                 **{stat: round(getattr(state, stat)) for stat in model.STATS},
                 # Learned habits, 1-3 stars each, in the order it learned them.
                 "traits": {t: model.trait_level(state, t) for t in state.traits},
+                # How it talks (the type's key), none before it is a teen.
+                "personality": state.personality,
                 "requests": model.requests(
                     state, dt_util.utcnow().timestamp(), pet.settings
                 ),
