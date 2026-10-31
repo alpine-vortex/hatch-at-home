@@ -4611,7 +4611,7 @@ class HatchPetCard extends HTMLElement {
     } else if (move === "perk") {
       this._animate(s, s.pet, "perk", 320);
     } else if (move === "hop") {
-      this._animate(s, s.pet, "hop", 1400); // two happy bounces
+      this._animate(s, s.pet, "greethop", 1400); // two happy bounces (_render clears "hop")
     } else if (move === "speck") {
       const speck = document.createElement("span");
       const rtl = Math.random() < 0.5;
@@ -4761,8 +4761,9 @@ class HatchPetCard extends HTMLElement {
   // A reaction to care for baby, teen and adult (the child has species poses): that
   // stage's mood frame for REACT_MS and a bounded move. Not over a scene, a link, the
   // low-battery gag, sleep, away or the egg; a game only for a catch (`inGame`).
-  // Under reduced motion only the frame changes (calm() shows its first).
-  _reactFrames(s, kind, { inGame = false, ms = REACT_MS } = {}) {
+  // Under reduced motion only the frame changes (calm() shows its first). With ms
+  // (a catch's pounce), the frame and the move both last that long.
+  _reactFrames(s, kind, { inGame = false, ms } = {}) {
     const r = REACTIONS[kind];
     if (!r || !s.species || s.drawn === "child" || s.scene || s.linking || s.power ||
       s.asleep || s.away || s.egg || (s.game && !inGame)) return;
@@ -4784,26 +4785,31 @@ class HatchPetCard extends HTMLElement {
     });
     if (r.poseOnly && !own) return; // the act's art failed before: nothing, a running reaction untouched
     s.poseFrames = own || moodFrames;
-    s.poseUntil = Date.now() + (kind === "ready" ? READY_MS : ms);
+    s.poseUntil = Date.now() + (kind === "ready" ? READY_MS : ms ?? REACT_MS);
     this._show(s, s.pet, s.poseFrames[0]);
     if (calm() || !r.move) return;
-    const move = kind === "praised" ? this._praiseMove(s) : r.move;
+    const move = kind === "praised" ? this._praiseMove(s, inGame) : r.move;
+    const moveMs = ms ?? r.ms;
     if (move === "wander") {
       const side = pick(["wander-l", "wander-r"]);
       s.pet.classList.add(side);
-      this._moving(s, r.ms + 900);
-      setTimeout(() => s.pet.classList.remove(side), r.ms);
+      this._moving(s, moveMs + 900);
+      setTimeout(() => s.pet.classList.remove(side), moveMs);
       return;
     }
-    this._animate(s, s.pet, move, r.ms);
-    if (move === "look") this._moving(s, r.ms + 250);
+    this._animate(s, s.pet, move, moveMs);
+    if (move === "look") this._moving(s, moveMs + 250);
   }
 
   // "Praised" moves the way its type likes (P3): the first move the type's row
   // adds that looks happy (not mumble, which is speech, nor look, the refusal's
-  // turn-away), else the plain greethop.
-  _praiseMove(s) {
-    return this._typeAdds(s).find((m) => m !== "mumble" && m !== "look") || REACTIONS.praised.move;
+  // turn-away), else the plain greethop. A hop is played as greethop (_render
+  // clears "hop" on every update); in a game a wander is a perk, so the pet is
+  // back in the middle for the next round.
+  _praiseMove(s, inGame = false) {
+    const move = this._typeAdds(s).find((m) => m !== "mumble" && m !== "look") || REACTIONS.praised.move;
+    if (move === "hop") return "greethop";
+    return inGame && move === "wander" ? "perk" : move;
   }
 
   // An open question is on show (its answer buttons).
@@ -7404,7 +7410,7 @@ class HatchPetCard extends HTMLElement {
         if (!isCalm && dark && !(s.visitUntil > now)) this._seasonFly(s, season, art, cls, ms, { ltr: true });
       }
     }
-    if (!this._free(s) || s.pet.classList.contains("hop")) return;
+    if (!this._free(s) || s.pet.classList.contains("hop") || s.pet.classList.contains("greethop")) return;
     const today = new Date();
     // The countdown, on the first look of the day.
     const treatOn = season.treat && seasonDate(season.treat, today.getFullYear());
@@ -7464,7 +7470,7 @@ class HatchPetCard extends HTMLElement {
   // day that holiday's costume wins: confetti, no party hat.
   _partyTick(s) {
     if (!this._state(s, "sensor.life_stage")?.attributes.birthday) return;
-    if (!this._free(s) || s.pet.classList.contains("hop")) return;
+    if (!this._free(s) || s.pet.classList.contains("hop") || s.pet.classList.contains("greethop")) return;
     if (this._hatSpot(s) === null) return; // a pose no hat can sit on: wait for the next
     const season = seasonNow(this._config);
     const today = new Date();

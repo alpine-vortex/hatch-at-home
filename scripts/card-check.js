@@ -4413,7 +4413,7 @@ async function main() {
         const calmMoves = el._idleMoves(s, true, true);
         out[type] = { extra: ["mumble", "look", "wander", "perk", "speck", "hop"]
           .map((m) => [m, count(moves, m) - count(base, m)]).filter(([, n]) => n), calm: calmMoves.join(),
-          praise: el._praiseMove(s), base: base.join() };
+          praise: el._praiseMove(s), praiseGame: el._praiseMove(s, true), base: base.join() };
       }
       t.pet("teen", null);
       out.noType = el._idleMoves(s, false, false).join();
@@ -4423,7 +4423,8 @@ async function main() {
     }, TYPES);
     const WANT = { mellow: [["mumble", 2]], sweet: [], bouncy: [["hop", 1]], starry: [["mumble", 1], ["perk", 1]],
       old_soul: [["look", 2]], fancy: [["perk", 2]], charming: [["look", 1], ["perk", 1]], plucky: [["wander", 1], ["perk", 1]] };
-    const PRAISE = { mellow: "greethop", sweet: "greethop", bouncy: "hop", starry: "perk", old_soul: "greethop", fancy: "perk",
+    // Bouncy's hop plays as greethop (_render clears "hop"); in a game plucky perks, not wanders.
+    const PRAISE = { mellow: "greethop", sweet: "greethop", bouncy: "greethop", starry: "perk", old_soul: "greethop", fancy: "perk",
       charming: "perk", plucky: "wander" };
     const mannerBad = [];
     for (const type of TYPES) {
@@ -4431,6 +4432,7 @@ async function main() {
       if (JSON.stringify(m.extra) !== JSON.stringify(WANT[type])) mannerBad.push(`${type}: adds ${JSON.stringify(m.extra)}`);
       if (m.calm !== "mumble,pose,pose") mannerBad.push(`${type}: calm ${m.calm}`);
       if (m.praise !== PRAISE[type]) mannerBad.push(`${type}: praise ${m.praise}`);
+      if (m.praiseGame !== (type === "plucky" ? "perk" : PRAISE[type])) mannerBad.push(`${type}: praise in a game ${m.praiseGame}`);
     }
     if (manner.noType !== manner[TYPES[0]].base || manner.child !== manner[TYPES[0]].base) mannerBad.push("no type / child not the base list");
     if (!manner.bouncy.base.split(",").every((m) => m !== "hop")) mannerBad.push("hop in the content base list");
@@ -6117,6 +6119,54 @@ async function main() {
     });
     check(`react: ${stage} a pat during a reaction speaks, keeps its move, adds no perk`,
       pat.cls.includes("greethop") && !pat.cls.includes("perk") && pat.said.length > 0 && pat.live, JSON.stringify(pat));
+    // P3 praise moves, live: a plucky pet's Catch pounce (ms 900) is a perk, back in the
+    // middle before the next round (1000 ms); bouncy's praise hop is a greethop, which
+    // a hass update (_render toggles "hop") leaves running.
+    if (stage === "adult") {
+      const moves = await card.evaluate(async (el) => {
+        const s = el._slides[el._index];
+        const base = el._state;
+        const as = (personality) => {
+          el._state = function (slide, key) {
+            const st = base.call(this, slide, key);
+            return key === "sensor.life_stage" && st && slide === s ? { ...st, attributes: { ...st.attributes, personality } } : st;
+          };
+        };
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const moved = () => [...s.pet.classList].filter((c) => ["wander-l", "wander-r", "perk", "hop", "greethop"].includes(c));
+        const out = {};
+        await wait(1500); // the pat check's greethop has run out
+        s.pet.classList.remove("wander-l", "wander-r", "perk", "hop", "greethop");
+        as("plucky");
+        const keep = s.game;
+        Object.assign(s, { poseUntil: 0, movingUntil: 0, game: { cur: null } });
+        el._reactFrames(s, "praised", { inGame: true, ms: 900 }); // the move is picked now
+        s.game = keep; // not left open for the tick to end
+        out.pluckyNow = moved();
+        await wait(1000);
+        out.pluckyNext = moved();
+        out.pluckyMoving = s.movingUntil > Date.now();
+        out.pluckyX = getComputedStyle(s.pet).translate;
+        as("bouncy");
+        Object.assign(s, { poseUntil: 0, movingUntil: 0 });
+        s.pet.classList.remove("greethop", "hop");
+        el._reactFrames(s, "praised");
+        out.bouncyNow = moved();
+        s.drawnSig = null; el._sig = null;
+        el.hass = { ...el._hass }; // an update that redraws the slide (toggles "hop")
+        await wait(300);
+        out.redrawn = !!s.drawnSig;
+        out.bouncyAfter = moved();
+        el._state = base;
+        Object.assign(s, { poseUntil: 0, movingUntil: 0 });
+        return out;
+      });
+      check("react: plucky's Catch praise is a perk, centred before the next round",
+        moves.pluckyNow.join() === "perk" && moves.pluckyNext.length === 0 && !moves.pluckyMoving &&
+        ["none", "0px", "0px 0px"].includes(moves.pluckyX), JSON.stringify(moves));
+      check("react: bouncy's praise hop (greethop) survives a hass update",
+        moves.redrawn && moves.bouncyNow.includes("greethop") && moves.bouncyAfter.includes("greethop"), JSON.stringify(moves));
+    }
     // R2 hooks: pat, refuse, aww (lost), ready, splash play the species' acts when declared and
     // change nothing without. The new art is not drawn yet, so the sprites are served the stage's content frames.
     const NEW = /_(pat|refuse|aww|ready|splash)_([12])\.png/;
