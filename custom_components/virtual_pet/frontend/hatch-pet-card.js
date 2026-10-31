@@ -4406,7 +4406,6 @@ class HatchPetCard extends HTMLElement {
     (s.queue ??= []).push({ text, ms, opts: rest, cls, at, type, perk: true });
   }
 
-  // An open question is on show (its answer buttons).
   // A reaction to care for baby, teen and adult (the child has species poses): that
   // stage's mood frame for REACT_MS and a bounded move. Not over a scene, a link, the
   // low-battery gag, sleep, away or the egg; a game only for a catch (`inGame`).
@@ -4426,6 +4425,7 @@ class HatchPetCard extends HTMLElement {
     if (r.move === "look") this._moving(s, r.ms + 250);
   }
 
+  // An open question is on show (its answer buttons).
   _questionOn(s) {
     return !!s.screen?.querySelector(".askday");
   }
