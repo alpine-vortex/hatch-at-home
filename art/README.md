@@ -26,7 +26,7 @@ named `{stage}_{mood}_{frame}.png`.
 - `*_sick_*`: the green tint is faint; the thermometer is what says "sick".
 - `bg_day`, `bg_night`, `bg_rain`, `bg_dim` are four different rooms, not one room
   in four lights, so cross-fading between them won't look like a light change.
-  Being fixed from 2026-10-30, world by world: see "One room in every light" below.
+  Fixed on 2026-10-30: see "One room in every light" below.
 - Hop poses (`excited`) keep the feet on the baseline. If the card wants a
   visible hop, it can add a small CSS bounce.
 - Beetle stages (the owner's choice): egg → baby (pale larva) → child (small blue
@@ -318,3 +318,12 @@ through the Codex CLI's image tool, then cut like the other rooms (4:3 crop, LAN
   the fireplace down to embers; lit warm with a lively fire and a crescent moon in the window; and
   overcast with a small fire and rain in the window. Night and rain are second takes: the first
   kept the day's sunlit window patch on the floor. Owner-approved from a probe sheet.
+- Terrarium `bg_rain` (the gecko's): the same tank as `bg_vivarium` with rain only on the glass
+  front, the heat lamp off and the tank dry (the old one rained inside the tank). Dim and night
+  were already the same tank and stay.
+- Night Sky `bg_night` (the bat's): the day meadow at full night, the moon where it was (the old
+  one was another scene). Pond `bg_night` (the tree frog's): the day pond at night with a moon
+  streak on the water (the old one moved the log and plants). One take each, owner-approved.
+- Left as they were, already the day scene in other light: Tidepool night and rain, Night Sky and
+  Pond rain.
+
