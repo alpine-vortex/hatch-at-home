@@ -258,7 +258,15 @@ async function runShots(browser, base, shots, outDir, workers) {
         page.motion = motion;
         // `missing`: sprite file names (e.g. "adult_eat_1") the server answers 404, for a load-fail shot.
         const miss = (shot.missing || []).map((n) => `${n}.png`);
-        const gate = miss.length ? (route) => (miss.some((n) => route.request().url().endsWith(`/${n}`)) ? route.fulfill({ status: 404 }) : route.continue()) : null;
+        // `acts`: the new poses' PNGs are not drawn yet; a shot that fakes them is served the species'
+        // own eat frames instead (bench only), so the card's act paths run with a real image.
+        const fake = shot.acts ? /_(pat|refuse|aww|ready|splash)_([12])\.png/ : null;
+        const gate = miss.length || fake ? async (route) => {
+          const url = route.request().url();
+          if (miss.some((n) => url.split("?")[0].endsWith(`/${n}`))) return route.fulfill({ status: 404 });
+          if (fake && fake.test(url)) return route.fulfill({ response: await route.fetch({ url: url.replace(fake, "_eat_$2.png") }) });
+          return route.continue();
+        } : null;
         if (gate) await page.route("**/sprites/**", gate);
         try { await page.evaluate((s) => window.bench.mount(s), shot); } finally { if (gate) await page.unroute("**/sprites/**", gate); }
         const inCard = { screen: ".slide:not(.away-slide) .screen", device: ".slide:not(.away-slide) .device" }[shot.clip];

@@ -5940,6 +5940,95 @@ async function main() {
     });
     check(`react: ${stage} a pat during a reaction speaks, keeps its move, adds no perk`,
       pat.cls.includes("greethop") && !pat.cls.includes("perk") && pat.said.length > 0 && pat.live, JSON.stringify(pat));
+    // R2 hooks: pat, refuse, aww (lost), ready, splash play the species' acts when declared and
+    // change nothing without. The new art is not drawn yet, so the sprites are served the stage's content frames.
+    const NEW = /_(pat|refuse|aww|ready|splash)_([12])\.png/;
+    const feedNew = async (route) => {
+      const url = route.request().url();
+      await (NEW.test(url) ? route.fulfill({ response: await route.fetch({ url: url.replace(NEW, "_content_$2.png") }) }) : route.continue());
+    };
+    await page.route("**/sprites/**", feedNew);
+    const hooks = (await card.evaluate(async (el, stage) => {
+      const s = el._slides[el._index];
+      const sp0 = s.species;
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const reset = () => {
+        Object.assign(s, { poseUntil: 0, patPoseUntil: 0, patAt: 0, movingUntil: 0, queue: [], sayUntil: 0, sayClass: 0, game: null, calling: false });
+        s.pet.classList.remove("look", "settle", "munch", "pat-soft", "perk");
+      };
+      const src = () => s.pet.getAttribute("src") || "";
+      const ev = { detail: 0, stopPropagation() {} };
+      const out = {};
+      const ALL = Object.fromEntries(["pat", "refuse", "aww", "ready", "splash"].map((k) => [k, ["baby", "teen", "adult"]]));
+      const realState = el._state;
+      for (const withActs of [true, false]) {
+        const k = withActs ? "acts" : "none";
+        s.species = { ...sp0, acts: withActs ? ALL : undefined };
+        // Warm every probe once (unknown plays), then let the loads finish.
+        reset(); el._reactFrames(s, "refused"); el._pat(s, ev); s.patPoseUntil = 0; reset();
+        await wait(500);
+        const r = out[k] = {};
+        reset(); el._pat(s, ev);
+        r.pat = { src: src(), live: s.patPoseUntil > Date.now(), reactLive: s.poseUntil > Date.now(), frames: el._frames(s).length };
+        el._pat(s, ev); // a second pat inside the cooldown: not "reacting", so it still wiggles
+        r.pat.soft = s.pet.classList.contains("pat-soft");
+        reset(); el._reactFrames(s, "fed"); const before = s.poseUntil; el._pat(s, ev);
+        r.patInReaction = { src: src(), live: s.patPoseUntil > Date.now(), same: s.poseUntil === before };
+        reset(); s.calling = true; el._pat(s, ev);
+        r.patCalling = { live: s.patPoseUntil > Date.now() };
+        reset(); s.asleep = true; el._pat(s, ev); s.asleep = false;
+        r.patAsleep = { live: s.patPoseUntil > Date.now() };
+        reset(); el._reactFrames(s, "refused");
+        r.refuse = { src: src(), live: s.poseUntil > Date.now(), look: s.pet.classList.contains("look") };
+        reset(); el._reactFrames(s, "lost", { inGame: true });
+        r.aww = { src: src(), live: s.poseUntil > Date.now() };
+        reset(); s.game = { cur: null }; el._react(s, { action: "game", result: "lost", at: Date.now() / 1000 });
+        r.awwLog = { src: src(), live: s.poseUntil > Date.now() };
+        reset(); s.game = { cur: null }; el._reactFrames(s, "ready", { inGame: true });
+        r.ready = { src: src(), live: s.poseUntil > Date.now(), ms: s.poseUntil - Date.now() };
+        reset();
+        // The clean scene's last beat.
+        el._state = function (slide, key) {
+          const st = realState.call(this, slide, key);
+          return key === "sensor.poop" && st ? { ...st, state: "2" } : st;
+        };
+        el._sceneStart(s, "clean");
+        if (s.scene) { s.scene.paused = true; el._sceneRender(s, 2000); r.splash = { src: src() }; el._sceneEnd(s, { quiet: true }); }
+        else r.splash = { src: "no scene" };
+        el._state = realState;
+        reset();
+      }
+      s.species = sp0;
+      return out;
+    }, stage));
+    const H = hooks.acts, N = hooks.none, sg = `/${stage}_`;
+    check(`react: ${stage} acts.pat shows on a pat, apart from the reaction`, H.pat.src.includes(`${sg}pat_`) && H.pat.live && !H.pat.reactLive && H.pat.frames === 2, JSON.stringify(H.pat));
+    check(`react: ${stage} a second pat is not "reacting" after the pat pose (still wiggles)`, H.pat.soft, JSON.stringify(H.pat));
+    check(`react: ${stage} no pat pose over a reaction, a call or sleep, and the reaction's frames stay`,
+      !H.patInReaction.live && H.patInReaction.same && !H.patCalling.live && !H.patAsleep.live && !H.patInReaction.src.includes("_pat_"), JSON.stringify([H.patInReaction, H.patCalling, H.patAsleep]));
+    check(`react: ${stage} without acts a pat is as before`, !N.pat.src.includes("_pat_") && !N.pat.live && !N.patInReaction.live, JSON.stringify(N.pat));
+    check(`react: ${stage} acts.refuse plays, else the bored frame and look`,
+      H.refuse.src.includes(`${sg}refuse_`) && H.refuse.live && N.refuse.src.includes(`${sg}bored_`) && N.refuse.look && N.refuse.live, JSON.stringify([H.refuse, N.refuse]));
+    check(`react: ${stage} acts.aww plays after a lost game (even with the game still open); none without`,
+      H.aww.live && H.aww.src.includes(`${sg}aww_`) && H.awwLog.live && H.awwLog.src.includes(`${sg}aww_`) && !N.aww.live && !N.awwLog.live, JSON.stringify([H.aww, H.awwLog, N.aww, N.awwLog]));
+    check(`react: ${stage} acts.ready plays ~1.2 s at a game's start; none without`,
+      H.ready.live && H.ready.src.includes(`${sg}ready_`) && H.ready.ms <= 1300 && !N.ready.live, JSON.stringify([H.ready, N.ready]));
+    check(`react: ${stage} acts.splash is the clean scene's last beat; without it the cheer or clean frames`,
+      H.splash.src.includes(`${sg}splash_`) && !N.splash.src.includes("_splash_") && N.splash.src !== "no scene", JSON.stringify([H.splash, N.splash]));
+    await page.unroute("**/sprites/**", feedNew);
+    // The pat pose under reduced motion is a single still frame.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const still = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const sp0 = s.species;
+      s.species = { ...sp0, acts: { pat: ["baby", "teen", "adult"] } };
+      s.patPoseFrames = ["adult_pat_1", "adult_pat_2"]; s.patPoseUntil = Date.now() + 900; s.poseUntil = 0;
+      const n = el._frames(s).length;
+      s.patPoseUntil = 0; s.patPoseFrames = null; s.species = sp0;
+      return n;
+    });
+    check(`react: ${stage} the pat pose is one still frame under reduced motion`, still === 1, String(still));
+    await page.emulateMedia({ reducedMotion: null });
     // Under reduced motion: the frame changes, nothing moves, no class sticks.
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.waitForTimeout(150);
