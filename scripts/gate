@@ -104,4 +104,8 @@ if [ $CC = 0 ] && [ $COS = 0 ] && [ ${#CC_ARGS[@]} = 0 ]; then
   exit 0
 fi
 [ $CC = 0 ] && [ $COS = 0 ] && { echo "gate: PASS (partial run, no marker)"; exit 0; }
-echo "gate: FAIL"; exit 1
+# Keep a failed run's logs (the /tmp dirs rotate), so a flake can be traced later.
+KEEP=$HOME/.local/state/crew/gate-fails/$(date +%Y%m%d-%H%M%S)-$(git rev-parse --short HEAD)
+mkdir -p "$KEEP" && cp "$LOGS"/*.log "$KEEP"/ 2>/dev/null
+cp -r dev/card-check "$KEEP/screens" 2>/dev/null
+echo "gate: FAIL (logs kept in $KEEP)"; exit 1
