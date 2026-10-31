@@ -366,6 +366,23 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   `thanksgiving-art`, 19 of 19; cut from Sol's drawings, the geese placed by hand).
   Checked on the card: every costume on 13 creatures × 4 stages, the turkey and
   geese at night.
+- **Winter lights** (owner, 2026-10-31; plan `docs/plan-2026-10-31-winter-lights.md`,
+  review folded). Card only, no server or notify change. `SEASONS` key `winter`, 1–31
+  Dec, after Thanksgiving (which wins 1 Dec in 2024/2030). New fields: `dated`
+  (named-day lines, `{on: [[m, d]] | (year) => [[m, d]], lines}`, mixed in about 1 in 3
+  on the day by `seasonLine`), `treatSay` (the treat-day second line in place of
+  "a treat! thank you!! ♪"), and `visitor.walk` (the walk is read from the season, not
+  `cls === "sturkey"`). Hanukkah comes from `Intl` `en-u-ca-hebrew` (`hanukkah(year)`:
+  25 Kislev, 8 days; null without the calendar, so no line rather than a wrong one).
+  A season visitor now pushes `nextVisitCheck` past `VISIT_AFTER_MS`, so a world
+  visitor never follows straight on. "holiday names" (`hatch-named-holidays`, only
+  `"off"` kept) in settings' "this screen": off drops `dated` lines and every line
+  `FESTIVAL_NAMES` matches (that regex is the tag: Halloween/Thanksgiving lines, the
+  turkey's greet, the treat line, the countdown, the favourite-season note). The night
+  glow is `.s-winter` (warm white, `s-shine`, the float keeps `s-bob`). Art: stand-ins
+  from `art/seasonal/make_winter.py` (16 files, copied to `ui/`); the final art swaps
+  the files. Checks: `tests/js/winter_lights.test.js`, card-check `winter`, bench
+  `--preset winter`.
 - **Voices** (phase 2 of the voices plan; released in 0.32.0): `species.json` `voice`
   (`sound`, `pitch`, `pace`, `likes`). Card: `_write` is the one direct bubble write
   (with `ms` it sets the hold; without, a game keeps its own); `_speak` may open a

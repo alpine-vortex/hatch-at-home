@@ -36,7 +36,7 @@ const results = [];
 
 // The gated sections of main(), in file order.
 const SECTIONS = ["shelf", "shell", "play", "resume", "moments", "photos", "personality", "types",
-  "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "care",
+  "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "oldcard"];
 const NEEDS = { oldcard: ["restart"] }; // oldcard asserts restart's seeded bond
 const argv = process.argv.slice(2);
@@ -3318,7 +3318,7 @@ async function main() {
     const literal = (name) => vm.runInNewContext(`(${src.match(new RegExp(`const ${name} = (\\{[\\s\\S]*?\\n\\});`))[1]})`);
     const BABY = literal("BABY");
     const normal = { REFUSALS: literal("REFUSALS"), WISHES: literal("WISHES") };
-    const seasons = [...src.matchAll(/key: "(halloween|thanksgiving)"/g)].map((m) => m[1]);
+    const seasons = [...src.matchAll(/key: "(halloween|thanksgiving|winter)"/g)].map((m) => m[1]);
     const card = new Set(["greet", "greet.warm", "greet.nickname", "idle.sleepy", "idle.bored", "idle.excited", "idle.hungry",
       "idle.dirty", "idle.default", "yum", "favourite_snack", "wish_granted", "friend_home", "care_miss", "tucked_in", "bond_up",
       "visit"]);
@@ -3655,7 +3655,7 @@ async function main() {
       const counted = s.counted;
       s.counted = true;
       try {
-        for (const key of ["halloween", "thanksgiving"]) {
+        for (const key of ["halloween", "thanksgiving", "winter"]) {
           el._config = { ...config, seasonal: key };
           localStorage.setItem(`hatch-costume-${key}-${s.ids?.device}-${new Date().toDateString()}`, "1");
           for (const [stage, cache] of [["baby", "on"], ["child", "on"], ["teen", "on"], ["baby", "off"]]) {
@@ -3688,7 +3688,8 @@ async function main() {
       holiday["halloween-baby-on"].said.every((x) => halloweenBaby.includes(x)) &&
       holiday["halloween-baby-on"].said.some((x) => !halloweenNormal.includes(x)) &&
       holiday["halloween-baby-on"].catchy.join() === "false" &&
-      holiday["thanksgiving-baby-on"].said.every((x) => ["gobble gobble!", "pie! yum yum", "thank you ♥", "cozy cozy~", "leaves!"].includes(x)),
+      holiday["thanksgiving-baby-on"].said.every((x) => ["gobble gobble!", "pie! yum yum", "thank you ♥", "cozy cozy~", "leaves!"].includes(x)) &&
+      holiday["winter-baby-on"].said.every((x) => ["pretty! pretty!", "lights!", "cozy cozy~", "yum yum"].includes(x)),
       JSON.stringify(holiday));
     check("holidays: a child, a teen and baby talk off keep the normal lines",
       ["halloween-child-on", "halloween-teen-on", "halloween-baby-off"].every((k) =>
@@ -6516,6 +6517,195 @@ async function main() {
     Object.assign(s, { poseUntil: 0, sayUntil: 0, visitUntil: 0, flairUntil: 0, queue: [] });
   });
   await holdVisits();
+  await unpinAwake(card);
+  }
+  if (want("winter")) {
+  // Winter lights (docs/plan-2026-10-31-winter-lights.md): 1-31 December after
+  // Thanksgiving, card only. The scene and its night glow (the float's bob kept),
+  // every hat seated, the walking snow hare (a world visitor waits after it), the
+  // cookie, the treat day's own line, Hanukkah from the browser's Hebrew calendar,
+  // and the "holiday names" row in "this screen": off, no festival name anywhere.
+  await calm();
+  await page.waitForTimeout(400);
+  await pinAwake(card, "winter");
+  const wDates = await card.evaluate((el) => {
+    const C = el.constructor;
+    const at = (y, m, d) => C.seasonNow({}, new Date(y, m - 1, d, 12))?.key || "-";
+    const winter = C.seasons.find((x) => x.key === "winter");
+    return {
+      keys: [at(2026, 11, 30), at(2026, 12, 1), at(2026, 12, 31), at(2027, 1, 1), at(2024, 12, 1), at(2030, 12, 1)].join(" "),
+      hanukkah: [2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032].map((y) => C.hanukkah(y)?.join("/")).join(" "),
+      christmas: C.seasonLines(winter, new Date(2026, 11, 25, 12), true).dated.length,
+    };
+  });
+  check("winter: 1-31 December, Thanksgiving keeps 1 Dec in the years it reaches it",
+    wDates.keys === "- winter winter - thanksgiving thanksgiving", wDates.keys);
+  check("winter: Hanukkah from the browser's Hebrew calendar, 2025-2032",
+    wDates.hanukkah === "12/15 12/5 12/25 12/13 12/2 12/21 12/10 11/28" && wDates.christmas === 2, JSON.stringify(wDates));
+  await card.evaluate((el) => { el.setConfig({ ...el._config, seasonal: "winter" }); el.hass = el._hass; });
+  await page.waitForTimeout(800);
+  const lights = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const season = el.constructor.seasons.find((x) => x.key === "winter");
+    s.nextVisitor = s.nextFlyer = s.nextCostume = Date.now() + 600000; // only what this check sends
+    s.screen.querySelector(".costume")?.remove();
+    // Every piece loads (stand-ins until the final art swaps the files).
+    const names = [...season.lanterns, season.corner, season.sweet, season.snack, "bunting", "deco",
+      ...season.flyer.art, ...season.visitor.art, ...season.costumes.map((c) => c.art)];
+    const missing = [];
+    await Promise.all(names.map((n) => new Promise((res) => {
+      const img = new Image();
+      img.onload = () => res();
+      img.onerror = () => { missing.push(n); res(); };
+      img.src = s.seasonBox.querySelector(".lantern").src.replace(/season_winter_[^/?]+/, `season_winter_${n}`);
+    })));
+    // The night glow: a drop-shadow on the lamp; a floating lamp keeps its bob.
+    const lamp = s.seasonBox.querySelector(".lantern");
+    const wasNight = s.screen.classList.contains("night");
+    s.screen.classList.add("night");
+    const plain = getComputedStyle(lamp);
+    const glow = { filter: plain.filter, anim: plain.animationName };
+    const floated = lamp.classList.contains("lantern-float");
+    lamp.classList.add("lantern-float");
+    const bob = getComputedStyle(lamp).animationName;
+    if (!floated) lamp.classList.remove("lantern-float");
+    if (!wasNight) s.screen.classList.remove("night");
+    // Every hat on the head, skip lists aside.
+    const [hx, hy] = s.species.hat?.[s.drawn] || s.species.head[s.drawn];
+    el._headTopAll(s, hx, hy);
+    await new Promise((r) => setTimeout(r, 600));
+    const top = el._hatSeat(s)?.top ?? null;
+    const r = s.pet.getBoundingClientRect();
+    const sr = s.screen.getBoundingClientRect();
+    const headTop = r.top - sr.top + top * (r.height / 256);
+    const seats = [];
+    for (const costume of season.costumes) {
+      s.sayUntil = 0; s.flairUntil = 0; s.movingUntil = 0;
+      el._costume(s, { ...season, costumes: [{ ...costume, skip: [] }] }, costume.art);
+      await new Promise((res) => setTimeout(res, 700));
+      const img = s.screen.querySelector(".costume .hat img");
+      seats.push(`${costume.art} ${Math.round(img.getBoundingClientRect().bottom - sr.top - headTop)}${img.naturalWidth ? "" : " (no art)"}`);
+    }
+    return {
+      pieces: [...new Set([...s.seasonBox.querySelectorAll("img, div")].map((i) => i.className.split(" ")[0]))].join(" "),
+      inSeason: s.screen.classList.contains("s-winter"), missing, glow, bob, seats,
+    };
+  });
+  check("winter dresses the scene and every piece loads",
+    lights.inSeason && /lantern/.test(lights.pieces) && /corner/.test(lights.pieces) && /bunting/.test(lights.pieces) &&
+      lights.missing.length === 0, `${lights.pieces}; missing ${lights.missing.join(", ")}`);
+  check("winter: the lamp glows at night, and a floating lamp still bobs",
+    /drop-shadow/.test(lights.glow.filter) && /s-shine/.test(lights.glow.anim) && /s-shine/.test(lights.bob) && /s-bob/.test(lights.bob),
+    JSON.stringify({ glow: lights.glow, bob: lights.bob }));
+  check("every winter costume sits on the head",
+    lights.seats.every((x) => { const d = Number(x.split(" ")[1]); return d > 0 && d < 20 && !/no art/.test(x); }),
+    lights.seats.join(", "));
+  await shot("05-winter");
+  const hare = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const season = el.constructor.seasons.find((x) => x.key === "winter");
+    s.screen.querySelector(".costume")?.remove();
+    s.sayUntil = 0; s.flairUntil = 0; s.nextVisitCheck = 0;
+    el._seasonVisitor(s, season);
+    const gap = s.nextVisitCheck - s.flairUntil;
+    await new Promise((r) => setTimeout(r, 1800));
+    const walker = !!s.seasonBox.querySelector(".snowhare.walk.flap");
+    const startle = s.bubble.textContent;
+    await new Promise((r) => setTimeout(r, 1900));
+    const greet = s.bubble.textContent;
+    el._react(s, { action: "snack", result: "ok", at: Date.now() / 1000 });
+    return { walker, startle, greet, gap, prop: s.prop.getAttribute("src") || "" };
+  });
+  check("winter: a snow hare walks by; the pet says oh!, then hi", hare.walker && hare.startle === "oh!" &&
+    hare.greet === "hi, little hare!", JSON.stringify(hare));
+  check("winter: a world visitor waits VISIT_AFTER_MS after the hare", hare.gap >= 120000, String(hare.gap));
+  check("snacks are cookies in winter", /season_winter_cookie/.test(hare.prop), hare.prop.split("/").pop());
+  await shot("05-winter-hare");
+  const treat = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const season = el.constructor.seasons.find((x) => x.key === "winter");
+    Object.assign(s, { sayUntil: 0, flairUntil: 0, movingUntil: 0, visitUntil: 0 });
+    el._costume(s, season, season.treatLine);
+    const first = s.bubble.textContent;
+    el._seasonTreat(s, season);
+    return [first, s.bubble.textContent];
+  });
+  check("winter's treat day: its own line and no thank-you", treat.join(" | ") === "so many lights! ♥ | a little treat ♪",
+    treat.join(" | "));
+  // Holiday names: the row in "this screen", on by default; off hides festival names.
+  const named = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const bell = s.status.querySelector(".bell.named");
+    const secs = [...s.status.querySelectorAll(".sec, .row")];
+    const screenAt = secs.findIndex((n) => n.classList.contains("sec") && n.textContent === "this screen");
+    const rowAt = secs.findIndex((n) => n.contains(bell));
+    const C = el.constructor;
+    const winter = C.seasons.find((x) => x.key === "winter");
+    // The card's own pool on a named day, and Halloween's costume lines from the tick.
+    const pool = C.seasonLines(winter, new Date(2026, 11, 25, 12));
+    const said = new Set();
+    const keep = [el._costume, el._seasonVisitor, el._seasonFlyer, el._config, s.counted];
+    el._costume = (slide, season, line) => said.add(line);
+    el._seasonVisitor = el._seasonFlyer = () => {};
+    el._config = { ...el._config, seasonal: "halloween" };
+    s.counted = true;
+    try {
+      localStorage.setItem(`hatch-costume-halloween-${s.ids?.device}-${new Date().toDateString()}`, "1");
+      for (let i = 0; i < 40; i++) { s.nextCostume = 1; s.sayUntil = 0; s.flairUntil = 0; el._seasonTick(s); }
+    } finally {
+      [el._costume, el._seasonVisitor, el._seasonFlyer, el._config, s.counted] = keep;
+    }
+    s.queue = [];
+    el._note(s, { kind: "season", season: "autumn", holiday: "thanksgiving" });
+    const note = s.queue.map((x) => x.text).join("");
+    s.queue = [];
+    return {
+      row: bell && { text: bell.textContent, pressed: bell.getAttribute("aria-pressed"), label: bell.getAttribute("aria-label"),
+        label2: bell.closest(".row")?.textContent.replace(/\s+/g, " ").trim() },
+      inScreen: screenAt >= 0 && rowAt > screenAt, stored: localStorage.getItem("hatch-named-holidays"),
+      dated: pool.dated.length, lines: pool.lines.join("|"), said: [...said], note,
+    };
+  });
+  await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    localStorage.removeItem("hatch-named-holidays");
+    if (!s.screen.classList.contains("show-status")) el._toggleStatus(s);
+  });
+  await page.waitForTimeout(300);
+  if (!await cur().locator(".status .sback").count()) await cur().locator(".status .gear").click();
+  await page.waitForTimeout(300);
+  await cur().locator(".bell.named").scrollIntoViewIfNeeded();
+  const onRow = await named();
+  check("holiday names: a row in this screen, on by default", onRow.row?.pressed === "true" && onRow.row?.text === "on" &&
+    onRow.row?.label === "holiday names" && onRow.inScreen && onRow.stored === null && onRow.dated === 2 &&
+    /Thanksgiving in your favourite season/.test(onRow.note), JSON.stringify(onRow));
+  await shot("05-winter-names-on");
+  await cur().locator(".bell.named").click();
+  await page.waitForTimeout(300);
+  const offRow = await named();
+  check("holiday names off: kept as off for this browser", offRow.row?.pressed === "false" && offRow.row?.text === "off" &&
+    offRow.stored === "off", JSON.stringify(offRow.row));
+  check("holiday names off: no dated line, no Halloween or Thanksgiving by name; generic lines stay",
+    offRow.dated === 0 && offRow.lines.includes("happy holidays! ♥") && offRow.said.length > 0 &&
+      !offRow.said.some((x) => /Halloween|Thanksgiving|Christmas|Hanukkah/.test(x)) &&
+      /^it's autumn, your favourite!/.test(offRow.note), JSON.stringify(offRow));
+  await cur().locator(".bell.named").scrollIntoViewIfNeeded();
+  await shot("05-winter-names-off");
+  await cur().locator(".bell.named").click();
+  await page.waitForTimeout(300);
+  check("holiday names on again: nothing kept", await evaluate(() => localStorage.getItem("hatch-named-holidays")) === null);
+  await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    localStorage.removeItem("hatch-named-holidays");
+    s.settings = false;
+    if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+    s.screen.querySelector(".costume")?.remove();
+    Object.assign(s, { poseUntil: 0, sayUntil: 0, visitUntil: 0, flairUntil: 0, nextVisitCheck: 0, queue: [] });
+    el.setConfig({ ...el._config, seasonal: false }); el.hass = el._hass;
+  });
+  await page.waitForTimeout(600);
+  check("winter: seasonal: false takes it away again",
+    await card.evaluate((el) => el._slides[el._index].seasonBox.children.length === 0));
   await unpinAwake(card);
   }
   if (want("care")) {

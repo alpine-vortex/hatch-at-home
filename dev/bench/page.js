@@ -185,6 +185,27 @@
     card._link = null;
   }
 
+  // The season's visitor (SEASONS visitor: the turkey, the snow hare) put on through
+  // the card's own _seasonFly and paused `at` (0-1 of its crossing, default .45),
+  // frame 1 or 2, with its first greet in the bubble: {season, at, frame, side}.
+  async function seasonVisitorShot(card, cur, sv) {
+    const season = card.constructor.seasons.find((x) => x.key === sv.season);
+    const { art, cls, ms, walk, greet } = season.visitor;
+    const el = card._seasonFly(cur, season, art, cls, ms, { ltr: sv.side !== "right", walk: !!walk });
+    await settled(card);
+    for (const a of el.getAnimations()) {
+      a.pause();
+      a.currentTime = ms * (sv.at ?? 0.45);
+    }
+    for (const img of el.querySelectorAll("img")) {
+      for (const a of img.getAnimations()) {
+        a.pause();
+        a.currentTime = sv.frame === 2 ? a.effect.getTiming().duration / 2 : 0;
+      }
+    }
+    card._write(cur, greet[0], 1e9);
+  }
+
   // Put on the costume `art` of `season` (frame 1 or 2 showing) and wait out the
   // pet's little perk, so the shot holds the hat still.
   async function dress(card, cur, { season, art, frame = 1 }) {
@@ -315,6 +336,7 @@
     // its animation that many ms in, so a mid-motion frame is the same every run.
     // `visitor`: one world visit pinned (see visitorShot).
     if (shot.visitor) await visitorShot(card, cur, shot.visitor, shot.petAt);
+    if (shot.seasonVisitor) await seasonVisitorShot(card, cur, shot.seasonVisitor);
     for (const c of shot.petClasses || []) cur.pet.classList.add(c);
     if (shot.petAt !== undefined) {
       for (const a of cur.pet.getAnimations()) {

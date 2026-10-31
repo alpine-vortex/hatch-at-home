@@ -70,7 +70,7 @@ devices:
 entities:
   - sensor.pip_mood
 experimental_catch: true  # optional prototype: adds Catch to the game picker
-seasonal: false  # optional: no seasonal touches (on by default; "halloween" or "thanksgiving" previews one)
+seasonal: false  # optional: no seasonal touches (on by default; "halloween", "thanksgiving" or "winter" previews one)
 ```
 
 **Upgrading from 0.3.x:** you added the card as a dashboard resource back then.
@@ -211,7 +211,20 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   an acorn cap; a turkey wanders by now and then ("gobble?!"); snacks are pumpkin pie;
   the countdown runs ("3 sleeps till Thanksgiving!"); and on the day the first visit
   gets "happy Thanksgiving! ♥", a plate, and a thank-you to everyone who looks after
-  it ("thank you all for taking care of me ♥"). All cosmetic.
+  it ("thank you all for taking care of me ♥").
+  **Winter lights** run from 1 to 31 December (Thanksgiving keeps 1 December in the
+  years it reaches it). A string of lights hangs across the scene, a lamp of the day
+  sits by the pet (a paper lantern, a star lamp or a snow lantern) and glows softly at
+  night (it floats in Tidepool and Pond), frost gathers in the corner (both corners of
+  the Terrarium), a mug waits by the door in Hearth, a snow globe joins the device's
+  decorations, and little lights drift across the night sky. The costume of the day is
+  a knit cap, earmuffs, a wreath of lights or a star cap, with "happy holidays! ♥",
+  "so many lights!" and the like; on Christmas Eve and Day, the days of Hanukkah and
+  New Year's Eve the pet sometimes names the day. A snow hare hops by now and then
+  ("oh!", then "hi, little hare!"); snacks are star cookies; and on 21 December the
+  first visit gets "so many lights! ♥" and a little treat. There's no countdown. The
+  season goes by the device's date, so it's winter lights in a southern December too.
+  All cosmetic. "holiday names" in settings turns festival names off (see below).
 - Tap the screen for the status page: hearts and meters, weight, care misses and
   ignored whines, traits (n/4) and the one it's learning next, upbringing,
   personality (from teen), the next egg, recent care, and a link to the journal.
@@ -223,7 +236,15 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk and
     my data. These follow your login. A shared screen doesn't show this part.
   - **this screen**: sounds here, babble (for pets with a voice), screen effects
-    here, mono screen and shared screen. These are saved in this browser only.
+    here, holiday names, mono screen and shared screen. These are saved in this
+    browser only.
+- **Holiday names.** "holiday names" in the sheet's "this screen" part is on to begin
+  with. Turned off, the pet on this screen never names a festival: no Christmas,
+  Hanukkah or New Year's Eve lines in December, no "happy Halloween!" or "happy
+  Thanksgiving!", no "3 sleeps till..." countdown, and "it's autumn, your favourite!"
+  in place of "Thanksgiving in your favourite season!". The seasons' scenery, hats
+  and generic lines ("happy holidays! ♥", "spooky~") stay. Phone messages are not
+  changed by it.
 - **The shell picker.** On a server that offers it, the sheet has a "shell" row
   showing the pet's current shell. Tap it to open the picker, a list of finishes in
   groups (world plastics, specials, prints), starting with the world's own. Tap a

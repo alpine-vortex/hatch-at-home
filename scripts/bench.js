@@ -179,6 +179,33 @@ const PRESETS = {
     }
     return out;
   },
+  // Winter lights at 330: every world day and night, each hat, mono at night per world,
+  // the snow hare, December by the clock (season "auto"), the holiday names row on/off.
+  winter() {
+    const out = [];
+    const base = { width: 330, season: "winter", group: "winter" };
+    for (const world of Object.keys(WORLDS)) {
+      for (const scene of ["day", "night"]) {
+        out.push({ ...base, name: `winter/${world}-${scene}`, label: `${world} ${scene}`, world, scene, say: "" });
+      }
+      out.push({ ...base, group: "winter-mono", name: `winter/mono-${world}-night`, label: `${world} mono night`, world,
+        scene: "night", mono: true, say: "" });
+    }
+    for (const art of ["knit_cap", "earmuffs", "light_wreath", "star_cap"]) {
+      out.push({ ...base, group: "winter-more", name: `winter/hat-${art}`, label: art, costume: { season: "winter", art } });
+    }
+    out.push({ ...base, group: "winter-more", name: "winter/hare-woodland", label: "snow hare", world: "woodland",
+      seasonVisitor: { season: "winter", at: 0.25 } });
+    out.push({ ...base, group: "winter-more", name: "winter/hare-hearth-night", label: "snow hare, night (frame 2)",
+      world: "hearth", scene: "night", seasonVisitor: { season: "winter", frame: 2, side: "right" } });
+    out.push({ ...base, group: "winter-more", name: "winter/auto-december", label: "auto, 12 Dec", season: "auto",
+      time: "2026-12-12T12:00:00Z", say: "" });
+    for (const [label, storage] of [["on", {}], ["off", { "hatch-named-holidays": "off" }]]) {
+      out.push({ ...base, group: "winter-more", name: `winter/names-${label}`, label: `holiday names ${label}`,
+        view: "settings", scroll: ".bell.named", storage });
+    }
+    return out;
+  },
   // The same sheet on a shared screen: nothing personal, only this screen's rows.
   "settings-shared"() {
     const out = [];

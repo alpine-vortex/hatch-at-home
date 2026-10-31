@@ -1,5 +1,9 @@
 # Winter lights, 2026-10-31 (plan; card only, date-based, art-gated)
 
+**Status: BUILT 2026-10-31** (crew s2559, on fm-batch5) with code stand-in art; the
+final art swaps files only. See *Built* at the end: the review (s2558) and the owner's
+decisions of 2026-10-31 win over the sections below where they differ.
+
 **Owner decided 2026-10-31:** the next Luna seasonal set is **winter lights**: generic
 December lights and trim, **by date, not weather**, built the way Halloween (0.28.0) and
 Thanksgiving (0.30.0) were. This plan is the card side. Art comes from the art coordinator
@@ -146,3 +150,52 @@ Recommendation: **set A for lines and treat, B for the first look**. Both avoid 
 6. **A new chirp?** *Recommend reuse* (`harvest`) for now.
 7. **Copy set A or B** (section 5)? *Recommend A for lines, B for the first look.*
 8. **Glow at night on the lamp?** *Recommend yes* (CSS only, free).
+
+## Built (2026-10-31, s2559)
+
+What shipped, where it differs from the plan above:
+
+- **Dates and order** as §1. `winter` sits after Thanksgiving in `SEASONS`.
+- **Worlds** as §2, except nightsky gets no `nightFlyer` (no art, so it would do nothing).
+  Nightsky is the same as `"*"`.
+- **Copy** (the owner's, verbatim):
+  - Lines all month: "happy holidays! ♥", "merry everything ♪", "so many lights!",
+    "twinkle twinkle ♪", "happy winter!", "cozy lights~".
+  - Named days, in `season.dated`, about 1 in 3 of the costume lines on the day:
+    - 24–25 Dec: "merry Christmas! ♥", "Christmas Eve! ♪"
+    - Hanukkah's 8 days: "happy Hanukkah! ♥", "the lights are glowing ♪"
+    - 31 Dec: "happy new year soon!", "new year's eve! ♪"
+    - Days that fall together give both sets (in 2027, 25 Dec is also Hanukkah).
+  - Treat day 21 Dec: `treatLine` "so many lights! ♥", then the new `treatSay`
+    "a little treat ♪". There is no "thank you" and no "longest night".
+  - Snack: "cookie!! ♪", "a star cookie, yay!".
+  - Baby (`season.winter`): "pretty! pretty!", "lights!", "cozy cozy~", "yum yum".
+  - No first-look row and no countdown.
+- **Hanukkah** comes from `Intl.DateTimeFormat("en-u-ca-hebrew")`:
+  - `hanukkah(year)` is the civil date of 25 Kislev; `hanukkahDays` gives all 8.
+  - Without the Hebrew calendar it returns null, so the pet says no Hanukkah line rather than a wrong one.
+  - 2025–2032 are pinned in the tests.
+- **Season visitor:** a snow hare (`hare_1/_2`, 68×68) that walks.
+  - It says "oh!", then "hi, little hare!".
+  - `walk` is now read from the season (the turkey sets `walk: true`).
+  - After any season visitor, a world visitor waits `VISIT_AFTER_MS`.
+- **"holiday names"** is a row in settings' "this screen" (`hatch-named-holidays`, on by
+  default, only `"off"` is stored). Off removes all of these:
+  - the dated lines
+  - every line `FESTIVAL_NAMES` matches ("happy Halloween!", "happy Thanksgiving!", the
+    Thanksgiving treat line, the turkey's "happy Thanksgiving, turkey ♪")
+  - the countdown, which is skipped
+  - the server's "Thanksgiving in your favourite season!", which falls back to "it's autumn, your favourite!"
+
+  Generic lines stay. A treat line that names a festival falls back to a generic line.
+- **Glow:** `.s-winter` gives a warm-white drop-shadow with a slow `s-shine`, and a floating lamp keeps `s-bob`.
+  The light string twinkles by brightness, never by opacity, so it still shows with animation off.
+- **Line classes:** season bubbles stay unclassed `_speak` via `_costume`. There is no `MOMENT_CLASS` entry and no server or notify change.
+- **Art:** 16 stand-ins from `art/seasonal/make_winter.py` at the review's canvases, copied to `ui/`:
+  - hats: 64×48 (`knit_cap`, `star_cap`) and 80×40 (`earmuffs`, `light_wreath`)
+  - lanterns 120×104, bunting 96×32, deco (a snow globe) and cookie 128×128
+  - frost 72×64, mug 48×24, twinkle 68×40, hare 68×68
+- **Checks:**
+  - `tests/js/winter_lights.test.js`: dates, Hanukkah, null-safety, dated mixing, the toggle across all seasons.
+  - card-check `winter`: scene, pieces load, glow and bob, hats seated, hare, the gap, cookie, treat, Hanukkah in Chromium, the toggle row on/off. Its baby lines go into the `photos` audit.
+  - bench `--preset winter`: worlds day/night, mono night, hats, hare, December `auto`, names on/off. The bench gained a `seasonVisitor` pin.
