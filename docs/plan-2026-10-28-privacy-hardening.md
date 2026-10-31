@@ -916,8 +916,8 @@ note, are marked *(P3c)* for review; drop the markers at release.
 >   person entity.
 > - *(P3c)* Titles and artists are no longer on `virtual_pet_watching` and
 >   `virtual_pet_listening`, on the last care sensor's `moments` or on `dream`. The two
->   events still fire each time the show or song changes, so read `media_title` from
->   your media player. On the life stage sensor, `dream` no longer has `title`, and a
+>   events still fire when the pet notices a new show or song (at most every 20
+>   minutes); for every change, read `media_title` from your media player. On the life stage sensor, `dream` no longer has `title`, and a
 >   dream about a show or song shows as no dream.
 >
 > **Phone messages are still personal.** A notification to your phone can still call you
@@ -1329,3 +1329,5 @@ check runs per old tag.
 **For 2a:** The public `moments` media types are now `tv_on`/`music_on`. Titles exist only on
 the channel (`house.media`, `house.dream`). Anything in 2a that reads a show from public
 moments or `stage.dream` must read `s.house` instead.
+
+**P3c audit (s2536, 2026-10-31):** MERGE. Tally: 0 would have reached a player or leaked, 4 nits. Fixed by the first mate: the media events' "each time" wording (a shared 20-min cooldown) and the card's CHANNEL_ONLY comment. Noted, not fixed: the `dreamed` event is never fired (`coordinator._dream` uses the return as a save flag), so only `test_model` guards its payload; if it ever fires, add it to `scripted_day`. `scripted_day`'s song goes straight to `_fire`, not through a real music player (optional later test).
