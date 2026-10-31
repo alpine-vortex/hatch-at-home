@@ -72,12 +72,12 @@ test("named days add their lines; same-day festivals add both", () => {
   const winter = SEASONS.find((x) => x.key === "winter");
   const dated = (y, m, d) => [...seasonLines(winter, at(y, m, d), true).dated];
   assert.deepStrictEqual(dated(2026, 12, 3), []);
-  assert.deepStrictEqual(dated(2026, 12, 24), ["merry Christmas! ♥", "Christmas Eve! ♪"]);
+  assert.deepStrictEqual(dated(2026, 12, 24), ["Christmas Eve! ♪", "merry Christmas! ♥"]);
+  assert.deepStrictEqual(dated(2026, 12, 25), ["merry Christmas! ♥"]); // no "Christmas Eve!" on the day
   assert.deepStrictEqual(dated(2026, 12, 31), ["happy new year soon!", "new year's eve! ♪"]);
   assert.deepStrictEqual(dated(2026, 12, 12), ["happy Hanukkah! ♥", "the lights are glowing ♪"]); // day 8
   assert.deepStrictEqual(dated(2026, 12, 13), []);
-  assert.deepStrictEqual(dated(2027, 12, 25), ["merry Christmas! ♥", "Christmas Eve! ♪", "happy Hanukkah! ♥",
-    "the lights are glowing ♪"]);
+  assert.deepStrictEqual(dated(2027, 12, 25), ["merry Christmas! ♥", "happy Hanukkah! ♥", "the lights are glowing ♪"]);
   assert.strictEqual(seasonLines(winter, at(2026, 12, 24), true).lines.length, 6);
 });
 
@@ -108,7 +108,7 @@ test("holiday names off: no festival name in any season's lines, treat, greet or
   assert.ok(!unnamed(lines("halloween")).includes("happy Halloween!"));
   assert.ok(!unnamed(lines("thanksgiving")).includes("happy Thanksgiving!"));
   assert.ok(unnamed(lines("winter")).includes("happy holidays! ♥")); // generic lines stay
-  for (const season of SEASONS) for (const d of season.dated || []) assert.ok(d.lines.length >= 2);
+  for (const season of SEASONS) for (const d of season.dated || []) assert.ok(d.lines.length >= 1); // 25 Dec has one
 });
 
 test("winter's copy names no thanks and no longest night; the snow hare walks", () => {

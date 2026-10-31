@@ -162,7 +162,8 @@ What shipped, where it differs from the plan above:
   - Lines all month: "happy holidays! ♥", "merry everything ♪", "so many lights!",
     "twinkle twinkle ♪", "happy winter!", "cozy lights~".
   - Named days, in `season.dated`, about 1 in 3 of the costume lines on the day:
-    - 24–25 Dec: "merry Christmas! ♥", "Christmas Eve! ♪"
+    - 24 Dec: "Christmas Eve! ♪", "merry Christmas! ♥"; 25 Dec: "merry Christmas! ♥" alone
+      (split after the s2561 audit: "Christmas Eve!" had shown on the day itself).
     - Hanukkah's 8 days: "happy Hanukkah! ♥", "the lights are glowing ♪"
     - 31 Dec: "happy new year soon!", "new year's eve! ♪"
     - Days that fall together give both sets (in 2027, 25 Dec is also Hanukkah).
@@ -173,6 +174,7 @@ What shipped, where it differs from the plan above:
   - No first-look row and no countdown.
 - **Hanukkah** comes from `Intl.DateTimeFormat("en-u-ca-hebrew")`:
   - `hanukkah(year)` is the civil date of 25 Kislev; `hanukkahDays` gives all 8.
+    The first candle is lit the evening before (24 Kislev); the lines keep to the day of 25 Kislev.
   - Without the Hebrew calendar it returns null, so the pet says no Hanukkah line rather than a wrong one.
   - 2025–2032 are pinned in the tests.
 - **Season visitor:** a snow hare (`hare_1/_2`, 68×68) that walks.

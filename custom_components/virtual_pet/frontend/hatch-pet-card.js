@@ -515,7 +515,8 @@ const SEASONS = [
     lines: ["happy holidays! ♥", "merry everything ♪", "so many lights!", "twinkle twinkle ♪",
       "happy winter!", "cozy lights~"],
     dated: [
-      { on: [[12, 24], [12, 25]], lines: ["merry Christmas! ♥", "Christmas Eve! ♪"] },
+      { on: [[12, 24]], lines: ["Christmas Eve! ♪", "merry Christmas! ♥"] },
+      { on: [[12, 25]], lines: ["merry Christmas! ♥"] },
       { on: (y) => hanukkahDays(y), lines: ["happy Hanukkah! ♥", "the lights are glowing ♪"] },
       { on: [[12, 31]], lines: ["happy new year soon!", "new year's eve! ♪"] },
     ],
