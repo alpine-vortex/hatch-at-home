@@ -1634,3 +1634,5 @@ What P3b shipped, where it differs from the text above, and what P3c now picks u
   you" (it read `wish.for`) to the plain "play a game together". On v0.37.0, dev's real
   level-up (8 to 9) reached only dev's channel ("left or right is our game now! ♥");
   the public `moments` had no bond moment.
+
+**P3b audit (s2530, 2026-10-31):** MERGE. Tally: 0 would have reached a player or leaked, 4 nits. Nits 3-4 (guide bond claim, event list, HANDOFF) fixed in 7906c7c; nits 1-2 (debug sensor unscanned by `test_public`, `test_recorded` filters only `sensor.`/`switch.`; `debug["last_events"]` lists personal types) are P3c scope. Owner: P3b is held on its branch and merges with P3c.
