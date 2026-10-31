@@ -11,6 +11,12 @@ the end of the current work takes the version**. So **the old-card check serves
 *released* card and the one a stale tablet realistically runs. Q11 is decided (owner: first
 mate's recommendation): `zone` is kept only while "my day" is on, dropped when it is turned
 off and on load of an old save.
+**Status update (first mate, 2026-10-30):** P2 and P3a (server #63, card #71) shipped in
+0.36.0; 0.37.0 followed. So "one release at the end" is retired: **P3b and P3c ship
+together in one privacy release** (owner, 2026-10-30), after both are merged and gated.
+P3b's plan review (s2526) is folded in at the end ("P3b plan review fold"); **that
+section wins over anything above it for P3b.** The older status text below is history.
+
 P3a, P3b and P3c not started. **P3a is split into P3a-server and P3a-card** (see
 "Decisions of the P3a plan review" below).
 
@@ -1496,3 +1502,79 @@ Review #N is the scout's finding number; all 18 proposed fixes are applied above
 - **#12:** the second-login bond is staged by seeding dev's bond and a `person.dev` with
   `user_id` in `dev/config/.storage` before start.
 - **#13:** stale line numbers get one rule, "re-grep at build; names win over numbers".
+
+## P3b plan review fold (s2526, 2026-10-30)
+
+Scout `hatch-at-home-s2526` reviewed P3b against `origin/main` at `1671f44` (0.37.0 + gear
+slice 6): FIX FIRST, 16 findings (1 player-impact, 10 plan defects, 5 nits), all folded
+here by the first mate. The full report is archived with the worker. **For P3b, this
+section wins over the text above.** Line numbers are from `1671f44`; names win.
+
+**Owner and first-mate decisions (2026-10-30):**
+- **Q-A (owner): P3b waits for P3c.** One privacy release carries both. P3b still merges
+  to `main` on its own, gated, so it must be safe alone (see the field set below).
+- **Q-B: "one release at the end" is retired** (0.36.0 and 0.37.0 shipped mid-plan).
+- **Q-C (first mate): the old-card check serves both v0.37.0 (the realistic stale tablet)
+  and v0.35.0 (the last pre-channel card, the only one P3b visibly changes), with a
+  baseline run against pre-P3b `main` first.**
+
+**P3b acceptance criteria** (the ship worker's checklist):
+1. **Scrub field set, per phase (#3).** P3b's `PRIVATE_EVENT_FIELDS` is exactly
+   `{"user", "for", "for_name", "nickname", "favourite"}`. P3c adds `title` and `artist`.
+   Stripping titles in P3b brings back "ooh, undefined!" on a v0.35.0 tablet.
+2. **Gate placement (#4).** In `_fire` (`coordinator.py:929-943`), `async_fire` runs before
+   `if simulated: continue`. (a) A D-G (`PERSONAL_EVENTS`) event never reaches `async_fire`,
+   simulated or not. (b) `_notify` and `_to_channel` get the **original** event (they read
+   `user`, `nickname`, later `title`). (c) `self.moments.insert` gets the scrubbed copy, not
+   `{**event}`. New test: `_fire([bond_up...], simulated=True)` fires no
+   `virtual_pet_bond_up`.
+3. **Test 5 and the `hass.states` scan exempt `sensor.<pet>_last_care` `log[].by` (#5)**,
+   the HA user's display name the owner kept (Q4). They search for user IDs, nicknames,
+   `for_name`, and the person's name everywhere except `log[].by`.
+4. **Pytest sites to rewrite (#6), a floor (re-grep `notify_users|bonds|for_name|"user"`):**
+   `tests/test_init.py` 708, 728 (`notify_users` on the sensor), 762 (drop `notify_users`
+   from the tuple, else KeyError), 878 (drop it from the tuple, add `assert "notify_users"
+   not in attrs`), 1859, 2036, 3076 (`attributes["bonds"]`), 1887, 1987, 2061, 2093 (D-G
+   with `user` in public moments), 2569 (seed, harmless); `tests/test_channel.py:343`
+   (assert `friend_home` is **not** in public moments and **is** in the private snapshot).
+5. **`someone_home` is already done (#7):** shipped in P3a (`tests/test_channel.py:320-343`).
+   Drop it from P3b's Test 4; keep it green.
+6. **Old-card check (#8):** new infrastructure in `scripts/card-check.js`: `page.route` on
+   `/virtual_pet/frontend/hatch-pet-card.js*` serving `git show v0.37.0:...` then
+   `git show v0.35.0:...`. Cases: an aimed wish, a bond moment (none appears), the status and
+   bell, `someone_home` on a shared screen. **Run it against pre-P3b `main` first and record
+   the errors.** Pass = P3b adds no new console error and no "undefined" (not zero errors).
+   TV, music and dream cases move to P3c.
+7. **`hass.states` second-login scan (#9)** runs only with the scratch HA per AGENTS.md
+   (`HA_URL`, `HA_CONFIG`, `HA_START`, so `seeded`). It scans `JSON.stringify` of every pet
+   entity's attributes on page2's `hass.states` for dev's ID and "sunbeam", minus `log[].by`,
+   and is an explicit FAIL (not a skip) when not seeded.
+8. **Shared-screen aimed-wish check (#10)**, new in card-check section 8 after the seed:
+   dev's page, `hatch-shared-screen` on, resubscribe; `s.mine` is null, the status wish row
+   is the plain `WISHES[kind]`, the first-look bubble has no "sunbeam" and no "with you".
+9. **`friends()` / `pick_wish` (#13):** pass friend IDs only, or keep `friends()` with a
+   one-line comment why. The diagnostics `for_name` redaction stays (old saves, Q7).
+10. **Comment only (#14):** `card-check.js:1100` "still on the public list until P3b"; keep
+    the check (a valid old-server stub).
+11. **Already verified, don't redo (#15, #16):** no Python reads the sensor's `bonds`,
+    `notify_users` or `wish.for`; the only other `async_fire` is `_welcome` (`{pet_id}`);
+    the blueprint reads only `call_started`; the bench has none of these. `wish_granted` and
+    `dreamed` carry nothing personal. The sensor's `_wish` keeps `("kind", "granted")` +
+    `open`.
+
+**Docs (#12), all in P3b:** `guide.md` 751-756 (events listed with `user`/`for`), 189 (the
+bond claim, false until now), 789-797 (Recorder: add purge guidance for the five D-G
+events and `virtual_pet_wish_made`, whose old rows have `for`), 737-756 (add
+`someone_home`, shipped 0.36.0); `HANDOFF.md` 286-316 (`bonds`, `for`/`for_name`);
+`dev/bench/README.md:119` (calls `bonds` a sensor attribute). Phone-message disclosure
+already exists (`guide.md` 436-437, 641-642): don't duplicate it.
+
+**Release note (#1, #11):** one privacy note for P3b + P3c. P3b's part: (1) bonds,
+nicknames, favourites, notify-me and aimed wishes are no longer on the sensor or the
+events; until now they still were, despite 0.36.0's wording, so say so plainly. (2) The
+breaking list (the five events, `trigger.event.data.for` on `wish_made`, templates on
+`bonds`/`notify_users`/`wish.for`/`wish.for_name`), plus one line: a "welcome home" on
+`friend_home` can move to `virtual_pet_someone_home` or the person entity. (3) Phone
+messages are still personal. (4) Purging old history: the five events and `wish_made`.
+(5) Reload a tablet still on 0.35 or older; 0.36+ needs nothing. Drop "Also in this
+update" (all already released). P3c adds the titles and `dream` paragraph.

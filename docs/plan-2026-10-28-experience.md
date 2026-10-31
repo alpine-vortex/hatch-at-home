@@ -874,7 +874,7 @@ runs on `hass` with a user (1b-5); 1b is size S (X-1); C1-C3 approved.
   | Class | Types |
   |---|---|
   | kept | `hatched`, `stage_changed`, `egg_laid`, `trait_learned`, `trait_deepened`, `wish_granted`, `bond_up`, `bond_record`, `bond_favourite`, `friend_home`, `tucked_in`, `favourite_snack`, `first_snow`, `first_frost`, **`care_miss`** ("...oh, there you are ♥" is never dropped), the forms book's new-page line, the teen reveal |
-  | care / beats | `call_answered`, `woke_up`, `fell_asleep`, `good_morning`, `discipline_miss`, `became_sick` (2b), `someone_home` (privacy P3b) |
+  | care / beats | `call_answered`, `woke_up`, `fell_asleep`, `good_morning`, `discipline_miss`, `became_sick` (2b), `someone_home` (privacy P3a, shipped 0.36.0) |
   | flavour | `sunrise`, `sunset`, `weather`, `forecast`, `news`, `pooped`, `tv_off_late`, `watching`, `listening`, and P3c's `tv_on`/`music_on` and `house.media` pushes |
 
   Phase 5's baby lines (`_lines`, `catch: false`) keep the class of the line they
