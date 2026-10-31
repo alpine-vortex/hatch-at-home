@@ -30,6 +30,10 @@ jobs:
             exit 1
           fi
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      # HACS downloads this one zip (hacs.json zip_release) instead of fetching
+      # thousands of files one by one, which left a half-installed 0.36.0.
+      - name: Zip the integration
+        run: cd custom_components/virtual_pet && zip -qr "$GITHUB_WORKSPACE/virtual_pet.zip" . -x '__pycache__/*' '*/__pycache__/*'
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
@@ -43,7 +47,8 @@ jobs:
           if gh release view "$TAG" >/dev/null 2>&1; then
             if [ "$GITHUB_REF_TYPE" = tag ]; then
               # Publishing a release in the web UI creates its tag, which runs this.
-              echo "::notice::$TAG was already released by hand; nothing to do"
+              echo "::notice::$TAG was already released by hand; adding the zip"
+              gh release upload "$TAG" virtual_pet.zip --clobber
               exit 0
             fi
             echo "::error::$TAG is already released; bump the version first"
@@ -53,4 +58,4 @@ jobs:
           # HACS offers it only to those who turned on "show beta versions".
           extra=()
           if [[ "$TAG" =~ (a|b|rc)[0-9]+$ ]]; then extra=(--prerelease --latest=false); fi
-          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes "${extra[@]}"
+          gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes "${extra[@]}" virtual_pet.zip
