@@ -859,6 +859,27 @@ const PERSONA = {
 };
 const FRIEND_WELCOME_MS = 6 * 3600 * 1000; // "welcome home!" at the next look, this long after
 const FIRST_LOOK_LINES = 3; // lines queued at the first look (the visit's notes fill what's left)
+// An adult's say on how it was raised (P2b): all happy, any type, at most once a
+// week per pet, at a first look that has room (docs/plan-2026-10-28-personality-types.md).
+const UPBRINGING_LINES = {
+  devoted: "you always looked after me ♥",
+  steady: "I turned out just right ♪",
+  scrappy: "I'm a bit of a rascal, hehe ♥",
+};
+const UPBRINGING_EVERY_MS = 7 * 24 * 3600 * 1000;
+// True (and marks it) when this pet's upbringing line is due: a week since the last.
+function upbringingDue(device) {
+  const key = `hatch-upbringing-${device}`;
+  const now = Date.now();
+  try {
+    if (now - Number(localStorage.getItem(key) || 0) < UPBRINGING_EVERY_MS) return false;
+    localStorage.setItem(key, String(now));
+  } catch (err) {
+    if (now - (upbringingDue.at?.[key] || 0) < UPBRINGING_EVERY_MS) return false;
+    (upbringingDue.at ??= {})[key] = now;
+  }
+  return true;
+}
 // Titles, artists and names cut so a line fits the bubble on a 330 px card.
 const short = (text, max = 30) => {
   const chars = Array.from(text || ""); // whole characters: never half an emoji
@@ -4845,6 +4866,9 @@ class HatchPetCard extends HTMLElement {
     }
     const wish = stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
     if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);
+    // Last, and only if there is room: an adult on how it was raised, once a week.
+    const raised = this._state(s, "sensor.life_stage")?.state === "adult" && UPBRINGING_LINES[stage.upbringing];
+    if (raised && lines.length < FIRST_LOOK_LINES && upbringingDue(device)) lines.push([raised, 5000]);
     for (const [text, ms, opts] of lines.slice(0, FIRST_LOOK_LINES)) this._queue(s, text, ms, opts);
   }
 
