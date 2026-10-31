@@ -186,8 +186,8 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   Disturb are left to your phone: the pet's calls and sickness are time-sensitive
   (they may come through a focus you allow); a need asking again is an ordinary
   notification, and poop calls stay on the card. Everything else waits like any
-  other notification. Each person only ever sees their own bond: it is on no sensor and no
-  event, and only their own card fetches it, over a private subscription. Care through Assist counts for
+  other notification. Each person only ever sees their own bond: it is on no pet sensor and no
+  pet event (your phone's messages may use your nickname), and only their own card fetches it, over a private subscription. Care through Assist counts for
   whoever is signed in; automations build no bond. A new generation keeps the household's bonds. (The card tells the pet who
   looked in with `virtual_pet.visit`, counted at most hourly.)
 - **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
@@ -751,6 +751,8 @@ missed re-call, which isn't a care miss),
 `parent_species`, `inherited_trait`), `virtual_pet_welcomed` (once, when the pet is added),
 `virtual_pet_wish_made` and `virtual_pet_wish_granted` (with `kind`),
 `virtual_pet_someone_home` (anyone signed in came home; it says nobody's name),
+`virtual_pet_holiday` (with `holiday`), `virtual_pet_weather` (with `change`),
+`virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
 `virtual_pet_favourite_snack` (with `food`).
 
 No person's bond, nickname, favourite game, notifications or aimed wish is ever on an

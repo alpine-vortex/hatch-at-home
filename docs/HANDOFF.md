@@ -292,7 +292,7 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   automations get none), and the wish to whoever granted it (`_actor`). New service
   `virtual_pet.visit` (the card calls it on the pet on show, hourly; the server also
   limits it hourly per person, in memory) counts the day's visit and grants the new
-  `say_hi` wish after noon. Life stage `bonds` (unrecorded): only levels, nicknames and
+  `say_hi` wish after noon. Life stage `bonds` (unrecorded) used to carry levels, nicknames and
   favourites (privacy P3b took `bonds` and `notify_users` off the sensor and the five
   bond moments off the bus and the public `moments`; the card has read the viewer's
   own bond and moments from `virtual_pet/subscribe` since P3a-card); the card shows only the viewer's (`_bond`): warmer hellos at 2, a hop
