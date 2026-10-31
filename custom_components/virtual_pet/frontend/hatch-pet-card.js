@@ -5749,10 +5749,16 @@ class HatchPetCard extends HTMLElement {
   // one update give the newest's reaction with one combined line (C4).
   _care(s, fresh) {
     // The viewer's recent presses, oldest first: two quick taps both count.
+    // Each fresh entry uses up one matching press, so none is left to claim later care.
     const pressed = (s.pressed || []).filter((p) => Date.now() - p.pressedAt < MINE_MATCH_MS);
-    const i = pressed.findIndex((p) => fresh.some((e) => e.action === p.action));
-    const mine = i >= 0;
-    if (mine) pressed.splice(i, 1);
+    let mine = false;
+    for (const e of fresh) {
+      const i = pressed.findIndex((p) => p.action === e.action);
+      if (i >= 0) {
+        pressed.splice(i, 1);
+        mine = true;
+      }
+    }
     s.pressed = pressed;
     const [newest] = fresh;
     const other = fresh.find((e) => e.action !== newest.action);

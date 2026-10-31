@@ -2937,14 +2937,18 @@ async function main() {
       el._care(s, [{ action: "feed", result: "ok" }]);
       el._care(s, [{ action: "snack", result: "ok" }]);
       el._care(s, [{ action: "snack", result: "ok" }]); // someone else's: no press left
+      // Both taps arriving in one update use up both presses: the next is someone else's.
+      s.pressed = ["feed", "snack"].map((action) => ({ action, pressedAt: Date.now() }));
+      el._care(s, [{ action: "snack", result: "ok" }, { action: "feed", result: "ok" }]);
+      el._care(s, [{ action: "feed", result: "ok" }]);
     } finally {
       el._react = was;
       s.pressed = [];
     }
     return seen;
   });
-  check("two quick taps (feed, snack) both count as mine, a third entry doesn't",
-    twoTaps.join() === "feed:true,snack:true,snack:false", twoTaps.join());
+  check("two quick taps (feed, snack) both count as mine, apart or in one update; a later entry doesn't",
+    twoTaps.join() === "feed:true,snack:true,snack:false,snack:true,feed:false", twoTaps.join());
 
   // The viewer's own press is "mine": a flavour moment 1 s later doesn't
   // overwrite its line for 3 s (and a poop has no line to say).
