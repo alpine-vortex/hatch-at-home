@@ -577,7 +577,7 @@ babies and children use the normal pat lines (no `BABY` keys yet); calm Catch ha
   (not the line) while `s.poseUntil > now`; that is 3c's call, not a `_patMayTalk` change.
   The box follows only `PERCH_MOVES` and `scale`: a reaction's `look`/settle needn't move it.
 - **For 4c:** `.pat` is not a status or settings control and is hidden whenever the status
-  is open, so 4c's 44 px list and box-size assert don't include it (it is ~150 x 150 px at 330).
+  is open, so 4c's 44 px list and box-size assert don't include it (about 105 px square on the 330 px card).
 
 **PR 3c: reactions at every stage (O02).** Size **M** without art, tier 1; art is a
 later, separate batch (**L**).
