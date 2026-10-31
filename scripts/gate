@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# The merge gate: lint + tests, then card-check and the costume previews on a
+# throwaway HA (fresh .storage, its own port, never 8123), as AGENTS.md asks.
+#
+#   scripts/gate                  # the whole gate
+#   scripts/gate --tests-only     # just scripts/test
+#   scripts/gate --port 8472      # pick the port (default: a free one in 8400-8499)
+#   scripts/gate -- --only shell  # anything after -- goes to card-check
+#
+# A full run takes ~45 min (card-check ~25, the two costume sweeps ~10 each).
+# Logs go to a fresh /tmp/hatch-gate-* dir, printed at the start. On a full pass
+# with a clean tree it writes the gate-passed marker for HEAD's tree, so the same
+# tree is never gated twice (the marker dir is shared by all worktrees).
+set -uo pipefail
+cd "$(dirname "$0")/.."
+ROOT=$(pwd)
+
+PORT="" TESTS_ONLY=0 CC_ARGS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --port) PORT=$2; shift 2 ;;
+    --tests-only) TESTS_ONLY=1; shift ;;
+    --) shift; CC_ARGS=("$@"); break ;;
+    *) echo "gate: unknown option $1" >&2; exit 2 ;;
+  esac
+done
+
+# A worktree links the main checkout's venv (AGENTS.md); resolve either way.
+MAIN=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
+VENV=$ROOT/.venv; [ -x "$VENV/bin/hass" ] || VENV=$MAIN/.venv
+HASS=$VENV/bin/hass
+export NODE_PATH=${NODE_PATH:-/home/poe/github/relink/node_modules}
+
+LOGS=$(mktemp -d /tmp/hatch-gate-XXXXXX)
+echo "gate: logs in $LOGS"
+
+if ! scripts/test -q >"$LOGS/test.log" 2>&1; then
+  echo "gate: FAIL scripts/test (lint, format or pytest)"; tail -15 "$LOGS/test.log"; exit 1
+fi
+echo "gate: scripts/test ok ($(grep -Eo '[0-9]+ passed' "$LOGS/test.log" | tail -1))"
+[ "$TESTS_ONLY" = 1 ] && exit 0
+
+listening() { ss -ltn "sport = :$1" | grep -q LISTEN; }
+if [ -z "$PORT" ]; then
+  for p in $(shuf -i 8400-8499); do listening "$p" || { PORT=$p; break; }; done
+fi
+if [ "$PORT" = 8123 ] || listening "$PORT"; then
+  echo "gate: port $PORT is 8123 or busy; pick another with --port" >&2; exit 2
+fi
+
+S=$LOGS/ha
+cp -r dev/config "$S"
+mkdir -p "$S/.storage" "$S/custom_components"
+ln -sfn "$ROOT/custom_components/virtual_pet" "$S/custom_components/virtual_pet"
+# The port lives in .storage/http; the yaml http: port reverts to 8123 (AGENTS.md).
+cat >"$S/.storage/http" <<EOF
+{"version": 2, "minor_version": 2, "key": "http", "data": {"stable": {"server_port": $PORT,
+ "cors_allowed_origins": ["https://cast.home-assistant.io"], "login_attempts_threshold": -1,
+ "ip_ban_enabled": true, "ssl_profile": "modern", "use_x_frame_options": true,
+ "error": null, "error_message": null}, "pending": null, "yaml_migration_done": true}}
+EOF
+
+stop_ha() {
+  # card-check restarts HA through HA_START, so stop whatever holds the port.
+  local pids
+  pids=$(ss -ltnp "sport = :$PORT" | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u)
+  [ -n "$pids" ] && kill $pids 2>/dev/null
+  [ -n "${HP:-}" ] && kill "$HP" 2>/dev/null
+  rm -rf "$S"
+}
+trap stop_ha EXIT
+
+"$HASS" --config "$S" >"$LOGS/ha.log" 2>&1 &
+HP=$!
+for _ in $(seq 1 120); do curl -s -o /dev/null "http://127.0.0.1:$PORT/" && break; sleep 2; done
+curl -s -o /dev/null "http://127.0.0.1:$PORT/" || { echo "gate: FAIL HA did not start on $PORT"; tail -5 "$LOGS/ha.log"; exit 1; }
+
+URL=http://127.0.0.1:$PORT
+HA_URL=$URL HA_CONFIG=$S HA_START="exec $HASS --config $S" \
+  node scripts/card-check.js "${CC_ARGS[@]}" >"$LOGS/card-check.log" 2>&1
+CC=$?
+echo "gate: card-check exit $CC, $(grep -c '^PASS' "$LOGS/card-check.log") PASS, $(grep -c '^FAIL' "$LOGS/card-check.log") FAIL"
+grep -E '^(FAIL|SKIP)' "$LOGS/card-check.log" | cut -c1-160 | head -20
+
+COS=0
+for season in halloween thanksgiving; do
+  HA_URL=$URL node scripts/costume-preview.js "$season" >"$LOGS/costume-$season.log" 2>&1 || COS=1
+done
+echo "gate: costume previews $([ $COS = 0 ] && echo ok || echo FAIL)"
+
+if [ $CC = 0 ] && [ $COS = 0 ] && [ ${#CC_ARGS[@]} = 0 ]; then
+  if [ -z "$(git status --porcelain --untracked-files=no)" ]; then
+    M=$(git rev-parse --git-common-dir)/gate-passed
+    mkdir -p "$M" && touch "$M/$(git rev-parse 'HEAD^{tree}')"
+    echo "gate: PASS, marker written for tree $(git rev-parse --short 'HEAD^{tree}')"
+  else
+    echo "gate: PASS (tree has changes, no marker)"
+  fi
+  exit 0
+fi
+[ $CC = 0 ] && [ $COS = 0 ] && { echo "gate: PASS (partial run, no marker)"; exit 0; }
+echo "gate: FAIL"; exit 1
