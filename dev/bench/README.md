@@ -69,6 +69,8 @@ A shot (all optional):
 | `patBox` | `true`: the pat's clear hit box (PR 3b) outlined in dashed magenta; it moves with `petClasses` such as `go-left` or `wander-r`, and a state that hides it shows no outline |
 | `beam` | `true`: the infrared beam held mid-flight (400 ms in, the head over the host's shell) by the card's own `_linkBeam`, no visit around it. Use `pets: 2` and `clip: "card"` |
 | `link` | the infrared visit greeting caught as the visit screen opens: `{waves, wait}` (`waves` is put on both species, `wait` is ms to hold, default 150) |
+| `care`, `careAt` | a `medicine` or `clean` scene paused at `careAt` ms (default 1500) |
+| `acts`, `missing`, `reactWait` | a fake species.json `acts` (`{eat: [stages], cheer: [...]}`) on every pet; sprite names (`adult_eat_1`) the server 404s; ms to wait for sprite probes before the shot. `link.cheer: true` runs the full visit (not calm) so the "hi hi" cheer plays: use `wait: 2000` |
 | `storage` | any other localStorage keys to seed |
 | `config` | extra card config (`setConfig`) |
 | `visit` | the reply the fake `virtual_pet.visit` service gives (`{notes: [...]}` makes the pet tell the viewer things) |

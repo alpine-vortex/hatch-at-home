@@ -256,7 +256,11 @@ async function runShots(browser, base, shots, outDir, workers) {
         const motion = shot.motion === "reduce" ? "reduce" : "no-preference";
         if (page.motion !== motion && (page.motion || motion === "reduce")) await page.emulateMedia({ reducedMotion: motion });
         page.motion = motion;
-        await page.evaluate((s) => window.bench.mount(s), shot);
+        // `missing`: sprite file names (e.g. "adult_eat_1") the server answers 404, for a load-fail shot.
+        const miss = (shot.missing || []).map((n) => `${n}.png`);
+        const gate = miss.length ? (route) => (miss.some((n) => route.request().url().endsWith(`/${n}`)) ? route.fulfill({ status: 404 }) : route.continue()) : null;
+        if (gate) await page.route("**/sprites/**", gate);
+        try { await page.evaluate((s) => window.bench.mount(s), shot); } finally { if (gate) await page.unroute("**/sprites/**", gate); }
         const inCard = { screen: ".slide:not(.away-slide) .screen", device: ".slide:not(.away-slide) .device" }[shot.clip];
         const file = path.join(outDir, `${shot.name}.png`);
         fs.mkdirSync(path.dirname(file), { recursive: true });

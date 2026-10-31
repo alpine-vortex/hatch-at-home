@@ -5770,11 +5770,14 @@ async function main() {
   }, entry);
   for (const stage of ["teen", "adult"]) {
     check(`react: ${stage} stage stubbed`, (await rs(stage)) === stage);
+    // A species that declares "acts" for this stage plays <stage>_eat / _cheer for fed / praised (R1).
+    const acts = await card.evaluate((el) => el._slides[el._index].species?.acts || null);
+    const own = (act) => (acts && (acts[act] === true || acts[act]?.includes(stage)) ? act : "excited");
     const cases = [
-      ["fed", { action: "feed", result: "ok" }, "excited", "munch"],
-      ["snack", { action: "snack", result: "ok" }, "excited", "munch"],
-      ["praised", { action: "praise", result: "ok" }, "excited", "greethop"],
-      ["won", { action: "game", result: "won" }, "excited", "greethop"],
+      ["fed", { action: "feed", result: "ok" }, own("eat"), "munch"],
+      ["snack", { action: "snack", result: "ok" }, own("eat"), "munch"],
+      ["praised", { action: "praise", result: "ok" }, own("cheer"), "greethop"],
+      ["won", { action: "game", result: "won" }, own("cheer"), "greethop"],
       ["tucked in", { action: "blanket", result: "ok" }, "cozy", "settle"],
       ["refused (full)", { action: "feed", result: "full" }, "bored", "look"],
     ];
@@ -5796,7 +5799,7 @@ async function main() {
       s.game = keep; s.poseUntil = 0;
       return out;
     });
-    check(`react: ${stage} a won game's log reacts even if the game is still open`, won.live && won.src.includes(`/${stage}_excited_`), JSON.stringify(won));
+    check(`react: ${stage} a won game's log reacts even if the game is still open`, won.live && won.src.includes(`/${stage}_${own("cheer")}_`), JSON.stringify(won));
     for (const result of ["asleep", "egg", "away", "no_game", "unfair", "spoiled", "lost"]) {
       const r = await react({ action: "play", result });
       check(`react: ${stage} ${result} does nothing`, !r.live && r.moves.length === 0, JSON.stringify(r));
@@ -5813,6 +5816,23 @@ async function main() {
     check(`react: ${stage} back to the mood frame after 2.5 s`,
       !after.live && after.shown && new RegExp(`/${stage}_${after.mood}_|/${stage}_content_`).test(after.src) &&
       !after.moves.some((c) => ["munch", "greethop", "look", "settle"].includes(c)), JSON.stringify(after));
+    // Fallback: an act whose sprites do not load swaps back to the mood frames, and is remembered
+    // (_poseOk, keyed species/stage/act, apart from the waves). No broken image left on show.
+    if (acts) {
+      const fb = await card.evaluate(async (el, stage) => {
+        const s = el._slides[el._index];
+        const real = s.speciesId;
+        s.speciesId = "no-such-species"; Object.assign(s, { poseUntil: 0 });
+        el._reactFrames(s, "fed");
+        const first = s.poseFrames[0];
+        await new Promise((r) => setTimeout(r, 700));
+        const out = { first, after: s.poseFrames[0], ok: el._poseOk.get(`no-such-species/${stage}/eat`), wave: [...(el._waveOk || new Map()).keys()].some((k) => k.includes("eat")) };
+        s.speciesId = real; s.poseUntil = 0;
+        return out;
+      }, stage);
+      check(`react: ${stage} a missing eat sprite falls back to the mood frame`,
+        fb.first === `${stage}_eat_1` && fb.after.startsWith(`${stage}_`) && !fb.after.includes("_eat_") && fb.ok === false && !fb.wave, JSON.stringify(fb));
+    }
     // Never while: a scene, a link, a game, the low-battery gag, asleep, away, egg.
     for (const [name, patch] of [["scene", { scene: { kind: "feed", frames: [] } }], ["linking", { linking: true }],
       ["game", { game: { cur: null } }], ["power", { power: {} }], ["asleep", { asleep: true }], ["away", { away: true }], ["egg", { egg: true }]]) {
@@ -5845,7 +5865,7 @@ async function main() {
     // Under reduced motion: the frame changes, nothing moves, no class sticks.
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.waitForTimeout(150);
-    for (const [entry, mood] of [[{ action: "feed", result: "ok" }, "excited"], [{ action: "blanket", result: "ok" }, "cozy"],
+    for (const [entry, mood] of [[{ action: "feed", result: "ok" }, own("eat")], [{ action: "blanket", result: "ok" }, "cozy"],
       [{ action: "feed", result: "full" }, "bored"]]) {
       const r = await react(entry);
       check(`react: ${stage} reduced motion, ${entry.result}: the frame changes, no move, no wander`,
