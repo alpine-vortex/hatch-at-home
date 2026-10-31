@@ -127,6 +127,8 @@ async def scripted_day(
         [
             {"type": "bond_up", "user": me.id, "level": 5, "nickname": NICKNAME},
             {"type": "bond_favourite", "user": me.id, "game": "left_right"},
+            {"type": "bond_record", "user": me.id, "game": "left_right", "wins": 5},
+            {"type": "friend_home", "user": me.id},
             {"type": "tucked_in", "user": me.id},
         ]
     )
@@ -134,6 +136,9 @@ async def scripted_day(
     pet._fire([{"type": "bond_up", "user": me.id, "level": 6}], simulated=True)
     await hass.async_block_till_done(wait_background_tasks=True)
     bond_phone = phone[told:]
+    # A phone message by nickname: theirs, and kept (the owner's decision).
+    pet._fire([{"type": "first_frost"}])
+    await hass.async_block_till_done(wait_background_tasks=True)
     # The show it watched: still a dream to have (the scrub copies).
     pet._fire([{"type": "watching", "title": "Bluey"}])
     await hass.async_block_till_done(wait_background_tasks=True)
@@ -180,7 +185,8 @@ async def test_nothing_personal_on_the_bus(
     for e in ours:
         assert not set(e.data) & PRIVATE_EVENT_FIELDS, (e.event_type, e.data)
         text = json.dumps(e.data, default=str)
-        for secret in day["secrets"]:
+        # Nor who cared (the care log's "by", kept on its sensor only).
+        for secret in (*day["secrets"], "Zeb Owner"):
             assert secret not in text, (e.event_type, secret)
         assert e.context.user_id is None, e.event_type
     made = [e for e in ours if e.event_type == f"{DOMAIN}_wish_made"]
@@ -200,8 +206,10 @@ async def test_nothing_personal_on_the_bus(
     assert not {m["type"] for m in moments} & PERSONAL_EVENTS
     home = [m for m in moments if m["type"] == "someone_home"]
     assert home and all(set(m) == {"type", "at"} for m in home)
-    # A bond moment sends nothing to a phone, opted in or not.
+    # A bond moment sends nothing to a phone, opted in or not; the phone's own
+    # messages may still use the nickname (disclosed in the guide).
     assert day["bond_phone"] == []
+    assert any(NICKNAME in c.data["message"] for c in day["phone"])
     # The scrub copied the show's event: the title still seeds a dream.
     assert any(s.get("title") == "Bluey" for s in pet.state.dream_seeds)
 

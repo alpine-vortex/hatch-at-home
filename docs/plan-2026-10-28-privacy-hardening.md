@@ -1596,10 +1596,11 @@ What P3b shipped, where it differs from the text above, and what P3c now picks u
   recorder searches pick them up.
 - Test 4's "the card's commands fire no `call_service`" is not repeated: P3a's
   `tests/test_channel.py` already asserts it.
-- Test 6 asserts the nickname appears **only** in notify `call_service` rows when it
-  appears at all (it doesn't require it there: whether the test recorder keeps those
-  rows wasn't part of P3b). User IDs aren't searched outside `virtual_pet_*` rows,
-  since HA's own `user_added` rows carry them.
+- Test 6: the scripted day ends with a `first_frost` that reaches the opted-in phone by
+  nickname. The test asserts the nickname **is** recorded, in notify `call_service`
+  rows only (the disclosed phone message), and in no `virtual_pet_*` row or pet state.
+  User IDs aren't searched outside `virtual_pet_*` rows, since HA's own `user_added`
+  rows carry them.
 - **The card-check seed** puts dev's bond at 144 points (level 8, one short of 9) with
   today's care unspent and `visited: true`, so the old-card check's care press makes a
   real `bond_up`. Unseed restores it as before.

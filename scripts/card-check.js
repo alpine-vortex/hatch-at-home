@@ -5702,8 +5702,11 @@ async function main() {
       s.settings = false; s.statusHtml = null; el._renderStatus(s, []);
       out.wish = [...s.status.querySelectorAll(".row")].find((r) => /^wish/.test(r.textContent.trim()))?.textContent.trim() || null;
       for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish)-/.test(k)) localStorage.removeItem(k);
-      s.lookedFirst = false; s.queue = [];
+      // Awake for the first look (it says nothing to a sleeping pet's screen).
+      const was = s.asleep;
+      s.asleep = false; s.lookedFirst = false; s.queue = [];
       el._firstLook(s);
+      s.asleep = was;
       out.look = s.queue.map((q) => q.text);
       s.queue = [];
       localStorage.setItem("hatch-shared-screen", "off");
@@ -5715,6 +5718,7 @@ async function main() {
     const sharedSaid = `${sharedWish.wish}|${sharedWish.look.join("|")}`;
     check("P3b: a wish aimed at dev is plain on dev's card turned shared screen (no mine, no name)",
       seeded && sharedWish.mine === null && /play a game together/.test(sharedWish.wish || "") &&
+      sharedWish.look.some((t) => /play a game today/.test(t)) &&
       !/sunbeam|with you|with me/.test(sharedSaid), JSON.stringify(sharedWish));
   } else {
     check("P3a: HA restart and the seeded bond can run (set HA_CONFIG and HA_START with HA_URL)", false,

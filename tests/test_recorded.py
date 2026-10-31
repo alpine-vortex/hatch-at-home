@@ -80,12 +80,12 @@ async def test_nothing_personal_is_recorded(
     for secret in day["secrets"]:
         for event_type, data in ours:
             assert secret not in data, (event_type, secret)
-    # The nickname, anywhere at all: only in a notify call (the phone message).
-    for event_type, data in events:
-        if NICKNAME in data:
-            assert event_type == "call_service" and '"domain":"notify"' in data, (
-                event_type
-            )
+    # The nickname, anywhere at all: only in a notify call (the phone message,
+    # which is recorded: kept by the owner's decision, and disclosed).
+    named = [(t, d) for t, d in events if NICKNAME in d]
+    assert named
+    for event_type, data in named:
+        assert event_type == "call_service" and '"domain":"notify"' in data, event_type
     # The pet's states: the care log's "by" is the only person's name kept, and
     # it is the HA user's display name ("Zeb Owner"), not a secret searched for.
     pets = [(e, a) for e, a in attrs if e.startswith(("sensor.pip_", "switch.pip_"))]
