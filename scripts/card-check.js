@@ -66,6 +66,54 @@ if (ONLY) {
 }
 const want = (name) => !ONLY || ONLY.has(name);
 
+// Keep dev pets awake for a section (they go to bed at night, and `_apply` re-sets
+// `asleep` from binary_sensor.asleep on every hass push). Overrides el._state for
+// asleep / lights_out to "off" while el.__pinAwake is set, and clears the slides'
+// leftovers. `unpinAwake` turns the override off when the section ends.
+function pinAwakeFn(el) {
+  const hour = new Date().getHours();
+  const was = !!el._slides[el._index]?.asleep;
+  if (!el.__pinAwakeInstalled) {
+    el.__pinAwakeInstalled = true;
+    const real = el._state;
+    el._state = function (slide, key) {
+      const st = real.call(this, slide, key);
+      return el.__pinAwake && st && (key === "binary_sensor.asleep" || key === "switch.lights_out")
+        ? { ...st, state: "off" } : st;
+    };
+  }
+  el.__pinAwake = true;
+  for (const s of el._slides) {
+    Object.assign(s, { asleep: false, lightsOut: false, game: null, power: null, queue: [], sayUntil: 0 });
+  }
+  el._booting = false;
+  return { hour, asleep: was };
+}
+async function pinAwake(card, section) {
+  if (process.env.CARD_CHECK_NIGHT) {
+    await card.evaluate((el) => Promise.all(el._slides.map((s) => {
+      const id = s.ids?.["binary_sensor.asleep"];
+      const st = id && el._hass.states[id];
+      return st && el._hass.callApi("POST", `states/${id}`, { state: "on", attributes: st.attributes });
+    })));
+    await card.page().waitForTimeout(500);
+  }
+  const r = await card.evaluate(pinAwakeFn);
+  if (r.asleep) console.log(`NOTE: dev pet asleep at ${r.hour}:00 in ${section}`);
+}
+async function unpinAwake(card) {
+  // (night mode: put the server's asleep sensors back to "off" for the sections that don't pin)
+  await card.evaluate((el, night) => {
+    el.__pinAwake = false;
+    if (!night) return null;
+    return Promise.all(el._slides.map((s) => {
+      const id = s.ids?.["binary_sensor.asleep"];
+      const st = id && el._hass.states[id];
+      return st && el._hass.callApi("POST", `states/${id}`, { state: "off", attributes: st.attributes });
+    }));
+  }, !!process.env.CARD_CHECK_NIGHT).catch(() => {});
+}
+
 function check(name, ok, detail = "") {
   results.push({ name, ok, detail });
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` (${detail})` : ""}`);
@@ -737,6 +785,10 @@ async function main() {
   const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
   // A context of its own, so a check can open a second tab on the same storage.
   const context = await browser.newContext({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1) });
+  // CARD_CHECK_NIGHT=1 plays a night: the browser's hour reads 2 (Date.now stays honest, so
+  // the waits still add up) and every pet's server-side asleep sensor is put "on" whenever a
+  // section pins the pets awake (pinAwake), so the pin is what keeps them up.
+  if (process.env.CARD_CHECK_NIGHT) await context.addInitScript(() => { Date.prototype.getHours = () => 2; });
   // The boot screen shows once per browser: every page here starts as if it had
   // been shown, except the boot checks' (they set the session flag and clear it).
   const bootVersion = /const BOOT_VERSION = "([^"]*)"/.exec(
@@ -1001,6 +1053,7 @@ async function main() {
   await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
   await seasonsOff(); // the reload brought the card back with its own config
   await hush(); // new slides: no sound unless a check asks for one
+  await pinAwake(card, "play");
   for (let i = 0; i < slides; i++) {
     if ((await page.locator("hatch-pet-card .title").innerText()).trim() === petName) break;
     await page.locator("hatch-pet-card .nav.next").click();
@@ -2021,6 +2074,7 @@ async function main() {
   check("catch keeps a best score",
     Number(await evaluate(() => localStorage.getItem("hatch-best-catch"))) >= expected);
 
+  await unpinAwake(card);
   }
   if (want("resume")) {
   // 3a. Games carry on (Wave 1 PR 1a): stopping a game and reopening it within
@@ -2142,6 +2196,7 @@ async function main() {
 
   }
   if (want("moments")) {
+  await pinAwake(card, "moments");
   // 4. Moments make the pet react.
   for (const [type, extra, expect] of [
     ["care_miss", { reason: "hunger" }, "there you are"],
@@ -2925,6 +2980,7 @@ async function main() {
   await quiet2a();
 
 
+  await unpinAwake(card);
   }
   if (want("photos")) {
   // 4b. A best friend's photo (phase 4). The viewer's photos come from the
@@ -3171,7 +3227,14 @@ async function main() {
           Object.assign(s, saved, { sayUntil: 0 });
           return out;
         },
-        said: (fn2) => { s.queue = []; s.sayUntil = 0; fn2(); const q = s.queue.map((x) => ({ text: x.text, opts: x.opts })); s.queue = []; return q; },
+        // What a moment says: a line said at once (2a) first, then any queued, each with its opts.
+        said: (fn2) => {
+          s.queue = []; s.sayUntil = 0; s.sayEntry = null;
+          fn2();
+          const q = [...(s.sayEntry ? [s.sayEntry] : []), ...s.queue].map((x) => ({ text: x.text, opts: x.opts }));
+          s.queue = [];
+          return q;
+        },
       };
       try {
         return await new Function("el", "s", "t", "arg", `return (${fn})(el, s, t, arg);`)(el, s, t, arg);
@@ -3806,8 +3869,10 @@ async function main() {
         },
         moment: (m) => { // what's said now, and what's queued after it
           free();
+          s.sayEntry = null;
           el._moment(s, { at: new Date().toISOString(), ...m }); el._stopTyping(s);
-          const out = { said: s.bubble.textContent, queued: s.queue.map((q) => ({ text: q.text, catch: !!q.opts?.catch })) };
+          const out = { said: s.bubble.textContent, saidCatch: !!s.sayEntry?.opts?.catch, // (2a: said at once, or queued)
+            queued: s.queue.map((q) => ({ text: q.text, catch: !!q.opts?.catch })) };
           s.queue = [];
           return out;
         },
@@ -3843,7 +3908,7 @@ async function main() {
           out[type][r] = { greet: t.greet() };
           for (const [key, m] of moments) {
             const said = t.moment(m);
-            out[type][r][key] = said.queued.length ? said.queued[0] : { text: said.said };
+            out[type][r][key] = said.queued.length ? said.queued[0] : { text: said.said, catch: said.saidCatch };
           }
         }
       }
@@ -3877,7 +3942,7 @@ async function main() {
     // speaks a type (even one stubbed in), nor a pet with none or an unknown one.
     const order = await typeAs(async (el, s, t) => {
       t.random(0.1);
-      const wish = () => t.moment({ type: "wish_granted" }).queued[0]?.text;
+      const wish = () => { const m = t.moment({ type: "wish_granted" }); return m.queued[0]?.text ?? m.said; };
       const out = {};
       t.baby(true);
       t.pet("baby", "sweet", 0); out.babyOn = wish();
@@ -4060,6 +4125,7 @@ async function main() {
 
   }
   if (want("sharedscreen")) {
+  await pinAwake(card, "sharedscreen");
   // 5b. FA: turning on "shared screen" clears every personal line, typed or
   // typing, on every slide of every card on the page and in every tab (privacy P1).
   {
@@ -4364,6 +4430,7 @@ async function main() {
       f6.disconnected && f6.observed, JSON.stringify(f6));
   }
 
+  await unpinAwake(card);
   }
   if (want("forget")) {
   // 5c. "forget my data" (privacy P2): personal screens only, two taps, then the
@@ -5796,7 +5863,7 @@ async function main() {
         s.screen.classList.remove("show-status");
       }
       el._booting = false;
-    }, index);
+    }, index).then(() => pinAwake(card, "infrared"));
     const state = () => card.evaluate((el) => {
       const [h, g] = [el._slides[el._index], el._slides[el._index + 1] || el._slides[el._index - 1]];
       const beam = el._track.querySelector(".irbeam");
@@ -5814,6 +5881,14 @@ async function main() {
         scale: h.pet.style.scale,
       };
     });
+    // Poll a condition on the card (it sits in a shadow root, so no page-level waitForFunction).
+    const until = async (fn, arg, ms) => {
+      for (const end = Date.now() + ms; Date.now() < end;) {
+        if (await card.evaluate(fn, arg).catch(() => false)) return true;
+        await lp.waitForTimeout(50);
+      }
+      return false;
+    };
     const strip = (name) => card.locator(".viewport").screenshot({ path: `${lshots}-${name}.png` });
 
     // The timer: the day's visit is 10-25 minutes away, and never while the boot screen is up.
@@ -5852,7 +5927,8 @@ async function main() {
     await lp.waitForTimeout(1100);
     const both = await state();
     await strip("4-visit");
-    await lp.waitForTimeout(1500);
+    // The guest's bubble shows only in a 2.2 s window of the visit: wait for it, not a fixed time.
+    await until((el) => el._slides.some((s) => s.screen.querySelector(".vsay:not([hidden])")), null, 3000);
     await strip("5-hop");
     const lines = await state();
     check(`the visit screen shows a connecting band, then both pets (${width}px)`,
@@ -5935,7 +6011,11 @@ async function main() {
       await card.evaluate((el, toRight) => el._linkStart(el._slides[1], el._slides[toRight ? 2 : 0]), toRight);
       await lp.waitForTimeout(500);
       const a = await state();
-      await lp.waitForTimeout(450);
+      // Wait for the head to have moved (a fixed 450 ms can sit on a frame edge), not a clock.
+      await until((el, x) => {
+        const h = el._track.querySelector(".irbeam .head");
+        return !h || Math.abs(h.getBoundingClientRect().left - x) > 2;
+      }, a.head, 2000);
       const b = await state();
       await strip(`7-three-${toRight ? "right" : "left"}`);
       check(`with three pets the beam goes ${toRight ? "right" : "left"} to the neighbour (${width}px)`,
