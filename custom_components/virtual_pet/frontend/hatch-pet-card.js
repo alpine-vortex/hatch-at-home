@@ -1578,6 +1578,8 @@ const STYLE = `
     image-rendering: pixelated; z-index: 1; }
   .trim-top { top: -12px; left: 50%; transform: translateX(-50%); }
   .trim-top2 { display: none; }
+  /* Egg (woodland): the garland flipped so it arches with the dome, not against it (owner, 2026-10-30). */
+  .egg .trim-top { transform: translateX(-50%) scaleY(-1); }
   .trim-corner { bottom: -18px; }
   .trim-corner.left { left: 14%; } .trim-corner.right { right: 14%; transform: scaleX(-1); }
   /* Tank: a pair standing on the lid's two ends, clear of its grips. */
