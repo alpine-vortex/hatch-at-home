@@ -4335,6 +4335,56 @@ async function main() {
     }
     check("P2b idle mumble: the type's lines by mood (default, bored, excited) on the heads side, sleepy/hungry/dirty and the tails side stay normal",
       idleBad.length === 0, idleBad.join(" | "));
+
+    // The upbringing lines: an adult at most once a week at the first look; never
+    // a baby, child or teen; every upbringing has a happy line of its own.
+    const grown = await typeAs(async (el, s, t) => {
+      const device = s.ids?.device;
+      const key = `hatch-upbringing-${device}`;
+      const realKeep = localStorage.getItem(key);
+      // _firstLook spends the day's dream and wish and moves the "seen" mark: put them back.
+      const spent = Object.keys(localStorage).filter((k) => /^hatch-(dream|wish|wishmention|welcomed|seen)-/.test(k))
+        .map((k) => [k, localStorage.getItem(k)]);
+      const wasLooked = s.lookedFirst, wasQueue = s.queue, wasSay = s.sayUntil;
+      const look = (stage, upbringing, { clear = true } = {}) => {
+        t.pet(stage, "sweet", null, { upbringing });
+        if (clear) localStorage.removeItem(key);
+        Object.assign(s, { lookedFirst: false, queue: [], asleep: false });
+        el._channelHeard = () => true;
+        el._firstLook(s);
+        const out = s.queue.map((q) => q.text);
+        s.queue = [];
+        return out;
+      };
+      const out = { stages: {} };
+      try {
+        for (const stage of ["baby", "child", "teen", "adult"]) out.stages[stage] = look(stage, "devoted");
+        out.each = {};
+        for (const u of ["devoted", "steady", "scrappy"]) out.each[u] = look("adult", u);
+        out.first = look("adult", "steady");
+        out.again = look("adult", "steady", { clear: false });
+        localStorage.setItem(key, String(Date.now() - 8 * 24 * 3600 * 1000));
+        out.nextWeek = look("adult", "steady", { clear: false });
+        out.unknown = look("adult", "weird");
+      } finally {
+        delete el._channelHeard;
+        for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish|wishmention|welcomed|seen)-/.test(k)) localStorage.removeItem(k);
+        for (const [k, v] of spent) localStorage.setItem(k, v);
+        Object.assign(s, { lookedFirst: wasLooked, queue: wasQueue, sayUntil: wasSay });
+        if (realKeep === null) localStorage.removeItem(key); else localStorage.setItem(key, realKeep);
+      }
+      return out;
+    });
+    const UP = { devoted: "you always looked after me ♥", steady: "I turned out just right ♪", scrappy: "I'm a bit of a rascal, hehe ♥" };
+    const grownBad = [];
+    for (const stage of ["baby", "child", "teen"]) if (grown.stages[stage].some((l) => Object.values(UP).includes(l))) grownBad.push(`${stage} got one`);
+    for (const [u, line] of Object.entries(UP)) if (!grown.each[u].includes(line)) grownBad.push(`${u}: ${grown.each[u]}`);
+    if (!grown.first.includes(UP.steady)) grownBad.push("first look: none");
+    if (grown.again.includes(UP.steady)) grownBad.push("twice in a week");
+    if (!grown.nextWeek.includes(UP.steady)) grownBad.push("not again after 8 days");
+    if (grown.unknown.length && grown.unknown.some((l) => Object.values(UP).includes(l))) grownBad.push("unknown upbringing");
+    check("upbringing lines: an adult gets its own once a week at the first look, never a baby, child or teen",
+      grownBad.length === 0, grownBad.join(" | "));
   }
 
   }
