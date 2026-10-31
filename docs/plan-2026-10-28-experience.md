@@ -629,7 +629,7 @@ gives no reaction.**
   (`_pounce`); **tucked in** = `blanket` answered (`_answer_request`, `REQUEST_ACTIONS`);
   **refused** = the `REFUSALS` fallthrough in `_react`, only for `full`, `not_needed`,
   `already_clean`, `not_sick`, `not_sleepy`, `too_tired` (not `asleep`, `egg`, `away`,
-  `no_game`, `unfair`, `spoiled`). `lost` takes no reaction.
+  `no_game`, `unfair`, `spoiled`). `lost` takes no reaction (**superseded 2026-10-31:** with `acts.aww` a lost game gets a good-sport reaction, none without; see section 6).
 - Moves: fed = a bounded class like `greethop` via `_animate` (**never `hop`**, which is
   infinite and stripped by `_redraw`); praised/won = `greethop`; refused = `look` for the
   reaction via `_animate` plus `_moving(s, ...)`; tucked in = a `transform` keyframe settle
@@ -971,6 +971,7 @@ the meal's existing "full" line; no new copy.
 | Q3 | F09: samples silent at night and asleep? | **Yes**, with C3; the tap still unlocks audio. |
 | Q4 | F11: reduced motion holds one frame? | **Yes.** |
 | Q5 | O01: a pat gives nothing kept? | **Yes.** |
+| R2-aww | A lost game gets a reaction? (reverses the 2026-10-30 first-mate decision "a lost game gives no reaction") | **Yes** (owner, 2026-10-31): `acts.aww` for REACT_MS, with `inGame`; with no `acts.aww` no reaction, no mood stand-in. |
 | Q6 | O02: the 12-frame slice? | **Yes to the slice**; the rest after it's been seen. |
 | Q7 | O04: show how long the pet will wait? | **No clock anywhere.** |
 | Q8 | O05: which creatures can be picked? | **Raised ones plus "surprise me"** on the card; the select keeps all. |
