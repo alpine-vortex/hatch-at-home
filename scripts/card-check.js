@@ -4311,11 +4311,14 @@ async function main() {
       const say = (type, moodState, r) => {
         t.pet("adult", type);
         s.moodState = moodState;
-        Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, nextIdle: 1 });
         s.bubble.textContent = "";
-        t.random(r);
-        el._idle(s);
-        return s.bubble.textContent || `(idle did not run: free=${!!el._free(s)} calm=${s.screen.classList.contains("show-status")})`;
+        for (let i = 0; i < 5 && !s.bubble.textContent; i++) { // the card's own tick may hold the pet a moment
+          Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, nextIdle: 1 });
+          let calls = 0; // draws: the next-idle delay, the move (0: mumble, first of the list), then the coin
+          t.random(() => (calls++ < 2 ? 0 : r));
+          el._idle(s);
+        }
+        return s.bubble.textContent || `(idle did not run: free=${!!el._free(s)} mood=${s.moodState} moves=${el._idleMoves(s, false, false)} st=${JSON.stringify([s.asleep, s.calling, !!s.game, !!s.scene, s.sayUntil - Date.now(), s.poseUntil - Date.now(), s.propUntil - Date.now(), s.flairUntil - Date.now(), s.movingUntil - Date.now()])})`;
       };
       for (const type of types) {
         out[type] = { content: say(type, "content", 0.1), bored: say(type, "bored", 0.1), excited: say(type, "excited", 0.1),
@@ -4385,6 +4388,45 @@ async function main() {
     if (grown.unknown.length && grown.unknown.some((l) => Object.values(UP).includes(l))) grownBad.push("unknown upbringing");
     check("upbringing lines: an adult gets its own once a week at the first look, never a baby, child or teen",
       grownBad.length === 0, grownBad.join(" | "));
+
+    // P3: the move list per type. Calm (reduced motion) leaves only mumble and
+    // pose for every type; otherwise each type's row adds its copies; "praised"
+    // takes the first body move the row adds (greethop where it adds none).
+    const manner = await typeAs(async (el, s, t, types) => {
+      const out = {};
+      const count = (list, m) => list.filter((x) => x === m).length;
+      for (const type of types) {
+        t.pet("adult", type);
+        s.moodState = "content";
+        const base = (() => { t.pet("adult", null); return el._idleMoves(s, false, false); })();
+        t.pet("adult", type);
+        const moves = el._idleMoves(s, false, false);
+        const calmMoves = el._idleMoves(s, true, true);
+        out[type] = { extra: ["mumble", "look", "wander", "perk", "speck", "hop"]
+          .map((m) => [m, count(moves, m) - count(base, m)]).filter(([, n]) => n), calm: calmMoves.join(),
+          praise: el._praiseMove(s), base: base.join() };
+      }
+      t.pet("teen", null);
+      out.noType = el._idleMoves(s, false, false).join();
+      t.pet("child", "bouncy");
+      out.child = el._idleMoves(s, false, false).join();
+      return out;
+    }, TYPES);
+    const WANT = { mellow: [["mumble", 2]], sweet: [], bouncy: [["hop", 1]], starry: [["mumble", 1], ["perk", 1]],
+      old_soul: [["look", 2]], fancy: [["perk", 2]], charming: [["look", 1], ["perk", 1]], plucky: [["wander", 1], ["perk", 1]] };
+    const PRAISE = { mellow: "greethop", sweet: "greethop", bouncy: "hop", starry: "perk", old_soul: "look", fancy: "perk",
+      charming: "look", plucky: "wander" };
+    const mannerBad = [];
+    for (const type of TYPES) {
+      const m = manner[type];
+      if (JSON.stringify(m.extra) !== JSON.stringify(WANT[type])) mannerBad.push(`${type}: adds ${JSON.stringify(m.extra)}`);
+      if (m.calm !== "mumble,pose,pose") mannerBad.push(`${type}: calm ${m.calm}`);
+      if (m.praise !== PRAISE[type]) mannerBad.push(`${type}: praise ${m.praise}`);
+    }
+    if (manner.noType !== manner[TYPES[0]].base || manner.child !== manner[TYPES[0]].base) mannerBad.push("no type / child not the base list");
+    if (!manner.bouncy.base.split(",").every((m) => m !== "hop")) mannerBad.push("hop in the content base list");
+    check("P3 manner: each type adds its moves (bouncy a hop even when content), calm leaves mumble and pose, no type or a child is unchanged, praise follows the row",
+      mannerBad.length === 0, mannerBad.join(" | "));
   }
 
   }
