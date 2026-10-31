@@ -83,7 +83,7 @@ first because it is the new thing, and "this screen" last, nearest to `shared sc
 ## 4. Per-pet finish picker
 
 - **Entry:** the `shell` row shows a swatch plus the current finish name; tap opens a
-  full-LCD picker view ("‹ shell", no pet name; see FM decision 3). The row and the
+  full-LCD picker view ("‹ settings", no pet name; see FM decision 3). The row and the
   heading exist only if the server sends `shell_finish_options` (FM decision 2).
 - **Preview:** two parts. (a) Tapping a tile applies it to the *live device* at once, no
   save, so the real shell is the preview and nothing new is drawn. It lives in
@@ -311,6 +311,9 @@ Each slice ships alone, ends green on `scripts/test`, and a bench look.
    left: owner wording changes to the slice-3 strings (6.3), the stage-specific locked
    note if more stages than `teen` ever unlock, and a picker sheet per stage. Slice 4 adds
    no other lines: every picker line is owned by slice 3, so 6.3 and 6.4 do not overlap.
+   **Shipped (first mate, 2026-10-30):** owner reworded the picker back row "‹ shell" to
+   "‹ settings" (it lands on the settings sheet; aria stays "back to settings"). No other
+   6.3 string changed; teen is still the only unlock stage, so the locked note stands.
 5. **Monochrome** (card only, after 1; reworked by the s2516 review, §5). Row `mono screen`
    (off/on), `hatch-mono`, `monoOn()`, class on `ha-card`, `storage` listener, the SVG
    4-tone filter on `.screen` and `.irbeam`, `.glow`/`.lcd`/`.ghost` handling and
@@ -343,7 +346,7 @@ none of "still, again, why, never, pleas, sad, cry, alone, forgot"):
 | Row heading, personal screen | "for <pet>" (upper-cased by CSS) |
 | Row heading, shared screen | "for the pet" |
 | Row label | "shell" |
-| Picker back row | "‹ shell" |
+| Picker back row | "‹ settings" (slice 4, owner 2026-10-30; was "‹ shell") |
 | Group headings | "world plastics", "specials", "prints" |
 | World's own tile | "<world> (default)" |
 | Current marker | "now" |

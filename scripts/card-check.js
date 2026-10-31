@@ -267,7 +267,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await page.waitForTimeout(250);
   let l = await look();
   const backFocus = await card.evaluate((el) => el.shadowRoot.activeElement?.className || "");
-  check("shell: back (‹ shell) reverts the preview, keeps the sheet and focuses the row",
+  check("shell: back (‹ settings) reverts the preview, keeps the sheet and focuses the row",
     reverted(l) && l.sheet && /shellrow/.test(backFocus), brief({ ...l, backFocus }));
   await openPicker();
   await tap("camo");

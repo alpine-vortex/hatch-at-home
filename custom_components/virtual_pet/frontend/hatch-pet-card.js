@@ -5386,7 +5386,7 @@ class HatchPetCard extends HTMLElement {
     const groups = SHELL_GROUPS.map(([head, keys], i) => `<div class="sec" data-group="${head}">${head}</div><div class="tiles">` +
       `${i === 0 ? tile(null) : ""}${keys.filter((k) => k !== own).map(tile).join("")}</div>`).join("");
     const html = `
-      <div class="shead"><button class="sback pback" aria-label="back to settings">‹ shell</button></div>
+      <div class="shead"><button class="sback pback" aria-label="back to settings">‹ settings</button></div>
       ${groups}
       <div class="pbtns"><button class="bell puse" aria-label="${escape(this._useAria(s, this._shellChoice(s)))}">use</button>` +
       `<button class="bell pdefault" aria-label="use the world's own shell">world default</button></div>
