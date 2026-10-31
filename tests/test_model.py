@@ -478,7 +478,7 @@ def test_sickness_while_asleep_is_told_on_waking():
     assert pet.sick and "became_sick" not in types(events)
     events = run(pet, at(7, 10, day=2))
     assert types(events).count("became_sick") == 1
-    assert "woke_up" in types(events)
+    assert types(events).index("woke_up") < types(events).index("became_sick")
     assert model.apply_action(pet, "medicine", pet.last_updated, NoLuck())[0] == "ok"
 
 
@@ -2919,3 +2919,11 @@ def test_a_new_egg_starts_on_its_worlds_own_shell():
     assert egg.shell_finish is None
     assert egg.to_dict()["shell_finish"] is None
     assert "shell_finish" not in egg.unknown and egg.unknown["later"] == 1
+
+
+def test_an_away_pet_does_not_become_sick():
+    start = at(9)
+    pet = hatched(start, health=R.SICK_BELOW_HEALTH - 1)
+    pet.away = True
+    events = run(pet, start + 5 * HOUR)
+    assert "became_sick" not in types(events)

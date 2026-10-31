@@ -4356,9 +4356,10 @@ class HatchPetCard extends HTMLElement {
   // May a line of this class go into the bubble now? Only a higher class
   // interrupts what's held, and nothing below kept interrupts a game or a
   // question. A line waiting in the queue at this class or above goes first.
-  _mayInterrupt(s, cls) {
+  // A call holds lines below kept, except its own news (C6, which comes with the sick call).
+  _mayInterrupt(s, cls, type) {
     if (cls >= MINE) return true;
-    if (s.game || this._questionOn(s) || (s.calling && cls < KEPT)) return false;
+    if (s.game || this._questionOn(s) || (s.calling && cls < KEPT && type !== "became_sick")) return false;
     if (s.queue?.some((q) => lineClass(q) >= cls)) return false;
     return !(s.sayUntil > Date.now()) || cls > (s.sayClass || 0);
   }
@@ -4369,7 +4370,7 @@ class HatchPetCard extends HTMLElement {
   // moment's time, noted as said for the catch-up.
   _line(s, cls, text, ms = 4500, { then, at, write, type, perk, still, ...opts } = {}) {
     const entry = { text, ms, cls, then, at, write, type, perk, still, opts };
-    if (this._mayInterrupt(s, cls)) {
+    if (this._mayInterrupt(s, cls, type)) {
       this._sayLine(s, entry);
       return;
     }
@@ -4415,7 +4416,7 @@ class HatchPetCard extends HTMLElement {
     if (!s.queue.length || s.sayUntil > now || s.game || s.power || s.screen.classList.contains("show-status")) return;
     let ready = s.asleep ? s.queue.filter((q) => lineClass(q) < KEPT) : s.queue;
     // A call's own words hold: while it's calling, only a kept line (not a wish) is said (2c).
-    if (s.calling) ready = ready.filter((q) => lineClass(q) >= KEPT && q.type !== "wish");
+    if (s.calling) ready = ready.filter((q) => q.type === "became_sick" || (lineClass(q) >= KEPT && q.type !== "wish"));
     if (!ready.length) return;
     // The highest class first; in a class, the queue's order. A line whose
     // still() says it no longer fits (e.g. 2b's C6 once it's well) is dropped.

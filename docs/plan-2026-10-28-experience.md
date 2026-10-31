@@ -401,6 +401,9 @@ existing request buttons, without their `?`).
 - **`s.calling` (2c):** `_mayInterrupt` refuses `cls < KEPT` while calling; `_sayQueued` leaves
   only kept lines that aren't `type: "wish"` while calling. **3b's `_patMayTalk`** should keep a
   `!s.calling` term when it replaces `_mayInterrupt`'s body, as before.
+- **C6 is exempt from the calling hold** (it arrives with the sick call in one update, and
+  `s.calling` is set before moments run): `_mayInterrupt(s, cls, type)` and `_sayQueued` let
+  `type === "became_sick"` through. Keep that in 3b's rewrite.
 - **Status row:** "would like" is the first row of the status sheet (above "wish"), from
   `reason_key` (`call_*`), the `sick` flag, then `requests` (no `lay_egg`). 4c's list gains it.
 - **Open for the owner:** the row's label ("would like") is the plan's; no other new copy.

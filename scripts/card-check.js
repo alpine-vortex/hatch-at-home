@@ -2862,6 +2862,19 @@ async function main() {
       c8.sceneLive.text !== "all better! ♪" && c8.own.text === "all better! ♪" && c8.own.cls === 4 &&
       c8.late.text === "all better! ♪" && c8.late.cls === 4 && c8.notSick !== "all better! ♪", JSON.stringify(c8));
 
+  // C6 arrives with the sick call in one update: the call doesn't hold it back.
+  await quiet2a();
+  await moodFlags(["sick"], { reason_key: "call_sick", reason: "feeling icky, medicine?" });
+  const withCall = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.calling = true;
+    el._moment(s, { type: "became_sick", at: new Date().toISOString() });
+    return { text: s.bubble.textContent, queued: s.queue.length };
+  });
+  check("2b: C6 is said at once even when the sick call came in the same update",
+    withCall.text === "I don't feel so good..." && withCall.queued === 0, JSON.stringify(withCall));
+  await moodBack();
+
   // PR 2c: what it wants, in order. A call holds the non-kept lines (and the wish); the
   // status row names the need above the wish, and the deadline is never shown.
   await quiet2a();
