@@ -544,6 +544,41 @@ babies and children use the normal pat lines (no `BABY` keys yet); calm Catch ha
   `catchCount` unchanged after 6 pats; no `callService`/`callWS` and `localStorage`
   unchanged in the 200 ms after a pat; one shared-screen pat; a visible focus ring.
 
+*3b shipped (s2542, 2026-10-31) and what 3c/4c rely on:*
+- Names (`hatch-pet-card.js`): `button.pat` in `.screen` (`s.pat`), `_patOn(s)` (box up?),
+  `_patMayTalk(s)`, `_pat(s, e)` (the handler), `PAT_LINES` (C10 by mood, else content),
+  `PAT_COOLDOWN_MS` 4000, `PAT_MS` 2500, `s.patAt` (last spoken pat). CSS: `.screen .pat`
+  (two classes, so `_tapped`'s `.tap-feedback` can't make it `position: relative`; its tap
+  ring and press scale are off), `.pet.pat-soft` (the cooldown's smaller wiggle, 300 ms),
+  `.pet.pat-slow` (asleep: `perk` over 1.1 s).
+- `_patMayTalk` was written with 2a's body plus `!s.calling` (2a and 2c had both landed):
+  `!s.calling && !s.power && !s.game && !_questionOn && !(kept line on show) && !(kept
+  line queued)`. No `became_sick` exception: a pat is not a moment. A pat line is
+  `_line(s, MINE, line, PAT_MS)` (catch off, no `perk` option: `_tapped` gives the perk), so
+  a kept moment arriving in the 2.5 s after a pat waits behind it in the queue.
+- Departure from the acceptance text: only the **speaking** pat calls `_tapped(s.pat, s)`.
+  The wiggle-only pat and the asleep pat call `_tapped(s.pat)` (haptic, no perk) and then
+  `_animate` their own class, because `_tapped` strips `perk` at 320 ms and would cut a
+  slowed one short. Both set `_moving` (400 ms; 1100 asleep), only when not `calm()`.
+- Hiding: CSS at once for `.show-status`, a shown `.game` (the pick menu too), `.askday`,
+  `.screen.linking`, a shown `.boot` and `.away-slide`; `s.pat.hidden = !_patOn(s)` in
+  `_renderSlide`, `_tick`, `_renderShelf`, `_toggleStatus`, `_powerGag`/`_powerEnd` and
+  `_sceneStart`/`_sceneEnd` (away and egg are `s.away`/`s.egg`, set in `_renderSlide`). The
+  handler re-checks `_patOn` and, when off, lets the tap through (status, or the slide).
+- aria-label `pat <name_by_user || device name || species name>`, set in `_renderSlide`
+  (the draw signature already holds `name_by_user`, so a rename redraws it).
+- Tests: card-check section `pat` (22 checks). The neighbour check is by state (box
+  `display: none`, device `inert`, a pat sent to it says nothing): on the dev dashboard the
+  neighbour's pet lies outside the card at 420 px, so no real tap reaches it. Bench field
+  `patBox: true` outlines the box; renders in the s2542 worker dir.
+- **For 3c:** a pat during a reaction **speaks** (2a's rule only holds back for kept lines;
+  a reaction holds no line). Its `perk` class also overrides a running reaction move
+  (`greethop` etc.) for 320 ms. If 3c wants the reaction kept whole, `_pat` skips the perk
+  (not the line) while `s.poseUntil > now`; that is 3c's call, not a `_patMayTalk` change.
+  The box follows only `PERCH_MOVES` and `scale`: a reaction's `look`/settle needn't move it.
+- **For 4c:** `.pat` is not a status or settings control and is hidden whenever the status
+  is open, so 4c's 44 px list and box-size assert don't include it (it is ~150 x 150 px at 330).
+
 **PR 3c: reactions at every stage (O02).** Size **M** without art, tier 1; art is a
 later, separate batch (**L**).
 - **No-art first.** Today only the child has species poses (`_petFrames` 2174,
@@ -602,7 +637,8 @@ gives no reaction.**
   current mood frame, the move alone carries it.
 - Never while `s.scene`, `s.linking`, `s.game`, `s.power`, `s.asleep`, away or egg. A
   reaction does not clear `sayUntil`; `_patMayTalk` is unchanged, so a pat during a
-  reaction wiggles. Under reduced motion only the `_1` frame changes (3a's rule).
+  reaction **speaks** (corrected by the 3b reconcile: only a kept line holds a pat back;
+  see "3b shipped" for the perk overlap). Under reduced motion only the `_1` frame changes (3a's rule).
 - Tests: card-check stubs `sensor.life_stage` to teen and adult and injects a care-log entry;
   `src` is `<stage>_excited_*`, then back to the mood frame after `poseUntil`; whitelisted
   refusals only; an asleep refusal changes nothing; under reduced motion the `src` changes
