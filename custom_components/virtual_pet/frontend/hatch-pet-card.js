@@ -1051,6 +1051,19 @@ const PAT_POSE_MS = 900; // acts.pat on a pat; apart from poseUntil so the next 
 // Which species.json "acts" pose a reaction plays at baby, teen and adult (R1, R2).
 // refused: the act, else the bored frame; lost and ready: the act, else nothing.
 const STAGE_POSES = { fed: "eat", praised: "cheer", greet: "cheer", refused: "refuse", lost: "aww", ready: "ready" };
+// Idle manner (P3): the copies of moves each type adds to _idle's list, in the
+// plan's order (docs/plan-2026-10-28-personality-types.md, "Idle manner"). Only
+// existing moves, reweighted. Bouncy's hop is on even when content.
+const IDLE_ADDS = {
+  mellow: ["mumble", "mumble"],
+  sweet: [],
+  bouncy: ["hop"],
+  starry: ["mumble", "perk"],
+  old_soul: ["look", "look"],
+  fancy: ["perk", "perk"],
+  charming: ["look", "perk"],
+  plucky: ["wander", "perk"],
+};
 // Only these refusals react; asleep, egg, away, no_game, unfair and spoiled do not.
 const REACT_REFUSALS = new Set(["full", "not_needed", "already_clean", "not_sick", "not_sleepy", "too_tired"]);
 const MINE_MATCH_MS = 10000; // a press is matched to the first new log entry within this
@@ -4431,6 +4444,25 @@ class HatchPetCard extends HTMLElement {
     return { text: typeof line === "function" ? line(arg) : line, baby: !!set };
   }
 
+  // The moves _idle picks from (P3): the common ones, and the copies this
+  // pet's type adds (IDLE_ADDS). Calm leaves only mumble and pose, whatever the type.
+  _idleMoves(s, hasPose, isCalm) {
+    const moves = ["mumble"];
+    if (hasPose) moves.push("pose", "pose");
+    if (!isCalm) {
+      moves.push("look", "look", "wander", "perk", "speck");
+      if (s.moodState === "excited") moves.push("hop", "hop");
+      moves.push(...this._typeAdds(s));
+    }
+    return moves;
+  }
+
+  // The moves a teen or adult's type adds to its idle list (IDLE_ADDS), in the table's order.
+  _typeAdds(s) {
+    const st = this._state(s, "sensor.life_stage");
+    return (st?.state === "teen" || st?.state === "adult") && IDLE_ADDS[st.attributes?.personality] || [];
+  }
+
   _idle(s) {
     const now = Date.now();
     if (!s.nextIdle) s.nextIdle = now + IDLE_MIN_MS / 2 + Math.random() * IDLE_SPREAD_MS;
@@ -4440,11 +4472,7 @@ class HatchPetCard extends HTMLElement {
     const isCalm = calm();
     const own = s.drawn === "child"
       ? Object.keys(s.species.extras || {}).filter((k) => !SHARED_POSES.has(k)) : [];
-    const moves = ["mumble"];
-    if (own.length) moves.push("pose", "pose");
-    if (!isCalm) moves.push("look", "look", "wander", "perk", "speck");
-    if (!isCalm && s.moodState === "excited") moves.push("hop", "hop");
-    const move = pick(moves);
+    const move = pick(this._idleMoves(s, own.length > 0, isCalm));
     if (move === "pose") {
       const frames = s.species.extras[pick(own)];
       s.poseFrames = Array.isArray(frames) ? frames : [frames];
@@ -4636,8 +4664,22 @@ class HatchPetCard extends HTMLElement {
     s.poseUntil = Date.now() + (kind === "ready" ? READY_MS : ms);
     this._show(s, s.pet, s.poseFrames[0]);
     if (calm() || !r.move) return;
-    this._animate(s, s.pet, r.move, r.ms);
-    if (r.move === "look") this._moving(s, r.ms + 250);
+    const move = kind === "praised" ? this._praiseMove(s) : r.move;
+    if (move === "wander") {
+      const side = pick(["wander-l", "wander-r"]);
+      s.pet.classList.add(side);
+      this._moving(s, r.ms + 900);
+      setTimeout(() => s.pet.classList.remove(side), r.ms);
+      return;
+    }
+    this._animate(s, s.pet, move, r.ms);
+    if (move === "look") this._moving(s, r.ms + 250);
+  }
+
+  // "Praised" moves the way its type likes (P3): the first body move the type's
+  // row adds (mumble is speech, not a move), else the plain greethop.
+  _praiseMove(s) {
+    return this._typeAdds(s).find((m) => m !== "mumble") || REACTIONS.praised.move;
   }
 
   // An open question is on show (its answer buttons).
