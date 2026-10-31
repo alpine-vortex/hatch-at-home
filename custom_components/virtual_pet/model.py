@@ -2642,7 +2642,9 @@ def _apply_lights(
         if night:
             state.happiness = _clamp(state.happiness + R.WAKE_IN_NIGHT_HAPPINESS)
             state.stayed_up_since = now
-            state.kept_up_until = now + R.FALL_ASLEEP_ANYWAY_MINUTES * 60
+        # Woken by hand, by night or in the hour before bedtime: the dark house
+        # can't put it straight back to bed for a while.
+        state.kept_up_until = now + R.FALL_ASLEEP_ANYWAY_MINUTES * 60
         _wake(state, events, "night" if night else "lights")
     return OK
 

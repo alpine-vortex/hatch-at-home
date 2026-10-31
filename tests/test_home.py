@@ -397,3 +397,17 @@ def test_forecast_talk_only_for_days_worth_a_word(today, before, kind):
     assert (talk and talk["kind"]) == kind
     if talk:
         assert talk["type"] == "forecast" and talk["when"] == "tomorrow"
+
+
+def test_waking_by_hand_before_bedtime_beats_the_dark_house():
+    # Bedtime 18:00: at 17:10 the house may already put it to bed (the hour
+    # before bedtime). A hand wake then must hold, like one in the night.
+    quiet = settings_with(home.HomeEffect(dark_and_quiet=True))
+    quiet = model.Settings(tz=UTC, home=quiet.home, bedtime=model.parse_hhmm("18:00"))
+    pet = hatched(at(17, 0))
+    model.advance(pet, at(17, 10), quiet, NoLuck(), max_gap=None)
+    assert pet.asleep  # the house put it to bed
+    model.set_lights_out(pet, False, at(17, 10), quiet)
+    assert not pet.asleep
+    model.advance(pet, at(17, 25), quiet, NoLuck(), max_gap=None)
+    assert not pet.asleep  # the switch is the top authority for a while
