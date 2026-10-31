@@ -7113,7 +7113,7 @@ async function main() {
       const clear = () => { for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k); };
       // prep() ran a tick ago: an idle flair, line or move in that gap would make a pet "not free", so reset in here.
       for (const s of el._slides) {
-        Object.assign(s, { scene: null, sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
+        Object.assign(s, { asleep: false, calling: false, game: null, moodState: "content", lookedFirst: true, queue: [], scene: null, sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
         s.screen.classList.remove("show-status");
       }
       for (const [who, s] of [["host", a], ["guest", b]]) {
