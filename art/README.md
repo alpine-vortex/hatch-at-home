@@ -314,4 +314,7 @@ through the Codex CLI's image tool, then cut like the other rooms (4:3 crop, LAN
 - Woodland `bg_rain`: the same cabin in cool overcast light with a small stove fire, rain
   falling past the firs and streaking the window. Both one edit each of the day room,
   owner-approved from a probe sheet.
-
+- Hearth `bg_dim`, `bg_night`, `bg_rain` (the kitten's rooms): the day room with the lights off and
+  the fireplace down to embers; lit warm with a lively fire and a crescent moon in the window; and
+  overcast with a small fire and rain in the window. Night and rain are second takes: the first
+  kept the day's sunlit window patch on the floor. Owner-approved from a probe sheet.
