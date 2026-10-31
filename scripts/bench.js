@@ -264,7 +264,10 @@ async function runShots(browser, base, shots, outDir, workers) {
         const gate = miss.length || fake ? async (route) => {
           const url = route.request().url();
           if (miss.some((n) => url.split("?")[0].endsWith(`/${n}`))) return route.fulfill({ status: 404 });
-          if (fake && fake.test(url)) return route.fulfill({ response: await route.fetch({ url: url.replace(fake, "_eat_$2.png") }) });
+          if (fake && fake.test(url)) { // the real art when it exists, else the eat frame
+            const real = await route.fetch();
+            return route.fulfill({ response: real.ok() ? real : await route.fetch({ url: url.replace(fake, "_eat_$2.png") }) });
+          }
           return route.continue();
         } : null;
         if (gate) await page.route("**/sprites/**", gate);

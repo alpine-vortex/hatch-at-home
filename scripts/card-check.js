@@ -5906,8 +5906,11 @@ async function main() {
         r.aww = { src: src(), live: s.poseUntil > Date.now() };
         reset(); s.game = { cur: null }; el._react(s, { action: "game", result: "lost", at: Date.now() / 1000 });
         r.awwLog = { src: src(), live: s.poseUntil > Date.now() };
-        reset(); s.game = { cur: null }; el._reactFrames(s, "ready", { inGame: true });
+        reset(); s.game = { cur: null }; // the picker: nothing yet
+        r.picker = { live: s.poseUntil > Date.now() };
+        await el._pickGame(s, "catch"); // the pick starts the game: acts.ready
         r.ready = { src: src(), live: s.poseUntil > Date.now(), ms: s.poseUntil - Date.now() };
+        el._endGame(s);
         reset();
         // The clean scene's last beat.
         el._state = function (slide, key) {
@@ -5934,7 +5937,7 @@ async function main() {
     check(`react: ${stage} acts.aww plays after a lost game (even with the game still open); none without`,
       H.aww.live && H.aww.src.includes(`${sg}aww_`) && H.awwLog.live && H.awwLog.src.includes(`${sg}aww_`) && !N.aww.live && !N.awwLog.live, JSON.stringify([H.aww, H.awwLog, N.aww, N.awwLog]));
     check(`react: ${stage} acts.ready plays ~1.2 s at a game's start; none without`,
-      H.ready.live && H.ready.src.includes(`${sg}ready_`) && H.ready.ms <= 1300 && !N.ready.live, JSON.stringify([H.ready, N.ready]));
+      !H.picker.live && H.ready.live && H.ready.src.includes(`${sg}ready_`) && H.ready.ms <= 1300 && !N.ready.live, JSON.stringify([H.ready, N.ready]));
     check(`react: ${stage} acts.splash is the clean scene's last beat; without it the cheer or clean frames`,
       H.splash.src.includes(`${sg}splash_`) && !N.splash.src.includes("_splash_") && N.splash.src !== "no scene", JSON.stringify([H.splash, N.splash]));
     await page.unroute("**/sprites/**", feedNew);

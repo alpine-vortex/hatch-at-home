@@ -4454,9 +4454,8 @@ class HatchPetCard extends HTMLElement {
     const sp = s.species;
     if (r.poseOnly && !(Array.isArray(sp.acts?.[STAGE_POSES[kind]]) || sp.acts?.[STAGE_POSES[kind]] === true)) return;
     const mood = sp.moods?.includes(r.mood) ? r.mood : "content";
-    s.poseFrames = [];
-    for (let i = 1; i <= (sp.frames || 1); i++) s.poseFrames.push(`${s.drawn}_${mood}_${i}`);
-    const moodFrames = s.poseFrames;
+    const moodFrames = [];
+    for (let i = 1; i <= (sp.frames || 1); i++) moodFrames.push(`${s.drawn}_${mood}_${i}`);
     const own = this._actPose(sp, s.drawn, s.speciesId, STAGE_POSES[kind], () => {
       if (s.poseFrames !== own) return;
       if (r.poseOnly) { // no mood stand-in: the reaction just ends
@@ -4468,8 +4467,8 @@ class HatchPetCard extends HTMLElement {
       s.poseFrames = moodFrames; // the act's art did not load: back to the mood frames
       this._show(s, s.pet, moodFrames[0]);
     });
-    if (r.poseOnly && !own) return; // the act's art failed before: nothing
-    if (own) s.poseFrames = own;
+    if (r.poseOnly && !own) return; // the act's art failed before: nothing, a running reaction untouched
+    s.poseFrames = own || moodFrames;
     s.poseUntil = Date.now() + (kind === "ready" ? READY_MS : ms);
     this._show(s, s.pet, s.poseFrames[0]);
     if (calm() || !r.move) return;
