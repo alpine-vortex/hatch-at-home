@@ -2528,7 +2528,7 @@ async function main() {
       at(2024, 12, 1), at(2024, 12, 2), at(2026, 10, 31), at(2026, 11, 1)].join(" ");
   });
   check("thanksgiving's dates follow the fourth thursday", tgDates ===
-    "- thanksgiving thanksgiving - thanksgiving - halloween -", tgDates);
+    "- thanksgiving thanksgiving - thanksgiving winter halloween -", tgDates); // 2 Dec: winter lights
   await card.evaluate((el) => { el.setConfig({ ...el._config, seasonal: "thanksgiving" }); el.hass = el._hass; });
   await page.waitForTimeout(800);
   const harvest = await card.evaluate(async (el) => {
@@ -6557,7 +6557,7 @@ async function main() {
       const img = new Image();
       img.onload = () => res();
       img.onerror = () => { missing.push(n); res(); };
-      img.src = s.seasonBox.querySelector(".lantern").src.replace(/season_winter_[^/?]+/, `season_winter_${n}`);
+      img.src = s.seasonBox.querySelector(".lantern").src.replace(/season_winter_[^/?]+\.png/, `season_winter_${n}.png`);
     })));
     // The night glow: a drop-shadow on the lamp; a floating lamp keeps its bob.
     const lamp = s.seasonBox.querySelector(".lantern");
@@ -6649,11 +6649,16 @@ async function main() {
     el._seasonVisitor = el._seasonFlyer = () => {};
     el._config = { ...el._config, seasonal: "halloween" };
     s.counted = true;
+    const mood = s.moodState;
+    s.screen.classList.remove("show-status"); // the sheet holds every tick: lift it meanwhile
+    Object.assign(s, { moodState: "content", poseUntil: 0, propUntil: 0, movingUntil: 0 });
     try {
       localStorage.setItem(`hatch-costume-halloween-${s.ids?.device}-${new Date().toDateString()}`, "1");
       for (let i = 0; i < 40; i++) { s.nextCostume = 1; s.sayUntil = 0; s.flairUntil = 0; el._seasonTick(s); }
     } finally {
       [el._costume, el._seasonVisitor, el._seasonFlyer, el._config, s.counted] = keep;
+      s.moodState = mood;
+      s.screen.classList.add("show-status");
     }
     s.queue = [];
     el._note(s, { kind: "season", season: "autumn", holiday: "thanksgiving" });
