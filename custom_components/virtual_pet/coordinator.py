@@ -244,6 +244,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # The person behind the care being applied (bonds), and when each person
         # last looked in (virtual_pet.visit; in memory).
         self._actor: str | None = None
+        # Games dropped unfinished (idle, away, asleep, switched from): the
+        # next guess of that kind starts a new game, and its reply says so.
+        self._dropped_games: set[str] = set()
         self._visits: dict[str, float] = {}
         # People (HA user IDs) whose person entity just came home, and when the
         # pet last cheered for each (in memory).
@@ -942,6 +945,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _fire(self, events: list[model.Event], simulated: bool = False) -> None:
         for event in events:
+            if event["type"] == "game_finished" and event.get("dropped"):
+                self._dropped_games.add(event["game"])
             # The bus and the public moments get a scrubbed copy, and a bond
             # moment not even that: it is its person's alone (the channel).
             # _notify and _to_channel read the event itself (who, the nickname).
@@ -2141,12 +2146,18 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._advance(now)
         by = await self._who(context)
         person = await self._person(context)
+        dropped = kind in self._dropped_games
+        self._dropped_games.discard(kind)
         if guess is None:
             info, events = model.start_game(self.state, kind, now, self.rng, by)
         else:
             info, events = model.play_game(
                 self.state, guess, now, self.rng, by, kind=kind
             )
+            if dropped and info["result"] == model.OK and info["round"] == 1:
+                # The game the guess was for was dropped (idle, away): this
+                # one is new, so the card adopts it instead of blaming a player.
+                info["restarted"] = True
         if info["result"] == "away" and self.privacy:
             info["result"] = self.state.care_log[0]["result"] = "asleep"
             for event in events:

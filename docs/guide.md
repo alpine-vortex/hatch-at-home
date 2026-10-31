@@ -267,7 +267,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   from automations and voice too. A button glows when the pet needs it, for example
   Feed when it's hungry. Medicine is greyed out unless it's sick.
 - The pet reacts to what happens to it, even when nobody pressed anything: a missed
-  call (gently: "...oh, there you are ♥"), hatching ("hello!"), growing up, a new trait, a good
+  call (gently, once, at your next look: "...oh, there you are ♥"), hatching ("hello!"), growing up, a new trait, a good
   morning, a fair scolding. In its child stage, each creature also has its own
   reactions, like the squirrel stuffing its cheeks with a snack or the kitten's
   zoomies after play.
@@ -512,7 +512,9 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   `left`/`right` plays left or right (the first guess starts it; the answer says where
   the pet went). For higher or lower, call it with `game: higher_lower` and no guess to
   start and see the first number, then `guess` `lower`/`higher`. A game costs energy
-  like play, and an unfinished one is dropped after 3 minutes. Each pet counts games
+  like play, and an unfinished one is dropped after 3 minutes (a guess after that
+  starts a new left or right game, and its answer has `restarted: true`; higher or
+  lower answers `no_game`). Each pet counts games
   played and won per game (attribute `games` on the life stage and debug sensors,
   diagnostics, and the journal).
 - **Chores:** map a to-do list in the options, and every item ticked off earns a treat.

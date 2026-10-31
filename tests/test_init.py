@@ -3565,6 +3565,36 @@ async def test_going_away_mid_game_drops_it_as_a_loss(
     assert not state.care_log  # nobody caused the drop, so nothing to react to
 
 
+async def test_a_guess_after_an_idle_drop_says_the_game_restarted(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The card's game was dropped for idling: the next guess starts a new one,
+    and the reply says so, so the card adopts it rather than blame a player."""
+    from custom_components.virtual_pet import rates as R
+
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=80.0, energy=90.0)
+    await setup(hass)
+    first = await game(hass, guess="left")
+    second = await game(hass, guess="left")
+    assert first["round"] == 1 and second["round"] == 2
+    assert "restarted" not in first and "restarted" not in second
+    await settle(hass, freezer, (R.GAME_IDLE_MINUTES + 1) * 60)
+    again = await game(hass, guess="left")
+    assert again["round"] == 1 and again["restarted"] is True
+    after = await game(hass, guess="left")
+    assert after["round"] == 2 and "restarted" not in after
+    # Higher or Lower has nothing to guess against once dropped.
+    await game(hass, game="higher_lower")
+    await game(hass, game="higher_lower", guess="higher")
+    await settle(hass, freezer, (R.GAME_IDLE_MINUTES + 1) * 60)
+    assert await game(hass, game="higher_lower", guess="higher") == {
+        "result": "no_game"
+    }
+
+
 async def test_unload_after_startup_does_not_remove_a_spent_listener(
     hass: HomeAssistant,
     now: float,
