@@ -3966,7 +3966,8 @@ async function main() {
     const py = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "model.py"), "utf8");
     const TYPES = [...py.split("\nPERSONALITIES = (")[1].split("\n)")[0].matchAll(/"(\w+)"/g)].map((m) => m[1]);
     const KEYS = ["reveal", "hello", "hello_shared", "hello_warm", "hello_hearts",
-      "good_morning", "sunset", "fell_asleep", "wish_granted", "favourite_snack"];
+      "good_morning", "sunset", "fell_asleep", "wish_granted", "favourite_snack",
+      "idle", "idle_bored", "idle_excited", "mood_content", "mood_excited"];
     const HELLOS = ["hello", "hello_shared", "hello_warm", "hello_hearts"];
     const longName = "Wwwwwwwwwwwwwwww"; // 16, as _greet leaves a name
     const longFood = "sunflower seeds"; // 15, the longest likes entry
@@ -4011,11 +4012,11 @@ async function main() {
         movingUntil: 0, queue: [], voicedAt: Date.now() + 1e9 });
       free();
       const t = {
-        pet: (stage, personality, level = null) => {
+        pet: (stage, personality, level = null, extra = {}) => {
           el._state = function (slide, key) {
             const st = realState.call(this, slide, key);
             if (key !== "sensor.life_stage" || !st || slide !== s) return st;
-            return { ...st, state: stage, attributes: { ...st.attributes, personality } };
+            return { ...st, state: stage, attributes: { ...st.attributes, personality, ...extra } };
           };
           s.mine = { ...(keptMine || {}), bond: level === null ? null : { level } }; // as the channel has it
         },
@@ -4267,6 +4268,81 @@ async function main() {
     await unshow();
     check("the side-by-side screenshots say each type's own line", sideBySide.length === 9 &&
       sideBySide.every((l) => !/: $/.test(l)), sideBySide.join(" | "));
+
+    // P2b: the mood line and the idle mumble. The mood line is picked by a hash of
+    // hatched_on, the key and the date, never Math.random, and is plain for the
+    // needs and the house's lines; the idle mumble keeps the body's lines normal.
+    const mood = await typeAs(async (el, s, t, types) => {
+      const says = (key, reason) => el._say(s, { state: "x", attributes: { reason, reason_key: key } }, false);
+      const out = { types: {} };
+      for (const type of types) {
+        let own = null, plain = null;
+        const seen = {};
+        for (let i = 0; i < 40 && !(own && plain); i++) {
+          t.pet("adult", type, null, { hatched_on: `2026-01-${String(i + 1).padStart(2, "0")}` });
+          t.random(0.1);
+          const a = says("content", "all good");
+          t.random(0.9);
+          const b = says("content", "all good");
+          const many = new Set([a, b]);
+          for (let k = 0; k < 20; k++) many.add(says("content", "all good"));
+          seen[i] = many.size;
+          if (many.size !== 1) { out.flicker = `${type} ${i}: ${[...many]}`; }
+          if (a === "all good") plain ||= i; else own ||= a;
+        }
+        out.types[type] = { own, plain, flicker: out.flicker || null };
+        t.pet("adult", type, null, { hatched_on: "2026-01-01" });
+        out.types[type].hungry = says("hungry", "a little hungry");
+        out.types[type].home = says("home_rain", "listening to the rain");
+        out.types[type].excited = says("excited", "that was fun!");
+      }
+      t.pet("child", null, null, { hatched_on: "2026-01-01" });
+      out.child = says("content", "all good");
+      t.pet("teen", null, null, { hatched_on: "2026-01-01" });
+      out.noType = says("content", "all good");
+      return out;
+    }, TYPES);
+    const moodBad = [];
+    for (const [type, m] of Object.entries(mood.types)) {
+      if (!PERSONA[type].mood_content.includes(m.own)) moodBad.push(`${type}: no own line (${m.own})`);
+      if (m.plain === null) moodBad.push(`${type}: never plain`);
+      if (m.flicker) moodBad.push(m.flicker);
+      if (m.hungry !== "a little hungry" || m.home !== "listening to the rain") moodBad.push(`${type}: needs/house not plain`);
+      if (m.excited !== "that was fun!" && !PERSONA[type].mood_excited.includes(m.excited)) moodBad.push(`${type}: excited ${m.excited}`);
+    }
+    if (mood.noType !== "all good") moodBad.push(`no type: ${mood.noType}`);
+    check("P2b mood line: content swaps by hash for every type, same all day (no flicker, random-free), needs and home stay plain, no type is plain",
+      moodBad.length === 0, moodBad.join(" | "));
+
+    const idle = await typeAs(async (el, s, t, types) => {
+      const out = {};
+      const say = (type, moodState, r) => {
+        t.pet("adult", type);
+        s.moodState = moodState;
+        Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, nextIdle: 1 });
+        s.bubble.textContent = "";
+        t.random(r);
+        el._idle(s);
+        return s.bubble.textContent || `(idle did not run: free=${!!el._free(s)} calm=${s.screen.classList.contains("show-status")})`;
+      };
+      for (const type of types) {
+        out[type] = { content: say(type, "content", 0.1), bored: say(type, "bored", 0.1), excited: say(type, "excited", 0.1),
+          sleepy: say(type, "sleepy", 0.1), hungry: say(type, "hungry", 0.1), dirty: say(type, "dirty", 0.1), plain: say(type, "content", 0.9) };
+      }
+      return out;
+    }, TYPES);
+    const idleBad = [];
+    for (const [type, o] of Object.entries(idle)) {
+      if (!PERSONA[type].idle.includes(o.content)) idleBad.push(`${type} content: ${o.content}`);
+      if (!PERSONA[type].idle_bored.includes(o.bored)) idleBad.push(`${type} bored: ${o.bored}`);
+      if (!PERSONA[type].idle_excited.includes(o.excited)) idleBad.push(`${type} excited: ${o.excited}`);
+      for (const k of ["sleepy", "hungry", "dirty"]) {
+        if (Object.values(PERSONA[type]).some((l) => l.includes?.(o[k]))) idleBad.push(`${type} ${k}: ${o[k]} is a type line`);
+      }
+      if (Object.values(PERSONA[type]).some((l) => l.includes?.(o.plain))) idleBad.push(`${type} plain: ${o.plain}`);
+    }
+    check("P2b idle mumble: the type's lines by mood (default, bored, excited) on the heads side, sleepy/hungry/dirty and the tails side stay normal",
+      idleBad.length === 0, idleBad.join(" | "));
   }
 
   }
