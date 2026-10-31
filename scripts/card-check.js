@@ -4414,8 +4414,8 @@ async function main() {
     }, TYPES);
     const WANT = { mellow: [["mumble", 2]], sweet: [], bouncy: [["hop", 1]], starry: [["mumble", 1], ["perk", 1]],
       old_soul: [["look", 2]], fancy: [["perk", 2]], charming: [["look", 1], ["perk", 1]], plucky: [["wander", 1], ["perk", 1]] };
-    const PRAISE = { mellow: "greethop", sweet: "greethop", bouncy: "hop", starry: "perk", old_soul: "look", fancy: "perk",
-      charming: "look", plucky: "wander" };
+    const PRAISE = { mellow: "greethop", sweet: "greethop", bouncy: "hop", starry: "perk", old_soul: "greethop", fancy: "perk",
+      charming: "perk", plucky: "wander" };
     const mannerBad = [];
     for (const type of TYPES) {
       const m = manner[type];

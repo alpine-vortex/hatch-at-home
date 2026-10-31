@@ -595,7 +595,9 @@ later, separate batch (**L**).
   | music / TV | `content` | sway |
   | happy arrival | `excited` | perk |
 - If personality P3 has merged, "praised" uses **the first move the type's row adds**
-  in P3's table (personality 559-570), and `greethop` for types that add none (sweet).
+  in P3's table (personality 559-570) **that looks happy** (FM, 2026-10-31: skip
+  `mumble`, which is speech, and `look`, the refusal's turn-away), and `greethop` for
+  types with none left (sweet, mellow, old soul).
   The weights aren't changed.
 - **Owner (Q6): the art slice, then decide.** After the no-art set has been seen on the
   phone: one species with two poses (say `eat` and `cheer`) at baby, teen and adult:

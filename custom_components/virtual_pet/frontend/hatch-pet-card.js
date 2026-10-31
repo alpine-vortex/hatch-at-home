@@ -4574,10 +4574,11 @@ class HatchPetCard extends HTMLElement {
     if (move === "look") this._moving(s, r.ms + 250);
   }
 
-  // "Praised" moves the way its type likes (P3): the first body move the type's
-  // row adds (mumble is speech, not a move), else the plain greethop.
+  // "Praised" moves the way its type likes (P3): the first move the type's row
+  // adds that looks happy (not mumble, which is speech, nor look, the refusal's
+  // turn-away), else the plain greethop.
   _praiseMove(s) {
-    return this._typeAdds(s).find((m) => m !== "mumble") || REACTIONS.praised.move;
+    return this._typeAdds(s).find((m) => m !== "mumble" && m !== "look") || REACTIONS.praised.move;
   }
 
   // An open question is on show (its answer buttons).
