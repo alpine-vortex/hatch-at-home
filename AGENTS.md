@@ -41,3 +41,14 @@ The manual route, if you need it:
 - Playwright resolves with `NODE_PATH=/home/poe/github/relink/node_modules`.
 - The venv is the main checkout's `.venv`. Symlink it into a worktree, and never
   commit the link.
+
+## Partial card-check runs
+
+`scripts/card-check.js --list` prints its section names; `--only a,b` runs just those.
+Ship workers run `scripts/gate -- --only <the sections their slice touches>` (or
+`card-check --only ...` on their own scratch HA, as above). A partial run skips the
+costume previews and writes no gate marker. The full `scripts/gate` is the first mate's,
+once per merged batch. Login, the dashboard, stubs and the pet-finding prelude always
+run, and `restart` puts dev's seeded bond and wish back. Sections lean on state their
+predecessors leave (the open sheet, the bond, the slide on show), so a lone section may
+need its neighbour in `--only`; `oldcard` pulls in `restart` by itself.
