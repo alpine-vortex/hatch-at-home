@@ -559,18 +559,30 @@ after the quantise. Strings exactly as 6.5. What differs, for slice 6:
   The bench now masks the pet exactly (captures with the pet hidden, black and white)
   and scores `apart`: the mean tone steps between each pet pixel and the pixel behind it
   (0 where it is lost). Woodland day scores ~0.9; N = 0.5. `delta` (the mean luma) and
-  `lost` are still printed. Flat = one tone over 97 % of the inset screen.
+  `lost` are still printed. Flat = one tone over 97 % of the inset screen. For the
+  record, the literal rule on the final filter: day's delta is 0.18-0.21, so N = 1 fails
+  2007 of 2498 and N = 0.18 fails 497 (3 in the strip). Its worst 10 include a banana
+  slug with 5 % of its pixels lost, which is why it was replaced (first mate to confirm).
 - **Bench:** `shot.mono` / `--mono on`, `classes` (put on `.screen` last, before
   transitions finish), `beam: true` (the card's own `_linkBeam`, held 400 ms in), preset
-  `mono` (species sheet + an 18-shot state strip, 420 and 330, 2496 shots, ~2.5 min),
-  `mono-pass.json` in the out dir. `dev/bench/README.md` is left for slice 6: add
+  `mono` (species sheet + a 19-shot state strip, 420 and 330, 2498 shots, ~2.5 min),
+  `mono-pass.json` in the out dir, with each shot's `.screen` classes. The bench's
+  `scene: "rain"` is woodland's rain backdrop, without `.raining`: the strip has both
+  (`raining` by `classes`, `rain-scene`). `dev/bench/README.md` is left for slice 6: add
   `mono`, `classes`, `beam` and the preset there.
 - **Docs:** the ghost line went in `docs/guide.md` (Ghosting); README has no ghost section
   and links the guide. The rest is slice 6.
-- **Result:** 57 of 2496 fail, every one on the species sheet (none in the state strip):
+- **Contrast:** `ha-card.lcd-on.mono .mono-grid` outranks a plain `lcd-on` rule, so the
+  `prefers-contrast: more` hide for `.mono-grid` is its own media rule after it
+  (card-check caught it).
+- **Card-check:** 364/364 on a scratch HA (fresh `.storage`, port 8318), with the slice 5
+  checks: the row, on/off and the key, filter on the screen and the beam, plastic
+  unfiltered, `.request` hidden over the sheet, effects off and on, more contrast,
+  a fresh load and a second tab following, no storage.
+- **Result:** 57 of 2498 fail, every one on the species sheet (none in the state strip):
   29 shots, each at both widths except tarantula baby asleep. They are the pond turtle
   (excited, cozy, dirty, teen sleepy), the dirty murk on otter, beaver and puffin, the
   terrarium eggs, firefly baby/child excited, and tarantula asleep. The ferret and pond
   turtle baby asleep fail as flat (the dark asleep screen). Worst 10: pond turtle excited at every
-  stage (0.28-0.38) and teen dirty (0.40). The outlines still read; the owner's look
+  stage (0.25-0.39) and teen dirty (0.40). The outlines still read; the owner's look
   decides.
