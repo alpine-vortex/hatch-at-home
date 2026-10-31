@@ -1,5 +1,10 @@
 # World visitor sprite studies
 
+> **Not the card's visitors.** The card's world visitors (Visitors v1) use a different
+> roster of 18 and their own 72 x 72 frames in `frontend/ui/visitor_<world>_<id>_<n>.png`,
+> drawn by `make_visitors.py` here (stand-ins); see `docs/plan-2026-10-31-visitors.md`,
+> "Built". The studies below are kept as drafts.
+
 24 small scene visitors: four associated with each world. These are draft art assets,
 separate from the live pet sprites and not installed or wired into card behavior.
 
