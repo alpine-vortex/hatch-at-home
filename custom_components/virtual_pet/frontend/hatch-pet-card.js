@@ -1960,7 +1960,7 @@ const STYLE = `
       var(--a) round(36%, var(--px)) round(95%, var(--px)) / var(--f) var(--f) no-repeat; }
   @keyframes twinkle { 0% { opacity: 1; } 40% { opacity: .25; } 55% { opacity: 1; } }
   .slide.away-slide .hw.flecks, ha-card.offscreen .hw.flecks { animation-play-state: paused; }
-  @media (prefers-contrast: more) { ha-card.lcd-on .lcd, ha-card.lcd-on .ghost, ha-card.lcd-on .mono-grid { display: none; } }
+  @media (prefers-contrast: more) { ha-card.lcd-on .lcd, ha-card.lcd-on .ghost { display: none; } }
   /* Idle life. */
   .pet { transition: translate .25s ease-out, rotate .2s ease-out; }
   .pet.look { rotate: y 180deg; }
@@ -1992,6 +1992,7 @@ const STYLE = `
     background-position: var(--lcd-x, 0) var(--lcd-y, 0); }
   ha-card.lcd-on.mono .mono-grid { display: block; }
   .screen.show-status ~ .mono-grid { display: none; }
+  @media (prefers-contrast: more) { ha-card.lcd-on.mono .mono-grid { display: none; } }
   @keyframes ir-fly { to { translate: var(--ir-d) 0; } }
   @keyframes ir-trail { to { opacity: 1; } }
   @keyframes ir-arrive { 0% { opacity: 1; scale: .6; } 100% { opacity: 0; scale: 1.3; } }

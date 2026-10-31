@@ -568,13 +568,17 @@ async function monoChecks({ page, context, check, cur, evaluate, shot, errors })
   });
   check("the wants-attention button stays hidden over the sheet and shows without it",
     request.over === "none" && request.after !== "none", JSON.stringify(request));
-  // Screen effects off (as these checks run): no grid at all; on: .mono-grid over
-  // the screen, the in-screen grid, ghost and glow hidden.
+  // Screen effects off: no grid at all; on: .mono-grid over the screen, the
+  // in-screen grid, ghost and glow hidden. Put back as they were after.
+  const setLcd = (on) => card.evaluate((el, on) => { localStorage.setItem("hatch-lcd", on ? "on" : "off"); el._card.classList.toggle("lcd-on", on); }, on);
+  const lcdWas = await card.evaluate((el) => el._card.classList.contains("lcd-on"));
+  await setLcd(false);
+  await page.waitForTimeout(300);
   const fxOff = await look();
   check("mono with screen effects off: filtered, no grid, glow and ghost hidden",
     fxOff.on && filtered(fxOff.screen) && fxOff.grid === "none" && fxOff.lcd === "none" && fxOff.glow === "none" && fxOff.ghost === "none",
     JSON.stringify(fxOff));
-  await card.evaluate((el) => { localStorage.setItem("hatch-lcd", "on"); el._card.classList.add("lcd-on"); });
+  await setLcd(true);
   await page.waitForTimeout(300);
   const fxOn = await look();
   await shot("d2-mono-on");
@@ -588,7 +592,7 @@ async function monoChecks({ page, context, check, cur, evaluate, shot, errors })
   check("mono with prefers-contrast: more: still filtered, no grid",
     contrast.on && filtered(contrast.screen) && contrast.grid === "none" && contrast.lcd === "none" && plain(contrast),
     JSON.stringify(contrast));
-  await card.evaluate((el) => { localStorage.setItem("hatch-lcd", "off"); el._card.classList.remove("lcd-on"); });
+  await setLcd(lcdWas);
 
   // A reload keeps it (a second tab opens on the same storage), and that tab
   // follows the first through the storage event, off and on again.

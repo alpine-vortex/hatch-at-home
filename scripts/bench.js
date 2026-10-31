@@ -135,7 +135,7 @@ const PRESETS = {
       }
       const strip = [
         ["day", {}], ["night", { scene: "night" }], ["dim", { scene: "dim" }], ["faded", { classes: ["faded"] }],
-        ["raining", { scene: "rain" }], ["lit", { classes: ["lit"] }], ["lit-night", { scene: "night", classes: ["lit"] }],
+        ["raining", { classes: ["raining"] }], ["rain-scene", { scene: "rain" }], ["lit", { classes: ["lit"] }], ["lit-night", { scene: "night", classes: ["lit"] }],
         ["status", { view: "status" }], ["journal", { journal: true, view: "journal" }],
         ["picker", { view: "picker", shellOptions: FINISHES, shellFinish: "stripes", stage: "teen" }],
         ["games", { view: "games" }], ["bubble", { say: "hi, Sam! I missed you~" }], ["boot", { booted: false }],
@@ -268,7 +268,7 @@ async function runShots(browser, base, shots, outDir, workers) {
         }, inCard);
         const png = await page.screenshot({ path: file, clip });
         shot.file = file;
-        if (shot.mono) shot.measure = await measureMono(page, clip, png);
+        if (shot.mono) shot.measure = { screen: await page.evaluate(() => window.bench.screenClass), ...await measureMono(page, clip, png) };
         if (shot.costume) {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
