@@ -1,9 +1,25 @@
 # Plan: device charm (LCD quirks, the infrared link, power-on)
 
-**DRAFT 1, 2026-10-29; owner answered Q1-Q10 the same day (all recommendations taken)** (revised the same day after a review pass: boot order, the ghost's class, the boot timeout, restart detection, the link's rate). A plan for the owner's review: nothing here is built. Three
+**DRAFT 1, 2026-10-29; owner answered Q1-Q10 the same day (all recommendations taken)** (revised the same day after a review pass: boot order, the ghost's class, the boot timeout, restart detection, the link's rate). A plan for the owner's review (status below). Three
 ideas from the owner, in one plan because they share pieces: an overlay layer inside
 the screen, the per-browser settings rows, the reduced-motion rule and the sound
 gate. Each part ships on its own and in any order, except where a PR says "after".
+
+**Status (2026-10-31): Parts 1-3 are built; Part 4 shells are built via the settings
+gear.** Verified against git tags.
+
+| Part | Commit | Release |
+|---|---|---|
+| D1 LCD grid | d88192d | 0.36.0 |
+| D4 boot screen | 032769a | 0.36.0 |
+| D5 `house.powered_on` + low-battery gag | 87c9d09, 425bd1e | 0.36.0 |
+| D2 ghosting | b4d4db1 | 0.36.0 |
+| D3 backlight | ddb92bf | 0.36.0 |
+| D6 infrared link | 0ee886f | 0.36.0 |
+| Part 4 shell picker (settings gear) | 0fca154, 3ad1211 | 0.36.0; its docs 1671f44 in 0.38.0 |
+
+Left: persona link-line variants (later); Q5 (links across separate cards) and Q6
+(a drawn wave pose) stay deferred. The body below is the original plan.
 
 **Line numbers are for `origin/main` at `29d77c2`.** P3a-card (in flight) rewrites
 parts of the card, so re-check every reference against main before building; the

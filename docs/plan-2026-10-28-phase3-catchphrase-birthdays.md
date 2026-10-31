@@ -1,5 +1,7 @@
 # Phase 3: a catchphrase, birthdays, and the one-time questions (build plan, draft 2)
 
+**Status (2026-10-31): shipped as 0.33.0** (b3e4692; audit fixes 188cbb2; 0.33.1 followed).
+
 Phase 3 of `plan-2026-10-28-voices-and-lines.md`: A5 (a catchphrase a friend gives
 it), A6 (birthdays, the pet's and yours) and the one-time question fix. That plan's
 "The second audit" section (rows 4, 5, 6, 11) wins over part A; this file says how

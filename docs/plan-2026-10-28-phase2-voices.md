@@ -1,5 +1,7 @@
 # Phase 2: voices, typing, babble, the favourite snack (build plan, draft 2)
 
+**Status (2026-10-31): shipped as 0.32.0** (44d8389, PR #26).
+
 Phase 2 of `plan-2026-10-28-voices-and-lines.md`: A1 (each creature's sound,
 `_speak`), A2 (typing and babble) and A4 (the favourite snack). That plan's "The
 second audit" section wins over part A; this file says how it's built. Version

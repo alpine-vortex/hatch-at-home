@@ -13,6 +13,18 @@ following on 2026-10-28:
 - **visiting each other** (pets on the shelf), looked at again (below);
 - **seasonal touches.** Halloween is built (0.28.0); the framework takes more seasons.
 
+## Status (2026-10-31)
+
+- **Shipped:** the daily wish, the dream and the away note; the bond with each person
+  (and its connections, `plan-2026-10-28-bond-connections.md`); seasons: Halloween
+  (0.28.0) and Thanksgiving; pet-to-pet visits, as the infrared link (device charm D6,
+  0.36.0, `plan-2026-10-29-device-charm.md`).
+- **In progress:** visitors v1 (card only, seeded by date, nothing saved):
+  `plan-2026-10-31-visitors.md`, on branch
+  `crew/hatch-at-home-s2552-visitors-v1-plan-card-only-see`, not yet on main.
+- **Not built:** finds and the basket/collection (no code for them on main);
+  other seasons.
+
 ## Rules for all of it
 
 - **Nothing is lost by missing a day.** No streaks, nothing that expires as a

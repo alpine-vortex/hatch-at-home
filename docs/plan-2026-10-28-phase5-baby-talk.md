@@ -2,7 +2,9 @@
 
 **Status (2026-10-28): built as 0.34.0b2** on crew branch
 `crew/hatch-at-home-s2416-phase-5-of-the-voices-plan-bab` (the switch and card lines,
-then `reason_key` in its own commit); the tier-2 audit of the built work is next.
+then `reason_key` in its own commit), merged as
+PR #34 (13c37c1, tag `v0.34.0b2`). **Status (2026-10-31):** shipped; the audit
+follow-ups landed later (e.g. a74a817, baby talk on the private channel).
 
 Phase 5 of `plan-2026-10-28-voices-and-lines.md`: A8, plus the second audit's row 9
 (kept by the owner as the last feature phase; the cache is keyed by user ID) and

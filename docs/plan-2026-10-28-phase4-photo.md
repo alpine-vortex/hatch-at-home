@@ -1,7 +1,8 @@
 # Phase 4: a photo, for best friends (build plan, draft 2)
 
-**Status (2026-10-28): built as 0.34.0b1, awaiting the beta try on both
-companion apps.** Reconcile for phase 5: the snapshot keeps `{name, species,
+**Status (2026-10-31): shipped.** Built as 0.34.0b1 (merge cb86f80, 2026-10-28);
+the `v0.34.0b1` tag is the latest 0.34 tag in the repo. Whether the beta was tried
+on both companion apps is not recorded in git (owner to confirm). Reconcile for phase 5: the snapshot keeps `{name, species,
 stage, traits, on}` (no `since`, no `world`); `take_photo` runs only on a
 counted visit (awake), and the note is derived in `_notes` right after the
 celebration. The quoted alt text lost "since" with the caption ("photo of Pip,

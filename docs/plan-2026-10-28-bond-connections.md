@@ -165,6 +165,25 @@ autumn, your favourite! 🍂". When a holiday season (Halloween, Thanksgiving) f
 their favourite season, its first look says so too ("Thanksgiving in autumn, your
 favourite time ♥").
 
+## Status (2026-10-31)
+
+Built in 0.31.0 (d1dfa89). "Building it" below is the original plan and is out of
+date in two ways:
+
+- The answer is now a websocket command, not a service: `websocket_answer`
+  (`__init__.py`) calls `async_answer` (`coordinator.py`).
+- Privacy P3b (a1dca88, 0.38.0) moved bonds, "notify me" and aimed wishes off the
+  sensor attributes and the bus onto the private channel, so the sensor no longer
+  carries `bonds`.
+
+Open questions, **as built** (the code's behaviour, not a new decision; owner to confirm):
+
+- Send-off switch: none of its own. `_send_off` needs the person's "my day" on,
+  and them in `notify_users` ("notify me"), at bond level 3+, a few times a week.
+- Quiet mode: on for everyone with "notify me", no switch (`_notify` holds
+  non-urgent notices while focus/Do Not Disturb is on).
+- Dream choices: stars / the sea / snacks / you (`people.py`), the same in every world.
+
 ## Building it
 
 - **Server:** `virtual_pet.answer`; bond `likes`, `dream_pick`, `guess`, `from`,
