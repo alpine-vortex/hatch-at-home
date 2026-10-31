@@ -26,6 +26,7 @@ named `{stage}_{mood}_{frame}.png`.
 - `*_sick_*`: the green tint is faint; the thermometer is what says "sick".
 - `bg_day`, `bg_night`, `bg_rain`, `bg_dim` are four different rooms, not one room
   in four lights, so cross-fading between them won't look like a light change.
+  Being fixed from 2026-10-30, world by world: see "One room in every light" below.
 - Hop poses (`excited`) keep the feet on the baseline. If the card wants a
   visible hop, it can add a small CSS bounce.
 - Beetle stages (the owner's choice): egg → baby (pale larva) → child (small blue
@@ -296,3 +297,16 @@ The audit found open bottoms in a few 128 frames. Two causes, no image calls:
   wins the bottom art pixel where the sheet's thin dark line won it at 64, and `outline.py` leaves the feet line alone.
   The bottom art pixel of each light column now takes the frame's outline colour (`close_bottom.py`).
 Then `outline.py` and `palette.py`.
+
+## One room in every light (2026-10-30)
+
+The owner wants each world's backgrounds to show the same room in every state: when the pet
+sleeps, the lights go off in the room it was just in. Each state is redrawn as an edit of the
+world's day room (same layout, furniture and window; only the light changes), by `gpt-5.6-luna`
+through the Codex CLI's image tool, then cut like the other rooms (4:3 crop, LANCZOS to
+512x384, `palette.py --lossy`).
+
+- Woodland `bg_dim`: the cabin with the lights off, stars in the window, the stove burned down to
+  embers. A two-step edit (the day room darkened, then the stove taken down to embers); the
+  owner picked it from probe sheets.
+
