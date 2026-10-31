@@ -339,8 +339,11 @@ async def test_someone_home_names_nobody(
     freezer.tick(timedelta(minutes=5))
     hass.states.async_set("person.me", "home", {"user_id": me.id})
     await settle(hass, freezer)
+    # Theirs (privacy P3b): not on the public list, in their own snapshot.
     moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
-    assert moments[0]["type"] == "friend_home"
+    assert not any(m["type"] == "friend_home" for m in moments)
+    snapshot = coordinator.channel_snapshot(object(), me.id, False)
+    assert snapshot["moments"][0]["type"] == "friend_home"
     assert len(fired) == 1
 
 

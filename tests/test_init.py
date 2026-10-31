@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import json
 import random
 from typing import Any
 
@@ -707,9 +708,10 @@ async def test_notifications_go_to_the_users_who_opted_in(
         blocking=True,
         context=Context(user_id=me.id),
     )
-    assert hass.states.get("sensor.pip_life_stage").attributes["notify_users"] == [
-        me.id
-    ]
+    pet = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    assert pet.state.notify_users == [me.id]
+    # Who gets notified is theirs: on no sensor (privacy P3b).
+    assert "notify_users" not in hass.states.get("sensor.pip_life_stage").attributes
     for _ in range(6):  # half an hour: hunger drops below 25 and it calls
         await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
@@ -727,7 +729,7 @@ async def test_notifications_go_to_the_users_who_opted_in(
         blocking=True,
         context=Context(user_id=me.id),
     )
-    assert hass.states.get("sensor.pip_life_stage").attributes["notify_users"] == []
+    assert pet.state.notify_users == []
 
 
 async def test_fast_forward_never_notifies(
@@ -761,7 +763,7 @@ async def test_attributes_are_copies_of_the_pets_lists(
     config = await setup(hass)
     attrs = hass.states.get("sensor.pip_life_stage").attributes
     pet = config.runtime_data.state
-    for key in ("traits", "raised", "journal", "notify_users"):
+    for key in ("traits", "raised", "journal"):
         assert attrs[key] is not getattr(pet, key), key
 
 
@@ -877,12 +879,12 @@ async def test_busy_attributes_stay_out_of_history(
         "journal",
         "trait_progress",
         "traits",
-        "notify_users",
         "shell_finish_options",
         "shell_locked",
     ):
         assert key in attrs
         assert key in LifeStageSensor._unrecorded_attributes, key
+    assert "notify_users" not in attrs  # privacy P3b
     assert attrs["upbringing"] == "steady"  # on track: no misses, no discipline
     from custom_components.virtual_pet.sensor import MoodSensor
 
@@ -1858,8 +1860,9 @@ async def test_each_person_has_their_own_bond(
     coordinator.state.wish["kind"] = "bath"  # a wish nobody here grants
     await visit(hass, me.id)
     await visit(hass, me.id)  # again within the hour: nothing more
-    bonds = hass.states.get("sensor.pip_life_stage").attributes["bonds"]
-    assert bonds == {me.id: {"level": 1}}
+    # Each person's bond is theirs: on no sensor (privacy P3b).
+    assert "bonds" not in hass.states.get("sensor.pip_life_stage").attributes
+    assert coordinator.bond_for(me.id)[0] == 1
     assert coordinator.state.bonds[me.id]["points"] == model.R.BOND_VISIT_POINTS
     # Care by the other person counts for them alone.
     for _ in range(2):
@@ -1885,8 +1888,11 @@ async def test_each_person_has_their_own_bond(
     bond = coordinator.state.bonds[me.id]
     assert bond["points"] == model.R.BOND_VISIT_POINTS + model.R.BOND_GAME_POINTS
     assert bond["games"] == {"left_right": 1}
+    # The level-up is theirs alone: on their channel, not the public list.
     moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
-    assert {"type": "bond_up", "user": me.id, "level": 2}.items() <= moments[0].items()
+    assert not any(m["type"] == "bond_up" for m in moments)
+    private = coordinator._private[me.id]
+    assert {"type": "bond_up", "level": 2}.items() <= private[0].items()
     # Automations and system users build no bond.
     await press(hass, "button.pip_snack")
     system = await hass.auth.async_create_system_user("Automation")
@@ -1964,7 +1970,7 @@ async def test_the_pet_knows_its_friends_on_their_phones_and_at_the_door(
     )
     await setup(hass)
     coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
-    assert coordinator.friends() == {me.id: "Sam"}
+    assert coordinator.friends() == {me.id}
     # Phones: the nickname for the friend, plain for everyone else.
     for user, phone in ((me, "mine"), (other, "theirs")):
         MockConfigEntry(
@@ -1985,8 +1991,12 @@ async def test_the_pet_knows_its_friends_on_their_phones_and_at_the_door(
         hass.states.async_set("person.me", "not_home", {"user_id": me.id})
         hass.states.async_set("person.other", "not_home", {"user_id": other.id})
         await settle(hass, freezer)
+    # Theirs alone (privacy P3b): on their own channel, not the public list.
     moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
-    assert [m["user"] for m in moments if m["type"] == "friend_home"] == [me.id]
+    assert not any(m["type"] == "friend_home" for m in moments)
+    home = [m for m in coordinator._private[me.id] if m["type"] == "friend_home"]
+    assert len(home) == 1 and "user" not in home[0]
+    assert other.id not in coordinator._private
 
 
 async def test_the_visit_tells_only_its_person_what_it_noticed(
@@ -2035,8 +2045,8 @@ async def test_the_visit_tells_only_its_person_what_it_noticed(
         context=Context(user_id=me.id),
     )
     # The switch is theirs alone: on the visit's response, not on a state.
-    bonds = hass.states.get("sensor.pip_life_stage").attributes["bonds"]
-    assert "my_day" not in bonds[me.id]
+    states = json.dumps([s.attributes for s in hass.states.async_all()], default=str)
+    assert "my_day" not in states
     freezer.tick(timedelta(hours=1))
     assert await look() == [{"kind": "steps", "steps": 11000}]
     freezer.tick(timedelta(hours=1))
@@ -2059,13 +2069,15 @@ async def test_tucked_in_says_goodnight_and_thanks_in_the_morning(
         blocking=True,
         context=Context(user_id=me.id),
     )
+    # Theirs alone (privacy P3b): on their own channel, not the public list.
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
     moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
-    assert any(m["type"] == "tucked_in" and m["user"] == me.id for m in moments)
+    assert not any(m["type"] == "tucked_in" for m in moments)
+    assert any(m["type"] == "tucked_in" for m in coordinator._private[me.id])
     # The morning after, awake: a thank-you, once.
     freezer.move_to("2026-10-29 08:00:00+00:00")
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
-    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
     await coordinator.async_set_lights_out(False)
     assert coordinator._awake()
     notes = await coordinator.async_visit(me.id)
@@ -2091,9 +2103,12 @@ async def test_beating_your_own_best_game_is_noticed(
             return_response=True,
             context=Context(user_id=me.id),
         )
+    # Theirs alone (privacy P3b): on their own channel, not the public list.
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
     moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
-    record = next(m for m in moments if m["type"] == "bond_record")
-    assert record["user"] == me.id and record["game"] == "left_right"
+    assert not any(m["type"] == "bond_record" for m in moments)
+    record = next(m for m in coordinator._private[me.id] if m["type"] == "bond_record")
+    assert "user" not in record and record["game"] == "left_right"
 
 
 # --- Bond connections (people.py) ------------------------------------------------
@@ -3075,8 +3090,8 @@ async def test_a_best_friends_photo_is_theirs_alone(
     }
     # Never on a sensor, the bus or in diagnostics.
     await hass.async_block_till_done()
-    bonds = hass.states.get("sensor.pip_life_stage").attributes["bonds"]
-    assert "photos" not in str(bonds) and "photos" not in str(bus)
+    states = str([s.attributes for s in hass.states.async_all()])
+    assert "photos" not in states and "photos" not in str(bus)
     diag = await async_get_config_entry_diagnostics(hass, config)
     assert "photos" not in str(diag) and "Old" not in str(diag)
     # A new generation's photo is said again, and the first is kept.

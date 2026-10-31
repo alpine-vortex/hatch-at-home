@@ -83,8 +83,9 @@ CONF_CHORES = "chores"  # to-do lists; a done item earns the pet a treat
 CONF_DASHBOARD = "dashboard"  # the path a tap on the pet's notifications opens
 
 # The private channel (virtual_pet/subscribe). Bond moments are one person's:
-# each goes to that person's own channel. Media moments, with their titles, go
-# to every channel, shared screens too (the house's, not anyone's).
+# each goes to that person's own channel only, never the bus or the public
+# moments. Media moments, with their titles, go to every channel, shared
+# screens too (the house's, not anyone's).
 PERSONAL_EVENTS = {
     "bond_up",
     "bond_record",
@@ -92,4 +93,7 @@ PERSONAL_EVENTS = {
     "friend_home",
     "tucked_in",
 }
+# What a public event never carries (the bus and the public moments): whose it
+# is and what the pet calls them. The last line of defence after the gate.
+PRIVATE_EVENT_FIELDS = {"user", "for", "for_name", "nickname", "favourite"}
 MEDIA_EVENTS = {"watching", "listening"}

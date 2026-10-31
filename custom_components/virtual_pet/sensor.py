@@ -152,12 +152,10 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "trait_progress",
             "journal",
             "memories",
-            "notify_users",
             "upbringing_score",
             "games",
             "wish",
             "dream",
-            "bonds",
             "favourites",
             "catchphrase",
             "personality",
@@ -182,7 +180,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
         """Today's wish; "open" while it can still come true, so the card stops
         mentioning it: "say hi this afternoon" and "a snack after lunch" close
         at bedtime ("tuck me in" is granted then, so it stays open)."""
-        wish = self._today_only(self.pet.wish, ("kind", "granted", "for", "for_name"))
+        wish = self._today_only(self.pet.wish, ("kind", "granted"))
         if wish is not None:
             late = wish.get("kind") in model.DAYTIME_WISHES and model.in_sleep_hours(
                 dt_util.utcnow().timestamp(), self.coordinator.settings
@@ -226,7 +224,6 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "trait_cap": R.TRAIT_CAP,  # new learning stops here
             "generation": self.pet.generation,
             "journal": [dict(r) for r in self.pet.journal],
-            "notify_users": list(self.pet.notify_users),
             # Whole percents, rounded down: a finer value changed on every tick,
             # and each change is a new database row.
             "trait_progress": {
@@ -235,19 +232,10 @@ class LifeStageSensor(PetEntity, SensorEntity):
             },
             "roster": list(self.coordinator.roster),
             # Daily check-ins: today's wish and this morning's dream, for the card
-            # (who granted the wish stays on the server).
-            # "for": a close friend it hopes grants it (user ID and first name).
+            # (who granted it, and whom it's for, stay on the server: the
+            # viewer's own card hears "for you" on its private channel).
             "wish": self._wish(),
             "dream": self._today_only(self.pet.dream, ("kind", "title")),
-            # Each person's bond, by HA user ID; the card shows only the viewer's
-            # own (points, who played what and "my day" stay on the server).
-            "bonds": {
-                user: {
-                    "level": model.bond_level(b["points"]),
-                    **{k: b[k] for k in ("nickname", "favourite") if b.get(k)},
-                }
-                for user, b in self.pet.bonds.items()
-            },
             # Its own favourites ({"snack": ...}): the pet's, not anyone's secret.
             "favourites": dict(self.pet.favourites),
             # What it says at the end of things: a friend's pick, or its own.

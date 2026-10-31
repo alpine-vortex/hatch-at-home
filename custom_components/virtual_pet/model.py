@@ -9,6 +9,7 @@ whatever events these return.
 from __future__ import annotations
 
 import calendar
+from collections.abc import Collection
 import copy
 from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
@@ -2212,11 +2213,12 @@ def pick_wish(
     today: str,
     rng: random.Random,
     options: set[str],
-    friends: dict[str, str] | None = None,
+    friends: Collection[str] | None = None,
 ) -> list[Event]:
     """Today's wish, once a day, from what the house can grant (never yesterday's
-    again), now and then aimed at one of its close friends ({user ID: first
-    name}). Missing a wish costs nothing: tomorrow brings a new one."""
+    again), now and then aimed at one of its close friends (HA user IDs; whom
+    it is for stays in the save, off the sensor and the event). Missing a wish
+    costs nothing: tomorrow brings a new one."""
     if state.wish and state.wish.get("day") == today:
         return []
     last = state.wish.get("kind") if state.wish else None
@@ -2229,8 +2231,7 @@ def pick_wish(
     state.wish = {"kind": kind, "day": today, "granted": False}
     if friends and kind in AIMED_WISHES and rng.random() < R.WISH_FOR_CHANCE:
         user = rng.choice(sorted(friends))
-        state.wish.update({"for": user, "for_name": friends[user]})
-        return [{"type": "wish_made", "kind": kind, "for": user}]
+        state.wish["for"] = user
     return [{"type": "wish_made", "kind": kind}]
 
 

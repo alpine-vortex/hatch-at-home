@@ -116,8 +116,8 @@ from its unlit twin on more than 5 % of its pixels, or the run exits non-zero.
 Looks only. There is no server logic: no mood or care rules, no privacy
 checks, no restarts, no real Home Assistant theme or fonts around the card
 (it sits on a dark page). The fake entities are the minimum the card reads;
-a screen that needs a sensor attribute this fake does not set (bonds,
-wishes, photos) shows its empty state. The shell picker's `use`, `world default`
+a screen that needs data this fake does not set (the private channel's
+bond and aimed wish, wishes, photos) shows its empty state. The shell picker's `use`, `world default`
 and its error lines need the server: card-check covers them. The journal has a fixture: `--journal`
 (`journal: true` or an object over it) fills the lead pet's `life_stage` with
 every creature of the world raised, two past generations, traits and a

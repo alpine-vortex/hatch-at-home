@@ -2266,20 +2266,21 @@ def test_bonds_carry_into_the_next_generation_and_survive_a_bad_save():
 
 def test_a_wish_may_be_aimed_at_a_close_friend():
     pet = hatched(at(9))
-    model.pick_wish(pet, "2026-10-01", Lucky(1), {"play"}, {"u1": "Sam"})
+    events = model.pick_wish(pet, "2026-10-01", Lucky(1), {"play"}, {"u1"})
     assert pet.wish == {
         "kind": "play",
         "day": "2026-10-01",
         "granted": False,
         "for": "u1",
-        "for_name": "Sam",
     }
+    # Whom it's for stays in the save, never on the event (privacy P3b).
+    assert events == [{"type": "wish_made", "kind": "play"}]
     # Anyone may grant it.
     assert model.grant_wish(pet, "play", at(10), "2026-10-01", 10, "Alex")
     # Not one the house grants, nor without friends.
-    model.pick_wish(pet, "2026-10-02", Lucky(1), {"tuck_in"}, {"u1": "Sam"})
+    model.pick_wish(pet, "2026-10-02", Lucky(1), {"tuck_in"}, {"u1"})
     assert "for" not in pet.wish
-    model.pick_wish(pet, "2026-10-03", Lucky(1), {"play"}, {})
+    model.pick_wish(pet, "2026-10-03", Lucky(1), {"play"}, set())
     assert "for" not in pet.wish
 
 
@@ -2630,7 +2631,7 @@ def test_a_lived_in_save_loads_unchanged():
     model.take_photo(pet, "u1", "2026-10-04")
     model.apply_action(pet, "feed", at(10), NoLuck(), "Sam")
     model.season_first(pet, "snow", at(9, day=3), UTC)
-    model.pick_wish(pet, "2026-10-04", Lucky(1), {"play"}, {"u1": "Sam"})
+    model.pick_wish(pet, "2026-10-04", Lucky(1), {"play"}, {"u1"})
     model.pick_dream(pet, "u1", "stars", at(20))
     pet.dream_seeds.append({"kind": "watching", "title": "Bluey", "at": at(19)})
     model.dream_on_waking(pet, at(7, day=5), "2026-10-05", random.Random(0))

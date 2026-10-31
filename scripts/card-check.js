@@ -1097,7 +1097,7 @@ async function main() {
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(300);
   // A level-up is said only to the person whose bond grew: from their own
-  // channel. Someone else's, still on the public list until P3b, says nothing.
+  // channel. Someone else's (a stub: an old server's public list) says nothing.
   const mine = await page.locator("hatch-pet-card").evaluate((el) => {
     const s = el._slides[el._index];
     s.queue = [];
@@ -5656,7 +5656,10 @@ async function main() {
     const downAt = Date.now();
     const token2 = await bounce(fresh, entryId, (data) => {
       before = { bond: data.bonds?.[me], wish: data.wish };
-      data.bonds = { ...(data.bonds || {}), [me]: { ...(data.bonds?.[me] || {}), points: 105, nickname: "sunbeam" } };
+      // Level 8, one point short of 9 with today's care still to earn: the
+      // old-card check's care press makes a real bond_up (8b).
+      data.bonds = { ...(data.bonds || {}), [me]: { ...(data.bonds?.[me] || {}), points: 144, nickname: "sunbeam",
+        day: today, today: 0, visited: true } };
       data.wish = { kind: "play", day: today, granted: false, for: me, for_name: USER.name };
     });
     unseed = () => bounce(token2, entryId, (data) => {
@@ -5687,9 +5690,173 @@ async function main() {
       JSON.stringify({ before: poweredBefore, after: back.powered }));
     check("P3a: the seeded wish is aimed at dev on dev's own card",
       back.aimed === true && /play a game with you/.test(back.wish || ""), JSON.stringify(back));
+    // The same aimed wish on dev's own card turned shared screen: no "mine"
+    // from the server, and the plain wish in the status and the first look.
+    const sharedWish = await card.evaluate(async (el, e) => {
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+      localStorage.setItem("hatch-shared-screen", "on");
+      el._subscribe(s, true);
+      for (let i = 0; i < 50 && (s.mine !== null || !s.subscribed); i++) await wait(100);
+      const out = { mine: s.mine, asleep: !!s.asleep };
+      s.settings = false; s.statusHtml = null; el._renderStatus(s, []);
+      out.wish = [...s.status.querySelectorAll(".row")].find((r) => /^wish/.test(r.textContent.trim()))?.textContent.trim() || null;
+      for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish)-/.test(k)) localStorage.removeItem(k);
+      s.lookedFirst = false; s.queue = [];
+      el._firstLook(s);
+      out.look = s.queue.map((q) => q.text);
+      s.queue = [];
+      localStorage.setItem("hatch-shared-screen", "off");
+      s.statusHtml = null;
+      el._subscribe(s, true);
+      for (let i = 0; i < 50 && s.mine?.bond?.nickname !== "sunbeam"; i++) await wait(100);
+      return out;
+    }, seedPet);
+    const sharedSaid = `${sharedWish.wish}|${sharedWish.look.join("|")}`;
+    check("P3b: a wish aimed at dev is plain on dev's card turned shared screen (no mine, no name)",
+      seeded && sharedWish.mine === null && /play a game together/.test(sharedWish.wish || "") &&
+      !/sunbeam|with you|with me/.test(sharedSaid), JSON.stringify(sharedWish));
   } else {
     check("P3a: HA restart and the seeded bond can run (set HA_CONFIG and HA_START with HA_URL)", false,
       "no HA_CONFIG/HA_START: the restart and the seeded second login didn't run");
+  }
+
+  // 8b. An old card on a stale tablet (privacy P3b): the one just before P3b
+  // (v0.37.0) and the last before the channel (v0.35.0, the only one P3b
+  // changes visibly), served in place of this card against this server. P3b
+  // takes bonds, notify_users and the aimed wish off the sensor and the bond
+  // moments off the bus: an old card loses them and must not break. Pass is
+  // no "undefined" and no uncaught error; every console error is kept in
+  // dev/card-check/old-card-<tag>.json, to compare with a pre-P3b run.
+  const BOND_MOMENTS = ["bond_up", "bond_record", "bond_favourite", "friend_home", "tucked_in"];
+  const oldCard = async (tag) => {
+    const root = path.join(__dirname, "..");
+    const src = require("child_process").execFileSync("git",
+      ["show", `${tag}:custom_components/virtual_pet/frontend/hatch-pet-card.js`],
+      { cwd: root, encoding: "utf8", maxBuffer: 64 << 20 });
+    const oldBoot = /const BOOT_VERSION = "([^"]*)"/.exec(src)?.[1] || null;
+    const ctx = await browser.newContext({ viewport: { width: 420, height: 860 }, storageState: await context.storageState() });
+    await ctx.addInitScript((v) => {
+      try {
+        if (v) localStorage.setItem("hatch-booted", v);
+        localStorage.setItem("hatch-lcd", "off");
+        localStorage.setItem("hatch-shared-screen", "off");
+      } catch (err) {
+        // no storage
+      }
+    }, oldBoot);
+    let served = 0;
+    await ctx.route("**/virtual_pet/frontend/hatch-pet-card.js*", (r) => {
+      served += 1;
+      return r.fulfill({ status: 200, contentType: "text/javascript", body: src });
+    });
+    const p = await ctx.newPage();
+    const errs = [];
+    const uncaught = [];
+    p.on("pageerror", (e) => { uncaught.push(String(e)); errs.push(String(e)); });
+    p.on("console", (m) => {
+      if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errs.push(m.text());
+    });
+    const out = { tag, cases: {} };
+    try {
+      await p.goto(`${HA}/pet-bench/pet`);
+      if (await p.waitForSelector('input[autocomplete="username"]', { timeout: 8000 }).catch(() => null)) {
+        await p.locator('input[autocomplete="username"]').first().fill(USER.username);
+        await p.locator('input[type="password"]').first().fill(USER.password);
+        await p.keyboard.press("Enter");
+      }
+      await p.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
+      await p.waitForTimeout(16000); // the frontend reloads itself once
+      await p.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+      const el = p.locator("hatch-pet-card").first();
+      const slideCount = await p.locator("hatch-pet-card .slide").count();
+      for (let i = 0; i < slideCount; i++) {
+        if (await el.evaluate((c, e) => c._slides?.[c._index]?.ids?.["sensor.life_stage"] === e, seedPet)) break;
+        await p.locator("hatch-pet-card .nav.next").click();
+        await p.waitForTimeout(700);
+      }
+      const view = () => el.evaluate((c) => {
+        const s = c._slides[c._index];
+        return { bubble: s.bubble?.textContent || "", status: s.status?.textContent || "",
+          queued: (s.queue || []).map((q) => q.text) };
+      });
+      // The status (the bond row, the aimed wish, the bell where it lives).
+      await p.locator("hatch-pet-card .statusbtn").click();
+      await p.waitForTimeout(800);
+      out.cases.status = await view();
+      out.cases.status.wish = await el.evaluate((c) => [...c._slides[c._index].status.querySelectorAll(".row")]
+        .find((r) => /^wish/.test(r.textContent.trim()))?.textContent.trim() || null);
+      await p.locator("hatch-pet-card .statusbtn").click();
+      await p.waitForTimeout(400);
+      // A real bond moment: dev's care press takes the seeded bond to level 9.
+      const level = () => page.locator("hatch-pet-card").evaluate((c, e) =>
+        c._slides.find((x) => x.ids?.["sensor.life_stage"] === e)?.mine?.bond?.level ?? null, seedPet);
+      const before = await level();
+      const said = new Set();
+      // Awake first (the card's "wake" tap): care to a sleeping pet is refused.
+      if (pet["switch.lights_out"]) {
+        await p.evaluate((id) => document.querySelector("home-assistant").hass
+          .callService("switch", "turn_off", { entity_id: id }), pet["switch.lights_out"]).catch(() => {});
+        await p.waitForTimeout(1500);
+      }
+      for (const key of ["button.play", "button.praise", "button.snack", "button.feed", "button.clean"]) {
+        if (!pet[key] || (await level()) > before) break;
+        await p.evaluate((id) => document.querySelector("home-assistant").hass
+          .callService("button", "press", { entity_id: id }), pet[key]).catch(() => {});
+        for (let i = 0; i < 10; i++) {
+          const v = await view();
+          [v.bubble, ...v.queued].forEach((t) => t && said.add(t));
+          await p.waitForTimeout(200);
+        }
+      }
+      for (let i = 0; i < 15; i++) {
+        const v = await view();
+        [v.bubble, ...v.queued].forEach((t) => t && said.add(t));
+        await p.waitForTimeout(200);
+      }
+      const lastCare = pet["sensor.last_care"];
+      out.cases.bond = { levelBefore: before, levelAfter: await level(), said: [...said],
+        publicMoments: await p.evaluate((id) => (document.querySelector("home-assistant").hass.states[id]
+          ?.attributes.moments || []).map((m) => m.type), lastCare) };
+      // someone_home on a shared screen (a public moment, injected).
+      out.cases.someoneHome = await el.evaluate(async (c, id) => {
+        localStorage.setItem("hatch-shared-screen", "on");
+        const s = c._slides[c._index];
+        s.queue = [];
+        const hass = c._hass;
+        const st = hass.states[id];
+        const moments = [{ type: "someone_home", at: new Date().toISOString() }, ...(st.attributes.moments || [])];
+        await hass.callApi("POST", `states/${id}`, { state: st.state, attributes: { ...st.attributes, moments } });
+        await new Promise((r) => setTimeout(r, 1500));
+        const r = { bubble: s.bubble?.textContent || "", queued: (s.queue || []).map((q) => q.text) };
+        localStorage.setItem("hatch-shared-screen", "off");
+        return r;
+      }, lastCare);
+    } catch (err) {
+      out.failed = String(err);
+    }
+    out.served = served;
+    out.errors = errs;
+    out.uncaught = uncaught;
+    const text = JSON.stringify(out.cases);
+    out.undefined = /undefined/.test(text);
+    out.sunbeam = /sunbeam/.test(text);
+    fs.writeFileSync(path.join(OUT, `old-card-${tag}.json`), JSON.stringify(out, null, 2));
+    await ctx.close();
+    return out;
+  };
+  for (const tag of ["v0.37.0", "v0.35.0"]) {
+    const r = await oldCard(tag);
+    check(`P3b: an old card (${tag}) on this server: no "undefined", no uncaught error`,
+      seeded && !r.failed && r.served > 0 && !r.undefined && r.uncaught.length === 0,
+      JSON.stringify({ failed: r.failed, served: r.served, errors: r.errors.slice(0, 3), uncaught: r.uncaught.slice(0, 3),
+        wish: r.cases.status?.wish, bond: r.cases.bond, someoneHome: r.cases.someoneHome }));
+    if (tag === "v0.37.0") {
+      const b = r.cases.bond || {};
+      check("P3b: a real bond level-up puts no bond moment on the public list",
+        b.levelAfter > b.levelBefore && !(b.publicMoments || []).some((t) => BOND_MOMENTS.includes(t)),
+        JSON.stringify(b));
+    }
   }
 
   // A second, non-admin login on the same dashboard.
@@ -5782,6 +5949,26 @@ async function main() {
     check("P3a: a wish aimed at dev is plain on the second login's card",
       seeded && (view.wish === "wish♡ play a game together" || /play a game together/.test(view.wish || "")), String(view.wish));
     check("P3a: no errors in the second login's console", errors2.length === 0, errors2.slice(0, 3).join(" | "));
+    // P3b: nothing of dev's on any pet entity in the second login's
+    // hass.states either, except the care log's "by" (the HA user's display
+    // name, kept by the owner's decision). Needs the seed: a FAIL without it.
+    const scan = await page2.evaluate(() => {
+      const hass = document.querySelector("home-assistant").hass;
+      const out = {};
+      for (const [id, st] of Object.entries(hass.states)) {
+        if (hass.entities[id]?.platform !== "virtual_pet") continue;
+        const attrs = { ...st.attributes };
+        if (Array.isArray(attrs.log)) attrs.log = attrs.log.map(({ by, ...rest }) => rest);
+        out[id] = attrs;
+      }
+      return out;
+    });
+    const scanned = JSON.stringify(scan);
+    const stateLeaks = [me, "sunbeam"].filter((d) => scanned.includes(d));
+    const keys = ["\"bonds\"", "\"notify_users\"", "\"for_name\"", "\"for\""].filter((k) => scanned.includes(k));
+    check("P3b: a second login's hass.states holds nothing of dev's (ID, nickname; log[].by aside)",
+      seeded && Object.keys(scan).length > 0 && stateLeaks.length === 0 && keys.length === 0,
+      JSON.stringify({ seeded, entities: Object.keys(scan).length, stateLeaks, keys }));
     await ctx2.close();
   }
   if (unseed) {

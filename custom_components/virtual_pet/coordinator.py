@@ -71,6 +71,7 @@ from .const import (
     LOGGER,
     MEDIA_EVENTS,
     PERSONAL_EVENTS,
+    PRIVATE_EVENT_FIELDS,
     STORE_MINOR_VERSION,
     STORE_VERSION,
 )
@@ -936,17 +937,23 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _fire(self, events: list[model.Event], simulated: bool = False) -> None:
         for event in events:
-            data = {k: v for k, v in event.items() if k != "type"}
-            data["pet_id"] = self.pet_id
-            if simulated:
-                data["simulated"] = True
-            self.hass.bus.async_fire(f"{DOMAIN}_{event['type']}", data)
+            # The bus and the public moments get a scrubbed copy, and a bond
+            # moment not even that: it is its person's alone (the channel).
+            # _notify and _to_channel read the event itself (who, the nickname).
+            public = event["type"] not in PERSONAL_EVENTS
+            scrubbed = {k: v for k, v in event.items() if k not in PRIVATE_EVENT_FIELDS}
+            if public:
+                data = {k: v for k, v in scrubbed.items() if k != "type"}
+                data["pet_id"] = self.pet_id
+                if simulated:
+                    data["simulated"] = True
+                self.hass.bus.async_fire(f"{DOMAIN}_{event['type']}", data)
             self._notify(event, simulated, events)
             if simulated:
                 continue
             at = dt_util.utcnow().isoformat()
-            if event["type"] in MOMENTS:
-                self.moments.insert(0, {**event, "at": at})
+            if public and event["type"] in MOMENTS:
+                self.moments.insert(0, {**scrubbed, "at": at})
                 del self.moments[MOMENTS_KEPT:]
             self._to_channel(event, at)
         if events:
@@ -1124,11 +1131,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     names[user] = first[0]
         return names
 
-    def friends(self) -> dict[str, str]:
-        """Its close friends who have a person entity: {user ID: first name}."""
+    def friends(self) -> set[str]:
+        """Its close friends who have a person entity (HA user IDs)."""
         return {
-            user: name
-            for user, name in self._person_names().items()
+            user
+            for user in self._person_names()
             if self.bond_for(user)[0] >= R.BOND_FRIEND_LEVEL
         }
 
@@ -2054,7 +2061,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _to_channel(self, event: model.Event, at: str) -> None:
         """A bond moment goes to its person's own channel (without who), and a
-        titled media moment to every channel. The public copy is unchanged."""
+        titled media moment to every channel."""
         kind = event["type"]
         live = self._current()
         if kind in PERSONAL_EVENTS and (user := event.get("user")):

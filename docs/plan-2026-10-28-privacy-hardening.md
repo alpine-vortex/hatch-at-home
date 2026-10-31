@@ -1281,26 +1281,33 @@ Each PR runs `scripts/test` and `scripts/card-check`. The P3 PRs are the tier-2 
 
 ## Release note (draft, for the single end-of-work release; P3c adds its titles paragraph)
 
+P3b's part, rewritten by the P3b ship (s2527, 2026-10-30) to the fold's points (1)-(5).
+"Also in this update" is dropped: all of it shipped in 0.36.0 and 0.37.0. P3c adds the
+titles and `dream` lines, marked *(P3c)*.
+
 > **Privacy: your bond with a pet is now yours alone.**
 >
-> Until now, other people in your home could read a few personal things through the
-> pet's sensors or events, if they went looking: each person's bond level, nickname and
-> favourite game, who gets notifications, and a day's wish aimed at a friend. The same
-> was true of the show or song the pet noticed, which Home Assistant's history also kept.
-> Now each person's card fetches only their own, privately, and none of it is on a sensor
-> or an event any more.
+> Each person's bond level, nickname and favourite game, who gets notifications, and a
+> day's wish aimed at someone are no longer on the pet's sensors or events. 0.36.0 said
+> they were private, and each card did fetch only its viewer's own, but until this
+> update the sensor and the events still carried them, so anyone in your home who went
+> looking (or any automation) could read them. Now they're on no sensor and no event.
+> *(P3c: the same for the show or song the pet noticed.)*
 >
 > **If an automation of yours reads any of these, it stops working:**
 >
-> - On the life stage sensor, the attributes `bonds` and `notify_users` are gone. `wish`
->   no longer has `for` or `for_name`. `dream` no longer has `title`, and a dream about a
->   show or song shows as no dream.
 > - The events `virtual_pet_bond_up`, `virtual_pet_bond_record`,
 >   `virtual_pet_bond_favourite`, `virtual_pet_friend_home` and `virtual_pet_tucked_in`
 >   are no longer fired.
-> - `virtual_pet_wish_made` no longer has `for`.
-> - `virtual_pet_watching` and `virtual_pet_listening` still fire, without `title` or
->   `artist`. Read your media player for those. *(P3c's paragraph.)*
+> - `virtual_pet_wish_made` no longer has `for` (`trigger.event.data.for`).
+> - On the life stage sensor, the attributes `bonds` and `notify_users` are gone, and
+>   `wish` no longer has `for` or `for_name`.
+> - A "welcome home" automation on `virtual_pet_friend_home` can move to
+>   `virtual_pet_someone_home` (anyone signed in came home, with no name) or to the
+>   person entity.
+> - *(P3c)* `dream` no longer has `title`, and a dream about a show or song shows as no
+>   dream. `virtual_pet_watching` and `virtual_pet_listening` still fire, without
+>   `title` or `artist`. Read your media player for those.
 >
 > **Phone messages are still personal.** A notification to your phone can still call you
 > by your nickname, and Home Assistant keeps every message it sends in its history, as it
@@ -1308,29 +1315,14 @@ Each PR runs `scripts/test` and `scripts/card-check`. The P3 PRs are the tier-2 
 >
 > **Already recorded history.** Events recorded before this update stay in Home
 > Assistant's history until the recorder purges them (after `purge_keep_days`, 10 days by
-> default). To remove them sooner, add the event types under `recorder: exclude:
-> event_types:` and run the **Recorder: Purge** action with **Apply filter** on.
+> default). To remove them sooner, add `virtual_pet_bond_up`, `virtual_pet_bond_record`,
+> `virtual_pet_bond_favourite`, `virtual_pet_friend_home`, `virtual_pet_tucked_in` and
+> `virtual_pet_wish_made` under `recorder: exclude: event_types:` and run the
+> **Recorder: Purge** action with **Apply filter** on. *(P3c: and the media events.)*
 >
-> **After updating, reload any dashboard that stays open** (a wall tablet, say). Until it
-> reloads, it shows no bond hearts or nicknames, but nothing breaks.
->
-> **Also in this update:**
->
-> - The welcome for a new pet goes to the sidebar, and to the phones of people who turned
->   on "notify me" for another pet. It no longer goes to every phone.
-> - A damaged save file no longer stops a pet loading: its name, family, journal,
->   memories and bonds are kept when they can be read, the file is backed up, and a note
->   under Settings → Repairs says how to restore it. A damaged pet is never welcomed as a
->   new one.
-> - A child's personality no longer shows before it has settled (it settles in the teens).
-> - Turning on "shared screen" now clears anything personal the pet was saying at that
->   moment, on every hatch card in that browser.
-> - New: `virtual_pet_someone_home` fires when anyone signed in comes home, with no name.
->   A shared screen says "someone's home!! ♥" for it, whoever it is.
-> - **New: "forget my data"** on the status screen erases what the pets remember about
->   you: your birthday, your answers, and your baby talk and "my day" settings. Your bond
->   with each pet stays. Removing the integration keeps these, so they're there if you
->   set it up again.
+> **Reload any dashboard still on 0.35 or older** (a wall tablet that has stayed open
+> since then). Until it reloads, it shows no bond hearts, nicknames or aimed wishes, but
+> nothing breaks. A dashboard on 0.36 or newer needs nothing.
 
 The **Apply filter** behaviour was checked in Home Assistant's `recorder/services.yaml`
 and `strings.json`: "Apply `entity_id` and `event_type` filters in addition to time-based
@@ -1578,3 +1570,54 @@ breaking list (the five events, `trigger.event.data.for` on `wish_made`, templat
 messages are still personal. (4) Purging old history: the five events and `wish_made`.
 (5) Reload a tablet still on 0.35 or older; 0.36+ needs nothing. Drop "Also in this
 update" (all already released). P3c adds the titles and `dream` paragraph.
+
+## P3b reconcile (s2527, 2026-10-30), for P3c
+
+What P3b shipped, where it differs from the text above, and what P3c now picks up.
+
+**Shipped as planned:**
+- `const.PRIVATE_EVENT_FIELDS = {"user", "for", "for_name", "nickname", "favourite"}`
+  (no `title`/`artist`).
+- `_fire`: a `PERSONAL_EVENTS` event never reaches `async_fire`, simulated or not, and
+  never `self.moments`. Every other event's bus data and public moment are built from a
+  scrubbed copy. `_notify`, `_to_channel` and `_check_ins` still get the original event.
+- `sensor.py`: `bonds` and `notify_users` are gone from the attributes and from
+  `_unrecorded_attributes`; `_wish` keeps `("kind", "granted")` + `open`. `dream` is
+  untouched (P3c).
+- `model.pick_wish`: `wish_made` is `{type, kind}` in both branches; `state.wish["for"]`
+  is kept, `for_name` no longer stored. Diagnostics still redact `for_name` (old saves).
+
+**Shipped differently:**
+- **`friends()` returns a set of user IDs** (criterion 9's first option), and `pick_wish`
+  takes `Collection[str]`. The first names it used to carry had no other reader.
+- **Tests 4 and 5 live in `tests/test_public.py`** (a shared `scripted_day`); Test 6 in
+  `tests/test_recorded.py` imports it. `TITLES = ()` in `test_public.py` is the hook
+  for P3c's title cases: add `"Bluey"` (and an artist) there, and the bus, state and
+  recorder searches pick them up.
+- Test 4's "the card's commands fire no `call_service`" is not repeated: P3a's
+  `tests/test_channel.py` already asserts it.
+- Test 6 asserts the nickname appears **only** in notify `call_service` rows when it
+  appears at all (it doesn't require it there: whether the test recorder keeps those
+  rows wasn't part of P3b). User IDs aren't searched outside `virtual_pet_*` rows,
+  since HA's own `user_added` rows carry them.
+- **The card-check seed** puts dev's bond at 144 points (level 8, one short of 9) with
+  today's care unspent and `visited: true`, so the old-card check's care press makes a
+  real `bond_up`. Unseed restores it as before.
+- The old-card check (8b) serves each tag with `page.route` in a fresh context built
+  from the dev page's storage state. Pass is "no `undefined`, no uncaught page error";
+  every console error goes to `dev/card-check/old-card-<tag>.json` for the comparison
+  with a baseline. The bond-moment case is its own check, against v0.37.0: dev's level
+  rises and no bond moment reaches the public `moments`.
+
+**What P3c must now do:**
+- Add `"title"` and `"artist"` to `PRIVATE_EVENT_FIELDS`. The `_fire` split needs no
+  further structural change; P3c adds the `tv_on`/`music_on` public moments in place of
+  titled `watching`/`listening`.
+- `sensor.py` `dream`: `("kind",)` only, `None` for media kinds; `dream_on_waking`
+  without `title`/`pick`/`user`; the debug sensor's redaction.
+- Fill `TITLES` in `tests/test_public.py`; flip `test_public`'s "the scrub copied: the
+  title still seeds a dream" so it also checks the bus has no title.
+- Extend card-check 8b with the TV, music and media-dream cases (and `tv_on` on the
+  old card), rerun it against v0.37.0 and v0.35.0, and compare with P3b's results (below).
+- Docs: `guide.md` events (`watching`/`listening` without `title`/`artist`), the
+  Recorder purge list (the media events), and the release note's *(P3c)* lines.

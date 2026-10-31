@@ -293,7 +293,9 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   `virtual_pet.visit` (the card calls it on the pet on show, hourly; the server also
   limits it hourly per person, in memory) counts the day's visit and grants the new
   `say_hi` wish after noon. Life stage `bonds` (unrecorded): only levels, nicknames and
-  favourites; the card shows only the viewer's (`_bond`): warmer hellos at 2, a hop
+  favourites (privacy P3b took `bonds` and `notify_users` off the sensor and the five
+  bond moments off the bus and the public `moments`; the card has read the viewer's
+  own bond and moments from `virtual_pet/subscribe` since P3a-card); the card shows only the viewer's (`_bond`): warmer hellos at 2, a hop
   (`greethop`, not `hop`, which the excited bounce clears) at 3, the nickname at 4,
   hearts at 8, a "you two" row of five hearts on the status screen, and `bond_up` /
   `bond_favourite` moments said only to their `user`. Diagnostics redact `bonds` and
@@ -305,7 +307,10 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   `friend_home` moments from person entities coming home (`person_moved` →
   `_arrivals` → `_friends_home` in `_sense_home`, level `BOND_FRIEND_LEVEL`, once per
   `FRIEND_HOME_EVERY_MINUTES` per person); aimed wishes (`pick_wish` `friends`, wish
-  `for` and `for_name`, `WISH_FOR_CHANCE`), drawn by the card's `_wishLine`. Third
+  `for` and `for_name`, `WISH_FOR_CHANCE`), drawn by the card's `_wishLine`. (Privacy
+  P3b: `pick_wish` takes friend IDs only and no longer stores `for_name`; `for` stays
+  in the save but is on neither the sensor nor `wish_made`; the card's aimed wish
+  comes from the channel's `mine.wish_for_you`.) Third
   pass: `virtual_pet.visit` now answers with `notes` for the caller only
   (`_notes`: `friends_for` from bond `since`, `tucked_in` from `tucked_at`, and
   "my day" from `wellbeing.notice`, each once a day via bond `noted`); new service

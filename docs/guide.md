@@ -186,7 +186,8 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   Disturb are left to your phone: the pet's calls and sickness are time-sensitive
   (they may come through a focus you allow); a need asking again is an ordinary
   notification, and poop calls stay on the card. Everything else waits like any
-  other notification. Each person only ever sees their own bond. Care through Assist counts for
+  other notification. Each person only ever sees their own bond: it is on no sensor and no
+  event, and only their own card fetches it, over a private subscription. Care through Assist counts for
   whoever is signed in; automations build no bond. A new generation keeps the household's bonds. (The card tells the pet who
   looked in with `virtual_pet.visit`, counted at most hourly.)
 - **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
@@ -749,11 +750,15 @@ missed re-call, which isn't a care miss),
 `virtual_pet_trait_learned` and `virtual_pet_trait_deepened` (with `trait`, `level`), `virtual_pet_egg_laid` (with `generation`,
 `parent_species`, `inherited_trait`), `virtual_pet_welcomed` (once, when the pet is added),
 `virtual_pet_wish_made` and `virtual_pet_wish_granted` (with `kind`),
-`virtual_pet_bond_up` (with `user`, the HA user ID, `level`, and `nickname` or
-`favourite` when the level brings one), `virtual_pet_bond_favourite` (with `user` and
-`game`), `virtual_pet_friend_home` (with `user`: a close friend came home),
-`virtual_pet_bond_record` (with `user`, `game`, `wins`: a new personal best),
-`virtual_pet_tucked_in` (with `user`), `virtual_pet_favourite_snack` (with `food`). What it notices about someone's day, where
+`virtual_pet_someone_home` (anyone signed in came home; it says nobody's name),
+`virtual_pet_favourite_snack` (with `food`).
+
+No person's bond, nickname, favourite game, notifications or aimed wish is ever on an
+event or a sensor: each person's card gets its own over a private websocket
+subscription. So a bond's moments (a level-up, a new best, a favourite game, a close
+friend coming home, a tuck-in) are not events, and `virtual_pet_wish_made` doesn't
+say whom a wish is for. A "welcome home" automation can use
+`virtual_pet_someone_home` or the person entity instead. What it notices about someone's day, where
 they've been, their alarm and their answers are never an event: they go only to
 that person, in `virtual_pet.visit`'s response, and answers come in through the
 websocket command `virtual_pet/answer`, which (unlike a service call) puts nothing
@@ -797,6 +802,17 @@ recorder:
     entity_globs:
       - sensor.*_debug
 ```
+
+Its events are recorded like any other; none carries a person. To keep them out of
+history altogether: `recorder: exclude: event_types: [virtual_pet_care, …]`.
+
+**Events from older versions.** Before the privacy update, the pets fired `virtual_pet_bond_up`,
+`virtual_pet_bond_record`, `virtual_pet_bond_favourite`, `virtual_pet_friend_home` and
+`virtual_pet_tucked_in` with the person's user ID (and a nickname or favourite game),
+and `virtual_pet_wish_made` with whom the wish was for. Those rows stay in history
+until the recorder purges them (after `purge_keep_days`, 10 days by default). To remove
+them sooner, add those six event types under `recorder: exclude: event_types:` and run
+the **Recorder: Purge** action with **Apply filter** on.
 
 ## Development
 
