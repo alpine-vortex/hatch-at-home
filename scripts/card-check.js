@@ -5799,7 +5799,8 @@ async function main() {
           .callService("switch", "turn_off", { entity_id: id }), pet["switch.lights_out"]).catch(() => {});
         await p.waitForTimeout(1500);
       }
-      for (const key of ["button.play", "button.praise", "button.snack", "button.feed", "button.clean"]) {
+      // Not "play": that would grant the seeded wish the second login checks.
+      for (const key of ["button.praise", "button.feed", "button.snack", "button.clean"]) {
         if (!pet[key] || (await level()) > before) break;
         await p.evaluate((id) => document.querySelector("home-assistant").hass
           .callService("button", "press", { entity_id: id }), pet[key]).catch(() => {});
