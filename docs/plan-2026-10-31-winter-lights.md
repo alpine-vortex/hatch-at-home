@@ -199,3 +199,8 @@ What shipped, where it differs from the plan above:
   - `tests/js/winter_lights.test.js`: dates, Hanukkah, null-safety, dated mixing, the toggle across all seasons.
   - card-check `winter`: scene, pieces load, glow and bob, hats seated, hare, the gap, cookie, treat, Hanukkah in Chromium, the toggle row on/off. Its baby lines go into the `photos` audit.
   - bench `--preset winter`: worlds day/night, mono night, hats, hare, December `auto`, names on/off. The bench gained a `seasonVisitor` pin.
+- **Costume preview:** `costume-preview.js winter` was run on a throwaway HA (all 480 shots: 30 creatures × 4 stages × 4 hats).
+  - Every hat seats on every creature, so no `skip` lists are needed yet.
+  - The stand-in earmuffs read as a band over the crown, with the muffs at the brim line rather than over the ears.
+  - The final art should hang the muffs lower, or the preview should be run again with a larger `sink`.
+  - `scripts/gate` still sweeps only Halloween and Thanksgiving; adding `winter` would cost about 15 min on every full gate.
