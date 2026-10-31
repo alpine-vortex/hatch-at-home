@@ -681,6 +681,46 @@ PR 3a (both change Catch's code).
   opens them, oldest first.
 - **Done =** every generation the journal keeps can be seen.
 
+**4c-rest + 4e plan review fold (s2534, 2026-10-31; wins over the 4c and 4e text).**
+Both FIX FIRST, plan edits only; report and measurements archived with the worker.
+**Two ships, 4c first** (no shared files). First-mate decisions (owner delegated):
+the shell picker is in 44 px scope (about 1.4-2 tile rows in view, it scrolls); the
+dots (24 px) and compact answer buttons (40 px) are out (later nit); species.json gains a
+`short` name (the old thirteen kept; **the worker proposes the other 17 in its report
+for the owner's sign-off before merge**); collect.png drops the egg row and the alt
+phrase "with the eggs they hatch from"; hero and worlds.png keep the 2026-10-28 device
+shots and re-lay only sprites and names (retaking devices is a later bench-wired job);
+misses and whines go under the "for <name>" group, which always renders.
+
+*4c-rest (the gear already moved the person and device rows, in the right order):*
+- Move `misses` and `whines` from `_renderStatus` to the "for <name>" group (rendered
+  even without `shell_finish_options` and on a shared screen; read-only). Card-check's
+  `/whines/` asserts (~804, 830) move with them. Dependencies on forms book 2a and 4b are
+  dropped (deferred). "my birthday" stays third; only "forget my data" must be last of
+  the person's rows. The status-row list gains 2c's "would like" row.
+- **44 px, real (min-height 44 and a 44 px pitch, not a padded hit area that overlaps):**
+  `.bell` (44x26; 24 in the compact picker), `.gear` (34x30, though the gear plan said
+  44), `.sback`/`.pback` (28 / 22 compact), `.jlink` (~42x28), `.shellrow` (38), picker
+  tiles (37 / 34 compact) and `.psave`/`.pclose`. Already fine: `.statusbtn`, `.nav`,
+  `.toy`, game buttons. Settings will scroll ~3-4 screens: accepted.
+- **Done =** every control in status, settings and the picker is at least 44x44 at 330 and
+  420 (a permanent card-check box-size assert); meters, mood and wish are visible without
+  scrolling at both widths; settings holds every row; shared-screen settings still hide
+  the person's rows and show misses/whines.
+- Tests: bench boxes and shots at 330 and 420 (`settings`, `settings-shared`, `picker`
+  presets; 320 as a shot), card-check for tab order and the forget two-tap.
+
+*4e (A9 met: the axolotl and moth adults were redrawn at 128 and merged 2026-10-30):*
+- The roster is 30 (worlds.json lists 31; beetle has no species.json, skip it as
+  `catalog.roster` does); art.py asserts 30 and prints the count used in the alt text.
+- Draw sprites at 128 (exact 2:1 of the 256 files), five rows per column in collect.png.
+  Re-lay the hero strip (two rows, no overlap) and worlds.png (no KeyError on new names;
+  fits the canvas). Labels use `short`, with a minimum text size.
+- Copy to update: README.md line 2 ("all thirteen creatures"), 103 ("Collect all 13"),
+  the art.py banner, guide.md ~854 ("still to come: more species").
+- Verified from the repo files; the README's raw URLs show the new images after merge.
+  A contact sheet goes to the first mate for the owner's look.
+
 ### F12 (art)
 
 Not re-planned: `docs/plan-2026-10-28-art-reviews.md` phases 2 and 3. Phase 3's batch
