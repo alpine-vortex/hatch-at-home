@@ -36,7 +36,7 @@ const results = [];
 
 // The gated sections of main(), in file order.
 const SECTIONS = ["shelf", "shell", "play", "resume", "moments", "photos", "personality", "types",
-  "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "care",
+  "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "oldcard"];
 const NEEDS = { oldcard: ["restart"] }; // oldcard asserts restart's seeded bond
 const argv = process.argv.slice(2);
@@ -5735,6 +5735,153 @@ async function main() {
     delete el.__calls;
   });
   await patReset();
+  await unpinAwake(card);
+  }
+  if (want("react")) {
+  // Reactions at baby, teen and adult (PR 3c): the stage's own mood frame and a bounded move.
+  await calm();
+  await page.waitForTimeout(800);
+  await pinAwake(card, "react");
+  const rs = (stage) => card.evaluate((el, stage) => {
+    const s = el._slides[el._index];
+    const real = el.__realState || el._state;
+    el.__realState = real;
+    el._state = function (slide, key) {
+      const st = real.call(this, slide, key);
+      return key === "sensor.life_stage" && st && stage ? { ...st, state: stage } : st;
+    };
+    s.framesKey = null;
+    el._redraw(s);
+    return s.drawn;
+  }, stage).then(async (drawn) => {
+    await page.waitForTimeout(300);
+    await card.evaluate((el) => Object.assign(el._slides[el._index], { poseUntil: 0, propUntil: 0, movingUntil: 0, queue: [],
+      sayUntil: 0, sayClass: 0, game: null, scene: null, power: null, linking: false, patAt: 0 }));
+    return card.evaluate((el) => el._slides[el._index].drawn);
+  });
+  const MOVES = ["munch", "greethop", "look", "settle", "perk", "pat-soft"];
+  const react = (entry) => card.evaluate((el, entry) => {
+    const s = el._slides[el._index];
+    Object.assign(s, { poseUntil: 0, movingUntil: 0 });
+    s.pet.classList.remove("munch", "greethop", "look", "settle", "perk", "pat-soft", "hop");
+    el._react(s, { at: Date.now() / 1000, ...entry });
+    return { src: s.pet.getAttribute("src"), live: s.poseUntil > Date.now(), moves: [...s.pet.classList].filter((c) => ["munch", "greethop", "look", "settle", "hop"].includes(c)),
+      moving: s.movingUntil > Date.now(), drawn: s.drawn };
+  }, entry);
+  for (const stage of ["teen", "adult"]) {
+    check(`react: ${stage} stage stubbed`, (await rs(stage)) === stage);
+    const cases = [
+      ["fed", { action: "feed", result: "ok" }, "excited", "munch"],
+      ["snack", { action: "snack", result: "ok" }, "excited", "munch"],
+      ["praised", { action: "praise", result: "ok" }, "excited", "greethop"],
+      ["won", { action: "game", result: "won" }, "excited", "greethop"],
+      ["tucked in", { action: "blanket", result: "ok" }, "cozy", "settle"],
+      ["refused (full)", { action: "feed", result: "full" }, "bored", "look"],
+    ];
+    for (const [name, entry, mood, move] of cases) {
+      const r = await react(entry);
+      check(`react: ${stage} ${name} shows ${stage}_${mood} and ${move}`,
+        r.src.includes(`/${stage}_${mood}_`) && r.live && r.moves.join() === move && (move !== "look" || r.moving), JSON.stringify(r));
+    }
+    for (const result of ["not_needed", "already_clean", "not_sick", "not_sleepy", "too_tired"]) {
+      const r = await react({ action: "play", result });
+      check(`react: ${stage} refusal ${result} reacts`, r.live && r.moves.join() === "look" && r.src.includes(`/${stage}_`), JSON.stringify(r));
+    }
+    for (const result of ["asleep", "egg", "away", "no_game", "unfair", "spoiled", "lost"]) {
+      const r = await react({ action: "play", result });
+      check(`react: ${stage} ${result} does nothing`, !r.live && r.moves.length === 0, JSON.stringify(r));
+    }
+    const after = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      el._react(s, { action: "feed", result: "ok", at: Date.now() / 1000 });
+      await new Promise((r) => setTimeout(r, 2800));
+      return { src: s.pet.getAttribute("src"), live: s.poseUntil > Date.now(), mood: s.moodState, moves: [...s.pet.classList] };
+    });
+    check(`react: ${stage} back to the mood frame after 2.5 s`,
+      !after.live && !after.moves.some((c) => ["munch", "greethop", "look", "settle"].includes(c)), JSON.stringify(after));
+    // Never while: a scene, a link, a game, the low-battery gag, asleep, away, egg.
+    for (const [name, patch] of [["scene", { scene: { kind: "feed", frames: [] } }], ["linking", { linking: true }],
+      ["game", { game: { cur: null } }], ["power", { power: {} }], ["asleep", { asleep: true }], ["away", { away: true }], ["egg", { egg: true }]]) {
+      const r = await card.evaluate((el, patch) => {
+        const s = el._slides[el._index];
+        const keep = { scene: s.scene, linking: s.linking, game: s.game, power: s.power, asleep: s.asleep, away: s.away, egg: s.egg };
+        Object.assign(s, { poseUntil: 0 }, patch);
+        s.pet.classList.remove("munch");
+        el._reactFrames(s, "fed");
+        const out = { live: s.poseUntil > Date.now(), moves: s.pet.classList.contains("munch") };
+        Object.assign(s, keep, { poseUntil: 0 });
+        return out;
+      }, patch);
+      check(`react: ${stage} no reaction while ${name}`, !r.live && !r.moves, JSON.stringify(r));
+    }
+    // A pat during a reaction speaks and keeps the reaction's move.
+    const pat = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+      el._react(s, { action: "praise", result: "ok", at: Date.now() / 1000 });
+      s.sayUntil = 0; s.queue = []; s.sayClass = 0;
+      s.pet.classList.remove("perk");
+      el._pat(s, { detail: 0, stopPropagation() {} });
+      const out = { cls: [...s.pet.classList], said: s.bubble.textContent, live: s.poseUntil > Date.now() };
+      s.patAt = 0;
+      return out;
+    });
+    check(`react: ${stage} a pat during a reaction speaks, keeps its move, adds no perk`,
+      pat.cls.includes("greethop") && !pat.cls.includes("perk") && pat.said.length > 0 && pat.live, JSON.stringify(pat));
+    // Under reduced motion: the frame changes, nothing moves, no class sticks.
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.waitForTimeout(150);
+    for (const [entry, mood] of [[{ action: "feed", result: "ok" }, "excited"], [{ action: "blanket", result: "ok" }, "cozy"],
+      [{ action: "feed", result: "full" }, "bored"]]) {
+      const r = await react(entry);
+      check(`react: ${stage} reduced motion, ${entry.result}: the frame changes, no move, no wander`,
+        r.src.includes(`/${stage}_${mood}_1`) && r.moves.length === 0 && !r.moving, JSON.stringify(r));
+    }
+    await page.emulateMedia({ reducedMotion: null });
+    await page.waitForTimeout(150);
+    await card.evaluate((el) => { el._slides[el._index].poseUntil = 0; });
+  }
+  // A child is left alone (its own species poses).
+  await rs("child");
+  const kid = await react({ action: "feed", result: "full" });
+  check("react: a child gets no stage reaction", !kid.moves.includes("look") || !kid.src.includes("/bored_"), JSON.stringify(kid));
+  await rs(null);
+  await card.evaluate((el) => { if (el.__realState) { el._state = el.__realState; delete el.__realState; } el._redraw(el._slides[el._index]); });
+  // Every species: 4 moods x 3 stages load.
+  const species = fs.readdirSync(path.join(__dirname, "../custom_components/virtual_pet/frontend/sprites"), { withFileTypes: true })
+    .filter((d) => d.isDirectory()).map((d) => d.name)
+    .filter((n) => fs.existsSync(path.join(__dirname, "../custom_components/virtual_pet/frontend/sprites", n, "species.json")))
+    .map((n) => [n, JSON.parse(fs.readFileSync(path.join(__dirname, "../custom_components/virtual_pet/frontend/sprites", n, "species.json"), "utf8"))])
+    .filter(([, d]) => d.ready !== false);
+  const loaded = await card.evaluate(async (el, list) => {
+    const base = el._slides[el._index].pet.src.replace(/\/sprites\/.*$/, "/sprites/");
+    const q = el._slides[el._index].pet.src.match(/\?.*$/)?.[0] || "";
+    const bad = [];
+    let n = 0;
+    const jobs = [];
+    for (const [id, d] of list) {
+      for (const stage of ["baby", "teen", "adult"]) {
+        const drawn = d.stages.includes(stage) ? stage : (d.stage_fallback?.[stage] || d.stages[d.stages.length - 1]);
+        for (const mood of ["content", "excited", "cozy", "bored"]) {
+          const m = d.moods.includes(mood) ? mood : "content";
+          for (let i = 1; i <= (d.frames || 1); i++) {
+            const url = `${base}${id}/${drawn}_${m}_${i}.png${q}`;
+            n++;
+            jobs.push(new Promise((ok) => {
+              const img = new Image();
+              img.onload = () => { if (!img.naturalWidth) bad.push(url); ok(); };
+              img.onerror = () => { bad.push(url); ok(); };
+              img.src = url;
+            }));
+          }
+        }
+      }
+    }
+    await Promise.all(jobs);
+    return { n, bad: bad.slice(0, 5), nbad: bad.length };
+  }, species);
+  check(`react: ${species.length} species x 3 stages x 4 moods all load (${loaded.n} frames)`,
+    species.length >= 30 && loaded.nbad === 0, JSON.stringify(loaded));
   await unpinAwake(card);
   }
   if (want("care")) {

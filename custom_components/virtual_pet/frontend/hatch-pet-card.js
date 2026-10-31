@@ -907,6 +907,17 @@ const MINE_MS = 3000;
 const PAT_LINES = { content: "hehe ♥", excited: "hehe! ♪", sleepy: "mmm...", sick: "thanks... ♥" };
 const PAT_COOLDOWN_MS = 4000; // a pat in this time after a spoken one wiggles, no line
 const PAT_MS = 2500;
+// Reactions to care at baby, teen and adult (PR 3c, O02): the stage's own mood frames
+// (no new art) and a bounded CSS move, for one length at every stage.
+const REACT_MS = 2500;
+const REACTIONS = {
+  fed: { mood: "excited", move: "munch", ms: 1500 },
+  praised: { mood: "excited", move: "greethop", ms: 1400 },
+  refused: { mood: "bored", move: "look", ms: 1200 },
+  tucked: { mood: "cozy", move: "settle", ms: REACT_MS },
+};
+// Only these refusals react; asleep, egg, away, no_game, unfair and spoiled do not.
+const REACT_REFUSALS = new Set(["full", "not_needed", "already_clean", "not_sick", "not_sleepy", "too_tired"]);
 const MINE_MATCH_MS = 10000; // a press is matched to the first new log entry within this
 const FLAVOUR_WAIT_MS = 8000;
 // Every moment type, coming (became_sick) or channel-only, has a class: card-check
@@ -1694,6 +1705,10 @@ const STYLE = `
   @keyframes pat-soft { 40% { transform: translateY(-2%) scale(1.02, .98); } }
   .pet.pat-slow { animation: perk 1.1s ease-in-out; }
   .pet.hop { animation: hop .7s ease-in-out infinite; }
+  .pet.munch { animation: munch .5s ease-in-out 3; }
+  @keyframes munch { 50% { transform: translateY(-4%) scale(1.04, .96); } }
+  .pet.settle { animation: settle 2.5s ease-in-out; }
+  @keyframes settle { 25%, 75% { transform: translateY(3%) scale(.97, .95); } }
   .pet.greethop { animation: hop .7s ease-in-out 2; } /* its own class: the bounce clears "hop" */
   @keyframes hop { 50% { transform: translateY(-9%); } }
   .poop { bottom: 5%; height: 15%; }
@@ -4392,6 +4407,25 @@ class HatchPetCard extends HTMLElement {
   }
 
   // An open question is on show (its answer buttons).
+  // A reaction to care for baby, teen and adult (the child has species poses): that
+  // stage's mood frame for REACT_MS and a bounded move. Not over a scene, a link, the
+  // low-battery gag, sleep, away or the egg; a game only for a catch (`inGame`).
+  // Under reduced motion only the frame changes (calm() shows its first).
+  _reactFrames(s, kind, { inGame = false } = {}) {
+    const r = REACTIONS[kind];
+    if (!r || !s.species || s.drawn === "child" || s.scene || s.linking || s.power ||
+      s.asleep || s.away || s.egg || (s.game && !inGame)) return;
+    const sp = s.species;
+    const mood = sp.moods?.includes(r.mood) ? r.mood : "content";
+    s.poseFrames = [];
+    for (let i = 1; i <= (sp.frames || 1); i++) s.poseFrames.push(`${s.drawn}_${mood}_${i}`);
+    s.poseUntil = Date.now() + REACT_MS;
+    this._show(s, s.pet, s.poseFrames[0]);
+    if (calm()) return;
+    this._animate(s, s.pet, r.move, r.ms);
+    if (r.move === "look") this._moving(s, r.ms + 250);
+  }
+
   _questionOn(s) {
     return !!s.screen?.querySelector(".askday");
   }
@@ -4428,15 +4462,17 @@ class HatchPetCard extends HTMLElement {
       }
       return;
     }
+    // A reaction running plays whole: the pat still speaks, but adds no move of its own.
+    const reacting = s.poseUntil > now;
     if (now - (s.patAt || 0) < PAT_COOLDOWN_MS || !this._patMayTalk(s)) {
       this._tapped(s.pat);
-      if (!still) {
+      if (!still && !reacting) {
         this._animate(s, s.pet, "pat-soft", 300);
         this._moving(s, 400);
       }
       return;
     }
-    this._tapped(s.pat, s);
+    this._tapped(s.pat, reacting ? undefined : s);
     s.patAt = now;
     this._line(s, MINE, PAT_LINES[s.moodState] || PAT_LINES.content, PAT_MS);
   }
@@ -5325,6 +5361,13 @@ class HatchPetCard extends HTMLElement {
         s.poseFrames = Array.isArray(poseFrames) ? poseFrames : [poseFrames];
         s.poseUntil = Date.now() + 2500;
         this._show(s, s.pet, s.poseFrames[0]);
+      } else if (entry.result !== "lost") {
+        const ok = entry.result === "ok";
+        const kind = entry.result === "won" ? "praised"
+          : ok && (entry.action === "feed" || entry.action === "snack") ? "fed"
+          : ok && entry.action === "praise" ? "praised"
+          : ok && entry.action === "blanket" ? "tucked" : null;
+        if (kind) this._reactFrames(s, kind);
       }
       if (entry.action === "fan") { // the fan stands by, and its breeze crosses the scene
         s.screen.classList.add("breezy");
@@ -5352,6 +5395,7 @@ class HatchPetCard extends HTMLElement {
       return;
     }
     const line = REFUSALS[entry.result];
+    if (REACT_REFUSALS.has(entry.result)) this._reactFrames(s, "refused");
     if (line) {
       said = [this._lines(s, `REFUSALS.${entry.result}`, line).text, 3500];
     }
@@ -7716,8 +7760,10 @@ class HatchPetCard extends HTMLElement {
       s.poseFrames = Array.isArray(frames) ? frames : [frames];
       s.poseUntil = Date.now() + 900;
       this._show(s, s.pet, s.poseFrames[0]);
-    } else {
+    } else if (s.drawn === "child") {
       this._animate(s, s.pet, "hop", 700);
+    } else {
+      this._reactFrames(s, "praised", { inGame: true });
     }
   }
 
