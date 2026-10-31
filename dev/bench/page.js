@@ -274,6 +274,9 @@
         a.currentTime = shot.petAt;
       }
     }
+    // `patBox`: the pat's clear hit box outlined, so a shot shows where a tap pats (or, in a
+    // state that hides it, that there is none).
+    if (shot.patBox) cur.pat.style.outline = "2px dashed #ff00d0";
     if (shot.beam) irBeam(card);
     // Date is pinned, so a line would never finish typing: write each whole.
     slides.forEach((x) => card._stopTyping(x));

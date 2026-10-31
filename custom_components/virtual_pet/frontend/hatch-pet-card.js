@@ -3032,6 +3032,7 @@ class HatchPetCard extends HTMLElement {
     const timers = [];
     const at = (ms, fn) => timers.push(setTimeout(fn, ms));
     s.power = { timers };
+    s.pat.hidden = true; // no pat over the gag
     const level = (n, blink) => {
       s.batt.dataset.level = String(n);
       s.batt.classList.toggle("blink", blink && !isCalm);
@@ -3067,6 +3068,7 @@ class HatchPetCard extends HTMLElement {
     const power = s.power;
     if (!power) return;
     s.power = null;
+    s.pat.hidden = !this._patOn(s);
     power.timers.forEach(clearTimeout);
     s.screen.classList.remove("blank");
     s.batt.hidden = true;
@@ -6485,6 +6487,7 @@ class HatchPetCard extends HTMLElement {
       sc.murk = s.murk.style.display !== "none" && Number(s.murk.style.opacity) > 0;
     }
     s.scene = sc;
+    s.pat.hidden = !this._patOn(s);
     for (const el of [s.pet, s.perch]) el.style.transition = "none";
     // A tap on the screen ends it (and doesn't open the status).
     sc.stop = (e) => {
@@ -6612,6 +6615,7 @@ class HatchPetCard extends HTMLElement {
     if (!sc) return;
     cancelAnimationFrame(sc.raf);
     s.scene = null;
+    s.pat.hidden = !this._patOn(s);
     s.screen.removeEventListener("click", sc.stop, true);
     sc.els.forEach((el) => el.remove());
     for (const el of [s.pet, s.perch]) el.style.translate = el.style.rotate = el.style.transition = "";

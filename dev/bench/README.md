@@ -65,6 +65,7 @@ A shot (all optional):
 | `lcd`, `booted`, `mono` | per-browser settings, see below |
 | `classes` | an array of classes put on `.screen` last, before the transitions finish: `faded`, `raining`, `lit`... (the bench's `scene: "rain"` is woodland's rain backdrop without `raining`) |
 | `petClasses`, `petAt` | classes put on the pet itself (`["droop"]`), and `petAt` ms to pause its animation at, so a mid-motion frame is the same every run |
+| `patBox` | `true`: the pat's clear hit box (PR 3b) outlined in dashed magenta; it moves with `petClasses` such as `go-left` or `wander-r`, and a state that hides it shows no outline |
 | `beam` | `true`: the infrared beam held mid-flight (400 ms in, the head over the host's shell) by the card's own `_linkBeam`, no visit around it. Use `pets: 2` and `clip: "card"` |
 | `link` | the infrared visit greeting caught as the visit screen opens: `{waves, wait}` (`waves` is put on both species, `wait` is ms to hold, default 150) |
 | `storage` | any other localStorage keys to seed |
