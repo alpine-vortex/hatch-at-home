@@ -1387,6 +1387,9 @@ async def test_the_pet_comments_on_whats_on_tv(
     assert tv_on and set(tv_on[0]) == {"type", "at"}
     pet = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
     assert pet._house["media"]["title"] == "Bluey"
+    for entity_id in ("sensor.pip_life_stage", "sensor.pip_last_care"):
+        attrs = hass.states.get(entity_id).attributes
+        assert "Bluey" not in json.dumps(dict(attrs), default=str), entity_id
 
 
 async def pick(hass: HomeAssistant, option: str) -> None:

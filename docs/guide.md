@@ -326,7 +326,7 @@ lay the egg, then rename it.
 | `select.<pet>_next_egg` | `Surprise me` (the default) or a creature of the egg's world, for the next hatch only. Attribute `next_egg` on the life stage sensor shows the choice too. |
 | `button.<pet>_lay_egg` | Starts the next generation. Available from a week into adulthood (day 21), while the pet is well and home. |
 | `button.<pet>_blanket`, `_fan` | Answers to what the house makes the pet ask for. Unavailable unless it's asking. |
-| `sensor.<pet>_debug` | Diagnostic, **disabled by default**. Enable it on the entity's settings page to see the raw numbers. For a file to share, use **Download diagnostics** on the pet's device page instead: it leaves out your entity IDs and people's names. |
+| `sensor.<pet>_debug` | Diagnostic, **disabled by default**. Enable it on the entity's settings page to see the raw numbers. What the house was doing (who's home, the show, the song) shows as `**REDACTED**`, privacy option or not. For a file to share, use **Download diagnostics** on the pet's device page instead: it leaves out your entity IDs and people's names. |
 
 ### Quick dashboard card
 
@@ -744,7 +744,8 @@ missed re-call, which isn't a care miss),
 `virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`,
 `virtual_pet_game_finished` (with `game`, `won`, `wins`; `dropped: true` for a game left unfinished after a guess, which counts as a loss and grants no wish, record or bond), `virtual_pet_chore_treat`,
 `virtual_pet_sunrise`, `virtual_pet_sunset`, `virtual_pet_good_morning`,
-`virtual_pet_watching` and `virtual_pet_listening` (with `title`, and `artist` for music),
+`virtual_pet_watching` and `virtual_pet_listening` (each time the show or song changes, with
+no `title` or `artist`: read `media_title` from your media player),
 `virtual_pet_tv_off_late`, `virtual_pet_news` (with `headline`, and `topic` if given),
 `virtual_pet_first_snow`, `virtual_pet_first_frost`,
 `virtual_pet_trait_learned` and `virtual_pet_trait_deepened` (with `trait`, `level`), `virtual_pet_egg_laid` (with `generation`,
@@ -760,7 +761,9 @@ event or a sensor: each person's card gets its own over a private websocket
 subscription. So a bond's moments (a level-up, a new best, a favourite game, a close
 friend coming home, a tuck-in) are not events, and `virtual_pet_wish_made` doesn't
 say whom a wish is for. A "welcome home" automation can use
-`virtual_pet_someone_home` or the person entity instead. What it notices about someone's day, where
+`virtual_pet_someone_home` or the person entity instead. Nor is the show or song the pet
+noticed, or a dream about one: the cards hear those on the same subscription (anyone who
+can open a card can already read your media players). What it notices about someone's day, where
 they've been, their alarm and their answers are never an event: they go only to
 that person, in `virtual_pet.visit`'s response, and answers come in through the
 websocket command `virtual_pet/answer`, which (unlike a service call) puts nothing
@@ -811,10 +814,11 @@ history altogether: `recorder: exclude: event_types: [virtual_pet_care, …]`.
 **Events from older versions.** Before the privacy update, the pets fired `virtual_pet_bond_up`,
 `virtual_pet_bond_record`, `virtual_pet_bond_favourite`, `virtual_pet_friend_home` and
 `virtual_pet_tucked_in` with the person's user ID (and a nickname or favourite game),
-and `virtual_pet_wish_made` with whom the wish was for. Those rows stay in history
-until the recorder purges them (after `purge_keep_days`, 10 days by default). To remove
-them sooner, add those six event types under `recorder: exclude: event_types:` and run
-the **Recorder: Purge** action with **Apply filter** on.
+`virtual_pet_wish_made` with whom the wish was for, and `virtual_pet_watching` and
+`virtual_pet_listening` with the show's or song's `title` (and `artist`). Those rows stay
+in history until the recorder purges them (after `purge_keep_days`, 10 days by default).
+To remove them sooner, add those eight event types under `recorder: exclude:
+event_types:` and run the **Recorder: Purge** action with **Apply filter** on.
 
 ## Development
 

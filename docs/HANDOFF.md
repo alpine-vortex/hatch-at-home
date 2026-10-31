@@ -189,7 +189,9 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
     game (`virtual_pet.play_game`); chore treats from to-do lists; collapsing into a
     nap at 0 energy.
   - **Card feedback:** the "moments" feed on `sensor.<pet>_last_care` (the card reacts
-    to misses, hatching, growing up, traits, sunsets, TV titles...); species
+    to misses, hatching, growing up, traits, sunsets...; TV and music titles come on the
+    private channel's `house.media`, the feed has only title-less `tv_on`/`music_on`
+    since privacy P3c); species
     `reactions` poses; stand-ins for missing art (scold/praise icons, CSS rain, breeze,
     lightning); idle life; greetings by the viewer's first name; a card editor
     (`devices`). The excited bounce lasts 10 s (the mood lasts `EXCITED_MINUTES`).
@@ -276,7 +278,9 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   games, chores, lights out, sunset with company, and the house (music, TV, rain);
   `dream_seed` / `dream_on_waking` (state `dream_seeds`, `dream`), dreamed at the
   morning wake. Both on the life stage sensor (`wish`, `dream`, today only, unrecorded;
-  who granted it stays on the server; diagnostics redact dream titles). Card: a say
+  who granted it stays on the server; diagnostics redact dream titles). Since privacy
+  P3c `dream` is `{kind}` only and `null` for a show or song: that one, with its title,
+  is the channel's `house.dream`. Card: a say
   queue (`_queue`, so lines that arrive together are all said), `_firstLook` (away
   note, dream, wish, each once a day per device), `_wishMention`, the wish row, the
   `wish_granted` moment. The wish row leads the status screen (0.29.0; lower down it

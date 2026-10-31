@@ -890,8 +890,9 @@ Each PR runs `scripts/test` and `scripts/card-check`. The P3 PRs are the tier-2 
 ## Release note (draft, for the single end-of-work release; P3c adds its titles paragraph)
 
 P3b's part, rewritten by the P3b ship (s2527, 2026-10-30) to the fold's points (1)-(5).
-"Also in this update" is dropped: all of it shipped in 0.36.0 and 0.37.0. P3c adds the
-titles and `dream` lines, marked *(P3c)*.
+"Also in this update" is dropped: all of it shipped in 0.36.0 and 0.37.0. P3c's titles and
+`dream` lines, written by the P3c ship (s2535, 2026-10-31) to the P3c fold's release
+note, are marked *(P3c)* for review; drop the markers at release.
 
 > **Privacy: your bond with a pet is now yours alone.**
 >
@@ -900,7 +901,7 @@ titles and `dream` lines, marked *(P3c)*.
 > they were private, and each card did fetch only its viewer's own, but until this
 > update the sensor and the events still carried them, so anyone in your home who went
 > looking (or any automation) could read them. Now they're on no sensor and no event.
-> *(P3c: the same for the show or song the pet noticed.)*
+> *(P3c)* The same goes for the show or song the pet noticed, and a dream about one.
 >
 > **If an automation of yours reads any of these, it stops working:**
 >
@@ -913,9 +914,11 @@ titles and `dream` lines, marked *(P3c)*.
 > - A "welcome home" automation on `virtual_pet_friend_home` can move to
 >   `virtual_pet_someone_home` (anyone signed in came home, with no name) or to the
 >   person entity.
-> - *(P3c)* `dream` no longer has `title`, and a dream about a show or song shows as no
->   dream. `virtual_pet_watching` and `virtual_pet_listening` still fire, without
->   `title` or `artist`. Read your media player for those.
+> - *(P3c)* Titles and artists are no longer on `virtual_pet_watching` and
+>   `virtual_pet_listening`, on the last care sensor's `moments` or on `dream`. The two
+>   events still fire each time the show or song changes, so read `media_title` from
+>   your media player. On the life stage sensor, `dream` no longer has `title`, and a
+>   dream about a show or song shows as no dream.
 >
 > **Phone messages are still personal.** A notification to your phone can still call you
 > by your nickname, and Home Assistant keeps every message it sends in its history, as it
@@ -924,13 +927,16 @@ titles and `dream` lines, marked *(P3c)*.
 > **Already recorded history.** Events recorded before this update stay in Home
 > Assistant's history until the recorder purges them (after `purge_keep_days`, 10 days by
 > default). To remove them sooner, add `virtual_pet_bond_up`, `virtual_pet_bond_record`,
-> `virtual_pet_bond_favourite`, `virtual_pet_friend_home`, `virtual_pet_tucked_in` and
-> `virtual_pet_wish_made` under `recorder: exclude: event_types:` and run the
-> **Recorder: Purge** action with **Apply filter** on. *(P3c: and the media events.)*
+> `virtual_pet_bond_favourite`, `virtual_pet_friend_home`, `virtual_pet_tucked_in`,
+> `virtual_pet_wish_made`, *(P3c)* `virtual_pet_watching` and `virtual_pet_listening`
+> under `recorder: exclude: event_types:` and run the **Recorder: Purge** action with
+> **Apply filter** on.
 >
-> **Reload any dashboard still on 0.35 or older** (a wall tablet that has stayed open
-> since then). Until it reloads, it shows no bond hearts, nicknames or aimed wishes, but
-> nothing breaks. A dashboard on 0.36 or newer needs nothing.
+> **After updating, reload every dashboard that stays open** (a wall tablet, say). Until
+> it reloads, nothing breaks, but it may leave things out: one on 0.36 or 0.37 no longer
+> says it watched TV or listened to music in "while you were out", and one on 0.35 or
+> older also shows no bond hearts, nicknames, aimed wishes, comments on the show or song,
+> or dreams about them.
 
 The **Apply filter** behaviour was checked in Home Assistant's `recorder/services.yaml`
 and `strings.json`: "Apply `entity_id` and `event_type` filters in addition to time-based
@@ -1269,3 +1275,54 @@ together (owner, 2026-10-30).
 `virtual_pet_watching`/`_listening`, public moments or `dream`; the events still fire each
 time the show or song changes, so read `media_title` from your player. The reload line
 becomes "after updating, reload every dashboard that stays open (a wall tablet, say)".
+
+## P3c reconcile (s2535, 2026-10-31), for 2a
+
+P3c is built on the P3b branch, per the fold above (its 10 criteria all met). P3b and P3c
+merge and release together.
+
+**Shipped as the fold says:**
+- `const.PUBLIC_AS`; `_fire` puts exactly `{type: tv_on|music_on, at}` on the public list for a
+  media event; `MOMENTS` swaps `watching`/`listening` for `tv_on`/`music_on`.
+  `PRIVATE_EVENT_FIELDS` gains `title` and `artist`, so `virtual_pet_watching`/`_listening`
+  carry `pet_id` only. No new bus events.
+- `sensor.py`: `dream` is `{kind}` only and `None` for a media kind (`LifeStageSensor._dream`);
+  the debug sensor redacts `PRIVATE_READINGS` always. `debug["last_events"]` leaves out
+  `PERSONAL_EVENTS` (a fire of only bond moments leaves the last list as it was).
+- `model.dream_on_waking` returns `{type: "dreamed", kind}` in both branches.
+- Card: the recap's `MOMENT_BITS` gains `tv_on`/`music_on`. Nothing else on the card changed.
+- Tests: `TITLES = ("Bluey", "Clair de lune", "Debussy")`. `scripted_day` sets up with a real
+  TV (`media_player.tv` playing "Bluey"), fires a song with an artist, seeds today's media
+  dream, and enables `sensor.pip_debug`. It waits out HA's 30 s registry reload rather than
+  reloading by hand: the delayed reload otherwise swaps the coordinator mid-day.
+  `test_recorded` scans by registry platform. Test 9 is
+  `test_the_debug_sensor_never_shows_a_title` (privacy off). Also new:
+  `test_the_debug_sensor_lists_no_bond_moment`.
+- **Test 5 can fail:** with `title`/`artist` taken back out of `PRIVATE_EVENT_FIELDS`,
+  `test_public` (bus) and `test_recorded` FAIL. With the sensor `dream` back to
+  `("kind", "title")`, `test_nothing_personal_on_a_state` FAILs.
+- The house-media check moved to pytest (`test_the_pet_comments_on_whats_on_tv`: `tv_on`
+  `{type, at}`, `_house["media"]` titled, no title on the life stage or last care).
+  Card-check doesn't drive a real TV (the dev pet has none). It checks the card against
+  the shapes pytest pins.
+
+**Card-check** (`scripts/gate -- --only moments,channel,oldcard`, restart pulled in):
+60/60. New: "P3c: a show's dream comes from house.dream, once" (sensor `dream: null`,
+`s.house.dream` titled), and "P3c: the recap keeps TV and music". In 8b, one P3c media
+check runs per old tag.
+
+**Old cards, P3c against P3b** (P3b: 0 console errors and no "undefined" on both):
+- **v0.37.0:** 0 console errors, no "undefined", no uncaught error, unchanged from P3b.
+  The public `tv_on`/`music_on` say nothing. The channel's show ("Bluey Old! I love this
+  one"), song ("♪ is this Debussy? ♪") and the show's dream ("I dreamed about Bluey Old!")
+  are still said. The recap from `tv_on`/`music_on` alone is `null`: it has no bits for
+  them. This loss is accepted (fold #9).
+- **v0.35.0:** 0 console errors, no "undefined", no uncaught error, unchanged from P3b.
+  `tv_on`/`music_on` say nothing. It has no channel, so it says no TV or music line and no
+  media dream (the sensor's `dream` is null), and gives no recap. These losses are accepted.
+- Raw results are in the crew worker's renders (`old-card-v0.37.0.json`,
+  `old-card-v0.35.0.json`).
+
+**For 2a:** The public `moments` media types are now `tv_on`/`music_on`. Titles exist only on
+the channel (`house.media`, `house.dream`). Anything in 2a that reads a show from public
+moments or `stage.dream` must read `s.house` instead.
