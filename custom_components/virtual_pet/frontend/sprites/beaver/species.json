@@ -1,5 +1,6 @@
 {
   "name": "Beaver",
+  "short": "Beaver",
   "ready": true,
   "stages": [
     "baby",

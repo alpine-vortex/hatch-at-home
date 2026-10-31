@@ -1,5 +1,6 @@
 {
   "name": "Mallard duckling",
+  "short": "Duckling",
   "ready": true,
   "stages": [
     "baby",

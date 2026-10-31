@@ -1,5 +1,6 @@
 {
   "name": "Western pond turtle",
+  "short": "Pond turtle",
   "ready": true,
   "stages": ["baby", "child", "teen", "adult"],
   "scale": {"adult": 1.2},

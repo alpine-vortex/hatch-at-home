@@ -1,5 +1,6 @@
 {
   "name": "Axolotl",
+  "short": "Axolotl",
   "ready": true,
   "stages": ["baby", "child", "teen", "adult"],
   "scale": { "adult": 1.2 },

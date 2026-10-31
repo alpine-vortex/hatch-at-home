@@ -1,5 +1,6 @@
 {
   "name": "Ball python",
+  "short": "Ball python",
   "ready": true,
   "stages": ["baby", "child", "teen", "adult"],
   "scale": {"adult": 1.15},

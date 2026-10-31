@@ -1,5 +1,6 @@
 {
   "name": "Red fox",
+  "short": "Red fox",
   "ready": true,
   "stages": ["baby", "child", "teen", "adult"],
   "scale": {"adult": 1.05},

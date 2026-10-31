@@ -1,5 +1,6 @@
 {
   "name": "Banana slug",
+  "short": "Banana slug",
   "ready": true,
   "stages": [
     "baby",

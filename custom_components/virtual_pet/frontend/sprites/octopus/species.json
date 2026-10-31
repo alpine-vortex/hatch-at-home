@@ -1,5 +1,6 @@
 {
   "name": "Giant Pacific octopus",
+  "short": "Octopus",
   "ready": true,
   "stages": ["baby", "child", "teen", "adult"],
   "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],

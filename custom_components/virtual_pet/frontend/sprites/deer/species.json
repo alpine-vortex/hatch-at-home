@@ -1,5 +1,6 @@
 {
   "name": "Black-tailed deer",
+  "short": "Deer",
   "ready": true,
   "stages": ["baby", "child", "teen", "adult"],
   "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],

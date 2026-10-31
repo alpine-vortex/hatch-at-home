@@ -1,5 +1,6 @@
 {
   "name": "Bearded dragon",
+  "short": "Beardie",
   "ready": true,
   "stages": [
     "baby",

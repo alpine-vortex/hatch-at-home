@@ -1,5 +1,6 @@
 {
   "name": "Harbor seal pup",
+  "short": "Seal pup",
   "ready": true,
   "stages": ["baby", "child", "teen", "adult"],
   "scale": {"adult": 1.1},

@@ -8,6 +8,7 @@ Run from the repo root: python3 scripts/readme/art.py
 """
 
 import io
+import json
 import math
 from pathlib import Path
 import random
@@ -33,31 +34,33 @@ CREAM = (255, 246, 224)
 WHITE = (255, 255, 255)
 RED = (232, 52, 60)
 
+
+def load_rosters():
+    """Worlds and their species from worlds.json and each species.json.
+
+    A species with no species.json (the beetle) is skipped, as the card's
+    roster does. Returns [(title, key, [species])] and {species: short name}.
+    """
+    worlds_json = json.loads((FRONT / "worlds.json").read_text())
+    worlds, names = [], {}
+    for key, w in worlds_json.items():
+        roster = []
+        for sp in w["roster"]:
+            f = SPRITES / sp / "species.json"
+            if not f.exists():
+                continue
+            names[sp] = json.loads(f.read_text())["short"]
+            roster.append(sp)
+        worlds.append((w["name"], key, roster))
+    return worlds, names
+
+
 # (title, world key, roster in card order). The key names the UI emblem
 # (ui/emblem_<key>.png) and the screenshot (src/world-<key>.png).
-WORLDS = [
-    ("Woodland", "woodland", ["bird", "squirrel", "deer"]),
-    ("Hearth", "hearth", ["kitten", "bunny"]),
-    ("Terrarium", "terrarium", ["gecko", "tarantula"]),
-    ("Tidepool", "tidepool", ["otter", "octopus"]),
-    ("Pond", "pond", ["treefrog", "axolotl"]),
-    ("Night Sky", "nightsky", ["bat", "lunamoth"]),
-]
-NAMES = {
-    "bird": "Bird",
-    "squirrel": "Squirrel",
-    "deer": "Deer",
-    "kitten": "Kitten",
-    "bunny": "Lop bunny",
-    "gecko": "Gecko",
-    "tarantula": "Tarantula",
-    "otter": "Sea otter",
-    "octopus": "Octopus",
-    "treefrog": "Tree frog",
-    "axolotl": "Axolotl",
-    "bat": "Bat",
-    "lunamoth": "Luna moth",
-}
+WORLDS, NAMES = load_rosters()
+COUNT = sum(len(r) for _, _, r in WORLDS)
+assert COUNT == 30, COUNT
+MIN_TEXT = 3  # smallest label size, in font pixels
 
 
 def font_file() -> io.BytesIO:
@@ -255,7 +258,7 @@ def save(img, name):
 
 
 def hero():
-    w, h = 1600, 860
+    w, h = 1600, 1090
     img = sunburst(w, h, 520, 330, PINK, PINK_LT, rays=32)
     sparkles(img, 26, 1, (30, 30, w - 30, 560))
     # Two devices, tilted like toys in a blister pack.
@@ -275,19 +278,28 @@ def hero():
     pixel_text(img, (110, 330), "AT HOME!", 17, WHITE, PURPLE, shadow=PINK_DK)
     y = ribbon(img, 470, 500, "a virtual pet that lives in your house", 5)
     pixel_text(img, (470, y + 34), "for Home Assistant", 5, PURPLE, anchor="ma")
-    burst(img, 140, 690, 120, [("NEW!", 8), ("6 worlds", 4)], fill=YELLOW)
-    # Ground strip with the whole cast.
+    burst(img, 130, 655, 102, [("NEW!", 8), ("6 worlds", 4)], fill=YELLOW)
+    # Ground strip with the whole cast: two rows at 128, laid out by the
+    # sprites' visible width so no two overlap.
     d = ImageDraw.Draw(img)
     d.rectangle([0, 760, w, h], fill=PURPLE)
     d.rectangle([0, 752, w, 760], fill=YELLOW)
     cast = [s for _, _, roster in WORLDS for s in roster]
-    step = (w - 400) / (len(cast) - 1)
-    for i, s in enumerate(cast):
-        sp = sprite(s, "child_content_1", 136)
-        img.alpha_composite(sp, (round(330 + i * step - 68), 646))
+    per = math.ceil(len(cast) / 2)
+    for r, row in enumerate((cast[:per], cast[per:])):
+        sps = [sprite(s, "child_content_1", 128) for s in row]
+        boxes = [sp.getchannel("A").getbbox() for sp in sps]
+        vis = sum(b[2] - b[0] for b in boxes)
+        margin = 50
+        gap = (w - 2 * margin - vis) / (len(row) - 1)
+        assert gap >= 2, (r, gap)
+        x = margin
+        for sp, b in zip(sps, boxes, strict=True):
+            img.alpha_composite(sp, (round(x - b[0]), 772 + r * 124))
+            x += b[2] - b[0] + gap
     pixel_text(
         img,
-        (w // 2, 790),
+        (w // 2, 1030),
         "feed it!  play with it!  tuck it in!",
         5,
         YELLOW,
@@ -297,7 +309,7 @@ def hero():
 
 
 def worlds():
-    w, h = 1600, 780
+    w, h = 1600, 880
     img = Image.new("RGBA", (w, h), CREAM)
     d = ImageDraw.Draw(img)
     for x in range(0, w, 40):
@@ -324,7 +336,7 @@ def worlds():
         pixel_text(img, (cx, y), title.upper(), 5, PINK_DK, anchor="ma")
         y += 56
         for s in roster:
-            pixel_text(img, (cx, y), NAMES[s], 3, PURPLE, anchor="ma")
+            pixel_text(img, (cx, y), NAMES[s], MIN_TEXT, PURPLE, anchor="ma")
             y += 34
     save(img, "worlds.png")
 
@@ -370,20 +382,23 @@ def grow():
 
 
 def collect():
-    w, h = 1600, 900
+    rows = max(len(r) for _, _, r in WORLDS)
+    slot = 190  # one creature: sprite at 128 plus its label
+    top = 300
+    w, h = 1600, top + rows * slot + 60
     img = sunburst(w, h, w // 2, h // 2, CYAN, (110, 214, 236), rays=36)
     sparkles(img, 30, 5, (20, 20, w - 20, h - 20))
     pixel_text(
         img,
         (w // 2, 30),
-        "COLLECT ALL 13!",
+        f"COLLECT ALL {COUNT}!",
         10,
         YELLOW,
         PURPLE,
         shadow=PINK_DK,
         anchor="ma",
     )
-    col = w / 6
+    col = w / len(WORLDS)
     for i, (title, key, roster) in enumerate(WORLDS):
         cx = round(col * i + col / 2)
         d = ImageDraw.Draw(img)
@@ -398,21 +413,10 @@ def collect():
         )
         img.alpha_composite(emblem, (cx - 40, 166))
         pixel_text(img, (cx, 254), title.upper(), 4, PINK_DK, anchor="ma")
-        slot = (h - 30 - 300) / 3
         for j, s in enumerate(roster):
-            y = round(300 + j * slot)
-            img.alpha_composite(sprite(s, "adult_content_1", 168), (cx - 84, y - 20))
-            pixel_text(img, (cx, y + 140), NAMES[s], 3, PURPLE, anchor="ma")
-        if len(roster) == 2:
-            y = round(300 + 2 * slot)
-            egg_src = next(
-                (s for s in roster if (SPRITES / s / "egg_idle_1.png").exists()), None
-            )
-            if egg_src:
-                img.alpha_composite(
-                    sprite(egg_src, "egg_idle_1", 168), (cx - 84, y - 20)
-                )
-                pixel_text(img, (cx, y + 140), "which one?", 3, PINK_DK, anchor="ma")
+            y = top + j * slot
+            img.alpha_composite(sprite(s, "adult_content_1", 128), (cx - 64, y))
+            pixel_text(img, (cx, y + 132), NAMES[s], MIN_TEXT, PURPLE, anchor="ma")
     save(img, "collect.png")
 
 
@@ -463,6 +467,9 @@ def footer():
 
 
 if __name__ == "__main__":
+    print(f"Drew {COUNT} species in {len(WORLDS)} worlds.")
+    print(f'hero alt: "... a parade of all {COUNT} creatures."')
+    print(f'collect alt: "Collect all {COUNT}: the adult creatures of every world."')
     hero()
     worlds()
     grow()

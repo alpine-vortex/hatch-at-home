@@ -1,5 +1,6 @@
 {
   "name": "Mexican red-knee tarantula",
+  "short": "Tarantula",
   "ready": true,
   "stages": ["baby", "child", "teen", "adult"],
   "moods": ["content", "excited", "cozy", "bored", "hungry", "sleepy", "asleep", "sick", "calling", "dirty"],

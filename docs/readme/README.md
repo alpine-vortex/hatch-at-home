@@ -37,10 +37,10 @@ stable when you can.
   says good night; it yawns at a late TV), "spooky seasons" (only Halloween
   exists).
 - **Creature names** come from `sprites/<species>/species.json` `name`,
-  shortened (Bird, not Robin; Deer, not Fawn). `NAMES` in `art.py` holds the
-  short forms.
+  shortened (Bird, not Robin; Deer, not Fawn). each `species.json`'s `short`
+  holds the short form (`art.py` reads it).
 - **Numbers on the box:**
-  - 6 worlds, 13 creatures and 16 traits.
+  - 6 worlds, 30 creatures and 16 traits.
   - The stage times: egg → baby 30 min → child 1 day → teen 5 days → adult 14 days.
   - The 20-minute call window, and three wins out of five rounds in a game.
 
@@ -112,7 +112,7 @@ Each one is a function in `art.py`; reuse them rather than drawing anew.
   stands on it.
 - **Sprites:** `sprite(species, frame, size)` scales the card's 256×256 sprites
   with nearest-neighbour, so pixels stay square. Use sizes that divide well:
-  136, 168, 256. The feet of every sprite sit at y = 224 of 256.
+  128, 256. The feet of every sprite sit at y = 224 of 256.
 - **Screenshots:** scale them with Lanczos (`scale_w` / `scale_h`), since they
   aren't pure pixel art.
 - **Output:** every image is 1600 px wide, quantised to 256 colours without
@@ -122,10 +122,10 @@ Each one is a function in `art.py`; reuse them rather than drawing anew.
 
 | File | Canvas | Background | Contents | Sources |
 | --- | --- | --- | --- | --- |
-| `hero.png` | 1600×860 | Pink sunburst centred at (520, 330), 32 rays | Logo "HATCH"/"AT HOME!" top left. Tagline ribbon and "for Home Assistant". "NEW! 6 worlds" burst bottom left. Hearth and Woodland devices tilted +7° and −6° on the right. All 13 child sprites on the ground strip, and "feed it! play with it! tuck it in!" on the strip. | `src/world-hearth.png`, `src/world-woodland.png`, the sprites |
-| `worlds.png` | 1600×780 | Cream with a dot grid | "CHOOSE YOUR WORLD!". Six framed devices 214 px wide in six columns, each with its world name and creatures below. | `src/world-*.png` |
+| `hero.png` | 1600×1090 | Pink sunburst centred at (520, 330), 32 rays | Logo "HATCH"/"AT HOME!" top left. Tagline ribbon and "for Home Assistant". "NEW! 6 worlds" burst bottom left. Hearth and Woodland devices tilted +7° and −6° on the right. All 30 child sprites at 128 px on the ground strip, two rows, and "feed it! play with it! tuck it in!" on the strip. | `src/world-hearth.png`, `src/world-woodland.png`, the sprites |
+| `worlds.png` | 1600×880 | Cream with a dot grid | "CHOOSE YOUR WORLD!". Six framed devices 214 px wide in six columns, each with its world name and creatures below. | `src/world-*.png` |
 | `grow.png` | 1600×560 | Yellow sunburst from below centre | "WATCH IT GROW!". The kitten's five stages (256 px) on orange ground shadows, with pink arrows between, and the stage name and time under each. | Kitten sprites (egg is `egg_idle_1`, the rest `*_content_1`) |
-| `collect.png` | 1600×900 | Cyan sunburst | "COLLECT ALL 13!". Six cream cards, one per world, each with its emblem and name, and the adults at 168 px. Two-creature worlds fill the third slot with their egg and "which one?". | `ui/emblem_<world>.png`, `adult_content_1`, `egg_idle_1` |
+| `collect.png` | 1600×1310 | Cyan sunburst | "COLLECT ALL 30!" (the count is read from the files). Six cream cards, one per world, each with its emblem and name, and the five adults at 128 px. | `ui/emblem_<world>.png`, `adult_content_1`, `egg_idle_1` |
 | `play.png` | 1600×980 | Pink sunburst | "A LIFE OF ITS OWN!". Six framed screens (420 px wide) in a 3×2 grid, each with a pill caption. | `src/04a-greeting`, `04a-pick`, `04c-higher-lower`, `02-status`, `05-wish-granted`, `03-journal` |
 | `house.png` | 1600×980 | Purple sunburst | "IT KNOWS YOUR HOUSE!". The same grid. | `src/05-forecast`, `05-watching`, `05-first_snow`, `05-sunset`, `05-trait_learned`, `05-halloween-extras` |
 | `footer.png` | 1600×300 | White with a 6 px purple border | A barcode (the bits of "HATCH AT HOME"), "AGES 8 TO 108" and the small print, with a bird egg on the right. | Bird `egg_idle_1` |
@@ -161,12 +161,13 @@ HA (`scripts/setup` once, then `scripts/develop`).
 ## When the game changes
 
 - **A new creature:**
-  - Add it to its world's roster in `WORLDS` and to `NAMES`.
-  - Update the counts: "COLLECT ALL 13!" in `collect()` and "13" in the README
-    (the features and the collect alt text).
-  - `hero()` spaces the cast automatically. Past about 16 creatures, shrink the
-    sprite size.
-  - `collect()` fits three per card. A fourth needs a smaller `slot`.
+  - Add it to its world's roster in `worlds.json` and give its `species.json` a
+    `short` name. `art.py` reads both, asserts `COUNT` (30) and prints the count
+    for the alt text: update the assert, then "30" in the README (the hero and
+    collect alt text) and here.
+  - `hero()` lays two rows by each sprite's visible width and asserts they fit.
+  - `collect()` fits five per card. A sixth needs a taller canvas (it grows with
+    the longest roster).
 - **A new world:**
   - Add it to `WORLDS`, plus the `src/world-<key>.png` shot and its UI emblem.
   - The six-column layouts in `worlds()` and `collect()` assume six worlds; at

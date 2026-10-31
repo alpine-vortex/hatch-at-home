@@ -1,5 +1,6 @@
 {
   "name": "Hermit crab",
+  "short": "Hermit crab",
   "ready": true,
   "stages": [
     "baby",

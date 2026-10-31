@@ -1,5 +1,6 @@
 {
   "name": "Corgi puppy",
+  "short": "Corgi",
   "ready": true,
   "stages": ["baby", "child", "teen", "adult"],
   "scale": {"adult": 1.1},

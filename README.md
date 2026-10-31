@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/hero.png" alt="Hatch at Home: a virtual pet that lives in your house, for Home Assistant. Two pet devices and a parade of all thirteen creatures." width="100%">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/hero.png" alt="Hatch at Home: a virtual pet that lives in your house, for Home Assistant. Two pet devices and a parade of all 30 creatures." width="100%">
 </p>
 
 <h3 align="center">★ Your very own pixel pet... that lives in your smart home! ★</h3>
@@ -100,7 +100,7 @@ Hook up the things you already have, and your pet notices them:
 > nobody home it goes to the sitter's, and nothing runs down until you're back.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/collect.png" alt="Collect all 13: the adult creatures of every world, with the eggs they hatch from" width="100%">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/collect.png" alt="Collect all 30: the adult creatures of every world" width="100%">
 </p>
 
 ## 🐣 HOW TO HATCH YOUR EGG
