@@ -2135,6 +2135,8 @@ async function main() {
     ["weather", { change: "rainbow" }, "rainbow"],
     ["forecast", { when: "tomorrow", kind: "warmer", high: 72 }, "warmer tomorrow: 72°"],
   ]) {
+    // Each from a quiet bubble: under 2a a kept line holds the next one back.
+    await card.evaluate((el) => Object.assign(el._slides[el._index], { sayUntil: 0, sayClass: 0, sayEntry: null, queue: [] }));
     if (type === "watching") { // the house's show: over the private channel only
       await page.locator("hatch-pet-card").evaluate((el, m) =>
         el._channel(el._slides[el._index], { moment: m }, el._hass.user.id), { type, ...extra, at: new Date().toISOString() });
@@ -2448,13 +2450,13 @@ async function main() {
   await page.waitForTimeout(600);
   const granted = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
-    const first = s.bubble.textContent; // the sunset's line
+    const first = s.bubble.textContent; // the wish's line: kept, over the sunset (flavour)
     s.sayUntil = 0;
     el._sayQueued(s);
     return [first, s.bubble.textContent];
   });
-  check("a wish coming true is celebrated after the line said with it",
-    /sun|sky/.test(granted[0]) && /wish|best day/.test(granted[1]), granted.join(" | "));
+  check("a wish coming true is celebrated over the sunset said with it (2a: kept over flavour)",
+    /wish|best day/.test(granted[0]) && !/sun|sky/.test(granted[1]), granted.join(" | "));
   await shot("05-wish-granted");
 
   // Excitement bounces briefly, not for the whole 15 minutes it lasts. The
@@ -2504,6 +2506,219 @@ async function main() {
   await shot("05-memories");
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
+
+  // PR 2a: every line has a class on the one queue (mine, kept, care and beats,
+  // flavour). Each check starts from a quiet bubble and an empty queue.
+  await calm();
+  const quiet2a = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    Object.assign(s, { sayUntil: 0, sayClass: 0, sayEntry: null, queue: [], game: null, pressed: null,
+      flairUntil: 0, asleep: false, nextIdle: Date.now() + 600000 });
+    s.screen.querySelector(".askday")?.remove();
+    s.asking = false;
+    s.screen.classList.remove("show-status");
+  });
+  // Every moment type has a class: coordinator MOMENTS, const PERSONAL_EVENTS
+  // and MEDIA_EVENTS, read from the Python by name.
+  const pySet = (file, name) => {
+    const src = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", file), "utf8");
+    const block = new RegExp(`^${name} = \\{([^}]*)\\}`, "m").exec(src);
+    return block ? [...block[1].matchAll(/"([a-z_]+)"/g)].map((x) => x[1]) : [];
+  };
+  const serverTypes = [...new Set([...pySet("coordinator.py", "MOMENTS"), ...pySet("const.py", "PERSONAL_EVENTS"),
+    ...pySet("const.py", "MEDIA_EVENTS")])];
+  const classes = await card.evaluate((el) => el.constructor.momentClasses || {});
+  const unclassed = serverTypes.filter((t) => !["kept", "beat", "flavour"].includes(classes[t]));
+  check("2a: every moment type has a class (MOMENTS, PERSONAL_EVENTS, MEDIA_EVENTS)",
+    serverTypes.length > 30 && serverTypes.includes("tv_on") && serverTypes.includes("watching") &&
+      serverTypes.includes("bond_up") && unclassed.length === 0,
+    `${serverTypes.length} types; unclassed: ${unclassed.join(", ") || "none"}`);
+  check("2a: care_miss is kept, tv_on is flavour, someone_home is a beat",
+    classes.care_miss === "kept" && classes.tv_on === "flavour" && classes.someone_home === "beat", JSON.stringify(classes));
+
+  // Wake, good morning and weather in one update: the yawn, then good morning,
+  // and nothing about the weather (it would wait more than 8 s).
+  await quiet2a();
+  const wakeAt = Date.now();
+  await inject(pet["sensor.last_care"], { attributes: { moments: [
+    { type: "weather", change: "sun_out", at: new Date(wakeAt + 2).toISOString() },
+    { type: "good_morning", at: new Date(wakeAt + 1).toISOString() },
+    { type: "woke_up", how: "morning", at: new Date(wakeAt).toISOString() },
+  ] } });
+  const morning = [];
+  for (let i = 0; i < 40; i++) {
+    const t = await cur().locator(".bubble").innerText();
+    if (morning[morning.length - 1] !== t) morning.push(t);
+    await page.waitForTimeout(300);
+  }
+  const iMorning = morning.findIndex((t) => /morning/.test(t));
+  check("2a: wake + good morning + weather: good morning is said, the weather isn't",
+    iMorning >= 0 && !morning.some((t) => /sun came out|sunshine/.test(t)) &&
+      morning.findIndex((t) => /yaaawn/.test(t)) < iMorning, morning.join(" | "));
+
+  // The viewer's own press is "mine": a flavour moment 1 s later doesn't
+  // overwrite its line for 3 s (and a poop has no line to say).
+  await quiet2a();
+  const pressAt = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    s.pressed = { action: "praise", pressedAt: Date.now() };
+    const hass = el._hass;
+    const id = s.ids["sensor.last_care"];
+    const st = hass.states[id];
+    const at = new Date().toISOString();
+    await hass.callApi("POST", `states/${id}`, { state: st.state,
+      attributes: { ...st.attributes, log: [{ action: "praise", result: "ok", by: "Dev", at }, ...(st.attributes.log || [])] } });
+    for (let i = 0; i < 40 && s.bubble.textContent !== "♥"; i++) await new Promise((r) => setTimeout(r, 25));
+    return Date.now();
+  });
+  await page.waitForTimeout(Math.max(0, pressAt + 1000 - Date.now()));
+  const nowIso = new Date().toISOString();
+  await inject(pet["sensor.last_care"], { attributes: { moments: [
+    { type: "sunset", at: nowIso }, { type: "pooped", count: 1, at: nowIso }] } });
+  await page.waitForTimeout(Math.max(0, pressAt + 2800 - Date.now()));
+  const heldMine = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { text: s.bubble.textContent, cls: s.sayClass, left: s.sayUntil - Date.now() };
+  });
+  check("2a: a care press, then sunset and a poop 1 s later, keeps the care line for 3 s",
+    heldMine.text === "♥" && heldMine.cls === 4, JSON.stringify(heldMine));
+
+  // Two kinds of care in one update: the newest's reaction with one line (C4).
+  await quiet2a();
+  const burst = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const hass = el._hass;
+    const id = s.ids["sensor.last_care"];
+    const st = hass.states[id];
+    const now = Date.now();
+    await hass.callApi("POST", `states/${id}`, { state: st.state, attributes: { ...st.attributes, log: [
+      { action: "clean", result: "ok", by: "B", at: new Date(now).toISOString() },
+      { action: "snack", result: "ok", by: "A", at: new Date(now - 1000).toISOString() },
+      ...(st.attributes.log || [])] } });
+    for (let i = 0; i < 60 && !/and/.test(s.bubble.textContent); i++) await new Promise((r) => setTimeout(r, 25));
+    return s.bubble.textContent;
+  });
+  check("2a: two kinds of care in one update give one line (C4)", burst === "snacks and a bath! ♥", burst);
+
+  // A care_miss during a game waits, and is said after it.
+  await quiet2a();
+  const missInGame = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.game = { picking: true };
+    el._moment(s, { type: "care_miss", reason: "hunger", at: new Date().toISOString() });
+    const during = s.bubble.textContent;
+    const waiting = s.queue.map((q) => q.text);
+    s.game = null;
+    s.sayUntil = 0;
+    el._sayQueued(s);
+    return { during, waiting, after: s.bubble.textContent };
+  });
+  check("2a: a care_miss during a game waits and is said after it",
+    !/there you are/.test(missInGame.during) && missInGame.waiting.some((t) => /there you are/.test(t)) &&
+      /there you are/.test(missInGame.after), JSON.stringify(missInGame));
+
+  // A house.media push (the channel's show) during a kept line is dropped.
+  await quiet2a();
+  const mediaOverKept = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    el._moment(s, { type: "care_miss", reason: "hunger", at: new Date().toISOString() });
+    el._channel(s, { moment: { type: "watching", title: "Bluey", at: new Date().toISOString() } }, el._hass.user.id);
+    const said = s.bubble.textContent;
+    s.sayUntil = 0;
+    el._sayQueued(s);
+    return { said, queue: s.queue.map((q) => q.text), after: s.bubble.textContent };
+  });
+  check("2a: a house.media push during a kept line is dropped, not said over it",
+    /there you are/.test(mediaOverKept.said) && !/Bluey/.test(mediaOverKept.after) && mediaOverKept.queue.length === 0,
+    JSON.stringify(mediaOverKept));
+
+  // Catch-up: a stage_changed 40 s old (the card was closed) is a line of the
+  // next look; with the away note and the wish that's three, the visit sends
+  // queued: 3 and no question comes.
+  await quiet2a();
+  const lifeWas = await evaluate((id) => document.querySelector("home-assistant").hass.states[id].attributes.wish, pet["sensor.life_stage"]);
+  const stageAt = new Date(Date.now() - 40000).toISOString();
+  const catchMoments = [{ type: "stage_changed", stage: "teen", from: "child", at: stageAt },
+    { type: "weather", change: "rain_started", at: new Date(Date.now() - 3600 * 1000).toISOString() }];
+  await inject(pet["sensor.life_stage"], { attributes: { wish: { kind: "sunset", granted: false } } });
+  await inject(pet["sensor.last_care"], { attributes: { moments: catchMoments } });
+  await page.waitForTimeout(600);
+  const look = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const device = s.ids.device;
+    for (const k of Object.keys(localStorage)) if (/^hatch-wish-/.test(k)) localStorage.removeItem(k);
+    localStorage.setItem(`hatch-seen-${device}`, JSON.stringify({ seen: Date.now() - 5 * 3600 * 1000, said: Date.now() - 120000 }));
+    s.lookedFirst = false; s.visitedAt = 0;
+    el._firstLook(s);
+    const lines = s.queue.map((q) => q.text);
+    const real = el._hass.callService;
+    let sent = null;
+    let reply = null;
+    el._hass.callService = function (domain, service, data, ...rest) {
+      const p = real.call(this, domain, service, data, ...rest);
+      if (service !== "visit") return p;
+      sent = data;
+      return p.then((r) => { reply = r?.response || {}; return r; });
+    };
+    s.sayUntil = Date.now() + 60000; // nothing is said while we look
+    try {
+      el._visit(s);
+      for (let i = 0; i < 60 && !reply; i++) await new Promise((r) => setTimeout(r, 50));
+      await new Promise((r) => setTimeout(r, 300));
+    } finally {
+      el._hass.callService = real;
+    }
+    return { lines, queued: sent?.queued, ask: reply?.ask ?? null, asking: s.queue.some((q) => q.ask) };
+  });
+  check("2a: a look with two lines and a catch-up line sends queued: 3 and asks no question",
+    look.lines.length === 3 && look.lines.some((t) => t === "guess what? I'm a teen now!") &&
+      look.queued === 3 && !look.ask && !look.asking, JSON.stringify(look));
+  const caught = await card.evaluate((el, at) => {
+    const s = el._slides[el._index];
+    const said = [];
+    for (let i = 0; i < 6 && s.queue.length; i++) {
+      s.sayUntil = 0;
+      el._sayQueued(s);
+      said.push(s.bubble.textContent);
+    }
+    s.lookedFirst = false;
+    el._firstLook(s); // the same page, looking again
+    const again = s.queue.map((q) => q.text);
+    s.queue = []; s.sayUntil = 0;
+    return { said, again, mark: el._seenRead(s.ids.device), at: new Date(at).getTime() };
+  }, stageAt);
+  check("2a: a stage_changed 40 s old is said once at the next look",
+    caught.said.filter((t) => /guess what\? I'm a teen/.test(t)).length === 1 &&
+      !caught.again.some((t) => /guess what/.test(t)) && caught.mark?.said >= caught.at &&
+      caught.mark?.seen > 0, JSON.stringify(caught));
+  // ...and not again after a reload (the same moment still in the list).
+  await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
+  await page.reload();
+  await signedIn();
+  await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+  await seasonsOff();
+  await hush();
+  for (let i = 0; i < slides; i++) {
+    if ((await page.locator("hatch-pet-card .title").innerText()).trim() === petName) break;
+    await page.locator("hatch-pet-card .nav.next").click();
+    await page.waitForTimeout(700);
+  }
+  await inject(pet["sensor.last_care"], { attributes: { moments: catchMoments } });
+  await page.waitForTimeout(3000);
+  const reloaded = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const mark = el._seenRead(s.ids.device);
+    return { mark, catchUp: el._catchUp(s, mark?.said, 3), queue: (s.queue || []).map((q) => q.text),
+      bubble: s.bubble.textContent };
+  });
+  check("2a: ...and not again after a reload",
+    typeof reloaded.mark?.said === "number" && reloaded.catchUp.length === 0 &&
+      !reloaded.queue.some((t) => /guess what/.test(t)) && !/guess what/.test(reloaded.bubble), JSON.stringify(reloaded));
+  await inject(pet["sensor.life_stage"], { attributes: { wish: lifeWas ?? null } });
+  await inject(pet["sensor.last_care"], { attributes: { moments: [] } });
+  await calm();
+  await quiet2a();
+
 
   }
   if (want("photos")) {

@@ -118,7 +118,7 @@ owner's "at most 2 missed calls a day counted" alone doesn't (open question N1).
 | Item | Covered by | What remains for this plan |
 |---|---|---|
 | F04 bonds in a public attribute | Privacy hardening P3a (the `virtual_pet/subscribe` channel, `mine.bond`) and P3b (`sensor.py` drops `bonds` and `notify_users`) | Nothing. |
-| F05 preference switches | Privacy P3a: `mine` = `{bond, notify_me, wish_for_you}`, pushed on change; the new `virtual_pet/my_day` command | **`my_day`, `birthday_kept` and `birthday_phone` are not in `mine`**, so after P3a they still come only from the visit and its two short replies. The privacy plan's test 3 expects "`virtual_pet/my_day` a `mine` push", but `mine` has no `my_day`. That is a **cross-plan change** (listed below), not this plan's. This plan's PR 1c adds all three to the visit's two short replies, and doesn't wait on P3a. |
+| F05 preference switches | Privacy P3a: `mine` = `{bond, notify_me, wish_for_you, my_day, baby_talk, birthday_phone, birthday_kept}`, pushed on change; the new `virtual_pet/my_day` command | **Stale since P3a (2a fold #15):** `mine` carries all the switches, `my_day` too (`coordinator._mine`); every visit reply carries them as well (`_visit_prefs`). |
 | F08 events overwrite each other | Privacy P3a: personal moments (D–G) arrive by push as they happen, not in the 10-slot public list; the snapshot carries the server's `now` for `recent()`; `house.media` is deduped by `at`. P3c moves media out of `moments` into a push | The classes on the existing queue; care bursts (`log[0]` only); a catch-up line for a milestone missed while the card was closed. After P3a and P3c, moments come from **two streams**, so the classes sit at `_moment` and `_queue`, not in `_renderSlide`. PR 2a comes after P3a **and P3c**. |
 | F03 filtered shelf | Forms book: **not covered** today | **Owner (Q1): house-wide.** A forms-book change (cross-plan list below); it lands in the forms book's PR 2a. |
 | F10 four generations | Forms book: the creature page's "raised here" (newest four, then "and more"; decision 8) | The journal's family line (3437): PR 4g. |
@@ -271,6 +271,43 @@ includes the viewer's own bond moments.**
   and `_wishMention` are kept; `bootMoments` keep their type's class. Card-check: a
   `house.media` push during a kept line is dropped, not said over it.
 - Stale (#15): §2's F05 row: `mine` carries all the switches (`my_day` too) since P3a.
+
+**2a reconcile (s2537, 2026-10-31), for 2b and 2c.** 2a is built on the P3b branch after P3c,
+per its fold. Names, all in `hatch-pet-card.js`:
+- **Classes:** `MINE` 4, `KEPT` 3, `BEAT` 2, `FLAVOUR` 1 (0 = the rest: a greeting, the mood
+  line, a game's prompt). `MOMENT_CLASS` is the table (`became_sick` already a beat);
+  `HatchPetCard.momentClasses` exposes it by name for card-check. Each `s.queue` entry has
+  `cls` (`lineClass(q)`: none = kept), and `type` for a moment's line.
+- **One door:** `_line(s, cls, text, ms, {then, at, write, type, perk, catch})` says it now if
+  `_mayInterrupt(s, cls)`, else queues it (kept, beats) or, flavour, queues it with `dropAt`
+  (now + `FLAVOUR_WAIT_MS`) or drops it. `_sayLine` puts an entry in the bubble, sets
+  `s.sayClass`/`s.sayEntry`, runs `then` (a moment's sparkle, chirp and move go there, so
+  they happen when it is said). `_write(s, text, ms, cls)` and `_speak(..., {cls})` record
+  the class; an unclassed write is 0.
+- **`_mayInterrupt(s, cls)`:** `MINE` always; else not during `s.game` or an open question
+  (`_questionOn`: `.askday` on show, not `s.asking`), not while an entry of this class or
+  higher waits in the queue, and only over a lower class. **3b's `_patMayTalk` doesn't exist
+  on this branch** (3b hasn't landed here): when it does, its body becomes
+  `this._mayInterrupt(s, MINE)`-style plus the fold's rule (a pat is wiggle only during a
+  kept line, a game or a question) and keeps `!s.calling`.
+- **`_sayQueued`:** drops expired flavour, then says the highest class first (queue order
+  within a class). Asleep, kept lines wait and a beat or flavour may still be said. It still
+  doesn't check `s.calling`: **2c adds that** (hold every entry with `lineClass(q) < KEPT`
+  while `s.calling`; held entries stay queued). `_visit`'s `queued` counts kept entries only,
+  so a held beat is never budgeted.
+- **2b's C6** is a new `_moment` case: `say(...)` there goes through `_line` as a `BEAT`
+  (`became_sick` is in `MOMENT_CLASS`). Put the droop in its `fx` (the third argument), and
+  "dropped if `sick` is gone at say-time" in the same `then` or a check in `_sayLine`. C8 in
+  `_react` goes through its `said = [...]` / `out()`, which is `MINE` for the viewer's own
+  press (matched by `s.pressed`) and `BEAT` for someone else's.
+- **Care:** `_care(s, fresh)` gets every fresh log entry (newest first); `_react(s, entry,
+  {mine, both})` says one line. C4 nouns are `CARE_NOUNS` (C9's words plus "snacks"); a pair
+  with no noun (praise, scold) says only the newest's reaction.
+- **Catch-up:** `_catchUp`/`_catchUpLine` in `_firstLook`, after the welcome and before the
+  away note. `hatch-seen-<device>` is `{seen, said}` (`_seenRead` reads the old number);
+  `_markSaid` is called when a kept moment is said (or handled with no line).
+- **Forms book's new-page line:** not on this branch (nothing to class yet); when it lands it
+  goes through `_line(s, KEPT, ...)` after the stage line and the teen reveal.
 
 **PR 2b: before, action, result (O03).** Size **S**, tier 1.
 - **One** new public moment, checked against the privacy scrub (no `user`, `by` or

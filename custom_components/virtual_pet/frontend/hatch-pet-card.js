@@ -886,6 +886,33 @@ const MOMENTS_KEPT = 10; // const.py MOMENTS_KEPT
 const CHANNEL_ONLY = new Set(["bond_up", "bond_record", "bond_favourite", "friend_home", "tucked_in", "watching", "listening"]);
 const MEDIA_MOMENTS = new Set(["watching", "listening"]);
 const momentKey = (m) => m && `${m.at}|${m.type}`;
+// Every line has a class (PR 2a). A higher class may interrupt a lower one; one
+// that can't waits in s.queue (kept, care and beats) or, flavour, is dropped if
+// it would wait more than FLAVOUR_WAIT_MS. During a kept line, a game or an open
+// question nothing below kept interrupts. 0 is the rest (a greeting, the mood line).
+const MINE = 4; // the viewer's own care press: never overwritten for MINE_MS
+const KEPT = 3; // never dropped, may wait
+const BEAT = 2; // care by someone else, calls, sleep
+const FLAVOUR = 1; // may be dropped, never replayed as a barrage
+const MINE_MS = 3000;
+const MINE_MATCH_MS = 10000; // a press is matched to the first new log entry within this
+const FLAVOUR_WAIT_MS = 8000;
+// Every moment type, coming (became_sick) or channel-only, has a class: card-check
+// holds this against coordinator MOMENTS, const PERSONAL_EVENTS and MEDIA_EVENTS.
+const MOMENT_CLASS = {
+  hatched: KEPT, stage_changed: KEPT, egg_laid: KEPT, trait_learned: KEPT, trait_deepened: KEPT,
+  wish_granted: KEPT, bond_up: KEPT, bond_record: KEPT, bond_favourite: KEPT, friend_home: KEPT,
+  tucked_in: KEPT, favourite_snack: KEPT, first_snow: KEPT, first_frost: KEPT, care_miss: KEPT,
+  call_answered: BEAT, woke_up: BEAT, fell_asleep: BEAT, good_morning: BEAT, discipline_miss: BEAT,
+  became_sick: BEAT, someone_home: BEAT,
+  sunrise: FLAVOUR, sunset: FLAVOUR, weather: FLAVOUR, forecast: FLAVOUR, news: FLAVOUR,
+  pooped: FLAVOUR, tv_off_late: FLAVOUR, watching: FLAVOUR, listening: FLAVOUR,
+  tv_on: FLAVOUR, music_on: FLAVOUR, // public: no line (the channel's watching/listening says it)
+};
+const lineClass = (q) => q.cls ?? KEPT; // a queued line with no class is kept (notes, questions)
+// Two kinds of care in one update (C4): "<first> and <second>! ♥".
+const CARE_NOUNS = { feed: "a meal", snack: "snacks", clean: "a bath", medicine: "medicine", play: "play",
+  blanket: "a blanket", fan: "a fan" };
 const VISIT_EVERY_MS = 3600 * 1000; // virtual_pet.visit, as the server counts it
 const VISIT_RETRY_MS = 5 * 60 * 1000; // after a visit that didn't count
 const WISH_MENTION_MS = [600000, 900000]; // between reminders of an open wish
@@ -3847,7 +3874,13 @@ class HatchPetCard extends HTMLElement {
     const latestAt = log[0]?.at ?? null;
     if (s.lastLogAt === undefined) s.lastLogAt = latestAt; // don't react to old care
     if (latestAt !== s.lastLogAt) {
-      if (recent(latestAt)) this._react(s, log[0]);
+      // Every fresh entry since the last one seen (a burst), newest first.
+      const fresh = [];
+      for (const e of log) {
+        if (e.at === s.lastLogAt) break;
+        if (recent(e.at)) fresh.push(e);
+      }
+      if (fresh.length) this._care(s, fresh);
       s.lastLogAt = latestAt;
     }
     // A person's own moments and the house's shows come from the channel only.
@@ -4185,18 +4218,20 @@ class HatchPetCard extends HTMLElement {
 
   // Every line put straight into the bubble. With ms, it holds the bubble that
   // long; without, the hold stays as it was (a game keeps its own).
-  _write(s, text, ms) {
+  _write(s, text, ms, cls = 0) {
     this._stopTyping(s);
     s.plain = undefined;
     s.bubble.textContent = text;
     if (ms !== undefined) s.sayUntil = Date.now() + ms;
+    s.sayClass = cls; // what's held in the bubble (PR 2a)
+    s.sayEntry = null;
   }
 
   // A line that may carry the creature's sound, typed out at its pace (and
   // babbled, if this browser wants that). Screen readers get the plain line,
   // once; the sound is hidden from them. With catch: true (lines that name
   // nobody), every third such voiced line ends with its catchphrase.
-  _speak(s, said, ms = 4500, { catch: catchy = false } = {}) {
+  _speak(s, said, ms = 4500, { catch: catchy = false, cls = 0 } = {}) {
     const voice = s.species?.voice;
     const sound = this._soundFor(s, said);
     let text = said;
@@ -4252,6 +4287,8 @@ class HatchPetCard extends HTMLElement {
       s.bubble.append(text);
     }
     s.sayUntil = Date.now() + typingMs + ms;
+    s.sayClass = cls;
+    s.sayEntry = null;
     const plain = spoken(text);
     if (onShow && plain && s.live.textContent !== plain) s.live.textContent = plain;
   }
@@ -4289,24 +4326,118 @@ class HatchPetCard extends HTMLElement {
   }
 
   // Lines waiting for the bubble (a dream, the away note, a wish), said one at
-  // a time once nothing else is being said.
+  // a time once nothing else is being said. Kept unless opts.cls says otherwise.
   _queue(s, text, ms = 4500, opts = {}) {
-    (s.queue ??= []).push({ text, ms, opts });
+    const { cls = KEPT, at, ...rest } = opts;
+    (s.queue ??= []).push({ text, ms, opts: rest, cls, at, perk: true });
+  }
+
+  // An open question is on show (its answer buttons).
+  _questionOn(s) {
+    return !!s.screen?.querySelector(".askday");
+  }
+
+  // May a line of this class go into the bubble now? Only a higher class
+  // interrupts what's held, and nothing below kept interrupts a game or a
+  // question. A line waiting in the queue at this class or above goes first.
+  _mayInterrupt(s, cls) {
+    if (cls >= MINE) return true;
+    if (s.game || this._questionOn(s)) return false;
+    if (s.queue?.some((q) => lineClass(q) >= cls)) return false;
+    return !(s.sayUntil > Date.now()) || cls > (s.sayClass || 0);
+  }
+
+  // One classed line (PR 2a): said now if it may interrupt, else it waits in
+  // the queue (kept, care, beats) or, flavour, waits a little or is dropped.
+  // then runs when it is said (its sparkle, chirp, move); at is a kept
+  // moment's time, noted as said for the catch-up.
+  _line(s, cls, text, ms = 4500, { then, at, write, type, perk, ...opts } = {}) {
+    const entry = { text, ms, cls, then, at, write, type, perk, opts };
+    if (this._mayInterrupt(s, cls)) {
+      this._sayLine(s, entry);
+      return;
+    }
+    const now = Date.now();
+    if (cls === FLAVOUR) {
+      // During a kept line, a game or a question (or with a kept line next): dropped.
+      if (s.game || this._questionOn(s) || (s.sayUntil > now && s.sayClass >= KEPT) ||
+        s.queue?.some((q) => lineClass(q) >= KEPT)) return;
+      const wait = Math.max(0, (s.sayUntil || 0) - now) +
+        (s.queue || []).reduce((n, q) => n + (q.ms || 0), 0);
+      if (wait > FLAVOUR_WAIT_MS) return;
+      entry.dropAt = now + FLAVOUR_WAIT_MS;
+    }
+    (s.queue ??= []).push(entry);
+  }
+
+  // Into the bubble: a queued line or one said at once.
+  _sayLine(s, q) {
+    const now = Date.now();
+    const cls = lineClass(q);
+    const was = s.sayEntry;
+    if (cls >= MINE && was && lineClass(was) === KEPT && s.sayUntil > now &&
+      now - was.shownAt < was.ms / 2) {
+      // The viewer's own press cut off a kept line early: it's said again after.
+      (s.queue ??= []).unshift({ ...was, then: null, shownAt: undefined });
+    }
+    if (q.write) this._write(s, q.text, q.ms, cls);
+    else this._speak(s, q.text, q.ms, { ...q.opts, cls });
+    s.sayEntry = { ...q, shownAt: now };
+    if (q.perk) this._animate(s, s.pet, "perk", 320);
+    if (q.at && cls === KEPT) this._markSaid(s, q.at);
+    q.then?.();
   }
 
   _sayQueued(s) {
     const now = Date.now();
-    if (s.asleep && s.queue?.length) {
-      // Asleep: the lines wait until it's up (they were said once, on the
-      // server's side); only a question is dropped, it may come another day.
-      if (s.queue.some((q) => q.ask)) this._clearAsk(s);
-      return;
+    if (!s.queue?.length) return;
+    s.queue = s.queue.filter((q) => !(q.dropAt < now)); // flavour that waited too long
+    // Asleep: kept lines wait until it's up (they were said once, on the
+    // server's side); only a question is dropped, it may come another day. A
+    // beat ("good night...") or flavour may still be said, as it would have been.
+    if (s.asleep && s.queue.some((q) => q.ask)) this._clearAsk(s);
+    if (!s.queue.length || s.sayUntil > now || s.game || s.power || s.screen.classList.contains("show-status")) return;
+    const ready = s.asleep ? s.queue.filter((q) => lineClass(q) < KEPT) : s.queue;
+    if (!ready.length) return;
+    // The highest class first; in a class, the queue's order.
+    const top = Math.max(...ready.map(lineClass));
+    const next = ready.find((q) => lineClass(q) === top);
+    s.queue.splice(s.queue.indexOf(next), 1);
+    this._sayLine(s, next);
+  }
+
+  // hatch-seen-<device>: { seen, said }. seen is when this device last looked
+  // (its own clock, for the away note); said is the newest kept moment's at
+  // this browser has said (the server's clock, for the catch-up). An older card
+  // stored seen alone, as a number.
+  _seenRead(device) {
+    try {
+      const raw = localStorage.getItem(`hatch-seen-${device}`);
+      if (!raw) return null;
+      const v = JSON.parse(raw);
+      if (typeof v === "number") return { seen: v, said: null };
+      return { seen: Number(v?.seen) || 0, said: typeof v?.said === "number" ? v.said : null };
+    } catch (err) {
+      return null; // no storage, or not ours
     }
-    if (!s.queue?.length || s.sayUntil > now || s.game || s.power || s.screen.classList.contains("show-status")) return;
-    const { text, ms, then, opts } = s.queue.shift();
-    this._speak(s, text, ms, opts);
-    this._animate(s, s.pet, "perk", 320);
-    then?.();
+  }
+
+  _seenWrite(device, patch) {
+    try {
+      const was = this._seenRead(device) || {};
+      localStorage.setItem(`hatch-seen-${device}`, JSON.stringify({ ...was, ...patch }));
+    } catch (err) {
+      // no storage
+    }
+  }
+
+  // A kept moment was said here: the catch-up won't say it (or anything older) again.
+  _markSaid(s, at) {
+    const t = new Date(at).getTime();
+    const device = s.ids?.device;
+    if (!Number.isFinite(t) || !device) return;
+    const said = this._seenRead(device)?.said;
+    if (said === null || said === undefined || t > said) this._seenWrite(device, { said: t });
   }
 
   // The first look at this pet on this device: what happened while you were
@@ -4331,12 +4462,18 @@ class HatchPetCard extends HTMLElement {
       lines.push([`welcome home, ${(bond?.level >= BOND.nickname && bond.nickname) || first || "friend"}! ♥`, 5000]);
       if (HOME_WEATHER[home.weather]) lines.push([HOME_WEATHER[home.weather], 4500]);
     }
-    let seen = 0;
-    try {
-      seen = Number(localStorage.getItem(`hatch-seen-${device}`) || 0);
-    } catch (err) {
-      // no storage: no away note
+    const mark = this._seenRead(device);
+    // Kept milestones said nowhere here (the card was closed): once, as lines of
+    // this look. A browser with no record yet starts from now, so a new one
+    // never replays the house's history.
+    if (typeof mark?.said === "number") {
+      for (const [text, at] of this._catchUp(s, mark.said, FIRST_LOOK_LINES - lines.length)) {
+        lines.push([text, 5000, { at }]);
+      }
+    } else {
+      this._seenWrite(device, { said: serverNow() });
     }
+    const seen = mark?.seen || 0;
     if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS) {
       const note = this._awayNote(s, seen);
       if (note) lines.push([note, 5500, { away: true }]);
@@ -4412,11 +4549,46 @@ class HatchPetCard extends HTMLElement {
     const now = Date.now();
     if (s.seenAt && now - s.seenAt < 60000) return;
     s.seenAt = now;
-    try {
-      localStorage.setItem(`hatch-seen-${s.ids?.device}`, String(now));
-    } catch (err) {
-      // no storage
+    this._seenWrite(s.ids?.device, { seen: now }); // said stays as it is
+  }
+
+  // The kept moments since said that this look should catch up: [line, at],
+  // oldest first, the newest room of them. The public list, and on a personal
+  // screen the viewer's own (s.privateMoments); never friend_home (the look
+  // welcomes them itself) and never flavour.
+  _catchUp(s, said, room) {
+    if (room <= 0) return [];
+    const pub = (this._state(s, "sensor.last_care")?.attributes.moments || []).filter((m) => !CHANNEL_ONLY.has(m.type));
+    const own = sharedScreen() ? [] : s.privateMoments || [];
+    const seen = new Set();
+    const missed = [...pub, ...own]
+      .filter((m) => m?.type && MOMENT_CLASS[m.type] === KEPT && m.type !== "friend_home" &&
+        new Date(m.at).getTime() > said && !seen.has(momentKey(m)) && seen.add(momentKey(m)))
+      .sort((a, b) => new Date(b.at) - new Date(a.at));
+    const out = [];
+    for (const m of missed) {
+      if (out.length >= room) break;
+      const text = this._catchUpLine(s, m);
+      if (text) out.push([text, m.at]);
     }
+    return out.reverse();
+  }
+
+  // A missed milestone in the words of the next look (C5), or its own line.
+  _catchUpLine(s, m) {
+    if (m.type === "stage_changed") {
+      if (m.stage === "baby" || !m.stage) return null; // hatching says hello
+      const a = /^[aeiou]/.test(m.stage) ? "an" : "a";
+      return this._lines(s, "catchup_stage", `guess what? I'm ${a} ${m.stage} now!`).text;
+    }
+    if (m.type === "trait_learned") {
+      return this._lines(s, "catchup_trait", `I learned something: ${String(m.trait).replaceAll("_", " ")}!`).text;
+    }
+    if (m.type === "hatched") return this._lines(s, "catchup_hatched", "hello! I hatched while you were away").text;
+    // The rest say what they would have said then (nothing else happens).
+    const said = [];
+    this._moment(s, m, said);
+    return said[0] || null;
   }
 
   // "while you were out, I napped, watched the rain and had a snack!": up to
@@ -4513,7 +4685,8 @@ class HatchPetCard extends HTMLElement {
     if (!id || !s.species || !this._channelHeard(s) || !this._hass.user || sharedScreen() ||
       Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
     s.visitedAt = Date.now();
-    const queued = Math.min((s.queue || []).length, 6);
+    // Only kept lines count: a waiting beat or flavour may yet be dropped.
+    const queued = Math.min((s.queue || []).filter((q) => lineClass(q) >= KEPT).length, 6);
     this._hass.callService("virtual_pet", "visit", { entity_id: id, queued }, undefined, false, true)
       .then((res) => {
         const reply = res?.response || {};
@@ -4532,7 +4705,7 @@ class HatchPetCard extends HTMLElement {
         const ask = reply.ask;
         if (QUESTIONS[ask] && !s.asking) {
           s.asking = true;
-          (s.queue ??= []).push({ text: QUESTIONS[ask].q, ms: ASK_MS, ask: true, then: () => this._ask(s, ask, id) });
+          (s.queue ??= []).push({ text: QUESTIONS[ask].q, ms: ASK_MS, ask: true, cls: KEPT, perk: true, then: () => this._ask(s, ask, id) });
         }
       })
       .catch(() => {
@@ -4554,7 +4727,7 @@ class HatchPetCard extends HTMLElement {
       const bond = this._bond(s);
       const name = (bond?.level >= BOND.nickname && bond.nickname) || short(this._hass.user?.name?.trim().split(/\s+/)[0], 16);
       if (!note.quiet && name) line = `happy birthday, ${name}!! ♥`;
-      (s.queue ??= []).push({ text: line, ms: 5000, personal: true, then: () => {
+      (s.queue ??= []).push({ text: line, ms: 5000, personal: true, cls: KEPT, perk: true, then: () => {
         if (!note.quiet) this._chirp(s, "birthday");
         this._sparkle(s);
       } });
@@ -4724,59 +4897,75 @@ class HatchPetCard extends HTMLElement {
 
   // Something happened in HA: show it. From sensor.last_care "moments", or
   // from the private channel (the viewer's own moments, the house's shows).
-  _moment(s, m) {
-    const say = (text, ms = 4500) => {
-      this._write(s, text, ms);
+  _moment(s, m, capture = null) {
+    // Each line goes out with the moment's class (PR 2a): said now, or queued,
+    // or (flavour) dropped; fx is what happens as it is said. With capture (the
+    // catch-up), only the words are kept: nothing is said and nothing moves.
+    const cls = MOMENT_CLASS[m.type] ?? FLAVOUR;
+    const at = cls === KEPT ? m.at : undefined;
+    let lined = false;
+    const line = (text, ms = 4500, fx, opts = {}) => {
+      lined = true;
+      if (capture) capture.push(text);
+      else this._line(s, cls, text, ms, { then: fx, at, type: m.type, ...opts });
     };
-    const speak = (text, ms = 4500) => this._speak(s, text, ms, { catch: true }); // may carry its sound
+    const say = (text, ms, fx) => line(text, ms, fx, { write: true });
+    const speak = (text, ms, fx) => line(text, ms, fx, { catch: true }); // may carry its sound
+    const now = (fx) => { if (!capture) fx(); }; // no line: it happens at once
+    const calm = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     switch (m.type) {
       case "care_miss":
-        say(this._lines(s, "care_miss", "...oh, there you are ♥").text, 5000); // never guilt
-        this._animate(s, s.pet, "perk", 320);
+        say(this._lines(s, "care_miss", "...oh, there you are ♥").text, 5000, // never guilt
+          () => this._animate(s, s.pet, "perk", 320));
         break;
       case "discipline_miss":
         say("ok, ok... ♪");
         break;
       case "call_answered":
         if (m.reason === "fake" && m.answer !== "spoiled") { // only a fair scold sulks
-          say("ok... sorry");
-          this._animate(s, s.pet, "sulk", 800);
+          say("ok... sorry", 4500, () => this._animate(s, s.pet, "sulk", 800));
         }
         break;
       case "hatched":
-        say("hello!");
-        this._chirp(s, "hatch");
-        this._animate(s, s.pet, "born", 500);
-        this._sparkle(s);
+        say("hello!", 4500, () => {
+          this._chirp(s, "hatch");
+          this._animate(s, s.pet, "born", 500);
+          this._sparkle(s);
+        });
         break;
       case "stage_changed":
         if (m.stage === "baby") break; // hatching says hello
         say(m.stage === "adult"
           ? "all grown up! ♥" // the upbringing is on the status screen, not announced
-          : `I'm a ${m.stage} now!`);
-        // A new teen tells its personality, in a bubble of its own after this one.
-        if (m.stage === "teen" && PERSONA[m.personality]) this._queue(s, pick(PERSONA[m.personality].reveal), 4500, { catch: true });
-        this._animate(s, s.pet, "stretch", 1100);
-        this._sparkle(s);
+          : `I'm a ${m.stage} now!`, 4500, () => {
+          this._animate(s, s.pet, "stretch", 1100);
+          this._sparkle(s);
+        });
+        // A new teen tells its personality, in a bubble of its own after this one
+        // (kept too, so it waits its turn).
+        if (m.stage === "teen" && PERSONA[m.personality] && !capture) {
+          this._line(s, KEPT, pick(PERSONA[m.personality].reveal), 4500, { catch: true, type: m.type, perk: true });
+        }
         break;
       case "trait_learned":
       case "trait_deepened":
         say(`${m.type === "trait_learned" ? "new trait" : "deeper trait"}: ` +
-          `${String(m.trait).replaceAll("_", " ")} ${"★".repeat(m.level || 1)}`);
-        this._sparkle(s);
-        this._chirp(s, "trait");
-        // Show what the new trait looks like, so its flair means something later.
-        setTimeout(() => this._flair(s, m.trait), 700);
+          `${String(m.trait).replaceAll("_", " ")} ${"★".repeat(m.level || 1)}`, 4500, () => {
+          this._sparkle(s);
+          this._chirp(s, "trait");
+          // Show what the new trait looks like, so its flair means something later.
+          setTimeout(() => this._flair(s, m.trait), 700);
+        });
         break;
       case "egg_laid":
-        say("see you in the journal!");
-        this._animate(s, s.pet, "born", 500);
-        this._sparkle(s);
+        say("see you in the journal!", 4500, () => {
+          this._animate(s, s.pet, "born", 500);
+          this._sparkle(s);
+        });
         break;
       case "woke_up":
         if (m.how === "morning") {
-          say("*yaaawn*");
-          this._animate(s, s.pet, "stretch", 1100);
+          say("*yaaawn*", 4500, () => this._animate(s, s.pet, "stretch", 1100));
         } else if (m.how === "night") {
           say("...so sleepy");
         }
@@ -4789,27 +4978,27 @@ class HatchPetCard extends HTMLElement {
         }
         break;
       case "good_morning":
-        speak(this._lines(s, "good_morning", pick(["morning!! you're up!", "morning! ♪"])).text);
-        this._animate(s, s.pet, "stretch", 1100);
+        speak(this._lines(s, "good_morning", pick(["morning!! you're up!", "morning! ♪"])).text, 4500,
+          () => this._animate(s, s.pet, "stretch", 1100));
         break;
       case "sunset":
-        speak(this._lines(s, "sunset", pick(["ooh, the sunset...", "pretty sky tonight", "the sun's going down"])).text);
-        this._look(s, 3000);
+        speak(this._lines(s, "sunset", pick(["ooh, the sunset...", "pretty sky tonight", "the sun's going down"])).text, 4500,
+          () => this._look(s, 3000));
         break;
       case "sunrise":
-        speak(pick(["the sun's up!", "good morning, sun!"]));
-        this._look(s, 2500);
+        speak(pick(["the sun's up!", "good morning, sun!"]), 4500, () => this._look(s, 2500));
         break;
-      case "watching":
+      case "watching": {
         if (!m.title) break;
         // A long title gets the short lines, so the bubble leaves the pet in view.
         const title = short(m.title);
-        this._speak(s, pick([`ooh, ${title}!`, `is this ${title}?`, `${title}! I love this one`]), 4500);
-        this._animate(s, s.pet, "perk", 320);
+        line(pick([`ooh, ${title}!`, `is this ${title}?`, `${title}! I love this one`]), 4500,
+          () => this._animate(s, s.pet, "perk", 320));
         break;
+      }
       case "listening":
         if (!m.title) break;
-        this._speak(s, m.artist && Math.random() < 0.5
+        line(m.artist && Math.random() < 0.5
           ? `♪ is this ${short(m.artist)}? ♪`
           : `♪ ${short(m.title)} ♪`);
         break;
@@ -4824,9 +5013,9 @@ class HatchPetCard extends HTMLElement {
         if (topic && topic.length <= 12 && h.length <= 45 && !/news$/i.test(topic)) {
           lines.push(`${topic} news! ${h}`);
         }
-        const line = pick(lines);
-        this._speak(s, line, 4000 + line.length * 50); // long enough to read; a headline gets no catchphrase
-        this._animate(s, s.pet, "perk", 320);
+        const said = pick(lines);
+        // Long enough to read; a headline gets no catchphrase.
+        line(said, 4000 + said.length * 50, () => this._animate(s, s.pet, "perk", 320));
         break;
       }
       case "weather": { // the weather just changed (or a hot or freezing day)
@@ -4842,10 +5031,11 @@ class HatchPetCard extends HTMLElement {
           cold: t ? [`brr, ${t} outside!`, `${t} out there... brr`] : ["brr, so cold out!"],
         }[m.change];
         if (!lines) break;
-        (m.change === "cold" ? say : speak)(pick(lines)); // a sulk gets no cheery sound
-        if (m.change === "rainbow" || m.change === "snow_started") this._sparkle(s);
-        if (m.change === "cold") this._animate(s, s.pet, "sulk", 800);
-        else this._look(s, 2500);
+        (m.change === "cold" ? say : speak)(pick(lines), 4500, () => { // a sulk gets no cheery sound
+          if (m.change === "rainbow" || m.change === "snow_started") this._sparkle(s);
+          if (m.change === "cold") this._animate(s, s.pet, "sulk", 800);
+          else this._look(s, 2500);
+        });
         break;
       }
       case "forecast": { // something worth a word in today's or tomorrow's forecast
@@ -4863,51 +5053,53 @@ class HatchPetCard extends HTMLElement {
           sunny: today ? ["sunny today! yay"] : ["sun tomorrow! yay"],
         }[m.kind];
         if (!lines) break;
-        (["storm", "cold", "colder"].includes(m.kind) ? say : speak)(pick(lines), 5000);
-        if (m.kind === "cold" || m.kind === "colder") this._animate(s, s.pet, "sulk", 800);
-        else this._animate(s, s.pet, "perk", 320);
+        (["storm", "cold", "colder"].includes(m.kind) ? say : speak)(pick(lines), 5000, () => {
+          if (m.kind === "cold" || m.kind === "colder") this._animate(s, s.pet, "sulk", 800);
+          else this._animate(s, s.pet, "perk", 320);
+        });
         break;
       }
-      case "wish_granted": // lines that arrive together queue, so none is lost
-        this._sparkle(s);
-        this._chirp(s, "trait");
+      case "wish_granted": { // lines that arrive together queue, so none is lost
         const granted = this._lines(s, "wish_granted", pick(["my wish came true! thank you ♥", "yay, my wish! ♥", "best day ever! ♥"]));
-        this._queue(s, granted.text, 4500, { catch: !granted.baby });
+        line(granted.text, 4500, () => {
+          this._sparkle(s);
+          this._chirp(s, "trait");
+        }, { catch: !granted.baby, perk: true });
         break;
+      }
       case "bond_up": { // only the person whose bond it is gets it (the channel)
         if (sharedScreen()) break; // nothing personal on a shared screen
-        this._sparkle(s);
-        this._chirp(s, "trait");
         const game = GAMES.find((g) => g.key === m.favourite);
-        this._queue(s, game ? `${game.label} is our game now! ♥`
+        line(game ? `${game.label} is our game now! ♥`
           : m.nickname ? `can I call you ${m.nickname}? ♥`
           : m.level >= BOND.max ? "you're my very best friend ♥"
           : m.level === BOND.max - 1 ? "you make every day better ♥"
           : m.level >= BOND.hearts ? "I'm always so happy when you're here ♥"
-          : this._lines(s, "bond_up", pick(["I like you a lot, you know ♥", "we're getting close! ♥", "you're the best ♥"])).text, 5000);
+          : this._lines(s, "bond_up", pick(["I like you a lot, you know ♥", "we're getting close! ♥", "you're the best ♥"])).text, 5000, () => {
+          this._sparkle(s);
+          this._chirp(s, "trait");
+        }, { perk: true });
         break;
       }
       case "friend_home": { // the viewer, a close friend, came home (the channel)
-        if (sharedScreen()) break; // a shared screen has someone_home
+        if (sharedScreen() || capture) break; // a shared screen has someone_home
         if (!this._welcomeDue(s, new Date(m.at).getTime())) break;
-        this._queue(s, this._lines(s, "friend_home", pick(["you're home!! ♥", "yay, you're back! ♥"])).text, 4500);
-        if (HOME_WEATHER[m.weather]) this._queue(s, HOME_WEATHER[m.weather], 4500);
-        const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-        if (!calm) this._animate(s, s.pet, "greethop", 1400);
+        line(this._lines(s, "friend_home", pick(["you're home!! ♥", "yay, you're back! ♥"])).text, 4500, () => {
+          if (!calm()) this._animate(s, s.pet, "greethop", 1400);
+        });
+        if (HOME_WEATHER[m.weather]) this._line(s, KEPT, HOME_WEATHER[m.weather], 4500, { type: m.type, perk: true });
         s.visitedAt = 0; // look in again now: the pet may want to ask about your day
         this._visit(s);
         break;
       }
       case "someone_home": // anyone signed in came home: nameless, shared screens only
         if (!sharedScreen()) break; // their own card says "you're home!!"
-        this._queue(s, "someone's home!! ♥", 4000);
-        this._animate(s, s.pet, "perk", 320);
+        line("someone's home!! ♥", 4000, () => this._animate(s, s.pet, "perk", 320));
         break;
       case "bond_record": { // only its person
         if (sharedScreen()) break; // nothing personal on a shared screen
         const game = GAMES.find((g) => g.key === m.game);
-        this._sparkle(s);
-        this._queue(s, `new best at ${game ? game.label : "a game"}! ${m.wins}/5 ♥`);
+        line(`new best at ${game ? game.label : "a game"}! ${m.wins}/5 ♥`, 4500, () => this._sparkle(s), { perk: true });
         break;
       }
       case "tucked_in": {
@@ -4915,47 +5107,80 @@ class HatchPetCard extends HTMLElement {
         const bond = this._bond(s);
         const name = short((bond?.level >= BOND.nickname && bond.nickname) ||
           this._hass.user?.name?.trim().split(/\s+/)[0], 16);
-        // Instead of the plain goodnight just said, not after it.
-        this._speak(s, withName(this._lines(s, "tucked_in", "thank you for tucking me in ♥").text, name), 4000);
+        // Instead of the plain goodnight just said (or waiting), not after it.
+        if (!capture && s.queue) s.queue = s.queue.filter((q) => q.type !== "fell_asleep");
+        line(withName(this._lines(s, "tucked_in", "thank you for tucking me in ♥").text, name), 4000);
         break;
       }
       case "bond_favourite":
-        if (!sharedScreen()) {
-          this._queue(s, pick(["our favourite game! ♥", "I love playing this with you ♥"]));
-        }
+        if (!sharedScreen()) line(pick(["our favourite game! ♥", "I love playing this with you ♥"]), 4500, null, { perk: true });
         break;
       case "favourite_snack": // at most once a day (the server's); a holiday snack says its own
         if (!seasonNow(this._config)?.snack) {
           const food = short(m.food, 16);
-          const line = this._lines(s, "favourite_snack", `${food}, my favourite!!`, food);
-          this._queue(s, line.text, 4500, { catch: !line.baby });
+          const said = this._lines(s, "favourite_snack", `${food}, my favourite!!`, food);
+          line(said.text, 4500, null, { catch: !said.baby, perk: true });
         }
         break;
       case "tv_off_late":
         say(pick(["*yawn* bedtime?", "all done? sleepy now..."]));
         break;
       case "first_snow":
-        speak("the first snow!! ❄");
-        this._sparkle(s);
-        this._animate(s, s.pet, "stretch", 1100);
+        speak("the first snow!! ❄", 4500, () => {
+          this._sparkle(s);
+          this._animate(s, s.pet, "stretch", 1100);
+        });
         break;
       case "first_frost":
-        speak("brr, frost outside!");
-        this._animate(s, s.pet, "sulk", 800);
+        speak("brr, frost outside!", 4500, () => this._animate(s, s.pet, "sulk", 800));
         break;
-      case "pooped": {
-        const img = s.poops[(m.count || 1) - 1];
-        if (img) this._animate(s, img, "born", 450);
+      case "pooped":
+        now(() => {
+          const img = s.poops[(m.count || 1) - 1];
+          if (img) this._animate(s, img, "born", 450);
+        });
         break;
-      }
     }
+    // A kept moment with no line here (a baby's stage, a shared screen) is
+    // done with all the same: the catch-up won't bring it back.
+    if (!capture && !lined && at) this._markSaid(s, at);
   }
 
-  _react(s, entry) {
+  // Fresh care (newest first): the viewer's own press is "mine" (the first new
+  // entry with its action that arrives within MINE_MATCH_MS of it: by arrival,
+  // never the two clocks, and never by the shared display name). Two kinds in
+  // one update give the newest's reaction with one combined line (C4).
+  _care(s, fresh) {
+    let mine = false;
+    const p = s.pressed;
+    if (p && Date.now() - p.pressedAt < MINE_MATCH_MS) {
+      if ([...fresh].reverse().some((e) => e.action === p.action)) {
+        mine = true;
+        s.pressed = null;
+      }
+    } else if (p) s.pressed = null;
+    const [newest] = fresh;
+    const other = fresh.find((e) => e.action !== newest.action);
+    const both = other && CARE_NOUNS[other.action] && CARE_NOUNS[newest.action] &&
+      ["ok", "won", "lost"].includes(other.result) && ["ok", "won", "lost"].includes(newest.result)
+      ? `${CARE_NOUNS[other.action]} and ${CARE_NOUNS[newest.action]}! ♥` : null;
+    this._react(s, newest, { mine, both });
+  }
+
+  _react(s, entry, { mine = false, both = null } = {}) {
     s.screen.querySelector(".costume")?.remove(); // care takes the stage
     if (this._sceneAnswered(s, entry)) return;
+    // One line at the end, of the press's class: the viewer's own is never
+    // overwritten for MINE_MS; someone else's care waits its turn.
+    let said = null;
+    const out = () => {
+      if (both) said = [both, 2500];
+      if (!said) return;
+      const [text, ms] = said;
+      this._line(s, mine ? MINE : BEAT, text, mine ? Math.max(ms, MINE_MS) : ms, { write: true, type: "care" });
+    };
     if (entry.action === "chore_treat") {
-      this._write(s, "a treat! someone did a chore ♪", 3500);
+      said = ["a treat! someone did a chore ♪", 3500];
     }
     if (["ok", "won", "lost"].includes(entry.result)) {
       const key = PROP_FOR[entry.action] || entry.action;
@@ -4974,27 +5199,29 @@ class HatchPetCard extends HTMLElement {
       }
       const food = this._words(s).food;
       if (entry.action === "feed" && food && Math.random() < 0.5) {
-        this._write(s, this._lines(s, "yum", `yum, ${food}!`, food).text, 2500); // its own food, in its own words
+        said = [this._lines(s, "yum", `yum, ${food}!`, food).text, 2500]; // its own food, in its own words
       }
       if (entry.action === "praise") {
-        this._write(s, "♥", 2500);
+        said = ["♥", 2500];
       }
       const season = seasonNow(this._config);
       const candy = season?.snack && key === "snack" ? `../ui/season_${season.key}_${season.snack}` : null;
       if (candy) {
-        this._write(s, pick(season.snackLines || ["a treat! ♪"]), 2500);
+        said = [pick(season.snackLines || ["a treat! ♪"]), 2500];
       }
       const prop = candy || s.species?.props?.[key] || FALLBACK_PROPS[key];
       if (prop) {
         this._show(s, s.prop, prop);
         s.propUntil = Date.now() + 2500;
       }
+      out();
       return;
     }
     const line = REFUSALS[entry.result];
     if (line) {
-      this._write(s, this._lines(s, `REFUSALS.${entry.result}`, line).text, 3500);
+      said = [this._lines(s, `REFUSALS.${entry.result}`, line).text, 3500];
     }
+    out();
   }
 
   _renderStatus(s, log) {
@@ -6040,6 +6267,7 @@ class HatchPetCard extends HTMLElement {
       }
     }
     if (!id) return;
+    s.pressed = { action, pressedAt: Date.now() }; // its log entry is "mine" (PR 2a)
     this._sceneStart(s, action);
     this._call(button, s, "button", "press", id);
   }
@@ -7408,6 +7636,8 @@ class HatchPetCardEditor extends HTMLElement {
 
 // For scripts/card-check and scripts/costume-preview.
 HatchPetCard.seasons = SEASONS;
+HatchPetCard.momentClasses = Object.fromEntries(Object.entries(MOMENT_CLASS)
+  .map(([type, c]) => [type, { [KEPT]: "kept", [BEAT]: "beat", [FLAVOUR]: "flavour" }[c]]));
 HatchPetCard.seasonNow = seasonNow;
 
 // The integration loads this file on every dashboard. If an old manual
