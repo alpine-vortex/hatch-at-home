@@ -1413,7 +1413,7 @@ async function main() {
     // A sad line and one with its own opener stay plain.
     s.voicedAt = 0;
     s.sayUntil = 0; // the burst's last line (kept) would hold it back (2a)
-    el._moment(s, { type: "care_miss", at: new Date().toISOString() });
+    el._moment(s, { type: "discipline_miss", at: new Date().toISOString() }); // said plain (care_miss is catch-up only)
     out.miss = s.bubble.textContent;
     el._speak(s, "hmm... sleepy", 300);
     out.opener = s.bubble.textContent;
@@ -1444,7 +1444,7 @@ async function main() {
   check("a burst of lines carries the sound once",
     voices.burst.join("|") === `${snd}! morning!|I dreamed I could fly!|how was your day?`, voices.burst.join("|"));
   check("sad lines and lines with their own opener stay plain",
-    voices.miss === "...oh, there you are ♥" && voices.opener === "hmm... sleepy", `${voices.miss} | ${voices.opener}`);
+    voices.miss === "ok, ok... ♪" && voices.opener === "hmm... sleepy", `${voices.miss} | ${voices.opener}`);
   check("opening the status screen finishes the line", voices.finished);
   check("its favourite snack is said", voices.favourite.length === 1 && voices.favourite[0].startsWith("hazelnuts, my favourite!!"),
     voices.favourite.join());
@@ -2324,6 +2324,120 @@ async function main() {
       (await evaluate(() => window.__catchRounds)) === 1, String(await evaluate(() => window.__catchRounds)));
     await stop();
 
+    // Fresh eyes #1+#2: a game the server dropped for idling. Left/Right: the guess
+    // began a new game (restarted: true), adopted as its round 1, no blame. Higher or
+    // Lower: no_game (never logged), said by the card itself. Replies stubbed.
+    const idle = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const hass = el._hass;
+      const real = hass.callService;
+      const reply = (response) => { hass.callService = async () => ({ response }); };
+      const out = {};
+      try {
+        s.game = { kind: "left_right", round: 2, wins: 1, busy: false };
+        el._gameView(s, "left_right");
+        reply({ result: "ok", game: "left_right", round: 1, rounds: 5, wins: 1, done: false,
+          went: "left", correct: true, restarted: true });
+        await el._guess(s, "left");
+        out.lr = { live: !!s.game, round: s.game?.round, wins: s.game?.wins, said: s.bubble.textContent,
+          score: s.gameScore.textContent };
+        el._endGame(s, null);
+        s.game = { kind: "higher_lower", round: 1, wins: 0, busy: false };
+        el._gameView(s, "higher_lower");
+        reply({ result: "no_game" });
+        await el._guess(s, "right");
+        out.hl = { live: !!s.game, said: s.bubble.textContent };
+      } finally {
+        hass.callService = real;
+        if (s.game) el._endGame(s, null);
+      }
+      return out;
+    });
+    check("idle drop, Left/Right: a restarted game is adopted as its round 1, no someone-else line",
+      idle.lr.live && idle.lr.round === 1 && idle.lr.wins === 1 && idle.lr.said === "yes! you found me" &&
+        idle.lr.score === "round 1/5 · 1 right", JSON.stringify(idle.lr));
+    check("idle drop, Higher/Lower: no_game ends the game with let's start over",
+      !idle.hl.live && idle.hl.said === "let's start over", JSON.stringify(idle.hl));
+
+    // Fresh eyes #3+#4: Catch never plays unseen. Opening the status, swiping away and
+    // tapping Play each end the round (the ball goes), and a game nobody tapped keeps no best.
+    const catchLive = () => card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      for (let w = 0; w < 300 && !(s.game?.cur && !s.game.cur.done); w++) await new Promise((r) => requestAnimationFrame(r));
+      return s.game?.kind === "catch" && !s.catchEl.hidden;
+    });
+    await open("catch");
+    const statusLive = await catchLive();
+    const statusEnd = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      el._toggleStatus(s);
+      const out = { game: !!s.game, ball: !s.catchEl.hidden };
+      await new Promise((r) => setTimeout(r, 300));
+      el._toggleStatus(s);
+      return out;
+    });
+    check("opening the status mid-Catch ends the game and hides the ball",
+      statusLive && !statusEnd.game && !statusEnd.ball, `${statusLive} ${JSON.stringify(statusEnd)}`);
+    await open("catch");
+    const playLive = await catchLive();
+    await button(2).click();
+    await page.waitForTimeout(400);
+    const playEnd = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      return { picking: !!s.game?.picking, ball: !s.catchEl.hidden };
+    });
+    check("Play mid-Catch ends the round: the picker, and no ball over it",
+      playLive && playEnd.picking && !playEnd.ball, `${playLive} ${JSON.stringify(playEnd)}`);
+    await card.evaluate((el) => el._endGame(el._slides[el._index], null));
+    if (slides > 1) {
+      await open("catch");
+      const swipeLive = await catchLive();
+      const swipe = await card.evaluate(async (el) => {
+        const back = el._index;
+        const s = el._slides[back];
+        el._go(back + 1);
+        const out = { game: !!s.game, ball: !s.catchEl.hidden };
+        await new Promise((r) => setTimeout(r, 400));
+        el._go(back);
+        return out;
+      });
+      await page.waitForTimeout(800);
+      check("swiping away mid-Catch ends the game on the slide left",
+        swipeLive && !swipe.game && !swipe.ball, `${swipeLive} ${JSON.stringify(swipe)}`);
+    }
+    const untapped = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const was = localStorage.getItem("hatch-best-catch");
+      localStorage.removeItem("hatch-best-catch");
+      // The last round of a game nobody tapped, resolved as a decoy dodged (a "catch").
+      s.game = { kind: "catch", round: 4, wins: 4, cur: { done: false, raf: 0 } };
+      el._catchResolve(s, true, "phew, let the bee go!");
+      await new Promise((r) => setTimeout(r, 1200));
+      const stored = localStorage.getItem("hatch-best-catch");
+      if (was === null) localStorage.removeItem("hatch-best-catch");
+      else localStorage.setItem("hatch-best-catch", was);
+      return { stored, ended: !s.game, said: s.bubble.textContent };
+    });
+    check("a Catch game nobody tapped keeps no best score",
+      untapped.ended && untapped.stored === null && /^5\/5 caught/.test(untapped.said), JSON.stringify(untapped));
+
+    // Fresh eyes #7: a care line said over a game's prompt gives way to the prompt again.
+    await page.waitForTimeout(4500); // the result line clears
+    await open("left_right");
+    const prompted = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const prompt = s.bubble.textContent;
+      el._react(s, { action: "feed", result: "ok" }, { mine: true });
+      const care = s.bubble.textContent;
+      s.sayUntil = Date.now() - 1; // the care line's hold runs out
+      await new Promise((r) => setTimeout(r, 1600)); // a tick or two
+      return { prompt, kept: s.game?.prompt, care, after: s.bubble.textContent, game: !!s.game };
+    });
+    check("feed mid-game: the care line, then the game's prompt again",
+      prompted.game && prompted.prompt === prompted.kept && prompted.care !== prompted.prompt &&
+        prompted.after === prompted.prompt, JSON.stringify(prompted));
+    await stop();
+
     // Two viewers share one server game: a stale guess ends with the line.
     const tab = await context.newPage();
     tab.on("pageerror", (e) => errors.push(`tab 2: ${e}`));
@@ -2360,7 +2474,6 @@ async function main() {
   await pinAwake(card, "moments");
   // 4. Moments make the pet react.
   for (const [type, extra, expect] of [
-    ["care_miss", { reason: "hunger" }, "there you are"],
     ["stage_changed", { stage: "teen", from: "child" }, "teen now"],
     ["trait_learned", { trait: "music_lover", level: 1 }, "new trait"],
     ["sunset", {}, "sun|sky"],
@@ -2385,6 +2498,24 @@ async function main() {
     check(`reacts to ${type}`, new RegExp(expect).test(said), said);
     await shot(`05-${type}`);
     await page.waitForTimeout(500);
+  }
+  // A care miss (fresh eyes #6): live, nothing is said to someone already looking;
+  // only the catch-up says "there you are".
+  {
+    await card.evaluate((el) => Object.assign(el._slides[el._index], { sayUntil: 0, sayClass: 0, sayEntry: null, queue: [] }));
+    const before = await bubble();
+    await inject(pet["sensor.last_care"], {
+      attributes: { moments: [{ type: "care_miss", reason: "hunger", at: new Date().toISOString() }] },
+    });
+    await page.waitForTimeout(500);
+    const live = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      return { said: s.bubble.textContent, queue: s.queue.map((q) => q.text),
+        catchUp: el._catchUpLine(s, { type: "care_miss", reason: "hunger", at: new Date().toISOString() }) };
+    });
+    check("a live care_miss says nothing; the catch-up says there you are",
+      !/there you are/.test(live.said) && !live.queue.some((t) => /there you are/.test(t)) &&
+        /there you are/.test(live.catchUp || ""), `${before} -> ${JSON.stringify(live)}`);
   }
 
   // Trait flair: one trait per place (head, air, ground), placed from the pet's
@@ -2792,12 +2923,35 @@ async function main() {
     iMorning >= 0 && !morning.some((t) => /sun came out|sunshine/.test(t)) &&
       morning.findIndex((t) => /yaaawn/.test(t)) < iMorning, morning.join(" | "));
 
+  // Fresh eyes #9: two quick different taps both count as the viewer's own.
+  const twoTaps = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const seen = [];
+    const was = el._react;
+    el._react = (x, entry, opts) => { seen.push(`${entry.action}:${!!opts?.mine}`); };
+    try {
+      s.pressed = [];
+      for (const action of ["feed", "snack"]) {
+        s.pressed = [...s.pressed, { action, pressedAt: Date.now() }];
+      }
+      el._care(s, [{ action: "feed", result: "ok" }]);
+      el._care(s, [{ action: "snack", result: "ok" }]);
+      el._care(s, [{ action: "snack", result: "ok" }]); // someone else's: no press left
+    } finally {
+      el._react = was;
+      s.pressed = [];
+    }
+    return seen;
+  });
+  check("two quick taps (feed, snack) both count as mine, a third entry doesn't",
+    twoTaps.join() === "feed:true,snack:true,snack:false", twoTaps.join());
+
   // The viewer's own press is "mine": a flavour moment 1 s later doesn't
   // overwrite its line for 3 s (and a poop has no line to say).
   await quiet2a();
   const pressAt = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
-    s.pressed = { action: "praise", pressedAt: Date.now() };
+    s.pressed = [{ action: "praise", pressedAt: Date.now() }];
     const hass = el._hass;
     const id = s.ids["sensor.last_care"];
     const st = hass.states[id];
@@ -2836,12 +2990,12 @@ async function main() {
   });
   check("2a: two kinds of care in one update give one line (C4)", burst === "snacks and a bath! ♥", burst);
 
-  // A care_miss during a game waits, and is said after it.
+  // A kept moment during a game waits, and is said after it.
   await quiet2a();
   const missInGame = await card.evaluate((el) => {
     const s = el._slides[el._index];
     s.game = { picking: true };
-    el._moment(s, { type: "care_miss", reason: "hunger", at: new Date().toISOString() });
+    el._moment(s, { type: "first_frost", at: new Date().toISOString() });
     const during = s.bubble.textContent;
     const waiting = s.queue.map((q) => q.text);
     s.game = null;
@@ -2849,15 +3003,15 @@ async function main() {
     el._sayQueued(s);
     return { during, waiting, after: s.bubble.textContent };
   });
-  check("2a: a care_miss during a game waits and is said after it",
-    !/there you are/.test(missInGame.during) && missInGame.waiting.some((t) => /there you are/.test(t)) &&
-      /there you are/.test(missInGame.after), JSON.stringify(missInGame));
+  check("2a: a kept moment during a game waits and is said after it",
+    !/frost outside/.test(missInGame.during) && missInGame.waiting.some((t) => /frost outside/.test(t)) &&
+      /frost outside/.test(missInGame.after), JSON.stringify(missInGame));
 
   // A house.media push (the channel's show) during a kept line is dropped.
   await quiet2a();
   const mediaOverKept = await card.evaluate((el) => {
     const s = el._slides[el._index];
-    el._moment(s, { type: "care_miss", reason: "hunger", at: new Date().toISOString() });
+    el._moment(s, { type: "first_frost", at: new Date().toISOString() });
     el._channel(s, { moment: { type: "watching", title: "Bluey", at: new Date().toISOString() } }, el._hass.user.id);
     const said = s.bubble.textContent;
     s.sayUntil = 0;
@@ -2865,7 +3019,7 @@ async function main() {
     return { said, queue: s.queue.map((q) => q.text), after: s.bubble.textContent };
   });
   check("2a: a house.media push during a kept line is dropped, not said over it",
-    /there you are/.test(mediaOverKept.said) && !/Bluey/.test(mediaOverKept.after) && mediaOverKept.queue.length === 0,
+    /frost outside/.test(mediaOverKept.said) && !/Bluey/.test(mediaOverKept.after) && mediaOverKept.queue.length === 0,
     JSON.stringify(mediaOverKept));
 
   // Catch-up: a stage_changed 40 s old (the card was closed) is a line of the
@@ -3518,8 +3672,7 @@ async function main() {
       out.home = t.said(() => el._moment(s, { type: "friend_home", at }));
       out.bond = t.said(() => el._moment(s, { type: "bond_up", level: 3, at }));
       s.sayUntil = 0;
-      el._moment(s, { type: "care_miss", at });
-      out.miss = s.bubble.textContent;
+      out.miss = el._catchUpLine(s, { type: "care_miss", at }); // the catch-up's: live says nothing
       s.sayUntil = 0; s.voicedAt = Date.now() + 1e9;
       el._moment(s, { type: "tucked_in", at });
       el._stopTyping(s);

@@ -3682,7 +3682,11 @@ class HatchPetCard extends HTMLElement {
   _go(index) {
     const n = this._slides.length;
     if (!n) return;
-    this._slides.forEach((x) => {
+    const to = (index + n) % n;
+    this._slides.forEach((x, i) => {
+      // A game stops on the slide being left: nobody plays it unseen (Catch
+      // would score itself).
+      if (x.game && i !== to) this._endGame(x, null);
       this._stopTyping(x);
       this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
       if (x.picker) { // and leaves the shell picker unsaved: the sheet again
@@ -3691,7 +3695,7 @@ class HatchPetCard extends HTMLElement {
       }
     });
     this._linkEnd(); // a swipe ends the visit at once
-    this._index = (index + n) % n;
+    this._index = to;
     this._renderShelf();
   }
 
@@ -4265,7 +4269,10 @@ class HatchPetCard extends HTMLElement {
     const egg = stage === "egg";
     if (s.game && (asleep || away || egg)) this._endGame(s, null);
     s.hatchesAt = egg ? stageState?.attributes.hatches_at : null;
-    if (!s.sayUntil || Date.now() > s.sayUntil) this._write(s, this._say(s, mood, away));
+    if (!s.sayUntil || Date.now() > s.sayUntil) {
+      if (s.game?.prompt) this._write(s, s.game.prompt, 60000); // a game waiting on a guess asks again
+      else this._write(s, this._say(s, mood, away));
+    }
 
     for (const action of ACTIONS) {
       const b = s.buttons[action.key];
@@ -4334,6 +4341,7 @@ class HatchPetCard extends HTMLElement {
   _toggleStatus(s) {
     const open = !s.screen.classList.contains("show-status");
     if (open) this._stopTyping(s); // the bubble hides: the line is said whole
+    if (open && s.game) this._endGame(s, null); // the sheet covers it: nobody plays it unseen
     s.screen.classList.toggle("show-status", open);
     s.journal = false;
     s.settings = false;
@@ -4476,8 +4484,11 @@ class HatchPetCard extends HTMLElement {
       }
       if (!s.sayUntil && s.species) {
         const mood = this._state(s, "sensor.mood");
-        const text = this._say(s, mood, mood?.state === "away");
-        if (s.bubble.textContent !== text) this._write(s, text);
+        // A game waiting on a guess asks again (a care line said over it is done).
+        const prompt = s.game?.prompt;
+        const text = prompt || this._say(s, mood, mood?.state === "away");
+        if (prompt) this._write(s, text, 60000);
+        else if (s.bubble.textContent !== text) this._write(s, text);
       }
     });
   }
@@ -5130,7 +5141,7 @@ class HatchPetCard extends HTMLElement {
   // The kept moments since said that this look should catch up: [line, at],
   // oldest first, the newest room of them. The public list, and on a personal
   // screen the viewer's own (s.privateMoments); never friend_home or tucked_in
-  // (CATCHUP_SKIP) and never flavour.
+  // (CATCHUP_SKIP) and never flavour; at most one care_miss.
   _catchUp(s, said, room) {
     if (room <= 0) return [];
     const pub = (this._state(s, "sensor.last_care")?.attributes.moments || []).filter((m) => !CHANNEL_ONLY.has(m.type));
@@ -5141,8 +5152,12 @@ class HatchPetCard extends HTMLElement {
         new Date(m.at).getTime() > said && !seen.has(momentKey(m)) && seen.add(momentKey(m)))
       .sort((a, b) => new Date(b.at) - new Date(a.at));
     const out = [];
+    let miss = false;
     for (const m of missed) {
       if (out.length >= room) break;
+      // Care misses say one line between them (the newest), leaving room for the rest.
+      if (m.type === "care_miss" && miss) continue;
+      if (m.type === "care_miss") miss = true;
       const text = this._catchUpLine(s, m);
       if (text) out.push([text, m.at]);
     }
@@ -5491,8 +5506,9 @@ class HatchPetCard extends HTMLElement {
     const now = (fx) => { if (!capture) fx(); }; // no line: it happens at once
     switch (m.type) {
       case "care_miss":
-        say(this._lines(s, "care_miss", "...oh, there you are ♥").text, 5000, // never guilt
-          () => this._animate(s, s.pet, "perk", 320));
+        // Only the catch-up says it: live, the viewer was here all along. Unsaid,
+        // it is marked said, so the catch-up won't bring it back either.
+        if (capture) say(this._lines(s, "care_miss", "...oh, there you are ♥").text, 5000); // never guilt
         break;
       case "discipline_miss":
         say("ok, ok... ♪");
@@ -5732,14 +5748,12 @@ class HatchPetCard extends HTMLElement {
   // never the two clocks, and never by the shared display name). Two kinds in
   // one update give the newest's reaction with one combined line (C4).
   _care(s, fresh) {
-    let mine = false;
-    const p = s.pressed;
-    if (p && Date.now() - p.pressedAt < MINE_MATCH_MS) {
-      if ([...fresh].reverse().some((e) => e.action === p.action)) {
-        mine = true;
-        s.pressed = null;
-      }
-    } else if (p) s.pressed = null;
+    // The viewer's recent presses, oldest first: two quick taps both count.
+    const pressed = (s.pressed || []).filter((p) => Date.now() - p.pressedAt < MINE_MATCH_MS);
+    const i = pressed.findIndex((p) => fresh.some((e) => e.action === p.action));
+    const mine = i >= 0;
+    if (mine) pressed.splice(i, 1);
+    s.pressed = pressed;
     const [newest] = fresh;
     const other = fresh.find((e) => e.action !== newest.action);
     const both = other && CARE_NOUNS[other.action] && CARE_NOUNS[newest.action] &&
@@ -6902,7 +6916,8 @@ class HatchPetCard extends HTMLElement {
       }
     }
     if (!id) return;
-    s.pressed = { action, pressedAt: Date.now() }; // its log entry is "mine" (PR 2a)
+    // Its log entry is "mine" (PR 2a); a few kept, so two quick taps both count.
+    s.pressed = [...(s.pressed || []).filter((p) => Date.now() - p.pressedAt < MINE_MATCH_MS), { action, pressedAt: Date.now() }];
     this._sceneStart(s, action);
     this._call(button, s, "button", "press", id);
   }
@@ -7162,6 +7177,7 @@ class HatchPetCard extends HTMLElement {
 
   _startGame(s, button) {
     this._tapped(button, s);
+    if (s.game) this._endGame(s, null); // Play mid-game starts over (Catch's ball goes too)
     this._clearAsk(s); // a game takes the screen
     const energy = Number.parseFloat(this._state(s, "sensor.energy")?.state);
     const refusal = s.asleep ? REFUSALS.asleep : energy < 15 ? REFUSALS.too_tired : null;
@@ -7176,14 +7192,14 @@ class HatchPetCard extends HTMLElement {
       this._pickGame(s, games[0].key);
       return;
     }
-    s.game = { picking: true };
+    s.game = { picking: true, prompt: this._card.classList.contains("compact") ? "pick a game!" : "what shall we play?" };
     // Built each time: the card's options decide which games are offered.
     s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
       `<button data-game="${g.key}"><span class="gi" aria-hidden="true">${gameIcon(g.key)}</span>` +
       `${g.label}</button>`).join("");
     this._gameView(s, "pick");
     // A narrow card has room for one short line beside the close button.
-    this._write(s, this._card.classList.contains("compact") ? "pick a game!" : "what shall we play?", 60000);
+    this._write(s, s.game.prompt, 60000);
     let last = null;
     try {
       last = localStorage.getItem(LAST_GAME_KEY);
@@ -7231,7 +7247,7 @@ class HatchPetCard extends HTMLElement {
     this._reactFrames(s, "ready", { inGame: true }); // acts.ready, if the species has it
     s.gameScore.textContent = "round 1/5";
     if (kind === "catch") {
-      this._write(s, "catch it! tap its side as it reaches me", 60000);
+      this._write(s, (g.prompt = "catch it! tap its side as it reaches me"), 60000);
       s.gameBox.querySelector(".gl").focus({ preventScroll: true });
       this._gameLater(s, g, 900, () => this._catchRound(s));
       return;
@@ -7248,12 +7264,13 @@ class HatchPetCard extends HTMLElement {
     g.wins = info.wins;
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
     s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
+    // The prompt is kept on the game: a care line said over it gives way to it again.
     if (kind === "left_right") {
-      this._write(s, "left or right? guess where I'll go!");
+      this._write(s, (g.prompt = "left or right? guess where I'll go!"));
     } else {
       // Higher or Lower shows its number before the next guess.
       this._showNumber(s, info.number);
-      this._write(s, "will the next one be higher or lower?");
+      this._write(s, (g.prompt = "will the next one be higher or lower?"));
     }
     s.sayUntil = Date.now() + 60000;
     s.gameBox.querySelector(".gl").focus({ preventScroll: true });
@@ -7293,8 +7310,9 @@ class HatchPetCard extends HTMLElement {
     if (s.game !== game) return null; // stopped while waiting
     if (!info || info.result !== "ok") {
       // A known refusal is said once, by _react, from the care log; only an
-      // unknown result gets a line here.
-      this._endGame(s, REFUSALS[info?.result] ? null : "not now");
+      // unknown result gets a line here. no_game is never logged (a Higher or
+      // Lower game the server dropped for idling): said here.
+      this._endGame(s, info?.result === "no_game" ? REFUSALS.no_game : REFUSALS[info?.result] ? null : "not now");
       return null;
     }
     return info;
@@ -7316,6 +7334,12 @@ class HatchPetCard extends HTMLElement {
     s.gameScore.textContent = "thinking…";
     const info = await this._playCall(s, { game: kind, guess });
     if (!info) return;
+    if (info.restarted) {
+      // The server dropped our game for idling and this guess began a new one:
+      // it is round 1 of that game, said as any round.
+      g.round = 0;
+      g.wins = 0;
+    }
     if (info.round !== g.round + 1) {
       // Another viewer guessed on the same server game meanwhile.
       this._endGame(s, "oh! someone else is playing with me");
@@ -7344,7 +7368,7 @@ class HatchPetCard extends HTMLElement {
       g.busy = false;
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
-      this._write(s, kind === "higher_lower" ? "higher or lower?" : "again! left or right?");
+      this._write(s, (g.prompt = kind === "higher_lower" ? "higher or lower?" : "again! left or right?"));
     });
   }
 
@@ -8308,6 +8332,7 @@ class HatchPetCard extends HTMLElement {
   _catchTap(s, side) {
     const c = s.game?.cur;
     if (!c || c.done) return;
+    s.game.tapped = true; // a game nobody tapped keeps no best
     const t = (performance.now() - c.start) / 1000;
     if (c.decoy) {
       this._catchResolve(s, false, "bzz! not the bee!");
@@ -8342,7 +8367,7 @@ class HatchPetCard extends HTMLElement {
       let best = g.wins;
       try {
         best = Math.max(best, Number(localStorage.getItem(BEST_CATCH_KEY) || 0));
-        localStorage.setItem(BEST_CATCH_KEY, String(best));
+        if (g.tapped) localStorage.setItem(BEST_CATCH_KEY, String(best));
       } catch (err) {
         // no storage: no best score
       }
