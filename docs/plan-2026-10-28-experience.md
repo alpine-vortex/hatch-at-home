@@ -306,6 +306,43 @@ includes the viewer's own bond moments.**
   `call_deadline`.
 - **Done =** a glance at the card says what it wants most, with no countdown.
 
+**2b + 2c plan review fold (s2533, 2026-10-31; wins over the 2b and 2c text above).**
+FIX FIRST both, plan edits only; report archived with the worker. **2b and 2c are one
+Sonnet ship, built after P3c and 2a on the same branch.** First-mate decisions (owner
+delegated): C6 before a coinciding `good_morning` (the cheer waits); a sick pet with no
+live call shows "medicine" in the row; C9 gains "a blanket" and "a fan" (from the
+existing request buttons, without their `?`).
+
+*2b acceptance:*
+- `became_sick` already exists with `cause`. Its public moment is `{type, at}` only (strip
+  `cause` for this type, like P3c's media shape); the bus and notify keep `cause`. Test:
+  moment keys == `{type, at}`; a simulated tick and an away pet add none; once per
+  sickness (asleep: on waking, after `woke_up`).
+- C6 "I don't feel so good..." (new `_moment` case) with a **droop**: a bounded `_animate`
+  class (never infinite; under reduced motion one frame holds). `_lines` key with a plain
+  fallback. A waiting C6 is dropped if `sick` is gone from `mood.flags` at say-time.
+- C8 "all better! ♪" in **both** paths: after the medicine scene's cheer ends (the
+  viewer's own tap: `_sceneAnswered` returns early today) and in `_react`'s `ok` branch
+  (another viewer). Test both.
+- A sick call following C6 in the same tick is accepted (C6 is a 4.5 s beat, then the
+  server's call line). The existing `?` in sick-call copy is out of scope.
+- Card-check 8b: an old card ignores `became_sick` without an error. Bench shot of the
+  droop (and its reduced-motion hold); the owner checks the droop once on a tablet.
+- **Done =** a pet falling sick shows C6 once; medicine `ok` shows C8; no new moment
+  carries a person.
+
+*2c acceptance:*
+- Sources, all on the card already (no server change): the need = `mood.attributes.
+  reason_key` when it starts with `call_`; the sick flag in `flags`; `requests` in
+  list order. `call_deadline` is never read.
+- Order: call > `sick` flag ("medicine") > requests in list order (`lay_egg` excluded).
+  C9 values: "a meal", "a bath", "a nap", "medicine", "play", "a blanket", "a fan" (never
+  `REQUEST_LABELS`, which carry `?`). Row hidden asleep, away, egg. It is the status
+  sheet's row only; the `wanted` glow and the request button stay and agree with it.
+- `_sayQueued` holds non-kept lines while `s.calling` (needs 2a's classes); held lines
+  stay queued and counted once, and are said when the call ends. 2a's later body keeps
+  `!s.calling` in `_patMayTalk`. PR 4c's status-row list gains this row.
+
 ### Wave 3: the pet itself
 
 **PR 3a: reduced motion, all the way (F11).** Size **S-M**, tier 1. Independent: it can
