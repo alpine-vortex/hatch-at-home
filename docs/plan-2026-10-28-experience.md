@@ -253,6 +253,25 @@ Their build detail and the Wave 0 audit (27 findings) are in
 - **Done =** no kept line is silent or said twice, and a person's own press is never
   overwritten by house flavour (the review's O03 rule).
 
+**2a plan review fold (s2532, 2026-10-31; wins over the 2a text above).** Reviewed with
+privacy P3c against the P3b branch: FIX FIRST, plan edits only. 2a builds after P3c, on
+the same branch. First-mate decision on its question (owner delegated): **catch-up
+includes the viewer's own bond moments.**
+- **Streams (#12):** catch-up reads the public `moments` plus `s.privateMoments` on a
+  personal screen, public only on a shared one. `friend_home` is excluded (the first look
+  says it). A restart loses private moments not yet said: accepted, as for public ones.
+- **`hatch-seen-<device>` keeps its meaning (#13):** it is the away note's last-looked
+  time, rewritten every minute. Store `{seen, said}` JSON in it (read the old number form
+  too), or keep `said` as a `momentKey`. Compare `at` with `serverNow()` (audit #20).
+- **Class table (#11):** after P3c, `tv_on`/`music_on` are "no line" on the card (the live
+  line comes from `house.media`). The test checks `MOMENTS ∪ PERSONAL_EVENTS ∪
+  MEDIA_EVENTS` (read from `coordinator.py`/`const.py` by a named regex in card-check)
+  against the card's class table.
+- **Missing classes (#14):** first-look lines (away note, dream incl. `house.dream`, wish)
+  and `_wishMention` are kept; `bootMoments` keep their type's class. Card-check: a
+  `house.media` push during a kept line is dropped, not said over it.
+- Stale (#15): §2's F05 row: `mine` carries all the switches (`my_day` too) since P3a.
+
 **PR 2b: before, action, result (O03).** Size **S**, tier 1.
 - **One** new public moment, checked against the privacy scrub (no `user`, `by` or
   `for`): `became_sick` (`model.py` 557 and 664) gets a "feeling poorly" beat: the sick
