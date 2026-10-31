@@ -19,6 +19,7 @@ from homeassistant.const import (
     UnitOfTemperature,
 )
 from homeassistant.core import (
+    CALLBACK_TYPE,
     Context,
     CoreState,
     Event,
@@ -495,12 +496,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._listen()
             return
 
+        unsub: CALLBACK_TYPE | None = None
+
         async def started(_: Event) -> None:
+            nonlocal unsub
+            unsub = None  # a fired listen_once is gone; removing it again raises
             self._listen()
 
-        self.config_entry.async_on_unload(
-            self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, started)
-        )
+        def stop() -> None:
+            if unsub is not None:
+                unsub()
+
+        unsub = self.hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, started)
+        self.config_entry.async_on_unload(stop)
 
     def _issue(
         self,

@@ -10,6 +10,7 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant import config_entries
 from homeassistant.const import (
     CONF_NAME,
+    EVENT_HOMEASSISTANT_STARTED,
     MATCH_ALL,
     STATE_OFF,
     STATE_ON,
@@ -17,6 +18,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import (
     Context,
+    CoreState,
     HomeAssistant,
     ServiceCall,
     ServiceResponse,
@@ -3514,3 +3516,20 @@ async def test_going_away_mid_game_drops_it_as_a_loss(
     assert state.games["left_right"]["played"] == 1
     assert state.wish["granted"] is False and not state.favourites
     assert not state.care_log  # nobody caused the drop, so nothing to react to
+
+
+async def test_unload_after_startup_does_not_remove_a_spent_listener(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Set up before HA is running: the started listener fires once and is gone,
+    so unloading the entry must not try to remove it again (ValueError)."""
+    hass.set_state(CoreState.starting)
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    config = await setup(hass)
+    hass.set_state(CoreState.running)
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
+    await hass.async_block_till_done()
+    assert await hass.config_entries.async_unload(config.entry_id)
+    await hass.async_block_till_done()
+    assert "Unable to remove unknown job listener" not in caplog.text
