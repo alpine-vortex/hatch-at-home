@@ -169,6 +169,12 @@ const VOICE_MAX = 60; // characters: past this the sound is left off
 // Lines that open with a sound of their own (whole words, any case).
 const OPENERS = /^(?:[*♪…]|\.\.\.|(?:hmm+|hehe|boo|gobble|crack|eep|eek|news|o+h+|brr+|aww+|mm+h?|ew|whe+|la la|yay|zzz|pitter)(?![a-z]))/i;
 
+// Reduced motion: the one place the OS setting is read (the CSS block below is the
+// other). Read live, so a change applies at the next thing that looks.
+function calm() {
+  return !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+}
+
 function babbleOn() {
   try {
     return localStorage.getItem(BABBLE_KEY) === "on";
@@ -2998,13 +3004,13 @@ class HatchPetCard extends HTMLElement {
   }
 
   _powerGag(s) {
-    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const isCalm = calm();
     const timers = [];
     const at = (ms, fn) => timers.push(setTimeout(fn, ms));
     s.power = { timers };
     const level = (n, blink) => {
       s.batt.dataset.level = String(n);
-      s.batt.classList.toggle("blink", blink && !calm);
+      s.batt.classList.toggle("blink", blink && !isCalm);
     };
     const sp = s.species;
     if (sp?.moods?.includes("sleepy") && s.drawn) {
@@ -3015,7 +3021,7 @@ class HatchPetCard extends HTMLElement {
     }
     level(1, true);
     s.batt.hidden = false;
-    if (!calm) {
+    if (!isCalm) {
       for (const t of [0, 160]) {
         at(t, () => s.screen.classList.add("blank"));
         at(t + 80, () => s.screen.classList.remove("blank"));
@@ -3025,7 +3031,7 @@ class HatchPetCard extends HTMLElement {
     at(2200, () => {
       if (s.calling || s.game || s.asleep) return this._powerEnd(s, true);
       s.poseUntil = 0;
-      if (!calm) level(3, false);
+      if (!isCalm) level(3, false);
       this._speak(s, pick(POWER_LINES.back), 1800);
       this._animate(s, s.pet, "perk", 320);
     });
@@ -3086,7 +3092,7 @@ class HatchPetCard extends HTMLElement {
         held.forEach((m) => this._moment(x, m));
       });
     };
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    if (calm()) {
       finish();
       return;
     }
@@ -3842,6 +3848,9 @@ class HatchPetCard extends HTMLElement {
       this._show(s, s.awaysign, null);
       s.awaylabel.textContent = "";
       s.frames = this._petFrames(sp, stage, mood?.state, calling, this._eggMinutes(stageState), flags);
+      const key = s.frames.join(",");
+      if (calm() && s.framesKey !== key) s.frame = 0; // a new mood or stage: its first frame
+      s.framesKey = key;
       const frames = this._frames(s);
       this._show(s, s.pet, frames[s.frame % frames.length]);
     }
@@ -4088,7 +4097,7 @@ class HatchPetCard extends HTMLElement {
     const media = (q) => window.matchMedia?.(q).matches;
     return s === this._slides[this._index] && this._visible && !document.hidden && !s.linking &&
       this._card.classList.contains("lcd-on") && s.pet.style.display !== "none" && !s.scene &&
-      s.game?.kind !== "catch" && !media("(prefers-reduced-motion: reduce)") &&
+      s.game?.kind !== "catch" && !calm() &&
       !media("(prefers-contrast: more)");
   }
 
@@ -4183,13 +4192,13 @@ class HatchPetCard extends HTMLElement {
     if (now < s.nextIdle) return;
     s.nextIdle = now + IDLE_MIN_MS + Math.random() * IDLE_SPREAD_MS;
     if (!this._free(s)) return;
-    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const isCalm = calm();
     const own = s.drawn === "child"
       ? Object.keys(s.species.extras || {}).filter((k) => !SHARED_POSES.has(k)) : [];
     const moves = ["mumble"];
     if (own.length) moves.push("pose", "pose");
-    if (!calm) moves.push("look", "look", "wander", "perk", "speck");
-    if (!calm && s.moodState === "excited") moves.push("hop", "hop");
+    if (!isCalm) moves.push("look", "look", "wander", "perk", "speck");
+    if (!isCalm && s.moodState === "excited") moves.push("hop", "hop");
     const move = pick(moves);
     if (move === "pose") {
       const frames = s.species.extras[pick(own)];
@@ -4257,7 +4266,7 @@ class HatchPetCard extends HTMLElement {
       if (s.catchCount % 3 === 0 && phrase && `${sound} ${said} ${phrase}`.length <= VOICE_MAX) text = `${said} ${phrase}`;
     }
     const onShow = s === this._slides[this._index];
-    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const isCalm = calm();
     const pace = voice?.pace;
     this._stopTyping(s);
     if (sound) s.voicedAt = Date.now();
@@ -4272,7 +4281,7 @@ class HatchPetCard extends HTMLElement {
     }
     let typingMs = 0;
     const status = s.screen.classList.contains("show-status");
-    if (onShow && !calm && !status && pace > 0 && this._visible && !document.hidden) {
+    if (onShow && !isCalm && !status && pace > 0 && this._visible && !document.hidden) {
       const chars = graphemes(text); // an emoji is never split
       const typed = document.createElement("span");
       const rest = document.createElement("span");
@@ -4681,10 +4690,10 @@ class HatchPetCard extends HTMLElement {
     if (type && bond && first && bond.level >= BOND.warm) own.push(...type.hello_warm.map((line) => line(first)));
     if (type && bond && first && bond.level >= BOND.hearts) own.push(...type.hello_hearts.map((line) => line(first)));
     this._speak(s, pick(own.length && Math.random() < 0.5 ? own : lines), 4000);
-    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (level >= BOND.hop && !calm) this._animate(s, s.pet, "greethop", 1400);
+    const isCalm = calm();
+    if (level >= BOND.hop && !isCalm) this._animate(s, s.pet, "greethop", 1400);
     else this._animate(s, s.pet, "perk", 320);
-    if (level >= BOND.hearts && !calm) this._bondHearts(s);
+    if (level >= BOND.hearts && !isCalm) this._bondHearts(s);
   }
 
   // The creature's own words (food, home), for its stage (a moth isn't a
@@ -4764,7 +4773,7 @@ class HatchPetCard extends HTMLElement {
     this._queue(s, line, 5000, { personal: true });
     if (note.kind === "friends_for") {
       this._sparkle(s);
-      if (!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) this._bondHearts(s);
+      if (!calm()) this._bondHearts(s);
     }
   }
 
@@ -4811,9 +4820,9 @@ class HatchPetCard extends HTMLElement {
       done();
       const lines = question.answers[answer] ?? question.answers[e.target.closest("button").dataset.answer];
       this._speak(s, question.reply ? question.reply(answer, s, mine) : pick(lines), 4500);
-      const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-      if (["great", "you"].includes(answer) && !calm) this._animate(s, s.pet, "greethop", 1400);
-      else if (["tough", "not really"].includes(answer) && !calm) this._bondHearts(s);
+      const isCalm = calm();
+      if (["great", "you"].includes(answer) && !isCalm) this._animate(s, s.pet, "greethop", 1400);
+      else if (["tough", "not really"].includes(answer) && !isCalm) this._bondHearts(s);
       else this._animate(s, s.pet, "perk", 320);
       if (question.keep) this._keepAnswer(s, kind, answer, entity);
     });
@@ -4869,9 +4878,10 @@ class HatchPetCard extends HTMLElement {
 
   // The frames to draw now: a reaction pose while one runs, else the mood's.
   _frames(s) {
-    if (s.scene) return s.scene.frames || s.frames || [];
-    if (s.linking && s.linkFrames?.length) return s.linkFrames;
-    return s.poseUntil && Date.now() < s.poseUntil ? s.poseFrames : s.frames || [];
+    const all = s.scene ? s.scene.frames || s.frames || []
+      : s.linking && s.linkFrames?.length ? s.linkFrames
+      : s.poseUntil && Date.now() < s.poseUntil ? s.poseFrames : s.frames || [];
+    return all.length > 1 && calm() ? all.slice(0, 1) : all; // calm: a still picture
   }
 
   _animate(s, el, cls, ms) {
@@ -4936,7 +4946,6 @@ class HatchPetCard extends HTMLElement {
     const say = (text, ms, fx) => line(text, ms, fx, { write: true });
     const speak = (text, ms, fx) => line(text, ms, fx, { catch: true }); // may carry its sound
     const now = (fx) => { if (!capture) fx(); }; // no line: it happens at once
-    const calm = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     switch (m.type) {
       case "care_miss":
         say(this._lines(s, "care_miss", "...oh, there you are ♥").text, 5000, // never guilt
@@ -6343,7 +6352,7 @@ class HatchPetCard extends HTMLElement {
     const due = kind === "medicine" ? (mood.attributes.flags || []).includes("sick")
       : Number(this._state(s, "sensor.poop")?.state || 0) > 0;
     if (!due) return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+    if (calm()) {
       s.sceneFade = { kind, until: Date.now() + 10000 }; // no scene: the news fades in
       return;
     }
@@ -6825,7 +6834,7 @@ class HatchPetCard extends HTMLElement {
     const spot = this._hatSpot(s) || s.species.head?.[s.drawn];
     if (spot) this._headTopAll(s, spot[0], spot[1]); // measure ahead
     const now = Date.now();
-    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const isCalm = calm();
     const part = seasonPart(season, s.worldKey);
     const dark = s.screen.classList.contains("night") || s.screen.classList.contains("dim");
     if (season.flyer) {
@@ -6833,7 +6842,7 @@ class HatchPetCard extends HTMLElement {
       if (now >= s.nextFlyer) {
         const [lo, hi] = SEASON_FLYER_MS;
         s.nextFlyer = now + lo + Math.random() * (hi - lo);
-        if (!calm && (dark || part.dayFlyers)) this._seasonFlyer(s, season);
+        if (!isCalm && (dark || part.dayFlyers)) this._seasonFlyer(s, season);
       }
     }
     if (season.nightFlyer && part.nightFlyer) {
@@ -6842,7 +6851,7 @@ class HatchPetCard extends HTMLElement {
         const [lo, hi] = SEASON_NIGHT_FLYER_MS;
         s.nextNightFlyer = now + lo + Math.random() * (hi - lo);
         const { art, cls, ms } = season.nightFlyer;
-        if (!calm && dark) this._seasonFly(s, season, art, cls, ms, { ltr: true });
+        if (!isCalm && dark) this._seasonFly(s, season, art, cls, ms, { ltr: true });
       }
     }
     if (!this._free(s) || s.pet.classList.contains("hop")) return;
@@ -6859,7 +6868,7 @@ class HatchPetCard extends HTMLElement {
         return;
       }
     }
-    if (season.visitor && !calm) {
+    if (season.visitor && !isCalm) {
       if (!s.nextVisitor) s.nextVisitor = now + 60000 + Math.random() * 60000;
       if (now >= s.nextVisitor) {
         const [lo, hi] = SEASON_VISITOR_MS;
@@ -6941,7 +6950,7 @@ class HatchPetCard extends HTMLElement {
   }
 
   _confetti(s) {
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    if (calm()) return;
     const box = document.createElement("div");
     box.className = "confetti";
     box.setAttribute("aria-hidden", "true");
@@ -7181,7 +7190,7 @@ class HatchPetCard extends HTMLElement {
   // Returns false when one is already on.
   _linkStart(host, guest) {
     if (this._link) return false;
-    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const isCalm = calm();
     const L = this._link = { host, guest, timers: [], hostScale: host.pet.style.scale };
     const at = (ms, fn) => L.timers.push(setTimeout(() => this._link === L && fn(), ms));
     const hostName = this._linkName(host);
@@ -7192,10 +7201,10 @@ class HatchPetCard extends HTMLElement {
     const gStage = guest.drawn || "adult";
     const gScale = (gs?.scale?.[gStage] || 1) * k;
     let gFrames = gs ? this._linkPose(gs, gStage, guest.speciesId, (f) => { gFrames = f; }) : [];
-    L.beamMs = calm ? 0 : 1500;
+    L.beamMs = isCalm ? 0 : 1500;
     this._moving(host, 9000);
     this._chirp(host, "link");
-    if (!calm) this._linkBeam(host, guest, toRight);
+    if (!isCalm) this._linkBeam(host, guest, toRight);
     // the guest's own slide: looking at the host, with a small note
     this._moving(guest, 6500);
     if (toRight) this._look(guest, 6500);
@@ -7206,11 +7215,11 @@ class HatchPetCard extends HTMLElement {
       const box = document.createElement("div");
       box.className = "visit";
       box.setAttribute("aria-hidden", "true");
-      if (!calm) box.innerHTML = '<div class="vband"><i></i><i></i><i></i><i></i><i></i></div>';
+      if (!isCalm) box.innerHTML = '<div class="vband"><i></i><i></i><i></i><i></i><i></i></div>';
       host.screen.append(box);
       L.box = box;
     });
-    const t0 = calm ? 200 : 2500;
+    const t0 = isCalm ? 200 : 2500;
     at(t0, () => {
       L.box.querySelector(".vband")?.remove();
       host.screen.classList.add("linking");
@@ -7227,7 +7236,7 @@ class HatchPetCard extends HTMLElement {
       L.box.append(img);
       L.img = img;
       let f = 0;
-      L.swap = setInterval(() => gFrames.length && this._show(guest, img, gFrames[++f % gFrames.length]), 700);
+      if (!isCalm) L.swap = setInterval(() => gFrames.length && this._show(guest, img, gFrames[++f % gFrames.length]), 700);
       this._queue(host, this._pick(["hi, {guest}!", "oh! {guest}! hello hello ♪"]).replace("{guest}", guestName), 3400);
       const say = document.createElement("div");
       say.className = "vsay";
@@ -7236,21 +7245,21 @@ class HatchPetCard extends HTMLElement {
       L.say = say;
     });
     at(t0 + 1200, () => {
-      if (!calm) this._animate(host, host.pet, "greethop", 1400);
+      if (!isCalm) this._animate(host, host.pet, "greethop", 1400);
     });
     at(t0 + 1800, () => {
       L.say.textContent = this._pick(["hi hi, {host}! ♪", "*waves* hi, {host}!"]).replace("{host}", hostName);
       L.say.hidden = false;
-      if (!calm) this._animate(guest, L.img, "greethop", 1400);
+      if (!isCalm) this._animate(guest, L.img, "greethop", 1400);
     });
     at(t0 + 3400, () => {
-      if (!calm && !sharedScreen()) this._bondHearts(host, "linkhearts");
+      if (!isCalm && !sharedScreen()) this._bondHearts(host, "linkhearts");
     });
     at(t0 + 4000, () => {
       L.say.hidden = true;
       L.img.classList.add("out");
     });
-    at(t0 + (calm ? 3600 : 4600), () => this._linkEnd());
+    at(t0 + (isCalm ? 3600 : 4600), () => this._linkEnd());
     return true;
   }
 
@@ -7503,7 +7512,7 @@ class HatchPetCard extends HTMLElement {
   _catchRound(s) {
     const g = s.game;
     if (!g || g.kind !== "catch") return;
-    const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const isCalm = calm();
     const f = g.round / (CATCH.rounds - 1);
     const lerp = ([a, b]) => a + (b - a) * f;
     const side = Math.random() < 0.5 ? "left" : "right";
@@ -7512,26 +7521,45 @@ class HatchPetCard extends HTMLElement {
     const motion = /cricket/.test(prop) ? "hop" : "roll";
     g.cur = {
       side, decoy, motion, done: false, start: performance.now(),
-      calm, travel: lerp(CATCH.travel) * (calm ? 1.6 : 1),
-      window: lerp(CATCH.window) * (calm ? 2 : 1),
+      calm: isCalm, travel: lerp(CATCH.travel) * (isCalm ? 1.6 : 1),
+      window: lerp(CATCH.window) * (isCalm ? 2 : 1),
     };
     const el = s.catchEl;
     if (decoy) el.src = BEE_FRAMES[0];
     else this._show(s, el, prop);
     el.hidden = false;
     el.style.display = "";
+    if (isCalm) { // at the far spot at once, not facing a stale transform
+      g.cur.step = 0;
+      el.style.left = `${side === "left" ? 0 : 84}%`;
+      el.style.transform = decoy && side === "left" ? "scaleX(-1)" : "";
+    }
     s.gameScore.textContent = `round ${g.round + 1}/${CATCH.rounds} · ${g.wins} caught`;
     const step = (now) => {
       const c = s.game?.cur;
       if (!c || c !== g.cur || c.done) return;
       const p = Math.min(Math.max(now - c.start, 0) / 1000 / c.travel, 1);
+      if (c.calm) { // reduced motion: two fixed spots, no sliding and no transform
+        // The last spot shows one frame (50 ms) before the "too soon" boundary, so a tap
+        // on what is on screen is never judged too soon.
+        const near = (now - c.start) / 1000 >= c.travel - c.window - 50 / 1000;
+        if (c.step !== (near ? 1 : 0)) {
+          c.step = near ? 1 : 0;
+          el.style.left = `${c.side === "left" ? (near ? 28 : 0) : (near ? 56 : 84)}%`;
+        }
+        if (c.decoy && c.side === "left") el.style.transform = "scaleX(-1)"; // faces its way, still
+        if (p >= 1) {
+          this._catchResolve(s, c.decoy, c.decoy ? "phew, let the bee go!" : "it got away...");
+          return;
+        }
+        c.raf = requestAnimationFrame(step);
+        return;
+      }
       // From off the edge to just beside the pet (which stands at 50%).
       const from = c.side === "left" ? -16 : 100;
       const to = c.side === "left" ? 28 : 56;
       el.style.left = `${from + (to - from) * p}%`;
-      if (c.calm) { // reduced motion: it only slides along (the bee still faces its way)
-        el.style.transform = c.decoy && c.side === "left" ? "scaleX(-1)" : "";
-      } else if (c.decoy) { // a bee flies: flapping, bobbing, facing where it goes
+      if (c.decoy) { // a bee flies: flapping, bobbing, facing where it goes
         // (rAF's first timestamp can come just before c.start)
         const flap = Math.floor(Math.max(now - c.start, 0) / BEE_FLAP_MS) % 2;
         if (c.flap !== flap) el.src = BEE_FRAMES[(c.flap = flap)];
@@ -7558,7 +7586,7 @@ class HatchPetCard extends HTMLElement {
       this._catchResolve(s, false, "bzz! not the bee!");
     } else if (side !== c.side) {
       this._catchResolve(s, false, "other side!");
-    } else if (t < c.travel - c.window) {
+    } else if (t < c.travel - c.window - (c.calm ? 0.05 : 0)) { // calm: the last spot shows 50 ms early
       this._catchResolve(s, false, "too soon!");
     } else {
       s.pet.classList.add(`go-${side}`);

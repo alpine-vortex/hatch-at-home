@@ -2073,6 +2073,82 @@ async function main() {
     `${catchRounds.map((r) => (r.decoy ? "bee" : r.early ? "early" : "catch")).join(" ")} -> ${catchLine}`);
   check("catch keeps a best score",
     Number(await evaluate(() => localStorage.getItem("hatch-best-catch"))) >= expected);
+  // 3a. Calm Catch: two steps (far at once, "at the pet" at travel - window - 50 ms), no
+  // slide and no transform; a tap on the last step's first frame catches. Time is moved
+  // through c.start, never waited for.
+  {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.waitForTimeout(4500); // the last result line clears
+    await inject(pet["sensor.energy"], { state: "80" });
+    await page.waitForTimeout(500);
+    await button(2).click();
+    await page.waitForTimeout(500);
+    await cur().locator('.gpick [data-game="catch"]').click();
+    const calmCatch = await page.locator("hatch-pet-card").evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+      for (let w = 0; w < 600 && !(s.game?.cur && !s.game.cur.done); w++) await frame();
+      const c = s.game.cur;
+      const seen = new Set();
+      const at = async (sec) => { // jump the round clock to sec seconds in
+        c.start = performance.now() - sec * 1000;
+        await frame();
+        seen.add(s.catchEl.style.left);
+        return { left: s.catchEl.style.left, transform: s.catchEl.style.transform };
+      };
+      const boundary = c.travel - c.window;
+      const first = { left: s.catchEl.style.left, calm: c.calm, side: c.side, decoy: c.decoy };
+      const early = await at(boundary / 2);
+      const justBefore = await at(boundary - 0.2);
+      const last = await at(boundary - 0.04); // the last step's first frames
+      const later = await at(boundary + c.window / 2);
+      const wins = s.game.wins;
+      s.gameBox.querySelector(c.side === "left" ? ".gl" : ".gr").click();
+      return { first, early, justBefore, last, later, seen: [...seen], won: s.game.wins - wins, near: c.side === "left" ? "28%" : "56%",
+        far: c.side === "left" ? "0%" : "84%", done: c.done };
+    });
+    check("3a: calm Catch shows the prop at the far spot at once",
+      calmCatch.first.calm && calmCatch.first.left === calmCatch.far, JSON.stringify(calmCatch));
+    check("3a: calm Catch takes exactly two left values and sets no transform",
+      calmCatch.seen.length === 2 && calmCatch.seen.every((v) => [calmCatch.far, calmCatch.near].includes(v)) &&
+      !calmCatch.early.transform && !calmCatch.last.transform, JSON.stringify(calmCatch));
+    check("3a: calm Catch jumps to the pet at travel - window - 50 ms, not before",
+      calmCatch.justBefore.left === calmCatch.far && calmCatch.last.left === calmCatch.near, JSON.stringify(calmCatch));
+    check("3a: a tap on the last step's first frame catches (not too soon)",
+      calmCatch.won === 1 && calmCatch.done, JSON.stringify(calmCatch));
+    await page.locator("hatch-pet-card").evaluate((el) => {
+      el._endGame(el._slides[el._index], "");
+    });
+    // A still picture: src stable over 5 ticks, one swap on a mood change, ending _1.
+    await page.waitForTimeout(1500);
+    const srcOf = () => card.evaluate((el) => el._slides[el._index].pet.getAttribute("src"));
+    const ticks = async (n) => {
+      const out = [];
+      for (let i = 0; i < n; i++) { await card.evaluate((el) => el._tick()); out.push(await srcOf()); }
+      return out;
+    };
+    const still = await ticks(5);
+    check("3a: with reduced motion the pet's src is the same over 5 ticks",
+      new Set(still).size === 1 && /_1\.png/.test(still[0]), JSON.stringify(still));
+    await inject(pet["sensor.mood"], { state: "hungry", attributes: { flags: ["hungry"], requests: [] } });
+    await page.waitForTimeout(1200);
+    const moved = await ticks(5);
+    check("3a: a mood change swaps the still frame once, and it ends in _1",
+      new Set(moved).size === 1 && moved[0] !== still[0] && /_1\.png/.test(moved[0]), JSON.stringify({ still: still[0], moved }));
+    await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [], requests: [] } });
+    await page.waitForTimeout(1200);
+    const calmAfter = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      return { frames: el._frames(s).length };
+    });
+    check("3a: calm _frames() returns one frame", calmAfter.frames === 1, JSON.stringify(calmAfter));
+    const guard = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8")
+      .split("\n").map((l, i) => [i + 1, l]).filter(([, l]) => l.includes("prefers-reduced-motion"));
+    check("3a: 'prefers-reduced-motion' appears only in calm() and the CSS block",
+      guard.length === 2 && /matchMedia/.test(guard[0][1]) && /@media/.test(guard[1][1]), JSON.stringify(guard));
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.waitForTimeout(1000);
+  }
 
   await unpinAwake(card);
   }
