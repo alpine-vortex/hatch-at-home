@@ -5367,7 +5367,8 @@ class HatchPetCard extends HTMLElement {
           : ok && (entry.action === "feed" || entry.action === "snack") ? "fed"
           : ok && entry.action === "praise" ? "praised"
           : ok && entry.action === "blanket" ? "tucked" : null;
-        if (kind) this._reactFrames(s, kind);
+        // A won game's log can land just before the card closes the game: still its reaction.
+        if (kind) this._reactFrames(s, kind, { inGame: entry.result === "won" });
       }
       if (entry.action === "fan") { // the fan stands by, and its breeze crosses the scene
         s.screen.classList.add("breezy");

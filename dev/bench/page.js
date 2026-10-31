@@ -274,6 +274,9 @@
         a.currentTime = shot.petAt;
       }
     }
+    // `react`: a care reaction (PR 3c) started through the card's own `_reactFrames`
+    // (`fed`, `praised`, `refused`, `tucked`); `petAt` pauses its move mid-way.
+    if (shot.react) card._reactFrames(cur, shot.react);
     // `patBox`: the pat's clear hit box outlined, so a shot shows where a tap pats (or, in a
     // state that hides it, that there is none).
     if (shot.patBox) cur.pat.style.outline = "2px dashed #ff00d0";

@@ -5787,6 +5787,16 @@ async function main() {
       const r = await react({ action: "play", result });
       check(`react: ${stage} refusal ${result} reacts`, r.live && r.moves.join() === "look" && r.src.includes(`/${stage}_`), JSON.stringify(r));
     }
+    const won = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const keep = s.game;
+      s.game = { cur: null }; s.poseUntil = 0;
+      el._react(s, { action: "game", result: "won", at: Date.now() / 1000 });
+      const out = { live: s.poseUntil > Date.now(), src: s.pet.getAttribute("src") };
+      s.game = keep; s.poseUntil = 0;
+      return out;
+    });
+    check(`react: ${stage} a won game's log reacts even if the game is still open`, won.live && won.src.includes(`/${stage}_excited_`), JSON.stringify(won));
     for (const result of ["asleep", "egg", "away", "no_game", "unfair", "spoiled", "lost"]) {
       const r = await react({ action: "play", result });
       check(`react: ${stage} ${result} does nothing`, !r.live && r.moves.length === 0, JSON.stringify(r));
@@ -5795,10 +5805,14 @@ async function main() {
       const s = el._slides[el._index];
       el._react(s, { action: "feed", result: "ok", at: Date.now() / 1000 });
       await new Promise((r) => setTimeout(r, 2800));
-      return { src: s.pet.getAttribute("src"), live: s.poseUntil > Date.now(), mood: s.moodState, moves: [...s.pet.classList] };
+      el._tick();
+      return { src: s.pet.getAttribute("src"), live: s.poseUntil > Date.now(), mood: s.moodState, moves: [...s.pet.classList],
+        frames: s.frames, shown: !(s.poseFrames || []).some((f) => s.pet.getAttribute("src").includes(`/${f}.png`)) ||
+          (s.frames || []).some((f) => s.pet.getAttribute("src").includes(`/${f}.png`)) };
     });
     check(`react: ${stage} back to the mood frame after 2.5 s`,
-      !after.live && !after.moves.some((c) => ["munch", "greethop", "look", "settle"].includes(c)), JSON.stringify(after));
+      !after.live && after.shown && new RegExp(`/${stage}_${after.mood}_|/${stage}_content_`).test(after.src) &&
+      !after.moves.some((c) => ["munch", "greethop", "look", "settle"].includes(c)), JSON.stringify(after));
     // Never while: a scene, a link, a game, the low-battery gag, asleep, away, egg.
     for (const [name, patch] of [["scene", { scene: { kind: "feed", frames: [] } }], ["linking", { linking: true }],
       ["game", { game: { cur: null } }], ["power", { power: {} }], ["asleep", { asleep: true }], ["away", { away: true }], ["egg", { egg: true }]]) {
@@ -5844,7 +5858,7 @@ async function main() {
   // A child is left alone (its own species poses).
   await rs("child");
   const kid = await react({ action: "feed", result: "full" });
-  check("react: a child gets no stage reaction", !kid.moves.includes("look") || !kid.src.includes("/bored_"), JSON.stringify(kid));
+  check("react: a child gets no stage reaction", kid.drawn === "child" && !kid.live && kid.moves.length === 0, JSON.stringify(kid));
   await rs(null);
   await card.evaluate((el) => { if (el.__realState) { el._state = el.__realState; delete el.__realState; } el._redraw(el._slides[el._index]); });
   // Every species: 4 moods x 3 stages load.

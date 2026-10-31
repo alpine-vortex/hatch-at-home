@@ -647,6 +647,49 @@ gives no reaction.**
 - **Done =** a teen and an adult react visibly and differently to feed, praise/win, refusal
   and tucking in, with no new files.
 
+*3c shipped (s2543, 2026-10-31) and what 4c/4e rely on:*
+- `hatch-pet-card.js`: `REACT_MS` 2500, `REACTIONS` (fed `excited`/`munch`, praised
+  `excited`/`greethop`, refused `bored`/`look`, tucked `cozy`/`settle`), `REACT_REFUSALS`
+  (the six whitelisted), `_reactFrames(s, kind, {inGame})`. CSS `munch` and `settle` are
+  bounded and new; `greethop` and `look` are reused. Hooks: `_react`'s ok/won branch (feed,
+  snack, praise, `result: "won"`, blanket ok; `lost` none), its `REFUSALS` fall-through, and
+  `_pounce`'s non-child branch (`inGame`, since a catch happens inside a game).
+- A `won` log entry reacts even while `s.game` is still set (the game's log can land just before the card closes it); a catch does too. No other hook reacts inside a game.
+- "Praised" is `greethop` for every type: P3 has not merged. A species with no
+  `moods` entry for the wanted mood falls back to `content`, as `_petFrames` does.
+- FM decision: while `s.poseUntil > now`, `_pat` still speaks but adds no `perk`/`pat-soft`,
+  so the reaction plays whole. `_patMayTalk` is unchanged. (The sleepy pose and the child's
+  poses set `poseUntil` too, so a pat during them skips its perk as well.)
+- A reaction does not clear `sayUntil`, and sets `_moving` only for `look`.
+- Tests: card-check section `react` (incl. the 30-species x 3-stage x 4-mood load
+  loop, 360 frames); bench field `react` (`petAt` pauses the move). Renders in the s2543
+  worker dir.
+- Not added: music/TV and happy-arrival reactions (dropped by the fold), no new art or copy.
+
+*Wave 3 reconcile for 4c and 4e (s2543, 2026-10-31; read after 3a, 3b and 3c shipped):*
+- **4c.** Nothing from Wave 3 adds a status or settings control. `.pat` is hidden whenever
+  the status is open (3b), so the 44 px list and box-size assert exclude it; 3a's Calm
+  Catch adds no buttons (the game buttons stay "already fine"); 3c adds none. The 3b
+  names the 4c worker needs are above ("3b shipped"). Line numbers in the 4c fold have
+  drifted: find sites by name. Checked still true on this branch: `.statusbtn` 44 px high,
+  `.gear`, `.sback` (`min-height: 28`; 26 / 22 while the picker is open and compact),
+  `.jlink` (`padding: 6px 0`), `.bell` (compact picker `min-height: 24`), `.tile`. The
+  card-check `/whines/` asserts are now near lines 900 and 926 (not ~804, 830).
+  **One new thing for the 4c box-size assert:** it runs with the pat box hidden (status
+  open), so no exclusion is needed; if a check ever runs with the status closed it must
+  skip `.pat` (about 105 px square at 330, so it passes anyway).
+- **4e.** Wave 3 touched no README, guide or `scripts/readme` file. Still true: `art.py`
+  has the hard-coded `WORLDS` (38) and `NAMES` (46), `collect()` (372) and the
+  "COLLECT ALL 13!" banner (379); README lines 2 ("all thirteen creatures") and 103
+  ("Collect all 13 ... with the eggs they hatch from"); no `species.json` has `short` yet
+  (0 of 30). **Drift:** the guide's "still to come: more species" is now at `docs/guide.md:858`
+  (the fold said ~854; the older text said 730). Note the guide has two "still to come"
+  phrases; only the Play one (858) names species.
+- **Order stays: 4c first, then 4e** (no shared files; 4c edits only the card and card-check,
+  4e only `scripts/readme`, `species.json`, the README and the guide). A 4e worker adding
+  `short` to 30 `species.json` files touches files the card reads at load: the 3c load
+  loop (section `react`) and the species presets will exercise them, so run both.
+
 ### Wave 4: progression and polish
 
 **Release scope (owner, 2026-10-30).** This release keeps only **PR 4e** (the counts and
