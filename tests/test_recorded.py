@@ -22,10 +22,13 @@ from homeassistant.components.recorder.db_schema import (
 )
 from homeassistant.components.recorder.util import session_scope
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 import pytest
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
+
+from custom_components.virtual_pet.const import DOMAIN
 
 from .test_public import NICKNAME, now, scripted_day  # noqa: F401 (now: a fixture)
 
@@ -88,8 +91,15 @@ async def test_nothing_personal_is_recorded(
         assert event_type == "call_service" and '"domain":"notify"' in data, event_type
     # The pet's states: the care log's "by" is the only person's name kept, and
     # it is the HA user's display name ("Zeb Owner"), not a secret searched for.
-    pets = [(e, a) for e, a in attrs if e.startswith(("sensor.pip_", "switch.pip_"))]
-    assert any(e == "sensor.pip_life_stage" for e, _ in pets)
+    # Every entity the pet owns (by the registry's platform, not by a prefix),
+    # the debug sensor too: scripted_day turns it on.
+    owned = {
+        e.entity_id
+        for e in er.async_get(hass).entities.values()
+        if e.platform == DOMAIN
+    }
+    pets = [(e, a) for e, a in attrs if e in owned]
+    assert {"sensor.pip_life_stage", "sensor.pip_debug"} <= {e for e, _ in pets}
     for secret in day["secrets"]:
         for entity_id, shared in pets:
             assert secret not in shared, (entity_id, secret)

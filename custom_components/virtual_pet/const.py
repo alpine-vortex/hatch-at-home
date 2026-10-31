@@ -94,6 +94,17 @@ PERSONAL_EVENTS = {
     "tucked_in",
 }
 # What a public event never carries (the bus and the public moments): whose it
-# is and what the pet calls them. The last line of defence after the gate.
-PRIVATE_EVENT_FIELDS = {"user", "for", "for_name", "nickname", "favourite"}
+# is, what the pet calls them, and the show or song (those stay on the channel).
+# The last line of defence after the gate.
+PRIVATE_EVENT_FIELDS = {
+    "user",
+    "for",
+    "for_name",
+    "nickname",
+    "favourite",
+    "title",
+    "artist",
+}
 MEDIA_EVENTS = {"watching", "listening"}
+# A media moment's public stand-in: the recap's "watched TV", with no title.
+PUBLIC_AS = {"watching": "tv_on", "listening": "music_on"}

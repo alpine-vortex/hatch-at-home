@@ -4428,6 +4428,7 @@ class HatchPetCard extends HTMLElement {
     const add = (b) => { if (b && !bits.includes(b)) bits.push(b); };
     const MOMENT_BITS = {
       fell_asleep: "napped", woke_up: "napped", watching: "watched TV", listening: "listened to music",
+      tv_on: "watched TV", music_on: "listened to music", // the public stand-ins, with no title
       news: "heard some news", sunset: "watched the sunset", wish_granted: "got my wish",
       trait_learned: "learned something new", first_snow: "saw the first snow",
     };

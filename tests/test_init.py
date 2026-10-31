@@ -1224,6 +1224,29 @@ async def test_diagnostics_hide_the_house_and_the_people(
     assert diag["calculation"]["home"]["readings"]["company"] == "**REDACTED**"
 
 
+async def test_the_debug_sensor_never_shows_a_title(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    # Privacy off: the house's readings are still redacted (F2, Q1).
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup_with_house(hass, tv=["media_player.tv"], privacy=False)
+    er.async_get(hass).async_update_entity("sensor.pip_debug", disabled_by=None)
+    await hass.config_entries.async_reload("test_pet")
+    await hass.async_block_till_done()
+    hass.states.async_set(
+        "media_player.tv",
+        "playing",
+        {"media_content_type": "tvshow", "media_series_title": "Bluey"},
+    )
+    await settle(hass, freezer)
+    calculation = hass.states.get("sensor.pip_debug").attributes["calculation"]
+    assert calculation["home"]["readings"]["tv_title"] == "**REDACTED**"
+    assert "Bluey" not in json.dumps(calculation, default=str)
+
+
 async def test_repairs_warn_about_entities_that_are_gone(
     hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
 ) -> None:
@@ -1358,8 +1381,12 @@ async def test_the_pet_comments_on_whats_on_tv(
     await settle(hass, freezer)
     moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
     # (The day's wish may be "watch TV together": then it comes true just after.)
-    watching = [m for m in moments if m["type"] == "watching"]
-    assert watching and watching[0]["title"] == "Bluey"
+    # The public list hears only that the TV was on; the show is the channel's.
+    assert not [m for m in moments if m["type"] in ("watching", "listening")]
+    tv_on = [m for m in moments if m["type"] == "tv_on"]
+    assert tv_on and set(tv_on[0]) == {"type", "at"}
+    pet = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    assert pet._house["media"]["title"] == "Bluey"
 
 
 async def pick(hass: HomeAssistant, option: str) -> None:
@@ -1821,8 +1848,10 @@ async def test_it_dreams_of_last_nights_show(
     # Through the night (it goes to bed at 23:00) to the morning (wake 07:00).
     for _ in range(12 * 12):
         await settle(hass, freezer, 5 * 60)
-    dream = hass.states.get("sensor.pip_life_stage").attributes["dream"]
-    assert dream == {"kind": "watching", "title": "Bluey"}
+    # A show's dream is the house's: on the channel, not the sensor.
+    assert hass.states.get("sensor.pip_life_stage").attributes["dream"] is None
+    pet = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    assert pet._house_view()["dream"] == {"kind": "watching", "title": "Bluey"}
     # The title is the house's business: diagnostics leave it out.
     from custom_components.virtual_pet.diagnostics import (
         async_get_config_entry_diagnostics,

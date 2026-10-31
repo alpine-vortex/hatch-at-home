@@ -2179,7 +2179,8 @@ def test_it_dreams_of_yesterday_and_forgets_old_seeds():
     model.dream_seed(pet, {"kind": "moon"}, at(20) - 40 * HOUR)  # too old
     events = model.dream_on_waking(pet, at(7, day=2), "d2", random.Random(0))
     assert pet.dream == {"kind": "watching", "title": "Bluey", "day": "d2"}
-    assert events == [{"type": "dreamed", **pet.dream}]
+    # The event says what kind only: the title stays in state.dream.
+    assert events == [{"type": "dreamed", "kind": "watching"}]
     assert pet.dream_seeds == []
     # Nothing to dream of: a plain dream, or none.
     kinds = set()
@@ -2307,7 +2308,8 @@ def test_last_nights_dream_pick_comes_true():
     model.dream_seed(pet, {"kind": "game"}, at(20))
     model.pick_dream(pet, "u1", "sea", at(21))
     model.pick_dream(pet, "u1", "stars", at(21, 30))  # their latest choice
-    model.dream_on_waking(pet, at(7, day=2), "2026-10-02", random.Random(1))
+    events = model.dream_on_waking(pet, at(7, day=2), "2026-10-02", random.Random(1))
+    assert events == [{"type": "dreamed", "kind": "picked"}]  # no pick, no who
     assert pet.dream == {
         "kind": "picked",
         "pick": "stars",

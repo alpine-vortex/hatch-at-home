@@ -2283,7 +2283,7 @@ def dream_on_waking(
             "user": chosen["user"],
             "day": today,
         }
-        return [{"type": "dreamed", "kind": "picked", "pick": chosen["pick"]}]
+        return [{"type": "dreamed", "kind": "picked"}]
     if fresh:
         seed = rng.choice(fresh)
         state.dream = {k: v for k, v in seed.items() if k != "at"} | {"day": today}
@@ -2291,7 +2291,9 @@ def dream_on_waking(
         state.dream = {"kind": rng.choice(["flying", "clouds", "feast"]), "day": today}
     else:
         return []
-    return [{"type": "dreamed", **state.dream}]
+    # The event says only what kind: the title, the pick and who asked stay in
+    # state.dream (the channel's house.dream, the card's first look).
+    return [{"type": "dreamed", "kind": state.dream["kind"]}]
 
 
 # --- Bonds: the pet knows each person, separately ------------------------------

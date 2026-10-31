@@ -21,7 +21,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.util import dt as dt_util
 
 from . import model, rates as R
-from .const import PRIVATE_READINGS
+from .const import MEDIA_EVENTS, PRIVATE_READINGS
 from .coordinator import PetConfigEntry, PetCoordinator
 from .entity import PetEntity
 
@@ -176,6 +176,14 @@ class LifeStageSensor(PetEntity, SensorEntity):
             return None
         return {k: record[k] for k in keys if k in record}
 
+    def _dream(self) -> dict[str, Any] | None:
+        """This morning's dream, its kind only. A dream of a show or song is
+        the house's (its title is on the private channel), so none here."""
+        dream = self._today_only(self.pet.dream, ("kind",))
+        if dream is not None and dream.get("kind") in MEDIA_EVENTS:
+            return None
+        return dream
+
     def _wish(self) -> dict[str, Any] | None:
         """Today's wish; "open" while it can still come true, so the card stops
         mentioning it: "say hi this afternoon" and "a snack after lunch" close
@@ -235,7 +243,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             # (who granted it, and whom it's for, stay on the server: the
             # viewer's own card hears "for you" on its private channel).
             "wish": self._wish(),
-            "dream": self._today_only(self.pet.dream, ("kind", "title")),
+            "dream": self._dream(),
             # Its own favourites ({"snack": ...}): the pet's, not anyone's secret.
             "favourites": dict(self.pet.favourites),
             # What it says at the end of things: a friend's pick, or its own.
@@ -333,11 +341,10 @@ class DebugSensor(PetEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         pet = self.pet
-        # As private as the mood sensor: no "away", nor what the house was up to.
+        # As private as the mood sensor: no "away". What the house was up to
+        # (who's home, the show, the song) is redacted always, privacy or not.
         _, flags, _ = self.coordinator.current_mood()
-        calculation = dict(self.coordinator.debug)
-        if self.coordinator.privacy:
-            calculation = async_redact_data(calculation, PRIVATE_READINGS)
+        calculation = async_redact_data(dict(self.coordinator.debug), PRIVATE_READINGS)
         stamp = dt_util.utc_from_timestamp
         return {
             "flags": flags,

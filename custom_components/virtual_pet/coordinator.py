@@ -72,6 +72,7 @@ from .const import (
     MEDIA_EVENTS,
     PERSONAL_EVENTS,
     PRIVATE_EVENT_FIELDS,
+    PUBLIC_AS,
     STORE_MINOR_VERSION,
     STORE_VERSION,
 )
@@ -115,8 +116,8 @@ MOMENTS = {
     "sunrise",
     "sunset",
     "good_morning",
-    "watching",
-    "listening",
+    "tv_on",
+    "music_on",
     "tv_off_late",
     "first_snow",
     "first_frost",
@@ -952,12 +953,20 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             if simulated:
                 continue
             at = dt_util.utcnow().isoformat()
-            if public and event["type"] in MOMENTS:
-                self.moments.insert(0, {**scrubbed, "at": at})
+            # A show or song is the house's, on the channel; the public list
+            # only hears that the TV or music was on.
+            if (as_type := PUBLIC_AS.get(event["type"])) is not None:
+                moment: dict[str, Any] | None = {"type": as_type, "at": at}
+            elif public and event["type"] in MOMENTS:
+                moment = {**scrubbed, "at": at}
+            else:
+                moment = None
+            if moment is not None:
+                self.moments.insert(0, moment)
                 del self.moments[MOMENTS_KEPT:]
             self._to_channel(event, at)
-        if events:
-            self.debug["last_events"] = [e["type"] for e in events][-10:]
+        if shown := [e["type"] for e in events if e["type"] not in PERSONAL_EVENTS]:
+            self.debug["last_events"] = shown[-10:]
         if simulated or self.state is None:
             return
         started = any(
