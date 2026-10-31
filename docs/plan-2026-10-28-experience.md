@@ -857,7 +857,7 @@ Both FIX FIRST, plan edits only; report and measurements archived with the worke
 the shell picker is in 44 px scope (about 1.4-2 tile rows in view, it scrolls); the
 dots (24 px) and compact answer buttons (40 px) are out (later nit); species.json gains a
 `short` name (the old thirteen kept; **the worker proposes the other 17 in its report
-for the owner's sign-off before merge**); collect.png drops the egg row and the alt
+for the owner's sign-off before merge**; APPROVED by the owner 2026-10-31 with one change: beardeddragon = "Bearded dragon"); collect.png drops the egg row and the alt
 phrase "with the eggs they hatch from"; hero and worlds.png keep the 2026-10-28 device
 shots and re-lay only sprites and names (retaking devices is a later bench-wired job);
 misses and whines go under the "for <name>" group, which always renders.
