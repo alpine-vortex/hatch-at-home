@@ -1,0 +1,11 @@
+#!/bin/sh
+# Refuse a commit whose staged Python fails ruff (format or lint).
+# Opt in once per clone: git config core.hooksPath scripts/hooks
+files=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
+[ -z "$files" ] && exit 0
+top=$(git rev-parse --show-toplevel)
+RUFF=$top/.venv/bin/ruff
+[ -x "$RUFF" ] || RUFF=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.venv/bin/ruff
+[ -x "$RUFF" ] || exit 0
+cd "$top" && $RUFF format --check $files && $RUFF check -q $files || {
+  echo "pre-commit: run 'ruff format' on the files above, then commit again." >&2; exit 1; }

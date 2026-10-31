@@ -20,6 +20,14 @@ falling back to HA.
 
 ## Running card-check on your own HA
 
+`scripts/gate` does all of the below for you: lint and tests, then a throwaway HA
+from `dev/config` with a fresh `.storage` on a free port (never 8123), card-check with
+`HA_URL`/`HA_CONFIG`/`HA_START` set, the costume previews, and cleanup. Arguments after
+`--` go to card-check. Prefer it over a hand-built scratch HA. To have commits refuse
+unformatted Python, run `git config core.hooksPath scripts/hooks` once.
+
+The manual route, if you need it:
+
 - Never use port 8123, or another worker's port. Copy `dev/config` to a scratch
   dir. Start HA once, stop it, then set `data.stable.server_port` and
   `data.pending = null` in `<config>/.storage/http` and start it again. The yaml
