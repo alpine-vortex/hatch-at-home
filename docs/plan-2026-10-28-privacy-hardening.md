@@ -1636,3 +1636,50 @@ What P3b shipped, where it differs from the text above, and what P3c now picks u
   the public `moments` had no bond moment.
 
 **P3b audit (s2530, 2026-10-31):** MERGE. Tally: 0 would have reached a player or leaked, 4 nits. Nits 3-4 (guide bond claim, event list, HANDOFF) fixed in 7906c7c; nits 1-2 (debug sensor unscanned by `test_public`, `test_recorded` filters only `sensor.`/`switch.`; `debug["last_events"]` lists personal types) are P3c scope. Owner: P3b is held on its branch and merges with P3c.
+
+## P3c plan review fold (s2532, 2026-10-31)
+
+Scout `hatch-at-home-s2532` reviewed P3c (with experience 2a) against the P3b branch
+`b1f96c1`: FIX FIRST. Full report archived with the worker. **For P3c, this section wins
+over the text above, including the P3b reconcile's "no further structural change".**
+Names win over line numbers. P3c is built on the P3b branch; both merge and release
+together (owner, 2026-10-30).
+
+**P3c acceptance criteria:**
+1. **Where `tv_on`/`music_on` come from (#1).** `const.PUBLIC_AS = {"watching": "tv_on",
+   "listening": "music_on"}`. In `_fire`, a media event's public moment is exactly
+   `{"type": PUBLIC_AS[t], "at": at}`. `MOMENTS` swaps `watching`/`listening` for
+   `tv_on`/`music_on`. The bus keeps `virtual_pet_watching`/`_listening` without
+   `title`/`artist`; no new bus events. Test: public media moments hold only `{type, at}`.
+2. `PRIVATE_EVENT_FIELDS` gains `title` and `artist`. `sensor.py` `dream`: `("kind",)`
+   only, `None` for media kinds; `dream_on_waking` without `title`/`pick`/`user`; the
+   debug sensor's redaction (owner F2/Q1: always redact).
+3. **Test 5 must be able to fail (#2).** `scripted_day` sets up with a TV
+   (`setup_with_house(tv=[...])`), plays "Bluey", and seeds today's
+   `state.dream = {"kind": "watching", "title": "Bluey", "day": today}` before publishing;
+   fill `TITLES` (a title and an artist). Assert `stage["dream"] is None` and that
+   `house.dream` on the channel has the title.
+4. **Debug sensor scanned (#3, P3b audit nit 1).** `scripted_day` enables
+   `sensor.pip_debug` (registry `disabled_by=None`, reload) and asserts it is scanned;
+   `test_recorded` filters the pet's entities by registry platform, not by prefix.
+5. **`debug["last_events"]` (#4, audit nit 2):** leave out `PERSONAL_EVENTS` types;
+   asserted by the scan in 4.
+6. **The house-media card check (#5):** server-only, so it moves to pytest. Card-check
+   keeps the channel side (`house.media` push gives one line).
+7. **First-look dream (#6):** card-check's stub moves to `s.house.dream`; add a check:
+   a media `stage.dream` of `null` plus `house.dream` says "I dreamed about Bluey!" once.
+8. **Pytest sites (#7), a floor, re-grep `"title"|watching|listening` in `tests/`:**
+   `test_the_pet_comments_on_whats_on_tv` (titled `watching` in public moments) and
+   `test_it_dreams_of_last_nights_show` (`dream == {kind, title}`), `tests/test_init.py`
+   around 1345-1362 and 1825. Keep 1219-1220 (diagnostics, injected).
+9. **Old cards (#8):** card-check 8b gains the TV, music, media-dream and recap cases for
+   v0.37.0 and v0.35.0, compared with P3b's results. v0.36/v0.37 tablets lose "watched TV"
+   / "listened to music" from the recap until reloaded (no `tv_on`/`music_on` in their
+   `MOMENT_BITS`); v0.35.0 also loses the live TV/music lines and media dreams. Accepted:
+   the release note's reload line says **reload every open dashboard** after updating.
+10. **Comment only (#10):** card-check ~4140 "still published until P3c".
+
+**Release note (#8, #9), P3c's part:** titles and artists are no longer on
+`virtual_pet_watching`/`_listening`, public moments or `dream`; the events still fire each
+time the show or song changes, so read `media_title` from your player. The reload line
+becomes "after updating, reload every dashboard that stays open (a wall tablet, say)".
