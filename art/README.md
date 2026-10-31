@@ -327,3 +327,13 @@ through the Codex CLI's image tool, then cut like the other rooms (4:3 crop, LAN
 - Left as they were, already the day scene in other light: Tidepool night and rain, Night Sky and
   Pond rain.
 
+## 128 sweep: open feet and grey fringe (2026-10-31)
+
+The feet and fringe checks from the tier-2 audit, run on every species against the 64 frames.
+Closed bottoms (`close_bottom.py`) where a frame was closed at 64 and open at 128: ball python
+baby excited 1, bearded dragon child/teen asleep, bunny teen content, octopus teen content,
+squirrel child sleepy. Grey-blue fringe specks cleaned (as on the kitten) on ten corgi baby
+frames. Left alone on purpose: the firefly's glow sparkles and the otter's water at the feet
+line, and the otter's cool greys (water edges, the sick tear). Hermit crab, seal and beetle
+greys are as at 64 (their own colours).
+
