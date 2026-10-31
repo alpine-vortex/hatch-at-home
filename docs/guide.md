@@ -252,6 +252,7 @@ pet; it's only how the screen looks.
   its last frame for a moment when it moves, and a short smear when it wanders or
   dashes aside in a game. Only on the pet you're looking at, never in Catch, and
   never with reduced motion. The same "screen effects here" switch turns it off.
+  It's off on a mono screen ("mono screen" in the settings), which keeps the grid.
 - **The backlight.** Every device has a little button on its shell: a nub on the
   egg's shoulder, the tank lid's right grip, a lamp on the house's chimney, the
   porthole's top-right rivet, a dewdrop on the lily pad's rim and a star on the

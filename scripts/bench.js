@@ -124,6 +124,31 @@ const PRESETS = {
     }
     return out;
   },
+  // The mono screen (4 tones): the species sheet (frame 1, as `species`), then one
+  // adult in woodland through every screen state, sheet, mark and the IR beam, at
+  // both card widths. Each shot is measured for the pass rule (see monoPass).
+  mono() {
+    const out = [];
+    for (const width of [420, 330]) {
+      for (const s of PRESETS.species()) {
+        out.push({ ...s, name: `mono/${width}/${s.name.slice(8)}`, group: `mono-${s.group}-${width}`, width, mono: true });
+      }
+      const strip = [
+        ["day", {}], ["night", { scene: "night" }], ["dim", { scene: "dim" }], ["faded", { classes: ["faded"] }],
+        ["raining", { scene: "rain" }], ["lit", { classes: ["lit"] }], ["lit-night", { scene: "night", classes: ["lit"] }],
+        ["status", { view: "status" }], ["journal", { journal: true, view: "journal" }],
+        ["picker", { view: "picker", shellOptions: FINISHES, shellFinish: "stripes", stage: "teen" }],
+        ["games", { view: "games" }], ["bubble", { say: "hi, Sam! I missed you~" }], ["boot", { booted: false }],
+        ["sick", { mood: "sick" }], ["dirty", { mood: "dirty" }], ["attention", { pet: { calling: true } }],
+        ["effects-off", { lcd: "off" }], ["beam", { beam: true, pets: 2, clip: "card" }],
+      ];
+      for (const [label, extra] of strip) {
+        out.push({ name: `mono/${width}/strip-${label}`, group: `mono-strip-${width}`, label, world: "woodland",
+          clip: "device", width, mono: true, say: "", ...extra });
+      }
+    }
+    return out;
+  },
   // The same sheet on a shared screen: nothing personal, only this screen's rows.
   "settings-shared"() {
     const out = [];
@@ -151,8 +176,9 @@ function normalize(raw) {
     shot.pets.push({ species: roster[i % roster.length], stage: "child", mood: "content", world: shot.world, ...(extra[i] || {}) });
   }
   shot.name ||= `shot-${shot.species || "x"}-${shot.stage}-${shot.mood}`;
-  if (shot.lcd !== undefined || shot.booted) {
-    shot.storage = { ...(shot.booted ? { "hatch-booted": "1" } : {}), ...(shot.lcd !== undefined ? { "hatch-lcd": String(shot.lcd) } : {}), ...shot.storage };
+  if (shot.lcd !== undefined || shot.booted || shot.mono) {
+    shot.storage = { ...(shot.booted ? { "hatch-booted": "1" } : {}), ...(shot.lcd !== undefined ? { "hatch-lcd": String(shot.lcd) } : {}),
+      ...(shot.mono ? { "hatch-mono": "4" } : {}), ...shot.storage };
   }
   return shot;
 }
@@ -173,6 +199,7 @@ function parseArgs(argv) {
     else if (key === "only") opts.only = val();
     else if (key === "shape" || key === "color" || key === "bezel" || key === "finish") (opts.shot.shell ||= {})[key] = val();
     else if (key === "lcd") opts.shot.lcd = val();
+    else if (key === "mono") opts.shot.mono = val() !== "off";
     else if (key === "boot") opts.shot.booted = false;
     else if (key === "mine") opts.shot.mine = true;
     else if (key === "journal") Object.assign(opts.shot, { journal: true, view: "journal" });
@@ -239,8 +266,9 @@ async function runShots(browser, base, shots, outDir, workers) {
           const b = el.getBoundingClientRect();
           return { x: b.x + scrollX, y: b.y + scrollY, width: b.width, height: b.height };
         }, inCard);
-        await page.screenshot({ path: file, clip });
+        const png = await page.screenshot({ path: file, clip });
         shot.file = file;
+        if (shot.mono) shot.measure = await measureMono(page, clip, png);
         if (shot.costume) {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
@@ -253,6 +281,126 @@ async function runShots(browser, base, shots, outDir, workers) {
   };
   await Promise.all(Array.from({ length: Math.min(workers, shots.length) }, worker));
   return failures;
+}
+
+// --- The mono pass rule ----------------------------------------------------
+//
+// The four tones the card's #hatch-mono4 filter draws, darkest to lightest.
+const MONO_TONES = [[0x2f, 0x3a, 0x24], [0x6f, 0x7f, 0x4f], [0x9a, 0xaa, 0x72], [0xc6, 0xd4, 0xa0]];
+const MONO_MIN_APART = 0.5; // tone steps, pet pixel to the pixel behind it, on average (woodland day: ~0.9)
+const MONO_MAX_SHARE = 0.97; // one tone over this much of the screen = flat
+
+// The screen (inset past its rounded corners) in the shot just taken, measured
+// against three more captures: the pet hidden (what is behind it), and the pet as
+// a black and as a white silhouette (where they differ is the pet, including the
+// pixels that came out the same tone as the background). Returns tone shares, how
+// much of the screen is on the palette, and for the pet: `apart`, the mean tone
+// steps between each pet pixel and the pixel behind it (0 where it is lost), `lost`,
+// the share that is the same tone, and `delta`, the mean luma difference in tone
+// steps. The pet ones are null when no pet is on show.
+async function measureMono(page, clip, png) {
+  const petStyle = (css) => page.evaluate(async (css) => {
+    const pet = document.querySelector("hatch-pet-card").shadowRoot.querySelector(".slide:not(.away-slide) .screen .pet");
+    Object.assign(pet.style, css);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  }, css);
+  const box = await page.evaluate((c) => {
+    const root = document.querySelector("hatch-pet-card").shadowRoot;
+    const s = root.querySelector(".slide:not(.away-slide) .screen");
+    const pet = s.querySelector(".pet");
+    const b = s.getBoundingClientRect();
+    const p = pet.getBoundingClientRect();
+    const css = getComputedStyle(pet);
+    const shown = pet.getAttribute("src") && css.display !== "none" && css.visibility !== "hidden" && Number(css.opacity) > 0 &&
+      p.width > 0 && !s.classList.contains("show-status") && !s.querySelector(".game:not([hidden])") && !root.querySelector(".boot:not([hidden])");
+    const ix = b.width * 0.06;
+    const iy = b.height * 0.06;
+    return { x: Math.round(b.x + scrollX - c.x + ix), y: Math.round(b.y + scrollY - c.y + iy),
+      w: Math.round(b.width - 2 * ix), h: Math.round(b.height - 2 * iy), shown: !!shown };
+  }, clip);
+  let more = null;
+  if (box.shown) {
+    more = {};
+    await petStyle({ visibility: "hidden" });
+    more.bare = (await page.screenshot({ clip })).toString("base64");
+    await petStyle({ visibility: "", filter: "brightness(0)" });
+    more.black = (await page.screenshot({ clip })).toString("base64");
+    await petStyle({ filter: "brightness(0) invert(1)" });
+    more.white = (await page.screenshot({ clip })).toString("base64");
+    await petStyle({ filter: "" });
+  }
+  return page.evaluate(async ({ a, more, box, tones }) => {
+    const pixels = async (src) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${src}`;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = img.width;
+      c.height = img.height;
+      const g = c.getContext("2d");
+      g.drawImage(img, 0, 0);
+      return g.getImageData(box.x, box.y, box.w, box.h).data;
+    };
+    const luma = (d, i) => 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+    const tl = tones.map(([r, g, b]) => 0.299 * r + 0.587 * g + 0.114 * b);
+    const step = (tl[3] - tl[0]) / 3;
+    const nearest = (l) => tl.reduce((best, t, i) => (Math.abs(l - t) < Math.abs(l - tl[best]) ? i : best), 0);
+    const pa = await pixels(a);
+    const [pb, pk, pw] = more ? [await pixels(more.bare), await pixels(more.black), await pixels(more.white)] : [];
+    const share = [0, 0, 0, 0];
+    let onPalette = 0;
+    let petL = 0;
+    let backL = 0;
+    let petN = 0;
+    let apart = 0;
+    let lost = 0;
+    const n = pa.length / 4;
+    for (let i = 0; i < pa.length; i += 4) {
+      const l = luma(pa, i);
+      const k = nearest(l);
+      share[k]++;
+      if (tones[k].every((v, c) => Math.abs(pa[i + c] - v) <= 20)) onPalette++;
+      if (pk && Math.abs(luma(pk, i) - luma(pw, i)) > 2 * step) {
+        const lb = luma(pb, i);
+        const d = Math.abs(k - nearest(lb));
+        petL += l;
+        backL += lb;
+        apart += d;
+        if (!d) lost++;
+        petN++;
+      }
+    }
+    return {
+      share: share.map((v) => +(v / n).toFixed(3)), palette: +(onPalette / n).toFixed(3), petPixels: petN,
+      apart: petN ? +(apart / petN).toFixed(2) : null, lost: petN ? +(lost / petN).toFixed(2) : null,
+      delta: petN ? +(Math.abs(petL - backL) / petN / step).toFixed(2) : null,
+    };
+  }, { a: png.toString("base64"), more, box, tones: MONO_TONES });
+}
+
+// Fail = a flat screen, or a pet under MONO_MIN_APART tone steps from what is
+// behind it. Then the worst 10 by that, for the owner's look.
+function monoPass(shots) {
+  const measured = shots.filter((s) => s.measure);
+  if (!measured.length) return;
+  const fails = [];
+  for (const s of measured) {
+    const m = s.measure;
+    const why = [];
+    if (Math.max(...m.share) > MONO_MAX_SHARE) why.push(`flat (${Math.max(...m.share)})`);
+    if (m.apart !== null && m.apart < MONO_MIN_APART) why.push(`apart ${m.apart}`);
+    if (why.length) fails.push(`${s.name}: ${why.join(", ")}`);
+  }
+  const pets = measured.filter((s) => s.measure.apart !== null).sort((a, b) => a.measure.apart - b.measure.apart);
+  const fmt = (s) => `${s.name}: apart ${s.measure.apart}, lost ${s.measure.lost}, delta ${s.measure.delta}, tones ${s.measure.share.join("/")}`;
+  console.log(`mono pass rule: ${measured.length} measured, ${fails.length} fail (apart >= ${MONO_MIN_APART}, no tone over ${MONO_MAX_SHARE})`);
+  for (const f of fails.slice(0, 40)) console.log(`  FAIL ${f}`);
+  if (fails.length > 40) console.log(`  ... ${fails.length - 40} more in mono-pass.json`);
+  console.log("  worst 10 by apart:");
+  for (const s of pets.slice(0, 10)) console.log(`    ${fmt(s)}`);
+  const offPalette = measured.filter((s) => s.measure.palette < 0.95);
+  if (offPalette.length) console.log(`  ${offPalette.length} under 95% on the palette (the worst: ${offPalette.sort((a, b) => a.measure.palette - b.measure.palette)[0].name})`);
+  return { fails, worst: pets.slice(0, 10).map(fmt) };
 }
 
 // A contact sheet per group: the shots as captioned tiles, drawn by the browser.
@@ -294,6 +442,9 @@ async function main() {
     const failures = await runShots(browser, url, shots, opts.out, opts.workers);
     const done = shots.filter((s) => s.file).length;
     console.log(`${done} written in ${((Date.now() - started) / 1000).toFixed(1)}s`);
+    const mono = monoPass(shots);
+    if (mono) fs.writeFileSync(path.join(opts.out, "mono-pass.json"), JSON.stringify({ ...mono,
+      shots: shots.filter((s) => s.measure).map((s) => ({ name: s.name, ...s.measure })) }, null, 1));
     if (opts.sheet && opts.preset) {
       for (const f of await buildSheets(browser, shots, opts.out)) console.log(`sheet ${f}`);
     }

@@ -235,6 +235,36 @@ function lcdOn() {
   }
 }
 
+// Mono screen: the LCD in four green tones (the #hatch-mono4 filter); off unless
+// turned on for this browser.
+const MONO_KEY = "hatch-mono";
+const MONO_EVENT = "hatch-mono-changed";
+
+function monoOn() {
+  try {
+    return localStorage.getItem(MONO_KEY) === "4";
+  } catch (err) {
+    return false;
+  }
+}
+
+// The four tones, darkest to lightest, and how many of 20 even luma steps each
+// takes: breaks at .25, .5 and .65. Each tone keeps its own band, so the card's
+// own LCD colours stay put; .65, not .75, was tuned in the bench (bench.js monoPass).
+const MONO_TONES = [["#2f3a24", 5], ["#6f7f4f", 5], ["#9aaa72", 3], ["#c6d4a0", 7]];
+const monoTable = (at) => MONO_TONES.flatMap(([hex, n]) =>
+  Array(n).fill((parseInt(hex.slice(at, at + 2), 16) / 255).toFixed(3))).join(" ");
+// Luma, then the tables: sRGB, so they give the tones as they are.
+const MONO_FILTER = `<svg class="monodefs" width="0" height="0" aria-hidden="true" focusable="false">
+  <filter id="hatch-mono4" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values=".299 .587 .114 0 0  .299 .587 .114 0 0  .299 .587 .114 0 0  0 0 0 1 0"/>
+    <feComponentTransfer>
+      <feFuncR type="discrete" tableValues="${monoTable(1)}"/>
+      <feFuncG type="discrete" tableValues="${monoTable(3)}"/>
+      <feFuncB type="discrete" tableValues="${monoTable(5)}"/>
+    </feComponentTransfer>
+  </filter></svg>`;
+
 function soundsOn() {
   try {
     return localStorage.getItem(SOUND_KEY) === "on";
@@ -1930,7 +1960,7 @@ const STYLE = `
       var(--a) round(36%, var(--px)) round(95%, var(--px)) / var(--f) var(--f) no-repeat; }
   @keyframes twinkle { 0% { opacity: 1; } 40% { opacity: .25; } 55% { opacity: 1; } }
   .slide.away-slide .hw.flecks, ha-card.offscreen .hw.flecks { animation-play-state: paused; }
-  @media (prefers-contrast: more) { ha-card.lcd-on .lcd, ha-card.lcd-on .ghost { display: none; } }
+  @media (prefers-contrast: more) { ha-card.lcd-on .lcd, ha-card.lcd-on .ghost, ha-card.lcd-on .mono-grid { display: none; } }
   /* Idle life. */
   .pet { transition: translate .25s ease-out, rotate .2s ease-out; }
   .pet.look { rotate: y 180deg; }
@@ -1946,6 +1976,22 @@ const STYLE = `
   .irbeam .trail { opacity: 0; animation: ir-trail .01s steps(1, end) forwards; }
   .irbeam .arrive { opacity: 0; animation: ir-arrive .5s steps(4, end) forwards; }
   .irbeam.gone { opacity: 0; transition: opacity .3s steps(3, end); }
+  /* Mono screen: the LCD (the screen, and the beam that flies over the glass) in the
+     four tones; the plastic (shell, bezel, buttons, label, .request) keeps its colour.
+     The beam's box is 1 px, so each of its images takes the filter. The backlight's
+     blend, the grid and the ghost would flip or snap under the quantise: hidden here,
+     and .mono-grid draws the grid again over the result. */
+  .monodefs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+  ha-card.mono .screen, ha-card.mono .irbeam img { filter: url(#hatch-mono4); }
+  ha-card.mono .screen .glow, ha-card.mono .screen .lcd, ha-card.mono .screen .ghost { display: none; }
+  .mono-grid { position: absolute; z-index: 1; pointer-events: none; display: none;
+    left: var(--mg-x, 9px); top: var(--mg-y, 9px); width: var(--mg-w, 0); height: var(--mg-h, 0); border-radius: var(--mg-r, 12px);
+    background-image:
+      repeating-linear-gradient(0deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px)),
+      repeating-linear-gradient(90deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px));
+    background-position: var(--lcd-x, 0) var(--lcd-y, 0); }
+  ha-card.lcd-on.mono .mono-grid { display: block; }
+  .screen.show-status ~ .mono-grid { display: none; }
   @keyframes ir-fly { to { translate: var(--ir-d) 0; } }
   @keyframes ir-trail { to { opacity: 1; } }
   @keyframes ir-arrive { 0% { opacity: 1; scale: .6; } 100% { opacity: 0; scale: 1.3; } }
@@ -2026,7 +2072,7 @@ const STYLE = `
   .boot .go { animation: bootblink 1.2s steps(1) infinite; }
   @keyframes bootblink { 50% { opacity: 0; } }
   /* The pet's request waits while the status screen or a game is up (it covered them). */
-  .screen.show-status + .request, .screen:has(> .game:not([hidden])) + .request { display: none !important; }
+  .screen.show-status ~ .request, .screen:has(> .game:not([hidden])) ~ .request { display: none !important; }
   /* With a game up, the bubble leaves room for its close button. */
   .screen:has(> .game:not([hidden])) .bubble { max-width: 54%; }
   /* A narrow card: status rows fit four hearts. */
@@ -2316,6 +2362,11 @@ class HatchPetCard extends HTMLElement {
     // A shared screen turned on in another card on this page, or another tab.
     window.addEventListener(SHARED_EVENT, this._onSharedEvent);
     window.addEventListener("storage", this._onSharedStorage);
+    // Mono screen turned on or off in another card on this page, or another tab
+    // (or while the card was away).
+    window.addEventListener(MONO_EVENT, this._onMono);
+    window.addEventListener("storage", this._onMonoStorage);
+    this._card?.classList.toggle("mono", monoOn());
     // Shared screen turned on or off while the card was away (its listeners
     // were off): catch up now, before a queued personal line is said.
     if (this._slides?.length && sharedScreen() !== this._sharedSeen) {
@@ -2346,6 +2397,8 @@ class HatchPetCard extends HTMLElement {
     document.removeEventListener("visibilitychange", this._onHidden);
     window.removeEventListener(SHARED_EVENT, this._onSharedEvent);
     window.removeEventListener("storage", this._onSharedStorage);
+    window.removeEventListener(MONO_EVENT, this._onMono);
+    window.removeEventListener("storage", this._onMonoStorage);
     this._listenReady(null);
     // A game (Catch's animation loop above all) stops with the card, and so
     // does a line typing out, and the private channel.
@@ -2595,7 +2648,7 @@ class HatchPetCard extends HTMLElement {
     this._sharedSeen = sharedScreen(); // what the card last saw (connectedCallback)
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `
-      <style>${STYLE}${SCENE_STYLE}</style>
+      <style>${STYLE}${SCENE_STYLE}</style>${MONO_FILTER}
       <ha-card>
         <div class="head">
           <div><div class="title-row"><img class="emblem" alt=""><div class="title"></div></div>
@@ -2615,6 +2668,7 @@ class HatchPetCard extends HTMLElement {
       </ha-card>`;
     this._card = root.querySelector("ha-card");
     this._card.classList.toggle("lcd-on", lcdOn());
+    this._card.classList.toggle("mono", monoOn());
     // The shell hardware's art: ui/shell_<part>.png, drawn by art/shell-parts/make_parts.py (see REQUEST.md there).
     const ui = (name) => `url("${BASE}/ui/${name}.png?v=${VERSION}")`;
     for (const k of ["screw", "slot", "stripes", "fleck", "glare", "logo", "plate", "battery", "light_on", "light_off"])
@@ -2727,7 +2781,7 @@ class HatchPetCard extends HTMLElement {
             <div class="status"></div>
             <i class="batt" data-level="1" aria-hidden="true" hidden><b></b><b></b><b></b></i>
             <button class="boot" hidden><span class="logo"><span class="ink">HATCH</span><span class="fill" aria-hidden="true">HATCH</span></span><span class="go">▶ tap to start</span></button>
-          </div><button class="request"></button></div>
+          </div><div class="mono-grid"></div><button class="request"></button></div>
           <div class="buttons"></div>
           <img class="trim-corner left" alt=""><img class="trim-corner right" alt="">
         </div>
@@ -2737,7 +2791,7 @@ class HatchPetCard extends HTMLElement {
     const s = {
       el: slide, device: q(".device"), label: q(".label"), screen: q(".screen"), bg: q(".bg"),
       awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), pet: q(".pet"), prop: q(".prop"),
-      perch: q(".perch"), ghost: q(".ghost"),
+      perch: q(".perch"), ghost: q(".ghost"), monoGrid: q(".mono-grid"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
@@ -3207,6 +3261,12 @@ class HatchPetCard extends HTMLElement {
     else this._goPersonal();
   };
 
+  _onMono = () => this._card?.classList.toggle("mono", monoOn());
+
+  _onMonoStorage = (e) => {
+    if (e.key === MONO_KEY || e.key === null) this._onMono(); // null: storage cleared
+  };
+
   // Take an open question off the screen (a game, another pet on this slide).
   _clearAsk(s) {
     s.screen?.querySelector(".askday")?.remove();
@@ -3268,6 +3328,14 @@ class HatchPetCard extends HTMLElement {
     s.screen.style.setProperty("--lcd-line", `${line}px`);
     s.screen.style.setProperty("--lcd-x", `${left % pitch}px`);
     s.screen.style.setProperty("--lcd-y", `${top % pitch}px`);
+    // The mono screen's grid sits over the screen, not in it: the same lines on its box.
+    const g = s.monoGrid.style;
+    for (const k of ["--lcd-pitch", "--lcd-line", "--lcd-x", "--lcd-y"]) g.setProperty(k, s.screen.style.getPropertyValue(k));
+    g.setProperty("--mg-x", `${s.screen.offsetLeft}px`);
+    g.setProperty("--mg-y", `${s.screen.offsetTop}px`);
+    g.setProperty("--mg-w", `${s.screen.offsetWidth}px`);
+    g.setProperty("--mg-h", `${s.screen.offsetHeight}px`);
+    g.setProperty("--mg-r", getComputedStyle(s.screen).borderRadius);
     // The shell's grid: the same world grid, but always whole device pixels.
     const px = Math.max(1, Math.round(((w * 0.465) / WORLD_GRID) * dpr)) / dpr;
     if (px !== s.px) {
@@ -5053,6 +5121,7 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       ${s.species?.voice ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`) : ""}
       ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
+      ${row(null, "mono screen", `<span><button class="bell mono" aria-label="mono screen: ${monoOn() ? "on" : "off"}, change" aria-pressed="${monoOn()}">${monoOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
@@ -5135,6 +5204,20 @@ class HatchPetCard extends HTMLElement {
         return; // no storage: the effects stay as they are
       }
       this._card.classList.toggle("lcd-on", on);
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+    });
+    s.status.querySelector(".bell.mono").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const on = !monoOn();
+      try {
+        if (on) localStorage.setItem(MONO_KEY, "4");
+        else localStorage.removeItem(MONO_KEY);
+      } catch (err) {
+        return; // no storage: the screen stays as it is
+      }
+      this._card.classList.toggle("mono", on);
+      window.dispatchEvent(new CustomEvent(MONO_EVENT)); // any other card on this page
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
     s.status.querySelector(".bell.bdayphone")?.addEventListener("click", (e) => {
