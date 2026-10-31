@@ -7675,22 +7675,45 @@ class HatchPetCard extends HTMLElement {
   }
 
   // A visitor comes by (a friendly ghost floats, a turkey walks); the pet
-  // startles, then greets it.
+  // startles, then greets it. Both lines are flavour, said now or not at all (a
+  // kept line, a game or a question wins), and each beat checks _visitorLive:
+  // else the visit ends at once, its picture gone, like a world visitor's.
   _seasonVisitor(s, season) {
     const { art, cls, ms, startle, jump, greet } = season.visitor;
-    this._seasonFly(s, season, art, cls, ms, { walk: !!season.visitor.walk });
+    this._seasonVisitEnd(s);
+    const el = this._seasonFly(s, season, art, cls, ms, { walk: !!season.visitor.walk });
     s.flairUntil = Date.now() + ms; // nothing else meanwhile
     s.visitUntil = s.flairUntil; // a pat wiggles, no line
     s.nextVisitCheck = Math.max(s.nextVisitCheck || 0, s.flairUntil + VISIT_AFTER_MS); // a world one later
-    setTimeout(() => {
-      this._write(s, startle, 1800);
+    const V = s.seasonVisit = { el, timers: [], until: s.flairUntil };
+    const at = (t, fn) => V.timers.push(setTimeout(() => {
+      if (s.seasonVisit !== V) return;
+      if (this._visitorLive(s)) fn();
+      else this._seasonVisitEnd(s);
+    }, t));
+    at(1400, () => {
+      if (!this._mayInterrupt(s, FLAVOUR)) return;
+      this._line(s, FLAVOUR, startle, 1800, { write: true });
       this._animate(s, s.pet, jump, jump === "perk" ? 320 : 800);
       if (season.chirp) this._chirp(s, season.chirp);
-    }, 1400);
-    setTimeout(() => {
-      this._speak(s, pick(unnamed(greet)), 3000);
+    });
+    at(3400, () => {
+      if (!this._mayInterrupt(s, FLAVOUR)) return;
+      this._line(s, FLAVOUR, pick(unnamed(greet)), 3000);
       this._animate(s, s.pet, "perk", 320);
-    }, 3400);
+    });
+    at(ms, () => this._seasonVisitEnd(s, { passed: true }));
+  }
+
+  // The seasonal visit's timers stop; cut short, its picture goes too.
+  _seasonVisitEnd(s, { passed = false } = {}) {
+    const V = s.seasonVisit;
+    if (!V) return;
+    s.seasonVisit = null;
+    V.timers.forEach(clearTimeout);
+    if (!passed) V.el.remove();
+    if (s.flairUntil === V.until) s.flairUntil = 0;
+    if (s.visitUntil === V.until) s.visitUntil = 0;
   }
 
   // --- World visitors (docs/plan-2026-10-31-visitors.md) ---------------------
@@ -7732,6 +7755,7 @@ class HatchPetCard extends HTMLElement {
   _visitorTick(s) {
     const now = Date.now();
     if (this._visitShown?.s !== s) this._visitShown = { s, at: now };
+    if (s.seasonVisit && !this._visitorLive(s)) this._seasonVisitEnd(s);
     if (s.visitor) {
       if (!this._visitorLive(s)) this._visitorEnd(s);
       return;

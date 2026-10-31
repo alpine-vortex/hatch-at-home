@@ -6619,6 +6619,36 @@ async function main() {
   check("winter: a snow hare walks by; the pet says oh!, then hi", hare.walker && hare.startle === "oh!" &&
     hare.greet === "hi, little hare!", JSON.stringify(hare));
   check("winter: a world visitor waits VISIT_AFTER_MS after the hare", hare.gap >= 120000, String(hare.gap));
+  // A kept line arriving while the hare passes outranks its oh! and hi (flavour):
+  // both are skipped, the kept line holds the bubble throughout. A game mid-walk
+  // ends the visit at its next beat: the hare gone, nothing said.
+  const hareKept = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const season = el.constructor.seasons.find((x) => x.key === "winter");
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    await wait(4500); // the last hare's walk is over
+    Object.assign(s, { sayUntil: 0, flairUntil: 0, visitUntil: 0, nextVisitCheck: 0, queue: [] });
+    el._seasonVisitor(s, season);
+    await wait(500);
+    el._line(s, 3, "kept line through the hare", 6000);
+    await wait(1400); // past oh! (1.4 s)
+    const atStartle = s.bubble.textContent;
+    await wait(2100); // past hi (3.4 s)
+    const atGreet = s.bubble.textContent;
+    await wait(2500); // the kept line is over
+    Object.assign(s, { sayUntil: 0, flairUntil: 0, visitUntil: 0, nextVisitCheck: 0, queue: [] });
+    s.bubble.textContent = "";
+    el._seasonVisitor(s, season);
+    s.game = { cur: null };
+    await wait(1700);
+    const inGame = { text: s.bubble.textContent, hare: !!s.seasonBox.querySelector(".snowhare"), on: !!s.seasonVisit };
+    s.game = null;
+    return { atStartle, atGreet, inGame };
+  });
+  check("winter: a kept line during the hare's walk survives",
+    [hareKept.atStartle, hareKept.atGreet].every((x) => x.includes("kept line through the hare")), JSON.stringify(hareKept));
+  check("winter: a game mid-walk ends the hare's visit, no oh!",
+    !hareKept.inGame.text.includes("oh!") && !hareKept.inGame.hare && !hareKept.inGame.on, JSON.stringify(hareKept.inGame));
   check("snacks are cookies in winter", /season_winter_cookie/.test(hare.prop), hare.prop.split("/").pop());
   await shot("05-winter-hare");
   const treat = await card.evaluate(async (el) => {
