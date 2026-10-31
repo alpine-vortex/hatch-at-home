@@ -6982,7 +6982,7 @@ async function main() {
       }
       for (const s of el._slides) {
         Object.assign(s, { asleep: false, lightsOut: false, calling: false, game: null, moodState: "content",
-          lookedFirst: true, queue: [], sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
+          lookedFirst: true, queue: [], scene: null, sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
         s.screen.classList.remove("show-status");
       }
       el._booting = false;
@@ -7111,6 +7111,11 @@ async function main() {
       const [a, b] = [el._slides[0], el._slides[1]];
       const out = {};
       const clear = () => { for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k); };
+      // prep() ran a tick ago: an idle flair, line or move in that gap would make a pet "not free", so reset in here.
+      for (const s of el._slides) {
+        Object.assign(s, { scene: null, sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
+        s.screen.classList.remove("show-status");
+      }
       for (const [who, s] of [["host", a], ["guest", b]]) {
         for (const [what, patch] of [["asleep", { asleep: true }], ["calling", { calling: true }], ["game", { game: { kind: "catch" } }], ["queue", { queue: [{ text: "x" }] }]]) {
           const keep = Object.fromEntries(Object.keys(patch).map((k) => [k, s[k]]));
