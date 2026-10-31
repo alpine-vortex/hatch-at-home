@@ -3226,6 +3226,11 @@ class HatchPetCard extends HTMLElement {
     }).observe(s.bubble, { childList: true, characterData: true, subtree: true });
     // A pat (PR 3b): a tap on the pet itself, card only. A tap beside it still opens the status.
     s.pat.addEventListener("click", (e) => this._pat(s, e));
+    // The CSS hides it at once for a game, a question or the status; if it had focus,
+    // that goes to the Status button rather than to the page.
+    s.pat.addEventListener("focusout", (e) => {
+      if (!e.relatedTarget && !this._patOn(s)) this._card?.querySelector(".statusbtn")?.focus();
+    });
     // Taps on the game mustn't reach the screen behind (which opens the status).
     s.gameBox.addEventListener("click", (e) => e.stopPropagation());
     s.gameBox.addEventListener("keydown", (e) => {
@@ -3337,7 +3342,7 @@ class HatchPetCard extends HTMLElement {
     const timers = [];
     const at = (ms, fn) => timers.push(setTimeout(fn, ms));
     s.power = { timers };
-    s.pat.hidden = true; // no pat over the gag
+    this._patSync(s, true); // no pat over the gag
     const level = (n, blink) => {
       s.batt.dataset.level = String(n);
       s.batt.classList.toggle("blink", blink && !isCalm);
@@ -3373,7 +3378,7 @@ class HatchPetCard extends HTMLElement {
     const power = s.power;
     if (!power) return;
     s.power = null;
-    s.pat.hidden = !this._patOn(s);
+    this._patSync(s);
     power.timers.forEach(clearTimeout);
     s.screen.classList.remove("blank");
     s.batt.hidden = true;
@@ -3944,7 +3949,7 @@ class HatchPetCard extends HTMLElement {
       const current = i === this._index;
       slide.el.classList.toggle("away-slide", !current);
       slide.device.inert = !current;
-      slide.pat.hidden = !this._patOn(slide);
+      this._patSync(slide);
       slide.el.setAttribute("aria-hidden", current ? "false" : "true");
     });
 
@@ -4295,7 +4300,7 @@ class HatchPetCard extends HTMLElement {
     }
     lights.querySelector(".lbl").textContent = sleeping ? "wake" : "sleep";
     lights.title = sleeping ? "Lights on: wake the pet" : "Lights out: put the pet to bed";
-    s.pat.hidden = !this._patOn(s);
+    this._patSync(s);
 
     if (s.screen.classList.contains("show-status")) this._renderStatus(s, log);
   }
@@ -4334,7 +4339,7 @@ class HatchPetCard extends HTMLElement {
     s.settings = false;
     this._closePicker(s);
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
-    s.pat.hidden = !this._patOn(s); // back at once when the status closes, not at the next tick
+    this._patSync(s); // back at once when the status closes, not at the next tick
     if (s === this._slides[this._index]) {
       this._card.querySelector(".statusbtn").setAttribute("aria-pressed", open ? "true" : "false");
     }
@@ -4451,7 +4456,7 @@ class HatchPetCard extends HTMLElement {
         s.propUntil = 0;
       }
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
-      s.pat.hidden = !this._patOn(s);
+      this._patSync(s);
       if (s === this._slides[this._index]) {
         if (!this._booting) this._greet(s); // the boot screen waits: only the speaking does
         this._powerTick(s);
@@ -4830,6 +4835,13 @@ class HatchPetCard extends HTMLElement {
     return !!s.species && s === this._slides[this._index] && !this._booting && !s.scene && !s.linking &&
       !s.power && !s.game && !s.away && !s.egg && !this._questionOn(s) &&
       !s.screen.classList.contains("show-status");
+  }
+
+  // The pat's box shown or hidden (each tick, and at once where something covers it).
+  // Hidden with focus on it: the focus moves to the Status button, not the page.
+  _patSync(s, hide = !this._patOn(s)) {
+    if (hide && !s.pat.hidden && this.shadowRoot?.activeElement === s.pat) this._card?.querySelector(".statusbtn")?.focus();
+    s.pat.hidden = hide;
   }
 
   // May a pat say its line? Not over a kept line or one waiting, a game, a question, a
@@ -6968,7 +6980,7 @@ class HatchPetCard extends HTMLElement {
       sc.murk = s.murk.style.display !== "none" && Number(s.murk.style.opacity) > 0;
     }
     s.scene = sc;
-    s.pat.hidden = !this._patOn(s);
+    this._patSync(s);
     for (const el of [s.pet, s.perch]) el.style.transition = "none";
     // A tap on the screen ends it (and doesn't open the status).
     sc.stop = (e) => {
@@ -7096,7 +7108,7 @@ class HatchPetCard extends HTMLElement {
     if (!sc) return;
     cancelAnimationFrame(sc.raf);
     s.scene = null;
-    s.pat.hidden = !this._patOn(s);
+    this._patSync(s);
     s.screen.removeEventListener("click", sc.stop, true);
     sc.els.forEach((el) => el.remove());
     for (const el of [s.pet, s.perch]) el.style.translate = el.style.rotate = el.style.transition = "";

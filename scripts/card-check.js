@@ -5776,6 +5776,43 @@ async function main() {
   const placed = await patState();
   check("the pat box sits on the pet's box, shown, named for the pet",
     placed.shown && placed.onPet && /^pat \S/.test(placed.label), JSON.stringify(placed));
+  // Focus on the pat box when a game (the tick hides it) or a question (the CSS hides it
+  // at once) covers it: the focus goes to the Status button, not the page.
+  const patFocus = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const active = () => el.shadowRoot.activeElement;
+    const name = () => (active() === s.pat ? "pat" : active()?.classList?.contains("statusbtn") ? "statusbtn" : active()?.tagName || "body");
+    const out = {};
+    s.pat.focus();
+    out.before = name();
+    const keep = s.game;
+    const boxHidden = s.gameBox.hidden;
+    s.game = { cur: null };
+    s.gameBox.hidden = false; // the CSS hides the pat at once
+    await new Promise((r) => setTimeout(r, 200));
+    out.gameNoTick = name();
+    el._tick();
+    out.game = name();
+    s.game = keep;
+    s.gameBox.hidden = boxHidden;
+    el._tick();
+    s.pat.focus();
+    out.again = name();
+    const ask = document.createElement("div");
+    ask.className = "askday";
+    s.screen.append(ask);
+    await new Promise((r) => setTimeout(r, 200));
+    out.questionNoTick = name();
+    el._tick();
+    out.question = name();
+    ask.remove();
+    el._tick();
+    return out;
+  });
+  check("pat: hidden with focus on it, the focus moves to Status",
+    patFocus.before === "pat" && patFocus.again === "pat" && patFocus.game === "statusbtn" && patFocus.question === "statusbtn",
+    JSON.stringify(patFocus));
+  await patReset();
   // Service calls and the pet's own websocket messages, on the connection itself.
   await card.evaluate((el) => {
     el.__calls = [];
