@@ -33,6 +33,12 @@ const allSpecies = () => fs.readdirSync(path.join(FRONTEND, "sprites"))
   .filter((d) => fs.existsSync(path.join(FRONTEND, "sprites", d, "species.json")));
 const worldOf = (species) => Object.keys(WORLDS).find((w) => WORLDS[w].roster.includes(species)) || "woodland";
 
+// The card's world visitors, read from its source (the card isn't a module).
+const VISITORS = (() => {
+  const src = fs.readFileSync(path.join(FRONTEND, "hatch-pet-card.js"), "utf8");
+  return require("vm").runInNewContext(`(${src.match(/\nconst VISITORS = (\{[\s\S]*?\n\});/)[1]})`);
+})();
+
 // --- Presets ---------------------------------------------------------------
 
 const PRESETS = {
@@ -92,6 +98,29 @@ const PRESETS = {
         out.push({ name: `ui/${world}-${view}`, group: "ui", label: `${world} ${view}`, world, view: view === "bubble" ? "card" : view, ...extra });
       }
     }
+    return out;
+  },
+  // World visitors at 330: every one at its greet (its own hours: night ones on a night
+  // screen), then the beats of one walker and one flyer, a calm visit, a baby and a child.
+  visitors() {
+    const out = [];
+    const base = { width: 330, group: "visitors" };
+    for (const [world, list] of Object.entries(VISITORS)) {
+      for (const v of list) {
+        out.push({ ...base, name: `visitors/${world}-${v.id}`, label: `${world} ${v.id}`, world,
+          scene: v.hours === "night" ? "night" : "day", visitor: { id: v.id, beat: "greet" } });
+      }
+    }
+    const extra = (name, label, shot) => out.push({ ...base, group: "visitors-beats", name: `visitors/${name}`, label, ...shot });
+    for (const beat of ["arrive", "greet", "leave"]) {
+      extra(`beat-woodland-snail-${beat}`, `snail ${beat}`, { world: "woodland", visitor: { id: "snail", beat, frame: 2 } });
+      extra(`beat-tidepool-gull-${beat}`, `gull ${beat} (right)`, { world: "tidepool", visitor: { id: "gull", beat, side: "right" } });
+    }
+    extra("night-hearth-mouse", "hearth mouse, night", { world: "hearth", scene: "night", visitor: { id: "mouse" } });
+    extra("calm-pond-heron", "pond heron, calm", { world: "pond", motion: "reduce", visitor: { id: "heron" } });
+    extra("baby-terrarium-ladybird", "baby, ladybird", { world: "terrarium", stage: "baby", visitor: { id: "ladybird" },
+      storage: { "hatch-baby-talk-bench-user": "on" } }); // baby talk is the viewer's own switch
+    extra("child-nightsky-raccoon", "child, raccoon (line only)", { world: "nightsky", stage: "child", scene: "night", visitor: { id: "raccoon" } });
     return out;
   },
   // The settings sheet (the status screen's gear) with the viewer's own rows, at

@@ -105,6 +105,35 @@
     }
   }
 
+  // A world visitor (VISITORS) through the card's own _visitorStart and _visitorGreet,
+  // its timers stopped and its moves paused, so a beat is the same every run:
+  // {id, beat: "arrive"|"greet"|"leave", frame: 1|2, side: "left"|"right"}. The id is
+  // looked up in the pet's world (default: its first visitor). Under motion "reduce"
+  // the card shows the still visit (one frame, at its edge) on its own.
+  async function visitorShot(card, s, vis, petAt) {
+    const list = VISITORS[s.worldKey] || [];
+    const v = list.find((x) => x.id === vis.id) || list[0];
+    if (!v) throw new Error(`no visitor ${vis.id} in ${s.worldKey}`);
+    const V = card._visitorStart(s, v, { ltr: vis.side !== "right" });
+    V.timers.forEach(clearTimeout);
+    const beat = vis.beat || "greet";
+    if (beat === "leave") V.el.classList.replace("in", "out");
+    if (beat === "greet") card._visitorGreet(s, v);
+    await settled(card);
+    const inMs = parseFloat(V.el.style.getPropertyValue("--in-ms")) || 1400;
+    for (const a of V.el.getAnimations()) {
+      a.pause();
+      a.currentTime = beat === "greet" ? (v.cross ? V.greetAt : inMs) : inMs / 2;
+    }
+    for (const img of V.el.querySelectorAll("img")) {
+      for (const a of img.getAnimations()) {
+        a.pause();
+        a.currentTime = vis.frame === 2 ? 250 : 0; // the flap: .5s, frame b from 250 ms
+      }
+    }
+    if (petAt === undefined) for (const a of s.pet.getAnimations()) { a.pause(); a.currentTime = 0; }
+  }
+
   // The infrared link greeting, caught as the visit screen opens (reduced motion:
   // no beam, so it opens at once). `link.waves` is put on both species as a fake
   // species.json "waves" key; leave it out for a species without any.
@@ -270,6 +299,8 @@
     for (const c of shot.classes || []) cur.screen.classList.add(c);
     // `petClasses`: classes on the pet itself (a reaction such as `droop`); `petAt` pauses
     // its animation that many ms in, so a mid-motion frame is the same every run.
+    // `visitor`: one world visit pinned (see visitorShot).
+    if (shot.visitor) await visitorShot(card, cur, shot.visitor, shot.petAt);
     for (const c of shot.petClasses || []) cur.pet.classList.add(c);
     if (shot.petAt !== undefined) {
       for (const a of cur.pet.getAnimations()) {

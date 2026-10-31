@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Lint and run the tests.
+# Lint and run the tests (Python, then the card's node unit tests).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 .venv/bin/ruff check .
 .venv/bin/ruff format --check .
 .venv/bin/pytest "$@"
+node --test tests/js/*.test.js # the card's pure helpers (visitorDay)
