@@ -1080,6 +1080,43 @@ later, separate batch (**L**).
 - **Done =** an adult reacts visibly and differently to feed, praise, refusal and
   tucking in, with no new files.
 
+**3c plan review fold (s2529, 2026-10-30; wins over the 3c text above).** Scout
+`hatch-at-home-s2529` against `52e815e`: FIX FIRST, 14 findings (3 player-impact, 8 plan
+defects, 3 nits), plan edits only; report archived with the worker. CARD names win over
+numbers. First-mate decisions on its questions (owner delegated, 2026-10-30): **drop the
+music/TV and happy-arrival rows** (no event; the `dance` stand-in and the greet already
+cover them), **one reaction length, 2500 ms, at every stage** (the child's), **a lost game
+gives no reaction.**
+
+- Frames: 30 ready species x 3 stages x 4 moods = 360 files, **0 missing**. Beetle has no
+  `species.json`, so it is not on the roster: skipped.
+- **Personality P3 has not merged:** "praised" is `greethop` for every type. Revisit after P3.
+- Build on what exists: a `_reactFrames(s, kind)` helper sets `s.poseFrames` from
+  `${s.drawn}_${mood}_n` with `s.poseUntil = now + REACT_MS` (2500) for non-child stages,
+  called from `_react` and `_pounce`'s non-child branch. No new hook in `_tick`. Child
+  behaviour unchanged.
+- Hooks (the four reactions): **fed** = log `action` `feed`/`snack`, `result` `ok`;
+  **praised** = `praise`, `ok`; **won** = `game` with `result: "won"`, or a catch
+  (`_pounce`); **tucked in** = `blanket` answered (`_answer_request`, `REQUEST_ACTIONS`);
+  **refused** = the `REFUSALS` fallthrough in `_react`, only for `full`, `not_needed`,
+  `already_clean`, `not_sick`, `not_sleepy`, `too_tired` (not `asleep`, `egg`, `away`,
+  `no_game`, `unfair`, `spoiled`). `lost` takes no reaction.
+- Moves: fed = a bounded class like `greethop` via `_animate` (**never `hop`**, which is
+  infinite and stripped by `_redraw`); praised/won = `greethop`; refused = `look` for the
+  reaction via `_animate` plus `_moving(s, ...)`; tucked in = a `transform` keyframe settle
+  (not `scale`, which carries the species scale). When the reaction frame equals the
+  current mood frame, the move alone carries it.
+- Never while `s.scene`, `s.linking`, `s.game`, `s.power`, `s.asleep`, away or egg. A
+  reaction does not clear `sayUntil`; `_patMayTalk` is unchanged, so a pat during a
+  reaction wiggles. Under reduced motion only the `_1` frame changes (3a's rule).
+- Tests: card-check stubs `sensor.life_stage` to teen and adult and injects a care-log entry;
+  `src` is `<stage>_excited_*`, then back to the mood frame after `poseUntil`; whitelisted
+  refusals only; an asleep refusal changes nothing; under reduced motion the `src` changes
+  and no animation class sticks; a load loop over every species' 4 moods x 3 stages
+  (`naturalWidth > 0`). Bench shots per stage x reaction frame.
+- **Done =** a teen and an adult react visibly and differently to feed, praise/win, refusal
+  and tucking in, with no new files.
+
 ### Wave 4: progression and polish
 
 **Release scope (owner, 2026-10-30).** This release keeps only **PR 4e** (the counts and
