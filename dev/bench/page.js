@@ -47,6 +47,9 @@
       const stage = pet.stage || "adult";
       const attrs = { world, roster: rosterOf(worlds[world]), species: pet.species, age_days: pet.age_days ?? 12 };
       if (stage === "egg") attrs.hatches_at = iso(pet.hatch_minutes ?? 600);
+      if (pet.personality) attrs.personality = pet.personality; // a teen or adult's type (P2a/P2b)
+      if (pet.hatched_on) attrs.hatched_on = pet.hatched_on;
+      if (pet.upbringing) attrs.upbringing = pet.upbringing;
       if (shot.journal && i === 0) {
         // The journal's data: every creature of the world raised, the two pets before
         // this one, a trait or two and a memory. `journal: {..}` overrides any of it.
@@ -69,7 +72,7 @@
       // The mood's own need shows as a flag (the button it wants lights up).
       const flags = [...new Set([...(["hungry", "bored", "dirty", "sick", "sleepy"].includes(mood) ? [mood] : []), ...(pet.flags || [])])];
       if (shot.scene === "rain" && !flags.includes("rainy")) flags.push("rainy");
-      put("sensor", "mood", mood, { flags });
+      put("sensor", "mood", mood, { flags, ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) });
       put("sensor", "last_care", iso(-45), { log: pet.log || [] });
       put("sensor", "energy", String(pet.energy ?? 80));
       put("sensor", "poop", String(pet.poop ?? (mood === "dirty" ? 2 : 0)));
@@ -240,6 +243,17 @@
     // `acts`: a fake species.json "acts" put on every pet's species (`{eat: [stages], cheer: [...]}`).
     if (shot.acts) for (const s of slides) s.species = { ...s.species, acts: shot.acts };
     if (shot.say !== undefined) card._write(cur, shot.say, 1e9);
+    // `idle`: the pet's idle mumble through the card's own _idle, the first move (a mumble)
+    // and the type's side of the coin forced (draws: next-idle delay, move, coin).
+    if (shot.idle) {
+      const real = Math.random;
+      let n = 0;
+      Math.random = () => (n++ < 2 ? 0 : 0.1);
+      Object.assign(cur, { moodState: shot.idle.mood || "content", nextIdle: 1, sayUntil: 0, poseUntil: 0, movingUntil: 0 });
+      card._idle(cur);
+      Math.random = real;
+      cur.sayUntil = Date.now() + 1e9;
+    }
     const root = card.shadowRoot;
     if (shot.link) await linkGreeting(card, shot.link);
     if (shot.power) powerGag(card, cur, shot.power);

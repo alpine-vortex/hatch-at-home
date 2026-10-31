@@ -11,8 +11,11 @@ end ("The audit of draft 1") wins where it differs from the sections above.
 **Status: P1 (the type) is merged (PR #36) and pre-released as 0.35.0b1.
 P2a (its voice: hellos, the reveal, the five moments) is built as 0.35.0b2**
 (crew branch `crew/hatch-at-home-s2423-personality-p2a-each-type-s-he`,
-2026-10-28; card only; not yet audited, PR'd or released). P2b onward are not
-built. The owner approved the lines' tables on 2026-10-28; P2a ships its tables
+2026-10-28; card only; not yet audited, PR'd or released). **P2b (idle and mood
+lines), the upbringing lines and P3 (idle manner, with 3c's praised move) are built**
+(crew branch `crew/hatch-at-home-s2550-personality-p2b-upbringing-lin`, 2026-10-31;
+card only, three commits, partial card-check `types,react,pat` green; not yet
+gated, PR'd or released). P4 is not built. The owner approved the lines' tables on 2026-10-28; P2a ships its tables
 verbatim. **Every line in this file is a proposal for the owner, not approved
 copy.** All lines are in the tables under "The lines"; none appears anywhere else.
 The phases are separate PRs, each with its own audit, as the owner works.
