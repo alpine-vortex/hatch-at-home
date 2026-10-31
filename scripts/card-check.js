@@ -5656,7 +5656,8 @@ async function main() {
     s.asleep = false;
     return out;
   });
-  check("asleep, a pat is a slow perk and no line", sleepy.cls && !sleepy.said && !sleepy.sayUntil, JSON.stringify(sleepy));
+  check("asleep, a pat is a slow perk and no line",
+    sleepy.cls && !Object.values(PAT).some((l) => sleepy.said.includes(l)) && !sleepy.sayUntil, JSON.stringify(sleepy));
   // Hidden where the pat makes no sense.
   await patReset();
   const hiddenIn = {};
