@@ -243,6 +243,16 @@
       for (let n = 0; !root.querySelector(".jgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
     }
     if (shot.view === "games") card._startGame(cur, cur.buttons.play); // the button itself can be disabled
+    // `catch`: a Catch round (needs config.experimental_catch) held at its `far` or `near` spot.
+    // Under motion "reduce" those are the two steps; the round clock is moved through c.start.
+    if (shot.catch) {
+      card._startGame(cur, cur.buttons.play);
+      cur.gameBox.querySelector('.gpick [data-game="catch"]').click();
+      let c;
+      for (let n = 0; n < 120 && !(c = cur.game?.cur); n++) await new Promise((r) => requestAnimationFrame(r));
+      const sec = shot.catch === "near" ? c.travel - c.window + 0.2 : 0.1;
+      await new Promise((r) => requestAnimationFrame((ts) => { c.start = ts - sec * 1000; r(); }));
+    }
     // `classes`: screen states the fake hass cannot pin (`lit`, `faded`...), put on last.
     for (const c of shot.classes || []) cur.screen.classList.add(c);
     // `petClasses`: classes on the pet itself (a reaction such as `droop`); `petAt` pauses

@@ -491,6 +491,31 @@ babies and children use the normal pat lines (no `BABY` keys yet); calm Catch ha
 - Tests: bench for the 330 px calm-Catch shots (`motion` field, `_startGame`, frozen
   `performance.now`); card-check for the tap judging and the `src` checks.
 
+*3a shipped (s2541, 2026-10-31) and what 3b/3c rely on:*
+- `calm()` is a module-level function (`hatch-pet-card.js`, above `babbleOn`), read live on each
+  call: `if (calm()) ...`. Locals that held the old flag are named `isCalm`, so a new site
+  must not declare `const calm`. It is the only `prefers-reduced-motion` string besides the CSS
+  block; card-check guards that (section `play`).
+- `_frames(s)` returns **one** frame under `calm()` (the mood's, a pose's, a link wave's), so
+  any 3b/3c code that shows `poseFrames[n]` for n > 0 shows frame 1 anyway; do not branch on it.
+  `_redraw` sets `s.frame = 0` when the frame list changed (`s.framesKey`).
+  **For 3c:** a reaction's pose frame still swaps in under calm (that swap is the "state
+  changed" case), as its `_1`, and swaps back when `poseUntil` ends; no extra work. Its tests'
+  "under reduced motion the `src` changes" holds as written.
+  **For 3b:** "only the line and the haptic" = `if (!calm()) ` around any JS-started wiggle
+  (`_animate`, `movingUntil`); the CSS `perk` is already killed by the global rule, so `_tapped`
+  needs no guard. `_idle` already limits itself to a mumble and poses under calm (no wander).
+- Calm Catch as built: the two steps are `left` 0 % / 84 % (far) and 28 % / 56 % (at the pet);
+  `c.step` holds 0 or 1; the round resolves at `travel` as before. Judging: `_catchTap` allows
+  `travel - window - 0.05 s` under `c.calm` (the step shows 50 ms early, so the tap on what is
+  visible is never "too soon"). Decoy bees keep a static `scaleX(-1)` facing from the left (no
+  motion; flagged to the owner in the report, drop it if "no transform" is meant literally).
+  **For 4f:** per-pet scoring changes only the finish call; the calm branch lives in
+  `_catchRound`/`_catchTap` and `c.calm` is per round.
+- Bench: `catch: "far" | "near"` (with `config: {experimental_catch: true}`, `motion: "reduce"`)
+  shows each step; the first mate's renders are in the s2541 worker dir.
+- Not changed, checked: beam, typewriter, boot, cleaning fade, idle moves, CSS perk/hop.
+
 *3b acceptance:*
 - Copy: the five C10 adult lines only; **`bored` and any mood outside C10's list use the
   content line**; babies and children use the same lines (no `_lines` route until `BABY`
