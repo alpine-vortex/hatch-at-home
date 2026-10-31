@@ -666,6 +666,11 @@ const PERSONA = {
     fell_asleep: ["best part of the day... zzz", "comfy... zzz", "night... ♪ zzz"],
     wish_granted: ["my wish! that's so nice ♥", "mm, my wish came true ♥", "a wish come true... nice ♪"],
     favourite_snack: [(food) => `${food}... my favourite... ♥`, (food) => `mm, ${food}... yum ♥`, (food) => `${food}! snack time ♪`],
+    idle: ["mmm... what's for lunch...", "*yawns*", "la... la... ♪"],
+    idle_bored: ["a nap sounds nice...", "*stretches out*"],
+    idle_excited: ["hehe! ok, nap now", "mm! that was fun ♪", "hehe, nice ♥"],
+    mood_content: ["taking it easy", "comfy and calm"],
+    mood_excited: ["hehe, that was nice", "mm, that was fun"],
   },
   sweet: {
     reveal: ["I think I'm the sweet kind ♥", "sweet, that's me ♥"],
@@ -678,6 +683,11 @@ const PERSONA = {
     fell_asleep: ["sweet dreams ♥", "night night ♥", "all tucked in ♥"],
     wish_granted: ["my wish came true ♥", "a wish come true! ♥", "my wish! so happy ♥"],
     favourite_snack: [(food) => `${food}! my favourite ♥`, (food) => `ooh, ${food}! ♥`, (food) => `${food}! yum yum ♥`],
+    idle: ["♪ tidy tidy ♪", "*smooths its corner*", "hmm hmm ♪"],
+    idle_bored: ["*tidies up a little*", "*hums softly*"],
+    idle_excited: ["hehe, so happy!", "yay! ♥", "that was lovely ♥"],
+    mood_content: ["all warm and happy", "nice and homey ♥"],
+    mood_excited: ["that was lovely!", "hehe, that was fun ♥"],
   },
   bouncy: {
     reveal: ["I think I'm the bouncy kind!", "bouncy! that's me! hup!"],
@@ -690,6 +700,11 @@ const PERSONA = {
     fell_asleep: ["big day! night night", "phew! night night", "all hopped out... zzz"],
     wish_granted: ["my wish!! yes yes!", "wish come true! woo!", "my wish! hup hup! ♥"],
     favourite_snack: [(food) => `${food}! power snack!!`, (food) => `${food}! yes!`, (food) => `${food}! hup hup!`],
+    idle: ["*hops in place*", "hup! hup!", "*jogs on the spot*"],
+    idle_bored: ["*bounces around*", "*does a little spin*"],
+    idle_excited: ["wheee! hup hup!", "woo! yes!", "*bounce bounce*"],
+    mood_content: ["full of beans", "ready for anything"],
+    mood_excited: ["that was great!", "woo! so much fun!"],
   },
   starry: {
     reveal: ["I think I'm the starry kind ★", "a star is born! that's me ★"],
@@ -702,6 +717,11 @@ const PERSONA = {
     fell_asleep: ["and... curtain! night ★", "that's a wrap! night ★", "lights down... zzz ★"],
     wish_granted: ["a wish come true! ★", "my wish! encore! ★", "dreams do come true ★"],
     favourite_snack: [(food) => `${food}! a snack for a star ★`, (food) => `${food}! bravo! ★`, (food) => `ooh, ${food}! ★`],
+    idle: ["♪ la la laaa ♪", "*hums a tune*", "*twirls*"],
+    idle_bored: ["*practises a bow*", "*sings to itself*"],
+    idle_excited: ["ta-da! ★", "what a show! ★", "♪ tra la la! ♪"],
+    mood_content: ["humming a little tune", "ready for my close-up ★"],
+    mood_excited: ["what a show!", "bravo! that was fun ★"],
   },
   old_soul: {
     reveal: ["hm. an old soul, I think.", "an old soul. suits me."],
@@ -714,6 +734,11 @@ const PERSONA = {
     fell_asleep: ["night, now. sleep well.", "off to bed. night.", "a good day. night ♥"],
     wish_granted: ["well, now. a wish come true ♥", "hm. my wish. how nice ♥", "well. that's a fine thing ♥"],
     favourite_snack: [(food) => `ah, ${food}. the good stuff`, (food) => `${food}. now that's proper`, (food) => `hm. ${food}. very nice`],
+    idle: ["hm, hm.", "*settles in*", "in my day... hm."],
+    idle_bored: ["*watches the clouds*", "*sits quietly*"],
+    idle_excited: ["heh. not bad at all.", "heh. well, well.", "ha. that was fun."],
+    mood_content: ["all's well", "a fine day"],
+    mood_excited: ["heh. that was nice", "well, that was fun"],
   },
   fancy: {
     reveal: ["I think I'm the fancy kind ♥", "fancy, that's me. how lovely ♥"],
@@ -726,6 +751,11 @@ const PERSONA = {
     fell_asleep: ["beauty sleep time ♥", "night night, darlings ♥", "off to my silk pillow ♥"],
     wish_granted: ["a wish, granted! lovely ♥", "my wish! how divine ♥", "a wish come true, darling ♥"],
     favourite_snack: [(food) => `${food}, how elegant ♥`, (food) => `${food}! simply divine ♥`, (food) => `ooh, ${food}! fancy ♥`],
+    idle: ["*fluffs up*", "*admires its reflection*", "la la, lovely ♪"],
+    idle_bored: ["*picks a pretty spot*", "*rearranges a ribbon*"],
+    idle_excited: ["oh, how lovely!", "divine! ♥", "*twirls prettily*"],
+    mood_content: ["looking my best", "all pretty and calm ♥"],
+    mood_excited: ["oh, how lovely!", "that was divine ♥"],
   },
   charming: {
     reveal: ["I'm the charming kind, I think ♥", "charming, that's me ♥"],
@@ -738,6 +768,11 @@ const PERSONA = {
     fell_asleep: ["goodnight, dear friends ♥", "until tomorrow, friends ♥", "a splendid day. night ♥"],
     wish_granted: ["my wish! how splendid ♥", "a wish come true! grand ♥", "what a marvellous wish ♥"],
     favourite_snack: [(food) => `${food}! exquisite ♥`, (food) => `ah, ${food}! splendid ♥`, (food) => `${food}, what a treat ♥`],
+    idle: ["*strikes a pose*", "*bows to no one*", "splendid, splendid ♪"],
+    idle_bored: ["*hums something grand*", "*practises a grand bow*"],
+    idle_excited: ["simply splendid!", "marvellous! ♥", "what an occasion!"],
+    mood_content: ["life is splendid", "all quite marvellous"],
+    mood_excited: ["simply splendid!", "what a marvellous time"],
   },
   plucky: {
     reveal: ["I'm the plucky kind! hmph ♥", "plucky, that's me! ♥"],
@@ -750,6 +785,11 @@ const PERSONA = {
     fell_asleep: ["I'll keep watch. night ♥", "night, team ♥", "all safe. sleep tight ♥"],
     wish_granted: ["my wish! heck yes! ♥", "a wish come true! hah ♥", "wish granted! nice ♥"],
     favourite_snack: [(food) => `${food}! now we're talking`, (food) => `${food}! that's the stuff`, (food) => `${food}! fuel up ♥`],
+    idle: ["*stands guard*", "*looks around, alert*", "all clear ♪"],
+    idle_bored: ["*kicks a pebble*", "*paces a little*"],
+    idle_excited: ["hah! nailed it!", "yes! heck yes!", "hah! go team!"],
+    mood_content: ["all under control", "all clear here"],
+    mood_excited: ["hah! that was great", "heck yes, that was fun"],
   },
 };
 const FRIEND_WELCOME_MS = 6 * 3600 * 1000; // "welcome home!" at the next look, this long after
@@ -4021,7 +4061,19 @@ class HatchPetCard extends HTMLElement {
     // older integration sends no key: the sentence as it is).
     const reason = mood?.attributes.reason || "";
     const key = mood?.attributes.reason_key;
-    return key ? this._lines(s, `reason.${key}`, reason).text : reason;
+    if (!key) return reason;
+    const mine = this._moodOwn(s, key);
+    // Hashed with the pet's birth (hatched_on), the key and the local date.
+    const born = this._state(s, "sensor.life_stage")?.attributes?.hatched_on || s.ids?.device;
+    return mine ? dailyPick([reason, reason, ...mine], `${born}|${key}`) : this._lines(s, `reason.${key}`, reason).text;
+  }
+
+  // A teen or adult's own content/excited mood line (P2b), or null. It is picked
+  // by dailyPick (no Math.random): the sentence is redrawn every tick, so it must
+  // not change until the date does. Babies and children keep baby talk.
+  _moodOwn(s, key) {
+    if (key !== "content" && key !== "excited") return null;
+    return this._persona(s)?.[`mood_${key}`] || null;
   }
 
   _toggleStatus(s) {
@@ -4310,7 +4362,12 @@ class HatchPetCard extends HTMLElement {
         hungry: ["*tummy rumbles*", "is it snack time?", ...(words.food ? [`mmm... ${words.food}...`] : [])],
         dirty: ["ew...", "*sniff sniff*"],
       }[s.moodState] || ["♪ hm hm hm ♪", "...", "*looks around*", "la la la"];
-      this._write(s, pick(lines), 2500);
+      // A teen or adult says its type's idle lines half the time, except for the
+      // body's own (sleepy, hungry, dirty, sick), which stay normal.
+      const bodily = ["sleepy", "hungry", "dirty", "sick"].includes(s.moodState);
+      const key = s.moodState === "bored" ? "idle_bored" : s.moodState === "excited" ? "idle_excited" : "idle";
+      const normal = pick(lines);
+      this._write(s, bodily ? normal : this._lines(s, key, normal).text, 2500);
       s.plain = s.bubble.textContent; // idle chatter isn't read out
     }
   }
