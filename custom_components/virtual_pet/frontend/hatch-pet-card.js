@@ -256,6 +256,23 @@ function monoOn() {
   }
 }
 
+// Holiday names: on unless turned off for this browser (only "off" is kept). Off,
+// no line names a festival: the season's dated lines go, and so does any line
+// FESTIVAL_NAMES matches (that pattern is the tag); the generic lines stay.
+const NAMED_KEY = "hatch-named-holidays";
+const FESTIVAL_NAMES = /Halloween|Thanksgiving|Christmas|Hanukkah|new year/i;
+
+function namedHolidays() {
+  try {
+    return localStorage.getItem(NAMED_KEY) !== "off";
+  } catch (err) {
+    return true;
+  }
+}
+
+// A list without the festival names when they're off.
+const unnamed = (list, named = namedHolidays()) => (named ? list : list.filter((x) => !FESTIVAL_NAMES.test(x)));
+
 // The four tones, darkest to lightest, and how many of 20 even luma steps each
 // takes: breaks at .25, .5 and .65. Each tone keeps its own band, so the card's
 // own LCD colours stay put; .65, not .75, was tuned in the bench (bench.js monoPass).
@@ -411,7 +428,9 @@ const FLAIR = {
 // - nightFlyer: crosses the night sky where part.nightFlyer (the witch)
 // - visitor: comes by now and then; the pet startles, then greets it
 // - snack: the snack prop, with snackLines; treat: the treat day, with treatLine
-//   (thanks: the pet thanks whoever cared for it most); countdown: its name
+//   (thanks: the pet thanks whoever cared for it most; else treatSay); countdown: its name
+// - dated: lines for named days ({on: [[m, d], ...] or (year) => [[m, d], ...]}),
+//   about 1 in 3 of the costume lines on the day, only with holiday names on
 // - bunting, mist (at night), leaves (falling), chirp
 const SEASONS = [
   {
@@ -475,13 +494,101 @@ const SEASONS = [
     snack: "pie",
     snackLines: ["pie!! ♪", "pumpkin pie, my favourite!", "mmm, still warm ♪"],
     flyer: { art: ["goose_1", "goose_2"], cls: "sgoose", ms: 8000, flock: 3 },
-    visitor: { art: ["turkey_1", "turkey_2"], cls: "sturkey", ms: 7000, startle: "gobble?!", jump: "perk",
+    visitor: { art: ["turkey_1", "turkey_2"], cls: "sturkey", ms: 7000, walk: true, startle: "gobble?!", jump: "perk",
       greet: ["hi, turkey!", "happy Thanksgiving, turkey ♪", "gobble gobble to you too!"] },
     chirp: "harvest",
     bunting: true,
     leaves: true,
   },
+  {
+    // Winter lights: 1-31 December, after Thanksgiving (which wins 1 Dec in the
+    // years it reaches it). Card only: no server holiday, no phone greeting. By the
+    // viewer's date, so a hot December gets it too (northern bias, accepted).
+    key: "winter", from: [12, 1], to: [12, 31],
+    worlds: {
+      "*": { lantern: "ground", corners: ["right"], dayFlyers: false, sweets: false }, // nightsky too
+      tidepool: { lantern: "float" },
+      pond: { lantern: "float" },
+      hearth: { sweets: true }, // a mug by the door
+      terrarium: { corners: ["left", "right"] },
+    },
+    lines: ["happy holidays! ♥", "merry everything ♪", "so many lights!", "twinkle twinkle ♪",
+      "happy winter!", "cozy lights~"],
+    dated: [
+      { on: [[12, 24], [12, 25]], lines: ["merry Christmas! ♥", "Christmas Eve! ♪"] },
+      { on: (y) => hanukkahDays(y), lines: ["happy Hanukkah! ♥", "the lights are glowing ♪"] },
+      { on: [[12, 31]], lines: ["happy new year soon!", "new year's eve! ♪"] },
+    ],
+    treat: [12, 21],
+    treatLine: "so many lights! ♥",
+    treatSay: "a little treat ♪",
+    costumes: [
+      { art: "knit_cap", sink: 8, width: 64 },
+      { art: "earmuffs", sink: 9, width: 76 },
+      { art: "light_wreath", sink: 9, width: 76 },
+      { art: "star_cap", sink: 8, width: 60 },
+    ],
+    lanterns: ["paper_lantern", "star_lamp", "snow_lantern"],
+    corner: "frost",
+    sweet: "mug",
+    snack: "cookie",
+    snackLines: ["cookie!! ♪", "a star cookie, yay!"],
+    flyer: { art: ["twinkle_1", "twinkle_2"], cls: "stwinkle", ms: 6500 },
+    visitor: { art: ["hare_1", "hare_2"], cls: "snowhare", ms: 7000, walk: true, startle: "oh!", jump: "perk",
+      greet: ["hi, little hare!"] },
+    chirp: "harvest",
+    bunting: true,
+  },
 ];
+// Hanukkah's first day ([month, day]: the civil date of 25 Kislev) in a year,
+// from the browser's Hebrew calendar; null without one (then no Hanukkah lines,
+// never wrong ones). Its eight days run on into January some years.
+const HANUKKAH = new Map();
+function hanukkah(year) {
+  if (HANUKKAH.has(year)) return HANUKKAH.get(year);
+  let at = null;
+  try {
+    const fmt = new Intl.DateTimeFormat("en-u-ca-hebrew", { month: "long", day: "numeric" });
+    if (fmt.resolvedOptions().calendar === "hebrew") {
+      for (let d = new Date(year, 10, 20); d.getFullYear() === year; d.setDate(d.getDate() + 1)) {
+        const parts = fmt.formatToParts(d);
+        const month = parts.find((x) => x.type === "month")?.value;
+        const day = Number(parts.find((x) => x.type === "day")?.value);
+        if (month === "Kislev" && day === 25) {
+          at = [d.getMonth() + 1, d.getDate()];
+          break;
+        }
+      }
+    }
+  } catch (err) {
+    at = null; // no Intl calendars
+  }
+  HANUKKAH.set(year, at);
+  return at;
+}
+// Hanukkah's days in December of a year (and the end of November when it starts early).
+function hanukkahDays(year) {
+  const first = hanukkah(year);
+  if (!first) return [];
+  return Array.from({ length: 8 }, (_, i) => {
+    const d = new Date(year, first[0] - 1, first[1] + i);
+    return [d.getMonth() + 1, d.getDate()];
+  });
+}
+// The costume lines on a date: { lines, dated }, without festival names when off.
+function seasonLines(season, date = new Date(), named = namedHolidays()) {
+  const lines = unnamed(season.lines || [], named);
+  if (!named || !season.dated) return { lines, dated: [] };
+  const y = date.getFullYear();
+  const today = (on) => (typeof on === "function" ? on(y) : on)
+    .some(([m, d]) => m === date.getMonth() + 1 && d === date.getDate());
+  return { lines, dated: season.dated.filter((x) => today(x.on)).flatMap((x) => x.lines) };
+}
+// One costume line: a named day's about 1 in 3, else the season's own.
+function seasonLine(season, date = new Date(), named = namedHolidays()) {
+  const { lines, dated } = seasonLines(season, date, named);
+  return dated.length && Math.random() < 1 / 3 ? pick(dated) : pick(lines);
+}
 // Thanksgiving's [month, day] in a year (the fourth Thursday of November),
 // moved by `days`.
 function thanksgiving(year, days = 0) {
@@ -714,6 +821,8 @@ const BABY = {
   // In place of season.lines (the costume bubble); children keep the normal ones.
   "season.halloween": { baby: ["boo!", "boo! hehe", "spooky~", "yay, costume!"] },
   "season.thanksgiving": { baby: ["gobble gobble!", "pie! yum yum", "thank you ♥", "cozy cozy~", "leaves!"] },
+  // The lights (SEASONS key "winter"), not the weather's winter (fav_season): no festival names.
+  "season.winter": { baby: ["pretty! pretty!", "lights!", "cozy cozy~", "yum yum"] },
 };
 // Personality (P2a): each type's own lines, for a teen or an adult whose
 // life_stage carries a personality (docs/plan-2026-10-28-personality-types.md).
@@ -977,7 +1086,7 @@ const NOTES = {
   back_from: (n) => PLACES[n.place],
   fav_weather: (n) => ({ sun: "it's sunny, your favourite! ☀", rain: "it's raining, your favourite! ☂",
     snow: "it's snowing, your favourite!! ❄", storms: "a storm! your favourite!" })[n.weather],
-  season: (n) => n.holiday
+  season: (n) => n.holiday && namedHolidays()
     ? `${n.holiday === "halloween" ? "Halloween" : "Thanksgiving"} in your favourite season! ♥`
     : `it's ${n.season}, your favourite! ${SEASON_ICONS[n.season] || ""}`.trim(),
   early_alarm: () => "early start tomorrow? sleep well ♥",
@@ -1958,6 +2067,15 @@ const STYLE = `
   .screen.s-halloween.dim .season .lantern.lantern-float {
     animation: s-flicker 1.6s ease-in-out infinite, s-bob 3s ease-in-out infinite alternate; }
   @keyframes s-flicker { 50% { filter: drop-shadow(0 0 3px rgba(255, 150, 50, .7)); } }
+  /* Winter lights: a soft warm-white glow, the float's bob kept. */
+  .screen.s-winter.night .season .lantern, .screen.s-winter.dim .season .lantern {
+    filter: drop-shadow(0 0 6px rgba(255, 238, 196, .95)); animation: s-shine 3.2s ease-in-out infinite; }
+  .screen.s-winter.night .season .lantern.lantern-float,
+  .screen.s-winter.dim .season .lantern.lantern-float {
+    animation: s-shine 3.2s ease-in-out infinite, s-bob 3s ease-in-out infinite alternate; }
+  @keyframes s-shine { 50% { filter: drop-shadow(0 0 4px rgba(255, 230, 180, .75)); } }
+  .screen.s-winter .season .bunting { animation: s-twinkle 2.4s steps(1) infinite; }
+  @keyframes s-twinkle { 50% { filter: brightness(1.2); } }
   .season .corner { top: 0; width: 17%; opacity: .85; }
   .season .corner.right { right: 0; }
   .season .corner.left { left: 0; transform: scaleX(-1); }
@@ -1972,9 +2090,13 @@ const STYLE = `
   .season .sghost.flap img { animation-duration: .8s; }
   .season .switch { width: 22%; top: 5%; }
   .season .sgoose { width: 10%; }
+  .season .stwinkle { width: 10%; }
+  .season .stwinkle.flap img { animation-duration: .6s; }
   /* A walker keeps to the ground: no flight bob, a slower step. */
   .season .sturkey { width: 15%; bottom: 6%; }
   .season .sturkey.flap img { animation-duration: .5s; }
+  .season .snowhare { width: 15%; bottom: 6%; }
+  .season .snowhare.flap img { animation-duration: .4s; }
   .season .sfly.walk.ltr { animation-name: s-ltr; } .season .sfly.walk.rtl { animation-name: s-rtl; }
   .season .sfly.ltr { left: -25%; } .season .sfly.rtl { left: 112%; }
   @keyframes s-fly { 25% { translate: 0 30%; } 50% { translate: 0 -20%; } 75% { translate: 0 25%; } }
@@ -5838,6 +5960,7 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       ${s.species?.voice ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`) : ""}
       ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
+      ${row(null, "holiday names", `<span><button class="bell named" aria-label="holiday names" aria-pressed="${namedHolidays()}">${namedHolidays() ? "on" : "off"}</button></span>`)}
       ${row(null, "mono screen", `<span><button class="bell mono" aria-label="mono screen: ${monoOn() ? "on" : "off"}, change" aria-pressed="${monoOn()}">${monoOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
@@ -5921,6 +6044,19 @@ class HatchPetCard extends HTMLElement {
         return; // no storage: the effects stay as they are
       }
       this._card.classList.toggle("lcd-on", on);
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+    });
+    s.status.querySelector(".bell.named").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const on = !namedHolidays();
+      try {
+        if (on) localStorage.removeItem(NAMED_KEY);
+        else localStorage.setItem(NAMED_KEY, "off");
+      } catch (err) {
+        this._statusMessage(s, "This browser can't save that setting.");
+        return;
+      }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
     s.status.querySelector(".bell.mono").addEventListener("click", (e) => {
@@ -7271,7 +7407,7 @@ class HatchPetCard extends HTMLElement {
     const today = new Date();
     // The countdown, on the first look of the day.
     const treatOn = season.treat && seasonDate(season.treat, today.getFullYear());
-    if (season.countdown && treatOn && !s.counted) {
+    if (season.countdown && treatOn && !s.counted && namedHolidays()) {
       s.counted = true;
       const treat = new Date(today.getFullYear(), treatOn[0] - 1, treatOn[1]);
       const days = Math.round((treat - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
@@ -7303,7 +7439,8 @@ class HatchPetCard extends HTMLElement {
         // no storage: once per page load
       }
       if (fresh) {
-        this._costume(s, season, season.treatLine || pick(season.lines));
+        const named = season.treatLine && unnamed([season.treatLine]).length;
+        this._costume(s, season, named ? season.treatLine : seasonLine(season, today));
         setTimeout(() => this._seasonTreat(s, season), 1600);
         return;
       }
@@ -7315,7 +7452,7 @@ class HatchPetCard extends HTMLElement {
     s.nextCostume = now + lo + Math.random() * (hi - lo);
     const fresh = season.costumes && oncePerDay(`costume-${season.key}-${s.ids?.device}`);
     const line = fresh ? { text: "new costume today! do you like it?", baby: false }
-      : this._lines(s, `season.${season.key}`, pick(season.lines));
+      : this._lines(s, `season.${season.key}`, seasonLine(season, today));
     this._costume(s, season, line.text, !line.baby);
     if (fresh && season.chirp) this._chirp(s, season.chirp);
   }
@@ -7502,7 +7639,7 @@ class HatchPetCard extends HTMLElement {
       box.append(sweet);
     }
     this._sparkle(s);
-    this._speak(s, season.thanks ? this._thanks(s) : "a treat! thank you!! ♪", 3500);
+    this._speak(s, season.thanks ? this._thanks(s) : season.treatSay ?? "a treat! thank you!! ♪", 3500);
   }
 
   // Thanks to everyone: never ranking who did the most.
@@ -7541,16 +7678,17 @@ class HatchPetCard extends HTMLElement {
   // startles, then greets it.
   _seasonVisitor(s, season) {
     const { art, cls, ms, startle, jump, greet } = season.visitor;
-    this._seasonFly(s, season, art, cls, ms, { walk: cls === "sturkey" });
+    this._seasonFly(s, season, art, cls, ms, { walk: !!season.visitor.walk });
     s.flairUntil = Date.now() + ms; // nothing else meanwhile
     s.visitUntil = s.flairUntil; // a pat wiggles, no line
+    s.nextVisitCheck = Math.max(s.nextVisitCheck || 0, s.flairUntil + VISIT_AFTER_MS); // a world one later
     setTimeout(() => {
       this._write(s, startle, 1800);
       this._animate(s, s.pet, jump, jump === "perk" ? 320 : 800);
       if (season.chirp) this._chirp(s, season.chirp);
     }, 1400);
     setTimeout(() => {
-      this._speak(s, pick(greet), 3000);
+      this._speak(s, pick(unnamed(greet)), 3000);
       this._animate(s, s.pet, "perk", 320);
     }, 3400);
   }
@@ -8261,6 +8399,8 @@ class HatchPetCardEditor extends HTMLElement {
 
 // For scripts/card-check and scripts/costume-preview.
 HatchPetCard.seasons = SEASONS;
+HatchPetCard.hanukkah = hanukkah;
+HatchPetCard.seasonLines = seasonLines;
 HatchPetCard.momentClasses = Object.fromEntries(Object.entries(MOMENT_CLASS)
   .map(([type, c]) => [type, { [KEPT]: "kept", [BEAT]: "beat", [FLAVOUR]: "flavour" }[c]]));
 HatchPetCard.seasonNow = seasonNow;
