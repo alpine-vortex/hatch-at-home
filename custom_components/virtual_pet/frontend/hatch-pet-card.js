@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.36.0b1";
+const VERSION = "0.36.0";
 const BASE = "/virtual_pet/frontend";
 // The world's grid: cells across the pet's box (46.5% of the screen's width).
 // The shell (--px), the LCD and the link beam are cut on it, and the props, UI
