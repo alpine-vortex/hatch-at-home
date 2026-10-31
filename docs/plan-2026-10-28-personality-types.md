@@ -15,7 +15,8 @@ P2a (its voice: hellos, the reveal, the five moments) is built as 0.35.0b2**
 lines), the upbringing lines and P3 (idle manner, with 3c's praised move) are built**
 (crew branch `crew/hatch-at-home-s2550-personality-p2b-upbringing-lin`, 2026-10-31;
 card only, three commits, partial card-check `types,react,pat` green; not yet
-gated, PR'd or released). P4 is not built. The owner approved the lines' tables on 2026-10-28; P2a ships its tables
+gated, PR'd or released). P4 (Assist data and LLM voice notes, server only) is built
+(crew branch `crew/hatch-at-home-s2556-personality-p4-assist-data-llm`, 2026-10-31). The owner approved the lines' tables on 2026-10-28; P2a ships its tables
 verbatim. **Every line in this file is a proposal for the owner, not approved
 copy.** All lines are in the tables under "The lines"; none appears anywhere else.
 The phases are separate PRs, each with its own audit, as the owner works.
