@@ -503,6 +503,70 @@ const dailyPick = (list, salt = "") => {
   for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return list[h % list.length];
 };
+// World visitors (docs/plan-2026-10-31-visitors.md): on about 4 days in 7 a small
+// creature from the pet's world drops by at the scene's edge and the pet greets it.
+// Card only: nothing is sent or saved but the day's localStorage flag. Per visitor:
+// hours ("day" 09-18 on a day screen, "night" 19-23 on a night or dim one), walk
+// (on the ground line, else it flies in), cross (no stop: straight over), in (ms to
+// arrive), stay (ms at the edge), lines (its two; VISIT_LINES are everyone's).
+// Art: frontend/ui/visitor_<world>_<id>_<1|2>.png, 72 x 72 (18 x 18 world cells
+// at 4 px a cell, as the props), shown 18 cells wide.
+const VISIT_LINES = ["oh! a visitor ♪", "hi there, friend!"];
+const VISITORS = {
+  woodland: [
+    { id: "chickadee", hours: "day", lines: ["chick-a-dee-dee! ♪", "hello, little chickadee!"] },
+    { id: "stellersjay", hours: "day", lines: ["ooh, so blue!", "hi, jay! ♪"] },
+    { id: "snail", hours: "day", walk: true, in: 2600, stay: 4200, lines: ["take your time, snail~", "hello, slow friend"] },
+  ],
+  terrarium: [
+    { id: "pillbug", hours: "day", walk: true, lines: ["hi, pill bug! don't roll away~", "a tiny armadillo!"] },
+    { id: "ladybird", hours: "day", lines: ["a ladybird! lucky ♪", "count your spots for me?"] },
+    { id: "moth", hours: "night", lines: ["hi, moth! the light's over there~", "fuzzy friend ♪"] },
+  ],
+  hearth: [
+    { id: "robin", hours: "day", walk: true, lines: ["hello, robin! ♪", "a robin at the window!"] },
+    { id: "mouse", hours: "night", walk: true, in: 900, lines: ["shh... hi, mouse ♪", "a crumb for you?"] },
+    { id: "cricket", hours: "night", walk: true, lines: ["cri-cri! ♪", "sing me a song, cricket"] },
+  ],
+  tidepool: [
+    { id: "gull", hours: "day", lines: ["hi, gull! no snacks here~", "hello from the sea ♪"] },
+    { id: "shorecrab", hours: "day", walk: true, lines: ["sideways hello! ♪", "hi, little crab!"] },
+    { id: "seastar", hours: "day", walk: true, in: 2600, stay: 4800, lines: ["a star in the water!", "hello, sea star~"] },
+  ],
+  pond: [
+    { id: "dragonfly", hours: "day", in: 900, lines: ["zoom! hi, dragonfly ♪", "so shiny!"] },
+    { id: "strider", hours: "day", walk: true, lines: ["walking on water?!", "hi, strider ♪"] },
+    { id: "heron", hours: "day", walk: true, in: 2000, lines: ["a heron! so tall...", "shh, it's fishing~"] },
+  ],
+  nightsky: [
+    { id: "shootingstar", hours: "night", cross: true, lines: ["a shooting star! make a wish ✦", "ooh! did you see that?"] },
+    { id: "nighthawk", hours: "night", lines: ["hi, nighthawk ♪", "night flyer friend!"] },
+    { id: "raccoon", hours: "night", walk: true, lines: ["hello, masked friend!", "a raccoon! say hi ♪"] },
+  ],
+};
+const VISIT_IN_MS = 1400; // to arrive (or leave), unless the visitor says
+const VISIT_STAY_MS = 3000; // at the edge, past the greet's start
+const VISIT_CALM_MS = 5000; // reduced motion: still, then gone
+const VISIT_CHECK_MS = 20000; // between looks for a visit
+const VISIT_SHOWN_MS = 30000; // the slide on show this long first
+const VISIT_AFTER_MS = 120000; // after an infrared link, before a visitor; a seasonal one after this
+// One pet's day: is it a visit day, which of its world's three comes, and the
+// start hour of each kind's 3-hour window. A day index (the local calendar date,
+// read as UTC, so a DST day is still one day) plus an offset from the device:
+// 4 visit days in every 7, and the three take turns, so any 21 days hold every
+// visitor (12 visit days). Pure: the same date and device give the same day.
+function visitorDay(date, device) {
+  const day = Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 864e5);
+  let h = 0;
+  for (const ch of `visit|${device || ""}`) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const n = day + (h % 7);
+  const pos = n % 7;
+  const visit = pos < 4;
+  const who = visit ? (Math.floor(n / 7) * 4 + pos + (h >>> 3)) % 3 : null;
+  let w = h ^ day;
+  w = Math.imul(w ^ (w >>> 15), 0x2c1b3c6d) >>> 0;
+  return { visit, who, day: 9 + (w % 7), night: 19 + ((w >>> 8) % 2) };
+}
 // Once per device per day (localStorage; once per page load without it).
 function oncePerDay(name) {
   const key = `hatch-${name}-${new Date().toDateString()}`;
@@ -622,6 +686,7 @@ const BABY = {
   "wish_granted": { baby: ["yay yay! ♥"] },
   "friend_home": { baby: ["you're home! yay yay ♥"] },
   "care_miss": { baby: ["oh! hi hi ♥"] },
+  "visit": { baby: ["hi hi!", "oh! hi hi ♥", "yay yay!", "hehe!"] }, // a world visitor (any of them)
   "tucked_in": { baby: ["night night ♥"] }, // withName: "night night, Sam ♥"
   "bond_up": { baby: ["yay, you! ♥"] },
   "WISHES.play": { baby: ["wish... play today"] },
@@ -913,6 +978,7 @@ const REACT_MS = 2500;
 const REACTIONS = {
   fed: { mood: "excited", move: "munch", ms: 1500 },
   praised: { mood: "excited", move: "greethop", ms: 1400 },
+  greet: { mood: "excited", move: "greethop", ms: 1400 }, // a world visitor (acts.cheer, else this)
   refused: { mood: "bored", move: "look", ms: 1200 },
   tucked: { mood: "cozy", move: "settle", ms: REACT_MS },
   // Only with the species' own act (STAGE_POSES): without it these do nothing (R2).
@@ -923,7 +989,7 @@ const READY_MS = 1200;
 const PAT_POSE_MS = 900; // acts.pat on a pat; apart from poseUntil so the next pat's `reacting` is unchanged
 // Which species.json "acts" pose a reaction plays at baby, teen and adult (R1, R2).
 // refused: the act, else the bored frame; lost and ready: the act, else nothing.
-const STAGE_POSES = { fed: "eat", praised: "cheer", refused: "refuse", lost: "aww", ready: "ready" };
+const STAGE_POSES = { fed: "eat", praised: "cheer", greet: "cheer", refused: "refuse", lost: "aww", ready: "ready" };
 // Only these refusals react; asleep, egg, away, no_game, unfair and spoiled do not.
 const REACT_REFUSALS = new Set(["full", "not_needed", "already_clean", "not_sick", "not_sleepy", "too_tired"]);
 const MINE_MATCH_MS = 10000; // a press is matched to the first new log entry within this
@@ -1841,6 +1907,27 @@ const STYLE = `
   .season .sfly.ltr { animation-name: s-fly, s-ltr; } .season .sfly.rtl { animation-name: s-fly, s-rtl; }
   .season .sfly.rtl img { transform: scaleX(-1); } /* the art faces right */
   @keyframes s-ltr { to { left: 112%; } } @keyframes s-rtl { to { left: -25%; } }
+  /* A world visitor (VISITORS): 18 world cells wide (--px a cell: whole device pixels),
+     resting at the scene's edge (--stop). It comes in from --from and leaves back to it;
+     a crosser carries on to --to. Under reduced motion it just stands at --stop. */
+  .season .vis { position: absolute; width: calc(var(--px, 2px) * 18); left: var(--stop);
+    --from: -25%; --stop: 5%; --to: 112%; }
+  .season .vis.rtl { --from: 112%; --stop: calc(95% - var(--px, 2px) * 18); --to: -25%; }
+  .season .vis img { position: static; display: block; width: 100%; }
+  .season .vis.flap img + img { position: absolute; inset: 0; }
+  .season .vis.flap img { animation: fl-frame-a .5s steps(1) infinite; }
+  .season .vis.flap img + img { animation-name: fl-frame-b; }
+  .season .vis.in { animation: v-in var(--in-ms, 1.4s) ease-out both; }
+  .season .vis.out { animation: v-out var(--in-ms, 1.4s) ease-in both; }
+  .season .vis.cross { animation: v-cross var(--in-ms, 1.4s) linear both; }
+  @keyframes v-in { from { left: var(--from); } to { left: var(--stop); } }
+  @keyframes v-out { from { left: var(--stop); } to { left: var(--from); } }
+  @keyframes v-cross { from { left: var(--from); } to { left: var(--to); } }
+  .season .vis.fly { top: 36%; } .season .vis.walk { bottom: 6%; }
+  .season .vis.vis-shootingstar { top: 28%; } /* under the bubble, over the pet's head */
+  /* The art faces right; leaving, it turns back the way it came. */
+  .season .vis.rtl img, .season .vis.ltr.out img { transform: scaleX(-1); }
+  .season .vis.rtl.out img { transform: none; }
   .season .bunting { position: absolute; top: 0; left: 0; right: 0; height: 8.4%;
     background-repeat: repeat-x; background-size: 18.75% 100%; image-rendering: pixelated; }
   .season .mist { position: absolute; left: -10%; right: -10%; bottom: 0; height: 26%; display: none;
@@ -4164,6 +4251,7 @@ class HatchPetCard extends HTMLElement {
         this._seasonTick(s);
         this._partyTick(s);
         this._linkTick(s);
+        this._visitorTick(s);
       }
       if (!s.sayUntil && s.species) {
         const mood = this._state(s, "sensor.mood");
@@ -4488,9 +4576,10 @@ class HatchPetCard extends HTMLElement {
   }
 
   // May a pat say its line? Not over a kept line or one waiting, a game, a question, a
-  // call or the low-battery gag: then it is a wiggle only (rapid pats can't cut off news).
+  // call, the low-battery gag or a visitor (world or seasonal): then it is a wiggle only
+  // (rapid pats can't cut off news, nor a pat the greeting).
   _patMayTalk(s) {
-    return !s.calling && !s.power && !s.game && !this._questionOn(s) &&
+    return !s.calling && !s.power && !s.game && !this._questionOn(s) && !(s.visitUntil > Date.now()) &&
       !(s.sayUntil > Date.now() && s.sayClass >= KEPT) && !s.queue?.some((q) => lineClass(q) >= KEPT);
   }
 
@@ -7042,7 +7131,7 @@ class HatchPetCard extends HTMLElement {
       if (now >= s.nextFlyer) {
         const [lo, hi] = SEASON_FLYER_MS;
         s.nextFlyer = now + lo + Math.random() * (hi - lo);
-        if (!isCalm && (dark || part.dayFlyers)) this._seasonFlyer(s, season);
+        if (!isCalm && (dark || part.dayFlyers) && !(s.visitUntil > now)) this._seasonFlyer(s, season);
       }
     }
     if (season.nightFlyer && part.nightFlyer) {
@@ -7051,7 +7140,7 @@ class HatchPetCard extends HTMLElement {
         const [lo, hi] = SEASON_NIGHT_FLYER_MS;
         s.nextNightFlyer = now + lo + Math.random() * (hi - lo);
         const { art, cls, ms } = season.nightFlyer;
-        if (!isCalm && dark) this._seasonFly(s, season, art, cls, ms, { ltr: true });
+        if (!isCalm && dark && !(s.visitUntil > now)) this._seasonFly(s, season, art, cls, ms, { ltr: true });
       }
     }
     if (!this._free(s) || s.pet.classList.contains("hop")) return;
@@ -7330,6 +7419,7 @@ class HatchPetCard extends HTMLElement {
     const { art, cls, ms, startle, jump, greet } = season.visitor;
     this._seasonFly(s, season, art, cls, ms, { walk: cls === "sturkey" });
     s.flairUntil = Date.now() + ms; // nothing else meanwhile
+    s.visitUntil = s.flairUntil; // a pat wiggles, no line
     setTimeout(() => {
       this._write(s, startle, 1800);
       this._animate(s, s.pet, jump, jump === "perk" ? 320 : 800);
@@ -7339,6 +7429,114 @@ class HatchPetCard extends HTMLElement {
       this._speak(s, pick(greet), 3000);
       this._animate(s, s.pet, "perk", 320);
     }, 3400);
+  }
+
+  // --- World visitors (docs/plan-2026-10-31-visitors.md) ---------------------
+  // Flavour only: nothing is sent, counted or kept but the day's localStorage flag
+  // (hatch-visit-<device>-<date>), used up only when a visit starts.
+
+  // Today's visitor for this pet, if it may come at this hour: a visit day, and the
+  // screen's kind (night or dim for a night visitor, else day) inside its window.
+  _visitorDue(s, date = new Date()) {
+    const list = VISITORS[s.worldKey];
+    if (!list) return null;
+    const d = visitorDay(date, s.ids?.device);
+    if (!d.visit) return null;
+    const v = list[d.who];
+    const dark = s.screen.classList.contains("night") || s.screen.classList.contains("dim");
+    if ((v.hours === "night") !== dark) return null;
+    const start = v.hours === "night" ? d.night : d.day;
+    return date.getHours() >= start && date.getHours() < start + 3 ? v : null;
+  }
+
+  // May a visit start? The pet on show VISIT_SHOWN_MS and past its first look, free
+  // (_linkFree: idle and awake, nothing queued or said, no game, scene, status or egg),
+  // no link, low-battery gag or call, and not within VISIT_AFTER_MS of a link.
+  _visitorFree(s, now = Date.now()) {
+    return s === this._slides[this._index] && !this._booting && !!s.lookedFirst && !s.visitor &&
+      !this._link && !s.linking && !s.power && !s.calling && !s.away && this._linkFree(s) &&
+      now - (this._visitShown?.s === s ? this._visitShown.at : now) >= VISIT_SHOWN_MS &&
+      now - (this._linkEndedAt ?? -Infinity) >= VISIT_AFTER_MS;
+  }
+
+  // Still fine to go on (each beat checks): the slide on show, awake, no game, scene,
+  // link, gag, call or status. Else the visit ends at once, its picture gone.
+  _visitorLive(s) {
+    return s === this._slides[this._index] && !s.asleep && !s.game && !s.scene && !s.linking &&
+      !s.power && !s.calling && !s.away && !s.screen.classList.contains("show-status");
+  }
+
+  // From _tick, for the slide on show: at most one look every VISIT_CHECK_MS.
+  _visitorTick(s) {
+    const now = Date.now();
+    if (this._visitShown?.s !== s) this._visitShown = { s, at: now };
+    if (s.visitor) {
+      if (!this._visitorLive(s)) this._visitorEnd(s);
+      return;
+    }
+    if (now < (s.nextVisitCheck || 0)) return;
+    s.nextVisitCheck = now + VISIT_CHECK_MS;
+    if (!this._visitorFree(s, now)) return;
+    const v = this._visitorDue(s);
+    if (v && oncePerDay(`visit-${s.ids?.device}`)) this._visitorStart(s, v);
+  }
+
+  // One visit: in from a side to the edge, the pet looks, then greets it (one line),
+  // and it goes back the way it came; a crosser streaks straight over. Reduced motion:
+  // the first frame, standing still at the edge for VISIT_CALM_MS; the greet's frame
+  // and the line, no look or hop.
+  _visitorStart(s, v, { ltr = Math.random() < 0.5 } = {}) {
+    this._visitorEnd(s);
+    const isCalm = calm();
+    const world = s.worldKey;
+    const inMs = v.in || (v.cross ? 1800 : VISIT_IN_MS);
+    const stay = v.stay || VISIT_STAY_MS;
+    const greetAt = isCalm ? 600 : v.cross ? Math.round(inMs * 0.6) : inMs + 1000;
+    const total = isCalm ? VISIT_CALM_MS : v.cross ? greetAt + 3000 : greetAt + stay + inMs;
+    const frames = isCalm ? [1] : [1, 2];
+    const el = document.createElement("div");
+    el.className = `vis vis-${v.id} ${v.walk ? "walk" : "fly"} ${ltr ? "ltr" : "rtl"}` +
+      `${frames.length > 1 ? " flap" : ""}${isCalm ? "" : v.cross ? " cross" : " in"}`;
+    el.dataset.visitor = `${world}/${v.id}`;
+    el.style.setProperty("--in-ms", `${inMs}ms`);
+    el.innerHTML = frames.map((n) =>
+      `<img src="${BASE}/ui/visitor_${world}_${v.id}_${n}.png?v=${VERSION}" alt="">`).join("");
+    s.seasonBox.append(el);
+    const now = Date.now();
+    const V = s.visitor = { el, v, timers: [], until: now + total, greetAt };
+    s.flairUntil = s.visitUntil = V.until; // nothing else meanwhile; a pat wiggles, no line
+    s.nextVisitor = Math.max(s.nextVisitor || 0, now + total + VISIT_AFTER_MS); // a seasonal one later
+    const at = (ms, fn) => V.timers.push(setTimeout(() => {
+      if (s.visitor !== V) return;
+      if (this._visitorLive(s)) fn();
+      else this._visitorEnd(s);
+    }, ms));
+    if (!isCalm && !v.cross) at(inMs, () => this._look(s, 900));
+    at(greetAt, () => this._visitorGreet(s, v));
+    if (v.cross && !isCalm) at(inMs, () => el.remove());
+    else if (!isCalm) at(greetAt + stay, () => el.classList.replace("in", "out"));
+    at(total, () => this._visitorEnd(s));
+    return V;
+  }
+
+  // The greet: acts.cheer (else the excited frame and a hop; a child, the line only)
+  // and one flavour line, said now or not at all (a kept line, a game or a question
+  // wins; the visitor still passes). A baby says baby talk.
+  _visitorGreet(s, v) {
+    if (!this._mayInterrupt(s, FLAVOUR)) return;
+    this._reactFrames(s, "greet");
+    const { text } = this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]));
+    this._line(s, FLAVOUR, text, 3000);
+  }
+
+  _visitorEnd(s) {
+    const V = s.visitor;
+    if (!V) return;
+    s.visitor = null;
+    V.timers.forEach(clearTimeout);
+    V.el.remove();
+    if (s.flairUntil === V.until) s.flairUntil = 0;
+    if (s.visitUntil === V.until) s.visitUntil = 0;
   }
 
   // --- The infrared link ------------------------------------------------------
@@ -7532,6 +7730,7 @@ class HatchPetCard extends HTMLElement {
     const L = this._link;
     if (!L) return;
     this._link = null;
+    this._linkEndedAt = Date.now(); // a world visitor waits VISIT_AFTER_MS
     L.timers.forEach(clearTimeout);
     clearInterval(L.swap);
     clearInterval(L.flap);
