@@ -993,6 +993,63 @@ go any time, but before PR 4f (Catch).
 - **Done =** the review's definition of done (feedback, no duplicates, accessible,
   reduced-motion equivalent), and nothing is stored.
 
+**3a/3b plan review fold (s2528, 2026-10-30; wins over the 3a and 3b text above).**
+Scout `hatch-at-home-s2528` against `1d72923`: both FIX FIRST, 29 findings (10 player-impact,
+13 plan defects, 6 nits), plan edits only; full report archived with the worker. CARD =
+`hatch-pet-card.js` at `1d72923`; names win over numbers. First-mate decisions on its five
+questions (owner delegated "decide the obvious", 2026-10-30): **3b ships before 2a with a
+stub; a pat while calling is wiggle only; asleep = a slowed `perk`, no text, no new art;
+babies and children use the normal pat lines (no `BABY` keys yet); calm Catch has two steps.**
+
+*3a acceptance:*
+- `calm()` replaces all **14** `prefers-reduced-motion` sites plus `_ghosting`'s local
+  `media()` (CARD 2962, 3050, 4137, 4209, 4487, 4569, 4616, 4894, 6062, 6543, 6659, 6899,
+  7221; 4039-4043). Card-check grep guard: no `prefers-reduced-motion` string outside `calm()`
+  and the CSS block (1340-1342).
+- **Catch has shipped** (7215-7345) and its calm branch still slides the prop: 3a changes a
+  shipped game; the "before 4f" ordering is dropped. Calm Catch: **two steps**, the prop
+  appears at once at the far spot (left 0 %, right 84 %) and jumps to "at the pet" (28 % /
+  56 %) at `travel - window - 50 ms` (a one-frame grace, so a tap on the visible last spot
+  is never "too soon", 7276). Test with `page.clock` or `c.start`, not wall time. A live OS
+  change applies from the next round (`c.calm` is per round). The catch pose jumps, no slide.
+- Hold frame 1: when calm and the frame list changed, `_redraw` sets `s.frame = 0`
+  (3805-3807, 4001); after a mood change the `src` ends in `_1`.
+- Also still under calm: `_frames()` returns one frame (poses, `_linkPose` waves), the link
+  guest's 700 ms `setInterval` is skipped (6945), the egg keeps the first `crack`/`wiggle`
+  frame.
+- Checked, no change: the beam (6910-6913), typewriter (4209-4217), boot (6062), cleaning
+  fade (3050), idle moves (4137-4145); CSS `perk`/`hop` are already killed by the global rule.
+- Tests: bench for the 330 px calm-Catch shots (`motion` field, `_startGame`, frozen
+  `performance.now`); card-check for the tap judging and the `src` checks.
+
+*3b acceptance:*
+- Copy: the five C10 adult lines only; **`bored` and any mood outside C10's list use the
+  content line**; babies and children use the same lines (no `_lines` route until `BABY`
+  `pat.*` keys exist, owner may add later). Asleep: `perk` slowed (CSS), no line, no sound.
+  Add no other player copy.
+- **Stub for 2a:** `_patMayTalk(s)` = `!(s.sayUntil > now) && !s.queue?.length && !s.game &&
+  !s.asking && !s.power && !s.calling`; otherwise wiggle only. 2a later replaces the body
+  with its class rule (loosen only).
+- The box: a `button.pat` placed by the same `.pet` rule (1634), added to the
+  `MutationObserver` that copies `PERCH_MOVES` and `scale` (2833-2845), `z-index` above
+  `.bubble` (1648) and below `.askday`, `.game`, `.status`, `.boot`. `aria-label` "pat
+  <given name>" (species name as fallback), updated on rename.
+- Hidden/inert when: not the current slide (a peeking neighbour's tap still brings it
+  forward), `.screen.show-status` (covers settings, picker, journal), the game pick menu and
+  a game (`:has()` as at 2086), `s.scene` (6117), `s.linking`, `s.power` (2965), `_booting`,
+  away (3797-3801), `.askday` up, the egg stage. Mono needs nothing.
+- Handler: `stopPropagation`; ignore `_swiped` when `e.detail === 0` (keyboard after a
+  swipe still pats); `_tapped(patBtn, s)` for the `perk` + the existing `vibrate(12)` (no
+  second vibrate, no `greethop`); line via plain `_speak(s, line, ms)` (never the `speak`
+  helper at 4730, which passes `catch: true`); a wiggle without a line sets
+  `s.movingUntil = now + 400` so `_idle` doesn't start a wander mid-wiggle. 4 s cooldown.
+- Tests (card-check for behaviour, bench for the box position and hidden states): pat gives
+  a C10 line and no status; tap beside the pet (outside 26.75-73.25 %, above 34 %) opens
+  status; three fast pats, one line; a pat during a kept line, a game, a question or a call
+  keeps it; swipe then Enter pats; peeking neighbour comes forward with no line;
+  `catchCount` unchanged after 6 pats; no `callService`/`callWS` and `localStorage`
+  unchanged in the 200 ms after a pat; one shared-screen pat; a visible focus ring.
+
 **PR 3c: reactions at every stage (O02).** Size **M** without art, tier 1; art is a
 later, separate batch (**L**).
 - **No-art first.** Today only the child has species poses (`_petFrames` 2174,
