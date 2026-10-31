@@ -1120,6 +1120,13 @@ async function main() {
   };
 
   const me = await evaluate(() => document.querySelector("home-assistant").hass.user.id);
+  // No natural world visitor during the run (it would silence pats and block idle life
+  // for ~7 s in its window): every pet's day is marked used. localStorage, so it holds
+  // over reloads; the visitors section clears it for its own cases and sets it back.
+  const holdVisits = () => card.evaluate((el) => {
+    for (const s of el._slides || []) localStorage.setItem(`hatch-visit-${s.ids?.device}-${new Date().toDateString()}`, "1");
+  });
+  await holdVisits();
   if (want("play")) {
   // Greeted by first name: forget past greetings, reload, come back to this pet.
   await evaluate(() => Object.keys(localStorage)
@@ -6093,11 +6100,11 @@ async function main() {
   // World visitors (docs/plan-2026-10-31-visitors.md): card only, seeded by date,
   // nothing kept but the day's flag. The decision (_visitorDue) is stubbed for the
   // gates; the real one is walked over 14 days x 24 hours. The day flag persists
-  // across runs: every hatch-visit-* is cleared first.
+  // across runs: every hatch-visit-* is cleared before each case, and set again after.
   await calm();
   await page.waitForTimeout(800);
   await pinAwake(card, "visitors");
-  await evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("hatch-visit-")).forEach((k) => localStorage.removeItem(k)));
+  // (vprep clears every hatch-visit-* once its stub is in, so no real visit slips in first)
   const vsrc = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
   const VIS = require("vm").runInNewContext(`(${vsrc.match(/\nconst VISITORS = (\{[\s\S]*?\n\});/)[1]})`);
   const VLINES = require("vm").runInNewContext(vsrc.match(/\nconst VISIT_LINES = (\[[^\n]*\]);/)[1]);
@@ -6339,8 +6346,8 @@ async function main() {
     el._visitorEnd(s);
     if (el.__realDue) { el._visitorDue = el.__realDue; delete el.__realDue; }
     Object.assign(s, { poseUntil: 0, sayUntil: 0, visitUntil: 0, flairUntil: 0, queue: [] });
-    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
   });
+  await holdVisits();
   await unpinAwake(card);
   }
   if (want("care")) {
