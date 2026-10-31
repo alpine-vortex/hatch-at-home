@@ -493,6 +493,165 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   check("shell: the stale list is gone again", JSON.stringify(restored) === JSON.stringify(a.options), JSON.stringify(restored));
 }
 
+// 2c. The mono screen (gear slice 5): the "mono screen" row in THIS SCREEN, per
+// browser. The screen and the IR beam take the 4-tone filter, the plastic keeps its
+// colour, the grid moves to .mono-grid (only with screen effects on, never with more
+// contrast), a reload keeps it, a second tab follows, and no storage leaves it off.
+async function monoChecks({ page, context, check, cur, evaluate, shot, errors }) {
+  const card = page.locator("hatch-pet-card");
+  const redraw = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.statusHtml = null;
+    el._renderStatus(s, el._state(s, "sensor.last_care")?.attributes.log || []);
+  });
+  const look = (p = page) => p.locator("hatch-pet-card").first().evaluate((el) => {
+    const s = el._slides[el._index];
+    const css = (n) => (n ? getComputedStyle(n) : null);
+    const bell = s.status.querySelector(".bell.mono");
+    const grid = s.el.querySelector(".mono-grid");
+    const a = grid.getBoundingClientRect();
+    const b = s.screen.getBoundingClientRect();
+    // A beam image of the card's own kind, to read the rule that reaches it.
+    const beam = document.createElement("div");
+    beam.className = "irbeam";
+    beam.innerHTML = "<img alt=''>";
+    el._track.append(beam);
+    const beamFilter = css(beam.firstChild).filter;
+    beam.remove();
+    return {
+      on: el._card.classList.contains("mono"), stored: localStorage.getItem("hatch-mono"),
+      row: bell && { text: bell.textContent, pressed: bell.getAttribute("aria-pressed"), label: bell.getAttribute("aria-label") },
+      screen: css(s.screen).filter, beam: beamFilter, request: css(s.request).filter,
+      buttons: css(s.el.querySelector(".buttons")).filter, label: css(s.label).filter,
+      glow: css(s.screen.querySelector(".glow")).display, lcd: css(s.screen.querySelector(".lcd")).display,
+      ghost: css(s.ghost).display, grid: css(grid).display,
+      fits: Math.abs(a.left - b.left) < 1 && Math.abs(a.top - b.top) < 1 && Math.abs(a.width - b.width) < 1 && Math.abs(a.height - b.height) < 1,
+    };
+  });
+  const tap = async () => {
+    await cur().locator(".bell.mono").click();
+    await page.waitForTimeout(300);
+  };
+  const filtered = (f) => /url\(.*hatch-mono4/.test(f || "");
+  const plain = (m) => m.request === "none" && m.buttons === "none" && m.label === "none";
+
+  await card.evaluate((el) => { localStorage.removeItem("hatch-mono"); el._card.classList.remove("mono"); });
+  await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
+  await page.waitForTimeout(400);
+  await cur().locator(".status .gear").click();
+  await page.waitForTimeout(300);
+  const off = await look();
+  check("mono screen: a row in this screen, off by default",
+    !off.on && off.stored === null && off.row?.text === "off" && off.row.pressed === "false" &&
+    off.row.label === "mono screen: off, change" && !filtered(off.screen) &&
+    await cur().locator(".status .sec", { hasText: "this screen" }).count() === 1,
+    JSON.stringify(off));
+  await tap();
+  const on = await look();
+  await cur().locator(".status .row", { hasText: "mono screen" }).scrollIntoViewIfNeeded();
+  await shot("d2-mono-row");
+  check("mono screen: on stores \"4\" and the screen and beam take the 4-tone filter, the plastic keeps its colour",
+    on.on && on.stored === "4" && on.row?.text === "on" && on.row.pressed === "true" && on.row.label === "mono screen: on, change" &&
+    filtered(on.screen) && filtered(on.beam) && plain(on),
+    JSON.stringify(on));
+  // The request button: hidden over the sheet (the rule reaches it past .mono-grid).
+  const request = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const had = s.request.classList.contains("show");
+    s.request.classList.add("show");
+    const over = getComputedStyle(s.request).display;
+    el._toggleStatus(s);
+    await new Promise((r) => setTimeout(r, 400));
+    const after = getComputedStyle(s.request).display;
+    if (!had) s.request.classList.remove("show");
+    return { over, after };
+  });
+  check("the wants-attention button stays hidden over the sheet and shows without it",
+    request.over === "none" && request.after !== "none", JSON.stringify(request));
+  // Screen effects off: no grid at all; on: .mono-grid over the screen, the
+  // in-screen grid, ghost and glow hidden. Put back as they were after.
+  const setLcd = (on) => card.evaluate((el, on) => { localStorage.setItem("hatch-lcd", on ? "on" : "off"); el._card.classList.toggle("lcd-on", on); }, on);
+  const lcdWas = await card.evaluate((el) => el._card.classList.contains("lcd-on"));
+  await setLcd(false);
+  await page.waitForTimeout(300);
+  const fxOff = await look();
+  check("mono with screen effects off: filtered, no grid, glow and ghost hidden",
+    fxOff.on && filtered(fxOff.screen) && fxOff.grid === "none" && fxOff.lcd === "none" && fxOff.glow === "none" && fxOff.ghost === "none",
+    JSON.stringify(fxOff));
+  await setLcd(true);
+  await page.waitForTimeout(300);
+  const fxOn = await look();
+  await shot("d2-mono-on");
+  check("mono with screen effects on: the grid drawn over the screen by .mono-grid, the in-screen grid, ghost and glow hidden",
+    fxOn.grid === "block" && fxOn.fits && fxOn.lcd === "none" && fxOn.ghost === "none" && fxOn.glow === "none" && filtered(fxOn.screen),
+    JSON.stringify(fxOn));
+  await page.emulateMedia({ contrast: "more" });
+  await page.waitForTimeout(300);
+  const contrast = await look();
+  await page.emulateMedia({ contrast: null });
+  check("mono with prefers-contrast: more: still filtered, no grid",
+    contrast.on && filtered(contrast.screen) && contrast.grid === "none" && contrast.lcd === "none" && plain(contrast),
+    JSON.stringify(contrast));
+  await setLcd(lcdWas);
+
+  // A reload keeps it (a second tab opens on the same storage), and that tab
+  // follows the first through the storage event, off and on again.
+  const tab = await context.newPage();
+  tab.on("pageerror", (e) => errors.push(`mono tab: ${e}`));
+  await tab.goto(`${HA}/pet-bench/pet`);
+  await tab.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
+  await tab.waitForTimeout(16000); // the frontend reloads itself once
+  await tab.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 }).catch(() => reloadFor(tab, "hatch-pet-card .statusbtn", 30000));
+  const opened = await tab.locator("hatch-pet-card").first().evaluate((el) => el._card.classList.contains("mono"));
+  await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
+  await page.waitForTimeout(400);
+  await cur().locator(".status .gear").click();
+  await page.waitForTimeout(300);
+  await tap();
+  await tab.waitForTimeout(500);
+  const followedOff = await tab.locator("hatch-pet-card").first().evaluate((el) => el._card.classList.contains("mono"));
+  await tap();
+  await tab.waitForTimeout(500);
+  const followedOn = await tab.locator("hatch-pet-card").first().evaluate((el) => el._card.classList.contains("mono"));
+  await tab.close();
+  check("mono screen: a fresh load keeps it, and a second tab follows off and on",
+    opened === true && followedOff === false && followedOn === true, JSON.stringify({ opened, followedOff, followedOn }));
+
+  // Off again: the key goes, not "off".
+  await tap();
+  const offAgain = await look();
+  check("mono screen: off removes the key and the filter",
+    !offAgain.on && offAgain.stored === null && offAgain.row?.text === "off" && !filtered(offAgain.screen), JSON.stringify(offAgain));
+
+  // No storage (for this key, so the rest of the card runs on): the row reads off
+  // and a tap changes nothing.
+  await card.evaluate((el) => {
+    el.__storage = ["getItem", "setItem", "removeItem"].map((k) => [k, Storage.prototype[k]]);
+    for (const [k, f] of el.__storage) {
+      Storage.prototype[k] = function (key, ...rest) {
+        if (key === "hatch-mono") throw new Error("no storage");
+        return f.call(this, key, ...rest);
+      };
+    }
+  });
+  await redraw();
+  await page.waitForTimeout(300);
+  await tap();
+  const none = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const bell = s.status.querySelector(".bell.mono");
+    const out = { on: el._card.classList.contains("mono"), text: bell?.textContent, pressed: bell?.getAttribute("aria-pressed") };
+    for (const [k, f] of el.__storage) Storage.prototype[k] = f;
+    delete el.__storage;
+    return { ...out, stored: localStorage.getItem("hatch-mono") };
+  });
+  check("mono screen: with no storage it stays off and a tap changes nothing",
+    !none.on && none.text === "off" && none.pressed === "false" && none.stored === null, JSON.stringify(none));
+  await redraw();
+  await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
+  await page.waitForTimeout(400);
+}
+
 async function main() {
   fs.mkdirSync(OUT, { recursive: true });
   await waitForHa();
@@ -4284,6 +4443,7 @@ async function main() {
     await under(".status", 0.25));
   await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
   await page.waitForTimeout(400);
+  await monoChecks({ page, context, check, cur, evaluate, shot, errors });
 
   for (const width of [420, 330]) {
     await page.setViewportSize({ width, height: 860 });

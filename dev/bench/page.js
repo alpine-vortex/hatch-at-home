@@ -139,6 +139,19 @@
     } else card._write(cur, "w-whoa... did someone pull my battery?", 1e9);
   }
 
+  // The infrared beam held mid-flight (400 ms of 1100: the head over the host's
+  // shell, its trail behind it). Drawn by the card's own _linkBeam, no visit around it.
+  function irBeam(card) {
+    const [host, guest] = card._slides;
+    card._link = { timers: [] };
+    card._linkBeam(host, guest, true);
+    const L = card._link;
+    clearInterval(L.flap);
+    L.timers.forEach(clearTimeout);
+    for (const a of L.beam.getAnimations({ subtree: true })) { a.pause(); a.currentTime = 400; }
+    card._link = null;
+  }
+
   // Put on the costume `art` of `season` (frame 1 or 2 showing) and wait out the
   // pet's little perk, so the shot holds the hat still.
   async function dress(card, cur, { season, art, frame = 1 }) {
@@ -230,6 +243,9 @@
       for (let n = 0; !root.querySelector(".jgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
     }
     if (shot.view === "games") card._startGame(cur, cur.buttons.play); // the button itself can be disabled
+    // `classes`: screen states the fake hass cannot pin (`lit`, `faded`...), put on last.
+    for (const c of shot.classes || []) cur.screen.classList.add(c);
+    if (shot.beam) irBeam(card);
     // Date is pinned, so a line would never finish typing: write each whole.
     slides.forEach((x) => card._stopTyping(x));
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -237,6 +253,7 @@
     for (const a of root.getAnimations()) if (a instanceof CSSTransition) a.finish();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     await settled(card);
+    window.bench.screenClass = cur.screen.className;
     return true;
   }
 
