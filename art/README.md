@@ -309,4 +309,9 @@ through the Codex CLI's image tool, then cut like the other rooms (4:3 crop, LAN
 - Woodland `bg_dim`: the cabin with the lights off, stars in the window, the stove burned down to
   embers. A two-step edit (the day room darkened, then the stove taken down to embers); the
   owner picked it from probe sheets.
+- Woodland `bg_night`: the same cabin lit warm in the evening (lamplight from off-frame, the
+  stove burning), a crescent moon and stars over the firs in the window.
+- Woodland `bg_rain`: the same cabin in cool overcast light with a small stove fire, rain
+  falling past the firs and streaking the window. Both one edit each of the day room,
+  owner-approved from a probe sheet.
 
