@@ -1622,3 +1622,15 @@ What P3b shipped, where it differs from the text above, and what P3c now picks u
   old card), rerun it against v0.37.0 and v0.35.0, and compare with P3b's results (below).
 - Docs: `guide.md` events (`watching`/`listening` without `title`/`artist`), the
   Recorder purge list (the media events), and the release note's *(P3c)* lines.
+
+**P3b's card-check results** (scratch HA, fresh `.storage`, seeded):
+- **Baseline, pre-P3b server** (`1d72923` + the new checks): 369/371. The two FAILs were
+  new P3b checks, expected before P3b: the second login's `hass.states` held dev's ID,
+  "sunbeam", `bonds`, `notify_users`, `for_name` and `for`; and the level-up case didn't
+  fire because the pet was asleep (the wake was added after). Old cards: v0.37.0 and
+  v0.35.0 each had 0 console errors and no "undefined".
+- **After P3b**: 371/371. Old cards: 0 console errors and no "undefined" on both, so P3b
+  adds none. v0.35.0's wish row on dev's own card went from the aimed "play a game with
+  you" (it read `wish.for`) to the plain "play a game together". On v0.37.0, dev's real
+  level-up (8 to 9) reached only dev's channel ("left or right is our game now! ♥");
+  the public `moments` had no bond moment.
