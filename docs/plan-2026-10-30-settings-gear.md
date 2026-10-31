@@ -321,7 +321,7 @@ Each slice ships alone, ends green on `scripts/test`, and a bench look.
    pass rule and the owner's look at the worst 10 (§5); `scripts/test`; card-check toggles
    it, a reload keeps it, a second tab follows through the listener, no storage stays
    off, and it works with effects off and `prefers-contrast: more`. Strings: 6.5.
-6. **README/docs** and the `dev/bench/README.md` table (view `settings`, `mono`).
+6. **README/docs** and the `dev/bench/README.md` table (view `settings`, `mono`). **Shipped (s2525, 2026-10-30):** bench README (`mono`, `classes`, `beam`, `link`, preset `mono`), README and guide (gear, shell picker, mono screen); no code.
 7. **Two tones** (parked, owner Q5: "2 tones only as a later step"). Not started; needs its own pass rule, since 2 tones can merge pet and background on dim.
 
 ## 6.3 FM decisions and strings (slice 3)

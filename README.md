@@ -114,6 +114,12 @@ Hook up the things you already have, and your pet notices them:
    Name your pet and pick its world. Want more pets? Add it again!
 5. **Put it on display:** edit a dashboard → *Add card* → **Hatch at Home pet shelf**.
 
+Tap the pet's screen for its status page, and the gear at the top of it for the
+settings: your own switches, this screen's (sounds, screen effects, the mono screen
+and the shared screen) and the pet's **shell**. Pick a finish for each pet, and
+earned ones unlock when it's a teen. A shared screen shows the shell but can't change
+it. The mono screen is per browser; Safari and iOS keep colour.
+
 Then open *What your pet notices* (the ⚙ next to your pet) to connect it to your
 weather, lights, TV and more. Every setting is optional.
 

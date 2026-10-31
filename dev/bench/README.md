@@ -19,6 +19,7 @@ node scripts/bench.js --preset finishes   # 576 shots: every shell finish, every
 node scripts/bench.js --preset settings         # the gear's sheet, 420/330, day/night
 node scripts/bench.js --preset settings-shared  # the same on a shared screen
 node scripts/bench.js --preset picker     # the shell picker: egg (locked) and teen, 420/330
+node scripts/bench.js --preset mono       # the mono screen: 2498 shots, ~2.5 min, plus the pass rule
 ```
 
 PNGs land in `dev/bench/out/` (gitignored; `--out DIR` to move it). A preset
@@ -60,7 +61,10 @@ A shot (all optional):
 | `say` | text put in the bubble (`""` clears it) |
 | `clip` | `card` (whole card, default), `device` (the toy), `screen` (the LCD only) |
 | `motion` | `reduce` emulates `prefers-reduced-motion: reduce` (`--motion reduce`) |
-| `lcd`, `booted` | per-browser settings, see below |
+| `lcd`, `booted`, `mono` | per-browser settings, see below |
+| `classes` | an array of classes put on `.screen` last, before the transitions finish: `faded`, `raining`, `lit`... (the bench's `scene: "rain"` is woodland's rain backdrop without `raining`) |
+| `beam` | `true`: the infrared beam held mid-flight (400 ms in, the head over the host's shell) by the card's own `_linkBeam`, no visit around it. Use `pets: 2` and `clip: "card"` |
+| `link` | the infrared visit greeting caught as the visit screen opens: `{waves, wait}` (`waves` is put on both species, `wait` is ms to hold, default 150) |
 | `storage` | any other localStorage keys to seed |
 | `config` | extra card config (`setConfig`) |
 | `visit` | the reply the fake `virtual_pet.visit` service gives (`{notes: [...]}` makes the pet tell the viewer things) |
@@ -71,9 +75,32 @@ Per-browser settings (localStorage, seeded per shot): `booted` (default true)
 sets `hatch-booted` so the power-on boot screen never covers the shot; `--boot`
 (or `"booted": false`) shows it (the page reloads for that shot, since the card
 shows it once per page load). `lcd` sets `hatch-lcd`: `"off"` turns the LCD
-grid and ghosting off, anything else leaves them on. `storage` seeds any other
-key. If the card changes these keys or values, update `normalize` in
+grid and ghosting off, anything else leaves them on. `mono` (`--mono on`; `--mono off`
+leaves it off) sets `hatch-mono` to `"4"`, the mono screen switch, and the shot is
+measured for the pass rule below. `storage` seeds any other key. If the card changes these keys or values, update `normalize` in
 `scripts/bench.js`.
+
+## The mono preset
+
+`--preset mono` shoots the species sheet (frame 1, as `species`) and then a 19-shot
+state strip of one adult in woodland, at 420 and 330, all with the mono screen on:
+day, night, dim, faded, raining, rain-scene, lit, lit-night, lit-rain-scene, status,
+journal, picker, games, bubble, boot, sick, dirty, attention, effects-off and beam
+(2498 shots, about 2.5 minutes). Sheets land in `out/sheets/` as `mono-species-<id>-<width>`
+and `mono-strip-<width>`.
+
+Each shot is measured against the card's four tones and the run prints the failures
+and the ten worst, and writes `mono-pass.json` to the out dir (every shot's numbers
+and its `.screen` classes). The numbers:
+
+- `apart`: the mean tone steps between each pet pixel and the pixel behind it (0
+  where the pet is lost). A pet fails under 0.5.
+- `lost`: the share of pet pixels that came out the same tone as the background.
+- `delta`: the mean luma difference between pet and background, in tone steps.
+- flat: one tone over 97 % of the screen. A flat shot fails.
+
+The run also checks the backlight: each lit strip shot (day, night, rain) must differ
+from its unlit twin on more than 5 % of its pixels, or the run exits non-zero.
 
 ## What is pinned
 

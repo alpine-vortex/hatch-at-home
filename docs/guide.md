@@ -213,8 +213,30 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   it ("thank you all for taking care of me ♥"). All cosmetic.
 - Tap the screen for the status page: hearts and meters, weight, care misses and
   ignored whines, traits (n/4) and the one it's learning next, upbringing,
-  personality (from teen), the next egg, the notify-me and sounds switches, recent
-  care, and a link to the journal. Tap again to go back.
+  personality (from teen), the next egg, recent care, and a link to the journal.
+  Tap again to go back. The switches live behind the gear (below).
+- **The settings gear.** A gear sits at the top of the status page ("settings").
+  Tap it for the settings sheet; "‹ settings" at the top of any sub-page takes you
+  back. The sheet has up to three parts:
+  - **for the pet** (or **for** its name): the pet's "shell" row, see below.
+  - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk and
+    my data. These follow your login. A shared screen doesn't show this part.
+  - **this screen**: sounds here, babble (for pets with a voice), screen effects
+    here, mono screen and shared screen. These are saved in this browser only.
+- **The shell picker.** On a server that offers it, the sheet has a "shell" row
+  showing the pet's current shell. Tap it to open the picker, a list of finishes in
+  groups (world plastics, specials, prints), starting with the world's own. Tap a
+  tile to see it on the pet's shell as a preview, then **use** to keep it, or
+  **world default** to go back to the world's own. "‹ settings" leaves without
+  saving. Each pet has its own shell. The earned shells (glitter, glow, smoke,
+  sunset, constellation and stars) unlock when the pet is a teen: before that their
+  tiles are dimmed with the stage they open at, and tapping one says "I get this one
+  as a teen ♪". On a shared screen the row is read-only: it shows the shell and says
+  "ask a grown-up to change it", with no picker.
+- **The mono screen.** "mono screen" in the sheet's "this screen" part redraws the
+  LCD in four greens, like an old handheld. It is per browser, off to begin with,
+  and only changes how the screen looks. Safari and iOS can't draw it and keep
+  showing colour.
 - Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
   and phones give a tiny vibration. Then the real reaction follows (a food bowl, a
   sparkle, or a refusal like "I'm full!"). If HA rejects the press, the button shakes
