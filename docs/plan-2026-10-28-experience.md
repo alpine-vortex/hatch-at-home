@@ -387,6 +387,24 @@ existing request buttons, without their `?`).
   stay queued and counted once, and are said when the call ends. 2a's later body keeps
   `!s.calling` in `_patMayTalk`. PR 4c's status-row list gains this row.
 
+**2b + 2c reconcile (s2538, 2026-10-31), for Wave 3.** Built as one ship on the 2a branch.
+- **Server:** `became_sick` is in `MOMENTS`; `MOMENT_BARE` (coordinator) makes its public moment
+  `{type, at}` only. The bus and the phones still carry `cause`. Simulated ticks add none.
+- **Card names:** `_isSick(s)` (the mood's `sick` flag, the `still` test of C6); `_allBetter(s, mine)`
+  (C8: `MINE` for the viewer, `BEAT` for someone else); `WANT_WORDS` (C9, call reasons, `sick`,
+  `blanket`, `fan`). C8 for the viewer's own tap is said from `_sceneEnd` (scene answered), or
+  from `_react` when the scene is already over; reduced motion and other viewers use `_react`'s `ok`.
+  The new `_lines` keys: `became_sick`, `all_better`.
+- **Droop:** `.pet.droop` (2.8 s, once); under reduced motion the sag is a held frame for as long
+  as the class stays. The bench has `petClasses` / `petAt` to pin it.
+- **Order:** a batch with `became_sick` and `good_morning` says C6 first (the cheer queues).
+- **`s.calling` (2c):** `_mayInterrupt` refuses `cls < KEPT` while calling; `_sayQueued` leaves
+  only kept lines that aren't `type: "wish"` while calling. **3b's `_patMayTalk`** should keep a
+  `!s.calling` term when it replaces `_mayInterrupt`'s body, as before.
+- **Status row:** "would like" is the first row of the status sheet (above "wish"), from
+  `reason_key` (`call_*`), the `sick` flag, then `requests` (no `lay_egg`). 4c's list gains it.
+- **Open for the owner:** the row's label ("would like") is the plan's; no other new copy.
+
 ### Wave 3: the pet itself
 
 **PR 3a: reduced motion, all the way (F11).** Size **S-M**, tier 1. Independent: it can

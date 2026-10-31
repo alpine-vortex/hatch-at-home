@@ -2536,6 +2536,7 @@ async function main() {
     s.screen.querySelector(".askday")?.remove();
     s.asking = false;
     s.screen.classList.remove("show-status");
+    if (s.bubble) s.bubble.textContent = "";
   });
   // Every moment type has a class: coordinator MOMENTS, const PERSONAL_EVENTS
   // and MEDIA_EVENTS, read from the Python by name.
@@ -2758,6 +2759,156 @@ async function main() {
   await inject(pet["sensor.life_stage"], { attributes: { wish: lifeWas ?? null } });
   await inject(pet["sensor.last_care"], { attributes: { moments: [] } });
   await calm();
+
+  // PR 2b: feeling poorly (C6), all better (C8). The mood's flags are set on the
+  // card's own copy of the state, and put back after.
+  const moodFlags = (flags, extra = {}) => card.evaluate((el, { flags, extra }) => {
+    const s = el._slides[el._index];
+    const st = el._hass.states[s.ids["sensor.mood"]];
+    window.__moodWas ??= st.attributes;
+    st.attributes = { ...window.__moodWas, flags, ...extra };
+  }, { flags, extra });
+  const moodBack = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    if (window.__moodWas) el._hass.states[s.ids["sensor.mood"]].attributes = window.__moodWas;
+    window.__moodWas = undefined;
+  });
+  await quiet2a();
+  await moodFlags(["sick"]);
+  const c6 = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    el._moment(s, { type: "became_sick", at: new Date().toISOString() });
+    return { text: s.bubble.textContent, droop: s.pet.classList.contains("droop"), cls: s.sayClass,
+      queue: s.queue.length };
+  });
+  check("2b: became_sick says C6 once, with the droop", c6.text === "I don't feel so good..." && c6.droop && c6.cls === 2 && c6.queue === 0,
+    JSON.stringify(c6));
+  await page.waitForTimeout(3000);
+  check("2b: the droop is bounded (the class is gone after it)",
+    !(await card.evaluate((el) => el._slides[el._index].pet.classList.contains("droop"))));
+  // Reduced motion: the animation is off and one frame holds (a sag), still on the class.
+  await quiet2a();
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const held = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    el._moment(s, { type: "became_sick", at: new Date().toISOString() });
+    const cs = getComputedStyle(s.pet);
+    return { anim: cs.animationName, transform: cs.transform };
+  });
+  await shot("2b-droop-reduced-motion");
+  check("2b: under reduced motion the droop is one held frame, not an animation",
+    held.anim === "none" && held.transform !== "none", JSON.stringify(held));
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  // A waiting C6 is dropped if the pet is well by the time it would be said; kept if still sick.
+  for (const sick of [false, true]) {
+    await quiet2a();
+    await moodFlags(sick ? ["sick"] : []);
+    const waited = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.game = { picking: true };
+      el._moment(s, { type: "became_sick", at: new Date().toISOString() });
+      const queued = s.queue.length;
+      s.game = null; s.sayUntil = 0;
+      el._sayQueued(s);
+      return { queued, after: s.bubble.textContent, left: s.queue.length };
+    });
+    check(`2b: a waiting C6 is ${sick ? "said while still sick" : "dropped once it is well"}`,
+      waited.queued === 1 && (/don't feel so good/.test(waited.after) === sick) && waited.left === 0, JSON.stringify(waited));
+  }
+  // A pet that wakes sick says C6 before the good morning cheer.
+  await quiet2a();
+  await moodFlags(["sick"]);
+  const sickAt = Date.now();
+  await inject(pet["sensor.last_care"], { attributes: { moments: [
+    { type: "became_sick", at: new Date(sickAt + 2).toISOString() },
+    { type: "good_morning", at: new Date(sickAt + 1).toISOString() },
+    { type: "woke_up", how: "morning", at: new Date(sickAt).toISOString() },
+  ] } });
+  const heardSick = [];
+  for (let i = 0; i < 50; i++) {
+    const t = await cur().locator(".bubble").innerText();
+    if (heardSick[heardSick.length - 1] !== t) heardSick.push(t);
+    await page.waitForTimeout(300);
+  }
+  const iSick = heardSick.findIndex((t) => /don't feel so good/.test(t));
+  const iCheer = heardSick.findIndex((t) => /morning/.test(t));
+  check("2b: C6 comes before a coinciding good morning (the cheer waits)",
+    iSick >= 0 && iCheer > iSick, heardSick.join(" | "));
+  // C8: someone else's medicine, the viewer's own after the scene's cheer, and one whose scene is over.
+  await moodBack();
+  await quiet2a();
+  const c8 = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const out = {};
+    el._react(s, { action: "medicine", result: "ok", by: "Other", at: new Date().toISOString() }, { mine: false });
+    out.other = { text: s.bubble.textContent, cls: s.sayClass };
+    s.sayUntil = 0; s.sayClass = 0; s.queue = []; s.bubble.textContent = "";
+    s.scene = { kind: "medicine", answered: false, els: [], stop() {}, raf: 0 };
+    el._react(s, { action: "medicine", result: "ok", at: new Date().toISOString() }, { mine: true });
+    out.sceneLive = { answered: s.scene?.answered, text: s.bubble.textContent };
+    el._sceneEnd(s);
+    out.own = { text: s.bubble.textContent, cls: s.sayClass };
+    s.sayUntil = 0; s.sayClass = 0; s.queue = [];
+    s.sceneOwes = { kind: "medicine", until: Date.now() + 5000 };
+    el._react(s, { action: "medicine", result: "ok", at: new Date().toISOString() }, { mine: true });
+    out.late = { text: s.bubble.textContent, cls: s.sayClass };
+    s.sayUntil = 0; s.sayClass = 0; s.queue = [];
+    el._react(s, { action: "medicine", result: "not_sick", at: new Date().toISOString() }, { mine: false });
+    out.notSick = s.bubble.textContent;
+    return out;
+  });
+  check("2b: medicine ok says C8: another viewer's (beat), the viewer's own after the scene, and one that comes late",
+    c8.other.text === "all better! ♪" && c8.other.cls === 2 && c8.sceneLive.answered === true &&
+      c8.sceneLive.text !== "all better! ♪" && c8.own.text === "all better! ♪" && c8.own.cls === 4 &&
+      c8.late.text === "all better! ♪" && c8.late.cls === 4 && c8.notSick !== "all better! ♪", JSON.stringify(c8));
+
+  // PR 2c: what it wants, in order. A call holds the non-kept lines (and the wish); the
+  // status row names the need above the wish, and the deadline is never shown.
+  await quiet2a();
+  const held2c = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.calling = true;
+    el._queue(s, "I wish for a hop", 4500, { type: "wish" });
+    el._line(s, 2, "good night...", 4000, { write: true });
+    el._sayQueued(s);
+    const during = { text: s.bubble.textContent, queued: s.queue.map((q) => q.text) };
+    s.calling = false;
+    el._sayQueued(s);
+    return { during, after: s.bubble.textContent, left: s.queue.map((q) => q.text) };
+  });
+  check("2c: a call holds a queued wish line and a beat; they are said when it ends",
+    !/hop|good night/.test(held2c.during.text) && held2c.during.queued.length === 2 &&
+      /hop|good night/.test(held2c.after), JSON.stringify(held2c));
+  await quiet2a();
+  await moodFlags([], { reason_key: "call_hunger", requests: ["fan"], call_deadline: "2099-CALLDEADLINE" });
+  const rows = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.asleep = false;
+    s.screen.classList.add("show-status");
+    el._renderStatus(s, []);
+    return { rows: [...s.status.querySelectorAll(".row")].map((r) => r.textContent.trim()),
+      html: s.screen.innerHTML + s.status.innerHTML };
+  });
+  const iWant = rows.rows.findIndex((r) => /^would like/.test(r));
+  const iWish = rows.rows.findIndex((r) => /^wish/.test(r));
+  check("2c: the status row names the call's need ('a meal'), above the wish row, no deadline",
+    iWant === 0 && /a meal/.test(rows.rows[iWant]) && !/snack/.test(rows.rows[iWant]) && (iWish < 0 || iWant < iWish) &&
+      !/CALLDEADLINE/.test(rows.html), JSON.stringify(rows.rows.slice(0, 3)));
+  const order = [];
+  for (const [flags, attrs] of [[["sick"], { reason_key: "mood_content", requests: ["fan"] }],
+    [[], { reason_key: "mood_content", requests: ["lay_egg", "blanket"] }],
+    [[], { reason_key: "mood_content", requests: ["lay_egg"] }]]) {
+    await moodFlags(flags, attrs);
+    order.push(await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      el._renderStatus(s, []);
+      return [...s.status.querySelectorAll(".row")].find((r) => /^would like/.test(r.textContent.trim()))
+        ?.textContent.trim() || null;
+    }));
+  }
+  check("2c: no call: sick says medicine, else the first request (lay_egg excluded), else no row",
+    /medicine/.test(order[0]) && /a blanket/.test(order[1]) && order[2] === null, JSON.stringify(order));
+  await moodBack();
   await quiet2a();
 
 
@@ -6212,6 +6363,17 @@ async function main() {
         const r = { bubble: s.bubble?.textContent || "", queued: (s.queue || []).map((q) => q.text) };
         localStorage.setItem("hatch-shared-screen", "off");
         return r;
+      }, lastCare);
+      // 2b: a public became_sick ({type, at}) on an old card: nothing breaks, nothing undefined.
+      out.cases.sick = await el.evaluate(async (c, id) => {
+        const s = c._slides[c._index];
+        s.queue = [];
+        const hass = c._hass;
+        const st = hass.states[id];
+        const moments = [{ type: "became_sick", at: new Date().toISOString() }, ...(st.attributes.moments || [])];
+        await hass.callApi("POST", `states/${id}`, { state: st.state, attributes: { ...st.attributes, moments } });
+        await new Promise((r) => setTimeout(r, 1500));
+        return { bubble: s.bubble?.textContent || "", queued: (s.queue || []).map((q) => q.text) };
       }, lastCare);
       // P3c: what this server sends about the TV, music and a show's dream.
       // The public list has a title-less tv_on and music_on; the sensor's dream

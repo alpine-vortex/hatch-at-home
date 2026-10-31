@@ -132,7 +132,11 @@ MOMENTS = {
     "tucked_in",
     "favourite_snack",
     "someone_home",
+    "became_sick",
 }
+# A public moment of these types keeps only {type, at}: the bus and the phones
+# still get the cause.
+MOMENT_BARE = {"became_sick"}
 MOMENTS_KEPT = 10
 # The visit's celebration lines (one a look, and always a place for it).
 CELEBRATIONS = {"your_birthday", "pet_birthday", "birthday_friends", "friends_for"}
@@ -957,6 +961,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             # only hears that the TV or music was on.
             if (as_type := PUBLIC_AS.get(event["type"])) is not None:
                 moment: dict[str, Any] | None = {"type": as_type, "at": at}
+            elif public and event["type"] in MOMENT_BARE:
+                moment = {"type": event["type"], "at": at}
             elif public and event["type"] in MOMENTS:
                 moment = {**scrubbed, "at": at}
             else:

@@ -245,6 +245,15 @@
     if (shot.view === "games") card._startGame(cur, cur.buttons.play); // the button itself can be disabled
     // `classes`: screen states the fake hass cannot pin (`lit`, `faded`...), put on last.
     for (const c of shot.classes || []) cur.screen.classList.add(c);
+    // `petClasses`: classes on the pet itself (a reaction such as `droop`); `petAt` pauses
+    // its animation that many ms in, so a mid-motion frame is the same every run.
+    for (const c of shot.petClasses || []) cur.pet.classList.add(c);
+    if (shot.petAt !== undefined) {
+      for (const a of cur.pet.getAnimations()) {
+        a.pause();
+        a.currentTime = shot.petAt;
+      }
+    }
     if (shot.beam) irBeam(card);
     // Date is pinned, so a line would never finish typing: write each whole.
     slides.forEach((x) => card._stopTyping(x));

@@ -384,3 +384,25 @@ async def test_forget_my_data_clears_my_private_moments(
     assert (await command(client, "forget_me"))["success"]
     assert me not in coordinator._private
     assert len(coordinator._private["other"]) == 1
+
+
+async def test_became_sick_moment_is_bare(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """2b: the public moment is {type, at}; the bus keeps the cause; a
+    fast-forward (simulated) tick adds none."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    fired = async_capture_events(hass, f"{DOMAIN}_became_sick")
+    sick = {"type": "became_sick", "cause": "poop"}
+    coordinator._fire([sick], simulated=True)
+    assert not [m for m in coordinator.moments if m["type"] == "became_sick"]
+    coordinator._fire([sick])
+    moments = [m for m in coordinator.moments if m["type"] == "became_sick"]
+    assert len(moments) == 1
+    assert set(moments[0]) == {"type", "at"}
+    assert [e.data["cause"] for e in fired] == ["poop", "poop"]

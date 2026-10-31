@@ -944,6 +944,10 @@ function weightLabel(v) {
   return `${Math.round(v)} · ${v < 25 ? "a bit light" : v > 75 ? "a bit heavy" : "just right"}`;
 }
 
+// What it would like, in the status sheet (2c, C9): a call's need, else medicine
+// if sick, else the first request. Plain words, no "?", no clock.
+const WANT_WORDS = { call_hunger: "a meal", call_dirty: "a bath", call_energy: "a nap", call_sick: "medicine",
+  call_happiness: "play", sick: "medicine", blanket: "a blanket", fan: "a fan" };
 const REQUEST_LABELS = { blanket: "blanket?", fan: "fan?", lay_egg: "lay an egg?" };
 const REQUEST_ARIA = {
   lay_egg: "Lay an egg: the pet retires to the journal and a new egg takes its place",
@@ -1369,6 +1373,7 @@ const STYLE = `
     outline-offset: 2px; box-shadow: 0 0 0 6px #1d2a22; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; }
+    .pet.droop { transform: translateY(4px) rotate(-4deg) scaleY(.94); transform-origin: 50% 100%; }
   }
   ha-card { overflow: hidden; border-radius: var(--ha-card-border-radius, 24px);
     background: var(--hp-backdrop, #2f4a3a); transition: background .5s; }
@@ -1818,6 +1823,10 @@ const STYLE = `
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
   .pet.sulk { animation: shake .35s 2; }
+  /* Feeling poorly (2b): sags and settles back, once. Reduced motion holds the sag. */
+  .pet.droop { animation: droop 2.8s ease-in-out 1; transform-origin: 50% 100%; }
+  @keyframes droop { 0%, 100% { transform: none; }
+    35%, 70% { transform: translateY(4px) rotate(-4deg) scaleY(.94); } }
   .pet.born { animation: pop .45s ease-out; }
   .pet.stretch { animation: perk .5s ease-out 2; }
   .poop.born { animation: pop .4s ease-out; }
@@ -3896,8 +3905,12 @@ class HatchPetCard extends HTMLElement {
         fresh.push(m);
       }
       s.lastMoment = momentKey(moments[0]);
-      fresh.reverse().filter((m) => recent(m.at))
-        .forEach((m) => this._moment(s, m));
+      const batch = fresh.reverse().filter((m) => recent(m.at));
+      // A pet that wakes sick says so before the cheer (the cheer waits).
+      const sick = batch.findIndex((m) => m.type === "became_sick");
+      const morning = batch.findIndex((m) => m.type === "good_morning");
+      if (sick > morning && morning >= 0) batch.splice(morning, 0, ...batch.splice(sick, 1));
+      batch.forEach((m) => this._moment(s, m));
     }
     const egg = stage === "egg";
     if (s.game && (asleep || away || egg)) this._endGame(s, null);
@@ -4345,7 +4358,7 @@ class HatchPetCard extends HTMLElement {
   // question. A line waiting in the queue at this class or above goes first.
   _mayInterrupt(s, cls) {
     if (cls >= MINE) return true;
-    if (s.game || this._questionOn(s)) return false;
+    if (s.game || this._questionOn(s) || (s.calling && cls < KEPT)) return false;
     if (s.queue?.some((q) => lineClass(q) >= cls)) return false;
     return !(s.sayUntil > Date.now()) || cls > (s.sayClass || 0);
   }
@@ -4400,7 +4413,9 @@ class HatchPetCard extends HTMLElement {
     // beat ("good night...") or flavour may still be said, as it would have been.
     if (s.asleep && s.queue.some((q) => q.ask)) this._clearAsk(s);
     if (!s.queue.length || s.sayUntil > now || s.game || s.power || s.screen.classList.contains("show-status")) return;
-    const ready = s.asleep ? s.queue.filter((q) => lineClass(q) < KEPT) : s.queue;
+    let ready = s.asleep ? s.queue.filter((q) => lineClass(q) < KEPT) : s.queue;
+    // A call's own words hold: while it's calling, only a kept line (not a wish) is said (2c).
+    if (s.calling) ready = ready.filter((q) => lineClass(q) >= KEPT && q.type !== "wish");
     if (!ready.length) return;
     // The highest class first; in a class, the queue's order. A line whose
     // still() says it no longer fits (e.g. 2b's C6 once it's well) is dropped.
@@ -4929,6 +4944,11 @@ class HatchPetCard extends HTMLElement {
       case "discipline_miss":
         say("ok, ok... ♪");
         break;
+      case "became_sick": // feeling poorly (2b): said once, dropped if it's well by then
+        line(this._lines(s, "became_sick", "I don't feel so good...").text, 4500,
+          () => this._animate(s, s.pet, "droop", 2800),
+          { write: true, still: () => this._isSick(s) });
+        break;
       case "call_answered":
         if (m.reason === "fake" && m.answer !== "spoiled") { // only a fair scold sulks
           say("ok... sorry", 4500, () => this._animate(s, s.pet, "sulk", 800));
@@ -5175,9 +5195,25 @@ class HatchPetCard extends HTMLElement {
     this._react(s, newest, { mine, both });
   }
 
+  _isSick(s) {
+    return (this._state(s, "sensor.mood")?.attributes.flags || []).includes("sick");
+  }
+
+  // Medicine that worked (2b, C8): the viewer's own is theirs, someone else's a beat.
+  _allBetter(s, mine) {
+    this._line(s, mine ? MINE : BEAT, this._lines(s, "all_better", "all better! ♪").text,
+      mine ? Math.max(3000, MINE_MS) : 3000, { write: true, type: "care" });
+  }
+
   _react(s, entry, { mine = false, both = null } = {}) {
     s.screen.querySelector(".costume")?.remove(); // care takes the stage
-    if (this._sceneAnswered(s, entry)) return;
+    const cured = entry.action === "medicine" && entry.result === "ok";
+    const sceneLive = s.scene?.kind === entry.action;
+    if (this._sceneAnswered(s, entry)) {
+      // The scene's cheer says it when it ends; a scene already over says it now.
+      if (cured && !sceneLive) this._allBetter(s, true);
+      return;
+    }
     // One line at the end, of the press's class: the viewer's own is never
     // overwritten for MINE_MS; someone else's care waits its turn.
     let said = null;
@@ -5190,6 +5226,7 @@ class HatchPetCard extends HTMLElement {
     if (entry.action === "chore_treat") {
       said = ["a treat! someone did a chore ♪", 3500];
     }
+    if (cured) said = [this._lines(s, "all_better", "all better! ♪").text, 3000];
     if (["ok", "won", "lost"].includes(entry.result)) {
       const key = PROP_FOR[entry.action] || entry.action;
       // The species' own reaction pose, drawn for the child only.
@@ -5301,9 +5338,18 @@ class HatchPetCard extends HTMLElement {
     // The creature picked for the next egg (if any), and its world if that changes.
     const nextEgg = [stageAttrs.next_egg?.toLowerCase(), stageAttrs.next_world && `in ${stageAttrs.next_world}`]
       .filter(Boolean).join(" ");
-    // Today's wish comes first: it changes daily, the rest is there every day.
+    // What it would like most, above today's wish; none asleep, away or in the egg.
+    const moodNow = this._state(s, "sensor.mood");
+    const wantKey = moodNow?.attributes.reason_key;
+    const wantsNow = (moodNow?.attributes.flags || []).includes("sick") ? "sick"
+      : (moodNow?.attributes.requests || []).find((r) => r !== "lay_egg" && WANT_WORDS[r]
+        && this._state(s, `button.${r}`));
+    const want = s.asleep || moodNow?.state === "away" || isEgg ? null
+      : (String(wantKey).startsWith("call_") && WANT_WORDS[wantKey]) || WANT_WORDS[wantsNow] || null;
+    // Today's wish comes first of the rest: it changes daily, the rest is there every day.
     const html = `
       <div class="shead">${this._gearButton()}</div>
+      ${want ? row(null, "would like", `<span>${escape(want)}</span>`) : ""}
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
         ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
@@ -6497,6 +6543,7 @@ class HatchPetCard extends HTMLElement {
     if (!sc.answered) s.sceneOwes = { kind: sc.kind, until: Date.now() + 10000 };
     s.frame = 0;
     if (!quiet) this._redraw(s);
+    if (!quiet && sc.answered && sc.kind === "medicine") this._allBetter(s, true); // the cheer is over
   }
 
   // The server's answer to a scene's tap (_react). The scene shows an "ok" itself;
