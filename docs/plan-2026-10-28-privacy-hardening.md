@@ -1316,7 +1316,10 @@ check runs per old tag.
   The public `tv_on`/`music_on` say nothing. The channel's show ("Bluey Old! I love this
   one"), song ("♪ is this Debussy? ♪") and the show's dream ("I dreamed about Bluey Old!")
   are still said. The recap from `tv_on`/`music_on` alone is `null`: it has no bits for
-  them. This loss is accepted (fold #9).
+  them. This loss is accepted (fold #9). Its JSON now has `"sunbeam": true`. That comes from
+  the new first-look case on dev's own card: the line "will you play a game with me today,
+  sunbeam?" is dev's seeded aimed wish, said to dev by nickname, and is correct. The
+  second-login check is what guards other viewers.
 - **v0.35.0:** 0 console errors, no "undefined", no uncaught error, unchanged from P3b.
   `tv_on`/`music_on` say nothing. It has no channel, so it says no TV or music line and no
   media dream (the sensor's `dream` is null), and gives no recap. These losses are accepted.
