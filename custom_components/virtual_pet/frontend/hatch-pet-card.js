@@ -1312,8 +1312,8 @@ const STYLE = `
     background: var(--hp-backdrop, #2f4a3a); transition: background .5s; }
   .head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
     padding: 14px 18px 4px; }
-  .title { font: 400 22px 'Tiny5', monospace; color: var(--hp-ink); }
-  .title.long { font-size: 17px; } /* a long name keeps to two lines */
+  .title { font: 400 24px 'Tiny5', monospace; color: var(--hp-ink); }
+  .title.long { font-size: 16px; } /* a long name keeps to two lines */
   .sub { font-size: 13px; color: var(--hp-subink); margin-top: 2px; }
   .chips { display: flex; gap: 6px; align-items: center; }
   .statusbtn { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px;
@@ -3498,7 +3498,7 @@ class HatchPetCard extends HTMLElement {
     const kind = stage?.state === "egg" ? "Egg" : s.species?.name || "";
     const title = this._card.querySelector(".title");
     title.textContent = device?.name_by_user || device?.name || "Pet";
-    title.classList.toggle("long", title.textContent.length > 14);
+    title.classList.toggle("long", title.textContent.length > 9);
     const emblem = this._card.querySelector(".emblem");
     if (world.emblem) {
       const src = `${BASE}/ui/${world.emblem}.png?v=${VERSION}`;
