@@ -12,6 +12,13 @@
 // dev/config and scripts/develop: card-check stops your dev HA there and
 // starts it again in the background (its log: dev/card-check/ha-restart.log).
 // With HA_URL and without them, section 8 fails rather than skip.
+//
+// --list prints the section names; --only a,b (or --only a --only b) runs just
+// those, in file order. The login, the dashboard, the stubs and the pet-finding
+// prelude always run, and a section's own teardown still runs (restart puts
+// dev's seeded bond and wish back). Sections lean on the state their
+// predecessors leave (the open sheet, the bond, the slide on show), so a lone
+// one may need its neighbour: add it to --only. oldcard pulls in restart.
 
 const { chromium } = require("playwright");
 const fs = require("fs");
@@ -26,6 +33,38 @@ const CLIENT = `${HA}/`;
 const USER = { username: "dev", password: "devdevdev", name: "Dev" };
 const OUT = path.join(__dirname, "..", "dev", "card-check");
 const results = [];
+
+// The gated sections of main(), in file order.
+const SECTIONS = ["shelf", "shell", "play", "resume", "moments", "photos", "personality", "types",
+  "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "care",
+  "editor", "boot", "infrared", "lowbattery", "restart", "oldcard"];
+const NEEDS = { oldcard: ["restart"] }; // oldcard asserts restart's seeded bond
+const argv = process.argv.slice(2);
+if (argv.includes("--list")) {
+  console.log(SECTIONS.join("\n"));
+  process.exit(0);
+}
+let ONLY = null;
+for (let i = 0; i < argv.length; i++) {
+  if (argv[i] !== "--only") {
+    console.error(`card-check: unknown argument ${argv[i]} (--list, --only <name>[,<name>...])`);
+    process.exit(2);
+  }
+  ONLY ||= new Set();
+  for (const n of (argv[++i] || "").split(",").filter(Boolean)) ONLY.add(n);
+}
+if (ONLY) {
+  const bad = [...ONLY].filter((n) => !SECTIONS.includes(n));
+  if (bad.length || !ONLY.size) {
+    console.error(`card-check: ${bad.length ? `unknown section ${bad.join(", ")}` : "--only needs a name"}; sections: ${SECTIONS.join(", ")}`);
+    process.exit(2);
+  }
+  for (const n of [...ONLY]) for (const need of NEEDS[n] || []) {
+    if (!ONLY.has(need)) console.log(`note: ${n} needs ${need}; running it too`);
+    ONLY.add(need);
+  }
+}
+const want = (name) => !ONLY || ONLY.has(name);
 
 function check(name, ok, detail = "") {
   results.push({ name, ok, detail });
@@ -791,8 +830,13 @@ async function main() {
     });
   }, { entity, patch });
 
-  // 1. The shelf draws its devices.
+  // The sections below are gated with `if (want(...)) {` lines, left unindented on
+  // purpose: re-indenting ~5000 lines would conflict with every branch that edits a check.
+  // What a section hands to a later one is declared here or in the ungated lines between.
   const slides = await page.locator("hatch-pet-card .slide").count();
+  const card = page.locator("hatch-pet-card");
+  if (want("shelf")) {
+  // 1. The shelf draws its devices.
   check("shelf shows the pets", slides >= 2, `${slides} devices`);
   check("sprites load", !(await bubble()).startsWith("missing sprites"));
   await shot("01-shelf");
@@ -902,6 +946,8 @@ async function main() {
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
 
+  }
+  if (want("shell")) {
   // 2b. The pet's shell picker.
   await shellChecks({ page, context, check, cur, evaluate, inject, shot, after: {
     url: CLIENT,
@@ -915,6 +961,7 @@ async function main() {
     },
   } });
 
+  }
   // 3. Find a pet with the energy to play (each game costs some), wake it if
   // it's asleep (one tap), then play a whole game.
   const energyOf = async () => {
@@ -942,6 +989,8 @@ async function main() {
     await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [], requests: [] } });
   };
 
+  const me = await evaluate(() => document.querySelector("home-assistant").hass.user.id);
+  if (want("play")) {
   // Greeted by first name: forget past greetings, reload, come back to this pet.
   await evaluate(() => Object.keys(localStorage)
     .filter((k) => k.startsWith("hatch-greet-")).forEach((k) => localStorage.removeItem(k)));
@@ -968,7 +1017,6 @@ async function main() {
 
   // The bond: looking in starts one for the viewer (virtual_pet.visit), and
   // the private channel brings it to this card alone.
-  const me = await evaluate(() => document.querySelector("home-assistant").hass.user.id);
   const bondOf = () => page.locator("hatch-pet-card").evaluate((el) => el._slides[el._index].mine?.bond);
   // What the channel would have said: this viewer's bond (and switches) on the slide on show.
   const mineFor = (patch) => page.locator("hatch-pet-card").evaluate((el, patch) => {
@@ -1954,6 +2002,8 @@ async function main() {
   check("catch keeps a best score",
     Number(await evaluate(() => localStorage.getItem("hatch-best-catch"))) >= expected);
 
+  }
+  if (want("resume")) {
   // 3a. Games carry on (Wave 1 PR 1a): stopping a game and reopening it within
   // the server's window picks up the same round and wins; old timers die with
   // their game.
@@ -2071,6 +2121,8 @@ async function main() {
     await tab.close();
   }
 
+  }
+  if (want("moments")) {
   // 4. Moments make the pet react.
   for (const [type, extra, expect] of [
     ["care_miss", { reason: "hunger" }, "there you are"],
@@ -2139,7 +2191,6 @@ async function main() {
   // Seasons: forced to Halloween, the lantern and web are in the scene, and a
   // costume moment puts the hat on the head (its brim at or below the head
   // point, never hovering over it). Off again with seasonal: false.
-  const card = page.locator("hatch-pet-card");
   await card.evaluate((el) => { el.setConfig({ ...el._config, seasonal: "halloween" }); el.hass = el._hass; });
   await page.waitForTimeout(800);
   const spooky = await card.evaluate(async (el) => {
@@ -2424,6 +2475,8 @@ async function main() {
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
 
+  }
+  if (want("photos")) {
   // 4b. A best friend's photo (phase 4). The viewer's photos come from the
   // virtual_pet/photos command, stubbed here with two generations.
   const PHOTOS = [
@@ -3139,6 +3192,8 @@ async function main() {
     await page.locator("hatch-pet-card").evaluate((el) => el._slides.forEach((s) => { s.sayUntil = 0; }));
   }
 
+  }
+  if (want("personality")) {
   // 4c. Personality (P1): a "personality" row for a teen and an adult, none for a
   // baby or an older server; the type on the journal line, none on an old record.
   // The life stage is stubbed in-page and kept until the screenshot is taken.
@@ -3223,6 +3278,8 @@ async function main() {
     await page.waitForTimeout(400);
   }
 
+  }
+  if (want("types")) {
   // 4d. Personality (P2a): each type's hellos, reveal and moments. The table is
   // read from the card's source; the stage, the type and the viewer's bond are
   // stubbed in-page, and Math.random is pinned where a check needs one side of
@@ -3535,6 +3592,8 @@ async function main() {
       sideBySide.every((l) => !/: $/.test(l)), sideBySide.join(" | "));
   }
 
+  }
+  if (want("egg")) {
   // 5. The egg wiggles, then cracks, before it hatches.
   // A pet update can replace the injected egg, so inject until it shows (or 3 tries).
   for (const [minutes, frames] of [[12, "egg_wiggle"], [4, "egg_crack"]]) {
@@ -3549,6 +3608,8 @@ async function main() {
     check(`egg shows ${frames}`, src.includes(frames), src.split("/").slice(-1)[0]);
   }
 
+  }
+  if (want("sharedscreen")) {
   // 5b. FA: turning on "shared screen" clears every personal line, typed or
   // typing, on every slide of every card on the page and in every tab (privacy P1).
   {
@@ -3853,6 +3914,8 @@ async function main() {
       f6.disconnected && f6.observed, JSON.stringify(f6));
   }
 
+  }
+  if (want("forget")) {
   // 5c. "forget my data" (privacy P2): personal screens only, two taps, then the
   // pets start fresh with you, here and on the server. Late in the run: its real
   // visits redraw the sensors over the stubs that earlier checks inject.
@@ -3969,6 +4032,8 @@ async function main() {
     forgot.storage.length === 0 && forgot.othersKept &&
     forgot.after.baby === false && (forgot.after.counted === false || (forgot.after.kept === false && forgot.after.myDay === false)),
     JSON.stringify(forgot));
+  }
+  if (want("prefs")) {
   // 6. The card editor loads and offers the pets.
   // 5d. Preferences on every visit, quiet samples (Wave 1, PR 1c).
   // "my day" reads "…" until a visit reply sets it, never "off" (with no
@@ -4114,6 +4179,8 @@ async function main() {
     !samples.babbleNight || (samples.babbleNight.played === 0 && /quiet till morning/.test(samples.babbleNight.note)),
     JSON.stringify(samples.babbleNight));
 
+  }
+  if (want("channel")) {
   // 7. The private channel (privacy P3a-card): the viewer's bond, switches and
   // own moments, and the house's shows, come only from virtual_pet/subscribe.
   {
@@ -4373,6 +4440,7 @@ async function main() {
     if (await cur().locator(".screen.show-status").count()) await page.locator("hatch-pet-card .statusbtn").click();
   }
 
+  }
   // Device charm, Part 1: the LCD quirks (docs/plan-2026-10-29-device-charm.md).
   const worlds = Object.keys(JSON.parse(fs.readFileSync(
     path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8")));
@@ -4439,6 +4507,7 @@ async function main() {
     }, [off.toString("base64"), on.toString("base64")]);
   };
 
+  if (want("lcd")) {
   // The "screen effects here" row: on by default, per browser.
   await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
   await page.waitForTimeout(400);
@@ -4474,8 +4543,12 @@ async function main() {
     await under(".status", 0.25));
   await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
   await page.waitForTimeout(400);
+  }
+  if (want("mono")) {
   await monoChecks({ page, context, check, cur, evaluate, shot, errors });
 
+  }
+  if (want("ghost")) {
   for (const width of [420, 330]) {
     await page.setViewportSize({ width, height: 860 });
     await page.waitForTimeout(600);
@@ -4659,6 +4732,8 @@ async function main() {
   await page.setViewportSize({ width: 420, height: 860 });
   await page.waitForTimeout(600);
 
+  }
+  if (want("backlight")) {
   // The backlight (1c): a button on each shell. Its 44 px target gets the taps,
   // and without it they'd land on the shell: not the screen, a toy, the label or
   // the request, and not past the slide's sides (the gap to the next device).
@@ -4802,6 +4877,8 @@ async function main() {
   });
   await page.setViewportSize({ width: 420, height: 860 });
   await page.waitForTimeout(600);
+  }
+  if (want("care")) {
   // Care scenes: medicine and clean play out (about 2 s) before the screen shows
   // the news. No call reaches the server here: each check plays its answer.
   {
@@ -5074,6 +5151,8 @@ async function main() {
     await calm();
   }
 
+  }
+  if (want("editor")) {
   const editor = await evaluate(async () => {
     const hass = document.querySelector("home-assistant").hass;
     const el = document.createElement("hatch-pet-card-editor");
@@ -5094,6 +5173,8 @@ async function main() {
   check("card editor renders a form", editor.form && editor.rendered);
   check("card editor saves the picked pets", Array.isArray(editor.config?.devices), JSON.stringify(editor.config));
 
+  }
+  if (want("boot")) {
   // 3a. The power-on boot screen, at two widths. A page of its own, flagged so the
   // seeded "already booted" doesn't apply; Date.getHours and the oscillator count
   // are stubbed per step.
@@ -5221,6 +5302,8 @@ async function main() {
   }
 
 
+  }
+  if (want("infrared")) {
   // 2a. The infrared link: a visit between the pet on show and a neighbour, at two
   // widths and with three pets. Sounds off; every visit is forced (the day's
   // random timer is checked separately), the lines are the card's own.
@@ -5427,8 +5510,10 @@ async function main() {
     await lp.close();
   }
 
+  }
   check("no errors in the browser console", errors.length === 0, errors.slice(0, 3).join(" | "));
 
+  if (want("lowbattery")) {
   // 7b. The low-battery gag after an HA restart (D5): the card compares the house
   // view's powered_on.at with its stored hatch-power-<pet>, through the real
   // channel path. The real restart's snapshot is asserted in section 8.
@@ -5600,6 +5685,11 @@ async function main() {
   }
 
 
+  }
+  let seeded = false;
+  let unseed = null;
+  const seedPet = pet["sensor.life_stage"];
+  if (want("restart")) {
   // 8. An HA restart keeps the bond, and a second login sees nothing of the
   // first's (privacy P3a-card). After the console check: a restart's lost
   // connection is noise there. The restart is opt-in, as card-check stops
@@ -5610,9 +5700,6 @@ async function main() {
   // and puts back what was there at the end (so the next run starts as this
   // one did). Without them the second-login checks would prove nothing, so
   // that's a failure, not a skip.
-  let seeded = false;
-  let unseed = null;
-  const seedPet = pet["sensor.life_stage"];
   // Stop HA, change the pet's store while it's down, start it again (detached:
   // it outlives this script) and wait until it runs. Returns a fresh token.
   const bounce = async (token, entryId, patch) => {
@@ -5725,6 +5812,8 @@ async function main() {
       "no HA_CONFIG/HA_START: the restart and the seeded second login didn't run");
   }
 
+  }
+  if (want("oldcard")) {
   // 8b. An old card on a stale tablet (privacy P3b): the one just before P3b
   // (v0.37.0) and the last before the channel (v0.35.0, the only one P3b
   // changes visibly), served in place of this card against this server. P3b
@@ -5976,6 +6065,7 @@ async function main() {
       JSON.stringify({ seeded, entities: Object.keys(scan).length, stateLeaks, keys }));
     await ctx2.close();
   }
+  }
   if (unseed) {
     await unseed();
     console.log("note: dev's seeded bond and wish are put back as they were");
@@ -5983,7 +6073,7 @@ async function main() {
   await browser.close();
 
   const failed = results.filter((r) => !r.ok);
-  console.log(`\n${results.length - failed.length}/${results.length} checks passed. Screenshots: ${OUT}`);
+  console.log(`\n${results.length - failed.length}/${results.length} checks passed${ONLY ? ` (partial: ${SECTIONS.filter(want).join(",")})` : ""}. Screenshots: ${OUT}`);
   process.exit(failed.length ? 1 : 0);
 }
 

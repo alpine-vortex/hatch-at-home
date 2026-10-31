@@ -7,6 +7,7 @@
 #   scripts/gate --port 8472      # pick the port (default: a free one in 8400-8499)
 #   scripts/gate -- --only shell  # anything after -- goes to card-check
 #
+# A partial run skips the costume previews and writes no marker.
 # A full run takes ~45 min (card-check ~25, the two costume sweeps ~10 each).
 # Logs go to a fresh /tmp/hatch-gate-* dir, printed at the start. On a full pass
 # with a clean tree it writes the gate-passed marker for HEAD's tree, so the same
@@ -83,10 +84,14 @@ echo "gate: card-check exit $CC, $(grep -c '^PASS' "$LOGS/card-check.log") PASS,
 grep -E '^(FAIL|SKIP)' "$LOGS/card-check.log" | cut -c1-160 | head -20
 
 COS=0
-for season in halloween thanksgiving; do
-  HA_URL=$URL node scripts/costume-preview.js "$season" >"$LOGS/costume-$season.log" 2>&1 || COS=1
-done
-echo "gate: costume previews $([ $COS = 0 ] && echo ok || echo FAIL)"
+if [ ${#CC_ARGS[@]} = 0 ]; then
+  for season in halloween thanksgiving; do
+    HA_URL=$URL node scripts/costume-preview.js "$season" >"$LOGS/costume-$season.log" 2>&1 || COS=1
+  done
+  echo "gate: costume previews $([ $COS = 0 ] && echo ok || echo FAIL)"
+else
+  echo "gate: costume previews skipped (partial card-check run)"
+fi
 
 if [ $CC = 0 ] && [ $COS = 0 ] && [ ${#CC_ARGS[@]} = 0 ]; then
   if [ -z "$(git status --porcelain --untracked-files=no)" ]; then
