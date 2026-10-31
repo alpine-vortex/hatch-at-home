@@ -915,9 +915,15 @@ const REACTIONS = {
   praised: { mood: "excited", move: "greethop", ms: 1400 },
   refused: { mood: "bored", move: "look", ms: 1200 },
   tucked: { mood: "cozy", move: "settle", ms: REACT_MS },
+  // Only with the species' own act (STAGE_POSES): without it these do nothing (R2).
+  lost: { mood: "content", move: "settle", ms: 1200, poseOnly: true }, // a good sport; the log can land before the game closes
+  ready: { mood: "content", move: null, ms: 1200, poseOnly: true }, // a game just began
 };
-// Which species.json "acts" pose a reaction plays at baby, teen and adult (R1); R2 adds more.
-const STAGE_POSES = { fed: "eat", praised: "cheer" };
+const READY_MS = 1200;
+const PAT_POSE_MS = 900; // acts.pat on a pat; apart from poseUntil so the next pat's `reacting` is unchanged
+// Which species.json "acts" pose a reaction plays at baby, teen and adult (R1, R2).
+// refused: the act, else the bored frame; lost and ready: the act, else nothing.
+const STAGE_POSES = { fed: "eat", praised: "cheer", refused: "refuse", lost: "aww", ready: "ready" };
 // Only these refusals react; asleep, egg, away, no_game, unfair and spoiled do not.
 const REACT_REFUSALS = new Set(["full", "not_needed", "already_clean", "not_sick", "not_sleepy", "too_tired"]);
 const MINE_MATCH_MS = 10000; // a press is matched to the first new log entry within this
@@ -4129,6 +4135,7 @@ class HatchPetCard extends HTMLElement {
     this._ticks = (this._ticks || 0) + 1;
     this._slides.forEach((s, i) => {
       if (s.poseUntil && Date.now() > s.poseUntil) s.poseUntil = 0;
+      if (s.patPoseUntil && Date.now() > s.patPoseUntil) s.patPoseUntil = 0;
       if (s.excitedSince && Date.now() - s.excitedSince >= BOUNCE_MS) s.pet.classList.remove("hop");
       const frames = this._frames(s);
       const seen = Math.abs(i - this._index) <= 1; // the pet on show and the peeking ones
@@ -4445,19 +4452,27 @@ class HatchPetCard extends HTMLElement {
     if (!r || !s.species || s.drawn === "child" || s.scene || s.linking || s.power ||
       s.asleep || s.away || s.egg || (s.game && !inGame)) return;
     const sp = s.species;
+    if (r.poseOnly && !(Array.isArray(sp.acts?.[STAGE_POSES[kind]]) || sp.acts?.[STAGE_POSES[kind]] === true)) return;
     const mood = sp.moods?.includes(r.mood) ? r.mood : "content";
     s.poseFrames = [];
     for (let i = 1; i <= (sp.frames || 1); i++) s.poseFrames.push(`${s.drawn}_${mood}_${i}`);
     const moodFrames = s.poseFrames;
     const own = this._actPose(sp, s.drawn, s.speciesId, STAGE_POSES[kind], () => {
       if (s.poseFrames !== own) return;
+      if (r.poseOnly) { // no mood stand-in: the reaction just ends
+        s.poseUntil = 0;
+        s.poseFrames = [];
+        this._show(s, s.pet, s.frames?.[0]);
+        return;
+      }
       s.poseFrames = moodFrames; // the act's art did not load: back to the mood frames
       this._show(s, s.pet, moodFrames[0]);
     });
+    if (r.poseOnly && !own) return; // the act's art failed before: nothing
     if (own) s.poseFrames = own;
-    s.poseUntil = Date.now() + ms;
+    s.poseUntil = Date.now() + (kind === "ready" ? READY_MS : ms);
     this._show(s, s.pet, s.poseFrames[0]);
-    if (calm()) return;
+    if (calm() || !r.move) return;
     this._animate(s, s.pet, r.move, r.ms);
     if (r.move === "look") this._moving(s, r.ms + 250);
   }
@@ -4482,6 +4497,22 @@ class HatchPetCard extends HTMLElement {
       !(s.sayUntil > Date.now() && s.sayClass >= KEPT) && !s.queue?.some((q) => lineClass(q) >= KEPT);
   }
 
+  // acts.pat for ~900 ms on a pat (R2), kept in s.patPoseUntil so `reacting` in the
+  // next pat is as before. Not over a reaction, a call, or a child; unloadable: today's pat only.
+  _patPose(s, reacting) {
+    if (reacting || s.calling || s.drawn === "child" || s.asleep) return;
+    const own = this._actPose(s.species, s.drawn, s.speciesId, "pat", () => {
+      if (s.patPoseFrames !== own) return;
+      s.patPoseUntil = 0;
+      s.patPoseFrames = null;
+      this._show(s, s.pet, s.frames?.[0]);
+    });
+    if (!own) return;
+    s.patPoseFrames = own;
+    s.patPoseUntil = Date.now() + PAT_POSE_MS;
+    this._show(s, s.pet, own[0]);
+  }
+
   // A pat (PR 3b, O01): card only, nothing is sent or stored. A perk and the tap's
   // haptic; a C10 line by mood, at most one per PAT_COOLDOWN_MS. Asleep: a slow perk
   // and nothing said. Under reduced motion only the line and the haptic.
@@ -4501,6 +4532,7 @@ class HatchPetCard extends HTMLElement {
     }
     // A reaction running plays whole: the pat still speaks, but adds no move of its own.
     const reacting = s.poseUntil > now;
+    this._patPose(s, reacting);
     if (now - (s.patAt || 0) < PAT_COOLDOWN_MS || !this._patMayTalk(s)) {
       this._tapped(s.pat);
       if (!still && !reacting) {
@@ -5032,7 +5064,8 @@ class HatchPetCard extends HTMLElement {
   _frames(s) {
     const all = s.scene ? s.scene.frames || s.frames || []
       : s.linking && s.linkFrames?.length ? s.linkFrames
-      : s.poseUntil && Date.now() < s.poseUntil ? s.poseFrames : s.frames || [];
+      : s.poseUntil && Date.now() < s.poseUntil ? s.poseFrames
+      : s.patPoseUntil > Date.now() && s.patPoseFrames ? s.patPoseFrames : s.frames || [];
     return all.length > 1 && calm() ? all.slice(0, 1) : all; // calm: a still picture
   }
 
@@ -5398,14 +5431,15 @@ class HatchPetCard extends HTMLElement {
         s.poseFrames = Array.isArray(poseFrames) ? poseFrames : [poseFrames];
         s.poseUntil = Date.now() + 2500;
         this._show(s, s.pet, s.poseFrames[0]);
-      } else if (entry.result !== "lost") {
+      } else {
         const ok = entry.result === "ok";
-        const kind = entry.result === "won" ? "praised"
+        // A lost game: a good sport, only with acts.aww (else no reaction, as before).
+        const kind = entry.result === "lost" ? "lost" : entry.result === "won" ? "praised"
           : ok && (entry.action === "feed" || entry.action === "snack") ? "fed"
           : ok && entry.action === "praise" ? "praised"
           : ok && entry.action === "blanket" ? "tucked" : null;
         // A won game's log can land just before the card closes the game: still its reaction.
-        if (kind) this._reactFrames(s, kind, { inGame: entry.result === "won" });
+        if (kind) this._reactFrames(s, kind, { inGame: entry.result === "won" || entry.result === "lost" });
       }
       if (entry.action === "fan") { // the fan stands by, and its breeze crosses the scene
         s.screen.classList.add("breezy");
@@ -6533,6 +6567,7 @@ class HatchPetCard extends HTMLElement {
     const box = s.screen.getBoundingClientRect();
     const pet = s.pet.getBoundingClientRect();
     sc.cheer = this._sceneFrames(s, "cheer");
+    if (kind === "clean") this._actPose(s.species, s.drawn, s.speciesId, "splash", () => {}); // warm the load probe
     if (kind === "medicine") {
       sc.pill = add("img", "scene scene-pill");
       sc.pill.setAttribute("src", spriteSrc(s.speciesId, s.species.props?.medicine || "bird/medicine"));
@@ -6684,7 +6719,7 @@ class HatchPetCard extends HTMLElement {
         }
         this._sparkle(s);
       }
-      if (t >= 1800) frames = sc.cheer;
+      if (t >= 1800) frames = this._actPose(s.species, s.drawn, s.speciesId, "splash", () => {}) || sc.cheer;
     }
     sc.frames = frames;
     const shown = frames || s.frames;
@@ -6817,6 +6852,7 @@ class HatchPetCard extends HTMLElement {
     const g = s.game = { kind, round: 0, wins: 0, busy: false };
     s.pet.classList.remove("go-left", "go-right");
     this._gameView(s, kind);
+    this._reactFrames(s, "ready", { inGame: true }); // acts.ready, if the species has it
     s.gameScore.textContent = "round 1/5";
     if (kind === "catch") {
       this._write(s, "catch it! tap its side as it reaches me", 60000);

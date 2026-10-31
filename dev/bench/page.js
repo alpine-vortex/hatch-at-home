@@ -288,6 +288,8 @@
     }
     // `reactWait`: ms to let sprite probes (and a failed one's swap back) finish before the shot.
     if (shot.reactWait) await new Promise((r) => setTimeout(r, shot.reactWait));
+    // `patTap`: a pat on the pet through the card's own `_pat` (acts.pat shows for ~900 ms).
+    if (shot.patTap) card._pat(cur, { stopPropagation() {}, detail: 0 });
     // `patBox`: the pat's clear hit box outlined, so a shot shows where a tap pats (or, in a
     // state that hides it, that there is none).
     if (shot.patBox) cur.pat.style.outline = "2px dashed #ff00d0";

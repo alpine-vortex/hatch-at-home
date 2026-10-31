@@ -71,6 +71,7 @@ A shot (all optional):
 | `link` | the infrared visit greeting caught as the visit screen opens: `{waves, wait}` (`waves` is put on both species, `wait` is ms to hold, default 150) |
 | `care`, `careAt` | a `medicine` or `clean` scene paused at `careAt` ms (default 1500) |
 | `acts`, `missing`, `reactWait` | a fake species.json `acts` (`{eat: [stages], cheer: [...]}`) on every pet; sprite names (`adult_eat_1`) the server 404s; ms to wait for sprite probes before the shot. `link.cheer: true` runs the full visit (not calm) so the "hi hi" cheer plays: use `wait: 2000` |
+| `patTap` | `true`: one pat through the card's own `_pat` (R2: `acts.pat` shows ~900 ms). With `acts`, the new poses (`pat refuse aww ready splash`) are served the species' `eat` frames, bench only. `react` also takes `lost` (acts.aww) and `ready` (acts.ready); `care: "clean"` with `careAt: 2000` shows `acts.splash` |
 | `storage` | any other localStorage keys to seed |
 | `config` | extra card config (`setConfig`) |
 | `visit` | the reply the fake `virtual_pet.visit` service gives (`{notes: [...]}` makes the pet tell the viewer things) |

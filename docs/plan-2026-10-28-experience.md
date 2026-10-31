@@ -1095,3 +1095,9 @@ part: M5's "same for `stayed_up_since`" (`shift_times` already shifts it, model
 - `_reactFrames(s, kind, {ms})` takes a pose length; the catch pounce passes 900. The visit cheer is at t0+1800 (host and guest, `L.timers`, skipped in calm and for a child).
 - Medicine and clean scenes now use eat/cheer frames too (checked: bench `care: "medicine"|"clean"`). Bench also gained `acts`, `missing`, `reactWait`, `link.cheer`.
 - Open question (unshipped): none needed; no copy added.
+
+**R2 shipped (s2549): card hooks for the new poses, all through `_actPose` (no new key, no new copy).**
+- Owner decided 2026-10-31: a lost game gets a good-sport reaction (reverses "`lost` takes no reaction", line 632). Kind `lost` -> `acts.aww` for REACT_MS, with `inGame`. With no `acts.aww`: no reaction, no mood stand-in (as before).
+- `pat`: `acts.pat` ~900 ms in `s.patPoseUntil` (not `poseUntil`, so the next pat's `reacting` is unchanged); not asleep, calling, child or over a reaction; calm shows one still frame. `refuse`: `refused` uses `acts.refuse`, else bored + look. `ready`: `_pickGame` plays `acts.ready` 1200 ms with `inGame` (not on the picker). `splash`: clean scene's last beat (t>=1800), else the cheer frames.
+- Bench: `acts` serves the new poses' PNGs as eat frames (bench only); `react: lost|ready`, `patTap`. `missing` now ignores the `?v=` query. card-check `react` runs every hook with and without `acts`.
+- Open question (unshipped): none. A6 pounce is not in R2.
