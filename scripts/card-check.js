@@ -2374,9 +2374,11 @@ async function main() {
   // Daily check-ins: the first look of the day tells what happened while you
   // were out, this morning's dream and today's wish, in turn; the wish is on the
   // status screen; a wish coming true queues behind a line said at the same time.
+  // A dream of a show is the house's (P3c): the sensor's dream is null and the
+  // title comes on the channel's house.dream.
   const hourAgo = new Date(Date.now() - 3600 * 1000).toISOString();
   await inject(pet["sensor.life_stage"], {
-    attributes: { wish: { kind: "sunset", granted: false }, dream: { kind: "watching", title: "Bluey" } },
+    attributes: { wish: { kind: "sunset", granted: false }, dream: null },
   });
   await inject(pet["sensor.last_care"], {
     attributes: { moments: [{ type: "weather", change: "rain_started", at: hourAgo },
@@ -2388,6 +2390,8 @@ async function main() {
     for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish)-/.test(k)) localStorage.removeItem(k);
     localStorage.setItem(`hatch-seen-${device}`, String(Date.now() - 5 * 3600 * 1000));
     s.lookedFirst = false; s.queue = []; s.sayUntil = 0; s.flairUntil = 0;
+    // In one go: the server's own channel push could replace s.house between calls.
+    s.house = { ...(s.house || {}), dream: { kind: "watching", title: "Bluey" } };
     el._firstLook(s);
     s.sayUntil = Date.now() + 60000; // the card's own tick mustn't say the first line before we do
   });
@@ -2404,6 +2408,32 @@ async function main() {
   check("the first look tells the day's news, dream and wish",
     /^while you were out, I (napped|watched the rain)/.test(firstLook[0]) && firstLook[1] === "I dreamed about Bluey!" &&
       firstLook[2] === "can we watch the sunset together?", firstLook.join(" | "));
+  // P3c: the media dream (sensor null, house.dream titled) is said once a day.
+  const dreamAgain = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.lookedFirst = false; s.queue = [];
+    s.house = { ...(s.house || {}), dream: { kind: "watching", title: "Bluey" } };
+    el._firstLook(s);
+    const queued = s.queue.map((q) => q.text);
+    s.queue = []; s.sayUntil = 0;
+    return queued;
+  });
+  check("P3c: a show's dream comes from house.dream, once",
+    !dreamAgain.some((t) => /dreamed/.test(t)), JSON.stringify(dreamAgain));
+  // P3c: the recap's TV and music come from the title-less public tv_on/music_on.
+  const recapAt = new Date(Date.now() - 1800 * 1000).toISOString();
+  await inject(pet["sensor.last_care"], {
+    attributes: { moments: [{ type: "music_on", at: recapAt }, { type: "tv_on", at: recapAt }], log: [] },
+  });
+  const recap = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    for (let i = 0; i < 30 && el._state(s, "sensor.last_care")?.attributes.moments?.[0]?.type !== "music_on"; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return el._awayNote(s, Date.now() - 3600 * 1000);
+  });
+  check("P3c: the recap keeps TV and music (tv_on, music_on)",
+    recap === "while you were out, I watched TV and listened to music!", recap);
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(500);
   check("the wish is on the status screen", /wish\s*♡ watch the sunset together/.test(await cur().locator(".status").innerText()));
@@ -4204,8 +4234,8 @@ async function main() {
         };
       }
     });
-    // One media line: the public titled moment (still published until P3c) is
-    // skipped, the channel's says it once, its house push and a replayed
+    // One media line: a public titled moment (an old server's; P3c publishes
+    // only a title-less tv_on) is skipped, the channel's says it once, its house push and a replayed
     // snapshot say nothing more. A private moment is said once too.
     const publicNow = await evaluate((e) =>
       document.querySelector("home-assistant").hass.states[e].attributes.moments || [], pet["sensor.last_care"]);
@@ -5821,6 +5851,7 @@ async function main() {
   // moments off the bus: an old card loses them and must not break. Pass is
   // no "undefined" and no uncaught error; every console error is kept in
   // dev/card-check/old-card-<tag>.json, to compare with a pre-P3b run.
+  // P3c adds the media cases: tv_on/music_on, a show's dream, the recap.
   const BOND_MOMENTS = ["bond_up", "bond_record", "bond_favourite", "friend_home", "tucked_in"];
   const oldCard = async (tag) => {
     const root = path.join(__dirname, "..");
@@ -5926,6 +5957,56 @@ async function main() {
         localStorage.setItem("hatch-shared-screen", "off");
         return r;
       }, lastCare);
+      // P3c: what this server sends about the TV, music and a show's dream.
+      // The public list has a title-less tv_on and music_on; the sensor's dream
+      // is null for a show; the title is on the channel (house.media, house.dream),
+      // which v0.35.0 doesn't read. Pushed by hand: the dev pet has no TV.
+      out.cases.media = await el.evaluate(async (c, { id, stageId }) => {
+        const s = c._slides[c._index];
+        const hass = c._hass;
+        const me = hass.user?.id;
+        const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+        const post = async (e, attrs) => {
+          const st = c._hass.states[e];
+          await c._hass.callApi("POST", `states/${e}`, { state: st.state, attributes: { ...st.attributes, ...attrs } });
+        };
+        const reset = () => { s.queue = []; s.sayUntil = 0; if (s.bubble) s.bubble.textContent = ""; };
+        const heard = () => [s.bubble?.textContent || "", ...(s.queue || []).map((q) => q.text)];
+        const r = { channel: typeof c._channel === "function" };
+        // Live: the public stand-ins, then (a channel card) the titled pushes.
+        reset();
+        const at = new Date().toISOString();
+        await post(id, { moments: [{ type: "music_on", at }, { type: "tv_on", at }, ...(c._hass.states[id].attributes.moments || [])] });
+        await wait(1500);
+        r.live = heard();
+        if (r.channel) {
+          reset();
+          c._channel(s, { moment: { type: "watching", title: "Bluey Old", at: new Date().toISOString() } }, me);
+          await wait(300);
+          r.tv = heard();
+          reset();
+          c._channel(s, { moment: { type: "listening", title: "Clair Old", artist: "Debussy", at: new Date().toISOString() } }, me);
+          await wait(300);
+          r.music = heard();
+        }
+        // This morning's dream of a show: null on the sensor, titled on the channel.
+        await post(stageId, { dream: null });
+        await wait(1000);
+        for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish)-/.test(k)) localStorage.removeItem(k);
+        s.lookedFirst = false; s.queue = []; s.sayUntil = Date.now() + 60000;
+        if (r.channel) c._channel(s, { house: { media: null, dream: { kind: "watching", title: "Bluey Old" } } }, me);
+        c._firstLook(s);
+        r.firstLook = (s.queue || []).map((q) => q.text);
+        r.dreamSaid = r.firstLook.some((t) => /dreamed/.test(t));
+        s.queue = []; s.sayUntil = 0;
+        // The recap, from the stand-ins alone (an old card has no bits for them).
+        const since = Date.now() - 3600 * 1000;
+        const recapAt = new Date(Date.now() - 1800 * 1000).toISOString();
+        await post(id, { moments: [{ type: "music_on", at: recapAt }, { type: "tv_on", at: recapAt }], log: [] });
+        for (let i = 0; i < 30 && c._hass.states[id]?.attributes.moments?.[0]?.type !== "music_on"; i++) await wait(100);
+        r.recap = c._awayNote(s, since);
+        return r;
+      }, { id: lastCare, stageId: seedPet });
     } catch (err) {
       out.failed = String(err);
     }
@@ -5944,7 +6025,17 @@ async function main() {
     check(`P3b: an old card (${tag}) on this server: no "undefined", no uncaught error`,
       seeded && !r.failed && r.served > 0 && !r.undefined && r.uncaught.length === 0,
       JSON.stringify({ failed: r.failed, served: r.served, errors: r.errors.slice(0, 3), uncaught: r.uncaught.slice(0, 3),
-        wish: r.cases.status?.wish, bond: r.cases.bond, someoneHome: r.cases.someoneHome }));
+        wish: r.cases.status?.wish, bond: r.cases.bond, someoneHome: r.cases.someoneHome, media: r.cases.media }));
+    // P3c: the stand-ins say nothing on an old card (no "ooh, undefined!"), and
+    // a channel card (v0.37.0) still has its live lines and the show's dream.
+    const m = r.cases.media || {};
+    const v037 = tag === "v0.37.0";
+    check(`P3c: an old card (${tag}): tv_on/music_on say nothing; ${v037 ? "the channel's show, song and dream are said" : "no channel, so no media lines"}`,
+      !!r.cases.media && !(m.live || []).some((t) => /TV|music|♪|undefined/.test(t)) &&
+        (v037 ? m.channel && (m.tv || []).some((t) => /Bluey Old/.test(t)) &&
+          (m.music || []).some((t) => /Clair Old|Debussy/.test(t)) && m.dreamSaid
+          : !m.channel && !m.dreamSaid),
+      JSON.stringify(m));
     if (tag === "v0.37.0") {
       const b = r.cases.bond || {};
       check("P3b: a real bond level-up puts no bond moment on the public list",
