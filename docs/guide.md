@@ -744,8 +744,8 @@ missed re-call, which isn't a care miss),
 `virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`,
 `virtual_pet_game_finished` (with `game`, `won`, `wins`; `dropped: true` for a game left unfinished after a guess, which counts as a loss and grants no wish, record or bond), `virtual_pet_chore_treat`,
 `virtual_pet_sunrise`, `virtual_pet_sunset`, `virtual_pet_good_morning`,
-`virtual_pet_watching` and `virtual_pet_listening` (each time the show or song changes, with
-no `title` or `artist`: read `media_title` from your media player),
+`virtual_pet_watching` and `virtual_pet_listening` (when the pet notices a new show or song, at most every 20 minutes, with
+no `title` or `artist`: for every change, read `media_title` from your media player),
 `virtual_pet_tv_off_late`, `virtual_pet_news` (with `headline`, and `topic` if given),
 `virtual_pet_first_snow`, `virtual_pet_first_frost`,
 `virtual_pet_trait_learned` and `virtual_pet_trait_deepened` (with `trait`, `level`), `virtual_pet_egg_laid` (with `generation`,

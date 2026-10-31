@@ -881,8 +881,8 @@ const SUBSCRIBE_RETRY_LAST_MS = 60000;
 const SUBSCRIBE_WAIT_MS = 3000;
 const MOMENTS_KEPT = 10; // const.py MOMENTS_KEPT
 // Moments that come only over the channel: a person's own (const.py
-// PERSONAL_EVENTS) and the house's shows and songs (MEDIA_EVENTS). The public
-// list may still carry them; the card never reads them there.
+// PERSONAL_EVENTS) and the house's shows and songs (MEDIA_EVENTS). Only an old
+// server's public list carries them; the card never reads them there.
 const CHANNEL_ONLY = new Set(["bond_up", "bond_record", "bond_favourite", "friend_home", "tucked_in", "watching", "listening"]);
 const MEDIA_MOMENTS = new Set(["watching", "listening"]);
 const momentKey = (m) => m && `${m.at}|${m.type}`;
