@@ -4399,17 +4399,20 @@ class HatchPetCard extends HTMLElement {
   // A species' own act frames (species.json "acts", never the child) for a stage, or null.
   // Every sprite is probed once, remembered in _poseOk by species/stage/act (not the
   // wave's keys). Unknown plays; a failed load calls `apply` once so the caller swaps
-  // back to the frames it had, and later calls get null. Never a broken image.
+  // back to the frames it had, and later calls get null. Never a broken image. A call
+  // while the probe is out (stored as undefined) starts no new one: its `apply` waits too.
   _actPose(sp, stage, speciesId, act, apply) {
     const stages = sp?.acts?.[act];
     if (!act || !stage || stage === "child" || !(stages === true || (Array.isArray(stages) && stages.includes(stage)))) return null;
     const names = [`${stage}_${act}_1`, `${stage}_${act}_2`];
     this._poseOk ||= new Map();
+    this._poseWait ||= new Map();
     const key = `${speciesId}/${stage}/${act}`;
     const known = this._poseOk.get(key);
     if (known === false) return null;
-    if (known === undefined) {
+    if (!this._poseOk.has(key)) {
       this._poseOk.set(key, undefined);
+      this._poseWait.set(key, [apply]);
       Promise.all(names.map((n) => new Promise((ok) => {
         const img = new Image();
         img.onload = () => ok(true);
@@ -4418,8 +4421,12 @@ class HatchPetCard extends HTMLElement {
       }))).then((r) => {
         const good = r.every(Boolean);
         this._poseOk.set(key, good);
-        if (!good) apply();
+        const waiting = this._poseWait.get(key) || [];
+        this._poseWait.delete(key);
+        if (!good) waiting.forEach((fn) => fn());
       });
+    } else if (known === undefined) {
+      this._poseWait.get(key)?.push(apply);
     }
     return names;
   }

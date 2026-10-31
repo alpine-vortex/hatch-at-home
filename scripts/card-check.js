@@ -6089,6 +6089,23 @@ async function main() {
       }, stage);
       check(`react: ${stage} a missing eat sprite falls back to the mood frame`,
         fb.first === `${stage}_eat_1` && fb.after.startsWith(`${stage}_`) && !fb.after.includes("_eat_") && fb.ok === false && !fb.wave, JSON.stringify(fb));
+      // Calls while the probe is out start no new one; each caller's fallback still runs.
+      const once = await card.evaluate(async (el, stage) => {
+        const s = el._slides[el._index];
+        const Real = window.Image;
+        let made = 0;
+        window.Image = function () { made++; return new Real(); };
+        let applied = 0;
+        try {
+          for (let i = 0; i < 3; i++) el._actPose(s.species, stage, "probe-once-species", "eat", () => { applied++; });
+        } finally {
+          window.Image = Real;
+        }
+        await new Promise((r) => setTimeout(r, 700));
+        return { made, applied, ok: el._poseOk.get(`probe-once-species/${stage}/eat`) };
+      }, stage);
+      check(`react: ${stage} an act's sprites are probed once while loading`,
+        once.made === 2 && once.applied === 3 && once.ok === false, JSON.stringify(once));
     }
     // Never while: a scene, a link, a game, the low-battery gag, asleep, away, egg.
     for (const [name, patch] of [["scene", { scene: { kind: "feed", frames: [] } }], ["linking", { linking: true }],
