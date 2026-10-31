@@ -3519,7 +3519,9 @@ async def test_going_away_mid_game_drops_it_as_a_loss(
 
 
 async def test_unload_after_startup_does_not_remove_a_spent_listener(
-    hass: HomeAssistant, now: float, hass_storage: dict[str, Any],
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Set up before HA is running: the started listener fires once and is gone,
