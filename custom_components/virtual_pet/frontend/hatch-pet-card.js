@@ -2177,16 +2177,16 @@ const STYLE = `
   .bar div { height: 100%; background: #2f3a24; }
   .hearts { letter-spacing: 2px; }
   .hearts .off { opacity: .25; }
-  .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 6px 0;
-    min-height: 28px;
+  .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
+    min-height: 44px; min-width: 44px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
   /* The status view's gear and the settings sheet's back row and headings. */
   .shead { position: sticky; top: -9px; z-index: 1; display: flex; align-items: center;
     margin-top: -9px; padding-top: 3px; background: #e9e2c6; }
   .gear { margin-left: auto; display: flex; align-items: center; justify-content: center;
-    min-width: 34px; min-height: 30px; padding: 3px 5px; border: none; background: none;
+    min-width: 44px; min-height: 44px; padding: 0 5px; border: none; background: none;
     color: inherit; cursor: pointer; }
-  .sback { border: none; background: none; padding: 6px 0; min-height: 28px; color: inherit;
+  .sback { border: none; background: none; padding: 0; min-height: 44px; min-width: 44px; color: inherit;
     font: 400 12px 'Tiny5', monospace; text-decoration: underline; cursor: pointer; }
   .sec { margin-top: 4px; padding-bottom: 2px; border-bottom: 2px dotted #2f3a24;
     font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
@@ -2202,6 +2202,7 @@ const STYLE = `
   .tiles { flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 4px; }
   .tiles:last-of-type { padding-bottom: 6px; } /* the last row scrolls clear of the bar */
   .tile { display: flex; flex-direction: column; align-items: center; gap: 0; min-width: 0;
+    box-sizing: border-box; min-height: 44px; justify-content: center;
     padding: 1px; border: 2px solid transparent; border-radius: 6px; background: none; color: inherit;
     font: 400 11px 'Tiny5', monospace; line-height: 1; text-align: center; cursor: pointer; }
   .tile .tname { max-width: 100%; overflow-wrap: anywhere; }
@@ -2215,20 +2216,17 @@ const STYLE = `
   .status:has(.pback) { gap: 2px; }
   .status:has(.pback) .sec { margin-top: 1px; }
   .shead:has(.pback) { z-index: 2; margin: -9px -12px 0; padding: 0 12px; }
-  .shead:has(.pback) .sback { padding: 3px 0; min-height: 26px; }
   .pbtns { flex: none; position: sticky; bottom: -9px; z-index: 2; display: flex; justify-content: flex-end; gap: 6px;
     margin: 0 -12px -9px; padding: 3px 12px 7px; background: #e9e2c6; }
   .status-feedback.over { bottom: 30px; z-index: 3; }
   /* A narrow card: tighter still, so two whole rows of tiles show between the bands. */
   .compact .status:has(.pback) { gap: 1px; }
   .compact .status:has(.pback) .sec { margin-top: 0; padding-bottom: 1px; }
-  .compact .shead:has(.pback) .sback { padding: 2px 0; min-height: 22px; }
   .compact .tile { padding: 0 1px; font-size: 10px; }
   .compact .tile .tsub { font-size: 9px; }
   .compact .pbtns { padding: 2px 12px 3px; }
-  .compact .pbtns .bell { min-height: 24px; padding: 2px 10px; }
   .bell { border: 2px solid #2f3a24; border-radius: 10px; background: none; color: inherit;
-    font: 400 12px 'Tiny5', monospace; padding: 3px 10px; min-width: 44px; min-height: 26px;
+    font: 400 12px 'Tiny5', monospace; padding: 3px 10px; min-width: 44px; min-height: 44px;
     cursor: pointer; }
   .bell[aria-pressed="true"] { background: #2f3a24; color: #e9e2c6; }
   .bell.pending { opacity: .65; }
@@ -5530,8 +5528,6 @@ class HatchPetCard extends HTMLElement {
       ${row("stat_health", "health", bar(value("health")))}
       ${row("stat_discipline", "discipline", bar(value("discipline")))}
       ${row(null, "weight", `<span>${weightLabel(value("weight"))}</span>`)}
-      ${row("stat_care_miss", "misses", `<span>${value("care_misses") ?? "–"}</span>`)}
-      ${row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0}</span>`)}
       ${row(null, traits.length > cap ? "traits" : `traits ${traits.length}/${cap}`, `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
       ${bestCatch ? row(null, "best catch", `<span>${bestCatch}/${CATCH.rounds}</span>`) : ""}
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
@@ -5567,12 +5563,18 @@ class HatchPetCard extends HTMLElement {
     const shellOptions = this._state(s, "sensor.life_stage")?.attributes.shell_finish_options;
     const shellName = escape(this._shellName(s, this._shellChoice(s)));
     const shellSwatch = `<span class="sw" style="background: ${finishSwatch(this._shellKey(s), s.world.shell?.color || "#e8834a")}"></span>`;
-    const shellRows = !Array.isArray(shellOptions) ? "" : sharedScreen()
+    // The pet's group always renders: misses and whines (read-only, also on a shared screen),
+    // then the shell where the server offers it.
+    const missRows = row(null, "misses", `<span>${Number.parseFloat(this._state(s, "sensor.care_misses")?.state) || 0}</span>`)
+      + row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0}</span>`);
+    const shellRows = sharedScreen()
       ? `<div class="sec">for the pet</div>
-      ${row(null, "shell", `<span class="shellro">${shellSwatch}${shellName}</span>`)}
-      <div class="shellnote">ask a grown-up to change it</div>`
+      ${missRows}
+      ${Array.isArray(shellOptions) ? row(null, "shell", `<span class="shellro">${shellSwatch}${shellName}</span>`) + `
+      <div class="shellnote">ask a grown-up to change it</div>` : ""}`
       : `<div class="sec">for ${escape(this._linkName(s))}</div>
-      ${row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`)}`;
+      ${missRows}
+      ${Array.isArray(shellOptions) ? row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`) : ""}`;
     // Who each part changes: the pet (everyone), the viewer (follows their login),
     // or this browser.
     const html = `

@@ -685,6 +685,7 @@ gives no reaction.**
   (0 of 30). **Drift:** the guide's "still to come: more species" is now at `docs/guide.md:858`
   (the fold said ~854; the older text said 730). Note the guide has two "still to come"
   phrases; only the Play one (858) names species.
+- **4c-rest shipped (s2548, 2026-10-31), for 4e:** 4c-rest touched only the card and card-check; no README, guide, `scripts/readme` or `species.json` file changed, so every 4e line number above still holds. The settings sheet's pet group now always renders (misses, whines, then the shell row if offered).
 - **Order stays: 4c first, then 4e** (no shared files; 4c edits only the card and card-check,
   4e only `scripts/readme`, `species.json`, the README and the guide). A 4e worker adding
   `short` to 30 `species.json` files touches files the card reads at load: the 3c load

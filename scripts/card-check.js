@@ -298,6 +298,83 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     brief({ ...opened, focus }));
   await shot("02d-shell-picker");
 
+  // 4c-rest: every control in the status, the settings sheet and the picker is a real 44x44
+  // target at 330 and 420 (dots and compact answer buttons are out of scope; .pat is hidden
+  // while the status is open), no two overlap, the status shows its wish and meters without
+  // scrolling, and the tab order is the page order with no positive tabindex.
+  const measure = (view) => card.evaluate((el, view) => {
+    const s = el._slides[el._index];
+    const sr = s.status.getBoundingClientRect();
+    const ctl = [...s.status.querySelectorAll("button, a[href], [tabindex]")]
+      .filter((b) => b.getClientRects().length && !b.closest("[hidden]"))
+      .map((b) => { const r = b.getBoundingClientRect(); return { name: b.className || b.tagName, w: r.width, h: r.height,
+        l: r.left, t: r.top, r: r.right, b: r.bottom, tab: b.getAttribute("tabindex") }; });
+    const small = ctl.filter((c) => c.w < 43.5 || c.h < 43.5).map((c) => `${c.name} ${c.w.toFixed(0)}x${c.h.toFixed(0)}`);
+    const overlap = [];
+    if (view !== "picker") for (let i = 0; i < ctl.length; i++) for (let j = i + 1; j < ctl.length; j++) {
+      const x = Math.min(ctl[i].r, ctl[j].r) - Math.max(ctl[i].l, ctl[j].l);
+      const y = Math.min(ctl[i].b, ctl[j].b) - Math.max(ctl[i].t, ctl[j].t);
+      if (x > 1 && y > 1) overlap.push(`${ctl[i].name}/${ctl[j].name}`);
+    }
+    const seen = view === "status" ? [...s.status.querySelectorAll(".row")]
+      .filter((r) => /^(would like|wish|hunger|happy|energy)/.test(r.children[1]?.textContent || ""))
+      .map((r) => ({ k: r.children[1].textContent, ok: r.getBoundingClientRect().bottom <= sr.bottom + 1 })) : [];
+    return { n: ctl.length, small, overlap, hidden: seen.filter((x) => !x.ok).map((x) => x.k), rows: seen.length,
+      posTab: ctl.filter((c) => Number(c.tab) > 0).length, scroll: s.status.scrollTop };
+  }, view);
+  const boxIssues = [];
+  const boxCounts = {};
+  for (const width of [330, 420]) {
+    await page.setViewportSize({ width, height: 860 });
+    await page.waitForTimeout(500);
+    for (const view of ["picker", "settings", "status"]) {
+      if (view === "settings") await cur().locator(".status .pback").click();
+      if (view === "status") await cur().locator(".status .sback").click();
+      await page.waitForTimeout(300);
+      const m = await measure(view);
+      boxCounts[`${width}-${view}`] = m.n;
+      if (m.small.length || m.overlap.length || m.hidden.length || m.posTab || m.n < 2) boxIssues.push(`${width} ${view}: ${JSON.stringify(m)}`);
+      if (view === "status" && m.rows < 3) boxIssues.push(`${width} status: only ${m.rows} meter rows found`);
+      if (view === "status") { await cur().locator(".status .gear").click(); await page.waitForTimeout(250); }
+      if (view === "settings") {
+        // Tab from the back row visits the buttons in page order.
+        await cur().locator(".status .sback").focus();
+        const order = [];
+        for (let i = 0; i < 4; i++) {
+          order.push(await card.evaluate((el) => el.shadowRoot.activeElement?.className.split(" ").slice(0, 2).join(" ")));
+          await page.keyboard.press("Tab");
+        }
+        const dom = await card.evaluate((el) => [...el._slides[el._index].status.querySelectorAll("button")].slice(0, 4)
+          .map((b) => b.className.split(" ").slice(0, 2).join(" ")));
+        if (order.join() !== dom.join()) boxIssues.push(`${width} tab order ${order} vs ${dom}`);
+        await cur().locator(".status .shellrow").click(); // and into the picker's turn
+        await page.waitForTimeout(250);
+        await cur().locator(".status .pback").click();
+        await page.waitForTimeout(250);
+      }
+    }
+    // Settings, shared screen: the person's rows hide, misses and whines stay, read-only.
+    const shared = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      localStorage.setItem("hatch-shared-screen", "on");
+      el._renderStatus(s, []);
+      const t = s.status.textContent;
+      const out = { misses: /misses/.test(t), whines: /whines/.test(t), personal: /notify me|my data|baby talk/.test(t),
+        group: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent).join("|") };
+      localStorage.setItem("hatch-shared-screen", "off");
+      el._renderStatus(s, []);
+      return out;
+    });
+    if (!shared.misses || !shared.whines || shared.personal) boxIssues.push(`${width} shared ${JSON.stringify(shared)}`);
+    // Back to the picker for the checks that follow.
+    await cur().locator(".status .shellrow").click();
+    await page.waitForTimeout(300);
+  }
+  await page.setViewportSize({ width: 420, height: 860 });
+  await page.waitForTimeout(400);
+  check("4c: every status, settings and picker control is 44x44 at 330 and 420, none overlap, the wish and meters show unscrolled, tab order is page order, shared settings keep misses/whines",
+    boxIssues.length === 0, boxIssues.join(" ; ") || JSON.stringify(boxCounts));
+
   // Locked tiles (a pet below teen): shown dimmed with their stage, never hidden; a tap
   // says when, saves nothing and leaves the shell as it is.
   const lockedKeys = Object.keys(a.locked || {});
@@ -537,8 +614,8 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     el._renderStatus(s, []);
     return out;
   });
-  check("shell: an older server's sheet has no shell row, no pet heading and no picker",
-    older.heads.join("|") === "for you|this screen" && !older.row && older.tiles === 0, JSON.stringify(older));
+  check("shell: an older server's sheet has no shell row and no picker (the pet's group stays, for misses and whines)",
+    /^for [^|]+\|for you\|this screen$/.test(older.heads.join("|")) && !older.row && older.tiles === 0, JSON.stringify(older));
 
   // Each error line: the shell goes back to its pick and the picker stays open.
   await openPicker();
@@ -897,7 +974,7 @@ async function main() {
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(600);
   const status = await cur().locator(".status").innerText();
-  check("status screen opens", /weight/.test(status) && /whines/.test(status));
+  check("status screen opens, without misses and whines (they live in settings)", /weight/.test(status) && !/whines|misses/.test(status));
   await shot("02-status");
   // The next egg's creature, picked through its select, shows on the status screen.
   const eggChoice = (await ids())["select.next_egg"];
@@ -923,11 +1000,12 @@ async function main() {
     const s = el._slides[el._index];
     return { open: s.screen.classList.contains("show-status"), back: !!s.status.querySelector(".sback"),
       focus: el.shadowRoot.activeElement?.className, sound: !!s.status.querySelector(".bell.sound"),
-      stats: /weight|whines/.test(s.status.textContent), heads: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent),
+      stats: /weight/.test(s.status.textContent), pet0: /misses/.test(s.status.textContent) && /whines/.test(s.status.textContent), heads: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent),
       pet: el._linkName(s) };
   });
   check("the status screen has a gear and no switches; the gear opens the settings sheet over it",
     statusRows && sheet.open && sheet.back && sheet.sound && !sheet.stats, JSON.stringify(sheet));
+  check("the settings sheet holds misses and whines under the pet's group", sheet.pet0, JSON.stringify(sheet));
   check("the gear moves focus to the sheet's back row", sheet.focus === "sback", sheet.focus);
   check("the sheet heads the pet's rows, the viewer's and this screen's",
     sheet.heads.join("|") === `for ${sheet.pet}|for you|this screen`, sheet.heads.join("|"));
