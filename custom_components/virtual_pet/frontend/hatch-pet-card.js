@@ -255,15 +255,17 @@ const MONO_TONES = [["#2f3a24", 5], ["#6f7f4f", 5], ["#9aaa72", 3], ["#c6d4a0", 
 const monoTable = (at) => MONO_TONES.flatMap(([hex, n]) =>
   Array(n).fill((parseInt(hex.slice(at, at + 2), 16) / 255).toFixed(3))).join(" ");
 // Luma, then the tables: sRGB, so they give the tones as they are.
-const MONO_FILTER = `<svg class="monodefs" width="0" height="0" aria-hidden="true" focusable="false">
-  <filter id="hatch-mono4" color-interpolation-filters="sRGB">
-    <feColorMatrix type="matrix" values=".299 .587 .114 0 0  .299 .587 .114 0 0  .299 .587 .114 0 0  0 0 0 1 0"/>
+// The backlight lifts the luma by about one tone (.22 of 1) before the tables.
+const monoFilter = (id, lift) => `<filter id="${id}" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values=".299 .587 .114 0 ${lift}  .299 .587 .114 0 ${lift}  .299 .587 .114 0 ${lift}  0 0 0 1 0"/>
     <feComponentTransfer>
       <feFuncR type="discrete" tableValues="${monoTable(1)}"/>
       <feFuncG type="discrete" tableValues="${monoTable(3)}"/>
       <feFuncB type="discrete" tableValues="${monoTable(5)}"/>
     </feComponentTransfer>
-  </filter></svg>`;
+  </filter>`;
+const MONO_FILTER = `<svg class="monodefs" width="0" height="0" aria-hidden="true" focusable="false">
+  ${monoFilter("hatch-mono4", 0)}${monoFilter("hatch-mono4-lit", 0.22)}</svg>`;
 
 function soundsOn() {
   try {
@@ -1985,6 +1987,9 @@ const STYLE = `
      and .mono-grid draws the grid again over the result. */
   .monodefs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
   ha-card.mono .screen, ha-card.mono .irbeam img { filter: url(#hatch-mono4); }
+  /* The backlight, in mono: the glow is hidden, so the lit screen takes a filter that
+     lifts the scene about one tone before the quantise. */
+  ha-card.mono .screen.lit { filter: url(#hatch-mono4-lit); }
   ha-card.mono .screen .glow, ha-card.mono .screen .lcd, ha-card.mono .screen .ghost { display: none; }
   .mono-grid { position: absolute; z-index: 1; pointer-events: none; display: none;
     left: var(--mg-x, 9px); top: var(--mg-y, 9px); width: var(--mg-w, 0); height: var(--mg-h, 0); border-radius: var(--mg-r, 12px);
@@ -1993,7 +1998,10 @@ const STYLE = `
       repeating-linear-gradient(90deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px));
     background-position: var(--lcd-x, 0) var(--lcd-y, 0); }
   ha-card.lcd-on.mono .mono-grid { display: block; }
-  .screen.show-status ~ .mono-grid { display: none; }
+  /* Hidden where .lcd is covered in colour: the sheet, the boot screen and a game. */
+  ha-card.lcd-on.mono .screen.show-status ~ .mono-grid,
+  ha-card.lcd-on.mono .screen:has(.boot:not([hidden])) ~ .mono-grid,
+  ha-card.lcd-on.mono .screen:has(.game:not([hidden])) ~ .mono-grid { display: none; }
   @media (prefers-contrast: more) { ha-card.lcd-on.mono .mono-grid { display: none; } }
   @keyframes ir-fly { to { translate: var(--ir-d) 0; } }
   @keyframes ir-trail { to { opacity: 1; } }
@@ -3264,7 +3272,12 @@ class HatchPetCard extends HTMLElement {
     else this._goPersonal();
   };
 
-  _onMono = () => this._card?.classList.toggle("mono", monoOn());
+  _onMono = () => {
+    this._card?.classList.toggle("mono", monoOn());
+    this._slides?.forEach((x) => { // an open sheet's row text and aria-pressed stay true
+      if (x.screen.classList.contains("show-status") && !x.picker) this._renderStatus(x, this._state(x, "sensor.last_care")?.attributes.log || []);
+    });
+  };
 
   _onMonoStorage = (e) => {
     if (e.key === MONO_KEY || e.key === null) this._onMono(); // null: storage cleared

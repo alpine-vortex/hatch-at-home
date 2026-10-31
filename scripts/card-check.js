@@ -518,7 +518,10 @@ async function monoChecks({ page, context, check, cur, evaluate, shot, errors })
     el._track.append(beam);
     const beamFilter = css(beam.firstChild).filter;
     beam.remove();
+    // A filter on any ancestor of the plastic would tint it too: walk up to ha-card.
+    const filterUp = (n) => { for (; n && n !== el._card; n = n.parentElement) if (css(n).filter !== "none") return true; return false; };
     return {
+      ancestorFilter: [s.request, s.el.querySelector(".buttons"), s.label].some(filterUp),
       on: el._card.classList.contains("mono"), stored: localStorage.getItem("hatch-mono"),
       row: bell && { text: bell.textContent, pressed: bell.getAttribute("aria-pressed"), label: bell.getAttribute("aria-label") },
       screen: css(s.screen).filter, beam: beamFilter, request: css(s.request).filter,
@@ -533,7 +536,7 @@ async function monoChecks({ page, context, check, cur, evaluate, shot, errors })
     await page.waitForTimeout(300);
   };
   const filtered = (f) => /url\(.*hatch-mono4/.test(f || "");
-  const plain = (m) => m.request === "none" && m.buttons === "none" && m.label === "none";
+  const plain = (m) => m.request === "none" && m.buttons === "none" && m.label === "none" && !m.ancestorFilter;
 
   await card.evaluate((el) => { localStorage.removeItem("hatch-mono"); el._card.classList.remove("mono"); });
   await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
@@ -578,13 +581,41 @@ async function monoChecks({ page, context, check, cur, evaluate, shot, errors })
   check("mono with screen effects off: filtered, no grid, glow and ghost hidden",
     fxOff.on && filtered(fxOff.screen) && fxOff.grid === "none" && fxOff.lcd === "none" && fxOff.glow === "none" && fxOff.ghost === "none",
     JSON.stringify(fxOff));
+  const sheet = async (open) => {
+    const now = await card.evaluate((el) => el._slides[el._index].screen.classList.contains("show-status"));
+    if (now !== open) {
+      await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
+      await page.waitForTimeout(400);
+    }
+  };
   await setLcd(true);
+  await sheet(true);
   await page.waitForTimeout(300);
   const fxOn = await look();
   await shot("d2-mono-on");
-  check("mono with screen effects on: the grid drawn over the screen by .mono-grid, the in-screen grid, ghost and glow hidden",
-    fxOn.grid === "block" && fxOn.fits && fxOn.lcd === "none" && fxOn.ghost === "none" && fxOn.glow === "none" && filtered(fxOn.screen),
+  check("mono with screen effects on, sheet open: .mono-grid hidden over the sheet, the in-screen grid, ghost and glow hidden",
+    fxOn.grid === "none" && fxOn.lcd === "none" && fxOn.ghost === "none" && fxOn.glow === "none" && filtered(fxOn.screen),
     JSON.stringify(fxOn));
+  await sheet(false);
+  const fxClosed = await look();
+  await shot("d2-mono-on");
+  check("mono with screen effects on, sheet closed: the grid drawn over the screen by .mono-grid",
+    fxClosed.grid === "block" && fxClosed.fits && fxClosed.lcd === "none", JSON.stringify(fxClosed));
+  // Boot screen and an open game cover the grid, as they cover .lcd in colour.
+  const covered = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const grid = getComputedStyle(s.el.querySelector(".mono-grid"));
+    const was = [s.boot.hidden, s.el.querySelector(".game").hidden];
+    s.boot.hidden = false;
+    const boot = grid.display;
+    s.boot.hidden = was[0];
+    s.el.querySelector(".game").hidden = false;
+    const game = grid.display;
+    s.el.querySelector(".game").hidden = was[1];
+    return { boot, game, after: grid.display };
+  });
+  check("mono grid: hidden over the boot screen and an open game, back after",
+    covered.boot === "none" && covered.game === "none" && covered.after === "block", JSON.stringify(covered));
   await page.emulateMedia({ contrast: "more" });
   await page.waitForTimeout(300);
   const contrast = await look();

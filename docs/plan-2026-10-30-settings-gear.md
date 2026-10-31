@@ -549,11 +549,13 @@ after the quantise. Strings exactly as 6.5. What differs, for slice 6:
 - **Same tab:** the `storage` event doesn't fire in the tab that wrote, so the toggle also
   sends a `hatch-mono-changed` window event (like `SHARED_EVENT`): a second card on the
   page follows. `connectedCallback` re-reads the class on return. The listeners only
-  toggle the class; an open sheet in another tab keeps its old row text until redrawn.
+  toggle the class and redraw an open sheet, so the row text and `aria-pressed` stay true.
 - **`.mono-grid` geometry:** `_lcdPitch` copies the four `--lcd-*` vars and the screen's
   offset, size and border radius (`--mg-*`) onto it, so every shell shape fits. No
-  warm tint (the `.lcd` tint would sit on top of the quantise). Hidden on the status
-  screen as `.lcd` is.
+  warm tint (the `.lcd` tint would sit on top of the quantise). Hidden where `.lcd` is covered in
+  colour mode: the status sheet (settings, journal, picker), the boot screen and an open game.
+  The backlight in mono: a second filter (`#hatch-mono4-lit`) lifts the luma .22 (about one
+  tone) before the quantise, on `.screen.lit`.
 - **Pass rule, measured differently:** the mean luma of pet vs background (as written)
   cancels out: a dark outline and a light fill on a mid ground read well but score ~0.3.
   The bench now masks the pet exactly (captures with the pet hidden, black and white)
@@ -586,3 +588,5 @@ after the quantise. Strings exactly as 6.5. What differs, for slice 6:
   turtle baby asleep fail as flat (the dark asleep screen). Worst 10: pond turtle excited at every
   stage (0.25-0.39) and teen dirty (0.40). The outlines still read; the owner's look
   decides.
+
+Slice 5 audit (s2523): Tally: 2 player-impact, 3 nits; all fixed in SHA_HERE.

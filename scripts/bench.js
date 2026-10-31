@@ -136,6 +136,7 @@ const PRESETS = {
       const strip = [
         ["day", {}], ["night", { scene: "night" }], ["dim", { scene: "dim" }], ["faded", { classes: ["faded"] }],
         ["raining", { classes: ["raining"] }], ["rain-scene", { scene: "rain" }], ["lit", { classes: ["lit"] }], ["lit-night", { scene: "night", classes: ["lit"] }],
+        ["lit-rain-scene", { scene: "rain", classes: ["lit"] }],
         ["status", { view: "status" }], ["journal", { journal: true, view: "journal" }],
         ["picker", { view: "picker", shellOptions: FINISHES, shellFinish: "stripes", stage: "teen" }],
         ["games", { view: "games" }], ["bubble", { say: "hi, Sam! I missed you~" }], ["boot", { booted: false }],
@@ -403,6 +404,46 @@ function monoPass(shots) {
   return { fails, worst: pets.slice(0, 10).map(fmt) };
 }
 
+// The mono backlight must move the scene: each lit strip shot against its unlit twin
+// differs on more than MONO_LIT_MIN of the pixels (day, night, rain).
+const MONO_LIT_MIN = 0.05;
+async function monoLitCheck(browser, shots) {
+  const by = new Map(shots.filter((s) => s.file && s.mono).map((s) => [s.name, s.file]));
+  const pairs = [];
+  for (const width of [420, 330]) {
+    for (const [unlit, lit] of [["day", "lit"], ["night", "lit-night"], ["rain-scene", "lit-rain-scene"]]) {
+      const a = by.get(`mono/${width}/strip-${unlit}`);
+      const b = by.get(`mono/${width}/strip-${lit}`);
+      if (a && b) pairs.push({ label: `${width} ${unlit} vs ${lit}`, a, b });
+    }
+  }
+  if (!pairs.length) return [];
+  const page = await browser.newPage();
+  const out = [];
+  for (const p of pairs) {
+    const share = await page.evaluate(async ({ a, b }) => {
+      const px = async (src) => {
+        const img = new Image();
+        img.src = `data:image/png;base64,${src}`;
+        await img.decode();
+        const c = document.createElement("canvas");
+        c.width = img.width;
+        c.height = img.height;
+        const g = c.getContext("2d");
+        g.drawImage(img, 0, 0);
+        return g.getImageData(0, 0, c.width, c.height).data;
+      };
+      const [x, y] = [await px(a), await px(b)];
+      let diff = 0;
+      for (let i = 0; i < x.length; i += 4) if (Math.abs(x[i] - y[i]) + Math.abs(x[i + 1] - y[i + 1]) + Math.abs(x[i + 2] - y[i + 2]) > 30) diff++;
+      return diff / (x.length / 4);
+    }, { a: fs.readFileSync(p.a).toString("base64"), b: fs.readFileSync(p.b).toString("base64") });
+    out.push({ ...p, share: +share.toFixed(3) });
+  }
+  await page.close();
+  return out;
+}
+
 // A contact sheet per group: the shots as captioned tiles, drawn by the browser.
 async function buildSheets(browser, shots, outDir) {
   const groups = new Map();
@@ -445,6 +486,12 @@ async function main() {
     const mono = monoPass(shots);
     if (mono) fs.writeFileSync(path.join(opts.out, "mono-pass.json"), JSON.stringify({ ...mono,
       shots: shots.filter((s) => s.measure).map((s) => ({ name: s.name, ...s.measure })) }, null, 1));
+    const lit = await monoLitCheck(browser, shots);
+    for (const l of lit) {
+      const bad = l.share <= MONO_LIT_MIN;
+      console.log(`mono backlight ${bad ? "FAIL" : "ok"}: ${l.label} differ on ${(l.share * 100).toFixed(1)}% of pixels (need > ${MONO_LIT_MIN * 100}%)`);
+      if (bad) process.exitCode = 1;
+    }
     if (opts.sheet && opts.preset) {
       for (const f of await buildSheets(browser, shots, opts.out)) console.log(`sheet ${f}`);
     }
