@@ -6535,13 +6535,14 @@ async function main() {
     return {
       keys: [at(2026, 11, 30), at(2026, 12, 1), at(2026, 12, 31), at(2027, 1, 1), at(2024, 12, 1), at(2030, 12, 1)].join(" "),
       hanukkah: [2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032].map((y) => C.hanukkah(y)?.join("/")).join(" "),
-      christmas: C.seasonLines(winter, new Date(2026, 11, 25, 12), true).dated.length,
+      christmas: [24, 25].map((d) => C.seasonLines(winter, new Date(2026, 11, d, 12), true).dated.join("/")).join(" | "),
     };
   });
   check("winter: 1-31 December, Thanksgiving keeps 1 Dec in the years it reaches it",
     wDates.keys === "- winter winter - thanksgiving thanksgiving", wDates.keys);
   check("winter: Hanukkah from the browser's Hebrew calendar, 2025-2032",
-    wDates.hanukkah === "12/15 12/5 12/25 12/13 12/2 12/21 12/10 11/28" && wDates.christmas === 2, JSON.stringify(wDates));
+    wDates.hanukkah === "12/15 12/5 12/25 12/13 12/2 12/21 12/10 11/28" &&
+      wDates.christmas === "Christmas Eve! ♪/merry Christmas! ♥ | merry Christmas! ♥", JSON.stringify(wDates)); // no Eve on the day
   await card.evaluate((el) => { el.setConfig({ ...el._config, seasonal: "winter" }); el.hass = el._hass; });
   await page.waitForTimeout(800);
   const lights = await card.evaluate(async (el) => {
@@ -6620,8 +6621,9 @@ async function main() {
     hare.greet === "hi, little hare!", JSON.stringify(hare));
   check("winter: a world visitor waits VISIT_AFTER_MS after the hare", hare.gap >= 120000, String(hare.gap));
   // A kept line arriving while the hare passes outranks its oh! and hi (flavour):
-  // both are skipped, the kept line holds the bubble throughout. A game mid-walk
-  // ends the visit at its next beat: the hare gone, nothing said.
+  // both are skipped, the kept line holds the bubble throughout. The status opened
+  // mid-walk (as a game would, _visitorLive) ends the visit at its next beat: the
+  // hare gone, nothing said.
   const hareKept = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
     const season = el.constructor.seasons.find((x) => x.key === "winter");
@@ -6631,23 +6633,25 @@ async function main() {
     el._seasonVisitor(s, season);
     await wait(500);
     el._line(s, 3, "kept line through the hare", 6000);
+    const said = () => `${s.sayEntry?.text}|${s.bubble.textContent}`; // the held line, and what's typed so far
     await wait(1400); // past oh! (1.4 s)
-    const atStartle = s.bubble.textContent;
+    const atStartle = said();
     await wait(2100); // past hi (3.4 s)
-    const atGreet = s.bubble.textContent;
+    const atGreet = said();
     await wait(2500); // the kept line is over
     Object.assign(s, { sayUntil: 0, flairUntil: 0, visitUntil: 0, nextVisitCheck: 0, queue: [] });
     s.bubble.textContent = "";
     el._seasonVisitor(s, season);
-    s.game = { cur: null };
+    s.screen.classList.add("show-status");
     await wait(1700);
     const inGame = { text: s.bubble.textContent, hare: !!s.seasonBox.querySelector(".snowhare"), on: !!s.seasonVisit };
-    s.game = null;
+    s.screen.classList.remove("show-status");
     return { atStartle, atGreet, inGame };
   });
   check("winter: a kept line during the hare's walk survives",
-    [hareKept.atStartle, hareKept.atGreet].every((x) => x.includes("kept line through the hare")), JSON.stringify(hareKept));
-  check("winter: a game mid-walk ends the hare's visit, no oh!",
+    [hareKept.atStartle, hareKept.atGreet].every((x) => x.startsWith("kept line through the hare|") && !/oh!|little hare!/.test(x)),
+    JSON.stringify(hareKept));
+  check("winter: the status opened mid-walk ends the hare's visit, no oh!",
     !hareKept.inGame.text.includes("oh!") && !hareKept.inGame.hare && !hareKept.inGame.on, JSON.stringify(hareKept.inGame));
   check("snacks are cookies in winter", /season_winter_cookie/.test(hare.prop), hare.prop.split("/").pop());
   await shot("05-winter-hare");
@@ -6712,7 +6716,7 @@ async function main() {
   await cur().locator(".bell.named").scrollIntoViewIfNeeded();
   const onRow = await named();
   check("holiday names: a row in this screen, on by default", onRow.row?.pressed === "true" && onRow.row?.text === "on" &&
-    onRow.row?.label === "holiday names" && onRow.inScreen && onRow.stored === null && onRow.dated === 2 &&
+    onRow.row?.label === "holiday names" && onRow.inScreen && onRow.stored === null && onRow.dated === 1 &&
     /Thanksgiving in your favourite season/.test(onRow.note), JSON.stringify(onRow));
   await shot("05-winter-names-on");
   await cur().locator(".bell.named").click();
