@@ -1120,22 +1120,26 @@ async function main() {
   const sharedMoments = await page.locator("hatch-pet-card").evaluate((el) => {
     localStorage.setItem("hatch-shared-screen", "on");
     const s = el._slides[el._index];
-    s.queue = [];
-    const before = s.bubble.textContent;
+    // 2a: a line is said at once when the bubble is free, else queued: both count.
+    Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0 });
+    let before = s.bubble.textContent;
+    const said = () => [...(s.bubble.textContent !== before ? [s.bubble.textContent] : []), ...s.queue.map((q) => q.text)];
     for (const type of ["bond_up", "bond_record", "tucked_in", "bond_favourite", "friend_home"]) {
       el._moment(s, { type, level: 4, nickname: "sunbeam", game: "left_right", wins: 4, at: new Date().toISOString() });
     }
+    const out = { personalOnShared: said(), before };
     el._moment(s, { type: "someone_home", at: new Date().toISOString() });
-    const out = { queued: s.queue.map((q) => q.text), bubble: s.bubble.textContent, before };
-    s.queue = [];
+    out.queued = said();
+    Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0 });
     localStorage.setItem("hatch-shared-screen", "off");
+    before = s.bubble.textContent;
     el._moment(s, { type: "someone_home", at: new Date().toISOString() });
-    out.personal = s.queue.map((q) => q.text);
+    out.personal = said();
     s.queue = [];
     return out;
   });
   check("a shared screen's moments name nobody", sharedMoments.queued.join() === "someone's home!! ♥" &&
-    sharedMoments.bubble === sharedMoments.before && sharedMoments.personal.length === 0, JSON.stringify(sharedMoments));
+    sharedMoments.personalOnShared.length === 0 && sharedMoments.personal.length === 0, JSON.stringify(sharedMoments));
   check("a shared screen shows nothing personal", sharedStatus && sharedView.sheetUp && sharedView.statusUp &&
     !sharedView.visited && !sharedView.bondRow &&
     !sharedView.said.includes(USER.name) && !sharedView.said.includes("sunbeam"), JSON.stringify(sharedView));
@@ -1151,8 +1155,10 @@ async function main() {
     s.queue = [];
     s.sayUntil = 0;
     el._moment(s, { type: "bond_up", level: 4, nickname: "sunbeam" });
-    const out = s.queue.map((q) => q.text);
+    const out = [s.bubble.textContent, ...s.queue.map((q) => q.text)]; // said at once (2a), or queued
     s.queue = [];
+    s.sayUntil = 0;
+    s.bubble.textContent = ""; // so the check below sees only what comes next
     return out;
   });
   const publicMoments = await evaluate((e) =>
@@ -1166,7 +1172,7 @@ async function main() {
     return [...(s.queue || []).map((q) => q.text), s.bubble.textContent].filter((t) => /pumpkin|call you/.test(t));
   });
   check("a bond level-up is said only to its person",
-    mine[0] === "can I call you sunbeam? ♥" && theirs.length === 0, `${mine} / ${theirs}`);
+    mine.includes("can I call you sunbeam? ♥") && theirs.length === 0, `${mine} / ${theirs}`);
   // A wish aimed at a close friend: spoken to them; anyone else sees the plain wish.
   const aimed = await page.locator("hatch-pet-card").evaluate((el) => {
     const s = el._slides[el._index];
@@ -1206,6 +1212,7 @@ async function main() {
   // A long title is cut to fit.
   const cut = await page.locator("hatch-pet-card").evaluate((el) => {
     const s = el._slides[el._index];
+    Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0 }); // flavour: only into a free bubble (2a)
     el._moment(s, { type: "watching", title: "The Great British Bake Off: Christmas Special", at: new Date().toISOString() });
     return s.bubble.textContent;
   });
@@ -1267,6 +1274,7 @@ async function main() {
     }
     // A sad line and one with its own opener stay plain.
     s.voicedAt = 0;
+    s.sayUntil = 0; // the burst's last line (kept) would hold it back (2a)
     el._moment(s, { type: "care_miss", at: new Date().toISOString() });
     out.miss = s.bubble.textContent;
     el._speak(s, "hmm... sleepy", 300);
@@ -1278,8 +1286,10 @@ async function main() {
     el._toggleStatus(s);
     // Its favourite snack (the server says so at most once a day).
     s.queue = [];
+    s.voicedAt = Date.now() + 1e9;
     el._moment(s, { type: "favourite_snack", food: "hazelnuts", at: new Date().toISOString() });
-    out.favourite = s.queue.map((q) => q.text);
+    // Kept: over the line on show at once (2a), or queued behind a kept one.
+    out.favourite = [s.bubble.textContent, ...s.queue.map((q) => q.text)].filter((t) => /hazelnuts/.test(t));
     s.queue = [];
     s.sayUntil = 0;
     s.voicedAt = Date.now() + 1e9; // hushed again for the checks after
@@ -1298,7 +1308,8 @@ async function main() {
   check("sad lines and lines with their own opener stay plain",
     voices.miss === "...oh, there you are ♥" && voices.opener === "hmm... sleepy", `${voices.miss} | ${voices.opener}`);
   check("opening the status screen finishes the line", voices.finished);
-  check("its favourite snack is said", voices.favourite.join() === "hazelnuts, my favourite!!", voices.favourite.join());
+  check("its favourite snack is said", voices.favourite.length === 1 && voices.favourite[0].startsWith("hazelnuts, my favourite!!"),
+    voices.favourite.join());
   // Reduced motion: no typing.
   await page.emulateMedia({ reducedMotion: "reduce" });
   const still = await page.locator("hatch-pet-card").evaluate((el) => {
@@ -1726,9 +1737,10 @@ async function main() {
     const out = [];
     const at = new Date().toISOString(); // the same arrival twice: cheered once
     for (const type of ["friend_home", "friend_home", "someone_home"]) {
-      s.queue = [];
+      Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0 });
+      s.bubble.textContent = "";
       el._moment(s, { type, at });
-      out.push(s.queue[0]?.text || "");
+      out.push(s.queue[0]?.text || s.bubble.textContent); // queued, or said at once (2a)
     }
     s.queue = [];
     return { out };
@@ -1745,14 +1757,21 @@ async function main() {
     el._note(s, { kind: "stairs", floors: 12 });
     el._moment(s, { type: "bond_record", game: "left_right", wins: 4, at: "x" });
     el._moment(s, { type: "tucked_in", at: "z" });
-    const out = [...s.queue.map((q) => q.text), s.bubble.textContent]; // the goodnight replaces, not queues
+    const out = s.queue.map((q) => q.text); // kept: each waits its turn (2a)
+    // The goodnight on show (a beat) is replaced by the tuck-in, not followed by it.
+    Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0 });
+    el._moment(s, { type: "fell_asleep", how: "house", at: "y" });
+    const night = s.bubble.textContent;
+    el._moment(s, { type: "tucked_in", at: "z" });
+    out.push(night, s.bubble.textContent, s.queue.length);
     s.queue = [];
     return out;
   }, me);
   check("private notes, records and goodnights are said to their person",
     secret[0] === "we've been friends for a month! ♥" && secret[1] === "11,000 steps?! you've been busy!" &&
     secret[2] === "12 floors of stairs?! you're a climber!" && secret[3] === "new best at left or right! 4/5 ♥" &&
-    secret[4] === "thank you for tucking me in, sunbeam ♥" && secret.length === 5,
+    secret[4] === "thank you for tucking me in, sunbeam ♥" && /night|sleep/.test(secret[5]) &&
+    secret[6] === "thank you for tucking me in, sunbeam ♥" && secret[7] === 0 && secret.length === 8,
     secret.join(" | "));
   // "How was your day?": three answers, a warm reply, and it goes away.
   const askBox = cur().locator(".askday");
