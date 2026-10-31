@@ -104,6 +104,8 @@ const LAST_GAME_KEY = "hatch-last-game";
 // option experimental_catch: true. The card times the taps; nothing goes to the
 // server and it gives no reward.
 const CATCH_GAME = { key: "catch", label: "catch!", guesses: ["left", "right"] };
+// Calm Catch's far spot: [left %, right %, bottom], above the nav buttons (.gl/.gr/.gx) at any width.
+const CALM_FAR = [8, 76, "42%"];
 const CATCH = {
   rounds: 5, winAt: 3,
   travel: [1.9, 1.0], // seconds for the prop to reach the pet, round 1 to round 5
@@ -7529,9 +7531,11 @@ class HatchPetCard extends HTMLElement {
     else this._show(s, el, prop);
     el.hidden = false;
     el.style.display = "";
+    el.style.bottom = "";
     if (isCalm) { // at the far spot at once, not facing a stale transform
       g.cur.step = 0;
-      el.style.left = `${side === "left" ? 0 : 84}%`;
+      el.style.left = `${side === "left" ? CALM_FAR[0] : CALM_FAR[1]}%`;
+      el.style.bottom = CALM_FAR[2];
       el.style.transform = decoy && side === "left" ? "scaleX(-1)" : "";
     }
     s.gameScore.textContent = `round ${g.round + 1}/${CATCH.rounds} · ${g.wins} caught`;
@@ -7545,7 +7549,8 @@ class HatchPetCard extends HTMLElement {
         const near = (now - c.start) / 1000 >= c.travel - c.window - 50 / 1000;
         if (c.step !== (near ? 1 : 0)) {
           c.step = near ? 1 : 0;
-          el.style.left = `${c.side === "left" ? (near ? 28 : 0) : (near ? 56 : 84)}%`;
+          el.style.left = `${c.side === "left" ? (near ? 28 : CALM_FAR[0]) : (near ? 56 : CALM_FAR[1])}%`;
+          el.style.bottom = near ? "" : CALM_FAR[2]; // far: raised, clear of the nav buttons
         }
         if (c.decoy && c.side === "left") el.style.transform = "scaleX(-1)"; // faces its way, still
         if (p >= 1) {

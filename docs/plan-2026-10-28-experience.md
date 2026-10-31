@@ -477,7 +477,7 @@ babies and children use the normal pat lines (no `BABY` keys yet); calm Catch ha
   and the CSS block (1340-1342).
 - **Catch has shipped** (7215-7345) and its calm branch still slides the prop: 3a changes a
   shipped game; the "before 4f" ordering is dropped. Calm Catch: **two steps**, the prop
-  appears at once at the far spot (left 0 %, right 84 %) and jumps to "at the pet" (28 % /
+  appears at once at the far spot (left 0 %, right 84 %; built as 8 % / 76 %, raised, see "3a shipped") and jumps to "at the pet" (28 % /
   56 %) at `travel - window - 50 ms` (a one-frame grace, so a tap on the visible last spot
   is never "too soon", 7276). Test with `page.clock` or `c.start`, not wall time. A live OS
   change applies from the next round (`c.calm` is per round). The catch pose jumps, no slide.
@@ -505,7 +505,7 @@ babies and children use the normal pat lines (no `BABY` keys yet); calm Catch ha
   **For 3b:** "only the line and the haptic" = `if (!calm()) ` around any JS-started wiggle
   (`_animate`, `movingUntil`); the CSS `perk` is already killed by the global rule, so `_tapped`
   needs no guard. `_idle` already limits itself to a mumble and poses under calm (no wander).
-- Calm Catch as built: the two steps are `left` 0 % / 84 % (far) and 28 % / 56 % (at the pet);
+- Calm Catch as built: the two steps are `left` 8 % / 76 % at `bottom` 42 % (far: raised, so the 0 %/84 % spot that sat under the nav buttons is gone; `CALM_FAR`) and 28 % / 56 % (at the pet);
   `c.step` holds 0 or 1; the round resolves at `travel` as before. Judging: `_catchTap` allows
   `travel - window - 0.05 s` under `c.calm` (the step shows 50 ms early, so the tap on what is
   visible is never "too soon"). Decoy bees keep a static `scaleX(-1)` facing from the left (no

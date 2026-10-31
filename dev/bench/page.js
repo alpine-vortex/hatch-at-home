@@ -250,6 +250,16 @@
       cur.gameBox.querySelector('.gpick [data-game="catch"]').click();
       let c;
       for (let n = 0; n < 120 && !(c = cur.game?.cur); n++) await new Promise((r) => requestAnimationFrame(r));
+      if (shot.catchSide || shot.catchDecoy) { // force the round: its side, and a bee (a later round)
+        cancelAnimationFrame(c.raf);
+        cur.game.round = shot.catchDecoy ? 1 : 0;
+        const rolls = [shot.catchSide === "right" ? 0.9 : 0.1, shot.catchDecoy ? 0 : 0.9];
+        const was = Math.random;
+        Math.random = () => (rolls.length ? rolls.shift() : was());
+        card._catchRound(cur);
+        Math.random = was;
+        c = cur.game.cur;
+      }
       const sec = shot.catch === "near" ? c.travel - c.window + 0.2 : 0.1;
       await new Promise((r) => requestAnimationFrame((ts) => { c.start = ts - sec * 1000; r(); }));
     }

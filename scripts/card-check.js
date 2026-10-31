@@ -2105,7 +2105,7 @@ async function main() {
       const wins = s.game.wins;
       s.gameBox.querySelector(c.side === "left" ? ".gl" : ".gr").click();
       return { first, early, justBefore, last, later, seen: [...seen], won: s.game.wins - wins, near: c.side === "left" ? "28%" : "56%",
-        far: c.side === "left" ? "0%" : "84%", done: c.done };
+        far: c.side === "left" ? "8%" : "76%", done: c.done };
     });
     check("3a: calm Catch shows the prop at the far spot at once",
       calmCatch.first.calm && calmCatch.first.left === calmCatch.far, JSON.stringify(calmCatch));
