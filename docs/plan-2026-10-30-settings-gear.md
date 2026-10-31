@@ -589,4 +589,4 @@ after the quantise. Strings exactly as 6.5. What differs, for slice 6:
   stage (0.25-0.39) and teen dirty (0.40). The outlines still read; the owner's look
   decides.
 
-Slice 5 audit (s2523): Tally: 2 player-impact, 3 nits; all fixed in SHA_HERE.
+Slice 5 audit (s2523): Tally: 2 player-impact, 3 nits; all fixed in 57272c2.
