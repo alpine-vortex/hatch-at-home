@@ -337,3 +337,13 @@ frames. Left alone on purpose: the firefly's glow sparkles and the otter's water
 line, and the otter's cool greys (water edges, the sick tear). Hermit crab, seal and beetle
 greys are as at 64 (their own colours).
 
+## Eat and cheer at 128 (2026-10-31)
+
+Every species gets its baby, teen and adult `eat` and `cheer` pairs (`<stage>_eat_1/2`,
+`<stage>_cheer_1/2`), cut at 2 px per art pixel with `cut_react` from the reaction sheets drawn on
+2026-10-29 (scale from each stage's `content_1`, stage palette, outline closed), limbs counted at
+zoom. species.json `"acts"` lists them; the care scenes play them. One world per commit.
+
+- Woodland: robin, deer, fox, banana slug cut; the squirrel's (shipped 2026-10-30) gain their
+  `"acts"` entry, so they play now.
+
