@@ -903,6 +903,10 @@ const KEPT = 3; // never dropped, may wait
 const BEAT = 2; // care by someone else, calls, sleep
 const FLAVOUR = 1; // may be dropped, never replayed as a barrage
 const MINE_MS = 3000;
+// A pat (C10), by mood; any other mood says the content line. Babies and children too.
+const PAT_LINES = { content: "hehe ♥", excited: "hehe! ♪", sleepy: "mmm...", sick: "thanks... ♥" };
+const PAT_COOLDOWN_MS = 4000; // a pat in this time after a spoken one wiggles, no line
+const PAT_MS = 2500;
 const MINE_MATCH_MS = 10000; // a press is matched to the first new log entry within this
 const FLAVOUR_WAIT_MS = 8000;
 // Every moment type, coming (became_sick) or channel-only, has a class: card-check
@@ -1674,7 +1678,21 @@ const STYLE = `
   .screen.night .bg { filter: brightness(.85); }
   .screen.dim .bg { filter: brightness(.5) saturate(.75); }
   .screen.dim .pet { filter: brightness(.8); }
-  .pet, .perch { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%; }
+  .pet, .perch, .screen .pat { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%; }
+  /* The pat (PR 3b): a clear button over the pet's box (the img takes no taps), above the
+     bubble and below a question, a game, the status and the boot screen. Written as
+     ".screen .pat" so _tapped's .tap-feedback (position: relative) can't move it. */
+  .screen .pat { position: absolute; z-index: 2; width: 46.5%; padding: 0; border: 0; border-radius: 12px;
+    background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .screen .pat[hidden], .screen.show-status .pat, .screen.linking .pat, .screen:has(> .askday) .pat,
+  .screen:has(> .game:not([hidden])) .pat, .screen:has(> .boot:not([hidden])) .pat,
+  .slide.away-slide .pat { display: none; }
+  .screen .pat.tap-feedback.pressed { transform: none; filter: none; }
+  .screen .pat.tap-feedback::after { display: none; }
+  .screen .pat:focus-visible { outline-offset: -3px; box-shadow: inset 0 0 0 6px #1d2a22; }
+  .pet.pat-soft { animation: pat-soft .3s ease-out; }
+  @keyframes pat-soft { 40% { transform: translateY(-2%) scale(1.02, .98); } }
+  .pet.pat-slow { animation: perk 1.1s ease-in-out; }
   .pet.hop { animation: hop .7s ease-in-out infinite; }
   .pet.greethop { animation: hop .7s ease-in-out 2; } /* its own class: the bounce clears "hop" */
   @keyframes hop { 50% { transform: translateY(-9%); } }
@@ -2092,12 +2110,12 @@ const STYLE = `
       radial-gradient(ellipse 10% 4% at 50% 90%, transparent 55%, rgba(255,255,255,.95) 62%, transparent 75%);
     animation: ripple 1.4s ease-out infinite; }
   @keyframes ripple { 0% { opacity: 0; transform: scale(.7); } 30% { opacity: 1; } 100% { opacity: 0; transform: scale(1.25); } }
-  .pet.go-left, .perch.go-left { translate: -60% 0; }
-  .pet.go-right, .perch.go-right { translate: 60% 0; }
+  .pet.go-left, .perch.go-left, .screen .pat.go-left { translate: -60% 0; }
+  .pet.go-right, .perch.go-right, .screen .pat.go-right { translate: 60% 0; }
   /* What the pet stands on (species.json "perch"); it follows the pet around. */
-  .perch { transition: translate .25s ease-out; }
-  .perch.wander-l { translate: -16% 0; transition-duration: .9s; }
-  .perch.wander-r { translate: 16% 0; transition-duration: .9s; }
+  .perch, .screen .pat { transition: translate .25s ease-out; }
+  .perch.wander-l, .screen .pat.wander-l { translate: -16% 0; transition-duration: .9s; }
+  .perch.wander-r, .screen .pat.wander-r { translate: 16% 0; transition-duration: .9s; }
   .status { position: absolute; inset: 0; background: #e9e2c6; color: #2f3a24; padding: 9px 12px;
     display: none; flex-direction: column; gap: 4px; font-size: 13px; overflow: auto; }
   .screen.show-status .status { display: flex; }
@@ -2826,6 +2844,7 @@ class HatchPetCard extends HTMLElement {
             <img class="attention" alt="wants attention">
             <div class="bubble"></div>
             <div class="sr" role="status"></div>
+            <button class="pat" type="button" hidden></button>
             <div class="game" hidden>
               <div class="gpick" role="group" aria-label="Pick a game">${this._games().map((g) =>
                 `<button data-game="${g.key}">${g.label}</button>`).join("")}</div>
@@ -2849,7 +2868,7 @@ class HatchPetCard extends HTMLElement {
     const s = {
       el: slide, device: q(".device"), label: q(".label"), screen: q(".screen"), bg: q(".bg"),
       awaysign: q(".awaysign"), awaylabel: q(".awaylabel"), pet: q(".pet"), prop: q(".prop"),
-      perch: q(".perch"), ghost: q(".ghost"), monoGrid: q(".mono-grid"),
+      perch: q(".perch"), ghost: q(".ghost"), monoGrid: q(".mono-grid"), pat: q(".pat"),
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
@@ -2886,8 +2905,9 @@ class HatchPetCard extends HTMLElement {
       for (const c of PERCH_MOVES) {
         s.perch.classList.toggle(c, s.pet.classList.contains(c));
         s.ghost.classList.toggle(c, s.pet.classList.contains(c));
+        s.pat.classList.toggle(c, s.pet.classList.contains(c));
       }
-      s.perch.style.scale = s.ghost.style.scale = s.pet.style.scale;
+      s.perch.style.scale = s.ghost.style.scale = s.pat.style.scale = s.pet.style.scale;
       if (moved) this._ghostTrail(s);
     }).observe(s.pet, { attributes: true, attributeFilter: ["class", "style"] });
     // What the pet says to someone (a refusal, a game's result, a moment) is read
@@ -2899,6 +2919,8 @@ class HatchPetCard extends HTMLElement {
         s.live.textContent = text;
       }
     }).observe(s.bubble, { childList: true, characterData: true, subtree: true });
+    // A pat (PR 3b): a tap on the pet itself, card only. A tap beside it still opens the status.
+    s.pat.addEventListener("click", (e) => this._pat(s, e));
     // Taps on the game mustn't reach the screen behind (which opens the status).
     s.gameBox.addEventListener("click", (e) => e.stopPropagation());
     s.gameBox.addEventListener("keydown", (e) => {
@@ -3615,6 +3637,7 @@ class HatchPetCard extends HTMLElement {
       const current = i === this._index;
       slide.el.classList.toggle("away-slide", !current);
       slide.device.inert = !current;
+      slide.pat.hidden = !this._patOn(slide);
       slide.el.setAttribute("aria-hidden", current ? "false" : "true");
     });
 
@@ -3822,6 +3845,10 @@ class HatchPetCard extends HTMLElement {
     const lightsOut = this._state(s, "switch.lights_out")?.state === "on";
     const asleep = this._state(s, "binary_sensor.asleep")?.state === "on";
     const away = mood?.state === "away";
+    s.away = away;
+    s.egg = stage === "egg";
+    const haDevice = this._hass.devices?.[s.ids?.device]; // its given name, as on the title
+    s.pat.setAttribute("aria-label", `pat ${haDevice?.name_by_user || haDevice?.name || sp.name || "pet"}`);
     s.asleep = asleep;
     s.lightsOut = lightsOut;
     // A new call chirps once (not on load: wasCalling starts undefined).
@@ -3961,6 +3988,7 @@ class HatchPetCard extends HTMLElement {
     }
     lights.querySelector(".lbl").textContent = sleeping ? "wake" : "sleep";
     lights.title = sleeping ? "Lights on: wake the pet" : "Lights out: put the pet to bed";
+    s.pat.hidden = !this._patOn(s);
 
     if (s.screen.classList.contains("show-status")) this._renderStatus(s, log);
   }
@@ -4067,6 +4095,7 @@ class HatchPetCard extends HTMLElement {
         s.propUntil = 0;
       }
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
+      s.pat.hidden = !this._patOn(s);
       if (s === this._slides[this._index]) {
         if (!this._booting) this._greet(s); // the boot screen waits: only the speaking does
         this._powerTick(s);
@@ -4362,6 +4391,51 @@ class HatchPetCard extends HTMLElement {
   // An open question is on show (its answer buttons).
   _questionOn(s) {
     return !!s.screen?.querySelector(".askday");
+  }
+
+  // The pat's box is up: the pet on show, out and about, with nothing over it (the CSS
+  // also hides it at once for the status, a game, a question, a link and the boot screen).
+  _patOn(s) {
+    return !!s.species && s === this._slides[this._index] && !this._booting && !s.scene && !s.linking &&
+      !s.power && !s.game && !s.away && !s.egg && !this._questionOn(s) &&
+      !s.screen.classList.contains("show-status");
+  }
+
+  // May a pat say its line? Not over a kept line or one waiting, a game, a question, a
+  // call or the low-battery gag: then it is a wiggle only (rapid pats can't cut off news).
+  _patMayTalk(s) {
+    return !s.calling && !s.power && !s.game && !this._questionOn(s) &&
+      !(s.sayUntil > Date.now() && s.sayClass >= KEPT) && !s.queue?.some((q) => lineClass(q) >= KEPT);
+  }
+
+  // A pat (PR 3b, O01): card only, nothing is sent or stored. A perk and the tap's
+  // haptic; a C10 line by mood, at most one per PAT_COOLDOWN_MS. Asleep: a slow perk
+  // and nothing said. Under reduced motion only the line and the haptic.
+  _pat(s, e) {
+    if (!this._patOn(s)) return; // let the tap reach the screen (status) or bring the slide forward
+    e.stopPropagation();
+    if (e.detail !== 0 && this._swiped) return; // the end of a swipe; a key after one still pats
+    const now = Date.now();
+    const still = calm();
+    if (s.asleep) {
+      this._tapped(s.pat);
+      if (!still) {
+        this._animate(s, s.pet, "pat-slow", 1100);
+        this._moving(s, 1100);
+      }
+      return;
+    }
+    if (now - (s.patAt || 0) < PAT_COOLDOWN_MS || !this._patMayTalk(s)) {
+      this._tapped(s.pat);
+      if (!still) {
+        this._animate(s, s.pet, "pat-soft", 300);
+        this._moving(s, 400);
+      }
+      return;
+    }
+    this._tapped(s.pat, s);
+    s.patAt = now;
+    this._line(s, MINE, PAT_LINES[s.moodState] || PAT_LINES.content, PAT_MS);
   }
 
   // May a line of this class go into the bubble now? Only a higher class
