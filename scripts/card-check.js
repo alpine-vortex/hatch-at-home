@@ -36,7 +36,7 @@ const results = [];
 
 // The gated sections of main(), in file order.
 const SECTIONS = ["shelf", "shell", "play", "resume", "moments", "photos", "personality", "types",
-  "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "care",
+  "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "oldcard"];
 const NEEDS = { oldcard: ["restart"] }; // oldcard asserts restart's seeded bond
 const argv = process.argv.slice(2);
@@ -5470,6 +5470,271 @@ async function main() {
   });
   await page.setViewportSize({ width: 420, height: 860 });
   await page.waitForTimeout(600);
+  }
+  if (want("pat")) {
+  // The pat (PR 3b): a clear button over the pet. A tap on it gives a C10 line and no
+  // status; a tap beside it still opens the status. Card only: nothing sent or stored.
+  await calm();
+  await page.waitForTimeout(800);
+  await pinAwake(card, "pat");
+  await card.evaluate((el) => {
+    el._slides.forEach((s) => { s.patAt = 0; s.queue = []; s.sayUntil = 0; s.sayClass = 0; });
+    el.__realMoving ||= el._moving;
+  });
+  const patState = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const r = s.pat.getBoundingClientRect();
+    const sc = s.screen.getBoundingClientRect();
+    return { shown: getComputedStyle(s.pat).display !== "none" && r.width > 0, hidden: s.pat.hidden,
+      status: s.screen.classList.contains("show-status"), said: s.bubble.textContent, cls: s.sayClass || 0,
+      label: s.pat.getAttribute("aria-label"), catchCount: s.catchCount || 0,
+      onPet: (() => {
+        const p = s.pet.getBoundingClientRect();
+        return [p.left - r.left, p.top - r.top, p.width - r.width, p.height - r.height].every((d) => Math.abs(d) < 1.5);
+      })(),
+      box: [(r.left - sc.left) / sc.width, (r.top - sc.top) / sc.height, r.width / sc.width, r.height / sc.height]
+        .map((n) => Math.round(n * 1000) / 10) };
+  });
+  const patReset = () => card.evaluate((el) => {
+    const s = el._slides[el._index];
+    if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+    Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0 });
+    s.bubble.textContent = "";
+    s.pat.hidden = !el._patOn(s);
+  });
+  // A real tap where the box is (hit-testing is the point), at a share of the screen.
+  const tapAt = async (fx, fy) => {
+    const r = await cur().locator(".screen").boundingBox();
+    await page.mouse.click(r.x + r.width * fx, r.y + r.height * fy);
+    await page.waitForTimeout(150);
+  };
+  const tapPet = async () => {
+    const r = await cur().locator(".pat").boundingBox();
+    await page.mouse.click(r.x + r.width / 2, r.y + r.height * 0.6);
+    await page.waitForTimeout(150);
+  };
+  const PAT = { content: "hehe ♥", excited: "hehe! ♪", sleepy: "mmm...", sick: "thanks... ♥" };
+  const spoke = (said, line) => said.replace(/^\S+ /, "") === line || said === line || said.endsWith(` ${line}`);
+  await patReset();
+  const placed = await patState();
+  check("the pat box sits on the pet's box, shown, named for the pet",
+    placed.shown && placed.onPet && /^pat \S/.test(placed.label), JSON.stringify(placed));
+  // Service calls and the pet's own websocket messages, on the connection itself.
+  await card.evaluate((el) => {
+    el.__calls = [];
+    const conn = el._hass.connection;
+    if (!conn.__realSend) {
+      conn.__realSend = conn.sendMessagePromise;
+      conn.sendMessagePromise = function (msg, ...a) {
+        if (msg?.type === "call_service" || /^virtual_pet\//.test(msg?.type || "")) el.__calls?.push(msg.type);
+        return conn.__realSend.call(this, msg, ...a);
+      };
+    }
+  });
+  const store = () => evaluate(() => JSON.stringify(Object.entries(localStorage).sort()));
+  const storeBefore = await store();
+  await tapPet();
+  await page.waitForTimeout(50);
+  const one = await patState();
+  const sent = await card.evaluate((el) => el.__calls.slice());
+  const storeAfter = await store();
+  check("a pat gives the content C10 line and doesn't open the status",
+    spoke(await bubble(), PAT.content) && !one.status, JSON.stringify(one));
+  check("a pat sends nothing and stores nothing (200 ms)", sent.length === 0 && storeAfter === storeBefore,
+    JSON.stringify({ sent, same: storeAfter === storeBefore }));
+  // Three fast pats, one line: the cooldown's pats wiggle.
+  await patReset();
+  let lines = 0;
+  await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    el.__patLines = 0;
+    s.__realSayLine ||= el._sayLine;
+    el._sayLine = function (sl, q) {
+      if (q.text === "hehe ♥") el.__patLines++;
+      return s.__realSayLine.call(this, sl, q);
+    };
+  });
+  for (let i = 0; i < 3; i++) await tapPet();
+  lines = await card.evaluate((el) => {
+    el._sayLine = el._slides[el._index].__realSayLine;
+    return el.__patLines;
+  });
+  check("three fast pats give one line", lines === 1, `lines ${lines}`);
+  // Each mood's line (babies and children say the same).
+  const moodLines = {};
+  for (const mood of ["excited", "sleepy", "sick", "bored", "hungry"]) {
+    await card.evaluate((el, mood) => { el._slides[el._index].moodState = mood; }, mood);
+    await patReset();
+    await card.evaluate((el, mood) => { el._slides[el._index].moodState = mood; }, mood);
+    await tapPet();
+    moodLines[mood] = await bubble();
+  }
+  await calm();
+  await page.waitForTimeout(500);
+  check("each mood pats with its C10 line (bored and hungry say the content line)",
+    spoke(moodLines.excited, PAT.excited) && spoke(moodLines.sleepy, PAT.sleepy) && spoke(moodLines.sick, PAT.sick) &&
+    spoke(moodLines.bored, PAT.content) && spoke(moodLines.hungry, PAT.content), JSON.stringify(moodLines));
+  // Six spoken pats don't count toward the catchphrase.
+  await patReset();
+  const cc0 = (await patState()).catchCount;
+  for (let i = 0; i < 6; i++) {
+    await card.evaluate((el) => { el._slides[el._index].patAt = 0; });
+    await tapPet();
+  }
+  const cc1 = (await patState()).catchCount;
+  check("six pats leave catchCount alone", cc0 === cc1, `${cc0} -> ${cc1}`);
+  // A tap beside the pet still opens the status (left of the box, and above it).
+  for (const [fx, fy] of [[0.12, 0.7], [0.88, 0.7], [0.5, 0.2]]) {
+    await patReset();
+    await card.evaluate((el) => el._slides[el._index].pet.classList.remove("wander-l", "wander-r"));
+    await page.waitForTimeout(300);
+    await tapAt(fx, fy);
+    const st = await patState();
+    check(`a tap beside the pet (${fx * 100} %, ${fy * 100} %) opens the status`, st.status, JSON.stringify(st));
+  }
+  await patReset();
+  // A pat during a kept line, a call: that line stays, the pat wiggles.
+  for (const [what, setup] of [
+    ["a kept line", (el) => el._line(el._slides[el._index], 3, "kept line for the pat check", 8000)],
+    ["a kept line waiting", (el) => {
+      const s = el._slides[el._index];
+      el._write(s, "something said", 8000);
+      s.sayUntil = Date.now() + 8000;
+      (s.queue ??= []).push({ text: "queued kept line", ms: 4000, cls: 3 });
+    }],
+    ["a call", (el) => {
+      const s = el._slides[el._index];
+      s.calling = true;
+      el._write(s, "calling line", 8000);
+    }],
+  ]) {
+    await patReset();
+    await card.evaluate(setup);
+    await page.waitForTimeout(300);
+    const before = await patState();
+    await tapPet();
+    await page.waitForTimeout(100);
+    const after = await patState();
+    const moving = await card.evaluate((el) => el._slides[el._index].movingUntil - Date.now());
+    check(`a pat during ${what} keeps its line and only wiggles`,
+      after.said === before.said && !after.status && moving > 0, JSON.stringify({ before: before.said, after: after.said, moving }));
+    await card.evaluate((el) => { el._slides[el._index].calling = false; });
+  }
+  await patReset();
+  // Keyboard: Enter pats, even right after a swipe; a visible focus ring.
+  await page.keyboard.press("Shift");
+  await cur().locator(".pat").focus();
+  const ring = await card.evaluate((el) => {
+    const p = el._slides[el._index].pat;
+    const cs = getComputedStyle(p);
+    return { focus: p.matches(":focus-visible"), outline: cs.outlineStyle, width: cs.outlineWidth };
+  });
+  check("the pat box has a visible focus ring", ring.focus && ring.outline !== "none" && ring.width !== "0px", JSON.stringify(ring));
+  await card.evaluate((el) => { el._swiped = true; });
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(150);
+  const byKey = await patState();
+  check("Enter pats right after a swipe, no status", spoke(await bubble(), PAT.content) && !byKey.status, JSON.stringify(byKey));
+  await card.evaluate((el) => { el._swiped = false; });
+  // One shared-screen pat: the same line (it names nobody).
+  await patReset();
+  await evaluate(() => localStorage.setItem("hatch-shared-screen", "on"));
+  await tapPet();
+  const shared = await bubble();
+  await evaluate(() => localStorage.setItem("hatch-shared-screen", "off"));
+  check("a pat on a shared screen gives the same line", spoke(shared, PAT.content), shared);
+  // Asleep: a slow perk, nothing said.
+  await patReset();
+  const sleepy = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    s.asleep = true;
+    s.bubble.textContent = "";
+    s.pat.click();
+    const cls = s.pet.classList.contains("pat-slow");
+    await new Promise((r) => setTimeout(r, 200));
+    const out = { said: s.bubble.textContent, cls, sayUntil: s.sayUntil > Date.now() };
+    s.asleep = false;
+    return out;
+  });
+  check("asleep, a pat is a slow perk and no line", sleepy.cls && !sleepy.said && !sleepy.sayUntil, JSON.stringify(sleepy));
+  // Hidden where the pat makes no sense.
+  await patReset();
+  const hiddenIn = {};
+  const flagged = async (name, on, off) => {
+    await card.evaluate(on);
+    await card.evaluate((el) => el._tick());
+    hiddenIn[name] = !(await patState()).shown;
+    await card.evaluate(off);
+    await card.evaluate((el) => el._tick());
+  };
+  await flagged("status", (el) => el._toggleStatus(el._slides[el._index]), (el) => el._toggleStatus(el._slides[el._index]));
+  await flagged("game", (el) => { const s = el._slides[el._index]; s.gameBox.hidden = false; },
+    (el) => { el._slides[el._index].gameBox.hidden = true; });
+  await flagged("question", (el) => { const d = document.createElement("div"); d.className = "askday"; el._slides[el._index].screen.append(d); },
+    (el) => el._slides[el._index].screen.querySelector(".askday")?.remove());
+  await flagged("scene", (el) => { el._slides[el._index].scene = { kind: "test" }; }, (el) => { el._slides[el._index].scene = null; });
+  await flagged("link", (el) => { el._slides[el._index].screen.classList.add("linking"); }, (el) => { el._slides[el._index].screen.classList.remove("linking"); });
+  await flagged("power", (el) => { el._slides[el._index].power = { timers: [] }; }, (el) => { el._slides[el._index].power = null; });
+  await flagged("boot", (el) => { el._slides[el._index].boot.hidden = false; }, (el) => { el._slides[el._index].boot.hidden = true; });
+  await flagged("away", (el) => { el._slides[el._index].away = true; }, (el) => { el._slides[el._index].away = false; });
+  await flagged("egg", (el) => { el._slides[el._index].egg = true; }, (el) => { el._slides[el._index].egg = false; });
+  check("the pat box is hidden in the status, a game, a question, a scene, a link, low battery, boot, away and the egg",
+    Object.values(hiddenIn).length === 9 && Object.values(hiddenIn).every(Boolean), JSON.stringify(hiddenIn));
+  check("the pat box is back after", (await patState()).shown);
+  // A peeking neighbour: its box is hidden and its device inert, so a real tap there reaches
+  // the slide (which brings it forward); even a pat sent to it says nothing.
+  if (slides > 1) {
+    await patReset();
+    const n = await card.evaluate((el) => {
+      const i = (el._index + 1) % el._slides.length;
+      const s = el._slides[i];
+      s.patAt = 0;
+      s.bubble.textContent = "";
+      s.sayUntil = Date.now() + 60000; // its own chatter held, so a line would be the pat's
+      let stopped = false;
+      const ev = { detail: 1, stopPropagation: () => { stopped = true; } };
+      el._pat(s, ev);
+      const out = { shown: getComputedStyle(s.pat).display !== "none", inert: s.device.inert, stopped,
+        said: s.bubble.textContent };
+      s.sayUntil = 0;
+      return out;
+    });
+    check("a peeking neighbour's pat box is hidden and inert, and a pat sent to it says nothing",
+      !n.shown && n.inert && !n.stopped && !n.said, JSON.stringify(n));
+  }
+  // Reduced motion: the line and nothing that moves.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await patReset();
+  const calmAt = await cur().locator(".pat").boundingBox();
+  const calmHit = await card.evaluate((el, [x, y]) => {
+    const h = el.shadowRoot.elementFromPoint(x, y);
+    const s = el._slides[el._index];
+    return { hit: `${h?.tagName}.${h?.className}`, on: el._patOn(s), talk: el._patMayTalk(s), index: el._index };
+  }, [calmAt.x + calmAt.width / 2, calmAt.y + calmAt.height * 0.6]);
+  await tapPet();
+  const calmPat = await card.evaluate((el, calmHit) => {
+    const s = el._slides[el._index];
+    return { anim: getComputedStyle(s.pet).animationName, said: s.bubble.textContent, calmHit };
+  }, calmHit);
+  const movedBefore = await card.evaluate((el) => el._slides[el._index].movingUntil || 0);
+  await tapPet(); // in the cooldown: no wiggle under calm
+  const calmMove = await card.evaluate((el, was) => {
+    const s = el._slides[el._index];
+    return { soft: s.pet.classList.contains("pat-soft"), moving: (s.movingUntil || 0) !== was };
+  }, movedBefore);
+  check("under reduced motion a pat gives the line and nothing moves",
+    spoke(calmPat.said.replace(/^\S+ /, ""), PAT.content) || calmPat.said.includes(PAT.content),
+    JSON.stringify({ calmPat, calmMove }));
+  check("under reduced motion a cooldown pat starts no wiggle", !calmMove.soft && !calmMove.moving, JSON.stringify(calmMove));
+  await page.emulateMedia({ reducedMotion: null });
+  await card.evaluate((el) => {
+    const conn = el._hass.connection;
+    if (conn.__realSend) conn.sendMessagePromise = conn.__realSend;
+    delete conn.__realSend;
+    delete el.__calls;
+  });
+  await patReset();
+  await unpinAwake(card);
   }
   if (want("care")) {
   // Care scenes: medicine and clean play out (about 2 s) before the screen shows

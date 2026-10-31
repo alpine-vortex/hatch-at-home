@@ -4015,6 +4015,7 @@ class HatchPetCard extends HTMLElement {
     s.settings = false;
     this._closePicker(s);
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+    s.pat.hidden = !this._patOn(s); // back at once when the status closes, not at the next tick
     if (s === this._slides[this._index]) {
       this._card.querySelector(".statusbtn").setAttribute("aria-pressed", open ? "true" : "false");
     }
