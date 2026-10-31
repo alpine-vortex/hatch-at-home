@@ -143,7 +143,7 @@ finds them.
    (`_confirmTap`), not "the `lay_egg` pattern with `CONFIRM_MS`" (privacy 858-859,
    1150). The forget row stays last among the person's own rows (privacy decision 12).
 2. **Privacy plan, P3a:** add `my_day` to `mine`, or drop "`virtual_pet/my_day` a
-   `mine` push" from its test 3.
+   `mine` push" from its test 3. *(Done in P3a: `mine` carries `my_day`, 2a fold #15.)*
 3. **Forms book, decision 10:** "every same-world device **in the house**", not "on the
    card". `_bookOf`, the seeding rule ("waits for every slide") and "raised here" get
    house-wide rules: pets found by `hass.entities[id].platform === "virtual_pet"` with a
@@ -287,17 +287,24 @@ per its fold. Names, all in `hatch-pet-card.js`:
 - **`_mayInterrupt(s, cls)`:** `MINE` always; else not during `s.game` or an open question
   (`_questionOn`: `.askday` on show, not `s.asking`), not while an entry of this class or
   higher waits in the queue, and only over a lower class. **3b's `_patMayTalk` doesn't exist
-  on this branch** (3b hasn't landed here): when it does, its body becomes
-  `this._mayInterrupt(s, MINE)`-style plus the fold's rule (a pat is wiggle only during a
-  kept line, a game or a question) and keeps `!s.calling`.
+  on this branch** (3b hasn't landed here). Not `_mayInterrupt(s, MINE)` (that is always
+  true): its body becomes `!s.calling && !s.power && !s.game && !this._questionOn(s) &&
+  !(s.sayUntil > Date.now() && s.sayClass >= KEPT) && !s.queue?.some((q) => lineClass(q) >= KEPT)`,
+  and a pat line goes out as `_line(s, MINE, ...)`.
 - **`_sayQueued`:** drops expired flavour, then says the highest class first (queue order
-  within a class). Asleep, kept lines wait and a beat or flavour may still be said. It still
-  doesn't check `s.calling`: **2c adds that** (hold every entry with `lineClass(q) < KEPT`
-  while `s.calling`; held entries stay queued). `_visit`'s `queued` counts kept entries only,
-  so a held beat is never budgeted.
+  within a class); an entry with `still()` returning false is dropped at say-time. Asleep,
+  kept lines wait and a beat or flavour may still be said. It still doesn't check
+  `s.calling`: **2c adds that.** Mind: fold #14 made the first-look wish and `_wishMention`
+  **kept**, so "hold `lineClass(q) < KEPT`" alone would not hold the wish. Those entries carry
+  `type: "wish"`: 2c holds non-kept **and** `type === "wish"` while `s.calling`. Live
+  non-kept lines also reach the bubble through `_line` → `_mayInterrupt`, so 2c adds
+  `s.calling` there too for `cls < KEPT`. Held entries stay queued. `_visit`'s `queued` counts
+  kept entries only, so a held beat is never budgeted.
 - **2b's C6** is a new `_moment` case: `say(...)` there goes through `_line` as a `BEAT`
-  (`became_sick` is in `MOMENT_CLASS`). Put the droop in its `fx` (the third argument), and
-  "dropped if `sick` is gone at say-time" in the same `then` or a check in `_sayLine`. C8 in
+  (`became_sick` is in `MOMENT_CLASS`). Put the droop in its `fx` (the third argument, run as
+  it is said). "Dropped if `sick` is gone at say-time" is the `still` option of `_line` (a
+  predicate `_sayQueued` tests before speaking; `then` runs after the words are up). Said
+  at once, it's sick now anyway. C8 in
   `_react` goes through its `said = [...]` / `out()`, which is `MINE` for the viewer's own
   press (matched by `s.pressed`) and `BEAT` for someone else's.
 - **Care:** `_care(s, fresh)` gets every fresh log entry (newest first); `_react(s, entry,

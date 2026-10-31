@@ -4328,8 +4328,8 @@ class HatchPetCard extends HTMLElement {
   // Lines waiting for the bubble (a dream, the away note, a wish), said one at
   // a time once nothing else is being said. Kept unless opts.cls says otherwise.
   _queue(s, text, ms = 4500, opts = {}) {
-    const { cls = KEPT, at, ...rest } = opts;
-    (s.queue ??= []).push({ text, ms, opts: rest, cls, at, perk: true });
+    const { cls = KEPT, at, type, ...rest } = opts;
+    (s.queue ??= []).push({ text, ms, opts: rest, cls, at, type, perk: true });
   }
 
   // An open question is on show (its answer buttons).
@@ -4351,8 +4351,8 @@ class HatchPetCard extends HTMLElement {
   // the queue (kept, care, beats) or, flavour, waits a little or is dropped.
   // then runs when it is said (its sparkle, chirp, move); at is a kept
   // moment's time, noted as said for the catch-up.
-  _line(s, cls, text, ms = 4500, { then, at, write, type, perk, ...opts } = {}) {
-    const entry = { text, ms, cls, then, at, write, type, perk, opts };
+  _line(s, cls, text, ms = 4500, { then, at, write, type, perk, still, ...opts } = {}) {
+    const entry = { text, ms, cls, then, at, write, type, perk, still, opts };
     if (this._mayInterrupt(s, cls)) {
       this._sayLine(s, entry);
       return;
@@ -4399,10 +4399,15 @@ class HatchPetCard extends HTMLElement {
     if (!s.queue.length || s.sayUntil > now || s.game || s.power || s.screen.classList.contains("show-status")) return;
     const ready = s.asleep ? s.queue.filter((q) => lineClass(q) < KEPT) : s.queue;
     if (!ready.length) return;
-    // The highest class first; in a class, the queue's order.
+    // The highest class first; in a class, the queue's order. A line whose
+    // still() says it no longer fits (e.g. 2b's C6 once it's well) is dropped.
     const top = Math.max(...ready.map(lineClass));
     const next = ready.find((q) => lineClass(q) === top);
     s.queue.splice(s.queue.indexOf(next), 1);
+    if (next.still && !next.still()) {
+      this._sayQueued(s);
+      return;
+    }
     this._sayLine(s, next);
   }
 
@@ -4484,7 +4489,7 @@ class HatchPetCard extends HTMLElement {
       lines.push([dream(dreamt, this._words(s)), 5000]);
     }
     const wish = stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
-    if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000]);
+    if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);
     for (const [text, ms, opts] of lines.slice(0, FIRST_LOOK_LINES)) this._queue(s, text, ms, opts);
   }
 
@@ -4541,7 +4546,7 @@ class HatchPetCard extends HTMLElement {
     s.nextWish = Infinity;
     const wish = this._state(s, "sensor.life_stage")?.attributes.wish;
     const line = wish && !wish.granted && wish.open !== false && this._wishLine(wish, s);
-    if (line && oncePerDay(`wishmention-${s.ids?.device}`)) this._queue(s, this._wishSaid(s, wish, line));
+    if (line && oncePerDay(`wishmention-${s.ids?.device}`)) this._queue(s, this._wishSaid(s, wish, line), 4500, { type: "wish" });
   }
 
   // When this device last saw the pet (for the away note), every minute.

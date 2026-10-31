@@ -2710,6 +2710,28 @@ async function main() {
     caught.said.filter((t) => /guess what\? I'm a teen/.test(t)).length === 1 &&
       !caught.again.some((t) => /guess what/.test(t)) && caught.mark?.said >= caught.at &&
       caught.mark?.seen > 0, JSON.stringify(caught));
+  // Fold #12: the catch-up reads the viewer's own moments too (a bond line),
+  // never friend_home, and on a shared screen the public list only.
+  const streams = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const kept = s.privateMoments;
+    const said = Date.now() - 60000;
+    const at = new Date(said + 1000).toISOString();
+    s.privateMoments = [{ type: "bond_up", level: 4, at }, { type: "friend_home", at }];
+    const own = el._catchUp(s, said, 3).map(([t]) => t);
+    localStorage.setItem("hatch-shared-screen", "on");
+    let shared;
+    try {
+      shared = el._catchUp(s, said, 3).map(([t]) => t);
+    } finally {
+      localStorage.setItem("hatch-shared-screen", "off");
+      s.privateMoments = kept;
+    }
+    return { own, shared };
+  });
+  check("2a: the catch-up includes the viewer's bond moments, not friend_home, and none on a shared screen",
+    streams.own.length >= 1 && streams.own.some((t) => /♥/.test(t)) && !streams.own.some((t) => /home/.test(t)) &&
+      !streams.shared.some((t) => /♥/.test(t)), JSON.stringify(streams)); // the bond line has a heart
   // ...and not again after a reload (the same moment still in the list).
   await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
   await page.reload();
