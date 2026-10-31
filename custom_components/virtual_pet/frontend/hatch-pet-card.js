@@ -909,6 +909,9 @@ const MOMENT_CLASS = {
   pooped: FLAVOUR, tv_off_late: FLAVOUR, watching: FLAVOUR, listening: FLAVOUR,
   tv_on: FLAVOUR, music_on: FLAVOUR, // public: no line (the channel's watching/listening says it)
 };
+// Kept moments the catch-up leaves out: the look welcomes a friend home itself,
+// and a thank-you for the tuck-in reads oddly the next morning (first mate, 2026-10-31).
+const CATCHUP_SKIP = new Set(["friend_home", "tucked_in"]);
 const lineClass = (q) => q.cls ?? KEPT; // a queued line with no class is kept (notes, questions)
 // Two kinds of care in one update (C4): "<first> and <second>! ♥".
 const CARE_NOUNS = { feed: "a meal", snack: "snacks", clean: "a bath", medicine: "medicine", play: "play",
@@ -4559,15 +4562,15 @@ class HatchPetCard extends HTMLElement {
 
   // The kept moments since said that this look should catch up: [line, at],
   // oldest first, the newest room of them. The public list, and on a personal
-  // screen the viewer's own (s.privateMoments); never friend_home (the look
-  // welcomes them itself) and never flavour.
+  // screen the viewer's own (s.privateMoments); never friend_home or tucked_in
+  // (CATCHUP_SKIP) and never flavour.
   _catchUp(s, said, room) {
     if (room <= 0) return [];
     const pub = (this._state(s, "sensor.last_care")?.attributes.moments || []).filter((m) => !CHANNEL_ONLY.has(m.type));
     const own = sharedScreen() ? [] : s.privateMoments || [];
     const seen = new Set();
     const missed = [...pub, ...own]
-      .filter((m) => m?.type && MOMENT_CLASS[m.type] === KEPT && m.type !== "friend_home" &&
+      .filter((m) => m?.type && MOMENT_CLASS[m.type] === KEPT && !CATCHUP_SKIP.has(m.type) &&
         new Date(m.at).getTime() > said && !seen.has(momentKey(m)) && seen.add(momentKey(m)))
       .sort((a, b) => new Date(b.at) - new Date(a.at));
     const out = [];

@@ -2717,7 +2717,7 @@ async function main() {
     const kept = s.privateMoments;
     const said = Date.now() - 60000;
     const at = new Date(said + 1000).toISOString();
-    s.privateMoments = [{ type: "bond_up", level: 4, at }, { type: "friend_home", at }];
+    s.privateMoments = [{ type: "bond_up", level: 4, at }, { type: "friend_home", at }, { type: "tucked_in", at }];
     const own = el._catchUp(s, said, 3).map(([t]) => t);
     localStorage.setItem("hatch-shared-screen", "on");
     let shared;
@@ -2729,8 +2729,8 @@ async function main() {
     }
     return { own, shared };
   });
-  check("2a: the catch-up includes the viewer's bond moments, not friend_home, and none on a shared screen",
-    streams.own.length >= 1 && streams.own.some((t) => /♥/.test(t)) && !streams.own.some((t) => /home/.test(t)) &&
+  check("2a: the catch-up includes the viewer's bond moments, not friend_home or tucked_in, and none on a shared screen",
+    streams.own.length >= 1 && streams.own.some((t) => /♥/.test(t)) && !streams.own.some((t) => /home|tucking/.test(t)) &&
       !streams.shared.some((t) => /♥/.test(t)), JSON.stringify(streams)); // the bond line has a heart
   // ...and not again after a reload (the same moment still in the list).
   await page.waitForLoadState("networkidle", { timeout: 15000 }).catch(() => {});
