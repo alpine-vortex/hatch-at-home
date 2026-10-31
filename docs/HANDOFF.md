@@ -361,7 +361,7 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   acorn cap (no skip lists; all seat on 13 creatures × 4 stages), a `harvest` chirp,
   and on the day "happy thanksgiving! ♥" then a thank-you to whoever gave the most care
   in the recent log (`_thanks`, first names only). The night lantern glow is
-  Halloween's only (`.s-halloween`). The art is the Hatch API Art session's redraw of
+  Halloween's (`.s-halloween`) and, since winter lights, `.s-winter`'s; Thanksgiving has none. The art is the Hatch API Art session's redraw of
   the stand-ins from `art/seasonal/make_thanksgiving.py` (2026-10-28, branch
   `thanksgiving-art`, 19 of 19; cut from Sol's drawings, the geese placed by hand).
   Checked on the card: every costume on 13 creatures × 4 stages, the turkey and

@@ -204,6 +204,14 @@ const PRESETS = {
       out.push({ ...base, group: "winter-more", name: `winter/names-${label}`, label: `holiday names ${label}`,
         view: "settings", scroll: ".bell.named", storage });
     }
+    // The row at both widths, personal and on a shared screen (it shows there too).
+    for (const width of [420, 330]) {
+      for (const shared of [false, true]) {
+        out.push({ ...base, width, group: "winter-names", name: `winter/names-${width}${shared ? "-shared" : ""}`,
+          label: `${width}${shared ? " shared" : ""}`, view: "settings", scroll: ".bell.named", mine: true,
+          storage: shared ? { "hatch-shared-screen": "on" } : {} });
+      }
+    }
     return out;
   },
   // The same sheet on a shared screen: nothing personal, only this screen's rows.
