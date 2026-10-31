@@ -11,6 +11,54 @@ Rules kept (HANDOFF and experience plan, "The owner's taste"): Animal Crossing f
 positive or quiet, no guilt, nothing to keep up, nothing missed by being away, and no
 person named on a shared screen.
 
+## Built (2026-10-31, s2554; the review's corrected list wins over the sections below)
+
+- **Card:** `VISITORS` + `VISIT_LINES` next to `dailyPick`; `visitorDay(date, device)`
+  (pure); `_visitorDue` / `_visitorFree` / `_visitorLive` / `_visitorTick` (from `_tick`,
+  the slide on show, one look every 20 s) / `_visitorStart` / `_visitorGreet` /
+  `_visitorEnd`. Own CSS (`.season .vis`, `--from`/`--stop`/`--to` keyframes), not
+  `_seasonFly`.
+- **Seed:** a day index (the local date read as UTC, so a DST day is one day) plus a
+  device offset: visit if `(day + off) % 7 < 4`; who rotates over the visit days, so
+  any 21 days hold all three. Windows: day starts 09-15 (3 h, ends by 18), night 19 or
+  20 (ends by 23). Node test: `tests/js/visitor_day.test.js` (in `scripts/test`).
+- **Day or night:** by the screen's `night`/`dim` class *and* the clock window. A rainy
+  night shows the `rain` scene, not `night`, so a night visitor skips it.
+- **Greet:** `REACTIONS.greet {excited, greethop, 1400}` + `STAGE_POSES.greet = "cheer"`
+  (acts.cheer through `_actPose`, else the excited frame and the hop). A child: the line
+  only. The line is said now or not at all (`_mayInterrupt(s, FLAVOUR)`, then `_line`);
+  `catch` off. A baby with baby talk on says `BABY.visit`: "hi hi!", "oh! hi hi ♥",
+  "yay yay!", "hehe!" (all words already in `BABY`).
+- **Copy (owner, 2026-10-31):** section 5 verbatim, minus "you came to see me?".
+- **Pats:** `s.visitUntil` (own flag), set by world and seasonal visitors: a pat wiggles,
+  no line. `flairUntil` also covers the visit (nothing else starts).
+- **Calm:** one `_1` image at its stop spot (CSS `left: var(--stop)`; the global
+  `animation: none` leaves it there), no flap class, 5 s; greet frame + line, no look or hop.
+- **Beats** re-check the slide on show, awake, no game/scene/link/gag/call/status;
+  else the visit ends at once and its picture goes.
+- **Seasons:** `s.nextVisitor` pushed past the visit + 2 min; seasonal flyers skip while
+  `s.visitUntil` runs. A visitor waits 2 min after an infrared link (`_linkEndedAt`).
+- **Side:** a coin per visit (the pet stands centred); walkers come in on the ground
+  (`bottom: 6%`), flyers at `top: 36%` (under the bubble), the shooting star crosses at 28%.
+- **Tests:** bench `visitor` field + `--preset visitors` (330 px); card-check `visitors`
+  section (clears `hatch-visit-*` first; gates by a stubbed `_visitorDue`, the real one
+  walked over 14 days x 24 h).
+
+### Canvas spec for the art batch (art coordinator)
+
+- **One canvas for all 36:** 72 x 72 PNG = an 18 x 18 grid of **world cells** at 4 px a
+  cell (the props', hats' and seasonal pieces' grid, `WORLD_GRID` 64). The card shows it
+  `calc(var(--px) * 18)` wide (about 13% of the screen; `--px` is whole device pixels),
+  so one art pixel is one world cell. The heron fits the same canvas (tall and narrow).
+- Transparent background, facing **right** (the card mirrors), the 128 sprites' dark
+  outline, the world's own tones. **Walkers stand on the canvas's bottom row**; flyers
+  are centred. `_1` and `_2` share one anchor (a flap or a step); under reduced motion
+  only `_1` shows, so `_1` must read alone.
+- Names: `frontend/ui/visitor_<world>_<id>_<1|2>.png`. Stand-ins:
+  `art/visitors/make_visitors.py` (writes straight into `frontend/ui`). The 256 px
+  studies already in `art/visitors/` (frames/, source/, manifest.json) are an older,
+  different roster and are **not** what the card uses.
+
 **Builds after R1 and R2** (`_actPose`, `STAGE_POSES`, the `acts.cheer` pose). Both are
 on `fm-batch4` / s2549, not yet on main. Names in this plan win over line numbers.
 

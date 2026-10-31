@@ -36,7 +36,7 @@ const results = [];
 
 // The gated sections of main(), in file order.
 const SECTIONS = ["shelf", "shell", "play", "resume", "moments", "photos", "personality", "types",
-  "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "care",
+  "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "oldcard"];
 const NEEDS = { oldcard: ["restart"] }; // oldcard asserts restart's seeded bond
 const argv = process.argv.slice(2);
@@ -3313,7 +3313,8 @@ async function main() {
     const normal = { REFUSALS: literal("REFUSALS"), WISHES: literal("WISHES") };
     const seasons = [...src.matchAll(/key: "(halloween|thanksgiving)"/g)].map((m) => m[1]);
     const card = new Set(["greet", "greet.warm", "greet.nickname", "idle.sleepy", "idle.bored", "idle.excited", "idle.hungry",
-      "idle.dirty", "idle.default", "yum", "favourite_snack", "wish_granted", "friend_home", "care_miss", "tucked_in", "bond_up"]);
+      "idle.dirty", "idle.default", "yum", "favourite_snack", "wish_granted", "friend_home", "care_miss", "tucked_in", "bond_up",
+      "visit"]);
     // The mood line's keys (sensor.mood reason_key), from the model's own tables.
     const py = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "model.py"), "utf8");
     const keysOf = (name) => [...py.split(`\n${name} = {`)[1].split("\n}")[0].matchAll(/"(\w+)":/g)].map((m) => m[1]);
@@ -6086,6 +6087,260 @@ async function main() {
   }, species);
   check(`react: ${species.length} species x 3 stages x 4 moods all load (${loaded.n} frames)`,
     species.length >= 30 && loaded.nbad === 0, JSON.stringify(loaded));
+  await unpinAwake(card);
+  }
+  if (want("visitors")) {
+  // World visitors (docs/plan-2026-10-31-visitors.md): card only, seeded by date,
+  // nothing kept but the day's flag. The decision (_visitorDue) is stubbed for the
+  // gates; the real one is walked over 14 days x 24 hours. The day flag persists
+  // across runs: every hatch-visit-* is cleared first.
+  await calm();
+  await page.waitForTimeout(800);
+  await pinAwake(card, "visitors");
+  await evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("hatch-visit-")).forEach((k) => localStorage.removeItem(k)));
+  const vsrc = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+  const VIS = require("vm").runInNewContext(`(${vsrc.match(/\nconst VISITORS = (\{[\s\S]*?\n\});/)[1]})`);
+  const VLINES = require("vm").runInNewContext(vsrc.match(/\nconst VISIT_LINES = (\[[^\n]*\]);/)[1]);
+  const VBABY = require("vm").runInNewContext(`(${vsrc.match(/\n {2}"visit": (\{[^\n]*\}),/)[1]})`).baby;
+  // A free, shown pet: past its first look, on show a minute, no link lately; the
+  // decision stubbed to `due` (a visitor object, or null), checks every tick.
+  const vprep = (due) => card.evaluate((el, due) => {
+    const s = el._slides[el._index];
+    el._visitorEnd(s);
+    if (!el.__realDue) el.__realDue = el._visitorDue;
+    // Due only inside __vtick: the card's own 700 ms tick never starts one meanwhile.
+    el._visitorDue = () => el.__vdue || null;
+    el.__vdue = null;
+    // It clears the 20 s throttle too: the card's own tick may have looked (nothing due) since.
+    el.__vtick = (t) => {
+      el.__vdue = due;
+      t.nextVisitCheck = 0;
+      try { el._visitorTick(t); } finally { el.__vdue = null; }
+    };
+    Object.assign(s, { poseUntil: 0, propUntil: 0, movingUntil: 0, flairUntil: 0, visitUntil: 0, queue: [], sayUntil: 0,
+      sayClass: 0, game: null, scene: null, power: null, linking: false, calling: false, asleep: false, away: false,
+      lookedFirst: true, nextVisitCheck: 0, patAt: 0, poseFrames: [], moodState: "content" });
+    s.screen.classList.remove("show-status");
+    el._booting = false;
+    el._visitShown = { s, at: Date.now() - 60000 };
+    el._linkEndedAt = undefined;
+    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
+    return { world: s.worldKey, device: s.ids?.device, key: `hatch-visit-${s.ids?.device}-${new Date().toDateString()}` };
+  }, due);
+  const where = await vprep(null);
+  const list = VIS[where.world] || [];
+  check("visitors: the pet's world has three visitors", list.length === 3, `${where.world}: ${list.map((v) => v.id)}`);
+  const V0 = list.find((v) => !v.cross) || list[0];
+  // Not due: nothing starts and the day's flag stays unused.
+  const tick = (setup) => card.evaluate((el, setup) => {
+    const s = el._slides[el._index];
+    const undo = [];
+    const set = (obj, k, v) => { undo.push([obj, k, obj[k]]); obj[k] = v; };
+    if (setup === "asleep") set(s, "asleep", true);
+    if (setup === "away") { set(s, "away", true); set(s, "moodState", "away"); }
+    if (setup === "game") set(s, "game", { cur: null });
+    if (setup === "scene") set(s, "scene", { kind: "clean" });
+    if (setup === "linking") set(s, "linking", true);
+    if (setup === "link running") set(el, "_link", { timers: [] });
+    if (setup === "calling") set(s, "calling", true);
+    if (setup === "power") set(s, "power", { timers: [] });
+    if (setup === "status open") s.screen.classList.add("show-status");
+    if (setup === "a line queued") set(s, "queue", [{ text: "x", ms: 100, cls: 3 }]);
+    if (setup === "before its first look") set(s, "lookedFirst", false);
+    if (setup === "in its first 30 s") set(el, "_visitShown", { s, at: Date.now() - 5000 });
+    if (setup === "a link 1 min ago") set(el, "_linkEndedAt", Date.now() - 60000);
+    if (setup === "egg") {
+      const real = el._state;
+      set(el, "_state", function (slide, key) {
+        const st = real.call(this, slide, key);
+        return key === "sensor.life_stage" && st ? { ...st, state: "egg" } : st;
+      });
+    }
+    const target = setup === "off-slide" ? { ...s, visitor: null } : s;
+    el.__vtick(target);
+    const out = { started: !!s.visitor || !!target.visitor,
+      used: Object.keys(localStorage).some((k) => k.startsWith("hatch-visit-")) };
+    s.screen.classList.remove("show-status");
+    for (const [obj, k, v] of undo.reverse()) obj[k] = v;
+    if (target !== s && target.visitor) el._visitorEnd(target);
+    return out;
+  }, setup);
+  {
+    const r = await tick(null);
+    check("visitors: not due, nothing starts and the day isn't used up", !r.started && !r.used, JSON.stringify(r));
+  }
+  const skips = ["asleep", "away", "egg", "game", "scene", "linking", "link running", "calling", "power", "status open",
+    "a line queued", "before its first look", "in its first 30 s", "a link 1 min ago", "off-slide"];
+  const bad = [];
+  for (const setup of skips) {
+    await vprep(V0);
+    const r = await tick(setup);
+    if (r.started || r.used) bad.push(`${setup}: ${JSON.stringify(r)}`);
+  }
+  check("visitors: no visit when asleep, away, egg, in a game or scene, linking, calling, power, status open, queued, " +
+    "early or off-slide; the day's flag unused", bad.length === 0, bad.join(" | "));
+  // A visit: the visitor's picture, the flag used, then the greet frame and one line.
+  await vprep(V0);
+  const before = await evaluate(() => Object.keys(localStorage));
+  const started = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    el.__vcalls = [];
+    el.__realCalls ||= { svc: el._hass.callService, ws: el._hass.callWS };
+    el._hass.callService = (...a) => { el.__vcalls.push(`svc ${a[0]}.${a[1]}`); return el.__realCalls.svc.apply(el._hass, a); };
+    el._hass.callWS = (...a) => { el.__vcalls.push(`ws ${a[0]?.type}`); return el.__realCalls.ws.apply(el._hass, a); };
+    el.__vtick(s);
+    const imgs = [...(s.visitor?.el.querySelectorAll("img") || [])].map((i) => i.getAttribute("src"));
+    s.nextVisitCheck = 0;
+    const again = (() => { // the same pet free again (no visit on, no flair): the day is used up
+      const keep = { visitor: s.visitor, flairUntil: s.flairUntil, visitUntil: s.visitUntil };
+      Object.assign(s, { visitor: null, flairUntil: 0, visitUntil: 0 });
+      el.__vtick(s);
+      const twice = !!s.visitor;
+      if (twice) el._visitorEnd(s);
+      Object.assign(s, keep);
+      return twice;
+    })();
+    return { on: !!s.visitor, imgs, visitUntil: s.visitUntil > Date.now(), again };
+  });
+  check("visitors: a free, shown pet gets its visitor (two frames) and pats go quiet for it",
+    started.on && started.imgs.length === 2 && started.imgs.every((x, i) => x.includes(`/ui/visitor_${where.world}_${V0.id}_${i + 1}.png`)) &&
+    started.visitUntil, JSON.stringify(started));
+  check("visitors: once a day per pet (the flag hatch-visit-<device>-<date>)", !started.again, JSON.stringify(started));
+  const pat = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const said = s.bubble.textContent;
+    const on = el._patOn(s);
+    el._pat(s, { stopPropagation() {}, detail: 0 });
+    return { on, patAt: s.patAt, same: s.bubble.textContent === said };
+  });
+  check("visitors: a pat mid-visit wiggles with no line", pat.on && pat.patAt === 0 && pat.same, JSON.stringify(pat));
+  await page.waitForTimeout((V0.in || 1400) + 1300);
+  const greeted = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { src: s.pet.getAttribute("src"), text: s.bubble.textContent, drawn: s.drawn, acts: s.species?.acts?.cheer ?? null,
+      leftOn: !!s.visitor, keys: Object.keys(localStorage), calls: el.__vcalls };
+  });
+  const lines = [...VLINES, ...V0.lines];
+  const greetFrame = greeted.drawn === "child" || /_(cheer|excited)_\d/.test(greeted.src);
+  check("visitors: the pet greets it: the cheer (or excited) frame and one of its lines",
+    greetFrame && lines.some((l) => greeted.text.includes(l)), JSON.stringify(greeted));
+  const added = greeted.keys.filter((k) => !before.includes(k));
+  check("visitors: nothing sent (no callService or callWS), only hatch-visit-* kept",
+    greeted.calls.length === 0 && added.length === 1 && added[0].startsWith("hatch-visit-"), JSON.stringify({ calls: greeted.calls, added }));
+  await card.evaluate((el) => { el._hass.callService = el.__realCalls.svc; el._hass.callWS = el.__realCalls.ws; });
+  // A kept line arriving mid-visit keeps its bubble: the greet is skipped.
+  await vprep(V0);
+  const kept = await card.evaluate(async (el, ms) => {
+    const s = el._slides[el._index];
+    el.__vtick(s);
+    el._line(s, 3, "a kept line for the check", 6000);
+    await new Promise((r) => setTimeout(r, ms));
+    return { text: s.bubble.textContent, pose: s.poseUntil > Date.now(), on: !!s.visitor };
+  }, (V0.in || 1400) + 1300);
+  check("visitors: a kept line mid-visit keeps its bubble; no greet", kept.text.includes("a kept line for the check") && !kept.pose && kept.on,
+    JSON.stringify(kept));
+  // The pet goes into a game mid-visit: the visit ends at the next beat, its picture gone, nothing said.
+  await vprep(V0);
+  const abort = await card.evaluate(async (el, ms) => {
+    const s = el._slides[el._index];
+    el.__vtick(s);
+    const box = s.visitor.el;
+    s.game = { cur: null };
+    await new Promise((r) => setTimeout(r, ms));
+    const out = { on: !!s.visitor, inDom: box.isConnected, said: s.sayUntil > Date.now() };
+    s.game = null;
+    return out;
+  }, (V0.in || 1400) + 1300);
+  check("visitors: a game starting mid-visit ends it, the picture removed, no line", !abort.on && !abort.inDom && !abort.said, JSON.stringify(abort));
+  // Reduced motion: one still first frame at the edge, on screen, then the greet frame and line, no hop.
+  await vprep(V0);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.waitForTimeout(150);
+  const still = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    el.__vtick(s);
+    const box = s.visitor.el;
+    const sc = s.screen.getBoundingClientRect();
+    const a = box.getBoundingClientRect();
+    await new Promise((r) => setTimeout(r, 1200));
+    const b = box.getBoundingClientRect();
+    return { imgs: [...box.querySelectorAll("img")].map((i) => i.getAttribute("src")), flap: box.classList.contains("flap"),
+      inside: a.width > 0 && a.left >= sc.left && a.right <= sc.right && a.top >= sc.top && a.bottom <= sc.bottom,
+      same: a.left === b.left && a.top === b.top, src: s.pet.getAttribute("src"), text: s.bubble.textContent,
+      hop: s.pet.classList.contains("greethop"), drawn: s.drawn };
+  });
+  check("visitors: reduced motion: one _1 frame, no flap, on screen and still; the greet frame and a line, no hop",
+    still.imgs.length === 1 && /_1\.png/.test(still.imgs[0]) && !still.flap && still.inside && still.same && !still.hop &&
+    (still.drawn === "child" || /_(cheer|excited)_1/.test(still.src)) && lines.some((l) => still.text.includes(l)), JSON.stringify(still));
+  await page.emulateMedia({ reducedMotion: null });
+  await page.waitForTimeout(150);
+  // A baby (baby talk on for this viewer) says the BABY.visit babble.
+  await vprep(V0);
+  const babyKey = `hatch-baby-talk-${me}`;
+  const baby = await card.evaluate(async (el, { key, ms }) => {
+    const s = el._slides[el._index];
+    const had = localStorage.getItem(key);
+    localStorage.setItem(key, "on");
+    const real = el._state;
+    el._state = function (slide, k) {
+      const st = real.call(this, slide, k);
+      return k === "sensor.life_stage" && st ? { ...st, state: "baby" } : st;
+    };
+    el.__vtick(s);
+    await new Promise((r) => setTimeout(r, ms));
+    const text = s.bubble.textContent;
+    el._state = real;
+    if (had === null) localStorage.removeItem(key); else localStorage.setItem(key, had);
+    return { text };
+  }, { key: babyKey, ms: (V0.in || 1400) + 1300 });
+  check("visitors: a baby says baby talk (BABY.visit)", VBABY.some((l) => baby.text.includes(l)), JSON.stringify(baby));
+  // The real decision over 14 days x 24 hours: 8 visit days, each with one 3-hour window
+  // on the matching screen (night 19-23 for a night visitor, day 09-18 else).
+  const walk = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const was = [s.screen.classList.contains("night"), s.screen.classList.contains("dim")];
+    const days = [];
+    const now = new Date();
+    for (let d = 0; d < 14; d++) {
+      const hours = [];
+      let id = null;
+      for (let h = 0; h < 24; h++) {
+        s.screen.classList.toggle("night", h >= 19 || h < 7);
+        s.screen.classList.remove("dim");
+        const v = el.__realDue.call(el, s, new Date(now.getFullYear(), now.getMonth(), now.getDate() + d, h, 30));
+        if (v) { hours.push(h); id = `${v.id}/${v.hours}`; }
+      }
+      days.push({ hours, id });
+    }
+    s.screen.classList.toggle("night", was[0]);
+    s.screen.classList.toggle("dim", was[1]);
+    return days;
+  });
+  const vdays = walk.filter((d) => d.hours.length);
+  const okHours = vdays.every((d) => d.hours.length === 3 && d.hours[2] - d.hours[0] === 2 &&
+    (d.id.endsWith("/night") ? d.hours[0] >= 19 && d.hours[2] <= 22 : d.hours[0] >= 9 && d.hours[2] <= 17));
+  check("visitors: over 14 days, 8 visit days, each one 3-hour window in its visitor's hours",
+    vdays.length === 8 && okHours, JSON.stringify(walk));
+  // Every visitor's frames load.
+  const frames = await card.evaluate(async (el, all) => {
+    const base = el._slides[el._index].pet.src.replace(/\/sprites\/.*$/, "/ui/");
+    const bad = [];
+    await Promise.all(all.map((n) => new Promise((ok) => {
+      const img = new Image();
+      img.onload = () => { if (!img.naturalWidth) bad.push(n); ok(); };
+      img.onerror = () => { bad.push(n); ok(); };
+      img.src = `${base}${n}.png`;
+    })));
+    return bad;
+  }, Object.entries(VIS).flatMap(([w, l]) => l.flatMap((v) => [1, 2].map((n) => `visitor_${w}_${v.id}_${n}`))));
+  check("visitors: all 36 visitor frames load", frames.length === 0, frames.join(", "));
+  await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    el._visitorEnd(s);
+    if (el.__realDue) { el._visitorDue = el.__realDue; delete el.__realDue; }
+    Object.assign(s, { poseUntil: 0, sayUntil: 0, visitUntil: 0, flairUntil: 0, queue: [] });
+    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
+  });
   await unpinAwake(card);
   }
   if (want("care")) {

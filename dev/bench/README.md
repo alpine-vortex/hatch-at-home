@@ -19,6 +19,7 @@ node scripts/bench.js --preset finishes   # 576 shots: every shell finish, every
 node scripts/bench.js --preset settings         # the gear's sheet, 420/330, day/night
 node scripts/bench.js --preset settings-shared  # the same on a shared screen
 node scripts/bench.js --preset picker     # the shell picker: egg (locked) and teen, 420/330
+node scripts/bench.js --preset visitors   # 28 shots at 330: every world visitor greeting, beats, night, calm, baby, child
 node scripts/bench.js --preset mono       # the mono screen: 2498 shots, ~2.5 min, plus the pass rule
 ```
 
@@ -72,6 +73,7 @@ A shot (all optional):
 | `care`, `careAt` | a `medicine` or `clean` scene paused at `careAt` ms (default 1500) |
 | `acts`, `missing`, `reactWait` | a fake species.json `acts` (`{eat: [stages], cheer: [...]}`) on every pet; sprite names (`adult_eat_1`) the server 404s; ms to wait for sprite probes before the shot. `link.cheer: true` runs the full visit (not calm) so the "hi hi" cheer plays: use `wait: 2000` |
 | `patTap` | `true`: one pat through the card's own `_pat` (R2: `acts.pat` shows ~900 ms). With `acts`, the new poses (`pat refuse aww ready splash`) are served the species' `eat` frames, bench only. `react` also takes `lost` (acts.aww) and `ready` (acts.ready); `care: "clean"` with `careAt: 2000` shows `acts.splash` |
+| `visitor` | a world visitor pinned through the card's own `_visitorStart`/`_visitorGreet`, timers stopped, moves paused: `{id, beat: "arrive"\|"greet"\|"leave", frame: 1\|2, side: "left"\|"right"}` (default its world's first, `greet`, left). With `motion: reduce` it is the still visit. Baby talk needs `storage: {"hatch-baby-talk-bench-user": "on"}` |
 | `storage` | any other localStorage keys to seed |
 | `config` | extra card config (`setConfig`) |
 | `visit` | the reply the fake `virtual_pet.visit` service gives (`{notes: [...]}` makes the pet tell the viewer things) |
