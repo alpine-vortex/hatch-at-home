@@ -24,5 +24,6 @@
     "adult_dirty": [206, 124],
     "adult_excited": [196, 80]
   },
-  "waves": {"baby": ["baby_wave_1", "baby_wave_2"], "teen": ["teen_wave_1", "teen_wave_2"], "adult": ["adult_wave_1", "adult_wave_2"]}
+  "waves": {"baby": ["baby_wave_1", "baby_wave_2"], "teen": ["teen_wave_1", "teen_wave_2"], "adult": ["adult_wave_1", "adult_wave_2"]},
+  "acts": {"eat": ["baby", "teen", "adult"], "cheer": ["baby", "teen", "adult"]}
 }
