@@ -916,6 +916,8 @@ const REACTIONS = {
   refused: { mood: "bored", move: "look", ms: 1200 },
   tucked: { mood: "cozy", move: "settle", ms: REACT_MS },
 };
+// Which species.json "acts" pose a reaction plays at baby, teen and adult (R1); R2 adds more.
+const STAGE_POSES = { fed: "eat", praised: "cheer" };
 // Only these refusals react; asleep, egg, away, no_game, unfair and spoiled do not.
 const REACT_REFUSALS = new Set(["full", "not_needed", "already_clean", "not_sick", "not_sleepy", "too_tired"]);
 const MINE_MATCH_MS = 10000; // a press is matched to the first new log entry within this
@@ -4094,6 +4096,34 @@ class HatchPetCard extends HTMLElement {
     return waves;
   }
 
+  // A species' own act frames (species.json "acts", never the child) for a stage, or null.
+  // Every sprite is probed once, remembered in _poseOk by species/stage/act (not the
+  // wave's keys). Unknown plays; a failed load calls `apply` once so the caller swaps
+  // back to the frames it had, and later calls get null. Never a broken image.
+  _actPose(sp, stage, speciesId, act, apply) {
+    const stages = sp?.acts?.[act];
+    if (!act || !stage || stage === "child" || !(stages === true || (Array.isArray(stages) && stages.includes(stage)))) return null;
+    const names = [`${stage}_${act}_1`, `${stage}_${act}_2`];
+    this._poseOk ||= new Map();
+    const key = `${speciesId}/${stage}/${act}`;
+    const known = this._poseOk.get(key);
+    if (known === false) return null;
+    if (known === undefined) {
+      this._poseOk.set(key, undefined);
+      Promise.all(names.map((n) => new Promise((ok) => {
+        const img = new Image();
+        img.onload = () => ok(true);
+        img.onerror = () => ok(false);
+        img.src = spriteSrc(speciesId, n);
+      }))).then((r) => {
+        const good = r.every(Boolean);
+        this._poseOk.set(key, good);
+        if (!good) apply();
+      });
+    }
+    return names;
+  }
+
   _tick() {
     if (!this._slides || !this._visible || document.hidden) return;
     this._ticks = (this._ticks || 0) + 1;
@@ -4410,7 +4440,7 @@ class HatchPetCard extends HTMLElement {
   // stage's mood frame for REACT_MS and a bounded move. Not over a scene, a link, the
   // low-battery gag, sleep, away or the egg; a game only for a catch (`inGame`).
   // Under reduced motion only the frame changes (calm() shows its first).
-  _reactFrames(s, kind, { inGame = false } = {}) {
+  _reactFrames(s, kind, { inGame = false, ms = REACT_MS } = {}) {
     const r = REACTIONS[kind];
     if (!r || !s.species || s.drawn === "child" || s.scene || s.linking || s.power ||
       s.asleep || s.away || s.egg || (s.game && !inGame)) return;
@@ -4418,7 +4448,14 @@ class HatchPetCard extends HTMLElement {
     const mood = sp.moods?.includes(r.mood) ? r.mood : "content";
     s.poseFrames = [];
     for (let i = 1; i <= (sp.frames || 1); i++) s.poseFrames.push(`${s.drawn}_${mood}_${i}`);
-    s.poseUntil = Date.now() + REACT_MS;
+    const moodFrames = s.poseFrames;
+    const own = this._actPose(sp, s.drawn, s.speciesId, STAGE_POSES[kind], () => {
+      if (s.poseFrames !== own) return;
+      s.poseFrames = moodFrames; // the act's art did not load: back to the mood frames
+      this._show(s, s.pet, moodFrames[0]);
+    });
+    if (own) s.poseFrames = own;
+    s.poseUntil = Date.now() + ms;
     this._show(s, s.pet, s.poseFrames[0]);
     if (calm()) return;
     this._animate(s, s.pet, r.move, r.ms);
@@ -7377,6 +7414,19 @@ class HatchPetCard extends HTMLElement {
       L.say.textContent = this._pick(["hi hi, {host}! ♪", "*waves* hi, {host}!"]).replace("{host}", hostName);
       L.say.hidden = false;
       if (!isCalm) this._animate(guest, L.img, "greethop", 1400);
+      if (!isCalm) { // both cheer on the "hi hi" line (acts.cheer; none for a child)
+        const gBefore = gFrames;
+        const gCheer = this._actPose(gs, gStage, guest.speciesId, "cheer", () => {
+          if (gFrames !== gCheer) return;
+          gFrames = gBefore;
+        });
+        if (gCheer) gFrames = gCheer;
+        const hBefore = host.linkFrames;
+        const hCheer = this._actPose(host.species, host.drawn || "adult", host.speciesId, "cheer", () => {
+          if (host.linkFrames === hCheer) host.linkFrames = hBefore;
+        });
+        if (hCheer && host.linkFrames) host.linkFrames = hCheer;
+      }
     });
     at(t0 + 3400, () => {
       if (!isCalm && !sharedScreen()) this._bondHearts(host, "linkhearts");
@@ -7764,7 +7814,7 @@ class HatchPetCard extends HTMLElement {
     } else if (s.drawn === "child") {
       this._animate(s, s.pet, "hop", 700);
     } else {
-      this._reactFrames(s, "praised", { inGame: true });
+      this._reactFrames(s, "praised", { inGame: true, ms: 900 });
     }
   }
 

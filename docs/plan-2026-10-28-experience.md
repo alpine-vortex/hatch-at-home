@@ -1085,3 +1085,13 @@ part: M5's "same for `stayed_up_since`" (`shift_times` already shifts it, model
   sentence), C2 "hm, that one slipped away ♪", C15 "a <creature> is on the way", and the
   rest of the copy table as written.
 - Wave 0 gets its own adversarial audit before it builds.
+
+## Week of 2026-10-31
+
+**R1 shipped (s2547): grown pets play their species' eat/cheer poses.**
+- Contract is the existing `species.json` `"acts"` (read like `_sceneFrames`; frames `<stage>_<act>_1/_2`); no new key.
+- `STAGE_POSES = {fed: "eat", praised: "cheer"}` maps a `_reactFrames` kind to an act. R2: add a kind and an entry, and declare the act in `acts`.
+- `_actPose(sp, stage, speciesId, act, apply)` is the reusable lookup + load probe: it returns the two frame names (null for child or an undeclared act), keyed `species/stage/act` in `_poseOk` (not `_waveOk`); unknown plays, a failed load calls `apply` to swap back, later calls get null.
+- `_reactFrames(s, kind, {ms})` takes a pose length; the catch pounce passes 900. The visit cheer is at t0+1800 (host and guest, `L.timers`, skipped in calm and for a child).
+- Medicine and clean scenes now use eat/cheer frames too (checked: bench `care: "medicine"|"clean"`). Bench also gained `acts`, `missing`, `reactWait`, `link.cheer`.
+- Open question (unshipped): none needed; no copy added.

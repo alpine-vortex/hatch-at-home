@@ -112,7 +112,8 @@
     const [host, guest] = card._slides;
     if (link.waves) for (const s of [host, guest]) s.species = { ...s.species, waves: link.waves };
     const mm = window.matchMedia.bind(window);
-    window.matchMedia = (q) => (String(q).includes("reduced-motion") ? { matches: true, addListener() {}, addEventListener() {} } : mm(q));
+    // `link.cheer`: the full visit (beam and all, ~2.5 s) so the cheer at "hi hi" plays; wait ~1900 past the screen.
+    if (!link.cheer) window.matchMedia = (q) => (String(q).includes("reduced-motion") ? { matches: true, addListener() {}, addEventListener() {} } : mm(q));
     card._linkStart(host, guest);
     window.matchMedia = mm;
     for (const t = Date.now() + 3000; !(host.linkFrames && card._link?.img?.getAttribute("src")) && Date.now() < t;) await new Promise((r) => setTimeout(r, 25));
@@ -207,6 +208,8 @@
     card._tick();
     slides.forEach((s) => { s.frame = 0; const f = card._frames(s); if (f.length) card._show(s, s.pet, f[0]); });
     const cur = slides[card._index];
+    // `acts`: a fake species.json "acts" put on every pet's species (`{eat: [stages], cheer: [...]}`).
+    if (shot.acts) for (const s of slides) s.species = { ...s.species, acts: shot.acts };
     if (shot.say !== undefined) card._write(cur, shot.say, 1e9);
     const root = card.shadowRoot;
     if (shot.link) await linkGreeting(card, shot.link);
@@ -277,6 +280,14 @@
     // `react`: a care reaction (PR 3c) started through the card's own `_reactFrames`
     // (`fed`, `praised`, `refused`, `tucked`); `petAt` pauses its move mid-way.
     if (shot.react) card._reactFrames(cur, shot.react);
+    // `care`: "medicine" or "clean" scene started through _sceneStart, paused and seeked to `careAt` ms.
+    if (shot.care) {
+      card._sceneStart(cur, shot.care);
+      cur.scene.paused = true;
+      card._sceneRender(cur, shot.careAt ?? 1500);
+    }
+    // `reactWait`: ms to let sprite probes (and a failed one's swap back) finish before the shot.
+    if (shot.reactWait) await new Promise((r) => setTimeout(r, shot.reactWait));
     // `patBox`: the pat's clear hit box outlined, so a shot shows where a tap pats (or, in a
     // state that hides it, that there is none).
     if (shot.patBox) cur.pat.style.outline = "2px dashed #ff00d0";
