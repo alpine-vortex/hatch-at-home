@@ -327,3 +327,13 @@ through the Codex CLI's image tool, then cut like the other rooms (4:3 crop, LAN
 - Left as they were, already the day scene in other light: Tidepool night and rain, Night Sky and
   Pond rain.
 
+## Eat and cheer at 128 (2026-10-31)
+
+Every species gets its baby, teen and adult `eat` and `cheer` pairs (`<stage>_eat_1/2`,
+`<stage>_cheer_1/2`), cut at 2 px per art pixel with `cut_react` from the reaction sheets drawn on
+2026-10-29 (scale from each stage's `content_1`, stage palette, outline closed), limbs counted at
+zoom. species.json `"acts"` lists them; the care scenes play them. One world per commit.
+
+- Woodland: robin, deer, fox, banana slug cut; the squirrel's (shipped 2026-10-30) gain their
+  `"acts"` entry, so they play now.
+
