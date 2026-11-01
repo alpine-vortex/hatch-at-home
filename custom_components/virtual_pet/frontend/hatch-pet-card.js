@@ -808,6 +808,9 @@ const BABY = {
   "friend_home": { baby: ["you're home! yay yay ♥"] },
   "care_miss": { baby: ["oh! hi hi ♥"] },
   "visit": { baby: ["hi hi!", "oh! hi hi ♥", "yay yay!", "hehe!"] }, // a world visitor (any of them)
+  // The infrared link (_linkStart): host greets the guest by name, the guest replies with the host's.
+  "link_host": { baby: [(n) => `hi hi, ${n}! ♪`, (n) => `${n}! yay yay!`], child: [(n) => `hi, ${n}! hello ♪`] },
+  "link_guest": { baby: [(n) => `hi hi, ${n}! ♪`], child: [(n) => `hi hi, ${n}! ♪`] },
   "tucked_in": { baby: ["night night ♥"] }, // withName: "night night, Sam ♥"
   "bond_up": { baby: ["yay, you! ♥"] },
   "WISHES.play": { baby: ["wish... play today"] },
@@ -859,6 +862,9 @@ const PERSONA = {
     idle_excited: ["hehe! ok, nap now", "mm! that was fun ♪", "hehe, nice ♥"],
     mood_content: ["taking it easy", "comfy and calm"],
     mood_excited: ["hehe, that was nice", "mm, that was fun"],
+    link_host: [(n) => `oh hey, ${n}... ♪`, (n) => `${n}... come sit a while ♥`],
+    link_guest: [(n) => `mm, hi, ${n}... ♪`],
+    link_kindred: [(n) => `${n}, we do cosy well ♥`, "mm, a nap with you sounds nice ♪"],
   },
   sweet: {
     reveal: ["I think I'm the sweet kind ♥", "sweet, that's me ♥"],
@@ -876,6 +882,9 @@ const PERSONA = {
     idle_excited: ["hehe, so happy!", "yay! ♥", "that was lovely ♥"],
     mood_content: ["all warm and happy", "nice and homey ♥"],
     mood_excited: ["that was lovely!", "hehe, that was fun ♥"],
+    link_host: [(n) => `${n}! hi! so glad you came ♥`, (n) => `hello hello, ${n} ♥`],
+    link_guest: [(n) => `hi, ${n}! ♥ hello ♥`],
+    link_kindred: [(n) => `${n}, we think alike ♥`, "it's nice to meet a kind heart ♥"],
   },
   bouncy: {
     reveal: ["I think I'm the bouncy kind!", "bouncy! that's me! hup!"],
@@ -893,6 +902,9 @@ const PERSONA = {
     idle_excited: ["wheee! hup hup!", "woo! yes!", "*bounce bounce*"],
     mood_content: ["full of beans", "ready for anything"],
     mood_excited: ["that was great!", "woo! so much fun!"],
+    link_host: [(n) => `${n}! hup hup, hi!`, (n) => `hiya, ${n}! *bounce*`],
+    link_guest: [(n) => `hup! hi, ${n}!`],
+    link_kindred: [(n) => `${n}! race you to the corner! hup`, "two of us, twice the hops!"],
   },
   starry: {
     reveal: ["I think I'm the starry kind ★", "a star is born! that's me ★"],
@@ -910,6 +922,9 @@ const PERSONA = {
     idle_excited: ["ta-da! ★", "what a show! ★", "♪ tra la la! ♪"],
     mood_content: ["humming a little tune", "ready for my close-up ★"],
     mood_excited: ["what a show!", "bravo! that was fun ★"],
+    link_host: [(n) => `${n}! my co-star ★`, (n) => `ah, ${n}! cue the music ★`],
+    link_guest: [(n) => `hello, ${n}! ★ take a bow`],
+    link_kindred: [(n) => `${n}! a duet, you and me ★`, "we shine best together ★"],
   },
   old_soul: {
     reveal: ["hm. an old soul, I think.", "an old soul. suits me."],
@@ -927,6 +942,9 @@ const PERSONA = {
     idle_excited: ["heh. not bad at all.", "heh. well, well.", "ha. that was fun."],
     mood_content: ["all's well", "a fine day"],
     mood_excited: ["heh. that was nice", "well, that was fun"],
+    link_host: [(n) => `hello, ${n}. come in.`, (n) => `${n}. good to see you.`],
+    link_guest: [(n) => `hm. hello, ${n}.`],
+    link_kindred: [(n) => `hm. ${n}. we understand each other.`, "good company, you."],
   },
   fancy: {
     reveal: ["I think I'm the fancy kind ♥", "fancy, that's me. how lovely ♥"],
@@ -944,6 +962,9 @@ const PERSONA = {
     idle_excited: ["oh, how lovely!", "divine! ♥", "*twirls prettily*"],
     mood_content: ["looking my best", "all pretty and calm ♥"],
     mood_excited: ["oh, how lovely!", "that was divine ♥"],
+    link_host: [(n) => `${n}, darling! how lovely ♥`, (n) => `oh, ${n}! welcome, welcome ♥`],
+    link_guest: [(n) => `${n}, darling! ♥`],
+    link_kindred: [(n) => `${n}, darling, we have such taste ♥`, "a fellow connoisseur ♥"],
   },
   charming: {
     reveal: ["I'm the charming kind, I think ♥", "charming, that's me ♥"],
@@ -961,6 +982,9 @@ const PERSONA = {
     idle_excited: ["simply splendid!", "marvellous! ♥", "what an occasion!"],
     mood_content: ["life is splendid", "all quite marvellous"],
     mood_excited: ["simply splendid!", "what a marvellous time"],
+    link_host: [(n) => `ah, ${n}! a delight ♥`, (n) => `${n}! what an honour ♥`],
+    link_guest: [(n) => `${n}! how splendid ♥`],
+    link_kindred: [(n) => `${n}! two of a kind, you and I ♥`, "such a grand pair we make ♥"],
   },
   plucky: {
     reveal: ["I'm the plucky kind! hmph ♥", "plucky, that's me! ♥"],
@@ -978,8 +1002,17 @@ const PERSONA = {
     idle_excited: ["hah! nailed it!", "yes! heck yes!", "hah! go team!"],
     mood_content: ["all under control", "all clear here"],
     mood_excited: ["hah! that was great", "heck yes, that was fun"],
+    link_host: [(n) => `yo, ${n}! all clear here`, (n) => `${n}! reporting in ♥`],
+    link_guest: [(n) => `hey, ${n}! ♥ hi hi`],
+    link_kindred: [(n) => `${n}! good team, you and me ♥`, "we've got each other's backs ♥"],
   },
 };
+// Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
+// types are partners here, or the same type, are kindred. On KINDRED_ODDS of their
+// links the host adds a line of its own (link_kindred). Nothing is counted or kept.
+const KINDRED = { mellow: "sweet", sweet: "mellow", bouncy: "starry", starry: "bouncy",
+  old_soul: "fancy", fancy: "old_soul", charming: "plucky", plucky: "charming" };
+const KINDRED_ODDS = 0.5; // a kindred link's chance of the host's extra line
 const FRIEND_WELCOME_MS = 6 * 3600 * 1000; // "welcome home!" at the next look, this long after
 const FIRST_LOOK_LINES = 3; // lines queued at the first look (the visit's notes fill what's left)
 // An adult's say on how it was raised (P2b): all happy, any type, at most once a
@@ -4613,6 +4646,19 @@ class HatchPetCard extends HTMLElement {
     return (st?.state === "teen" || st?.state === "adult") && PERSONA[st.attributes?.personality] || null;
   }
 
+  // The pet's personality key, for a teen or an adult whose type the card knows, else null.
+  _typeKey(s) {
+    const st = this._state(s, "sensor.life_stage");
+    const key = st?.attributes?.personality;
+    return (st?.state === "teen" || st?.state === "adult") && Object.hasOwn(PERSONA, key) ? key : null;
+  }
+
+  // Kindred (2b): both have a type, and it's the same or KINDRED's partner.
+  _kindred(a, b) {
+    const [x, y] = [this._typeKey(a), this._typeKey(b)];
+    return !!x && !!y && (x === y || KINDRED[x] === y);
+  }
+
   // A line in baby talk, else half the time in its personality's words, else
   // the normal one: {text, baby}. A baby line never carries the catchphrase
   // (callers pass catch: !baby); a personality line may, as the normal one does.
@@ -4810,9 +4856,10 @@ class HatchPetCard extends HTMLElement {
 
   // Lines waiting for the bubble (a dream, the away note, a wish), said one at
   // a time once nothing else is being said. Kept unless opts.cls says otherwise.
+  // still() false drops it unsaid; then() runs when it is said.
   _queue(s, text, ms = 4500, opts = {}) {
-    const { cls = KEPT, at, type, ...rest } = opts;
-    (s.queue ??= []).push({ text, ms, opts: rest, cls, at, type, perk: true });
+    const { cls = KEPT, at, type, still, then, ...rest } = opts;
+    (s.queue ??= []).push({ text, ms, opts: rest, cls, at, type, still, then, perk: true });
   }
 
   // A reaction to care for baby, teen and adult (the child has species poses): that
@@ -8005,14 +8052,28 @@ class HatchPetCard extends HTMLElement {
   }
 
   // One visit: the beam, the visit screen, the two lines, the guest's own slide.
+  // Each pet speaks as itself (_lines: baby talk, its type, or the normal line);
+  // a kindred pair's host may add a line (2b). Every roll is made here, at the start.
   // Returns false when one is already on.
   _linkStart(host, guest) {
     if (this._link) return false;
     const isCalm = calm();
     const L = this._link = { host, guest, timers: [], hostScale: host.pet.style.scale };
-    const at = (ms, fn) => L.timers.push(setTimeout(() => this._link === L && fn(), ms));
+    const at = (ms, fn) => {
+      const t = setTimeout(() => this._link === L && fn(), ms);
+      L.timers.push(t);
+      return t;
+    };
     const hostName = this._linkName(host);
     const guestName = this._linkName(guest);
+    const hello = this._lines(host, "link_host", this._pick(["hi, {guest}!", "oh! {guest}! hello hello ♪"])
+      .replace("{guest}", guestName), guestName).text;
+    const reply = this._lines(guest, "link_guest", this._pick(["hi hi, {host}! ♪", "*waves* hi, {host}!"])
+      .replace("{host}", hostName), hostName).text;
+    // The kindred extra: its own roll, never through _lines (it has no normal line).
+    const own = this._kindred(host, guest) && Math.random() < KINDRED_ODDS && this._pick(PERSONA[this._typeKey(host)].link_kindred);
+    const extra = own ? (typeof own === "function" ? own(guestName) : own) : null;
+    const stretch = extra ? 1000 : 0; // the visit holds a little longer for it
     const toRight = this._slides.indexOf(guest) > this._slides.indexOf(host);
     const k = 0.7; // the pets stand at 70% of their size on the visit screen
     const gs = guest.species;
@@ -8055,7 +8116,22 @@ class HatchPetCard extends HTMLElement {
       L.img = img;
       let f = 0;
       if (!isCalm) L.swap = setInterval(() => gFrames.length && this._show(guest, img, gFrames[++f % gFrames.length]), 700);
-      this._queue(host, this._pick(["hi, {guest}!", "oh! {guest}! hello hello ♪"]).replace("{guest}", guestName), 3400);
+      // Both host lines queued now, in order; neither is said once the visit is over.
+      const still = () => this._link === L;
+      if (!extra) this._queue(host, hello, 3400, { still });
+      else {
+        this._queue(host, hello, 2200, { still });
+        // Said late (the first line typed slowly): the visit waits for it to be read.
+        this._queue(host, extra, 1600, { still, then: () => {
+          L.say.hidden = true; // the guest's reply has had its turn: the bubbles would overlap
+          const left = host.sayUntil - Date.now();
+          if (left <= L.endsIn - Date.now()) return;
+          clearTimeout(L.hideAt);
+          clearTimeout(L.endAt);
+          L.hideAt = at(Math.max(0, left - 600), hide);
+          L.endAt = at(left, () => this._linkEnd());
+        } });
+      }
       const say = document.createElement("div");
       say.className = "vsay";
       say.hidden = true;
@@ -8066,7 +8142,7 @@ class HatchPetCard extends HTMLElement {
       if (!isCalm) this._animate(host, host.pet, "greethop", 1400);
     });
     at(t0 + 1800, () => {
-      L.say.textContent = this._pick(["hi hi, {host}! ♪", "*waves* hi, {host}!"]).replace("{host}", hostName);
+      L.say.textContent = reply; // visual only: the visit screen is aria-hidden
       L.say.hidden = false;
       if (!isCalm) this._animate(guest, L.img, "greethop", 1400);
       if (!isCalm) { // both cheer on the "hi hi" line (acts.cheer; none for a child)
@@ -8086,11 +8162,14 @@ class HatchPetCard extends HTMLElement {
     at(t0 + 3400, () => {
       if (!isCalm && !sharedScreen()) this._bondHearts(host, "linkhearts");
     });
-    at(t0 + 4000, () => {
+    const hide = () => {
       L.say.hidden = true;
       L.img.classList.add("out");
-    });
-    at(t0 + (isCalm ? 3600 : 4600), () => this._linkEnd());
+    };
+    const endMs = t0 + (isCalm ? 3600 : 4600) + stretch;
+    L.hideAt = at(t0 + 4000 + stretch, hide);
+    L.endAt = at(endMs, () => this._linkEnd());
+    L.endsIn = Date.now() + endMs; // when the visit ends, unless the extra stretches it
     return true;
   }
 
