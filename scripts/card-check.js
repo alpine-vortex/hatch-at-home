@@ -6776,21 +6776,22 @@ async function main() {
       clearFlag();
       out.first = look(V0);
       out.twice = look(V0);
-      // The visit can't also play after it: due, free and shown, nothing starts.
-      el.__vdue = null;
-      el._visitShown = { s, at: Date.now() - 60000 };
-      el._visitorDue = () => V0;
-      s.nextVisitCheck = 0;
-      el._visitorTick(s);
-      out.playedAfter = !!s.visitor;
-      el._visitorEnd(s);
-      el._visitorDue = () => el.__vdue || null;
+      // A visit tried with V0 due, the pet free and shown a minute (the same for both
+      // cases below): it can't also play after the catch-up; with no flag it does.
+      const tryVisit = () => {
+        Object.assign(s, { poseUntil: 0, sayUntil: 0, sayClass: 0, visitUntil: 0, flairUntil: 0, queue: [], nextVisitCheck: 0 });
+        el._visitShown = { s, at: Date.now() - 60000 };
+        el.__vdue = V0;
+        try { el._visitorTick(s); } finally { el.__vdue = null; }
+        const on = !!s.visitor;
+        el._visitorEnd(s);
+        Object.assign(s, { poseUntil: 0, sayUntil: 0, visitUntil: 0, flairUntil: 0, queue: [] });
+        return on;
+      };
+      out.playedAfter = tryVisit();
       // The visit played on this device today: no catch-up.
       clearFlag();
-      el.__vtick(s);
-      out.played = !!s.visitor;
-      el._visitorEnd(s);
-      Object.assign(s, { poseUntil: 0, sayUntil: 0, visitUntil: 0, flairUntil: 0, queue: [] });
+      out.played = tryVisit();
       out.afterVisit = look(V0);
       // The shooting star's own line.
       clearFlag();
