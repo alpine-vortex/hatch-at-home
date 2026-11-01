@@ -5937,11 +5937,20 @@ async function main() {
     el._tick = () => {};
     await wait(1500); // an idle move already under way finishes
     s.pet.classList.remove("wander-l", "wander-r", "look");
+    // The card's own wanders and reactions add and drop their class on setTimeouts, outside
+    // _tick, so one can land mid-sample: the drop makes a 30% trail (_ghostTrail) that sits
+    // over the frame fade (frameJust/frameLater read 0.3, not 0.35 falling). Refuse a
+    // move class from the pet until the trail step adds its own.
+    const realAdd = s.pet.classList.add.bind(s.pet.classList);
+    s.pet.classList.add = (...c) => realAdd(...c.filter((x) => !/^(wander|go)-/.test(x)));
     await wait(1200);
+    s.pet.classList.remove("wander-l", "wander-r", "go-left", "go-right");
+    await wait(0); // the observer settles the ghost's classes
     // A clean frame swap: the pet awake, still, with two different frames.
     s.pet.classList.remove("hop", "greethop", "look", "dance", "shiver");
     s.screen.classList.remove("breezy", "windy");
     s.pet.getAnimations().forEach((a) => a.cancel());
+    s.ghost.getAnimations().forEach((a) => a.cancel());
     s.ghostUntil = 0;
     const realFrames = el._frames;
     el._frames = () => [s.frames[0], s.frames.find((f) => f !== s.frames[0]) || s.frames[0]];
@@ -5958,6 +5967,7 @@ async function main() {
     await wait(300);
     out.frameLater = op();
     // A wander: the ghost trails the pet at 30% and catches up.
+    delete s.pet.classList.add; // the real one again
     s.pet.classList.add("wander-l");
     await wait(150);
     out.trail = op();
