@@ -173,11 +173,13 @@ card's own methods should hold `sayUntil` so the card's tick doesn't race them; 
 dev pets drift (below).
 
 **Dev pets drift.** After many `card-check` runs the dev pets in `dev/config` get
-sick (weight 0, recent misses), and checks like idle life fail. Until the dev utility
-(open item 0) exists: stop HA, then in `dev/config/.storage/virtual_pet.0*` set
-`sick` false, `recent_misses` [], `health` 100, `energy` 90, `hunger` 80, `weight` 50,
-`call` null, `latched` [], and start it again. An old HA may still be running from an
-earlier session: `scripts/develop` then exits with "stop the existing instance".
+sick (weight 0, recent misses), and checks like idle life fail. `card-check` now
+heals them at the start of every run with the admin service `virtual_pet.restore_pet`
+(`mode: heal`, the default: needs topped up, not sick, no misses, poops or call
+waiting; `mode: reset` also clears the care record, discipline and counters; who
+the pet is stays). Call it by hand from Developer tools if a pet drifts mid-run; no
+need to stop HA or edit `.storage`. An old HA may still be running from an earlier
+session: `scripts/develop` then exits with "stop the existing instance".
 
 ## Where things stand
 
@@ -459,12 +461,9 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
 
 ## Open items, in priority order
 
-0. **Dev utility (owner, 2026-10-28, to do later):** a way to restore a test pet to
-   full health and/or reset it to defaults. The dev pets in `dev/config` drift after
-   many `card-check` runs (energy, weight, recent misses: sickness by neglect), which
-   breaks checks like idle life; today that means stopping HA and editing
-   `.storage/virtual_pet.*` by hand. A debug service (admin, like `fast_forward`) or a
-   `scripts/` helper.
+0. *(done 2026-10-31)* **Dev utility:** the admin service `virtual_pet.restore_pet`
+   (`heal` or `reset`), called by `card-check` at the start of each run. See "Dev
+   pets drift" above.
 
 1. **Assist on the owner's HA:** ask them to try it (an LLM agent, and the sentences
    file) and report what it says; tune the wording from that.

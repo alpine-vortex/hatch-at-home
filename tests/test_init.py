@@ -223,6 +223,63 @@ async def test_fast_forward_service(
     assert hass.states.get("sensor.pip_care_misses").state == "1"
 
 
+async def test_restore_pet_service(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    stored = hatched_pet(now, health=10.0, weight=0.0, sick=True, care_misses=3)
+    stored["data"]["recent_misses"] = [now - 60] * 4
+    hass_storage[STORE_KEY] = stored
+    await setup(hass)
+    assert hass.states.get("binary_sensor.pip_sick").state == STATE_ON
+    response = await hass.services.async_call(
+        DOMAIN, "restore_pet", {}, blocking=True, return_response=True
+    )
+    assert response["test_pet"]["mode"] == "heal"
+    assert "sick" in response["test_pet"]["changed"]
+    assert hass.states.get("binary_sensor.pip_sick").state != STATE_ON
+    assert hass.states.get("sensor.pip_health").state == "100"
+    assert hass.states.get("sensor.pip_care_misses").state == "3"
+    await hass.services.async_call(
+        DOMAIN, "restore_pet", {"mode": "reset"}, blocking=True
+    )
+    assert hass.states.get("sensor.pip_care_misses").state == "0"
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            DOMAIN, "restore_pet", {"config_entry_id": "nope"}, blocking=True
+        )
+
+
+async def test_restore_pet_takes_the_call_off_the_phones(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, hunger=26.0)
+    await setup(hass)
+    me = await hass.auth.async_create_user("Me")
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": me.id, "device_name": "My Phone"}
+    ).add_to_hass(hass)
+    phone = async_mock_service(hass, "notify", "mobile_app_my_phone")
+    await hass.services.async_call(
+        DOMAIN,
+        "notify_me",
+        {"entity_id": "sensor.pip_mood", "enabled": True},
+        blocking=True,
+        context=Context(user_id=me.id),
+    )
+    for _ in range(6):  # hunger drops below 25 and it calls
+        await settle(hass, freezer, 5 * 60)
+    await hass.async_block_till_done()
+    assert [c.data["message"] for c in phone] == ["Pip is hungry!"]
+    await hass.services.async_call(DOMAIN, "restore_pet", {}, blocking=True)
+    await hass.async_block_till_done()
+    assert phone[-1].data["message"] == "clear_notification"
+    assert phone[-1].data["data"]["tag"] == "virtual_pet_test_pet_call"
+    assert hass.states.get("binary_sensor.pip_calling").state != STATE_ON
+
+
 async def test_restart_does_not_hurt(
     hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
 ) -> None:

@@ -36,6 +36,7 @@ from .const import (
     ATTR_GUESS,
     ATTR_HEADLINE,
     ATTR_HOURS,
+    ATTR_MODE,
     ATTR_TOPIC,
     CARD_FILENAME,
     DOMAIN,
@@ -44,6 +45,7 @@ from .const import (
     SERVICE_MY_DAY,
     SERVICE_NOTIFY_ME,
     SERVICE_PLAY_GAME,
+    SERVICE_RESTORE_PET,
     SERVICE_SET_SHELL,
     SERVICE_SHARE_NEWS,
     SERVICE_VISIT,
@@ -122,6 +124,12 @@ FAST_FORWARD_SCHEMA = vol.Schema(
         vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
     }
 )
+RESTORE_PET_SCHEMA = vol.Schema(
+    {
+        vol.Optional(ATTR_MODE, default="heal"): vol.In(["heal", "reset"]),
+        vol.Optional(ATTR_CONFIG_ENTRY_ID): cv.string,
+    }
+)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -156,7 +164,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_my_day)
     websocket_api.async_register_command(hass, websocket_set_shell)
 
-    async def fast_forward(call: ServiceCall) -> ServiceResponse:
+    def debug_pets(call: ServiceCall) -> list[PetConfigEntry]:
+        """The pets a debug service acts on: the one named, or all loaded."""
         entries: list[PetConfigEntry] = hass.config_entries.async_loaded_entries(DOMAIN)
         if entry_id := call.data.get(ATTR_CONFIG_ENTRY_ID):
             entries = [e for e in entries if e.entry_id == entry_id]
@@ -164,12 +173,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             raise ServiceValidationError(
                 translation_domain=DOMAIN, translation_key="no_pet"
             )
+        return entries
+
+    async def fast_forward(call: ServiceCall) -> ServiceResponse:
         results = {}
-        for entry in entries:
+        for entry in debug_pets(call):
             results[entry.entry_id] = await entry.runtime_data.async_fast_forward(
                 call.data[ATTR_HOURS]
             )
         return results
+
+    async def restore_pet(call: ServiceCall) -> ServiceResponse:
+        # For dev pets worn down by test runs; never needed in normal play.
+        return {
+            entry.entry_id: await entry.runtime_data.async_restore(call.data[ATTR_MODE])
+            for entry in debug_pets(call)
+        }
 
     def pet_of(call: ServiceCall) -> PetCoordinator:
         """The loaded pet that owns the call's entity."""
@@ -315,6 +334,14 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         SERVICE_FAST_FORWARD,
         fast_forward,
         schema=FAST_FORWARD_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    async_register_admin_service(
+        hass,
+        DOMAIN,
+        SERVICE_RESTORE_PET,
+        restore_pet,
+        schema=RESTORE_PET_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
     return True
