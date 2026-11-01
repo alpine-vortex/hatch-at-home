@@ -25,7 +25,7 @@ below is PROPOSED.
 | # | Slice | Size | Tier | Art | Art queued? | Needs |
 |---|---|---|---|---|---|---|
 | 1a | Batch 6 lands; release 0.39.0 | S | 0 (FM) | none | — | the batch 6 gate |
-| 1b | **Refuse poses**: PNGs + `acts.refuse` in each `species.json`; card-check `react`, bench sheet | S | 1 | 30 species × 3 stages × 2 | **yes, drawing** (`art-128-refuse`, one world per commit) | 1a |
+| 1b | **Refuse poses**: PNGs + `acts.refuse` in each `species.json`; card-check `react`, bench sheet | S | 1 | ~90 (87 planned) | **yes, drawing** (`art-128-refuse`, one world per commit) | 1a |
 | 1c | **Aww poses** (a lost game), as 1b | S | 1 | ~90 | yes, next | 1a |
 | 1d | **Ready poses** (game start), as 1b | S | 1 | ~90 | yes | 1a |
 | 1e | **Splash poses** (clean's last beat), as 1b | S | 1 | ~90 | yes | 1a |
@@ -45,7 +45,7 @@ below is PROPOSED.
 | 2a | **Kindred pairs + persona link lines**: one extra line when a kindred pair links (personality "Later"), and each type's link line variants (device charm "Left"); card only | M | 0 copy plan, then 1 | none | — | Q4, Q6; the owner picks the PROPOSED lines first |
 | 2b | Visitor catch-up for a baby: the `BABY.visit` babble, e.g. PROPOSED "hi hi! ♪" | XS | 1 | none | — | Q9; fold into 2a's ship |
 | 2c | **Playtime design note**: the Catch rethink and 4d's slower game in one note (shapes, odds, the 70-80% rule) | — | 0 | none for the note | — | Q2, Q3 |
-| 2d | A **wave** pose for the link greet and visitors (device charm Q6; visitors §6 "later `acts.wave`"): `acts.wave` + one `STAGE_POSES` entry | S | 1 | ~180 | **no** | the owner's yes; it goes into the Luna queue after winter |
+| 2d | A **wave** pose for the link greet and visitors (device charm Q6; visitors §6 "later `acts.wave`"): `acts.wave` + one `STAGE_POSES` entry | S | 1 | ~90 | **no** | the owner's yes; it goes into the Luna queue after winter |
 | 2e | **Visitors v2 plan** (finds, basket, collection, gifts: check-ins item 1) | — | 0, then an L/tier-2 build | ~60 finds | no | Q10; the seed moves to the server |
 | 2f | Older generations (4g), unbundled from the forms book | S | 1 | none | — | Q8 |
 
