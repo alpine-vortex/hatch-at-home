@@ -364,3 +364,4 @@ commit.
   four feet down plus the raised paw made five legs).
 - Terrarium: ball python (adult from the probe), bearded dragon, gecko, tarantula, tortoise (droop and
   tilt, feet down; the tarantula raises a front leg).
+- Pond: axolotl, beaver, duckling (on its water ring, as in its idle frames), pond turtle (droop), tree frog.
