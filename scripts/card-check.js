@@ -1145,8 +1145,15 @@ async function main() {
   // No natural world visitor during the run (it would silence pats and block idle life
   // for ~7 s in its window): every pet's day is marked used. localStorage, so it holds
   // over reloads; the visitors section clears it for its own cases and sets it back.
+  // Both days: the browser's (v1's fallback) and HA's (house.visit.day keys the flag, v2).
   const holdVisits = () => card.evaluate((el) => {
-    for (const s of el._slides || []) localStorage.setItem(`hatch-visit-${s.ids?.device}-${new Date().toDateString()}`, "1");
+    const iso = new Intl.DateTimeFormat("en-CA", { timeZone: el._hass?.config?.time_zone || undefined }).format(new Date());
+    const [y, m, d] = iso.split("-").map(Number);
+    const days = new Set([new Date().toDateString(), new Date(y, m - 1, d).toDateString()]);
+    for (const s of el._slides || []) {
+      if (s.house?.visit?.day) days.add(el._visitDay(s).toDateString());
+      for (const day of days) localStorage.setItem(`hatch-visit-${s.ids?.device}-${day}`, "1");
+    }
   });
   await holdVisits();
   if (enter("play")) {
@@ -7020,10 +7027,171 @@ async function main() {
   check("visitors: catch-up: no room after three kept lines, nothing pushed out, the flag unused",
     cu.full.said.length === 0 && cu.full.q.length === 3 && cu.full.q.every((x) => /^kept /.test(x.text)) && !cu.full.flag,
     JSON.stringify(cu.full));
-  // The real decision over 14 days x 24 hours: 8 visit days, each with one 3-hour window
-  // on the matching screen (night 19-23 for a night visitor, day 09-18 else).
+  // v2 (docs/plan-2026-11-01-visitors-v2.md §1): the server picks the day's visit and
+  // the card plays house.visit. The real channel's plan: always a key (null on a day
+  // with no visit, so the card doesn't fall back), a visitor of this world, 3 hours.
+  const served = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { has: !!s.house && "visit" in s.house, visit: s.house?.visit ?? null, world: s.worldKey };
+  });
+  const servedIds = (VIS[served.world] || []).map((v) => v.id);
+  check("visitors: the channel carries house.visit, the server's plan (null on a no-visit day)",
+    served.has && (served.visit === null || (servedIds.includes(served.visit.id) &&
+      served.visit.until - served.visit.from === 10800 && /^\d{4}-\d{2}-\d{2}$/.test(served.visit.day))),
+    JSON.stringify(served));
+  // A plan pinned for V0 (window: an hour ago to two hours on): due exactly inside it,
+  // on its kind of screen, by the server's clock; told missed once it's over; an id
+  // this world hasn't, or a no-visit day (null), plays nothing and never falls back.
+  const planned = await card.evaluate((el, V0) => {
+    const s = el._slides[el._index];
+    const had = s.house;
+    const was = [s.screen.classList.contains("night"), s.screen.classList.contains("dim")];
+    const kind = (night) => { s.screen.classList.toggle("night", night); s.screen.classList.remove("dim"); };
+    const now = Math.floor(Date.now() / 1000);
+    const plan = { day: "2026-03-14", id: V0.id, hours: V0.hours, from: now - 3600, until: now + 7200 };
+    const due = (t) => el.__realDue.call(el, s, new Date(t * 1000))?.id || null;
+    const missed = (t) => el._visitorMissed(s, new Date(t * 1000))?.id || null;
+    const out = {};
+    try {
+      s.house = { ...(had || {}), visit: plan };
+      kind(V0.hours === "night");
+      Object.assign(out, { before: due(plan.from - 1), start: due(plan.from), last: due(plan.until - 1),
+        after: due(plan.until), now: el.__realDue.call(el, s)?.id || null,
+        missedIn: missed(now), missedAfter: missed(plan.until), flagDay: el._visitDay(s).toDateString() });
+      kind(V0.hours !== "night");
+      out.otherScreen = due(now);
+      kind(V0.hours === "night");
+      s.house = { ...(had || {}), visit: { ...plan, id: "nobody" } };
+      out.unknown = due(now);
+      // No visit today: 14 days x 24 hours, on either screen, nothing due or missed
+      // (v1's pick alone would give 8 visit days).
+      s.house = { ...(had || {}), visit: null };
+      const hits = [];
+      const base = new Date();
+      for (let d = 0; d < 14; d++) {
+        for (let h = 0; h < 24; h++) {
+          kind(h >= 19 || h < 7);
+          const at = new Date(base.getFullYear(), base.getMonth(), base.getDate() + d, h, 30);
+          if (el.__realDue.call(el, s, at) || el._visitorMissed(s, at)) hits.push(`${d}/${h}`);
+        }
+      }
+      out.noVisitHits = hits;
+    } finally {
+      s.house = had;
+      s.screen.classList.toggle("night", was[0]);
+      s.screen.classList.toggle("dim", was[1]);
+    }
+    return out;
+  }, V0);
+  check("visitors: the card plays the server's window (from <= now < until, by the server's clock), on its kind of screen",
+    planned.before === null && planned.start === V0.id && planned.last === V0.id && planned.after === null &&
+    planned.now === V0.id && planned.otherScreen === null && planned.unknown === null, JSON.stringify(planned));
+  check("visitors: the server's visit is told missed only once its window is over",
+    planned.missedIn === null && planned.missedAfter === V0.id, JSON.stringify(planned));
+  check("visitors: the day's flag is keyed by house.visit.day (finding #22)",
+    planned.flagDay === new Date(2026, 2, 14).toDateString(), JSON.stringify(planned));
+  check("visitors: a no-visit day from the server plays nothing and never falls back to v1's pick",
+    planned.noVisitHits.length === 0, JSON.stringify(planned.noVisitHits));
+  // Two cards, the second in another time zone (one whose date differs from HA's now),
+  // agree on the plan and the flag's day; then that browser crosses its own midnight
+  // inside the same HA day, and the visit doesn't play twice (finding #22). v1's key
+  // (the browser's date) would let it play again: shown last, with no house.visit.
+  {
+    const haTz = await card.evaluate((el) => el._hass.config.time_zone);
+    const dayIn = (tz) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+    const haDay = dayIn(haTz);
+    const tz = ["Pacific/Kiritimati", "Pacific/Pago_Pago"].find((z) => dayIn(z) !== haDay);
+    const petId = await card.evaluate((el) => el._slides[el._index].ids?.["sensor.life_stage"]);
+    const ctx = await browser.newContext({ viewport: { width: 420, height: 860 }, storageState: await context.storageState(), timezoneId: tz });
+    await ctx.addInitScript(() => {
+      try {
+        localStorage.setItem("hatch-lcd", "off");
+        localStorage.setItem("hatch-shared-screen", "off");
+      } catch (err) {
+        // no storage
+      }
+    });
+    const p2 = await ctx.newPage();
+    p2.on("pageerror", (e) => errors.push(`visitors tz tab: ${e}`));
+    const out = { tz, haTz, haDay };
+    try {
+      await p2.clock.install(); // the time runs as usual; setSystemTime jumps it below
+      await p2.goto(`${HA}/pet-bench/pet`);
+      if (await p2.waitForSelector('input[autocomplete="username"]', { timeout: 8000 }).catch(() => null)) {
+        await p2.locator('input[autocomplete="username"]').first().fill(USER.username);
+        await p2.locator('input[type="password"]').first().fill(USER.password);
+        await p2.keyboard.press("Enter");
+      }
+      await p2.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
+      await settle(p2);
+      await p2.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+      const el2 = p2.locator("hatch-pet-card").first();
+      const slides2 = await p2.locator("hatch-pet-card .slide").count();
+      for (let i = 0; i < slides2; i++) {
+        if (await el2.evaluate((c, e) => c._slides?.[c._index]?.ids?.["sensor.life_stage"] === e, petId)) break;
+        await p2.locator("hatch-pet-card .nav.next").click();
+        await p2.waitForTimeout(700);
+      }
+      const view = (el) => el.evaluate(async (c) => {
+        const s = c._slides[c._index];
+        for (let i = 0; i < 100 && !(s.house && "visit" in s.house); i++) await new Promise((r) => setTimeout(r, 100));
+        return { visit: s.house?.visit ?? null, flagDay: c._visitDay(s).toDateString(), browserDay: new Date().toDateString() };
+      });
+      out.a = await view(card);
+      out.b = await view(el2);
+      // The crossing, on the second card: a plan for HA's today, inside its window.
+      const tryVisit = (step) => el2.evaluate((el, { V0, haDay, step }) => {
+        const s = el._slides[el._index];
+        const now = Math.floor(Date.now() / 1000);
+        if (step === "plan") s.house = { ...(s.house || {}), visit: { day: haDay, id: V0.id, hours: V0.hours, from: now - 3600, until: now + 7200 } };
+        if (step === "clear") for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
+        if (step === "fallback") { const { visit, ...rest } = s.house || {}; s.house = rest; }
+        el._visitorEnd(s);
+        Object.assign(s, { poseUntil: 0, propUntil: 0, movingUntil: 0, flairUntil: 0, visitUntil: 0, queue: [], sayUntil: 0,
+          sayClass: 0, game: null, scene: null, power: null, linking: false, calling: false, asleep: false, away: false,
+          lookedFirst: true, nextVisitCheck: 0, patAt: 0, poseFrames: [], moodState: "content" });
+        s.screen.classList.remove("show-status");
+        el._booting = false;
+        el._link = null;
+        el._visitShown = { s, at: Date.now() - 60000 };
+        el._linkEndedAt = undefined;
+        const real = el._visitorDue;
+        el._visitorDue = () => V0;
+        try { el._visitorTick(s); } finally { el._visitorDue = real; }
+        const on = !!s.visitor;
+        el._visitorEnd(s);
+        Object.assign(s, { poseUntil: 0, sayUntil: 0, visitUntil: 0, flairUntil: 0, queue: [] });
+        return { on, browserDay: new Date().toDateString(), keys: Object.keys(localStorage).filter((k) => k.startsWith("hatch-visit-")) };
+      }, { V0, haDay, step });
+      await tryVisit("plan");
+      out.first = await tryVisit("clear");
+      out.again = await tryVisit("none");
+      const midnight = await p2.evaluate(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 1).getTime(); });
+      await p2.clock.setSystemTime(midnight);
+      out.crossed = await tryVisit("none");
+      out.v1 = await tryVisit("fallback");
+    } catch (err) {
+      out.error = String(err);
+    } finally {
+      await ctx.close();
+    }
+    check(`visitors: two cards, one in ${tz}, get the same house.visit and key its flag by HA's day`,
+      !out.error && !!tz && JSON.stringify(out.a.visit) === JSON.stringify(out.b.visit) &&
+      (out.a.visit === null || (out.a.flagDay === out.b.flagDay && out.b.flagDay !== out.b.browserDay)), JSON.stringify(out));
+    const haKey = (() => { const [y, m, d] = haDay.split("-").map(Number); return new Date(y, m - 1, d).toDateString(); })();
+    check("visitors: crossing the browser's own midnight inside one HA day, the visit plays once (flag keyed by house.visit.day)",
+      !out.error && out.first.on && !out.again.on && !out.crossed.on && out.crossed.browserDay !== out.first.browserDay &&
+      out.crossed.keys.length === 1 && out.crossed.keys[0].endsWith(haKey), JSON.stringify(out));
+    check("visitors: (v1's key, with no house.visit, would have played it again past the browser's midnight)",
+      !out.error && out.v1.on, JSON.stringify(out.v1 || out));
+  }
+  // v1's fallback (no house.visit: an older server, the bench) over 14 days x 24 hours:
+  // 8 visit days, each with one 3-hour window on the matching screen (night 19-23 for a
+  // night visitor, day 09-18 else).
   const walk = await card.evaluate((el) => {
     const s = el._slides[el._index];
+    const had = s.house;
+    if (had) { const { visit, ...rest } = had; s.house = rest; }
     const was = [s.screen.classList.contains("night"), s.screen.classList.contains("dim")];
     const days = [];
     const now = new Date();
@@ -7041,6 +7209,7 @@ async function main() {
       }
       days.push({ hours, id, missed });
     }
+    s.house = had;
     s.screen.classList.toggle("night", was[0]);
     s.screen.classList.toggle("dim", was[1]);
     return days;
@@ -7048,10 +7217,10 @@ async function main() {
   const vdays = walk.filter((d) => d.hours.length);
   const okHours = vdays.every((d) => d.hours.length === 3 && d.hours[2] - d.hours[0] === 2 &&
     (d.id.endsWith("/night") ? d.hours[0] >= 19 && d.hours[2] <= 22 : d.hours[0] >= 9 && d.hours[2] <= 17));
-  check("visitors: over 14 days, 8 visit days, each one 3-hour window in its visitor's hours",
+  check("visitors: v1's fallback: over 14 days, 8 visit days, each one 3-hour window in its visitor's hours",
     vdays.length === 8 && okHours, JSON.stringify(walk));
   // The catch-up's window: from the hour after the last due hour to midnight, never before.
-  check("visitors: catch-up comes only once the day's window is over (none on other days)",
+  check("visitors: v1's fallback: catch-up comes only once the day's window is over (none on other days)",
     walk.every((d) => d.hours.length ? d.missed.length === 23 - d.hours[2] && d.missed[0] === d.hours[2] + 1 : !d.missed.length),
     JSON.stringify(walk.map((d) => [d.hours, d.missed])));
   // Every visitor's frames load.
@@ -8238,10 +8407,18 @@ async function main() {
     // Seed: dev's bond with this pet, and today's wish aimed at dev. What was
     // there goes back at the end.
     const today = new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(new Date());
+    // And today's world visit (visitors v2): the pet's first visitor, its window on now,
+    // at a minute no pick would make, so a re-roll on restart would show.
+    const seedWorld = await card.evaluate((el, e) => el._slides.find((x) => x.ids?.["sensor.life_stage"] === e)?.worldKey, seedPet);
+    const seedGuest = (JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"))[seedWorld]?.visitors || [])[0];
+    const seedFrom = Math.floor(Date.now() / 1000) - 17 * 60 - 7;
+    const seedVisit = seedGuest && { day: today, world: seedWorld, id: seedGuest.id, hours: seedGuest.hours,
+      from: seedFrom, until: seedFrom + 10800, credited: false };
     let before = null;
     const downAt = Date.now();
     const token2 = await bounce(fresh, entryId, (data) => {
-      before = { bond: data.bonds?.[me], wish: data.wish };
+      before = { bond: data.bonds?.[me], wish: data.wish, visit: data.visit };
+      if (seedVisit) data.visit = seedVisit;
       // Level 8, one point short of 9 with today's care still to earn: the
       // old-card check's care press makes a real bond_up (8b).
       data.bonds = { ...(data.bonds || {}), [me]: { ...(data.bonds?.[me] || {}), points: 144, nickname: "sunbeam",
@@ -8252,6 +8429,7 @@ async function main() {
       if (before.bond === undefined) delete data.bonds?.[me];
       else data.bonds = { ...(data.bonds || {}), [me]: before.bond };
       data.wish = before.wish;
+      if (seedVisit) data.visit = before.visit ?? null;
     });
     const upAt = Date.now();
     const back = await card.evaluate(async (el, e) => {
@@ -8265,8 +8443,11 @@ async function main() {
       el._renderStatus(sl, []);
       return { s: Math.round((Date.now() - start) / 1000), bond: sl.mine?.bond, aimed: sl.mine?.wish_for_you,
         you: /you two/.test(sl.status.textContent), wish: sl.status.querySelector(".row")?.textContent.trim(),
-        mark: window.__hatchMark, powered: sl.house?.powered_on?.at ?? null };
+        mark: window.__hatchMark, powered: sl.house?.powered_on?.at ?? null, visit: sl.house?.visit ?? null };
     }, seedPet);
+    check("visitors v2: an HA restart keeps the day's visit (no re-roll), and the card gets it as house.visit",
+      !!seedVisit && JSON.stringify(back.visit) === JSON.stringify({ day: seedVisit.day, id: seedVisit.id,
+        hours: seedVisit.hours, from: seedVisit.from, until: seedVisit.until }), JSON.stringify({ seeded: seedVisit, got: back.visit }));
     seeded = back.bond?.nickname === "sunbeam";
     check("P3a: an HA restart keeps the bond (back within 90 s of start-up, no page reload)",
       seeded && back.you && back.mark === "same page" && back.s <= 90,
