@@ -31,8 +31,15 @@ for _ in $(seq 1 30); do
 done
 [ -n "$ID" ] || { echo "ci-gate: the run never appeared" >&2; exit 1; }
 echo "ci-gate: run $ID on $BRANCH @$(git rev-parse --short "$SHA")"
-gh run watch "$ID" --interval 30 >/dev/null 2>&1
-CONC=$(gh run view "$ID" --json conclusion -q .conclusion)
+# Poll rather than `gh run watch`, which can return before the run ends. A
+# blank status (a failed API call) is not an answer: ask again.
+while [ "$(gh run view "$ID" --json status -q .status 2>/dev/null)" != completed ]; do sleep 30; done
+CONC=""
+for _ in $(seq 1 10); do
+  CONC=$(gh run view "$ID" --json conclusion -q .conclusion 2>/dev/null)
+  [ -n "$CONC" ] && break
+  sleep 6
+done
 gh run view "$ID" --json jobs -q '.jobs[] | "  \(.name) \(.conclusion)"'
 if [ "$CONC" = success ]; then
   mkdir -p "$M" && touch "$M/$TREE"
