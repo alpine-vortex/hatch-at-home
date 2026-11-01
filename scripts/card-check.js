@@ -1111,6 +1111,16 @@ async function main() {
     statusRows && sheet.open && sheet.back && sheet.sound && !sheet.stats, JSON.stringify(sheet));
   check("the settings sheet no longer holds misses and whines (on status now, top10 4a)", !sheet.pet0, JSON.stringify(sheet));
   check("the gear moves focus to the sheet's back row", sheet.focus === "sback", sheet.focus);
+  // top10 3a: the family-tablet note sits right under the "shared screen" switch.
+  const tabletNote = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const row = s.status.querySelector(".bell.shared")?.closest(".row");
+    const next = row?.nextElementSibling;
+    return { next: next?.className || null, text: next?.textContent || null };
+  });
+  check("top10 3a: the family-tablet note follows the shared screen switch",
+    /sharednote/.test(tabletNote.next || "") && tabletNote.text === "a family tablet? give it its own login, and we'll make friends ♥",
+    JSON.stringify(tabletNote));
   check("the sheet heads the pet's rows, the viewer's and this screen's",
     sheet.heads.join("|") === `for ${sheet.pet}|for you|this screen`, sheet.heads.join("|"));
   await shot("02c-settings");

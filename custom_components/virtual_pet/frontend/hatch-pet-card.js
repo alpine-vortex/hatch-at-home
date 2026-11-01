@@ -6398,6 +6398,7 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "holiday names", `<span><button class="bell named" aria-label="holiday names" aria-pressed="${namedHolidays()}">${namedHolidays() ? "on" : "off"}</button></span>`)}
       ${row(null, "mono screen", `<span><button class="bell mono" aria-label="mono screen: ${monoOn() ? "on" : "off"}, change" aria-pressed="${monoOn()}">${monoOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
+      <div class="shellnote sharednote">a family tablet? give it its own login, and we'll make friends ♥</div>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     s.status.querySelector(".sback").addEventListener("click", (e) => {

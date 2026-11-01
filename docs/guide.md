@@ -178,9 +178,17 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     week, from the pet you're closest to, and silent (level 3).
 
   On a wall tablet or any screen the whole family looks at but one person is signed
-  in to, turn on "shared screen" on its status page (it's saved in that browser
-  only): it shows nothing personal there, no names, notes, questions, bond or "my
-  day", and doesn't count as anyone's visit.
+  in to, turn on "shared screen" in settings (the gear on the status page; it's saved
+  in that browser only): it shows nothing personal there, no names, notes, questions,
+  bond or "my day", and doesn't count as anyone's visit.
+
+  **A family tablet: which way?** There are two ways to set one up. Give the tablet its
+  own Home Assistant login (a "family" user): the pet then treats the tablet as one
+  more person, with its own household bond, greetings, questions and nickname, and
+  everyone's own phone or login keeps its own bond as well. Or sign the tablet in as one
+  person and turn on "shared screen": nothing personal shows, and the tablet builds no
+  bond at all. The first is warmer for a family; the second suits a screen in a shared
+  or public space. The card says so in a line under the "shared screen" switch.
 
   "My day" is one switch per person, for every pet. Phone focus modes and Do Not
   Disturb are left to your phone: the pet's calls and sickness are time-sensitive
