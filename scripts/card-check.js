@@ -6591,7 +6591,8 @@ async function main() {
     if (setup === "status open") s.screen.classList.add("show-status");
     if (setup === "a line queued") set(s, "queue", [{ text: "x", ms: 100, cls: 3 }]);
     if (setup === "before its first look") set(s, "lookedFirst", false);
-    if (setup === "in its first 30 s") set(el, "_visitShown", { s, at: Date.now() - 5000 });
+    if (setup === "in its first 10 s") set(el, "_visitShown", { s, at: Date.now() - 9000 });
+    if (setup === "just past 10 s") set(el, "_visitShown", { s, at: Date.now() - 10500 });
     if (setup === "a link 1 min ago") set(el, "_linkEndedAt", Date.now() - 60000);
     if (setup === "egg") {
       const real = el._state;
@@ -6614,7 +6615,7 @@ async function main() {
     check("visitors: not due, nothing starts and the day isn't used up", !r.started && !r.used, JSON.stringify(r));
   }
   const skips = ["asleep", "away", "egg", "game", "scene", "linking", "link running", "calling", "power", "status open",
-    "a line queued", "before its first look", "in its first 30 s", "a link 1 min ago", "off-slide"];
+    "a line queued", "before its first look", "in its first 10 s", "a link 1 min ago", "off-slide"];
   const bad = [];
   for (const setup of skips) {
     await vprep(V0);
@@ -6623,6 +6624,14 @@ async function main() {
   }
   check("visitors: no visit when asleep, away, egg, in a game or scene, linking, calling, power, status open, queued, " +
     "early or off-slide; the day's flag unused", bad.length === 0, bad.join(" | "));
+  // VISIT_SHOWN_MS is 10 s (owner, 2026-10-31): 9 s on show, no visit; 10.5 s, it starts.
+  {
+    await vprep(V0);
+    const r = await tick("just past 10 s");
+    await card.evaluate((el) => el._visitorEnd(el._slides[el._index]));
+    check("visitors: the slide on show 10 s (VISIT_SHOWN_MS), then a visit may start", r.started && r.used &&
+      /\nconst VISIT_SHOWN_MS = 10000;/.test(vsrc), JSON.stringify(r));
+  }
   // A visit: the visitor's picture, the flag used, then the greet frame and one line.
   await vprep(V0);
   const before = await evaluate(() => Object.keys(localStorage));
@@ -6738,6 +6747,92 @@ async function main() {
     return { text };
   }, { key: babyKey, ms: (V0.in || 1400) + 1300 });
   check("visitors: a baby says baby talk (BABY.visit)", VBABY.some((l) => baby.text.includes(l)), JSON.stringify(baby));
+  // The catch-up (owner, 2026-10-31): today's visitor's window over and the visit
+  // never played here, the next first look says "a <name> came by today ♪" once
+  // (flavour, last, only with room), using up the day's flag so the visit can't play.
+  // _visitorMissed (the window) is stubbed; its clock is walked below and in node.
+  await vprep(null);
+  const VSTAR = VIS.nightsky.find((v) => v.id === "shootingstar");
+  const catchUp = await card.evaluate((el, { V0, VSTAR }) => {
+    const s = el._slides[el._index];
+    const device = s.ids?.device;
+    const spent = Object.keys(localStorage).filter((k) => /^hatch-(dream|wish|wishmention|welcomed|seen|upbringing)-/.test(k))
+      .map((k) => [k, localStorage.getItem(k)]);
+    const real = { missed: el._visitorMissed, heard: el._channelHeard, catchUp: el._catchUp, seenRead: el._seenRead, away: el._awayNote };
+    // Room for it: no kept catch-up, away note, dream, wish or upbringing line this look.
+    el._catchUp = () => [];
+    el._awayNote = () => null;
+    const day = new Date().toDateString();
+    for (const n of ["dream", "wish"]) localStorage.setItem(`hatch-${n}-${device}-${day}`, "1");
+    localStorage.setItem(`hatch-upbringing-${device}`, String(Date.now()));
+    const flag = () => Object.keys(localStorage).some((k) => k.startsWith(`hatch-visit-${device}-`));
+    const clearFlag = () => { for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k); };
+    const look = (missed) => {
+      el._visitorMissed = () => missed;
+      el._channelHeard = () => true;
+      Object.assign(s, { lookedFirst: false, queue: [], asleep: false, away: false });
+      el._firstLook(s);
+      const q = s.queue.map((x) => ({ text: x.text, cls: x.cls }));
+      s.queue = [];
+      return { q, said: q.filter((x) => / came by today ♪$| went by! ♪$/.test(x.text)), flag: flag() };
+    };
+    const out = {};
+    try {
+      clearFlag();
+      out.before = look(null); // the window not over yet (or no visit today)
+      clearFlag();
+      out.first = look(V0);
+      out.twice = look(V0);
+      // A visit tried with V0 due, the pet free and shown a minute (the same for both
+      // cases below): it can't also play after the catch-up; with no flag it does.
+      const tryVisit = () => {
+        Object.assign(s, { poseUntil: 0, sayUntil: 0, sayClass: 0, visitUntil: 0, flairUntil: 0, queue: [], nextVisitCheck: 0 });
+        el._visitShown = { s, at: Date.now() - 60000 };
+        el.__vdue = V0;
+        try { el._visitorTick(s); } finally { el.__vdue = null; }
+        const on = !!s.visitor;
+        el._visitorEnd(s);
+        Object.assign(s, { poseUntil: 0, sayUntil: 0, visitUntil: 0, flairUntil: 0, queue: [] });
+        return on;
+      };
+      out.playedAfter = tryVisit();
+      // The visit played on this device today: no catch-up.
+      clearFlag();
+      out.played = tryVisit();
+      out.afterVisit = look(V0);
+      // The shooting star's own line.
+      clearFlag();
+      out.star = look(VSTAR);
+      // No room: three kept catch-up lines fill the first look; the flag stays unused.
+      clearFlag();
+      el._seenRead = function (d) { return { ...(real.seenRead.call(this, d) || {}), said: 0 }; };
+      el._catchUp = () => [["kept one", "2026-01-01T00:00:00Z"], ["kept two", "2026-01-01T00:00:01Z"], ["kept three", "2026-01-01T00:00:02Z"]];
+      out.full = look(V0);
+    } finally {
+      el._visitorMissed = real.missed; el._channelHeard = real.heard; el._catchUp = real.catchUp; el._seenRead = real.seenRead;
+      el._awayNote = real.away;
+      for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish|wishmention|welcomed|seen|upbringing)-/.test(k)) localStorage.removeItem(k);
+      for (const [k, v] of spent) localStorage.setItem(k, v);
+      Object.assign(s, { lookedFirst: true, queue: [], sayUntil: 0 });
+      clearFlag();
+    }
+    return out;
+  }, { V0, VSTAR });
+  const cu = catchUp;
+  check("visitors: catch-up: nothing said before the window ends; the day's flag unused",
+    cu.before.said.length === 0 && !cu.before.flag, JSON.stringify(cu.before));
+  check(`visitors: catch-up: after the window, "a ${V0.name} came by today ♪" once, flavour, last; the flag used`,
+    cu.first.said.length === 1 && cu.first.said[0].text === `a ${V0.name} came by today ♪` && cu.first.said[0].cls === 1 &&
+    cu.first.q[cu.first.q.length - 1].text === cu.first.said[0].text && cu.first.flag, JSON.stringify(cu.first));
+  check("visitors: catch-up: never twice, and the visit can't also play after it",
+    cu.twice.said.length === 0 && !cu.playedAfter, JSON.stringify({ twice: cu.twice, playedAfter: cu.playedAfter }));
+  check("visitors: catch-up: none if the visit played on this device today",
+    cu.played && cu.afterVisit.said.length === 0, JSON.stringify({ played: cu.played, afterVisit: cu.afterVisit }));
+  check("visitors: catch-up: the shooting star says \"a shooting star went by! ♪\"",
+    cu.star.said.length === 1 && cu.star.said[0].text === "a shooting star went by! ♪", JSON.stringify(cu.star));
+  check("visitors: catch-up: no room after three kept lines, nothing pushed out, the flag unused",
+    cu.full.said.length === 0 && cu.full.q.length === 3 && cu.full.q.every((x) => /^kept /.test(x.text)) && !cu.full.flag,
+    JSON.stringify(cu.full));
   // The real decision over 14 days x 24 hours: 8 visit days, each with one 3-hour window
   // on the matching screen (night 19-23 for a night visitor, day 09-18 else).
   const walk = await card.evaluate((el) => {
@@ -6747,14 +6842,17 @@ async function main() {
     const now = new Date();
     for (let d = 0; d < 14; d++) {
       const hours = [];
+      const missed = [];
       let id = null;
       for (let h = 0; h < 24; h++) {
         s.screen.classList.toggle("night", h >= 19 || h < 7);
         s.screen.classList.remove("dim");
-        const v = el.__realDue.call(el, s, new Date(now.getFullYear(), now.getMonth(), now.getDate() + d, h, 30));
+        const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d, h, 30);
+        const v = el.__realDue.call(el, s, at);
         if (v) { hours.push(h); id = `${v.id}/${v.hours}`; }
+        if (el._visitorMissed(s, at)) missed.push(h);
       }
-      days.push({ hours, id });
+      days.push({ hours, id, missed });
     }
     s.screen.classList.toggle("night", was[0]);
     s.screen.classList.toggle("dim", was[1]);
@@ -6765,6 +6863,10 @@ async function main() {
     (d.id.endsWith("/night") ? d.hours[0] >= 19 && d.hours[2] <= 22 : d.hours[0] >= 9 && d.hours[2] <= 17));
   check("visitors: over 14 days, 8 visit days, each one 3-hour window in its visitor's hours",
     vdays.length === 8 && okHours, JSON.stringify(walk));
+  // The catch-up's window: from the hour after the last due hour to midnight, never before.
+  check("visitors: catch-up comes only once the day's window is over (none on other days)",
+    walk.every((d) => d.hours.length ? d.missed.length === 23 - d.hours[2] && d.missed[0] === d.hours[2] + 1 : !d.missed.length),
+    JSON.stringify(walk.map((d) => [d.hours, d.missed])));
   // Every visitor's frames load.
   const frames = await card.evaluate(async (el, all) => {
     const base = el._slides[el._index].pet.src.replace(/\/sprites\/.*$/, "/ui/");

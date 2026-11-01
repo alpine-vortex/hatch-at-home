@@ -1,4 +1,4 @@
-// visitorDay (the card's world-visitor seed) as a pure function: node --test tests/js
+// visitorDay (the card's world-visitor seed) and visitorMissed (the catch-up's pick) as pure functions: node --test tests/js
 // The card isn't a module: the function and VISITORS are read from its source.
 const test = require("node:test");
 const assert = require("node:assert");
@@ -9,9 +9,10 @@ const vm = require("vm");
 const src = fs.readFileSync(path.join(__dirname, "..", "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
 const fn = src.match(/\nfunction visitorDay\([\s\S]*?\n\}\n/)[0];
 const table = src.match(/\nconst VISITORS = (\{[\s\S]*?\n\});/)[1];
+const missedFn = src.match(/\nfunction visitorMissed\([\s\S]*?\n\}\n/)[0];
 const ctx = {};
-vm.runInNewContext(`${fn}; this.visitorDay = visitorDay; this.VISITORS = ${table};`, ctx);
-const { visitorDay, VISITORS } = ctx;
+vm.runInNewContext(`${fn}; ${missedFn}; this.visitorDay = visitorDay; this.visitorMissed = visitorMissed; this.VISITORS = ${table};`, ctx);
+const { visitorDay, visitorMissed, VISITORS } = ctx;
 
 const START = new Date(2026, 0, 1, 12);
 const days = (n, from = START) => Array.from({ length: n }, (_, i) => new Date(from.getFullYear(), from.getMonth(), from.getDate() + i, 12));
@@ -82,4 +83,42 @@ test("VISITORS: 3 a world, 6 worlds, two lines each, day or night", () => {
       }
     }
   }
+});
+
+test("visitorMissed: only on a visit day, once that visitor's window is over, until midnight", () => {
+  let dayCase = 0;
+  let nightCase = 0;
+  for (const world of Object.keys(VISITORS)) {
+    const list = VISITORS[world];
+    for (const d of days(28)) {
+      const at = (h) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, 30);
+      const seed = visitorDay(d, "a1b2c3");
+      if (!seed.visit) {
+        for (let h = 0; h < 24; h++) assert.strictEqual(visitorMissed(list, at(h), "a1b2c3"), null);
+        continue;
+      }
+      const v = list[seed.who];
+      const start = v.hours === "night" ? seed.night : seed.day;
+      if (v.hours === "night") nightCase++;
+      else dayCase++;
+      for (let h = 0; h < 24; h++) {
+        const got = visitorMissed(list, at(h), "a1b2c3");
+        assert.strictEqual(got, h >= start + 3 ? v : null, `${world} ${d.toDateString()} ${h}:30 (start ${start})`);
+      }
+    }
+  }
+  assert.ok(dayCase > 0 && nightCase > 0);
+  assert.strictEqual(visitorMissed(undefined, new Date(), "a1b2c3"), null); // a world with no visitors
+});
+
+test("VISITORS: a name each (the catch-up's 'a <name>'), the shooting star its own line", () => {
+  for (const list of Object.values(VISITORS)) {
+    for (const v of list) {
+      assert.ok(typeof v.name === "string" && /^[^aeiouAEIOU]/.test(v.name), v.id); // "a", never "an"
+    }
+  }
+  const star = VISITORS.nightsky.find((v) => v.id === "shootingstar");
+  assert.strictEqual(star.catchup, "a shooting star went by! ♪");
+  assert.strictEqual(VISITORS.hearth.find((v) => v.id === "robin").name, "robin");
+  assert.strictEqual(VISITORS.woodland.find((v) => v.id === "stellersjay").name, "Steller's jay");
 });

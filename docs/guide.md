@@ -190,6 +190,10 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   pet event (your phone's messages may use your nickname), and only their own card fetches it, over a private subscription. Care through Assist counts for
   whoever is signed in; automations build no bond. A new generation keeps the household's bonds. (The card tells the pet who
   looked in with `virtual_pet.visit`, counted at most hourly.)
+- **Visitors**: on about 4 days in 7 a small creature from the pet's world (a robin, a
+  heron, a shooting star...) drops by during a 3-hour window and the pet greets it, once
+  a day on each screen; if the window passed while nobody was looking, the next look
+  that day says so ("a robin came by today ♪").
 - **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
   off): from 20 to 31 October it's **Halloween**. Bunting hangs across the scene, a
   jack-o'-lantern with a new carved face each day sits by the pet and glows at night (it

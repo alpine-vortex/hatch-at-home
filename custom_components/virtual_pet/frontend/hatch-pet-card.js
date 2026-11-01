@@ -616,47 +616,49 @@ const dailyPick = (list, salt = "") => {
 // Card only: nothing is sent or saved but the day's localStorage flag. Per visitor:
 // hours ("day" 09-18 on a day screen, "night" 19-23 on a night or dim one), walk
 // (on the ground line, else it flies in), cross (no stop: straight over), in (ms to
-// arrive), stay (ms at the edge), lines (its two; VISIT_LINES are everyone's).
+// arrive), stay (ms at the edge), lines (its two; VISIT_LINES are everyone's),
+// name (the plan's roster; the catch-up's "a <name> came by today ♪"), catchup (its
+// own catch-up line instead).
 // Art: frontend/ui/visitor_<world>_<id>_<1|2>.png, 72 x 72 (18 x 18 world cells
 // at 4 px a cell, as the props), shown 18 cells wide.
 const VISIT_LINES = ["oh! a visitor ♪", "hi there, friend!"];
 const VISITORS = {
   woodland: [
-    { id: "chickadee", hours: "day", lines: ["chick-a-dee-dee! ♪", "hello, little chickadee!"] },
-    { id: "stellersjay", hours: "day", lines: ["ooh, so blue!", "hi, jay! ♪"] },
-    { id: "snail", hours: "day", walk: true, in: 2600, stay: 4200, lines: ["take your time, snail~", "hello, slow friend"] },
+    { id: "chickadee", name: "chickadee", hours: "day", lines: ["chick-a-dee-dee! ♪", "hello, little chickadee!"] },
+    { id: "stellersjay", name: "Steller's jay", hours: "day", lines: ["ooh, so blue!", "hi, jay! ♪"] },
+    { id: "snail", name: "garden snail", hours: "day", walk: true, in: 2600, stay: 4200, lines: ["take your time, snail~", "hello, slow friend"] },
   ],
   terrarium: [
-    { id: "pillbug", hours: "day", walk: true, lines: ["hi, pill bug! don't roll away~", "a tiny armadillo!"] },
-    { id: "ladybird", hours: "day", lines: ["a ladybird! lucky ♪", "count your spots for me?"] },
-    { id: "moth", hours: "night", lines: ["hi, moth! the light's over there~", "fuzzy friend ♪"] },
+    { id: "pillbug", name: "pill bug", hours: "day", walk: true, lines: ["hi, pill bug! don't roll away~", "a tiny armadillo!"] },
+    { id: "ladybird", name: "ladybird", hours: "day", lines: ["a ladybird! lucky ♪", "count your spots for me?"] },
+    { id: "moth", name: "moth", hours: "night", lines: ["hi, moth! the light's over there~", "fuzzy friend ♪"] },
   ],
   hearth: [
-    { id: "robin", hours: "day", walk: true, lines: ["hello, robin! ♪", "a robin at the window!"] },
-    { id: "mouse", hours: "night", walk: true, in: 900, lines: ["shh... hi, mouse ♪", "a crumb for you?"] },
-    { id: "cricket", hours: "night", walk: true, lines: ["cri-cri! ♪", "sing me a song, cricket"] },
+    { id: "robin", name: "robin", hours: "day", walk: true, lines: ["hello, robin! ♪", "a robin at the window!"] },
+    { id: "mouse", name: "house mouse", hours: "night", walk: true, in: 900, lines: ["shh... hi, mouse ♪", "a crumb for you?"] },
+    { id: "cricket", name: "hearth cricket", hours: "night", walk: true, lines: ["cri-cri! ♪", "sing me a song, cricket"] },
   ],
   tidepool: [
-    { id: "gull", hours: "day", lines: ["hi, gull! no snacks here~", "hello from the sea ♪"] },
-    { id: "shorecrab", hours: "day", walk: true, lines: ["sideways hello! ♪", "hi, little crab!"] },
-    { id: "seastar", hours: "day", walk: true, in: 2600, stay: 4800, lines: ["a star in the water!", "hello, sea star~"] },
+    { id: "gull", name: "gull", hours: "day", lines: ["hi, gull! no snacks here~", "hello from the sea ♪"] },
+    { id: "shorecrab", name: "shore crab", hours: "day", walk: true, lines: ["sideways hello! ♪", "hi, little crab!"] },
+    { id: "seastar", name: "sea star", hours: "day", walk: true, in: 2600, stay: 4800, lines: ["a star in the water!", "hello, sea star~"] },
   ],
   pond: [
-    { id: "dragonfly", hours: "day", in: 900, lines: ["zoom! hi, dragonfly ♪", "so shiny!"] },
-    { id: "strider", hours: "day", walk: true, lines: ["walking on water?!", "hi, strider ♪"] },
-    { id: "heron", hours: "day", walk: true, in: 2000, lines: ["a heron! so tall...", "shh, it's fishing~"] },
+    { id: "dragonfly", name: "dragonfly", hours: "day", in: 900, lines: ["zoom! hi, dragonfly ♪", "so shiny!"] },
+    { id: "strider", name: "water strider", hours: "day", walk: true, lines: ["walking on water?!", "hi, strider ♪"] },
+    { id: "heron", name: "heron", hours: "day", walk: true, in: 2000, lines: ["a heron! so tall...", "shh, it's fishing~"] },
   ],
   nightsky: [
-    { id: "shootingstar", hours: "night", cross: true, lines: ["a shooting star! make a wish ✦", "ooh! did you see that?"] },
-    { id: "nighthawk", hours: "night", lines: ["hi, nighthawk ♪", "night flyer friend!"] },
-    { id: "raccoon", hours: "night", walk: true, lines: ["hello, masked friend!", "a raccoon! say hi ♪"] },
+    { id: "shootingstar", name: "shooting star", catchup: "a shooting star went by! ♪", hours: "night", cross: true, lines: ["a shooting star! make a wish ✦", "ooh! did you see that?"] },
+    { id: "nighthawk", name: "nighthawk", hours: "night", lines: ["hi, nighthawk ♪", "night flyer friend!"] },
+    { id: "raccoon", name: "raccoon", hours: "night", walk: true, lines: ["hello, masked friend!", "a raccoon! say hi ♪"] },
   ],
 };
 const VISIT_IN_MS = 1400; // to arrive (or leave), unless the visitor says
 const VISIT_STAY_MS = 3000; // at the edge, past the greet's start
 const VISIT_CALM_MS = 5000; // reduced motion: still, then gone
 const VISIT_CHECK_MS = 20000; // between looks for a visit
-const VISIT_SHOWN_MS = 30000; // the slide on show this long first
+const VISIT_SHOWN_MS = 10000; // the slide on show this long first
 const VISIT_AFTER_MS = 120000; // after an infrared link, before a visitor; a seasonal one after this
 // One pet's day: is it a visit day, which of its world's three comes, and the
 // start hour of each kind's 3-hour window. A day index (the local calendar date,
@@ -674,6 +676,14 @@ function visitorDay(date, device) {
   let w = h ^ day;
   w = Math.imul(w ^ (w >>> 15), 0x2c1b3c6d) >>> 0;
   return { visit, who, day: 9 + (w % 7), night: 19 + ((w >>> 8) % 2) };
+}
+// Today's visitor once its 3-hour window is over (that day's or night's), else null:
+// the catch-up's pick (the screen's kind doesn't matter, only the clock). Pure.
+function visitorMissed(list, date, device) {
+  const d = visitorDay(date, device);
+  const v = d.visit && list?.[d.who];
+  if (!v) return null;
+  return date.getHours() >= (v.hours === "night" ? d.night : d.day) + 3 ? v : null;
 }
 // Once per device per day (localStorage; once per page load without it).
 function oncePerDay(name) {
@@ -5071,6 +5081,13 @@ class HatchPetCard extends HTMLElement {
     // Last, and only if there is room: an adult on how it was raised, once a week.
     const raised = this._state(s, "sensor.life_stage")?.state === "adult" && UPBRINGING_LINES[stage.upbringing];
     if (raised && lines.length < FIRST_LOOK_LINES && upbringingDue(device)) lines.push([raised, 5000]);
+    // Very last, flavour: today's visitor came and went with nobody here to see it
+    // (its window over, the day's visit flag unset). Said once, and the flag used up,
+    // so the visit can't also play; only with room, so it never pushes a line out.
+    const missed = this._visitorMissed(s);
+    if (missed && lines.length < FIRST_LOOK_LINES && oncePerDay(`visit-${device}`)) {
+      lines.push([missed.catchup || `a ${missed.name} came by today ♪`, 4500, { cls: FLAVOUR }]);
+    }
     for (const [text, ms, opts] of lines.slice(0, FIRST_LOOK_LINES)) this._queue(s, text, ms, opts);
   }
 
@@ -7788,6 +7805,11 @@ class HatchPetCard extends HTMLElement {
     if ((v.hours === "night") !== dark) return null;
     const start = v.hours === "night" ? d.night : d.day;
     return date.getHours() >= start && date.getHours() < start + 3 ? v : null;
+  }
+
+  // Today's visitor if its window is over (the first look's catch-up line).
+  _visitorMissed(s, date = new Date()) {
+    return visitorMissed(VISITORS[s.worldKey], date, s.ids?.device);
   }
 
   // May a visit start? The pet on show VISIT_SHOWN_MS and past its first look, free
