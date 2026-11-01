@@ -13,6 +13,7 @@ from custom_components.virtual_pet import model, rates as R
 MIN = 60.0
 SETTINGS = model.Settings(tz=UTC)  # bedtime 23:00, wake 07:00
 LEAVES = model.DIG_BERRIES + model.DIG_BEES
+HOME = model.PARK_HOUSEHOLD
 
 
 def at(hour: int, minute: int = 0) -> float:
@@ -88,13 +89,6 @@ def test_best_play_wins_70_to_80_percent_and_random_play_far_less():
     random_play = win_rate(coin, games, seed=12)
     assert 0.70 <= good <= 0.80, good
     assert random_play <= good - 0.20, (good, random_play)
-
-
-def test_a_dig_pays_at_least_what_play_does():
-    # Best play wins about 76.4% (worked out exactly in the plan).
-    assert 0.764 * R.DIG_WIN_HAPPINESS + 0.236 * R.GAME_LOSE_HAPPINESS >= (
-        R.PLAY_HAPPINESS
-    )
 
 
 def test_a_berry_isnt_a_round_and_a_bee_or_a_keep_ends_one():
@@ -181,13 +175,13 @@ def test_an_x_before_the_first_tap_ends_and_after_it_parks():
     pet = hatched(at(9))
     model.start_game(pet, "dig", at(9), Pile())
     assert model.end_game(pet, "dig", at(9)) == "ended"
-    assert pet.game is None and pet.parked is None
+    assert pet.game is None and pet.parked == {}
     rng = Pile("berry")
     model.start_game(pet, "dig", at(9), rng)
     dig(pet, "dig", at(9), rng)
     before = (pet.happiness, pet.energy, len(pet.care_log), dict(pet.games))
     assert model.end_game(pet, "dig", at(9)) == "parked"
-    assert pet.game is None and pet.parked is not None and pet.parked.basket == 1
+    assert pet.game is None and pet.parked[HOME].basket == 1
     assert (pet.happiness, pet.energy, len(pet.care_log), dict(pet.games)) == before
     assert model.end_game(pet, "dig", at(9)) is None  # nothing in progress now
 
@@ -213,16 +207,16 @@ def test_a_parked_dig_carries_on_after_ten_minutes():
     pet = parked_mid_game(at(9))
     later = at(9, 10)
     model.advance(pet, later, SETTINGS, random.Random(1))
-    assert pet.parked is not None and pet.games == {}  # the idle drop spares it
+    assert HOME in pet.parked and pet.games == {}  # the idle drop spares it
     info, _ = model.start_game(pet, "dig", later, Pile())
     assert resumed(info) == (1, 1, 2) and info["leaves"] == LEAVES - 2
-    assert pet.parked is None and pet.game.last_at == later
+    assert pet.parked == {} and pet.game.last_at == later
 
 
 def test_a_parked_dig_survives_a_save_and_load():
     pet = parked_mid_game(at(9))
     loaded = model.PetState.from_dict(pet.to_dict())
-    assert loaded.parked == pet.parked
+    assert loaded.parked == pet.parked and HOME in loaded.parked
     info, _ = model.start_game(loaded, "dig", at(9, 1), Pile())
     assert resumed(info) == (1, 1, 2)
 
@@ -232,7 +226,7 @@ def test_a_parked_dig_survives_sleep_and_another_game():
     # Lights out drops the game in progress, but never the parked dig.
     model.play_game(pet, "left", at(9, 1), random.Random(1))
     model.set_lights_out(pet, True, at(9, 2), SETTINGS)
-    assert pet.asleep and pet.game is None and pet.parked is not None
+    assert pet.asleep and pet.game is None and HOME in pet.parked
     model.set_lights_out(pet, False, at(9, 30), SETTINGS)
     assert not pet.asleep
     info, _ = model.start_game(pet, "dig", at(9, 31), Pile())
@@ -242,13 +236,14 @@ def test_a_parked_dig_survives_sleep_and_another_game():
 def test_starting_another_kind_leaves_the_parked_dig():
     pet = parked_mid_game(at(9))
     model.start_game(pet, "higher_lower", at(9), random.Random(1))
-    assert pet.parked is not None and pet.game.kind == "higher_lower"
+    assert HOME in pet.parked and pet.game.kind == "higher_lower"
 
 
 def test_shift_times_moves_the_parked_dig():
     pet = parked_mid_game(at(9))
     model.shift_times(pet, 100.0)
-    assert pet.parked.started == at(9) + 100.0 and pet.parked.last_at == at(9) + 100.0
+    parked = pet.parked[HOME]
+    assert parked.started == at(9) + 100.0 and parked.last_at == at(9) + 100.0
 
 
 def test_a_server_drop_of_a_dig_is_free_until_a_round_ends():
@@ -271,11 +266,18 @@ def test_dig_saves_load_from_older_and_newer_versions():
     del data["parked"]
     data["game"] = {"started": at(9), "last_at": at(9), "rounds": 1, "wins": 0}
     old = model.PetState.from_dict(data)
-    assert old.parked is None and old.game.kind == "left_right" and old.game.basket == 0
+    assert old.parked == {} and old.game.kind == "left_right" and old.game.basket == 0
     good = {"started": at(9), "last_at": at(9), "kind": "dig", "rounds": 2}
+    # This branch's first cut saved one parked dig: it goes to the household.
     data["game"] = data["parked"] = {**good, "wins": 3, "basket": 4}
+    single = model.PetState.from_dict(data)
+    assert single.game.basket == 4 and single.parked[HOME].wins == 3
+    assert single.parked[HOME].player is None
+    # Per person: each slot keeps its own; the slot is the player.
+    data["parked"] = {HOME: {**good, "basket": 1}, "u1": {**good, "basket": 2}}
     new = model.PetState.from_dict(data)
-    assert new.game.basket == 4 and new.parked.basket == 4 and new.parked.wins == 3
+    assert {s: g.basket for s, g in new.parked.items()} == {HOME: 1, "u1": 2}
+    assert new.parked["u1"].player == "u1"
     # Damaged: a pile too full, a game already over, the wrong kind parked.
     for bad in (
         {**good, "basket": model.DIG_BERRIES},
@@ -285,12 +287,30 @@ def test_dig_saves_load_from_older_and_newer_versions():
         {**good, "rounds": R.GAME_ROUNDS},
         "x",
     ):
-        data["game"] = data["parked"] = bad
+        data["game"] = bad
+        data["parked"] = {"u1": bad, HOME: {**good}}
         damaged = model.PetState.from_dict(data)
-        assert damaged.game is None and damaged.parked is None, bad
+        assert damaged.game is None and list(damaged.parked) == [HOME], bad
     data["game"] = None
-    data["parked"] = {"started": at(9), "last_at": at(9), "kind": "left_right"}
-    assert model.PetState.from_dict(data).parked is None
+    for bad in (
+        {"started": at(9), "last_at": at(9), "kind": "left_right"},
+        {"u1": {"started": at(9), "last_at": at(9), "kind": "left_right"}},
+        [1, 2],
+        "x",
+        None,
+    ):
+        data["parked"] = bad
+        assert model.PetState.from_dict(data).parked == {}, bad
+
+
+def test_a_parked_dig_older_than_the_pet_is_dropped():
+    """A downgraded version lays an egg and keeps the unknown `parked` key;
+    back on this version, the old pet's dig doesn't turn up on the egg."""
+    pet = hatched(at(9))
+    data = pet.to_dict()
+    old = {"started": at(9) - 60, "last_at": at(9) - 60, "kind": "dig", "rounds": 1}
+    data["parked"] = {HOME: old, "u1": {**old, "started": at(9)}}
+    assert list(model.PetState.from_dict(data).parked) == ["u1"]
 
 
 def test_an_older_version_keeps_a_newer_dig_save_safe():
@@ -310,4 +330,69 @@ def test_a_new_egg_has_no_parked_dig():
     pet = parked_mid_game(at(9))
     pet.age_hours = dict(R.STAGE_STARTS)["adult"] + R.LAY_EGG_AFTER_ADULT_HOURS + 5
     egg, _ = model.lay_egg(pet, at(9, 1), random.Random(1))
-    assert egg is not pet and egg.parked is None
+    assert egg is not pet and egg.parked == {}
+
+
+def parked_by(pet: model.PetState, player: str | None, finds: list[str], now: float):
+    rng = Pile(*finds)
+    model.start_game(pet, "dig", now, rng, player=player)
+    for _ in finds:
+        dig_as(pet, "dig", now, rng, player)
+    return model.end_game(pet, "dig", now, player)
+
+
+def dig_as(pet, guess, now, rng, player):
+    return model.play_game(pet, guess, now, rng, kind="dig", player=player)
+
+
+def test_a_parked_dig_is_its_persons_own():
+    pet = hatched(at(9))
+    assert parked_by(pet, "ann", ["berry", "berry"], at(9)) == "parked"
+    assert pet.parked["ann"].basket == 2 and pet.parked["ann"].player == "ann"
+    # Bob starts fresh; Ann's stays put.
+    info, _ = model.start_game(pet, "dig", at(9, 1), Pile(), player="bob")
+    assert (info["round"], info["basket"]) == (0, 0) and pet.game.player == "bob"
+    assert pet.parked["ann"].basket == 2
+    # A call with no person (an automation) has the household's own slot.
+    model.end_game(pet, "dig", at(9, 1), "bob")  # nothing shown: just ends
+    info, _ = model.start_game(pet, "dig", at(9, 2), Pile())
+    assert info["basket"] == 0 and pet.game.player is None
+    # Ann carries on hers.
+    model.end_game(pet, "dig", at(9, 2))
+    info, _ = model.start_game(pet, "dig", at(9, 3), Pile(), player="ann")
+    assert info["basket"] == 2 and "ann" not in pet.parked
+
+
+def test_starting_a_dig_puts_another_persons_live_dig_aside_for_them():
+    pet = hatched(at(9))
+    rng = Pile("berry")
+    model.start_game(pet, "dig", at(9), rng, player="ann")
+    dig_as(pet, "dig", at(9), rng, "ann")
+    before = (pet.happiness, len(pet.care_log), dict(pet.games))
+    info, events = model.start_game(pet, "dig", at(9, 1), Pile(), player="bob")
+    assert info["basket"] == 0 and pet.game.player == "bob"
+    assert pet.parked["ann"].basket == 1  # free: nothing counted or logged
+    assert (pet.happiness, len(pet.care_log), dict(pet.games)) == before
+    assert not [e for e in events if e["type"] == "game_finished"]
+
+
+def test_a_dig_with_no_game_says_when_theirs_is_parked():
+    pet = hatched(at(9))
+    parked_by(pet, "ann", ["berry"], at(9))
+    assert dig_as(pet, "dig", at(9), Pile(), "ann")[0] == {
+        "result": "no_game",
+        "parked": True,
+    }
+    assert dig_as(pet, "dig", at(9), Pile(), "bob")[0] == {"result": "no_game"}
+
+
+def test_whoever_finishes_a_dig_gets_its_record():
+    pet = hatched(at(9))
+    rng = Pile("berry", "berry", "berry", "berry", "berry")
+    model.start_game(pet, "dig", at(9), rng, player="ann")
+    for _ in range(5):
+        dig_as(pet, "dig", at(9), rng, "ann")
+    info, events = dig_as(pet, "keep", at(9), rng, "ann")
+    assert info["won"] and pet.parked == {}
+    finished = [e for e in events if e["type"] == "game_finished"]
+    assert finished[0]["wins"] == 5

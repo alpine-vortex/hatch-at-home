@@ -238,7 +238,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         kind = call.data[ATTR_GAME]
         guess = call.data.get(ATTR_GUESS)
         if call.data[ATTR_END]:
-            return await pet_of(call).async_end_game(kind)
+            return await pet_of(call).async_end_game(kind, call.context)
         if guess is not None and guess not in GAMES[kind]:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,

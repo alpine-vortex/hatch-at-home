@@ -2351,15 +2351,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._publish()
         return result
 
-    async def async_end_game(self, kind: str) -> dict[str, Any]:
+    async def async_end_game(
+        self, kind: str, context: Context | None = None
+    ) -> dict[str, Any]:
         """A person ends the game in progress. Harmless with none. It isn't a
         drop: nothing is counted and the kind isn't marked, so the next game
         is simply new, except a Berry dig that has shown something: that one
-        is parked, and the next dig carries on from it."""
+        is parked for the person ending it (the household with no person),
+        and their next dig carries on from it."""
         assert self.state is not None
         now = self._now()
         self._advance(now)
-        how = model.end_game(self.state, kind, now)
+        person = await self._person(context)
+        how = model.end_game(self.state, kind, now, person)
         self._dropped_games.discard(kind)
         if how:
             self._save()
@@ -2378,10 +2382,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         dropped = kind in self._dropped_games
         self._dropped_games.discard(kind)
         if guess is None:
-            info, events = model.start_game(self.state, kind, now, self.rng, by)
+            info, events = model.start_game(
+                self.state, kind, now, self.rng, by, player=person
+            )
         else:
             info, events = model.play_game(
-                self.state, guess, now, self.rng, by, kind=kind
+                self.state, guess, now, self.rng, by, kind=kind, player=person
             )
             if dropped and info["result"] == model.OK and info["round"] == 1:
                 # The game the guess was for was dropped (idle, away): this

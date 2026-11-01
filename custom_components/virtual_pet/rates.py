@@ -103,7 +103,7 @@ GAME_WIN_HAPPINESS = 30.0  # left/right is luck: a game pays at least like Play
 SKILL_GAME_WIN_HAPPINESS = 21.0
 GAME_LOSE_HAPPINESS = 12.0
 # Berry dig, the slower game: win at this many berries banked. Best play wins
-# about 76% (tests/test_model.py simulates it), so a win pays a little more
+# about 76% (tests/test_dig.py simulates it), so a win pays a little more
 # than Higher or Lower: 0.764 * 23 + 0.236 * 12 = 20.4, at least Play's 20.
 DIG_WIN_AT = 5
 DIG_WIN_HAPPINESS = 23.0

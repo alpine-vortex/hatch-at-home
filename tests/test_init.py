@@ -1071,15 +1071,52 @@ async def test_a_parked_berry_dig_carries_on_across_a_restart(
         "ended": True,
         "parked": True,
     }
-    assert coordinator.state.game is None and coordinator.state.parked is not None
+    assert coordinator.state.game is None
+    assert list(coordinator.state.parked) == [
+        model.PARK_HOUSEHOLD
+    ]  # no person: the household's
     assert len(coordinator.state.care_log) == log and not coordinator.state.games
     await hass.config_entries.async_reload("test_pet")
     await hass.async_block_till_done()
     coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
-    assert coordinator.state.parked is not None
+    assert list(coordinator.state.parked) == [model.PARK_HOUSEHOLD]
     back = await game(hass, game="dig")
     assert (back["round"], back["wins"], back["basket"]) == shown
-    assert coordinator.state.parked is None and coordinator.state.game.kind == "dig"
+    assert coordinator.state.parked == {} and coordinator.state.game.kind == "dig"
+
+
+async def test_a_parked_berry_dig_is_the_person_who_parked_it(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0, energy=90.0)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    ann = await hass.auth.async_create_user("Ann")
+    bob = await hass.auth.async_create_user("Bob")
+
+    async def as_(user, **data: Any) -> dict[str, Any]:
+        return await hass.services.async_call(
+            DOMAIN,
+            "play_game",
+            {"entity_id": "button.pip_feed", "game": "dig", **data},
+            blocking=True,
+            return_response=True,
+            context=Context(user_id=user.id),
+        )
+
+    await as_(ann)
+    tap = await as_(ann, guess="dig")
+    assert (await as_(ann, end=True))["parked"] is True
+    assert list(coordinator.state.parked) == [ann.id]
+    fresh = await as_(bob)
+    assert (fresh["round"], fresh["wins"], fresh["basket"]) == (0, 0, 0)
+    assert await as_(bob, end=True) == {"result": "ok", "ended": True, "parked": False}
+    back = await as_(ann)
+    assert (back["round"], back["wins"], back["basket"]) == (
+        tap["round"],
+        tap["wins"],
+        tap["basket"],
+    )
 
 
 async def test_a_guess_from_another_game_is_refused(

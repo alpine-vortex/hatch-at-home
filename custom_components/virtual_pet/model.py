@@ -215,7 +215,25 @@ def _game(v: Any) -> Game | None:
         kind=v.get("kind", "left_right"),
         number=int(number) if _num(number) else None,
         basket=int(basket) if v.get("kind") == "dig" else 0,
+        player=v["player"] if isinstance(v.get("player"), str) else None,
     )
+
+
+def _parked(v: Any, born: float) -> dict[str, Game]:
+    """The parked digs as loaded. A save from before they were per person
+    holds one dig: it goes to the household. A damaged one, one that isn't a
+    dig, or one older than the pet (an older version's egg kept a later
+    version's key) is dropped."""
+    if isinstance(v, dict) and "kind" in v:
+        v = {PARK_HOUSEHOLD: v}
+    out: dict[str, Game] = {}
+    for slot, raw in _mapping(v).items():
+        game = _game(raw)
+        if isinstance(slot, str) and game and game.kind == "dig":
+            if game.started >= born:
+                game.player = None if slot == PARK_HOUSEHOLD else slot
+                out[slot] = game
+    return out
 
 
 def _bond(bond: dict[str, Any]) -> dict[str, Any]:
@@ -374,6 +392,9 @@ class Game:
     # Berry dig: this round's berries, not yet banked (the bank is wins). The
     # pile left is always DIG_BEES bees and DIG_BERRIES - basket berries.
     basket: int = 0
+    # Berry dig: whose dig it is (an HA user id; None for the household: an
+    # automation, or a screen with no person), so a ✕ parks it for them.
+    player: str | None = None
 
 
 @dataclass
@@ -455,10 +476,11 @@ class PetState:
     # when: the next start shows it again for OPENING_KEEP_MINUTES (no reroll).
     opening: int | None = None
     opening_at: float | None = None
-    # A Berry dig a person closed (✕) after it had shown something: the next
-    # dig carries on from it. Never in `game`, so no drop (idle, asleep, away)
-    # sees it, and it has no time limit.
-    parked: Game | None = None
+    # Berry digs closed with ✕ after they had shown something, one per person
+    # (HA user id, or PARK_HOUSEHOLD for calls with no person): that person's
+    # next dig carries on from theirs. Never in `game`, so no drop (idle,
+    # asleep, away) sees them, and they have no time limit.
+    parked: dict[str, Game] = field(default_factory=dict)
     games: dict[str, dict[str, int]] = field(default_factory=dict)  # kind -> counts
     sick_unannounced: str | None = (
         None  # cause, if it fell sick asleep (told on waking)
@@ -606,8 +628,7 @@ class PetState:
                     call.get("recall") is True,
                 )
         kwargs["game"] = _game(kwargs.get("game"))
-        parked = _game(kwargs.get("parked"))
-        kwargs["parked"] = parked if parked and parked.kind == "dig" else None
+        kwargs["parked"] = _parked(kwargs.get("parked"), kwargs["born"])
         opening, opening_at = (
             kwargs.get("opening"),
             _float(kwargs.get("opening_at"), None),
@@ -806,9 +827,9 @@ def shift_times(state: PetState, delta: float) -> None:
         state.game.last_at += delta
     if state.opening_at is not None:
         state.opening_at += delta
-    if state.parked is not None:
-        state.parked.started += delta
-        state.parked.last_at += delta
+    for parked in state.parked.values():
+        parked.started += delta
+        parked.last_at += delta
     if state.call is not None:
         state.call.started += delta
         state.call.deadline += delta
@@ -2074,14 +2095,29 @@ NUMBERS = range(1, 10)  # Higher or Lower's numbers
 # basket off and ends the round. Keep banks the basket and ends the round.
 DIG_BERRIES = 6
 DIG_BEES = 2
+# The parked dig of calls with no person (automations, a screen with none).
+# HA user ids are hex, so they never clash with it.
+PARK_HOUSEHOLD = "household"
+
+
+def _slot(player: str | None) -> str:
+    return player or PARK_HOUSEHOLD
 
 
 def start_game(
-    state: PetState, kind: str, now: float, rng: random.Random, by: str | None = None
+    state: PetState,
+    kind: str,
+    now: float,
+    rng: random.Random,
+    by: str | None = None,
+    player: str | None = None,
 ) -> tuple[dict[str, Any], list[Event]]:
     """Start a game of this kind (dropping any game in progress, except one of
     this kind with no guess yet, which carries on), and return its opening:
-    Higher or Lower's first number. The caller advances the pet to now first."""
+    Higher or Lower's first number. A Berry dig is the player's own (player:
+    their HA user id, None for the household): their parked dig carries on,
+    and another person's dig in progress is parked for them, not taken over.
+    The caller advances the pet to now first."""
     if kind not in GAMES:
         raise ValueError(f"unknown game {kind}")
     events: list[Event] = []
@@ -2092,19 +2128,24 @@ def start_game(
         return {"result": refusal}, events
     _spoil_whine(state, events)
     game = state.game
+    if game is not None and game.kind == "dig" == kind and game.player != player:
+        # Someone else's dig: put aside for them (free), as their ✕ would.
+        end_game(state, kind, now, game.player)
+        game = None
     if game is not None and game.kind == kind:
         # Carry on with the same game, guessed or not: the same round, score
         # and number, so starting over can't fish for an easy opening.
         game.last_at = now
         return _round_info(game), events
     events += drop_game(state, now, by, switched=True)
-    if kind == "dig" and state.parked is not None:
-        # A dig closed with ✕ carries on: the same round, bank and basket.
-        game, state.parked = state.parked, None
+    if kind == "dig" and _slot(player) in state.parked:
+        # Their dig closed with ✕ carries on: the same round, bank and basket.
+        game = state.game = state.parked.pop(_slot(player))
         game.last_at = now
-        state.game = game
         return _round_info(game), events
     game = state.game = Game(started=now, last_at=now, kind=kind)
+    if kind == "dig":
+        game.player = player
     if kind == "higher_lower":
         kept = state.opening
         if (
@@ -2119,19 +2160,23 @@ def start_game(
     return _round_info(game), events
 
 
-def end_game(state: PetState, kind: str, now: float) -> str | None:
+def end_game(
+    state: PetState, kind: str, now: float, player: str | None = None
+) -> str | None:
     """A person ends the game in progress of this kind (the card's "maybe
     later"). Unlike a drop, it costs and earns nothing: no energy, happiness,
     played count, log line or event. A Higher or Lower opening nobody guessed
     on is kept, as in a drop, so quitting can't reroll it. A Berry dig that has
-    shown anything is parked instead, so the next dig carries on from it.
+    shown anything is parked instead, for the person who ends it (player; None
+    for the household), so their next dig carries on from it.
     Returns "ended", "parked", or None if there was no such game."""
     game = state.game
     if game is None or game.kind != kind:
         return None
     state.game = None
     if game.kind == "dig" and (game.rounds or game.wins or game.basket):
-        state.parked = game
+        game.player = player
+        state.parked[_slot(player)] = game
         return "parked"
     if game.rounds == 0 and game.kind == "higher_lower" and game.number is not None:
         state.opening, state.opening_at = game.number, now
@@ -2211,6 +2256,7 @@ def play_game(
     rng: random.Random,
     by: str | None = None,
     kind: str = "left_right",
+    player: str | None = None,
 ) -> tuple[dict[str, Any], list[Event]]:
     """One round of a game; the last one settles it.
 
@@ -2247,6 +2293,9 @@ def play_game(
     if game is None:
         if kind != "left_right":
             # Nothing to guess against yet; the card starts the game first.
+            # A dig of theirs put aside (another screen's ✕) says so.
+            if kind == "dig" and _slot(player) in state.parked:
+                return {"result": "no_game", "parked": True}, events
             return {"result": "no_game"}, events
         info, started = start_game(state, kind, now, rng, by)
         events += started
