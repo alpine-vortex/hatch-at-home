@@ -16,6 +16,7 @@ from datetime import UTC, date, datetime, time, timedelta, tzinfo
 import math
 import random
 from typing import Any
+import zlib
 
 from . import rates as R
 from .home import COZY_FLAGS, EXCITED_FLAGS, REASONS, HomeEffect
@@ -3021,11 +3022,58 @@ def dream_seed(state: PetState, seed: dict[str, Any], now: float) -> None:
     del state.dream_seeds[: -R.DREAM_SEEDS_KEPT]
 
 
+# Plain dreams for a morning with nothing to dream about (fresh-moment 6), each a
+# line in the card's DREAMS. A plain list: any length turns.
+PLAIN_DREAMS = (
+    "flying",
+    "clouds",
+    "feast",
+    "swim_fish",
+    "acorn",
+    "tall",
+    "stars_sang",
+    "blanket",
+    "secret_door",
+    "leaf_ride",
+    "bubbles",
+    "birds_talk",
+    "tiny_boat",
+    "pillow_hill",
+    "moon_dance",
+    "pie",
+    "rainbow_slide",
+    "candy_clouds",
+    "tiny_hat",
+    "giant_sock",
+    "parade",
+    "juggling",
+    "pink_sky",
+    "big_puddle",
+    "sing_along",
+    "bean",
+    "cake_house",
+    "jelly",
+    "lantern",
+    "whistle",
+)
+
+
+def plain_dream(pet_id: str, today: str) -> str:
+    """Today's plain dream for this pet: the list turns by day, from a per-pet
+    offset, so no kind comes twice in len(PLAIN_DREAMS) days. The offset is a
+    fixed hash (crc32), the same after a restart (hash() is salted per
+    process); nothing is saved."""
+    offset = zlib.crc32(f"dream|{pet_id}".encode())
+    return PLAIN_DREAMS[
+        (date.fromisoformat(today).toordinal() + offset) % len(PLAIN_DREAMS)
+    ]
+
+
 def dream_on_waking(
-    state: PetState, now: float, today: str, rng: random.Random
+    state: PetState, now: float, today: str, rng: random.Random, pet_id: str = ""
 ) -> list[Event]:
     """In the morning, the pet dreamed of one of yesterday's moments (or, with
-    none, maybe of something plain). The seeds are used up either way."""
+    none, of something plain: plain_dream). The seeds are used up either way."""
     fresh = [s for s in state.dream_seeds if now - s["at"] < R.DREAM_SEED_HOURS * 3600]
     state.dream_seeds = []
     picks = [p for p in state.dream_picks if now - p["at"] < R.DREAM_PICK_HOURS * 3600]
@@ -3045,7 +3093,7 @@ def dream_on_waking(
         seed = rng.choice([s for s in fresh if s.get("kind") != "visitor"] or fresh)
         state.dream = {k: v for k, v in seed.items() if k != "at"} | {"day": today}
     elif rng.random() < R.DREAM_PLAIN_CHANCE:
-        state.dream = {"kind": rng.choice(["flying", "clouds", "feast"]), "day": today}
+        state.dream = {"kind": plain_dream(pet_id, today), "day": today}
     else:
         return []
     # The event says only what kind: the title, the pick and who asked stay in

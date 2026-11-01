@@ -321,7 +321,9 @@ WISH_SAY_HI_AFTER_HOUR = 12  # "come say hi this afternoon"
 WISH_FOR_CHANCE = 0.35  # a person's wish is aimed at a close friend
 DREAM_SEEDS_KEPT = 12  # the day's moments a dream can be about
 DREAM_SEED_HOURS = 30.0  # older seeds are forgotten
-DREAM_PLAIN_CHANCE = 0.5  # with nothing to dream about: a plain dream, or none
+DREAM_PLAIN_CHANCE = (
+    1.0  # with nothing to dream about: a plain dream (fresh-moment 6: every morning)
+)
 # World visitors (docs/plan-2026-11-01-visitors-v2.md §1): the server's day plan.
 VISIT_CYCLE_DAYS = 7  # a visit on VISIT_DAYS of every VISIT_CYCLE_DAYS
 VISIT_DAYS = 4

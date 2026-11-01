@@ -6,6 +6,7 @@ from collections import Counter
 from datetime import UTC, datetime
 import math
 import random
+import zlib
 
 import pytest
 
@@ -2185,13 +2186,39 @@ def test_it_dreams_of_yesterday_and_forgets_old_seeds():
     # The event says what kind only: the title stays in state.dream.
     assert events == [{"type": "dreamed", "kind": "watching"}]
     assert pet.dream_seeds == []
-    # Nothing to dream of: a plain dream, or none.
-    kinds = set()
-    for seed in range(20):
-        pet.dream = None
-        model.dream_on_waking(pet, at(7, day=3), "d3", random.Random(seed))
-        kinds.add(pet.dream and pet.dream["kind"])
-    assert None in kinds and kinds - {None} <= {"flying", "clouds", "feast"}
+    # Nothing to dream of: a plain dream every morning (fresh-moment 6).
+    pet.dream = None
+    model.dream_on_waking(pet, at(7, day=3), "2026-11-03", random.Random(0), "pet-a")
+    assert pet.dream["kind"] in model.PLAIN_DREAMS
+
+
+def test_plain_dreams_turn_through_the_whole_list():
+    """Fresh-moment 6: with no seeds, as many mornings as the list is long give
+    every plain kind once, by day and a per-pet offset from a fixed hash (the same
+    in every process, unlike hash()); no saved history."""
+    n = len(model.PLAIN_DREAMS)
+    assert n == len(set(model.PLAIN_DREAMS)) >= 15
+    days = [
+        datetime.fromordinal(datetime(2026, 11, 1).toordinal() + i).date().isoformat()
+        for i in range(n)
+    ]
+    for pet_id in ("pet-a", "01JBX9Q7ZK"):
+        pet = hatched(at(20))
+        kinds = []
+        for i, day in enumerate(days):
+            pet.dream = None
+            model.dream_on_waking(pet, at(7, day=2), day, random.Random(i), pet_id)
+            kinds.append(pet.dream["kind"])
+        assert sorted(kinds) == sorted(model.PLAIN_DREAMS)
+    offset = zlib.crc32(b"dream|pet-a")
+    first = datetime(2026, 11, 1).toordinal()
+    assert (
+        model.plain_dream("pet-a", "2026-11-01")
+        == model.PLAIN_DREAMS[(first + offset) % n]
+    )
+    assert model.plain_dream("pet-a", "2026-11-01") != model.plain_dream(
+        "pet-a", "2026-11-02"
+    )
 
 
 def test_dream_seeds_are_capped():

@@ -1309,7 +1309,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         now = self._now()
         if model.life_stage(self.state) == "egg":
             return
-        if model.dream_on_waking(self.state, now, self._today(now)[0], self.rng):
+        if model.dream_on_waking(
+            self.state, now, self._today(now)[0], self.rng, self.pet_id
+        ):
             self._save()
 
     def _check_ins(self, events: list[model.Event]) -> None:

@@ -2,7 +2,7 @@
 
 **Status: building, 2026-11-01.** The owner approved the drafts for slices 4 and 6
 (below) and chose no new lines for slice 3. The FM approved 5a, 5b and 6 from this text.
-Slice 6b (15 more dreams) is still a draft.
+Slice 6b's 15 more dreams were approved too, so the plain list has 30 kinds.
 
 Source: the scout's research `~/.local/state/crew/research/fresh-moment.md` (s2619, at
 origin/main `f37a0cc8`). The owner took every recommendation (2026-11-01): Q1-Q4, Q6, Q7
@@ -132,7 +132,7 @@ same first look (its dream line takes a third `worlds` argument), so its form is
 ### 6. A plain dream every unmapped morning (tier 2)
 
 - `dream_on_waking`: with no seeds, always a plain dream (`DREAM_PLAIN_CHANCE` 0.5 → 1).
-- Plain kinds are a plain list: the 3 now, plus the 12 below, plus 6b's once approved.
+- Plain kinds are a plain list: the 3 now, plus the 12 below, plus 6b's 15 (30 in all).
   The kind turns by day ordinal with a per-pet offset, so it doesn't repeat for as many
   days as the list is long, whatever its length.
 - The offset is a fixed hash of `pet_id` (`zlib.crc32`, never Python's salted `hash()`),
@@ -146,7 +146,7 @@ same first look (its dream line takes a third `worlds` argument), so its form is
 ## Drafts
 
 Approved (owner, 2026-11-01): slice 4's wish branch A, its 2 moment lines and its 24 type
-lines, and slice 6's 12 dreams. Slice 3 adds no lines. Slice 6b is a DRAFT.
+lines, and slice 6's 12 dreams; then slice 6b's 15. Slice 3 adds no lines.
 
 Each draft is 40 characters at most, with no question and none of the no-nag words
 (still, again, why, never, please, sad, cry, alone, forgot).
@@ -211,7 +211,7 @@ Pick one:
 11. "I dreamed of a hill made of pillows"
 12. "I dreamed I danced in the moonlight ★"
 
-### Slice 6b: more dreams (DRAFT, 15)
+### Slice 6b: more dreams (15, approved by the owner 2026-11-01)
 
 The owner wants a bigger pool, since a plain dream comes most mornings. They join the list
 once approved.
