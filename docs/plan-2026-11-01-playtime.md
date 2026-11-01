@@ -243,6 +243,30 @@ icon, the button labels and aria labels, the berry line, the score line, the end
 `bond_up` / `bond_record` lines, the service texts, the guide / README / how-to-play lines,
 the log score string.
 
+### The dig as built (2026-11-01, s2611)
+
+- **Server** (`model.py`): `GAMES["dig"] = ("keep", "dig")`, `DIG_BERRIES = 6`, `DIG_BEES = 2`;
+  `Game.basket`; `PetState.parked`; `_dig` settles one tap; `_finish_game` is shared by all
+  kinds; `_game_score` gives the log's "<n> berries". `end_game` returns "ended", "parked" or
+  None; `async_end_game` replies `{"result", "ended", "parked"}`. `rates.DIG_WIN_AT = 5`,
+  `rates.DIG_WIN_HAPPINESS = 23`. Service texts and options updated (strings, en.json,
+  services.yaml).
+- **Measured** (`tests/test_dig.py`, 20,000 seeded games each through `model.play_game`):
+  best play (the stop table) 76.7%, random play 41.5%. The sixth berry banks itself, as
+  §2a says.
+- **Card**: the picker's third entry ("berry dig", the bee as its icon); keep/dig buttons;
+  leaves left in `.gnum`; a **two-line score** ("round n/5", then "b banked · basket k"),
+  because one line didn't fit between the buttons at 330 px. The bee shows still on the
+  left, above keep, until the next prompt. `.gcatch` is now `.gprop` (and `s.catchEl` is
+  `s.propEl`). `SERVER_GAMES` replaces the two-kind lists in `_quitGame` and the idle close.
+  The compact picker (330 px) stacks three games from the bottom at 40 px a button (the
+  compact ask buttons' size), since three 44 px buttons covered the prompt.
+- **Checks**: pytest `tests/test_dig.py` (18) and `test_a_parked_berry_dig_carries_on_across_a_restart`;
+  card-check's `resume` section, the dig contract on stubbed replies and one real park round
+  trip; bench `--preset dig` (420/330, calm).
+- **Not done here**: `docs/howto/how-to-play.html` (a fixed print page: a third game card
+  needs a layout pass and the owner's copy); the copy list awaits the owner's sign-off.
+
 ## 3. Catch: three ways forward
 
 ### A. Rework Catch (keep a reflex game)
