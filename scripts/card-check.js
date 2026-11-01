@@ -2607,6 +2607,29 @@ async function main() {
   }
   if (enter("moments")) {
   await pinAwake(card, "moments");
+  // 4a. A kept line queued for an off-show slide: capped, and the catch-up never repeats it.
+  const offShow = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const fake = Object.create(s);
+    Object.assign(fake, { queue: [], privateMoments: [] });
+    const base = Date.now() + 3600e3; // newer than anything said
+    const iso = (n) => new Date(base + n * 1000).toISOString();
+    const moments = [["bond_up", 1], ["care_miss", 2], ["first_snow", 3], ["care_miss", 4], ["tucked_in", 5], ["favourite_snack", 6]];
+    const real = el._index;
+    try {
+      el._index = -1; // fake is never the slide on show
+      for (const [type, n] of moments) el._line(fake, 3, `${type} line`, 4500, { at: iso(n), type });
+    } finally { el._index = real; }
+    const left = fake.queue.map((q) => q.type);
+    // The catch-up skips what already waits in the queue.
+    fake.privateMoments = [{ type: "favourite_snack", at: iso(6) }];
+    const caught = el._catchUp(fake, 0, 3).filter(([, at]) => at === iso(6));
+    return { left, caught: caught.length };
+  });
+  check("moments: off-show kept lines are capped to 3, newest, one care miss",
+    offShow.left.length === 3 && offShow.left.filter((x) => x === "care_miss").length <= 1 &&
+    !offShow.left.includes("bond_up"), JSON.stringify(offShow));
+  check("moments: the catch-up skips a moment already waiting in the queue", offShow.caught === 0, JSON.stringify(offShow));
   // 4. Moments make the pet react.
   for (const [type, extra, expect] of [
     ["stage_changed", { stage: "teen", from: "child" }, "teen now"],
@@ -4257,6 +4280,8 @@ async function main() {
     await olderBtn.click();
     const all = (await cur().locator(".gen").allInnerTexts()).map((l) => l.replace(/\s+/g, " ").trim())
       .filter((l) => /^gen \d/.test(l)).map((l) => l.split(" ")[1]); // not the memories line
+    check("2e: focus moves to the first revealed generation",
+      await cur().locator(".jmore .gen").first().evaluate((e) => document.activeElement === e || e.getRootNode().activeElement === e), "");
     check("2e: a tap opens the rest, oldest first, and the link goes",
       all.join() === "1,2,3,4,5,6,7" && (await cur().locator(".jolder").count()) === 0, all.join());
     await shot("07f-older-generations-open");
@@ -6961,7 +6986,18 @@ async function main() {
       clearFlag();
       out.first = look(V0);
       clearFlag();
-      out.baby = look(V0, "baby");
+      // Baby talk on for this viewer: "hi hi! ♪"; off (the default): the normal line.
+      const talkKey = `hatch-baby-talk-${el._hass.user.id}`;
+      const talkWas = localStorage.getItem(talkKey);
+      try {
+        localStorage.setItem(talkKey, "on");
+        out.baby = look(V0, "baby");
+        clearFlag();
+        localStorage.setItem(talkKey, "off");
+        out.babyOff = look(V0, "baby");
+      } finally {
+        if (talkWas === null) localStorage.removeItem(talkKey); else localStorage.setItem(talkKey, talkWas);
+      }
       clearFlag();
       out.first = look(V0);
       out.twice = look(V0);
@@ -7008,6 +7044,8 @@ async function main() {
     cu.first.q[cu.first.q.length - 1].text === cu.first.said[0].text && cu.first.flag, JSON.stringify(cu.first));
   check("visitors: catch-up: a baby says \"hi hi! ♪\" instead, once, flavour",
     cu.baby.said.length === 1 && cu.baby.said[0].text === "hi hi! ♪" && cu.baby.said[0].cls === 1, JSON.stringify(cu.baby));
+  check("visitors: catch-up: a baby with baby talk off gets the normal line",
+    cu.babyOff.said.length === 1 && cu.babyOff.said[0].text === `a ${V0.name} came by today ♪`, JSON.stringify(cu.babyOff));
   check("visitors: catch-up: never twice, and the visit can't also play after it",
     cu.twice.said.length === 0 && !cu.playedAfter, JSON.stringify({ twice: cu.twice, playedAfter: cu.playedAfter }));
   check("visitors: catch-up: none if the visit played on this device today",

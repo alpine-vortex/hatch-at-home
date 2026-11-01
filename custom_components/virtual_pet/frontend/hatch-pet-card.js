@@ -1033,6 +1033,7 @@ const KINDRED = { mellow: "sweet", sweet: "mellow", bouncy: "starry", starry: "b
   old_soul: "fancy", fancy: "old_soul", charming: "plucky", plucky: "charming" };
 const KINDRED_ODDS = 0.5; // a kindred link's chance of the host's extra line
 const FRIEND_WELCOME_MS = 6 * 3600 * 1000; // "welcome home!" at the next look, this long after
+const REPLY_MIN_MS = 1500; // a kindred visit's guest reply stays on show at least this long
 const FIRST_LOOK_LINES = 3; // lines queued at the first look (the visit's notes fill what's left)
 // An adult's say on how it was raised (P2b): all happy, any type, at most once a
 // week per pet, at a first look that has room (docs/plan-2026-10-28-personality-types.md).
@@ -5055,6 +5056,28 @@ class HatchPetCard extends HTMLElement {
       entry.dropAt = now + FLAVOUR_WAIT_MS;
     }
     (s.queue ??= []).push(entry);
+    if (offShow) this._capOffShow(s);
+  }
+
+  // A slide that is not on show keeps at most FIRST_LOOK_LINES kept moments
+  // waiting (the newest), and one care miss (the newest), as the catch-up
+  // merges them. The dropped ones are older than what stays: saying the newer
+  // marks them said, so the catch-up never brings them back.
+  _capOffShow(s) {
+    const time = (q) => new Date(q.at).getTime() || 0;
+    const kept = s.queue.filter((q) => q.cls === KEPT && q.at).sort((a, b) => time(b) - time(a));
+    const drop = new Set();
+    let miss = false;
+    const rest = [];
+    for (const q of kept) {
+      if (q.type === "care_miss") {
+        if (miss) { drop.add(q); continue; }
+        miss = true;
+      }
+      rest.push(q);
+    }
+    rest.slice(FIRST_LOOK_LINES).forEach((q) => drop.add(q));
+    if (drop.size) s.queue = s.queue.filter((q) => !drop.has(q));
   }
 
   // Into the bubble: a queued line or one said at once.
@@ -5187,7 +5210,7 @@ class HatchPetCard extends HTMLElement {
     // so the visit can't also play; only with room, so it never pushes a line out.
     const missed = this._visitorMissed(s);
     if (missed && lines.length < FIRST_LOOK_LINES && oncePerDay(`visit-${device}`)) {
-      const baby = this._state(s, "sensor.life_stage")?.state === "baby";
+      const baby = this._babyStage(s) === "baby";
       lines.push([baby ? "hi hi! ♪" : missed.catchup || `a ${missed.name} came by today ♪`, 4500, { cls: FLAVOUR }]);
     }
     for (const [text, ms, opts] of lines.slice(0, FIRST_LOOK_LINES)) this._queue(s, text, ms, opts);
@@ -5265,10 +5288,12 @@ class HatchPetCard extends HTMLElement {
     if (room <= 0) return [];
     const pub = (this._state(s, "sensor.last_care")?.attributes.moments || []).filter((m) => !CHANNEL_ONLY.has(m.type));
     const own = sharedScreen() ? [] : s.privateMoments || [];
+    // Already waiting in the queue (a kept line queued while off show): not said twice.
+    const waiting = new Set((s.queue || []).filter((q) => q.at).map((q) => new Date(q.at).getTime()));
     const seen = new Set();
     const missed = [...pub, ...own]
       .filter((m) => m?.type && MOMENT_CLASS[m.type] === KEPT && !CATCHUP_SKIP.has(m.type) &&
-        new Date(m.at).getTime() > said && !seen.has(momentKey(m)) && seen.add(momentKey(m)))
+        new Date(m.at).getTime() > said && !waiting.has(new Date(m.at).getTime()) && !seen.has(momentKey(m)) && seen.add(momentKey(m)))
       .sort((a, b) => new Date(b.at) - new Date(a.at));
     const out = [];
     let miss = false;
@@ -6730,7 +6755,7 @@ class HatchPetCard extends HTMLElement {
         <span>gen ${stage.generation || 1}</span></div>
       <div class="jgrid">${tiles.join("")}</div>
       ${this._photoRow(s)}
-      <div class="jlist">${olderLink}<span class="jmore"></span>${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
+      <div class="jlist">${olderLink}<div class="jmore"></div>${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
       <button class="jlink">‹ status</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
@@ -6740,10 +6765,17 @@ class HatchPetCard extends HTMLElement {
       s.status.querySelector(".jolder")?.remove();
       s.olderOpen = true;
     };
+    const focusOlder = () => { // the button is gone: focus moves to the first revealed generation
+      const first = s.status.querySelector(".jmore .gen");
+      if (!first) return;
+      first.tabIndex = -1;
+      first.focus({ preventScroll: true });
+    };
     s.status.querySelector(".jolder")?.addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
       this._tapped(e.currentTarget);
       showOlder();
+      focusOlder();
     });
     if (older.length && s.olderOpen) showOlder();
     s.status.querySelectorAll(".psave").forEach((button) => button.addEventListener("click", (e) => {
@@ -8154,7 +8186,10 @@ class HatchPetCard extends HTMLElement {
         this._queue(host, hello, 2200, { still });
         // Said late (the first line typed slowly): the visit waits for it to be read.
         this._queue(host, extra, 1600, { still, then: () => {
-          L.say.hidden = true; // the guest's reply has had its turn: the bubbles would overlap
+          // The guest's reply has had its turn (at least REPLY_MIN_MS on show): the bubbles would overlap.
+          const shown = L.replyAt ? Date.now() - L.replyAt : REPLY_MIN_MS;
+          if (shown >= REPLY_MIN_MS) L.say.hidden = true;
+          else at(REPLY_MIN_MS - shown, () => { L.say.hidden = true; });
           const left = host.sayUntil - Date.now();
           if (left <= L.endsIn - Date.now()) return;
           clearTimeout(L.hideAt);
@@ -8173,6 +8208,7 @@ class HatchPetCard extends HTMLElement {
       if (!isCalm) this._animate(host, host.pet, "greethop", 1400);
     });
     at(t0 + 1800, () => {
+      L.replyAt = Date.now();
       L.say.textContent = reply; // visual only: the visit screen is aria-hidden
       L.say.hidden = false;
       if (!isCalm) this._animate(guest, L.img, "greethop", 1400);
