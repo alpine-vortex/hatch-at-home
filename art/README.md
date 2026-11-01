@@ -360,3 +360,5 @@ lizards, turtles, insects) droop and tilt instead. species.json `"acts"` lists t
 commit.
 
 - Woodland: banana slug, robin, deer, fox, squirrel.
+- Hearth: bunny, corgi, ferret, hamster, kitten (corgi teen and adult and kitten teen redrawn once:
+  four feet down plus the raised paw made five legs).
