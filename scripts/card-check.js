@@ -3443,6 +3443,16 @@ async function main() {
   await skip(page, 3000);
   check("2b: the droop is bounded (the class is gone after it)",
     !(await card.evaluate((el) => el._slides[el._index].pet.classList.contains("droop"))));
+  // gaps-seams 2b: from weight (the only cause the public moment keeps), it says why.
+  await quiet2a();
+  const fromWeight = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    el._moment(s, { type: "became_sick", cause: "weight", at: new Date().toISOString() });
+    return s.bubble.textContent;
+  });
+  check("gaps-seams 2b: sick from weight says too many snacks",
+    ["ugh... too many snacks, I think", "my tummy's grumbly... too many snacks", "tummy hurts... too many snacks"].includes(fromWeight), fromWeight);
+  await skip(page, 3000);
   // Reduced motion: the animation is off and one frame holds (a sag), still on the class.
   await quiet2a();
   await page.emulateMedia({ reducedMotion: "reduce" });

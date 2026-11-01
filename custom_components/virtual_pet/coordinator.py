@@ -143,6 +143,9 @@ MOMENTS = {
 # A public moment of these types keeps only {type, at}: the bus and the phones
 # still get the cause.
 MOMENT_BARE = {"became_sick"}
+# ...except these causes, which the card says ("too many snacks"): weight only
+# (gaps-seams 2b, owner Q3). Neglect and the rest never reach the public list.
+MOMENT_CAUSES_SHOWN = {"weight"}
 MOMENTS_KEPT = 10
 # The visit's celebration lines (one a look, and always a place for it).
 CELEBRATIONS = {"your_birthday", "pet_birthday", "birthday_friends", "friends_for"}
@@ -1017,6 +1020,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 moment: dict[str, Any] | None = {"type": as_type, "at": at}
             elif public and event["type"] in MOMENT_BARE:
                 moment = {"type": event["type"], "at": at}
+                if event.get("cause") in MOMENT_CAUSES_SHOWN:
+                    moment["cause"] = event["cause"]
             elif public and event["type"] in MOMENTS:
                 moment = {**scrubbed, "at": at}
             else:

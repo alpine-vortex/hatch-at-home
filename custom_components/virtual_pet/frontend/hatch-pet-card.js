@@ -1409,6 +1409,9 @@ function weightLabel(v) {
 }
 const isHeavy = (v) => v !== null && v > 75; // rates.py WEIGHT_HEAVY_ABOVE
 // A heavy pet's snack, half the time (gaps-seams 2a): snacks are what tip it.
+// Sick from weight (gaps-seams 2b, owner Q3), and in baby talk.
+const SICK_WEIGHT = ["ugh... too many snacks, I think", "my tummy's grumbly... too many snacks"];
+const SICK_WEIGHT_BABY = "tummy hurts... too many snacks";
 const HEAVY_SNACK = ["one more and I'll be round as a ball!", "*pats tummy* getting a bit round..."];
 
 // The status row counting down to the next stage (gaps-seams 1a), or null: a child
@@ -5994,7 +5997,9 @@ class HatchPetCard extends HTMLElement {
         say("ok, ok... ♪");
         break;
       case "became_sick": // feeling poorly (2b): said once, dropped if it's well by then
-        line(this._lines(s, "became_sick", "I don't feel so good...").text, 4500,
+        // From weight, the public moment keeps its cause (gaps-seams 2b): it says why.
+        line(m.cause === "weight" ? (this._babyStage(s) ? SICK_WEIGHT_BABY : pick(SICK_WEIGHT))
+          : this._lines(s, "became_sick", "I don't feel so good...").text, 4500,
           () => this._animate(s, s.pet, "droop", 2800),
           { write: true, still: () => this._isSick(s) });
         break;
