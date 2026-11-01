@@ -1,6 +1,6 @@
 # Design note: playtime, the Catch rethink and the slower game (next-stages 2c)
 
-**Status: DECIDED (owner, 2026-11-01): all six recommendations in §5 taken** (drop Catch; build the Berry dig as 4d; slower games only for now; A6 pounce art stays off; ✕ parks the dig, free, no time limit; the dig pays 23). Build: dig + park as one tier-1 PR, then Catch removal (S). Was: for the owner. Docs only; nothing is built. It covers the Catch rethink (FM, Q2) and
+**Status: DECIDED (owner, 2026-11-01): all six recommendations in §5 taken** (drop Catch; build the Berry dig as 4d; slower games only for now; A6 pounce art stays off; ✕ parks the dig, free, no time limit; the dig pays 23). Build: dig + park as one tier-2 PR (a new save field: the parked game), then Catch removal (S), one PR each, the removal rebased on the dig. The adversarial review (s2610, FIX FIRST, 16 findings) is folded in: §2a is the dig's build spec, §3 C's "Removal: review additions" the removal's. Was: for the owner. Docs only; nothing is built. It covers the Catch rethink (FM, Q2) and
 4d's slower game (deferred by the owner, 2026-10-30), and it decides whether A6 pounce art
 comes back. Sources: `plan-2026-10-31-next-stages.md` (2c, "Deferred", "Withdrawn",
 Decided 1-3), `plan-2026-10-28-experience.md` (PR 4d, PR 4f, owner Q9 and A5, the taste
@@ -92,7 +92,7 @@ many leaves are left; the score shows banked and basket.
 | Play | Wins |
 |---|---|
 | best | **76.4%** |
-| random (coin flip each choice; keep isn't offered on an empty basket, so a round's first tap is a dig) | 41.7% (34.7 points less) |
+| random (coin flip each choice; keep isn't offered on an empty basket, so a round's first tap is a dig) | 41.5% (34.9 points less; review re-run: 41.46%) |
 | naive: always keep at 3 | 58.5% |
 | naive: always keep at 2 | 56.7% |
 | naive: always keep at 1 | 23.7% |
@@ -137,6 +137,111 @@ the same pile.
   for a first cut. Berry and leaf props can come later from the Hatch API Art session.
 - **A6 pounce art: no.** The dig doesn't need it. A later polish could play a pounce into the
   pile on each dig, but that is not part of this proposal.
+
+## 2a. The dig's build spec (adversarial review folded in, 2026-11-01)
+
+What the review (s2610) found the plan left to guess, settled here. Numbers are review
+finding numbers.
+
+**The parked game (1, 5, 16).**
+- The park is **dig-only**. ✕ on Left or Right and Higher or Lower stays as decided (Q1 of
+  next-stages): it ends the game and the next start is fresh. Their checks
+  (`test_ending_a_game_is_free_and_the_next_one_is_new`, card-check "first guess after the x
+  is round 1") stay. Their fishing is the 1g tuning review's.
+- A parked dig lives in a **new `PetState` slot, `parked`** (a `Game`, kind `dig`), like
+  `opening`/`opening_at`, **never in `state.game`**. So the idle drop (`GAME_IDLE_MINUTES`),
+  the sleep drop and the away drop never see it or score it. No time limit. It survives an HA
+  restart (saved), `shift_times` moves its times, `from_dict` loads it through `_game` and
+  drops it if it is damaged or not a dig. It clears on retire / a new egg, like the game.
+- ✕ (`end: true`) on a dig **with nothing shown** (no tap yet: round 0, nothing banked, an
+  empty basket) simply ends it. Once anything is shown, it **parks**: `state.parked = game`,
+  `state.game = None`. Still free: no energy, happiness, count, log line or event.
+- The next dig start takes the parked game back (`last_at = now`) and carries on: the same
+  round, bank and basket. Starting another kind doesn't touch it.
+- The `end` reply: `{"result": "ok", "ended": true|false, "parked": true|false}`.
+- Downgrade: an older version's `_game()` drops the unknown kind `dig`, and the `parked` key
+  sits in its unknown keys (re-emitted by `to_dict`), so an old version loads a new save
+  safely. A pytest loads old saves (no `parked`, no `basket`) and new ones, damaged ones too.
+
+**The pile is one field (14).** A bee ends the round and the next round deals a fresh pile, so
+mid-round the pile is always **2 bees and 6 − basket berries**. `Game` gains **one** field,
+`basket` (0-5); the bank is `wins`; leaves left = 8 − basket. `_game()` drops a dig whose
+basket is out of range. Nothing else can disagree with itself. When the sixth berry is dug
+the pile is only bees, so the basket **banks by itself** and the round ends: a dig there could
+only lose. That changes nothing for best play (76.43%) and lifts random play a little; the
+pytest measures its own random figure and asserts the 20-point gap.
+
+**The per-tap contract (2).**
+- `round` = completed rounds. A dig that finds a berry is not a round; a bee, a keep and the
+  sixth berry each end one. `rounds` (the saved count) is completed rounds too, so a drop is
+  free until the first round ends (13: that only rerolls the first pile and costs its basket,
+  no fishing).
+- Each dig is drawn and settled in its own call (no pre-dealt order, so a parked pile can't be
+  peeked at).
+- The reply (`_round_info` for a dig): `result`, `game`, `round`, `rounds` (5), `wins`
+  (banked), `basket`, `leaves`, `win_at` (5), `done`; after a tap also `found`
+  (`berry`, `bee` or `kept`) and `round_over`. A finished game adds `won`.
+- `keep` on an empty basket is refused: `{"result": "empty_basket"}`, and nothing changes (not
+  `last_at`, not a fake-call whine). The card never sends it (keep is disabled on an empty
+  basket), but a raw `play_game` or an automation can.
+- A dig with no game in progress answers `no_game`, as Higher or Lower does: the card starts
+  the game first.
+- The card's check for a second viewer, dig only: a reply must follow from the card's own
+  state. A berry: the same round, the same bank, basket + 1. A bee: round + 1, the same bank.
+  A keep: round + 1, bank + basket. Anything else is "someone else is playing". The
+  `round === 1 && g.round > 0` restart guess is not used for the dig (a dig lost to the
+  server comes back as `no_game`).
+
+**Score, record and pay (3).**
+- Win at **5 banked** (`R.DIG_WIN_AT = 5`); a won game pays **`R.DIG_WIN_HAPPINESS = 23`**, its
+  own branch, not the shared skill branch. A loss pays `GAME_LOSE_HAPPINESS` (12). The player
+  trait bonus as for the others. The game ends after round 5 or once 5 are banked.
+- `wins` is berries banked and can pass 5 (4 banked + a basket of 6 = 10). The dig's best
+  (`game_record`) is **berries banked**, and the card says it with no "/5"
+  (`bond_record`). The log score is "<n> berries" for a dig (finished or dropped), not
+  "wins/rounds". `game_finished.wins` is the bank.
+- Every consumer of `wins` for the dig: `_round_info`, the finish in `play_game`, the log score
+  in `play_game` and `drop_game`, `game_finished`, `game_record`, the card's `bond_record`
+  line, its score line and its end lines.
+- The dig joins `test_a_game_pays_at_least_what_play_does`.
+
+**The card's kind lists (4).** `GAMES` (picker entry), `gameIcon`, `_gameView` (labels, aria,
+keep disabled on an empty basket, the pile count in `.gnum`), `_pickGame` (start, or resume
+a parked game), `_guess` (the dig branch, before the left/right and higher/lower round checks),
+`_quitGame` (sends `end` for the dig), the idle-close in `_render` (the dig too), the
+`bond_up` / `bond_record` lines. Every card-driven quit path (✕, Escape, swiping to another
+pet, the status sheet, Play mid-game) goes through `_quitGame`, so **each one parks** a dig
+that has shown something. That is intended.
+- The bee shows in Catch's prop element, **renamed from `.gcatch` to a shared game prop
+  (`.gprop`)**, kept for the dig after Catch goes.
+- Closing the tab (or a crash) mid-dig is not a ✕: the server hears nothing and idle-drops it
+  after 3 minutes, a loss once a round has ended (12). Decided Q1 stands; no `pagehide` call.
+
+**Acceptance (9, 10).**
+- pytest: best play (the stop table above, which plays at exactly best) over ≥ 20,000 seeded
+  games through the real `model.play_game` lands in 70-80%; random play (a coin flip at each
+  choice, keep not offered on an empty basket) at least 20 points less. Park then resume gives
+  the same round, bank and basket; across a save/load (an HA restart); across sleep; after 10
+  minutes. The idle and sleep drops spare the parked game. ✕ before the first tap ends, after
+  it parks. Keep on an empty basket answers `empty_basket` and changes nothing. Old and new
+  saves load; a damaged `parked` or `basket` is dropped.
+- card-check: the dig's contract with **stubbed `callService` replies** (as the idle-drop
+  check does), not a real random draw: a berry, a bee, a keep, keep disabled on an empty
+  basket, ✕ sends `end`, a reply out of step ends the game. The real-HA run owns the wiring
+  only; the pytest owns the odds.
+- bench: a `game: "dig"` shot with scripted replies (a bench change: today its fake `hass`
+  answers `{}`), at 330 px with one thumb and in compact mode. The picker has three games for
+  everyone now: it must fit at 330 px and compact.
+- Turn-based, so the same under reduced motion (the bee shows still, no flap). The two buttons
+  carry aria labels.
+- Docs: the `play_game` service and field texts (`strings.json`, `translations/en.json`,
+  `services.yaml` options), `guide.md` (~92-99, ~521-527), README, how-to-play.
+
+**Copy (11).** The three draft lines above are used verbatim. Everything else the dig adds is
+working text for the owner's sign-off, listed in the build's report: the picker label and
+icon, the button labels and aria labels, the berry line, the score line, the end lines, the
+`bond_up` / `bond_record` lines, the service texts, the guide / README / how-to-play lines,
+the log score string.
 
 ## 3. Catch: three ways forward
 
@@ -216,6 +321,24 @@ plus the dig if it is built.
     calm-Catch checks), and guide lines 72 and 99.
   - Keep `BEE_FRAMES` and `catch_decoy_*.png` if the dig is built (its bee). `_pounce`
     goes or becomes the dig's win beat.
+- **Removal: review additions (s2610 #6-8, #15).** For the removal PR, rebased on the dig:
+  - **Checks that must survive** (card-check uses Catch for them today): the status sheet
+    mid-game ends a game (~2560), Play mid-game (~2580), swipe-away (~2590), reopening inside
+    900 ms runs one round (2428), "a game nobody tapped keeps no best" (2604), and the `3a`
+    reduced-motion pet-src checks (2277-2340) inside the calm-Catch block. Re-point them at
+    the dig (or Higher or Lower); keep `3a`. Mind the `experimental_catch: true` config set at
+    ~2242, which stays on for later sections. Run the full gate once for the removal.
+  - **More to remove:** the ghosting exception (`s.game?.kind !== "catch"`, card ~4720) and
+    `guide.md:302` ("never in Catch"); `guide.md:92` ("three with Catch") with 72/99; Catch's
+    use of the shared prop in `_endGame`; the bench's fake journal `games: { catch: … }`
+    (`page.js:84`), its `catch` field (~433-450) and `dev/bench/README.md:71`.
+  - **Keep:** the shared prop `.gprop` (the dig's bee, renamed from `.gcatch` in the dig PR),
+    `BEE_FRAMES` and the PNGs. `BEE_FLAP_MS` goes unless the dig's bee flaps. `_pounce` goes
+    (the dig's win is the cheer frames). Keep `test_saved_games_load…`: its `"kind": "catch"`
+    case still guards old saves. `LAST_GAME_KEY` holding "catch" falls back to the first game.
+  - **Supersedes:** dropping Catch supersedes owner A8's "best catch" status row (experience
+    plan `:1009`); the stored `hatch-best-catch` is left to rot. Q3 supersedes Q9's "mix of
+    reflex and slower games".
 - **A6 pounce art: no.** Nothing would play it.
 
 ### Side by side
@@ -238,9 +361,10 @@ reuses the bee. Catch's weakness is the reflex idea itself, so A puts L-size wor
 the owner found weak. **Pounce stays on file** as the pet-first game to add later if the picker
 feels thin. If it is built, A6 comes back with it. **A6 stays off the Luna queue.**
 
-Build order if the owner agrees: (1) the park-on-✕ rule for the new kind, and the dig, as one
-tier-1 PR held to its simulation; (2) the Catch removal as an S PR, at any time: Catch is
-only offered with `experimental_catch`, so the default picker (two games) doesn't change.
+Build order (decided): (1) the park-on-✕ rule, for the dig only, and the dig, as one
+tier-2 PR held to its simulation (§2a); (2) after it, the Catch removal as an S PR rebased on
+the dig. Both edit `_gameView`, `_guess`, `_pickGame` and `_quitGame`, and the dig reuses
+Catch's bee, so the removal can't go first or alongside.
 
 ## 5. Owner questions
 
