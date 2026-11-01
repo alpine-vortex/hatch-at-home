@@ -48,15 +48,15 @@ Order (owner, Q7): **the wave pose first**, then kindred pairs.
 
 | # | Slice | Size | Tier | Art | Queued? | Needs |
 |---|---|---|---|---|---|---|
-| 2a | **Wave pose** for the infrared link's greet and world visitors (device charm Q6; visitors §6 "later `acts.wave`"): `acts.wave` + one `STAGE_POSES` entry through `_actPose`, with a fallback (today's cheer). The baby's visitor catch-up line, approved "hi hi! ♪" (owner, Q9), ships in this slice | S | 1 | ~90 | **yes**: after splash, before winter (owner, Q7) | the art; it merges with the hook |
+| 2a | **BUILT (v0.39.x).** World visitors' greet plays the species' existing `waves` frames (the link greeting's loader and fallbacks, `_linkPose`); no `acts.wave`, no new art (the wave art already existed). The baby's visitor catch-up line "hi hi! ♪" (owner, Q9) shipped with it. Seasonal visitors keep their startle/perk | S | 1 | 0 (was ~90: the art existed) | no | none |
 | 2b | **Kindred pairs + persona link lines**: one extra line when a kindred pair links (personality "Later"), and each type's link-line variants (device charm "Left"); card only, nothing counted (FM, Q6) | M | 0 copy plan, then 1 | none | — | the owner picks the PROPOSED lines first (new lines stay proposals, Q4) |
 | 2c | **Playtime design note**: the Catch rethink (FM, Q2) and 4d's slower game in one note (shapes, odds, the 70-80% rule); decides whether pounce art comes back | — | 0 | none for the note | — | — |
 | 2d | **Visitors v2 plan** (finds, basket, collection, gifts: check-ins item 1), from v1's 18-visitor roster; plan in stage 2, build after (FM, Q10) | — | 0, then an L/tier-2 build | ~60 finds | no | the seed moves to the server |
 | 2e | Older generations (4g), unbundled from the forms book (FM, Q8) | S | 1 | none | — | — |
 
 **Dependencies.**
-- 2a: the hook and the art land together ("art merges with the code that plays it"); the
-  wave art is fifth in the Luna queue, so 2a ships when it's drawn.
+- 2a: built, needing no art (the wave frames already existed in `species.json` "waves").
+  It no longer gates 1f.
 - 2b reads the built personality (P1-P3) and the infrared link (D6). It has no server or
   save change.
 - 2d: v1 picks the visitor on the card and saves nothing. A collection can't credit a

@@ -121,6 +121,13 @@ const PRESETS = {
     extra("baby-terrarium-ladybird", "baby, ladybird", { world: "terrarium", stage: "baby", visitor: { id: "ladybird" },
       storage: { "hatch-baby-talk-bench-user": "on" } }); // baby talk is the viewer's own switch
     extra("child-nightsky-raccoon", "child, raccoon (line only)", { world: "nightsky", stage: "child", scene: "night", visitor: { id: "raccoon" } });
+    // The greet's wave frames: three species at baby, teen and adult, and a child (no wave).
+    for (const species of ["otter", "fox", "beardeddragon"]) {
+      for (const stage of ["baby", "teen", "adult"]) {
+        extra(`wave-${species}-${stage}`, `${species} ${stage} waves`, { world: "woodland", species, stage, visitor: { id: "snail" } });
+      }
+    }
+    extra("wave-otter-child", "otter child (no wave)", { world: "woodland", species: "otter", stage: "child", visitor: { id: "snail" } });
     return out;
   },
   // The settings sheet (the status screen's gear) with the viewer's own rows, at
