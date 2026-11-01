@@ -1643,8 +1643,11 @@ async function main() {
   const phoneAsk = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const s = el._slides[el._index];
     const realOwn = el._callOwn;
+    const realWS = el._hass.callWS;
     const calls = [];
+    const acks = [];
     el._callOwn = async (type, data) => { calls.push({ type, ...data }); };
+    el._hass.callWS = (msg) => { acks.push(msg); return Promise.resolve(null); }; // the "shown" ack
     const wasMine = s.mine ? s.mine.notify_me : undefined;
     const run = async (answer) => {
       Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0, asking: false });
@@ -1659,9 +1662,10 @@ async function main() {
       const no = await run("not now");
       const callsAfterNo = calls.length;
       const yes = await run("yes");
-      return { no, yes, callsAfterNo, calls };
+      return { no, yes, callsAfterNo, calls, acks: acks.filter((m) => m.type === "virtual_pet/answer") };
     } finally {
       el._callOwn = realOwn;
+      el._hass.callWS = realWS;
       if (s.mine) s.mine.notify_me = wasMine;
       el._clearAsk(s);
     }
@@ -1671,6 +1675,8 @@ async function main() {
     JSON.stringify(phoneAsk.yes.labels) === JSON.stringify(["yes ♥", "not now"]) && phoneAsk.callsAfterNo === 0 &&
     phoneAsk.calls.length === 1 && phoneAsk.calls[0].type === "notify_me" && phoneAsk.calls[0].enabled === true,
     JSON.stringify(phoneAsk));
+  check("top10 1a (audit #1): each time it's shown, the card tells the server (answer \"shown\")",
+    phoneAsk.acks.length === 2 && phoneAsk.acks.every((m) => m.question === "phone" && m.answer === "shown"), JSON.stringify(phoneAsk.acks));
   // top10 6b: the social meter. "friends" on the status page from the server's
   // social_level (hidden at 0, aria "friends this week: n of 10"); a link reports
   // virtual_pet/linked with both pets; full hearts queue "so many friends this week! ♥"

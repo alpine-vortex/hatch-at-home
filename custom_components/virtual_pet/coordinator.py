@@ -339,11 +339,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     @property
     def social_level(self) -> int:
-        """The social meter, 0-10 over the last week (top10 §6). A pet alone in
-        the house has no neighbours to link with, so a visitor counts for more."""
+        """The social meter, 0-10 over the last week (top10 §6)."""
         assert self.state is not None
-        solo = len(self.hass.data.get(DOMAIN, {}).get("pets", {})) <= 1
-        return model.social_level(self.state, self._today(self._now())[0], solo)
+        return model.social_level(self.state, self._today(self._now())[0])
 
     def social_link(self, other: str) -> None:
         """The infrared link brought another pet of this house today."""
@@ -1527,7 +1525,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         now = self._now()
         # Someone looked in while the day's visitor was here: a greeted visitor
         # for the social meter (top10 §6), whatever else this look counts for.
-        if model.social_greet(self.state, now, self._today(now)[0], self.world):
+        if self._awake() and model.social_greet(
+            self.state, now, self._today(now)[0], self.world
+        ):
             self._save()
             self._publish()
         person = self.people.person(user)
@@ -1843,9 +1843,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         assert self.state is not None
         person = self.people.person(user)
         today, hour = self._today(now)
-        if self._phone_ask_due(user, person):
-            # Ahead of the day's questions: it matters now, and comes once ever.
-            person["phone_asked"] = True
+        if self._phone_ask_due(user, person, today):
+            # Ahead of the day's questions: it matters now. It is the day's
+            # question, and asked for good only once the card says it showed it
+            # (async_answer "phone"): one the card dropped comes on a later day.
             P.mark_asked(person, today, hour)
             self.people.save()
             return "phone"
@@ -1871,7 +1872,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.people.save()
         return kind
 
-    def _phone_ask_due(self, user: str, person: dict[str, Any]) -> bool:
+    def _phone_ask_due(self, user: str, person: dict[str, Any], today: str) -> bool:
         """Whether the pet asks this person "can I call your phone?" (top10 1a):
         once ever, house-wide (`phone_asked` in the people store; "forget my
         data" clears it); only with the Home Assistant app signed in as them
@@ -1881,6 +1882,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         assert state is not None
         if (
             person.get("phone_asked")
+            or (person.get("asked") or {}).get("day")
+            == today  # a question today already
             or user in state.notify_users
             or model.life_stage(state) == "egg"
         ):
@@ -1936,6 +1939,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return
         if answer not in P.ANSWERS.get(question, ()):
             raise ValueError(f"{answer} isn't an answer to {question}")
+        if question == "phone":
+            # Shown on their card: asked for good ("yes" also turns notify me on,
+            # from the card). Kept in the people store; "forget my data" clears it.
+            self.people.person(user)["phone_asked"] = True
+            self.people.save()
+            return
         if question == "catchphrase":
             # Only from the close friend it asked, while the question is open:
             # it's the pet's, and everyone hears it.

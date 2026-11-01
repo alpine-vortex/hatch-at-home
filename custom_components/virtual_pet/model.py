@@ -343,14 +343,17 @@ def social_link(state: PetState, today: str, other: str) -> bool:
     return True
 
 
-def social_level(state: PetState, today: str, solo: bool) -> int:
-    """The week's level, 0 to R.SOCIAL_MAX (halves of five hearts)."""
+def social_level(state: PetState, today: str) -> int:
+    """The week's level, 0 to R.SOCIAL_MAX (halves of five hearts). A pet with
+    no link all week (alone in the house, or on a card of its own) gets more for
+    each visitor, so it can still fill; a linked one keeps the link credit."""
     first = (date.fromisoformat(today) - timedelta(days=R.SOCIAL_DAYS - 1)).isoformat()
+    week = [e for d, e in state.social.items() if first <= d <= today]
+    solo = not any(e.get("links") for e in week)
     visitor = R.SOCIAL_VISITOR_SOLO if solo else R.SOCIAL_VISITOR
     halves = sum(
         (visitor if e.get("visitor") else 0) + R.SOCIAL_LINK * len(e.get("links", []))
-        for d, e in state.social.items()
-        if first <= d <= today
+        for e in week
     )
     return min(R.SOCIAL_MAX, halves)
 

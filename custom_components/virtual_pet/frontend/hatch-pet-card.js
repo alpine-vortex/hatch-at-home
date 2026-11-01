@@ -5938,6 +5938,12 @@ class HatchPetCard extends HTMLElement {
     });
     s.screen.append(box);
     s.askTimer = setTimeout(done, ASK_MS);
+    // The phone question is asked for good only once it's on screen (top10 1a): one
+    // dropped before this comes again another day. A websocket answer, off the bus.
+    if (kind === "phone") {
+      this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity, question: "phone", answer: "shown" })
+        .catch(() => {}); // an older server, or a lost reply: it may ask again, once
+    }
   }
 
   // A websocket command, not a service call: answers stay off the event bus.
@@ -6522,7 +6528,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
         ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
-      ${social > 0 ? row(null, "friends", socialHearts(social)) : ""}
+      ${social > 0 && !isEgg ? row(null, "friends", socialHearts(social)) : ""}
       ${row("icon_feed", "hunger", hearts(value("hunger"), FEED_FULL_AT))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}

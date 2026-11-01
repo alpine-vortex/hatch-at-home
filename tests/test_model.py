@@ -2953,24 +2953,23 @@ def test_social_meter_counts_greeted_visitors_and_links_over_a_week() -> None:
     assert not model.social_greet(pet, 1500.0, "2026-11-01", "pond")  # another world's
     assert model.social_greet(pet, 1500.0, "2026-11-01", "woodland")
     assert not model.social_greet(pet, 1600.0, "2026-11-01", "woodland")  # once a day
-    assert model.social_level(pet, "2026-11-01", solo=False) == R.SOCIAL_VISITOR
-    assert model.social_level(pet, "2026-11-01", solo=True) == R.SOCIAL_VISITOR_SOLO
+    # No link all week: the solo credit (a pet alone, or on a card of its own).
+    assert model.social_level(pet, "2026-11-01") == R.SOCIAL_VISITOR_SOLO
     assert model.social_link(pet, "2026-11-01", "other-pet")
     assert not model.social_link(pet, "2026-11-01", "other-pet")  # once a day each
-    assert (
-        model.social_level(pet, "2026-11-01", solo=False)
-        == R.SOCIAL_VISITOR + R.SOCIAL_LINK
-    )
+    # A link this week: the plain visitor credit plus the link.
+    assert model.social_level(pet, "2026-11-01") == R.SOCIAL_VISITOR + R.SOCIAL_LINK
     # A rolling week: the day falls off on the eighth; the level never passes the cap.
-    assert (
-        model.social_level(pet, "2026-11-07", solo=False)
-        == R.SOCIAL_VISITOR + R.SOCIAL_LINK
-    )
-    assert model.social_level(pet, "2026-11-08", solo=False) == 0
+    assert model.social_level(pet, "2026-11-07") == R.SOCIAL_VISITOR + R.SOCIAL_LINK
+    assert model.social_level(pet, "2026-11-08") == 0
+    # Once the link is out of the week, a visitor counts solo again.
+    pet.social["2026-11-09"] = {"visitor": True, "links": []}
+    assert model.social_level(pet, "2026-11-09") == R.SOCIAL_VISITOR_SOLO
+    del pet.social["2026-11-09"]
     for d in range(1, 8):
         model.social_link(pet, f"2026-11-0{d}", "a")
         model.social_link(pet, f"2026-11-0{d}", "b")
-    assert model.social_level(pet, "2026-11-07", solo=False) == R.SOCIAL_MAX
+    assert model.social_level(pet, "2026-11-07") == R.SOCIAL_MAX
     # Writing a new day prunes the ones before the week (and any ahead of it).
     pet.social["2026-12-25"] = {"visitor": True, "links": []}
     model.social_link(pet, "2026-11-09", "a")

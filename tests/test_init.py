@@ -3765,9 +3765,25 @@ async def test_phone_question_once_after_a_miss_with_the_app_only(
     ).add_to_hass(hass)
     async_mock_service(hass, "notify", "mobile_app_my_phone")
     coordinator._visits.clear()
-    coordinator.people.person(me.id).pop("asked", None)  # the earlier look's question
+    # Today's question already asked: not today (audit #2).
+    coordinator.people.person(me.id)["asked"] = {"day": "2026-10-28"}
+    assert (await look(hass, me.id))["ask"] != "phone"
+    coordinator._visits.clear()
+    coordinator.people.person(me.id).pop("asked", None)
     assert (await look(hass, me.id))["ask"] == "phone"
+    # Sent, but the card never showed it: not asked for good, so it comes again
+    # (another day: it was the day's question) (audit #1).
+    assert "phone_asked" not in coordinator.people.person(me.id)
+    coordinator._visits.clear()
+    assert (await look(hass, me.id))["ask"] != "phone"  # once a day
+    coordinator._visits.clear()
+    coordinator.people.person(me.id).pop("asked", None)  # the next day
+    assert (await look(hass, me.id))["ask"] == "phone"
+    # The card says it showed it: asked for good.
+    await coordinator.async_answer(me.id, "phone", "shown")
     assert coordinator.people.person(me.id)["phone_asked"] is True
+    with pytest.raises(ValueError):
+        await coordinator.async_answer(me.id, "phone", "yes")  # only "shown"
     coordinator._visits.clear()
     coordinator.people.person(me.id).pop("asked", None)
     assert (await look(hass, me.id))["ask"] != "phone"
@@ -3901,8 +3917,17 @@ async def test_social_meter_links_and_a_greeted_visitor(
         "until": now + 3600,
         "credited": False,
     }
+    # Asleep (or an egg, or away): a look doesn't greet it (audit #8).
+    pets[0].state.asleep = True
     await look(hass, me.id)
     await hass.async_block_till_done()
+    assert not pets[0].state.social[pets[0]._today(now)[0]]["visitor"]
+    pets[0].state.asleep = False
+    pets[0]._visits.clear()
+    await look(hass, me.id)
+    await hass.async_block_till_done()
+    # Linked this week: the plain visitor credit (two pets on separate cards, never
+    # linked, would each get the solo credit: test_model).
     assert level("pip") == model.R.SOCIAL_LINK + model.R.SOCIAL_VISITOR
     # Diagnostics: the days are redacted.
     diag = await diagnostics.async_get_config_entry_diagnostics(

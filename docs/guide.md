@@ -161,10 +161,10 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   two" in five hearts.
 - **Friends this week.** Beside "you two", the status page shows "friends": five
   hearts for the pet's week beyond the house. A world visitor counts when someone looks
-  in while it's there, and each neighbour it meets over the infrared link counts once a
+  in while it's there and the pet is up, and each neighbour it meets over the infrared link counts once a
   day. It's a rolling week, so it fills and fades with the visits, and it changes
-  nothing about the pet: no stats, no points. A pet alone in the house gets a little
-  more from each visitor. At full hearts it says "so many friends this week! ♥" (once a
+  nothing about the pet: no stats, no points. A pet that met no neighbour all week (alone
+  in the house, or on a card of its own) gets a little more from each visitor. At full hearts it says "so many friends this week! ♥" (once a
   week), and a new egg starts its own. The row hides until there's a friend to show.
 - **My day** (turn it on in settings, the gear on the status screen; for yourself only): the pet notices your
   good days from the phones you signed in to the Home Assistant app with. It only
@@ -682,8 +682,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   the card. Fast-forward never notifies.
   The pet asks once: after a call is missed (or while one is waiting), it may ask
   "can I call your phone when I need you?". It asks only people signed in to the Home
-  Assistant app on a phone, never someone already getting its calls, and never again
-  after an answer (unless you "forget my data"). "yes ♥" turns "notify me" on for that pet.
+  Assistant app on a phone, never someone already getting its calls, and at most one
+  question a day. Once you've seen it, it never asks again (unless you "forget my data"). "yes ♥" turns "notify me" on for that pet.
 - **Sounds:** off until you turn them on. In settings (the gear on the status screen), tap "sounds here"
   for little chirps when the pet calls, hatches, learns a trait or wins a game. It
   only changes this browser, and the pet stays quiet while it sleeps and from 21:00
@@ -715,8 +715,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   if you turn "birthday on my phone" on (in settings; off by default) and have
   "notify me" on, your phone hears it once that morning from the pet you're closest
   to, by its nickname for you. Like every phone message, that one is in Home
-  Assistant's history, where admins can see it; that's why it starts off. "forget my birthday" on the
-  status screen (two taps) forgets it and stops asking; "forget my data" forgets
+  Assistant's history, where admins can see it; that's why it starts off. "forget my birthday" in
+  settings (the gear on the status screen; two taps) forgets it and stops asking; "forget my data" forgets
   everything the pets remember about you (see Privacy).
 - **A photo, for best friends.** At bond level 10, once a pet is a teen, it makes
   you a framed photo of itself as it was that day ("I made you something! it's in

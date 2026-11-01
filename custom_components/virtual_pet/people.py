@@ -51,6 +51,9 @@ ANSWERS: dict[str, tuple[str, ...]] = {
     "guess": ("rain", "sun"),
     # The pet's, not the person's: what it says at the end of things.
     "catchphrase": ("hehe", "yay", "and stuff", "la la", "keep"),
+    # The phone question (top10 1a): the card says it showed it, and only then is
+    # it asked for good (a question the card dropped comes again).
+    "phone": ("shown",),
 }
 # One-time questions about the person, in the order they're asked, with the bond
 # level each needs. (The pet's own one-time question, its catchphrase, comes from

@@ -329,8 +329,9 @@ VISIT_HOURS = 3  # the window's length
 
 # The social meter (top10 §6): a level 0-10 (five hearts, in halves) over a rolling
 # SOCIAL_DAYS of the pet's own social life. A visitor someone greeted (looked in
-# during its window) is worth SOCIAL_VISITOR halves, or SOCIAL_VISITOR_SOLO in a
-# one-pet house (no links there, so four good days still fill it); each neighbour
+# during its window, the pet awake) is worth SOCIAL_VISITOR halves, or
+# SOCIAL_VISITOR_SOLO for a pet with no link all week (four good days still fill
+# it); each neighbour
 # met over the infrared link, SOCIAL_LINK a day. Display only: it changes nothing.
 SOCIAL_DAYS = 7
 SOCIAL_MAX = 10
