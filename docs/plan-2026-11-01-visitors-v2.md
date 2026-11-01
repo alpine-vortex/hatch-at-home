@@ -158,18 +158,22 @@ saw it or not.
     - **`autumn` / `winter`** (finding #4, R5) come from `people.py` `season(day,
       latitude)` (`people.py:277`, used at `coordinator.py:1522`), so they follow the
       hemisphere. It returns None in the tropics: no season is then set.
-    - **The fallback (R5).** A find with a weather or season `when` gets, while its
-      condition is false, the **rare weight (1)** instead of its tier weight. Tropical
-      homes, homes with no weather entity (no `condition`, `home.py:164-177`) and homes
-      that never see snow can all complete the collection, and no weather or seasonal find
-      stays a silhouette for good (finding #21). `night` and `full_moon` finds have no
-      fallback: they happen everywhere.
+    - **The fallback (R5), only where the signal is missing.** Where `season()` is None
+      (a tropical latitude), season finds (chanterelle, pine sprig) are unconditional at the
+      **rare weight (1)**. Where the home has no weather entity (`condition` is None,
+      `home.py:164-177`), weather finds (rainy, snowy, sunny, foggy) are unconditional at
+      weight 1 too. Everywhere else the condition gates: false means no chance. So a
+      find that is already rare (four-leaf clover, message in a bottle) keeps its
+      condition. `night` and `full_moon` finds have no fallback: they happen everywhere.
+      A home *with* a weather entity that never sees a condition is Open question 2.
 - **Finds already in the collection are weighted ×0.5**, never 0, so new ones come a little
   sooner, but repeats still happen and still delight.
 - **Rare enough to be special, never a worry.** A pytest works out each find's expected
   wait from the weights at an **explicit rate of 2.4 finds a day** (awake ~16 h, a roll
-  every 4 h, 0.6 chance: 4 × 0.6). The rarest unconditional find (1 in ~53 of the weight,
-  from a fresh collection, ≈ 22 days) must be under about 3 weeks to a month. The bound
+  every 4 h, 0.6 chance: 4 × 0.6). The **acceptance bound: from a
+  fresh collection, each world's rarest unconditional find has an expected wait of at most
+  30 days** at that rate. Terrarium and Hearth are tightest (about 53 of unconditional
+  weight, so about 22 days; the ×0.5 on met finds only shortens it). The bound
   holds **whether or not anyone taps the basket** (R1): rolls and the collection credit
   don't wait for a tap. Only what is *seen* depends on tapping.
 - **The coverage run (finding #1, #21).** A fixed-seed **90-day** run (one length
@@ -177,7 +181,7 @@ saw it or not.
   "each condition true on half the days"): a pet that sleeps 22:00-07:00, the sun down by
   the real day length, Night Sky rolling asleep. It runs twice: once with weather and
   seasons varying, and once with **no weather entity and a tropical latitude**, which
-  proves the fallbacks. The run is seeded, so it can't flake.
+  proves the fallbacks (the second run also sees every weather and season find). The run is seeded, so it can't flake.
 - **A moment, `found`** `{id, world}`, with no user. It goes to the moments and the bus,
   like other house moments. The away note can then say "found a pine cone"
   (`MOMENT_BITS.found`). No consumer yet beyond the away note; it is on the bus like the
@@ -508,8 +512,7 @@ follow in either order. V-E comes last.
 | V-F | **Final art**: 60 finds (64 × 64, #18) + 3 baskets, one world per commit, each swapping its stand-ins | M (art-bound) | 1 | 63 | V-C; the Luna queue; the ⟲ picks |
 
 **Which slice owns each review finding:** V-A #8 #9 #10 #11 #12 #19 #22; V-B #1 #2 #3 #4 #5
-#13 #18 (lists) #20 #21 and the salvage of `basket`; V-C #15 #16 #17 #23; V-D #6 #7 #15
-(collection fixture); V-E #6 #7 #14; V-F #18 #23. Review blockers: before V-A, #9 #10 #11
+#13 #18 (lists) #20 #21 and the salvage of `basket`; V-C #15 #16 #17 #23; V-D #6 #7; V-E #6 #7 #14; V-F #18 #23. Review blockers: before V-A, #9 #10 #11
 #22 (all in V-A); before V-B, #1 #2 #3 #4 #8 #12 #21; before V-C/V-F, #23 #18; before V-E, #6
 #7 #14.
 
@@ -597,10 +600,20 @@ bumped (no consumer); the `when` grammar is a list of lists with `!`.
    (for the comet dust, Night Sky), tiny rocket (for the meteorite pebble, Night Sky),
    little lantern (for the glow pebble, Night Sky). *Rec: as listed.* This is Q6 narrowed
    to the nine changes; V-F's art request waits on it, V-A to V-E don't.
-2. **The fallback weight.** A weather or season find whose condition is false still comes
-   at the rare weight (1), so a frosted leaf can turn up in a sunny summer. *Rec: keep:*
-   it is what makes the collection completable everywhere (R5); the only alternative is
-   hiding a condition find's silhouette until it's met.
+2. **A home with a weather entity that never sees a condition** (dev's San Diego has no
+   snow): the frosted leaf stays a silhouette for good, against the "no hole to fill" rule.
+   *Rec: hide a weather or season find's tile, silhouette included, until it is met* (as
+   gift-only finds are hidden), so no hole shows. The alternative is the rare fallback
+   everywhere, which makes the condition meaningless for rare finds.
+3. **Line length in the no-nagging scan** (finding #16). `card-check.js:4250` caps lines at
+   40 characters; V5 "I saved this message in a bottle for you ♥" is 43 and V6 "I found
+   this tiny telescope just for you ♥" is 42. *Rec: shorten V5 to "saved this <find> for
+   you ♥" (PROPOSED) and V6 to "made this for you ♥" / "found this for you ♥"
+   (PROPOSED), the find being shown by the pop-up beside it.* The alternative is raising
+   the cap for this table only.
+4. **Sea glass** (Tidepool: green, blue, red) will look identical as `brightness(0)`
+   silhouettes, the same trouble as #18. Not fixed here (the brief scoped #18 to pebbles
+   and dust). *Rec: draw three different shapes (a chip, a round, a shard) in V-F.*
 
 ## 14. Later (not in v2)
 
