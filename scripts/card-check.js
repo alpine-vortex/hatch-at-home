@@ -8636,6 +8636,15 @@ async function main() {
     }, seedPet);
     check("visitors v2 V-C: an HA restart keeps the seeded basket (house.basket 3, no ids on the house view)",
       !!seedBasket && back.basket === 3, JSON.stringify({ seeded: seedBasket, got: back.basket }));
+    // And the seeded collection page (V-D0's virtual_pet/collection): its visitors and known
+    // finds are back after the restart (the gift-only and unknown ids are V-D's to check).
+    const coll = seedPage && await card.evaluate((el, e) => el._hass.callWS({ type: "virtual_pet/collection", entity_id: e, shared: false })
+      .catch((err) => ({ error: err?.code || String(err) })), seedPet);
+    const wantV = seedPage ? Object.keys(seedPage.visitors) : [];
+    const wantF = seedBasket ? [wFinds[0].id, wFinds[1].id, leftId] : [];
+    check("visitors v2 V-C: an HA restart keeps the seeded collection (its visitors and finds, by virtual_pet/collection)",
+      !!coll && coll.world === seedWorld && wantV.every((v) => coll.visitors?.includes(v)) &&
+      wantF.every((f) => coll.finds?.[f] === today), JSON.stringify({ want: { visitors: wantV, finds: wantF }, got: coll }));
     check("visitors v2: an HA restart keeps the day's visit (no re-roll), and the card gets it as house.visit",
       !!seedVisit && JSON.stringify(back.visit) === JSON.stringify({ day: seedVisit.day, id: seedVisit.id,
         hours: seedVisit.hours, from: seedVisit.from, until: seedVisit.until }), JSON.stringify({ seeded: seedVisit, got: back.visit }));
