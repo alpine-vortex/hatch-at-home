@@ -101,26 +101,12 @@ const GAMES = [
   { key: "higher_lower", label: "higher or lower", guesses: ["lower", "higher"] },
   { key: "dig", label: "berry dig", guesses: ["keep", "dig"] },
 ];
-// The server games (all of GAMES; Catch is the card's own).
+// The server games (all of GAMES).
 const SERVER_GAMES = new Set(GAMES.map((g) => g.key));
 // Matches rates.GAME_IDLE_MINUTES: the server drops a server game left idle
 // this long, and the card closes its own copy then, silently.
 const GAME_IDLE_MS = 3 * 60 * 1000;
 const LAST_GAME_KEY = "hatch-last-game";
-// Catch, the Giga Pets reflex game: a prototype, offered only with the card
-// option experimental_catch: true. The card times the taps; nothing goes to the
-// server and it gives no reward.
-const CATCH_GAME = { key: "catch", label: "catch!", guesses: ["left", "right"] };
-// Calm Catch's far spot: [left %, right %, bottom], above the nav buttons (.gl/.gr/.gx) at any width.
-const CALM_FAR = [8, 76, "42%"];
-const CATCH = {
-  rounds: 5, winAt: 3,
-  travel: [1.9, 1.0], // seconds for the prop to reach the pet, round 1 to round 5
-  window: [1.2, 0.6], // the last part of its trip in which a tap catches it
-  decoyChance: 0.25, // from round 2
-};
-const BEST_CATCH_KEY = "hatch-best-catch";
-
 // Sounds: little square-wave chirps, off until someone turns them on for this
 // device (status screen). Never while the pet sleeps, nor late at night.
 const SOUND_KEY = "hatch-sounds";
@@ -794,9 +780,8 @@ function seasonNow(config, date = new Date()) {
   return SEASONS.find((x) => after(md, seasonDate(x.from, year)) && after(seasonDate(x.to, year), md)) || null;
 }
 
-// Catch's decoy: Sol's bee (ui/catch_decoy_1, _2: wings up, down), facing left.
+// The dig's bee: Sol's bee (ui/catch_decoy_1, _2: wings up, down), facing left.
 const BEE_FRAMES = [1, 2].map((n) => `${BASE}/ui/catch_decoy_${n}.png?v=${VERSION}`);
-const BEE_FLAP_MS = 120;
 
 const REFUSALS = {
   full: "I'm full!",
@@ -2999,7 +2984,7 @@ class HatchPetCard extends HTMLElement {
     window.removeEventListener(MONO_EVENT, this._onMono);
     window.removeEventListener("storage", this._onMonoStorage);
     this._listenReady(null);
-    // A game (Catch's animation loop above all) stops with the card, and so
+    // A game stops with the card, and so
     // does a line typing out, and the private channel.
     for (const s of this._slides || []) {
       if (s.game) this._endGame(s, null);
@@ -3373,7 +3358,7 @@ class HatchPetCard extends HTMLElement {
             <button class="pat" type="button" hidden></button>
             <button class="basket" type="button" aria-label="the basket" hidden><img alt=""></button>
             <div class="game" hidden>
-              <div class="gpick" role="group" aria-label="Pick a game">${this._games().map((g) =>
+              <div class="gpick" role="group" aria-label="Pick a game">${GAMES.map((g) =>
                 `<button data-game="${g.key}">${g.label}</button>`).join("")}</div>
               <img class="gprop" alt="" hidden>
               <span class="gnum" aria-live="polite" hidden></span>
@@ -3925,8 +3910,7 @@ class HatchPetCard extends HTMLElement {
     if (!n) return;
     const to = (index + n) % n;
     this._slides.forEach((x, i) => {
-      // A game stops on the slide being left: nobody plays it unseen (Catch
-      // would score itself).
+      // A game stops on the slide being left: nobody plays it unseen.
       if (x.game && i !== to) this._quitGame(x, null);
       this._stopTyping(x);
       this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
@@ -4744,13 +4728,13 @@ class HatchPetCard extends HTMLElement {
 
   // Ghosting: a slow LCD leaves a fading trace where the pet was. Only the pet on
   // show, with screen effects on, never with reduced motion or more contrast, and
-  // never in Catch (a reflex game needs a clean pet). The fades are Web Animations,
+  // The fades are Web Animations,
   // which the reduced-motion CSS rule doesn't reach: hence the checks here.
   _ghosting(s) {
     const media = (q) => window.matchMedia?.(q).matches;
     return s === this._slides[this._index] && this._visible && !document.hidden && !s.linking &&
       this._card.classList.contains("lcd-on") && s.pet.style.display !== "none" && !s.scene &&
-      s.game?.kind !== "catch" && !calm() &&
+      !calm() &&
       !media("(prefers-contrast: more)");
   }
 
@@ -5046,9 +5030,9 @@ class HatchPetCard extends HTMLElement {
 
   // A reaction to care for baby, teen and adult (the child has species poses): that
   // stage's mood frame for REACT_MS and a bounded move. Not over a scene, a link, the
-  // low-battery gag, sleep, away or the egg; a game only for a catch (`inGame`).
+  // low-battery gag, sleep, away or the egg; a game only with `inGame`.
   // Under reduced motion only the frame changes (calm() shows its first). With ms
-  // (a catch's pounce), the frame and the move both last that long.
+  // (a win beat), the frame and the move both last that long.
   _reactFrames(s, kind, { inGame = false, ms } = {}) {
     const r = REACTIONS[kind];
     if (!r || !s.species || s.drawn === "child" || s.scene || s.linking || s.power ||
@@ -6301,12 +6285,6 @@ class HatchPetCard extends HTMLElement {
         .filter(([t, p]) => !held.has(t) && FLAIR[t] && p > 0.05 && p < 1)
         .sort((a, b) => b[1] - a[1])[0]
       : null;
-    let bestCatch = 0;
-    try {
-      bestCatch = this._config?.experimental_catch ? Number(localStorage.getItem(BEST_CATCH_KEY) || 0) : 0;
-    } catch (err) {
-      // no storage: no best score to show
-    }
     // The viewer's own bond, in five hearts (a half heart a level).
     const bond = this._bond(s);
     const bondHearts = (level) => {
@@ -6354,7 +6332,6 @@ class HatchPetCard extends HTMLElement {
       ${row("stat_discipline", "discipline", bar(value("discipline")))}
       ${row(null, "weight", `<span>${weightLabel(value("weight"))}</span>`)}
       ${row(null, traits.length > cap ? "traits" : `traits ${traits.length}/${cap}`, `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
-      ${bestCatch ? row(null, "best catch", `<span>${bestCatch}/${CATCH.rounds}</span>`) : ""}
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
@@ -7716,7 +7693,7 @@ class HatchPetCard extends HTMLElement {
 
   _startGame(s, button) {
     this._tapped(button, s);
-    if (s.game) this._quitGame(s, null); // Play mid-game starts over (Catch's ball goes too)
+    if (s.game) this._quitGame(s, null); // Play mid-game starts over
     this._clearAsk(s); // a game takes the screen
     const energy = Number.parseFloat(this._state(s, "sensor.energy")?.state);
     const refusal = s.asleep ? REFUSALS.asleep : energy < 15 ? REFUSALS.too_tired : null;
@@ -7726,7 +7703,7 @@ class HatchPetCard extends HTMLElement {
     }
     if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
     s.screen.querySelector(".flair")?.remove();
-    const games = this._games();
+    const games = GAMES;
     if (games.length === 1) {
       this._pickGame(s, games[0].key);
       return;
@@ -7782,11 +7759,6 @@ class HatchPetCard extends HTMLElement {
     if (need() > pick.clientHeight) pick.classList.add("tight");
   }
 
-  // The games the play button offers: Catch only with experimental_catch.
-  _games() {
-    return this._config?.experimental_catch ? [...GAMES, CATCH_GAME] : GAMES;
-  }
-
   // Show the picker ("pick") or a game's buttons (its key) in the game overlay.
   _gameView(s, view) {
     const box = s.gameBox;
@@ -7801,9 +7773,8 @@ class HatchPetCard extends HTMLElement {
     const dig = view === "dig";
     gl.innerHTML = hl ? '<span class="hl">lo</span>' : dig ? '<span class="hl">keep</span>' : icon("prev", 22);
     gr.innerHTML = hl ? '<span class="hl">hi</span>' : dig ? '<span class="hl">dig</span>' : icon("next", 22);
-    const katch = view === "catch";
-    gl.setAttribute("aria-label", hl ? "Guess lower" : dig ? "Keep the basket" : katch ? "Catch it on the left" : "Guess left");
-    gr.setAttribute("aria-label", hl ? "Guess higher" : dig ? "Dig a leaf" : katch ? "Catch it on the right" : "Guess right");
+    gl.setAttribute("aria-label", hl ? "Guess lower" : dig ? "Keep the basket" : "Guess left");
+    gr.setAttribute("aria-label", hl ? "Guess higher" : dig ? "Dig a leaf" : "Guess right");
     box.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
   }
 
@@ -7819,12 +7790,6 @@ class HatchPetCard extends HTMLElement {
     this._gameView(s, kind);
     this._reactFrames(s, "ready", { inGame: true }); // acts.ready, if the species has it
     s.gameScore.textContent = "round 1/5";
-    if (kind === "catch") {
-      this._write(s, (g.prompt = "catch it! tap its side as it reaches me"), 60000);
-      s.gameBox.querySelector(".gl").focus({ preventScroll: true });
-      this._gameLater(s, g, 900, () => this._catchRound(s));
-      return;
-    }
     // The server keeps the game: a start while one of this kind runs carries
     // on (same round, wins and number), so the card adopts what it replies.
     g.busy = true;
@@ -7909,10 +7874,6 @@ class HatchPetCard extends HTMLElement {
     if (!s.game || s.game.busy || !s.game.kind) return;
     this._tapped(s.gameBox.querySelector(side === "left" ? ".gl" : ".gr"), s);
     const kind = s.game.kind;
-    if (kind === "catch") {
-      this._catchTap(s, side);
-      return;
-    }
     const game = GAMES.find((g) => g.key === kind);
     const guess = game.guesses[side === "left" ? 0 : 1];
     if (kind === "dig") {
@@ -9173,150 +9134,11 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
-  // --- Catch (prototype) -----------------------------------------------------
-  // Timed in the browser (performance.now, requestAnimationFrame), so network
-  // lag can't matter; the 700 ms tick and hass updates don't touch it.
-
-  _catchRound(s) {
-    const g = s.game;
-    if (!g || g.kind !== "catch") return;
-    const isCalm = calm();
-    const f = g.round / (CATCH.rounds - 1);
-    const lerp = ([a, b]) => a + (b - a) * f;
-    const side = Math.random() < 0.5 ? "left" : "right";
-    const decoy = g.round > 0 && Math.random() < CATCH.decoyChance;
-    const prop = s.species?.props?.play || "";
-    const motion = /cricket/.test(prop) ? "hop" : "roll";
-    g.cur = {
-      side, decoy, motion, done: false, start: performance.now(),
-      calm: isCalm, travel: lerp(CATCH.travel) * (isCalm ? 1.6 : 1),
-      window: lerp(CATCH.window) * (isCalm ? 2 : 1),
-    };
-    const el = s.propEl;
-    if (decoy) el.src = BEE_FRAMES[0];
-    else this._show(s, el, prop);
-    el.hidden = false;
-    el.style.display = "";
-    el.style.bottom = "";
-    if (isCalm) { // at the far spot at once, not facing a stale transform
-      g.cur.step = 0;
-      el.style.left = `${side === "left" ? CALM_FAR[0] : CALM_FAR[1]}%`;
-      el.style.bottom = CALM_FAR[2];
-      el.style.transform = decoy && side === "left" ? "scaleX(-1)" : "";
-    }
-    s.gameScore.textContent = `round ${g.round + 1}/${CATCH.rounds} · ${g.wins} caught`;
-    const step = (now) => {
-      const c = s.game?.cur;
-      if (!c || c !== g.cur || c.done) return;
-      const p = Math.min(Math.max(now - c.start, 0) / 1000 / c.travel, 1);
-      if (c.calm) { // reduced motion: two fixed spots, no sliding and no transform
-        // The last spot shows one frame (50 ms) before the "too soon" boundary, so a tap
-        // on what is on screen is never judged too soon.
-        const near = (now - c.start) / 1000 >= c.travel - c.window - 50 / 1000;
-        if (c.step !== (near ? 1 : 0)) {
-          c.step = near ? 1 : 0;
-          el.style.left = `${c.side === "left" ? (near ? 28 : CALM_FAR[0]) : (near ? 56 : CALM_FAR[1])}%`;
-          el.style.bottom = near ? "" : CALM_FAR[2]; // far: raised, clear of the nav buttons
-        }
-        if (c.decoy && c.side === "left") el.style.transform = "scaleX(-1)"; // faces its way, still
-        if (p >= 1) {
-          this._catchResolve(s, c.decoy, c.decoy ? "phew, let the bee go!" : "it got away...");
-          return;
-        }
-        c.raf = requestAnimationFrame(step);
-        return;
-      }
-      // From off the edge to just beside the pet (which stands at 50%).
-      const from = c.side === "left" ? -16 : 100;
-      const to = c.side === "left" ? 28 : 56;
-      el.style.left = `${from + (to - from) * p}%`;
-      if (c.decoy) { // a bee flies: flapping, bobbing, facing where it goes
-        // (rAF's first timestamp can come just before c.start)
-        const flap = Math.floor(Math.max(now - c.start, 0) / BEE_FLAP_MS) % 2;
-        if (c.flap !== flap) el.src = BEE_FRAMES[(c.flap = flap)];
-        el.style.transform = `translateY(${Math.sin(p * Math.PI * 6) * 12}%)` +
-          (c.side === "left" ? " scaleX(-1)" : "");
-      } else el.style.transform = c.motion === "hop"
-        ? `translateY(${-Math.abs(Math.sin(p * Math.PI * 4)) * 40}%)`
-        : `rotate(${(c.side === "left" ? 1 : -1) * p * 540}deg)`;
-      if (p >= 1) {
-        // It reached the pet untouched: a real one got away, a decoy was dodged.
-        this._catchResolve(s, c.decoy, c.decoy ? "phew, let the bee go!" : "it got away...");
-        return;
-      }
-      c.raf = requestAnimationFrame(step);
-    };
-    g.cur.raf = requestAnimationFrame(step);
-  }
-
-  _catchTap(s, side) {
-    const c = s.game?.cur;
-    if (!c || c.done) return;
-    s.game.tapped = true; // a game nobody tapped keeps no best
-    const t = (performance.now() - c.start) / 1000;
-    if (c.decoy) {
-      this._catchResolve(s, false, "bzz! not the bee!");
-    } else if (side !== c.side) {
-      this._catchResolve(s, false, "other side!");
-    } else if (t < c.travel - c.window - (c.calm ? 0.05 : 0)) { // calm: the last spot shows 50 ms early
-      this._catchResolve(s, false, "too soon!");
-    } else {
-      s.pet.classList.add(`go-${side}`);
-      this._catchResolve(s, true, "got it!");
-    }
-  }
-
-  _catchResolve(s, ok, line) {
-    const g = s.game;
-    const c = g?.cur;
-    if (!c || c.done) return;
-    c.done = true;
-    cancelAnimationFrame(c.raf);
-    s.propEl.hidden = true;
-    g.round += 1;
-    g.wins += ok ? 1 : 0;
-    this._write(s, line);
-    if (ok) this._pounce(s);
-    s.gameScore.textContent = `round ${g.round}/${CATCH.rounds} · ${g.wins} caught`;
-    this._gameLater(s, g, 1000, () => {
-      s.pet.classList.remove("go-left", "go-right");
-      if (g.round < CATCH.rounds) {
-        this._catchRound(s);
-        return;
-      }
-      let best = g.wins;
-      try {
-        best = Math.max(best, Number(localStorage.getItem(BEST_CATCH_KEY) || 0));
-        if (g.tapped) localStorage.setItem(BEST_CATCH_KEY, String(best));
-      } catch (err) {
-        // no storage: no best score
-      }
-      if (g.wins >= CATCH.winAt) this._chirp(s, "win");
-      this._endGame(s, `${g.wins}/${CATCH.rounds} caught${g.wins >= CATCH.winAt ? "! ♪" : "..."} · best ${best}/${CATCH.rounds}`);
-    });
-  }
-
-  // A catch: the species' own "won" pose where one is drawn (child), else a hop.
-  _pounce(s) {
-    const pose = s.species?.reactions?.won;
-    const frames = s.drawn === "child" && s.species?.extras?.[pose];
-    if (frames) {
-      s.poseFrames = Array.isArray(frames) ? frames : [frames];
-      s.poseUntil = Date.now() + 900;
-      this._show(s, s.pet, s.poseFrames[0]);
-    } else if (s.drawn === "child") {
-      this._animate(s, s.pet, "hop", 700);
-    } else {
-      this._reactFrames(s, "praised", { inGame: true, ms: 900 });
-    }
-  }
-
   // The player (or the card, moving off a game) ends a game: the server drops
   // it too, with no reward or penalty, or parks a Berry dig that has shown
   // something, so the next dig carries on. Every card-driven quit (✕, Escape,
   // a swipe, the status sheet, Play mid-game) comes here, so each one parks.
-  // Fire and forget; a failed call is silent. Catch lives only on the card,
-  // so it makes no call.
+  // Fire and forget; a failed call is silent.
   _quitGame(s, line) {
     const kind = s.game?.kind;
     const id = s.ids?.["sensor.mood"];
@@ -9333,7 +9155,7 @@ class HatchPetCard extends HTMLElement {
   _endGame(s, line) {
     cancelAnimationFrame(s.game?.cur?.raf);
     s.propEl.hidden = true;
-    s.propEl.style.bottom = ""; // the dig's bee sits higher than Catch's ball
+    s.propEl.style.bottom = ""; // the dig's bee sits higher
     s.gameScore.classList.remove("two");
     s.gameNum.removeAttribute("aria-label"); // the dig's "n leaves left"
     s.game = null;

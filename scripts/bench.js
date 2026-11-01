@@ -114,11 +114,9 @@ const PRESETS = {
       out.push({ ...base, name: `dig/${width}-bee`, label: "a bee", game: "dig",
         digReplies: [r(1, 2, 2), r(2, 2, 0, { found: "bee", round_over: true })], digTaps: ["dig"] });
     }
-    // The picker fits at every card width (audit s2616 #1/#4): three games, and four with Catch.
+    // The picker fits at every card width (audit s2616 #1/#4): three games.
     for (const width of [300, 320, 336, 350, 360, 375, 385, 400, 420]) {
       out.push({ width, world: "woodland", group: "dig-picker", name: `dig/picker-${width}`, label: `${width}`, view: "games" });
-      out.push({ width, world: "woodland", group: "dig-picker-catch", name: `dig/picker-catch-${width}`, label: `${width} +catch`,
-        view: "games", config: { experimental_catch: true } });
     }
     out.push({ width: 300, world: "woodland", group: "dig-300", name: "dig/300-under-way", label: "300: round 2, basket 2", game: "dig" });
     out.push({ width: 300, world: "woodland", group: "dig-300", name: "dig/300-start", label: "300: fresh pile",
