@@ -20,12 +20,19 @@ M=$(git rev-parse --git-common-dir)/gate-passed
 if [ -e "$M/$TREE" ]; then echo "ci-gate: tree $(git rev-parse --short "$TREE") already passed"; exit 0; fi
 
 git push -q -u origin "$BRANCH" || { echo "ci-gate: push failed" >&2; exit 1; }
+# Runs this commit already has (a gate run again on the same SHA): never ours.
+runs() {
+  gh run list -w Validate -b "$BRANCH" -e workflow_dispatch -L 20 --json databaseId,headSha \
+    -q ".[] | select(.headSha == \"$SHA\") | .databaseId"
+}
+OLD=" $(runs | tr '\n' ' ') "
 gh workflow run validate.yml --ref "$BRANCH" || exit 1
-# The dispatched run shows up a few seconds later; find it by its commit.
+# The dispatched run shows up a few seconds later: the commit's first new one.
 ID=""
 for _ in $(seq 1 30); do
-  ID=$(gh run list -w Validate -b "$BRANCH" -e workflow_dispatch -L 5 --json databaseId,headSha \
-    -q "[.[] | select(.headSha == \"$SHA\")][0].databaseId // empty")
+  for r in $(runs); do
+    case "$OLD" in *" $r "*) ;; *) ID=$r; break ;; esac
+  done
   [ -n "$ID" ] && break
   sleep 4
 done
