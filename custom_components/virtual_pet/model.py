@@ -199,6 +199,14 @@ def _game(v: Any) -> Game | None:
         _num(number) and int(number) in NUMBERS
     ):
         return None  # nothing to guess against
+    basket = v.get("basket", 0)
+    if v.get("kind") == "dig" and not (
+        _num(basket)
+        and 0 <= int(basket) < DIG_BERRIES  # the sixth berry banks itself
+        and _int(v.get("wins"), 0, 0) < R.DIG_WIN_AT
+        and _int(v.get("rounds"), 0, 0) < R.GAME_ROUNDS
+    ):
+        return None  # a dig that can't be: one already over, or a pile too full
     return Game(
         started=float(v["started"]),
         last_at=float(v["last_at"]),
@@ -206,6 +214,7 @@ def _game(v: Any) -> Game | None:
         wins=_int(v.get("wins"), 0, 0),
         kind=v.get("kind", "left_right"),
         number=int(number) if _num(number) else None,
+        basket=int(basket) if v.get("kind") == "dig" else 0,
     )
 
 
@@ -362,6 +371,9 @@ class Game:
     wins: int = 0
     kind: str = "left_right"  # one of GAMES
     number: int | None = None  # Higher or Lower: the number on show
+    # Berry dig: this round's berries, not yet banked (the bank is wins). The
+    # pile left is always DIG_BEES bees and DIG_BERRIES - basket berries.
+    basket: int = 0
 
 
 @dataclass
@@ -443,6 +455,10 @@ class PetState:
     # when: the next start shows it again for OPENING_KEEP_MINUTES (no reroll).
     opening: int | None = None
     opening_at: float | None = None
+    # A Berry dig a person closed (✕) after it had shown something: the next
+    # dig carries on from it. Never in `game`, so no drop (idle, asleep, away)
+    # sees it, and it has no time limit.
+    parked: Game | None = None
     games: dict[str, dict[str, int]] = field(default_factory=dict)  # kind -> counts
     sick_unannounced: str | None = (
         None  # cause, if it fell sick asleep (told on waking)
@@ -590,6 +606,8 @@ class PetState:
                     call.get("recall") is True,
                 )
         kwargs["game"] = _game(kwargs.get("game"))
+        parked = _game(kwargs.get("parked"))
+        kwargs["parked"] = parked if parked and parked.kind == "dig" else None
         opening, opening_at = (
             kwargs.get("opening"),
             _float(kwargs.get("opening_at"), None),
@@ -788,6 +806,9 @@ def shift_times(state: PetState, delta: float) -> None:
         state.game.last_at += delta
     if state.opening_at is not None:
         state.opening_at += delta
+    if state.parked is not None:
+        state.parked.started += delta
+        state.parked.last_at += delta
     if state.call is not None:
         state.call.started += delta
         state.call.deadline += delta
@@ -2039,13 +2060,20 @@ def _log(state: PetState, entry: dict[str, Any]) -> None:
 # --- Games (the card's play button) -------------------------------------------
 
 SIDES = ("left", "right")
-# Each game and the guesses it takes. left_right is luck (the first-generation
-# Tamagotchi's game); higher_lower is odds (the second generation's).
+# Each game and the guesses it takes, left button first. left_right is luck
+# (the first-generation Tamagotchi's game); higher_lower is odds (the second
+# generation's); dig is push-your-luck (the slower game).
 GAMES: dict[str, tuple[str, ...]] = {
     "left_right": SIDES,
     "higher_lower": ("lower", "higher"),
+    "dig": ("keep", "dig"),
 }
 NUMBERS = range(1, 10)  # Higher or Lower's numbers
+# Berry dig: each round a fresh leaf pile hides this many berries and bees. A
+# dig turns one leaf: a berry goes in the round's basket, a bee scares the
+# basket off and ends the round. Keep banks the basket and ends the round.
+DIG_BERRIES = 6
+DIG_BEES = 2
 
 
 def start_game(
@@ -2070,6 +2098,12 @@ def start_game(
         game.last_at = now
         return _round_info(game), events
     events += drop_game(state, now, by, switched=True)
+    if kind == "dig" and state.parked is not None:
+        # A dig closed with ✕ carries on: the same round, bank and basket.
+        game, state.parked = state.parked, None
+        game.last_at = now
+        state.game = game
+        return _round_info(game), events
     game = state.game = Game(started=now, last_at=now, kind=kind)
     if kind == "higher_lower":
         kept = state.opening
@@ -2085,18 +2119,30 @@ def start_game(
     return _round_info(game), events
 
 
-def end_game(state: PetState, kind: str, now: float) -> bool:
+def end_game(state: PetState, kind: str, now: float) -> str | None:
     """A person ends the game in progress of this kind (the card's "maybe
     later"). Unlike a drop, it costs and earns nothing: no energy, happiness,
     played count, log line or event. A Higher or Lower opening nobody guessed
-    on is kept, as in a drop, so quitting can't reroll it. True if one ended."""
+    on is kept, as in a drop, so quitting can't reroll it. A Berry dig that has
+    shown anything is parked instead, so the next dig carries on from it.
+    Returns "ended", "parked", or None if there was no such game."""
     game = state.game
     if game is None or game.kind != kind:
-        return False
+        return None
     state.game = None
+    if game.kind == "dig" and (game.rounds or game.wins or game.basket):
+        state.parked = game
+        return "parked"
     if game.rounds == 0 and game.kind == "higher_lower" and game.number is not None:
         state.opening, state.opening_at = game.number, now
-    return True
+    return "ended"
+
+
+def _game_score(game: Game) -> str:
+    """A game's score for the care log."""
+    if game.kind == "dig":
+        return f"{game.wins} berries"
+    return f"{game.wins}/{game.rounds}"
 
 
 def drop_game(
@@ -2132,7 +2178,7 @@ def drop_game(
                 "action": "game",
                 "by": by,
                 "result": "lost",
-                "score": f"{game.wins}/{game.rounds}",
+                "score": _game_score(game),
                 "game": game.kind,
             },
         )
@@ -2171,13 +2217,24 @@ def play_game(
     left_right: the pet hides left or right and the player guesses; the first
     guess starts a game. higher_lower: the player guesses whether the next
     number (1-9, never the same) is higher or lower; start_game shows the
-    first. The caller advances the pet to now first. Returns what the card
-    needs to draw the round, and events.
+    first. dig: one tap of a Berry dig (dig a leaf, or keep the basket); a
+    berry doesn't finish a round, so "round" in the reply is rounds finished.
+    start_game starts it, and keep on an empty basket is refused
+    (empty_basket) with nothing changed. The caller advances the pet to now
+    first. Returns what the card needs to draw the round, and events.
     """
     if guess not in GAMES.get(kind, ()):
         raise ValueError(f"{guess} is not a guess in {kind}")
     events: list[Event] = []
     game = state.game
+    if (
+        guess == "keep"
+        and game is not None
+        and game.kind == "dig"
+        and kind == "dig"
+        and game.basket == 0
+    ):
+        return {"result": "empty_basket"}, events  # nothing to keep; nothing changes
     refusal = _refuse_play(state)
     if refusal is None or (
         refusal == "too_tired" and game is not None and game.kind == kind
@@ -2199,8 +2256,34 @@ def play_game(
         assert game is not None
     if kind == "higher_lower":
         assert game.number is not None
-    game.rounds += 1
     game.last_at = now
+    if kind == "dig":
+        extra = _dig(game, guess, rng)
+        info = {**_round_info(game), **extra}
+    else:
+        info = _guess_round(game, guess, rng)
+    if not info["done"]:
+        return info, events
+    state.game = None
+    if kind == "dig":
+        won = game.wins >= R.DIG_WIN_AT
+    else:
+        won = game.wins >= R.GAME_WIN_AT
+    if not won:
+        happiness = R.GAME_LOSE_HAPPINESS
+    elif kind == "left_right":
+        happiness = R.GAME_WIN_HAPPINESS
+    elif kind == "dig":
+        happiness = R.DIG_WIN_HAPPINESS
+    else:
+        happiness = R.SKILL_GAME_WIN_HAPPINESS
+    return _finish_game(state, game, won, happiness, info, now, by, events)
+
+
+def _guess_round(game: Game, guess: str, rng: random.Random) -> dict[str, Any]:
+    """One round of Left or Right or Higher or Lower: one guess, settled."""
+    game.rounds += 1
+    kind = game.kind
     if kind == "higher_lower":
         shown = game.number
         game.number = rng.choice([n for n in NUMBERS if n != shown])
@@ -2211,17 +2294,41 @@ def play_game(
         correct = went == guess
         extra = {"went": went}
     game.wins += correct
-    info = {**_round_info(game), **extra, "correct": correct}
-    if not info["done"]:
-        return info, events
-    state.game = None
-    won = game.wins >= R.GAME_WIN_AT
-    if not won:
-        happiness = R.GAME_LOSE_HAPPINESS
-    elif kind == "left_right":
-        happiness = R.GAME_WIN_HAPPINESS
+    return {**_round_info(game), **extra, "correct": correct}
+
+
+def _dig(game: Game, guess: str, rng: random.Random) -> dict[str, Any]:
+    """One tap of a Berry dig, settled in the same call: a dig is drawn now
+    (no order dealt ahead, so a parked pile can't be peeked at)."""
+    if guess == "keep":
+        found = "kept"
     else:
-        happiness = R.SKILL_GAME_WIN_HAPPINESS
+        berries = DIG_BERRIES - game.basket
+        found = "berry" if rng.randrange(berries + DIG_BEES) < berries else "bee"
+    if found == "berry":
+        game.basket += 1
+        if game.basket < DIG_BERRIES:
+            return {"found": found, "round_over": False}
+        # The sixth berry: only bees are left, so the basket banks itself.
+    if found != "bee":
+        game.wins += game.basket
+    game.basket = 0
+    game.rounds += 1
+    return {"found": found, "round_over": True}
+
+
+def _finish_game(
+    state: PetState,
+    game: Game,
+    won: bool,
+    happiness: float,
+    info: dict[str, Any],
+    now: float,
+    by: str | None,
+    events: list[Event],
+) -> tuple[dict[str, Any], list[Event]]:
+    """A game's last round settled it: pay, count, log and tell."""
+    kind = game.kind
     if won:
         happiness += R.PLAYER_WIN_HAPPINESS * _scale(state, "player")
     happiness_before = state.happiness
@@ -2237,7 +2344,7 @@ def play_game(
     counts["won"] += won
     result = "won" if won else "lost"
     info["won"] = won
-    score = f"{game.wins}/{game.rounds}"
+    score = _game_score(game)
     _log(
         state,
         {
@@ -2262,13 +2369,18 @@ def _round_info(game: Game) -> dict[str, Any]:
     info: dict[str, Any] = {
         "result": OK,
         "game": game.kind,
-        "round": game.rounds,
+        "round": game.rounds,  # rounds finished (a dig that finds a berry isn't one)
         "rounds": R.GAME_ROUNDS,
         "wins": game.wins,
         "done": game.rounds >= R.GAME_ROUNDS,
     }
     if game.kind == "higher_lower":
         info["number"] = game.number
+    if game.kind == "dig":
+        info["basket"] = game.basket
+        info["leaves"] = DIG_BERRIES + DIG_BEES - game.basket
+        info["win_at"] = R.DIG_WIN_AT
+        info["done"] = info["done"] or game.wins >= R.DIG_WIN_AT
     return info
 
 

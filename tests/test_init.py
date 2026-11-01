@@ -1020,7 +1020,7 @@ async def test_ending_a_game_is_free_and_the_next_one_is_new(
     finished = async_capture_events(hass, f"{DOMAIN}_game_finished")
     # No game: harmless.
     reply = await game(hass, end=True)
-    assert reply == {"result": "ok", "ended": False}
+    assert reply == {"result": "ok", "ended": False, "parked": False}
     # Mid Left/Right.
     await game(hass, guess="left")
     await game(hass, guess="left")
@@ -1049,6 +1049,37 @@ async def test_ending_a_game_is_free_and_the_next_one_is_new(
     await game(hass, game="higher_lower")
     fresh = await game(hass, game="higher_lower", guess="higher")
     assert fresh["round"] == 1 and "restarted" not in fresh
+
+
+async def test_a_parked_berry_dig_carries_on_across_a_restart(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    """✕ on a dig that has shown something parks it (free); a restart keeps
+    it; the next dig start carries on. Keep on an empty basket is refused."""
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0, energy=90.0)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    started = await game(hass, game="dig")
+    assert (started["round"], started["basket"], started["leaves"]) == (0, 0, 8)
+    assert await game(hass, game="dig", guess="keep") == {"result": "empty_basket"}
+    # Dig until something is shown, then ✕.
+    tap = await game(hass, game="dig", guess="dig")
+    shown = (tap["round"], tap["wins"], tap["basket"])
+    log = len(coordinator.state.care_log)
+    assert await game(hass, game="dig", end=True) == {
+        "result": "ok",
+        "ended": True,
+        "parked": True,
+    }
+    assert coordinator.state.game is None and coordinator.state.parked is not None
+    assert len(coordinator.state.care_log) == log and not coordinator.state.games
+    await hass.config_entries.async_reload("test_pet")
+    await hass.async_block_till_done()
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    assert coordinator.state.parked is not None
+    back = await game(hass, game="dig")
+    assert (back["round"], back["wins"], back["basket"]) == shown
+    assert coordinator.state.parked is None and coordinator.state.game.kind == "dig"
 
 
 async def test_a_guess_from_another_game_is_refused(
