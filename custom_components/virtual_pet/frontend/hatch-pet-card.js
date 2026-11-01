@@ -2144,10 +2144,11 @@ const STYLE = `
     width: 40px; height: 28px; border-radius: 8px; background: var(--hp-screen-tint, #f3e7c9); }
   .game .gpick .gi img { image-rendering: pixelated; }
   .game .gpick .gi-arrow { font-size: 12px; margin: 0 1px; }
-  /* Three games on a narrow screen: stacked from the bottom, under the prompt. */
-  .compact .game .gpick { inset: 18% 0 2%; gap: 4px; justify-content: flex-end; }
-  .compact .game .gpick button { min-height: 40px; font-size: 13px; }
-  .compact .game .gpick .gi { height: 24px; }
+  /* Three games on a narrow screen: two rows of labels (no icons), still 44 px
+     tall (4c's tap size), under the prompt and clear of the close button. */
+  .compact .game .gpick { inset: 26% 3% 4%; flex-flow: row wrap; align-content: center; gap: 6px 4px; }
+  .compact .game .gpick button { min-width: 0; padding: 0 10px; font-size: 12px; justify-content: center; }
+  .compact .game .gpick .gi { display: none; }
   .game .gnum { position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
     display: grid; place-items: center; min-width: 52px; min-height: 56px; padding: 6px 10px;
     border-radius: 10px; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;

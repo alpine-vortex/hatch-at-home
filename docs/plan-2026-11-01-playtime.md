@@ -259,8 +259,8 @@ the log score string.
   because one line didn't fit between the buttons at 330 px. The bee shows still on the
   left, above keep, until the next prompt. `.gcatch` is now `.gprop` (and `s.catchEl` is
   `s.propEl`). `SERVER_GAMES` replaces the two-kind lists in `_quitGame` and the idle close.
-  The compact picker (330 px) stacks three games from the bottom at 40 px a button (the
-  compact ask buttons' size), since three 44 px buttons covered the prompt.
+  The compact picker (330 px) shows its three games as two rows of labels, no icons, at
+  44 px (4c's tap size): a column of three covered the prompt and the close button.
 - **Checks**: pytest `tests/test_dig.py` (18) and `test_a_parked_berry_dig_carries_on_across_a_restart`;
   card-check's `resume` section, the dig contract on stubbed replies and one real park round
   trip; bench `--preset dig` (420/330, calm).
