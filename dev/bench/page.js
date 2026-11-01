@@ -330,6 +330,7 @@
     };
   }
 
+  let FINDS_DEFAULT;
   async function mount(shot) {
     await customElements.whenDefined("hatch-pet-card");
     const stage = document.getElementById("stage");
@@ -352,6 +353,12 @@
       if (shot.shell.finish === "none") delete world.shell.finish;
     }
 
+    // FINDS_SHOWN (the card's release switch, off until V-F): `findsShown: true` turns it
+    // on for this shot; every other shot gets the card's own default back.
+    const Card = customElements.get("hatch-pet-card");
+    if (FINDS_DEFAULT === undefined) FINDS_DEFAULT = Card.findsShown;
+    Card.findsShown = shot.findsShown === undefined ? FINDS_DEFAULT : !!shot.findsShown;
+
     const card = document.createElement("hatch-pet-card");
     card.setConfig({ seasonal: shot.season === "auto" ? undefined : shot.season, ...(shot.config || {}) });
     card.hass = buildHass(shot, WORLDS);
@@ -368,6 +375,7 @@
     const cur = slides[card._index];
     // `acts`: a fake species.json "acts" put on every pet's species (`{eat: [stages], cheer: [...]}`).
     if (shot.acts) for (const s of slides) s.species = { ...s.species, acts: shot.acts };
+    if (shot.ask) card._ask(cur, shot.ask);
     if (shot.say !== undefined) card._write(cur, shot.say, 1e9);
     // `idle`: the pet's idle mumble through the card's own _idle, the first move (a mumble)
     // and the type's side of the coin forced (draws: next-idle delay, move, coin).
