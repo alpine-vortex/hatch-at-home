@@ -99,7 +99,9 @@ const enter = (name) => {
 // Keep dev pets awake for a section (they go to bed at night, and `_apply` re-sets
 // `asleep` from binary_sensor.asleep on every hass push). Overrides el._state for
 // asleep / lights_out to "off" while el.__pinAwake is set, and clears the slides'
-// leftovers. `unpinAwake` turns the override off when the section ends.
+// leftovers. A server-side call (a fresh hatchling's whine, ~3% of runs after the 1 h
+// fast-forward) is read as not calling too, as calm() would have it: no section tests a
+// real server call (call lines are driven on the card). `unpinAwake` turns it all off.
 function pinAwakeFn(el) {
   const hour = new Date().getHours();
   const was = !!el._slides[el._index]?.asleep;
@@ -108,8 +110,14 @@ function pinAwakeFn(el) {
     const real = el._state;
     el._state = function (slide, key) {
       const st = real.call(this, slide, key);
-      return el.__pinAwake && st && (key === "binary_sensor.asleep" || key === "switch.lights_out")
-        ? { ...st, state: "off" } : st;
+      if (!el.__pinAwake || !st) return st;
+      if (key === "binary_sensor.asleep" || key === "switch.lights_out" || key === "binary_sensor.calling") {
+        return { ...st, state: "off" };
+      }
+      if (key === "sensor.mood" && st.state === "calling") {
+        return { ...st, state: "content", attributes: { ...st.attributes, reason: "all good", reason_key: "content", flags: [], requests: [] } };
+      }
+      return st;
     };
   }
   el.__pinAwake = true;
@@ -2658,6 +2666,10 @@ async function main() {
   }
   if (enter("moments")) {
   await pinAwake(card, "moments");
+  // A shard opens here (SHARD_STARTS) straight after the prelude's 1 h fast-forward, with
+  // no play or resume section to calm the pet first: a hatchling's whine then held
+  // "play with me?" over every flavour line (CI, 2026-11-01).
+  await calm();
   // 4a. A kept line queued for an off-show slide: capped, and the catch-up never repeats it.
   const offShow = await card.evaluate((el) => {
     const s = el._slides[el._index];
