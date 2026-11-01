@@ -99,8 +99,9 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   leaves left). **dig** turns one leaf: a berry goes in this round's basket, a bee scares
   the basket off and ends the round. **keep** banks the basket and ends the round. Five
   rounds; 5 berries banked win, and a win pays a little more than higher or lower. ✕ puts
-  a dig aside instead of ending it: the next berry dig carries on from the same pile,
-  round and bank, however much later. (The `play` button entity is still plain play, for
+  a dig aside instead of ending it: your next berry dig carries on from the same pile,
+  round and bank, however much later. Each person has their own; someone else starts
+  fresh. (The `play` button entity is still plain play, for
   automations and voice.)
 - **Catch** (prototype, card option `experimental_catch: true`): a toy rolls in from
   one side; tap that side as it reaches the pet, but let the bee go by. Five rounds,
@@ -534,7 +535,9 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   starts a new left or right game, and its answer has `restarted: true`; higher or
   lower and the berry dig answer `no_game`). `end: true` (the card's ✕) ends the game in
   progress with no reward, penalty or log line; a berry dig that has started is put aside
-  instead (`parked: true` in the answer), and the next dig carries on from it. Each pet counts games
+  instead (`parked: true` in the answer) for whoever ended it, and their next dig carries
+  on from it. Calls with no person (automations) share one household slot. A dig guess
+  with no game answers `no_game`, with `parked: true` if the caller's dig is put aside. Each pet counts games
   played and won per game (attribute `games` on the life stage and debug sensors,
   diagnostics, and the journal).
 - **Chores:** map a to-do list in the options, and every item ticked off earns a treat.

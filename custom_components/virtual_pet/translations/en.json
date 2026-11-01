@@ -363,7 +363,7 @@
         },
         "end": {
           "name": "End",
-          "description": "End the game in progress instead of playing a round: no reward, no penalty, nothing logged. Does nothing if there is none, or it is another game. A berry dig that has started is put aside instead, and the next dig carries on from it."
+          "description": "End the game in progress instead of playing a round: no reward, no penalty, nothing logged. Does nothing if there is none, or it is another game. A berry dig that has started is put aside instead for whoever ends it (one shared slot for calls with no person, such as automations), and their next dig carries on from it."
         }
       }
     },

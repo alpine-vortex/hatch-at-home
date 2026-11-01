@@ -2144,11 +2144,14 @@ const STYLE = `
     width: 40px; height: 28px; border-radius: 8px; background: var(--hp-screen-tint, #f3e7c9); }
   .game .gpick .gi img { image-rendering: pixelated; }
   .game .gpick .gi-arrow { font-size: 12px; margin: 0 1px; }
-  /* Three games on a narrow screen: two rows of labels (no icons), still 44 px
-     tall (4c's tap size), under the prompt and clear of the close button. */
-  .compact .game .gpick { inset: 26% 3% 4%; flex-flow: row wrap; align-content: center; gap: 6px 4px; }
-  .compact .game .gpick button { min-width: 0; padding: 0 10px; font-size: 12px; justify-content: center; }
-  .compact .game .gpick .gi { display: none; }
+  /* _fitPicker puts the picker's top under the close button. When a column of
+     games doesn't fit there, they wrap into rows of labels (no icons), still
+     44 px tall (4c's tap size). */
+  .game .gpick.wrap { left: 3%; right: 3%; flex-flow: row wrap; align-content: center; gap: 6px 4px; }
+  .game .gpick.wrap button { min-width: 0; padding: 0 10px; font-size: 12px; justify-content: center; }
+  .game .gpick.wrap .gi { display: none; }
+  .game .gpick.wrap.tight { left: 1%; right: 1%; gap: 4px 3px; } /* still too tall: two a row */
+  .game .gpick.wrap.tight button { padding: 0 6px; font-size: 11px; }
   .game .gnum { position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
     display: grid; place-items: center; min-width: 52px; min-height: 56px; padding: 6px 10px;
     border-radius: 10px; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
@@ -2313,6 +2316,10 @@ const STYLE = `
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .game .gscore.two { white-space: pre; text-align: center; line-height: 1.25; } /* the dig: round, then bank and basket */
+  /* The dig at 300 px: the two-line score between keep and dig, clear of both. */
+  .compact .game .gscore.two { font-size: 10px; padding: 1px 3px; bottom: 3%; letter-spacing: -.3px; }
+  .compact .game.dig .gl { left: 1.5%; }
+  .compact .game.dig .gr { right: 1.5%; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
   .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
   .screen.show-status .bondhearts, .screen.show-status .linkhearts,
@@ -3937,6 +3944,7 @@ class HatchPetCard extends HTMLElement {
       this._redraw(); // the trim is sized for the layout: draw every slide again
     }
     for (const s of this._slides) s.el.style.width = `${this._slideW}px`;
+    for (const s of this._slides) if (s.game?.picking) this._fitPicker(s);
     this._renderShelf();
   }
 
@@ -7717,12 +7725,14 @@ class HatchPetCard extends HTMLElement {
       this._pickGame(s, games[0].key);
       return;
     }
-    s.game = { picking: true, prompt: this._card.classList.contains("compact") ? "pick a game!" : "what shall we play?" };
+    // The long prompt wraps to two lines (over the picker) on a slide under 300 px.
+    s.game = { picking: true, prompt: this._slideW < 300 ? "pick a game!" : "what shall we play?" };
     // Built each time: the card's options decide which games are offered.
     s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
       `<button data-game="${g.key}"><span class="gi" aria-hidden="true">${gameIcon(g.key)}</span>` +
       `${g.label}</button>`).join("");
     this._gameView(s, "pick");
+    this._fitPicker(s);
     // A narrow card has room for one short line beside the close button.
     this._write(s, s.game.prompt, 60000);
     let last = null;
@@ -7736,6 +7746,26 @@ class HatchPetCard extends HTMLElement {
     pick.focus({ preventScroll: true });
   }
 
+  // The picker sits under the close button (and the one-line prompt beside
+  // it), down to the screen's foot. A column of games that doesn't fit there
+  // wraps into rows (.wrap), so no width from 300 to 420 hides or covers one.
+  _fitPicker(s) {
+    const pick = s.gameBox.querySelector(".gpick");
+    const gx = s.gameBox.querySelector(".gx");
+    if (!pick || !gx || pick.hidden) return;
+    const box = s.gameBox.getBoundingClientRect();
+    if (!box.height) return;
+    pick.style.top = `${Math.round(gx.getBoundingClientRect().bottom - box.top + 6)}px`;
+    pick.style.bottom = "2%";
+    pick.classList.remove("wrap", "tight");
+    const buttons = [...pick.querySelectorAll("button")];
+    // The games' height, from the first one's top to the last one's foot, + the press shadow.
+    const need = () => Math.max(...buttons.map((b) => b.offsetTop + b.offsetHeight)) -
+      Math.min(...buttons.map((b) => b.offsetTop)) + 4;
+    if (need() > pick.clientHeight) pick.classList.add("wrap");
+    if (need() > pick.clientHeight) pick.classList.add("tight");
+  }
+
   // The games the play button offers: Catch only with experimental_catch.
   _games() {
     return this._config?.experimental_catch ? [...GAMES, CATCH_GAME] : GAMES;
@@ -7745,6 +7775,7 @@ class HatchPetCard extends HTMLElement {
   _gameView(s, view) {
     const box = s.gameBox;
     box.hidden = false;
+    box.classList.toggle("dig", view === "dig");
     box.querySelector(".gpick").hidden = view !== "pick";
     s.gameNum.hidden = view !== "higher_lower" && view !== "dig";
     const [gl, gr] = [box.querySelector(".gl"), box.querySelector(".gr")];
@@ -7797,6 +7828,10 @@ class HatchPetCard extends HTMLElement {
       g.basket = info.basket;
       this._digShow(s, info);
       this._write(s, (g.prompt = "dig or keep?"));
+      s.sayUntil = Date.now() + 60000;
+      // Keep is disabled on an empty basket: start on dig then.
+      s.gameBox.querySelector(info.basket ? ".gl" : ".gr").focus({ preventScroll: true });
+      return;
     } else if (kind === "left_right") {
       this._write(s, (g.prompt = "left or right? guess where I'll go!"));
     } else {
@@ -7844,7 +7879,11 @@ class HatchPetCard extends HTMLElement {
       // A known refusal is said once, by _react, from the care log; only an
       // unknown result gets a line here. no_game is never logged (a Higher or
       // Lower game the server dropped for idling): said here.
-      this._endGame(s, info?.result === "no_game" ? REFUSALS.no_game : REFUSALS[info?.result] ? null : "not now");
+      // A dig: keep on an empty basket means another screen kept it first; no
+      // game while theirs is parked means another screen put it aside.
+      this._endGame(s, info?.result === "empty_basket" ? "oh! someone else is playing with me"
+        : info?.result === "no_game" && info.parked ? "maybe later!"
+        : info?.result === "no_game" ? REFUSALS.no_game : REFUSALS[info?.result] ? null : "not now");
       return null;
     }
     return info;

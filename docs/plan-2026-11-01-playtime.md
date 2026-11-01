@@ -268,6 +268,26 @@ the log score string.
   picture); its spacing is tightened so it still fits 600×900. The copy list awaits the
   owner's sign-off.
 
+### Audit s2616 fixes (2026-11-01)
+
+- **Per person (owner):** `PetState.parked` is a map, HA user id → dig, with
+  `"household"` for calls with no person (automations; a screen signed in as its own user
+  keeps that user's slot). `Game.player` says whose a dig is. A dig started by someone
+  else while one is live parks the live one for its person (free) and starts the new
+  player's own. Whoever finishes a dig gets its bond, best and record. A save with one
+  parked dig (this branch's first cut) loads it into the household slot. A parked dig
+  older than the pet is dropped on load (an older version's egg keeps the unknown key).
+  A dig guess with no game answers `{"result": "no_game", "parked": true}` when the
+  caller's dig is put aside.
+- **Picker:** `_fitPicker` puts the picker under the close button and wraps the games into
+  rows of labels when a column doesn't fit, then tightens them (11 px, two a row) if the
+  rows still don't. The short prompt ("pick a game!") shows on any slide under 300 px.
+  Checked on the bench at 300-420 with three games and four (Catch).
+- **Card:** at 300 px the dig's score is narrower and keep/dig sit further out; the card
+  focuses dig on an empty basket; `empty_basket` says "oh! someone else is playing with
+  me", a parked `no_game` says "maybe later!" (existing lines).
+- Pay stays 23; a disconnect or a 3-minute idle mid-dig stays a loss (Q1).
+
 ## 3. Catch: three ways forward
 
 ### A. Rework Catch (keep a reflex game)

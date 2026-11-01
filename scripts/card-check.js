@@ -2629,6 +2629,34 @@ async function main() {
     check("dig: a won game says the berries banked, no /5",
       !dig.won.live && dig.won.said === "5 berries! you win ♪", JSON.stringify(dig.won));
 
+    // Replies across screens (audit s2616 #8/#9), stubbed with no waits: keep on a
+    // basket another screen kept first is someone else; no game while this person's
+    // dig is parked (another screen's x) is "maybe later!", not "let's start over".
+    const across = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const hass = el._hass;
+      const real = hass.callService;
+      const out = {};
+      try {
+        for (const [key, response] of [["empty", { result: "empty_basket" }],
+          ["parked", { result: "no_game", parked: true }]]) {
+          s.game = { kind: "dig", round: 1, wins: 0, basket: 2, busy: false };
+          el._gameView(s, "dig");
+          hass.callService = async () => ({ response });
+          await el._guess(s, key === "empty" ? "left" : "right");
+          out[key] = { live: !!s.game, said: s.bubble.textContent };
+        }
+      } finally {
+        hass.callService = real;
+        if (s.game) el._endGame(s, null);
+      }
+      return out;
+    });
+    check("dig: empty_basket from another screen's keep says someone else is playing",
+      !across.empty.live && across.empty.said === "oh! someone else is playing with me", JSON.stringify(across.empty));
+    check("dig: no game while this person's dig is parked says maybe later",
+      !across.parked.live && across.parked.said === "maybe later!", JSON.stringify(across.parked));
+
     // The real server: one dig, the x, and reopening carries on (parked).
     {
       await open("dig");
