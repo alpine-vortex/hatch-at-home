@@ -419,6 +419,8 @@
       // `preview`: a tile tapped (its finish on the live shell, unsaved); "" is the world's own.
       if (shot.preview !== undefined) root.querySelector(`.tile[data-finish="${shot.preview}"]`).click();
     }
+    // `scrollEnd` on the status box's own views: its end (the bigtext preset's status-end).
+    if (shot.scrollEnd && ["status", "settings", "picker"].includes(shot.view)) cur.status.scrollTop = cur.status.scrollHeight;
     // `scroll`: a selector in the status box brought into view (the picker's list scrolls).
     if (shot.scroll) {
       const box = cur.status;
