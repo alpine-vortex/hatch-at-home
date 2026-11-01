@@ -3464,35 +3464,83 @@ async function main() {
   const resumed = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
     const back = (hiddenMs) => {
-      Object.assign(s, { lookedFirst: true, greeted: true, visitedAt: Date.now(), nextWish: Date.now() + 1, queue: [] });
+      Object.assign(s, { lookedFirst: true, greeted: true, visitedAt: Date.now(), nextWish: Date.now() + 1, queue: [], lastMoment: "m" });
       s.sayUntil = Date.now() + 60000; // nothing said meanwhile: the tick mustn't greet or speak
       el._hiddenAt = Date.now() - hiddenMs;
       el._onHidden(); // visible again
-      return { looked: s.lookedFirst, greeted: s.greeted, visited: s.visitedAt, mention: s.nextWish };
+      return { looked: s.lookedFirst, greeted: s.greeted, visited: s.visitedAt, mention: s.nextWish, replay: s.lastMoment === undefined };
     };
-    const look = () => {
+    const look = (fresh = true) => {
       s.house = { ...(s.house || {}), dream: { kind: "watching", title: "Bluey" } };
       el._firstLook(s);
       const held = s.queue.map((q) => q.text);
-      el.hass = el._hass; // the house's next word: states are fresh
+      el.hass = el._hass; // a set hass with the same states (a connection change): still held
       el._firstLook(s);
-      return { held, said: s.queue.map((q) => q.text) };
+      held.push(...s.queue.map((q) => q.text));
+      if (fresh) el.hass = { ...el._hass, states: { ...el._hass.states } }; // fresh states
+      else el._resumedAt = Date.now() - 6000; // the hold ran out on the old states
+      el._firstLook(s);
+      const said = s.queue.map((q) => q.text);
+      el._resumedAt = el._resumeStates = null;
+      return { held, said };
     };
     for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish)-/.test(k)) localStorage.removeItem(k);
     const short = back(60 * 1000);
+    const device = s.ids.device;
+    const seenWas = localStorage.getItem(`hatch-seen-${device}`);
+    const hoursAgo = Date.now() - 5 * 3600 * 1000;
+    el._seenWrite(device, { seen: hoursAgo });
     const long = back(3 * 3600 * 1000 + 1000);
+    s.seenAt = 0;
+    el._seen(s); // a tick while held mustn't move the mark: the away note reads it
+    long.seen = el._seenRead(device)?.seen === hoursAgo;
     const first = look();
+    if (seenWas === null) localStorage.removeItem(`hatch-seen-${device}`); else localStorage.setItem(`hatch-seen-${device}`, seenWas);
     back(3 * 3600 * 1000 + 1000);
     const twice = look();
-    s.queue = []; s.sayUntil = 0;
-    return { short, long, first, twice };
+    // Timed out on old states: no dream or wish, and their keys left for the next look.
+    for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish)-/.test(k)) localStorage.removeItem(k);
+    back(3 * 3600 * 1000 + 1000);
+    const stale = look(false);
+    stale.keys = Object.keys(localStorage).filter((k) => /^hatch-(dream|wish)-/.test(k));
+    // A screen left on (no hide): a new day, or the pet up for the day seen live, is a new
+    // look; the same day isn't.
+    let fresh = null;
+    el._firstLook = function (t) { if (t === s && fresh === null) fresh = !t.lookedFirst; };
+    el._visit = () => {}; // no server visit from these ticks
+    const roll = (day) => {
+      fresh = null;
+      Object.assign(s, { lookedFirst: true, greeted: true, sayUntil: Date.now() + 60000 });
+      el._lookDay = day;
+      el._tick();
+      return fresh;
+    };
+    let rolled, sameDay;
+    try {
+      rolled = roll("Mon Jan 01 2001");
+      sameDay = roll(new Date().toDateString());
+    } finally {
+      delete el._firstLook;
+      delete el._visit;
+    }
+    s.lookedFirst = true;
+    el._moment(s, { type: "woke_up", how: "morning", at: new Date().toISOString() });
+    const woke = !s.lookedFirst;
+    s.queue = []; s.sayUntil = 0; s.lookedFirst = true;
+    return { short, long, first, twice, stale, rolled, sameDay, woke };
   });
   check("fresh-moment 1: a tab back after 3 h hidden looks again (the dream and wish once, after fresh states); 1 min changes nothing",
     resumed.short.looked && resumed.short.greeted && resumed.short.visited > 0 && resumed.short.mention > 0 &&
-      !resumed.long.looked && !resumed.long.greeted && resumed.long.visited === 0 && resumed.long.mention === 0 &&
+      !resumed.long.looked && !resumed.long.greeted && resumed.long.visited === 0 && resumed.long.mention === 0 && resumed.long.seen &&
+      resumed.long.replay && !resumed.short.replay &&
       resumed.first.held.length === 0 && resumed.first.said.includes("I dreamed about Bluey!") &&
       resumed.first.said.includes("can we watch the sunset together?") &&
       !resumed.twice.said.some((t) => /dreamed|sunset together/.test(t)), JSON.stringify(resumed));
+  check("fresh-moment 1: a set hass with the same states keeps the hold; timed out, no dream or wish and their keys unused",
+    resumed.first.held.length === 0 && !resumed.stale.said.some((t) => /dreamed|sunset together/.test(t)) &&
+      resumed.stale.keys.length === 0, JSON.stringify(resumed.stale));
+  check("fresh-moment 1: a screen left on looks again on a new day or a live morning wake-up, not on the same day",
+    resumed.rolled === true && resumed.sameDay === false && resumed.woke, JSON.stringify(resumed));
   // top10 6d: a visitor's dream names it from worlds.json; one this card doesn't know
   // says no dream line at all.
   const visitorDream = await card.evaluate((el) => {
@@ -9756,7 +9804,7 @@ async function main() {
       s.mine = { ...(s.mine || {}), gift: g };
       el._hiddenAt = Date.now() - hiddenMs;
       el._onHidden(); // the page is visible: a return
-      el.hass = el._hass; // fresh states: a long absence's new look may begin (fresh-moment 1)
+      el.hass = { ...el._hass, states: { ...el._hass.states } }; // fresh states: a long absence's new look may begin (fresh-moment 1)
       const said = [];
       const was = el._sayLine;
       el._sayLine = function (sl, q) { said.push(q.text); return was.call(this, sl, q); };

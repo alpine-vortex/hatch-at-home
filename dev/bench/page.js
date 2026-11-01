@@ -206,7 +206,7 @@
       Object.assign(s, { lookedFirst: true, greeted: true }); // this page looked before it was hidden
       card._hiddenAt = Date.now() - 3 * 3600e3 - 1000;
       card._onHidden(); // visible again
-      card.hass = card._hass; // the house's next word
+      card.hass = { ...card._hass, states: { ...card._hass.states } }; // fresh states
     } else {
       Object.assign(s, { lookedFirst: false, greeted: false });
     }

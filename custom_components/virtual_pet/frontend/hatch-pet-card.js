@@ -3032,7 +3032,9 @@ class HatchPetCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (this._resumedAt && !document.hidden) this._resumedAt = null; // fresh states: the look may begin
+    if (this._resumedAt && !document.hidden && hass?.states !== this._resumeStates) {
+      this._resumedAt = this._resumeStates = null; // fresh states: the look may begin
+    }
     this._listenReady(hass?.connection);
     this._watchServerClock(hass);
     this._resendAnswers();
@@ -3102,18 +3104,14 @@ class HatchPetCard extends HTMLElement {
       this._hiddenAt ??= Date.now();
       return;
     }
-    // Back after a long while (owner Q1): a new look, as a fresh page would have (the
-    // greeting, the first look, the visit, a gift waiting; fresh-moment 1). Each line's
-    // own once-key still stops a double, and the wish mention starts over, so the
-    // first look says the wish first. The look waits for the house's next word
-    // (RESUME_HOLD_MS at most): a phone back from sleep holds yesterday's states.
+    // Back after a long while (owner Q1): a new look, as a fresh page would have, a gift
+    // waiting too (fresh-moment 1). The look waits for fresh states (RESUME_HOLD_MS at
+    // most): a phone back from sleep holds yesterday's, and a set hass with the same
+    // states object (a connection change) isn't fresh.
     if (this._hiddenAt && Date.now() - this._hiddenAt >= AWAY_NOTE_AFTER_MS) {
-      (this._slides || []).forEach((x) => {
-        x.giftAgain = true;
-        x.lookedFirst = x.greeted = false;
-        x.visitedAt = x.nextWish = 0;
-      });
+      this._newLook(this._slides || [], { resumed: true });
       this._resumedAt = Date.now();
+      this._resumeStates = this._hass?.states;
     }
     this._hiddenAt = null;
     this._touchedAt = null; // a new look begins at its first touch (gaps-seams 5a)
@@ -4877,6 +4875,12 @@ class HatchPetCard extends HTMLElement {
   _tick() {
     if (!this._slides || !this._visible || document.hidden) return;
     this._ticks = (this._ticks || 0) + 1;
+    // A screen left on overnight (a wall tablet never hides): a new day is a new look.
+    const day = new Date().toDateString();
+    if (this._lookDay !== day) {
+      if (this._lookDay) this._newLook(this._slides);
+      this._lookDay = day;
+    }
     this._slides.forEach((s, i) => {
       if (s.poseUntil && Date.now() > s.poseUntil) s.poseUntil = 0;
       if (s.patPoseUntil && Date.now() > s.patPoseUntil) s.patPoseUntil = 0;
@@ -5534,6 +5538,21 @@ class HatchPetCard extends HTMLElement {
     if (said === null || said === undefined || t > said) this._seenWrite(device, { said: t });
   }
 
+  // A new look on the same page (fresh-moment 1): the greeting, the first look, the visit
+  // and the wish mention start over; each line's own once-key still stops a double. A
+  // tab back from hiding also says a gift waiting, and leaves what happened meanwhile
+  // to the catch-up (no live replay of moments, as _forget).
+  _newLook(slides, { resumed = false } = {}) {
+    for (const x of slides) {
+      x.lookedFirst = x.greeted = false;
+      x.visitedAt = x.nextWish = 0;
+      if (resumed) {
+        x.giftAgain = true;
+        x.lastMoment = x.lastLogAt = undefined;
+      }
+    }
+  }
+
   // A tab just back after a long while, its states not yet fresh (fresh-moment 1).
   _resumeHeld() {
     return !!this._resumedAt && Date.now() - this._resumedAt < RESUME_HOLD_MS;
@@ -5580,11 +5599,14 @@ class HatchPetCard extends HTMLElement {
       lines.push([this._pick(WEEK_OLD), 5000]);
     }
     const dreamt = s.house?.dream || stage.dream; // a show or song's, from the house
-    const dreamLine = dreamt && DREAMS[dreamt.kind]?.(dreamt, this._words(s), this._worlds);
+    // The hold ran out on states that may be yesterday's: no dream or wish this look (their
+    // keys stay unused for the next).
+    const stale = !!this._resumedAt;
+    const dreamLine = !stale && dreamt && DREAMS[dreamt.kind]?.(dreamt, this._words(s), this._worlds);
     if (dreamLine && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
       lines.push([dreamLine, 5000]);
     }
-    const wish = stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
+    const wish = !stale && stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
     if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);
     // What happened while you were out comes after what's new (fresh-moment 2, owner Q2).
     // From TODAY_FROM_HOUR, once a day here: a line about its day, in the away note's place.
@@ -5769,6 +5791,7 @@ class HatchPetCard extends HTMLElement {
   // When this device last saw the pet (for the away note), every minute.
   _seen(s) {
     const now = Date.now();
+    if (this._resumeHeld()) return; // a tab back: its first look reads the old mark first (fresh-moment 1)
     if (s.seenAt && now - s.seenAt < 60000) return;
     s.seenAt = now;
     this._seenWrite(s.ids?.device, { seen: now }); // said stays as it is
@@ -6264,6 +6287,7 @@ class HatchPetCard extends HTMLElement {
       case "woke_up":
         if (m.how === "morning") {
           say("*yaaawn*", 4500, () => this._animate(s, s.pet, "stretch", 1100));
+          if (!capture) this._newLook([s]); // up for the day, seen live: the morning's look begins (fresh-moment 1)
         } else if (m.how === "night") {
           say("...so sleepy");
         }
