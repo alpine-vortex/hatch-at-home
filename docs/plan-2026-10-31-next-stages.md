@@ -7,18 +7,21 @@ the same day (one commit per plan on `crew/hatch-at-home-s2570-…`). Labels use
 
 **The owner's priority (2026-10-31):** reactions, visitors and playtime are "where the
 connections really shine". **Art merges with the code that plays it.** Every copy line
-below is PROPOSED.
+below is PROPOSED unless marked approved.
+
+**Answers folded in (2026-10-31).** "(owner)" marks the owner's own calls and "(FM)" the
+first mate's. They are listed under "Decided" at the end.
 
 ## Where things stand
 
 - **Built:** experience Waves 0-3, 4c-rest and 4e. R1 (eat and cheer) and R2: hooks for
   pat, refuse, aww, ready and splash, each with a fallback. Personality P1-P4. Visitors v1
   with its catch-up line and final art. Winter lights with stand-in art and the "holiday
-  names" toggle. ✕ ends the game on the server. Bond connections, voices phases 1-5 and
-  device charm Parts 1-4.
-- **Deferred by the owner (2026-10-30):** 4a, 4b, 4d, 4g and the forms book. These stay
-  deferred here. Only 4g comes back, as a question (Q8).
-- **On hold:** 4f (Catch as a normal game), by the owner's Catch call (Q2).
+  names" toggle. ✕ ends the game on the server, free (owner, Q1). Bond connections, voices
+  phases 1-5 and device charm Parts 1-4.
+- **Deferred by the owner (2026-10-30):** 4a, 4b, 4d and the forms book. These stay
+  deferred. 4g is unbundled from the forms book (FM, Q8) and is slice 2e.
+- **Withdrawn:** 4f, Catch as a normal game (FM, Q2). The Catch rethink is in 2c.
 
 ## Stage 1: land what's in flight, art-only pose slices, winter before 1 Dec
 
@@ -29,68 +32,55 @@ below is PROPOSED.
 | 1c | **Aww poses** (a lost game), as 1b | S | 1 | ~90 | yes, next | 1a |
 | 1d | **Ready poses** (game start), as 1b | S | 1 | ~90 | yes | 1a |
 | 1e | **Splash poses** (clean's last beat), as 1b | S | 1 | ~90 | yes | 1a |
-| 1f | **Winter lights final art**: swap the 16 stand-ins; re-run `costume-preview.js winter` (the earmuffs' sink) | S | 1 | ~16-25 | yes, after the poses | 1a; **must be in a release before 1 Dec** |
-| 1g | ✕ after a guess: the rule the owner picks (Q1) | S | 1 | none | — | Q1 |
-| 1h | Tuning review (HANDOFF item 4, about 2026-11-03): read the owner's diagnostics against `rates.py`, propose numbers | S | 0, then 1 | none | — | the owner's diagnostics |
+| 1f | **Winter lights final art**: swap the 16 stand-ins; re-run `costume-preview.js winter` (the earmuffs' sink) | S | 1 | ~16-25 | yes, after the wave (2a) | 1a; **must be in a release before 1 Dec** |
+| 1g | Tuning review (HANDOFF item 4, about 2026-11-03): read the owner's diagnostics against `rates.py`, propose numbers | S | 0, then 1 | none | — | the owner's diagnostics |
 
 - 1b-1e are **art-only slices**. R2's hooks and fallbacks are already on main (`f663533d`),
   so no code slice is planned for them. Each world's art merges with its `acts` entry.
-- A release of 1b-1f together (0.40.0) before 1 Dec is the date that matters. Your Luna
-  order puts reactions before the seasonal set; if the pose art runs late, whether winter
-  jumps the queue is Q11.
+- **The Luna queue (owner, Q7):** refuse, aww, ready, splash, **wave**, then winter's final
+  art. A6 pounce is off the queue until 2c (FM, Q3). **Winter jumps ahead if the poses
+  aren't done by about 20 Nov** (FM, Q11), so it is in a release before 1 Dec.
+- The old 1g (a rule for ✕ after a guess) is dropped: ✕ is free always (owner, Q1).
 
 ## Stage 2: connections (reactions, visitors, playtime)
 
+Order (owner, Q7): **the wave pose first**, then kindred pairs.
+
 | # | Slice | Size | Tier | Art | Queued? | Needs |
 |---|---|---|---|---|---|---|
-| 2a | **Kindred pairs + persona link lines**: one extra line when a kindred pair links (personality "Later"), and each type's link line variants (device charm "Left"); card only | M | 0 copy plan, then 1 | none | — | Q4, Q6; the owner picks the PROPOSED lines first |
-| 2b | Visitor catch-up for a baby: the `BABY.visit` babble, e.g. PROPOSED "hi hi! ♪" | XS | 1 | none | — | Q9; fold into 2a's ship |
-| 2c | **Playtime design note**: the Catch rethink and 4d's slower game in one note (shapes, odds, the 70-80% rule) | — | 0 | none for the note | — | Q2, Q3 |
-| 2d | A **wave** pose for the link greet and visitors (device charm Q6; visitors §6 "later `acts.wave`"): `acts.wave` + one `STAGE_POSES` entry | S | 1 | ~90 | **no** | the owner's yes; it goes into the Luna queue after winter |
-| 2e | **Visitors v2 plan** (finds, basket, collection, gifts: check-ins item 1) | — | 0, then an L/tier-2 build | ~60 finds | no | Q10; the seed moves to the server |
-| 2f | Older generations (4g), unbundled from the forms book | S | 1 | none | — | Q8 |
+| 2a | **Wave pose** for the infrared link's greet and world visitors (device charm Q6; visitors §6 "later `acts.wave`"): `acts.wave` + one `STAGE_POSES` entry through `_actPose`, with a fallback (today's cheer). The baby's visitor catch-up line, approved "hi hi! ♪" (owner, Q9), ships in this slice | S | 1 | ~90 | **yes**: after splash, before winter (owner, Q7) | the art; it merges with the hook |
+| 2b | **Kindred pairs + persona link lines**: one extra line when a kindred pair links (personality "Later"), and each type's link-line variants (device charm "Left"); card only, nothing counted (FM, Q6) | M | 0 copy plan, then 1 | none | — | the owner picks the PROPOSED lines first (new lines stay proposals, Q4) |
+| 2c | **Playtime design note**: the Catch rethink (FM, Q2) and 4d's slower game in one note (shapes, odds, the 70-80% rule); decides whether pounce art comes back | — | 0 | none for the note | — | — |
+| 2d | **Visitors v2 plan** (finds, basket, collection, gifts: check-ins item 1), from v1's 18-visitor roster; plan in stage 2, build after (FM, Q10) | — | 0, then an L/tier-2 build | ~60 finds | no | the seed moves to the server |
+| 2e | Older generations (4g), unbundled from the forms book (FM, Q8) | S | 1 | none | — | — |
 
 **Dependencies.**
-- 2a reads the built personality (P1-P3) and the infrared link (D6). It has no server or
+- 2a: the hook and the art land together ("art merges with the code that plays it"); the
+  wave art is fifth in the Luna queue, so 2a ships when it's drawn.
+- 2b reads the built personality (P1-P3) and the infrared link (D6). It has no server or
   save change.
-- 2d's art merges with its hook.
-- 2e: v1 picks the visitor on the card and saves nothing. A collection can't credit a
+- 2d: v1 picks the visitor on the card and saves nothing. A collection can't credit a
   visit until the server owns the day's seed, so this is the plan's first design point.
-- 2f touches the same `_renderJournal` code as the forms book's PR 2a. Whichever ships
+- 2e touches the same `_renderJournal` code as the forms book's PR 2a. Whichever ships
   second rebases.
 
-## Open owner questions (each with a recommendation)
+## Decided (2026-10-31)
 
-1. **✕ after a guess.** `end_game` (batch 6, `f1e90a9a`) ends a game for free even after a
-   guess. PR 0f made "a dropped game with a guess" a loss, so a losing game can't be quit
-   and restarted to farm records, bond points or dream seeds. *Recommend:* ✕ stays free
-   before the first guess and counts as a loss after one, as a drop does (1g). No new copy.
-2. **Catch vs Q9/A4.** On 10-28 you decided "Catch ships as a normal game" (4f). On 10-31
-   you said it "doesn't seem like a strong game". *Recommend:* 4f is withdrawn. Catch stays
-   card-only until the rethink, which becomes 2c's design note rather than a separate task.
-3. **A6 pounce art** (queued last for Luna) only plays in Catch, and there's no hook for it.
-   *Recommend:* take it off the queue until 2c settles Catch's future, and put the wave
-   (2d) in its place if you want it.
-4. **Personality lines.** The plan says the tables were approved on 10-28 and shipped
-   verbatim, and also says all 307 lines are still proposals. *Recommend:* treat the
-   shipped tables as approved, and mark any line you want changed as you meet it.
-5. **Bond connections "as built".** There's no separate send-off switch, quiet mode is on
-   for everyone with "notify me", and the dream choices (stars, the sea, snacks, you) are
-   the same in every world. *Recommend:* confirm all three as built.
-6. **Pet friendships.** Check-ins item 5 counts visits ("best friends" at a few), but the
-   infrared link's rule is no friendship meter or visit counts. *Recommend:* keep the
-   link's rule. Kindred pairs and "neighbours talking" stay flavour from today's link
-   only, with nothing counted.
-7. **Stage 2 order.** *Recommend:* 2a first (no art, card only, it uses what's built and
-   it's the "connections" you named), with 2c's note written alongside. Then 2e's plan.
-8. **Older generations (4g)**: unbundle it from the deferred forms book? *Recommend:*
-   yes. It's small, it's on your interest list, and its only tie to the forms book is
-   one shared function.
-9. **Baby visitor catch-up.** It's plain for now. *Recommend:* a babble line, e.g.
-   PROPOSED "hi hi! ♪", in 2b.
-10. **Visitors v2.** *Recommend:* write the plan in stage 2 (server seed, basket of 3,
-    collection, gifts) starting from v1's 18-visitor roster, and build it after stage 2.
-11. **Winter vs the poses, if the art runs late.** Your Luna order is reactions first, then
-    the seasonal set, and the queue was estimated at about 3 days. *Recommend:* keep your
-    order. If by about 20 Nov the poses aren't done, winter's art jumps ahead so it can be
-    in a release before 1 Dec.
+1. **✕ is free always** (owner), before or after a guess. 0f's "a dropped game with a guess
+   is a loss" no longer applies to a person's ✕; it still applies to drops the server
+   makes (idle, asleep, away). As built in `f1e90a9a`; no slice.
+2. **4f withdrawn** (FM); the Catch rethink goes in 2c.
+3. **A6 pounce off the Luna queue until 2c** (FM; done).
+4. **The shipped personality lines are approved as shipped** (owner, 2026-10-31). New lines
+   stay proposals.
+5. **Bond connections kept as built** (owner): no separate send-off switch, quiet mode on
+   for everyone with "notify me", the same dream choices in every world. The old
+   questions are closed.
+6. **No counts between pets** (FM): kindred pairs and "neighbours talking" are flavour from
+   the day's link only.
+7. **Stage 2 starts with the wave pose** (owner), ahead of kindred pairs. The Luna queue is
+   refuse, aww, ready, splash, wave, then winter's final art.
+8. **4g unbundled** from the forms book (FM).
+9. **The baby's visitor catch-up line: "hi hi! ♪"** (owner, approved).
+10. **Visitors v2:** plan in stage 2, build after (FM).
+11. **Winter jumps the queue** if the poses aren't done by about 20 Nov (FM, as recommended).

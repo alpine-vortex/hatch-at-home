@@ -4,8 +4,9 @@
 (2a `e0422553`, 2b+2c `172b1e27`), Wave 3 (3a `b54017b7`, 3b `4c7c0102`, 3c `0197ad0b`),
 4c-rest `cbe9fc3d` and 4e `11ca8685`/`92d07795` are on main since v0.38.0,
 unreleased (Waves 2-3 merged as waves, 4c-rest and R1 in batch 4, 4e and R2 in batch 5), with R1/R2 from "Week of 2026-10-31". **Deferred by the owner
-(2026-10-30):** 4a, 4b, 4d, 4f, 4g. **4f is now contradicted** by the owner's call on
-Catch (2026-10-31; see "Week of 2026-10-31"). The status column in section 4 is current.
+(2026-10-30):** 4a, 4b, 4d. **4f is withdrawn** (FM, 2026-10-31; the Catch rethink goes in
+`plan-2026-10-31-next-stages.md` 2c). **4g is unbundled** from the forms book (FM,
+2026-10-31; next-stages 2e). The status column in section 4 is current.
 
 **DRAFT 3, 2026-10-28.** A plan for the owner's review: nothing here is built *(true when
 written; see the status above)*. Draft 1
@@ -838,10 +839,10 @@ and moth adults land** (the art session is redrawing them now).
 
 **PR 4f: Catch, a normal game (O06, owner A4).** Size **M**, tier 1. After PR 1a and
 PR 3a (both change Catch's code).
-- **ON HOLD (2026-10-31), contradiction flagged:** Q9/A4 decided "Catch ships as a normal
-  game". On 2026-10-31 the owner said Catch "doesn't seem like a strong game": it stays
-  card-only and not counted, and a rethink is a tududi task, not a plan. Don't build 4f
-  until the owner says which holds.
+- **WITHDRAWN (FM, 2026-10-31).** Q9/A4 had decided "Catch ships as a normal game"; on
+  2026-10-31 the owner said Catch "doesn't seem like a strong game", so it stays
+  card-only and not counted. The rethink goes in the next-stages plan's 2c (a playtime
+  design note with 4d's slower game).
 - Feature-gaps **C2 full** (`plan-2026-10-27-feature-gaps.md` 224-312): the start call
   returns the five rounds; a `caught: n` finish call; rewards, play counts, bond and
   favourite, like the other games; the per-pet best in place of the browser-wide
@@ -858,7 +859,8 @@ PR 3a (both change Catch's code).
 - **Done =** Catch plays, pays and records like the other games.
 
 **PR 4g: older generations (F10, owner Q2).** Size **S**, tier 1. After forms book 2a
-(the same `_renderJournal` edit; cross-plan change 4).
+(the same `_renderJournal` edit; cross-plan change 4). **Unbundled (FM, 2026-10-31):** it
+ships on its own as next-stages 2e; whichever of 4g and forms book 2a ships second rebases.
 - The family line (3437, `.slice(-4)`) keeps the newest four, then "older generations
   (N)" (C16), a tap that opens the rest, oldest first.
 - **Tests:** card-check: with seven generations, four show and the link says 3; a tap
@@ -941,8 +943,8 @@ on main since v0.38.0, unreleased. "deferred" = the owner's 2026-10-30 release s
 | 4c | Status and settings apart, 44 px (O07) | M | 1 | privacy P2/P3a, forms book 2a | main (4c-rest) |
 | 4d | A slower game: design note, then a build held to 70-80% (O06) | M-L | 1 | the owner's pick of the design | deferred |
 | 4e | README and guide counts, `art.py` re-laid (F13) | M | 1 | the new axolotl and moth adults | main |
-| 4f | Catch, a normal game (O06) | M | 1 | 1a, 3a, the decoy prop | **on hold** (Catch call, 10-31) |
-| 4g | Older generations (F10) | S | 1 | forms book 2a | deferred |
+| 4f | Catch, a normal game (O06) | M | 1 | 1a, 3a, the decoy prop | **withdrawn** (FM, 10-31) |
+| 4g | Older generations (F10) | S | 1 | forms book 2a (unbundled, FM 10-31) | next-stages 2e |
 
 ## 5. Copy (proposals; the owner decides the words)
 
@@ -1125,14 +1127,13 @@ part: M5's "same for `stayed_up_since`" (`shift_times` already shifts it, model
 `play_game` takes `end: true` (`model.end_game`); the card sends it on ✕/Escape, status,
 swipe, and Play during Left or Right or Higher or Lower. Catch stays card-only. A person's quit
 costs and earns nothing, isn't a drop, and keeps an unguessed Higher or Lower opening.
-- **Contradiction (flagged, not resolved):** `end_game` ends a game **with guesses** for
-  free too. PR 0f (audit finding 5) made "a dropped game with a guess" a loss, so a
-  restart can't farm records, bond points or dream seeds. With ✕, a person who is losing
-  can quit and start over with no loss. The owner decides whether a quit after a guess
-  counts as a loss (as a drop does), or stays free.
+- **✕ is free always (owner, 2026-10-31)**, before or after a guess. PR 0f's "a dropped
+  game with a guess is a loss" (audit finding 5) no longer applies to a person's ✕; it
+  still applies to drops the server makes (idle, asleep, away).
+  As built; no change.
 
 **Catch (owner, 2026-10-31):** "doesn't seem like a strong game": it stays card-only and
-not counted; a rethink is a tududi task, not a plan. This contradicts Q9/A4 and puts
-PR 4f on hold (above). It also leaves **A6 pounce** (queued last in the Luna art order) with
-nothing to play it: Catch's pounce is the only player, and no `acts.pounce` hook exists.
-Under "art merges with the code that plays it", hold A6 until the Catch rethink.
+not counted; a rethink is a tududi task, not a plan. PR 4f is
+withdrawn (FM; above), and the rethink goes in next-stages 2c. **A6 pounce** had nothing
+to play it (Catch's pounce was its only player; no `acts.pounce` hook exists), so it is
+**off the Luna queue until 2c** (FM, 2026-10-31, done).

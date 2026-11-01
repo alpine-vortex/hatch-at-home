@@ -18,10 +18,9 @@ end ("The audit of draft 1") wins where it differs from the sections above.
 - **Left:** only "Later: kindred pairs". Its gate ("when visits are built") is now met by
   the infrared link (device charm D6, `0ee886f`, 0.36.0), and it is the same work as
   device charm's "persona link-line variants (later)". Plan the two together.
-- **Contradiction, not resolved here:** the paragraph below says the owner approved the
-  lines' tables on 2026-10-28 and the phases shipped them verbatim, but "Still for the
-  owner: the lines" (in "Decided and still open") says all 307 are unapproved proposals.
-  The owner should say which holds (next-stages plan, question list).
+- **The lines (owner, 2026-10-31): the shipped lines are APPROVED as shipped.** New lines
+  (kindred pairs, persona link lines) stay proposals until the owner picks them. This
+  settles the clash between the paragraph below and "Still for the owner: the lines".
 
 The owner approved the lines' tables on 2026-10-28; P2a ships its tables
 verbatim. **Every line in this file is a proposal for the owner, not approved
@@ -791,7 +790,7 @@ upbringing lines are their own small PR; fancy gets a fourth leaning
 superlative ("glad it's you ♥").
 
 **Still for the owner: the lines.** All 307 are in "The lines (proposal)". Mark
-the ones to change.
+the ones to change. *Closed 2026-10-31 (owner): the shipped lines are approved as shipped.*
 
 ## The audit of draft 1 (18 findings) and what changed
 

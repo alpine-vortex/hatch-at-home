@@ -3,7 +3,8 @@
 **Status: BUILT 2026-10-31** (crew s2559) with code stand-in art; the final art swaps
 files only. *Reconciled 2026-10-31 against git:* the code (`f6b9b29f` … `d647f3d0`) is in
 batch 6 (`fm-batch6c`, gating), not on main; release 0.39.0 follows. **Left:** the final
-art (Luna; queued after the reaction poses) must land in a release **before 1 Dec**, and
+art (Luna; queued after refuse, aww, ready, splash and wave (owner, 2026-10-31); it jumps
+ahead if those aren't done by about 20 Nov (FM)) must land in a release **before 1 Dec**, and
 `costume-preview.js winter` is re-run with it (the earmuffs' sink, see *Built*). See *Built* at the end: the review (s2558) and the owner's
 decisions of 2026-10-31 win over the sections below where they differ.
 

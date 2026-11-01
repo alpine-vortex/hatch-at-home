@@ -177,7 +177,7 @@ date in two ways:
   sensor attributes and the bus onto the private channel, so the sensor no longer
   carries `bonds`.
 
-Open questions, **as built** (the code's behaviour, not a new decision; owner to confirm):
+Open questions, **as built**: **closed 2026-10-31 (owner): kept as built.**
 
 - Send-off switch: none of its own. `_send_off` needs the person's "my day" on,
   and them in `notify_users` ("notify me"), at bond level 3+, a few times a week.
@@ -204,8 +204,8 @@ Open questions, **as built** (the code's behaviour, not a new decision; owner to
 
 ## Open questions
 
-*2026-10-31: the same three as "Open questions, as built" in "Status" above, which wins.
-Still unconfirmed by the owner.*
+*Closed 2026-10-31 (owner): kept as built* (no send-off switch of its own; quiet mode on
+for everyone with "notify me"; the same dream choices in every world).
 
 - Should the send-off (2) have its own switch, or ride "notify me"?
 - Quiet mode (6) on by default for everyone with "notify me"?

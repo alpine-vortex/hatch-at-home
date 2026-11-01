@@ -22,7 +22,9 @@ Left: persona link-line variants (later); Q5 (links across separate cards) and Q
 (a drawn wave pose) stay deferred. *2026-10-31:* the persona link lines are unblocked
 (personality P2a-P3 are built) and are the same slice as personality's "kindred pairs".
 Q6 would now be an `acts.wave` entry plus one `STAGE_POSES` hook through `_actPose`
-(R2's pattern), with its art merged alongside. Batch 6 (`fm-batch6c`) adds shell fixes: the porthole edge inset and the
+(R2's pattern), with its art merged alongside. **Owner, 2026-10-31: the wave pose is
+first in stage 2** (next-stages 2a); its art is fifth in the Luna queue, after splash and
+before winter's final art. Batch 6 (`fm-batch6c`) adds shell fixes: the porthole edge inset and the
 IR beam over the trim (`a6e0c044`). The body below is the original plan.
 
 **Line numbers are for `origin/main` at `29d77c2`.** P3a-card (in flight) rewrites

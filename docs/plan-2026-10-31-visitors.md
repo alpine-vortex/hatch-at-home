@@ -4,7 +4,8 @@
 world visitors on the card) is on main (batch 5, unreleased). In batch 6 (`fm-batch6c`,
 gating; release 0.39.0 follows): the catch-up line and 10 s on show `8911ef94`, and the
 **final art for all 36 frames** (`c9252a2e` … `b57149da`, replacing the stand-ins).
-Left: the baby's catch-up babble (open, below) and the tier-2 v2 (finds, basket,
+Left: the baby's catch-up line, approved "hi hi! ♪" (owner, 2026-10-31; ships with
+the wave pose, next-stages 2a) and the tier-2 v2 (finds, basket,
 collection: `plan-2026-10-28-daily-checkins.md` item 1). **v2 dependency:** v1 picks the
 day's visitor on the card and saves nothing, so a collection can't credit a visit; v2
 needs the seed (or the visit) on the server first.
@@ -265,8 +266,9 @@ The art batch is separate and runs in parallel (**M**, art-bound). Ship after R1
 "you came to see me?", see *Built*), and the catch-up line. Built as recommended, not
 recorded as the owner's answer: 1 (the roster, now with final art), 2 (no weather
 visitors), 3 (a still visitor plus the line), 4 (world visitors kept 2 min apart from
-season visitors), 5 (pat wiggles silently), 6 (4 days in 7). Still open: the baby's
-catch-up line (plain for now; `BABY.visit` babble?).
+season visitors), 5 (pat wiggles silently), 6 (4 days in 7). The baby's catch-up
+line: **"hi hi! ♪"** (owner, 2026-10-31), shipping with the wave pose (next-stages 2a),
+which also replaces the greet's cheer with `acts.wave` (owner: the wave is first in stage 2).
 
 1. **The roster:** are these 18 right? Your examples (crab, owl) are now creatures, so
    the crab became a shore crab, and the owl became a nighthawk. *Rec: as listed.*

@@ -188,10 +188,10 @@ be more than one pet.
   on the tick, `visiting` on both states; the card loads the guest's species to draw
   it. No new art, since every creature exists. **Cost:** M.
 - **Only one pet?** Nothing changes, and the visitors from feature 1 fill the gap.
-- *Contradiction (flagged 2026-10-31, not resolved):* item 5 shipped as the infrared link
-  (device charm D6), whose rules say **no friendship meter, gifts or visit counts**.
-  The pair visit counts and "best friends" line above break that rule. The owner decides
-  which holds (`plan-2026-10-31-next-stages.md`).
+- **No counts (FM, 2026-10-31):** item 5 shipped as the infrared link (device charm D6),
+  whose rules say **no friendship meter, gifts or visit counts**, and that rule holds. The
+  pair visit counts and the "best friends" line above are dropped; kindred pairs and
+  "neighbours talking" are flavour from the day's link only.
 - **Neighbours talking** (owner, 2026-10-28, from Animal Crossing): pets mention each
   other ("have you met Mochi? she's so nice!", "Mochi visited yesterday ♥"), more as
   they become friends.
