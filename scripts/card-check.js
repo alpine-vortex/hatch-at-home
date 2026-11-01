@@ -3871,7 +3871,7 @@ async function main() {
     return { said, again, mark: el._seenRead(s.ids.device), at: new Date(at).getTime() };
   }, stageAt);
   check("2a: a stage_changed 40 s old is said once at the next look",
-    caught.said.filter((t) => /guess what\? I'm a teen/.test(t)).length === 1 &&
+    caught.said.filter((t) => /guess what! I'm a teen/.test(t)).length === 1 &&
       !caught.again.some((t) => /guess what/.test(t)) && caught.mark?.said >= caught.at &&
       caught.mark?.seen > 0, JSON.stringify(caught));
   // Fold #12: the catch-up reads the viewer's own moments too (a bond line),
