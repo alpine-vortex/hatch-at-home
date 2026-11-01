@@ -374,12 +374,15 @@ def choose_question(
     if came_home in DAY_ZONES or came_home == "home":
         return "how_day"  # back from work or school, or a friend just home
     kind = rotation(date.fromisoformat(today))
-    if kind == "how_day" and hour >= R.ASK_DAY_FROM:
-        return "how_day"
     if kind == "dream" and 0 < to_bed_minutes <= R.ASK_DREAM_BEFORE_BED_MINUTES:
         return "dream"
     if kind == "guess" and has_forecast and hour >= R.ASK_GUESS_FROM:
         return "guess"
+    # Today's kind can't be asked now (the dream before its window, a guess with no
+    # forecast or too early): how_day stands in, so most evenings get a question
+    # (fresh-moment 5b). Still one later question a day: "later" is marked either way.
+    if hour >= R.ASK_DAY_FROM:
+        return "how_day"
     return None
 
 
