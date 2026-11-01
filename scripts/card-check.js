@@ -2532,15 +2532,20 @@ async function main() {
     // Berry dig (playtime 2a): the per-tap contract, with stubbed replies (the
     // pytest owns the odds). A berry isn't a round; a bee and a keep end one; keep
     // is disabled on an empty basket and sends nothing; a reply out of step is
-    // someone else; the x sends end (which parks it on the server).
+    // someone else; the x sends end (which parks it on the server). The card's own
+    // _playCall is stubbed on the instance: the waits between taps let HA hand the
+    // card a fresh hass, which would bring back the real callService.
     const dig = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
-      const hass = el._hass;
-      const real = hass.callService;
       const sent = [];
       const base = { result: "ok", game: "dig", rounds: 5, win_at: 5, done: false };
       const queue = [];
-      hass.callService = async (d, svc, data) => { sent.push(data); return { response: queue.shift() }; };
+      el._playCall = async (x, data) => {
+        sent.push(data);
+        const info = queue.shift();
+        if (x.game && info?.result !== "ok") el._endGame(x, "not now");
+        return x.game && info?.result === "ok" ? info : null;
+      };
       const keep = () => s.gameBox.querySelector(".gl").getAttribute("aria-disabled");
       const out = {};
       try {
@@ -2566,8 +2571,15 @@ async function main() {
         out.bee = { round: s.game.round, wins: s.game.wins, said: s.bubble.textContent, prop: !s.propEl.hidden };
         await new Promise((r) => setTimeout(r, 1000));
         out.afterBee = { prop: !s.propEl.hidden, said: s.bubble.textContent, keep: keep() };
-        el._quitGame(s, null);
-        out.end = sent.at(-1);
+        const hass = el._hass;
+        const real = hass.callService;
+        hass.callService = async (d, svc, data) => { out.end = data; return { response: {} }; };
+        try {
+          el._quitGame(s, null);
+        } finally {
+          hass.callService = real;
+        }
+        out.numLabel = s.gameNum.getAttribute("aria-label");
         // A reply out of step (a berry while we think the basket holds 0, banked 2).
         s.game = { picking: true };
         queue.push({ ...base, round: 2, wins: 1, basket: 0, leaves: 8 });
@@ -2590,7 +2602,7 @@ async function main() {
         await new Promise((r) => setTimeout(r, 1000));
         out.won = { live: !!s.game, said: s.bubble.textContent };
       } finally {
-        hass.callService = real;
+        delete el._playCall;
         if (s.game) el._endGame(s, null);
       }
       return out;
@@ -2610,8 +2622,8 @@ async function main() {
       dig.bee.round === 2 && dig.bee.wins === 1 && dig.bee.prop && dig.bee.said === "bzz! the berries rolled away" &&
         !dig.afterBee.prop && dig.afterBee.said === "dig or keep?" && dig.afterBee.keep === "true",
       JSON.stringify([dig.bee, dig.afterBee]));
-    check("dig: the x sends end for the dig (the server parks it)",
-      dig.end?.game === "dig" && dig.end?.end === true, JSON.stringify(dig.end));
+    check("dig: the x sends end for the dig (the server parks it), and the pile's label goes",
+      dig.end?.game === "dig" && dig.end?.end === true && dig.numLabel === null, JSON.stringify([dig.end, dig.numLabel]));
     check("dig: a reply out of step ends the game as someone else's",
       !dig.stray.live && dig.stray.said === "oh! someone else is playing with me", JSON.stringify(dig.stray));
     check("dig: a won game says the berries banked, no /5",

@@ -9275,6 +9275,7 @@ class HatchPetCard extends HTMLElement {
     s.propEl.hidden = true;
     s.propEl.style.bottom = ""; // the dig's bee sits higher than Catch's ball
     s.gameScore.classList.remove("two");
+    s.gameNum.removeAttribute("aria-label"); // the dig's "n leaves left"
     s.game = null;
     s.gameTimers?.forEach(clearTimeout);
     s.gameTimers?.clear();

@@ -264,8 +264,9 @@ the log score string.
 - **Checks**: pytest `tests/test_dig.py` (18) and `test_a_parked_berry_dig_carries_on_across_a_restart`;
   card-check's `resume` section, the dig contract on stubbed replies and one real park round
   trip; bench `--preset dig` (420/330, calm).
-- **Not done here**: `docs/howto/how-to-play.html` (a fixed print page: a third game card
-  needs a layout pass and the owner's copy); the copy list awaits the owner's sign-off.
+- **how-to-play**: page 5 says three games and has a "Berry dig" card (the bee as its
+  picture); its spacing is tightened so it still fits 600×900. The copy list awaits the
+  owner's sign-off.
 
 ## 3. Catch: three ways forward
 
@@ -338,7 +339,8 @@ plus the dig if it is built.
   "a mix of reflex and slower games" would not be met for now (Q3).
 - **Cost:** S, tier 1, removal only:
   - in `hatch-pet-card.js`: `CATCH_GAME`, `CATCH`, `CALM_FAR`, `BEST_CATCH_KEY` (104-118),
-    `BEE_FLAP_MS`, the `.gcatch` element and its CSS, `_catchRound`/`_catchTap`/`_catchResolve`
+    `BEE_FLAP_MS`, Catch's use of the prop element (the element itself stays: `.gprop`, see
+    below), `_catchRound`/`_catchTap`/`_catchResolve`
     (about 9015-9130), the `catch` branches in `_pickGame`, `_guess` and `_gameView`, and
     status's "best catch" row;
   - elsewhere: the bench `catch` field, card-check's Catch steps (the `play` section and the
