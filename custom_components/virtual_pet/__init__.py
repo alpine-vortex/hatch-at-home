@@ -593,6 +593,10 @@ async def websocket_set_shell(
     {
         vol.Required("type"): f"{DOMAIN}/collect",
         vol.Required("entity_id"): cv.entity_id,
+        # V-E review #1: optional, so V-C's {type, entity_id} tap still works;
+        # `shared` has no default, so the gift path can't fail open.
+        vol.Optional("gift", default=False): bool,
+        vol.Optional("shared"): bool,
     }
 )
 @websocket_api.async_response
@@ -603,13 +607,31 @@ async def websocket_collect(
     {id, world, new, from?}, and the basket empties for every screen. Any
     login, shared and read-only too (the basket is the household's). A
     websocket command, so who tapped isn't recorded. Nothing is awaited
-    before the read-and-clear: a second tap gets []."""
+    before the read-and-clear: a second tap gets [].
+
+    With `gift: true` it is instead the caller's own gift (plan visitors v2
+    §5): {gift: {id, world}} or {gift: null}, never the basket. Only when the
+    screen says `shared: false` outright; absent or true is refused with
+    `shared` (a card bug's guard: `shared` is the client's own claim, as on
+    subscribe). Without `gift` the basket path is unchanged and `shared`
+    ignored."""
     entity = er.async_get(hass).async_get(msg["entity_id"])
     pet: PetCoordinator | None = (
         hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
     )
     if pet is None or pet.state is None:
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    if msg["gift"]:
+        if msg.get("shared") is not False:
+            connection.send_error(
+                msg["id"], "shared", "A gift is taken on its person's own screen"
+            )
+            return
+        gift = pet.take_gift(connection.user.id)
+        connection.send_result(msg["id"], {"gift": gift})
+        if gift is not None:
+            await pet.async_save_now()  # never given twice
         return
     finds = pet.collect()
     connection.send_result(msg["id"], {"finds": finds})
@@ -630,8 +652,9 @@ async def websocket_collection(
 ) -> None:
     """The collection page's read (plan visitors v2 §4): {world, visitors:
     [id], finds: {id: day}} for the pet's current world. Any login, read-only
-    too. `shared` is required like subscribe's and ignored until V-E adds
-    `gifts` for an unshared screen. Pure: no advance, no save, no publish."""
+    too. `shared` is required like subscribe's: an unshared screen also gets
+    `gifts`, the caller's own given finds of this world (V-E). Pure: no
+    advance, no save, no publish."""
     entity = er.async_get(hass).async_get(msg["entity_id"])
     pet: PetCoordinator | None = (
         hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
@@ -639,7 +662,9 @@ async def websocket_collection(
     if pet is None or pet.state is None:
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
-    connection.send_result(msg["id"], pet.collection_view())
+    connection.send_result(
+        msg["id"], pet.collection_view(connection.user.id, msg["shared"])
+    )
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:

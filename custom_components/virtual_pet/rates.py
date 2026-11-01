@@ -332,6 +332,12 @@ FIND_MISSING_WEIGHT = 1  # a condition true only for want of a signal (R5)
 FIND_NIGHT_HOURS = (20, 6)  # "night" with no sun entity: 20:00-06:00 local
 FIND_FULL_MOON_DAYS = 1.5  # finds: full within 1.5 days of mid-cycle (3 nights)
 BASKET_SIZE = 3  # finds waiting; more go straight to the collection
+# Gifts (plan visitors v2 §5): per person, private, for a friend at
+# BOND_FRIEND_LEVEL or more, on their own clock, never ranked.
+GIFT_EVERY_DAYS = (6.0, 8.0)  # between gifts, calendar days, jittered
+GIFT_ONLY_CHANCE = 1 / 6  # the world's gift-only find, until they have it
+GIFT_HAD_WEIGHT = 0.2  # a find this person was already given
+GIFT_TIER_WEIGHTS = {10: 10, 4: 8, 1: 2}  # the basket's tiers, rarer ones 2x
 FAVOURITE_SNACK_CHANCE = 0.4  # a snack is its favourite (said at most once a day)
 
 # A bond with each person (HA user). Points never go down. A typical day (a

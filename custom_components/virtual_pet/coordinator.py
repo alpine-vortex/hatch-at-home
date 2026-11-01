@@ -525,6 +525,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._want_forecast(now)
         self._daily_visit(now)
         self._roll_find(now)
+        self._gift_tick(now)
         self._fire(self._daily_wish(now))
         return self.state
 
@@ -1139,6 +1140,34 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._save()
         self._fire(events)
 
+    def _gift_tick(self, now: float) -> None:
+        """Each friend's gift clock (plan visitors v2 §5), after the find
+        roll, outside advance; not until the house has been read once (a
+        gift's conditions need the flags). Saved, never fired: a gift is on
+        no bus, sensor, push or debug list. The tick's update then pushes the
+        person's own `mine.gift`."""
+        state = self.state
+        if state is None or self._find_flags is None:
+            return
+        if model.gift_tick(
+            state, now, self.world, self.finds, self._find_flags, self.rng
+        ):
+            self._save()
+
+    def take_gift(self, user: str) -> dict[str, Any] | None:
+        """The gift's take (virtual_pet/collect {gift: true}): read and clear
+        with no await (two screens: the first gets it, the second None), then
+        only the watchers' `mine` changes, so only this person's screens are
+        sent anything: no advance, no publish, no event (V-E review #2). The
+        caller saves at once."""
+        assert self.state is not None
+        gift = model.take_gift(
+            self.state, user, self._now(), self.known_finds, self.rng
+        )
+        if gift is not None:
+            self._push_watchers()
+        return gift
+
     def collect(self) -> list[dict[str, Any]]:
         """The basket tap (virtual_pet/collect): read and clear the known finds
         waiting, with no await in between (two screens: the first gets them,
@@ -1150,13 +1179,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._publish()
         return taken
 
-    def collection_view(self) -> dict[str, Any]:
+    def collection_view(self, user: str, shared: bool) -> dict[str, Any]:
         """The collection page (virtual_pet/collection, plan visitors v2 §4):
         {world, visitors: [id], finds: {id: day}} for this world's page of
         state.collection, only ids worlds.json knows for this world, and no
         gift-only find (known_finds includes them; V-E puts gifts on the
-        receiver's own page, as a later `gifts` key). Pure read: no advance, no
-        save, no publish. Ids it skips stay in the save (V-A's rule)."""
+        receiver's own page, as `gifts`). Pure read: no advance, no save, no
+        publish. Ids it skips stay in the save (V-A's rule).
+
+        `gifts` (V-E review #17): absent on a shared screen; otherwise the ids
+        of this world's known finds in this person's own `gifts`, [] for none
+        or no bond."""
         assert self.state is not None
         page = self.state.collection.get(self.world, {})
         known_visitors = self.known_visitors.get(self.world, set())
@@ -1164,7 +1197,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         gift_only = {f["id"] for f in self.finds if f.get("gift_only")}
         visitors = page.get("visitors", {})
         finds = page.get("finds", {})
-        return {
+        view: dict[str, Any] = {
             "world": self.world,
             "visitors": [v for v in visitors if v in known_visitors],
             "finds": {
@@ -1173,6 +1206,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 if f in known_finds and f not in gift_only
             },
         }
+        if not shared:
+            bond = self.state.bonds.get(user) or {}
+            view["gifts"] = [g for g in bond.get("gifts", ()) if g in known_finds]
+        return view
 
     async def async_save_now(self) -> None:
         """Write the save at once (after a collect: a crash can't bring the
@@ -2164,6 +2201,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "baby_talk": self.people.baby_talk(user),
             "birthday_phone": bool(person.get("birthday_phone")),
             "birthday_kept": bool(person.get("birthday")),
+            # Their waiting gift, {id, world}, or None (plan visitors v2 §5).
+            "gift": model.known_gift(bond, self.known_finds),
         }
 
     def _house_view(self) -> dict[str, Any]:

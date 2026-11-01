@@ -2,8 +2,9 @@
 
 A scripted day of one person's bond with the pet: a visit, care, a game
 record, a favourite game, a level-up, a tuck-in, coming home, a day's wish
-aimed at them, the show it watched and the song it heard, and a dream of the
-show. Their user ID, first name and nickname reach their own channel and their
+aimed at them, the show it watched and the song it heard, a dream of the
+show, and a gift set aside for them and taken (visitors v2 V-E: the
+gift-only find's id, which nothing but a gift ever names). Their user ID, first name and nickname reach their own channel and their
 phone, never the event bus or a state; the show and song reach every channel
 (P3c), never the bus or a state either. The care log's "by" (the HA user's
 display name) stays, by the owner's decision.
@@ -45,6 +46,7 @@ SHOW = "Bluey"
 SONG = "Clair de lune"
 ARTIST = "Debussy"
 TITLES: tuple[str, ...] = (SHOW, SONG, ARTIST)
+GIFT = "acorncup"  # woodland's gift-only find (V-E review #11)
 
 
 @pytest.fixture
@@ -163,12 +165,22 @@ async def scripted_day(
     pet.state.dream = {"kind": "watching", "title": SHOW, "day": today}
     pet._publish()
     await hass.async_block_till_done(wait_background_tasks=True)
+    # A gift set aside for them on the tick, then taken on their own screen.
+    monkeypatch.setattr(model.R, "GIFT_ONLY_CHANCE", 1.0)
+    pet.state.bonds[me.id]["next_gift_at"] = pet._now() - 60
+    await pet.async_refresh()
+    assert pet._mine(me.id)["gift"] == {"id": GIFT, "world": "woodland"}
+    assert pet.take_gift(me.id) == {"id": GIFT, "world": "woodland"}
+    await pet.async_save_now()
+    await settle(hass, freezer)
+    assert pet.state.bonds[me.id]["gifts"] == [GIFT]
+    assert GIFT not in str(pet.state.collection)  # never the house's (R3)
     return {
         "me": me,
         "pet": pet,
         "phone": phone,
         "bond_phone": bond_phone,
-        "secrets": (me.id, FIRST_NAME, NICKNAME, *TITLES),
+        "secrets": (me.id, FIRST_NAME, NICKNAME, *TITLES, GIFT),
     }
 
 
@@ -251,6 +263,14 @@ async def test_nothing_personal_on_the_bus(
     # every channel hears it.
     assert any(s.get("title") == SHOW for s in pet.state.dream_seeds)
     assert pet._house["media"]["title"] == SONG
+    # The gift (V-E review #11, #12, #21): on no push, private moment, debug
+    # list, house view or the shared collection; no `found` for it.
+    assert GIFT not in json.dumps([c.data for c in day["phone"]], default=str)
+    assert GIFT not in json.dumps(pet._private, default=str)
+    assert GIFT not in json.dumps(pet.debug, default=str)
+    assert GIFT not in json.dumps(pet._house_view(), default=str)
+    assert GIFT not in json.dumps(pet.collection_view(day["me"].id, True))
+    assert GIFT not in json.dumps(pet.moments, default=str)
 
 
 async def test_a_simulated_bond_moment_is_never_fired(

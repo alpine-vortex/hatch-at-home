@@ -1016,13 +1016,22 @@ async def test_collection_reads_this_worlds_known_page_only(
     now: float,
     hass_storage: dict[str, Any],
     hass_ws_client: Any,
+    hass_read_only_user: Any,
     hass_read_only_access_token: str,
 ) -> None:
     """V-D0: unknown, wrong-world and gift-only ids are skipped, never dropped
-    from the save; shared true and false get the same reply; a read-only login
-    may read; nothing is saved or pushed."""
+    from the save; a read-only login may read; nothing is saved or pushed.
+    V-E (review #17) rewrote the "shared true and false get the same reply"
+    half: a shared screen gets no `gifts` key; the caller's own screen gets
+    their gifts of this world that worlds.json knows (the gift-only one
+    included), and nobody else's."""
+    me = hass_read_only_user.id
+    bonds = {
+        me: {"points": 30, "gifts": ["acorncup", "pinecone", "pearl", "nonesuch"]},
+        "someone-else": {"points": 30, "gifts": ["acorn", "snailshell"]},
+    }
     hass_storage[STORE_KEY] = hatched_pet(
-        now, collection=COLLECTION, next_find_at=now + 4 * HOUR
+        now, collection=COLLECTION, next_find_at=now + 4 * HOUR, bonds=bonds
     )
     pet = (await setup(hass)).runtime_data
     await hass.async_block_till_done()
@@ -1037,9 +1046,12 @@ async def test_collection_reads_this_worlds_known_page_only(
         "visitors": ["stellersjay"],
         "finds": {"acorn": "2026-10-22"},
     }
-    for shared in (True, False):
-        reply = await command(client, "collection", entity_id=entity, shared=shared)
-        assert reply["success"] and reply["result"] == want
+    reply = await command(client, "collection", entity_id=entity, shared=True)
+    assert reply["success"] and reply["result"] == want  # no `gifts` key
+    reply = await command(client, "collection", entity_id=entity, shared=False)
+    assert reply["success"]
+    assert reply["result"] == {**want, "gifts": ["acorncup", "pinecone"]}
+    assert "acorncup" not in reply["result"]["finds"]  # never the house page
     assert pet.state.collection == COLLECTION  # nothing dropped
     assert await pushed(watcher) == []  # no publish
     await hass.async_block_till_done()
@@ -1065,7 +1077,10 @@ async def test_collection_empty_reads_as_empty(
     client = await hass_ws_client(hass)
     entity = "sensor.pip_life_stage"
     reply = await command(client, "collection", entity_id=entity, shared=False)
-    assert reply["result"] == {"world": "woodland", "visitors": [], "finds": {}}
+    want = {"world": "woodland", "visitors": [], "finds": {}}
+    assert reply["result"] == {**want, "gifts": []}  # no bond: none (V-E)
+    reply = await command(client, "collection", entity_id=entity, shared=True)
+    assert reply["result"] == want
 
 
 async def test_collection_of_an_egg_still_reads(

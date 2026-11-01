@@ -223,10 +223,24 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
         "since": _str,
         "day": _str,
         "tucked_at": _num,
+        "next_gift_at": _num,
     }
     for key, check in checks.items():
         if key in out and not check(out[key]):
             del out[key]
+    # Gifts (plan visitors v2 §6, V-E review #3/#14): nothing here may raise,
+    # or bonds_from drops the whole bond. A bad value is dropped alone; an
+    # id no worlds.json knows is not bad (a later version's): kept.
+    gift = out.get("gift")
+    if "gift" in out and not (
+        isinstance(gift, dict) and _str(gift.get("id")) and _str(gift.get("world"))
+    ):
+        del out["gift"]
+    if "gifts" in out:
+        if isinstance(out["gifts"], list):
+            out["gifts"] = list(dict.fromkeys(g for g in out["gifts"] if _str(g)))
+        else:
+            del out["gifts"]
     for key in ("games", "best"):
         if key in out:
             out[key] = _int_map(out[key])
@@ -2627,6 +2641,111 @@ def collect_basket(state: PetState, known: dict[str, set[str]]) -> list[dict[str
     taken = basket_known(state, known)
     state.basket = [e for e in state.basket if e["id"] not in known.get(e["world"], ())]
     return [{k: e[k] for k in ("id", "world", "new", "from") if k in e} for e in taken]
+
+
+def pick_gift(
+    bond: dict[str, Any],
+    finds: list[dict[str, Any]],
+    flags: dict[str, bool | None],
+    rng: random.Random,
+) -> dict[str, Any] | None:
+    """What the pet sets aside for one person (plan visitors v2 §5, V-E
+    review #9). First the world's gift-only find, 1 in GIFT_ONLY_CHANCE,
+    only while this person hasn't had it. Otherwise the world's other finds
+    by tier and condition (`find_weight`, with the R5 fallback), the rarer
+    tiers doubled (GIFT_TIER_WEIGHTS), and one this person was already given
+    at GIFT_HAD_WEIGHT. The house's collection plays no part (no x0.5)."""
+    had = set(bond.get("gifts", ()))
+    only = [f for f in finds if f.get("gift_only") and f["id"] not in had]
+    if only and rng.random() < R.GIFT_ONLY_CHANCE:
+        return only[0]
+    pool = []
+    for f in finds:
+        if f.get("gift_only"):
+            continue
+        tier = R.GIFT_TIER_WEIGHTS.get(f["weight"], f["weight"])
+        w = find_weight({**f, "weight": tier}, flags)
+        if w > 0:
+            pool.append((f, w * (R.GIFT_HAD_WEIGHT if f["id"] in had else 1.0)))
+    if not pool:
+        return None
+    return rng.choices([f for f, _ in pool], [w for _, w in pool])[0]
+
+
+def _next_gift(now: float, rng: random.Random) -> float:
+    return now + rng.uniform(*R.GIFT_EVERY_DAYS) * 86400
+
+
+def gift_tick(
+    state: PetState,
+    now: float,
+    world: str,
+    finds: list[dict[str, Any]],
+    flags: dict[str, bool | None],
+    rng: random.Random,
+) -> bool:
+    """Each friend's gift clock (plan visitors v2 §5, V-E review #8). On the
+    tick, outside advance, on the wall clock in every stage but the egg (a
+    nap, the night and away don't pause it: a gift just waits). Per bond at
+    BOND_FRIEND_LEVEL or more, never ranked: while a gift waits the clock is
+    left alone (it starts again on the take); none set, or further ahead
+    than any gap (the clock went back), schedules one with no gift, so an
+    upgrade or reaching the level brings no burst; once due, one gift, never
+    caught up. Fires nothing, ever. True if a bond changed (save it)."""
+    if not finds or life_stage(state) == "egg":
+        return False
+    changed = False
+    for _user, bond in sorted(state.bonds.items()):
+        if bond_level(bond["points"]) < R.BOND_FRIEND_LEVEL or "gift" in bond:
+            continue
+        due = bond.get("next_gift_at")
+        if due is None or due - now > R.GIFT_EVERY_DAYS[1] * 86400:
+            bond["next_gift_at"] = _next_gift(now, rng)
+            changed = True
+            continue
+        if now < due:
+            continue
+        find = pick_gift(bond, finds, flags, rng)
+        if find is None:
+            bond["next_gift_at"] = _next_gift(now, rng)
+        else:
+            bond["gift"] = {"id": find["id"], "world": world}
+        changed = True
+    return changed
+
+
+def known_gift(bond: dict[str, Any] | None, known: dict[str, set[str]]) -> Any:
+    """A bond's waiting gift as {id, world}, if some world knows it; else
+    None (an unknown id is a later version's: kept, never shown, review #14)."""
+    gift = bond.get("gift") if bond else None
+    if gift is None or gift["id"] not in known.get(gift["world"], ()):
+        return None
+    return {"id": gift["id"], "world": gift["world"]}
+
+
+def take_gift(
+    state: PetState,
+    user: str,
+    now: float,
+    known: dict[str, set[str]],
+    rng: random.Random,
+) -> dict[str, Any] | None:
+    """The person's own look takes their gift (§5): read and clear with no
+    await, so a second screen gets None. Its id joins their `gifts` (once,
+    ids only, R6) and their clock starts again. Never the house collection
+    (R3), no bond points (Q7), no event. A bond is read, never created; an
+    unknown gift stays where it is."""
+    bond = state.bonds.get(user)
+    gift = known_gift(bond, known)
+    if gift is None:
+        return None
+    assert bond is not None
+    del bond["gift"]
+    gifts = bond.setdefault("gifts", [])
+    if gift["id"] not in gifts:
+        gifts.append(gift["id"])
+    bond["next_gift_at"] = _next_gift(now, rng)
+    return gift
 
 
 def grant_wish(
