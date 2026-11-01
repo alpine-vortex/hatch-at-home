@@ -20,14 +20,14 @@ slot in the first look and the basket's turn before a visitor stay as they are.
 
 | # | Slice | Size | Tier | New lines |
 |---|---|---|---|---|
-| 1 | A resumed tab is a new look | S | 1 | none |
+| 1 | A resumed tab, or a new day on a screen left on, is a new look | S | 1 | none |
 | 2 | The first look leads with what's new | S | 1 | none |
 | 7 | One move in the first 10 s | S | 1 | none |
 | 3 | A missed day visitor plays live at the next daytime look | M | 1 | none |
 | 5a | A question no longer freezes visitors and moves | S | 2 | none |
 | 5b | A later question on most evenings; the dream question 4 h before bed | S | 2 | none |
-| 4 | An evening "today" line | S-M | 1 | about 36 |
-| 6 | A plain dream every unmapped morning, from 15 | S | 2 | 12 |
+| 4 | An evening "today" line | S-M | 1 | 36 |
+| 6 | A plain dream every unmapped morning, from 30 | S | 2 | 27 |
 
 The FM approved the 5a, 5b and 6 approaches before the build and reads their diffs
 before the merge. Each slice merges origin/main first. The top-10 branch (s2614) touches the
@@ -35,19 +35,32 @@ same first look (its dream line takes a third `worlds` argument), so its form is
 
 ### 1. A resumed tab is a new look (owner Q1)
 
-- `_onHidden`: back after `AWAY_NOTE_AFTER_MS` (3 h) hidden, every slide gets
-  `lookedFirst`, `greeted` and `visitedAt` reset, as `giftAgain` is now.
+- `_onHidden`: back after `AWAY_NOTE_AFTER_MS` (3 h) hidden, `_newLook` resets every
+  slide's `lookedFirst`, `greeted` and `visitedAt`, as `giftAgain` is reset now.
 - The wish mention's timer is re-armed too. Otherwise it ran out while hidden, and the
   wish is said twice: once in the first look and again by the mention.
-- Nothing doubles: the 3 h greet key, `oncePerDay` (dream, wish, visit) and the `said`
-  mark still guard each line.
-- Stale state: a phone resumes with last night's states in memory. The dream and wish
-  are said only when their `day` is today's, so a stale one can't use up today's key.
-- **Test:** card-check `gifts` already hides the tab for `hiddenMs`. Add to it, or a new
-  `resume` case: after 3 h hidden, the greeting and the first look run again with no line
-  said twice. Under 3 h, nothing reruns.
-- **Bench:** a new `resumed: {hiddenMs}` option runs the card's own `_onHidden` and
-  ticks. Shot: a resumed morning tab with the greeting, then its first line.
+- Moments aren't replayed live on the return (`lastMoment` and `lastLogAt` are cleared,
+  as `_forget` does). The catch-up alone tells what happened while hidden.
+- A screen left on looks again too, since a wall tablet never hides. That happens on a
+  new local day (`_tick`) or when the pet is seen waking for the day (the live `woke_up`
+  morning moment). Review s2622 #2.
+- Doubles: the 3 h greet key, `oncePerDay` (dream, wish, visit) and the `said` mark
+  guard each line.
+- Stale state: a phone resumes with last night's states in memory, and the sensor's
+  dream and wish carry no `day`. So the first look, the visit and the `seen` mark wait
+  until `hass.states` is a new object, which is the house's fresh states. A set hass
+  with the old object (a connection change) doesn't count.
+  - After `RESUME_HOLD_MS` (5 s) the look goes on, but without the dream and wish. Their
+    keys stay unused for the next look (review s2622 #1).
+- **Test:** card-check `moments`:
+  - After 3 h hidden, the greeting and the first look run again, once fresh states come.
+    Under 3 h, nothing reruns.
+  - The same states object keeps the hold. A timeout says no dream or wish.
+  - The `seen` mark holds.
+  - A date roll or a live morning wake-up looks again; the same day doesn't.
+- `gifts` takes a gift on the return.
+- **Bench:** `--preset look` with `look.resumed`: a resumed morning tab at 5, 10, 20
+  and 30 s.
 
 ### 2. The first look leads with what's new (owner Q2)
 
@@ -63,15 +76,15 @@ same first look (its dream line takes a third `worlds` argument), so its form is
 
 ### 7. One move in the first 10 s
 
-- The first look's first flair comes about 1 s after its first line ends, and it may
-  start while a line is showing. Flair is pieces around the pet, not a bubble.
-- A pet with no traits does one of its idle moves (a look or a hop, no line) instead.
-  In season, the costume's first draw may come at the same point.
+- The first look's first flair comes 6 s in (`FIRST_MOVE_MS`), while a line is showing.
+  Flair is pieces around the pet, not a bubble.
+- A pet with no traits looks around instead (not when calm). There's no costume draw:
+  every pet gets one of the two.
 - After that, flair and idle keep their own timers.
-- **Test:** card-check `personality`: on a first look, a flair or a move starts before
-  10 s while the queue is still speaking.
-- **Bench:** a new `look: {at: [5, 10, 20, 30]}` option moves the pinned clock forward
-  and ticks, one shot per second given. Shot strip: a 30 s morning look.
+- **Test:** card-check `moments`: a first look plans its move within 10 s, and it plays
+  over a line.
+- **Bench:** `look: {at}` moves the pinned clock forward in 250 ms steps and ticks. Shot
+  strip: a 30 s morning look.
 
 ### 3. A missed day visitor plays live at the next daytime look (owner Q3, Q7)
 
@@ -83,12 +96,18 @@ same first look (its dream line takes a third `worlds` argument), so its form is
 - Fix: the first look spends the `visit-` key on the line before `_visitorTick` runs. On
   a day screen the first look now leaves the key alone, and `_visitorTick` accepts a day
   visitor whose window has passed.
-- The visit still waits for the basket and for the queue to empty. The server's
-  collection credit at the window's end is unchanged.
+- It comes right after the look's first line (`s.lateVisit`), not after the queue
+  drains and the 10 s and 20 s checks, which half the time fell after a 30 s look
+  (review s2622 #7).
+  - The other lines go on, and its greet is a move with no line while they wait.
+  - It still waits for the basket and a free pet, and is given up after 60 s.
+- The server's collection credit at the window's end is unchanged.
 - Greeting: the visitor's own lines as now (owner: no new lines).
-- **Test:** card-check `visitors`: after the window, a day screen plays the visit and
-  says no catch-up line. A dark screen says the line and plays no visit. A second look
-  that day plays neither.
+- **Test:** card-check `visitors`:
+  - After the window, a day screen plays the visit and says no catch-up line.
+  - A dark screen says the line and plays no visit.
+  - A second look that day plays neither.
+  - The visit starts after the first line, with the rest still queued.
 
 ### 5a. A question no longer freezes visitors and moves (before Q6)
 
@@ -97,31 +116,42 @@ same first look (its dream line takes a third `worlds` argument), so its form is
 - Change: while the only thing showing is a question, a visitor and a flair may still
   start, and the question's bubble stays. The visitor's greet line is skipped, as it
   already is over a kept line. Its picture and the pet's look and hop still play.
-- **Test:** card-check `visitors`: a question showing, then the visitor passes, and the
-  question is still there after.
+- Idle moves still wait for the question's hold. Slice 7's first move doesn't.
+- **Test:** card-check `visitors`:
+  - A question showing, then a visitor and a flair still come, and the question stays.
+  - A real click on an answer mid-visit lands (review s2622 #9).
+- **Bench:** `--preset look`: a question on show as a visitor arrives and greets.
 
 ### 5b. A later question on most evenings (owner Q6)
 
 - `choose_question`: when the rotation's kind can't be asked now, it falls back to
   `how_day` (from `ASK_DAY_FROM`). That covers a dream question before its window, and a
   guess with no forecast or too early.
+  - It does so only on `ASK_FALLBACK_DAYS` (4) of every 7 days, by the day, so it isn't
+    nightly (review s2622 #5).
+- No "did you sleep well?" on a morning the pet has a dream to tell (`dreamed`).
 - `ASK_DREAM_BEFORE_BED_MINUTES` goes from 180 to 240, so a 19:30 look before a 23:00 bed
   can get it.
 - Still one later question per person a day. Personal screens only, as now.
-- **Test:** pytest `tests/test_people.py`: on a dream day at 19:30 the dream question is
-  asked; at 17:00, how_day. On a guess day with no forecast, how_day. Already asked: none.
+- **Test:** pytest `tests/test_people.py`:
+  - On a dream day at 19:30 the dream question is asked; at 17:00, how_day.
+  - On a guess day with no forecast, how_day.
+  - Already asked: none.
+  - At most 4 stand-ins in 7 days.
+  - No "slept" after a dream.
 
 ### 4. An evening "today" line (owner Q4)
 
 - The first look from 17:00 adds one line about the pet's own day, once per device a day.
   It takes the away note's place: both would tell the same day.
 - What it says, first match:
-  1. Today's wish was granted: that wish's line.
-  2. One of today's moments, as a bit. These are the away note's bits without sleep and
-     without finds while they're hidden.
-  3. The pet's personality line, `dailyPick`ed.
-- A day visitor's catch-up line in the same look takes the visitor, so it's not told
-  twice.
+  1. Today's wish was granted: that wish's line. Not when this look's catch-up already
+     told it (review s2622 #3).
+  2. A day visitor seen live here today: "a {visitor} visited me today ♪".
+  3. Today's newest moment, as a bit. These are the away note's bits without sleep and
+     without care (review s2622 #6). A find's bit, once finds show, only if it fits in 40.
+  4. The pet's personality line, `dailyPick`ed.
+- A day visitor's catch-up line and a visitor seen live never meet in one look.
 - A teen or adult only. A baby or child says nothing new.
 - No names and nothing about who did what, so a shared screen gets it too. It never
   mentions an open wish.
@@ -133,15 +163,21 @@ same first look (its dream line takes a third `worlds` argument), so its form is
 
 - `dream_on_waking`: with no seeds, always a plain dream (`DREAM_PLAIN_CHANCE` 0.5 → 1).
 - Plain kinds are a plain list: the 3 now, plus the 12 below, plus 6b's 15 (30 in all).
-  The kind turns by day ordinal with a per-pet offset, so it doesn't repeat for as many
-  days as the list is long, whatever its length.
-- The offset is a fixed hash of `pet_id` (`zlib.crc32`, never Python's salted `hash()`),
-  so it holds across restarts. No new saved field (FM, 2026-11-01).
+- Each cycle of that many days walks the list in its own order (review s2622 #4):
+  - It's shuffled by `random.Random(crc32(pet_id) ^ cycle)`, so no kind comes twice in a
+    cycle and two pets don't keep step.
+  - A cycle never opens with the last one's last dream.
+- The hash is fixed (`zlib.crc32`, never Python's salted `hash()`), so it holds across
+  restarts. No new saved field (FM, 2026-11-01).
 - The top-10 branch's visitor dream (6d) is the visitor seed, so this slice adds none.
 - No season keying: the server doesn't know the card's seasons.
-- **Test:** pytest `tests/test_model.py`: with no seeds, as many mornings in a row as the
-  list is long give that many different kinds. The same pet gets the same kind from a
-  fresh process, and a seed still wins. Card-check `moments`: each kind has a line.
+- **Test:** pytest `tests/test_model.py`:
+  - A cycle gives every kind once.
+  - No two mornings running are the same.
+  - Two pets differ.
+  - The same kind comes from a process with another hash seed.
+  - A seed still wins.
+- Node `tests/js/dream_lines.test.js`: every kind has a scanned line. Card-check `moments`: each kind has a line.
 
 ## Drafts
 
@@ -254,3 +290,11 @@ All slices built on 2026-11-01, on `crew/hatch-at-home-s2621-fresh-moment-every-
 - **4** `e05dc703`: `_todayLine`, `TODAY_WISH`, `PERSONA.*.today`, and a visitor seen live
   kept per device (`hatch-visitseen-<device>`, one key, overwritten). Bench: the look
   preset adds an evening.
+- **Review s2622** (FM, 2026-11-01), all folded in:
+  - #1, #2, #8 and the `seen` hold: `2a9f5a15`
+  - #3, #6: `6d6c9139`
+  - #4: `7009f794`
+  - #5: `fa2efc56`
+  - #7: `25183284`
+  - #9: `e9e3e87d`
+  - the today line's 40-character cap on a bit: in the plan-text commit

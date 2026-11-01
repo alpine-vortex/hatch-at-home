@@ -5907,7 +5907,8 @@ class HatchPetCard extends HTMLElement {
     const seen = this._visitSeen(s);
     if (seen) return `a ${seen} visited me today ♪`;
     const midnight = new Date().setHours(0, 0, 0, 0);
-    const bit = this._dayBits(s, midnight, false).find((b) => b !== "napped" && b !== "got my wish");
+    const bit = this._dayBits(s, midnight, false) // a find's bit, once shown, only if the line fits
+      .find((b) => b !== "napped" && b !== "got my wish" && `today I ${b}! ♪`.length <= 40);
     if (bit) return `today I ${bit}! ♪`;
     const type = this._persona(s);
     return type ? dailyPick(type.today, `${s.ids?.device}|today`) : null;
