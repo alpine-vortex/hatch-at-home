@@ -360,9 +360,11 @@ V-B review #10). The card reads names and art from the same file.
   `hatch-pet-card.js:6595`), next to "‹ status". The page has its own `jhead`: "finds · <world>".
 - **Content: this world only.**
   - **Visitors:** 3 tiles, each the `_1` frame.
-  - **Finds:** 9 tiles, plus the gift-only one for a person who has it. For each find, a met one is drawn with its name; an unmet one is a
-    dark silhouette (CSS `filter: brightness(0) opacity(.3)`, no new art), with no name and
-    no "???".
+  - **Finds:** a tile per find in `worlds.json` order. A met one is drawn with its name; an
+    unmet one is a dark silhouette (CSS `filter: brightness(0) opacity(.3)`, no new art), with
+    no name and no "???". **A find with any `when`** (weather, season, night, full moon) has
+    no tile at all until met, as the gift-only one (owner, 2026-11-02; §13b #2), so 5-8
+    silhouettes show per world.
   - **Gift-only finds** (§5) are **never in the house collection** (R3, finding #7). They
     appear only on the receiver's own screen, from their own `gifts` list, with the ♥.
     Before that, no tile and no silhouette, so there is no hole to fill. A shared screen
@@ -373,10 +375,10 @@ V-B review #10). The card reads names and art from the same file.
     reply has it and draws nothing extra when it doesn't, so V-E has no third card touch.
     Any ordinary find received as a gift also gets the ♥, but is a tile in the house
     collection only if it was *found* (a gift alone never credits the house).
-  - **OPEN, owner Q2 (V-E review #19):** an ordinary find this person got *only* as a
-    gift, on their own page: drawn with a ♥, or a silhouette with a ♥? The review
-    recommends drawn, with a ♥, on their screen only (the house's page, and everyone
-    else's, show it unmet until it is found).
+  - **Decided, owner Q2 (V-E review #19; 2026-11-02):** an ordinary find this person got
+    *only* as a gift is drawn with a ♥ on their own (unshared) page; the house's page, a
+    shared screen and everyone else's show it unmet until it is found. A gift-only find they
+    received is drawn with a ♥, on their screen only.
 - **Read on open:** `virtual_pet/collection {entity_id, shared}` (a websocket command).
   - **`vol.Required("shared"): bool`, as `subscribe` has** (finding #6): the client sends
     it per subscription (`__init__.py:481,498`), so the server can't tell otherwise.
@@ -681,7 +683,7 @@ V-C only.
 | V-A ✅ | **Built** (s2582; "V-A as built" below). **The server owns the day's visit**: `worlds.json` `visitors` (with `leaves`); `PetState.visit` with `world` (#9); `_daily_visit` (rng only for the window hour, #11; credit-then-pick on rollover, #10); crediting at window end into `collection[world].visitors`, in every stage (R4); `_house_view.visit`; the card plays from `house.visit`, with the `visitorDay` fallback and the once-a-day flag keyed by `visit.day` (#22); `salvage` keeps `collection` and `visit` (#8, audit #4); unknown ids kept in the save, skipped where counted or shown (#12, audit #1); F5 validators, `lay_egg` carry; **no `STORE_MINOR_VERSION` bump** (#19); pytest; card-check `visitors` extended (crossing the browser's midnight) | M | **2** | none | Q1-Q8 decided |
 | V-B ✅ | **Built** (s2591; "V-B as built" below). **Finds and the basket, server**: `worlds.json` `finds` (the `when` grammar, #3; the ⟲ lists, #18; `leaves` ids, #5: V-A already wrote `jayfeather`, `gullfeather`, `heronfeather`, `nighthawkfeather` on the visitors, so the feathers take those ids); unknown find ids in `collection[w].finds` and the basket kept in the save, skipped where counted or shown (V-A's rule, audit #1: no drop at load); the roll with `night`, `full_moon`, `P.season` and the rare fallback (#1, #4, #21, R5); rolls continue while full, extras to the collection (#2, R1); Night Sky rolls asleep (R2); `basket`, `next_find_at`; the visitor's left find; the `found` moment (no consumer yet, #20); `_house_view.basket` (#20); `virtual_pet/collect` (ws; read-and-clear with no `await`, #13); `salvage` keeps `basket`; validators; the stand-in script and 60 finds at 64 px + 3 baskets at 48 px (#23, V-B review #16); pytest incl. the real-sleep-hours 90-day run and the `when` token check | M | **2** | stand-ins | V-A |
 | V-C | **The basket and the reveal, card**: the basket button, the reveal queue, lines V1-V4 and V8, calm, compact; the reveal at 16 cells (#23); the no-nagging scan extended to the V1-V11 table, with the longest-name length check (#16); the bench `house` fixture (extending `--mine`, #15) plus `--preset finds`; card-check `finds` (ws spy, not a DB read, #17) | M | 1 | stand-ins | V-B |
-| V-D | **The collection page**: `virtual_pet/collection {entity_id, shared}` ws read (#6); no gift in the house `finds` map (#7, R3); the journal's "finds ›" link; tiles at 16 cells and silhouettes; **the ♥ on the viewer's own gift tiles, read from `gifts` when the reply has it (moved here from V-E, V-E review #20; the drawing of a gift-only-received ordinary find waits on owner Q2)**; the bench `--collection` fixture; card-check | M | 1 | stand-ins | V-B |
+| V-D ✅ | **Built** (s2600; "V-D as built" below). **The collection page**: `virtual_pet/collection {entity_id, shared}` ws read (#6); no gift in the house `finds` map (#7, R3); the journal's "finds ›" link; tiles at 16 cells and silhouettes; **the ♥ on the viewer's own gift tiles, read from `gifts` when the reply has it (moved here from V-E, V-E review #20; a gift-only-received ordinary find is drawn, owner Q2)**; the bench `--collection` fixture; card-check | M | 1 | stand-ins | V-B |
 | V-E1 ✅ | **Built** (s2597; "V-E1 as built" below). **Gifts, server**: bond `gift {id, world}`/`gifts` (ids only, R6)/`next_gift_at`, never raising in `_bond` (V-E review #3, #4, #14); the per-person clock (#8); `pick_gift` (#9); `mine.gift`; `collect {gift: true, shared: false}` (#1, #2, #18); `collection` `gifts` (#17); no event, push or debug (#12, #21); the privacy pytest with the gift-only id (#11) | M | **2** | none | V-B, V-D0 |
 | V-E2 ✅ | **Built** (s2601; "V-E2 as built" below). **Gifts, card**: the first look V5-V7 with the reserved slot (V-E review #6), `.reveal.gift` above the pet (#5), `GIFT_MADE` and `BABY.gift` (#10), the ♥ state dropped on a shared flip (#12), the error reply swallowed (#1); the bench `gift` field and `--preset gifts` (#16); card-check `gifts` (#15); owner Q1 decides when a gift arriving while the card is open is said (#7) | M | 1 | none new | V-C, V-E1 |
 | V-F | **Final art**: 60 finds (64 × 64, #18) + 3 baskets, one world per commit, each swapping its stand-ins | M (art-bound) | 1 | 63 | V-C; the Luna queue; the ⟲ picks |
@@ -879,7 +881,46 @@ and P1-P2 fixes, with the first mate's picks:
   for `gifts` (#17); `test_channel`'s `mine` shape gains `gift: null`; `test_public`'s
   scripted day sets aside and takes `acorncup` and scans for it.
 
-**V-E2 as built (s2601, for V-D and V-F):** card only, no server change.
+**V-D as built (s2600, for V-E2 and V-F):** card only, no server change. The V-C/V-D
+review's D2-D8 and P2, and the V-E review's #19 and #20.
+
+- **Card** (`hatch-pet-card.js`): `collectionTiles(world, reply, own)`, pure, exported as
+  `HatchPetCard.collectionTiles`: the world's visitors (`visitorList` order), then its
+  finds (`worlds.json` order), each `{kind, id, name, met, heart}`. `own` (an unshared
+  screen) is the only way `gifts` is read. A gift sets `met` and `heart`; a gift-only id in
+  the house `finds` map is never met (D7); a find with a `when` or a gift-only one that
+  isn't met has no tile; ids `worlds.json` lacks are skipped.
+- **The page**: "finds ›" (`.flink`) in the journal's new foot (`.jfoot`: "‹ status"
+  left, "finds ›" right). A separate `s.finds` flag (D3), cleared wherever `s.journal` is;
+  `_renderStatus` routes to `_renderFinds` first; `_fetchPhotos` and the journal's own
+  late render never draw over the page. Each open drops the last reply and reads
+  `virtual_pet/collection {entity_id, shared: sharedScreen()}` once (`_loadFinds`, one read
+  in flight); the reply is kept as `s.findsData` only while the page is, and dropped
+  (`_dropFinds`) with the photos: a new pet, a shared-screen flip (V-E review #12), the
+  card going. Never in `localStorage`. `_goPersonal` reads an open page again. A reply
+  for another pet or from before a flip is dropped; an error goes back to the journal with
+  no text.
+- **Tiles** (`.fgrid`, `.ftile`): a visitor's `_1` frame at 18 cells and a find at 16 (`--px`
+  a cell, both 1:1), a 62 px minimum width for the caption. Two grids (visitors, finds)
+  with a dotted rule between, no heading. Unmet: `.locked` (the journal's silhouette
+  filter), `alt=""`, no caption, no label (D5); on mono the silhouette's opacity is .5.
+  The ♥ is a `.fheart` in the tile's corner.
+- **Unmet visitors are silhouettes** too (§13 #5 read as "unmet ones"; not quoted for
+  visitors in §4: a question in the s2600 report).
+- **Bench**: the `collection` shot field (`true` part met with three gifts, `"empty"`,
+  `"error"`, or `{visitors, finds, gifts}`; gifts only to an unshared screen, as the server)
+  and `view: "collection"` (`--collection`); `scrollEnd`; `--preset collection` (21 shots).
+- **Card-check `collection`** (after `finds`, `NEEDS.collection = ["restart"]`): the real
+  reply (D7: the gift-only id and `laterfind` absent; `gifts` only when not shared), one
+  `virtual_pet/collection {shared: false}` and no `call_service`, head and links, tiles and
+  silhouettes against the reply, D8's no-count scan, D6's fit at 420 and 330, D3's photo
+  load; then with gifts added to the reply on the card's side: the ♥ tiles, a shared flip
+  dropping them (and no `localStorage` key), a shared screen's `shared: true` with no ♥
+  even when the reply carries gifts, and an error staying on the journal.
+- **Tests**: `tests/js/collection.test.js` (per world: empty, met/hidden/D7, the ♥ own and
+  shared; a bad reply).
+
+**V-E2 as built (s2601, for V-F):** card only, no server change.
 
 - **Card** (`hatch-pet-card.js`): `GIFT_MADE` (`acorncup`, `knittedheart`, `paperboat`),
   `GIFT_LINES` (`find` V5 over the find's `name`, `made`/`found` V6), `GIFT_LINE_MS` 5000,
@@ -918,18 +959,23 @@ and P1-P2 fixes, with the first mate's picks:
   "message in a bottle" in the porthole and at 330, V5 day/night, V6 made ×2 and found
   from another world, V7 baby, calm, compact, asleep: nothing taken).
 - **Card-check `gifts`** sits right after `restart` (`NEEDS.gifts = ["restart"]`, the same
-  shard). Restart's bounce seeds `bonds[dev].gift` = the world's **gift-only** find, only
-  when `gifts` runs (else a later fresh tab of dev's would take it); `unseed` puts the bond
-  back whole. With a gift-only id the line checked is **V6**, not V5 (V5's words are the
-  Node test's and the bench's). Checks: the open card holds `mine.gift` and says nothing
-  (no interruption); a shared flip drops a pop and its line; a shared first look sends no
-  collect; `collect {gift}` without `shared: false` (and with `shared: true`) is refused
-  `shared`; a shared `collection` has no `gifts`; two fresh tabs: exactly one non-empty
-  take, at most one empty, exactly one gift line; after it the house `finds` map has no
-  gift and dev's `gifts` has it; no entity state or bus event carries it; Q1 on the card
-  with the take stubbed (a short absence takes nothing, a long one takes and says it).
-  `finds`' second tab counts only basket collects. The second login (`other`) isn't
-  re-checked here: by `oldcard` the gift is taken (V-E1's pytest covers other users).
+  shard; V-D's `collection` follows `finds`). It seeds dev's gift **in its own bounce**
+  (review #15's first option; restart's `bounce` is kept for it): the world's **gift-only**
+  find, with every card on the page a shared screen meanwhile, then personal again with
+  every slide's first look done. (Seeding in restart's bounce failed in a wide run: after
+  a restart a card can see its slides' pets anew, run a first look again and take the
+  gift before `gifts` runs.) `unseed` puts the bond back whole. With a gift-only id the
+  line checked is **V6**, not V5 (V5's words are the Node test's and the bench's). Checks:
+  the open card holds `mine.gift` and says nothing (no interruption); a shared flip drops a
+  pop and its line; a shared first look sends no collect; `collect {gift}` without
+  `shared: false` (and with `shared: true`) is refused `shared`; a shared `collection` has
+  no `gifts`; two fresh tabs: exactly one non-empty take, at most one empty, exactly one
+  gift line (the losing tab usually gets the push of `mine.gift = null` before its look
+  and sends nothing); after it the house `finds` map has no gift and dev's `gifts` has it;
+  no entity state or bus event carries it; Q1 on the card with the take stubbed (a short
+  absence takes nothing, a long one takes and says it). `finds`' second tab counts only
+  basket collects. The second login (`other`) isn't re-checked here: by `oldcard` the gift
+  is taken (V-E1's pytest covers other users).
 - **Tests**: `tests/js/gift_lines.test.js` (GIFT_MADE ⊂ gift-only ids, made + found = all
   six; V5 over every ordinary find ≤ 40 with "message in a bottle" exactly 40; V6/V7
   words; the scan); `gift` joins card-check's baby-scan keys.
@@ -1058,9 +1104,20 @@ the gift's slot is reserved before the missed-visitor line (the gift wins). Buil
 
 **Still OPEN for the owner (do not decide in a slice):**
 
-- **Q2 (V-E review #19).** An ordinary find you got only as a gift: on your own
-  collection page, is it drawn? *Recommended:* drawn, with a ♥, on your screen only; the
-  house's page, and everyone else's, show it unmet until it is found.
+- None. Q1 is answered above; Q2 below (the V-D brief's answers).
+
+The V-D brief's answers (owner, 2026-11-02):
+
+- **Hidden until met:** any find with a `when` (weather, season, night, full moon) and
+  every gift-only find has no tile at all until met; the rest show a silhouette until met
+  (V-C/V-D review D2, owner Q1 there).
+- **Page copy:** back link "‹ journal", loading "opening…" (the journal's own string), on
+  an error stay on the journal with no text (D4). Title "finds · <world>" and link
+  "finds ›" (§7 V9).
+- **V-E review Q2 (#19):** an ordinary find this person got only as a gift is drawn (not a
+  silhouette) with a ♥ on their own unshared screen; the house, a shared screen and
+  everyone else's treat it as unmet. A gift-only find they received: drawn with a ♥, on
+  their screen only.
 
 ## 13b. Answered (owner, 2026-11-01): all four as recommended
 

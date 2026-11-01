@@ -177,6 +177,34 @@ const PRESETS = {
     g("asleep", "asleep: nothing", { world: "woodland", mood: "asleep", gift: { id: "pinecone", world: "woodland" } });
     return out;
   },
+  // The finds page (visitors v2 §4, V-D): each world part met at both card widths (two
+  // visitors; plain finds drawn, the rest silhouettes; a `when` find met, the others
+  // hidden; ♥ on a met gift, a gift the house never found and the gift-only one), then the
+  // same page on a shared screen (no ♥, no gift-only tile), an empty page, everything met
+  // at 330 (the longest names), mono at both widths, and an older server (the journal).
+  collection() {
+    const out = [];
+    for (const width of [420, 330]) {
+      for (const world of Object.keys(WORLDS)) {
+        out.push({ name: `collection/${width}/${world}`, group: `collection-${width}`, label: `${world}`, world, width,
+          scene: world === "nightsky" ? "night" : "day", view: "collection", collection: true });
+      }
+    }
+    const extra = (name, label, shot) => out.push({ group: "collection-cases", name: `collection/${name}`, label,
+      view: "collection", collection: true, ...shot });
+    extra("shared-woodland", "shared screen: no ♥", { world: "woodland", storage: { "hatch-shared-screen": "on" } });
+    extra("empty-woodland", "empty page", { world: "woodland", collection: "empty" });
+    const all = (w) => ({ visitors: w.visitors.map((v) => v.id), finds: w.finds.filter((f) => !f.gift_only).map((f) => f.id),
+      gifts: w.finds.filter((f) => f.gift_only).map((f) => f.id) });
+    extra("all-tidepool-330", "all met, 330", { world: "tidepool", width: 330, collection: all(WORLDS.tidepool) });
+    extra("all-nightsky-420", "all met, 420", { world: "nightsky", scene: "night", collection: all(WORLDS.nightsky) });
+    extra("mono-420", "mono 420", { world: "woodland", mono: true });
+    extra("mono-330", "mono 330", { world: "woodland", width: 330, mono: true });
+    extra("mono-hearth-330", "mono hearth 330", { world: "hearth", width: 330, mono: true });
+    extra("error-woodland", "older server: the journal (its foot)", { world: "woodland", collection: "error", scrollEnd: true });
+    extra("foot-woodland-330", "the page's foot, 330", { world: "woodland", width: 330, scrollEnd: true });
+    return out;
+  },
   // The settings sheet (the status screen's gear) with the viewer's own rows, at
   // both card widths, day and night.
   settings() {
@@ -323,6 +351,7 @@ function parseArgs(argv) {
     else if (key === "mine") opts.shot.mine = true;
     else if (key === "gift") { const [world, id] = val().split("/"); opts.shot.gift = { id, world }; } // --gift woodland/pinecone
     else if (key === "journal") Object.assign(opts.shot, { journal: true, view: "journal" });
+    else if (key === "collection") Object.assign(opts.shot, { collection: true, view: "collection" });
     else if (key === "season") opts.shot.season = val() === "off" ? false : val() === "on" ? "auto" : argv[i];
     else opts.shot[key] = num.has(key) ? Number(val()) : val();
   }
