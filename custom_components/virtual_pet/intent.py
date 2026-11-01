@@ -8,8 +8,9 @@ assistant can be found.
 
 from __future__ import annotations
 
+import math
 import re
-from typing import override
+from typing import Any, override
 
 from homeassistant.components.homeassistant import async_should_expose
 from homeassistant.core import HomeAssistant
@@ -81,8 +82,59 @@ REFUSED = {
 MARKS = re.compile(r"[*~♪♥♡★☂☀❄\u2600-\u27bf\U0001f000-\U0001faff\ufe0f]")
 
 
+# Today's wish, as Assist says it (gaps-seams 6a): "Today it wishes for ...".
+WISH_SPOKEN = {
+    "play": "a game together",
+    "snack": "a snack after lunch",
+    "bath": "a bubble bath",
+    "praise": 'to hear "good job"',
+    "tuck_in": "to be tucked in tonight",
+    "sunset": "to watch the sunset",
+    "music": "some music",
+    "tv": "to watch TV together",
+    "chore": "a chore treat",
+    "rain": "to see the rain",
+    "say_hi": "a hello this afternoon",
+}
+
+
+def spoken_about(
+    stage: str,
+    age_days: float,
+    wish: dict[str, Any] | None,
+    visitor: str | None,
+) -> list[str]:
+    """The sentences after the mood (gaps-seams 6a): its stage and day (not for
+    an egg, whose mood says it), today's wish (only its plain kind: an aimed
+    wish's friend is private), and today's visitor once its window is over."""
+    out = []
+    if stage != "egg":
+        article = "an" if stage[:1] in "aeiou" else "a"
+        out.append(f"It's {article} {stage}, day {math.floor(age_days) + 1}.")
+    if wish and wish.get("granted"):
+        out.append("Its wish came true today.")
+    elif wish and wish.get("kind") in WISH_SPOKEN:
+        words = WISH_SPOKEN[wish["kind"]]
+        # "wishes to hear ..." but "wishes for a bubble bath".
+        out.append(
+            f"Today it wishes {'' if words.startswith('to ') else 'for '}{words}."
+        )
+    if visitor == "shooting star":
+        out.append("A shooting star went by today.")
+    elif visitor:
+        out.append(
+            f"{'An' if visitor[:1] in 'aeiou' else 'A'} {visitor} came by today."
+        )
+    return out
+
+
 def spoken_status(
-    name: str, mood: str, reason: str, traits: list[str], nickname: str | None
+    name: str,
+    mood: str,
+    reason: str,
+    traits: list[str],
+    nickname: str | None,
+    about: list[str] | None = None,
 ) -> str:
     """ "Hi, sunbeam! Pip is cozy: toasty by the fire." The greeting first; the
     pet's reason without the marks a voice would read out (*, ~, ♪), and left
@@ -98,6 +150,8 @@ def spoken_status(
         speech += f": {said}{end}"
     else:
         speech += "."
+    for sentence in about or []:
+        speech += f" {sentence}"
     if traits:
         speech += f" Traits: {', '.join(traits)}."
     return f"Hi, {nickname}! {speech}" if nickname else speech
@@ -180,8 +234,20 @@ class StatusIntent(intent.IntentHandler):
         response.response_type = intent.IntentResponseType.QUERY_ANSWER
         traits = [t.replace("_", " ") for t in state.traits]
         level, nickname = pet.bond_for(intent_obj.context.user_id)
+        # Asleep says nothing more: the sitter's privacy answers "asleep" too, and
+        # the two must sound the same.
+        about = (
+            []
+            if mood == "asleep"
+            else spoken_about(
+                model.life_stage(state),
+                state.age_hours / 24,
+                pet.spoken_wish(),
+                pet.spoken_visitor(),
+            )
+        )
         response.async_set_speech(
-            spoken_status(name, MOOD_WORDS[mood], reason, traits, nickname)
+            spoken_status(name, MOOD_WORDS[mood], reason, traits, nickname, about)
         )
         response.async_set_speech_slots(
             {
