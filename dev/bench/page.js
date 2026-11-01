@@ -101,6 +101,7 @@
       put("sensor", "mood", mood, { flags, ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) });
       put("sensor", "last_care", iso(-45), { log: pet.log || [] });
       put("sensor", "energy", String(pet.energy ?? 80));
+      if (pet.weight !== undefined) put("sensor", "weight", String(pet.weight));
       put("sensor", "poop", String(pet.poop ?? (mood === "dirty" ? 2 : 0)));
       put("sensor", "care_misses", "0");
       put("binary_sensor", "calling", pet.calling || mood === "calling" ? "on" : "off");

@@ -1359,8 +1359,11 @@ const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
 // The same bands as rates.py (WEIGHT_LIGHT_BELOW, WEIGHT_HEAVY_ABOVE).
 function weightLabel(v) {
   if (v === null) return "–";
-  return `${Math.round(v)} · ${v < 25 ? "a bit light" : v > 75 ? "a bit heavy" : "just right"}`;
+  return `${Math.round(v)} · ${v < 25 ? "a bit light · a meal would help" : v > 75 ? "a bit heavy · snacks add up" : "just right"}`;
 }
+const isHeavy = (v) => v !== null && v > 75; // rates.py WEIGHT_HEAVY_ABOVE
+// A heavy pet's snack, half the time (gaps-seams 2a): snacks are what tip it.
+const HEAVY_SNACK = ["one more and I'll be round as a ball!", "*pats tummy* getting a bit round..."];
 
 // The status row counting down to the next stage (gaps-seams 1a), or null: a child
 // to teen, a teen to grown up. "About", since ageing pauses while it's away.
@@ -6248,6 +6251,10 @@ class HatchPetCard extends HTMLElement {
       if (candy) {
         said = [pick(season.snackLines || ["a treat! ♪"]), 2500];
       }
+      const weight = Number.parseFloat(this._state(s, "sensor.weight")?.state);
+      if (entry.action === "snack" && isHeavy(Number.isFinite(weight) ? weight : null) && Math.random() < 0.5) {
+        said = [pick(HEAVY_SNACK), 3000];
+      }
       const prop = candy || s.species?.props?.[key] || FALLBACK_PROPS[key];
       if (prop) {
         this._show(s, s.prop, prop);
@@ -6345,7 +6352,8 @@ class HatchPetCard extends HTMLElement {
       : (moodNow?.attributes.requests || []).find((r) => r !== "lay_egg" && WANT_WORDS[r]
         && this._state(s, `button.${r}`));
     const want = s.asleep || moodNow?.state === "away" || isEgg ? null
-      : (String(wantKey).startsWith("call_") && WANT_WORDS[wantKey]) || WANT_WORDS[wantsNow] || null;
+      : (String(wantKey).startsWith("call_") && WANT_WORDS[wantKey]) || WANT_WORDS[wantsNow]
+        || (isHeavy(value("weight")) ? "a game, to run it off" : null);
     // Today's wish comes first of the rest: it changes daily, the rest is there every day.
     const html = `
       <div class="shead">${this._gearButton()}</div>

@@ -48,7 +48,7 @@ A shot (all optional):
 | --- | --- |
 | `name` | output path under `out/`, without `.png` |
 | `species`, `stage`, `mood`, `world` | the first pet (default: the world's first species, adult, content, woodland). Stages: egg baby child teen adult. |
-| `pet` | more of the first pet: `name`, `age_days`, `flags`, `energy`, `hatch_minutes`... |
+| `pet` | more of the first pet: `name`, `age_days`, `flags`, `energy`, `weight` (none by default: the row shows –), `hatch_minutes`... |
 | `pets` | a number (extra pets are children from the world's roster) or an array of pet overrides; the first is on show, the card gets its dots |
 | `shell` | `{shape, color, bezel, finish}` over the world's own; `finish: "none"` drops it. Shapes: egg tank house porthole pad moon |
 | `scene` | `day` (default), `night`, `dim` (lights out), `rain` |
