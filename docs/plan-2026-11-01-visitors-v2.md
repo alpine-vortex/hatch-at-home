@@ -696,6 +696,8 @@ V-C only.
 | V-E2 ✅ | **Built** (s2601; "V-E2 as built" below). **Gifts, card**: the first look V5-V7 with the reserved slot (V-E review #6), `.reveal.gift` above the pet (#5), `GIFT_MADE` and `BABY.gift` (#10), the ♥ state dropped on a shared flip (#12), the error reply swallowed (#1); the bench `gift` field and `--preset gifts` (#16); card-check `gifts` (#15); owner Q1 decides when a gift arriving while the card is open is said (#7) | M | 1 | none new | V-C, V-E1 |
 | V-F | **Final art**: 60 finds (64 × 64, #18) + 3 baskets, one world per commit, each swapping its stand-ins | M (art-bound) | 1 | 63 | V-C; the Luna queue; the ⟲ picks |
 
+**FINDS_SHOWN off until V-F** (s2608, owner 2026-11-01: release with stand-in art hidden): the card const `FINDS_SHOWN = false` hides the basket, reveal and find lines (V1-V4, V8), the gift take, line and pop (V5-V7; a gift waits on the server) and the finds page's finds grid (its visitors stay); V-F turns it on. card-check (`gifts`, `finds`, `collection`) and the bench presets turn on `HatchPetCard.findsShown`.
+
 **V-A as built (s2582, for V-B onwards):**
 
 - `worlds.json` `visitors: [{id, name, hours, leaves?}]` per world, in v1's order (the

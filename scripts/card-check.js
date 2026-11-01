@@ -362,8 +362,8 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await shot("02d-shell-picker");
 
   // 4c-rest: every control in the status, the settings sheet and the picker is a real 44x44
-  // target at 330 and 420 (dots and compact answer buttons are out of scope; .pat is hidden
-  // while the status is open), no two overlap, the status shows its wish and meters without
+  // target at 330 and 420 (.pat is hidden while the status is open), plus the slide dots and
+  // the answer buttons, no two overlap, the status shows its wish and meters without
   // scrolling, and the tab order is the page order with no positive tabindex.
   const measure = (view) => card.evaluate((el, view) => {
     const s = el._slides[el._index];
@@ -390,6 +390,39 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   for (const width of [330, 420]) {
     await page.setViewportSize({ width, height: 860 });
     await page.waitForTimeout(500);
+    // The slide dots and the compact answer buttons (330 is the compact layout): 44x44 hit
+    // boxes, the dots edge to edge so none steals a neighbour's tap, the dot itself still 10 px.
+    const tapBoxes = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const dots = [...el.shadowRoot.querySelectorAll(".dots .dot")];
+      const dr = dots.map((d) => d.getBoundingClientRect());
+      const out = { compact: el._card.classList.contains("compact"), dots: dots.length, small: [], overlap: 0,
+        mark: dots.length ? parseFloat(getComputedStyle(dots[0], "::before").height) : 0 };
+      dr.forEach((r, i) => {
+        if (r.width < 43.5 || r.height < 43.5) out.small.push(`dot ${r.width.toFixed(0)}x${r.height.toFixed(0)}`);
+        for (let j = i + 1; j < dr.length; j++) {
+          if (Math.min(r.right, dr[j].right) - Math.max(r.left, dr[j].left) > 1
+            && Math.min(r.bottom, dr[j].bottom) - Math.max(r.top, dr[j].top) > 1) out.overlap++;
+        }
+      });
+      // The sheets hide the screen: look at it for a moment as it is with no sheet open.
+      const wasOpen = s.screen.classList.contains("show-status");
+      s.screen.classList.remove("show-status");
+      await new Promise((r) => setTimeout(r, 60));
+      el._ask(s, "catchphrase");
+      const bs = [...s.screen.querySelectorAll(".askday button")];
+      out.answers = bs.length;
+      for (const b of bs) {
+        const r = b.getBoundingClientRect();
+        if (r.width < 43.5 || r.height < 43.5) out.small.push(`answer ${r.width.toFixed(0)}x${r.height.toFixed(0)}`);
+      }
+      el._clearAsk(s);
+      if (wasOpen) s.screen.classList.add("show-status");
+      return out;
+    });
+    if (tapBoxes.dots < 2 || tapBoxes.answers < 2 || tapBoxes.small.length || tapBoxes.overlap || tapBoxes.mark !== 10
+      || tapBoxes.compact !== (width === 330)) boxIssues.push(`${width} dots/answers: ${JSON.stringify(tapBoxes)}`);
+    boxCounts[`${width}-tapBoxes`] = tapBoxes.dots + "d" + tapBoxes.answers + "a";
     for (const view of ["picker", "settings", "status"]) {
       if (view === "settings") await cur().locator(".status .pback").click();
       if (view === "status") await cur().locator(".status .sback").click();
@@ -1180,6 +1213,23 @@ async function main() {
 
   // A content pet that isn't calling: a calling pet is never greeted and has no
   // idle life, and a freshly hatched one may well be calling.
+  // The card's FINDS_SHOWN release switch ships off until V-F's art (no basket, reveal,
+  // gift or finds grid). gifts, finds and collection test the real features, so each turns
+  // it on (HatchPetCard.findsShown): on this page now, and in every tab the context opens
+  // after (an init script, kept for the rest of the run: only these sections follow).
+  let findsInit = false;
+  const showFinds = async () => {
+    if (!findsInit) {
+      findsInit = true;
+      await context.addInitScript(() => customElements.whenDefined("hatch-pet-card").then(() => {
+        customElements.get("hatch-pet-card").findsShown = true;
+      }));
+    }
+    await card.evaluateAll((els) => {
+      customElements.get("hatch-pet-card").findsShown = true;
+      els.forEach((el) => el._slides.forEach((x) => el._basketSync(x)));
+    });
+  };
   const calm = async () => {
     await inject(pet["binary_sensor.calling"], { state: "off" });
     await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [], requests: [] } });
@@ -8776,6 +8826,39 @@ async function main() {
     els.forEach((el) => el._goPersonal());
   }, { e: seedPet, was: poweredWas });
   await pinAwake(card, "gifts");
+  // FINDS_SHOWN off (the default until V-F), with dev's gift and restart's basket both
+  // waiting: no basket shows, a tap, a tab-back and a direct take send no collect, and no
+  // pop or reveal appears. Then it is turned on for the real features below.
+  const off = await card.first().evaluate(async (el, e) => {
+    const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+    const conn = el._hass.connection;
+    const sent = [];
+    const real = conn.sendMessagePromise;
+    conn.sendMessagePromise = function (msg, ...a) {
+      if (msg?.type === "virtual_pet/collect") sent.push(JSON.stringify(msg));
+      return real.call(this, msg, ...a);
+    };
+    const onShow = s === el._slides[el._index];
+    try {
+      el._basketSync(s);
+      s.giftAgain = true;
+      el._giftReturn(s);
+      await el._giftTake(s);
+      await el._basketTap(s);
+      await new Promise((r) => setTimeout(r, 1500));
+    } finally {
+      conn.sendMessagePromise = real;
+      s.giftAgain = false;
+    }
+    const shown = (b) => !!b && !b.hidden && getComputedStyle(b).display !== "none";
+    return { def: customElements.get("hatch-pet-card").findsShown, onShow, gift: !!s.mine?.gift,
+      basket: s.house?.basket ?? null, baskets: el._slides.filter((x) => shown(x.basket)).length,
+      reveals: el._slides.filter((x) => x.screen?.querySelector(".reveal")).length, sent };
+  }, seedPet);
+  check("FINDS_SHOWN off by default: with a gift and a full basket waiting, no basket or pop shows and no collect is sent",
+    off.def === false && off.onShow && off.gift && off.basket > 0 && off.baskets === 0 && off.reveals === 0 &&
+    off.sent.length === 0, JSON.stringify(off));
+  await showFinds();
   // Everything this page sends to the pet from here on, and every event on the bus.
   const held = await card.first().evaluate(async (el, e) => {
     const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
@@ -9008,6 +9091,7 @@ async function main() {
   await page.waitForTimeout(500);
   await calm();
   await pinAwake(card, "finds");
+  await showFinds();
   const W = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
   const fw = W[basketSeed.world];
   const aOf = (id) => fw.finds.find((f) => f.id === id).a;
@@ -9253,6 +9337,7 @@ async function main() {
   await page.waitForTimeout(500);
   await calm();
   await pinAwake(card, "collection");
+  await showFinds();
   const W = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
   const cw = basketSeed.world;
   const fw = W[cw];
