@@ -8886,9 +8886,11 @@ async function main() {
     el._card.classList.add("compact");
     el._basketSync(s);
     const out = { compactShown: getComputedStyle(s.basket).display !== "none", compactShows: el._basketShows(s) };
-    const br = s.basket.getBoundingClientRect(), tr = s.basket.querySelector("img").getBoundingClientRect();
+    s.screen.classList.remove("show-status");
+    s.basket.scrollIntoView({ block: "center" }); // elementFromPoint needs it on screen
+    const br = s.basket.getBoundingClientRect();
     const sr = s.basket.closest(".screen").getBoundingClientRect();
-    const hit = document.elementFromPoint(br.x + br.width / 2, br.y + br.height / 2);
+    const hit = el.shadowRoot.elementFromPoint(br.x + br.width / 2, br.y + br.height / 2);
     // the 44 px tap box is the ::before; it is tappable when the centre hits the button
     out.tap = { hit: hit === s.basket, inside: br.left >= sr.left && br.right <= sr.right && br.bottom <= sr.bottom + 1,
       w: br.width, w44: parseFloat(getComputedStyle(s.basket, "::before").width) };
