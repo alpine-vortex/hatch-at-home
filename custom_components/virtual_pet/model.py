@@ -250,6 +250,48 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _visit(v: Any) -> dict[str, Any] | None:
+    """The day's visit as loaded (plan visitors v2 §6): a str day (an ISO
+    date) and world, and for a visit (id set) its hours and window; else None,
+    and the next tick picks again. A later version's keys are kept."""
+    if not (isinstance(v, dict) and _str(v.get("day")) and _str(v.get("world"))):
+        return None
+    try:
+        date.fromisoformat(v["day"])
+    except ValueError:
+        return None
+    out = dict(v)
+    if v.get("id") is None:
+        out["id"] = None
+        return out
+    if not (
+        _str(v.get("id"))
+        and v.get("hours") in ("day", "night")
+        and _num(v.get("from"))
+        and _num(v.get("until"))
+    ):
+        return None
+    out["from"], out["until"] = float(v["from"]), float(v["until"])
+    out["credited"] = v.get("credited") is True
+    return out
+
+
+def collection_from(v: Any) -> dict[str, dict[str, Any]]:
+    """The device's collection, {world: {visitors: {id: day}, finds: {id: day}}}:
+    a world that isn't a str key with a dict page is dropped, the rest kept.
+    Ids no worlds.json knows are the coordinator's to drop (no catalog here)."""
+    out: dict[str, dict[str, Any]] = {}
+    for world, page in _mapping(v).items():
+        if not (_str(world) and isinstance(page, dict)):
+            continue
+        out[world] = {
+            **page,
+            "visitors": _str_map(page.get("visitors")),
+            "finds": _str_map(page.get("finds")),
+        }
+    return out
+
+
 def bonds_from(v: Any) -> dict[str, dict[str, Any]]:
     """Every bond that can be read; a damaged one is dropped alone."""
     out = {}
@@ -392,6 +434,12 @@ class PetState:
     # world's own. Kept as it grows up; a new egg starts on the default. A key
     # this version doesn't know is kept (a later version's) and not shown.
     shell_finish: str | None = None
+    # World visitors (plan visitors v2): the day's visit {day, world, id, hours,
+    # from, until, credited} (id None: no visit that day), and the device's
+    # collection {world: {visitors: {id: day}, finds: {id: day}}}. Both are the
+    # device's, kept across generations; no person is in either.
+    visit: dict[str, Any] | None = None
+    collection: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store, with any keys this version doesn't know."""
@@ -535,6 +583,8 @@ class PetState:
             kwargs["personality"] = None
         kwargs["bonds"] = bonds_from(kwargs.get("bonds"))
         kwargs["favourites"] = _str_map(kwargs.get("favourites"))
+        kwargs["visit"] = _visit(kwargs.get("visit"))
+        kwargs["collection"] = collection_from(kwargs.get("collection"))
         for key in (
             "favourite_said",
             "catchphrase",
@@ -565,7 +615,7 @@ class PetState:
     @classmethod
     def salvage(cls, data: Any, default_name: str, now: float) -> PetState:
         """What can still be read from a save from_dict couldn't load: its name,
-        family, journal, memories and bonds, each on its own. The rest starts
+        family, journal, memories, bonds and collection, each on its own. The rest starts
         fresh, as a new egg's would. Never raises."""
         if not is_pet_root(data):
             data = {}
@@ -581,6 +631,7 @@ class PetState:
             "journal": lambda v: [_retired(r) for r in _records(v)],
             "memories": lambda v: _records(v, at=_num, kind=_str),
             "bonds": bonds_from,
+            "collection": collection_from,  # the device's, lifelong
         }
         for key, read in readers.items():
             try:
@@ -1694,6 +1745,10 @@ def lay_egg(
     egg.unknown = dict(getattr(state, "unknown", {}))  # a later version's keys
     egg.unknown.pop("shell_finish", None)  # the old pet's look, not the egg's
     egg.memories = list(state.memories)
+    # The device's: the day's visit (a new world's egg makes it no visit, as
+    # its world no longer matches) and the collection, across generations.
+    egg.visit = copy.deepcopy(state.visit)
+    egg.collection = copy.deepcopy(state.collection)
     # Chore treats earned today wait for the hatchling, and count toward today's limit.
     egg.chore_treats = list(state.chore_treats)
     egg.treats_waiting = state.treats_waiting
@@ -2247,6 +2302,102 @@ def pick_wish(
         user = rng.choice(sorted(friends))
         state.wish["for"] = user
     return [{"type": "wish_made", "kind": kind}]
+
+
+# --- World visitors: the day's visit (plan visitors v2 §1) ------------------
+
+
+def _visit_hash(pet_id: str) -> int:
+    """visitorDay's 31-multiplier hash (card), over "visit|<pet_id>": stable
+    across restarts, unlike hash()."""
+    h = 0
+    for ch in f"visit|{pet_id}":
+        h = (h * 31 + ord(ch)) & 0xFFFFFFFF
+    return h
+
+
+def visit_turn(day: str, pet_id: str, count: int = 3) -> int | None:
+    """Which of the world's visitors comes on this local day (an ISO date), or
+    None on a day with no visit. The day index plus a per-pet offset: VISIT_DAYS
+    of every VISIT_CYCLE_DAYS, and the visitors take turns over the visit days,
+    so any 21 days hold all three. Deterministic: no rng."""
+    if count <= 0:
+        return None
+    index = (date.fromisoformat(day) - date(1970, 1, 1)).days
+    h = _visit_hash(pet_id)
+    n = index + h % R.VISIT_CYCLE_DAYS
+    pos = n % R.VISIT_CYCLE_DAYS
+    if pos >= R.VISIT_DAYS:
+        return None
+    return (n // R.VISIT_CYCLE_DAYS * R.VISIT_DAYS + pos + (h >> 3)) % count
+
+
+def live_visit(state: PetState, world: str) -> dict[str, Any] | None:
+    """The saved visit if it is this world's; one from another world (the
+    device moved worlds with its egg) counts as no visit."""
+    visit = state.visit
+    return visit if visit and visit.get("world") == world else None
+
+
+def credit_visit(state: PetState, now: float, world: str) -> bool:
+    """At its window's end the visitor joins the collection, seen or not, in
+    every stage (egg and away too): the server's, not the pet's. Once."""
+    visit = live_visit(state, world)
+    if (
+        not visit
+        or not visit.get("id")
+        or visit.get("credited")
+        or now < visit["until"]
+    ):
+        return False
+    page = state.collection.setdefault(world, {"visitors": {}, "finds": {}})
+    page.setdefault("visitors", {}).setdefault(visit["id"], visit["day"])
+    visit["credited"] = True
+    return True
+
+
+def daily_visit(
+    state: PetState,
+    now: float,
+    today: str,
+    world: str,
+    visitors: list[dict[str, Any]],
+    pet_id: str,
+    rng: random.Random,
+    tz: tzinfo,
+) -> bool:
+    """Credit the saved visit if its window is over, then, on a new local day,
+    pick and save today's (finding #10: credit first, and a pick never
+    overwrites a visit still waiting for its credit). Only the window's start
+    hour is random (finding #11). True if the save changed."""
+    changed = credit_visit(state, now, world)
+    visit = live_visit(state, world)
+    if visit and visit.get("day") == today:
+        return changed
+    if visit and visit.get("id") and not visit.get("credited"):
+        return changed  # its window isn't over yet (a clock or zone change)
+    who = visit_turn(today, pet_id, len(visitors))
+    if who is None:
+        state.visit = {"day": today, "world": world, "id": None}
+        return True
+    guest = visitors[who]
+    hours = "night" if guest.get("hours") == "night" else "day"
+    if hours == "night":
+        start = rng.choice(R.VISIT_NIGHT_STARTS)
+    else:
+        start = rng.randint(*R.VISIT_DAY_STARTS)
+    day = date.fromisoformat(today)
+    begin = datetime(day.year, day.month, day.day, start, tzinfo=tz).timestamp()
+    state.visit = {
+        "day": today,
+        "world": world,
+        "id": guest["id"],
+        "hours": hours,
+        "from": begin,
+        "until": begin + R.VISIT_HOURS * 3600,
+        "credited": False,
+    }
+    return True
 
 
 def grant_wish(

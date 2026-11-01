@@ -7,7 +7,7 @@ species marked ready count, and a world with none ready is hidden.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import logging
 from pathlib import Path
@@ -28,6 +28,9 @@ class Catalog:
 
     species: dict[str, dict[str, Any]]
     worlds: dict[str, dict[str, Any]]
+    # Every world's visitors ({id, name, hours, leaves?}, in roster order), from
+    # all of worlds.json, ready or not: a saved collection is checked against it.
+    visitors: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
     def roster(self, world: str) -> list[str]:
         """Ready species of a world, in roster order."""
@@ -68,4 +71,14 @@ def load_catalog() -> Catalog:
         for key, world in all_worlds.items()
         if any(s in species for s in world.get("roster", []))
     }
-    return Catalog(species, worlds)
+    visitors = {
+        key: [
+            v
+            for v in world.get("visitors", [])
+            if isinstance(v, dict)
+            and isinstance(v.get("id"), str)
+            and v.get("hours") in ("day", "night")
+        ]
+        for key, world in all_worlds.items()
+    }
+    return Catalog(species, worlds, visitors)

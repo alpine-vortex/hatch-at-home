@@ -107,6 +107,8 @@ async def test_each_person_hears_only_their_own_bond(
         "birthday_phone": False,
         "birthday_kept": False,
     }
+    visit = mine["house"].pop("visit")  # today's visit (or none): no person in it
+    assert visit is None or set(visit) == {"day", "id", "hours", "from", "until"}
     assert mine["house"] == {"media": None, "dream": None}
     assert mine["moments"] == []
     assert dt_util.parse_datetime(mine["now"]) == dt_util.utcnow()
@@ -143,6 +145,8 @@ async def test_a_shared_screen_hears_the_house_only(
     events = await pushed(shared)
     media = events[0]["moment"]
     assert media == {"type": "watching", "title": "Bluey", "at": media["at"]}
+    assert len(events) == 2 and "visit" in events[1]["house"]  # the day's, or None
+    events[1]["house"].pop("visit")
     assert events[1:] == [{"house": {"media": media, "dream": None}}]
     assert "sunbeam" not in json.dumps(events) and me not in json.dumps(events)
     # Subscribing again replays the same media moment (the card dedupes by at).

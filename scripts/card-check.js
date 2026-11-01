@@ -6726,7 +6726,10 @@ async function main() {
   await pinAwake(card, "visitors");
   // (vprep clears every hatch-visit-* once its stub is in, so no real visit slips in first)
   const vsrc = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
-  const VIS = require("vm").runInNewContext(`(${vsrc.match(/\nconst VISITORS = (\{[\s\S]*?\n\});/)[1]})`);
+  // Each world's visitors: worlds.json's roster with the card's play data (by id).
+  const VPLAY = require("vm").runInNewContext(`(${vsrc.match(/\nconst VISITOR_PLAY = (\{[\s\S]*?\n\});/)[1]})`);
+  const VWORLDS = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
+  const VIS = Object.fromEntries(Object.entries(VWORLDS).map(([w, x]) => [w, (x.visitors || []).map((v) => ({ ...VPLAY[v.id], ...v }))]));
   const VLINES = require("vm").runInNewContext(vsrc.match(/\nconst VISIT_LINES = (\[[^\n]*\]);/)[1]);
   const VBABY = require("vm").runInNewContext(`(${vsrc.match(/\n {2}"visit": (\{[^\n]*\}),/)[1]})`).baby;
   // A free, shown pet: past its first look, on show a minute, no link lately; the

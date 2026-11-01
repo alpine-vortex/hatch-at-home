@@ -108,13 +108,13 @@
     }
   }
 
-  // A world visitor (VISITORS) through the card's own _visitorStart and _visitorGreet,
+  // A world visitor (the card's visitorList) through the card's own _visitorStart and _visitorGreet,
   // its timers stopped and its moves paused, so a beat is the same every run:
   // {id, beat: "arrive"|"greet"|"leave", frame: 1|2, side: "left"|"right"}. The id is
   // looked up in the pet's world (default: its first visitor). Under motion "reduce"
   // the card shows the still visit (one frame, at its edge) on its own.
   async function visitorShot(card, s, vis, petAt) {
-    const list = VISITORS[s.worldKey] || [];
+    const list = visitorList(s.world);
     const v = list.find((x) => x.id === vis.id) || list[0];
     if (!v) throw new Error(`no visitor ${vis.id} in ${s.worldKey}`);
     const V = card._visitorStart(s, v, { ltr: vis.side !== "right" });
