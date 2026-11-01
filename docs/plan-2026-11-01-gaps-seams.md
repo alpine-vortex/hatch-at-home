@@ -319,7 +319,12 @@ idle, link, editor) and a bench shot where it's visual (1a, 2a).
 | Q9 | **Yes:** Assist mentions today's visitor once its window has ended. Line in §4b. |
 | Q10 | **Plan + art in Feb.** |
 
-## 4b. New drafts (await the owner's approval; not shipped until approved)
+## 4b. New drafts (all approved by the owner, 2026-11-01)
+
+The owner approved every line below, the charming swap included. The FM reviewed 3a.
+Q2 follow-up: the stretch ships at ×1.06, only while the pet is heavy (>75), and is bench-checked at
+330 and 420 px (slice 2c). 2b keeps the cause in the public moment for `weight` only, with a test
+that no other cause leaks.
 
 - **3a, 1 Dec phone push:** `The winter lights are up! {name} is all aglow ✨` (no festival
   name; ends in an emoji, so no nickname).
@@ -341,7 +346,7 @@ idle, link, editor) and a bench shot where it's visual (1a, 2a).
 
 - **4a, a swap:** charming's approved bored line `a bit dull, isn't it?` asks a question,
   which the persona scan forbids ("no asking"). Built as `a bit dull today, I must say`
-  until the owner picks a line.
+  (approved).
 - **6a, Assist visitor (today's visit, window ended):** `A {visitor} came by today.`
   (the shooting star: `A shooting star went by today.`), after the wish sentence.
 
@@ -349,7 +354,7 @@ idle, link, editor) and a bench shot where it's visual (1a, 2a).
 
 | Slice | Commit | Notes |
 |---|---|---|
-| 3a winter mornings | `f334f862` | 1 Dec line awaits §4b approval |
+| 3a winter mornings | `f334f862` | reviewed by the FM; 1 Dec line approved |
 | 1a countdown | `f2873ad2` | bench: `s1a-*.png` |
 | 1b one week | `c8f4444b` | |
 | 2a weight words | `43cbefe0` | bench `pet.weight`; `s2a-weight-330.png` |
