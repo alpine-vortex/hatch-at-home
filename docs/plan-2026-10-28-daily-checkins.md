@@ -19,11 +19,12 @@ following on 2026-10-28:
   (and its connections, `plan-2026-10-28-bond-connections.md`); seasons: Halloween
   (0.28.0) and Thanksgiving; pet-to-pet visits, as the infrared link (device charm D6,
   0.36.0, `plan-2026-10-29-device-charm.md`).
-- **In progress:** visitors v1 (card only, seeded by date, nothing saved):
-  `plan-2026-10-31-visitors.md`, on branch
-  `crew/hatch-at-home-s2552-visitors-v1-plan-card-only-see`, not yet on main.
-- **Not built:** finds and the basket/collection (no code for them on main);
-  other seasons.
+- **Built since (reconciled 2026-10-31 against git):** visitors v1 (card only, seeded by
+  date, nothing saved; `plan-2026-10-31-visitors.md`): `4bf1958e` on main (batch 5); its
+  catch-up line `8911ef94` and final art for all 36 in batch 6. Winter lights
+  (`plan-2026-10-31-winter-lights.md`, `f6b9b29f`, batch 6) closes §6's "generic or named?".
+- **Not built:** finds, the basket, the collection and gifts (item 1's server half);
+  the other seasons in §6; pets' friendship counts and "neighbours talking" (item 5).
 
 ## Rules for all of it
 
@@ -61,6 +62,11 @@ things, and visitors drop by.
   across generations.
 
 ### Per world (each device shell has its own)
+
+*2026-10-31:* the **visitors** column below is the draft. v1 shipped a different 18
+(three per world, with final art; `plan-2026-10-31-visitors.md` §4), e.g. a garden snail,
+not a banana slug, and a nighthawk, not an owl. A v2 starts from v1's roster. The finds
+column is still a draft.
 
 Draft lists for the owner and Sol to change. Conditions use flags the house already
 senses. Rare ones are marked ★.
@@ -182,6 +188,10 @@ be more than one pet.
   on the tick, `visiting` on both states; the card loads the guest's species to draw
   it. No new art, since every creature exists. **Cost:** M.
 - **Only one pet?** Nothing changes, and the visitors from feature 1 fill the gap.
+- *Contradiction (flagged 2026-10-31, not resolved):* item 5 shipped as the infrared link
+  (device charm D6), whose rules say **no friendship meter, gifts or visit counts**.
+  The pair visit counts and "best friends" line above break that rule. The owner decides
+  which holds (`plan-2026-10-31-next-stages.md`).
 - **Neighbours talking** (owner, 2026-10-28, from Animal Crossing): pets mention each
   other ("have you met Mochi? she's so nice!", "Mochi visited yesterday ♥"), more as
   they become friends.
@@ -197,7 +207,7 @@ something we should jump into".
 | Season | When | Touches |
 | --- | --- | --- |
 | First snow | the first snowy day (already sensed) to a week after | a scarf at the head point, snow on the device's top trim |
-| Winter holidays | about 1–31 December | lights along the trim, a little tree or lantern, a gift on the morning of the 25th |
+| Winter holidays | about 1–31 December | lights along the trim, a little tree or lantern, a gift on the morning of the 25th (**built as winter lights**, with no gift on the 25th: a quiet 21 Dec treat day instead) |
 | New year | 31 Dec – 1 Jan | a party hat, confetti at midnight if awake |
 | Valentine's | 14 Feb | hearts float up when cared for |
 | Spring | equinox week | blossoms on the trims, a flower crown |
@@ -227,5 +237,7 @@ something we should jump into".
   tablet login would count as one person.
 - **Finds per world:** are the lists right? Anything they'd love to find?
 - **Which seasons**, and should the winter holidays be generic ("winter lights") or
-  named?
+  named? *Answered 2026-10-31: winter lights, with named days (Christmas Eve/Day,
+  Hanukkah, New Year's Eve) behind a per-screen "holiday names" toggle that hides every
+  festival name.*
 - **Should Sol redraw the Halloween stand-ins** for next year, and draw the finds?
