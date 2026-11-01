@@ -1117,6 +1117,16 @@ async def test_a_parked_berry_dig_is_the_person_who_parked_it(
         tap["wins"],
         tap["basket"],
     )
+    # A shared screen (Ann signed in on the kitchen tablet): the household's slot.
+    await as_(ann, end=True)
+    await as_(ann, shared=True)
+    shared_tap = await as_(ann, shared=True, guess="dig")
+    assert (await as_(ann, shared=True, end=True))["parked"] is True
+    assert set(coordinator.state.parked) == {ann.id, model.PARK_HOUSEHOLD}
+    home = await game(hass, game="dig")  # an automation carries on the same one
+    assert (
+        home["basket"] == shared_tap["basket"] and home["round"] == shared_tap["round"]
+    )
 
 
 async def test_a_guess_from_another_game_is_refused(

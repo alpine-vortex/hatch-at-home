@@ -312,6 +312,12 @@ function soundsOn() {
 const SHARED_KEY = "hatch-shared-screen";
 // Fired on window when the switch flips, so every card on the page follows.
 const SHARED_EVENT = "hatch-shared-changed";
+// A shared screen's Berry dig is the household's, not the signed-in user's:
+// put aside with ✕, it is carried on by the household (play_game shared).
+function digShared(kind) {
+  return kind === "dig" && sharedScreen() ? { shared: true } : {};
+}
+
 function sharedScreen() {
   try {
     return localStorage.getItem(SHARED_KEY) === "on";
@@ -7732,9 +7738,9 @@ class HatchPetCard extends HTMLElement {
       `<button data-game="${g.key}"><span class="gi" aria-hidden="true">${gameIcon(g.key)}</span>` +
       `${g.label}</button>`).join("");
     this._gameView(s, "pick");
-    this._fitPicker(s);
     // A narrow card has room for one short line beside the close button.
     this._write(s, s.game.prompt, 60000);
+    this._fitPicker(s); // measured with the prompt in the bubble
     let last = null;
     try {
       last = localStorage.getItem(LAST_GAME_KEY);
@@ -7755,10 +7761,20 @@ class HatchPetCard extends HTMLElement {
     if (!pick || !gx || pick.hidden) return;
     const box = s.gameBox.getBoundingClientRect();
     if (!box.height) return;
-    pick.style.top = `${Math.round(gx.getBoundingClientRect().bottom - box.top + 6)}px`;
-    pick.style.bottom = "2%";
     pick.classList.remove("wrap", "tight");
     const buttons = [...pick.querySelectorAll("button")];
+    // First the plain column where it has always been, if it covers nothing: not
+    // the close button, not the prompt, and none cut off at the foot.
+    pick.style.top = pick.style.bottom = "";
+    const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const keep = [gx, s.bubble].filter((el) => el && !el.hidden).map((el) => el.getBoundingClientRect())
+      .filter((r) => r.height);
+    if (buttons.every((b) => {
+      const r = b.getBoundingClientRect();
+      return r.bottom + 4 <= box.bottom && !keep.some((k) => hit(r, k));
+    })) return;
+    pick.style.top = `${Math.round(gx.getBoundingClientRect().bottom - box.top + 6)}px`;
+    pick.style.bottom = "2%";
     // The games' height, from the first one's top to the last one's foot, + the press shadow.
     const need = () => Math.max(...buttons.map((b) => b.offsetTop + b.offsetHeight)) -
       Math.min(...buttons.map((b) => b.offsetTop)) + 4;
@@ -7868,7 +7884,7 @@ class HatchPetCard extends HTMLElement {
     let info;
     try {
       const res = await this._hass.callService(
-        "virtual_pet", "play_game", { entity_id: id, ...data }, undefined, false, true);
+        "virtual_pet", "play_game", { entity_id: id, ...data, ...digShared(data.game) }, undefined, false, true);
       info = res?.response;
     } catch (err) {
       if (s.game === game) this._endGame(s, "hmm, that didn't work");
@@ -8015,6 +8031,11 @@ class HatchPetCard extends HTMLElement {
       g.busy = false;
       this._digShow(s, info);
       this._write(s, (g.prompt = "dig or keep?"));
+      // Keep is disabled on an empty basket: focus on it moves to dig.
+      const gl = s.gameBox.querySelector(".gl");
+      if (!g.basket && this.shadowRoot?.activeElement === gl) {
+        s.gameBox.querySelector(".gr").focus({ preventScroll: true });
+      }
     });
   }
 
@@ -9302,7 +9323,7 @@ class HatchPetCard extends HTMLElement {
     if (id && SERVER_GAMES.has(kind)) {
       try {
         Promise.resolve(this._hass.callService(
-          "virtual_pet", "play_game", { entity_id: id, game: kind, end: true },
+          "virtual_pet", "play_game", { entity_id: id, game: kind, end: true, ...digShared(kind) },
           undefined, false, true)).catch(() => {});
       } catch (err) { /* silent */ }
     }

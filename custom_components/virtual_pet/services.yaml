@@ -91,6 +91,11 @@ play_game:
       example: true
       selector:
         boolean:
+    shared:
+      required: false
+      default: false
+      selector:
+        boolean:
 share_news:
   fields:
     entity_id:

@@ -259,8 +259,7 @@ the log score string.
   because one line didn't fit between the buttons at 330 px. The bee shows still on the
   left, above keep, until the next prompt. `.gcatch` is now `.gprop` (and `s.catchEl` is
   `s.propEl`). `SERVER_GAMES` replaces the two-kind lists in `_quitGame` and the idle close.
-  The compact picker (330 px) shows its three games as two rows of labels, no icons, at
-  44 px (4c's tap size): a column of three covered the prompt and the close button.
+  The picker's fit is per width now: see "Audit s2616 fixes" below.
 - **Checks**: pytest `tests/test_dig.py` (18) and `test_a_parked_berry_dig_carries_on_across_a_restart`;
   card-check's `resume` section, the dig contract on stubbed replies and one real park round
   trip; bench `--preset dig` (420/330, calm).
@@ -271,20 +270,23 @@ the log score string.
 ### Audit s2616 fixes (2026-11-01)
 
 - **Per person (owner):** `PetState.parked` is a map, HA user id → dig, with
-  `"household"` for calls with no person (automations; a screen signed in as its own user
-  keeps that user's slot). `Game.player` says whose a dig is. A dig started by someone
+  `"household"` for calls with no person (automations) and for the card on a shared screen,
+  which says so with `play_game`'s optional `shared: true` (the screen's own claim, as on the
+  channel; it changes the dig's slot only, not who gets the bond). `Game.player` says whose a dig is. A dig started by someone
   else while one is live parks the live one for its person (free) and starts the new
   player's own. Whoever finishes a dig gets its bond, best and record. A save with one
   parked dig (this branch's first cut) loads it into the household slot. A parked dig
   older than the pet is dropped on load (an older version's egg keeps the unknown key).
   A dig guess with no game answers `{"result": "no_game", "parked": true}` when the
   caller's dig is put aside.
-- **Picker:** `_fitPicker` puts the picker under the close button and wraps the games into
-  rows of labels when a column doesn't fit, then tightens them (11 px, two a row) if the
-  rows still don't. The short prompt ("pick a game!") shows on any slide under 300 px.
+- **Picker:** `_fitPicker` keeps the plain column where it has always been if it covers
+  neither the close button nor the prompt and nothing is cut off; else it puts the picker
+  under the close button and wraps the games into rows of labels, then tightens them (11 px,
+  two a row) if the rows still don't fit. With three games the column touches the close
+  button at every width up to 420, so the rows now show at 420 too. The short prompt ("pick a game!") shows on any slide under 300 px.
   Checked on the bench at 300-420 with three games and four (Catch).
 - **Card:** at 300 px the dig's score is narrower and keep/dig sit further out; the card
-  focuses dig on an empty basket; `empty_basket` says "oh! someone else is playing with
+  focuses dig on an empty basket (at the start, and after a keep or a bee); `empty_basket` says "oh! someone else is playing with
   me", a parked `no_game` says "maybe later!" (existing lines).
 - Pay stays 23; a disconnect or a 3-minute idle mid-dig stays a loss (Q1).
 

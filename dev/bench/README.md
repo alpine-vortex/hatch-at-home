@@ -24,7 +24,7 @@ node scripts/bench.js --preset visitors   # 28 shots at 330: every world visitor
 node scripts/bench.js --preset finds      # 74 shots: every find at reveal size, the baskets, sparkle, V3, baby, calm, compact
 node scripts/bench.js --preset gifts      # 11 shots: a gift's first look, V5 (longest name), V6 made/found, V7 baby, calm, compact, asleep
 node scripts/bench.js --preset collection # 21 shots: the finds page, each world at 420/330, shared, empty, all met, mono, an older server
-node scripts/bench.js --preset dig        # 11 shots: the Berry dig at 420/330 (picker, fresh, under way, berry, bee), calm bee
+node scripts/bench.js --preset dig        # 31 shots: the Berry dig at 420/330/300, calm bee, the picker at 300-420 (with Catch too)
 node scripts/bench.js --preset mono       # the mono screen: 2498 shots, ~2.5 min, plus the pass rule
 ```
 

@@ -102,6 +102,9 @@ PLAY_GAME_SCHEMA = vol.Schema(
         ),
         # End the game in progress instead (the card's "maybe later").
         vol.Optional(ATTR_END, default=False): cv.boolean,
+        # The card on a shared screen: a berry dig is the household's, not the
+        # signed-in user's (the screen's own claim, as on the channel).
+        vol.Optional("shared", default=False): cv.boolean,
     }
 )
 SHARE_NEWS_SCHEMA = vol.Schema(
@@ -238,7 +241,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         kind = call.data[ATTR_GAME]
         guess = call.data.get(ATTR_GUESS)
         if call.data[ATTR_END]:
-            return await pet_of(call).async_end_game(kind, call.context)
+            return await pet_of(call).async_end_game(
+                kind, call.context, call.data["shared"]
+            )
         if guess is not None and guess not in GAMES[kind]:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -248,7 +253,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     "guesses": " or ".join(GAMES[kind]),
                 },
             )
-        return await pet_of(call).async_play_game(guess, call.context, kind)
+        return await pet_of(call).async_play_game(
+            guess, call.context, kind, call.data["shared"]
+        )
 
     async def share_news(call: ServiceCall) -> ServiceResponse:
         # One pet that isn't loaded doesn't keep the news from the others.
