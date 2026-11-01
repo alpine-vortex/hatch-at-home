@@ -3,11 +3,18 @@
 # (.github/dependabot.yml) proposes updates.
 name: Validate
 
+# Only main and PRs: crew and art branches push often and check locally with
+# scripts/gate, and every failed run emails the owner.
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
   workflow_dispatch:
+
+# A newer push to the same branch or PR cancels the run still going.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   hacs:
@@ -41,6 +48,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # oldcard loads past releases' cards with `git show v0.37.0:...`.
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
       - run: scripts/setup
       - run: npm install --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
