@@ -205,6 +205,20 @@ const PRESETS = {
     extra("foot-woodland-330", "the page's foot, 330", { world: "woodland", width: 330, scrollEnd: true });
     return out;
   },
+  // Big text (top10 4b): every status-box page at 420, 330 and compact (260), the
+  // status page also scrolled to its end. Nothing may clip or run off the box.
+  bigtext() {
+    const out = [];
+    for (const width of [420, 330, 260]) {
+      for (const view of ["status", "settings", "picker", "journal", "collection"]) {
+        out.push({ name: `bigtext/${width}/${view}`, group: `bigtext-${width}`, label: view, world: "woodland", width, view,
+          bigText: true, mine: true, ...(view === "picker" ? { shellOptions: FINISHES, shellFinish: "stripes", stage: "teen" } : {}), ...(view === "collection" ? { collection: true } : {}) });
+      }
+      out.push({ name: `bigtext/${width}/status-end`, group: `bigtext-${width}`, label: "status, end", world: "woodland", width,
+        view: "status", bigText: true, scrollEnd: true });
+    }
+    return out;
+  },
   // The settings sheet (the status screen's gear) with the viewer's own rows, at
   // both card widths, day and night.
   settings() {
@@ -326,9 +340,9 @@ function normalize(raw) {
     shot.pets.push({ species: roster[i % roster.length], stage: "child", mood: "content", world: shot.world, ...(extra[i] || {}) });
   }
   shot.name ||= `shot-${shot.species || "x"}-${shot.stage}-${shot.mood}`;
-  if (shot.lcd !== undefined || shot.booted || shot.mono) {
+  if (shot.lcd !== undefined || shot.booted || shot.mono || shot.bigText) {
     shot.storage = { ...(shot.booted ? { "hatch-booted": "1" } : {}), ...(shot.lcd !== undefined ? { "hatch-lcd": String(shot.lcd) } : {}),
-      ...(shot.mono ? { "hatch-mono": "4" } : {}), ...shot.storage };
+      ...(shot.mono ? { "hatch-mono": "4" } : {}), ...(shot.bigText ? { "hatch-big-text": "on" } : {}), ...shot.storage };
   }
   return shot;
 }
@@ -350,6 +364,7 @@ function parseArgs(argv) {
     else if (key === "shape" || key === "color" || key === "bezel" || key === "finish") (opts.shot.shell ||= {})[key] = val();
     else if (key === "lcd") opts.shot.lcd = val();
     else if (key === "mono") opts.shot.mono = val() !== "off";
+    else if (key === "big-text") opts.shot.bigText = true; // the "big text" switch on (top10 4b)
     else if (key === "boot") opts.shot.booted = false;
     else if (key === "mine") opts.shot.mine = true;
     else if (key === "finds-shown") opts.shot.findsShown = true; // FINDS_SHOWN on (off until V-F)

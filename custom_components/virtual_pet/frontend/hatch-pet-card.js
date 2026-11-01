@@ -259,6 +259,20 @@ function monoOn() {
   }
 }
 
+// Big text: the status box's pages (status, journal, settings, picker) in larger
+// words; off unless turned on for this browser (top10 4b). It rides on the mono
+// screen's event and storage listeners (MONO_EVENT, _onMono): both are this
+// screen's look.
+const BIG_KEY = "hatch-big-text";
+
+function bigOn() {
+  try {
+    return localStorage.getItem(BIG_KEY) === "on";
+  } catch (err) {
+    return false;
+  }
+}
+
 // Holiday names: on unless turned off for this browser (only "off" is kept). Off,
 // no line names a festival: the season's dated lines go, and so does any line
 // FESTIVAL_NAMES matches (that pattern is the tag); the generic lines stay.
@@ -2708,6 +2722,14 @@ const STYLE = `
   ha-card.mono .ftile.locked img { opacity: .5; }
   .ftile .fheart { position: absolute; top: 0; right: 0; font-size: 12px; line-height: 1; }
   .jlist { font-size: 12px; opacity: .9; display: flex; flex-direction: column; gap: 3px; }
+  /* Big text (top10 4b): every size on the status box's pages, about 3 px up. */
+  ha-card.bigtext .status { font-size: 16px; }
+  ha-card.bigtext .status .log, ha-card.bigtext .status .jlist, ha-card.bigtext .status .photos,
+  ha-card.bigtext .status .status-feedback, ha-card.bigtext .status .sback,
+  ha-card.bigtext .status .fheart { font-size: 15px; }
+  ha-card.bigtext .status .sec, ha-card.bigtext .status .shellnote, ha-card.bigtext .status .jtile,
+  ha-card.bigtext .status .ftile, ha-card.bigtext .status .tile { font-size: 13px; }
+  ha-card.bigtext .status .tile .tsub { font-size: 12px; }
   .photos { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
   .prow { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px; }
   .print { margin: 0; flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
@@ -2943,6 +2965,7 @@ class HatchPetCard extends HTMLElement {
     window.addEventListener(MONO_EVENT, this._onMono);
     window.addEventListener("storage", this._onMonoStorage);
     this._card?.classList.toggle("mono", monoOn());
+    this._card?.classList.toggle("bigtext", bigOn());
     // Shared screen turned on or off while the card was away (its listeners
     // were off): catch up now, before a queued personal line is said.
     if (this._slides?.length && sharedScreen() !== this._sharedSeen) {
@@ -3248,6 +3271,7 @@ class HatchPetCard extends HTMLElement {
     this._card = root.querySelector("ha-card");
     this._card.classList.toggle("lcd-on", lcdOn());
     this._card.classList.toggle("mono", monoOn());
+    this._card.classList.toggle("bigtext", bigOn());
     // The shell hardware's art: ui/shell_<part>.png, drawn by art/shell-parts/make_parts.py (see REQUEST.md there).
     const ui = (name) => `url("${BASE}/ui/${name}.png?v=${VERSION}")`;
     for (const k of ["screw", "slot", "stripes", "fleck", "glare", "logo", "plate", "battery", "light_on", "light_off"])
@@ -3873,13 +3897,14 @@ class HatchPetCard extends HTMLElement {
 
   _onMono = () => {
     this._card?.classList.toggle("mono", monoOn());
+    this._card?.classList.toggle("bigtext", bigOn());
     this._slides?.forEach((x) => { // an open sheet's row text and aria-pressed stay true
       if (x.screen.classList.contains("show-status") && !x.picker) this._renderStatus(x, this._state(x, "sensor.last_care")?.attributes.log || []);
     });
   };
 
   _onMonoStorage = (e) => {
-    if (e.key === MONO_KEY || e.key === null) this._onMono(); // null: storage cleared
+    if (e.key === MONO_KEY || e.key === BIG_KEY || e.key === null) this._onMono(); // null: storage cleared
   };
 
   // Take an open question off the screen (a game, another pet on this slide).
@@ -6397,6 +6422,7 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "holiday names", `<span><button class="bell named" aria-label="holiday names" aria-pressed="${namedHolidays()}">${namedHolidays() ? "on" : "off"}</button></span>`)}
       ${row(null, "mono screen", `<span><button class="bell mono" aria-label="mono screen: ${monoOn() ? "on" : "off"}, change" aria-pressed="${monoOn()}">${monoOn() ? "on" : "off"}</button></span>`)}
+      ${row(null, "big text", `<span><button class="bell bigtext" aria-label="big text: larger words on this screen's pages" aria-pressed="${bigOn()}">${bigOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
       <div class="shellnote sharednote">a family tablet? give it its own login, and we'll make friends ♥</div>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
@@ -6507,6 +6533,21 @@ class HatchPetCard extends HTMLElement {
       }
       this._card.classList.toggle("mono", on);
       window.dispatchEvent(new CustomEvent(MONO_EVENT)); // any other card on this page
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+    });
+    s.status.querySelector(".bell.bigtext").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const on = !bigOn();
+      try {
+        if (on) localStorage.setItem(BIG_KEY, "on");
+        else localStorage.removeItem(BIG_KEY);
+      } catch (err) {
+        this._statusMessage(s, "This browser can't save that setting.");
+        return;
+      }
+      this._card.classList.toggle("bigtext", on);
+      window.dispatchEvent(new CustomEvent(MONO_EVENT)); // any other card on this page (_onMono)
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
     s.status.querySelector(".bell.bdayphone")?.addEventListener("click", (e) => {

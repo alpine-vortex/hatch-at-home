@@ -758,6 +758,77 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   check("shell: the stale list is gone again", JSON.stringify(restored) === JSON.stringify(a.options), JSON.stringify(restored));
 }
 
+// 2d. Big text (top10 4b): the "big text" row in THIS SCREEN, per browser, off by
+// default. On, the status box's words grow (16 px) and no page runs off the box
+// sideways at 330 (status, settings, journal); another tab's change is followed; off
+// puts it back.
+async function bigTextChecks({ page, check, cur, shot }) {
+  const card = page.locator("hatch-pet-card");
+  const state = () => card.first().evaluate((el) => {
+    const s = el._slides[el._index];
+    const bell = s.status.querySelector(".bell.bigtext");
+    return { on: el._card.classList.contains("bigtext"), stored: localStorage.getItem("hatch-big-text"),
+      row: bell && { text: bell.textContent, pressed: bell.getAttribute("aria-pressed"), label: bell.getAttribute("aria-label") },
+      size: getComputedStyle(s.status).fontSize };
+  });
+  const openSheet = async () => {
+    await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      if (!s.screen.classList.contains("show-status")) el._toggleStatus(s);
+    });
+    await page.waitForTimeout(300);
+    if (await cur().locator(".status .gear").count()) await cur().locator(".status .gear").click();
+    await page.waitForTimeout(300);
+  };
+  await card.evaluate((el) => { localStorage.removeItem("hatch-big-text"); el._card.classList.remove("bigtext"); });
+  await openSheet();
+  const off = await state();
+  check("big text: a row in this screen, off by default, 13 px",
+    !off.on && off.stored === null && off.row?.text === "off" && off.row.pressed === "false" &&
+    off.row.label === "big text: larger words on this screen's pages" && off.size === "13px", JSON.stringify(off));
+  await cur().locator(".bell.bigtext").click();
+  await page.waitForTimeout(300);
+  const on = await state();
+  check("big text: on stores \"on\", the row says so and the words are 16 px",
+    on.on && on.stored === "on" && on.row?.text === "on" && on.row.pressed === "true" && on.size === "16px", JSON.stringify(on));
+  // Nothing runs off the box sideways at 330: status, settings, journal.
+  const vp = page.viewportSize();
+  await page.setViewportSize({ width: 330, height: 860 });
+  await page.waitForTimeout(400);
+  const fits = await card.first().evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const fit = () => s.status.scrollWidth <= s.status.clientWidth + 1;
+    const out = {};
+    s.settings = true; s.journal = false; s.finds = false;
+    el._renderStatus(s, []); await wait(200); out.settings = fit();
+    s.settings = false;
+    el._renderStatus(s, []); await wait(200); out.status = fit();
+    s.journal = true;
+    el._renderStatus(s, []); await wait(1500); out.journal = fit();
+    s.journal = false;
+    el._renderStatus(s, []);
+    return out;
+  });
+  await shot("d3-bigtext-330");
+  check("big text at 330: status, settings and the journal fit the box's width", fits.status && fits.settings && fits.journal, JSON.stringify(fits));
+  await page.setViewportSize(vp);
+  // Another tab's change arrives as a storage event (the mono listener reads it too).
+  const kept = await card.first().evaluate((el) => {
+    el._card.classList.remove("bigtext");
+    window.dispatchEvent(new StorageEvent("storage", { key: "hatch-big-text" }));
+    return el._card.classList.contains("bigtext");
+  });
+  check("big text: another tab's change (a storage event) is followed", kept, String(kept));
+  await openSheet();
+  await cur().locator(".bell.bigtext").click();
+  await page.waitForTimeout(300);
+  const back = await state();
+  check("big text: off removes the key and the words are 13 px again", !back.on && back.stored === null && back.size === "13px", JSON.stringify(back));
+  await card.evaluate((el) => { const s = el._slides[el._index]; if (s.screen.classList.contains("show-status")) el._toggleStatus(s); });
+  await page.waitForTimeout(300);
+}
+
 // 2c. The mono screen (gear slice 5): the "mono screen" row in THIS SCREEN, per
 // browser. The screen and the IR beam take the 4-tone filter, the plastic keeps its
 // colour, the grid moves to .mono-grid (only with screen effects on, never with more
@@ -5905,6 +5976,7 @@ async function main() {
   }
   if (enter("mono")) {
   await monoChecks({ page, context, check, cur, evaluate, shot, errors });
+  await bigTextChecks({ page, check, cur, shot });
 
   }
   if (enter("ghost")) {
