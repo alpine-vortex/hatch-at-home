@@ -33,6 +33,8 @@ const COPY_TABLES = {
   TRICK_LINES: {},
   LINK_VISITOR_NEWS: { fill: "visitor" },
   LINK_NEWS_REPLY: {},
+  PAIR_LINES: {},
+  VISIT_GUEST: {},
 };
 
 function lines(value, path, out) {

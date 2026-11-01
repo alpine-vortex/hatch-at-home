@@ -8348,6 +8348,86 @@ async function main() {
     check("fresh E3: two starts on one day add 1; a new generation reads 0, and its key replaces the old",
       counted.one === 1 && counted.differ && counted.fresh === 0 && counted.oldGone && counted.nextN === 1, JSON.stringify(counted));
   }
+  // Fresh-expand E10 (V-b, V-c), card only: on a pinned pair day a friend of the planned
+  // visitor comes too (two visitors, a pair line), nothing sent and its friend not counted;
+  // on a pinned no-visit guest day a visitor from another world comes in its window, says
+  // its home's line, and visitseen isn't written; a dark screen gets only night guests.
+  {
+    const PAIRS = require("vm").runInNewContext(vsrc.match(/\nconst PAIR_LINES = (\[[^\n]*\]);/)[1]);
+    const GUESTS = require("vm").runInNewContext(`(${vsrc.match(/\nconst VISIT_GUEST = (\{[\s\S]*?\n\});/)[1]})`);
+    const host = list.find((v) => !v.cross && list.some((x) => x.id !== v.id && x.hours === v.hours && !x.cross));
+    if (host) {
+      await vprep(host);
+      const pair = await card.evaluate(async (el, { ms }) => {
+        const s = el._slides[el._index];
+        const real = { rare: el._rareDay, svc: el._hass.callService, ws: el._hass.callWS };
+        const calls = [];
+        el._hass.callService = (...a) => { calls.push(a[1]); return real.svc.apply(el._hass, a); };
+        el._hass.callWS = (m) => { calls.push(m?.type); return real.ws.call(el._hass, m); };
+        el._rareDay = (sl, kind) => kind === "pair";
+        try {
+          el.__vtick(s);
+          await new Promise((r) => setTimeout(r, ms));
+          const out = { vis: [...s.seasonBox.querySelectorAll(".vis")].map((v) => v.dataset.visitor), said: s.bubble.textContent,
+            tally: el._visitFriends(s), calls };
+          el._visitorEnd(s);
+          out.after = s.seasonBox.querySelectorAll(".vis").length;
+          return out;
+        } finally {
+          Object.assign(el, { _rareDay: real.rare });
+          Object.assign(el._hass, { callService: real.svc, callWS: real.ws });
+        }
+      }, { ms: (host.in || 1400) + 1600 });
+      check("fresh E10 (V-b): a pair day brings a second visitor of the world and a pair line; both go; nothing sent; only the planned one counted",
+        pair.vis.length === 2 && new Set(pair.vis).size === 2 && PAIRS.includes(pair.said) && pair.after === 0 &&
+        pair.calls.length === 0 && Object.keys(pair.tally).length === 1, JSON.stringify(pair));
+    }
+    await vprep(null);
+    const guest = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const real = { rare: el._rareDay, house: s.house };
+      const seenKey = `hatch-visitseen-${s.ids?.device}`;
+      const seenBefore = localStorage.getItem(seenKey);
+      const out = {};
+      el._rareDay = (sl, kind) => kind === "guest";
+      s.house = { ...(s.house || {}), visit: null };
+      const at = (h) => new Date(new Date().setHours(h, 30, 0, 0));
+      try {
+        s.screen.classList.remove("night", "dim");
+        out.day = el._visitorGuest(s, at(10));
+        out.dayLate = el._visitorGuest(s, at(14));
+        s.screen.classList.add("night");
+        out.night = el._visitorGuest(s, at(20));
+        out.nightAtDay = el._visitorGuest(s, at(10));
+        s.screen.classList.remove("night");
+        s.house = { ...s.house, visit: { id: "x", day: "2026-01-01", from: 0, until: 0 } };
+        out.planned = el._visitorGuest(s, at(10));
+        s.house = { ...s.house, visit: null };
+        if (out.day) {
+          el._visitorStart(s, out.day.v, { world: out.day.world, guest: true });
+          await new Promise((r) => setTimeout(r, (out.day.v.in || 1400) + 1300));
+          out.shown = [...s.seasonBox.querySelectorAll(".vis")].map((v) => v.dataset.visitor);
+          out.said = s.bubble.textContent;
+          el._visitorEnd(s);
+        }
+        out.seenSame = localStorage.getItem(seenKey) === seenBefore;
+        out.home = s.worldKey;
+      } finally {
+        el._rareDay = real.rare;
+        s.house = real.house;
+        s.screen.classList.remove("night");
+      }
+      const brief = (g) => g && { id: g.v.id, world: g.world, hours: g.v.hours };
+      return { ...out, day: brief(out.day), dayLate: brief(out.dayLate), night: brief(out.night), nightAtDay: brief(out.nightAtDay),
+        planned: brief(out.planned) };
+    });
+    check("fresh E10 (V-c): a no-visit guest day: another world's day visitor 09-12 (none at 14, none on a visit day), its home's line, visitseen untouched",
+      guest.day && guest.day.world !== guest.home && guest.day.hours === "day" && !guest.dayLate && !guest.planned &&
+      guest.shown?.[0] === `${guest.day.world}/${guest.day.id}` && guest.said === GUESTS[guest.day.world] && guest.seenSame,
+      JSON.stringify(guest));
+    check("fresh E10 (V-c): a dark screen gets only night guests, 19-22",
+      guest.night?.hours === "night" && guest.night.world !== guest.home && !guest.nightAtDay, JSON.stringify(guest));
+  }
   // The catch-up (owner, 2026-10-31): today's visitor's window over and the visit
   // never played here, the next first look says "a <name> came by today ♪" once
   // (flavour, last, only with room), using up the day's flag so the visit can't play.

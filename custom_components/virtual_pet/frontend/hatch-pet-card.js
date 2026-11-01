@@ -803,6 +803,11 @@ const foundBit = (worlds, m) => {
   return f?.a ? `found ${f.a}` : null;
 };
 const VISIT_FRIEND_AFTER = 3; // sighting days on this screen before a visitor is a friend (E3)
+// Rare visits, card only (E10): no credit, nothing kept but the guest's day flag.
+const PAIR_ODDS = 15; // a planned visit brings a friend 1 day in this many (V-b)
+const GUEST_ODDS = 30; // a no-visit day brings a guest 1 day in this many (V-c)
+const PAIR_BEHIND_MS = 1500; // the friend comes in this far behind, from the other side
+const GUEST_HOURS = { day: 9, night: 19 }; // the guest's window starts: 3 hours each
 const CRUMB_ODDS = 1 / 15; // a feed's chance of the crumb line, once a day (E4 F-b)
 const BUBBLE_POP_ODDS = 1 / 8; // a clean's chance of one bubble drifting up and popping (E4 M-b)
 // The meal by the hour on this device (E4 F-a): null from 22 to 05.
@@ -1388,6 +1393,17 @@ const TRICK_LINES = ["look what I can do! ♪", "ta-da! a new trick ♪", "I lea
 // (or its dream, in DREAMS' words), and the host's answer.
 const LINK_VISITOR_NEWS = (v) => `a ${v} came to see me today ♪`;
 const LINK_NEWS_REPLY = "ooh, nice! ♪";
+// V-b (E10): now and then a planned visitor brings a friend of its world; in place of the greet.
+const PAIR_LINES = ["oh! a pair of friends ♪", "two visitors at once! ♪", "a little parade! hi hi ♪"];
+// V-c: on a day with no visit, now and then a guest from another world, by its home world.
+const VISIT_GUEST = {
+  woodland: "a guest from the woods! ♪",
+  terrarium: "a guest from the terrarium! ♪",
+  hearth: "a visitor from a cozy house! ♪",
+  tidepool: "a guest from the seaside! ♪",
+  pond: "a guest from the pond! ♪",
+  nightsky: "a guest from the night sky ✦",
+};
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -9482,18 +9498,50 @@ class HatchPetCard extends HTMLElement {
     s.nextVisitCheck = now + VISIT_CHECK_MS;
     if (!this._visitorFree(s, now)) return;
     const v = this._visitorDue(s) || this._visitorLate(s);
-    if (v && oncePerDay(`visit-${s.ids?.device}`, this._visitDay(s))) this._visitorStart(s, v);
+    if (v && oncePerDay(`visit-${s.ids?.device}`, this._visitDay(s))) {
+      this._visitorStart(s, v);
+      return;
+    }
+    // A no-visit day's rare guest from another world (E10 V-c): once a day, in its window.
+    const g = !v && this._visitorGuest(s);
+    if (g && oncePerDay(`guest-${s.ids?.device}`, this._visitDay(s))) this._visitorStart(s, g.v, { world: g.world, guest: true });
+  }
+
+  // --- Fresh-expand E10: a rare pair, a guest from another world (card only) --------
+
+  // This pet's roll for a rare kind of day (pure: the device, the day and the kind).
+  _rareDay(s, kind, odds) {
+    return turnHash(`${s.ids?.device}|${this._visitDay(s).toDateString()}|${kind}`) % odds === 0;
+  }
+
+  // V-b: on a pair day, a friend of the planned visitor: its world's, the same hours, not
+  // a crosser. Null otherwise. Not counted, not written anywhere.
+  _visitorPair(s, v) {
+    if (v.cross || !this._rareDay(s, "pair", PAIR_ODDS)) return null;
+    return visitorList(s.world).find((x) => x.id !== v.id && x.hours === v.hours && !x.cross) || null;
+  }
+
+  // V-c: on a day the server plans no visit, a guest day: in the day or night window of
+  // this screen's kind, a visitor from another world with those hours. {v, world} or null.
+  _visitorGuest(s, date = new Date()) {
+    if (!s.house || !("visit" in s.house) || s.house.visit !== null || !this._rareDay(s, "guest", GUEST_ODDS)) return null;
+    const hours = this._screenDark(s) ? "night" : "day";
+    const from = GUEST_HOURS[hours];
+    if (date.getHours() < from || date.getHours() >= from + 3) return null;
+    const all = Object.entries(this._worlds || {}).filter(([w]) => w !== s.worldKey)
+      .flatMap(([w, world]) => visitorList(world).filter((x) => x.hours === hours).map((x) => ({ v: x, world: w })));
+    if (!all.length) return null;
+    return all[turnHash(`${s.ids?.device}|${this._visitDay(s).toDateString()}|guestwho`) % all.length];
   }
 
   // One visit: in from a side to the edge, the pet looks, then greets it (one line),
   // and it goes back the way it came; a crosser streaks straight over. Reduced motion:
   // the first frame, standing still at the edge for VISIT_CALM_MS; the greet's frame
   // and the line, no look or hop.
-  _visitorStart(s, v, { ltr = Math.random() < 0.5, count = true } = {}) {
+  _visitorStart(s, v, { ltr = Math.random() < 0.5, count = true, world = s.worldKey, guest = false } = {}) {
     this._visitorEnd(s);
-    if (count) this._visitFriendCount(s, v);
+    if (count && !guest) this._visitFriendCount(s, v);
     const isCalm = calm();
-    const world = s.worldKey;
     const inMs = v.in || (v.cross ? 1800 : VISIT_IN_MS);
     const stay = (v.stay || VISIT_STAY_MS) * (sharedScreen() ? 2 : 1); // a shared screen: longer (E8 Sh-a)
     const greetAt = isCalm ? 600 : v.cross ? Math.round(inMs * 0.6) : inMs + 1000;
@@ -9508,8 +9556,8 @@ class HatchPetCard extends HTMLElement {
       `<img src="${BASE}/ui/visitor_${world}_${v.id}_${n}.png?v=${VERSION}" alt="">`).join("");
     s.seasonBox.append(el);
     const now = Date.now();
-    const V = s.visitor = { el, v, timers: [], until: now + total, greetAt };
-    if (!v.cross) { // seen here today, for the evening's today line (fresh-moment 4)
+    const V = s.visitor = { el, els: [el], v, timers: [], until: now + total, greetAt, guest: guest ? world : null };
+    if (!v.cross && !guest) { // seen here today, for the evening's today line (fresh-moment 4)
       try {
         localStorage.setItem(`hatch-visitseen-${s.ids?.device}`, JSON.stringify({ day: this._visitDay(s).toDateString(), name: v.name }));
       } catch (err) {
@@ -9524,9 +9572,24 @@ class HatchPetCard extends HTMLElement {
       else this._visitorEnd(s);
     }, ms));
     if (!isCalm && !v.cross) at(inMs, () => this._look(s, 900));
+    // A friend of its world along, now and then (E10 V-b): the other side, a little behind.
+    const pal = !guest && this._visitorPair(s, v);
+    if (pal) {
+      V.pair = pal;
+      at(isCalm ? 0 : PAIR_BEHIND_MS, () => {
+        const el2 = el.cloneNode(false);
+        el2.className = el.className.replace(/\bvis-\S+/, `vis-${pal.id}`).replace(/\b(ltr|rtl)\b/, ltr ? "rtl" : "ltr")
+          .replace(/\b(walk|fly)\b/, pal.walk ? "walk" : "fly");
+        el2.dataset.visitor = `${world}/${pal.id}`;
+        el2.innerHTML = frames.map((n) =>
+          `<img src="${BASE}/ui/visitor_${world}_${pal.id}_${n}.png?v=${VERSION}" alt="">`).join("");
+        s.seasonBox.append(el2);
+        V.els.push(el2);
+      });
+    }
     at(greetAt, () => this._visitorGreet(s, v));
     if (v.cross && !isCalm) at(inMs, () => el.remove());
-    else if (!isCalm) at(greetAt + stay, () => el.classList.replace("in", "out"));
+    else if (!isCalm) at(greetAt + stay, () => V.els.forEach((x) => x.classList.replace("in", "out")));
     at(total, () => this._visitorEnd(s));
     return V;
   }
@@ -9549,8 +9612,13 @@ class HatchPetCard extends HTMLElement {
       this._show(s, s.pet, mine[0]);
     }
     if (asking) return;
-    const friend = this._visitFriendLine(s, v);
-    const { text } = friend ? { text: friend } : this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]));
+    const V = s.visitor;
+    const baby = this._babySet(s, "visit");
+    // A guest says where it's from; a pair, that there are two (E10); else a friend's
+    // line (E3), else the usual. Baby talk stays.
+    const rare = !baby && (V?.guest ? VISIT_GUEST[V.guest] : V?.pair ? turnPick(PAIR_LINES, `${s.ids?.device}|pair`) : null);
+    const friend = !rare && this._visitFriendLine(s, v);
+    const { text } = rare || friend ? { text: rare || friend } : this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]));
     this._line(s, FLAVOUR, text, 3000);
   }
 
@@ -9602,7 +9670,7 @@ class HatchPetCard extends HTMLElement {
     if (!V) return;
     s.visitor = null;
     V.timers.forEach(clearTimeout);
-    V.el.remove();
+    (V.els || [V.el]).forEach((x) => x.remove());
     if (s.flairUntil === V.until) s.flairUntil = 0;
     if (s.visitUntil === V.until) s.visitUntil = 0;
   }
