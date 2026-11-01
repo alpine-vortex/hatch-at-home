@@ -1021,7 +1021,7 @@ async def test_ending_a_game_is_free_and_the_next_one_is_new(
     finished = async_capture_events(hass, f"{DOMAIN}_game_finished")
     # No game: harmless.
     reply = await game(hass, end=True)
-    assert reply == {"result": "ok", "ended": False}
+    assert reply == {"result": "ok", "ended": False, "parked": False}
     # Mid Left/Right.
     await game(hass, guess="left")
     await game(hass, guess="left")
@@ -1050,6 +1050,84 @@ async def test_ending_a_game_is_free_and_the_next_one_is_new(
     await game(hass, game="higher_lower")
     fresh = await game(hass, game="higher_lower", guess="higher")
     assert fresh["round"] == 1 and "restarted" not in fresh
+
+
+async def test_a_parked_berry_dig_carries_on_across_a_restart(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    """✕ on a dig that has shown something parks it (free); a restart keeps
+    it; the next dig start carries on. Keep on an empty basket is refused."""
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0, energy=90.0)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    started = await game(hass, game="dig")
+    assert (started["round"], started["basket"], started["leaves"]) == (0, 0, 8)
+    assert await game(hass, game="dig", guess="keep") == {"result": "empty_basket"}
+    # Dig until something is shown, then ✕.
+    tap = await game(hass, game="dig", guess="dig")
+    shown = (tap["round"], tap["wins"], tap["basket"])
+    log = len(coordinator.state.care_log)
+    assert await game(hass, game="dig", end=True) == {
+        "result": "ok",
+        "ended": True,
+        "parked": True,
+    }
+    assert coordinator.state.game is None
+    assert list(coordinator.state.parked) == [
+        model.PARK_HOUSEHOLD
+    ]  # no person: the household's
+    assert len(coordinator.state.care_log) == log and not coordinator.state.games
+    await hass.config_entries.async_reload("test_pet")
+    await hass.async_block_till_done()
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    assert list(coordinator.state.parked) == [model.PARK_HOUSEHOLD]
+    back = await game(hass, game="dig")
+    assert (back["round"], back["wins"], back["basket"]) == shown
+    assert coordinator.state.parked == {} and coordinator.state.game.kind == "dig"
+
+
+async def test_a_parked_berry_dig_is_the_person_who_parked_it(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0, energy=90.0)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    ann = await hass.auth.async_create_user("Ann")
+    bob = await hass.auth.async_create_user("Bob")
+
+    async def as_(user, **data: Any) -> dict[str, Any]:
+        return await hass.services.async_call(
+            DOMAIN,
+            "play_game",
+            {"entity_id": "button.pip_feed", "game": "dig", **data},
+            blocking=True,
+            return_response=True,
+            context=Context(user_id=user.id),
+        )
+
+    await as_(ann)
+    tap = await as_(ann, guess="dig")
+    assert (await as_(ann, end=True))["parked"] is True
+    assert list(coordinator.state.parked) == [ann.id]
+    fresh = await as_(bob)
+    assert (fresh["round"], fresh["wins"], fresh["basket"]) == (0, 0, 0)
+    assert await as_(bob, end=True) == {"result": "ok", "ended": True, "parked": False}
+    back = await as_(ann)
+    assert (back["round"], back["wins"], back["basket"]) == (
+        tap["round"],
+        tap["wins"],
+        tap["basket"],
+    )
+    # A shared screen (Ann signed in on the kitchen tablet): the household's slot.
+    await as_(ann, end=True)
+    await as_(ann, shared=True)
+    shared_tap = await as_(ann, shared=True, guess="dig")
+    assert (await as_(ann, shared=True, end=True))["parked"] is True
+    assert set(coordinator.state.parked) == {ann.id, model.PARK_HOUSEHOLD}
+    home = await game(hass, game="dig")  # an automation carries on the same one
+    assert (
+        home["basket"] == shared_tap["basket"] and home["round"] == shared_tap["round"]
+    )
 
 
 async def test_a_guess_from_another_game_is_refused(

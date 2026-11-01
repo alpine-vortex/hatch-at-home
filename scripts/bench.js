@@ -99,6 +99,36 @@ const PRESETS = {
     }
     return out;
   },
+  // The Berry dig (playtime 2a) with scripted replies, at 420 and 330 (compact): a
+  // game under way, a berry just dug, a bee, and the three-game picker.
+  dig() {
+    const out = [];
+    const r = (round, wins, basket, more = {}) => ({ result: "ok", game: "dig", round, rounds: 5, wins, basket,
+      leaves: 8 - basket, win_at: 5, done: false, ...more });
+    for (const width of [420, 330]) {
+      const base = { width, world: "woodland", group: `dig-${width}` };
+      out.push({ ...base, name: `dig/${width}-picker`, label: "picker (three games)", view: "games" });
+      out.push({ ...base, name: `dig/${width}-start`, label: "fresh pile, keep disabled", game: "dig",
+        digReplies: [r(0, 0, 0)] });
+      out.push({ ...base, name: `dig/${width}-under-way`, label: "round 2, 2 banked, basket 2", game: "dig" });
+      out.push({ ...base, name: `dig/${width}-berry`, label: "a berry", game: "dig",
+        digReplies: [r(1, 2, 2), r(1, 2, 3, { found: "berry", round_over: false })], digTaps: ["dig"] });
+      out.push({ ...base, name: `dig/${width}-bee`, label: "a bee", game: "dig",
+        digReplies: [r(1, 2, 2), r(2, 2, 0, { found: "bee", round_over: true })], digTaps: ["dig"] });
+    }
+    // The picker fits at every card width (audit s2616 #1/#4): three games, and four with Catch.
+    for (const width of [300, 320, 336, 350, 360, 375, 385, 400, 420]) {
+      out.push({ width, world: "woodland", group: "dig-picker", name: `dig/picker-${width}`, label: `${width}`, view: "games" });
+      out.push({ width, world: "woodland", group: "dig-picker-catch", name: `dig/picker-catch-${width}`, label: `${width} +catch`,
+        view: "games", config: { experimental_catch: true } });
+    }
+    out.push({ width: 300, world: "woodland", group: "dig-300", name: "dig/300-under-way", label: "300: round 2, basket 2", game: "dig" });
+    out.push({ width: 300, world: "woodland", group: "dig-300", name: "dig/300-start", label: "300: fresh pile",
+      game: "dig", digReplies: [r(0, 0, 0)] });
+    out.push({ width: 330, world: "woodland", group: "dig-calm", name: "dig/330-bee-calm", label: "a bee, reduced motion",
+      motion: "reduce", game: "dig", digReplies: [r(1, 2, 2), r(2, 2, 0, { found: "bee", round_over: true })], digTaps: ["dig"] });
+    return out;
+  },
   // World visitors at 330: every one at its greet (its own hours: night ones on a night
   // screen), then the beats of one walker and one flyer, a calm visit, a baby and a child.
   visitors() {

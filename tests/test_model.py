@@ -1627,8 +1627,11 @@ def test_a_game_pays_at_least_what_play_does():
     # Left or Right: about even odds. Higher or Lower: a good player wins ~92%.
     luck = 0.49 * R.GAME_WIN_HAPPINESS + 0.51 * R.GAME_LOSE_HAPPINESS
     skill = 0.92 * R.SKILL_GAME_WIN_HAPPINESS + 0.08 * R.GAME_LOSE_HAPPINESS
+    # The Berry dig: best play wins 76.4% (exact; tests/test_dig.py measures it).
+    dig = 0.764 * R.DIG_WIN_HAPPINESS + 0.236 * R.GAME_LOSE_HAPPINESS
     assert luck >= R.PLAY_HAPPINESS
     assert skill >= R.PLAY_HAPPINESS
+    assert dig >= R.PLAY_HAPPINESS
 
 
 def test_weight_burn_is_plain_at_50_and_restoring_above():

@@ -86,13 +86,20 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   that asks for it. Reduced motion skips the fill.
 - The screen shows the pet, its scene and a speech bubble. The bubble says what's on
   its mind, or why it refused something ("I'm full!").
-- **Play** offers two games (three with Catch). It opens a picker that starts on the
+- **Play** offers three games (four with Catch). It opens a picker that starts on the
   last game you picked. **Left or right:**
   the pet hides on one side and you guess with the arrows; a win cheers it up more than
   plain play. **Higher or lower:** the pet shows a number from 1 to 9 and you guess
   whether the next is lower (lo) or higher (hi); it's mostly skill, so a win pays like
-  plain play. Five rounds each; three right guesses win. ✕ stops a game. (The `play`
-  button entity is still plain play, for automations and voice.)
+  plain play. Five rounds each; three right guesses win. ✕ stops a game. **Berry dig:**
+  each round the pet faces a leaf pile hiding 6 berries and 2 bees (the number is the
+  leaves left). **dig** turns one leaf: a berry goes in this round's basket, a bee scares
+  the basket off and ends the round. **keep** banks the basket and ends the round. Five
+  rounds; 5 berries banked win, and a win pays a little more than higher or lower. ✕ puts
+  a dig aside instead of ending it: your next berry dig carries on from the same pile,
+  round and bank, however much later. Each person has their own; someone else starts
+  fresh. (The `play` button entity is still plain play, for
+  automations and voice.)
 - **Catch** (prototype, card option `experimental_catch: true`): a toy rolls in from
   one side; tap that side as it reaches the pet, but let the bee go by. Five rounds,
   three catches win; the best score stays in this browser. No reward, nothing is sent
@@ -539,11 +546,18 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 - **The games:** five rounds from the card, or `virtual_pet.play_game`: `guess`
   `left`/`right` plays left or right (the first guess starts it; the answer says where
   the pet went). For higher or lower, call it with `game: higher_lower` and no guess to
-  start and see the first number, then `guess` `lower`/`higher`. A game costs energy
+  start and see the first number, then `guess` `lower`/`higher`. For the berry dig, call
+  it with `game: dig` and no guess to start, then `guess` `dig` or `keep`; `round` in the
+  answer is rounds finished (a berry doesn't finish one), with `wins` (berries banked),
+  `basket`, `leaves`, and after a tap `found` (`berry`, `bee` or `kept`) and `round_over`.
+  `keep` on an empty basket answers `empty_basket` and changes nothing. A game costs energy
   like play, and an unfinished one is dropped after 3 minutes (a guess after that
   starts a new left or right game, and its answer has `restarted: true`; higher or
-  lower answers `no_game`). `end: true` (the card's ✕) ends the game in
-  progress with no reward, penalty or log line. Each pet counts games
+  lower and the berry dig answer `no_game`). `end: true` (the card's ✕) ends the game in
+  progress with no reward, penalty or log line; a berry dig that has started is put aside
+  instead (`parked: true` in the answer) for whoever ended it, and their next dig carries
+  on from it. Calls with no person (automations) share one household slot. A dig guess
+  with no game answers `no_game`, with `parked: true` if the caller's dig is put aside. Each pet counts games
   played and won per game (attribute `games` on the life stage and debug sensors,
   diagnostics, and the journal).
 - **Chores:** map a to-do list in the options, and every item ticked off earns a treat.

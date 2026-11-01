@@ -2424,22 +2424,45 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._publish()
         return result
 
-    async def async_end_game(self, kind: str) -> dict[str, Any]:
+    async def async_forget_games(self, user: str) -> None:
+        """Forget my data: this person's parked dig goes, and a dig in progress
+        no longer names them (it's the household's now). Written at once, as
+        the people store is."""
+        assert self.state is not None
+        dropped = self.state.parked.pop(user, None) is not None
+        game = self.state.game
+        if game is not None and game.player == user:
+            game.player = None
+            dropped = True
+        if dropped:
+            await self.store.async_save(self.state.to_dict())
+
+    async def async_end_game(
+        self, kind: str, context: Context | None = None, shared: bool = False
+    ) -> dict[str, Any]:
         """A person ends the game in progress. Harmless with none. It isn't a
         drop: nothing is counted and the kind isn't marked, so the next game
-        is simply new."""
+        is simply new, except a Berry dig that has shown something: that one
+        is parked for the person ending it (the household with no person),
+        and their next dig carries on from it."""
         assert self.state is not None
         now = self._now()
         self._advance(now)
-        ended = model.end_game(self.state, kind, now)
+        # A shared screen's dig is the household's (PARK_HOUSEHOLD).
+        person = None if shared else await self._person(context)
+        how = model.end_game(self.state, kind, now, person)
         self._dropped_games.discard(kind)
-        if ended:
+        if how:
             self._save()
             self._publish()
-        return {"result": model.OK, "ended": ended}
+        return {"result": model.OK, "ended": how is not None, "parked": how == "parked"}
 
     async def async_play_game(
-        self, guess: str | None, context: Context | None, kind: str = "left_right"
+        self,
+        guess: str | None,
+        context: Context | None,
+        kind: str = "left_right",
+        shared: bool = False,
     ) -> dict[str, Any]:
         """One round of a game, or with no guess, the start of one."""
         assert self.state is not None
@@ -2449,11 +2472,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         person = await self._person(context)
         dropped = kind in self._dropped_games
         self._dropped_games.discard(kind)
+        # Whose dig it is: a shared screen's is the household's. The bond,
+        # best and record still go to the person who finishes it.
+        player = None if shared else person
         if guess is None:
-            info, events = model.start_game(self.state, kind, now, self.rng, by)
+            info, events = model.start_game(
+                self.state, kind, now, self.rng, by, player=player
+            )
         else:
             info, events = model.play_game(
-                self.state, guess, now, self.rng, by, kind=kind
+                self.state, guess, now, self.rng, by, kind=kind, player=player
             )
             if dropped and info["result"] == model.OK and info["round"] == 1:
                 # The game the guess was for was dropped (idle, away): this

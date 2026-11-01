@@ -76,6 +76,7 @@ function digit(n, px = 6) {
 function gameIcon(key) {
   if (key === "left_right") return `${icon("prev", 16)}${icon("next", 16)}`;
   if (key === "higher_lower") return `${digit(1, 2)}<span class="gi-arrow">↕</span>${digit(9, 2)}`;
+  if (key === "dig") return `<img src="${BASE}/ui/catch_decoy_1.png?v=${VERSION}" width="20" height="20" alt="">`;
   return `<img src="${BASE}/ui/flair_player.png?v=${VERSION}" width="20" height="20" alt="">`;
 }
 
@@ -98,9 +99,12 @@ const ACTIONS = [
 const GAMES = [
   { key: "left_right", label: "left or right", guesses: ["left", "right"] },
   { key: "higher_lower", label: "higher or lower", guesses: ["lower", "higher"] },
+  { key: "dig", label: "berry dig", guesses: ["keep", "dig"] },
 ];
-// Matches rates.GAME_IDLE_MINUTES: the server drops a Left/Right or Higher/Lower
-// game left idle this long, and the card closes its own copy then, silently.
+// The server games (all of GAMES; Catch is the card's own).
+const SERVER_GAMES = new Set(GAMES.map((g) => g.key));
+// Matches rates.GAME_IDLE_MINUTES: the server drops a server game left idle
+// this long, and the card closes its own copy then, silently.
 const GAME_IDLE_MS = 3 * 60 * 1000;
 const LAST_GAME_KEY = "hatch-last-game";
 // Catch, the Giga Pets reflex game: a prototype, offered only with the card
@@ -322,6 +326,12 @@ function soundsOn() {
 const SHARED_KEY = "hatch-shared-screen";
 // Fired on window when the switch flips, so every card on the page follows.
 const SHARED_EVENT = "hatch-shared-changed";
+// A shared screen's Berry dig is the household's, not the signed-in user's:
+// put aside with ✕, it is carried on by the household (play_game shared).
+function digShared(kind) {
+  return kind === "dig" && sharedScreen() ? { shared: true } : {};
+}
+
 function sharedScreen() {
   try {
     return localStorage.getItem(SHARED_KEY) === "on";
@@ -2165,6 +2175,14 @@ const STYLE = `
     width: 40px; height: 28px; border-radius: 8px; background: var(--hp-screen-tint, #f3e7c9); }
   .game .gpick .gi img { image-rendering: pixelated; }
   .game .gpick .gi-arrow { font-size: 12px; margin: 0 1px; }
+  /* _fitPicker puts the picker's top under the close button. When a column of
+     games doesn't fit there, they wrap into rows of labels (no icons), still
+     44 px tall (4c's tap size). */
+  .game .gpick.wrap { left: 3%; right: 3%; flex-flow: row wrap; align-content: center; gap: 6px 4px; }
+  .game .gpick.wrap button { min-width: 0; padding: 0 10px; font-size: 12px; justify-content: center; }
+  .game .gpick.wrap .gi { display: none; }
+  .game .gpick.wrap.tight { left: 1%; right: 1%; gap: 4px 3px; } /* still too tall: two a row */
+  .game .gpick.wrap.tight button { padding: 0 6px; font-size: 11px; }
   .game .gnum { position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
     display: grid; place-items: center; min-width: 52px; min-height: 56px; padding: 6px 10px;
     border-radius: 10px; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
@@ -2321,13 +2339,18 @@ const STYLE = `
   .confetti i { position: absolute; top: -6%; left: var(--x); width: 5px; height: 8px; background: var(--c);
     animation: confetti 2.6s linear var(--d) forwards; }
   @keyframes confetti { to { top: 106%; rotate: 540deg; } }
-  .game .gcatch { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
+  .game .gprop { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
     pointer-events: none; will-change: left, transform; }
-  .game .gcatch[hidden] { display: none; }
+  .game .gprop[hidden] { display: none; }
   .game .hl { font: inherit; font-size: 14px; }
   .game .gscore { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
+  .game .gscore.two { white-space: pre; text-align: center; line-height: 1.25; } /* the dig: round, then bank and basket */
+  /* The dig at 300 px: the two-line score between keep and dig, clear of both. */
+  .compact .game .gscore.two { font-size: 10px; padding: 1px 3px; bottom: 3%; letter-spacing: -.3px; }
+  .compact .game.dig .gl { left: 1.5%; }
+  .compact .game.dig .gr { right: 1.5%; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
   .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
   .screen.show-status .bondhearts, .screen.show-status .linkhearts,
@@ -3388,7 +3411,7 @@ class HatchPetCard extends HTMLElement {
             <div class="game" hidden>
               <div class="gpick" role="group" aria-label="Pick a game">${this._games().map((g) =>
                 `<button data-game="${g.key}">${g.label}</button>`).join("")}</div>
-              <img class="gcatch" alt="" hidden>
+              <img class="gprop" alt="" hidden>
               <span class="gnum" aria-live="polite" hidden></span>
               <button class="gl" aria-label="Guess left">${icon("prev", 22)}</button>
               <span class="gscore" aria-live="polite"></span>
@@ -3412,7 +3435,7 @@ class HatchPetCard extends HTMLElement {
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
-      catchEl: q(".gcatch"), live: q(".sr[role=status]"), seasonBox: q(".season"),
+      propEl: q(".gprop"), live: q(".sr[role=status]"), seasonBox: q(".season"),
       basket: q(".basket"),
     };
     // The LCD grid: one cell per world art pixel, measured on the screen itself
@@ -3966,6 +3989,7 @@ class HatchPetCard extends HTMLElement {
       this._redraw(); // the trim is sized for the layout: draw every slide again
     }
     for (const s of this._slides) s.el.style.width = `${this._slideW}px`;
+    for (const s of this._slides) if (s.game?.picking) this._fitPicker(s);
     this._renderShelf();
   }
 
@@ -4525,7 +4549,7 @@ class HatchPetCard extends HTMLElement {
     }
     const egg = stage === "egg";
     if (s.game && (asleep || away || egg)) this._endGame(s, null);
-    else if (s.game && (s.game.kind === "left_right" || s.game.kind === "higher_lower") &&
+    else if (s.game && SERVER_GAMES.has(s.game.kind) &&
         !s.game.busy && s.game.lastAt && Date.now() - s.game.lastAt >= GAME_IDLE_MS) {
       this._endGame(s, null); // the server has dropped it already: no call, no line
     }
@@ -6124,7 +6148,8 @@ class HatchPetCard extends HTMLElement {
       case "bond_record": { // only its person
         if (sharedScreen()) break; // nothing personal on a shared screen
         const game = GAMES.find((g) => g.key === m.game);
-        line(`new best at ${game ? game.label : "a game"}! ${m.wins}/5 ♥`, 4500, () => this._sparkle(s), { perk: true });
+        const best = m.game === "dig" ? `${m.wins} berries` : `${m.wins}/5`; // the dig's best is berries banked
+        line(`new best at ${game ? game.label : "a game"}! ${best} ♥`, 4500, () => this._sparkle(s), { perk: true });
         break;
       }
       case "tucked_in": {
@@ -7859,7 +7884,8 @@ class HatchPetCard extends HTMLElement {
       this._pickGame(s, games[0].key);
       return;
     }
-    s.game = { picking: true, prompt: this._card.classList.contains("compact") ? "pick a game!" : "what shall we play?" };
+    // The long prompt wraps to two lines (over the picker) on a slide under 300 px.
+    s.game = { picking: true, prompt: this._slideW < 300 ? "pick a game!" : "what shall we play?" };
     // Built each time: the card's options decide which games are offered.
     s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
       `<button data-game="${g.key}"><span class="gi" aria-hidden="true">${gameIcon(g.key)}</span>` +
@@ -7867,6 +7893,7 @@ class HatchPetCard extends HTMLElement {
     this._gameView(s, "pick");
     // A narrow card has room for one short line beside the close button.
     this._write(s, s.game.prompt, 60000);
+    this._fitPicker(s); // measured with the prompt in the bubble
     let last = null;
     try {
       last = localStorage.getItem(LAST_GAME_KEY);
@@ -7878,6 +7905,36 @@ class HatchPetCard extends HTMLElement {
     pick.focus({ preventScroll: true });
   }
 
+  // The picker sits under the close button (and the one-line prompt beside
+  // it), down to the screen's foot. A column of games that doesn't fit there
+  // wraps into rows (.wrap), so no width from 300 to 420 hides or covers one.
+  _fitPicker(s) {
+    const pick = s.gameBox.querySelector(".gpick");
+    const gx = s.gameBox.querySelector(".gx");
+    if (!pick || !gx || pick.hidden) return;
+    const box = s.gameBox.getBoundingClientRect();
+    if (!box.height) return;
+    pick.classList.remove("wrap", "tight");
+    const buttons = [...pick.querySelectorAll("button")];
+    // First the plain column where it has always been, if it covers nothing: not
+    // the close button, not the prompt, and none cut off at the foot.
+    pick.style.top = pick.style.bottom = "";
+    const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const keep = [gx, s.bubble].filter((el) => el && !el.hidden).map((el) => el.getBoundingClientRect())
+      .filter((r) => r.height);
+    if (buttons.every((b) => {
+      const r = b.getBoundingClientRect();
+      return r.bottom + 4 <= box.bottom && !keep.some((k) => hit(r, k));
+    })) return;
+    pick.style.top = `${Math.round(gx.getBoundingClientRect().bottom - box.top + 6)}px`;
+    pick.style.bottom = "2%";
+    // The games' height, from the first one's top to the last one's foot, + the press shadow.
+    const need = () => Math.max(...buttons.map((b) => b.offsetTop + b.offsetHeight)) -
+      Math.min(...buttons.map((b) => b.offsetTop)) + 4;
+    if (need() > pick.clientHeight) pick.classList.add("wrap");
+    if (need() > pick.clientHeight) pick.classList.add("tight");
+  }
+
   // The games the play button offers: Catch only with experimental_catch.
   _games() {
     return this._config?.experimental_catch ? [...GAMES, CATCH_GAME] : GAMES;
@@ -7887,17 +7944,19 @@ class HatchPetCard extends HTMLElement {
   _gameView(s, view) {
     const box = s.gameBox;
     box.hidden = false;
+    box.classList.toggle("dig", view === "dig");
     box.querySelector(".gpick").hidden = view !== "pick";
-    s.gameNum.hidden = view !== "higher_lower";
+    s.gameNum.hidden = view !== "higher_lower" && view !== "dig";
     const [gl, gr] = [box.querySelector(".gl"), box.querySelector(".gr")];
     gl.hidden = gr.hidden = view === "pick";
     s.gameScore.hidden = view === "pick";
     const hl = view === "higher_lower";
-    gl.innerHTML = hl ? '<span class="hl">lo</span>' : icon("prev", 22);
-    gr.innerHTML = hl ? '<span class="hl">hi</span>' : icon("next", 22);
+    const dig = view === "dig";
+    gl.innerHTML = hl ? '<span class="hl">lo</span>' : dig ? '<span class="hl">keep</span>' : icon("prev", 22);
+    gr.innerHTML = hl ? '<span class="hl">hi</span>' : dig ? '<span class="hl">dig</span>' : icon("next", 22);
     const katch = view === "catch";
-    gl.setAttribute("aria-label", hl ? "Guess lower" : katch ? "Catch it on the left" : "Guess left");
-    gr.setAttribute("aria-label", hl ? "Guess higher" : katch ? "Catch it on the right" : "Guess right");
+    gl.setAttribute("aria-label", hl ? "Guess lower" : dig ? "Keep the basket" : katch ? "Catch it on the left" : "Guess left");
+    gr.setAttribute("aria-label", hl ? "Guess higher" : dig ? "Dig a leaf" : katch ? "Catch it on the right" : "Guess right");
     box.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
   }
 
@@ -7933,7 +7992,16 @@ class HatchPetCard extends HTMLElement {
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
     s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
     // The prompt is kept on the game: a care line said over it gives way to it again.
-    if (kind === "left_right") {
+    if (kind === "dig") {
+      // A fresh pile, or a parked dig carried on: the same round, bank and basket.
+      g.basket = info.basket;
+      this._digShow(s, info);
+      this._write(s, (g.prompt = "dig or keep?"));
+      s.sayUntil = Date.now() + 60000;
+      // Keep is disabled on an empty basket: start on dig then.
+      s.gameBox.querySelector(info.basket ? ".gl" : ".gr").focus({ preventScroll: true });
+      return;
+    } else if (kind === "left_right") {
       this._write(s, (g.prompt = "left or right? guess where I'll go!"));
     } else {
       // Higher or Lower shows its number before the next guess.
@@ -7969,7 +8037,7 @@ class HatchPetCard extends HTMLElement {
     let info;
     try {
       const res = await this._hass.callService(
-        "virtual_pet", "play_game", { entity_id: id, ...data }, undefined, false, true);
+        "virtual_pet", "play_game", { entity_id: id, ...data, ...digShared(data.game) }, undefined, false, true);
       info = res?.response;
     } catch (err) {
       if (s.game === game) this._endGame(s, "hmm, that didn't work");
@@ -7980,7 +8048,11 @@ class HatchPetCard extends HTMLElement {
       // A known refusal is said once, by _react, from the care log; only an
       // unknown result gets a line here. no_game is never logged (a Higher or
       // Lower game the server dropped for idling): said here.
-      this._endGame(s, info?.result === "no_game" ? REFUSALS.no_game : REFUSALS[info?.result] ? null : "not now");
+      // A dig: keep on an empty basket means another screen kept it first; no
+      // game while theirs is parked means another screen put it aside.
+      this._endGame(s, info?.result === "empty_basket" ? "oh! someone else is playing with me"
+        : info?.result === "no_game" && info.parked ? "maybe later!"
+        : info?.result === "no_game" ? REFUSALS.no_game : REFUSALS[info?.result] ? null : "not now");
       return null;
     }
     return info;
@@ -7996,6 +8068,10 @@ class HatchPetCard extends HTMLElement {
     }
     const game = GAMES.find((g) => g.key === kind);
     const guess = game.guesses[side === "left" ? 0 : 1];
+    if (kind === "dig") {
+      await this._digTap(s, guess); // a tap isn't a round: its own checks, not the ones below
+      return;
+    }
     const g = s.game;
     g.busy = true;
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
@@ -8040,6 +8116,79 @@ class HatchPetCard extends HTMLElement {
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
       this._write(s, (g.prompt = kind === "higher_lower" ? "higher or lower?" : "again! left or right?"));
+    });
+  }
+
+  // Berry dig: the pile's leaves left in .gnum, the bank and basket on the
+  // score line, keep only with something in the basket.
+  _digShow(s, info) {
+    this._showNumber(s, info.leaves);
+    s.gameNum.setAttribute("aria-label", `${info.leaves} leaves left`);
+    s.gameScore.classList.add("two");
+    s.gameScore.textContent = `round ${Math.min(info.round + 1, info.rounds)}/${info.rounds}\n` +
+      `${info.wins} banked · basket ${info.basket}`;
+    s.gameBox.querySelector(".gl").setAttribute("aria-disabled", info.basket ? "false" : "true");
+    s.gameBox.querySelector(".gr").setAttribute("aria-disabled", "false");
+  }
+
+  // One tap of a Berry dig. A dig that finds a berry doesn't finish a round, so
+  // the reply must follow from the card's own game: a berry is the same round
+  // and bank with one more in the basket; a bee is the next round, the same
+  // bank; a keep (or the sixth berry) is the next round with the basket banked.
+  // Anything else means someone else is playing the same server game.
+  async _digTap(s, guess) {
+    const g = s.game;
+    if (guess === "keep" && !g.basket) return; // nothing to keep: the server would refuse it
+    g.busy = true;
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+    s.gameScore.textContent = "thinking…";
+    const info = await this._playCall(s, { game: "dig", guess });
+    if (!info) return;
+    const next = info.round === g.round + 1 && info.basket === 0;
+    const fits = info.found === "berry" && !info.round_over
+      ? info.round === g.round && info.wins === g.wins && info.basket === g.basket + 1
+      : info.found === "bee" ? next && info.wins === g.wins
+      : info.found === "kept" ? next && info.wins === g.wins + g.basket
+      : info.found === "berry" && next && info.wins === g.wins + g.basket + 1;
+    if (!fits) {
+      this._endGame(s, "oh! someone else is playing with me");
+      return;
+    }
+    g.round = info.round;
+    g.wins = info.wins;
+    g.basket = info.basket;
+    g.lastAt = Date.now();
+    this._digShow(s, info);
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+    this._animate(s, s.gameNum, "flip", 300);
+    if (info.found === "bee") {
+      s.propEl.src = BEE_FRAMES[0];
+      s.propEl.style.left = "10%"; // beside the pile, clear of the score and the buttons
+      s.propEl.style.bottom = "40%";
+      s.propEl.style.transform = "";
+      s.propEl.hidden = false;
+      this._write(s, "bzz! the berries rolled away");
+    } else if (info.round_over) {
+      this._animate(s, s.pet, "perk", 300);
+      this._write(s, "safe in the basket ♪");
+    } else {
+      this._write(s, "a berry!");
+    }
+    this._gameLater(s, g, info.round_over ? 900 : 300, () => {
+      s.propEl.hidden = true;
+      if (info.done) {
+        if (info.won) this._chirp(s, "win");
+        this._endGame(s, info.won ? `${info.wins} berries! you win ♪` : `${info.wins} berries... again sometime?`);
+        return;
+      }
+      g.busy = false;
+      this._digShow(s, info);
+      this._write(s, (g.prompt = "dig or keep?"));
+      // Keep is disabled on an empty basket: focus on it moves to dig.
+      const gl = s.gameBox.querySelector(".gl");
+      if (!g.basket && this.shadowRoot?.activeElement === gl) {
+        s.gameBox.querySelector(".gr").focus({ preventScroll: true });
+      }
     });
   }
 
@@ -9219,7 +9368,7 @@ class HatchPetCard extends HTMLElement {
       calm: isCalm, travel: lerp(CATCH.travel) * (isCalm ? 1.6 : 1),
       window: lerp(CATCH.window) * (isCalm ? 2 : 1),
     };
-    const el = s.catchEl;
+    const el = s.propEl;
     if (decoy) el.src = BEE_FRAMES[0];
     else this._show(s, el, prop);
     el.hidden = false;
@@ -9299,7 +9448,7 @@ class HatchPetCard extends HTMLElement {
     if (!c || c.done) return;
     c.done = true;
     cancelAnimationFrame(c.raf);
-    s.catchEl.hidden = true;
+    s.propEl.hidden = true;
     g.round += 1;
     g.wins += ok ? 1 : 0;
     this._write(s, line);
@@ -9339,15 +9488,18 @@ class HatchPetCard extends HTMLElement {
   }
 
   // The player (or the card, moving off a game) ends a game: the server drops
-  // it too, with no reward or penalty. Fire and forget; a failed call is silent.
-  // Catch lives only on the card, so it makes no call.
+  // it too, with no reward or penalty, or parks a Berry dig that has shown
+  // something, so the next dig carries on. Every card-driven quit (✕, Escape,
+  // a swipe, the status sheet, Play mid-game) comes here, so each one parks.
+  // Fire and forget; a failed call is silent. Catch lives only on the card,
+  // so it makes no call.
   _quitGame(s, line) {
     const kind = s.game?.kind;
     const id = s.ids?.["sensor.mood"];
-    if (id && (kind === "left_right" || kind === "higher_lower")) {
+    if (id && SERVER_GAMES.has(kind)) {
       try {
         Promise.resolve(this._hass.callService(
-          "virtual_pet", "play_game", { entity_id: id, game: kind, end: true },
+          "virtual_pet", "play_game", { entity_id: id, game: kind, end: true, ...digShared(kind) },
           undefined, false, true)).catch(() => {});
       } catch (err) { /* silent */ }
     }
@@ -9356,7 +9508,10 @@ class HatchPetCard extends HTMLElement {
 
   _endGame(s, line) {
     cancelAnimationFrame(s.game?.cur?.raf);
-    s.catchEl.hidden = true;
+    s.propEl.hidden = true;
+    s.propEl.style.bottom = ""; // the dig's bee sits higher than Catch's ball
+    s.gameScore.classList.remove("two");
+    s.gameNum.removeAttribute("aria-label"); // the dig's "n leaves left"
     s.game = null;
     s.gameTimers?.forEach(clearTimeout);
     s.gameTimers?.clear();

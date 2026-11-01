@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import json
 from typing import Any
 
 from homeassistant.auth.const import GROUP_ID_USER
@@ -17,6 +18,7 @@ from pytest_homeassistant_custom_component.common import (
     async_capture_events,
 )
 
+from custom_components.virtual_pet import model
 from custom_components.virtual_pet.const import DOMAIN
 from custom_components.virtual_pet.people import STORE_KEY as PEOPLE_KEY
 
@@ -246,3 +248,58 @@ async def test_a_birthday_refusal_survives_forget_my_data(
         "birthday_skipped": True
     }
     assert saved_people(hass_storage)[ada.id] == {"birthday_skipped": True}
+
+
+async def test_forget_me_drops_my_parked_dig_on_every_pet_and_saves(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """A parked Berry dig is keyed by the person's HA user id: forget my data
+    takes it from every pet, and a dig in progress stops naming them."""
+    ada, token = await a_user(hass)
+    now = dt_util.utcnow().timestamp()
+    dig = {"started": now, "last_at": now, "kind": "dig", "rounds": 1, "basket": 2}
+    hass_storage[STORE_KEY] = hatched_pet(
+        now,
+        parked={ada.id: dict(dig), "user-b": dict(dig), "household": dict(dig)},
+        game={**dig, "player": ada.id},
+    )
+    config = await setup(hass)
+    moss = await add_moss(hass)
+    moss.runtime_data.state.parked[ada.id] = model.Game(
+        started=now, last_at=now, kind="dig", rounds=1, player=ada.id
+    )
+    client = await hass_ws_client(hass, token)
+    await client.send_json_auto_id({"type": "virtual_pet/forget_me"})
+    assert (await client.receive_json())["success"]
+    pip = config.runtime_data.state
+    assert set(pip.parked) == {"user-b", "household"}
+    assert pip.game is not None and pip.game.player is None
+    assert ada.id not in moss.runtime_data.state.parked
+    # Written at once: the save on disk names them nowhere.
+    for key in (STORE_KEY, MOSS_KEY):
+        assert ada.id not in json.dumps(hass_storage[key]["data"]), key
+
+
+async def test_diagnostics_hold_no_user_id_from_a_parked_dig(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    from custom_components.virtual_pet.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    ada, _ = await a_user(hass)
+    now = dt_util.utcnow().timestamp()
+    dig = {"started": now, "last_at": now, "kind": "dig", "rounds": 1, "basket": 2}
+    hass_storage[STORE_KEY] = hatched_pet(
+        now,
+        parked={ada.id: dict(dig), "user-b": dict(dig), "household": dict(dig)},
+        game={**dig, "player": ada.id},
+    )
+    config = await setup(hass)
+    diag = await async_get_config_entry_diagnostics(hass, config)
+    text = json.dumps(diag, default=str)
+    assert ada.id not in text and "user-b" not in text
+    # Still three digs, told apart, for debugging.
+    parked = diag["pet"]["parked"]
+    assert sorted(parked) == ["household", "person 1", "person 2"]
+    assert all(g["basket"] == 2 for g in parked.values())
