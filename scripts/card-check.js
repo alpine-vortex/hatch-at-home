@@ -2363,6 +2363,80 @@ async function main() {
     check("idle drop, Higher/Lower: no_game ends the game with let's start over",
       !idle.hl.live && idle.hl.said === "let's start over", JSON.stringify(idle.hl));
 
+    // Batch 6 audit #4: after an HA restart the server's dropped-games memory is gone,
+    // so a stale guess's round-1 reply has no `restarted` flag. Round 1 past round 0
+    // still means a new game: adopted quietly.
+    const noFlag = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const hass = el._hass;
+      const real = hass.callService;
+      try {
+        s.game = { kind: "left_right", round: 3, wins: 2, busy: false };
+        el._gameView(s, "left_right");
+        hass.callService = async () => ({ response: { result: "ok", game: "left_right", round: 1, rounds: 5,
+          wins: 0, done: false, went: "right", correct: false } });
+        await el._guess(s, "left");
+        return { live: !!s.game, round: s.game?.round, said: s.bubble.textContent };
+      } finally {
+        hass.callService = real;
+        if (s.game) el._endGame(s, null);
+      }
+    });
+    check("a round-1 reply without `restarted` is adopted quietly, no someone-else line",
+      noFlag.live && noFlag.round === 1 && !/someone else/.test(noFlag.said), JSON.stringify(noFlag));
+
+    // Batch 6 audit #5: a Left/Right game left idle is closed by the card itself after
+    // GAME_IDLE_MINUTES (3), silently, with no server call. Faked clock.
+    const idleClose = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const realNow = Date.now;
+      const hass = el._hass;
+      const real = hass.callService;
+      let calls = 0;
+      hass.callService = async (...a) => { calls++; return real.apply(hass, a); };
+      try {
+        s.game = { kind: "left_right", round: 1, wins: 0, busy: false, prompt: "again! left or right?",
+          lastAt: realNow.call(Date) };
+        el._gameView(s, "left_right");
+        Date.now = () => realNow.call(Date) + 2 * 60 * 1000;
+        el._renderSlide(s);
+        const at2 = !!s.game;
+        Date.now = () => realNow.call(Date) + 3 * 60 * 1000 + 1000;
+        el._renderSlide(s);
+        return { at2, at3: !!s.game, hidden: s.gameBox.hidden, calls };
+      } finally {
+        Date.now = realNow;
+        hass.callService = real;
+        if (s.game) el._endGame(s, null);
+      }
+    });
+    check("an idle Left/Right game stays at 2 min and closes silently at 3 min, no server call",
+      idleClose.at2 && !idleClose.at3 && idleClose.hidden && idleClose.calls === 0, JSON.stringify(idleClose));
+
+    // Batch 6 audit #1: a tap on the scene mid-game keeps the game; Status ends it.
+    await open("left_right");
+    await cur().locator(".gl").waitFor();
+    await page.waitForTimeout(500);
+    const box = await cur().locator(".pet").first().boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await page.waitForTimeout(300);
+    const afterTap = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      return { game: !!s.game, status: s.screen.classList.contains("show-status") };
+    });
+    check("a real tap on the pet mid-game keeps the game and opens no status",
+      afterTap.game && !afterTap.status, JSON.stringify(afterTap));
+    await page.locator("hatch-pet-card .statusbtn").click();
+    await page.waitForTimeout(300);
+    const afterBtn = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      return { game: !!s.game, status: s.screen.classList.contains("show-status") };
+    });
+    check("the Status button mid-game still opens the sheet and ends the game",
+      !afterBtn.game && afterBtn.status, JSON.stringify(afterBtn));
+    if (afterBtn.status) await page.locator("hatch-pet-card .statusbtn").click();
+    await page.waitForTimeout(200);
+
     // Fresh eyes #3+#4: Catch never plays unseen. Opening the status, swiping away and
     // tapping Play each end the round (the ball goes), and a game nobody tapped keeps no best.
     const catchLive = () => card.evaluate(async (el) => {

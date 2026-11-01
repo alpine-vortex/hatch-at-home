@@ -99,6 +99,9 @@ const GAMES = [
   { key: "left_right", label: "left or right", guesses: ["left", "right"] },
   { key: "higher_lower", label: "higher or lower", guesses: ["lower", "higher"] },
 ];
+// Matches rates.GAME_IDLE_MINUTES: the server drops a Left/Right or Higher/Lower
+// game left idle this long, and the card closes its own copy then, silently.
+const GAME_IDLE_MS = 3 * 60 * 1000;
 const LAST_GAME_KEY = "hatch-last-game";
 // Catch, the Giga Pets reflex game: a prototype, offered only with the card
 // option experimental_catch: true. The card times the taps; nothing goes to the
@@ -3289,6 +3292,9 @@ class HatchPetCard extends HTMLElement {
     // A tap on the screen is a shortcut for the Status button; it holds buttons of its
     // own (the game, the bell, the journal), so it isn't a button itself.
     s.screen.addEventListener("click", () => {
+      // A game on show keeps its screen: a stray tap must not end it unseen (the
+      // Status button still does, on purpose).
+      if (s.game) return;
       if (!this._swiped) {
         this._tapped(this._card.querySelector(".statusbtn"));
         this._toggleStatus(s);
@@ -4290,6 +4296,10 @@ class HatchPetCard extends HTMLElement {
     }
     const egg = stage === "egg";
     if (s.game && (asleep || away || egg)) this._endGame(s, null);
+    else if (s.game && (s.game.kind === "left_right" || s.game.kind === "higher_lower") &&
+        !s.game.busy && s.game.lastAt && Date.now() - s.game.lastAt >= GAME_IDLE_MS) {
+      this._endGame(s, null); // the server has dropped it already: no call, no line
+    }
     s.hatchesAt = egg ? stageState?.attributes.hatches_at : null;
     if (!s.sayUntil || Date.now() > s.sayUntil) {
       if (s.game?.prompt) this._write(s, s.game.prompt, 60000); // a game waiting on a guess asks again
@@ -7297,6 +7307,7 @@ class HatchPetCard extends HTMLElement {
     g.busy = false;
     g.round = info.round;
     g.wins = info.wins;
+    g.lastAt = Date.now();
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
     s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
     // The prompt is kept on the game: a care line said over it gives way to it again.
@@ -7369,7 +7380,9 @@ class HatchPetCard extends HTMLElement {
     s.gameScore.textContent = "thinking…";
     const info = await this._playCall(s, { game: kind, guess });
     if (!info) return;
-    if (info.restarted) {
+    // Round 1 while we are past it can only be a new game (the server's `restarted`
+    // flag is lost across an HA restart): adopt it the same way.
+    if (info.restarted || (info.round === 1 && g.round > 0)) {
       // The server dropped our game for idling and this guess began a new one:
       // it is round 1 of that game, said as any round.
       g.round = 0;
@@ -7382,6 +7395,7 @@ class HatchPetCard extends HTMLElement {
     }
     g.round = info.round;
     g.wins = info.wins;
+    g.lastAt = Date.now();
     if (kind === "higher_lower") {
       this._showNumber(s, info.number);
       this._animate(s, s.gameNum, "flip", 300);
