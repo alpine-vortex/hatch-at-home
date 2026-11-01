@@ -591,29 +591,15 @@ Also settled by the first mate: finds are drawn and revealed at 16 cells (64 px)
 visitor leaves its own feather via a per-visitor `leaves` id; `STORE_MINOR_VERSION` is not
 bumped (no consumer); the `when` grammar is a list of lists with `!`.
 
-## 13b. Still open for the owner
+## 13b. Answered (owner, 2026-11-01): all four as recommended
 
-1. **The ⟲ replacements (PROPOSED copy; pick, cut or swap):** wild strawberry (for the
-   smooth river stone, Woodland), tiny mushroom (for the shiny pebble, Terrarium), crystal
-   cluster (for the quartz chip, Terrarium), brass key (for the marble, Hearth), cork float
-   (for the skipping stone, Pond), heron feather (for the duck feather, Pond), paper star
-   (for the comet dust, Night Sky), tiny rocket (for the meteorite pebble, Night Sky),
-   little lantern (for the glow pebble, Night Sky). *Rec: as listed.* This is Q6 narrowed
-   to the nine changes; V-F's art request waits on it, V-A to V-E don't.
-2. **A home with a weather entity that never sees a condition** (dev's San Diego has no
-   snow): the frosted leaf stays a silhouette for good, against the "no hole to fill" rule.
-   *Rec: hide a weather or season find's tile, silhouette included, until it is met* (as
-   gift-only finds are hidden), so no hole shows. The alternative is the rare fallback
-   everywhere, which makes the condition meaningless for rare finds.
-3. **Line length in the no-nagging scan** (finding #16). `card-check.js:4250` caps lines at
-   40 characters; V5 "I saved this message in a bottle for you ♥" is 43 and V6 "I found
-   this tiny telescope just for you ♥" is 42. *Rec: shorten V5 to "saved this <find> for
-   you ♥" (PROPOSED) and V6 to "made this for you ♥" / "found this for you ♥"
-   (PROPOSED), the find being shown by the pop-up beside it.* The alternative is raising
-   the cap for this table only.
-4. **Sea glass** (Tidepool: green, blue, red) will look identical as `brightness(0)`
-   silhouettes, the same trouble as #18. Not fixed here (the brief scoped #18 to pebbles
-   and dust). *Rec: draw three different shapes (a chip, a round, a shard) in V-F.*
+1. **The nine ⟲ replacements are approved as listed:** wild strawberry, tiny mushroom, crystal cluster,
+   brass key, cork float, heron feather, paper star, tiny rocket, little lantern.
+2. **A weather or season find's tile is hidden, silhouette included, until it is met** (as gift-only
+   finds are). The rare fallback stays only where the signal is missing (R5).
+3. **V5 = "saved this <find> for you ♥"; V6 = "made this for you ♥" / "found this for you ♥"**
+   (approved); the 40-character cap stays.
+4. **Sea glass: three different shapes** (a chip, a round, a shard) in V-F.
 
 ## 14. Later (not in v2)
 
