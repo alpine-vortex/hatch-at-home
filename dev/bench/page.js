@@ -78,6 +78,8 @@
       if (pet.personality) attrs.personality = pet.personality; // a teen or adult's type (P2a/P2b)
       if (pet.hatched_on) attrs.hatched_on = pet.hatched_on;
       if (pet.upbringing) attrs.upbringing = pet.upbringing;
+      // Today's wish and dream (`{kind, granted}`, `{kind}`) and traits, for a `look` shot.
+      for (const key of ["wish", "dream", "traits", "trait_levels"]) if (pet[key]) attrs[key] = pet[key];
       if (shot.journal && i === 0) {
         // The journal's data: every creature of the world raised, the two pets before
         // this one, a trait or two and a memory. `journal: {..}` overrides any of it.
@@ -101,7 +103,9 @@
       const flags = [...new Set([...(["hungry", "bored", "dirty", "sick", "sleepy"].includes(mood) ? [mood] : []), ...(pet.flags || [])])];
       if (shot.scene === "rain" && !flags.includes("rainy")) flags.push("rainy");
       put("sensor", "mood", mood, { flags, ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) });
-      put("sensor", "last_care", iso(-45), { log: pet.log || [] });
+      // `moments`: [{type, ago (minutes), ...}], the public moments the away note reads.
+      const moments = (pet.moments || []).map(({ ago = 30, ...m }) => ({ ...m, at: iso(-ago) }));
+      put("sensor", "last_care", iso(-45), { log: pet.log || [], ...(pet.moments ? { moments } : {}) });
       put("sensor", "energy", String(pet.energy ?? 80));
       if (pet.weight !== undefined) put("sensor", "weight", String(pet.weight));
       put("sensor", "poop", String(pet.poop ?? (mood === "dirty" ? 2 : 0)));
@@ -183,6 +187,41 @@
         a.currentTime = 300;
       }
     }
+  }
+
+  // `look`: a look played over time by the card's own tick (the driver moves the pinned
+  // clock and calls bench.step): {at: seconds in, resumed: a tab back after 3 h hidden
+  // (fresh-moment 1), seenAgo: hours since this device last looked (the away note)}.
+  // The first look, greeting, idle and flair run; the channel counts as heard.
+  function lookStart(card, s, look) {
+    for (const k of Object.keys(localStorage)) if (/^hatch-greet-/.test(k)) localStorage.removeItem(k);
+    window.bench.info = { said: [], moves: [], t0: Date.now() };
+    if (look.seenAgo !== undefined) {
+      localStorage.setItem(`hatch-seen-${s.ids.device}`, JSON.stringify({ seen: Date.now() - look.seenAgo * 3600e3, said: Date.now() }));
+    }
+    Object.assign(s, { subscribed: true, queue: [], sayUntil: 0, nextIdle: 0, nextFlair: 0, voicedAt: 0, visitedAt: Date.now() });
+    if (look.resumed) {
+      Object.assign(s, { lookedFirst: true, greeted: true }); // this page looked before it was hidden
+      card._hiddenAt = Date.now() - 3 * 3600e3 - 1000;
+      card._onHidden(); // visible again
+      card.hass = card._hass; // the house's next word
+    } else {
+      Object.assign(s, { lookedFirst: false, greeted: false });
+    }
+  }
+
+  // One step of a `look`: a tick, each line written whole (typing needs a running clock).
+  function step() {
+    const card = document.querySelector("hatch-pet-card");
+    card._tick();
+    card._slides.forEach((x) => card._stopTyping(x));
+    // What the bubble said and the moves made, in order (written beside the shot).
+    const s = card._slides[card._index];
+    const info = window.bench.info ||= { said: [], moves: [] };
+    const text = s.bubble.textContent;
+    if (text && s.sayUntil > Date.now() && info.said.at(-1) !== text) info.said.push(text);
+    const move = s.screen.querySelector(".flair") ? "flair" : s.poseUntil > Date.now() ? "pose" : s.movingUntil > Date.now() ? "move" : null;
+    if (move && info.moves.at(-1)?.[0] !== move) info.moves.push([move, Date.now()]);
   }
 
   async function settled(card) {
@@ -376,6 +415,7 @@
     const cur = slides[card._index];
     // `acts`: a fake species.json "acts" put on every pet's species (`{eat: [stages], cheer: [...]}`).
     if (shot.acts) for (const s of slides) s.species = { ...s.species, acts: shot.acts };
+    if (shot.look) lookStart(card, cur, shot.look);
     if (shot.ask) card._ask(cur, shot.ask);
     if (shot.say !== undefined) card._write(cur, shot.say, 1e9);
     // `idle`: the pet's idle mumble through the card's own _idle, the first move (a mumble)
@@ -524,5 +564,5 @@
     return true;
   }
 
-  window.bench = { mount };
+  window.bench = { mount, step };
 })();

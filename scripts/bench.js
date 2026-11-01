@@ -187,6 +187,22 @@ const PRESETS = {
     extra("compact-330", "compact: the basket shows", { world: "woodland", width: 330, basket: 3 });
     return out;
   },
+  // A 30 s look (fresh-moment), played by the card's own tick: a fresh page's morning and
+  // a tab resumed after 3 h hidden, each at 5, 10, 20 and 30 s in. An adult with a type, a
+  // trait, today's wish and dream, and a night's sleep since this device last looked.
+  look() {
+    const out = [];
+    const pet = { personality: "mellow", traits: ["early_bird"], trait_levels: { early_bird: 1 },
+      wish: { kind: "bath", granted: false, open: true }, dream: { kind: "flying" },
+      moments: [{ type: "fell_asleep", ago: 540 }, { type: "woke_up", ago: 30 }] };
+    for (const [kind, resumed] of [["fresh", false], ["resumed", true]]) {
+      for (const at of [5, 10, 20, 30]) {
+        out.push({ group: `look-${kind}`, name: `look/${kind}-${String(at).padStart(2, "0")}s`, label: `${kind}, ${at} s`,
+          world: "woodland", width: 330, time: "2026-11-02T07:30:00Z", pet, look: { at, resumed, seenAgo: 12 } });
+      }
+    }
+    return out;
+  },
   // Gifts (visitors v2 §5, V-E2): said at the first look, the find popped above the pet.
   // V5 with the longest name (porthole too), V6 made and found, an old world's gift, V7
   // (baby), calm (still), compact, and an asleep pet's look that takes nothing.
@@ -456,6 +472,14 @@ async function runShots(browser, base, shots, outDir, workers) {
         } : null;
         if (gate) await page.route("**/sprites/**", gate);
         try { await page.evaluate((s) => window.bench.mount(s), shot); } finally { if (gate) await page.unroute("**/sprites/**", gate); }
+        if (shot.look) { // the look played on: the pinned clock moved on in 250 ms steps, a tick each
+          const t0 = new Date(shot.time).getTime();
+          for (let ms = 250; ms <= (shot.look.at || 0) * 1000; ms += 250) {
+            await page.clock.setFixedTime(new Date(t0 + ms));
+            await page.evaluate(() => window.bench.step());
+          }
+          await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+        }
         const inCard = { screen: ".slide:not(.away-slide) .screen", device: ".slide:not(.away-slide) .device" }[shot.clip];
         const file = path.join(outDir, `${shot.name}.png`);
         fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -469,7 +493,7 @@ async function runShots(browser, base, shots, outDir, workers) {
         const png = await page.screenshot({ path: file, clip });
         shot.file = file;
         if (shot.mono) shot.measure = { screen: await page.evaluate(() => window.bench.screenClass), ...await measureMono(page, clip, png) };
-        if (shot.costume || shot.gift) {
+        if (shot.costume || shot.gift || shot.look) {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }
