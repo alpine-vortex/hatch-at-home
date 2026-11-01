@@ -195,8 +195,8 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   a day on each screen; if the window passed while nobody was looking, the next look
   that day says so ("a robin came by today ♪"). Home Assistant picks the day's visitor
   and its window, so every screen agrees and a restart doesn't change it.
-- **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
-  off): from 20 to 31 October it's **Halloween**. Bunting hangs across the scene, a
+- **Seasons** (by the viewing device's date; card option `seasonal: false`, or "Seasonal
+  decorations" in the card editor, turns them off): from 20 to 31 October it's **Halloween**. Bunting hangs across the scene, a
   jack-o'-lantern with a new carved face each day sits by the pet and glows at night (it
   floats in Tidepool and Pond), cobwebs hang in the corner (both corners of the
   Terrarium), a sweet waits by the door in Hearth, a pumpkin joins the device's

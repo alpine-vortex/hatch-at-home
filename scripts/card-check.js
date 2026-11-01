@@ -8026,11 +8026,33 @@ async function main() {
     const device = Object.values(hass.entities).find((e) => e.platform === "virtual_pet")?.device_id;
     form?.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { devices: [device] } } }));
     const config = await Promise.race([changed, new Promise((r) => setTimeout(() => r(null), 2000))]);
+    // gaps-seams 7a: the seasonal switch. Off writes `seasonal: false`; on drops it, but
+    // keeps a preview key; the form shows it on unless the config says false.
+    const seasonal = {};
+    const turn = async (start, on) => {
+      el.setConfig(start);
+      await new Promise((r) => setTimeout(r, 50));
+      const shown = form?.data?.seasonal;
+      const next = new Promise((resolve) => el.addEventListener("config-changed", (e) => resolve(e.detail.config), { once: true }));
+      form?.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { devices: [], seasonal: on } } }));
+      return { shown, config: await Promise.race([next, new Promise((r) => setTimeout(() => r(null), 2000))]) };
+    };
+    seasonal.off = await turn({}, false);
+    seasonal.on = await turn({ seasonal: false }, true);
+    seasonal.preview = await turn({ seasonal: "winter" }, true);
+    seasonal.label = form?.computeLabel?.({ name: "seasonal" });
+    seasonal.fields = (form?.schema || []).map((f) => f.name);
     el.remove();
-    return { form: !!form, rendered: !!form?.shadowRoot, config };
+    return { form: !!form, rendered: !!form?.shadowRoot, config, seasonal };
   });
   check("card editor renders a form", editor.form && editor.rendered);
   check("card editor saves the picked pets", Array.isArray(editor.config?.devices), JSON.stringify(editor.config));
+  const sz = editor.seasonal;
+  check("card editor: a seasonal switch, on unless seasonal: false; off writes false, on drops it, a preview stays",
+    sz.fields.join() === "devices,seasonal" && sz.label === "Seasonal decorations"
+    && sz.off.shown === true && sz.off.config?.seasonal === false
+    && sz.on.shown === false && sz.on.config && !("seasonal" in sz.on.config)
+    && sz.preview.shown === true && sz.preview.config?.seasonal === "winter", JSON.stringify(sz));
 
   }
   if (enter("boot")) {
