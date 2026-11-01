@@ -572,6 +572,18 @@
     // `patBox`: the pat's clear hit box outlined, so a shot shows where a tap pats (or, in a
     // state that hides it, that there is none).
     if (shot.patBox) cur.pat.style.outline = "2px dashed #ff00d0";
+    // `bubblePop`: a clean's extra bubble (fresh-expand M-b) through the card's own
+    // `_bubblePop`, its roll pinned, paused at `bubblePop` (0-1 of its 1.2 s; true: .7, up and about to pop).
+    if (shot.bubblePop) {
+      const random = Math.random;
+      Math.random = () => 0;
+      let made;
+      try { made = card._bubblePop(cur); } finally { Math.random = random; }
+      clearTimeout(made?.timer);
+      const pop = made.img;
+      await pop.decode().catch(() => {});
+      for (const a of pop?.getAnimations() || []) { a.pause(); a.currentTime = 1200 * (shot.bubblePop === true ? 0.7 : shot.bubblePop); }
+    }
     if (shot.beam) irBeam(card);
     // Date is pinned, so a line would never finish typing: write each whole.
     slides.forEach((x) => card._stopTyping(x));

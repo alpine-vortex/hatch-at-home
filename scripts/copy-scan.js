@@ -17,6 +17,12 @@ const COPY_TABLES = {
   PERSONA_FRESH: {},
   PAT_SPOT: {},
   VISIT_FRIENDS: {},
+  WAKE_LINES: {},
+  NIGHT_VISITOR: { fill: "visitor" },
+  NIGHT_SUNSET: {},
+  MEAL_LINES: {},
+  CRUMB_LINE: { fill: "visitor" },
+  CURED_LINES: {},
 };
 
 function lines(value, path, out) {

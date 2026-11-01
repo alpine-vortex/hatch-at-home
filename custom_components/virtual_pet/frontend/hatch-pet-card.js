@@ -784,6 +784,10 @@ const foundBit = (worlds, m) => {
   return f?.a ? `found ${f.a}` : null;
 };
 const VISIT_FRIEND_AFTER = 3; // sighting days on this screen before a visitor is a friend (E3)
+const CRUMB_ODDS = 1 / 15; // a feed's chance of the crumb line, once a day (E4 F-b)
+const BUBBLE_POP_ODDS = 1 / 8; // a clean's chance of one bubble drifting up and popping (E4 M-b)
+// The meal by the hour on this device (E4 F-a): null from 22 to 05.
+const mealPart = (hour) => (hour >= 5 && hour < 11 ? "breakfast" : hour >= 11 && hour < 16 ? "lunch" : hour >= 16 && hour < 22 ? "supper" : null);
 const VISIT_IN_MS = 1400; // to arrive (or leave), unless the visitor says
 const VISIT_STAY_MS = 3000; // at the edge, past the greet's start
 const VISIT_CALM_MS = 5000; // reduced motion: still, then gone
@@ -1263,6 +1267,23 @@ const VISIT_FRIENDS = {
   nighthawk: ["my nighthawk pal ♪", "nighthawk! my night friend ♥", "hi, sky buddy! swoop ♪"],
   raccoon: ["the raccoon! my night buddy", "my masked friend! hi hi ♥", "raccoon pal! hello ♪"],
 };
+// S-a (E4): a morning's wake line, in turns; the last one only on a day with a dream
+// (on another day its turn says the first).
+const WAKE_LINES = ["*yaaawn*", "*yawn* ...morning already ♪", "*stretch* mm, cozy night ♪", "*yaaawn* ...hi, day ♪",
+  "*blink blink* morning ♪", "*yawn* I had the best dream"];
+// S-b: lights out after a visitor seen here today (by its name), else after today's sunset.
+const NIGHT_VISITOR = [(v) => `night, little ${v} ♪`, (v) => `sweet dreams, ${v} ♪`];
+const NIGHT_SUNSET = "night... what a nice sunset ♥";
+// F-a: a meal by the device's clock (none from 22 to 05: "yum" only).
+const MEAL_LINES = {
+  breakfast: ["breakfast! ♪", "a good start to the day ♪", "morning munchies! yum", "breakfast time, yum ♥"],
+  lunch: ["lunch! just what I needed", "a midday munch ♪", "lunch! yum yum ♪", "mm, a hearty lunch ♥"],
+  supper: ["mm, a cozy supper ♥", "supper time! yum ♪", "a warm supper, mm ♥", "dinner! just right ♪"],
+};
+// F-b: now and then, on a day a visitor came by here.
+const CRUMB_LINE = (v) => `saving a crumb for the ${v} ♪`;
+// M-a: the day after a cure, at the first look. Never says "sick".
+const CURED_LINES = ["feeling much better today ♪", "I feel all better today ♥"];
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -2362,6 +2383,11 @@ const STYLE = `
   .attention { top: 5%; right: 5%; height: 17%; animation: pulse 1s ease-in-out infinite; }
   @keyframes pulse { 50% { transform: scale(1.12); } }
   .prop { left: 67%; bottom: 7%; height: 22%; animation: pop .3s ease-out; }
+  /* A clean's extra bubble (fresh-expand M-b): up 30 px over 1.2 s, then it pops. */
+  .bubblepop { position: absolute; left: 74%; bottom: 24%; height: 16%; image-rendering: pixelated; pointer-events: none;
+    animation: bubblepop 1.2s ease-out forwards; }
+  @keyframes bubblepop { 0% { transform: translateY(0); opacity: 1; } 80% { transform: translateY(-30px) scale(1); opacity: 1; }
+    100% { transform: translateY(-30px) scale(0); opacity: 0; } }
   @keyframes pop { from { transform: scale(.3); opacity: 0; } }
   .awaysign { left: 50%; bottom: 12%; height: 40%; margin-left: -20%; }
   .awaylabel { position: absolute; left: 0; right: 0; bottom: 5%; text-align: center;
@@ -5746,6 +5772,9 @@ class HatchPetCard extends HTMLElement {
     }
     const wish = !stale && stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
     if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);
+    // The day after a cure seen here (E4 M-a): after the wish, before the away note.
+    const cured = lines.length < FIRST_LOOK_LINES && this._curedLine(s);
+    if (cured) lines.push([cured, 4500]);
     // What happened while you were out comes after what's new (fresh-moment 2, owner Q2).
     // From TODAY_FROM_HOUR, once a day here: a line about its day, in the away note's place.
     const today = this._evening() && lines.length < FIRST_LOOK_LINES && this._todayLine(s, wishTold);
@@ -6431,7 +6460,7 @@ class HatchPetCard extends HTMLElement {
         break;
       case "woke_up":
         if (m.how === "morning") {
-          say("*yaaawn*", 4500, () => this._animate(s, s.pet, "stretch", 1100));
+          say(this._wakeLine(s), 4500, () => this._animate(s, s.pet, "stretch", 1100));
           if (!capture) this._newLook([s]); // up for the day, seen live: the morning's look begins (fresh-moment 1)
         } else if (m.how === "night") {
           say("...so sleepy");
@@ -6441,7 +6470,7 @@ class HatchPetCard extends HTMLElement {
         if (m.how === "collapsed") {
           say("so... sleepy... zzz", 5000);
         } else if (m.how === "house" || m.how === "lights") {
-          say(this._lines(s, "fell_asleep", pick(["good night...", "night night...", "sleep tight..."])).text, 4000);
+          say(this._nightLine(s) || this._lines(s, "fell_asleep", pick(["good night...", "night night...", "sleep tight..."])).text, 4000);
         }
         break;
       case "good_morning":
@@ -6643,6 +6672,82 @@ class HatchPetCard extends HTMLElement {
     return (this._state(s, "sensor.mood")?.attributes.flags || []).includes("sick");
   }
 
+  // --- Fresh-expand E4: wake, bedtime, meals, medicine ---------------------------
+
+  // Today's dream, if the states are today's (as the first look reads it).
+  _dreamToday(s) {
+    return !this._resumedAt && (s.house?.dream || this._state(s, "sensor.life_stage")?.attributes?.dream) || null;
+  }
+
+  // S-a: a morning wake, in turns per pet; the dream line only on a dream day.
+  _wakeLine(s, date = new Date()) {
+    const line = turnPick(WAKE_LINES, `${s.ids?.device}|wake`, date);
+    return line === WAKE_LINES[WAKE_LINES.length - 1] && !this._dreamToday(s) ? WAKE_LINES[0] : line;
+  }
+
+  // S-b: lights out after a visitor seen here today, else after today's sunset: once a
+  // day on this device. Null: the usual line.
+  _nightLine(s) {
+    const seen = this._visitSeen(s);
+    const midnight = new Date().setHours(0, 0, 0, 0);
+    const sunset = (this._state(s, "sensor.last_care")?.attributes?.moments || [])
+      .some((m) => m.type === "sunset" && new Date(m.at).getTime() > midnight);
+    if (!seen && !sunset) return null;
+    if (!oncePerDay(`nightcb-${s.ids?.device}`)) return null;
+    return seen ? turnPick(NIGHT_VISITOR, `${s.ids?.device}|night`)(seen) : NIGHT_SUNSET;
+  }
+
+  // F-a, F-b: a feed's line, [text, ms] or null. The crumb now and then on a day a
+  // visitor came by here (once a day); else half "yum" (its own food, in its own words),
+  // half the meal of the hour. Baby talk keeps "yum".
+  _mealLine(s, food, hour = new Date().getHours()) {
+    const seen = this._visitSeen(s);
+    if (seen && Math.random() < CRUMB_ODDS && oncePerDay(`crumb-${s.ids?.device}`)) {
+      return [CRUMB_LINE(seen), 2500];
+    }
+    const part = mealPart(hour);
+    const yum = food && (!part || this._babySet(s, "yum") || Math.random() < 0.5);
+    if (yum) return [this._lines(s, "yum", `yum, ${food}!`, food).text, 2500];
+    return part ? [this._fresh(s, "meal", MEAL_LINES[part]), 2500] : null;
+  }
+
+  // M-a: a cure seen here marks the day; the next day's first look says a line, once.
+  _curedMark(s) {
+    try {
+      localStorage.setItem(`hatch-cured-${s.ids?.device}`, new Date().toDateString());
+    } catch (err) {
+      // no storage: no line tomorrow
+    }
+  }
+
+  // The day-after line, or null (and a cure older than yesterday is forgotten).
+  _curedLine(s) {
+    const key = `hatch-cured-${s.ids?.device}`;
+    try {
+      const day = localStorage.getItem(key);
+      if (!day) return null;
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      if (day === new Date().toDateString()) return null; // tomorrow
+      localStorage.removeItem(key);
+      if (day !== yesterday.toDateString() || this._isSick(s) || !oncePerDay(`curedcb-${s.ids?.device}`)) return null;
+      return turnPick(CURED_LINES, `${s.ids?.device}|cured`);
+    } catch (err) {
+      return null;
+    }
+  }
+
+  // M-b: now and then a clean's extra bubble drifts up and pops. No line; none when calm.
+  _bubblePop(s) {
+    if (calm() || Math.random() >= BUBBLE_POP_ODDS) return;
+    const img = document.createElement("img");
+    img.className = "bubblepop";
+    img.alt = "";
+    img.src = `${BASE}/ui/prop_bubbles_1.png?v=${VERSION}`;
+    s.prop.after(img);
+    return { img, timer: setTimeout(() => img.remove(), 1300) };
+  }
+
   // Medicine that worked (2b, C8): the viewer's own is theirs, someone else's a beat.
   _allBetter(s, mine) {
     this._line(s, mine ? MINE : BEAT, this._lines(s, "all_better", "all better! ♪").text,
@@ -6652,6 +6757,8 @@ class HatchPetCard extends HTMLElement {
   _react(s, entry, { mine = false, both = null } = {}) {
     s.screen.querySelector(".costume")?.remove(); // care takes the stage
     const cured = entry.action === "medicine" && entry.result === "ok";
+    if (cured) this._curedMark(s); // E4 M-a: a line at tomorrow's first look
+    if (entry.action === "clean" && entry.result === "ok") this._bubblePop(s); // E4 M-b
     const sceneLive = s.scene?.kind === entry.action;
     if (this._sceneAnswered(s, entry)) {
       // The scene's cheer says it when it ends; a scene already over says it now.
@@ -6696,9 +6803,7 @@ class HatchPetCard extends HTMLElement {
         s.breezeTimer = setTimeout(() => s.screen.classList.remove("breezy"), 2600);
       }
       const food = this._words(s).food;
-      if (entry.action === "feed" && food && Math.random() < 0.5) {
-        said = [this._lines(s, "yum", `yum, ${food}!`, food).text, 2500]; // its own food, in its own words
-      }
+      if (entry.action === "feed" && entry.result === "ok") said = this._mealLine(s, food); // E4 F-a, F-b
       if (entry.action === "praise") {
         said = [this._lines(s, "praise", "♥", undefined, { fresh: true }).text, 2500]; // P-c: a baby keeps "♥"
       }

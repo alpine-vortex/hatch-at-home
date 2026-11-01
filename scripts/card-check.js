@@ -4097,6 +4097,57 @@ async function main() {
   await moodBack();
   await quiet2a();
 
+  // Fresh-expand E4 (S-a, S-b, M-a): the morning wake in turns, its dream line only on a
+  // dream day; lights out after a visitor seen here says its callback once a day; the day
+  // after a cure seen here, the first look's line, once.
+  {
+    const src4 = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+    const WAKE = require("vm").runInNewContext(src4.match(/\nconst WAKE_LINES = (\[[\s\S]*?\]);/)[1]);
+    const CURED = require("vm").runInNewContext(src4.match(/\nconst CURED_LINES = (\[[^\n]*\]);/)[1]);
+    const e4 = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const device = s.ids?.device;
+      const real = { dream: el._dreamToday, seen: el._visitSeen, sick: el._isSick };
+      const out = {};
+      const days = (n) => Array.from({ length: n }, (_, i) => new Date(2026, 10, 1 + i, 7));
+      try {
+        el._dreamToday = () => ({ kind: "stars" });
+        out.dream = days(12).map((d) => el._wakeLine(s, d));
+        el._dreamToday = () => null;
+        out.none = days(12).map((d) => el._wakeLine(s, d));
+        const night = `hatch-nightcb-${device}-${new Date().toDateString()}`;
+        localStorage.removeItem(night);
+        el._visitSeen = () => "robin";
+        out.night = [el._nightLine(s), el._nightLine(s)];
+        localStorage.removeItem(night);
+        el._visitSeen = () => null;
+        out.plain = el._nightLine(s);
+        const curedKey = `hatch-cured-${device}`;
+        const cb = `hatch-curedcb-${device}-${new Date().toDateString()}`;
+        localStorage.removeItem(cb);
+        el._isSick = () => false;
+        el._curedMark(s);
+        out.sameDay = [el._curedLine(s), localStorage.getItem(curedKey) !== null];
+        const y = new Date();
+        y.setDate(y.getDate() - 1);
+        localStorage.setItem(curedKey, y.toDateString());
+        out.nextDay = [el._curedLine(s), el._curedLine(s), localStorage.getItem(curedKey)];
+        localStorage.removeItem(cb);
+      } finally {
+        Object.assign(el, { _dreamToday: real.dream, _visitSeen: real.seen, _isSick: real.sick });
+      }
+      return out;
+    });
+    const dreamLine = WAKE[WAKE.length - 1];
+    check("fresh E4 (S-a): the wake takes turns; a dream day can say the dream line, a day with none never",
+      e4.dream.includes(dreamLine) && !e4.none.includes(dreamLine) && e4.none.every((l) => WAKE.includes(l)) &&
+      e4.dream.every((l, i) => !i || l !== e4.dream[i - 1]), JSON.stringify(e4));
+    check("fresh E4 (S-b): lights out after a visitor seen here says its callback once a day; no visitor or sunset, the usual",
+      /robin/.test(e4.night[0] || "") && e4.night[1] === null && e4.plain === null, JSON.stringify(e4.night));
+    check("fresh E4 (M-a): a cure says nothing the same day; the next day's first look says a line once, and the mark goes",
+      e4.sameDay[0] === null && e4.sameDay[1] && CURED.includes(e4.nextDay[0]) && e4.nextDay[1] === null && e4.nextDay[2] === null,
+      JSON.stringify({ sameDay: e4.sameDay, nextDay: e4.nextDay }));
+  }
 
   await unpinAwake(card);
   }
@@ -8881,6 +8932,39 @@ async function main() {
       Object.values(strips).length === 6 && Object.values(strips).every((g) => g.every(Boolean)),
       Object.keys(strips).join(" "));
     await calm();
+  }
+  // Fresh-expand E4 (F-a, F-b): a feed at 08:00 says a breakfast line or its "yum"; from
+  // 22 to 05, "yum" only; the crumb line (random 0) on a day a visitor came by, once a day.
+  {
+    const src4 = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+    const MEALS = require("vm").runInNewContext(`(${src4.match(/\nconst MEAL_LINES = (\{[\s\S]*?\n\});/)[1]})`);
+    const meals = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const real = { seen: el._visitSeen, random: Math.random };
+      const out = { breakfast: [], late: [] };
+      try {
+        el._visitSeen = () => null;
+        for (let i = 0; i < 30; i++) out.breakfast.push(el._mealLine(s, "seeds", 8)?.[0]);
+        for (let i = 0; i < 10; i++) out.late.push(el._mealLine(s, "seeds", 23)?.[0]);
+        out.noFoodLate = el._mealLine(s, null, 23);
+        const crumbKey = `hatch-crumb-${s.ids?.device}-${new Date().toDateString()}`;
+        localStorage.removeItem(crumbKey);
+        el._visitSeen = () => "snail";
+        Math.random = () => 0;
+        out.crumb = [el._mealLine(s, "seeds", 12)?.[0], el._mealLine(s, "seeds", 12)?.[0]];
+        localStorage.removeItem(crumbKey);
+      } finally {
+        Object.assign(el, { _visitSeen: real.seen });
+        Math.random = real.random;
+      }
+      return out;
+    });
+    const yum = (l) => /seeds/.test(l || "");
+    check("fresh E4 (F-a): feeds at 08:00 say breakfast lines or the food's yum; late at night, yum only",
+      meals.breakfast.every((l) => MEALS.breakfast.includes(l) || yum(l)) && meals.breakfast.some((l) => MEALS.breakfast.includes(l)) &&
+      meals.late.every(yum) && meals.noFoodLate === null, JSON.stringify(meals));
+    check("fresh E4 (F-b): the crumb line for today's visitor, once a day",
+      meals.crumb[0] === "saving a crumb for the snail ♪" && meals.crumb[1] !== meals.crumb[0], JSON.stringify(meals.crumb));
   }
 
   }
