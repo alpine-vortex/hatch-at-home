@@ -154,11 +154,15 @@ Each world has 10 finds: one gift-only, and nine found in the basket.
 `worlds.json` gains, per world:
 
 ```json
-"finds": [{"id": "pinecone", "name": "pine cone", "weight": 10, "when": null}, …]
+"finds": [{"id": "pinecone", "name": "pine cone", "a": "a pine cone", "weight": 10, "when": null},
+          {"id": "stardust", "name": "stardust", "a": "some stardust", …}, …]
 ```
 
 - `when` is null, or a list of conditions that are ANDed.
 - `gift_only: true` marks a gift-only find.
+- `a` is the name with its article ("an acorn", "some stardust", "some cattail fluff").
+  Lines use `<a find>`, so none says "a acorn" or "a stardust". A Node test checks that
+  every find has an `a`, and that it starts with "a ", "an " or "some ".
 
 The server reads it in `species.py` beside the roster. The card reads names and art from
 the same file.
@@ -197,7 +201,7 @@ the same file.
   `hatch-pet-card.js:6595`), next to "‹ status". The page has its own `jhead`: "finds · <world>".
 - **Content: this world only.**
   - **Visitors:** 3 tiles, each the `_1` frame.
-  - **Finds:** 10 tiles. For each find, a met one is drawn with its name; an unmet one is a
+  - **Finds:** 9 tiles, plus the gift-only one once it exists. For each find, a met one is drawn with its name; an unmet one is a
     dark silhouette (CSS `filter: brightness(0) opacity(.3)`, no new art), with no name and
     no "???".
   - **Gift-only finds** (§5) show only once someone has one. Before that, no tile and no
@@ -253,9 +257,10 @@ From check-ins item 1: "I saved this pine cone for you! ♥", with "good variety
   - It is never on a sensor and never on the bus (no `gift_*` event, no moment with a
     user).
   - It is never in `_house_view`, and never named on a shared screen.
-  - `forget_me` (`__init__.py:386`) leaves bonds. It is extended to drop `gift` and
-    `gifts` from every pet's bond for that person, because those are theirs alone. The
-    guide's "forget my data" text says so.
+  - **`forget_me` is unchanged.** It erases the people store and leaves bonds
+    (`__init__.py:386`, privacy plan FB). Gift data lives in the bond, so it stays with the
+    bond, as the nickname and photos already do. If the owner wants gifts erased too, that
+    is a change to FB, so it is part of Q2.
 - **Bonds: none (Q7).** A gift is a *result* of the bond. Taking it gives no points,
   otherwise a waiting gift would become a reason to log in.
 
@@ -263,14 +268,21 @@ From check-ins item 1: "I saved this pine cone for you! ♥", with "good variety
 
 | Field | Shape | Carried by `lay_egg` | Validation (F5) |
 |---|---|---|---|
-| `visit` | `{day, id, hours, from, until, credited}` or null | yes (today's plan stays) | dict with str `day`. Else null, and the next tick re-picks. |
-| `basket` | list of up to 3 `{id, from?, at}` | yes (finds wait) | list of dicts with str `id`, cut to 3. An id no longer in the world's list is dropped at load. |
+| `visit` | `{day, id, hours, from, until, credited}` or null | yes, unless the egg changes worlds (then null) | dict with str `day`. Else null, and the next tick re-picks. |
+| `basket` | list of up to 3 `{id, world, from?, at}` | yes (finds wait, even across a world change) | list of dicts with str `id` and `world`, cut to 3. An id no world knows is dropped at load. |
 | `next_find_at` | float or null | yes | `_float` |
 | `collection` | `{world: {visitors: {id: day}, finds: {id: day}}}` | yes | the world key is a str, the inner maps are str→str; a bad world is dropped, the rest kept |
 | `bonds[u].gift` | `{id, day}` or absent | (bonds already) | the bond loader (`model.py:239` area) drops a bad one and keeps the bond |
 | `bonds[u].gifts` | `{id: day}` | (bonds already) | as `collection`'s inner map |
 | `bonds[u].next_gift_at` | float | (bonds already) | `_float` |
 
+- **A world change (the next egg in another world).**
+  - Each basket entry also stores its `world`. A find from the old world stays in the
+    basket and is revealed with the old world's art and line, and credited to that world's
+    page. A find is never dropped for being from another world.
+  - Load drops only an id that no world in `worlds.json` knows.
+  - The day's `visit` is dropped when the egg brings a new world; the next day picks from
+    the new world. v1's catch-up line then has nothing to say that day.
 - **No migrate function.**
   - `PetState.from_dict` already defaults missing keys and keeps unknown ones
     (`model.py:401`), so an old save loads with an empty basket and collection.
@@ -293,7 +305,7 @@ From check-ins item 1: "I saved this pine cone for you! ♥", with "good variety
   - `collect`: two concurrent calls give `[…]` and `[]`;
   - gift: level 3+ only, per-person clocks, the weighting, gift-only never in a basket;
   - a gift is never on the sensor, the bus, `_house_view` or another user's `mine`;
-  - `forget_me` drops gift data and keeps the bond;
+  - `forget_me` leaves the bond and its gifts (FB as decided);
   - diagnostics redact it.
 
 ## 7. Copy (all PROPOSED; the owner picks)
@@ -306,14 +318,14 @@ noted), `catch` off.
 
 | # | Where | Proposal |
 |---|---|---|
-| V1 | Reveal, a find | "a <find>! ♪" · "look, a <find> ♪" · "ooh, a <find>~" (one, by `dailyPick`) |
-| V2 | Reveal, a first-ever find | "a <find>! a new one ✦" |
-| V3 | Reveal, a find a visitor left | "the <visitor> left a <find> ♪" |
-| V4 | Reveal, baby | "ooh! ♪" · "mine? hehe ♥" (words already in `BABY`) |
+| V1 | Reveal, a find | "<a find>! ♪" · "look, <a find> ♪" · "ooh, <a find>~" (one, by `dailyPick`) |
+| V2 | Reveal, a first-ever find | "<a find>! a new one ✦" |
+| V3 | Reveal, a find a visitor left | "the <visitor> left <a find> ♪" |
+| V4 | Reveal, baby | `BABY.visit`'s own babbles ("yay yay!", "hehe!"), as a new key `BABY.find` reusing them; no new words |
 | V5 | A gift, first look on the receiver's screen | "I saved this <find> for you! ♥" (owner's own example, check-ins item 1) |
 | V6 | A gift-only find given | "I made this <find> for you ♥" (for the "made" ones: acorn-cap cup, knitted heart, paper boat) · "I found this <find> just for you ♥" (pearl, pressed fern, tiny telescope) |
 | V7 | A gift, baby | "for you! ♥" |
-| V8 | Away note bit (`MOMENT_BITS.found`) | "found a <find>" (joins "napped, watched the rain, …") |
+| V8 | Away note bit (`MOMENT_BITS.found`) | "found <a find>" (joins "napped, watched the rain, …") |
 | V9 | Collection page head / link | "finds · <world>" / "finds ›" |
 | V10 | Collection, a visitor tile's caption | its `name` (v1 roster) |
 | V11 | Basket `aria-label` | "the basket" |
@@ -330,7 +342,7 @@ Cut on purpose (they nag or ask): "the basket is full!", "come see what I found"
 | `found` moment | every screen, the away note | moments + bus (no user) | the bus, like other house moments |
 | Collect (tap) | the caller | **websocket** `virtual_pet/collect` (not a service and not a button, because a service's `call_service` row records `context_user_id`, rows M/O) | no |
 | Collection | the person who opens it | websocket `virtual_pet/collection` | no |
-| Waiting gift, gift list | **only that person, own screen** | `mine.gift`, the `collection` reply's `gifts` | no; redacted in diagnostics; erased by `forget_me` |
+| Waiting gift, gift list | **only that person, own screen** | `mine.gift`, the `collection` reply's `gifts` | no; redacted in diagnostics; kept with the bond by `forget_me`, as FB decided (Q2) |
 
 - A shared screen shows the visit, the basket, finds and the collection without gifts. A
   gift stays waiting.
@@ -378,9 +390,9 @@ follow in either order. V-E comes last.
 |---|---|---|---|---|---|
 | V-A | **The server owns the day's visit**: `worlds.json` `visitors`; `PetState.visit`; `_daily_visit`; crediting at window end into `collection[world].visitors`; `_house_view.visit`; the card plays from `house.visit` with the `visitorDay` fallback; `STORE_MINOR_VERSION` 2, F5 validators, `lay_egg` carry; pytest; card-check `visitors` extended | M | **2** | none | the owner's Q1 |
 | V-B | **Finds and the basket, server**: `worlds.json` `finds`; the roll; `basket`, `next_find_at`; the visitor's left find; the `found` moment; `virtual_pet/collect` (ws); validators; the stand-in script and 60 + 3 stand-ins; pytest | M | **2** | stand-ins | V-A; Q6 lists |
-| V-C | **The basket and the reveal, card**: the basket button, the reveal queue, lines V1-V4 and V8, calm, compact; the bench `house.basket` fixture plus `--preset finds`; card-check `finds` | M | 1 | stand-ins | V-B |
+| V-C | **The basket and the reveal, card**: the basket button, the reveal queue, lines V1-V4 and V8, calm, compact; V1-V11 added to card-check's no-nagging scan (`card-check.js:3604`/`4250`); the bench `house.basket` fixture plus `--preset finds`; card-check `finds` | M | 1 | stand-ins | V-B |
 | V-D | **The collection page**: the `virtual_pet/collection` ws read; the journal's "finds ›" link; tiles and silhouettes; the bench `--collection` fixture; card-check | M | 1 | stand-ins | V-B |
-| V-E | **Gifts**: bond `gift`/`gifts`/`next_gift_at`; the per-person clock; the weighting and gift-only finds; `mine.gift`; the first-look line V5-V7; `collect {gift: true}`; `forget_me`; diagnostics; the ♥ tiles; the privacy pytest and card-check | M | **2** | none new | V-B, V-D; Q2, Q3 |
+| V-E | **Gifts**: bond `gift`/`gifts`/`next_gift_at`; the per-person clock; the weighting and gift-only finds; `mine.gift`; the first-look line V5-V7; `collect {gift: true}`; diagnostics; the ♥ tiles; the privacy pytest and card-check | M | **2** | none new | V-B, V-D; Q2, Q3 |
 | V-F | **Final art**: 60 finds + 3 baskets, one world per commit, each swapping its stand-ins | M (art-bound) | 1 | 63 | V-C; the Luna queue |
 
 The whole build is **L**, as next-stages 2d says. V-B to V-E each touch about one module
@@ -411,8 +423,7 @@ on each side.
   - `gifts` (new):
     - seeds `bonds[dev].gift`; dev's personal card says V5 and takes it;
     - a shared screen and the second user (`other`, card-check 8384) see nothing;
-    - the sensor attributes and the bus carry no `gift`;
-    - `forget_me` drops it.
+    - the sensor attributes and the bus carry no `gift`.
 
 ## 13. Owner questions (8; recommendation first)
 
@@ -422,7 +433,8 @@ on each side.
    a write from the card, and a visitor you never see stays a silhouette.)
 2. **Gifts: to whom?** *Rec: each friend at bond level 3+, on their own clock, about once a
    week; never "the closest one".* Picking one person would rank people and show who's
-   first.
+   first. Gifts live in the bond, so "forget my data" leaves them, as it leaves bonds (FB).
+   *Rec: keep FB as decided;* erasing gifts too would change FB.
 3. **One-of-a-kind gift finds:** one per world that only a gift brings? *Rec: yes, six (the
    acorn-cap cup, pressed fern, knitted heart, pearl, paper boat and tiny telescope). No
    silhouette for them until someone has one, so there's no hole to fill.*
