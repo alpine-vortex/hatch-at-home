@@ -4327,6 +4327,47 @@ async function main() {
         Object.assign(s, { lookedFirst: true, queue: [], sayUntil: 0, sayClass: 0 });
       }
     });
+    // Fresh-expand E9: a link guest's news (L-a) is its dream today in DREAMS' words, else
+    // its visitor seen today, else none (yesterday's dream isn't on the sensor); the
+    // journal's head carries today's dream (J-a); status shows the evening's today line,
+    // else today's dream (St-a).
+    const e9 = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const real = { dream: el._dreamToday, seen: el._visitSeen, evening: el._evening, today: el._todayLine };
+      const out = {};
+      try {
+        el._visitSeen = () => null;
+        el._dreamToday = () => ({ kind: "rainbow" });
+        out.dream = el._linkNews(s);
+        el._dreamToday = () => null;
+        out.none = el._linkNews(s);
+        el._visitSeen = () => "robin";
+        out.visitor = el._linkNews(s);
+        el._visitSeen = () => null;
+        el._dreamToday = () => ({ kind: "rainbow" });
+        s.journal = true;
+        await el._renderJournal(s);
+        out.jdream = s.status.querySelector(".jdream")?.textContent || null;
+        s.journal = false;
+        el._evening = () => true;
+        el._todayLine = () => "today I watched the sunset! ♪";
+        el._renderStatus(s, []);
+        out.evening = s.status.querySelector(".stoday")?.textContent || null;
+        el._evening = () => false;
+        el._renderStatus(s, []);
+        out.morning = s.status.querySelector(".stoday")?.textContent || null;
+      } finally {
+        Object.assign(el, { _dreamToday: real.dream, _visitSeen: real.seen, _evening: real.evening, _todayLine: real.today });
+        s.journal = false;
+        el._renderStatus(s, []);
+      }
+      return out;
+    });
+    check("fresh E9 (L-a): a link guest's news is today's dream, else today's visitor, else none",
+      e9.dream === "I dreamed about a rainbow!" && e9.none === null && e9.visitor === "a robin came to see me today ♪", JSON.stringify(e9));
+    check("fresh E9 (J-a, St-a): the journal's head has today's dream; status has the evening's today line, else the dream",
+      e9.jdream === "I dreamed about a rainbow!" && e9.evening === "today I watched the sunset! ♪" && e9.morning === "I dreamed about a rainbow!",
+      JSON.stringify(e9));
     check("fresh E8 (A-a): back after 3 days, the look starts with a welcome and has no away note; after 5 h, none",
       WELCOME.includes(e8.long[0]?.text) && !e8.long.some((q) => q.away) && !e8.short.some((q) => WELCOME.includes(q.text)),
       JSON.stringify(e8));

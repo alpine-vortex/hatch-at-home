@@ -115,6 +115,8 @@ const gameDayList = (type) => {
   return [lean, lean, ...GAMES.map((g) => g.key).filter((k) => k !== lean)];
 };
 const SHINY_ODDS = 1 / 25; // a berry's chance of being the shiny one (D-b, a card roll)
+const LINK_NEWS_ODDS = 1 / 3; // a link's chance of the guest's news (E9 L-a)
+const LINK_NEWS_MS = 1500; // after the guest's reply; the visit holds this much longer
 const LONG_AWAY_MS = 48 * 3600 * 1000; // a first look this long after the last: a welcome (E8 A-a)
 // An adult's tricks (E8 LS-a): one more each month from its 14th day, all three by month 3,
 // in its idle moves. CSS moves only (no art): a spin, a double perk, a look around.
@@ -1382,6 +1384,10 @@ const WELCOME_BACK = ["you're here! ♥ hop hop", "yay, a visit! ♥", "hello he
 const FAV_LINES = ["I made up a song for you ♪", "you're my favourite ♥", "I saved you the comfy spot ♥", "*hums your song* ♪"];
 // LS-a: an adult's new trick, the first look of each month it learns one.
 const TRICK_LINES = ["look what I can do! ♪", "ta-da! a new trick ♪", "I learned a new move! ♪"];
+// L-a (E9): over an infrared link, now and then the guest's news of today's visitor
+// (or its dream, in DREAMS' words), and the host's answer.
+const LINK_VISITOR_NEWS = (v) => `a ${v} came to see me today ♪`;
+const LINK_NEWS_REPLY = "ooh, nice! ♪";
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -3082,6 +3088,7 @@ const STYLE = `
   .status-feedback { position: sticky; bottom: 0; margin-top: auto; padding: 5px 7px;
     background: #2f3a24; color: #e9e2c6; font-size: 12px; min-height: 14px; }
   .jhead { display: flex; justify-content: space-between; align-items: baseline; }
+  .jdream, .stoday { font-size: 13px; color: var(--hp-subink); margin: 2px 0 4px; } /* today's dream, today's line (E9) */
   .jgrid { display: flex; flex-wrap: wrap; gap: 6px 10px; }
   .jtile { display: flex; flex-direction: column; align-items: center; width: 64px; font-size: 11px;
     text-align: center; line-height: 1.1; }
@@ -6863,6 +6870,12 @@ class HatchPetCard extends HTMLElement {
     return !this._resumedAt && (s.house?.dream || this._state(s, "sensor.life_stage")?.attributes?.dream) || null;
   }
 
+  // Today's dream as the first look says it (DREAMS), or null (E9 J-a, St-a).
+  _dreamSaid(s) {
+    const dream = this._dreamToday(s);
+    return (dream && DREAMS[dream.kind]?.(dream, this._words(s), this._worlds)) || null;
+  }
+
   // S-a: a morning wake, in turns per pet; the dream line only on a dream day.
   _wakeLine(s, date = new Date()) {
     const line = turnPick(WAKE_LINES, `${s.ids?.device}|wake`, date);
@@ -7114,8 +7127,11 @@ class HatchPetCard extends HTMLElement {
     const misses = row(null, "missed calls", `<span>${Number.parseFloat(careMisses?.state) || 0}</span>`)
       + row(null, "ignored whines", `<span>${careMisses?.attributes.discipline_misses ?? 0}</span>`);
     // Today's wish comes first of the rest: it changes daily, the rest is there every day.
+    // Its day so far (E9 St-a): the evening's today line, else today's dream. A page, not a bubble.
+    const today = !isEgg && ((this._evening() && this._todayLine(s)) || this._dreamSaid(s));
     const html = `
       <div class="shead">${this._gearButton()}</div>
+      ${today ? `<div class="stoday">${escape(today)}</div>` : ""}
       ${want ? row(null, "would like", `<span>${escape(want)}</span>`) : ""}
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
         ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
@@ -7829,6 +7845,7 @@ class HatchPetCard extends HTMLElement {
     const html = `
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
+      ${this._dreamSaid(s) ? `<div class="jdream">${escape(this._dreamSaid(s))}</div>` : ""}
       <div class="jgrid">${tiles.join("")}</div>
       <button class="wlink">every world ›</button>
       ${this._photoRow(s)}
@@ -9847,7 +9864,9 @@ class HatchPetCard extends HTMLElement {
     // The kindred extra: its own roll, never through _lines (it has no normal line).
     const own = this._kindred(host, guest) && Math.random() < KINDRED_ODDS && this._pick(PERSONA[this._typeKey(host)].link_kindred);
     const extra = own ? (typeof own === "function" ? own(guestName) : own) : null;
-    const stretch = extra ? 1000 : 0; // the visit holds a little longer for it
+    // Or the guest's news of its day (E9 L-a): public, the pets' own; shared screens too.
+    const news = !extra && Math.random() < LINK_NEWS_ODDS ? this._linkNews(guest) : null;
+    const stretch = extra ? 1000 : news ? LINK_NEWS_MS : 0; // the visit holds a little longer for it
     const toRight = this._slides.indexOf(guest) > this._slides.indexOf(host);
     const k = 0.7; // the pets stand at 70% of their size on the visit screen
     const gs = guest.species;
@@ -9934,6 +9953,10 @@ class HatchPetCard extends HTMLElement {
         if (hCheer && host.linkFrames) host.linkFrames = hCheer;
       }
     });
+    if (news) {
+      at(t0 + 1800 + LINK_NEWS_MS, () => { L.say.textContent = news; });
+      at(t0 + 1800 + LINK_NEWS_MS * 2, () => this._queue(host, LINK_NEWS_REPLY, 1800, { still: () => this._link === L }));
+    }
     at(t0 + 3400, () => {
       if (!isCalm && !sharedScreen()) this._bondHearts(host, "linkhearts");
     });
@@ -9950,6 +9973,16 @@ class HatchPetCard extends HTMLElement {
 
   _pick(list) {
     return list[Math.floor(Math.random() * list.length)];
+  }
+
+  // The guest's news over a link (E9 L-a): today's dream as DREAMS says it, else today's
+  // visitor seen on the guest's device, else null.
+  _linkNews(guest) {
+    const dream = this._dreamToday(guest);
+    const said = dream && DREAMS[dream.kind]?.(dream, this._words(guest), this._worlds);
+    if (said) return said;
+    const seen = this._visitSeen(guest);
+    return seen ? LINK_VISITOR_NEWS(seen) : null;
   }
 
   // The beam: a red head with ripples flies along the tops of the devices, a
