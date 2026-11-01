@@ -540,6 +540,7 @@ Cut on purpose (they nag or ask): "the basket is full!", "come see what I found"
 | `found` moment | every screen, the away note | moments + bus (no user) | the bus, like other house moments |
 | Collect (tap) | the caller | **websocket** `virtual_pet/collect` (not a service and not a button, because a service's `call_service` row records `context_user_id`, rows M/O) | no |
 | Collection | the person who opens it | websocket `virtual_pet/collection` | no |
+| Collection read (V-D0, built) | any login, read-only too; the same reply for `shared` true or false until V-E | `virtual_pet/collection {entity_id, shared}` reply: ids and local days, no user, no gift; a pure read (no advance, save or publish) | no |
 | Waiting gift, gift list | **only that person, own screen** | `mine.gift`, the `collection` reply's `gifts` (only when `shared` is false) | no; ids only, no dates; redacted in diagnostics; kept with the bond by `forget_me`, as FB decided (Q2) |
 
 - A shared screen shows the visit, the basket, finds and the collection without gifts. A
@@ -739,6 +740,20 @@ and P1-P2 fixes, with the first mate's picks:
   `foundBit`).
 - **For V-D**: the seeded collection page is restart's; `this._worlds` and `findOf` are
   there to use. **For V-E**: the gift's first look can reuse `_revealStart` with one find.
+
+**V-D0 as built (s2594, for the V-D card worker):**
+
+- `virtual_pet/collection {entity_id, shared}`, `shared` `vol.Required` bool (accepted and
+  ignored until V-E). Any login, read-only too. Errors: `no_pet` for an unknown entity.
+- Reply, exactly: `{"world": "<pet's current world>", "visitors": ["id", ...], "finds":
+  {"id": "YYYY-MM-DD", ...}}`. `visitors` is in save order (not roster order: sort by
+  `worlds.json` on the card); `finds` is `{id: first day}`. An empty page is `visitors:
+  []`, `finds: {}`. The same reply for `shared` true or false.
+- Filtered to `known_visitors[world]` / `known_finds[world]`, minus this world's
+  `gift_only` finds. Unknown and wrong-world ids are skipped, never dropped from the save.
+- Pure read: `PetCoordinator.collection_view()` (sync); no advance, save or publish. Works on an
+  egg. V-E adds `gifts: [id]` to this reply, only when `shared` is false.
+- Tests: `tests/test_finds.py` (`test_collection_*`).
 
 **Which slice owns each review finding:** V-A #8 #9 #10 #11 #12 #19 #22; V-B #1 #2 #3 #4 #5
 #13 #18 (lists) #20 #21 and the salvage of `basket`; V-C #15 #16 #17 #23; V-D #6 #7; V-E #6 #7 #14; V-F #18 #23. Review blockers: before V-A, #9 #10 #11
