@@ -7261,6 +7261,36 @@ async function main() {
   check("visitors: v1's fallback: catch-up comes only once the day's window is over (none on other days)",
     walk.every((d) => d.hours.length ? d.missed.length === 23 - d.hours[2] && d.missed[0] === d.hours[2] + 1 : !d.missed.length),
     JSON.stringify(walk.map((d) => [d.hours, d.missed])));
+  // v1's pick is for a true old server only (the channel up, no visit key). With the
+  // channel failed or not up yet (HA starting or reloading), nothing is due or told
+  // missed, so the day's flag is left for the server's visit (V-A audit #3).
+  const noChannel = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const was = { house: s.house, subscribed: s.subscribed, subscribeFailed: s.subscribeFailed,
+      night: s.screen.classList.contains("night"), dim: s.screen.classList.contains("dim") };
+    const hits = [];
+    try {
+      const now = new Date();
+      for (const [house, failed] of [[null, true], [{}, true], [null, false]]) {
+        Object.assign(s, { house, subscribed: false, subscribeFailed: failed });
+        for (let d = 0; d < 14; d++) {
+          for (let h = 0; h < 24; h++) {
+            s.screen.classList.toggle("night", h >= 19 || h < 7);
+            s.screen.classList.remove("dim");
+            const at = new Date(now.getFullYear(), now.getMonth(), now.getDate() + d, h, 30);
+            if (el.__realDue.call(el, s, at) || el._visitorMissed(s, at)) hits.push(`${failed}/${d}/${h}`);
+          }
+        }
+      }
+    } finally {
+      Object.assign(s, { house: was.house, subscribed: was.subscribed, subscribeFailed: was.subscribeFailed });
+      s.screen.classList.toggle("night", was.night);
+      s.screen.classList.toggle("dim", was.dim);
+    }
+    return hits;
+  });
+  check("visitors: with no channel (failed or not up yet) nothing plays or is told missed: no v1 pick",
+    noChannel.length === 0, JSON.stringify(noChannel.slice(0, 10)));
   // Every visitor's frames load.
   const frames = await card.evaluate(async (el, all) => {
     const base = el._slides[el._index].pet.src.replace(/\/sprites\/.*$/, "/ui/");

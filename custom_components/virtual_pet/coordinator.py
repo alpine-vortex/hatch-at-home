@@ -201,7 +201,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.egg_roster: tuple[str, ...] = ()
         self.egg_species_names: dict[str, str] = {}
         # World visitors (worlds.json): this world's, in roster order, and the
-        # ids every world knows (for the collection's check after load).
+        # ids every world knows (the saved visit's check after load; what
+        # counts or shows the collection skips the rest).
         self.visitors: list[dict[str, Any]] = []
         self.known_visitors: dict[str, set[str]] = {}
         self.rng = random.Random()
@@ -1042,27 +1043,21 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         return wishes
 
     def _check_visits(self) -> None:
-        """After load (finding #12, #9): drop collection entries no worlds.json
-        knows (a world, or a visitor of its world; finds are V-B's to check),
-        and make a visit from another world, or by a visitor this world no
-        longer has, no visit that day (the next day picks from this world)."""
+        """After load (finding #9, #12): a visit from another world, or by a
+        visitor this world no longer has, becomes no visit that day (the next
+        day picks from this world). The collection is left as saved: a world or
+        id this worlds.json doesn't know (a later version's, before a downgrade)
+        stays for the upgrade back, and whatever counts or shows the collection
+        skips it (owner, 2026-11-01)."""
         state = self.state
         assert state is not None
-        known = self.known_visitors
-        state.collection = {
-            world: {
-                **page,
-                "visitors": {
-                    k: day for k, day in page["visitors"].items() if k in known[world]
-                },
-            }
-            for world, page in state.collection.items()
-            if world in known
-        }
         visit = state.visit
         if visit and (
             visit["world"] != self.world
-            or (visit["id"] and visit["id"] not in known.get(self.world, set()))
+            or (
+                visit["id"]
+                and visit["id"] not in self.known_visitors.get(self.world, set())
+            )
         ):
             state.visit = {"day": visit["day"], "world": self.world, "id": None}
 
@@ -1086,14 +1081,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _visit_view(self) -> dict[str, Any] | None:
         """Today's visit for every screen: {day, id, hours, from, until} (epoch
-        seconds), only today's, only with a visitor, only this world's. It
-        names nobody."""
+        seconds), only with a visitor, only this world's, and only today's or
+        one inside its window whatever its day (HA's zone moved east across
+        midnight mid-window). It names nobody."""
         if self.state is None:
             return None
         visit = model.live_visit(self.state, self.world)
         if not visit or not visit.get("id"):
             return None
-        if visit["day"] != self._today(self._now())[0]:
+        now = self._now()
+        live = visit["from"] <= now < visit["until"]
+        if visit["day"] != self._today(now)[0] and not live:
             return None
         return {k: visit[k] for k in ("day", "id", "hours", "from", "until")}
 
