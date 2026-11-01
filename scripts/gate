@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The merge gate: lint + tests, then card-check and the costume previews on a
+# The merge gate: lint + tests, then card-check on a
 # throwaway HA (fresh .storage, its own port, never 8123), as AGENTS.md asks.
 #
 #   scripts/gate                  # the whole gate
@@ -7,8 +7,10 @@
 #   scripts/gate --port 8472      # pick the port (default: a free one in 8400-8499)
 #   scripts/gate -- --only shell  # anything after -- goes to card-check
 #
-# A partial run skips the costume previews and writes no marker.
-# A full run takes ~45 min (card-check ~25, the two costume sweeps ~10 each).
+# A partial run writes no marker. A full run takes ~20 min, mostly card-check.
+# Costume previews are screenshots, not checks: they left the gate (owner,
+# 2026-10-31). Shoot costumes on the card bench (dev/bench/README.md), or run
+# scripts/costume-preview.js by hand when a season changes.
 # Logs go to a fresh /tmp/hatch-gate-* dir, printed at the start. On a full pass
 # with a clean tree it writes the gate-passed marker for HEAD's tree, so the same
 # tree is never gated twice (the marker dir is shared by all worktrees).
@@ -83,17 +85,7 @@ CC=$?
 echo "gate: card-check exit $CC, $(grep -c '^PASS' "$LOGS/card-check.log") PASS, $(grep -c '^FAIL' "$LOGS/card-check.log") FAIL"
 grep -E '^(FAIL|SKIP)' "$LOGS/card-check.log" | cut -c1-160 | head -20
 
-COS=0
-if [ ${#CC_ARGS[@]} = 0 ]; then
-  for season in halloween thanksgiving; do
-    HA_URL=$URL node scripts/costume-preview.js "$season" >"$LOGS/costume-$season.log" 2>&1 || COS=1
-  done
-  echo "gate: costume previews $([ $COS = 0 ] && echo ok || echo FAIL)"
-else
-  echo "gate: costume previews skipped (partial card-check run)"
-fi
-
-if [ $CC = 0 ] && [ $COS = 0 ] && [ ${#CC_ARGS[@]} = 0 ]; then
+if [ $CC = 0 ] && [ ${#CC_ARGS[@]} = 0 ]; then
   if [ -z "$(git status --porcelain --untracked-files=no)" ]; then
     M=$(git rev-parse --git-common-dir)/gate-passed
     mkdir -p "$M" && touch "$M/$(git rev-parse 'HEAD^{tree}')"
@@ -103,7 +95,7 @@ if [ $CC = 0 ] && [ $COS = 0 ] && [ ${#CC_ARGS[@]} = 0 ]; then
   fi
   exit 0
 fi
-[ $CC = 0 ] && [ $COS = 0 ] && { echo "gate: PASS (partial run, no marker)"; exit 0; }
+[ $CC = 0 ] && { echo "gate: PASS (partial run, no marker)"; exit 0; }
 # Keep a failed run's logs (the /tmp dirs rotate), so a flake can be traced later.
 KEEP=$HOME/.local/state/crew/gate-fails/$(date +%Y%m%d-%H%M%S)-$(git rev-parse --short HEAD)
 mkdir -p "$KEEP" && cp "$LOGS"/*.log "$KEEP"/ 2>/dev/null

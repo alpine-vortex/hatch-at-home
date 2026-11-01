@@ -22,7 +22,7 @@ falling back to HA.
 
 `scripts/gate` does all of the below for you: lint and tests, then a throwaway HA
 from `dev/config` with a fresh `.storage` on a free port (never 8123), card-check with
-`HA_URL`/`HA_CONFIG`/`HA_START` set, the costume previews, and cleanup. Arguments after
+`HA_URL`/`HA_CONFIG`/`HA_START` set, and cleanup. Arguments after
 `--` go to card-check. Prefer it over a hand-built scratch HA. To have commits refuse
 unformatted Python, run `git config core.hooksPath scripts/hooks` once.
 
@@ -46,8 +46,8 @@ The manual route, if you need it:
 
 `scripts/card-check.js --list` prints its section names; `--only a,b` runs just those.
 Ship workers run `scripts/gate -- --only <the sections their slice touches>` (or
-`card-check --only ...` on their own scratch HA, as above). A partial run skips the
-costume previews and writes no gate marker. The full `scripts/gate` is the first mate's,
+`card-check --only ...` on their own scratch HA, as above). A partial run
+writes no gate marker. The full `scripts/gate` is the first mate's,
 once per merged batch. Login, the dashboard, stubs and the pet-finding prelude always
 run, and `restart` puts dev's seeded bond and wish back. Sections lean on state their
 predecessors leave (the open sheet, the bond, the slide on show), so a lone section may
