@@ -279,7 +279,8 @@ def _visit(v: Any) -> dict[str, Any] | None:
 def collection_from(v: Any) -> dict[str, dict[str, Any]]:
     """The device's collection, {world: {visitors: {id: day}, finds: {id: day}}}:
     a world that isn't a str key with a dict page is dropped, the rest kept.
-    Ids no worlds.json knows are the coordinator's to drop (no catalog here)."""
+    Ids no worlds.json knows are kept (a later version's, back after an
+    upgrade): whatever counts or shows the collection skips them."""
     out: dict[str, dict[str, Any]] = {}
     for world, page in _mapping(v).items():
         if not (_str(world) and isinstance(page, dict)):
@@ -615,7 +616,7 @@ class PetState:
     @classmethod
     def salvage(cls, data: Any, default_name: str, now: float) -> PetState:
         """What can still be read from a save from_dict couldn't load: its name,
-        family, journal, memories, bonds and collection, each on its own. The rest starts
+        family, journal, memories, bonds, collection and the day's visit, each on its own. The rest starts
         fresh, as a new egg's would. Never raises."""
         if not is_pet_root(data):
             data = {}
@@ -632,6 +633,7 @@ class PetState:
             "memories": lambda v: _records(v, at=_num, kind=_str),
             "bonds": bonds_from,
             "collection": collection_from,  # the device's, lifelong
+            "visit": _visit,  # an uncredited visit still gets its credit
         }
         for key, read in readers.items():
             try:
@@ -2368,14 +2370,20 @@ def daily_visit(
 ) -> bool:
     """Credit the saved visit if its window is over, then, on a new local day,
     pick and save today's (finding #10: credit first, and a pick never
-    overwrites a visit still waiting for its credit). Only the window's start
-    hour is random (finding #11). True if the save changed."""
+    overwrites a visit still waiting for its credit, unless that window is more
+    than a day off: a clock that ran ahead). Only the window's start hour is
+    random (finding #11). True if the save changed."""
     changed = credit_visit(state, now, world)
     visit = live_visit(state, world)
     if visit and visit.get("day") == today:
         return changed
     if visit and visit.get("id") and not visit.get("credited"):
-        return changed  # its window isn't over yet (a clock or zone change)
+        if visit["until"] - now <= R.VISIT_HOURS * 3600 + 86400:
+            return changed  # its window isn't over yet (a clock or zone change)
+        # Its window is more than a day ahead: picked while the clock ran ahead
+        # (a bad RTC before NTP, a snapshot). Nobody saw it: dropped, not
+        # credited (that would date a first meeting in the future), and today's
+        # is picked.
     who = visit_turn(today, pet_id, len(visitors))
     if who is None:
         state.visit = {"day": today, "world": world, "id": None}

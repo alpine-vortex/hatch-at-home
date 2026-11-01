@@ -11,6 +11,7 @@ from zoneinfo import ZoneInfo
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import async_fire_time_changed
 
 from custom_components.virtual_pet import model, rates as R
 from custom_components.virtual_pet.const import DOMAIN
@@ -217,6 +218,50 @@ def test_a_pick_never_overwrites_a_visit_waiting_for_its_credit() -> None:
     assert pet.visit["day"] == tomorrow
 
 
+def test_a_visit_picked_by_a_clock_running_ahead_doesnt_block_later_picks() -> None:
+    """V-A audit #2: a visit picked while the clock ran a year ahead (a bad RTC
+    before NTP) is dropped, not credited, once the clock is right, and every
+    later day gets its plan."""
+    tz = ZoneInfo("Europe/London")
+    ahead = first_visit_day("2027-11-01")
+    pet = model.PetState.new("Pip", 0)
+    model.daily_visit(
+        pet, stamp(ahead, 8, tz), ahead, "woodland", WOODLAND, PET,
+        random.Random(1), tz,
+    )  # fmt: skip
+    assert pet.visit is not None and pet.visit["id"] and pet.visit["day"] == ahead
+    for day in days(date(2026, 11, 1), 29):
+        model.daily_visit(
+            pet, stamp(day, 23, tz), day, "woodland", WOODLAND, PET,
+            random.Random(), tz,
+        )  # fmt: skip
+        assert pet.visit is not None and pet.visit["day"] == day
+    seen = pet.collection.get("woodland", {}).get("visitors", {}).values()
+    assert seen and all(d.startswith("2026-11") for d in seen)
+
+
+def test_a_live_window_on_a_later_day_still_waits_for_its_credit() -> None:
+    """A zone moving west: the saved visit's day is after HA's new today, its
+    window still open (about 2 hours left). It isn't overwritten."""
+    day = first_visit_day("2026-03-02")
+    pet = plan(day)
+    visit = pet.visit
+    assert visit is not None and visit["id"]
+    yesterday = (date.fromisoformat(day) - timedelta(1)).isoformat()
+    now = visit["until"] - 2 * HOUR
+    assert not model.daily_visit(
+        pet, now, yesterday, "woodland", WOODLAND, PET, random.Random(), UTC
+    )
+    assert pet.visit is visit
+    # More than a day off is a clock that ran ahead, not a zone: picked afresh.
+    now = visit["until"] - R.VISIT_HOURS * HOUR - 86400 - 1
+    assert model.daily_visit(
+        pet, now, yesterday, "woodland", WOODLAND, PET, random.Random(), UTC
+    )
+    assert pet.visit is not visit and pet.visit["day"] == yesterday
+    assert pet.collection == {}
+
+
 def test_a_visit_from_another_world_is_no_visit() -> None:
     """Finding #9: the egg moved worlds; the old world's visit isn't credited
     and isn't shown."""
@@ -324,8 +369,20 @@ def test_salvage_keeps_the_collection() -> None:
     assert pet.collection == {
         "woodland": {"visitors": {"snail": "2026-03-02"}, "finds": {}}
     }
-    assert pet.visit is None  # the day's plan is picked again
+    assert pet.visit == data["visit"]  # kept (V-A audit #4)
     assert model.PetState.salvage({"collection": 7}, "Pip", 0).collection == {}
+
+
+def test_salvage_keeps_the_days_visit() -> None:
+    """V-A audit #4: an uncredited visit survives a salvage, so it is still
+    credited and the day's window hour isn't re-rolled."""
+    day = first_visit_day("2026-03-01")
+    visit = plan(day).visit
+    assert visit is not None
+    pet = model.PetState.salvage({"visit": dict(visit), "hunger": "junk"}, "Pip", 0)
+    assert pet.visit == visit
+    assert model.credit_visit(pet, visit["until"], "woodland")
+    assert model.PetState.salvage({"visit": 7}, "Pip", 0).visit is None
 
 
 def test_lay_egg_carries_the_visit_and_the_collection() -> None:
@@ -435,11 +492,12 @@ async def test_on_load_another_worlds_visit_is_no_visit_today(
     assert pet.state.collection == {}
 
 
-async def test_unknown_ids_are_dropped_after_load(
+async def test_unknown_ids_are_kept_in_the_save_after_load(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory, hass_storage: dict[str, Any]
 ) -> None:
-    """Finding #12: a world or visitor no worlds.json knows goes; finds are
-    left for V-B (no find catalog yet); a world not ready keeps its page."""
+    """V-A audit #1 (owner, 2026-11-01): a world or visitor no worlds.json knows
+    (a later version's, before a downgrade) stays in the save for the upgrade
+    back; only the saved visit by an unknown visitor becomes no visit."""
     freezer.move_to("2026-10-26 14:00:00+00:00")
     now = dt_util.utcnow().timestamp()
     collection = {
@@ -454,14 +512,40 @@ async def test_unknown_ids_are_dropped_after_load(
     visit.update(hours="day", **{"from": now, "until": now + 3 * HOUR})
     hass_storage[STORE_KEY] = hatched_pet(now, collection=collection, visit=visit)
     pet = (await setup(hass)).runtime_data
-    assert pet.state.collection == {
-        "woodland": {
-            "visitors": {"chickadee": "2026-10-01"},
-            "finds": {"pinecone": "2026-10-03", "nonesuch": "2026-10-04"},
-        },
-        "nightsky": {"visitors": {"raccoon": "2026-10-05"}, "finds": {}},
-    }
+    assert pet.state.collection == collection
     assert pet.state.visit == {"day": "2026-10-26", "world": "woodland", "id": None}
+    freezer.tick(timedelta(minutes=10))  # past the save's delay
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    saved = hass_storage[STORE_KEY]["data"]
+    assert saved["visit"]["id"] is None  # the save after load did happen
+    assert saved["collection"] == collection
+
+
+async def test_a_live_window_from_yesterday_is_on_show_after_a_zone_moves_east(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, hass_storage: dict[str, Any]
+) -> None:
+    """V-A audit #5 (with #2's wait): HA's zone moves east across midnight inside
+    the window; the visit, still yesterday's, waits for its credit and is on show
+    until its window ends."""
+    day = first_visit_day("2026-10-26", "test_pet")
+    freezer.move_to(f"{day} 14:00:00+00:00")
+    now = dt_util.utcnow().timestamp()
+    saved = today_visit(day, now)  # 12:17 to 15:17 UTC
+    hass_storage[STORE_KEY] = hatched_pet(now, visit=saved)
+    config = await setup(hass)
+    await hass.config.async_set_time_zone("Pacific/Kiritimati")  # UTC+14: tomorrow
+    pet = config.runtime_data
+    await pet.async_refresh()
+    assert pet._today(now)[0] > day
+    assert pet.state.visit == saved
+    assert pet._house_view()["visit"] == {
+        k: saved[k] for k in ("day", "id", "hours", "from", "until")
+    }
+    freezer.move_to(datetime.fromtimestamp(saved["until"] + 60, UTC))
+    await pet.async_refresh()
+    assert pet.state.collection["woodland"]["visitors"] == {saved["id"]: day}
+    assert pet.state.visit["day"] == pet._today(saved["until"] + 60)[0]
 
 
 async def test_the_day_turns_over_at_ha_local_midnight(

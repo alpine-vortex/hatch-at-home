@@ -117,8 +117,11 @@ saw it or not.
 - It is not in `mine` because it is the same for everyone.
 - It is not a sensor attribute because it changes daily. The channel pushes it, and the
   house view doesn't go into the history database.
-- **`visitorDay` stays as the fallback.** It is used when the channel has no `house.visit`:
-  an old server, the channel not up yet, or the bench.
+- **`visitorDay` stays as the fallback**, for a true old server only: the channel is up
+  and its `house` has no `visit` key (V-A audit #3, owner 2026-11-01). With the channel not
+  up yet or failed (HA starting or reloading), the card says and plays no visitor and leaves
+  the day's flag unused: v1's pick hashes the device, the server's the entry, so they differ.
+  The bench plays visitors through `_visitorStart` directly.
   - A new card with an old server behaves as v1.
   - An old card (a cached browser) with a new server keeps its own pick. The server still
     credits from its own plan, so the collection is right either way.
@@ -301,9 +304,10 @@ the same file.
     next egg may change worlds.
   - Each world's page shows only its own entries. A device that changed worlds keeps both.
   - The dates are local days, and no user is stored.
-  - Unknown ids (a world or find no `worlds.json` knows) are **dropped by the coordinator
-    after load**, as the roster checks are, or kept and skipped at render (finding #12).
-    `model.py` imports no catalog and can't do it in `from_dict`.
+  - Unknown ids (a world, visitor or find no `worlds.json` knows, e.g. a later version's
+    before a downgrade) are **kept in the save** and skipped wherever the collection is
+    counted or shown (finding #12; V-A audit #1, owner 2026-11-01), so an upgrade back
+    loses nothing. Only the day's `visit` is checked at load (it only affects play).
 
 ## 5. Gifts (per person, private)
 
@@ -364,7 +368,7 @@ From check-ins item 1: "I saved this pine cone for you! ♥", with "good variety
 | Field | Shape | Carried by `lay_egg` | Validation (F5) |
 |---|---|---|---|
 | `visit` | `{day, world, id, hours, from, until, credited}` or null | yes; a `world` that isn't the current one counts as no visit (on load too), so no special case in `lay_egg` | dict with str `day` and `world`. Else null, and the next tick re-picks. |
-| `basket` | list of up to 3 `{id, world, from?, at}` | yes (finds wait, even across a world change) | list of dicts with str `id` and `world`, cut to 3. An id no world knows is dropped by the coordinator after load (finding #12). |
+| `basket` | list of up to 3 `{id, world, from?, at}` | yes (finds wait, even across a world change) | list of dicts with str `id` and `world`, cut to 3. An id no world knows is kept in the save and skipped where the basket is revealed or counted (finding #12, V-A audit #1). |
 | `next_find_at` | float or null | yes | `_float` |
 | `collection` | `{world: {visitors: {id: day}, finds: {id: day}}}` | yes | the world key is a str, the inner maps are str→str; a bad world is dropped, the rest kept |
 | `bonds[u].gift` | `{id, day}` or absent | (bonds already) | the bond loader (`model.py:239` area) drops a bad one and keeps the bond |
@@ -375,8 +379,8 @@ From check-ins item 1: "I saved this pine cone for you! ♥", with "good variety
   - Each basket entry also stores its `world`. A find from the old world stays in the
     basket and is revealed with the old world's art and line, and credited to that world's
     page. A find is never dropped for being from another world.
-  - The coordinator drops, after load, only an id that no world in `worlds.json` knows
-    (`model.py` can't see the catalog, finding #12).
+  - An id that no world in `worlds.json` knows is kept in the save and skipped where it
+    would be counted or shown (finding #12, V-A audit #1); nothing is dropped at load.
   - The day's `visit` carries its `world` (finding #9). If the egg brings a new world, the
     mismatch makes it no visit, so `lay_egg` doesn't need to know the world; the next day
     picks from the new world. v1's catch-up line then has nothing to say that day.
@@ -389,7 +393,7 @@ From check-ins item 1: "I saved this pine cone for you! ♥", with "good variety
   no-op migrate and save again, and nothing reads the marker. Bump it later if a
   migration needs it (that consumer would name it).
 - **Salvage (finding #8).** `model.py:567-591` `salvage` keeps only name, generation,
-  species, raised, journal, memories and bonds. It gains **`collection`** (and `basket`),
+  species, raised, journal, memories and bonds. It gains **`collection`** and the day's `visit` (V-A audit #4; and `basket`),
   so a damaged save doesn't wipe the device's lifelong collection. Tested under F5.
 - **Seeding the collection on upgrade:** none. It starts empty. (v1 saved nothing, so
   there's nothing to credit.)
@@ -506,8 +510,8 @@ follow in either order. V-E comes last.
 
 | # | Slice | Size | Tier | Art | Needs |
 |---|---|---|---|---|---|
-| V-A ✅ | **Built** (s2582; "V-A as built" below). **The server owns the day's visit**: `worlds.json` `visitors` (with `leaves`); `PetState.visit` with `world` (#9); `_daily_visit` (rng only for the window hour, #11; credit-then-pick on rollover, #10); crediting at window end into `collection[world].visitors`, in every stage (R4); `_house_view.visit`; the card plays from `house.visit`, with the `visitorDay` fallback and the once-a-day flag keyed by `visit.day` (#22); `salvage` keeps `collection` (#8); unknown ids dropped by the coordinator (#12); F5 validators, `lay_egg` carry; **no `STORE_MINOR_VERSION` bump** (#19); pytest; card-check `visitors` extended (crossing the browser's midnight) | M | **2** | none | Q1-Q8 decided |
-| V-B | **Finds and the basket, server**: `worlds.json` `finds` (the `when` grammar, #3; the ⟲ lists, #18; `leaves` ids, #5: V-A already wrote `jayfeather`, `gullfeather`, `heronfeather`, `nighthawkfeather` on the visitors, so the feathers take those ids); the coordinator's unknown-id drop (`_check_visits`) extended to `collection[w].finds` and the basket; the roll with `night`, `full_moon`, `P.season` and the rare fallback (#1, #4, #21, R5); rolls continue while full, extras to the collection (#2, R1); Night Sky rolls asleep (R2); `basket`, `next_find_at`; the visitor's left find; the `found` moment (no consumer yet, #20); `_house_view.basket` (#20); `virtual_pet/collect` (ws; read-and-clear with no `await`, #13); `salvage` keeps `basket`; validators; the stand-in script and 60 + 3 stand-ins at 64 px (#23); pytest incl. the real-sleep-hours 90-day run and the `when` token check | M | **2** | stand-ins | V-A |
+| V-A ✅ | **Built** (s2582; "V-A as built" below). **The server owns the day's visit**: `worlds.json` `visitors` (with `leaves`); `PetState.visit` with `world` (#9); `_daily_visit` (rng only for the window hour, #11; credit-then-pick on rollover, #10); crediting at window end into `collection[world].visitors`, in every stage (R4); `_house_view.visit`; the card plays from `house.visit`, with the `visitorDay` fallback and the once-a-day flag keyed by `visit.day` (#22); `salvage` keeps `collection` and `visit` (#8, audit #4); unknown ids kept in the save, skipped where counted or shown (#12, audit #1); F5 validators, `lay_egg` carry; **no `STORE_MINOR_VERSION` bump** (#19); pytest; card-check `visitors` extended (crossing the browser's midnight) | M | **2** | none | Q1-Q8 decided |
+| V-B | **Finds and the basket, server**: `worlds.json` `finds` (the `when` grammar, #3; the ⟲ lists, #18; `leaves` ids, #5: V-A already wrote `jayfeather`, `gullfeather`, `heronfeather`, `nighthawkfeather` on the visitors, so the feathers take those ids); unknown find ids in `collection[w].finds` and the basket kept in the save, skipped where counted or shown (V-A's rule, audit #1: no drop at load); the roll with `night`, `full_moon`, `P.season` and the rare fallback (#1, #4, #21, R5); rolls continue while full, extras to the collection (#2, R1); Night Sky rolls asleep (R2); `basket`, `next_find_at`; the visitor's left find; the `found` moment (no consumer yet, #20); `_house_view.basket` (#20); `virtual_pet/collect` (ws; read-and-clear with no `await`, #13); `salvage` keeps `basket`; validators; the stand-in script and 60 + 3 stand-ins at 64 px (#23); pytest incl. the real-sleep-hours 90-day run and the `when` token check | M | **2** | stand-ins | V-A |
 | V-C | **The basket and the reveal, card**: the basket button, the reveal queue, lines V1-V4 and V8, calm, compact; the reveal at 16 cells (#23); the no-nagging scan extended to the V1-V11 table, with the longest-name length check (#16); the bench `house` fixture (extending `--mine`, #15) plus `--preset finds`; card-check `finds` (ws spy, not a DB read, #17) | M | 1 | stand-ins | V-B |
 | V-D | **The collection page**: `virtual_pet/collection {entity_id, shared}` ws read (#6); no gift in the house `finds` map (#7, R3); the journal's "finds ›" link; tiles at 16 cells and silhouettes; the bench `--collection` fixture; card-check | M | 1 | stand-ins | V-B |
 | V-E | **Gifts**: bond `gift`/`gifts` (ids only, R6)/`next_gift_at`; the per-person clock; the weighting and gift-only finds; `mine.gift`; the first-look line V5-V7 (collect first, speak on non-empty, #14); `collect {gift: true, shared}` refused when shared (#6); gifts only on the receiver's ♥ page (#7, R3); diagnostics; the privacy pytest and card-check (two tabs) | M | **2** | none new | V-B, V-D |
@@ -522,29 +526,40 @@ follow in either order. V-E comes last.
   `collection_from` keeps each page's `finds` map and any later keys, so a V-B→V-A
   downgrade loses nothing); `visit_turn` (the day index plus the 31-hash of
   `visit|<entry_id>`, no rng), `live_visit`, `credit_visit`, `daily_visit`. `lay_egg`
-  deep-copies `visit` and `collection`; `salvage` reads `collection` (V-B adds `basket`).
+  deep-copies `visit` and `collection`; `salvage` reads `collection` and `visit` (V-B adds
+  `basket`).
   Rates: `R.VISIT_CYCLE_DAYS`, `VISIT_DAYS`, `VISIT_HOURS`, `VISIT_DAY_STARTS`,
   `VISIT_NIGHT_STARTS`.
 - **The visitor's left find (V-B) hooks into `model.credit_visit`**, the one place a
   window's end is seen.
 - Coordinator: `_daily_visit` runs on **every** tick (no awake or sleep-hours gate, R4).
-  `_check_visits` runs after load: it drops a collection world no `worlds.json` knows and
-  a visitor id its world doesn't have, and **leaves `finds` alone** (V-B extends it). A
-  saved visit from another world, or by a visitor this world lacks, becomes a no-visit
-  record `{day, world: <current>, id: null}` for the same day, so that day has no visit
+  `_check_visits` runs after load and checks only the visit: a saved visit from another
+  world, or by a visitor this world lacks, becomes a no-visit record
+  `{day, world: <current>, id: null}` for the same day, so that day has no visit
   and the next day picks from the current world (§1, §6).
+- The collection keeps every world and id as saved, known or not (V-A audit #1); whatever
+  counts or shows it (V-C's `virtual_pet/collection`) skips the ones `known_visitors` (and
+  V-B's find catalog) lack.
 - A pick never overwrites a visit still waiting for its credit, even on a new day (a
-  clock or time-zone change): it waits until that window ends (at most 3 hours).
+  time-zone change): it waits while `until - now <= VISIT_HOURS*3600 + 1 day`. A visit
+  further ahead was picked by a clock that ran ahead (a bad RTC before NTP, a snapshot): it
+  is dropped, not credited, and today's is picked (V-A audit #2).
+- `_house_view.visit` is sent while `from <= now < until` whatever its day (HA's zone
+  moving east across midnight mid-window, audit #5), else only on its own day.
 - **`house.visit` is always a key**: `null` on a day with no visit, from another world, or
-  not today. The card falls back to `visitorDay` only when the key is absent (an older
-  server, the channel not up, the bench). Otherwise a no-visit day would play v1's pick.
+  not today. The card falls back to `visitorDay` only when the channel is up and the key is
+  absent (a true old server, audit #3). With no channel it plays and says nothing.
+  Otherwise a no-visit day would play v1's pick.
+- Accepted as is (audit #6, #7): an egg laid into a new world mid-window loses the old
+  world's uncredited visit (§6); a night visitor plays only on a `night`/`dim` screen, a
+  day visitor only on a day screen, though both are credited.
 - Card: `VISITORS` became `VISITOR_PLAY` (play data by id) plus `visitorList(world)`. The
   bench (`scripts/bench.js`, `dev/bench/page.js`), card-check and `tests/js` read the roster
   from `worlds.json`. The window is compared with `serverNow()`. The flag key is
   `hatch-visit-<device>-<toDateString of house.visit.day>`, so `DATED_KEY` still prunes it.
-- Tests: `tests/test_visit.py` (24 cases); `tests/js/visitor_day.test.js` checks that the
+- Tests: `tests/test_visit.py` (28 cases); `tests/js/visitor_day.test.js` checks that the
   play table and the roster match one for one. card-check `visitors`: the plan, a second
-  card in another time zone, and the browser's midnight; `restart` seeds today's visit and
+  card in another time zone, the browser's midnight, and no v1 pick without a channel; `restart` seeds today's visit and
   checks it survives a restart.
 
 **Which slice owns each review finding:** V-A #8 #9 #10 #11 #12 #19 #22; V-B #1 #2 #3 #4 #5

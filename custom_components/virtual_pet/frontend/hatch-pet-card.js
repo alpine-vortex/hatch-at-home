@@ -7914,10 +7914,14 @@ class HatchPetCard extends HTMLElement {
   // (hatch-visit-<device>-<day>), used up when a visit starts or is told missed.
 
   // The server's plan for today (house.visit: {day, id, hours, from, until}, epoch
-  // seconds), null on a day with none; undefined when the channel has no plan at all
-  // (an older server, not subscribed yet, the bench): then v1's own pick.
+  // seconds), null on a day with none. Undefined only for a true old server (the
+  // channel up, its house with no visit key): then v1's own pick. With no channel
+  // (not up yet, or failed: HA starting or reloading) null, so nothing is said or
+  // played and the day's flag is left for the server's visit (v1's pick hashes the
+  // device, the server's the entry, so they differ).
   _visitPlan(s) {
-    return s.house && "visit" in s.house ? s.house.visit || null : undefined;
+    if (s.house && "visit" in s.house) return s.house.visit || null;
+    return s.subscribed ? undefined : null;
   }
 
   // The day the visit flag is keyed by: the server's day (finding #22: a browser in
