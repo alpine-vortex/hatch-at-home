@@ -7639,6 +7639,37 @@ async function main() {
     check("fresh-moment 5a: with a question on show a visitor and a flair still come, no line over it, and the question stays",
       r.started && r.said === "how was your day?" && r.flair && r.box, JSON.stringify(r));
   }
+  // Review s2622 #9: an answer tapped while the visitor is on screen still lands (a real
+  // click, so nothing of the visit covers the buttons); the question goes, its reply said.
+  {
+    await vprep(V0);
+    const started = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      el._ask(s, "how_day");
+      el._write(s, "how was your day?", 60000);
+      el.__vtick(s);
+      return !!s.visitor;
+    });
+    let clicked = true;
+    try {
+      await cur().locator(".askday button").first().click({ timeout: 3000 });
+    } catch (err) {
+      clicked = String(err.message).split("\n")[0];
+    }
+    const after = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const out = { box: !!s.screen.querySelector(".askday"), said: s.bubble.textContent, visitor: !!s.visitor };
+      el._visitorEnd(s);
+      s.screen.querySelector(".askday")?.remove();
+      clearTimeout(s.askTimer);
+      Object.assign(s, { asking: false, sayUntil: 0, poseUntil: 0, flairUntil: 0, visitUntil: 0 });
+      for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
+      return out;
+    });
+    check("fresh-moment 5a: an answer tapped mid-visit lands: the question goes and its reply is said",
+      started && clicked === true && !after.box && after.said !== "how was your day?",
+      JSON.stringify({ started, clicked, ...after }));
+  }
   // VISIT_SHOWN_MS is 10 s (owner, 2026-10-31): 9 s on show, no visit; 10.5 s, it starts.
   {
     await vprep(V0);

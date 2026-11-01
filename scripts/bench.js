@@ -205,6 +205,12 @@ const PRESETS = {
     // used up in the morning (its key spent), the dream too.
     const evening = { ...pet, moments: [{ type: "woke_up", ago: 750 }, { type: "sunset", ago: 60 }] };
     const spent = { "hatch-dream-bench_dev_0-Mon Nov 02 2026": "1", "hatch-wish-bench_dev_0-Mon Nov 02 2026": "1" };
+    // A question on show as a visitor walks in and greets (fresh-moment 5a): the question
+    // keeps its bubble and buttons, the greet says no line.
+    for (const beat of ["arrive", "greet"]) {
+      out.push({ group: "look-question", name: `look/question-visitor-${beat}`, label: `question, visitor ${beat}`,
+        world: "woodland", width: 330, ask: "how_day", say: "how was your day?", visitor: { beat } });
+    }
     for (const at of [5, 10]) {
       out.push({ group: "look-evening", name: `look/evening-${String(at).padStart(2, "0")}s`, label: `evening, ${at} s`,
         world: "woodland", width: 330, scene: "night", time: "2026-11-02T19:30:00Z", pet: evening, storage: spent,
