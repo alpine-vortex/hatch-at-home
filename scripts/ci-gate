@@ -46,7 +46,7 @@ if [ "$CONC" = success ]; then
   echo "ci-gate: PASS, marker written for tree $(git rev-parse --short "$TREE")"
   exit 0
 fi
-# The card jobs are "card (1/3)" and so on, one per shard.
+# The card jobs are "card (1/4)" and so on, one per shard.
 # (--log-failed comes back empty for long jobs; the job log endpoint doesn't.)
 for JOB in $(gh run view "$ID" --json jobs -q '.jobs[] | select((.name | startswith("card")) and .conclusion == "failure") | .databaseId'); do
   gh api "repos/{owner}/{repo}/actions/jobs/$JOB/logs" 2>/dev/null |
