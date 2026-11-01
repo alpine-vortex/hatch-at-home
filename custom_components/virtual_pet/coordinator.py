@@ -335,6 +335,21 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         return notify.dashboard_path(self.config_entry.options.get(CONF_DASHBOARD))
 
     @property
+    def social_level(self) -> int:
+        """The social meter, 0-10 over the last week (top10 §6). A pet alone in
+        the house has no neighbours to link with, so a visitor counts for more."""
+        assert self.state is not None
+        solo = len(self.hass.data.get(DOMAIN, {}).get("pets", {})) <= 1
+        return model.social_level(self.state, self._today(self._now())[0], solo)
+
+    def social_link(self, other: str) -> None:
+        """The infrared link brought another pet of this house today."""
+        assert self.state is not None
+        if model.social_link(self.state, self._today(self._now())[0], other):
+            self._save()
+            self._publish()
+
+    @property
     def senses(self) -> list[str]:
         """The kinds of house signal mapped in the options (SENSES), never
         which entities: for the card's "notices" row (top10 2a)."""
@@ -1505,6 +1520,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         devices."""
         assert self.state is not None
         now = self._now()
+        # Someone looked in while the day's visitor was here: a greeted visitor
+        # for the social meter (top10 §6), whatever else this look counts for.
+        if model.social_greet(self.state, now, self._today(now)[0], self.world):
+            self._save()
+            self._publish()
         person = self.people.person(user)
         last = self._visits.get(user, -1e12)
         just_home = person.get("arrived", 0) > last

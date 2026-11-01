@@ -321,6 +321,17 @@ DREAM_PLAIN_CHANCE = 0.5  # with nothing to dream about: a plain dream, or none
 VISIT_CYCLE_DAYS = 7  # a visit on VISIT_DAYS of every VISIT_CYCLE_DAYS
 VISIT_DAYS = 4
 VISIT_HOURS = 3  # the window's length
+
+# The social meter (top10 §6): a level 0-10 (five hearts, in halves) over a rolling
+# SOCIAL_DAYS of the pet's own social life. A visitor someone greeted (looked in
+# during its window) is worth SOCIAL_VISITOR halves, or SOCIAL_VISITOR_SOLO in a
+# one-pet house (no links there, so four good days still fill it); each neighbour
+# met over the infrared link, SOCIAL_LINK a day. Display only: it changes nothing.
+SOCIAL_DAYS = 7
+SOCIAL_MAX = 10
+SOCIAL_VISITOR = 2
+SOCIAL_VISITOR_SOLO = 3
+SOCIAL_LINK = 1
 VISIT_DAY_STARTS = (9, 15)  # a day visitor's window starts in this hour range (local)
 VISIT_NIGHT_STARTS = (19, 20)  # a night visitor's
 VISIT_LEAVES_FIND = 0.33  # a visitor leaves a find when its window ends

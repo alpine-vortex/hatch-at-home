@@ -3751,3 +3751,83 @@ async def test_senses_are_kinds_never_entities(
     await hass.config_entries.async_reload(config.entry_id)
     await hass.async_block_till_done()
     assert hass.states.get("sensor.pip_life_stage").attributes["senses"] == []
+
+
+async def test_social_meter_links_and_a_greeted_visitor(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+) -> None:
+    """top10 §6: the card's virtual_pet/linked counts each pet once a day for the
+    other; a look during the day's visit counts a greeted visitor; social_level
+    is on the life stage, out of history, and the days are redacted in
+    diagnostics."""
+    from custom_components.virtual_pet import diagnostics
+    from custom_components.virtual_pet.sensor import LifeStageSensor
+
+    await hass.config.async_set_time_zone("UTC")
+    now = dt_util.utcnow().timestamp()
+    pets = []
+    for entry_id, name in (("test_pet", "Pip"), ("other_pet", "Bo")):
+        hass_storage[f"{DOMAIN}.{entry_id}"] = {
+            **hatched_pet(now),
+            "key": f"{DOMAIN}.{entry_id}",
+        }
+        hass_storage[f"{DOMAIN}.{entry_id}"]["data"]["name"] = name
+        config = MockConfigEntry(
+            domain=DOMAIN,
+            title=name,
+            data={CONF_NAME: name, "new_pet": True},
+            entry_id=entry_id,
+        )
+        config.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(config.entry_id)
+        await hass.async_block_till_done()
+        pets.append(config.runtime_data)
+
+    def level(pet: str) -> int:
+        return hass.states.get(f"sensor.{pet}_life_stage").attributes["social_level"]
+
+    assert level("pip") == 0 and level("bo") == 0
+    assert "social_level" in LifeStageSensor._unrecorded_attributes
+    client = await hass_ws_client(hass)
+    for _ in range(2):  # twice the same day: once
+        await client.send_json_auto_id(
+            {
+                "type": "virtual_pet/linked",
+                "entity_id": "sensor.pip_mood",
+                "other": "sensor.bo_mood",
+            }
+        )
+        assert (await client.receive_json())["success"]
+        await hass.async_block_till_done()
+    assert level("pip") == model.R.SOCIAL_LINK and level("bo") == model.R.SOCIAL_LINK
+    assert pets[0].state.social[pets[0]._today(now)[0]]["links"] == ["other_pet"]
+    # One pet linked with itself: refused.
+    await client.send_json_auto_id(
+        {
+            "type": "virtual_pet/linked",
+            "entity_id": "sensor.pip_mood",
+            "other": "sensor.pip_life_stage",
+        }
+    )
+    assert not (await client.receive_json())["success"]
+    # A look while the day's visitor is here: a greeted visitor (two pets: 2 halves).
+    me = await friend(hass, 0)
+    pets[0].state.visit = {
+        "day": pets[0]._today(now)[0],
+        "world": pets[0].world,
+        "id": "hedgehog",
+        "hours": "day",
+        "from": now - 600,
+        "until": now + 3600,
+        "credited": False,
+    }
+    await look(hass, me.id)
+    await hass.async_block_till_done()
+    assert level("pip") == model.R.SOCIAL_LINK + model.R.SOCIAL_VISITOR
+    # Diagnostics: the days are redacted.
+    diag = await diagnostics.async_get_config_entry_diagnostics(
+        hass, hass.config_entries.async_get_entry("test_pet")
+    )
+    assert diag["pet"]["social"] == "**REDACTED**"

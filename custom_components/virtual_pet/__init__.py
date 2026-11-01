@@ -156,6 +156,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_forget_me)
     websocket_api.async_register_command(hass, websocket_subscribe)
     websocket_api.async_register_command(hass, websocket_notify_me)
+    websocket_api.async_register_command(hass, websocket_linked)
     websocket_api.async_register_command(hass, websocket_my_day)
     websocket_api.async_register_command(hass, websocket_set_shell)
     websocket_api.async_register_command(hass, websocket_collect)
@@ -532,6 +533,35 @@ async def websocket_notify_me(
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
     await pet.async_set_notify(connection.user.id, msg["enabled"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/linked",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("other"): cv.entity_id,
+    }
+)
+@callback
+def websocket_linked(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The card played the infrared link between two of the house's pets: each
+    counts the other once today, for the social meter (top10 §6). Nothing about
+    who was looking is kept."""
+    registry = er.async_get(hass)
+    pets = hass.data[DOMAIN]["pets"]
+    found = []
+    for key in ("entity_id", "other"):
+        entity = registry.async_get(msg[key])
+        found.append(pets.get(entity.config_entry_id) if entity else None)
+    one, two = found
+    if one is None or two is None or one is two:
+        connection.send_error(msg["id"], "no_pet", "Two different pets are needed")
+        return
+    one.social_link(two.pet_id)
+    two.social_link(one.pet_id)
     connection.send_result(msg["id"])
 
 

@@ -164,6 +164,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "shell_finish_options",
             "shell_locked",
             "senses",
+            "social_level",
         }
     )
 
@@ -226,6 +227,8 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "shell_locked": model.shell_locked(self.pet),
             # The kinds the house shows it (weather, tv...), never an entity.
             "senses": self.coordinator.senses,
+            # The social meter, 0-10 over the week (top10 §6); the days stay saved.
+            "social_level": self.coordinator.social_level,
             "raised": list(self.pet.raised),
             "traits": list(self.pet.traits),
             "trait_levels": {

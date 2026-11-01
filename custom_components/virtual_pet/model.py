@@ -264,6 +264,70 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def social_from(v: Any) -> dict[str, dict[str, Any]]:
+    """The social meter's days as loaded: a day key that is a date, with a bool
+    `visitor` and a list of str `links` (each once); anything else dropped."""
+    out: dict[str, dict[str, Any]] = {}
+    for day, entry in _mapping(v).items():
+        try:
+            date.fromisoformat(day)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(entry, dict):
+            continue
+        links = entry.get("links")
+        out[day] = {
+            "visitor": entry.get("visitor") is True,
+            "links": list(dict.fromkeys(x for x in links if isinstance(x, str)))
+            if isinstance(links, list)
+            else [],
+        }
+    return out
+
+
+def _social_day(state: PetState, today: str) -> dict[str, Any]:
+    """Today's entry, the week's older days kept and the rest (and any day
+    ahead of today: a clock that ran ahead) dropped."""
+    first = (date.fromisoformat(today) - timedelta(days=R.SOCIAL_DAYS - 1)).isoformat()
+    state.social = {d: e for d, e in state.social.items() if first <= d <= today}
+    return state.social.setdefault(today, {"visitor": False, "links": []})
+
+
+def social_greet(state: PetState, now: float, today: str, world: str) -> bool:
+    """Someone looked in while the day's visitor was here: the day counts a
+    greeted visitor (once). True if the save changed."""
+    visit = live_visit(state, world)
+    if not visit or not visit.get("id") or not visit["from"] <= now < visit["until"]:
+        return False
+    day = _social_day(state, today)
+    if day["visitor"]:
+        return False
+    day["visitor"] = True
+    return True
+
+
+def social_link(state: PetState, today: str, other: str) -> bool:
+    """The infrared link brought this neighbour today (once a day each). True if
+    the save changed."""
+    day = _social_day(state, today)
+    if other in day["links"]:
+        return False
+    day["links"].append(other)
+    return True
+
+
+def social_level(state: PetState, today: str, solo: bool) -> int:
+    """The week's level, 0 to R.SOCIAL_MAX (halves of five hearts)."""
+    first = (date.fromisoformat(today) - timedelta(days=R.SOCIAL_DAYS - 1)).isoformat()
+    visitor = R.SOCIAL_VISITOR_SOLO if solo else R.SOCIAL_VISITOR
+    halves = sum(
+        (visitor if e.get("visitor") else 0) + R.SOCIAL_LINK * len(e.get("links", []))
+        for d, e in state.social.items()
+        if first <= d <= today
+    )
+    return min(R.SOCIAL_MAX, halves)
+
+
 def _visit(v: Any) -> dict[str, Any] | None:
     """The day's visit as loaded (plan visitors v2 §6): a str day (an ISO
     date) and world, and for a visit (id set) its hours and window; else None,
@@ -483,6 +547,11 @@ class PetState:
     # scheduled on the first tick the pet can roll). The device's too.
     basket: list[dict[str, Any]] = field(default_factory=list)
     next_find_at: float | None = None
+    # The social meter (top10 §6): the last R.SOCIAL_DAYS local days, {day:
+    # {"visitor": True if someone greeted the day's visitor, "links": [pet ids
+    # met over the infrared link]}}. The pet's own: no person in it, and a new
+    # egg starts with none.
+    social: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store, with any keys this version doesn't know."""
@@ -629,6 +698,7 @@ class PetState:
         kwargs["visit"] = _visit(kwargs.get("visit"))
         kwargs["collection"] = collection_from(kwargs.get("collection"))
         kwargs["basket"] = basket_from(kwargs.get("basket"))
+        kwargs["social"] = social_from(kwargs.get("social"))
         for key in (
             "favourite_said",
             "catchphrase",
