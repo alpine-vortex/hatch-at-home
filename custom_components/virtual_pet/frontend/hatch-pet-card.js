@@ -1277,6 +1277,7 @@ const momentKey = (m) => m && `${m.at}|${m.type}`;
 // question nothing below kept interrupts. 0 is the rest (a greeting, the mood line).
 const MINE = 4; // the viewer's own care press: never overwritten for MINE_MS
 const KEPT = 3; // never dropped, may wait
+const SOCIAL_MAX = 10; // the social meter's top (rates.SOCIAL_MAX): five hearts, in halves
 const BEAT = 2; // care by someone else, calls, sleep
 const FLAVOUR = 1; // may be dropped, never replayed as a barrage
 const MINE_MS = 3000;
@@ -4732,6 +4733,7 @@ class HatchPetCard extends HTMLElement {
         if (!this._booting) {
           this._sayQueued(s);
           this._wishMention(s);
+          this._socialFull(s);
         }
         this._seen(s);
         this._idle(s);
@@ -6336,6 +6338,18 @@ class HatchPetCard extends HTMLElement {
       }
       return `<span class="hearts" role="img" aria-label="bond level ${level} of ${BOND.max}">${out}</span>`;
     };
+    // The social meter (top10 §6): the pet's week beyond the house, five hearts in
+    // halves; hidden at 0 and from an older server.
+    const social = Number(stageAttrs.social_level) || 0;
+    const socialHearts = (level) => {
+      const img = (n) => `<img src="${BASE}/ui/stat_heart_${n}.png?v=${VERSION}" alt="">`;
+      let out = "";
+      for (let i = 0; i < SOCIAL_MAX / 2; i++) {
+        const left = level - i * 2;
+        out += img(left >= 2 ? "full" : left === 1 ? "half" : "empty");
+      }
+      return `<span class="hearts" role="img" aria-label="friends this week: ${level} of ${SOCIAL_MAX}">${out}</span>`;
+    };
     const ic = (n) => pixelIcon(n, 18);
     const bar = (v) => v === null ? "–"
       : `<div class="bar" role="img" aria-label="${Math.round(v)} of 100"><div style="width:${v}%"></div></div>`;
@@ -6369,6 +6383,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
         ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
+      ${social > 0 ? row(null, "friends", socialHearts(social)) : ""}
       ${row("icon_feed", "hunger", hearts(value("hunger"), FEED_FULL_AT))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}
@@ -8780,7 +8795,30 @@ class HatchPetCard extends HTMLElement {
     const guest = this._linkPick(host);
     if (!guest) return;
     this._linkAt = now + lo + Math.random() * (hi - lo);
-    this._linkStart(host, guest);
+    if (this._linkStart(host, guest) !== false) this._linkReport(host, guest);
+  }
+
+  // The social meter full (top10 §6): said once a week per pet on this device,
+  // the week from Monday; nothing else on it changes the pet.
+  _socialFull(s) {
+    const level = this._state(s, "sensor.life_stage")?.attributes.social_level;
+    if (level !== SOCIAL_MAX || s.asleep || s.game || !s.ids?.device) return;
+    if (s.sayUntil > Date.now() || s.queue?.some((q) => lineClass(q) >= KEPT)) return;
+    const monday = new Date();
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    if (!oncePerDay(`social-full-${s.ids.device}`, monday)) return;
+    (s.queue ??= []).push({ text: "so many friends this week! ♥", ms: 4500, cls: KEPT, perk: true });
+  }
+
+  // Tell the server the two pets met (top10 §6, the social meter): each counts the
+  // other once a day there, however many screens report it. Nobody's name goes.
+  _linkReport(host, guest) {
+    const a = host.ids?.["sensor.life_stage"];
+    const b = guest.ids?.["sensor.life_stage"];
+    if (!a || !b || a === b) return;
+    this._hass.callWS({ type: "virtual_pet/linked", entity_id: a, other: b }).catch(() => {
+      // an older integration has no meter: the link is the same
+    });
   }
 
   // One visit: the beam, the visit screen, the two lines, the guest's own slide.

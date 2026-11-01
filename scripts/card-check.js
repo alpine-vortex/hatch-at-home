@@ -1668,6 +1668,74 @@ async function main() {
     JSON.stringify(phoneAsk.yes.labels) === JSON.stringify(["yes ♥", "not now"]) && phoneAsk.callsAfterNo === 0 &&
     phoneAsk.calls.length === 1 && phoneAsk.calls[0].type === "notify_me" && phoneAsk.calls[0].enabled === true,
     JSON.stringify(phoneAsk));
+  // top10 6b: the social meter. "friends" on the status page from the server's
+  // social_level (hidden at 0, aria "friends this week: n of 10"); a link reports
+  // virtual_pet/linked with both pets; full hearts queue "so many friends this week! ♥"
+  // once a week on this device.
+  const social = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    const withLevel = (lvl) => {
+      el._state = (x, key) => {
+        const st = real.call(el, x, key);
+        return key === "sensor.life_stage" && st && x === s ? { ...st, attributes: { ...st.attributes, social_level: lvl } } : st;
+      };
+    };
+    const rowOf = () => [...s.status.querySelectorAll(".row")].find((r) => /friends/.test(r.textContent));
+    const out = {};
+    const wasSettings = s.settings;
+    s.settings = false; s.journal = false; s.finds = false; s.everyWorld = false;
+    try {
+      withLevel(0);
+      s.statusHtml = null;
+      el._renderStatus(s, []);
+      out.zero = !!rowOf();
+      withLevel(5);
+      s.statusHtml = null;
+      el._renderStatus(s, []);
+      out.five = { aria: rowOf()?.querySelector(".hearts")?.getAttribute("aria-label") || null,
+        full: rowOf()?.querySelectorAll("img[src*='stat_heart_full']").length, half: rowOf()?.querySelectorAll("img[src*='stat_heart_half']").length };
+      // The weekly line: once, then not again this week.
+      withLevel(10);
+      const monday = new Date();
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+      localStorage.removeItem(`hatch-social-full-${s.ids.device}-${monday.toDateString()}`);
+      const keep = { queue: s.queue, sayUntil: s.sayUntil, asleep: s.asleep, game: s.game };
+      Object.assign(s, { queue: [], sayUntil: 0, asleep: false, game: null });
+      el._socialFull(s);
+      out.first = s.queue.map((q) => q.text);
+      s.queue = [];
+      el._socialFull(s);
+      out.again = s.queue.length;
+      Object.assign(s, keep);
+      localStorage.removeItem(`hatch-social-full-${s.ids.device}-${monday.toDateString()}`);
+    } finally {
+      el._state = real;
+      s.settings = wasSettings;
+      s.statusHtml = null;
+    }
+    // The link's report, with the websocket stubbed.
+    const realWS = el._hass.callWS;
+    const sent = [];
+    el._hass.callWS = (msg) => { sent.push(msg); return Promise.resolve(null); };
+    try {
+      const other = el._slides.find((x) => x !== s && x.ids?.["sensor.life_stage"]);
+      if (other) el._linkReport(s, other);
+      out.report = sent.filter((m) => m.type === "virtual_pet/linked");
+      out.want = other ? [s.ids["sensor.life_stage"], other.ids["sensor.life_stage"]] : null;
+    } finally {
+      el._hass.callWS = realWS;
+    }
+    return out;
+  });
+  check("top10 6b: \"friends\" hidden at 0; at 5, two and a half hearts with its aria",
+    !social.zero && social.five.aria === "friends this week: 5 of 10" && social.five.full === 2 && social.five.half === 1, JSON.stringify(social));
+  check("top10 6b: full hearts say \"so many friends this week! ♥\" once a week",
+    JSON.stringify(social.first) === JSON.stringify(["so many friends this week! ♥"]) && social.again === 0, JSON.stringify(social));
+  if (social.want) {
+    check("top10 6b: a link reports virtual_pet/linked with both pets",
+      social.report.length === 1 && social.report[0].entity_id === social.want[0] && social.report[0].other === social.want[1], JSON.stringify(social.report));
+  }
   // Screen readers hear plain words: no hearts or notes; a bare heart is "thank you!".
   const heard = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const s = el._slides[el._index];

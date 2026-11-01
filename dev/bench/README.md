@@ -74,6 +74,7 @@ A shot (all optional):
 | `catch` | `far` or `near`: a Catch round started (set `config: {experimental_catch: true}`) and held there by moving its clock. With `motion: reduce` those are calm Catch's two steps. `catchSide: "left"|"right"` and `catchDecoy: true` force the round (a bee is a later round) |
 | `lcd`, `booted`, `mono` | per-browser settings, see below |
 | `senses` | the kinds the house shows the pet (`["weather", "tv"]`; `[]`: "just the clock"), for the sheet's "notices" row |
+| `social` | the social meter's level, 0-10 (`7`: three and a half hearts), for the status page's "friends" row |
 | `bigText` | `true` (`--big-text`): the "big text" switch on (larger words on the status box's pages) |
 | `classes` | an array of classes put on `.screen` last, before the transitions finish: `faded`, `raining`, `lit`... (the bench's `scene: "rain"` is woodland's rain backdrop without `raining`) |
 | `petClasses`, `petAt` | classes put on the pet itself (`["droop"]`), and `petAt` ms to pause its animation at, so a mid-motion frame is the same every run |

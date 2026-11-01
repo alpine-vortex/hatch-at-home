@@ -90,6 +90,7 @@
       // The shell the server would send (the lead pet): its pick, the finishes it may
       // wear and the locked ones with their stage. Left out, the card hides the row.
       if (i === 0 && shot.senses !== undefined) attrs.senses = shot.senses; // top10 2b: the kinds the house shows it
+      if (i === 0 && shot.social !== undefined) attrs.social_level = shot.social; // top10 §6: the social meter, 0-10
       if (i === 0 && shot.shellOptions !== undefined) {
         Object.assign(attrs, { shell_finish: shot.shellFinish ?? null, shell_finish_options: shot.shellOptions,
           shell_locked: shot.shellLocked || {} });

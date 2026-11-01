@@ -151,7 +151,14 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 
   A bond never changes the pet's stats: it's flavour. The status screen shows "you
   two" in five hearts.
-- **My day** (opt in in settings (the gear on the status screen), for yourself only): the pet notices your
+- **Friends this week.** Beside "you two", the status page shows "friends": five
+  hearts for the pet's week beyond the house. A world visitor counts when someone looks
+  in while it's there, and each neighbour it meets over the infrared link counts once a
+  day. It's a rolling week, so it fills and fades with the visits, and it changes
+  nothing about the pet: no stats, no points. A pet alone in the house gets a little
+  more from each visitor. At full hearts it says "so many friends this week! ♥" (once a
+  week), and a new egg starts its own. The row hides until there's a friend to show.
+- **My day** (turn it on in settings, the gear on the status screen; for yourself only): the pet notices your
   good days from the phones you signed in to the Home Assistant app with. It only
   ever says something when a day stands out for the better, and only to you, at most
   once a day; never a quiet day, a short night, a heart rate or a weight. The closer
