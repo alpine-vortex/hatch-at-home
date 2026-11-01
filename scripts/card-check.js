@@ -5841,6 +5841,9 @@ async function main() {
 
   }
   if (enter("ghost")) {
+  // The prelude turns the grid off; the lcd section turns it back on. Alone (gate --auto)
+  // the first shell would be checked with it off, so turn it on here.
+  await setLcd(true);
   for (const width of [420, 330]) {
     await page.setViewportSize({ width, height: 860 });
     await page.waitForTimeout(600);
@@ -8631,6 +8634,8 @@ async function main() {
       el._renderStatus(sl, []);
       return { s: Math.round((Date.now() - start) / 1000), bond: sl.mine?.bond, aimed: sl.mine?.wish_for_you,
         you: /you two/.test(sl.status.textContent), wish: sl.status.querySelector(".row")?.textContent.trim(),
+        // the wish's own row: a pet that is calling gets a "would like" row above it
+        wishRow: [...sl.status.querySelectorAll(".row")].find((r) => /^wish/.test(r.textContent.trim()))?.textContent.trim(),
         mark: window.__hatchMark, powered: sl.house?.powered_on?.at ?? null, visit: sl.house?.visit ?? null,
         basket: sl.house?.basket };
     }, seedPet);
@@ -8656,7 +8661,7 @@ async function main() {
       !!back.powered && back.powered !== poweredBefore && Math.abs(Date.now() - Date.parse(back.powered)) < 10 * 60000,
       JSON.stringify({ before: poweredBefore, after: back.powered }));
     check("P3a: the seeded wish is aimed at dev on dev's own card",
-      back.aimed === true && /play a game with you/.test(back.wish || ""), JSON.stringify(back));
+      back.aimed === true && /play a game with you/.test(back.wishRow || ""), JSON.stringify(back));
     // The same aimed wish on dev's own card turned shared screen: no "mine"
     // from the server, and the plain wish in the status and the first look.
     const sharedWish = await card.evaluate(async (el, e) => {
