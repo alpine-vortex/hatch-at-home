@@ -263,6 +263,20 @@ function monoOn() {
   }
 }
 
+// Big text: the status box's pages (status, journal, settings, picker) in larger
+// words; off unless turned on for this browser (top10 4b). It rides on the mono
+// screen's event and storage listeners (MONO_EVENT, _onMono): both are this
+// screen's look.
+const BIG_KEY = "hatch-big-text";
+
+function bigOn() {
+  try {
+    return localStorage.getItem(BIG_KEY) === "on";
+  } catch (err) {
+    return false;
+  }
+}
+
 // Holiday names: on unless turned off for this browser (only "off" is kept). Off,
 // no line names a festival: the season's dated lines go, and so does any line
 // FESTIVAL_NAMES matches (that pattern is the tag); the generic lines stay.
@@ -1207,6 +1221,11 @@ const QUESTIONS = {
   fav_season: { q: "what's your favourite season?", keep: true, answers: {
     spring: ["spring! flowers everywhere ♪"], summer: ["summer! sunshine! ☀"],
     autumn: ["autumn! crunchy leaves ♪"], winter: ["winter! snuggly ❄"] } },
+  // Asked once ever, after a missed call, of someone with the HA app (top10 1a; the
+  // server decides). "yes" turns on "notify me" for this pet (_ask).
+  phone: { q: "can I call your phone when I need you?", answers: {
+    yes: ["yay! I'll ring you ♥"], "not now": ["ok! it's in my settings if you change your mind"] },
+  label: (a) => (a === "yes" ? "yes ♥" : a) },
   dream: { q: "what should I dream about tonight?", keep: true, answers: {
     stars: ["the stars... ok!"], sea: ["the sea! ok!"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ ok!"] } },
   guess: { q: "rain or sun tomorrow?", keep: true, answers: {
@@ -1300,6 +1319,11 @@ const DREAMS = {
   flying: () => "I dreamed I could fly!",
   clouds: () => "I dreamed I napped on a cloud...",
   feast: (d, w) => `I dreamed about a mountain of ${w?.food || "snacks"}!`,
+  // Yesterday's world visitor (top10 6d), by its name in worlds.json; none known: no dream line.
+  visitor: (d, w, worlds) => {
+    const v = worlds?.[d.world]?.visitors?.find((x) => x.id === d.id);
+    return v?.name ? `I dreamed about the ${v.name}! ♪` : null;
+  },
 };
 const AWAY_NOTE_AFTER_MS = 3 * 3600 * 1000;
 // A bond with each person (only the viewer's own, from the private channel's
@@ -1328,6 +1352,7 @@ const momentKey = (m) => m && `${m.at}|${m.type}`;
 // question nothing below kept interrupts. 0 is the rest (a greeting, the mood line).
 const MINE = 4; // the viewer's own care press: never overwritten for MINE_MS
 const KEPT = 3; // never dropped, may wait
+const SOCIAL_MAX = 10; // the social meter's top (rates.SOCIAL_MAX): five hearts, in halves
 const BEAT = 2; // care by someone else, calls, sleep
 const FLAVOUR = 1; // may be dropped, never replayed as a barrage
 const MINE_MS = 3000;
@@ -2796,7 +2821,7 @@ const STYLE = `
      pixels), the unmet ones dark silhouettes with no name, the viewer's gifts with a ♥. */
   .jfoot { display: flex; justify-content: space-between; align-items: flex-end; }
   .jfoot .jlink { align-self: auto; }
-  .flink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
+  .flink, .wlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
     min-height: 44px; min-width: 44px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
   .fgrid { display: flex; flex-wrap: wrap; gap: 6px 8px; }
@@ -2810,6 +2835,15 @@ const STYLE = `
   ha-card.mono .ftile.locked img { opacity: .5; }
   .ftile .fheart { position: absolute; top: 0; right: 0; font-size: 12px; line-height: 1; }
   .jlist { font-size: 12px; opacity: .9; display: flex; flex-direction: column; gap: 3px; }
+  /* Big text (top10 4b): every size on the status box's pages, about 3 px up. */
+  ha-card.bigtext .status { font-size: 16px; }
+  ha-card.bigtext .status .log, ha-card.bigtext .status .jlist, ha-card.bigtext .status .photos,
+  ha-card.bigtext .status .status-feedback, ha-card.bigtext .status .sback, ha-card.bigtext .status .jlink,
+  ha-card.bigtext .status .flink, ha-card.bigtext .status .wlink, ha-card.bigtext .status .jolder,
+  ha-card.bigtext .status .fheart { font-size: 15px; }
+  ha-card.bigtext .status .sec, ha-card.bigtext .status .shellnote, ha-card.bigtext .status .jtile,
+  ha-card.bigtext .status .ftile, ha-card.bigtext .status .tile { font-size: 13px; }
+  ha-card.bigtext .status .tile .tsub { font-size: 12px; }
   .photos { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
   .prow { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px; }
   .print { margin: 0; flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
@@ -3046,6 +3080,7 @@ class HatchPetCard extends HTMLElement {
     window.addEventListener(MONO_EVENT, this._onMono);
     window.addEventListener("storage", this._onMonoStorage);
     this._card?.classList.toggle("mono", monoOn());
+    this._card?.classList.toggle("bigtext", bigOn());
     // Shared screen turned on or off while the card was away (its listeners
     // were off): catch up now, before a queued personal line is said.
     if (this._slides?.length && sharedScreen() !== this._sharedSeen) {
@@ -3351,6 +3386,7 @@ class HatchPetCard extends HTMLElement {
     this._card = root.querySelector("ha-card");
     this._card.classList.toggle("lcd-on", lcdOn());
     this._card.classList.toggle("mono", monoOn());
+    this._card.classList.toggle("bigtext", bigOn());
     // The shell hardware's art: ui/shell_<part>.png, drawn by art/shell-parts/make_parts.py (see REQUEST.md there).
     const ui = (name) => `url("${BASE}/ui/${name}.png?v=${VERSION}")`;
     for (const k of ["screw", "slot", "stripes", "fleck", "glare", "logo", "plate", "battery", "light_on", "light_off"])
@@ -3874,6 +3910,7 @@ class HatchPetCard extends HTMLElement {
     s.wasCalling = undefined; // a call already on doesn't chirp
     s.journal = false;
     s.finds = false;
+    s.everyWorld = false;
     s.settings = false;
     this._closePicker(s);
     this._shellSettled(s);
@@ -3942,6 +3979,7 @@ class HatchPetCard extends HTMLElement {
       slide.screen.querySelector(".linkhearts")?.remove(); // a visit's, mid-way
       slide.journal = false;
       slide.finds = false; // the settings sheet stays, without its personal rows
+      slide.everyWorld = false;
       this._closePicker(slide); // and without the picker (read-only here)
       slide.confirm = null; // an armed "forget" is a personal row
       slide.status.innerHTML = ""; // drawn again, without its personal rows
@@ -3982,13 +4020,14 @@ class HatchPetCard extends HTMLElement {
 
   _onMono = () => {
     this._card?.classList.toggle("mono", monoOn());
+    this._card?.classList.toggle("bigtext", bigOn());
     this._slides?.forEach((x) => { // an open sheet's row text and aria-pressed stay true
       if (x.screen.classList.contains("show-status") && !x.picker) this._renderStatus(x, this._state(x, "sensor.last_care")?.attributes.log || []);
     });
   };
 
   _onMonoStorage = (e) => {
-    if (e.key === MONO_KEY || e.key === null) this._onMono(); // null: storage cleared
+    if (e.key === MONO_KEY || e.key === BIG_KEY || e.key === null) this._onMono(); // null: storage cleared
   };
 
   // Take an open question off the screen (a game, another pet on this slide).
@@ -4683,6 +4722,7 @@ class HatchPetCard extends HTMLElement {
     s.screen.classList.toggle("show-status", open);
     s.journal = false;
     s.finds = false;
+    s.everyWorld = false;
     s.settings = false;
     this._closePicker(s);
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
@@ -4814,6 +4854,7 @@ class HatchPetCard extends HTMLElement {
         if (!this._booting) {
           this._sayQueued(s);
           this._wishMention(s);
+          this._socialFull(s);
         }
         this._seen(s);
         this._idle(s);
@@ -5451,9 +5492,9 @@ class HatchPetCard extends HTMLElement {
       if (note) lines.push([note, 5500, { away: true }]);
     }
     const dreamt = s.house?.dream || stage.dream; // a show or song's, from the house
-    const dream = dreamt && DREAMS[dreamt.kind];
-    if (dream && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
-      lines.push([dream(dreamt, this._words(s)), 5000]);
+    const dreamLine = dreamt && DREAMS[dreamt.kind]?.(dreamt, this._words(s), this._worlds);
+    if (dreamLine && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
+      lines.push([dreamLine, 5000]);
     }
     const wish = stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
     if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);
@@ -5889,9 +5930,20 @@ class HatchPetCard extends HTMLElement {
       else if (["tough", "not really"].includes(answer) && !isCalm) this._bondHearts(s);
       else this._animate(s, s.pet, "perk", 320);
       if (question.keep) this._keepAnswer(s, kind, answer, entity);
+      if (kind === "phone" && answer === "yes") {
+        this._setNotify(s, true).then((ok) => {
+          if (!ok && s.ids?.["sensor.life_stage"] === entity) this._write(s, "hm, that one slipped away ♪", 3500);
+        });
+      }
     });
     s.screen.append(box);
     s.askTimer = setTimeout(done, ASK_MS);
+    // The phone question is asked for good only once it's on screen (top10 1a): one
+    // dropped before this comes again another day. A websocket answer, off the bus.
+    if (kind === "phone") {
+      this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity, question: "phone", answer: "shown" })
+        .catch(() => {}); // an older server, or a lost reply: it may ask again, once
+    }
   }
 
   // A websocket command, not a service call: answers stay off the event bus.
@@ -6367,6 +6419,10 @@ class HatchPetCard extends HTMLElement {
   }
 
   _renderStatus(s, log) {
+    if (s.everyWorld) {
+      this._renderEveryWorld(s);
+      return;
+    }
     if (s.finds) {
       this._renderFinds(s);
       return;
@@ -6425,6 +6481,18 @@ class HatchPetCard extends HTMLElement {
       }
       return `<span class="hearts" role="img" aria-label="bond level ${level} of ${BOND.max}">${out}</span>`;
     };
+    // The social meter (top10 §6): the pet's week beyond the house, five hearts in
+    // halves; hidden at 0 and from an older server.
+    const social = Number(stageAttrs.social_level) || 0;
+    const socialHearts = (level) => {
+      const img = (n) => `<img src="${BASE}/ui/stat_heart_${n}.png?v=${VERSION}" alt="">`;
+      let out = "";
+      for (let i = 0; i < SOCIAL_MAX / 2; i++) {
+        const left = level - i * 2;
+        out += img(left >= 2 ? "full" : left === 1 ? "half" : "empty");
+      }
+      return `<span class="hearts" role="img" aria-label="friends this week: ${level} of ${SOCIAL_MAX}">${out}</span>`;
+    };
     const ic = (n) => pixelIcon(n, 18);
     const bar = (v) => v === null ? "–"
       : `<div class="bar" role="img" aria-label="${Math.round(v)} of 100"><div style="width:${v}%"></div></div>`;
@@ -6449,6 +6517,10 @@ class HatchPetCard extends HTMLElement {
     const want = s.asleep || moodNow?.state === "away" || isEgg ? null
       : (String(wantKey).startsWith("call_") && WANT_WORDS[wantKey]) || WANT_WORDS[wantsNow]
         || (isHeavy(value("weight")) ? "a game, to run it off" : null);
+    // How care is going, beside the upbringing it shapes (top10 4a; was in settings).
+    const careMisses = this._state(s, "sensor.care_misses");
+    const misses = row(null, "missed calls", `<span>${Number.parseFloat(careMisses?.state) || 0}</span>`)
+      + row(null, "ignored whines", `<span>${careMisses?.attributes.discipline_misses ?? 0}</span>`);
     // Today's wish comes first of the rest: it changes daily, the rest is there every day.
     const html = `
       <div class="shead">${this._gearButton()}</div>
@@ -6456,6 +6528,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
         ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
+      ${social > 0 && !isEgg ? row(null, "friends", socialHearts(social)) : ""}
       ${row("icon_feed", "hunger", hearts(value("hunger"), FEED_FULL_AT))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}
@@ -6467,6 +6540,7 @@ class HatchPetCard extends HTMLElement {
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
+      ${isEgg ? "" : misses}
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
       ${nextStage ? row(null, nextStage[0], `<span>${nextStage[1]}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
@@ -6498,18 +6572,25 @@ class HatchPetCard extends HTMLElement {
     const shellOptions = this._state(s, "sensor.life_stage")?.attributes.shell_finish_options;
     const shellName = escape(this._shellName(s, this._shellChoice(s)));
     const shellSwatch = `<span class="sw" style="background: ${finishSwatch(this._shellKey(s), s.world.shell?.color || "#e8834a")}"></span>`;
-    // The pet's group always renders: misses and whines (read-only, also on a shared screen),
-    // then the shell where the server offers it.
-    const missRows = row(null, "misses", `<span>${Number.parseFloat(this._state(s, "sensor.care_misses")?.state) || 0}</span>`)
-      + row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0}</span>`);
-    const shellRows = sharedScreen()
-      ? `<div class="sec">for the pet</div>
-      ${missRows}
-      ${Array.isArray(shellOptions) ? row(null, "shell", `<span class="shellro">${shellSwatch}${shellName}</span>`) + `
+    // What the house shows it (top10 2b): the kinds the server lists, never an
+    // entity; everyone sees it, and an admin gets a link to the options.
+    const senses = this._state(s, "sensor.life_stage")?.attributes.senses;
+    const notices = !Array.isArray(senses) ? ""
+      : row(null, "notices", `<span class="senses">${senses.length ? senses.map(escape).join(" · ") : "just the clock"}</span>`)
+        + (this._hass.user?.is_admin && !sharedScreen() ? `<button class="wlink connect">connect more ›</button>` : "");
+    // The pet's group: what it notices, then the shell, where the server offers it
+    // (read-only on a shared screen). Misses and whines moved to the status page
+    // (top10 4a), so an older server's sheet has no pet group at all.
+    const hasShell = Array.isArray(shellOptions);
+    const shellRows = !hasShell && !notices ? ""
+      : sharedScreen()
+        ? `<div class="sec">for the pet</div>
+      ${notices}
+      ${hasShell ? `${row(null, "shell", `<span class="shellro">${shellSwatch}${shellName}</span>`)}
       <div class="shellnote">ask a grown-up to change it</div>` : ""}`
-      : `<div class="sec">for ${escape(this._linkName(s))}</div>
-      ${missRows}
-      ${Array.isArray(shellOptions) ? row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`) : ""}`;
+        : `<div class="sec">for ${escape(this._linkName(s))}</div>
+      ${notices}
+      ${hasShell ? row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`) : ""}`;
     // Who each part changes: the pet (everyone), the viewer (follows their login),
     // or this browser.
     const html = `
@@ -6529,7 +6610,9 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "holiday names", `<span><button class="bell named" aria-label="holiday names" aria-pressed="${namedHolidays()}">${namedHolidays() ? "on" : "off"}</button></span>`)}
       ${row(null, "mono screen", `<span><button class="bell mono" aria-label="mono screen: ${monoOn() ? "on" : "off"}, change" aria-pressed="${monoOn()}">${monoOn() ? "on" : "off"}</button></span>`)}
+      ${row(null, "big text", `<span><button class="bell bigtext" aria-label="big text: larger words on this screen's pages" aria-pressed="${bigOn()}">${bigOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
+      <div class="shellnote sharednote">a family tablet? give it its own login, and we'll make friends ♥</div>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     s.status.querySelector(".sback").addEventListener("click", (e) => {
@@ -6550,6 +6633,13 @@ class HatchPetCard extends HTMLElement {
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
       s.status.querySelector(".pback")?.focus({ preventScroll: true });
+    });
+    // An admin's way to the pet's options (Settings → Devices & services → Virtual Pet).
+    s.status.querySelector(".connect")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      history.pushState(null, "", "/config/integrations/integration/virtual_pet");
+      window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
     });
     s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -6638,6 +6728,21 @@ class HatchPetCard extends HTMLElement {
       }
       this._card.classList.toggle("mono", on);
       window.dispatchEvent(new CustomEvent(MONO_EVENT)); // any other card on this page
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+    });
+    s.status.querySelector(".bell.bigtext").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const on = !bigOn();
+      try {
+        if (on) localStorage.setItem(BIG_KEY, "on");
+        else localStorage.removeItem(BIG_KEY);
+      } catch (err) {
+        this._statusMessage(s, "This browser can't save that setting.");
+        return;
+      }
+      this._card.classList.toggle("bigtext", on);
+      window.dispatchEvent(new CustomEvent(MONO_EVENT)); // any other card on this page (_onMono)
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
     s.status.querySelector(".bell.bdayphone")?.addEventListener("click", (e) => {
@@ -7010,7 +7115,7 @@ class HatchPetCard extends HTMLElement {
   // Phone notifications are per user: this only changes them for whoever is signed in.
   async _setNotify(s, enabled) {
     const id = s.ids?.["sensor.life_stage"];
-    if (!id) return;
+    if (!id) return false;
     const button = s.status.querySelector(".bell.notify");
     if (button) {
       button.classList.add("pending");
@@ -7022,6 +7127,7 @@ class HatchPetCard extends HTMLElement {
     try {
       await this._callOwn("notify_me", { entity_id: id, enabled });
       this._statusMessage(s, enabled ? "I'll ping your phone!" : "Phone pings off.");
+      return true;
     } catch (err) {
       if (s.mine) s.mine.notify_me = !enabled;
       if (button) {
@@ -7029,6 +7135,7 @@ class HatchPetCard extends HTMLElement {
         button.textContent = !enabled ? "on" : "off";
       }
       this._statusMessage(s, "That didn't work. Try again.");
+      return false;
     } finally {
       button?.classList.remove("pending");
     }
@@ -7132,13 +7239,15 @@ class HatchPetCard extends HTMLElement {
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
       <div class="jgrid">${tiles.join("")}</div>
+      <button class="wlink">every world ›</button>
       ${this._photoRow(s)}
       <div class="jlist">${olderLink}<div class="jmore"></div>${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
-      <div class="jfoot"><button class="jlink">‹ status</button><button class="flink">finds ›</button></div>
+      <div class="jfoot"><button class="jlink">‹ status</button><button class="flink">${findsShown() ? "finds" : "visitors"} ›</button></div>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     this._journalLink(s, false);
     this._findsLink(s, true);
+    this._everyWorldLink(s, true);
     const showOlder = () => {
       s.status.querySelector(".jmore").innerHTML = older.map(line).join("");
       s.status.querySelector(".jolder")?.remove();
@@ -7388,6 +7497,55 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
+  // --- Every world (top10 8a) ---------------------------------------------------
+  // Each world's creatures, one row a world: drawn and named if a pet on this card has
+  // raised it (any world: a device that changed world keeps its `raised`), "???" if
+  // not, as in the journal. Nothing locked, nothing counted (owner Q6), no new state.
+
+  // "every world ›" under the journal's grid (open) or "‹ journal" on the page (back).
+  _everyWorldLink(s, open) {
+    s.status.querySelector(".wlink")?.addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      this._tapped(e.currentTarget);
+      s.everyWorld = open;
+      s.journal = !open;
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      s.status.scrollTop = 0; // a new view starts at its top
+      s.status.querySelector(open ? ".wlink" : ".jlink")?.focus({ preventScroll: true });
+    });
+  }
+
+  async _renderEveryWorld(s) {
+    const foot = `<div class="jfoot"><button class="wlink">‹ journal</button></div>`;
+    const loading = `<div class="jhead"><span>every world</span><span>opening…</span></div>${foot}`;
+    if (this._setStatus(s, loading)) this._everyWorldLink(s, false);
+    const raised = new Set();
+    for (const other of this._slides) (this._state(other, "sensor.life_stage")?.attributes.raised || []).forEach((r) => raised.add(r));
+    const worlds = Object.entries(this._worlds || {});
+    // A creature whose species.json won't load isn't ready: no tile (never a broken image).
+    const names = {};
+    await Promise.all(worlds.flatMap(([, w]) => (w.roster || []).map((id) => loadJson(`sprites/${id}/species.json`)
+      .then((d) => { names[id] = d.name || id; }).catch(() => {}))));
+    if (!s.everyWorld) return; // closed (or back to the journal) while the names loaded
+    const rows = worlds.map(([, w]) => {
+      const tiles = (w.roster || []).filter((id) => names[id]).map((id) => {
+        const known = raised.has(id);
+        return `<div class="jtile${known ? "" : " locked"}">` +
+          `<img src="${BASE}/sprites/${id}/child_content_1.png?v=${VERSION}" alt="">` +
+          `<span>${known ? escape(names[id]).toLowerCase() : "???"}</span></div>`;
+      });
+      return tiles.length ? `<div class="sec">${escape(w.name || "")}</div><div class="jgrid">${tiles.join("")}</div>` : "";
+    });
+    const html = `
+      <div class="jhead"><span>every world</span></div>
+      ${rows.join("")}
+      ${foot}
+      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
+    if (!this._setStatus(s, html)) return;
+    this._everyWorldLink(s, false);
+    s.status.querySelectorAll(".sec, .jhead").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
+  }
+
   // --- The finds page (visitors v2 §4, V-D) --------------------------------------
   // This world's visitors and finds, read on open from virtual_pet/collection (never a
   // sensor) and kept only while the page is: never in localStorage. The viewer's gifts
@@ -7448,7 +7606,8 @@ class HatchPetCard extends HTMLElement {
     if (!data && !s.findsLoad) this._loadFinds(s); // dropped meanwhile (a shared-screen flip)
     const key = data?.reply?.world || s.worldKey;
     const world = this._worlds?.[key];
-    const head = `finds · ${escape(world?.name || this._worldName(s))}`;
+    // Named by what it shows: visitors only while FINDS_SHOWN is off (top10 7a).
+    const head = `${findsShown() ? "finds" : "visitors"} · ${escape(world?.name || this._worldName(s))}`;
     const foot = `<button class="flink">‹ journal</button>`;
     let html;
     if (!data) {
@@ -8914,7 +9073,30 @@ class HatchPetCard extends HTMLElement {
     const guest = this._linkPick(host);
     if (!guest) return;
     this._linkAt = now + lo + Math.random() * (hi - lo);
-    this._linkStart(host, guest);
+    if (this._linkStart(host, guest) !== false) this._linkReport(host, guest);
+  }
+
+  // The social meter full (top10 §6): said once a week per pet on this device,
+  // the week from Monday; nothing else on it changes the pet.
+  _socialFull(s) {
+    const level = this._state(s, "sensor.life_stage")?.attributes.social_level;
+    if (level !== SOCIAL_MAX || s.asleep || s.game || !s.ids?.device) return;
+    if (s.sayUntil > Date.now() || s.queue?.some((q) => lineClass(q) >= KEPT)) return;
+    const monday = new Date();
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    if (!oncePerDay(`social-full-${s.ids.device}`, monday)) return;
+    (s.queue ??= []).push({ text: "so many friends this week! ♥", ms: 4500, cls: KEPT, perk: true });
+  }
+
+  // Tell the server the two pets met (top10 §6, the social meter): each counts the
+  // other once a day there, however many screens report it. Nobody's name goes.
+  _linkReport(host, guest) {
+    const a = host.ids?.["sensor.life_stage"];
+    const b = guest.ids?.["sensor.life_stage"];
+    if (!a || !b || a === b) return;
+    this._hass.callWS({ type: "virtual_pet/linked", entity_id: a, other: b }).catch(() => {
+      // an older integration has no meter: the link is the same
+    });
   }
 
   // One visit: the beam, the visit screen, the two lines, the guest's own slide.

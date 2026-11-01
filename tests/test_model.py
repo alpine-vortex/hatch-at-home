@@ -2930,3 +2930,69 @@ def test_an_away_pet_does_not_become_sick():
     pet.away = True
     events = run(pet, start + 5 * HOUR)
     assert "became_sick" not in types(events)
+
+
+# --- The social meter (top10 §6) ------------------------------------------------
+
+
+def test_social_meter_counts_greeted_visitors_and_links_over_a_week() -> None:
+    pet = model.PetState.new("Pip", 0.0)
+    # A visit today, 10:00-13:00 (epoch seconds are only compared here).
+    pet.visit = {
+        "day": "2026-11-01",
+        "world": "woodland",
+        "id": "hedgehog",
+        "hours": "day",
+        "from": 1000.0,
+        "until": 2000.0,
+        "credited": False,
+    }
+    assert not model.social_greet(
+        pet, 999.0, "2026-11-01", "woodland"
+    )  # before it came
+    assert not model.social_greet(pet, 1500.0, "2026-11-01", "pond")  # another world's
+    assert model.social_greet(pet, 1500.0, "2026-11-01", "woodland")
+    assert not model.social_greet(pet, 1600.0, "2026-11-01", "woodland")  # once a day
+    # No link all week: the solo credit (a pet alone, or on a card of its own).
+    assert model.social_level(pet, "2026-11-01") == R.SOCIAL_VISITOR_SOLO
+    assert model.social_link(pet, "2026-11-01", "other-pet")
+    assert not model.social_link(pet, "2026-11-01", "other-pet")  # once a day each
+    # A link this week: the plain visitor credit plus the link.
+    assert model.social_level(pet, "2026-11-01") == R.SOCIAL_VISITOR + R.SOCIAL_LINK
+    # A rolling week: the day falls off on the eighth; the level never passes the cap.
+    assert model.social_level(pet, "2026-11-07") == R.SOCIAL_VISITOR + R.SOCIAL_LINK
+    assert model.social_level(pet, "2026-11-08") == 0
+    # Once the link is out of the week, a visitor counts solo again.
+    pet.social["2026-11-09"] = {"visitor": True, "links": []}
+    assert model.social_level(pet, "2026-11-09") == R.SOCIAL_VISITOR_SOLO
+    del pet.social["2026-11-09"]
+    for d in range(1, 8):
+        model.social_link(pet, f"2026-11-0{d}", "a")
+        model.social_link(pet, f"2026-11-0{d}", "b")
+    assert model.social_level(pet, "2026-11-07") == R.SOCIAL_MAX
+    # Writing a new day prunes the ones before the week (and any ahead of it).
+    pet.social["2026-12-25"] = {"visitor": True, "links": []}
+    model.social_link(pet, "2026-11-09", "a")
+    assert min(pet.social) >= "2026-11-03" and max(pet.social) == "2026-11-09"
+
+
+def test_social_days_load_checked_and_a_new_egg_starts_at_zero() -> None:
+    pet = model.PetState.new("Pip", 0.0)
+    data = pet.to_dict()
+    data["social"] = {
+        "2026-11-01": {"visitor": True, "links": ["a", "a", 3, "b"]},
+        "not a day": {"visitor": True},
+        "2026-11-02": "broken",
+        "2026-11-03": {"visitor": "yes", "links": "a"},
+    }
+    loaded = model.PetState.from_dict(data)
+    assert loaded.social == {
+        "2026-11-01": {"visitor": True, "links": ["a", "b"]},
+        "2026-11-03": {"visitor": False, "links": []},
+    }
+    assert model.PetState.from_dict({**data, "social": "junk"}).social == {}
+    # A new egg starts its own social life (owner S6).
+    parent = hatched(at(12), age_hours=ADULT + R.LAY_EGG_AFTER_ADULT_HOURS + 5)
+    model.social_link(parent, "2026-11-01", "a")
+    egg, _ = model.lay_egg(parent, at(12), random.Random(1))
+    assert egg is not parent and egg.social == {}

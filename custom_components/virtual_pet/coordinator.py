@@ -49,12 +49,18 @@ from .backup import (
     async_kept_backup,
 )
 from .const import (
+    CONF_AQI,
     CONF_AWAY_AFTER,
     CONF_BEDTIME,
+    CONF_BEDTIME_LIGHTS,
     CONF_CHORES,
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
     CONF_DASHBOARD,
+    CONF_FIREPLACE,
+    CONF_INDOOR_TEMP,
+    CONF_LUX,
+    CONF_MOON_ALTITUDE,
     CONF_MOON_ILLUMINATION,
     CONF_MOON_PHASE,
     CONF_MUSIC,
@@ -62,6 +68,7 @@ from .const import (
     CONF_NEXT_WORLD,
     CONF_PRIVACY,
     CONF_RAIN,
+    CONF_ROOM_LIGHTS,
     CONF_SITTER_SETTLES,
     CONF_SOLAR,
     CONF_SPECIES,
@@ -151,6 +158,20 @@ MOMENTS_KEPT = 10
 CELEBRATIONS = {"your_birthday", "pet_birthday", "birthday_friends", "friends_for"}
 # Moments a dream can be about, by the dream's kind. (Not news: it stays
 # cosmetic, and changes nothing that's saved.)
+# What the pet notices, as the card's "notices" row names it (top10 2a): a kind
+# shows once any of its options is mapped. Kinds only, never an entity: no
+# presence (zone) or motion, so the row never hints at who's home, and no bedtime
+# (it always has one).
+SENSES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("weather", (CONF_WEATHER, CONF_RAIN, CONF_SOLAR, CONF_INDOOR_TEMP, CONF_AQI)),
+    ("lights", (CONF_ROOM_LIGHTS, CONF_LUX, CONF_BEDTIME_LIGHTS)),
+    ("tv", (CONF_TV,)),
+    ("music", (CONF_MUSIC,)),
+    ("chores", (CONF_CHORES,)),
+    ("fireplace", (CONF_FIREPLACE,)),
+    ("moon", (CONF_MOON_PHASE, CONF_MOON_ILLUMINATION, CONF_MOON_ALTITUDE)),
+)
+
 DREAM_OF = {
     "first_snow": "snow_started",
     "wish_granted": "wish",
@@ -315,6 +336,26 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     def dashboard(self) -> str | None:
         """The dashboard a tap on this pet's notifications opens, if one is set."""
         return notify.dashboard_path(self.config_entry.options.get(CONF_DASHBOARD))
+
+    @property
+    def social_level(self) -> int:
+        """The social meter, 0-10 over the last week (top10 §6)."""
+        assert self.state is not None
+        return model.social_level(self.state, self._today(self._now())[0])
+
+    def social_link(self, other: str) -> None:
+        """The infrared link brought another pet of this house today."""
+        assert self.state is not None
+        if model.social_link(self.state, self._today(self._now())[0], other):
+            self._save()
+            self._publish()
+
+    @property
+    def senses(self) -> list[str]:
+        """The kinds of house signal mapped in the options (SENSES), never
+        which entities: for the card's "notices" row (top10 2a)."""
+        options = self.config_entry.options
+        return [kind for kind, keys in SENSES if any(options.get(k) for k in keys)]
 
     @property
     def privacy(self) -> bool:
@@ -1482,6 +1523,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         devices."""
         assert self.state is not None
         now = self._now()
+        # Someone looked in while the day's visitor was here: a greeted visitor
+        # for the social meter (top10 §6), whatever else this look counts for.
+        if self._awake() and model.social_greet(
+            self.state, now, self._today(now)[0], self.world
+        ):
+            self._save()
+            self._publish()
         person = self.people.person(user)
         last = self._visits.get(user, -1e12)
         just_home = person.get("arrived", 0) > last
@@ -1795,6 +1843,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         assert self.state is not None
         person = self.people.person(user)
         today, hour = self._today(now)
+        if self._phone_ask_due(user, person, today):
+            # Ahead of the day's questions: it matters now. It is the day's
+            # question, and asked for good only once the card says it showed it
+            # (async_answer "phone"): one the card dropped comes on a later day.
+            P.mark_asked(person, today, hour)
+            self.people.save()
+            return "phone"
         kind = P.choose_question(
             person,
             today,
@@ -1816,6 +1871,27 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._save()
         self.people.save()
         return kind
+
+    def _phone_ask_due(self, user: str, person: dict[str, Any], today: str) -> bool:
+        """Whether the pet asks this person "can I call your phone?" (top10 1a):
+        once ever, house-wide (`phone_asked` in the people store; "forget my
+        data" clears it); only with the Home Assistant app signed in as them
+        (their own phones, never anyone else's); not if they already get this
+        pet's calls; and only after a missed call, or while a real call is open."""
+        state = self.state
+        assert state is not None
+        if (
+            person.get("phone_asked")
+            or (person.get("asked") or {}).get("day")
+            == today  # a question today already
+            or user in state.notify_users
+            or model.life_stage(state) == "egg"
+        ):
+            return False
+        call = state.call
+        if not state.recent_misses and (call is None or call.reason == "fake"):
+            return False
+        return bool(notify.phones(self.hass, user))
 
     def _pet_once(self, user: str, today: str) -> tuple[str, ...]:
         """The pet's own one-time questions still open for this person: its
@@ -1863,6 +1939,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return
         if answer not in P.ANSWERS.get(question, ()):
             raise ValueError(f"{answer} isn't an answer to {question}")
+        if question == "phone":
+            # Shown on their card: asked for good ("yes" also turns notify me on,
+            # from the card). Kept in the people store; "forget my data" clears it.
+            self.people.person(user)["phone_asked"] = True
+            self.people.save()
+            return
         if question == "catchphrase":
             # Only from the close friend it asked, while the question is open:
             # it's the pet's, and everyone hears it.

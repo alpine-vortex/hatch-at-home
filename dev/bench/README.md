@@ -24,6 +24,8 @@ node scripts/bench.js --preset visitors   # 28 shots at 330: every world visitor
 node scripts/bench.js --preset finds      # 74 shots: every find at reveal size, the baskets, sparkle, V3, baby, calm, compact
 node scripts/bench.js --preset gifts      # 11 shots: a gift's first look, V5 (longest name), V6 made/found, V7 baby, calm, compact, asleep
 node scripts/bench.js --preset collection # 21 shots: the finds page, each world at 420/330, shared, empty, all met, mono, an older server
+node scripts/bench.js --preset bigtext    # 18 shots: "big text" on, every status-box page at 420, 330 and 260
+node scripts/bench.js --preset everyworld # 10 shots: the journal's "every world" page, none / some / all raised, 420 and 330, big text
 node scripts/bench.js --preset dig        # 31 shots: the Berry dig at 420/330/300, calm bee, the picker at 300-420 (with Catch too)
 node scripts/bench.js --preset mono       # the mono screen: 2498 shots, ~2.5 min, plus the pass rule
 ```
@@ -56,7 +58,7 @@ A shot (all optional):
 | `season` | `false` (default: no seasonal touches), `"auto"` (by `time`), or a season key such as `halloween` |
 | `time` | pinned clock, ISO (default `2026-06-15T12:00:00Z`; the browser runs in UTC) |
 | `width` | card width in px (420, or 330 for the compact layout); `dpr` pixel ratio |
-| `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `picker` (the sheet's shell picker; needs `shellOptions`), `journal` (see below), `collection` (the journal's "finds ›" page; see `collection`), `games` (game picker) |
+| `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `picker` (the sheet's shell picker; needs `shellOptions`), `journal` (see below), `everyworld` (the journal's "every world ›" page; `journal: {raised}` sets what's drawn), `collection` (the journal's "finds ›" page; see `collection`), `games` (game picker) |
 | `shellOptions`, `shellFinish`, `shellLocked` | the lead pet's `shell_finish_options` (finish keys it may wear), `shell_finish` (its pick, default none: the world's own) and `shell_locked` (`{key: stage}`). Without `shellOptions` the card has no shell row, as with an older server |
 | `preview` | in the picker, the tile tapped: that finish on the live shell, unsaved (`""` is the world's own) |
 | `scroll` | a selector in the status box brought into view (the picker scrolls), e.g. `.tile.now` or `.sec[data-group="specials"]` (its top just under the back row) |
@@ -73,6 +75,9 @@ A shot (all optional):
 | `game`, `digReplies`, `digTaps` | `game: "dig"`: a Berry dig started through the picker, answered by `digReplies` (play_game replies in order; default: round 2, 2 banked, basket 2), then `digTaps` (`"dig"`/`"keep"`) played; held on the last reply (a bee still shows) |
 | `catch` | `far` or `near`: a Catch round started (set `config: {experimental_catch: true}`) and held there by moving its clock. With `motion: reduce` those are calm Catch's two steps. `catchSide: "left"|"right"` and `catchDecoy: true` force the round (a bee is a later round) |
 | `lcd`, `booted`, `mono` | per-browser settings, see below |
+| `senses` | the kinds the house shows the pet (`["weather", "tv"]`; `[]`: "just the clock"), for the sheet's "notices" row |
+| `social` | the social meter's level, 0-10 (`7`: three and a half hearts), for the status page's "friends" row |
+| `bigText` | `true` (`--big-text`): the "big text" switch on (larger words on the status box's pages) |
 | `classes` | an array of classes put on `.screen` last, before the transitions finish: `faded`, `raining`, `lit`... (the bench's `scene: "rain"` is woodland's rain backdrop without `raining`) |
 | `petClasses`, `petAt` | classes put on the pet itself (`["droop"]`), and `petAt` ms to pause its animation at, so a mid-motion frame is the same every run |
 | `petStretch` | a mockup only (gaps-seams Q2): the pet drawn that many times wider (`1.06`), its height kept, over the species' own scale |

@@ -91,6 +91,8 @@
       }
       // The shell the server would send (the lead pet): its pick, the finishes it may
       // wear and the locked ones with their stage. Left out, the card hides the row.
+      if (i === 0 && shot.senses !== undefined) attrs.senses = shot.senses; // top10 2b: the kinds the house shows it
+      if (i === 0 && shot.social !== undefined) attrs.social_level = shot.social; // top10 §6: the social meter, 0-10
       if (i === 0 && shot.shellOptions !== undefined) {
         Object.assign(attrs, { shell_finish: shot.shellFinish ?? null, shell_finish_options: shot.shellOptions,
           shell_locked: shot.shellLocked || {} });
@@ -418,6 +420,8 @@
       // `preview`: a tile tapped (its finish on the live shell, unsaved); "" is the world's own.
       if (shot.preview !== undefined) root.querySelector(`.tile[data-finish="${shot.preview}"]`).click();
     }
+    // `scrollEnd` on the status box's own views: its end (the bigtext preset's status-end).
+    if (shot.scrollEnd && ["status", "settings", "picker"].includes(shot.view)) cur.status.scrollTop = cur.status.scrollHeight;
     // `scroll`: a selector in the status box brought into view (the picker's list scrolls).
     if (shot.scroll) {
       const box = cur.status;
@@ -431,6 +435,16 @@
       // The journal loads the species names first: wait for its tiles.
       // (Date is pinned, so count the tries instead of reading the clock.)
       for (let n = 0; !root.querySelector(".jgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+    }
+    // The journal's "every world ›" page (top10 8a); `journal: {raised: [..]}` sets what's drawn.
+    if (shot.view === "everyworld") {
+      root.querySelector(".statusbtn").click();
+      root.querySelector(".jlink").click();
+      for (let n = 0; !root.querySelector(".wlink") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+      root.querySelector(".wlink").click();
+      for (let n = 0; !root.querySelector(".jgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+      await Promise.all([...root.querySelectorAll(".jgrid img")].map((img) => img.decode().catch(() => {})));
+      if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight;
     }
     if (shot.view === "collection") {
       root.querySelector(".statusbtn").click();
