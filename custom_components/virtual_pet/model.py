@@ -2497,6 +2497,9 @@ def daily_visit(
     visitor's gift, not the pet's find). True if the save changed."""
     changed = credit_visit(state, now, world)
     visit = live_visit(state, world)
+    if changed and visit:
+        # Tonight it may dream of the visitor (top10 6d; other seeds come first).
+        dream_seed(state, {"kind": "visitor", "id": visit["id"], "world": world}, now)
     if changed and finds is not None and rng.random() < R.VISIT_LEAVES_FIND:
         leave_find(state, visit, visitors, finds, known or {}, rng)
     if visit and visit.get("day") == today:
@@ -2874,7 +2877,8 @@ def dream_on_waking(
         }
         return [{"type": "dreamed", "kind": "picked"}]
     if fresh:
-        seed = rng.choice(fresh)
+        # A visitor's dream only when nothing else happened (top10 6d).
+        seed = rng.choice([s for s in fresh if s.get("kind") != "visitor"] or fresh)
         state.dream = {k: v for k, v in seed.items() if k != "at"} | {"day": today}
     elif rng.random() < R.DREAM_PLAIN_CHANCE:
         state.dream = {"kind": rng.choice(["flying", "clouds", "feast"]), "day": today}

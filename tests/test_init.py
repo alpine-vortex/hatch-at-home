@@ -3831,3 +3831,28 @@ async def test_social_meter_links_and_a_greeted_visitor(
         hass, hass.config_entries.async_get_entry("test_pet")
     )
     assert diag["pet"]["social"] == "**REDACTED**"
+
+
+async def test_a_visitor_dream_names_its_visitor_and_no_other_dream_grows(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    """top10 6d: the life stage's dream carries a visitor's id and world (nobody's);
+    every other dream stays its kind only."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    today = dt_util.now().date().isoformat()
+
+    def shown(dream: dict[str, Any]) -> Any:
+        coordinator.state.dream = {**dream, "day": today}
+        coordinator.async_set_updated_data(coordinator.state)
+        return hass.states.get("sensor.pip_life_stage").attributes["dream"]
+
+    assert shown({"kind": "visitor", "id": "chickadee", "world": "woodland"}) == {
+        "kind": "visitor",
+        "id": "chickadee",
+        "world": "woodland",
+    }
+    assert shown({"kind": "picked", "pick": "sea", "user": "abc", "id": "x"}) == {
+        "kind": "picked"
+    }

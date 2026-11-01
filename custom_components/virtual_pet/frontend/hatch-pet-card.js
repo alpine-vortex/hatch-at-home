@@ -1249,6 +1249,11 @@ const DREAMS = {
   flying: () => "I dreamed I could fly!",
   clouds: () => "I dreamed I napped on a cloud...",
   feast: (d, w) => `I dreamed about a mountain of ${w?.food || "snacks"}!`,
+  // Yesterday's world visitor (top10 6d), by its name in worlds.json; none known: no dream line.
+  visitor: (d, w, worlds) => {
+    const v = worlds?.[d.world]?.visitors?.find((x) => x.id === d.id);
+    return v?.name ? `I dreamed about the ${v.name}! ♪` : null;
+  },
 };
 const AWAY_NOTE_AFTER_MS = 3 * 3600 * 1000;
 // A bond with each person (only the viewer's own, from the private channel's
@@ -5362,9 +5367,9 @@ class HatchPetCard extends HTMLElement {
       if (note) lines.push([note, 5500, { away: true }]);
     }
     const dreamt = s.house?.dream || stage.dream; // a show or song's, from the house
-    const dream = dreamt && DREAMS[dreamt.kind];
-    if (dream && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
-      lines.push([dream(dreamt, this._words(s)), 5000]);
+    const dreamLine = dreamt && DREAMS[dreamt.kind]?.(dreamt, this._words(s), this._worlds);
+    if (dreamLine && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
+      lines.push([dreamLine, 5000]);
     }
     const wish = stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
     if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);

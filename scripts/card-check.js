@@ -3336,6 +3336,29 @@ async function main() {
   });
   check("P3c: a show's dream comes from house.dream, once",
     !dreamAgain.some((t) => /dreamed/.test(t)), JSON.stringify(dreamAgain));
+  // top10 6d: a visitor's dream names it from worlds.json; one this card doesn't know
+  // says no dream line at all.
+  const visitorDream = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const said = (dream) => {
+      for (const k of Object.keys(localStorage)) if (/^hatch-dream-/.test(k)) localStorage.removeItem(k);
+      s.lookedFirst = false; s.queue = [];
+      s.house = { ...(s.house || {}), dream };
+      el._firstLook(s);
+      const out = s.queue.map((q) => q.text).filter((t) => /dreamed/.test(t));
+      s.queue = []; s.sayUntil = 0;
+      return out;
+    };
+    try {
+      return { known: said({ kind: "visitor", id: "stellersjay", world: "woodland" }),
+        unknown: said({ kind: "visitor", id: "nobody", world: "woodland" }) };
+    } finally {
+      s.house = { ...(s.house || {}), dream: null };
+    }
+  });
+  check("top10 6d: a visitor's dream names it; an unknown one says nothing",
+    JSON.stringify(visitorDream.known) === JSON.stringify(["I dreamed about the Steller's jay! ♪"]) && visitorDream.unknown.length === 0,
+    JSON.stringify(visitorDream));
   // P3c: the recap's TV and music come from the title-less public tv_on/music_on.
   const recapAt = new Date(Date.now() - 1800 * 1000).toISOString();
   await inject(pet["sensor.last_care"], {
