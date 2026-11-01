@@ -8,15 +8,22 @@ personalities and The Sims' traits, emotions and wants.
 Draft 1 was written for an adversarial audit by a separate scout. **Draft 2** folds
 in that audit (18 findings) and the owner's answers of 2026-10-28; the table at the
 end ("The audit of draft 1") wins where it differs from the sections above.
-**Status: P1 (the type) is merged (PR #36) and pre-released as 0.35.0b1.
-P2a (its voice: hellos, the reveal, the five moments) is built as 0.35.0b2**
-(crew branch `crew/hatch-at-home-s2423-personality-p2a-each-type-s-he`,
-2026-10-28; card only; not yet audited, PR'd or released). **P2b (idle and mood
-lines), the upbringing lines and P3 (idle manner, with 3c's praised move) are built**
-(crew branch `crew/hatch-at-home-s2550-personality-p2b-upbringing-lin`, 2026-10-31;
-card only, three commits, partial card-check `types,react,pat` green; not yet
-gated, PR'd or released). P4 (Assist data and LLM voice notes, server only) is built
-(crew branch `crew/hatch-at-home-s2556-personality-p4-assist-data-llm`, 2026-10-31). The owner approved the lines' tables on 2026-10-28; P2a ships its tables
+**Status (reconciled 2026-10-31 against git): every phase in the table is built.**
+- **Released:** P1 (PR #36, 0.35.0b1, in 0.35.0) and P2a (PR #37, `7ae0b7d2`, 0.35.0b2,
+  in 0.35.0).
+- **On main, unreleased (batch 5):** P2b `9817d6ab` (idle and mood lines), the
+  upbringing lines `4b6906d8`, P3 `0480aa53` (idle manner; praise follows the type's row).
+- **Batch 6 (`fm-batch6c`, gating; release 0.39.0 follows):** P4 `0cdf6eed` (status data
+  carries `personality`; the LLM prompt gets the eight voice notes).
+- **Left:** only "Later: kindred pairs". Its gate ("when visits are built") is now met by
+  the infrared link (device charm D6, `0ee886f`, 0.36.0), and it is the same work as
+  device charm's "persona link-line variants (later)". Plan the two together.
+- **Contradiction, not resolved here:** the paragraph below says the owner approved the
+  lines' tables on 2026-10-28 and the phases shipped them verbatim, but "Still for the
+  owner: the lines" (in "Decided and still open") says all 307 are unapproved proposals.
+  The owner should say which holds (next-stages plan, question list).
+
+The owner approved the lines' tables on 2026-10-28; P2a ships its tables
 verbatim. **Every line in this file is a proposal for the owner, not approved
 copy.** All lines are in the tables under "The lines"; none appears anywhere else.
 The phases are separate PRs, each with its own audit, as the owner works.
@@ -605,7 +612,7 @@ The notes are softened from draft 1 ("lots of exclamation marks", "dry",
 
 ### Pets meeting each other (later)
 
-When visits (`plan-2026-10-28-daily-checkins.md` item 5) are built: every pair gets
+When visits (`plan-2026-10-28-daily-checkins.md` item 5) are built (*2026-10-31: they are, as the infrared link, device charm D6; this is now the same slice as device charm's persona link-line variants*): every pair gets
 along. AC's counterpart pairs become **kindred pairs** that get one extra line
 when they meet (written with item 5, not here): mellow and sweet, bouncy and starry, old soul
 and fancy (cranky and snooty), charming and plucky (AC's two later types, paired
@@ -735,7 +742,7 @@ checks.
 | **Upbringing lines** | the three upbringings' lines at the first look, at most weekly | S | P1 | a check that an adult gets one at most once a week, and a baby never |
 | **P3. Its manner** | per-type move weights in `_idle` | S | P1 | the stubbed-random and reduced-motion checks green |
 | **P4. Assist** | `personality` in the status intent's data, the LLM prompt's voice notes | S | P1 | P4 pytest green |
-| Later | Kindred pairs when pets visit each other | with item 5 | visits built | planned with item 5 |
+| Later | Kindred pairs when pets visit each other | with item 5 | visits built (**met 2026-10-31**: the infrared link, device charm D6, 0.36.0) | planned with device charm's persona link lines |
 
 **PRs vs releases** (decided, Q10): each row above is its own PR. Releases: P1
 alone (it changes the save), then the rest together or as they're ready.
