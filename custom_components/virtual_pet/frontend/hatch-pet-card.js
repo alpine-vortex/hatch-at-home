@@ -663,6 +663,17 @@ const FIND_LINES = {
 const FIND_STEP_MS = 2500; // the reveal: one find each
 const FIND_LINE_MS = 2200; // its line, gone before the next find's
 const FOUND_BITS = 3; // the away note's "found <a find>" bits, newest first
+// Gifts (plan visitors v2 §5, §7 V5-V7): said once, on the receiver's own screen, at a
+// first look. V5 names the find (its `name`, so "message in a bottle" is 40 characters);
+// a gift-only find has no name in the line: "made" for the three in GIFT_MADE, "found"
+// for the other three (V6). A baby says BABY.gift (V7). No personality words, no nickname.
+const GIFT_MADE = ["acorncup", "knittedheart", "paperboat"];
+const GIFT_LINES = {
+  find: (name) => `saved this ${name} for you ♥`,
+  made: "made this for you ♥",
+  found: "found this for you ♥",
+};
+const GIFT_LINE_MS = 5000; // the line, and the pop above the pet with it
 // A find in worlds.json ({id, name, a, ...}), or null for one this card doesn't know.
 const findOf = (worlds, world, id) => (Array.isArray(worlds?.[world]?.finds) &&
   worlds[world].finds.find((f) => f?.id === id)) || null;
@@ -843,6 +854,7 @@ const BABY = {
   "care_miss": { baby: ["oh! hi hi ♥"] },
   "visit": { baby: ["hi hi!", "oh! hi hi ♥", "yay yay!", "hehe!"] }, // a world visitor (any of them)
   "find": { baby: ["yay yay!", "hehe!"] }, // a find in the basket's reveal: visit's own, not its greetings
+  "gift": { baby: ["for you! ♥"] }, // a gift at the first look (V7), any find
   // The infrared link (_linkStart): host greets the guest by name, the guest replies with the host's.
   "link_host": { baby: [(n) => `hi hi, ${n}! ♪`, (n) => `${n}! yay yay!`], child: [(n) => `hi, ${n}! hello ♪`] },
   "link_guest": { baby: [(n) => `hi hi, ${n}! ♪`], child: [(n) => `hi hi, ${n}! ♪`] },
@@ -2229,7 +2241,13 @@ const STYLE = `
     margin-left: calc(var(--px, 2px) * -8); image-rendering: pixelated; }
   .screen .reveal .rf.pop { animation: pop .3s ease-out; transform-origin: 50% 100%; }
   .screen .reveal .burst { top: auto; bottom: 90%; }
-  .compact .screen .basket, .compact .screen .reveal { display: none; }
+  .compact .screen .basket, .compact .screen .reveal:not(.gift) { display: none; }
+  /* A gift (visitors v2 §5): the find alone, 16 cells, no basket, up by the pet's head on
+     the right: straight above the pet is the bubble's (left-anchored, up to 69% wide),
+     where its line is said. Shown in compact too: it needs no basket's room. */
+  .screen .reveal.gift { left: auto; right: calc(6% + var(--edge, 0%)); bottom: 46%;
+    width: calc(var(--px, 2px) * 16); }
+  .screen .reveal.gift .rf { position: static; display: block; width: 100%; margin: 0; }
   .season .bunting { position: absolute; top: calc(var(--edge, 0%) * .3); left: var(--edge, 0%);
     right: var(--edge, 0%); height: 8.4%;
     background-repeat: repeat-x; background-size: 18.75% 100%; image-rendering: pixelated; }
@@ -2853,7 +2871,16 @@ class HatchPetCard extends HTMLElement {
 
   // A hidden tab: lines are said whole, and babbles stop.
   _onHidden = () => {
-    if (document.hidden) (this._slides || []).forEach((x) => this._stopTyping(x));
+    if (document.hidden) {
+      (this._slides || []).forEach((x) => this._stopTyping(x));
+      this._hiddenAt ??= Date.now();
+      return;
+    }
+    // Back after a long while (owner Q1): a gift waiting is said, as at a first look.
+    if (this._hiddenAt && Date.now() - this._hiddenAt >= AWAY_NOTE_AFTER_MS) {
+      (this._slides || []).forEach((x) => { x.giftAgain = true; });
+    }
+    this._hiddenAt = null;
   };
 
   connectedCallback() {
@@ -2910,6 +2937,7 @@ class HatchPetCard extends HTMLElement {
       this._powerEnd(s);
       s.powerPending = null;
       this._dropPhotos(s);
+      this._giftPopEnd(s); // a take on its way, or its line, is still said on return
       this._unsubscribe(s);
     }
   }
@@ -3700,8 +3728,10 @@ class HatchPetCard extends HTMLElement {
     s.collecting = false; // a reply on its way is the last pet's: dropped
     s.visitedAt = 0;
     s.lookedFirst = false;
+    s.giftAgain = false;
     s.wishDay = null;
     this._dropPhotos(s);
+    this._dropGift(s);
     // Its other timers, and what each would have tidied away.
     clearTimeout(s.breezeTimer);
     s.screen?.classList.remove("breezy");
@@ -3742,6 +3772,7 @@ class HatchPetCard extends HTMLElement {
       this._clearAsk(slide);
       slide.queue = [];
       this._dropPhotos(slide);
+      this._dropGift(slide); // a take on its way is dropped unsaid; the pop goes
       this._stopTyping(slide); // writes the whole line in, so it's cleared after
       slide.bubble.textContent = "";
       slide.plain = undefined;
@@ -4607,6 +4638,7 @@ class HatchPetCard extends HTMLElement {
         if (!this._booting) this._greet(s); // the boot screen waits: only the speaking does
         this._powerTick(s);
         this._firstLook(s); // before the visit: it tells the server what's queued
+        this._giftReturn(s);
         this._visit(s);
         if (!this._booting) {
           this._sayQueued(s);
@@ -5248,15 +5280,115 @@ class HatchPetCard extends HTMLElement {
     // Last, and only if there is room: an adult on how it was raised, once a week.
     const raised = this._state(s, "sensor.life_stage")?.state === "adult" && UPBRINGING_LINES[stage.upbringing];
     if (raised && lines.length < FIRST_LOOK_LINES && upbringingDue(device)) lines.push([raised, 5000]);
+    // Then a gift waiting for the viewer (visitors v2 §5): its slot is kept here, as the
+    // reply that says it is async; it wins over the missed visitor (review Q3).
+    const gift = this._giftDue(s) && lines.length < FIRST_LOOK_LINES;
+    const room = FIRST_LOOK_LINES - (gift ? 1 : 0);
     // Very last, flavour: today's visitor came and went with nobody here to see it
     // (its window over, the day's visit flag unset). Said once, and the flag used up,
     // so the visit can't also play; only with room, so it never pushes a line out.
     const missed = this._visitorMissed(s);
-    if (missed && lines.length < FIRST_LOOK_LINES && oncePerDay(`visit-${device}`, this._visitDay(s))) {
+    if (missed && lines.length < room && oncePerDay(`visit-${device}`, this._visitDay(s))) {
       const baby = this._babyStage(s) === "baby";
       lines.push([baby ? "hi hi! ♪" : missed.catchup || `a ${missed.name} came by today ♪`, 4500, { cls: FLAVOUR }]);
     }
     for (const [text, ms, opts] of lines.slice(0, FIRST_LOOK_LINES)) this._queue(s, text, ms, opts);
+    s.giftAgain = false; // this look is the one a tab coming back would have had
+    if (gift) this._giftTake(s);
+  }
+
+  // --- Gifts (plan visitors v2 §5) ----------------------------------------------
+  // Only the viewer's own `mine.gift`, never on a shared screen (there it waits), and
+  // nothing of it in localStorage. Said at a first look, or when the tab comes back
+  // after being hidden at least AWAY_NOTE_AFTER_MS (owner Q1); never while watching.
+
+  _giftDue(s) {
+    return !!s.mine?.gift && !sharedScreen() && !s.gifting;
+  }
+
+  // The take: one virtual_pet/collect {gift}, and only a non-empty reply speaks (another
+  // screen of the same person may have taken it: {gift: null}). The reply alone decides:
+  // the server's push of mine.gift = null to this screen arrives before it. An error (an
+  // older server, or `shared`) is no gift.
+  async _giftTake(s) {
+    const entity = s.ids?.["sensor.life_stage"];
+    if (!entity || !this._hass) return;
+    s.gifting = true;
+    const epoch = s.giftEpoch = (s.giftEpoch || 0) + 1;
+    let gift = null;
+    try {
+      const reply = await this._hass.callWS({ type: "virtual_pet/collect", entity_id: entity, gift: true, shared: false });
+      gift = reply?.gift || null;
+    } catch (err) {
+      console.warn("hatch-pet-card: the gift", err?.message || err);
+    }
+    if (s.giftEpoch !== epoch || s.ids?.["sensor.life_stage"] !== entity) return; // dropped meanwhile
+    s.gifting = false;
+    const find = gift && typeof gift.world === "string" && findOf(this._worlds, gift.world, gift.id);
+    if (!find || sharedScreen()) return; // one this card doesn't know: nothing
+    const g = { id: find.id, world: gift.world };
+    this._queue(s, this._giftLine(s, find), GIFT_LINE_MS, {
+      type: "gift", still: () => !sharedScreen(), then: () => this._giftPop(s, g),
+    });
+  }
+
+  // V5 for an ordinary find, V6 for a gift-only one, V7 (BABY.gift) for a baby.
+  _giftLine(s, find) {
+    const normal = !find.gift_only ? GIFT_LINES.find(find.name)
+      : GIFT_MADE.includes(find.id) ? GIFT_LINES.made : GIFT_LINES.found;
+    const baby = this._babySet(s, "gift");
+    return baby ? pick(baby) : normal;
+  }
+
+  // The gift pops up above the pet as its line is said (a reveal's look, with no basket,
+  // the basket left as it is, no sparkle); still under reduced motion. Gone with the line.
+  _giftPop(s, g) {
+    this._giftPopEnd(s);
+    if (sharedScreen() || !s.screen) return;
+    const el = document.createElement("div");
+    el.className = "reveal gift";
+    el.innerHTML = '<img class="rf" alt="">';
+    const img = el.firstChild;
+    img.src = `${BASE}/ui/find_${g.world}_${g.id}.png?v=${VERSION}`;
+    img.dataset.find = `${g.world}/${g.id}`;
+    if (!calm()) img.classList.add("pop");
+    s.screen.append(el);
+    const until = Date.now() + GIFT_LINE_MS;
+    const P = s.giftPop = { el, until, timer: setTimeout(() => this._giftPopEnd(s), GIFT_LINE_MS) };
+    if (!(s.flairUntil > until)) s.flairUntil = P.until; // a pat wiggles; nothing else starts
+    if (!(s.visitUntil > until)) s.visitUntil = P.until;
+  }
+
+  // The pop gone (its line's time is up, or the slide's gift is dropped).
+  _giftPopEnd(s) {
+    const P = s.giftPop;
+    if (P) {
+      s.giftPop = null;
+      clearTimeout(P.timer);
+      P.el.remove();
+      if (s.flairUntil === P.until) s.flairUntil = 0;
+      if (s.visitUntil === P.until) s.visitUntil = 0;
+    }
+  }
+
+  // The gift's state on a slide forgotten: the pop, its line, and a take still on its
+  // way (its reply is dropped). On a shared screen, another pet, or the card leaving.
+  _dropGift(s) {
+    this._giftPopEnd(s);
+    s.giftEpoch = (s.giftEpoch || 0) + 1;
+    s.gifting = false;
+    if (s.queue?.length) s.queue = s.queue.filter((q) => q.type !== "gift");
+  }
+
+  // Owner Q1: the tab came back after being hidden at least AWAY_NOTE_AFTER_MS, and a
+  // gift waits: taken now, under the first look's own conditions (each tick until they
+  // hold, for the slide on show). A first look in between uses it up.
+  _giftReturn(s) {
+    if (!s.giftAgain || !s.lookedFirst || !this._channelHeard(s)) return;
+    const away = this._state(s, "sensor.mood")?.state === "away";
+    if (!s.species || s.asleep || away || this._eggMinutes(this._state(s, "sensor.life_stage")) !== null) return;
+    s.giftAgain = false;
+    if (this._giftDue(s)) this._giftTake(s);
   }
 
   // Each "came home" is welcomed once in this browser, by any pet (seen live,
@@ -8976,6 +9108,8 @@ HatchPetCard.seasons = SEASONS;
 HatchPetCard.hanukkah = hanukkah;
 HatchPetCard.seasonLines = seasonLines;
 HatchPetCard.findLines = FIND_LINES;
+HatchPetCard.giftLines = GIFT_LINES;
+HatchPetCard.giftMade = GIFT_MADE;
 HatchPetCard.momentClasses = Object.fromEntries(Object.entries(MOMENT_CLASS)
   .map(([type, c]) => [type, { [KEPT]: "kept", [BEAT]: "beat", [FLAVOUR]: "flavour" }[c]]));
 HatchPetCard.seasonNow = seasonNow;

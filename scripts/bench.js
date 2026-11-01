@@ -157,6 +157,26 @@ const PRESETS = {
     extra("compact-330", "compact: no basket", { world: "woodland", width: 330, basket: 3 });
     return out;
   },
+  // Gifts (visitors v2 §5, V-E2): said at the first look, the find popped above the pet.
+  // V5 with the longest name (porthole too), V6 made and found, an old world's gift, V7
+  // (baby), calm (still), compact, and an asleep pet's look that takes nothing.
+  gifts() {
+    const out = [];
+    const g = (name, label, shot) => out.push({ group: "gifts", name: `gifts/${name}`, label, ...shot });
+    g("v5-tidepool-bottle", "V5, longest name (porthole)", { world: "tidepool", gift: { id: "bottle", world: "tidepool" } });
+    g("v5-woodland-pinecone", "V5", { world: "woodland", gift: { id: "pinecone", world: "woodland" } });
+    g("v5-nightsky-night", "V5, night", { world: "nightsky", scene: "night", gift: { id: "moonstone", world: "nightsky" } });
+    g("v6-made-hearth", "V6 made (knitted heart)", { world: "hearth", gift: { id: "knittedheart", world: "hearth" } });
+    g("v6-found-pond", "V6 found (pearl, from tidepool)", { world: "pond", gift: { id: "pearl", world: "tidepool" } });
+    g("v6-made-pond", "V6 made (paper boat)", { world: "pond", gift: { id: "paperboat", world: "pond" } });
+    g("v7-baby", "V7 baby", { world: "terrarium", stage: "baby", gift: { id: "seedpod", world: "terrarium" },
+      storage: { "hatch-baby-talk-bench-user": "on" } });
+    g("calm", "calm: still", { world: "woodland", motion: "reduce", gift: { id: "acorncup", world: "woodland" } });
+    g("compact-330", "compact", { world: "woodland", width: 330, gift: { id: "fourleafclover", world: "woodland" } });
+    g("compact-330-porthole", "compact, porthole, longest", { world: "tidepool", width: 330, gift: { id: "bottle", world: "tidepool" } });
+    g("asleep", "asleep: nothing", { world: "woodland", mood: "asleep", gift: { id: "pinecone", world: "woodland" } });
+    return out;
+  },
   // The settings sheet (the status screen's gear) with the viewer's own rows, at
   // both card widths, day and night.
   settings() {
@@ -301,6 +321,7 @@ function parseArgs(argv) {
     else if (key === "mono") opts.shot.mono = val() !== "off";
     else if (key === "boot") opts.shot.booted = false;
     else if (key === "mine") opts.shot.mine = true;
+    else if (key === "gift") { const [world, id] = val().split("/"); opts.shot.gift = { id, world }; } // --gift woodland/pinecone
     else if (key === "journal") Object.assign(opts.shot, { journal: true, view: "journal" });
     else if (key === "season") opts.shot.season = val() === "off" ? false : val() === "on" ? "auto" : argv[i];
     else opts.shot[key] = num.has(key) ? Number(val()) : val();
@@ -383,7 +404,7 @@ async function runShots(browser, base, shots, outDir, workers) {
         const png = await page.screenshot({ path: file, clip });
         shot.file = file;
         if (shot.mono) shot.measure = { screen: await page.evaluate(() => window.bench.screenClass), ...await measureMono(page, clip, png) };
-        if (shot.costume) {
+        if (shot.costume || shot.gift) {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }

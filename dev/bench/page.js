@@ -91,7 +91,9 @@
       // The card asks once for a server clock reading; none arrives here.
       connection: { subscribeEvents: noop, subscribeMessage: noop },
       callService: async (domain, service) => ({ response: service === "visit" ? (shot.visit || { counted: true }) : {} }),
-      callWS: async (msg) => (msg.type === "virtual_pet/photos" ? { photos: [] } : {}),
+      // A gift's take (`gift` shot field) answers as the server would for its own person.
+      callWS: async (msg) => (msg.type === "virtual_pet/photos" ? { photos: [] }
+        : msg.type === "virtual_pet/collect" && msg.gift === true && msg.shared === false ? { gift: shot.gift || null } : {}),
       callApi: async () => ({}),
     };
   }
@@ -114,6 +116,29 @@
       for (const a of el.getAnimations()) {
         a.pause();
         a.currentTime = el.classList.contains("burst") ? 120 : 300;
+      }
+    }
+  }
+
+  // A gift waiting for the viewer (`gift: {id, world}`, visitors v2 §5) at the card's own
+  // first look: mine.gift set, the look forced (its other lines dropped, so the gift's is
+  // the one said), the take answered by the fake callWS, the line said and the pop paused
+  // just in. An asleep, away or egg pet's first look doesn't run: nothing is taken or said.
+  async function giftShot(card, s, gift) {
+    s.mine = { bond: { level: 6, nickname: null }, ...(s.mine || {}), gift };
+    Object.assign(s, { subscribed: true, lookedFirst: false, queue: [], sayUntil: 0 });
+    card._firstLook(s);
+    s.queue = (s.queue || []).filter((q) => q.type === "gift");
+    for (let n = 0; s.gifting && n < 200; n++) await new Promise((r) => setTimeout(r, 5));
+    card._sayQueued(s);
+    if (s.giftPop) clearTimeout(s.giftPop.timer); // held for the shot
+    window.bench.info = { lookedFirst: !!s.lookedFirst, said: s.sayEntry?.type === "gift" ? s.sayEntry.text : null,
+      pop: s.giftPop ? s.giftPop.el.querySelector(".rf").dataset.find : null };
+    await settled(card);
+    for (const el of s.screen.querySelectorAll(".reveal.gift .rf")) {
+      for (const a of el.getAnimations()) {
+        a.pause();
+        a.currentTime = 300;
       }
     }
   }
@@ -387,6 +412,8 @@
     if (shot.seasonVisitor) await seasonVisitorShot(card, cur, shot.seasonVisitor);
     // `reveal`: the basket's reveal pinned (see revealShot).
     if (shot.reveal) await revealShot(card, cur, shot.reveal);
+    // `gift`: a gift said at the first look (see giftShot).
+    if (shot.gift) await giftShot(card, cur, shot.gift);
     for (const c of shot.petClasses || []) cur.pet.classList.add(c);
     if (shot.petAt !== undefined) {
       for (const a of cur.pet.getAnimations()) {
