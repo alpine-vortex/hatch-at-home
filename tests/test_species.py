@@ -237,6 +237,8 @@ def test_every_creature_has_a_voice(species: str) -> None:
 def test_no_mammals_is_kept_by_the_gentle_lists() -> None:
     """The gentle likes (the default) name no mammal; the owner-approved
     realistic lists (decisions 2026-10-28) are the only ones that do."""
+    # The mammals in today's lists; the exact likes_real check below and the
+    # owner's review of new lists are the real guard.
     mammals = {"mice", "voles", "rats"}
     real = {}
     for species in READY:

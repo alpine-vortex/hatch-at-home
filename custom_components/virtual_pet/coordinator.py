@@ -209,10 +209,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.egg_roster: tuple[str, ...] = ()
         self.egg_species_names: dict[str, str] = {}
         self.rng = random.Random()
-        # Each ready creature's favourite-snack choices, and the stages with
-        # food words of their own (a moth: no snacks there).
-        # Each creature's foods: gentle (no mammals, the default) and, where
-        # its real diet differs, realistic (the "no mammals" option off).
+        # Each creature's favourite-snack choices: gentle (no mammals, the
+        # default) and, where its real diet differs, realistic (the "no
+        # mammals" option off); and the stages with food words of their own
+        # (a moth: no snacks there).
         self.likes: dict[str, list[str]] = {}
         self.likes_real: dict[str, list[str]] = {}
         self.own_food_stages: dict[str, set[str]] = {}

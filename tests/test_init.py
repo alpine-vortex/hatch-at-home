@@ -2794,6 +2794,18 @@ async def test_no_mammals_keeps_mice_off_the_menu_and_off_lets_them_on(
     assert coordinator.state.favourites["snack"] in ["mice", "voles", "moths"]
 
 
+async def test_a_mammal_favourite_is_picked_again_at_load(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    # Picked with "no mammals" off; the option is on again (the default).
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, species="owl", favourites={"snack": "mice"}
+    )
+    config = await setup(hass)
+    snack = config.runtime_data.state.favourites["snack"]
+    assert snack in ["moths", "beetles", "crickets"]
+
+
 async def test_an_egg_hatched_by_fast_forward_picks_its_favourite(
     hass: HomeAssistant, now: float
 ) -> None:

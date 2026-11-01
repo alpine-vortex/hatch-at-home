@@ -128,7 +128,7 @@
               "no_mammals": "No mammals"
             },
             "data_description": {
-              "no_mammals": "On: no favourite snack is a mammal (an owl likes moths, beetles and crickets). Off: realistic diets where they differ (an owl likes mice, voles and moths). A pet whose favourite isn't on its diet any more picks a new one."
+              "no_mammals": "On: no favourite snack is a mammal (an owl likes moths, beetles and crickets). Off: realistic diets where they differ (an owl likes mice, voles and moths). A pet whose favourite is a mammal picks a new one when this is turned on."
             }
           },
           "privacy": {
