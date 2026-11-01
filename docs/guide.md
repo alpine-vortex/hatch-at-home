@@ -514,7 +514,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   start and see the first number, then `guess` `lower`/`higher`. A game costs energy
   like play, and an unfinished one is dropped after 3 minutes (a guess after that
   starts a new left or right game, and its answer has `restarted: true`; higher or
-  lower answers `no_game`). Each pet counts games
+  lower answers `no_game`). `end: true` (the card's ✕) ends the game in
+  progress with no reward, penalty or log line. Each pet counts games
   played and won per game (attribute `games` on the life stage and debug sensors,
   diagnostics, and the journal).
 - **Chores:** map a to-do list in the options, and every item ticked off earns a treat.

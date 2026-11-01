@@ -31,6 +31,7 @@ from . import channel, notify, rates as R
 from .const import (
     ATTR_CONFIG_ENTRY_ID,
     ATTR_ENABLED,
+    ATTR_END,
     ATTR_FINISH,
     ATTR_GAME,
     ATTR_GUESS,
@@ -99,6 +100,8 @@ PLAY_GAME_SCHEMA = vol.Schema(
         vol.Optional(ATTR_GUESS): vol.In(
             sorted({g for gs in GAMES.values() for g in gs})
         ),
+        # End the game in progress instead (the card's "maybe later").
+        vol.Optional(ATTR_END, default=False): cv.boolean,
     }
 )
 SHARE_NEWS_SCHEMA = vol.Schema(
@@ -232,6 +235,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     async def play_game(call: ServiceCall) -> ServiceResponse:
         kind = call.data[ATTR_GAME]
         guess = call.data.get(ATTR_GUESS)
+        if call.data[ATTR_END]:
+            return await pet_of(call).async_end_game(kind)
         if guess is not None and guess not in GAMES[kind]:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,

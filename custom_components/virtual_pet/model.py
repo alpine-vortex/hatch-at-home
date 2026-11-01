@@ -1980,6 +1980,20 @@ def start_game(
     return _round_info(game), events
 
 
+def end_game(state: PetState, kind: str, now: float) -> bool:
+    """A person ends the game in progress of this kind (the card's "maybe
+    later"). Unlike a drop, it costs and earns nothing: no energy, happiness,
+    played count, log line or event. A Higher or Lower opening nobody guessed
+    on is kept, as in a drop, so quitting can't reroll it. True if one ended."""
+    game = state.game
+    if game is None or game.kind != kind:
+        return False
+    state.game = None
+    if game.rounds == 0 and game.kind == "higher_lower" and game.number is not None:
+        state.opening, state.opening_at = game.number, now
+    return True
+
+
 def drop_game(
     state: PetState, now: float, by: str | None = None, switched: bool = False
 ) -> list[Event]:

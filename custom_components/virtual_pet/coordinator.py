@@ -2137,6 +2137,20 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._publish()
         return result
 
+    async def async_end_game(self, kind: str) -> dict[str, Any]:
+        """A person ends the game in progress. Harmless with none. It isn't a
+        drop: nothing is counted and the kind isn't marked, so the next game
+        is simply new."""
+        assert self.state is not None
+        now = self._now()
+        self._advance(now)
+        ended = model.end_game(self.state, kind, now)
+        self._dropped_games.discard(kind)
+        if ended:
+            self._save()
+            self._publish()
+        return {"result": model.OK, "ended": ended}
+
     async def async_play_game(
         self, guess: str | None, context: Context | None, kind: str = "left_right"
     ) -> dict[str, Any]:

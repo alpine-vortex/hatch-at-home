@@ -1008,6 +1008,49 @@ async def test_higher_or_lower_through_the_service(
     assert hass.states.get("sensor.pip_debug").attributes["games"] == counts
 
 
+async def test_ending_a_game_is_free_and_the_next_one_is_new(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    """The card's "maybe later": no reward, penalty, count, log line or event,
+    and not a drop, so the next guess is a plain round 1."""
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0, energy=90.0)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    state = coordinator.state
+    finished = async_capture_events(hass, f"{DOMAIN}_game_finished")
+    # No game: harmless.
+    reply = await game(hass, end=True)
+    assert reply == {"result": "ok", "ended": False}
+    # Mid Left/Right.
+    await game(hass, guess="left")
+    await game(hass, guess="left")
+    before = (state.happiness, state.energy, state.hunger, state.weight)
+    log = len(state.care_log)
+    assert (await game(hass, end=True))["ended"] is True
+    assert state.game is None
+    assert (state.happiness, state.energy, state.hunger, state.weight) == before
+    assert len(state.care_log) == log and not state.games
+    assert not finished and not coordinator._dropped_games
+    again = await game(hass, guess="left")
+    assert again["round"] == 1 and "restarted" not in again
+    await game(hass, end=True)
+    # Mid Higher/Lower; another kind's end leaves the game alone.
+    await game(hass, game="higher_lower")
+    await game(hass, game="higher_lower", guess="higher")
+    await game(hass, game="left_right", end=True)  # not this kind: no-op
+    assert state.game is not None and state.game.kind == "higher_lower"
+    await game(hass, game="higher_lower", end=True)
+    assert state.game is None and not coordinator._dropped_games
+    assert not finished and not state.games
+    # A guess has no game now; starting then guessing is a fresh round 1.
+    assert (await game(hass, game="higher_lower", guess="higher")) == {
+        "result": "no_game"
+    }
+    await game(hass, game="higher_lower")
+    fresh = await game(hass, game="higher_lower", guess="higher")
+    assert fresh["round"] == 1 and "restarted" not in fresh
+
+
 async def test_a_guess_from_another_game_is_refused(
     hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
 ) -> None:

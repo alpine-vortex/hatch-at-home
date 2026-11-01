@@ -82,6 +82,12 @@ play_game:
             - right
             - lower
             - higher
+    end:
+      required: false
+      default: false
+      example: true
+      selector:
+        boolean:
 share_news:
   fields:
     entity_id:

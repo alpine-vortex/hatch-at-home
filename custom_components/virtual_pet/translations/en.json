@@ -360,6 +360,10 @@
         "guess": {
           "name": "Guess",
           "description": "Left or right; lower or higher. Leave it out to start a game."
+        },
+        "end": {
+          "name": "End",
+          "description": "End the game in progress instead of playing a round: no reward, no penalty, nothing logged. Does nothing if there is none, or it is another game."
         }
       }
     },

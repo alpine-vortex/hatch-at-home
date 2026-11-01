@@ -2267,12 +2267,16 @@ async function main() {
       await open(kind);
       const back = await score();
       check(`${kind}: a fresh game reads round 1 of 5`, /^round 1\/5/.test(fresh), fresh);
-      check(`${kind}: reopened, the score reads round 2 of 5 with the wins kept`,
-        /^round 2\/5 · \d right$/.test(back) && back === played, `${played} -> ${back}`);
-      if (kind === "higher_lower") {
-        check("higher or lower: the number is kept",
-          (await cur().locator(".gnum").getAttribute("data-n")) === number);
-      }
+      // The x ends the game on the server too (play_game end): reopened, it is
+      // a fresh game, and the next guess is round 1 with no "someone else".
+      check(`${kind}: after the x, reopening starts a fresh game (round 1 of 5)`,
+        /^round 1\/5/.test(back) && back === fresh, `${played} -> ${back}`);
+      await cur().locator(".gl").click();
+      await page.waitForTimeout(1400);
+      const again = await score();
+      check(`${kind}: the first guess after the x is round 1 of the new game, no blame`,
+        /^round 2\/5/.test(again) && !/someone else/.test(await page.locator("hatch-pet-card").evaluate((el) => el._slides[el._index].bubble.textContent)),
+        again);
       await stop();
     }
 
@@ -2427,7 +2431,10 @@ async function main() {
     const prompted = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       const prompt = s.bubble.textContent;
+      const rnd = Math.random;
+      Math.random = () => 0; // the feed line is said only half the time
       el._react(s, { action: "feed", result: "ok" }, { mine: true });
+      Math.random = rnd;
       const care = s.bubble.textContent;
       s.sayUntil = Date.now() - 1; // the care line's hold runs out
       await new Promise((r) => setTimeout(r, 1600)); // a tick or two

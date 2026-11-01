@@ -3234,13 +3234,13 @@ class HatchPetCard extends HTMLElement {
     // Taps on the game mustn't reach the screen behind (which opens the status).
     s.gameBox.addEventListener("click", (e) => e.stopPropagation());
     s.gameBox.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && s.game) this._endGame(s, "maybe later!");
+      if (e.key === "Escape" && s.game) this._quitGame(s, "maybe later!");
     });
     q(".gl").addEventListener("click", () => this._guess(s, "left"));
     q(".gr").addEventListener("click", () => this._guess(s, "right"));
     q(".gx").addEventListener("click", (e) => {
       this._tapped(e.currentTarget, s);
-      this._endGame(s, "maybe later!");
+      this._quitGame(s, "maybe later!");
     });
     q(".gpick").addEventListener("click", (e) => {
       const b = e.target.closest("button[data-game]");
@@ -3686,7 +3686,7 @@ class HatchPetCard extends HTMLElement {
     this._slides.forEach((x, i) => {
       // A game stops on the slide being left: nobody plays it unseen (Catch
       // would score itself).
-      if (x.game && i !== to) this._endGame(x, null);
+      if (x.game && i !== to) this._quitGame(x, null);
       this._stopTyping(x);
       this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
       if (x.picker) { // and leaves the shell picker unsaved: the sheet again
@@ -4341,7 +4341,7 @@ class HatchPetCard extends HTMLElement {
   _toggleStatus(s) {
     const open = !s.screen.classList.contains("show-status");
     if (open) this._stopTyping(s); // the bubble hides: the line is said whole
-    if (open && s.game) this._endGame(s, null); // the sheet covers it: nobody plays it unseen
+    if (open && s.game) this._quitGame(s, null); // the sheet covers it: nobody plays it unseen
     s.screen.classList.toggle("show-status", open);
     s.journal = false;
     s.settings = false;
@@ -7183,7 +7183,7 @@ class HatchPetCard extends HTMLElement {
 
   _startGame(s, button) {
     this._tapped(button, s);
-    if (s.game) this._endGame(s, null); // Play mid-game starts over (Catch's ball goes too)
+    if (s.game) this._quitGame(s, null); // Play mid-game starts over (Catch's ball goes too)
     this._clearAsk(s); // a game takes the screen
     const energy = Number.parseFloat(this._state(s, "sensor.energy")?.state);
     const refusal = s.asleep ? REFUSALS.asleep : energy < 15 ? REFUSALS.too_tired : null;
@@ -8395,6 +8395,22 @@ class HatchPetCard extends HTMLElement {
     } else {
       this._reactFrames(s, "praised", { inGame: true, ms: 900 });
     }
+  }
+
+  // The player (or the card, moving off a game) ends a game: the server drops
+  // it too, with no reward or penalty. Fire and forget; a failed call is silent.
+  // Catch lives only on the card, so it makes no call.
+  _quitGame(s, line) {
+    const kind = s.game?.kind;
+    const id = s.ids?.["sensor.mood"];
+    if (id && (kind === "left_right" || kind === "higher_lower")) {
+      try {
+        Promise.resolve(this._hass.callService(
+          "virtual_pet", "play_game", { entity_id: id, game: kind, end: true },
+          undefined, false, true)).catch(() => {});
+      } catch (err) { /* silent */ }
+    }
+    this._endGame(s, line);
   }
 
   _endGame(s, line) {
