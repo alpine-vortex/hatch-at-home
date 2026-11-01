@@ -1,6 +1,6 @@
 # Plan: a fresh moment on every daily visit
 
-**Status: building, 2026-11-01.** The owner approved the drafts for slices 4 and 6
+**Status: built, 2026-11-01** (see the build log). The owner approved the drafts for slices 4 and 6
 (below) and chose no new lines for slice 3. The FM approved 5a, 5b and 6 from this text.
 Slice 6b's 15 more dreams were approved too, so the plain list has 30 kinds.
 
@@ -234,4 +234,23 @@ once approved.
 
 ## Build log
 
-- (empty)
+All slices built on 2026-11-01, on `crew/hatch-at-home-s2621-fresh-moment-every-daily-visit`.
+
+- **1** `87f1a5d5`: the reset on a return after 3 h. The first look and visit wait for the
+  house's next state push (`RESUME_HOLD_MS`, 5 s at most), since the sensor's wish and dream
+  carry no day to check. Card-check `moments` and `gifts`. Bench: `--preset look`
+  (`128e4e8e`).
+- **2** `bd4cd68e`: the new order, and no sleep-only note.
+- **7** `07b45b8f`: flair 6 s in, else a look around. No costume draw: flair or a look
+  covers every pet. On a two-line bubble the flair can touch its corner, as the resting
+  mood line's always could.
+- **3** `5694e6e6`: `_visitorLate`; the first look leaves a day screen's missed day visitor
+  to it.
+- **5a** `19b319ce`: `_askOnly`. A visitor and a flair still come while a question is on
+  show; the greet is a move with no line.
+- **5b** `7ad7d5cd`: the how_day stand-in, and the dream question 240 min before bed.
+- **6** `23c6c9fb`: `PLAIN_DREAMS` (30), `plain_dream`, a crc32 offset; a node test
+  (`tests/js/dream_lines.test.js`).
+- **4** `e05dc703`: `_todayLine`, `TODAY_WISH`, `PERSONA.*.today`, and a visitor seen live
+  kept per device (`hatch-visitseen-<device>`, one key, overwritten). Bench: the look
+  preset adds an evening.
