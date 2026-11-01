@@ -156,6 +156,16 @@ async function settle(pg, quiet = 3000, max = 16000) {
   pg.off("framenavigated", on);
 }
 
+// Wait out the card's own timers (a line clearing, a pose or class ending) at once:
+// run the page's fake clock `ms` on, firing every timer due, then set its Date back
+// to real time, so the card's stamps don't drift from the server's (a 60 s skew
+// broke care's timing checks). Only for waits on the card's timers: never for the
+// server, image loads, or a CSS animation mid-flight (the clock doesn't drive CSS).
+async function skip(pg, ms) {
+  await pg.clock.runFor(ms);
+  await pg.clock.setSystemTime(new Date());
+}
+
 function check(name, ok, detail = "") {
   results.push({ name, ok, detail });
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` (${detail})` : ""}`);
@@ -904,6 +914,9 @@ async function main() {
   const browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] });
   // A context of its own, so a check can open a second tab on the same storage.
   const context = await browser.newContext({ viewport: { width: 420, height: 860 }, deviceScaleFactor: Number(process.env.SCALE || 1) });
+  // Playwright's clock on every page, flowing in real time: skip() moves it on
+  // past the card's own timers instead of sleeping (see skip below).
+  await context.clock.install();
   // CARD_CHECK_NIGHT=1 plays a night: the browser's hour reads 2 (Date.now stays honest, so
   // the waits still add up) and every pet's server-side asleep sensor is put "on" whenever a
   // section pins the pets awake (pinAwake), so the pin is what keeps them up.
@@ -2149,7 +2162,7 @@ async function main() {
   await shot("04-game-over");
 
   // Higher or Lower: guess from the number on show, the odds way round.
-  await page.waitForTimeout(3500); // let the last game's line clear
+  await skip(page, 3500); // let the last game's line clear
   await button(2).click();
   await page.waitForTimeout(600);
   await cur().locator('.gpick [data-game="higher_lower"]').click();
@@ -2175,7 +2188,7 @@ async function main() {
   // Catch (prototype, behind experimental_catch): the card times the taps, so
   // play it from inside the page: tap mid-window on the right side, leave the
   // bees alone, and tap one round too soon on purpose (so 4 of 5).
-  await page.waitForTimeout(3500);
+  await skip(page, 3500);
   await page.locator("hatch-pet-card").evaluate((el) => el.setConfig({ ...el._config, experimental_catch: true }));
   await inject(pet["sensor.energy"], { state: "80" }); // the card turns play down when tired
   await page.waitForTimeout(800);
@@ -2216,7 +2229,7 @@ async function main() {
   // through c.start, never waited for.
   {
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.waitForTimeout(4500); // the last result line clears
+    await skip(page, 4500); // the last result line clears
     await inject(pet["sensor.energy"], { state: "80" });
     await page.waitForTimeout(500);
     await button(2).click();
@@ -2308,7 +2321,7 @@ async function main() {
       await cur().locator(".gx").click();
       await page.waitForTimeout(300);
     };
-    await page.waitForTimeout(4500); // let the catch result line clear
+    await skip(page, 4500); // let the catch result line clear
     for (const kind of ["left_right", "higher_lower"]) {
       await open(kind);
       const fresh = await score();
@@ -2553,7 +2566,7 @@ async function main() {
       untapped.ended && untapped.stored === null && /^5\/5 caught/.test(untapped.said), JSON.stringify(untapped));
 
     // Fresh eyes #7: a care line said over a game's prompt gives way to the prompt again.
-    await page.waitForTimeout(4500); // the result line clears
+    await skip(page, 4500); // the result line clears
     await open("left_right");
     const prompted = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
@@ -3297,7 +3310,7 @@ async function main() {
   });
   check("2b: became_sick says C6 once, with the droop", c6.text === "I don't feel so good..." && c6.droop && c6.cls === 2 && c6.queue === 0,
     JSON.stringify(c6));
-  await page.waitForTimeout(3000);
+  await skip(page, 3000);
   check("2b: the droop is bounded (the class is gone after it)",
     !(await card.evaluate((el) => el._slides[el._index].pet.classList.contains("droop"))));
   // Reduced motion: the animation is off and one frame holds (a sag), still on the class.
