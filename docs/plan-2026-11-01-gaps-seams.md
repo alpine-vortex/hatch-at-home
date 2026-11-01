@@ -1,6 +1,7 @@
 # Plan: gaps and seams (the review's non-Top-10 items)
 
-**Status: plan, waiting on the owner's answers (§4).** No code yet.
+**Status: answered 2026-11-01 (§4a); building.** New drafts (§4b) await the owner's approval
+before those parts ship.
 
 Source: the fresh-eyes review `~/.local/state/crew/research/gaps.md` (and `features.md`), at
 origin/main `dcbb8367` (0.41.0), 2026-11-01. The review's Top 10 belongs to another agent; where one
@@ -303,12 +304,52 @@ idle, link, editor) and a bench shot where it's visual (1a, 2a).
 | Q9 | Assist: mention today's visitor? | (a) no; (b) yes once its window has ended | **(a)**: it spoils the surprise and it's flavour. |
 | Q10 | Spring/summer: queue the art? | (a) plan + art in Feb, for a March equinox; (b) later; (c) never | **(a)**: a plan in Feb leaves the art time for 20 March. |
 
+## 4a. Owner answers (2026-11-01, relayed by the FM)
+
+| # | Answer |
+|---|---|
+| Q1 | **Approved:** all draft lines in §2.1-2.7 as written. |
+| Q2 | **Mock up first:** bench mockups of a slight horizontal stretch for heavy pets (2-3 scale steps, a few species, 330 and 420 px, checked for pixel doubling), as a contact sheet for the owner. The stretch ships only once the owner picks; the weight words ship as planned. |
+| Q3 | **Yes:** the public `became_sick` moment keeps its cause for `weight` only, and the card says it. Tier 2 (slice 2b); its line is in §4b. |
+| Q4 | **Both:** 1 Dec and 21 Dec. 1 Dec line in §4b. Ships before 1 Dec, so 3a is built first. |
+| Q5 | **Leave it;** the guide says the phone pushes name the festival whatever a screen's switch says (Top-10 #10's docs pass). |
+| Q6 | **Cozy + bored moods and visitor greetings** get type variants (2 per type, §4b); refusals stay plain. |
+| Q7 | **Only when someone is watching:** the first link of the day fires 1-3 min into a visible look that was touched recently (the tab is shown, and a tap or swipe in the last few minutes). Never on a hidden tab or an untouched wall tablet. Later pairs keep 10-25 min. |
+| Q8 | **Yes, later:** a level-5 unlock and a bond-timing review go in a later bond plan. No slice here. |
+| Q9 | **Yes:** Assist mentions today's visitor once its window has ended. Line in §4b. |
+| Q10 | **Plan + art in Feb.** |
+
+## 4b. New drafts (await the owner's approval; not shipped until approved)
+
+- **3a, 1 Dec phone push:** `The winter lights are up! {name} is all aglow ✨` (no festival
+  name; ends in an emoji, so no nickname).
+- **2b, sick from weight (card, the became_sick moment with `cause: weight`):**
+  `ugh... too many snacks, I think`, `my tummy's grumbly... too many snacks`.
+  Baby talk (baby, child): `tummy hurts... too many snacks`.
+- **4b, visitor-greeting variants (PERSONA `visit`, said half the time like other keys):**
+
+  | Type | visit |
+  |---|---|
+  | mellow | `oh, hi there... ♪`, `mm, a visitor... nice` |
+  | sweet | `a visitor! welcome ♥`, `hello, little friend ♥` |
+  | bouncy | `a visitor! hup hup, hi!`, `hiya, friend! *bounce*` |
+  | starry | `a guest star! ★`, `welcome to the show! ★` |
+  | old soul | `well, hello there.`, `ah. a visitor. welcome.` |
+  | fancy | `oh, a visitor! how lovely ♥`, `welcome, welcome, dear ♥` |
+  | charming | `a visitor! what an honour`, `do come in, friend ♥` |
+  | plucky | `who goes there? oh, hi!`, `visitor spotted! hi! ♥` |
+
+- **6a, Assist visitor (today's visit, window ended):** `A {visitor} came by today.`
+  (the shooting star: `A shooting star went by today.`), after the wish sentence.
+
 ## 5. Build order
 
-1. **3a winter greeting** first (tier 2, needs the FM's review before build, and a release
-   before 21 Dec).
-2. 1a, 1b (first-week), 2a (weight), 4a (persona moods), 5a, 5b (multi-pet), 7a (editor).
-3. 6a Assist (tier 2, needs-you before build).
+1. **3a winter greeting** first (tier 2: 1 Dec and 21 Dec; in a release before 1 Dec).
+2. 1a, 1b (first-week), 2a (weight words), 4a (persona moods), 5a, 5b (multi-pet), 7a (editor).
+3. 6a Assist (tier 2), now with the visitor.
+4. Added by the answers: **2b** sick-from-weight (tier 2, server + card); **4b** persona
+   visitor greetings (tier 1, after §4b approval); **2c** the heavy stretch (bench
+   mockups now, a build only once the owner picks).
 4. 8 spring/summer: its own plan later (Q10).
 
 Items dropped or answered "no change": 2.9 temperament, 2.10 beetle, "two ways in", "two
