@@ -1302,6 +1302,7 @@ const DREAMS = {
   feast: (d, w) => `I dreamed about a mountain of ${w?.food || "snacks"}!`,
 };
 const AWAY_NOTE_AFTER_MS = 3 * 3600 * 1000;
+const RESUME_HOLD_MS = 5000; // a tab back after AWAY_NOTE_AFTER_MS: its first look waits for fresh states
 // A bond with each person (only the viewer's own, from the private channel's
 // "mine"). What each level brings, as in rates.py: a warmer hello, a
 // hop when they look in, the nickname it picked, its favourite of their games,
@@ -2956,6 +2957,7 @@ class HatchPetCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (this._resumedAt && !document.hidden) this._resumedAt = null; // fresh states: the look may begin
     this._listenReady(hass?.connection);
     this._watchServerClock(hass);
     this._resendAnswers();
@@ -3025,9 +3027,18 @@ class HatchPetCard extends HTMLElement {
       this._hiddenAt ??= Date.now();
       return;
     }
-    // Back after a long while (owner Q1): a gift waiting is said, as at a first look.
+    // Back after a long while (owner Q1): a new look, as a fresh page would have (the
+    // greeting, the first look, the visit, a gift waiting; fresh-moment 1). Each line's
+    // own once-key still stops a double, and the wish mention starts over, so the
+    // first look says the wish first. The look waits for the house's next word
+    // (RESUME_HOLD_MS at most): a phone back from sleep holds yesterday's states.
     if (this._hiddenAt && Date.now() - this._hiddenAt >= AWAY_NOTE_AFTER_MS) {
-      (this._slides || []).forEach((x) => { x.giftAgain = true; });
+      (this._slides || []).forEach((x) => {
+        x.giftAgain = true;
+        x.lookedFirst = x.greeted = false;
+        x.visitedAt = x.nextWish = 0;
+      });
+      this._resumedAt = Date.now();
     }
     this._hiddenAt = null;
     this._touchedAt = null; // a new look begins at its first touch (gaps-seams 5a)
@@ -5407,10 +5418,16 @@ class HatchPetCard extends HTMLElement {
     if (said === null || said === undefined || t > said) this._seenWrite(device, { said: t });
   }
 
+  // A tab just back after a long while, its states not yet fresh (fresh-moment 1).
+  _resumeHeld() {
+    return !!this._resumedAt && Date.now() - this._resumedAt < RESUME_HOLD_MS;
+  }
+
   // The first look at this pet on this device: what happened while you were
   // out, this morning's dream and today's wish (each once a day per device).
   _firstLook(s) {
     if (!this._channelHeard(s)) return; // the viewer's bond and wish first
+    if (this._resumeHeld()) return; // fresh states first
     const away = this._state(s, "sensor.mood")?.state === "away";
     if (s.lookedFirst || !s.species || s.asleep || away || this._eggMinutes(this._state(s, "sensor.life_stage")) !== null) return;
     s.lookedFirst = true;
@@ -5780,7 +5797,7 @@ class HatchPetCard extends HTMLElement {
     // Not before the first look has run (it needs the creature and the
     // channel's first word): it says what's queued.
     if (!id || !s.species || !this._channelHeard(s) || !this._hass.user || sharedScreen() ||
-      Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
+      Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS || this._resumeHeld()) return;
     s.visitedAt = Date.now();
     // Only kept lines count: a waiting beat or flavour may yet be dropped.
     const queued = Math.min((s.queue || []).filter((q) => lineClass(q) >= KEPT).length, 6);

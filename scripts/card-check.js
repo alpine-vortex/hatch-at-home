@@ -3213,6 +3213,41 @@ async function main() {
   });
   check("P3c: a show's dream comes from house.dream, once",
     !dreamAgain.some((t) => /dreamed/.test(t)), JSON.stringify(dreamAgain));
+  // Fresh-moment 1 (owner Q1): a tab back after AWAY_NOTE_AFTER_MS hidden is a new look
+  // (greeting, first look, visit, the wish mention from scratch), once the house's states
+  // come; a short absence changes nothing, and each line's once-key stops a double.
+  const resumed = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const back = (hiddenMs) => {
+      Object.assign(s, { lookedFirst: true, greeted: true, visitedAt: Date.now(), nextWish: Date.now() + 1, queue: [] });
+      s.sayUntil = Date.now() + 60000; // nothing said meanwhile: the tick mustn't greet or speak
+      el._hiddenAt = Date.now() - hiddenMs;
+      el._onHidden(); // visible again
+      return { looked: s.lookedFirst, greeted: s.greeted, visited: s.visitedAt, mention: s.nextWish };
+    };
+    const look = () => {
+      s.house = { ...(s.house || {}), dream: { kind: "watching", title: "Bluey" } };
+      el._firstLook(s);
+      const held = s.queue.map((q) => q.text);
+      el.hass = el._hass; // the house's next word: states are fresh
+      el._firstLook(s);
+      return { held, said: s.queue.map((q) => q.text) };
+    };
+    for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish)-/.test(k)) localStorage.removeItem(k);
+    const short = back(60 * 1000);
+    const long = back(3 * 3600 * 1000 + 1000);
+    const first = look();
+    back(3 * 3600 * 1000 + 1000);
+    const twice = look();
+    s.queue = []; s.sayUntil = 0;
+    return { short, long, first, twice };
+  });
+  check("fresh-moment 1: a tab back after 3 h hidden looks again (the dream and wish once, after fresh states); 1 min changes nothing",
+    resumed.short.looked && resumed.short.greeted && resumed.short.visited > 0 && resumed.short.mention > 0 &&
+      !resumed.long.looked && !resumed.long.greeted && resumed.long.visited === 0 && resumed.long.mention === 0 &&
+      resumed.first.held.length === 0 && resumed.first.said.includes("I dreamed about Bluey!") &&
+      resumed.first.said.includes("can we watch the sunset together?") &&
+      !resumed.twice.said.some((t) => /dreamed|sunset together/.test(t)), JSON.stringify(resumed));
   // P3c: the recap's TV and music come from the title-less public tv_on/music_on.
   const recapAt = new Date(Date.now() - 1800 * 1000).toISOString();
   await inject(pet["sensor.last_care"], {
@@ -9309,10 +9344,15 @@ async function main() {
       s.mine = { ...(s.mine || {}), gift: g };
       el._hiddenAt = Date.now() - hiddenMs;
       el._onHidden(); // the page is visible: a return
+      el.hass = el._hass; // fresh states: a long absence's new look may begin (fresh-moment 1)
       const said = [];
       const was = el._sayLine;
       el._sayLine = function (sl, q) { said.push(q.text); return was.call(this, sl, q); };
-      await wait(2500);
+      // The new look's greeting and lines come first: skip through them to the gift's.
+      for (let i = 0; i < 25; i++) {
+        await wait(100);
+        s.sayUntil = 0;
+      }
       delete el._sayLine;
       const pop = !!s.screen.querySelector(".reveal.gift");
       el._dropGift(s);
