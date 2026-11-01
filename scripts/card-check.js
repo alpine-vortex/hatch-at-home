@@ -5287,6 +5287,54 @@ async function main() {
     check("fresh E8 (LS-a): an adult of 45 days spins in its idle moves (none when calm, none for a teen); its trick line once",
       ls.moves.includes("spin") && !ls.calmMoves.includes("spin") && !ls.teen.includes("spin") &&
       ls.first.some((l) => TRICK7.includes(l)) && !ls.again.some((l) => TRICK7.includes(l)), JSON.stringify(ls));
+    // Fresh-expand F3: the pet's promise. On its pinned day 0 a teen's first look says the
+    // promise; on day 4 the payoff, once a cycle, with the bigger move; a child, none.
+    const pctx = {};
+    require("vm").runInNewContext([/\nconst dayOrdinal = [^\n]*\n/, /\nconst turnHash = [\s\S]*?\n\};\n/, /\nconst PROMISE_CYCLE = [^\n]*\n/,
+      /\nconst PROMISE_TOPICS = [^\n]*\n/, /\nfunction promiseDay\([\s\S]*?\n\}\n/].map((re) => src7.match(re)[0]).join("") +
+      "this.promiseDay = promiseDay;", pctx);
+    const PROMISE = require("vm").runInNewContext(`(${src7.match(/\nconst PROMISE_LINES = (\{[\s\S]*?\n\});/)[1]})`);
+    const pdevice = await card.evaluate((el) => el._slides[el._index].ids.device);
+    let p0 = 0;
+    while (pctx.promiseDay(pdevice, new Date(2030, 0, 1 + p0, 12)).day !== 0) p0++;
+    const d0 = new Date(2030, 0, 1 + p0, 12);
+    const topic = pctx.promiseDay(pdevice, d0).topic;
+    const pr = await card.evaluate((el, { t0, t4 }) => {
+      const s = el._slides[el._index];
+      const real = el._state;
+      const as = (stage) => {
+        el._state = function (sl, k) {
+          const st = real.call(this, sl, k);
+          return k === "sensor.life_stage" && st ? { ...st, state: stage } : st;
+        };
+      };
+      const d0 = new Date(t0);
+      const d4 = new Date(t4);
+      const keys = [`hatch-promise-${s.ids.device}`, `hatch-promise-${s.ids.device}-${d0.toDateString()}`,
+        `hatch-promise-${s.ids.device}-${d4.toDateString()}`];
+      keys.forEach((k) => localStorage.removeItem(k));
+      const out = {};
+      try {
+        as("child");
+        out.child = el._promiseLook(s, d0);
+        as("teen");
+        out.day0 = el._promiseLook(s, d0);
+        out.day0again = el._promiseLook(s, d0);
+        out.day4 = el._promiseLook(s, d4);
+        localStorage.removeItem(keys[2]);
+        out.day4again = el._promiseLook(s, d4); // paid this cycle
+        s.pet.classList.remove("bighop", "spin");
+        if (out.day4?.move) el._promiseMove(s, out.day4.move);
+        out.cls = [...s.pet.classList].filter((c) => ["bighop", "spin"].includes(c));
+      } finally {
+        el._state = real;
+        keys.forEach((k) => localStorage.removeItem(k));
+      }
+      return out;
+    }, { t0: d0.getTime(), t4: new Date(2030, 0, 5 + p0, 12).getTime() });
+    check("fresh F3: a teen's day 0 says its promise once; day 4 the payoff once a cycle, with the bigger move; a child none",
+      pr.child === null && pr.day0?.line === PROMISE[topic][0] && pr.day0again === null && pr.day4?.line === PROMISE[topic][1] &&
+      pr.day4again === null && (topic === "song" || pr.cls.length === 1), JSON.stringify({ topic, ...pr }));
     check("fresh E7 (Q-a): how_day's tough answer says the type's reply (random 0) or a base one (0.9); great says either",
       e7[0] === own.reply_tough[0] && base.tough.includes(e7[1]) &&
       e7.slice(2).every((l) => [...own.reply_great, ...base.great].includes(l)), JSON.stringify(e7));

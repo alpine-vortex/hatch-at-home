@@ -808,6 +808,17 @@ const PAIR_ODDS = 15; // a planned visit brings a friend 1 day in this many (V-b
 const GUEST_ODDS = 30; // a no-visit day brings a guest 1 day in this many (V-c)
 const PAIR_BEHIND_MS = 1500; // the friend comes in this far behind, from the other side
 const GUEST_HOURS = { day: 9, night: 19 }; // the guest's window starts: 3 hours each
+// The pet's promise (F3): a 21-day cycle per pet (offset by its device), the topic by cycle.
+// Day 0 the promise, days 1-3 practice now and then, day 4 the payoff (to day 7 if missed).
+const PROMISE_CYCLE = 21;
+const PROMISE_TOPICS = ["hop", "spin", "song"];
+const PROMISE_PAYOFF = [4, 7]; // the first look from day 4, up to day 7, then it lapses
+const PROMISE_PRACTICE_ODDS = 1 / 3; // an idle's chance of practice, days 1-3
+function promiseDay(device, date = new Date()) {
+  const n = dayOrdinal(date) + (turnHash(`promise|${device || ""}`) % PROMISE_CYCLE);
+  const cycle = Math.floor(n / PROMISE_CYCLE);
+  return { day: n % PROMISE_CYCLE, cycle, topic: PROMISE_TOPICS[cycle % PROMISE_TOPICS.length] };
+}
 const CRUMB_ODDS = 1 / 15; // a feed's chance of the crumb line, once a day (E4 F-b)
 const BUBBLE_POP_ODDS = 1 / 8; // a clean's chance of one bubble drifting up and popping (E4 M-b)
 // The meal by the hour on this device (E4 F-a): null from 22 to 05.
@@ -1404,6 +1415,13 @@ const VISIT_GUEST = {
   pond: "a guest from the pond! ♪",
   nightsky: "a guest from the night sky ✦",
 };
+// F3: the pet's own promise, every screen: [said on day 0, the payoff on day 4], by topic.
+const PROMISE_LINES = {
+  hop: ["I'm practising my hop! ♪", "I can hop higher now ♪"],
+  spin: ["I'm practising a spin ♪", "look, a whole spin now! ♪"],
+  song: ["I'm learning a new song ♪", "I learned my song! ♪ la la"],
+};
+const PROMISE_MID = "hup! getting there ♪"; // days 1-3, now and then, with the move done small
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -3226,6 +3244,8 @@ const STYLE = `
     100% { transform: translateY(-70px) scale(1); opacity: 0; } }
   .pet.perk { animation: perk .3s ease-out; }
   .pet.spin { animation: spin .9s ease-in-out; } /* an adult's trick (fresh-expand LS-a) */
+  .pet.bighop { animation: bighop .7s ease-in-out 2; } /* the promise's payoff (F3): 1.4x a hop */
+  @keyframes bighop { 50% { transform: translateY(-12.6%); } }
   @keyframes spin { to { rotate: y 360deg; } }
   @keyframes perk { 40% { transform: translateY(-6%) scale(1.04, .96); } }
   .toy.wanted .cap { background: #ffe9a8; }
@@ -5409,6 +5429,56 @@ class HatchPetCard extends HTMLElement {
     return turnPick(FAV_LINES, `${s.ids?.device}|fav`);
   }
 
+  // --- Fresh-expand F3: the pet's own promise ------------------------------------
+
+  // At a first look, a teen or adult's promise beat today: {line, move} or null. Day 0
+  // the promise; days 4-7 the payoff once a cycle (one overwritten key per pet).
+  _promiseLook(s, date = new Date()) {
+    const stage = this._state(s, "sensor.life_stage")?.state;
+    if (stage !== "teen" && stage !== "adult") return null;
+    const device = s.ids?.device;
+    const p = promiseDay(device, date);
+    const paidKey = `hatch-promise-${device}`;
+    if (p.day === 0) {
+      return oncePerDay(`promise-${device}`, date) ? { line: PROMISE_LINES[p.topic][0], move: null } : null;
+    }
+    if (p.day < PROMISE_PAYOFF[0] || p.day > PROMISE_PAYOFF[1]) return null;
+    try {
+      if (localStorage.getItem(paidKey) === String(p.cycle)) return null;
+      if (!oncePerDay(`promise-${device}`, date)) return null;
+      localStorage.setItem(paidKey, String(p.cycle));
+    } catch (err) {
+      return null;
+    }
+    return { line: PROMISE_LINES[p.topic][1], move: p.topic };
+  }
+
+  // Practice, days 1-3: now and then an idle does the move small, with its line once a day.
+  _promisePractice(s, date = new Date()) {
+    const stage = this._state(s, "sensor.life_stage")?.state;
+    if (stage !== "teen" && stage !== "adult") return false;
+    const p = promiseDay(s.ids?.device, date);
+    if (p.day < 1 || p.day > 3 || Math.random() >= PROMISE_PRACTICE_ODDS) return false;
+    if (!oncePerDay(`promise-${s.ids?.device}`, date)) return false;
+    this._line(s, FLAVOUR, PROMISE_MID, 3000);
+    this._promiseMove(s, p.topic, true);
+    return true;
+  }
+
+  // The topic's move: small (practice) or the payoff's (a hop 1.4x as high, a full spin,
+  // two chirps). None when calm (the line still comes).
+  _promiseMove(s, topic, small = false) {
+    if (topic === "song") {
+      this._chirp(s, "win");
+      if (!small) setTimeout(() => this._chirp(s, "win"), 500);
+      return;
+    }
+    if (calm()) return;
+    if (topic === "hop") this._animate(s, s.pet, small ? "perk" : "bighop", small ? 320 : 1400);
+    else this._animate(s, s.pet, small ? "pat-soft" : "spin", small ? 300 : 900);
+    this._moving(s, small ? 400 : 1400);
+  }
+
   // The moves a teen or adult's type adds to its idle list (IDLE_ADDS), in the table's order.
   _typeAdds(s) {
     const st = this._state(s, "sensor.life_stage");
@@ -5424,6 +5494,7 @@ class HatchPetCard extends HTMLElement {
     const isCalm = calm();
     const own = s.drawn === "child"
       ? Object.keys(s.species.extras || {}).filter((k) => !SHARED_POSES.has(k)) : [];
+    if (this._promisePractice(s)) return; // the promise's practice, days 1-3 (F3)
     const move = pick(this._idleMoves(s, own.length > 0, isCalm));
     if (move === "pose") {
       const frames = s.species.extras[pick(own)];
@@ -5977,6 +6048,12 @@ class HatchPetCard extends HTMLElement {
     if (trick) {
       lines.push([turnPick(TRICK_LINES, `${device}|trick`), 4500]);
       if (!calm()) setTimeout(() => this._trickMove(s, trick), 600);
+    }
+    // The pet's own promise (F3): day 0 says it, day 4 (to 7) the payoff, with the move.
+    const promise = lines.length < FIRST_LOOK_LINES && this._promiseLook(s);
+    if (promise) {
+      lines.push([promise.line, 4500]);
+      if (promise.move) setTimeout(() => this._promiseMove(s, promise.move), 600);
     }
     // Last, and only if there is room: an adult on how it was raised, once a week.
     const raised = this._state(s, "sensor.life_stage")?.state === "adult" && UPBRINGING_LINES[stage.upbringing];

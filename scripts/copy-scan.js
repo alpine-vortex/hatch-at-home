@@ -35,6 +35,8 @@ const COPY_TABLES = {
   LINK_NEWS_REPLY: {},
   PAIR_LINES: {},
   VISIT_GUEST: {},
+  PROMISE_LINES: {},
+  PROMISE_MID: {},
 };
 
 function lines(value, path, out) {
