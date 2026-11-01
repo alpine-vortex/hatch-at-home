@@ -197,8 +197,8 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   a day on each screen; if the window passed while nobody was looking, the next look
   that day says so ("a robin came by today ♪"). Home Assistant picks the day's visitor
   and its window, so every screen agrees and a restart doesn't change it.
-- **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
-  off): from 20 to 31 October it's **Halloween**. Bunting hangs across the scene, a
+- **Seasons** (by the viewing device's date; card option `seasonal: false`, or "Seasonal
+  decorations" in the card editor, turns them off): from 20 to 31 October it's **Halloween**. Bunting hangs across the scene, a
   jack-o'-lantern with a new carved face each day sits by the pet and glows at night (it
   floats in Tidepool and Pond), cobwebs hang in the corner (both corners of the
   Terrarium), a sweet waits by the door in Hearth, a pumpkin joins the device's
@@ -644,7 +644,9 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   this pet's calls, sickness, hatching, growing up, new or deeper traits, the season's
   first snow and frost, new eggs, and a holiday greeting on the morning of Halloween
   ("Happy Halloween! Pip is dressed up and ready to trick or treat 🎃") and of
-  Thanksgiving ("Happy Thanksgiving! Pip is thankful for you 🦃") on your phone, through
+  Thanksgiving ("Happy Thanksgiving! Pip is thankful for you 🦃"), and two winter lights
+  mornings: 1 December ("The winter lights are up! Pip is all aglow ✨") and 21 December
+  ("Winter lights day! Pip saved you a star cookie ✨"), on your phone, through
   the Home Assistant app. It only changes them for whoever is signed in; each person
   chooses for themselves. Automations can use `virtual_pet.notify_me` the same way.
   A call's notification has buttons that answer it (Feed, Medicine, Lights out; Play
@@ -715,7 +717,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 ## Talking to it through Assist
 
 Ask "how's Pip?" and the pet answers in its own words ("Pip is hungry: a little
-peckish."), and names its traits if it has learned any. Ask "feed Pip" and it's the same as pressing the button, logged under
+peckish. It's a child, day 2. Today it wishes for a bubble bath."): its stage and
+day, today's wish (never who it's for), the day's visitor once its visit is over
+("A robin came by today."), and its traits if it has learned any. A sleeping pet
+just says so. Ask "feed Pip" and it's the same as pressing the button, logged under
 your name.
 
 - **LLM agents** (Claude, OpenAI, Ollama and others set to control Home Assistant)
@@ -794,7 +799,7 @@ no `title` or `artist`: for every change, read `media_title` from your media pla
 `parent_species`, `inherited_trait`), `virtual_pet_welcomed` (once, when the pet is added),
 `virtual_pet_wish_made` and `virtual_pet_wish_granted` (with `kind`),
 `virtual_pet_someone_home` (anyone signed in came home; it says nobody's name),
-`virtual_pet_holiday` (with `holiday`), `virtual_pet_weather` (with `change`),
+`virtual_pet_holiday` (with `holiday`: `halloween`, `thanksgiving`, `winter_lights` or `winter_treat`), `virtual_pet_weather` (with `change`),
 `virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
 `virtual_pet_favourite_snack` (with `food`).
 

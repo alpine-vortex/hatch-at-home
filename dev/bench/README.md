@@ -49,7 +49,7 @@ A shot (all optional):
 | --- | --- |
 | `name` | output path under `out/`, without `.png` |
 | `species`, `stage`, `mood`, `world` | the first pet (default: the world's first species, adult, content, woodland). Stages: egg baby child teen adult. |
-| `pet` | more of the first pet: `name`, `age_days`, `flags`, `energy`, `hatch_minutes`... |
+| `pet` | more of the first pet: `name`, `age_days`, `flags`, `energy`, `weight` (none by default: the row shows –), `hatch_minutes`... |
 | `pets` | a number (extra pets are children from the world's roster) or an array of pet overrides; the first is on show, the card gets its dots |
 | `shell` | `{shape, color, bezel, finish}` over the world's own; `finish: "none"` drops it. Shapes: egg tank house porthole pad moon |
 | `scene` | `day` (default), `night`, `dim` (lights out), `rain` |
@@ -74,6 +74,7 @@ A shot (all optional):
 | `lcd`, `booted`, `mono` | per-browser settings, see below |
 | `classes` | an array of classes put on `.screen` last, before the transitions finish: `faded`, `raining`, `lit`... (the bench's `scene: "rain"` is woodland's rain backdrop without `raining`) |
 | `petClasses`, `petAt` | classes put on the pet itself (`["droop"]`), and `petAt` ms to pause its animation at, so a mid-motion frame is the same every run |
+| `petStretch` | a mockup only (gaps-seams Q2): the pet drawn that many times wider (`1.06`), its height kept, over the species' own scale |
 | `react` | `fed`, `praised`, `refused` or `tucked`: that care reaction (PR 3c, teen/adult/baby only) started through the card's own `_reactFrames`: the stage's excited/bored/cozy frame and its move; `petAt` pauses the move mid-way |
 | `patBox` | `true`: the pat's clear hit box (PR 3b) outlined in dashed magenta; it moves with `petClasses` such as `go-left` or `wander-r`, and a state that hides it shows no outline |
 | `beam` | `true`: the infrared beam held mid-flight (400 ms in, the head over the host's shell) by the card's own `_linkBeam`, no visit around it. Use `pets: 2` and `clip: "card"` |

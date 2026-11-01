@@ -103,6 +103,7 @@
       put("sensor", "mood", mood, { flags, ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) });
       put("sensor", "last_care", iso(-45), { log: pet.log || [] });
       put("sensor", "energy", String(pet.energy ?? 80));
+      if (pet.weight !== undefined) put("sensor", "weight", String(pet.weight));
       put("sensor", "poop", String(pet.poop ?? (mood === "dirty" ? 2 : 0)));
       put("sensor", "care_misses", "0");
       put("binary_sensor", "calling", pet.calling || mood === "calling" ? "on" : "off");
@@ -463,6 +464,12 @@
     // `gift`: a gift said at the first look (see giftShot).
     if (shot.gift) await giftShot(card, cur, shot.gift);
     for (const c of shot.petClasses || []) cur.pet.classList.add(c);
+    // `petStretch`: a mockup only (gaps-seams Q2): the pet drawn that much wider, its
+    // height kept, over the species' own scale.
+    if (shot.petStretch) {
+      const k = Number(cur.pet.style.scale) || 1;
+      cur.pet.style.scale = `${k * shot.petStretch} ${k}`;
+    }
     if (shot.petAt !== undefined) {
       for (const a of cur.pet.getAnimations()) {
         a.pause();

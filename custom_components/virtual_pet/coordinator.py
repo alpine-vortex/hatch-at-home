@@ -143,6 +143,9 @@ MOMENTS = {
 # A public moment of these types keeps only {type, at}: the bus and the phones
 # still get the cause.
 MOMENT_BARE = {"became_sick"}
+# ...except these causes, which the card says ("too many snacks"): weight only
+# (gaps-seams 2b, owner Q3). Neglect and the rest never reach the public list.
+MOMENT_CAUSES_SHOWN = {"weight"}
 MOMENTS_KEPT = 10
 # The visit's celebration lines (one a look, and always a place for it).
 CELEBRATIONS = {"your_birthday", "pet_birthday", "birthday_friends", "friends_for"}
@@ -1017,6 +1020,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 moment: dict[str, Any] | None = {"type": as_type, "at": at}
             elif public and event["type"] in MOMENT_BARE:
                 moment = {"type": event["type"], "at": at}
+                if event.get("cause") in MOMENT_CAUSES_SHOWN:
+                    moment["cause"] = event["cause"]
             elif public and event["type"] in MOMENTS:
                 moment = {**scrubbed, "at": at}
             else:
@@ -1974,7 +1979,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return
         local = dt_util.now()
         today = local.date().isoformat()
-        kind = notify.holiday(local.date())
+        kind = notify.holiday_morning(local.date())
         if kind is None or self._holiday_on == today:
             return
         self._holiday_on = today
@@ -2180,6 +2185,31 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         ):
             return None
         return wish
+
+    def spoken_wish(self) -> dict[str, Any] | None:
+        """Today's wish for Assist (gaps-seams 6a): open, or granted today. Only
+        its kind and whether it came true: never who it's for."""
+        wish = self.state.wish if self.state else None
+        if (
+            wish
+            and wish.get("granted")
+            and wish.get("day") == dt_util.now().date().isoformat()
+        ):
+            return {"kind": wish.get("kind"), "granted": True}
+        open_wish = self._open_wish()
+        return {"kind": open_wish.get("kind")} if open_wish else None
+
+    def spoken_visitor(self) -> str | None:
+        """Today's visitor's name for Assist (gaps-seams 6a), once its window is
+        over (credited); None before then, so the surprise isn't spoiled."""
+        visit = model.live_visit(self.state, self.world) if self.state else None
+        if not visit or not visit.get("id") or not visit.get("credited"):
+            return None
+        if visit.get("day") != self._today(self._now())[0]:
+            return None
+        return next(
+            (v.get("name") for v in self.visitors if v.get("id") == visit["id"]), None
+        )
 
     def _mine(self, user: str) -> dict[str, Any]:
         """What only this person sees: their bond, and their own switches. Read,

@@ -92,6 +92,24 @@ def test_thanksgiving_is_the_fourth_thursday_of_november():
     assert text == "Happy Thanksgiving! Pip is thankful for you 🦃"
 
 
+def test_winter_lights_mornings_name_no_festival_and_stay_off_the_fav_season_note():
+    assert notify.holiday_morning(date(2026, 12, 1)) == "winter_lights"
+    assert notify.holiday_morning(date(2026, 12, 21)) == "winter_treat"
+    assert notify.holiday_morning(date(2026, 10, 31)) == "halloween"
+    assert notify.holiday_morning(date(2026, 11, 26)) == "thanksgiving"
+    assert notify.holiday_morning(date(2026, 12, 25)) is None
+    # holiday() feeds "<holiday> in your favourite season!": winter stays out of it.
+    assert notify.holiday(date(2026, 12, 1)) is None
+    assert notify.holiday(date(2026, 12, 21)) is None
+    lights = notify.message({"type": "holiday", "holiday": "winter_lights"}, "Pip", {})
+    treat = notify.message({"type": "holiday", "holiday": "winter_treat"}, "Pip", {})
+    assert lights == "The winter lights are up! Pip is all aglow ✨"
+    assert treat == "Winter lights day! Pip saved you a star cookie ✨"
+    for text in (lights, treat):
+        assert not any(w in text for w in ("Christmas", "Hanukkah", "New Year"))
+        assert notify.to_friend(text, "bean") == text
+
+
 def test_a_friend_is_told_by_nickname():
     assert notify.to_friend("Pip is hungry!", "sunbeam") == "Pip is hungry, sunbeam!"
     assert (

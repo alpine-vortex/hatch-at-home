@@ -973,6 +973,9 @@ async function main() {
     try {
       if (!sessionStorage.getItem("cc-boot-test") && v) localStorage.setItem("hatch-booted", v);
       for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-power-")) localStorage.removeItem(k);
+      // Today's infrared link counts as done, so a page with taps never starts the day's
+      // first one by itself (gaps-seams 5a); the link checks clear it.
+      localStorage.setItem(`hatch-link-cardcheck-${new Date().toDateString()}`, "1");
     } catch (err) {
       // no storage
     }
@@ -3526,6 +3529,16 @@ async function main() {
   await skip(page, 3000);
   check("2b: the droop is bounded (the class is gone after it)",
     !(await card.evaluate((el) => el._slides[el._index].pet.classList.contains("droop"))));
+  // gaps-seams 2b: from weight (the only cause the public moment keeps), it says why.
+  await quiet2a();
+  const fromWeight = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    el._moment(s, { type: "became_sick", cause: "weight", at: new Date().toISOString() });
+    return s.bubble.textContent;
+  });
+  check("gaps-seams 2b: sick from weight says too many snacks",
+    ["ugh... too many snacks, I think", "my tummy's grumbly... too many snacks", "tummy hurts... too many snacks"].includes(fromWeight), fromWeight);
+  await skip(page, 3000);
   // Reduced motion: the animation is off and one frame holds (a sag), still on the class.
   await quiet2a();
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -3908,7 +3921,10 @@ async function main() {
           const saved = { moodState: s.moodState, drawn: s.drawn };
           Object.assign(s, { moodState: mood, drawn: "adult", sayUntil: 0, nextIdle: 1, poseUntil: 0, movingUntil: 0 });
           s.plain = undefined;
+          const shelf = el._slides;
+          el._slides = [s]; // no neighbour lines (gaps-seams 5b, checked on their own)
           el._idle(s);
+          el._slides = shelf;
           const out = s.plain === undefined ? "" : s.bubble.textContent;
           Object.assign(s, saved, { sayUntil: 0 });
           return out;
@@ -4519,7 +4535,7 @@ async function main() {
     const TYPES = [...py.split("\nPERSONALITIES = (")[1].split("\n)")[0].matchAll(/"(\w+)"/g)].map((m) => m[1]);
     const KEYS = ["reveal", "hello", "hello_shared", "hello_warm", "hello_hearts",
       "good_morning", "sunset", "fell_asleep", "wish_granted", "favourite_snack",
-      "idle", "idle_bored", "idle_excited", "mood_content", "mood_excited"];
+      "idle", "idle_bored", "idle_excited", "mood_content", "mood_excited", "mood_cozy", "mood_bored", "visit"];
     const HELLOS = ["hello", "hello_shared", "hello_warm", "hello_hearts"];
     const longName = "Wwwwwwwwwwwwwwww"; // 16, as _greet leaves a name
     const longFood = "sunflower seeds"; // 15, the longest likes entry
@@ -4543,7 +4559,9 @@ async function main() {
           if (/!!!/.test(line)) bad.push(`${type}.${key}: "${line}" !!!`);
           if (/\b(still|again|why|never|pleas\w*|sad|cry|alone|forgot\w*)\b/i.test(line)) bad.push(`${type}.${key}: "${line}" nags`);
           if (words.some((w, i) => i > 1 && w === words[i - 1] && w === words[i - 2])) bad.push(`${type}.${key}: "${line}" three in a row`);
-          if (line.includes("?")) bad.push(`${type}.${key}: "${line}" asks`);
+          // One approved exception (owner, 2026-11-01, gaps-seams 4b): a sentry's call, not a question to the player.
+          const ASKS_OK = ["who goes there? oh, hi!"];
+          if (line.includes("?") && !ASKS_OK.includes(line)) bad.push(`${type}.${key}: "${line}" asks`);
           if (line.length > 40) bad.push(`${type}.${key}: "${line}" ${line.length} long`);
           if (key === "wish_granted" && /thank|you remembered|too kind/i.test(line)) bad.push(`${type}.${key}: "${line}" credits someone`);
           if (HELLOS.includes(key) && /\b(favourite|best|morning|afternoon|evening|night|tonight|tomorrow)\b/i.test(line)) {
@@ -4876,6 +4894,8 @@ async function main() {
         out.types[type].hungry = says("hungry", "a little hungry");
         out.types[type].home = says("home_rain", "listening to the rain");
         out.types[type].excited = says("excited", "that was fun!");
+        out.types[type].cozy = says("cozy", "nice and cozy");
+        out.types[type].bored = says("bored", "nothing to do");
       }
       t.pet("child", null, null, { hatched_on: "2026-01-01" });
       out.child = says("content", "all good");
@@ -4890,6 +4910,9 @@ async function main() {
       if (m.flicker) moodBad.push(m.flicker);
       if (m.hungry !== "a little hungry" || m.home !== "listening to the rain") moodBad.push(`${type}: needs/house not plain`);
       if (m.excited !== "that was fun!" && !PERSONA[type].mood_excited.includes(m.excited)) moodBad.push(`${type}: excited ${m.excited}`);
+      // gaps-seams 4a: cozy and bored swap the same way.
+      if (m.cozy !== "nice and cozy" && !PERSONA[type].mood_cozy.includes(m.cozy)) moodBad.push(`${type}: cozy ${m.cozy}`);
+      if (m.bored !== "nothing to do" && !PERSONA[type].mood_bored.includes(m.bored)) moodBad.push(`${type}: bored ${m.bored}`);
     }
     if (mood.noType !== "all good") moodBad.push(`no type: ${mood.noType}`);
     check("P2b mood line: content swaps by hash for every type, same all day (no flicker, random-free), needs and home stay plain, no type is plain",
@@ -4905,7 +4928,10 @@ async function main() {
           Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, nextIdle: 1 });
           let calls = 0; // draws: the next-idle delay, the move (0: mumble, first of the list), then the coin
           t.random(() => (calls++ < 2 ? 0 : r));
+          const shelf = el._slides;
+          el._slides = [s]; // no neighbour lines (gaps-seams 5b, checked on their own)
           el._idle(s);
+          el._slides = shelf;
         }
         return s.bubble.textContent || `(idle did not run: free=${!!el._free(s)} mood=${s.moodState} moves=${el._idleMoves(s, false, false)} st=${JSON.stringify([s.asleep, s.calling, !!s.game, !!s.scene, s.sayUntil - Date.now(), s.poseUntil - Date.now(), s.propUntil - Date.now(), s.flairUntil - Date.now(), s.movingUntil - Date.now()])})`;
       };
@@ -4927,6 +4953,32 @@ async function main() {
     }
     check("P2b idle mumble: the type's lines by mood (default, bored, excited) on the heads side, sleepy/hungry/dirty and the tails side stay normal",
       idleBad.length === 0, idleBad.join(" | "));
+    // gaps-seams 5b: with a neighbour on the shelf, the neighbour roll (1 in 6) names it,
+    // never for a bodily mood; alone on the shelf, never.
+    const near = await typeAs(async (el, s, t) => {
+      const say = (moodState, r, alone) => {
+        t.pet("adult", null);
+        s.moodState = moodState;
+        s.bubble.textContent = "";
+        const shelf = el._slides;
+        const other = { ids: { device: "cc-neighbour" } };
+        el._slides = alone ? [s] : [s, other];
+        const devices = el._hass.devices;
+        el._hass.devices = { ...devices, "cc-neighbour": { name: "Nib" } };
+        for (let i = 0; i < 5 && !s.bubble.textContent; i++) {
+          Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, nextIdle: 1 });
+          let calls = 0;
+          t.random(() => (calls++ < 2 ? 0 : r));
+          el._idle(s);
+        }
+        el._slides = shelf;
+        el._hass.devices = devices;
+        return s.bubble.textContent;
+      };
+      return { named: say("content", 0.1), bodily: say("hungry", 0.1), alone: say("content", 0.1, true), off: say("content", 0.5) };
+    });
+    check("gaps-seams 5b: an idle line may name a neighbour on the shelf, never for a bodily mood or alone",
+      /Nib/.test(near.named) && !/Nib/.test(near.bodily) && !/Nib/.test(near.alone) && !/Nib/.test(near.off), JSON.stringify(near));
 
     // The upbringing lines: an adult at most once a week at the first look; never
     // a baby, child or teen; every upbringing has a happy line of its own.
@@ -7117,7 +7169,9 @@ async function main() {
     return { src: s.pet.getAttribute("src"), text: s.bubble.textContent, drawn: s.drawn, acts: s.species?.acts?.cheer ?? null, waves: !!s.species?.waves?.[s.drawn],
       leftOn: !!s.visitor, keys: Object.keys(localStorage), calls: el.__vcalls };
   });
-  const lines = [...VLINES, ...V0.lines];
+  // A teen or adult may greet in its type's words (gaps-seams 4b).
+  const VPERSONA = require("vm").runInNewContext(`(${vsrc.match(/const PERSONA = (\{[\s\S]*?\n\});/)[1]})`);
+  const lines = [...VLINES, ...V0.lines, ...Object.values(VPERSONA).flatMap((t) => t.visit)];
   const waves = greeted.drawn !== "child" && greeted.waves;
   const greetFrame = greeted.drawn === "child" || (waves ? /_wave_\d/.test(greeted.src) : /_(cheer|excited)_\d/.test(greeted.src));
   check("visitors: the pet greets it with its wave frames (child: the greet as before; no waves: cheer or excited) and one of its lines",
@@ -8083,11 +8137,33 @@ async function main() {
     const device = Object.values(hass.entities).find((e) => e.platform === "virtual_pet")?.device_id;
     form?.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { devices: [device] } } }));
     const config = await Promise.race([changed, new Promise((r) => setTimeout(() => r(null), 2000))]);
+    // gaps-seams 7a: the seasonal switch. Off writes `seasonal: false`; on drops it, but
+    // keeps a preview key; the form shows it on unless the config says false.
+    const seasonal = {};
+    const turn = async (start, on) => {
+      el.setConfig(start);
+      await new Promise((r) => setTimeout(r, 50));
+      const shown = form?.data?.seasonal;
+      const next = new Promise((resolve) => el.addEventListener("config-changed", (e) => resolve(e.detail.config), { once: true }));
+      form?.dispatchEvent(new CustomEvent("value-changed", { detail: { value: { devices: [], seasonal: on } } }));
+      return { shown, config: await Promise.race([next, new Promise((r) => setTimeout(() => r(null), 2000))]) };
+    };
+    seasonal.off = await turn({}, false);
+    seasonal.on = await turn({ seasonal: false }, true);
+    seasonal.preview = await turn({ seasonal: "winter" }, true);
+    seasonal.label = form?.computeLabel?.({ name: "seasonal" });
+    seasonal.fields = (form?.schema || []).map((f) => f.name);
     el.remove();
-    return { form: !!form, rendered: !!form?.shadowRoot, config };
+    return { form: !!form, rendered: !!form?.shadowRoot, config, seasonal };
   });
   check("card editor renders a form", editor.form && editor.rendered);
   check("card editor saves the picked pets", Array.isArray(editor.config?.devices), JSON.stringify(editor.config));
+  const sz = editor.seasonal;
+  check("card editor: a seasonal switch, on unless seasonal: false; off writes false, on drops it, a preview stays",
+    sz.fields.join() === "devices,seasonal" && sz.label === "Seasonal decorations"
+    && sz.off.shown === true && sz.off.config?.seasonal === false
+    && sz.on.shown === false && sz.on.config && !("seasonal" in sz.on.config)
+    && sz.preview.shown === true && sz.preview.config?.seasonal === "winter", JSON.stringify(sz));
 
   }
   if (enter("boot")) {
@@ -8244,6 +8320,7 @@ async function main() {
     // Everyone free, on this page, no leftovers from earlier pages' storage.
     const prep = (index = 0) => card.evaluate((el, index) => {
       for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k);
+      localStorage.setItem(`hatch-link-cardcheck-${new Date().toDateString()}`, "1"); // not the day's first
       el._linkEnd();
       el._linkAt = Date.now() + 1e9; // only the forced visits run
       el._index = index;
@@ -8290,7 +8367,8 @@ async function main() {
     };
     const strip = (name) => card.locator(".viewport").screenshot({ path: `${lshots}-${name}.png` });
 
-    // The timer: the day's visit is 10-25 minutes away, and never while the boot screen is up.
+    // The timer: after the day's first, a visit is 10-25 minutes away, and never while the
+    // boot screen is up.
     await prep();
     const timer = await card.evaluate((el) => {
       const h = el._slides[el._index];
@@ -8301,9 +8379,46 @@ async function main() {
       el._booting = false;
       return { wait, booting, started: !!el._link };
     });
-    check(`link waits 10-25 minutes after the page loads (${width}px)`,
+    check(`link waits 10-25 minutes after the day's first (${width}px)`,
       timer.wait > 590000 && timer.wait <= 1500000 && !timer.started, JSON.stringify(timer));
     check(`link never starts under the boot screen (${width}px)`, !timer.booting);
+    // The day's first (gaps-seams 5a, owner Q7): only 1-3 min into a look someone touched
+    // in the last 5 min, on a shown tab; never untouched, too soon, stale, hidden or off screen.
+    await prep();
+    const first = await card.evaluate((el) => {
+      for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k);
+      const h = el._slides[el._index];
+      const now = Date.now();
+      const tries = {};
+      const tryIt = (name, touched, look) => {
+        el._linkEnd();
+        el._touchedAt = touched === null ? null : now - touched;
+        el._lookAt = now - look;
+        el._linkFirstMs = 90000;
+        el._linkTick(h);
+        tries[name] = !!el._link;
+        el._linkEnd();
+        for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k);
+      };
+      tryIt("untouched", null, 100000);
+      tryIt("soon", 1000, 30000);
+      tryIt("stale", 310000, 400000);
+      Object.defineProperty(document, "hidden", { get: () => true, configurable: true });
+      tryIt("hidden", 1000, 100000);
+      delete document.hidden;
+      el._visible = false; // scrolled off screen (the card's IntersectionObserver)
+      tryIt("offscreen", 1000, 100000);
+      el._visible = true;
+      tryIt("watched", 1000, 100000);
+      const ms = [];
+      for (let i = 0; i < 20; i++) { el._linkFirstMs = undefined; el._touchedAt = null; el._linkTick(h); ms.push(el._linkFirstMs); }
+      el._linkAt = Date.now() + 1e9;
+      localStorage.setItem(`hatch-link-cardcheck-${new Date().toDateString()}`, "1");
+      return { tries, lo: Math.min(...ms), hi: Math.max(...ms) };
+    });
+    check(`the day's first link waits for a touched, shown look 1-3 min in (${width}px)`,
+      first.tries.watched && !first.tries.untouched && !first.tries.soon && !first.tries.stale && !first.tries.hidden && !first.tries.offscreen
+      && first.lo >= 60000 && first.hi <= 180000, JSON.stringify(first));
 
     // A full visit, with frames along the way.
     await prep();

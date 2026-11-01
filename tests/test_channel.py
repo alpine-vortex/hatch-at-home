@@ -413,3 +413,27 @@ async def test_became_sick_moment_is_bare(
     assert len(moments) == 1
     assert set(moments[0]) == {"type", "at"}
     assert [e.data["cause"] for e in fired] == ["poop", "poop"]
+
+
+async def test_became_sick_moment_keeps_only_the_weight_cause(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+) -> None:
+    """gaps-seams 2b (owner Q3): a sickness from weight keeps its cause in the
+    public moment, for the card's "too many snacks"; every other cause stays bare."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    for cause in ("low_health", "neglect", "poop", "something_new", None):
+        coordinator._fire([{"type": "became_sick", "cause": cause}])
+        latest = next(m for m in coordinator.moments if m["type"] == "became_sick")
+        assert set(latest) == {"type", "at"}, cause
+    coordinator._fire([{"type": "became_sick", "cause": "weight"}])
+    latest = next(m for m in coordinator.moments if m["type"] == "became_sick")
+    assert set(latest) == {"type", "at", "cause"} and latest["cause"] == "weight"
+    assert all(
+        m.get("cause") in (None, "weight")
+        for m in coordinator.moments
+        if m["type"] == "became_sick"
+    )
