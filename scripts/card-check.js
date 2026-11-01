@@ -1184,11 +1184,22 @@ async function main() {
     await page.waitForTimeout(700);
   }
   await calm();
+  // Idle chatter ("all good!") can take the bubble before or after the hello, and a
+  // sample of the bubble can miss a 4 s line: hold idle life and keep every line said.
+  await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.nextIdle = Date.now() + 600000;
+    el.__said = [];
+    const speak = el._speak;
+    el._speak = function (slide, line, ...rest) { if (slide === s) el.__said.push(String(line)); return speak.call(this, slide, line, ...rest); };
+  });
   let greeting = "";
   for (let i = 0; i < 30 && !greeting.includes(USER.name); i++) {
     await page.waitForTimeout(500);
-    greeting = await bubble();
+    const said = await card.evaluate((el) => el.__said);
+    greeting = said.find((l) => l.includes(USER.name)) || await bubble();
   }
+  await card.evaluate((el) => { delete el._speak; delete el.__said; el._slides[el._index].nextIdle = 0; }); // idle life back
   check("greets the viewer by first name", greeting.includes(USER.name), greeting);
   await shot("04a-greeting");
 
@@ -2684,12 +2695,14 @@ async function main() {
   const spooky = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
     s.sayUntil = 0; s.flairUntil = 0;
+    s.nextIdle = Date.now() + 600000; s.greeted = true; // no idle line or hello over "boo!"
     const [hx0, hy0] = el._hatSpot(s) || s.species.head[s.drawn];
     el._headTopAll(s, hx0, hy0); // load every frame first, as the season's ticks do
     await new Promise((r) => setTimeout(r, 600));
     el._costume(s, { key: "halloween" }, "boo!");
     await new Promise((r) => setTimeout(r, 900));
     const hat = s.screen.querySelector(".costume .hat")?.getBoundingClientRect();
+    s.nextIdle = 0; // idle life back (the greeting stays done)
     const at = el._flairAnchors(s);
     const sr = s.screen.getBoundingClientRect();
     const r = s.pet.getBoundingClientRect();
