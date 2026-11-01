@@ -2973,6 +2973,32 @@ async function main() {
       embers.every((e) => e.bottom < flair.at.fy + 8),
     `cloud bottom ${Math.round(cloud?.bottom)} vs head ${Math.round(flair.at.hy)}`);
   check("a flair moment clears itself", flair.after === 0);
+  // Fresh-moment 7: a first look plans one move within 10 s, and it plays over a line
+  // being said (flair has no bubble); with no flair, a look around.
+  const firstMove = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    Object.assign(s, { lookedFirst: false, queue: [], flairUntil: 0, poseUntil: 0, movingUntil: 0, propUntil: 0 });
+    const t0 = Date.now();
+    el._firstLook(s);
+    const planned = s.firstMoveAt - t0;
+    s.queue = [];
+    s.firstMoveAt = Date.now() - 1;
+    el._write(s, "a line on show", 5000);
+    el._firstMove(s);
+    const out = { planned, flair: !!s.screen.querySelector(".flair"), done: s.firstMoveAt === 0, said: s.bubble.textContent };
+    s.screen.querySelector(".flair")?.remove();
+    Object.assign(s, { flairUntil: 0, sayUntil: 0 });
+    const real = el._flair;
+    el._flair = () => [];
+    s.firstMoveAt = Date.now() - 1;
+    el._firstMove(s);
+    el._flair = real;
+    out.look = s.pet.classList.contains("look");
+    return out;
+  });
+  check("fresh-moment 7: a first look's one move comes within 10 s, over a line (flair, else a look around)",
+    firstMove.planned > 0 && firstMove.planned <= 10000 && firstMove.flair && firstMove.done &&
+      firstMove.said === "a line on show" && firstMove.look, JSON.stringify(firstMove));
   await inject(pet["sensor.life_stage"], { attributes: { traits: [], trait_levels: {} } });
 
   // Seasons: forced to Halloween, the lantern and web are in the scene, and a

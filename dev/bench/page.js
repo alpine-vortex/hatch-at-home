@@ -222,6 +222,21 @@
     if (text && s.sayUntil > Date.now() && info.said.at(-1) !== text) info.said.push(text);
     const move = s.screen.querySelector(".flair") ? "flair" : s.poseUntil > Date.now() ? "pose" : s.movingUntil > Date.now() ? "move" : null;
     if (move && info.moves.at(-1)?.[0] !== move) info.moves.push([move, Date.now()]);
+    if (move === "flair" && !info.flairAt) info.flairAt = Date.now();
+  }
+
+  // The end of a `look`: a flair's CSS runs on the real clock, so it is seeked to the
+  // pinned clock's time since it began, and held.
+  function lookEnd() {
+    const card = document.querySelector("hatch-pet-card");
+    const s = card._slides[card._index];
+    const info = window.bench.info || {};
+    for (const el of s.screen.querySelectorAll(".flair, .flair *")) {
+      for (const a of el.getAnimations()) {
+        a.pause();
+        a.currentTime = Date.now() - (info.flairAt || Date.now());
+      }
+    }
   }
 
   async function settled(card) {
@@ -564,5 +579,5 @@
     return true;
   }
 
-  window.bench = { mount, step };
+  window.bench = { mount, step, lookEnd };
 })();

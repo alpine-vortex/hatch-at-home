@@ -431,6 +431,11 @@ function linkedToday(day = new Date()) {
 }
 const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
 const FLAIR_MS = 4200; // how long a moment lasts
+// A first look's one early move (fresh-moment 7): this long after the look begins (the
+// greeting's line done, the first look's first one on), and given up if not free by
+// FIRST_MOVE_LATE_MS after.
+const FIRST_MOVE_MS = 6000;
+const FIRST_MOVE_LATE_MS = 15000;
 const FLAIR = {
   storm_watcher: { place: "head", art: "frames" },
   thunder_heart: { place: "head", art: "frames" },
@@ -4829,6 +4834,7 @@ class HatchPetCard extends HTMLElement {
         this._seen(s);
         this._idle(s);
         this._flairTick(s);
+        this._firstMove(s);
         this._seasonTick(s);
         this._partyTick(s);
         this._linkTick(s);
@@ -4896,6 +4902,33 @@ class HatchPetCard extends HTMLElement {
       !s.screen.classList.contains("show-status") &&
       !(s.sayUntil > now) && !(s.poseUntil > now) && !(s.propUntil > now) &&
       !(s.flairUntil > now) && !(s.movingUntil > now);
+  }
+
+  // Free but for a line being said: a move with no words may play over it (fresh-moment 7).
+  _freeBody(s) {
+    const now = Date.now();
+    return s.species && !s.asleep && !s.calling && !s.game && !s.scene && !s.linking && !s.power && !s.visitor &&
+      IDLE_MOODS.has(s.moodState) && !s.screen.classList.contains("show-status") &&
+      !(s.poseUntil > now) && !(s.propUntil > now) && !(s.flairUntil > now) && !(s.movingUntil > now);
+  }
+
+  // A first look's one early move (fresh-moment 7), so a 30 s look sees the pet do
+  // something, not only talk: its flair (traits), else a look around (not when calm).
+  // Over a line, as it has no bubble. Then flair and idle keep their own timers.
+  _firstMove(s) {
+    const now = Date.now();
+    if (!s.firstMoveAt || now < s.firstMoveAt) return;
+    if (!this._freeBody(s)) {
+      if (now - s.firstMoveAt > FIRST_MOVE_LATE_MS) s.firstMoveAt = 0;
+      return;
+    }
+    s.firstMoveAt = 0;
+    if (this._flair(s).length) {
+      const [lo, hi] = FLAIR_EVERY_MS;
+      s.nextFlair = now + lo + Math.random() * (hi - lo);
+    } else if (!calm()) {
+      this._look(s, 1800);
+    }
   }
 
   // A wander or a look moves the pet off its spot for a while; a hat placed
@@ -5431,6 +5464,7 @@ class HatchPetCard extends HTMLElement {
     const away = this._state(s, "sensor.mood")?.state === "away";
     if (s.lookedFirst || !s.species || s.asleep || away || this._eggMinutes(this._state(s, "sensor.life_stage")) !== null) return;
     s.lookedFirst = true;
+    s.firstMoveAt = Date.now() + FIRST_MOVE_MS;
     const stage = this._state(s, "sensor.life_stage")?.attributes || {};
     const device = s.ids?.device;
     // At most FIRST_LOOK_LINES lines, in this order, the newest first; what doesn't fit isn't said

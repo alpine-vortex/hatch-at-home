@@ -478,6 +478,7 @@ async function runShots(browser, base, shots, outDir, workers) {
             await page.clock.setFixedTime(new Date(t0 + ms));
             await page.evaluate(() => window.bench.step());
           }
+          await page.evaluate(() => window.bench.lookEnd());
           await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
         }
         const inCard = { screen: ".slide:not(.away-slide) .screen", device: ".slide:not(.away-slide) .device" }[shot.clip];
