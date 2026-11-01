@@ -5144,6 +5144,41 @@ async function main() {
     await page.locator("hatch-pet-card .statusbtn").click();
     await page.waitForTimeout(400);
   }
+  // Fresh-expand E7 (Q-a): a typed teen's answer to "how was your day?" says its own
+  // reply or a base one; "tough" with random 0 says the type's.
+  {
+    const src7 = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+    const own = require("vm").runInNewContext(`(${src7.match(/\nconst PERSONA_FRESH = (\{[\s\S]*?\n\});/)[1]})`).sweet;
+    const base = require("vm").runInNewContext(`(${src7.match(/\n {2}how_day: \{ q: "how was your day\?", answers: (\{[\s\S]*?\] \}) \},/)[1]})`);
+    const e7 = await card.evaluate(async (el, own) => {
+      const s = el._slides[el._index];
+      const real = { persona: el._persona, speak: el._speak, random: Math.random };
+      const said = [];
+      el._persona = () => own;
+      el._speak = function (sl, text, ...rest) { said.push(text); return real.speak.call(this, sl, text, ...rest); };
+      const answer = (a) => {
+        el._ask(s, "how_day");
+        s.screen.querySelector(`.askday [data-answer="${a}"]`)?.click();
+      };
+      try {
+        Math.random = () => 0;
+        answer("tough");
+        Math.random = () => 0.9;
+        answer("tough");
+        Math.random = real.random;
+        for (let i = 0; i < 6; i++) answer("great");
+      } finally {
+        Object.assign(el, { _persona: real.persona, _speak: real.speak });
+        Math.random = real.random;
+        s.screen.querySelector(".askday")?.remove();
+        Object.assign(s, { asking: false, queue: [], sayUntil: 0, sayClass: 0 });
+      }
+      return said;
+    }, own);
+    check("fresh E7 (Q-a): how_day's tough answer says the type's reply (random 0) or a base one (0.9); great says either",
+      e7[0] === own.reply_tough[0] && base.tough.includes(e7[1]) &&
+      e7.slice(2).every((l) => [...own.reply_great, ...base.great].includes(l)), JSON.stringify(e7));
+  }
 
   }
   if (enter("types")) {

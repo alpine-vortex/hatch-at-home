@@ -1227,55 +1227,80 @@ const PERSONA = {
 // Every table from here to the end marker is plain data and is named in
 // scripts/copy-scan.js's COPY_TABLES, which card-check and node scan line by line.
 // PERSONA_FRESH: each type's lines for the new keys, merged into PERSONA below.
-// pat (P-a): a spoken pat while content or excited; praise (P-c): in place of "♥".
+// pat (P-a): a spoken pat while content or excited; praise (P-c): in place of "♥";
+// game_win / game_lose (G-c): after a game's count line; reply_* (Q-a): how_day's answers.
 const PERSONA_FRESH = {
   mellow: {
     pat: ["mm, right there ♪", "*melts a little* ahh ♥"],
     praise: ["mm, thanks... ♥", "aw, that's nice to hear ♪"],
     game_win: ["mm, nice game ♪"],
     game_lose: ["close one! that was cozy ♥"],
+    reply_great: ["mm, a good day. nice ♥"],
+    reply_ok: ["ok days can be cozy too ♪"],
+    reply_tough: ["*leans on you* I'm here ♥"],
   },
   sweet: {
     pat: ["aw, you ♥", "that's so nice ♥ hehe"],
     praise: ["hehe, you're sweet ♥", "you make me so happy ♥"],
     game_win: ["you're so good at this ♥"],
     game_lose: ["that was fun anyway ♥"],
+    reply_great: ["yay! I'm so glad ♥"],
+    reply_ok: ["ok is nice too ♥"],
+    reply_tough: ["*sits close* I'm here ♥"],
   },
   bouncy: {
     pat: ["hee! that tickles!", "pat pat! hup! ♪"],
     praise: ["yes! *happy hop*", "woo! I'm good! hup!"],
     game_win: ["woo! what a game! hup!"],
     game_lose: ["phew! rematch soon! hup"],
+    reply_great: ["woo! great day! high five! hup"],
+    reply_ok: ["ok! more hops tomorrow, then!"],
+    reply_tough: ["*hops over softly* I'm here ♥"],
   },
   starry: {
     pat: ["a pat for the star! ★", "my favourite kind of applause ★"],
     praise: ["a bow, thank you ★", "I'll take a bow for that ★"],
     game_win: ["a winning show! ★"],
     game_lose: ["bravo, both of us ★"],
+    reply_great: ["a great day! bravo ★"],
+    reply_ok: ["every show has quiet nights ★"],
+    reply_tough: ["you're my star anyway ★"],
   },
   old_soul: {
     pat: ["hm. that's rather nice.", "ah. just the thing."],
     praise: ["hm. kind of you.", "much obliged, friend."],
     game_win: ["a fine match, well played."],
     game_lose: ["hm. a good game, all told."],
+    reply_great: ["hm. good to hear."],
+    reply_ok: ["hm. ok days count too, friend."],
+    reply_tough: ["hm. sit with me a while ♥"],
   },
   fancy: {
     pat: ["how very kind ♥", "mind the fluff! ♥ hehe"],
     praise: ["oh, you flatter me ♥", "I do try, darling ♥"],
     game_win: ["you play beautifully ♥"],
     game_lose: ["a lovely little game ♥"],
+    reply_great: ["how marvellous, darling ♥"],
+    reply_ok: ["ok is perfectly fine, darling ♥"],
+    reply_tough: ["come here, darling ♥"],
   },
   charming: {
     pat: ["oh, how delightful ♥", "a splendid pat, thank you"],
     praise: ["how lovely of you ♥", "what a splendid thing to say ♥"],
     game_win: ["a splendid victory ♥"],
     game_lose: ["a grand game, truly ♥"],
+    reply_great: ["splendid news! ♥"],
+    reply_ok: ["a fair day, then ♥"],
+    reply_tough: ["tea and a cuddle, then ♥"],
   },
   plucky: {
     pat: ["hah! good pat ♥", "heh, not bad at all ♥"],
     praise: ["I'll do it even better! ♪", "heck yes, I'm good! hah"],
     game_win: ["hah! great game! ♥"],
     game_lose: ["rematch tomorrow. you're on! hah"],
+    reply_great: ["heck yes! good day ♥"],
+    reply_ok: ["ok's a win in my book ♥"],
+    reply_tough: ["I've got you. *hug* ♥"],
   },
 };
 // P-b: now and then a spoken pat finds the sweet spot (any stage but a baby).
@@ -6328,7 +6353,9 @@ class HatchPetCard extends HTMLElement {
       this._tapped(e.target.closest("button"));
       done();
       const lines = question.answers[answer] ?? question.answers[e.target.closest("button").dataset.answer];
-      this._speak(s, question.reply ? question.reply(answer, s, mine) : pick(lines), 4500);
+      // how_day's answers in the type's own words half the time (fresh-expand E7, Q-a).
+      this._speak(s, question.reply ? question.reply(answer, s, mine)
+        : kind === "how_day" ? this._lines(s, `reply_${answer}`, pick(lines)).text : pick(lines), 4500);
       const isCalm = calm();
       if (["great", "you"].includes(answer) && !isCalm) this._animate(s, s.pet, "greethop", 1400);
       else if (["tough", "not really"].includes(answer) && !isCalm) this._bondHearts(s);
