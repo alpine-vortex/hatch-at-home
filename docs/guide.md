@@ -635,7 +635,9 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   this pet's calls, sickness, hatching, growing up, new or deeper traits, the season's
   first snow and frost, new eggs, and a holiday greeting on the morning of Halloween
   ("Happy Halloween! Pip is dressed up and ready to trick or treat 🎃") and of
-  Thanksgiving ("Happy Thanksgiving! Pip is thankful for you 🦃") on your phone, through
+  Thanksgiving ("Happy Thanksgiving! Pip is thankful for you 🦃"), and two winter lights
+  mornings: 1 December ("The winter lights are up! Pip is all aglow ✨") and 21 December
+  ("Winter lights day! Pip saved you a star cookie ✨"), on your phone, through
   the Home Assistant app. It only changes them for whoever is signed in; each person
   chooses for themselves. Automations can use `virtual_pet.notify_me` the same way.
   A call's notification has buttons that answer it (Feed, Medicine, Lights out; Play
@@ -785,7 +787,7 @@ no `title` or `artist`: for every change, read `media_title` from your media pla
 `parent_species`, `inherited_trait`), `virtual_pet_welcomed` (once, when the pet is added),
 `virtual_pet_wish_made` and `virtual_pet_wish_granted` (with `kind`),
 `virtual_pet_someone_home` (anyone signed in came home; it says nobody's name),
-`virtual_pet_holiday` (with `holiday`), `virtual_pet_weather` (with `change`),
+`virtual_pet_holiday` (with `holiday`: `halloween`, `thanksgiving`, `winter_lights` or `winter_treat`), `virtual_pet_weather` (with `change`),
 `virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
 `virtual_pet_favourite_snack` (with `food`).
 

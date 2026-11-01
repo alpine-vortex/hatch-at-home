@@ -58,6 +58,16 @@ HOLIDAYS: dict[tuple[int, int], str] = {(10, 31): "halloween"}
 HOLIDAY_MORNINGS = {
     "halloween": "Happy Halloween! {name} is dressed up and ready to trick or treat 🎃",
     "thanksgiving": "Happy Thanksgiving! {name} is thankful for you 🦃",
+    # Winter lights (the card's December season): no festival names, since the
+    # phone can't see a screen's "holiday names" switch.
+    "winter_lights": "The winter lights are up! {name} is all aglow ✨",
+    "winter_treat": "Winter lights day! {name} saved you a star cookie ✨",
+}
+# Mornings greeted on the phones only: holiday() feeds the fav-season note too,
+# which has words for Halloween and Thanksgiving only.
+PHONE_MORNINGS: dict[tuple[int, int], str] = {
+    (12, 1): "winter_lights",
+    (12, 21): "winter_treat",  # the card's winter treat day
 }
 
 
@@ -72,6 +82,12 @@ def holiday(day: date) -> str | None:
     if day == thanksgiving(day.year):
         return "thanksgiving"
     return HOLIDAYS.get((day.month, day.day))
+
+
+def holiday_morning(day: date) -> str | None:
+    """The day the pet greets on the phones, if any: a holiday or a winter
+    lights morning."""
+    return holiday(day) or PHONE_MORNINGS.get((day.month, day.day))
 
 
 # Buttons on a call's notification: what would answer it. A plea to play may be
