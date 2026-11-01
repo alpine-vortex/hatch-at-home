@@ -40,9 +40,10 @@ const results = [];
 // The gated sections of main(), in file order.
 const SECTIONS = ["shelf", "shell", "play", "resume", "moments", "photos", "personality", "types",
   "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
-  "editor", "boot", "infrared", "lowbattery", "restart", "finds", "oldcard"];
-// oldcard asserts restart's seeded bond; finds taps the basket restart seeds.
-const NEEDS = { oldcard: ["restart"], finds: ["restart"] };
+  "editor", "boot", "infrared", "lowbattery", "restart", "gifts", "finds", "oldcard"];
+// oldcard asserts restart's seeded bond; finds taps the basket restart seeds; gifts takes
+// the gift restart seeds (right after it: a later section's fresh tab would take it first).
+const NEEDS = { oldcard: ["restart"], finds: ["restart"], gifts: ["restart"] };
 const argv = process.argv.slice(2);
 if (argv.includes("--list")) {
   console.log(SECTIONS.join("\n"));
@@ -3707,7 +3708,7 @@ async function main() {
     const seasons = [...src.matchAll(/key: "(halloween|thanksgiving|winter)"/g)].map((m) => m[1]);
     const card = new Set(["greet", "greet.warm", "greet.nickname", "idle.sleepy", "idle.bored", "idle.excited", "idle.hungry",
       "idle.dirty", "idle.default", "yum", "favourite_snack", "wish_granted", "friend_home", "care_miss", "tucked_in", "bond_up",
-      "visit", "find", "link_host", "link_guest"]); // link_*: the infrared link (2b); find: the basket's reveal
+      "visit", "find", "gift", "link_host", "link_guest"]); // link_*: the infrared link (2b); find: the basket's reveal; gift: V7
     // The mood line's keys (sensor.mood reason_key), from the model's own tables.
     const py = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "model.py"), "utf8");
     const keysOf = (name) => [...py.split(`\n${name} = {`)[1].split("\n}")[0].matchAll(/"(\w+)":/g)].map((m) => m[1]);
@@ -8519,6 +8520,7 @@ async function main() {
   let seeded = false;
   let unseed = null;
   let basketSeed = null; // restart's seeded basket, for finds: {entryId, world, basket, back}
+  let giftSeed = null; // restart's seeded gift for dev, for gifts: {id, world}
   const seedPet = pet["sensor.life_stage"];
   if (enter("restart")) {
   // 8. An HA restart keeps the bond, and a second login sees nothing of the
@@ -8593,6 +8595,19 @@ async function main() {
     const seedPage = seedBasket && { visitors: { [seedW.visitors[0].id]: today, [leaver.id]: today },
       finds: { [wFinds[0].id]: today, [wFinds[1].id]: today, [leftId]: today,
         [(seedW.finds.find((f) => f.gift_only) || {}).id || "nogift"]: today, laterfind: today } };
+    // And a gift waiting for dev (V-E2, the gifts section takes it): the world's gift-only
+    // find, which nothing else shows, so the absence checks can't meet it some other way.
+    // Only when gifts runs: any fresh tab of dev's would take it at its first look.
+    const giftOnly = want("gifts") && (seedW.finds || []).find((f) => f.gift_only);
+    const seedGift = giftOnly ? { id: giftOnly.id, world: seedWorld } : null;
+    // The seeded pet's slide has had its first look (restart just brought it on show): the
+    // gift then waits on an open card, and gifts checks that nothing takes it.
+    if (seedGift) {
+      await card.evaluate((el, e) => {
+        const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+        if (s) s.lookedFirst = true;
+      }, seedPet);
+    }
     let before = null;
     const downAt = Date.now();
     const token2 = await bounce(fresh, entryId, (data) => {
@@ -8605,8 +8620,9 @@ async function main() {
       }
       // Level 8, one point short of 9 with today's care still to earn: the
       // old-card check's care press makes a real bond_up (8b).
-      data.bonds = { ...(data.bonds || {}), [me]: { ...(data.bonds?.[me] || {}), points: 144, nickname: "sunbeam",
-        day: today, today: 0, visited: true } };
+      const { gift: _was, ...bond } = data.bonds?.[me] || {}; // no gift but the seeded one
+      data.bonds = { ...(data.bonds || {}), [me]: { ...bond, points: 144, nickname: "sunbeam",
+        day: today, today: 0, visited: true, ...(seedGift ? { gift: seedGift } : {}) } };
       data.wish = { kind: "play", day: today, granted: false, for: me, for_name: USER.name };
     });
     unseed = () => bounce(token2, entryId, (data) => {
@@ -8622,6 +8638,7 @@ async function main() {
       }
     });
     if (seedBasket) basketSeed = { entryId, world: seedWorld, basket: seedBasket };
+    giftSeed = seedGift;
     const upAt = Date.now();
     const back = await card.evaluate(async (el, e) => {
       const start = Date.now();
@@ -8698,8 +8715,239 @@ async function main() {
   }
 
   }
+  if (enter("gifts")) {
+  // 8a. Gifts (visitors v2 §5, V-E2), on the gift restart seeded for dev (the world's
+  // gift-only find). While it waits: the open card says nothing (a gift isn't an
+  // interruption); a shared screen's first look sends nothing and says nothing, the
+  // server refuses a take without shared: false, and a shared collection has no gifts; a
+  // shared flip drops a pop and its line. Then two fresh tabs of dev race their first
+  // looks: exactly one non-empty take and one gift line across both. After: the house
+  // page has no gift, dev's own has it, and no state or event carried it. Then the
+  // tab-back rule (owner Q1) on the card, with the take stubbed.
+  if (!giftSeed) {
+    check("V-E2: the gifts section has restart's seeded gift (set HA_CONFIG and HA_START)", false,
+      "no seeded gift: restart didn't run or its world has no gift-only find");
+  } else {
+  await calm();
+  await pinAwake(card, "gifts");
+  const gid = giftSeed.id;
+  // Everything this page sends to the pet from here on, and every event on the bus.
+  const held = await card.first().evaluate(async (el, e) => {
+    const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+    const conn = el._hass.connection;
+    el.__giftSent = [];
+    if (!conn.__giftSend) {
+      conn.__giftSend = conn.sendMessagePromise;
+      conn.sendMessagePromise = function (msg, ...a) {
+        if (/^virtual_pet\//.test(msg?.type || "")) el.__giftSent?.push(JSON.stringify(msg));
+        return conn.__giftSend.call(this, msg, ...a);
+      };
+    }
+    window.__giftBus = [];
+    window.__giftBusOff = await conn.subscribeEvents((ev) => window.__giftBus.push(JSON.stringify(ev)));
+    const said = [];
+    new MutationObserver(() => said.push(s.bubble.textContent)).observe(s.bubble, { childList: true, characterData: true, subtree: true });
+    await new Promise((r) => setTimeout(r, 3000));
+    return { gift: s.mine?.gift ?? null, lookedFirst: !!s.lookedFirst, sent: el.__giftSent.slice(),
+      said: [...said, ...(s.queue || []).map((q) => q.text)].filter(Boolean) };
+  }, seedPet);
+  const giftLines = /made this for you|found this for you|saved this .* for you|for you! ♥/;
+  check("V-E2: the seeded gift reaches dev's own card as mine.gift {id, world}",
+    JSON.stringify(held.gift) === JSON.stringify(giftSeed), JSON.stringify({ seeded: giftSeed, got: held.gift }));
+  check("V-E2: a gift arriving on an open card (its first look done) is not said, and nothing is taken",
+    held.lookedFirst && !held.sent.some((m) => /"gift":true/.test(m)) && !held.said.some((t) => giftLines.test(t)),
+    JSON.stringify(held));
+  // Shared: this card turned shared screen (the real _goShared), with a pop and its line up
+  // first; then its first look again, and the server asked directly.
+  const shared = await card.first().evaluate(async (el, { e, g }) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+    const id = s.ids["sensor.life_stage"];
+    el._giftPop(s, g);
+    el._queue(s, "found this for you ♥", 5000, { type: "gift" });
+    const popped = !!s.screen.querySelector(".reveal.gift");
+    localStorage.setItem("hatch-shared-screen", "on");
+    el._goShared();
+    const out = { popped, popAfter: !!s.screen.querySelector(".reveal.gift") || !!s.giftPop,
+      lineAfter: (s.queue || []).some((q) => q.type === "gift") };
+    for (let i = 0; i < 50 && (s.mine !== null || !s.subscribed); i++) await wait(100);
+    el.__giftSent = [];
+    const was = s.asleep;
+    Object.assign(s, { asleep: false, lookedFirst: false, queue: [], sayUntil: 0 });
+    el._firstLook(s);
+    s.asleep = was;
+    await wait(1500);
+    out.mine = s.mine;
+    out.look = (s.queue || []).map((q) => q.text);
+    out.sent = el.__giftSent.filter((m) => /virtual_pet\/collect/.test(m));
+    const err = (p) => p.then((r) => ({ ok: r }), (x) => ({ error: x?.code || String(x) }));
+    out.noShared = await err(el._hass.callWS({ type: "virtual_pet/collect", entity_id: id, gift: true }));
+    out.sharedTrue = await err(el._hass.callWS({ type: "virtual_pet/collect", entity_id: id, gift: true, shared: true }));
+    out.coll = await err(el._hass.callWS({ type: "virtual_pet/collection", entity_id: id, shared: true }));
+    localStorage.setItem("hatch-shared-screen", "off");
+    s.queue = [];
+    el._goPersonal();
+    for (let i = 0; i < 50 && !s.mine?.gift; i++) await wait(100);
+    out.back = s.mine?.gift ?? null;
+    s.lookedFirst = true; // this page sits out the race
+    return out;
+  }, { e: seedPet, g: giftSeed });
+  check("V-E2: a shared flip drops the gift's pop and its queued line (_dropGift)",
+    shared.popped && !shared.popAfter && !shared.lineAfter, JSON.stringify(shared));
+  check("V-E2: a shared screen's first look sends no collect and says no gift line (mine is null there)",
+    shared.mine === null && shared.sent.length === 0 && !shared.look.some((t) => giftLines.test(t)), JSON.stringify(shared));
+  check("V-E2: the server refuses a gift's take without shared: false (error shared), and the gift still waits",
+    shared.noShared.error === "shared" && shared.sharedTrue.error === "shared" &&
+    JSON.stringify(shared.back) === JSON.stringify(giftSeed), JSON.stringify(shared));
+  check("V-E2: a shared screen's collection reply has no gifts",
+    !!shared.coll.ok && !("gifts" in shared.coll.ok), JSON.stringify(shared.coll));
+  // Two fresh tabs of dev, opened together: their spies are in before the card runs.
+  await context.addInitScript(() => {
+    window.__gift = { said: [], replies: [], looks: [] };
+    customElements.whenDefined("hatch-pet-card").then(() => {
+      const P = customElements.get("hatch-pet-card").prototype;
+      if (P.__giftSpy) return;
+      P.__giftSpy = true;
+      const say = P._sayLine;
+      P._sayLine = function (s, q) {
+        window.__gift.said.push(q?.text);
+        return say.call(this, s, q);
+      };
+      const take = P._giftTake;
+      P._giftTake = function (s) {
+        const hass = this._hass;
+        if (hass && !hass.__giftSpy) {
+          hass.__giftSpy = true;
+          const real = hass.callWS.bind(hass);
+          hass.callWS = (msg) => {
+            const p = real(msg);
+            if (msg?.type === "virtual_pet/collect" && msg.gift) {
+              p.then((r) => window.__gift.replies.push(r), (x) => window.__gift.replies.push({ error: x?.code || String(x) }));
+            }
+            return p;
+          };
+        }
+        return take.call(this, s);
+      };
+    });
+  });
+  const tabs = [];
+  await Promise.all([0, 1].map(async (i) => {
+    const pg = await context.newPage();
+    pg.on("pageerror", (err) => errors.push(`gifts tab ${i}: ${err}`));
+    tabs.push(pg);
+    try {
+      await pg.goto(`${HA}/pet-bench/pet`);
+      await pg.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
+      await settle(pg);
+      await pg.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+      const c = pg.locator("hatch-pet-card").first();
+      // Woken only if the pet is asleep here (pinAwake clears the queues: a look that
+      // already ran has queued its lines, and its gift's, and must keep them).
+      if (await c.evaluate((el) => el._slides.some((x) => x.asleep))) await pinAwake(c, `gifts tab ${i}`);
+      const n = await pg.locator("hatch-pet-card .slide").count();
+      for (let k = 0; k < n; k++) {
+        if (await c.evaluate((el, e) => el._slides?.[el._index]?.ids?.["sensor.life_stage"] === e, seedPet)) break;
+        await pg.locator("hatch-pet-card .nav.next").click();
+        await pg.waitForTimeout(700);
+      }
+    } catch (err) {
+      errors.push(`gifts tab ${i}: ${err.message}`);
+    }
+  }));
+  const race = [];
+  for (const pg of tabs) {
+    const c = pg.locator("hatch-pet-card").first();
+    race.push(await c.evaluate(async (el, e) => {
+      const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+      for (let i = 0; i < 250 && (!s?.lookedFirst || s.gifting || s.queue?.some((q) => q.type === "gift")); i++) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      const find = el._worlds?.[s.mine?.gift?.world || ""]?.finds;
+      return { ...window.__gift, lookedFirst: !!s?.lookedFirst, onShow: el._slides[el._index] === s,
+        mine: s?.mine?.gift ?? null, pop: s?.giftPop ? s.giftPop.el.querySelector(".rf").dataset.find : null,
+        queue: (s?.queue || []).map((q) => q.text), hasFind: !!find };
+    }, seedPet).catch((err) => ({ error: err.message })));
+  }
+  const replies = race.flatMap((r) => r.replies || []);
+  const full = replies.filter((r) => r?.gift);
+  const lines = race.flatMap((r) => (r.said || []).filter((t) => giftLines.test(t || "")));
+  const wantLine = giftSeed && (["acorncup", "knittedheart", "paperboat"].includes(gid) ? "made this for you ♥" : "found this for you ♥");
+  check("V-E2: two tabs of dev: exactly one non-empty take ({gift: {id, world}}), at most one empty, no error",
+    full.length === 1 && JSON.stringify(full[0].gift) === JSON.stringify(giftSeed) &&
+    replies.length - full.length <= 1 && replies.every((r) => !r?.error && "gift" in r), JSON.stringify(race));
+  check(`V-E2: two tabs of dev: exactly one gift line across both (V6 for the gift-only ${gid}: "${wantLine}"), with the pop`,
+    lines.length === 1 && (lines[0] === wantLine || lines[0] === "for you! ♥") &&
+    race.filter((r) => r.pop === `${giftSeed.world}/${gid}`).length <= 1, JSON.stringify({ lines, race }));
+  for (const pg of tabs) await pg.close().catch(() => {});
+  await page.bringToFront();
+  // After the take: dev's card (sat out) said nothing and holds no gift; the pages and the bus.
+  const after = await card.first().evaluate(async (el, { e, g }) => {
+    const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+    const id = s.ids["sensor.life_stage"];
+    for (let i = 0; i < 30 && s.mine?.gift; i++) await new Promise((r) => setTimeout(r, 100));
+    const mine = await el._hass.callWS({ type: "virtual_pet/collection", entity_id: id, shared: false });
+    const house = await el._hass.callWS({ type: "virtual_pet/collection", entity_id: id, shared: true });
+    window.__giftBusOff?.();
+    const ents = Object.keys(el._hass.states).filter((k) => el._hass.entities?.[k]?.device_id === s.ids.device);
+    return { gift: s.mine?.gift ?? null, sent: el.__giftSent.filter((m) => /"gift":true/.test(m) && /"shared":false/.test(m)),
+      mineGifts: mine.gifts, mineFinds: Object.keys(mine.finds || {}), houseFinds: Object.keys(house.finds || {}),
+      houseGifts: "gifts" in house, states: JSON.stringify(ents.map((k) => el._hass.states[k])), nEnts: ents.length,
+      bus: window.__giftBus.filter((x) => x.includes(g) || /"gifts?"/.test(x)), nBus: window.__giftBus.length };
+  }, { e: seedPet, g: gid });
+  check("V-E2: after the take, dev's open card holds mine.gift null and sent no take of its own",
+    after.gift === null && after.sent.length === 0, JSON.stringify({ gift: after.gift, sent: after.sent }));
+  check("V-E2: the gift is on dev's own page (gifts), never in the house finds map (finding #7)",
+    Array.isArray(after.mineGifts) && after.mineGifts.includes(gid) && !after.mineFinds.includes(gid) &&
+    !after.houseFinds.includes(gid) && !after.houseGifts, JSON.stringify(after));
+  check("V-E2: no sensor state or attribute and no bus event carries the gift",
+    after.nEnts > 0 && !after.states.includes(gid) && !/"gifts?"/.test(after.states) && after.nBus > 0 && after.bus.length === 0,
+    JSON.stringify({ nEnts: after.nEnts, nBus: after.nBus, bus: after.bus }));
+  // Owner Q1 on the card, the take stubbed (the server's is checked above): a tab back after
+  // AWAY_NOTE_AFTER_MS hidden takes a waiting gift and says it; a short absence doesn't.
+  const q1 = await card.first().evaluate(async (el, { e, g }) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+    const hass = el._hass;
+    const real = hass.callWS;
+    const calls = [];
+    hass.callWS = (msg) => {
+      if (msg?.type === "virtual_pet/collect" && msg.gift) {
+        calls.push(msg);
+        return Promise.resolve({ gift: g });
+      }
+      return real.call(hass, msg);
+    };
+    const run = async (hiddenMs) => {
+      Object.assign(s, { queue: [], sayUntil: 0, flairUntil: 0, visitUntil: 0 });
+      s.mine = { ...(s.mine || {}), gift: g };
+      el._hiddenAt = Date.now() - hiddenMs;
+      el._onHidden(); // the page is visible: a return
+      const said = [];
+      const was = el._sayLine;
+      el._sayLine = function (sl, q) { said.push(q.text); return was.call(this, sl, q); };
+      await wait(2500);
+      delete el._sayLine;
+      const pop = !!s.screen.querySelector(".reveal.gift");
+      el._dropGift(s);
+      return { said, pop, again: !!s.giftAgain };
+    };
+    const short = await run(60 * 1000);
+    const nShort = calls.length;
+    const long = await run(3 * 3600 * 1000 + 1000);
+    hass.callWS = real;
+    s.mine = { ...(s.mine || {}), gift: null };
+    s.giftAgain = false;
+    return { short, nShort, long, nLong: calls.length - nShort, shared: calls.every((m) => m.shared === false) };
+  }, { e: seedPet, g: giftSeed });
+  check("V-E2 (owner Q1): a tab back after a short absence takes nothing; after AWAY_NOTE_AFTER_MS it takes and says the gift",
+    q1.nShort === 0 && !q1.short.said.some((t) => giftLines.test(t || "")) && q1.nLong === 1 && q1.shared &&
+    q1.long.said.some((t) => giftLines.test(t || "")) && q1.long.pop, JSON.stringify(q1));
+  await unpinAwake(card);
+  }
+  }
   if (enter("finds")) {
-  // 8a. The basket and the reveal (visitors v2 §3, V-C), on the basket restart seeded:
+  // 8b. The basket and the reveal (visitors v2 §3, V-C), on the basket restart seeded:
   // its picture with no number; nothing said on open; a tap is one virtual_pet/collect (a
   // websocket command: no call_service, so who tapped isn't recorded) and never a pat or
   // the status; a double tap sends one; the finds come out one by one with their lines
@@ -8748,7 +8996,7 @@ async function main() {
       const conn = c._hass.connection;
       const real = conn.sendMessagePromise;
       conn.sendMessagePromise = function (msg, ...a) {
-        if (msg?.type === "virtual_pet/collect") c.__collects++;
+        if (msg?.type === "virtual_pet/collect" && !msg.gift) c.__collects++; // a gift's take isn't the basket's
         return real.call(this, msg, ...a);
       };
     });

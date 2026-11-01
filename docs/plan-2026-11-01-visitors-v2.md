@@ -437,10 +437,11 @@ V-E2.
   - Variety is per person, so each friend can get their own one-of-a-kind.
 - **Given at their next look**, on **their own** screen (V-E2, the card):
   - V5 "saved this <find> for you ♥" (V6 for a gift-only find, V7 for a baby; §7);
-  - the find pops up **above the pet**, a gift variant of the reveal (V-E review #5):
+  - the find pops up **by the pet's head**, a gift variant of the reveal (V-E review #5):
     `.reveal.gift`, with no basket picture (`.rb`), the basket left as it is, no `burst`;
     the pop is the queued line's `then` (`_queue` `opts.then`), so picture and line
-    arrive together.
+    arrive together. (Planned "above the pet"; built up on the pet's right, since the
+    space straight above is the bubble's: see "V-E2 as built".)
   - **First-look order (V-E review #6).** `_firstLook` is synchronous and the reply is
     async. So: the existing lines, then **reserve the gift's slot** (only if
     `s.mine?.gift && !sharedScreen() && lines.length < FIRST_LOOK_LINES`), then the
@@ -450,9 +451,9 @@ V-E2.
     `collect {gift: true, shared: false}`; on a non-empty reply `_queue` V5/V6/V7 as
     **KEPT** (said once; waits through a nap like other kept lines). Empty or an error
     (an older server): nothing, and the slot goes unused.
-  - **A gift that arrives while the card is open (V-E review #7): OPEN, owner Q1.** The
-    review recommends the next first look, or the tab coming back after being hidden at
-    least `AWAY_NOTE_AFTER_MS`; never an interruption while you watch.
+  - **A gift that arrives while the card is open (V-E review #7; owner Q1, 2026-11-02:
+    as recommended).** Said at the next first look, or when the tab comes back after
+    being hidden at least `AWAY_NOTE_AFTER_MS`; never an interruption while you watch.
   - Not on a shared screen; there it waits. Nothing expires: a gift waits as long as it
     has to, and a second gift doesn't come until the first is taken.
   - **Two screens (finding #14).** A person may have two screens (phone and laptop), and
@@ -682,7 +683,7 @@ V-C only.
 | V-C | **The basket and the reveal, card**: the basket button, the reveal queue, lines V1-V4 and V8, calm, compact; the reveal at 16 cells (#23); the no-nagging scan extended to the V1-V11 table, with the longest-name length check (#16); the bench `house` fixture (extending `--mine`, #15) plus `--preset finds`; card-check `finds` (ws spy, not a DB read, #17) | M | 1 | stand-ins | V-B |
 | V-D | **The collection page**: `virtual_pet/collection {entity_id, shared}` ws read (#6); no gift in the house `finds` map (#7, R3); the journal's "finds ›" link; tiles at 16 cells and silhouettes; **the ♥ on the viewer's own gift tiles, read from `gifts` when the reply has it (moved here from V-E, V-E review #20; the drawing of a gift-only-received ordinary find waits on owner Q2)**; the bench `--collection` fixture; card-check | M | 1 | stand-ins | V-B |
 | V-E1 ✅ | **Built** (s2597; "V-E1 as built" below). **Gifts, server**: bond `gift {id, world}`/`gifts` (ids only, R6)/`next_gift_at`, never raising in `_bond` (V-E review #3, #4, #14); the per-person clock (#8); `pick_gift` (#9); `mine.gift`; `collect {gift: true, shared: false}` (#1, #2, #18); `collection` `gifts` (#17); no event, push or debug (#12, #21); the privacy pytest with the gift-only id (#11) | M | **2** | none | V-B, V-D0 |
-| V-E2 | **Gifts, card**: the first look V5-V7 with the reserved slot (V-E review #6), `.reveal.gift` above the pet (#5), `GIFT_MADE` and `BABY.gift` (#10), the ♥ state dropped on a shared flip (#12), the error reply swallowed (#1); the bench `gift` field and `--preset gifts` (#16); card-check `gifts` (#15); owner Q1 decides when a gift arriving while the card is open is said (#7) | M | 1 | none new | V-C, V-E1 |
+| V-E2 ✅ | **Built** (s2601; "V-E2 as built" below). **Gifts, card**: the first look V5-V7 with the reserved slot (V-E review #6), `.reveal.gift` above the pet (#5), `GIFT_MADE` and `BABY.gift` (#10), the ♥ state dropped on a shared flip (#12), the error reply swallowed (#1); the bench `gift` field and `--preset gifts` (#16); card-check `gifts` (#15); owner Q1 decides when a gift arriving while the card is open is said (#7) | M | 1 | none new | V-C, V-E1 |
 | V-F | **Final art**: 60 finds (64 × 64, #18) + 3 baskets, one world per commit, each swapping its stand-ins | M (art-bound) | 1 | 63 | V-C; the Luna queue; the ⟲ picks |
 
 **V-A as built (s2582, for V-B onwards):**
@@ -878,6 +879,61 @@ and P1-P2 fixes, with the first mate's picks:
   for `gifts` (#17); `test_channel`'s `mine` shape gains `gift: null`; `test_public`'s
   scripted day sets aside and takes `acorncup` and scans for it.
 
+**V-E2 as built (s2601, for V-D and V-F):** card only, no server change.
+
+- **Card** (`hatch-pet-card.js`): `GIFT_MADE` (`acorncup`, `knittedheart`, `paperboat`),
+  `GIFT_LINES` (`find` V5 over the find's `name`, `made`/`found` V6), `GIFT_LINE_MS` 5000,
+  `BABY.gift` = "for you! ♥" (V7, baby stage only); exported as `HatchPetCard.giftLines`
+  and `.giftMade`. No personality variants, no nickname (V5-V7 go through `_babySet`
+  only, not `_lines`).
+- **First look** (`_firstLook`): after the upbringing line, `_giftDue(s)` (`mine.gift`, not
+  a shared screen, no take in flight) with room reserves the slot; the missed visitor
+  needs room past it. After the sync lines are queued, `_giftTake(s)`: one
+  `virtual_pet/collect {entity_id, gift: true, shared: false}`. **The reply alone
+  decides** (V-E1 audit #1: the server's push of `mine.gift = null` comes first); a
+  `{gift: null}`, an error or a find this card doesn't know says nothing. A non-empty
+  reply is `_queue`d as KEPT, `type: "gift"`, with **no `at`** (so `_markSaid` writes
+  nothing) and `then` = `_giftPop`. A reply that lands after another pet came onto the
+  slide, or after a shared flip (`s.giftEpoch`), is dropped.
+- **The pop** (`_giftPop`/`_giftPopEnd`): `<div class="reveal gift"><img class="rf">`, the
+  find's art from `gift.world` (`find_<world>_<id>.png`), the `pop` animation unless calm,
+  no basket, no `burst`, `s.basket` untouched; for `GIFT_LINE_MS` with `flairUntil` and
+  `visitUntil` held as the reveal does. **Placed up on the pet's right** (`right: 6% +
+  edge`, `bottom: 46%`, 16 cells), not straight above: the bubble (left-anchored, up to 69%
+  wide) covers the space over the pet's head, and the first bench render hid the find
+  under V5's two-line bubble. Shown in compact too (`.reveal:not(.gift)` keeps the
+  basket reveal's compact rule); hidden under the status like the reveal.
+- **Dropped** (`_dropGift`: the pop, a queued gift line, a take in flight) on `_goShared`
+  (any `SHARED_EVENT` flip or storage event) and in `_forget`; `disconnectedCallback`
+  ends only the pop (a take or line still waiting is said on return). Nothing gift-related
+  is stored anywhere. A gift taken but dropped unsaid by a shared flip is gone (the server
+  has cleared it): privacy wins over the one line.
+- **Owner Q1** (`_onHidden`, `_giftReturn`): a `visibilitychange` back to visible after
+  `AWAY_NOTE_AFTER_MS` hidden sets `s.giftAgain` on every slide; the tick takes a waiting
+  gift for the slide on show once the first look's conditions hold (channel heard, species,
+  awake, home, hatched). A first look uses the flag up. Nothing else is re-run on return.
+- **Bench**: shot field `gift: {id, world}` (and `--gift world/id`) through the real
+  `_firstLook` with a fake `callWS` answering only `collect {gift: true, shared: false}`;
+  writes `{lookedFirst, said, pop}` beside the PNG. `--preset gifts`: 11 shots (V5 with
+  "message in a bottle" in the porthole and at 330, V5 day/night, V6 made ×2 and found
+  from another world, V7 baby, calm, compact, asleep: nothing taken).
+- **Card-check `gifts`** sits right after `restart` (`NEEDS.gifts = ["restart"]`, the same
+  shard). Restart's bounce seeds `bonds[dev].gift` = the world's **gift-only** find, only
+  when `gifts` runs (else a later fresh tab of dev's would take it); `unseed` puts the bond
+  back whole. With a gift-only id the line checked is **V6**, not V5 (V5's words are the
+  Node test's and the bench's). Checks: the open card holds `mine.gift` and says nothing
+  (no interruption); a shared flip drops a pop and its line; a shared first look sends no
+  collect; `collect {gift}` without `shared: false` (and with `shared: true`) is refused
+  `shared`; a shared `collection` has no `gifts`; two fresh tabs: exactly one non-empty
+  take, at most one empty, exactly one gift line; after it the house `finds` map has no
+  gift and dev's `gifts` has it; no entity state or bus event carries it; Q1 on the card
+  with the take stubbed (a short absence takes nothing, a long one takes and says it).
+  `finds`' second tab counts only basket collects. The second login (`other`) isn't
+  re-checked here: by `oldcard` the gift is taken (V-E1's pytest covers other users).
+- **Tests**: `tests/js/gift_lines.test.js` (GIFT_MADE ⊂ gift-only ids, made + found = all
+  six; V5 over every ordinary find ≤ 40 with "message in a bottle" exactly 40; V6/V7
+  words; the scan); `gift` joins card-check's baby-scan keys.
+
 **Which slice owns each review finding:** V-A #8 #9 #10 #11 #12 #19 #22; V-B #1 #2 #3 #4 #5
 #13 #18 (lists) #20 #21 and the salvage of `basket`; V-C #15 #16 #17 #23; V-D #6 #7; V-E #6 #7 #14; V-F #18 #23. Review blockers: before V-A, #9 #10 #11
 #22 (all in V-A); before V-B, #1 #2 #3 #4 #8 #12 #21; before V-C/V-F, #23 #18; before V-E, #6
@@ -994,11 +1050,14 @@ The V-E review (s2596, FIX FIRST, plan edits only), decided by the first mate
 (§5, §7, §11, §12). #8 and #9 take the recommended rules (a)-(g) and weights as written.
 Review Q3 (missed visitor or gift, room for one): **the gift** (§5).
 
+**Q1 (V-E review #7), answered by the owner (2026-11-02): as recommended.** A gift that
+arrives while your card is already open is said at the next first look, or when the tab
+comes back after being hidden at least `AWAY_NOTE_AFTER_MS`; never as an interruption
+while you watch. With it, the first mate's pick for review Q3 stands: at the first look
+the gift's slot is reserved before the missed-visitor line (the gift wins). Built in V-E2.
+
 **Still OPEN for the owner (do not decide in a slice):**
 
-- **Q1 (V-E review #7).** A gift that arrives while your card is already open: when does
-  the pet say it? *Recommended:* at the next first look, or when the tab comes back after
-  being hidden at least `AWAY_NOTE_AFTER_MS`; never an interruption while you watch.
 - **Q2 (V-E review #19).** An ordinary find you got only as a gift: on your own
   collection page, is it drawn? *Recommended:* drawn, with a ♥, on your screen only; the
   house's page, and everyone else's, show it unmet until it is found.

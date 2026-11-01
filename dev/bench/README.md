@@ -22,6 +22,7 @@ node scripts/bench.js --preset picker     # the shell picker: egg (locked) and t
 node scripts/bench.js --preset winter     # winter lights at 330: worlds day/night, mono night, hats, snow hare, auto, holiday names
 node scripts/bench.js --preset visitors   # 28 shots at 330: every world visitor greeting, beats, night, calm, baby, child
 node scripts/bench.js --preset finds      # 74 shots: every find at reveal size, the baskets, sparkle, V3, baby, calm, compact
+node scripts/bench.js --preset gifts      # 11 shots: a gift's first look, V5 (longest name), V6 made/found, V7 baby, calm, compact, asleep
 node scripts/bench.js --preset mono       # the mono screen: 2498 shots, ~2.5 min, plus the pass rule
 ```
 
@@ -80,6 +81,7 @@ A shot (all optional):
 | `visitor` | a world visitor pinned through the card's own `_visitorStart`/`_visitorGreet`, timers stopped, moves paused: `{id, beat: "arrive"\|"greet"\|"leave", frame: 1\|2, side: "left"\|"right"}` (default its world's first, `greet`, left). With `motion: reduce` it is the still visit. Baby talk needs `storage: {"hatch-baby-talk-bench-user": "on"}` |
 | `seasonVisitor` | the season's own visitor (the turkey, the snow hare) through the card's own `_seasonFly`, paused: `{season, at, frame, side}` (`at` 0-1 of its crossing, default .45; its first greet in the bubble) |
 | `house`, `basket` | the house view the private channel would send (`house`, an object over it), and `basket`: how many finds wait (`house.basket`, 0-3), so the basket shows (visitors v2 §3) |
+| `gift` | a gift waiting for the viewer (visitors v2 §5): `{id, world}` set as `mine.gift`, the card's own first look forced (its other lines dropped), the take answered by the fake `callWS` (only `collect {gift: true, shared: false}`), the line said and the pop paused just in. `--gift woodland/pinecone` on the command line. Writes `<shot>.json` beside the PNG: `{lookedFirst, said, pop}`. An asleep, away or egg pet's first look doesn't run, so nothing is said |
 | `reveal` | the basket's reveal pinned through the card's own `_revealStart`/`_revealFind`, timers stopped: `{id, world?, new?, from?}` (one find; `world` defaults to the pet's) or `{finds: [...], at}` (shown up to the find at `at`). Its line in the bubble, its pop and a `new` find's sparkle paused just in; with `motion: reduce` it is still |
 | `storage` | any other localStorage keys to seed (`hatch-named-holidays: "off"` turns holiday names off) |
 | `config` | extra card config (`setConfig`) |
