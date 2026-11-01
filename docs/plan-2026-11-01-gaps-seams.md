@@ -339,8 +339,25 @@ idle, link, editor) and a bench shot where it's visual (1a, 2a).
   | charming | `a visitor! what an honour`, `do come in, friend ♥` |
   | plucky | `who goes there? oh, hi!`, `visitor spotted! hi! ♥` |
 
+- **4a, a swap:** charming's approved bored line `a bit dull, isn't it?` asks a question,
+  which the persona scan forbids ("no asking"). Built as `a bit dull today, I must say`
+  until the owner picks a line.
 - **6a, Assist visitor (today's visit, window ended):** `A {visitor} came by today.`
   (the shooting star: `A shooting star went by today.`), after the wish sentence.
+
+## 4c. Build log
+
+| Slice | Commit | Notes |
+|---|---|---|
+| 3a winter mornings | `f334f862` | 1 Dec line awaits §4b approval |
+| 1a countdown | `f2873ad2` | bench: `s1a-*.png` |
+| 1b one week | `c8f4444b` | |
+| 2a weight words | `43cbefe0` | bench `pet.weight`; `s2a-weight-330.png` |
+| Q2 mockups | `54101007` | bench `petStretch`; sheet `q2-stretch-sheet.png` |
+| 4a persona moods | `7ab947ff` | charming swap above |
+| 5a watched first link | `e1703495` | card-check marks the day's link done on its pages |
+| 5b neighbour lines | `004f82e4` | |
+| 7a editor switch | `7c7fade2` | |
 
 ## 5. Build order
 
