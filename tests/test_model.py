@@ -2342,6 +2342,16 @@ def test_it_picks_a_favourite_snack_once_from_its_likes():
     assert pet.favourites == {"snack": first}
 
 
+def test_a_favourite_off_its_diet_is_picked_again():
+    pet = hatched(at(12))
+    pet.favourites = {"snack": "mice"}
+    gentle = ["moths", "beetles"]
+    assert not model.pick_favourite(pet, gentle, random.Random(1))  # still for good
+    assert model.pick_favourite(pet, gentle, random.Random(1), {"mice", "voles"})
+    assert pet.favourites["snack"] in gentle
+    assert not model.pick_favourite(pet, gentle, random.Random(2), {"mice", "voles"})
+
+
 def test_its_favourite_snack_is_said_at_most_once_a_day():
     pet = hatched(at(12))
     assert model.favourite_snack(pet, "2026-10-01", Luck()) == []  # none picked yet

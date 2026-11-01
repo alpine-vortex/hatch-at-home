@@ -121,6 +121,16 @@
               "moon_altitude": "Optional. Degrees above the horizon; the moon only counts while it's up."
             }
           },
+          "food": {
+            "name": "Food",
+            "description": "What its favourite snack can be.",
+            "data": {
+              "no_mammals": "No mammals"
+            },
+            "data_description": {
+              "no_mammals": "On: no favourite snack is a mammal (an owl likes moths, beetles and crickets). Off: realistic diets where they differ (an owl likes mice, voles and moths). A pet whose favourite isn't on its diet any more picks a new one."
+            }
+          },
           "privacy": {
             "name": "Privacy",
             "description": "For wall tablets and shared dashboards.",

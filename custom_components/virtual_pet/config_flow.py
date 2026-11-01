@@ -51,6 +51,7 @@ from .const import (
     CONF_MUSIC,
     CONF_NEW_PET,
     CONF_NEXT_WORLD,
+    CONF_NO_MAMMALS,
     CONF_PRIVACY,
     CONF_RAIN,
     CONF_ROOM_LIGHTS,
@@ -295,6 +296,9 @@ class PetOptionsFlow(OptionsFlowWithReload):
                 (CONF_MOON_PHASE, _entities("sensor"), None),
                 (CONF_MOON_ILLUMINATION, _entities("sensor"), None),
                 (CONF_MOON_ALTITUDE, _entities("sensor"), None),
+            ],
+            "food": [
+                (CONF_NO_MAMMALS, BooleanSelector(), True),
             ],
             "privacy": [
                 (CONF_PRIVACY, BooleanSelector(), True),

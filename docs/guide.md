@@ -420,6 +420,12 @@ the pet comes home.
 | Moon illumination | none | Optional, the lit fraction (0–1 or %). Used when there's no phase sensor: 97% or more is full, 3% or less is new. |
 | Moon altitude | none | Optional, degrees. The moon only counts while it's above the horizon. |
 
+### Food
+
+| Field | Default | What it does |
+| --- | --- | --- |
+| No mammals | on | No pet's favourite snack is a mammal: the owl likes moths, beetles and crickets, the ball python quail eggs and egg yolk. Turn it off for realistic diets where they differ (owl: mice, voles, moths; ball python: mice, rats, quail eggs; fox: mice, blackberries, beetles). A pet whose favourite is a mammal picks a new one when it's turned back on; turning it off leaves a favourite as it is, and the next hatchling picks from the realistic foods. |
+
 ### Privacy
 
 | Field | Default | What it does |
@@ -623,7 +629,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 - **Its favourite snack.** At hatching each pet picks a favourite from its
   creature's foods (the squirrel likes hazelnuts, fir cones and mushrooms), and now
   and then a snack turns out to be it: "hazelnuts, my favourite!!", at most once a
-  day. It's on the life stage sensor as `favourites`.
+  day. It's on the life stage sensor as `favourites`. No favourite is a mammal
+  unless you turn off **No mammals** in the pet's options (Food).
 - **Its catchphrase.** Each creature has one of its own ("tra la" for the bird,
   "acorn" for the squirrel), said now and then at the end of a line that names
   nobody. Once you're close (bond level 7), the pet asks you once what it should

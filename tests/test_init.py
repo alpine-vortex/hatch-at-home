@@ -408,6 +408,7 @@ async def test_options_flow_saves_a_flat_mapping(
             "room": {},
             "activity": {"zone": "zone.home", "tv": ["media_player.tv"]},
             "sky": {},
+            "food": {"no_mammals": True},
             "privacy": {"privacy": True},
             "notifications": {},
         },
@@ -420,6 +421,7 @@ async def test_options_flow_saves_a_flat_mapping(
         "weather": "weather.home",
         "zone": "zone.home",
         "tv": ["media_player.tv"],
+        "no_mammals": True,
         "privacy": True,
         "comfort_low": 18.0,
         "comfort_high": 26.5,
@@ -619,6 +621,7 @@ async def test_options_show_fahrenheit_and_store_celsius(
         "room": {},
         "activity": {"zone": "zone.home", "away_after": 2},
         "sky": {},
+        "food": {"no_mammals": True},
         "privacy": {"privacy": True},
         "notifications": {},
     }
@@ -829,6 +832,7 @@ async def test_options_reject_impossible_settings(
         "room": {"fireplace": "sensor.fire_temp"},
         "activity": {"zone": "zone.home"},
         "sky": {},
+        "food": {"no_mammals": True},
         "privacy": {"privacy": True},
         "notifications": {},
     }
@@ -2760,6 +2764,34 @@ async def test_a_hatched_pet_picks_a_favourite_snack_and_says_so(
     assert {"type": "favourite_snack", "food": food}.items() <= moments(hass)[0].items()
     await press(hass, "button.pip_snack")  # once a day
     assert [m["type"] for m in moments(hass)].count("favourite_snack") == 1
+
+
+async def test_no_mammals_keeps_mice_off_the_menu_and_off_lets_them_on(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, species="squirrel")
+    config = await setup(hass)
+    coordinator = config.runtime_data
+    gentle = ["moths", "beetles", "crickets"]
+    # On by default: the owl's gentle foods, and mice or voles may not stay.
+    assert coordinator.diet("owl") == (gentle, {"mice", "voles"})
+    assert coordinator.diet("squirrel") == (coordinator.likes["squirrel"], set())
+    coordinator.state.species = "owl"
+    coordinator.state.favourites = {"snack": "mice"}  # picked with it off
+    coordinator._pick_favourite()
+    assert coordinator.state.favourites["snack"] in gentle
+    # Off: realistic foods where the creature has them; a favourite stays.
+    hass.config_entries.async_update_entry(
+        config, options={**config.options, "no_mammals": False}
+    )
+    assert coordinator.diet("owl") == (["mice", "voles", "moths"], set())
+    assert coordinator.diet("squirrel")[0] == coordinator.likes["squirrel"]
+    kept = coordinator.state.favourites["snack"]
+    coordinator._pick_favourite()
+    assert coordinator.state.favourites["snack"] == kept
+    coordinator.state.favourites = {}
+    coordinator._pick_favourite()
+    assert coordinator.state.favourites["snack"] in ["mice", "voles", "moths"]
 
 
 async def test_an_egg_hatched_by_fast_forward_picks_its_favourite(
