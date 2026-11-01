@@ -405,6 +405,10 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
             && Math.min(r.bottom, dr[j].bottom) - Math.max(r.top, dr[j].top) > 1) out.overlap++;
         }
       });
+      // The sheets hide the screen: look at it for a moment as it is with no sheet open.
+      const wasOpen = s.screen.classList.contains("show-status");
+      s.screen.classList.remove("show-status");
+      await new Promise((r) => setTimeout(r, 60));
       el._ask(s, "catchphrase");
       const bs = [...s.screen.querySelectorAll(".askday button")];
       out.answers = bs.length;
@@ -413,6 +417,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
         if (r.width < 43.5 || r.height < 43.5) out.small.push(`answer ${r.width.toFixed(0)}x${r.height.toFixed(0)}`);
       }
       el._clearAsk(s);
+      if (wasOpen) s.screen.classList.add("show-status");
       return out;
     });
     if (tapBoxes.dots < 2 || tapBoxes.answers < 2 || tapBoxes.small.length || tapBoxes.overlap || tapBoxes.mark !== 10
