@@ -1,5 +1,14 @@
 # Visitors v1, 2026-10-31 (card only, seeded by date, nothing saved)
 
+**Status (reconciled 2026-10-31 against git): BUILT.** v1 `4bf1958e` (Visitors v1: seeded
+world visitors on the card) is on main (batch 5, unreleased). In batch 6 (`fm-batch6c`,
+gating; release 0.39.0 follows): the catch-up line and 10 s on show `8911ef94`, and the
+**final art for all 36 frames** (`c9252a2e` … `b57149da`, replacing the stand-ins).
+Left: the baby's catch-up babble (open, below) and the tier-2 v2 (finds, basket,
+collection: `plan-2026-10-28-daily-checkins.md` item 1). **v2 dependency:** v1 picks the
+day's visitor on the card and saves nothing, so a collection can't credit a visit; v2
+needs the seed (or the visit) on the server first.
+
 **Owner decided 2026-10-31:** card-only v1. On some days a small creature from the pet's
 world drops by at the edge of the scene, picked by date (the same on every screen that
 day), and the pet greets it. Nothing is saved, the server doesn't change, and there's no
@@ -75,8 +84,8 @@ Visitors were too easy to miss. Two changes, card only:
   It names no person, so a shared screen says it too. A baby says the plain line for
   now (open question: `BABY.visit` babbles for the greet).
 
-**Builds after R1 and R2** (`_actPose`, `STAGE_POSES`, the `acts.cheer` pose). Both are
-on `fm-batch4` / s2549, not yet on main. Names in this plan win over line numbers.
+**Builds after R1 and R2** (`_actPose`, `STAGE_POSES`, the `acts.cheer` pose). *Done: R1
+`398c1915` and R2 `f663533d` are on main.* Names in this plan win over line numbers.
 
 ## 1. What the player sees (storyboard, about 7 s)
 
@@ -219,7 +228,8 @@ says its babble version. Under 2a's classes the visit line is **flavour**.
   transparent background; facing right (the card mirrors for `rtl`).
 - **Naming:** `frontend/ui/visitor_<world>_<id>_<1|2>.png`
   (e.g. `visitor_woodland_chickadee_1.png`).
-- **Provenance:** stand-ins drawn in code first (`art/visitors/make_visitors.py`, as
+- **Provenance (done 2026-10-31: the final 36 replaced the stand-ins in batch 6, one commit
+  per world plus hand fixes and a Sol moth redraw, `c9252a2e` … `b57149da`):** stand-ins drawn in code first (`art/visitors/make_visitors.py`, as
   `art/seasonal/make_halloween.py`), so v1 can ship and be felt on the phone. The real
   batch is one request to the owner's **Hatch API Art** session (it picks Luna or Sol),
   sent through the art coordinator, keeping the stand-ins' names, canvases and
@@ -250,6 +260,13 @@ says its babble version. Under 2a's classes the visit line is **flavour**.
 The art batch is separate and runs in parallel (**M**, art-bound). Ship after R1/R2.
 
 ## 10. Open owner questions (each with a recommendation)
+
+*Reconciled 2026-10-31.* Decided by the owner: card-only v1, the copy (section 5 minus
+"you came to see me?", see *Built*), and the catch-up line. Built as recommended, not
+recorded as the owner's answer: 1 (the roster, now with final art), 2 (no weather
+visitors), 3 (a still visitor plus the line), 4 (world visitors kept 2 min apart from
+season visitors), 5 (pat wiggles silently), 6 (4 days in 7). Still open: the baby's
+catch-up line (plain for now; `BABY.visit` babble?).
 
 1. **The roster:** are these 18 right? Your examples (crab, owl) are now creatures, so
    the crab became a shore crab, and the owl became a nighthawk. *Rec: as listed.*
