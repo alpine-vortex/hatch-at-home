@@ -2152,6 +2152,8 @@ const STYLE = `
   .screen.dim .bg { filter: brightness(.5) saturate(.75); }
   .screen.dim .pet { filter: brightness(.8); }
   .pet, .perch, .screen .pat { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%; }
+  /* Heavy (gaps-seams 2c): 6% wider, height and feet kept, still centred. */
+  .pet.heavy, .ghost.heavy { aspect-ratio: 1.06; margin-left: -24.645%; }
   /* The pat (PR 3b): a clear button over the pet's box (the img takes no taps), above the
      bubble and below a question, a game, the status and the boot screen. Written as
      ".screen .pat" so _tapped's .tap-feedback (position: relative) can't move it. */
@@ -4510,6 +4512,11 @@ class HatchPetCard extends HTMLElement {
     const drawn = sp.stages?.includes(stage) ? stage : sp.stage_fallback?.[stage];
     s.drawn = drawn;
     s.pet.style.scale = String(sp.scale?.[drawn] || 1);
+    // A heavy pet is drawn a little wider (gaps-seams 2c, owner: x1.06, only while heavy).
+    const weight = Number.parseFloat(this._state(s, "sensor.weight")?.state);
+    const heavy = stage !== "egg" && isHeavy(Number.isFinite(weight) ? weight : null);
+    s.pet.classList.toggle("heavy", heavy);
+    s.ghost?.classList.toggle("heavy", heavy);
     // Baby, teen and adult have no house poses: a hop dances, a shake shivers.
     const standIn = drawn !== "child" && !away && !asleep && POSE_MOODS.has(mood?.state);
     s.pet.classList.toggle("dance", standIn && flags.includes("dancing"));
