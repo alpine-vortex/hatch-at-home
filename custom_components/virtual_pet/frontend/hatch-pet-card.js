@@ -990,6 +990,7 @@ const PERSONA = {
     mood_excited: ["hehe, that was nice", "mm, that was fun"],
     mood_cozy: ["mm, perfect nap spot", "warm and comfy... ♪"],
     mood_bored: ["a nap sounds nice...", "just lazing about"],
+    today: ["a slow, cozy sort of day ♪", "mm, a comfy kind of day", "today was nice and lazy ♪"], // the evening's line about its day (fresh-moment 4)
     visit: ["oh, hi there... ♪", "mm, a visitor... nice"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `oh hey, ${n}... ♪`, (n) => `${n}... come sit a while ♥`],
     link_guest: [(n) => `mm, hi, ${n}... ♪`],
@@ -1013,6 +1014,7 @@ const PERSONA = {
     mood_excited: ["that was lovely!", "hehe, that was fun ♥"],
     mood_cozy: ["all snug ♥", "warm and happy ♥"],
     mood_bored: ["wish someone would visit ♥", "waiting for a friend ♥"],
+    today: ["today was a lovely day ♥", "such a warm, homey day ♥", "a nice, gentle day today ♥"], // the evening's line about its day (fresh-moment 4)
     visit: ["a visitor! welcome ♥", "hello, little friend ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! hi! so glad you came ♥`, (n) => `hello hello, ${n} ♥`],
     link_guest: [(n) => `hi, ${n}! ♥ hello ♥`],
@@ -1036,6 +1038,7 @@ const PERSONA = {
     mood_excited: ["that was great!", "woo! so much fun!"],
     mood_cozy: ["cozy... but ready to hop!", "warm paws, happy hops"],
     mood_bored: ["need to hop about!", "so... much... sitting"],
+    today: ["today was a hoppy one!", "what a zippy day! hup!", "today went boing boing! ♪"], // the evening's line about its day (fresh-moment 4)
     visit: ["a visitor! hup hup, hi!", "hiya, friend! *bounce*"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! hup hup, hi!`, (n) => `hiya, ${n}! *bounce*`],
     link_guest: [(n) => `hup! hi, ${n}!`],
@@ -1059,6 +1062,7 @@ const PERSONA = {
     mood_excited: ["what a show!", "bravo! that was fun ★"],
     mood_cozy: ["cozy, like backstage ★", "a warm spotlight ♪"],
     mood_bored: ["no audience today...", "waiting for my cue ★"],
+    today: ["today was a little show ★", "a day worth an encore ★", "today had its own sparkle ★"], // the evening's line about its day (fresh-moment 4)
     visit: ["a guest star! ★", "welcome to the show! ★"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! my co-star ★`, (n) => `ah, ${n}! cue the music ★`],
     link_guest: [(n) => `hello, ${n}! ★ take a bow`],
@@ -1082,6 +1086,7 @@ const PERSONA = {
     mood_excited: ["heh. that was nice", "well, that was fun"],
     mood_cozy: ["a fine warm spot", "cozy. as it should be."],
     mood_bored: ["hm. quiet day.", "nothing doing. hm."],
+    today: ["hm. a good, quiet day.", "a fine day, all told.", "hm. today was well spent."], // the evening's line about its day (fresh-moment 4)
     visit: ["well, hello there.", "ah. a visitor. welcome."], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `hello, ${n}. come in.`, (n) => `${n}. good to see you.`],
     link_guest: [(n) => `hm. hello, ${n}.`],
@@ -1105,6 +1110,7 @@ const PERSONA = {
     mood_excited: ["oh, how lovely!", "that was divine ♥"],
     mood_cozy: ["cozy and fabulous ♥", "warm and lovely ♥"],
     mood_bored: ["how dull...", "nothing lovely to do"],
+    today: ["a rather elegant day ♥", "today was simply divine ♥", "such a stylish day, darling ♥"], // the evening's line about its day (fresh-moment 4)
     visit: ["oh, a visitor! how lovely ♥", "welcome, welcome, dear ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}, darling! how lovely ♥`, (n) => `oh, ${n}! welcome, welcome ♥`],
     link_guest: [(n) => `${n}, darling! ♥`],
@@ -1128,6 +1134,7 @@ const PERSONA = {
     mood_excited: ["simply splendid!", "what a marvellous time"],
     mood_cozy: ["splendidly cozy", "warm as a welcome"],
     mood_bored: ["a bit dull today, I must say", "awaiting company"],
+    today: ["what a splendid day it was ♥", "a marvellous little day ♥", "today was quite grand ♥"], // the evening's line about its day (fresh-moment 4)
     visit: ["a visitor! what an honour", "do come in, friend ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `ah, ${n}! a delight ♥`, (n) => `${n}! what an honour ♥`],
     link_guest: [(n) => `${n}! how splendid ♥`],
@@ -1151,6 +1158,7 @@ const PERSONA = {
     mood_excited: ["hah! that was great", "heck yes, that was fun"],
     mood_cozy: ["cozy post, all clear", "warm and on watch"],
     mood_bored: ["nothing to guard...", "waiting for orders!"],
+    today: ["today was a good run! hah", "all handled today ♥", "today went great. heck yes!"], // the evening's line about its day (fresh-moment 4)
     visit: ["who goes there? oh, hi!", "visitor spotted! hi! ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `yo, ${n}! all clear here`, (n) => `${n}! reporting in ♥`],
     link_guest: [(n) => `hey, ${n}! ♥ hi hi`],
@@ -1344,6 +1352,21 @@ const DREAMS = {
   },
 };
 const AWAY_NOTE_AFTER_MS = 3 * 3600 * 1000;
+// The evening's line about its own day (fresh-moment 4, owner 2026-11-01): from this hour,
+// at the first look; a granted wish's line by kind (tuck_in is granted at bedtime, after).
+const TODAY_FROM_HOUR = 17;
+const TODAY_WISH = {
+  play: "I got to play a game today! ♪",
+  snack: "I got a snack after lunch! ♥",
+  bath: "I got my bubble bath today! ♥",
+  praise: "somebody said I'm good today ♥",
+  sunset: "I got to watch the sunset today ♥",
+  music: "I got some music today ♪",
+  tv: "I got to watch TV today ♪",
+  chore: "I got a chore treat today! ♥",
+  rain: "I got to see the rain today! ♪",
+  say_hi: "I got a hello this afternoon ♥",
+};
 const RESUME_HOLD_MS = 5000; // a tab back after AWAY_NOTE_AFTER_MS: its first look waits for fresh states
 // A bond with each person (only the viewer's own, from the private channel's
 // "mine"). What each level brings, as in rates.py: a warmer hello, a
@@ -5564,8 +5587,11 @@ class HatchPetCard extends HTMLElement {
     const wish = stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
     if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);
     // What happened while you were out comes after what's new (fresh-moment 2, owner Q2).
+    // From TODAY_FROM_HOUR, once a day here: a line about its day, in the away note's place.
+    const today = this._evening() && lines.length < FIRST_LOOK_LINES && this._todayLine(s);
     const seen = mark?.seen || 0;
-    if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS && lines.length < FIRST_LOOK_LINES) {
+    if (today && oncePerDay(`today-${device}`)) lines.push([today, 5000, { away: true }]);
+    else if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS && lines.length < FIRST_LOOK_LINES) {
       const note = this._awayNote(s, seen);
       if (note) lines.push([note, 5500, { away: true }]);
     }
@@ -5796,6 +5822,16 @@ class HatchPetCard extends HTMLElement {
   // "while you were out, I napped, watched the rain and had a snack!": up to
   // three things from the moments and care since the device last looked.
   _awayNote(s, since) {
+    const bits = this._dayBits(s, since);
+    // A nap alone isn't news (fresh-moment 2, owner Q2): no note.
+    if (bits.every((b) => b === "napped")) return null;
+    const list = bits.slice(0, 2); // two at most: a bubble on a 330 px card
+    return `while you were out, I ${list.join(" and ")}!`;
+  }
+
+  // What the pet did since then, newest first, as bits ("watched TV"): its moments, the
+  // finds while shown, then care (the away note's, and the evening's today line).
+  _dayBits(s, since) {
     const lastCare = this._state(s, "sensor.last_care")?.attributes || {};
     const after = (at) => new Date(at).getTime() > since;
     const bits = [];
@@ -5823,10 +5859,41 @@ class HatchPetCard extends HTMLElement {
     for (const e of [...(lastCare.log || [])].reverse()) {
       if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) add(CARE_BITS[e.action]);
     }
-    // A nap alone isn't news (fresh-moment 2, owner Q2): no note.
-    if (bits.every((b) => b === "napped")) return null;
-    const list = bits.slice(0, 2); // two at most: a bubble on a 330 px card
-    return `while you were out, I ${list.join(" and ")}!`;
+    return bits;
+  }
+
+  // The evening's line about the pet's own day (fresh-moment 4, owner Q4), a teen's or
+  // adult's: today's wish come true, else a visitor seen here today, else the newest
+  // of today's bits (not a nap), else its type's line. Names nobody and never an open
+  // wish, so a shared screen gets it too. null: nothing to say (the away note's turn).
+  _todayLine(s) {
+    const life = this._state(s, "sensor.life_stage");
+    if (life?.state !== "teen" && life?.state !== "adult") return null;
+    const wish = life.attributes?.wish;
+    if (wish?.granted && TODAY_WISH[wish.kind]) return TODAY_WISH[wish.kind];
+    const seen = this._visitSeen(s);
+    if (seen) return `a ${seen} visited me today ♪`;
+    const midnight = new Date().setHours(0, 0, 0, 0);
+    const bit = this._dayBits(s, midnight).find((b) => b !== "napped" && b !== "got my wish");
+    if (bit) return `today I ${bit}! ♪`;
+    const type = this._persona(s);
+    return type ? dailyPick(type.today, `${s.ids?.device}|today`) : null;
+  }
+
+  // The evening, for the today line: from TODAY_FROM_HOUR on this device's clock.
+  _evening() {
+    return new Date().getHours() >= TODAY_FROM_HOUR;
+  }
+
+  // The name of today's world visitor if it came by live on this device (for the today
+  // line), else null. One key per device, overwritten: nothing piles up.
+  _visitSeen(s) {
+    try {
+      const seen = JSON.parse(localStorage.getItem(`hatch-visitseen-${s.ids?.device}`) || "null");
+      return seen?.day === this._visitDay(s).toDateString() ? seen.name : null;
+    } catch (err) {
+      return null;
+    }
   }
 
   _hourHello(first) {
@@ -8882,6 +8949,13 @@ class HatchPetCard extends HTMLElement {
     s.seasonBox.append(el);
     const now = Date.now();
     const V = s.visitor = { el, v, timers: [], until: now + total, greetAt };
+    if (!v.cross) { // seen here today, for the evening's today line (fresh-moment 4)
+      try {
+        localStorage.setItem(`hatch-visitseen-${s.ids?.device}`, JSON.stringify({ day: this._visitDay(s).toDateString(), name: v.name }));
+      } catch (err) {
+        // no storage: no visitor in the today line
+      }
+    }
     s.flairUntil = s.visitUntil = V.until; // nothing else meanwhile; a pat wiggles, no line
     s.nextVisitor = Math.max(s.nextVisitor || 0, now + total + VISIT_AFTER_MS); // a seasonal one later
     const at = (ms, fn) => V.timers.push(setTimeout(() => {

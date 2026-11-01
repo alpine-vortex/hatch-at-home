@@ -188,7 +188,7 @@ const PRESETS = {
     return out;
   },
   // A 30 s look (fresh-moment), played by the card's own tick: a fresh page's morning and
-  // a tab resumed after 3 h hidden, each at 5, 10, 20 and 30 s in. An adult with a type, a
+  // a tab resumed after 3 h hidden, each at 5, 10, 20 and 30 s in, and an evening look. An adult with a type, a
   // trait, today's wish and dream, and a night's sleep since this device last looked.
   look() {
     const out = [];
@@ -200,6 +200,15 @@ const PRESETS = {
         out.push({ group: `look-${kind}`, name: `look/${kind}-${String(at).padStart(2, "0")}s`, label: `${kind}, ${at} s`,
           world: "woodland", width: 330, time: "2026-11-02T07:30:00Z", pet, look: { at, resumed, seenAgo: 12 } });
       }
+    }
+    // The evening's today line (fresh-moment 4): a 19:30 look after the sunset; the wish
+    // used up in the morning (its key spent), the dream too.
+    const evening = { ...pet, moments: [{ type: "woke_up", ago: 750 }, { type: "sunset", ago: 60 }] };
+    const spent = { "hatch-dream-bench_dev_0-Mon Nov 02 2026": "1", "hatch-wish-bench_dev_0-Mon Nov 02 2026": "1" };
+    for (const at of [5, 10]) {
+      out.push({ group: "look-evening", name: `look/evening-${String(at).padStart(2, "0")}s`, label: `evening, ${at} s`,
+        world: "woodland", width: 330, scene: "night", time: "2026-11-02T19:30:00Z", pet: evening, storage: spent,
+        look: { at, seenAgo: 12 } });
     }
     return out;
   },

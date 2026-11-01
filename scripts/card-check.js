@@ -4907,7 +4907,7 @@ async function main() {
     const TYPES = [...py.split("\nPERSONALITIES = (")[1].split("\n)")[0].matchAll(/"(\w+)"/g)].map((m) => m[1]);
     const KEYS = ["reveal", "hello", "hello_shared", "hello_warm", "hello_hearts",
       "good_morning", "sunset", "fell_asleep", "wish_granted", "favourite_snack",
-      "idle", "idle_bored", "idle_excited", "mood_content", "mood_excited", "mood_cozy", "mood_bored", "visit"];
+      "idle", "idle_bored", "idle_excited", "mood_content", "mood_excited", "mood_cozy", "mood_bored", "today", "visit"];
     const HELLOS = ["hello", "hello_shared", "hello_warm", "hello_hearts"];
     const longName = "Wwwwwwwwwwwwwwww"; // 16, as _greet leaves a name
     const longFood = "sunflower seeds"; // 15, the longest likes entry
@@ -5027,6 +5027,66 @@ async function main() {
     }, { fn: fn.toString(), arg });
     const filled = (type, key, arg) => PERSONA[type][key].map((line) => fill(line, arg));
     await page.emulateMedia({ reducedMotion: "reduce" });
+
+    // Fresh-moment 4 (owner Q4): the evening's today line. A granted wish's line, else a
+    // visitor seen here today, else today's newest bit (not a nap), else the type's line;
+    // a teen or adult only. At the first look from TODAY_FROM_HOUR, once a day, in the
+    // away note's place; never in the morning.
+    const TODAY_WISH = vm.runInNewContext(`(${src.match(/\nconst TODAY_WISH = (\{[\s\S]*?\n\});/)[1]})`);
+    const todayBad = Object.entries(TODAY_WISH).filter(([, l]) =>
+      /\b(still|again|why|never|pleas\w*|sad|cry|alone|forgot\w*)\b/i.test(l) || l.includes("?") || l.length > 40);
+    const todayOut = await typeAs(async (el, s, t) => {
+      const out = {};
+      const real = { bits: el._dayBits, seen: el._visitSeen, evening: el._evening, catchUp: el._catchUp };
+      const dreamKey = `hatch-dream-${s.ids?.device}-${new Date().toDateString()}`;
+      const dreamWas = localStorage.getItem(dreamKey);
+      const clearToday = () => { for (const k of Object.keys(localStorage)) if (/^hatch-today-/.test(k)) localStorage.removeItem(k); };
+      try {
+        el._visitSeen = () => null;
+        t.pet("adult", "mellow", 6, { wish: { kind: "bath", granted: true } });
+        out.wish = el._todayLine(s);
+        t.pet("adult", "mellow", 6, { wish: { kind: "bath", granted: false } });
+        el._visitSeen = () => "chickadee";
+        out.visitor = el._todayLine(s);
+        el._visitSeen = () => null;
+        el._dayBits = () => ["napped", "watched the sunset"];
+        out.bit = el._todayLine(s);
+        el._dayBits = () => ["napped"];
+        out.type = el._todayLine(s);
+        t.pet("child", "mellow", 6, {});
+        out.child = el._todayLine(s);
+        t.pet("adult", "mellow", 6, { wish: null });
+        el._catchUp = () => [];
+        localStorage.setItem(dreamKey, "1"); // no dream line: room for the rest
+        const look = (evening) => {
+          el._evening = () => evening;
+          Object.assign(s, { lookedFirst: false, queue: [], asleep: false, away: false });
+          el._firstLook(s);
+          const q = s.queue.map((x) => x.text);
+          s.queue = [];
+          return q;
+        };
+        clearToday();
+        out.morning = look(false);
+        out.evening = look(true);
+        out.again = look(true);
+      } finally {
+        Object.assign(el, { _dayBits: real.bits, _visitSeen: real.seen, _evening: real.evening, _catchUp: real.catchUp });
+        if (dreamWas === null) localStorage.removeItem(dreamKey); else localStorage.setItem(dreamKey, dreamWas);
+        clearToday();
+        s.lookedFirst = true;
+      }
+      return out;
+    });
+    const mellowToday = PERSONA.mellow.today;
+    check("fresh-moment 4: the today line: the wish's, a visitor seen, today's bit, else the type's; none for a child",
+      todayBad.length === 0 && todayOut.wish === TODAY_WISH.bath && todayOut.visitor === "a chickadee visited me today ♪" &&
+        todayOut.bit === "today I watched the sunset! ♪" && mellowToday.includes(todayOut.type) && todayOut.child === null,
+      JSON.stringify({ todayBad, ...todayOut }));
+    check("fresh-moment 4: said at an evening first look, once a day; never in the morning",
+      todayOut.evening.some((l) => mellowToday.includes(l)) && !todayOut.morning.some((l) => mellowToday.includes(l)) &&
+        !todayOut.again.some((l) => mellowToday.includes(l)),
+      JSON.stringify({ morning: todayOut.morning, evening: todayOut.evening, again: todayOut.again }));
 
     // The half rule, at every site: heads the type's line, tails the normal pick.
     const MOMENTS = [["good_morning", { type: "good_morning" }], ["sunset", { type: "sunset" }],
