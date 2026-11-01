@@ -8522,6 +8522,7 @@ async function main() {
   let unseed = null;
   let basketSeed = null; // restart's seeded basket, for finds: {entryId, world, basket, back}
   let giftBounce = null; // for gifts: {bounce, entryId, world} (its own bounce seeds dev's gift)
+  let giftsTaken = []; // the gift ids dev holds after gifts (collection draws them with ♥)
   const seedPet = pet["sensor.life_stage"];
   if (enter("restart")) {
   // 8. An HA restart keeps the bond, and a second login sees nothing of the
@@ -8916,6 +8917,7 @@ async function main() {
   }, { e: seedPet, g: gid });
   check("V-E2: after the take, dev's open card holds mine.gift null and sent no take of its own",
     after.gift === null && after.sent.length === 0, JSON.stringify({ gift: after.gift, sent: after.sent }));
+  giftsTaken = Array.isArray(after.mineGifts) ? after.mineGifts : [];
   check("V-E2: the gift is on dev's own page (gifts), never in the house finds map (finding #7)",
     Array.isArray(after.mineGifts) && after.mineGifts.includes(gid) && !after.mineFinds.includes(gid) &&
     !after.houseFinds.includes(gid) && !after.houseGifts, JSON.stringify(after));
@@ -9295,9 +9297,18 @@ async function main() {
   const named = (t) => (t.locked ? t.text === "" && t.alt === "" && t.label === null : t.text === nameOf(t.id) && t.alt === "");
   check("V-D: three visitor tiles, the met ones drawn with their names, the other a silhouette", same(a.visitors, wantV) &&
     a.visitors.every(named), JSON.stringify({ want: wantV, got: a.visitors }));
+  // A gift dev really received (the gifts section's, when it ran) is drawn with a ♥ on dev's
+  // own page (owner Q2): checked apart, and left out of the house's tiles below.
+  const gotGifts = (a.tiles || []).filter((t) => giftsTaken.includes(t.id));
+  const houseTiles = (a.tiles || []).filter((t) => !giftsTaken.includes(t.id));
   check("V-D: find tiles: met ones drawn with names; unmet plain ones silhouettes with no name, alt or label; unmet `when` finds, the gift-only one and laterfind absent",
-    same(a.tiles, wantF) && a.tiles.every(named) && !a.tiles.some((t) => giftOnly.includes(t.id) || t.id === "laterfind") &&
-    !a.tiles.some((t) => t.heart) && !/\?\?\?/.test(a.text), JSON.stringify({ want: wantF, got: a.tiles }));
+    same(houseTiles, wantF) && houseTiles.every(named) && !houseTiles.some((t) => giftOnly.includes(t.id) || t.id === "laterfind") &&
+    !houseTiles.some((t) => t.heart) && !/\?\?\?/.test(a.text), JSON.stringify({ want: wantF, got: a.tiles, giftsTaken }));
+  if (giftsTaken.length) {
+    check("V-D/V-E2: the gift dev took in gifts is drawn on dev's own page with a ♥",
+      giftsTaken.filter((id) => fw.finds.some((f) => f.id === id)).every((id) => gotGifts.some((t) => t.id === id && !t.locked && t.heart)),
+      JSON.stringify({ giftsTaken, gotGifts }));
+  }
   check("V-D: no count on the page (no \"x of y\", %, or progress, D8)", !/\d+\s*(of|\/)\s*\d+|%|progress/i.test(a.text), a.text);
   // D3: a photo load while on the page draws the journal under it no more.
   const photos = await card.first().evaluate(async (el) => {
