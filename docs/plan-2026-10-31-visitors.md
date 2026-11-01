@@ -206,8 +206,8 @@ says its babble version. Under 2a's classes the visit line is **flavour**.
   finishes its walk silently. This fixes the seasonal visitor's unconditional
   `_speak` at 3400 ms, which v1 doesn't copy.
 - **R2 poses:** greet = `acts.cheer` via `_actPose` (load fallback: `excited` +
-  `greethop`). No new act in v1. A later `acts.wave` could replace it, and that's the
-  art plan's call.
+  `greethop`). No new act in v1. **Built later (next-stages 2a):** the greet plays the
+  species' existing `waves` frames (`_linkPose`, with its fallbacks), no `acts.wave`.
 - **Pat during a visit:** wiggle only, no line, while `s.flairUntil > now`. This is a
   one-line change to `_patMayTalk`, and it also applies during seasonal visitors (today
   a pat there speaks and is then overwritten by the greet). Taps on the visitor
@@ -268,7 +268,7 @@ recorded as the owner's answer: 1 (the roster, now with final art), 2 (no weathe
 visitors), 3 (a still visitor plus the line), 4 (world visitors kept 2 min apart from
 season visitors), 5 (pat wiggles silently), 6 (4 days in 7). The baby's catch-up
 line: **"hi hi! ♪"** (owner, 2026-10-31), shipping with the wave pose (next-stages 2a),
-which also replaces the greet's cheer with `acts.wave` (owner: the wave is first in stage 2).
+which also replaces the greet's cheer with the species' existing wave frames (owner: the wave is first in stage 2). **Built (2a).**
 
 1. **The roster:** are these 18 right? Your examples (crab, owl) are now creatures, so
    the crab became a shore crab, and the owl became a nighthawk. *Rec: as listed.*

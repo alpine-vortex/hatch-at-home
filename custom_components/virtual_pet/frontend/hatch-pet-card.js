@@ -5108,7 +5108,8 @@ class HatchPetCard extends HTMLElement {
     // so the visit can't also play; only with room, so it never pushes a line out.
     const missed = this._visitorMissed(s);
     if (missed && lines.length < FIRST_LOOK_LINES && oncePerDay(`visit-${device}`)) {
-      lines.push([missed.catchup || `a ${missed.name} came by today ♪`, 4500, { cls: FLAVOUR }]);
+      const baby = this._state(s, "sensor.life_stage")?.state === "baby";
+      lines.push([baby ? "hi hi! ♪" : missed.catchup || `a ${missed.name} came by today ♪`, 4500, { cls: FLAVOUR }]);
     }
     for (const [text, ms, opts] of lines.slice(0, FIRST_LOOK_LINES)) this._queue(s, text, ms, opts);
   }
@@ -7914,7 +7915,17 @@ class HatchPetCard extends HTMLElement {
   // wins; the visitor still passes). A baby says baby talk.
   _visitorGreet(s, v) {
     if (!this._mayInterrupt(s, FLAVOUR)) return;
+    const before = s.poseUntil;
     this._reactFrames(s, "greet");
+    // The wave frames (the link greeting's loader and fallbacks) replace the greet
+    // pose when it ran; a child, or a species without waves, keeps the greet as it was.
+    if (s.poseUntil && s.poseUntil !== before && s.drawn !== "child" && s.species?.waves?.[s.drawn]) {
+      const mine = this._linkPose(s.species, s.drawn, s.speciesId, (f) => {
+        if (s.poseFrames === mine) { s.poseFrames = f; this._show(s, s.pet, f[0]); }
+      });
+      s.poseFrames = mine;
+      this._show(s, s.pet, mine[0]);
+    }
     const { text } = this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]));
     this._line(s, FLAVOUR, text, 3000);
   }

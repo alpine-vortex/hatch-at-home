@@ -6767,13 +6767,27 @@ async function main() {
   await page.waitForTimeout((V0.in || 1400) + 1300);
   const greeted = await card.evaluate((el) => {
     const s = el._slides[el._index];
-    return { src: s.pet.getAttribute("src"), text: s.bubble.textContent, drawn: s.drawn, acts: s.species?.acts?.cheer ?? null,
+    return { src: s.pet.getAttribute("src"), text: s.bubble.textContent, drawn: s.drawn, acts: s.species?.acts?.cheer ?? null, waves: !!s.species?.waves?.[s.drawn],
       leftOn: !!s.visitor, keys: Object.keys(localStorage), calls: el.__vcalls };
   });
   const lines = [...VLINES, ...V0.lines];
-  const greetFrame = greeted.drawn === "child" || /_(cheer|excited)_\d/.test(greeted.src);
-  check("visitors: the pet greets it: the cheer (or excited) frame and one of its lines",
+  const waves = greeted.drawn !== "child" && greeted.waves;
+  const greetFrame = greeted.drawn === "child" || (waves ? /_wave_\d/.test(greeted.src) : /_(cheer|excited)_\d/.test(greeted.src));
+  check("visitors: the pet greets it with its wave frames (child: the greet as before; no waves: cheer or excited) and one of its lines",
     greetFrame && lines.some((l) => greeted.text.includes(l)), JSON.stringify(greeted));
+  // Without the wave art the greet falls back to excited frames, never a broken image.
+  const fb = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    if (s.drawn === "child" || !s.species?.waves?.[s.drawn]) return { skip: true };
+    const key = `${s.speciesId}/${s.drawn}`;
+    const had = el._waveOk?.get(key);
+    (el._waveOk ||= new Map()).set(key, false);
+    const frames = el._linkPose(s.species, s.drawn, s.speciesId, () => {});
+    if (had === undefined) el._waveOk.delete(key); else el._waveOk.set(key, had);
+    return { frames };
+  });
+  check("visitors: the greet falls back to the excited frames when the waves failed to load",
+    fb.skip || (fb.frames?.length && fb.frames.every((f) => !/_wave_/.test(f))), JSON.stringify(fb));
   const added = greeted.keys.filter((k) => !before.includes(k));
   check("visitors: nothing sent (no callService or callWS), only hatch-visit-* kept",
     greeted.calls.length === 0 && added.length === 1 && added[0].startsWith("hatch-visit-"), JSON.stringify({ calls: greeted.calls, added }));
@@ -6821,7 +6835,7 @@ async function main() {
   });
   check("visitors: reduced motion: one _1 frame, no flap, on screen and still; the greet frame and a line, no hop",
     still.imgs.length === 1 && /_1\.png/.test(still.imgs[0]) && !still.flap && still.inside && still.same && !still.hop &&
-    (still.drawn === "child" || /_(cheer|excited)_1/.test(still.src)) && lines.some((l) => still.text.includes(l)), JSON.stringify(still));
+    (still.drawn === "child" || /_(cheer|excited|wave)_1/.test(still.src)) && lines.some((l) => still.text.includes(l)), JSON.stringify(still));
   await page.emulateMedia({ reducedMotion: null });
   await page.waitForTimeout(150);
   // A baby (baby talk on for this viewer) says the BABY.visit babble.
@@ -6864,19 +6878,29 @@ async function main() {
     localStorage.setItem(`hatch-upbringing-${device}`, String(Date.now()));
     const flag = () => Object.keys(localStorage).some((k) => k.startsWith(`hatch-visit-${device}-`));
     const clearFlag = () => { for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k); };
-    const look = (missed) => {
+    const realState = el._state;
+    const look = (missed, stage = "adult") => {
+      el._state = function (slide, k) { // the line depends on the stage: pin it
+        const st = realState.call(this, slide, k);
+        return k === "sensor.life_stage" && st ? { ...st, state: stage } : st;
+      };
       el._visitorMissed = () => missed;
       el._channelHeard = () => true;
       Object.assign(s, { lookedFirst: false, queue: [], asleep: false, away: false });
       el._firstLook(s);
       const q = s.queue.map((x) => ({ text: x.text, cls: x.cls }));
+      el._state = realState;
       s.queue = [];
-      return { q, said: q.filter((x) => / came by today ♪$| went by! ♪$/.test(x.text)), flag: flag() };
+      return { q, said: q.filter((x) => / came by today ♪$| went by! ♪$|^hi hi! ♪$/.test(x.text)), flag: flag() };
     };
     const out = {};
     try {
       clearFlag();
       out.before = look(null); // the window not over yet (or no visit today)
+      clearFlag();
+      out.first = look(V0);
+      clearFlag();
+      out.baby = look(V0, "baby");
       clearFlag();
       out.first = look(V0);
       out.twice = look(V0);
@@ -6921,6 +6945,8 @@ async function main() {
   check(`visitors: catch-up: after the window, "a ${V0.name} came by today ♪" once, flavour, last; the flag used`,
     cu.first.said.length === 1 && cu.first.said[0].text === `a ${V0.name} came by today ♪` && cu.first.said[0].cls === 1 &&
     cu.first.q[cu.first.q.length - 1].text === cu.first.said[0].text && cu.first.flag, JSON.stringify(cu.first));
+  check("visitors: catch-up: a baby says \"hi hi! ♪\" instead, once, flavour",
+    cu.baby.said.length === 1 && cu.baby.said[0].text === "hi hi! ♪" && cu.baby.said[0].cls === 1, JSON.stringify(cu.baby));
   check("visitors: catch-up: never twice, and the visit can't also play after it",
     cu.twice.said.length === 0 && !cu.playedAfter, JSON.stringify({ twice: cu.twice, playedAfter: cu.playedAfter }));
   check("visitors: catch-up: none if the visit played on this device today",
