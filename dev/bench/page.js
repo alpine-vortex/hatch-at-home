@@ -427,6 +427,16 @@
       // (Date is pinned, so count the tries instead of reading the clock.)
       for (let n = 0; !root.querySelector(".jgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
     }
+    // The journal's "every world ›" page (top10 8a); `journal: {raised: [..]}` sets what's drawn.
+    if (shot.view === "everyworld") {
+      root.querySelector(".statusbtn").click();
+      root.querySelector(".jlink").click();
+      for (let n = 0; !root.querySelector(".wlink") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+      root.querySelector(".wlink").click();
+      for (let n = 0; !root.querySelector(".jgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+      await Promise.all([...root.querySelectorAll(".jgrid img")].map((img) => img.decode().catch(() => {})));
+      if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight;
+    }
     if (shot.view === "collection") {
       root.querySelector(".statusbtn").click();
       root.querySelector(".jlink").click();

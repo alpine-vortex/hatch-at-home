@@ -205,6 +205,24 @@ const PRESETS = {
     extra("foot-woodland-330", "the page's foot, 330", { world: "woodland", width: 330, scrollEnd: true });
     return out;
   },
+  // Every world (top10 8a): none raised, a few from two worlds, and all 30, at 420 and
+  // 330, the 330 ones also scrolled to the foot; big text at 330.
+  everyworld() {
+    const out = [];
+    const all = Object.values(WORLDS).flatMap((w) => w.roster);
+    const cases = { none: [], some: [...WORLDS.woodland.roster.slice(0, 3), ...WORLDS.pond.roster.slice(0, 2)], all };
+    for (const width of [420, 330]) {
+      for (const [k, raised] of Object.entries(cases)) {
+        out.push({ name: `everyworld/${width}/${k}`, group: `everyworld-${width}`, label: k, world: "woodland", width,
+          view: "everyworld", journal: { raised } });
+        if (width === 330) out.push({ name: `everyworld/${width}/${k}-end`, group: `everyworld-${width}`, label: `${k}, end`,
+          world: "woodland", width, view: "everyworld", journal: { raised }, scrollEnd: true });
+      }
+    }
+    out.push({ name: "everyworld/330/big", group: "everyworld-330", label: "big text", world: "woodland", width: 330,
+      view: "everyworld", journal: { raised: cases.some }, bigText: true });
+    return out;
+  },
   // Big text (top10 4b): every status-box page at 420, 330 and compact (260), the
   // status page also scrolled to its end. Nothing may clip or run off the box.
   bigtext() {

@@ -25,6 +25,7 @@ node scripts/bench.js --preset finds      # 74 shots: every find at reveal size,
 node scripts/bench.js --preset gifts      # 11 shots: a gift's first look, V5 (longest name), V6 made/found, V7 baby, calm, compact, asleep
 node scripts/bench.js --preset collection # 21 shots: the finds page, each world at 420/330, shared, empty, all met, mono, an older server
 node scripts/bench.js --preset bigtext    # 18 shots: "big text" on, every status-box page at 420, 330 and 260
+node scripts/bench.js --preset everyworld # 10 shots: the journal's "every world" page, none / some / all raised, 420 and 330, big text
 node scripts/bench.js --preset mono       # the mono screen: 2498 shots, ~2.5 min, plus the pass rule
 ```
 
@@ -56,7 +57,7 @@ A shot (all optional):
 | `season` | `false` (default: no seasonal touches), `"auto"` (by `time`), or a season key such as `halloween` |
 | `time` | pinned clock, ISO (default `2026-06-15T12:00:00Z`; the browser runs in UTC) |
 | `width` | card width in px (420, or 330 for the compact layout); `dpr` pixel ratio |
-| `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `picker` (the sheet's shell picker; needs `shellOptions`), `journal` (see below), `collection` (the journal's "finds ›" page; see `collection`), `games` (game picker) |
+| `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `picker` (the sheet's shell picker; needs `shellOptions`), `journal` (see below), `everyworld` (the journal's "every world ›" page; `journal: {raised}` sets what's drawn), `collection` (the journal's "finds ›" page; see `collection`), `games` (game picker) |
 | `shellOptions`, `shellFinish`, `shellLocked` | the lead pet's `shell_finish_options` (finish keys it may wear), `shell_finish` (its pick, default none: the world's own) and `shell_locked` (`{key: stage}`). Without `shellOptions` the card has no shell row, as with an older server |
 | `preview` | in the picker, the tile tapped: that finish on the live shell, unsaved (`""` is the world's own) |
 | `scroll` | a selector in the status box brought into view (the picker scrolls), e.g. `.tile.now` or `.sec[data-group="specials"]` (its top just under the back row) |
