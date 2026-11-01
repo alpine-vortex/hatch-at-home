@@ -3198,9 +3198,9 @@ async function main() {
     }));
     await shot(name);
   }
-  check("the first look tells the day's news, dream and wish",
-    /^while you were out, I (napped|watched the rain)/.test(firstLook[0]) && firstLook[1] === "I dreamed about Bluey!" &&
-      firstLook[2] === "can we watch the sunset together?", firstLook.join(" | "));
+  check("the first look tells the dream and wish first, then the day's news (fresh-moment 2)",
+    firstLook[0] === "I dreamed about Bluey!" && firstLook[1] === "can we watch the sunset together?" &&
+      /^while you were out, I (napped|watched the rain)/.test(firstLook[2]), firstLook.join(" | "));
   // P3c: the media dream (sensor null, house.dream titled) is said once a day.
   const dreamAgain = await card.evaluate((el) => {
     const s = el._slides[el._index];
@@ -3262,6 +3262,19 @@ async function main() {
   });
   check("P3c: the recap keeps TV and music (tv_on, music_on)",
     recap === "while you were out, I watched TV and listened to music!", recap);
+  // Fresh-moment 2 (owner Q2): a note whose only news is a nap isn't said.
+  const napAt = new Date(Date.now() - 1800 * 1000).toISOString();
+  await inject(pet["sensor.last_care"], {
+    attributes: { moments: [{ type: "woke_up", at: napAt }, { type: "fell_asleep", how: "house", at: napAt }], log: [] },
+  });
+  const napOnly = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    for (let i = 0; i < 30 && el._state(s, "sensor.last_care")?.attributes.moments?.[0]?.type !== "woke_up"; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return el._awayNote(s, Date.now() - 3600 * 1000);
+  });
+  check("fresh-moment 2: an away note that would only say it napped isn't said", napOnly === null, String(napOnly));
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(500);
   check("the wish is on the status screen", /wish\s*♡ watch the sunset together/.test(await cur().locator(".status").innerText()));

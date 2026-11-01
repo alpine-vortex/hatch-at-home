@@ -5433,7 +5433,7 @@ class HatchPetCard extends HTMLElement {
     s.lookedFirst = true;
     const stage = this._state(s, "sensor.life_stage")?.attributes || {};
     const device = s.ids?.device;
-    // At most FIRST_LOOK_LINES lines, in this order; what doesn't fit isn't said
+    // At most FIRST_LOOK_LINES lines, in this order, the newest first; what doesn't fit isn't said
     // (the dream and wish come again at the next first look; the visit's notes
     // are budgeted on the server from what's queued here).
     const lines = [];
@@ -5462,11 +5462,6 @@ class HatchPetCard extends HTMLElement {
     if (stage.age_days >= 7 && stage.age_days < 8 && lines.length < FIRST_LOOK_LINES && onceEver(`week-${device}-${stage.generation || 1}`)) {
       lines.push([this._pick(WEEK_OLD), 5000]);
     }
-    const seen = mark?.seen || 0;
-    if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS) {
-      const note = this._awayNote(s, seen);
-      if (note) lines.push([note, 5500, { away: true }]);
-    }
     const dreamt = s.house?.dream || stage.dream; // a show or song's, from the house
     const dream = dreamt && DREAMS[dreamt.kind];
     if (dream && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
@@ -5474,6 +5469,12 @@ class HatchPetCard extends HTMLElement {
     }
     const wish = stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
     if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);
+    // What happened while you were out comes after what's new (fresh-moment 2, owner Q2).
+    const seen = mark?.seen || 0;
+    if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS && lines.length < FIRST_LOOK_LINES) {
+      const note = this._awayNote(s, seen);
+      if (note) lines.push([note, 5500, { away: true }]);
+    }
     // Last, and only if there is room: an adult on how it was raised, once a week.
     const raised = this._state(s, "sensor.life_stage")?.state === "adult" && UPBRINGING_LINES[stage.upbringing];
     if (raised && lines.length < FIRST_LOOK_LINES && upbringingDue(device)) lines.push([raised, 5000]);
@@ -5727,7 +5728,8 @@ class HatchPetCard extends HTMLElement {
     for (const e of [...(lastCare.log || [])].reverse()) {
       if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) add(CARE_BITS[e.action]);
     }
-    if (!bits.length) return null;
+    // A nap alone isn't news (fresh-moment 2, owner Q2): no note.
+    if (bits.every((b) => b === "napped")) return null;
     const list = bits.slice(0, 2); // two at most: a bubble on a 330 px card
     return `while you were out, I ${list.join(" and ")}!`;
   }
