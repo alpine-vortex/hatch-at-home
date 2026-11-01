@@ -1,9 +1,9 @@
 # Plan: the experience review (13 defects, 8 opportunities) and a balance wave
 
-**Status (reconciled 2026-10-31 against git):** Waves 0-1 shipped (0.35-0.36). Wave 2
+**Status (reconciled 2026-10-31 against git):** Waves 0-1 shipped (all in v0.36.0). Wave 2
 (2a `e0422553`, 2b+2c `172b1e27`), Wave 3 (3a `b54017b7`, 3b `4c7c0102`, 3c `0197ad0b`),
-4c-rest `cbe9fc3d` and 4e `11ca8685`/`92d07795` are on main (after v0.38.0,
-batch 5, unreleased), with R1/R2 from "Week of 2026-10-31". **Deferred by the owner
+4c-rest `cbe9fc3d` and 4e `11ca8685`/`92d07795` are on main since v0.38.0,
+unreleased (Waves 2-3 merged as waves, 4c-rest and R1 in batch 4, 4e and R2 in batch 5), with R1/R2 from "Week of 2026-10-31". **Deferred by the owner
 (2026-10-30):** 4a, 4b, 4d, 4f, 4g. **4f is now contradicted** by the owner's call on
 Catch (2026-10-31; see "Week of 2026-10-31"). The status column in section 4 is current.
 
@@ -914,8 +914,8 @@ axolotl and moth adults are being redrawn now (A9).
 
 ## 4. Sizes at a glance (build order)
 
-*Status column (2026-10-31):* "shipped" = in a release (Waves 0-1 in 0.35-0.36); "main" =
-on main, unreleased (batch 5). "deferred" = the owner's 2026-10-30 release scope.
+*Status column (2026-10-31):* "shipped" = in a release (Waves 0-1 in v0.36.0); "main" =
+on main since v0.38.0, unreleased. "deferred" = the owner's 2026-10-30 release scope.
 
 | PR | What | Size | Tier | Waits on | Status 10-31 |
 |---|---|---|---|---|---|

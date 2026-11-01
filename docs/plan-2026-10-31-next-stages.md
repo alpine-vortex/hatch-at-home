@@ -2,7 +2,7 @@
 
 Base: `fm-batch6c` @`b57149da` (main + batch 6). The plans were reconciled against git
 the same day (one commit per plan on `crew/hatch-at-home-s2570-…`). Labels used:
-**released** = in a tag up to v0.38.0; **main** = batch 5, unreleased; **batch 6** =
+**released** = in a tag up to v0.38.0; **main** = on main since v0.38.0, unreleased (batches 4-5 and Waves 2-3); **batch 6** =
 `fm-batch6c`, still gating. Release 0.39.0 follows batch 6.
 
 **The owner's priority (2026-10-31):** reactions, visitors and playtime are "where the
@@ -35,8 +35,9 @@ below is PROPOSED.
 
 - 1b-1e are **art-only slices**. R2's hooks and fallbacks are already on main (`f663533d`),
   so no code slice is planned for them. Each world's art merges with its `acts` entry.
-- A release of 1b-1f together (0.40.0) before 1 Dec is the date that matters. If the
-  pose art runs late, **1f goes first**: winter is dated, the poses aren't.
+- A release of 1b-1f together (0.40.0) before 1 Dec is the date that matters. Your Luna
+  order puts reactions before the seasonal set; if the pose art runs late, whether winter
+  jumps the queue is Q11.
 
 ## Stage 2: connections (reactions, visitors, playtime)
 
@@ -89,3 +90,7 @@ below is PROPOSED.
    PROPOSED "hi hi! ♪", in 2b.
 10. **Visitors v2.** *Recommend:* write the plan in stage 2 (server seed, basket of 3,
     collection, gifts) starting from v1's 18-visitor roster, and build it after stage 2.
+11. **Winter vs the poses, if the art runs late.** Your Luna order is reactions first, then
+    the seasonal set, and the queue was estimated at about 3 days. *Recommend:* keep your
+    order. If by about 20 Nov the poses aren't done, winter's art jumps ahead so it can be
+    in a release before 1 Dec.
