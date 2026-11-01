@@ -6,7 +6,10 @@ branch `crew/hatch-at-home-s2582-v-a-the-server-owns-the-day-s`; see "V-A as bui
 §11). **V-B built 2026-11-01** (s2591, branch
 `crew/hatch-at-home-s2591-visitors-v2-v-b-finds-and-the`; its adversarial review s2590,
 findings #1-#21, is folded in, marked "V-B review #n"; see "V-B as built" under §11). V-C
-and V-D are next.
+(s2595) and V-D0 (s2594) are built. **V-E1 built 2026-11-01** (s2597, gifts, server; the
+V-E review s2596, findings #1-#21, is folded in, marked "V-E review #n"; see "V-E1 as
+built" under §11). V-D's card and V-E2 (gifts, card) are next; owner Q1 and Q2 are open
+(§13).
 Next-stages slice 2d (`plan-2026-10-31-next-stages.md`).
 This plan is the server half of daily check-ins item 1 (`plan-2026-10-28-daily-checkins.md`).
 It builds on visitors v1 as built (`plan-2026-10-31-visitors.md`: 18 visitors, final art,
@@ -365,14 +368,23 @@ V-B review #10). The card reads names and art from the same file.
     Before that, no tile and no silhouette, so there is no hole to fill. A shared screen
     never shows one.
   - **No total, no "x of y", no bar.**
-  - On the viewer's own screen only, gifts get a small ♥ on their tiles (§5). Any
-    ordinary find received as a gift also gets the ♥, but is a tile in the house
+  - On the viewer's own screen only, gifts get a small ♥ on their tiles (§5). **This is
+    V-D's card** (V-E review #20: there is no separate ♥ page): it reads `gifts` when the
+    reply has it and draws nothing extra when it doesn't, so V-E has no third card touch.
+    Any ordinary find received as a gift also gets the ♥, but is a tile in the house
     collection only if it was *found* (a gift alone never credits the house).
+  - **OPEN, owner Q2 (V-E review #19):** an ordinary find this person got *only* as a
+    gift, on their own page: drawn with a ♥, or a silhouette with a ♥? The review
+    recommends drawn, with a ♥, on their screen only (the house's page, and everyone
+    else's, show it unmet until it is found).
 - **Read on open:** `virtual_pet/collection {entity_id, shared}` (a websocket command).
   - **`vol.Required("shared"): bool`, as `subscribe` has** (finding #6): the client sends
     it per subscription (`__init__.py:481,498`), so the server can't tell otherwise.
   - It returns `{world, visitors: [id], finds: {id: first_on}}` (found finds only, never a
-    gift), plus `gifts: [id]` for the caller **only when `shared` is false**.
+    gift), plus `gifts: [id]` for the caller **only when `shared` is false** (V-E review
+    #17, built in V-E1): `collection_view(user, shared)`; the key is absent when shared,
+    else `[]` or the ids of this world's known finds in the caller's own `gifts` (the
+    same per-world scope as `finds`; the gift-only one included).
   - The data stays out of sensor attributes: it only grows.
 - **Kept by the device**, like `bonds` and `firsts` in `lay_egg` (`model.py:1665`), so it
   grows across generations.
@@ -388,50 +400,105 @@ V-B review #10). The card reads names and art from the same file.
 ## 5. Gifts (per person, private)
 
 From check-ins item 1: "I saved this pine cone for you! ♥", with "good variety" (owner,
-2026-10-28).
+2026-10-28). The V-E review (s2596, findings #1-#21, "V-E review #n" below) is folded in;
+the server half is **built as V-E1** (see "V-E1 as built" under §11), the card half is
+V-E2.
 
-- **To whom (Q2).** *Recommended:* every friend at **bond level 3 or more**, each on their
-  own clock, never ranked.
+- **To whom (Q2).** Every friend at **bond level 3 or more** (`R.BOND_FRIEND_LEVEL`), each
+  on their own clock, never ranked.
   - About once every 6-8 days per person (`R.GIFT_EVERY_DAYS` (6, 8), jittered), the pet
     sets aside one find for that person.
   - It is not "the person it's closest to". Picking one person would rank people (the
     taste rule) and would show who ranks first.
   - Two friends each get their own gifts, on their own days.
-- **What.**
-  - The pet picks from the world's finds, weighted away from what this person already got
-    (`gifts` ×0.2).
-  - Rarer finds are weighted 2× compared with the basket's weights.
-  - The world's gift-only find has a 1-in-6 chance on any gift until this person has it.
-    It never comes as a basket find. Variety is per person, so each friend can get their
-    own one-of-a-kind.
-- **Given at their next look**, on **their own** screen. It is a first-look line, last in
-  the list and only if there is room (as the catch-up line):
-  - "I saved this <find> for you! ♥"
-  - the find pops up above the pet, as a reveal does;
-  - `virtual_pet/collect {entity_id, gift: true}` takes it.
+- **The clock (V-E review #8, first mate: as recommended).**
+  - (a) `model.gift_tick(state, now, world, finds, flags, rng)` runs in `_tick` after
+    `_roll_find`, outside `advance`, and only once the house has been read
+    (`_find_flags` set; the conditions need it).
+  - (b) It runs on the wall clock in every stage but the egg. A nap, the night and away
+    don't pause it: "every 6-8 days" are calendar days, and a gift just waits.
+  - (c) None on a level-3+ bond schedules `now + uniform(6, 8)` days with no gift, so an
+    upgrade or reaching level 3 brings no burst.
+  - (d) While a gift waits the clock is left alone. **On the take**, `next_gift_at = now
+    + uniform(6, 8)` days.
+  - (e) More than 8 days ahead means the clock went back: scheduled again, no gift.
+  - (f) One gift per due clock, never caught up.
+  - (g) Not in `shift_times`.
+- **What (V-E review #9, first mate: as recommended).** `model.pick_gift`, never
+  `pick_find` and **never `add_find`** (that would credit the house page: the R3 leak).
+  - First, the world's gift-only find, at 1 in 6 (`R.GIFT_ONLY_CHANCE`), only while this
+    person hasn't had it, and never again after.
+  - Otherwise the world's other finds by `find_weight(f, flags)` (conditions apply, with
+    the R5 fallback at weight 1), with the rarer tiers doubled (`R.GIFT_TIER_WEIGHTS`:
+    10, 4, 1 → 10, 8, 2), and ×0.2 (`R.GIFT_HAD_WEIGHT`) for a find this person was
+    already given. **No** house ×0.5: the house's collection plays no part.
+  - `gifts` gains an id only if it's absent (so at most 60). The gift-only finds'
+    placeholder `weight: 1` in `worlds.json` stays unread.
+  - Variety is per person, so each friend can get their own one-of-a-kind.
+- **Given at their next look**, on **their own** screen (V-E2, the card):
+  - V5 "saved this <find> for you ♥" (V6 for a gift-only find, V7 for a baby; §7);
+  - the find pops up **above the pet**, a gift variant of the reveal (V-E review #5):
+    `.reveal.gift`, with no basket picture (`.rb`), the basket left as it is, no `burst`;
+    the pop is the queued line's `then` (`_queue` `opts.then`), so picture and line
+    arrive together.
+  - **First-look order (V-E review #6).** `_firstLook` is synchronous and the reply is
+    async. So: the existing lines, then **reserve the gift's slot** (only if
+    `s.mine?.gift && !sharedScreen() && lines.length < FIRST_LOOK_LINES`), then the
+    missed visitor only if room remains. **The gift wins over the missed-visitor line**
+    when there is room for one (review Q3; first mate, 2026-11-01: the missed visitor is
+    house flavour said again in the away note, the gift a one-time personal line). Then
+    `collect {gift: true, shared: false}`; on a non-empty reply `_queue` V5/V6/V7 as
+    **KEPT** (said once; waits through a nap like other kept lines). Empty or an error
+    (an older server): nothing, and the slot goes unused.
+  - **A gift that arrives while the card is open (V-E review #7): OPEN, owner Q1.** The
+    review recommends the next first look, or the tab coming back after being hidden at
+    least `AWAY_NOTE_AFTER_MS`; never an interruption while you watch. Until the owner
+    answers, V-E2 says it only at a first look.
   - Not on a shared screen; there it waits. Nothing expires: a gift waits as long as it
     has to, and a second gift doesn't come until the first is taken.
-  - **Order (finding #14).** A person may have two screens (phone and laptop), and both get
-    `mine.gift`. The card calls `collect {gift: true}` **first** and speaks V5 and pops the
-    find **only if the reply is non-empty**; the second screen gets `[]` and stays quiet.
-    Same order as the basket. The server refuses `collect {gift: true}` when the client
-    says `shared: true` (finding #6), so `collect` takes `shared` too.
-- **Saved in the bond:** `bonds[user].gift = {id, day}` (waiting; the day is when it was
-  set aside), and `bonds[user].gifts = [id, …]` (received, **ids only, no dates**, R6):
-  a dated log of when someone opened their card would survive `forget_me`, and FB's "your
-  bonds stay" doesn't cover that.
+  - **Two screens (finding #14).** A person may have two screens (phone and laptop), and
+    both get `mine.gift`. The card calls `collect {gift: true}` **first** and speaks and
+    pops **only if the reply is non-empty**; the second screen gets `{gift: null}` and
+    stays quiet.
+- **`collect` for a gift (V-E review #1, #2, #18).**
+  - Schema: `vol.Optional("gift", default=False): bool`, `vol.Optional("shared"): bool`
+    (no default: HA rejects extra keys, and V-C's tap sends only `{type, entity_id}`).
+  - `gift: true` is refused with error `shared` unless `shared: false` was sent
+    outright (absent or true). Without `gift`, the basket path is unchanged and `shared`
+    is ignored. The gift path never touches the basket, and the basket path never
+    touches the gift.
+  - The reply is `{"gift": {id, world}}` or `{"gift": null}` (not `finds`, so the basket
+    parser can never pick it up).
+  - The take is read-and-clear with no await, then `_push_watchers()` only (the caller's
+    own `mine` changes, so only their screens are sent anything), then `async_save_now`.
+    No `_advance`, no `_publish`, no `_fire`.
+- **Saved in the bond (V-E review #4):** `bonds[user].gift = {id, world}` (waiting; the
+  world is the one it came from, so a gift that waited across a world change still
+  shows its own art, V-B review #10), `bonds[user].gifts = [id, …]` (received, **ids
+  only, no dates**, R6; ids are unique across worlds), and `bonds[user].next_gift_at`.
+  No `day` in the gift: nothing read it, and it would be a date in the bond.
   - Bonds already carry into the next generation and are redacted whole in diagnostics
     (`REDACT_STATE` has `bonds`).
+  - **Unknown ≠ bad (V-E review #14).** A waiting gift, or a `gifts` id, that no
+    `worlds.json` knows (a later version's, after a downgrade) is kept. `mine.gift` is
+    null for it, `collect {gift}` returns null and leaves it (it blocks that person's
+    next gift: acceptable, it is the later version's), and `gifts` replies skip it.
   - **A taken gift never enters the house collection** (R3, finding #7). It shows only on
-    the receiver's own ♥ page, from `bonds[u].gifts`. A house-wide `finds` map would
-    otherwise tell the household that someone got a gift that day (with two friends at
-    level 3+, it names them).
-- **Privacy, the bar (privacy plan F1).**
-  - The gift reaches the person only through `mine` (`_mine`, `coordinator.py:1981`):
-    `mine.gift = {id}` while one waits.
-  - It is never on a sensor and never on the bus (no `gift_*` event, no moment with a
-    user).
-  - It is never in `_house_view`, and never named on a shared screen.
+    the receiver's own screen, as ♥ on their tiles on **the collection page (V-D's card)**
+    (V-E review #20), from `bonds[u].gifts`. A house-wide `finds` map would otherwise
+    tell the household that someone got a gift that day (with two friends at level 3+,
+    it names them).
+- **Privacy, the bar (privacy plan F1; V-E review #12, #13, #21).**
+  - The gift reaches the person only through `mine` (`_mine`): `mine.gift = {id, world}`
+    or null, and the `collection` reply's `gifts` when `shared` is false.
+  - **No event of any kind**: no `gift_*` event, no `found` for a gift, no moment, so no
+    bus, no `_notify` push, no `debug["last_events"]`, and no personal moment
+    (`_private`, which would also notify and which `forget_me` wipes while the bond keeps
+    the gift).
+  - Never on a sensor, never in `_house_view`, never in `bond_for` (the voice/LLM
+    context), no `debug` key, never named on a shared screen.
+  - On the card: never written to `localStorage`, and the ♥ state is dropped on a
+    `SHARED_EVENT` flip, as `_dropPhotos` does.
   - **`forget_me` is unchanged.** It erases the people store and leaves bonds
     (`__init__.py:386`, privacy plan FB). Gift data lives in the bond, so it stays with the
     bond, as the nickname and photos already do. If the owner wants gifts erased too, that
@@ -447,9 +514,9 @@ From check-ins item 1: "I saved this pine cone for you! ♥", with "good variety
 | `basket` | list of `{id, world, new, from?}`: up to 3 known entries, plus any unknown ones | yes (finds wait, even across a world change) | list of dicts with str `id` and `world`; `new` is `is True`; a `from` that isn't a str is dropped; a later version's keys are kept. **At load the first 3 known entries and every unknown one are kept** (V-B review #9, `trim_basket`); unknown entries don't count toward the 3, aren't counted in `house.basket`, and `collect` leaves them in place. No `at` (V-B review #17: nothing read it). |
 | `next_find_at` | float or null | **no: `lay_egg` sets None** (V-B review #8 e) | `_float`, else None; lifecycle in §2 "The find clock" |
 | `collection` | `{world: {visitors: {id: day}, finds: {id: day}}}` | yes | the world key is a str, the inner maps are str→str; a bad world is dropped, the rest kept |
-| `bonds[u].gift` | `{id, day}` or absent | (bonds already) | the bond loader (`model.py:239` area) drops a bad one and keeps the bond |
-| `bonds[u].gifts` | `[id, …]` (ids only, R6) | (bonds already) | a list of str; bad entries dropped |
-| `bonds[u].next_gift_at` | float | (bonds already) | `_float` |
+| `bonds[u].gift` | `{id, world}` or absent (V-E review #4) | (bonds already) | kept only if a dict with str `id` and `world` (a later version's keys in it kept), else deleted alone. **`_bond` must never raise**: `bonds_from` drops the whole bond on an exception (V-E review #3). An unknown id is kept (#14). |
+| `bonds[u].gifts` | `[id, …]` (ids only, R6) | (bonds already) | a list, filtered to str, each once; not a list: deleted. Unknown ids kept (#14). |
+| `bonds[u].next_gift_at` | float | (bonds already) | `_num`, else deleted; lifecycle in §5 "The clock" |
 
 - **A world change (the next egg in another world).**
   - Each basket entry also stores its `world`. A find from the old world stays in the
@@ -493,11 +560,20 @@ From check-ins item 1: "I saved this pine cone for you! ♥", with "good variety
     every `when` token is a known flag; a `leaves` id names a find of its world;
     gift-only never rolled or left (moved from V-E, V-B review #15);
   - `collect`: the ws handler driven twice back to back gives `[…]` and `[]` (V-B review #11);
-  - gift: level 3+ only, per-person clocks, the weighting;
-    a taken gift never enters the house `collection` or `finds` map; `gifts` holds ids
-    only; `collection {shared: true}` has no `gifts`; `collect {gift: true, shared: true}`
-    is refused (findings #6, #7, R3, R6);
-  - a gift is never on the sensor, the bus, `_house_view` or another user's `mine`;
+  - gift (built in V-E1, `tests/test_gifts.py`): a bad `gift`/`gifts`/`next_gift_at`
+    each dropped with `points`/`nickname`/`photos` intact, and `salvage` and `lay_egg`
+    keep them (V-E review #3); unknown ids kept, never shown or taken (#14); the clock's
+    rules (a)-(g) one by one, and level 3 and level 10 at the same rate over a year
+    (#8); the weighting and the gift-only draw (#9); a taken gift never enters the house
+    `collection` or `finds` map (#9 a, R3); `gifts` holds ids only, once each (R6);
+    `collection {shared: true}` has no `gifts` (#17; `test_finds`'s V-D0 sameness test
+    rewritten); `collect {gift: true}` with `shared` absent or true is refused, V-C's
+    `{type, entity_id}` still opens the basket and leaves the gift (#1); the take pushes
+    only the taker's `mine`, publishes nothing and saves at once (#2);
+  - a gift is never on the sensor, the bus, `_house_view`, `bond_for`, a push, `debug`,
+    `_private`, the moments, the shared collection reply, another user's `mine` or the
+    shared snapshot; every check uses the gift-only id `acorncup` (V-E review #11, #12,
+    #21), and `test_public`'s scripted day has a set-aside and a take;
   - `forget_me` leaves the bond and its gifts (FB as decided);
   - diagnostics redact it.
 
@@ -507,8 +583,9 @@ Every line passes the no-nagging scan (experience plan §5), which now **names t
 table** (finding #16): the loops at `card-check.js:3604` and `:4250` walk `BABY` (:3590) and
 `PERSONA` (:4240) only, so V-C extends them to the V1-V11 table. :4250 also caps a line at
 40 characters; V5 with "message in a bottle" is 43 and V6 with "tiny telescope" is 42, so
-the length check runs on the **longest find name** and the lines are shortened if needed
-(e.g. "saved this <find> for you ♥"), or the cap is raised for this table. Every line: no "!!!", no word repeated
+the length check runs on the **longest find name**. Settled by §13b #3: the lines were
+shortened and the 40-character cap stays (V5 with "message in a bottle" is exactly 40,
+which passes `> 40` with no margin; V-E review #10). Every line: no "!!!", no word repeated
 more than twice in a row, none of "still", "again", "why", "never", "pleas", "sad", "cry",
 "alone", "forgot", and no `?` that asks the person for something. Lines name no person,
 except the gift's "you" on the receiver's own screen. Route `_lines` (baby talk where
@@ -520,13 +597,16 @@ noted), `catch` off.
 | V2 | Reveal, a first-ever find | "<a find>! a new one ✦" |
 | V3 | Reveal, a find a visitor left | "the <visitor> left <a find> ♪" |
 | V4 | Reveal, baby | `BABY.visit`'s own babbles ("yay yay!", "hehe!"), as a new key `BABY.find` reusing them; no new words |
-| V5 | A gift, first look on the receiver's screen | "I saved this <find> for you! ♥" (owner's own example, check-ins item 1) |
-| V6 | A gift-only find given | "I made this <find> for you ♥" (for the "made" ones: acorn-cap cup, knitted heart, paper boat) · "I found this <find> just for you ♥" (pearl, pressed fern, tiny telescope) |
-| V7 | A gift, baby | "for you! ♥" |
+| V5 | A gift, first look on the receiver's screen | "saved this <find> for you ♥" (approved, §13b #3; the scan runs it over every non-gift-only find, ≤ 40) |
+| V6 | A gift-only find given | "made this for you ♥" (`acorncup`, `knittedheart`, `paperboat`) · "found this for you ♥" (`pressedfern`, `pearl`, `telescope`); no find name (approved, §13b #3). The made ones are a card constant `GIFT_MADE`, with a Node test that its ids are gift-only ones (V-E review #10). |
+| V7 | A gift, baby | `BABY.gift = ["for you! ♥"]` |
 | V8 | Away note bit (`MOMENT_BITS.found`) | "found <a find>" (joins "napped, watched the rain, …") |
 | V9 | Collection page head / link | "finds · <world>" / "finds ›" |
 | V10 | Collection, a visitor tile's caption | its `name` (v1 roster) |
 | V11 | Basket `aria-label` | "the basket" |
+
+V5-V7 have no personality variants and no `withName` nickname (V-E review #10): the
+V-E2 worker invents none.
 
 Cut on purpose (they nag or ask): "the basket is full!", "come see what I found",
 "<n> new finds", "collect them all", "you have a gift waiting" on a push.
@@ -540,11 +620,18 @@ Cut on purpose (they nag or ask): "the basket is full!", "come see what I found"
 | `found` moment | every screen, the away note | moments + bus (no user) | the bus, like other house moments |
 | Collect (tap) | the caller | **websocket** `virtual_pet/collect` (not a service and not a button, because a service's `call_service` row records `context_user_id`, rows M/O) | no |
 | Collection | the person who opens it | websocket `virtual_pet/collection` | no |
-| Collection read (V-D0, built) | any login, read-only too; the same reply for `shared` true or false until V-E | `virtual_pet/collection {entity_id, shared}` reply: ids and local days, no user, no gift; a pure read (no advance, save or publish) | no |
-| Waiting gift, gift list | **only that person, own screen** | `mine.gift`, the `collection` reply's `gifts` (only when `shared` is false) | no; ids only, no dates; redacted in diagnostics; kept with the bond by `forget_me`, as FB decided (Q2) |
+| Collection read (V-D0, built) | any login, read-only too; the same reply for `shared` true or false until V-E1 | `virtual_pet/collection {entity_id, shared}` reply: ids and local days, no user, no gift; a pure read (no advance, save or publish) | no |
+| Collection read (V-E1, built) | as above, plus the caller's own `gifts` when `shared` is false | `virtual_pet/collection` reply | no |
+| Waiting gift, gift list | **only that person, own screen** | `mine.gift` (`{id, world}` or null), the `collection` reply's `gifts` (only when `shared` is false), the `collect {gift: true, shared: false}` reply | no; ids only, no dates; redacted in diagnostics; kept with the bond by `forget_me`, as FB decided (Q2); no event, push, debug, `_private` or `bond_for` (V-E review #12) |
 
 - A shared screen shows the visit, the basket, finds and the collection without gifts. A
   gift stays waiting.
+- **What "own screen" means (V-E review #13).** The bar is the person's own login, on a
+  screen not switched to shared: the same as `mine`. `shared` is the client's own claim
+  (a per-browser `localStorage` switch, as on `subscribe`), so the server's refusal of
+  `collect {gift: true}` without `shared: false` is defence in depth against a card bug,
+  not against the account holder. A family account used as a personal login sees that
+  account's gifts, as it sees its bond.
 - **Read-only logins can open the basket.** It changes nothing but the basket, like a pat.
   The next-egg pick (C13) needs control because it changes the pet's future; this doesn't.
 - No `context=` on any new `_fire`.
@@ -585,15 +672,18 @@ Cut on purpose (they nag or ask): "the basket is full!", "come see what I found"
 ## 11. Slices
 
 **Anything touching the save is tier 2.** Order: V-A first. V-B and V-C, then V-D, can
-follow in either order. V-E comes last.
+follow in either order. V-E comes last, split by the V-E review: **V-E1** (server, built)
+needs nothing from V-D's card, and V-C's card ignores `mine.gift`; **V-E2** (card) needs
+V-C only.
 
 | # | Slice | Size | Tier | Art | Needs |
 |---|---|---|---|---|---|
 | V-A ✅ | **Built** (s2582; "V-A as built" below). **The server owns the day's visit**: `worlds.json` `visitors` (with `leaves`); `PetState.visit` with `world` (#9); `_daily_visit` (rng only for the window hour, #11; credit-then-pick on rollover, #10); crediting at window end into `collection[world].visitors`, in every stage (R4); `_house_view.visit`; the card plays from `house.visit`, with the `visitorDay` fallback and the once-a-day flag keyed by `visit.day` (#22); `salvage` keeps `collection` and `visit` (#8, audit #4); unknown ids kept in the save, skipped where counted or shown (#12, audit #1); F5 validators, `lay_egg` carry; **no `STORE_MINOR_VERSION` bump** (#19); pytest; card-check `visitors` extended (crossing the browser's midnight) | M | **2** | none | Q1-Q8 decided |
 | V-B ✅ | **Built** (s2591; "V-B as built" below). **Finds and the basket, server**: `worlds.json` `finds` (the `when` grammar, #3; the ⟲ lists, #18; `leaves` ids, #5: V-A already wrote `jayfeather`, `gullfeather`, `heronfeather`, `nighthawkfeather` on the visitors, so the feathers take those ids); unknown find ids in `collection[w].finds` and the basket kept in the save, skipped where counted or shown (V-A's rule, audit #1: no drop at load); the roll with `night`, `full_moon`, `P.season` and the rare fallback (#1, #4, #21, R5); rolls continue while full, extras to the collection (#2, R1); Night Sky rolls asleep (R2); `basket`, `next_find_at`; the visitor's left find; the `found` moment (no consumer yet, #20); `_house_view.basket` (#20); `virtual_pet/collect` (ws; read-and-clear with no `await`, #13); `salvage` keeps `basket`; validators; the stand-in script and 60 finds at 64 px + 3 baskets at 48 px (#23, V-B review #16); pytest incl. the real-sleep-hours 90-day run and the `when` token check | M | **2** | stand-ins | V-A |
 | V-C | **The basket and the reveal, card**: the basket button, the reveal queue, lines V1-V4 and V8, calm, compact; the reveal at 16 cells (#23); the no-nagging scan extended to the V1-V11 table, with the longest-name length check (#16); the bench `house` fixture (extending `--mine`, #15) plus `--preset finds`; card-check `finds` (ws spy, not a DB read, #17) | M | 1 | stand-ins | V-B |
-| V-D | **The collection page**: `virtual_pet/collection {entity_id, shared}` ws read (#6); no gift in the house `finds` map (#7, R3); the journal's "finds ›" link; tiles at 16 cells and silhouettes; the bench `--collection` fixture; card-check | M | 1 | stand-ins | V-B |
-| V-E | **Gifts**: bond `gift`/`gifts` (ids only, R6)/`next_gift_at`; the per-person clock; the weighting and gift-only finds; `mine.gift`; the first-look line V5-V7 (collect first, speak on non-empty, #14); `collect {gift: true, shared}` refused when shared (#6); gifts only on the receiver's ♥ page (#7, R3); diagnostics; the privacy pytest and card-check (two tabs) | M | **2** | none new | V-B, V-D |
+| V-D | **The collection page**: `virtual_pet/collection {entity_id, shared}` ws read (#6); no gift in the house `finds` map (#7, R3); the journal's "finds ›" link; tiles at 16 cells and silhouettes; **the ♥ on the viewer's own gift tiles, read from `gifts` when the reply has it (moved here from V-E, V-E review #20; the drawing of a gift-only-received ordinary find waits on owner Q2)**; the bench `--collection` fixture; card-check | M | 1 | stand-ins | V-B |
+| V-E1 ✅ | **Built** (s2597; "V-E1 as built" below). **Gifts, server**: bond `gift {id, world}`/`gifts` (ids only, R6)/`next_gift_at`, never raising in `_bond` (V-E review #3, #4, #14); the per-person clock (#8); `pick_gift` (#9); `mine.gift`; `collect {gift: true, shared: false}` (#1, #2, #18); `collection` `gifts` (#17); no event, push or debug (#12, #21); the privacy pytest with the gift-only id (#11) | M | **2** | none | V-B, V-D0 |
+| V-E2 | **Gifts, card**: the first look V5-V7 with the reserved slot (V-E review #6), `.reveal.gift` above the pet (#5), `GIFT_MADE` and `BABY.gift` (#10), the ♥ state dropped on a shared flip (#12), the error reply swallowed (#1); the bench `gift` field and `--preset gifts` (#16); card-check `gifts` (#15); owner Q1 decides when a gift arriving while the card is open is said (#7) | M | 1 | none new | V-C, V-E1 |
 | V-F | **Final art**: 60 finds (64 × 64, #18) + 3 baskets, one world per commit, each swapping its stand-ins | M (art-bound) | 1 | 63 | V-C; the Luna queue; the ⟲ picks |
 
 **V-A as built (s2582, for V-B onwards):**
@@ -677,7 +767,7 @@ follow in either order. V-E comes last.
   `art/finds/make_finds.py`.
 - **For V-D:** `collection[world].finds` is `{id: first day}`, credited when rolled or left
   (a find still in the basket is already met). Skip ids `known_finds` lacks, and
-  gift-only ids (V-E puts gifts on the ♥ page only).
+  gift-only ids (V-E puts gifts only on the receiver's own tiles, as ♥, V-E review #20).
 - A V-B save round-trips through 0.40.0 and back (checked by hand against its
   `model.py`): `basket` and `next_find_at` sit in V-A's `unknown`, and V-A's `lay_egg`
   copies them; its egg carries a stale `next_find_at`, which on the upgrade back is one
@@ -739,7 +829,9 @@ and P1-P2 fixes, with the first mate's picks:
 - **Tests**: `tests/js/find_lines.test.js` (the lines' words, scan and cap; `BABY.find`;
   `foundBit`).
 - **For V-D**: the seeded collection page is restart's; `this._worlds` and `findOf` are
-  there to use. **For V-E**: the gift's first look can reuse `_revealStart` with one find.
+  there to use. **For V-E**: the gift's first look can reuse `_revealStart` with one find. (Superseded by
+  V-E review #5: `_revealStart` is a basket reveal; V-E2 adds a `.reveal.gift` variant
+  above the pet, §5.)
 
 **V-D0 as built (s2594, for the V-D card worker):**
 
@@ -748,17 +840,46 @@ and P1-P2 fixes, with the first mate's picks:
 - Reply, exactly: `{"world": "<pet's current world>", "visitors": ["id", ...], "finds":
   {"id": "YYYY-MM-DD", ...}}`. `visitors` is in save order (not roster order: sort by
   `worlds.json` on the card); `finds` is `{id: first day}`. An empty page is `visitors:
-  []`, `finds: {}`. The same reply for `shared` true or false.
+  []`, `finds: {}`. The same reply for `shared` true or false (until V-E1, which adds
+  `gifts` when `shared` is false).
 - Filtered to `known_visitors[world]` / `known_finds[world]`, minus this world's
   `gift_only` finds. Unknown and wrong-world ids are skipped, never dropped from the save.
 - Pure read: `PetCoordinator.collection_view()` (sync); no advance, save or publish. Works on an
   egg. V-E adds `gifts: [id]` to this reply, only when `shared` is false.
 - Tests: `tests/test_finds.py` (`test_collection_*`).
 
+**V-E1 as built (s2597, for V-E2 and V-D):** server only, no card change.
+
+- `rates.py`: `GIFT_EVERY_DAYS` (6, 8) days, `GIFT_ONLY_CHANCE` 1/6, `GIFT_HAD_WEIGHT`
+  0.2, `GIFT_TIER_WEIGHTS` `{10: 10, 4: 8, 1: 2}`; the level is `BOND_FRIEND_LEVEL` (3).
+- `model.py`: `_bond` checks `next_gift_at` (`_num`), `gift` (dict with str `id` and
+  `world`, extra keys kept) and `gifts` (list, str only, deduplicated), deleting a bad
+  value alone and never raising; `pick_gift(bond, finds, flags, rng)`;
+  `gift_tick(state, now, world, finds, flags, rng)` → bool (bonds in sorted user order,
+  so the rng's use is stable); `known_gift(bond, known)` → `{id, world}` or None;
+  `take_gift(state, user, now, known, rng)` (reads `state.bonds.get`, never creates a
+  bond). `salvage` and `lay_egg` needed no change (bonds already).
+- Coordinator: `_gift_tick` in `_tick` after `_roll_find` (saves on a change, fires
+  nothing; the tick's own update pushes `mine.gift`); `take_gift(user)` (then
+  `_push_watchers()` only); `_mine(user)["gift"]` is **always a key**, `{id, world}` or
+  null; `collection_view(user, shared)`.
+- `__init__.py`: `collect` schema per §5; the gift path replies `{"gift": …}` and saves
+  at once on a non-null reply; error `shared`. `collection` passes `connection.user.id`.
+- **For V-E2:** call `virtual_pet/collect {entity_id, gift: true, shared: false}` only
+  when `mine.gift` is set and the screen isn't shared; treat any error (`shared`, or
+  `invalid_format` from a pre-V-E1 server) as "no gift". `mine.gift.world` names the art
+  (`find_<world>_<id>.png`), which may be another world's.
+- **For V-D:** the reply has `gifts` only when `shared` is false; draw ♥ from it.
+- Tests: `tests/test_gifts.py` (20 cases); `test_finds`' V-D0 collection tests rewritten
+  for `gifts` (#17); `test_channel`'s `mine` shape gains `gift: null`; `test_public`'s
+  scripted day sets aside and takes `acorncup` and scans for it.
+
 **Which slice owns each review finding:** V-A #8 #9 #10 #11 #12 #19 #22; V-B #1 #2 #3 #4 #5
 #13 #18 (lists) #20 #21 and the salvage of `basket`; V-C #15 #16 #17 #23; V-D #6 #7; V-E #6 #7 #14; V-F #18 #23. Review blockers: before V-A, #9 #10 #11
 #22 (all in V-A); before V-B, #1 #2 #3 #4 #8 #12 #21; before V-C/V-F, #23 #18; before V-E, #6
-#7 #14.
+#7 #14. **V-E review (s2596):** V-E1 #1 #2 #3 #4 #8 #9 #11 #12 #13 (the §8 wording) #14 #17
+#18 #21; V-E2 #5 #6 #7 (after owner Q1) #10 #12 (card half) #15 #16; V-D #19 (after
+owner Q2) #20.
 
 The whole build is **L**, as next-stages 2d says. V-B to V-E each touch about one module
 on each side.
@@ -769,7 +890,10 @@ on each side.
   - a `house` fixture for the channel (`visit`, `basket`): the bench README (line 60)
     already has a `mine` fixture (`--mine`), so this extends that path with `house`;
   - a `basket: [ids]` shot field and a `reveal: {id, new, from?}` pin;
-  - a `--collection` fixture like `--journal` (part met, one gift ♥);
+  - a `--collection` fixture like `--journal` (part met, one gift ♥; V-D);
+  - (V-E2, V-E review #16) a shot field `gift: {id, world}` (via `mine.gift` plus a forced
+    first look) and `--preset gifts`: V5 with the longest name, V6 made and found, V7
+    baby, calm, compact, and a gift on an asleep pet showing nothing;
   - `--preset finds`: all 60 finds at reveal size on each world's backdrop, the three
     baskets, a collection page per world, and a calm and a compact shot.
 - **Card-check** (behaviour, a scratch HA through `scripts/gate -- --only …`):
@@ -789,9 +913,14 @@ on each side.
     - no `call_service` is sent for a collect: the ws spy (`card-check.js:5883`) sees one
       `virtual_pet/collect` and no `call_service` (finding #17; there is no DB read);
     - calm and compact behave.
-  - `gifts` (new):
-    - seeds `bonds[dev].gift`; dev's personal card says V5 and takes it;
-    - two tabs of dev: one says V5, the other stays quiet (finding #14);
+  - `gifts` (new, V-E2):
+    - seeds `bonds[dev].gift` **in `gifts`' own step**, or `gifts` sits right after
+      `restart` with `NEEDS.gifts = ["restart"]` in the same shard (V-E review #15: a
+      gift seeded in restart's bounce could be taken by a later section's fresh load).
+      The dev pet must be awake, home and hatched at that first look; dev's personal
+      card says V5 and takes it;
+    - two tabs of dev: assert **exactly one** V5 across both and one non-empty `collect`
+      reply in the ws spy (which tab wins is a race; finding #14);
     - a shared card's collection reply has no `gifts`; a shared `collect {gift}` is refused;
     - the house `finds` map has no gift (finding #7);
     - a shared screen and the second user (`other`, card-check 8384) see nothing;
@@ -854,6 +983,21 @@ The V-B audit (s2592, FIX FIRST), decided by the first mate (2026-11-01) as it r
   from now, with no roll.
 - #3-#5 (nits): `find_weight` compares by value; `valid_find` needs a str `name`; a known
   id under the wrong world counts as unknown (a comment says so, for V-D).
+
+The V-E review (s2596, FIX FIRST, plan edits only), decided by the first mate
+(2026-11-01): #1-#4, #8, #9, #11-#14, #17, #18, #21 accepted with their fixes (§5, §6,
+§8; built in V-E1); #5, #6, #10, #12 (card half), #15, #16, #20 accepted for V-E2 and V-D
+(§5, §7, §11, §12). #8 and #9 take the recommended rules (a)-(g) and weights as written.
+Review Q3 (missed visitor or gift, room for one): **the gift** (§5).
+
+**Still OPEN for the owner (do not decide in a slice):**
+
+- **Q1 (V-E review #7).** A gift that arrives while your card is already open: when does
+  the pet say it? *Recommended:* at the next first look, or when the tab comes back after
+  being hidden at least `AWAY_NOTE_AFTER_MS`; never an interruption while you watch.
+- **Q2 (V-E review #19).** An ordinary find you got only as a gift: on your own
+  collection page, is it drawn? *Recommended:* drawn, with a ♥, on your screen only; the
+  house's page, and everyone else's, show it unmet until it is found.
 
 ## 13b. Answered (owner, 2026-11-01): all four as recommended
 
