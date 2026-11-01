@@ -58,6 +58,7 @@ from .const import (
     CONF_MUSIC,
     CONF_NEW_PET,
     CONF_NEXT_WORLD,
+    CONF_NO_MAMMALS,
     CONF_PRIVACY,
     CONF_SITTER_SETTLES,
     CONF_SPECIES,
@@ -156,6 +157,13 @@ def _log_damage(message: str, title: str, err: BaseException) -> None:
     LOGGER.debug(message, title, exc_info=err)
 
 
+def _foods(value: Any) -> list[str]:
+    """A species.json food list, without anything that isn't a name."""
+    if not isinstance(value, list):
+        return []
+    return [x for x in value if isinstance(x, str) and x]
+
+
 class PetStore(Store[dict[str, Any]]):
     """The pet's JSON file, with a hook for future schema migrations."""
 
@@ -201,9 +209,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.egg_roster: tuple[str, ...] = ()
         self.egg_species_names: dict[str, str] = {}
         self.rng = random.Random()
-        # Each ready creature's favourite-snack choices, and the stages with
-        # food words of their own (a moth: no snacks there).
+        # Each creature's favourite-snack choices: gentle (no mammals, the
+        # default) and, where its real diet differs, realistic (the "no
+        # mammals" option off); and the stages with food words of their own
+        # (a moth: no snacks there).
         self.likes: dict[str, list[str]] = {}
+        self.likes_real: dict[str, list[str]] = {}
         self.own_food_stages: dict[str, set[str]] = {}
         self.catchphrases: dict[str, str] = {}  # each creature's own
         self.state: model.PetState | None = None
@@ -342,12 +353,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             voice = data.get("voice") if isinstance(data.get("voice"), dict) else {}
             if isinstance(voice.get("catchphrase"), str):
                 self.catchphrases[key] = voice["catchphrase"]
-            likes = voice.get("likes")
-            self.likes[key] = (
-                [x for x in likes if isinstance(x, str) and x]
-                if isinstance(likes, list)
-                else []
-            )
+            self.likes[key] = _foods(voice.get("likes"))
+            if real := _foods(voice.get("likes_real")):
+                self.likes_real[key] = real
             words = data.get("words") if isinstance(data.get("words"), dict) else {}
             self.own_food_stages[key] = {
                 stage
@@ -938,7 +946,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         at load for a pet from before favourites)."""
         state = self.state
         if state is not None and state.species:
-            model.pick_favourite(state, self.likes.get(state.species, []), self.rng)
+            likes, off_diet = self.diet(state.species)
+            model.pick_favourite(state, likes, self.rng, off_diet)
+
+    def diet(self, species: str) -> tuple[list[str], set[str]]:
+        """The foods this pet's favourite comes from, and the ones it may not
+        keep. "No mammals" on (the default): its creature's gentle likes, and a
+        realistic-only favourite (mice) is picked again. Off: its realistic
+        likes where it has them; a favourite picked before stays."""
+        gentle = self.likes.get(species, [])
+        real = self.likes_real.get(species, [])
+        if self.config_entry.options.get(CONF_NO_MAMMALS, True):
+            return gentle, set(real) - set(gentle)
+        return real or gentle, set()
 
     def _fire(self, events: list[model.Event], simulated: bool = False) -> None:
         for event in events:

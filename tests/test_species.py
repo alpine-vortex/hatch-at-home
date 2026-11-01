@@ -226,6 +226,31 @@ def test_every_creature_has_a_voice(species: str) -> None:
     likes = voice["likes"]
     assert 2 <= len(likes) <= 3 and len(set(likes)) == len(likes)
     assert all(isinstance(x, str) and 0 < len(x) <= 16 for x in likes)
+    # Realistic foods ("no mammals" off), only where they differ: 2-3 as well.
+    if "likes_real" in voice:
+        real = voice["likes_real"]
+        assert 2 <= len(real) <= 3 and len(set(real)) == len(real)
+        assert all(isinstance(x, str) and 0 < len(x) <= 16 for x in real)
+        assert real != likes
+
+
+def test_no_mammals_is_kept_by_the_gentle_lists() -> None:
+    """The gentle likes (the default) name no mammal; the owner-approved
+    realistic lists (decisions 2026-10-28) are the only ones that do."""
+    # The mammals in today's lists; the exact likes_real check below and the
+    # owner's review of new lists are the real guard.
+    mammals = {"mice", "voles", "rats"}
+    real = {}
+    for species in READY:
+        voice = json.loads((SPRITES / species / "species.json").read_text())["voice"]
+        assert not mammals & set(voice["likes"]), species
+        if "likes_real" in voice:
+            real[species] = voice["likes_real"]
+    assert real == {
+        "owl": ["mice", "voles", "moths"],
+        "ballpython": ["mice", "rats", "quail eggs"],
+        "fox": ["mice", "blackberries", "beetles"],
+    }
 
 
 def test_creatures_in_one_world_sound_different() -> None:

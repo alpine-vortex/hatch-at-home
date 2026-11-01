@@ -2504,10 +2504,18 @@ def favourite_game(state: PetState, user: str, game: str, today: str) -> list[Ev
 # --- Its favourite snack --------------------------------------------------------
 
 
-def pick_favourite(state: PetState, likes: list[str], rng: random.Random) -> bool:
+def pick_favourite(
+    state: PetState,
+    likes: list[str],
+    rng: random.Random,
+    off_diet: Collection[str] = (),
+) -> bool:
     """Once it has hatched, it picks a favourite snack from its creature's likes,
-    for good. Whether it picked one now."""
-    if "snack" in state.favourites or not likes or life_stage(state) == "egg":
+    for good, unless its favourite is off its diet now ("no mammals" turned on
+    with mice its favourite): then it picks again. Whether it picked one now."""
+    if not likes or life_stage(state) == "egg":
+        return False
+    if "snack" in state.favourites and state.favourites["snack"] not in off_diet:
         return False
     state.favourites["snack"] = rng.choice(likes)
     return True

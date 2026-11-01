@@ -27,7 +27,7 @@ while its adult sprites are being redrawn.
 | `murk` | Water worlds only (`"mess": "murk"` in `worlds.json`): a 512×384 overlay that clouds the scene instead of showing poop, stronger with each mess. Every creature in the world needs it (later ones borrow the first's, like `otter/murk`); without it the card shows poop. |
 | `backgrounds` | `day`, `night`, `rain`, `dim` scenes, 512×384. Only `day` is required; missing scenes reuse it, dimmed by the card. |
 | `words` | Optional flavour words for speech: `food`, `home`, and per-stage overrides (`"adult": {"home": "branch"}`) |
-| `voice` | Optional: `sound` (one word, said at the start of a line now and then; unique in its world), `pitch` (the babble's base note, 330-1200 Hz), `pace` (typing speed, 25-45 characters a second), `likes` (2-3 foods; each pet picks its favourite snack from them at hatching). Without it the pet speaks plainly and never babbles |
+| `voice` | Optional: `sound` (one word, said at the start of a line now and then; unique in its world), `pitch` (the babble's base note, 330-1200 Hz), `pace` (typing speed, 25-45 characters a second), `likes` (2-3 foods, never a mammal; each pet picks its favourite snack from them at hatching), `likes_real` (optional, 2-3 realistic foods where they differ, used with the "no mammals" option off; the owner approves these lists). Without it the pet speaks plainly and never babbles |
 
 Sprites are 256×256 transparent PNGs with the feet on y=224; props are 128×128.
 Every creature has a closed dark outline; `scripts/art/outline.py` closes gaps along

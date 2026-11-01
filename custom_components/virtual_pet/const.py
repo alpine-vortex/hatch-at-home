@@ -59,6 +59,7 @@ CONF_MUSIC = "music"
 CONF_TV = "tv"
 CONF_ZONE = "zone"
 CONF_PRIVACY = "privacy"
+CONF_NO_MAMMALS = "no_mammals"  # gentle diets: no favourite snack is a mammal
 # What the house was doing, not how the pet is: what's on and who's home.
 PRIVATE_READINGS = {
     "company",

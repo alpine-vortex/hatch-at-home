@@ -170,6 +170,7 @@ async def test_the_dashboard_opens_from_every_notification(
                 "sitter_settles": True,
             },
             "sky": {},
+            "food": {"no_mammals": True},
             "privacy": {"privacy": True},
             "notifications": {"dashboard": "/pets"},
         },
