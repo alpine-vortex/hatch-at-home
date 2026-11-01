@@ -2986,7 +2986,7 @@ async function main() {
   await inject(pet["sensor.mood"], { state: "excited", attributes: { flags: ["excited"] } });
   await page.waitForTimeout(800);
   const hopsAtFirst = await cur().locator(".pet.hop").count();
-  await page.waitForTimeout(11000);
+  await skip(page, 11000); // the tick ends the bounce by Date.now()
   // Idle life also hops now and then while excited (1.4 s, at most every 20 s),
   // so look for a moment without a hop over the next 3 s, not at one instant.
   let stopped = false;
