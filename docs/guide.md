@@ -66,7 +66,6 @@ devices:
 # or, as before, any one entity of each pet:
 entities:
   - sensor.pip_mood
-experimental_catch: true  # optional prototype: adds Catch to the game picker
 seasonal: false  # optional: no seasonal touches (on by default; "halloween", "thanksgiving" or "winter" previews one)
 ```
 
@@ -86,7 +85,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   that asks for it. Reduced motion skips the fill.
 - The screen shows the pet, its scene and a speech bubble. The bubble says what's on
   its mind, or why it refused something ("I'm full!").
-- **Play** offers three games (four with Catch). It opens a picker that starts on the
+- **Play** offers three games. It opens a picker that starts on the
   last game you picked. **Left or right:**
   the pet hides on one side and you guess with the arrows; a win cheers it up more than
   plain play. **Higher or lower:** the pet shows a number from 1 to 9 and you guess
@@ -100,10 +99,6 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   round and bank, however much later. Each person has their own; someone else starts
   fresh. (The `play` button entity is still plain play, for
   automations and voice.)
-- **Catch** (prototype, card option `experimental_catch: true`): a toy rolls in from
-  one side; tap that side as it reaches the pet, but let the bee go by. Five rounds,
-  three catches win; the best score stays in this browser. No reward, nothing is sent
-  to Home Assistant.
 - **Every day** there's something new when you look in:
   - **A wish of the day**, picked when it wakes up, only from what your house can grant: play
     a game together, a snack after lunch, a bubble bath, "good job!", being tucked in
@@ -326,7 +321,7 @@ pet; it's only how the screen looks.
   more contrast.
 - **Ghosting.** Like a slow old LCD, the screen leaves a fading trace of the pet:
   its last frame for a moment when it moves, and a short smear when it wanders or
-  dashes aside in a game. Only on the pet you're looking at, never in Catch, and
+  dashes aside in a game. Only on the pet you're looking at, and
   never with reduced motion. The same "screen effects here" switch turns it off.
   It's off on a mono screen ("mono screen" in the settings), which keeps the grid.
 - **The backlight.** Every device has a little button on its shell: a nub on the

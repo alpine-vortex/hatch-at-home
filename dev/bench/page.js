@@ -83,7 +83,7 @@
         // this one, a trait or two and a memory. `journal: {..}` overrides any of it.
         const roster = rosterOf(worlds[world]);
         const past = (k) => ({ generation: k + 1, name: ["Pip", "Mochi"][k], species: roster[(k + 1) % roster.length],
-          age_days: 31 + k * 9, upbringing: ["playful", "caring"][k], personality: ["bold", "gentle"][k], games: { catch: 3 + k },
+          age_days: 31 + k * 9, upbringing: ["playful", "caring"][k], personality: ["bold", "gentle"][k], games: { left_right: 3 + k },
           traits: ["sunny"], trait_levels: { sunny: 2 } });
         Object.assign(attrs, { raised: roster, generation: 3, traits: ["sunny", "cuddly"], trait_levels: { sunny: 1, cuddly: 3 },
           inherited_trait: "sunny", journal: [past(0), past(1)], memories: [{ kind: "first_frost", at: Math.floor(now.getTime() / 1000) - 5 * 86400 }],
@@ -457,26 +457,6 @@
       if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight; // the foot's links
     }
     if (shot.view === "games") card._startGame(cur, cur.buttons.play); // the button itself can be disabled
-    // `catch`: a Catch round (needs config.experimental_catch) held at its `far` or `near` spot.
-    // Under motion "reduce" those are the two steps; the round clock is moved through c.start.
-    if (shot.catch) {
-      card._startGame(cur, cur.buttons.play);
-      cur.gameBox.querySelector('.gpick [data-game="catch"]').click();
-      let c;
-      for (let n = 0; n < 120 && !(c = cur.game?.cur); n++) await new Promise((r) => requestAnimationFrame(r));
-      if (shot.catchSide || shot.catchDecoy) { // force the round: its side, and a bee (a later round)
-        cancelAnimationFrame(c.raf);
-        cur.game.round = shot.catchDecoy ? 1 : 0;
-        const rolls = [shot.catchSide === "right" ? 0.9 : 0.1, shot.catchDecoy ? 0 : 0.9];
-        const was = Math.random;
-        Math.random = () => (rolls.length ? rolls.shift() : was());
-        card._catchRound(cur);
-        Math.random = was;
-        c = cur.game.cur;
-      }
-      const sec = shot.catch === "near" ? c.travel - c.window + 0.2 : 0.1;
-      await new Promise((r) => requestAnimationFrame((ts) => { c.start = ts - sec * 1000; r(); }));
-    }
     // `game: "dig"`: a Berry dig started through the card's own picker, then `digTaps`
     // ("dig" or "keep") played, each answered by the next of `digReplies` (scripted).
     // Held on the last reply, before its pause (a bee still shows).

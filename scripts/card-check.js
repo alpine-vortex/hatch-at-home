@@ -2562,48 +2562,20 @@ async function main() {
   check("the picker remembers the last game",
     await evaluate(() => localStorage.getItem("hatch-last-game")) === "higher_lower");
 
-  // Catch (prototype, behind experimental_catch): the card times the taps, so
-  // play it from inside the page: tap mid-window on the right side, leave the
-  // bees alone, and tap one round too soon on purpose (so 4 of 5).
+  // Catch is gone: a YAML experimental_catch: true in an old card config is ignored
+  // harmlessly. It stays on for the sections below, which must not notice.
   await skip(page, 3500);
   await page.locator("hatch-pet-card").evaluate((el) => el.setConfig({ ...el._config, experimental_catch: true }));
   await inject(pet["sensor.energy"], { state: "80" }); // the card turns play down when tired
   await page.waitForTimeout(800);
   await button(2).click();
   await page.waitForTimeout(600);
-  check("catch joins the picker with the option",
-    (await cur().locator(".gpick button").count()) === 4);
-  await cur().locator('.gpick [data-game="catch"]').click();
-  const catchShot = page.waitForTimeout(2600).then(() => shot("04d-catch"));
-  const catchRounds = await page.locator("hatch-pet-card").evaluate(async (el) => {
-    const s = el._slides[el._index];
-    const out = [];
-    const frame = () => new Promise((r) => requestAnimationFrame(r));
-    for (let i = 0; i < 5; i++) {
-      let c;
-      for (let w = 0; w < 600 && !((c = s.game?.cur) && !c.done && s.game.round === i); w++) await frame();
-      if (!c) return out;
-      const early = i === 2 && !c.decoy;
-      const due = early ? 0.05 : c.travel - c.window / 2;
-      while (!c.done && (performance.now() - c.start) / 1000 < due) await frame();
-      if (!c.decoy && !c.done) s.gameBox.querySelector(c.side === "left" ? ".gl" : ".gr").click();
-      while (!c.done) await frame();
-      out.push({ decoy: c.decoy, early, wins: s.game?.wins });
-      for (let w = 0; w < 200 && s.game && s.game.round === i + 1 && s.game.cur === c; w++) await frame();
-    }
-    return out;
-  });
-  await catchShot;
-  await page.waitForTimeout(1500);
-  const catchLine = await bubble();
-  const expected = 5 - catchRounds.filter((r) => r.early).length;
-  check("catch plays five timed rounds", catchRounds.length === 5 && catchLine.startsWith(`${expected}/5 caught`),
-    `${catchRounds.map((r) => (r.decoy ? "bee" : r.early ? "early" : "catch")).join(" ")} -> ${catchLine}`);
-  check("catch keeps a best score",
-    Number(await evaluate(() => localStorage.getItem("hatch-best-catch"))) >= expected);
-  // 3a. Calm Catch: two steps (far at once, "at the pet" at travel - window - 50 ms), no
-  // slide and no transform; a tap on the last step's first frame catches. Time is moved
-  // through c.start, never waited for.
+  check("experimental_catch: true is ignored: the picker keeps its three games, no catch",
+    (await cur().locator(".gpick button").count()) === 3 && (await cur().locator('.gpick [data-game="catch"]').count()) === 0);
+  await cur().locator(".gx").click();
+  await page.waitForTimeout(300);
+  // 3a. Reduced motion: the pet's src stays one still picture, even in a game. Time is
+  // moved, never waited for.
   {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await skip(page, 4500); // the last result line clears
@@ -2611,39 +2583,10 @@ async function main() {
     await page.waitForTimeout(500);
     await button(2).click();
     await page.waitForTimeout(500);
-    await cur().locator('.gpick [data-game="catch"]').click();
-    const calmCatch = await page.locator("hatch-pet-card").evaluate(async (el) => {
-      const s = el._slides[el._index];
-      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      for (let w = 0; w < 600 && !(s.game?.cur && !s.game.cur.done); w++) await frame();
-      const c = s.game.cur;
-      const seen = new Set();
-      const at = async (sec) => { // jump the round clock to sec seconds in
-        c.start = performance.now() - sec * 1000;
-        await frame();
-        seen.add(s.propEl.style.left);
-        return { left: s.propEl.style.left, transform: s.propEl.style.transform };
-      };
-      const boundary = c.travel - c.window;
-      const first = { left: s.propEl.style.left, calm: c.calm, side: c.side, decoy: c.decoy };
-      const early = await at(boundary / 2);
-      const justBefore = await at(boundary - 0.2);
-      const last = await at(boundary - 0.04); // the last step's first frames
-      const later = await at(boundary + c.window / 2);
-      const wins = s.game.wins;
-      s.gameBox.querySelector(c.side === "left" ? ".gl" : ".gr").click();
-      return { first, early, justBefore, last, later, seen: [...seen], won: s.game.wins - wins, near: c.side === "left" ? "28%" : "56%",
-        far: c.side === "left" ? "8%" : "76%", done: c.done };
-    });
-    check("3a: calm Catch shows the prop at the far spot at once",
-      calmCatch.first.calm && calmCatch.first.left === calmCatch.far, JSON.stringify(calmCatch));
-    check("3a: calm Catch takes exactly two left values and sets no transform",
-      calmCatch.seen.length === 2 && calmCatch.seen.every((v) => [calmCatch.far, calmCatch.near].includes(v)) &&
-      !calmCatch.early.transform && !calmCatch.last.transform, JSON.stringify(calmCatch));
-    check("3a: calm Catch jumps to the pet at travel - window - 50 ms, not before",
-      calmCatch.justBefore.left === calmCatch.far && calmCatch.last.left === calmCatch.near, JSON.stringify(calmCatch));
-    check("3a: a tap on the last step's first frame catches (not too soon)",
-      calmCatch.won === 1 && calmCatch.done, JSON.stringify(calmCatch));
+    await cur().locator('.gpick [data-game="left_right"]').click();
+    await page.waitForTimeout(600);
+    check("3a: a game under reduced motion opens with no prop showing",
+      await card.evaluate((el) => { const s = el._slides[el._index]; return s.game?.kind === "left_right" && s.propEl.hidden; }));
     await page.locator("hatch-pet-card").evaluate((el) => {
       el._endGame(el._slides[el._index], "");
     });
@@ -2698,7 +2641,7 @@ async function main() {
       await cur().locator(".gx").click();
       await page.waitForTimeout(300);
     };
-    await skip(page, 4500); // let the catch result line clear
+    await skip(page, 4500); // let the result line clear
     for (const kind of ["left_right", "higher_lower"]) {
       await open(kind);
       const fresh = await score();
@@ -2752,23 +2695,24 @@ async function main() {
     check("a game closed during a pending guess throws nothing", errors.length === errorsBefore,
       errors.slice(errorsBefore).join(" | "));
 
-    // Catch (experimental_catch is on above): close and reopen inside 900 ms,
-    // and exactly one round runs (the kickoff timer only).
-    await open("catch");
-    await page.locator("hatch-pet-card").evaluate((el) => {
+    // Close and reopen inside 900 ms (left or right): the old game's guess timer dies
+    // with it, so nothing fires on the new game and nothing throws.
+    const errorsReopen = errors.length;
+    await open("left_right");
+    await cur().locator(".gl").click();
+    const timersLeft = await page.locator("hatch-pet-card").evaluate((el) => {
       const s = el._slides[el._index];
-      window.__catchRounds = 0;
-      const was = el._catchRound.bind(el);
-      el._catchRound = (x) => { window.__catchRounds += x === s && x.game?.kind === "catch" ? 1 : 0; return was(x); };
+      const before = s.gameTimers?.size || 0;
       el._endGame(s, null);
+      return { before, after: s.gameTimers?.size || 0 };
     });
     await page.waitForTimeout(100);
     await button(2).click();
     await page.waitForTimeout(300);
-    await cur().locator('.gpick [data-game="catch"]').click();
+    await cur().locator('.gpick [data-game="left_right"]').click();
     await page.waitForTimeout(1500);
-    check("catch reopened inside 900 ms runs one round",
-      (await evaluate(() => window.__catchRounds)) === 1, String(await evaluate(() => window.__catchRounds)));
+    check("a game reopened inside 900 ms: the old guess timer died and nothing throws",
+      timersLeft.after === 0 && errors.length === errorsReopen, JSON.stringify(timersLeft) + errors.slice(errorsReopen).join(" | "));
     await stop();
 
     // Fresh eyes #1+#2: a game the server dropped for idling. Left/Right: the guess
@@ -3022,67 +2966,68 @@ async function main() {
     if (afterBtn.status) await page.locator("hatch-pet-card .statusbtn").click();
     await page.waitForTimeout(200);
 
-    // Fresh eyes #3+#4: Catch never plays unseen. Opening the status, swiping away and
-    // tapping Play each end the round (the ball goes), and a game nobody tapped keeps no best.
-    const catchLive = () => card.evaluate(async (el) => {
+    // Fresh eyes #3+#4: a game never plays unseen. Opening the status, swiping away and
+    // tapping Play each end it (no prop left showing), and a game nobody tapped sends only an end.
+    const gameLive = () => card.evaluate(async (el) => {
       const s = el._slides[el._index];
-      for (let w = 0; w < 300 && !(s.game?.cur && !s.game.cur.done); w++) await new Promise((r) => requestAnimationFrame(r));
-      return s.game?.kind === "catch" && !s.propEl.hidden;
+      for (let w = 0; w < 300 && !s.game; w++) await new Promise((r) => requestAnimationFrame(r));
+      return s.game?.kind === "left_right" && !s.game.picking;
     });
-    await open("catch");
-    const statusLive = await catchLive();
+    await open("left_right");
+    const statusLive = await gameLive();
     const statusEnd = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       el._toggleStatus(s);
-      const out = { game: !!s.game, ball: !s.propEl.hidden };
+      const out = { game: !!s.game, prop: !s.propEl.hidden };
       await new Promise((r) => setTimeout(r, 300));
       el._toggleStatus(s);
       return out;
     });
-    check("opening the status mid-Catch ends the game and hides the ball",
-      statusLive && !statusEnd.game && !statusEnd.ball, `${statusLive} ${JSON.stringify(statusEnd)}`);
-    await open("catch");
-    const playLive = await catchLive();
+    check("opening the status mid-game ends the game and hides the prop",
+      statusLive && !statusEnd.game && !statusEnd.prop, `${statusLive} ${JSON.stringify(statusEnd)}`);
+    await open("left_right");
+    const playLive = await gameLive();
     await button(2).click();
     await page.waitForTimeout(400);
     const playEnd = await card.evaluate((el) => {
       const s = el._slides[el._index];
-      return { picking: !!s.game?.picking, ball: !s.propEl.hidden };
+      return { picking: !!s.game?.picking, prop: !s.propEl.hidden };
     });
-    check("Play mid-Catch ends the round: the picker, and no ball over it",
-      playLive && playEnd.picking && !playEnd.ball, `${playLive} ${JSON.stringify(playEnd)}`);
+    check("Play mid-game ends the game: the picker, and no prop over it",
+      playLive && playEnd.picking && !playEnd.prop, `${playLive} ${JSON.stringify(playEnd)}`);
     await card.evaluate((el) => el._endGame(el._slides[el._index], null));
     if (slides > 1) {
-      await open("catch");
-      const swipeLive = await catchLive();
+      await open("left_right");
+      const swipeLive = await gameLive();
       const swipe = await card.evaluate(async (el) => {
         const back = el._index;
         const s = el._slides[back];
         el._go(back + 1);
-        const out = { game: !!s.game, ball: !s.propEl.hidden };
+        const out = { game: !!s.game, prop: !s.propEl.hidden };
         await new Promise((r) => setTimeout(r, 400));
         el._go(back);
         return out;
       });
       await page.waitForTimeout(800);
-      check("swiping away mid-Catch ends the game on the slide left",
-        swipeLive && !swipe.game && !swipe.ball, `${swipeLive} ${JSON.stringify(swipe)}`);
+      check("swiping away mid-game ends the game on the slide left",
+        swipeLive && !swipe.game && !swipe.prop, `${swipeLive} ${JSON.stringify(swipe)}`);
     }
     const untapped = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
-      const was = localStorage.getItem("hatch-best-catch");
-      localStorage.removeItem("hatch-best-catch");
-      // The last round of a game nobody tapped, resolved as a decoy dodged (a "catch").
-      s.game = { kind: "catch", round: 4, wins: 4, cur: { done: false, raf: 0 } };
-      el._catchResolve(s, true, "phew, let the bee go!");
-      await new Promise((r) => setTimeout(r, 1200));
-      const stored = localStorage.getItem("hatch-best-catch");
-      if (was === null) localStorage.removeItem("hatch-best-catch");
-      else localStorage.setItem("hatch-best-catch", was);
-      return { stored, ended: !s.game, said: s.bubble.textContent };
+      const calls = [];
+      const real = el._hass.callService;
+      el._hass.callService = (...a) => { calls.push(a[2]); return real.apply(el._hass, a); };
+      try {
+        s.game = { picking: true };
+        el._pickGame(s, "left_right"); // started, never tapped
+        await new Promise((r) => setTimeout(r, 300));
+        el._quitGame(s, null);
+      } finally { el._hass.callService = real; }
+      return { ended: !s.game, calls: calls.map((c) => (c?.end ? "end" : c?.guess ? "guess" : "start")) };
     });
-    check("a Catch game nobody tapped keeps no best score",
-      untapped.ended && untapped.stored === null && /^5\/5 caught/.test(untapped.said), JSON.stringify(untapped));
+    check("a game nobody tapped sends only its end: no guess, no result",
+      untapped.ended && untapped.calls.at(-1) === "end" && !untapped.calls.includes("guess"),
+      JSON.stringify(untapped));
 
     // Fresh eyes #7: a care line said over a game's prompt gives way to the prompt again.
     await skip(page, 4500); // the result line clears
@@ -6482,13 +6427,12 @@ async function main() {
 
   // Ghosting (1b): a frame swap and a wander leave a fading trace, on the pet on show only.
   await setLcd(true);
-  const ghostRun = (opts) => card.evaluate(async (el, { catchGame }) => {
+  const ghostRun = (opts) => card.evaluate(async (el) => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const s = el._slides[el._index];
     const op = () => Number(getComputedStyle(s.ghost).opacity);
     const out = { pets: s.screen.querySelectorAll(".pet").length, ghostIsPet: s.ghost.classList.contains("pet") };
     const savedGame = s.game;
-    if (catchGame) s.game = { kind: "catch" };
     // No tick of the card's own while sampling (its idle life moves the pet too).
     const realTick = el._tick;
     el._tick = () => {};
@@ -6549,9 +6493,6 @@ async function main() {
       Math.abs(g.trail - 0.3) < 0.01 && g.trailLater === 0 && g.back === 0, JSON.stringify(g));
     check(`ghosting at ${width} px: the ghost is not a second pet`, g.pets === 1 && !g.ghostIsPet, JSON.stringify(g));
   }
-  const inCatch = await ghostRun({ catchGame: true });
-  check("ghosting stays hidden in Catch",
-    inCatch.frameJust === 0 && inCatch.trail === 0, JSON.stringify(inCatch));
   await page.emulateMedia({ reducedMotion: "reduce" });
   const calmGhost = await ghostRun({});
   check("ghosting never shows with reduced motion",
@@ -7188,7 +7129,7 @@ async function main() {
     });
     check(`react: ${stage} a pat during a reaction speaks, keeps its move, adds no perk`,
       pat.cls.includes("greethop") && !pat.cls.includes("perk") && pat.said.length > 0 && pat.live, JSON.stringify(pat));
-    // P3 praise moves, live: a plucky pet's Catch pounce (ms 900) is a perk, back in the
+    // P3 praise moves, live: a plucky pet's win beat in a game (ms 900) is a perk, back in the
     // middle before the next round (1000 ms); bouncy's praise hop is a greethop, which
     // a hass update (_render toggles "hop") leaves running.
     if (stage === "adult") {
@@ -7230,7 +7171,7 @@ async function main() {
         Object.assign(s, { poseUntil: 0, movingUntil: 0 });
         return out;
       });
-      check("react: plucky's Catch praise is a perk, centred before the next round",
+      check("react: plucky's in-game praise is a perk, centred before the next round",
         moves.pluckyNow.join() === "perk" && moves.pluckyNext.length === 0 && !moves.pluckyMoving &&
         ["none", "0px", "0px 0px"].includes(moves.pluckyX), JSON.stringify(moves));
       check("react: bouncy's praise hop (greethop) survives a hass update",
@@ -7282,9 +7223,9 @@ async function main() {
         r.awwLog = { src: src(), live: s.poseUntil > Date.now() };
         reset(); s.game = { cur: null }; // the picker: nothing yet
         r.picker = { live: s.poseUntil > Date.now() };
-        await el._pickGame(s, "catch"); // the pick starts the game: acts.ready
+        await el._pickGame(s, "left_right"); // the pick starts the game: acts.ready
         r.ready = { src: src(), live: s.poseUntil > Date.now(), ms: s.poseUntil - Date.now() };
-        el._endGame(s);
+        el._quitGame(s, null);
         reset();
         // The clean scene's last beat.
         el._state = function (slide, key) {
@@ -8867,7 +8808,7 @@ async function main() {
         s.screen.classList.remove("show-status");
       }
       for (const [who, s] of [["host", a], ["guest", b]]) {
-        for (const [what, patch] of [["asleep", { asleep: true }], ["calling", { calling: true }], ["game", { game: { kind: "catch" } }], ["queue", { queue: [{ text: "x" }] }]]) {
+        for (const [what, patch] of [["asleep", { asleep: true }], ["calling", { calling: true }], ["game", { game: { kind: "left_right" } }], ["queue", { queue: [{ text: "x" }] }]]) {
           const keep = Object.fromEntries(Object.keys(patch).map((k) => [k, s[k]]));
           Object.assign(s, patch); clear();
           out[`${who} ${what}`] = el._linkPick(a);
