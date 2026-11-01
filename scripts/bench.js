@@ -335,7 +335,7 @@ function normalize(raw) {
 
 function parseArgs(argv) {
   const opts = { shot: {}, workers: 6, out: path.join(ROOT, "dev", "bench", "out"), sheet: true };
-  const num = new Set(["width", "dpr", "pets", "seed"]);
+  const num = new Set(["width", "dpr", "pets", "seed", "basket"]);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith("--")) throw new Error(`unexpected argument ${a}`);
