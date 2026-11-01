@@ -7891,6 +7891,26 @@ async function main() {
       clearFlag();
       out.darkLive = late();
       out.darkLook = look(VDAY);
+      // It comes right after the look's first line, the rest still queued (review s2622 #7).
+      el._screenDark = () => false;
+      clearFlag();
+      look(VDAY);
+      out.dayPending = !!s.lateVisit;
+      el._visitorMissed = () => VDAY;
+      Object.assign(s, { visitor: null, poseUntil: 0, flairUntil: 0, movingUntil: 0, sayUntil: Date.now() + 3000,
+        queue: [{ text: "one", ms: 5000, cls: 3 }, { text: "two", ms: 5000, cls: 3 }] });
+      s.lateVisit = { left: 1, made: Date.now() };
+      el._visitorTick(s);
+      const early = !!s.visitor; // two lines waiting: not yet
+      s.queue.shift();
+      el._visitorTick(s);
+      const during = !!s.visitor; // the first line still on show
+      s.lateVisit.after = Date.now() - 1;
+      s.sayUntil = 0;
+      el._visitorTick(s);
+      out.firstLine = { early, during, after: s.visitor?.v.id || null, queued: s.queue.length };
+      el._visitorEnd(s);
+      Object.assign(s, { queue: [], lateVisit: null, poseUntil: 0, flairUntil: 0, visitUntil: 0 });
     } finally {
       el.__late = false;
       el._visitorMissed = real.missed; el._channelHeard = real.heard; el._catchUp = real.catchUp; el._seenRead = real.seenRead;
@@ -7907,6 +7927,9 @@ async function main() {
     cu.dayLook.said.length === 0 && !cu.dayLook.flag && cu.dayLive.id === VDAY.id && cu.dayLive.flag &&
       cu.dayAgain.id === null && cu.dayLookAfter.said.length === 0,
     JSON.stringify({ dayLook: cu.dayLook, dayLive: cu.dayLive, dayAgain: cu.dayAgain, after: cu.dayLookAfter }));
+  check("fresh-moment 3: the missed visitor comes right after the look's first line, the rest still queued",
+    cu.dayPending && !cu.firstLine.early && !cu.firstLine.during && cu.firstLine.after === VDAY.id && cu.firstLine.queued === 1,
+    JSON.stringify({ pending: cu.dayPending, firstLine: cu.firstLine }));
   check("fresh-moment 3: a dark screen keeps the line, no late visit (Q7); a night visitor stays a line",
     cu.darkLive.id === null && !cu.darkLive.flag && cu.darkLook.said.length === 1 && cu.dayNight.said.length === 1,
     JSON.stringify({ darkLive: cu.darkLive, darkLook: cu.darkLook, dayNight: cu.dayNight }));

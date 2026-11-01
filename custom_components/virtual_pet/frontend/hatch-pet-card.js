@@ -436,6 +436,8 @@ const FLAIR_MS = 4200; // how long a moment lasts
 // FIRST_MOVE_LATE_MS after.
 const FIRST_MOVE_MS = 6000;
 const FIRST_MOVE_LATE_MS = 15000;
+// A first look's missed day visitor waits at most this long for its turn (fresh-moment 3).
+const LATE_VISIT_MS = 60000;
 const FLAIR = {
   storm_watcher: { place: "head", art: "frames" },
   thunder_heart: { place: "head", art: "frames" },
@@ -5636,6 +5638,10 @@ class HatchPetCard extends HTMLElement {
       lines.push([baby ? "hi hi! ♪" : missed.catchup || `a ${missed.name} came by today ♪`, 4500, { cls: FLAVOUR }]);
     }
     for (const [text, ms, opts] of lines.slice(0, FIRST_LOOK_LINES)) this._queue(s, text, ms, opts);
+    // A missed day visitor comes by right after this look's first line, not after them
+    // all (fresh-moment 3, review s2622 #7): _visitorTick starts it once the queue is down
+    // to the rest and the line on show is done.
+    s.lateVisit = this._visitorLate(s) ? { left: Math.max(Math.min(lines.length, FIRST_LOOK_LINES) - 1, 0), made: Date.now() } : null;
     s.giftAgain = false; // this look is the one a tab coming back would have had
     if (gift) this._giftTake(s);
   }
@@ -8895,6 +8901,27 @@ class HatchPetCard extends HTMLElement {
     return date.getHours() >= start && date.getHours() < start + 3 ? v : null;
   }
 
+  // A first look's missed day visitor (s.lateVisit): once its first line is said and done,
+  // it comes by, the look's other lines going on (its greet is a move, no line, while
+  // they wait). Not over a link, game, call, the basket or a busy pet; given up after
+  // LATE_VISIT_MS, when the usual check may still bring it. True: it started.
+  _lateVisitTick(s, now) {
+    const late = s.lateVisit;
+    if (now - late.made > LATE_VISIT_MS) {
+      s.lateVisit = null;
+      return false;
+    }
+    if ((s.queue?.length || 0) > late.left) return false; // the first line not said yet
+    late.after ??= Math.max(s.sayUntil || 0, now); // the line on show is done
+    if (now < late.after || s !== this._slides[this._index] || this._booting || this._link || s.linking ||
+      s.power || s.calling || s.away || this._basketShows(s) || !this._freeBody(s)) return false;
+    s.lateVisit = null;
+    const v = this._visitorLate(s);
+    if (!v || !oncePerDay(`visit-${s.ids?.device}`, this._visitDay(s))) return false;
+    this._visitorStart(s, v);
+    return true;
+  }
+
   // A night (or dim) screen: night visitors only.
   _screenDark(s) {
     return s.screen.classList.contains("night") || s.screen.classList.contains("dim");
@@ -8947,6 +8974,7 @@ class HatchPetCard extends HTMLElement {
       if (!this._visitorLive(s)) this._visitorEnd(s);
       return;
     }
+    if (s.lateVisit && this._lateVisitTick(s, now)) return;
     if (now < (s.nextVisitCheck || 0)) return;
     s.nextVisitCheck = now + VISIT_CHECK_MS;
     if (!this._visitorFree(s, now)) return;
