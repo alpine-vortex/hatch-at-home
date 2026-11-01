@@ -259,15 +259,32 @@
   // looked up in the pet's world (default: its first visitor). Under motion "reduce"
   // the card shows the still visit (one frame, at its edge) on its own.
   async function visitorShot(card, s, vis, petAt) {
-    const list = visitorList(s.world);
+    // `guest: "<world>"` (fresh-expand E10 V-c): a visitor from that world, its home
+    // world's guest line. `pair: true` (V-b): the day is a pair day, so a friend of its
+    // world comes in behind from the other side.
+    const home = vis.guest ? card._worlds?.[vis.guest] : s.world;
+    if (vis.guest && !home) throw new Error(`no world ${vis.guest}`);
+    const list = visitorList(home);
     const v = list.find((x) => x.id === vis.id) || list[0];
-    if (!v) throw new Error(`no visitor ${vis.id} in ${s.worldKey}`);
+    if (!v) throw new Error(`no visitor ${vis.id} in ${vis.guest || s.worldKey}`);
     // `friend` (fresh-expand E3): seen here on enough days already, so the greet is a
     // friend line (the coin pinned to the friend side).
     if (vis.friend) {
       localStorage.setItem(card._visitFriendKey(s), JSON.stringify({ [v.id]: { n: 3, day: card._visitDay(s).toDateString() } }));
     }
-    const V = card._visitorStart(s, v, { ltr: vis.side !== "right" });
+    const rare = card._rareDay;
+    if (vis.pair) card._rareDay = (sl, kind, odds) => kind === "pair" || rare.call(card, sl, kind, odds);
+    let V;
+    try {
+      V = card._visitorStart(s, v, vis.guest
+        ? { ltr: vis.side !== "right", world: vis.guest, guest: true }
+        : { ltr: vis.side !== "right" });
+    } finally {
+      card._rareDay = rare;
+    }
+    if (vis.pair && !V.pair) throw new Error(`no pair for ${v.id} in ${s.worldKey}`);
+    // The friend comes in on its own timer (PAIR_BEHIND_MS; before the greet's).
+    if (vis.pair) for (let i = 0; i < 80 && V.els.length < 2; i++) await new Promise((r) => setTimeout(r, 25));
     V.timers.forEach(clearTimeout);
     const beat = vis.beat || "greet";
     if (beat === "leave") V.el.classList.replace("in", "out");
@@ -280,11 +297,13 @@
     }
     await settled(card);
     const inMs = parseFloat(V.el.style.getPropertyValue("--in-ms")) || 1400;
-    for (const a of V.el.getAnimations()) {
-      a.pause();
-      a.currentTime = beat === "greet" ? (v.cross ? V.greetAt : inMs) : inMs / 2;
+    for (const el of V.els) {
+      for (const a of el.getAnimations()) {
+        a.pause();
+        a.currentTime = beat === "greet" ? (v.cross ? V.greetAt : inMs) : inMs / 2;
+      }
     }
-    for (const img of V.el.querySelectorAll("img")) {
+    for (const img of V.els.flatMap((el) => [...el.querySelectorAll("img")])) {
       for (const a of img.getAnimations()) {
         a.pause();
         a.currentTime = vis.frame === 2 ? 250 : 0; // the flap: .5s, frame b from 250 ms

@@ -35,6 +35,7 @@ const worldOf = (species) => Object.keys(WORLDS).find((w) => WORLDS[w].roster.in
 
 // The world visitors: worlds.json's roster (the play data is the card's).
 const VISITORS = Object.fromEntries(Object.entries(WORLDS).map(([w, world]) => [w, world.visitors || []]));
+const CROSSERS = new Set(["shootingstar"]); // the card's VISITOR_PLAY with cross: true
 
 // --- Presets ---------------------------------------------------------------
 
@@ -176,6 +177,28 @@ const PRESETS = {
           scene: v.hours === "night" ? "night" : "day", visitor: { id: v.id, beat: "greet", friend: true } });
       }
     }
+    return out;
+  },
+  // Fresh-expand E10, card only: a pair day in each world (a planned visitor and a friend of
+  // its world with the same hours, from the other side) and a guest from the next world
+  // (its home world's line), at the greet.
+  "visitors-rare"() {
+    const out = [];
+    const worlds = Object.keys(VISITORS);
+    worlds.forEach((world, i) => {
+      const list = VISITORS[world].filter((v) => !CROSSERS.has(v.id)); // a crosser never pairs
+      const v = list.find((x) => list.some((y) => y.id !== x.id && y.hours === x.hours));
+      if (v) {
+        out.push({ width: 330, group: "rare-pair", name: `visitors-rare/pair-${world}-${v.id}`, label: `${world}: ${v.id} and a friend`,
+          world, scene: v.hours === "night" ? "night" : "day", visitor: { id: v.id, beat: "greet", pair: true } });
+      }
+      const from = worlds[(i + 1) % worlds.length];
+      const g = VISITORS[from].find((x) => !CROSSERS.has(x.id) && x.hours !== "night");
+      if (g) {
+        out.push({ width: 330, group: "rare-guest", name: `visitors-rare/guest-${world}-from-${from}`, label: `${world}: ${g.id} from ${from}`,
+          world, scene: "day", visitor: { id: g.id, beat: "greet", guest: from } });
+      }
+    });
     return out;
   },
   // The basket and the reveal (visitors v2 §3, V-C): every find at reveal size (16 cells)
