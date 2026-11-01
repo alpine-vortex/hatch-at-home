@@ -364,6 +364,7 @@
     const cur = slides[card._index];
     // `acts`: a fake species.json "acts" put on every pet's species (`{eat: [stages], cheer: [...]}`).
     if (shot.acts) for (const s of slides) s.species = { ...s.species, acts: shot.acts };
+    if (shot.ask) card._ask(cur, shot.ask);
     if (shot.say !== undefined) card._write(cur, shot.say, 1e9);
     // `idle`: the pet's idle mumble through the card's own _idle, the first move (a mumble)
     // and the type's side of the coin forced (draws: next-idle delay, move, coin).

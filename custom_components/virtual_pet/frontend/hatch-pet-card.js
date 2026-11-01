@@ -1807,8 +1807,9 @@ const STYLE = `
   /* Dots share what room the arrows leave; many pets wrap onto a second row. */
   .foot { gap: 8px; }
   .nav { flex-shrink: 0; }
-  .dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 4px; min-width: 0; }
-  .dot { width: 24px; height: 24px; border: none; padding: 0; cursor: pointer;
+  .dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0; min-width: 0; }
+  /* 44 x 44 hit area (4c's size); the drawn dot is still 10 px, and the boxes sit edge to edge. */
+  .dot { width: 44px; height: 44px; border: none; padding: 0; cursor: pointer;
     background: none; display: flex; align-items: center; justify-content: center; }
   .dot::before { content: ""; width: 10px; height: 10px; border-radius: 5px;
     background: color-mix(in srgb, var(--hp-ink) 55%, transparent); transition: width .3s; }
@@ -2767,7 +2768,7 @@ const STYLE = `
   .screen .askday.many { max-width: 236px; } /* three a row at most */
   .compact .screen .askday { gap: 4px; bottom: 2%; }
   .compact .screen .askday.many { max-width: 100%; }
-  .compact .screen .askday button, .compact .screen .askday select { min-height: 40px; min-width: 44px;
+  .compact .screen .askday button, .compact .screen .askday select { min-height: 44px; min-width: 44px;
     font-size: 12px; padding: 2px 7px; border-radius: 10px; }
   .screen .askday select, .compact .screen .askday select { font-size: 16px; } /* iOS zooms in under 16 px */
   .screen .askday select { font: inherit; font-size: 14px; min-height: 44px; border-radius: 14px;
