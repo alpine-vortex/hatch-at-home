@@ -293,6 +293,28 @@ def collection_from(v: Any) -> dict[str, dict[str, Any]]:
     return out
 
 
+def basket_from(v: Any) -> list[dict[str, Any]]:
+    """The basket as loaded (plan visitors v2 §6): each entry a dict with a str
+    id and world, `new` a bool (set when it was rolled) and `from` a str
+    visitor id or absent; a later version's keys are kept. Bad entries are
+    dropped. Ids no worlds.json knows are kept: the coordinator trims to the
+    first BASKET_SIZE known entries plus every unknown one (review V-B #9)."""
+    out = []
+    for entry in v if isinstance(v, list) else []:
+        if not (
+            isinstance(entry, dict)
+            and _str(entry.get("id"))
+            and _str(entry.get("world"))
+        ):
+            continue
+        entry = dict(entry)
+        entry["new"] = entry.get("new") is True
+        if not _str(entry.get("from")):
+            entry.pop("from", None)
+        out.append(entry)
+    return out
+
+
 def bonds_from(v: Any) -> dict[str, dict[str, Any]]:
     """Every bond that can be read; a damaged one is dropped alone."""
     out = {}
@@ -441,6 +463,12 @@ class PetState:
     # device's, kept across generations; no person is in either.
     visit: dict[str, Any] | None = None
     collection: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Finds (plan visitors v2 §2-§3): up to BASKET_SIZE known finds waiting for
+    # a tap, [{id, world, new, from?}] (credited to the collection when rolled;
+    # `new`: first of its kind then), and when the next roll is due (None:
+    # scheduled on the first tick the pet can roll). The device's too.
+    basket: list[dict[str, Any]] = field(default_factory=list)
+    next_find_at: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store, with any keys this version doesn't know."""
@@ -476,7 +504,7 @@ class PetState:
             kwargs[key] = kwargs.get(key) is True
         if not isinstance(kwargs.get("lights_before_away"), bool):
             kwargs["lights_before_away"] = None
-        for key in ("stayed_up_since", "wake_at"):
+        for key in ("stayed_up_since", "wake_at", "next_find_at"):
             kwargs[key] = _float(kwargs.get(key), None)
         for key in ("species", "inherited_from", "shell_finish"):
             kwargs[key] = _opt_str(kwargs.get(key))
@@ -586,6 +614,7 @@ class PetState:
         kwargs["favourites"] = _str_map(kwargs.get("favourites"))
         kwargs["visit"] = _visit(kwargs.get("visit"))
         kwargs["collection"] = collection_from(kwargs.get("collection"))
+        kwargs["basket"] = basket_from(kwargs.get("basket"))
         for key in (
             "favourite_said",
             "catchphrase",
@@ -616,7 +645,7 @@ class PetState:
     @classmethod
     def salvage(cls, data: Any, default_name: str, now: float) -> PetState:
         """What can still be read from a save from_dict couldn't load: its name,
-        family, journal, memories, bonds, collection and the day's visit, each on its own. The rest starts
+        family, journal, memories, bonds, collection, the day's visit and the basket, each on its own. The rest starts
         fresh, as a new egg's would. Never raises."""
         if not is_pet_root(data):
             data = {}
@@ -634,6 +663,7 @@ class PetState:
             "bonds": bonds_from,
             "collection": collection_from,  # the device's, lifelong
             "visit": _visit,  # an uncredited visit still gets its credit
+            "basket": basket_from,  # finds waiting for a tap
         }
         for key, read in readers.items():
             try:
@@ -1751,6 +1781,10 @@ def lay_egg(
     # its world no longer matches) and the collection, across generations.
     egg.visit = copy.deepcopy(state.visit)
     egg.collection = copy.deepcopy(state.collection)
+    # Finds wait in the basket, even across a world change; the egg can't roll,
+    # so the find clock starts again when the hatchling can (review V-B #8).
+    egg.basket = copy.deepcopy(state.basket)
+    egg.next_find_at = None
     # Chore treats earned today wait for the hatchling, and count toward today's limit.
     egg.chore_treats = list(state.chore_treats)
     egg.treats_waiting = state.treats_waiting
@@ -2367,14 +2401,20 @@ def daily_visit(
     pet_id: str,
     rng: random.Random,
     tz: tzinfo,
+    finds: list[dict[str, Any]] | None = None,
+    known: dict[str, set[str]] | None = None,
 ) -> bool:
     """Credit the saved visit if its window is over, then, on a new local day,
     pick and save today's (finding #10: credit first, and a pick never
     overwrites a visit still waiting for its credit, unless that window is more
     than a day off: a clock that ran ahead). Only the window's start hour is
-    random (finding #11). True if the save changed."""
+    random (finding #11). With the world's finds, a credited visitor now and
+    then leaves one (§1, review V-B #6; no `found` moment: it is the
+    visitor's gift, not the pet's find). True if the save changed."""
     changed = credit_visit(state, now, world)
     visit = live_visit(state, world)
+    if changed and finds is not None and rng.random() < R.VISIT_LEAVES_FIND:
+        leave_find(state, visit, visitors, finds, known or {}, rng)
     if visit and visit.get("day") == today:
         return changed
     if visit and visit.get("id") and not visit.get("credited"):
@@ -2406,6 +2446,177 @@ def daily_visit(
         "credited": False,
     }
     return True
+
+
+# --- Finds and the basket (plan visitors v2 §2-§3) --------------------------
+
+# Worlds whose pet finds things while it sleeps (R2): the night's finds.
+FINDS_ASLEEP = frozenset({"nightsky"})
+
+
+def find_weight(find: dict[str, Any], flags: dict[str, bool | None]) -> float:
+    """A find's weight from its tier and its `when` (review V-B #2). Each
+    token is true, false or missing (None: no signal set up); a `!` token is
+    the opposite, and missing stays missing. A clause (an AND) fails on a
+    false token; with every token present and true it gets the tier weight,
+    and one true only because missing tokens dropped out gets weight 1 (the
+    rare fallback, R5). The best clause wins; none: 0."""
+    when = find.get("when")
+    tier = float(find["weight"])
+    if when is None:
+        return tier
+    best = 0.0
+    for clause in when:
+        missing = False
+        for token in clause:
+            value = flags.get(token.removeprefix("!"))
+            if value is None:
+                missing = True
+            elif value is token.startswith("!"):
+                break
+        else:
+            best = max(best, min(tier, R.FIND_MISSING_WEIGHT) if missing else tier)
+    return best
+
+
+def can_find(state: PetState, world: str) -> bool:
+    """A roll can happen: awake and home, not an egg; only Night Sky's pet
+    also finds things asleep (R2). Otherwise the find clock is paused."""
+    if state.away or life_stage(state) == "egg":
+        return False
+    return not state.asleep or world in FINDS_ASLEEP
+
+
+def basket_known(state: PetState, known: dict[str, set[str]]) -> list[dict[str, Any]]:
+    """The basket's entries some world knows (V-A's rule: the rest are a
+    later version's, kept in the save, never counted or shown)."""
+    return [e for e in state.basket if e["id"] in known.get(e["world"], ())]
+
+
+def trim_basket(state: PetState, known: dict[str, set[str]]) -> None:
+    """After load (review V-B #9): the first BASKET_SIZE known entries and
+    every unknown one, in order."""
+    kept, out = 0, []
+    for entry in state.basket:
+        if entry["id"] in known.get(entry["world"], ()):
+            if kept >= R.BASKET_SIZE:
+                continue
+            kept += 1
+        out.append(entry)
+    state.basket = out
+
+
+def add_find(
+    state: PetState,
+    day: str,
+    world: str,
+    find_id: str,
+    known: dict[str, set[str]],
+    left_by: str | None = None,
+) -> bool:
+    """A find joins the collection at once, tapped or not (review V-B #1), and
+    waits in the basket if it has room (known entries of every world count).
+    Its basket entry keeps whether it was new then. True if it went in the
+    basket; else it went straight to the collection, unseen (R1)."""
+    page = state.collection.setdefault(world, {"visitors": {}, "finds": {}})
+    met = page.setdefault("finds", {})
+    new = find_id not in met
+    met.setdefault(find_id, day)
+    if len(basket_known(state, known)) >= R.BASKET_SIZE:
+        return False
+    entry: dict[str, Any] = {"id": find_id, "world": world, "new": new}
+    if left_by is not None:
+        entry["from"] = left_by
+    state.basket.append(entry)
+    return True
+
+
+def pick_find(
+    state: PetState,
+    world: str,
+    finds: list[dict[str, Any]],
+    flags: dict[str, bool | None],
+    rng: random.Random,
+) -> dict[str, Any] | None:
+    """A find from the world's list, weighted by tier and condition; one
+    already in the collection counts half. Never a gift-only find."""
+    met = state.collection.get(world, {}).get("finds", {})
+    pool = [
+        (f, w * (R.FIND_MET_WEIGHT if f["id"] in met else 1.0))
+        for f in finds
+        if not f.get("gift_only") and (w := find_weight(f, flags)) > 0
+    ]
+    if not pool:
+        return None
+    return rng.choices([f for f, _ in pool], [w for _, w in pool])[0]
+
+
+def roll_find(
+    state: PetState,
+    now: float,
+    day: str,
+    world: str,
+    finds: list[dict[str, Any]],
+    flags: dict[str, bool | None],
+    known: dict[str, set[str]],
+    rng: random.Random,
+) -> list[Event]:
+    """The find clock (§2, review V-B #5 and #8). Called on the tick, outside
+    advance, so nothing is caught up. While the pet can't roll the clock is
+    paused: next_find_at is left as it is. With none set, the next roll is
+    scheduled 3-5 h on. Once it is due, one roll (never more, however long
+    it was due) and the next is scheduled. A find that goes in the basket
+    is a `found` moment; one with no room goes to the collection alone."""
+    if not finds or not can_find(state, world):
+        return []
+    if state.next_find_at is not None and now < state.next_find_at:
+        return []
+    due = state.next_find_at is not None
+    state.next_find_at = now + rng.uniform(*R.FIND_EVERY_HOURS) * 3600
+    if not due or rng.random() >= R.FIND_CHANCE:
+        return []
+    find = pick_find(state, world, finds, flags, rng)
+    if find is None or not add_find(state, day, world, find["id"], known):
+        return []
+    return [{"type": "found", "id": find["id"], "world": world}]
+
+
+def leave_find(
+    state: PetState,
+    visit: dict[str, Any] | None,
+    visitors: list[dict[str, Any]],
+    finds: list[dict[str, Any]],
+    known: dict[str, set[str]],
+    rng: random.Random,
+) -> None:
+    """A credited visitor leaves a find (§1): its own `leaves` find, else one
+    of the world's plain commons (weight 10, no condition). In the basket
+    with `from`, or straight to the collection when it is full."""
+    if not visit or not visit.get("id"):
+        return
+    world = visit["world"]
+    guest = next((v for v in visitors if v["id"] == visit["id"]), {})
+    usable = {f["id"]: f for f in finds if not f.get("gift_only")}
+    leaves = guest.get("leaves")
+    if leaves not in usable:
+        commons = [
+            f["id"]
+            for f in usable.values()
+            if f["weight"] >= 10 and f.get("when") is None
+        ]
+        if not commons:
+            return
+        leaves = rng.choice(commons)
+    add_find(state, visit["day"], world, leaves, known, left_by=visit["id"])
+
+
+def collect_basket(state: PetState, known: dict[str, set[str]]) -> list[dict[str, Any]]:
+    """The tap (§3): the known finds waiting, in order, as {id, world, new,
+    from?}, taken out of the basket; unknown entries stay (review V-B #9).
+    Pure, no await: two taps get the finds and then []."""
+    taken = basket_known(state, known)
+    state.basket = [e for e in state.basket if e["id"] not in known.get(e["world"], ())]
+    return [{k: e[k] for k in ("id", "world", "new", "from") if k in e} for e in taken]
 
 
 def grant_wish(

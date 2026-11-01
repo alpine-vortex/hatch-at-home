@@ -55,11 +55,15 @@ from .const import (
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
     CONF_DASHBOARD,
+    CONF_MOON_ILLUMINATION,
+    CONF_MOON_PHASE,
     CONF_MUSIC,
     CONF_NEW_PET,
     CONF_NEXT_WORLD,
     CONF_PRIVACY,
+    CONF_RAIN,
     CONF_SITTER_SETTLES,
+    CONF_SOLAR,
     CONF_SPECIES,
     CONF_TV,
     CONF_WAKE_TIME,
@@ -87,6 +91,7 @@ from .home import (
     Presence,
     Readings,
     evaluate,
+    find_flags,
     forecast_moment,
     is_raining,
 )
@@ -133,6 +138,7 @@ MOMENTS = {
     "favourite_snack",
     "someone_home",
     "became_sick",
+    "found",  # {id, world}: a find went in the basket (no user)
 }
 # A public moment of these types keeps only {type, at}: the bus and the phones
 # still get the cause.
@@ -205,6 +211,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # counts or shows the collection skips the rest).
         self.visitors: list[dict[str, Any]] = []
         self.known_visitors: dict[str, set[str]] = {}
+        # Finds (worlds.json): this world's, and the ids every world knows (the
+        # basket and the collection keep the rest, never counted or shown).
+        # The find flags are None until the house has been read once
+        # (review V-B #3): no roll before.
+        self.finds: list[dict[str, Any]] = []
+        self.known_finds: dict[str, set[str]] = {}
+        self._find_flags: dict[str, bool | None] | None = None
         self.rng = random.Random()
         # Each ready creature's favourite-snack choices, and the stages with
         # food words of their own (a moth: no snacks there).
@@ -344,6 +357,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             world: {v["id"] for v in visitors}
             for world, visitors in catalog.visitors.items()
         }
+        self.finds = list(catalog.finds.get(self.world, []))
+        self.known_finds = {
+            world: {f["id"] for f in finds} for world, finds in catalog.finds.items()
+        }
         self.species_names = {s: catalog.species[s].get("name", s) for s in self.roster}
         self.egg_roster = (
             tuple(catalog.roster(next_world)) if next_world else self.roster
@@ -446,6 +463,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 dt_util.as_local(dt_util.utc_from_timestamp(hatch)).date().isoformat()
             )
         self._check_visits()
+        model.trim_basket(self.state, self.known_finds)  # review V-B #9
         self._pick_favourite()
         self._save()
         self._first_saved()
@@ -506,6 +524,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._sense_home(now)  # time-based signals: motion going quiet, away
         self._want_forecast(now)
         self._daily_visit(now)
+        self._roll_find(now)
         self._fire(self._daily_wish(now))
         return self.state
 
@@ -738,6 +757,23 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
         readings = self.watcher.read(now, night, late)
         options = self.config_entry.options
+        local = dt_util.as_local(dt_util.utc_from_timestamp(now))
+        self._find_flags = find_flags(
+            readings,
+            now,
+            local.hour,
+            P.season(local.date(), self.hass.config.latitude),
+            {
+                name
+                for name, keys in (
+                    ("weather", (CONF_WEATHER,)),
+                    ("rain", (CONF_RAIN,)),
+                    ("solar", (CONF_SOLAR,)),
+                    ("moon", (CONF_MOON_PHASE, CONF_MOON_ILLUMINATION)),
+                )
+                if any(options.get(k) for k in keys)
+            },
+        )
         effect = evaluate(
             readings,
             options.get(CONF_COMFORT_LOW, R.HOME_COMFORT_LOW_C),
@@ -1076,8 +1112,49 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.pet_id,
             self.rng,
             dt_util.get_default_time_zone(),
+            finds=self.finds,
+            known=self.known_finds,
         ):
             self._save()
+
+    def _roll_find(self, now: float) -> None:
+        """The find clock (plan visitors v2 §2): after the house is read, outside
+        advance, so nothing is caught up. Nothing rolls until the house has
+        been read once (review V-B #3)."""
+        state = self.state
+        if state is None or self._find_flags is None:
+            return
+        before = state.next_find_at
+        events = model.roll_find(
+            state,
+            now,
+            self._today(now)[0],
+            self.world,
+            self.finds,
+            self._find_flags,
+            self.known_finds,
+            self.rng,
+        )
+        if state.next_find_at != before:
+            self._save()
+        self._fire(events)
+
+    def collect(self) -> list[dict[str, Any]]:
+        """The basket tap (virtual_pet/collect): read and clear the known finds
+        waiting, with no await in between (two screens: the first gets them,
+        the second []), and publish, so every screen's basket goes at once.
+        Pure: no advance. The caller saves at once (review V-B #18)."""
+        assert self.state is not None
+        taken = model.collect_basket(self.state, self.known_finds)
+        if taken:
+            self._publish()
+        return taken
+
+    async def async_save_now(self) -> None:
+        """Write the save at once (after a collect: a crash can't bring the
+        basket back)."""
+        assert self.state is not None
+        await self.store.async_save(self.state.to_dict())
 
     def _visit_view(self) -> dict[str, Any] | None:
         """Today's visit for every screen: {day, id, hours, from, until} (epoch
@@ -2083,6 +2160,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # Always present (None on a day with no visit), so a card can tell a
         # no-visit day from an older server that sends none (v1's fallback).
         view["visit"] = self._visit_view()
+        # Always present: how many known finds wait (0-3), never which; a card
+        # picks basket_<n>.png from it (review V-B #12).
+        view["basket"] = (
+            len(model.basket_known(self.state, self.known_finds)) if self.state else 0
+        )
         if self._powered_on:
             view["powered_on"] = {"at": self._powered_on}
         return view

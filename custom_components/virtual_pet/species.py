@@ -13,6 +13,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from .home import FIND_TOKENS
+
 _LOGGER = logging.getLogger(__package__)
 
 # "egg" is optional: the egg belongs to the device's world, and the card draws
@@ -31,6 +33,10 @@ class Catalog:
     # Every world's visitors ({id, name, hours, leaves?}, in roster order), from
     # all of worlds.json, ready or not: a saved collection is checked against it.
     visitors: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    # Every world's finds ({id, name, a, weight, when, gift_only?}), from all
+    # of worlds.json, ready or not (plan visitors v2 §2): a find of a world
+    # gone not-ready is still known in the basket and the collection.
+    finds: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
     def roster(self, world: str) -> list[str]:
         """Ready species of a world, in roster order."""
@@ -81,4 +87,45 @@ def load_catalog() -> Catalog:
         ]
         for key, world in all_worlds.items()
     }
-    return Catalog(species, worlds, visitors)
+    finds = {
+        key: [f for f in world.get("finds", []) if valid_find(f)]
+        for key, world in all_worlds.items()
+    }
+    return Catalog(species, worlds, visitors, finds)
+
+
+def valid_when(when: Any) -> bool:
+    """A find's condition: null (always), or an OR of ANDs, a non-empty list of
+    non-empty lists of known tokens, each maybe "!"-negated ([] and [[]] are
+    not valid: a typo would be a find that never comes)."""
+    if when is None:
+        return True
+    return (
+        isinstance(when, list)
+        and bool(when)
+        and all(
+            isinstance(clause, list)
+            and bool(clause)
+            and all(
+                isinstance(t, str) and t.removeprefix("!") in FIND_TOKENS
+                for t in clause
+            )
+            for clause in when
+        )
+    )
+
+
+def valid_find(find: Any) -> bool:
+    """A find the server can roll and the card can name."""
+    ok = (
+        isinstance(find, dict)
+        and isinstance(find.get("id"), str)
+        and isinstance(find.get("a"), str)
+        and isinstance(find.get("weight"), int | float)
+        and not isinstance(find.get("weight"), bool)
+        and find["weight"] > 0
+        and valid_when(find.get("when"))
+    )
+    if not ok:
+        _LOGGER.warning("Skipping a find in worlds.json: %s", find)
+    return ok

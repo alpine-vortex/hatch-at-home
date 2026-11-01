@@ -1249,6 +1249,7 @@ const MOMENT_CLASS = {
   sunrise: FLAVOUR, sunset: FLAVOUR, weather: FLAVOUR, forecast: FLAVOUR, news: FLAVOUR,
   pooped: FLAVOUR, tv_off_late: FLAVOUR, watching: FLAVOUR, listening: FLAVOUR,
   tv_on: FLAVOUR, music_on: FLAVOUR, // public: no line (the channel's watching/listening says it)
+  found: FLAVOUR, // a find went in the basket: the away note's (V-C); no line
 };
 // Kept moments the catch-up leaves out: the look welcomes a friend home itself,
 // and a thank-you for the tuck-in reads oddly the next morning (first mate, 2026-10-31).

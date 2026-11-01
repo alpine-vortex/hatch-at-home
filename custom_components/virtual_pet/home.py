@@ -144,6 +144,63 @@ def moon_phase(phase: str | None, illumination: float | None) -> str | None:
     return None
 
 
+# Finds (plan visitors v2 §2): the tokens a find's `when` may name.
+FIND_TOKENS = frozenset(
+    {"rainy", "snowy", "sunny", "foggy", "night", "full_moon", "autumn", "winter"}
+)
+# A new moon to start the count from (2000-01-06 18:14 UTC), and the mean
+# synodic month in days.
+_NEW_MOON_EPOCH = 947182440.0
+_SYNODIC_DAYS = 29.530588853
+
+
+def full_moon_by_date(now: float) -> bool:
+    """With no moon entity mapped: the moon is full within a day of the
+    middle of its cycle (a mean month: good to well under a day)."""
+    age = ((now - _NEW_MOON_EPOCH) / 86400) % _SYNODIC_DAYS
+    return abs(age - _SYNODIC_DAYS / 2) <= R.FIND_FULL_MOON_DAYS
+
+
+def find_flags(
+    r: Readings,
+    now: float,
+    local_hour: int,
+    season: str | None,
+    configured: frozenset[str] | set[str],
+) -> dict[str, bool | None]:
+    """Each find token true, false or None (missing: no signal for it is set
+    up; review V-B #3). Missing comes from the configuration (`configured`
+    holds "weather", "rain", "solar" and "moon" for what is mapped), so a
+    mapped entity that is briefly unavailable reads false, not missing.
+
+    - `night` is the sun being down (no sun entity: 20:00-06:00 local), not
+      the sleep hours.
+    - `full_moon` is the phase with the sun down; with no moon entity mapped,
+      the phase comes from the date.
+    - `autumn` / `winter` come from the season (None in the tropics).
+    - Weather tokens are read on their own, not as the house's one flag."""
+    weather = "weather" in configured
+    if r.sun_up is not None:
+        night = not r.sun_up
+    else:
+        start, end = R.FIND_NIGHT_HOURS
+        night = local_hour >= start or local_hour < end
+    if "moon" in configured:
+        full = moon_phase(r.moon_phase, r.moon_illumination) == "full_moon"
+    else:
+        full = full_moon_by_date(now)
+    return {
+        "rainy": is_raining(r) if weather or "rain" in configured else None,
+        "snowy": r.condition in SNOWY if weather else None,
+        "sunny": is_sunny(r) if weather or "solar" in configured else None,
+        "foggy": r.condition in FOGGY if weather else None,
+        "night": night,
+        "full_moon": night and full,
+        "autumn": None if season is None else season == "autumn",
+        "winter": None if season is None else season == "winter",
+    }
+
+
 def evaluate(
     r: Readings,
     comfort_low_c: float = R.HOME_COMFORT_LOW_C,

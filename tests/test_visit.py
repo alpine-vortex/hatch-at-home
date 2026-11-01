@@ -348,7 +348,7 @@ def test_damaged_visits_and_collections_load_with_the_rest_kept() -> None:
 
 def test_a_downgrade_keeps_a_later_versions_keys() -> None:
     data = model.PetState.new("Pip", 0).to_dict()
-    data["basket"] = [{"id": "pinecone", "world": "woodland"}]
+    data["basket"] = [{"id": "pinecone", "world": "woodland", "new": False, "x": 1}]
     data["collection"] = {"woodland": {"visitors": {}, "finds": {}, "later": [1]}}
     data["visit"] = {"day": "2026-03-02", "world": "woodland", "id": None, "x": 1}
     saved = model.PetState.from_dict(data, "Pip", 0).to_dict()

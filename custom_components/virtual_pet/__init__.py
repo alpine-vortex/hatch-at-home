@@ -158,6 +158,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_notify_me)
     websocket_api.async_register_command(hass, websocket_my_day)
     websocket_api.async_register_command(hass, websocket_set_shell)
+    websocket_api.async_register_command(hass, websocket_collect)
 
     async def fast_forward(call: ServiceCall) -> ServiceResponse:
         entries: list[PetConfigEntry] = hass.config_entries.async_loaded_entries(DOMAIN)
@@ -585,6 +586,34 @@ async def websocket_set_shell(
         connection.send_error(msg["id"], "shell_locked", "Not grown into that yet")
         return
     connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/collect",
+        vol.Required("entity_id"): cv.entity_id,
+    }
+)
+@websocket_api.async_response
+async def websocket_collect(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The basket tap (plan visitors v2 §3): the finds waiting, in order, as
+    {id, world, new, from?}, and the basket empties for every screen. Any
+    login, shared and read-only too (the basket is the household's). A
+    websocket command, so who tapped isn't recorded. Nothing is awaited
+    before the read-and-clear: a second tap gets []."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None or pet.state is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    finds = pet.collect()
+    connection.send_result(msg["id"], {"finds": finds})
+    if finds:
+        await pet.async_save_now()  # review V-B #18: never revealed twice
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:

@@ -2352,7 +2352,8 @@ async def test_a_send_off_on_a_rainy_morning_a_few_times_a_week(
         freezer.move_to(f"2026-10-{26 + day} 08:00:00+00:00")
         rainy()
         await leave_and_return()
-    assert len(phone) == model.R.SENDOFF_PER_WEEK
+    sendoffs = [c for c in phone if "umbrella" in c.data["message"]]
+    assert len(sendoffs) == model.R.SENDOFF_PER_WEEK  # a call may come too (rng)
 
 
 async def test_answers_are_kept_per_person_and_checked(

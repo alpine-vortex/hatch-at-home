@@ -323,6 +323,15 @@ VISIT_DAYS = 4
 VISIT_HOURS = 3  # the window's length
 VISIT_DAY_STARTS = (9, 15)  # a day visitor's window starts in this hour range (local)
 VISIT_NIGHT_STARTS = (19, 20)  # a night visitor's
+VISIT_LEAVES_FIND = 0.33  # a visitor leaves a find when its window ends
+# Finds and the basket (plan visitors v2 §2-§3).
+FIND_EVERY_HOURS = (3.0, 5.0)  # between rolls: about 4 h, jittered ±1 h
+FIND_CHANCE = 0.6  # a roll finds something (about 2.4 finds on a normal day)
+FIND_MET_WEIGHT = 0.5  # a find already in the collection: less likely, never 0
+FIND_MISSING_WEIGHT = 1  # a condition true only for want of a signal (R5)
+FIND_NIGHT_HOURS = (20, 6)  # "night" with no sun entity: 20:00-06:00 local
+FIND_FULL_MOON_DAYS = 1.0  # with no moon entity: full within a day of mid-cycle
+BASKET_SIZE = 3  # finds waiting; more go straight to the collection
 FAVOURITE_SNACK_CHANCE = 0.4  # a snack is its favourite (said at most once a day)
 
 # A bond with each person (HA user). Points never go down. A typical day (a

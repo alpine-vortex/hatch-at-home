@@ -46,6 +46,100 @@
         "name": "garden snail",
         "hours": "day"
       }
+    ],
+    "finds": [
+      {
+        "id": "pinecone",
+        "name": "pine cone",
+        "a": "a pine cone",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "acorn",
+        "name": "acorn",
+        "a": "an acorn",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "mapleseed",
+        "name": "maple seed",
+        "a": "a maple seed",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "wildstrawberry",
+        "name": "wild strawberry",
+        "a": "a wild strawberry",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "jayfeather",
+        "name": "jay feather",
+        "a": "a jay feather",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "snailshell",
+        "name": "snail shell",
+        "a": "a snail shell",
+        "weight": 4,
+        "when": [
+          [
+            "rainy"
+          ]
+        ]
+      },
+      {
+        "id": "chanterelle",
+        "name": "chanterelle",
+        "a": "a chanterelle",
+        "weight": 4,
+        "when": [
+          [
+            "autumn",
+            "rainy"
+          ],
+          [
+            "autumn",
+            "foggy"
+          ]
+        ]
+      },
+      {
+        "id": "frostedleaf",
+        "name": "frosted leaf",
+        "a": "a frosted leaf",
+        "weight": 4,
+        "when": [
+          [
+            "snowy"
+          ]
+        ]
+      },
+      {
+        "id": "fourleafclover",
+        "name": "four-leaf clover",
+        "a": "a four-leaf clover",
+        "weight": 1,
+        "when": [
+          [
+            "sunny"
+          ]
+        ]
+      },
+      {
+        "id": "acorncup",
+        "name": "acorn-cap cup",
+        "a": "an acorn-cap cup",
+        "weight": 1,
+        "when": null,
+        "gift_only": true
+      }
     ]
   },
   "terrarium": {
@@ -94,6 +188,83 @@
         "name": "moth",
         "hours": "night"
       }
+    ],
+    "finds": [
+      {
+        "id": "tinymushroom",
+        "name": "tiny mushroom",
+        "a": "a tiny mushroom",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "driedflower",
+        "name": "dried flower",
+        "a": "a dried flower",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "curledbark",
+        "name": "curled bark",
+        "a": "some curled bark",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "seedpod",
+        "name": "seed pod",
+        "a": "a seed pod",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "shedskin",
+        "name": "shed skin",
+        "a": "a shed skin",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "crystalcluster",
+        "name": "crystal cluster",
+        "a": "a crystal cluster",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "dewdrop",
+        "name": "dew drop",
+        "a": "a dew drop",
+        "weight": 4,
+        "when": [
+          [
+            "foggy"
+          ]
+        ]
+      },
+      {
+        "id": "pressedmoss",
+        "name": "pressed moss",
+        "a": "some pressed moss",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "tinyfossil",
+        "name": "tiny fossil",
+        "a": "a tiny fossil",
+        "weight": 1,
+        "when": null
+      },
+      {
+        "id": "pressedfern",
+        "name": "pressed fern",
+        "a": "a pressed fern",
+        "weight": 1,
+        "when": null,
+        "gift_only": true
+      }
     ]
   },
   "hearth": {
@@ -140,6 +311,86 @@
         "id": "cricket",
         "name": "hearth cricket",
         "hours": "night"
+      }
+    ],
+    "finds": [
+      {
+        "id": "button",
+        "name": "button",
+        "a": "a button",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "ribbon",
+        "name": "ribbon",
+        "a": "a ribbon",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "spool",
+        "name": "spool of thread",
+        "a": "a spool of thread",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "cookie",
+        "name": "cookie",
+        "a": "a cookie",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "lostsock",
+        "name": "lost sock",
+        "a": "a lost sock",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "toymouse",
+        "name": "toy mouse",
+        "a": "a toy mouse",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "thimble",
+        "name": "thimble",
+        "a": "a thimble",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "pinesprig",
+        "name": "pine sprig",
+        "a": "a pine sprig",
+        "weight": 4,
+        "when": [
+          [
+            "snowy"
+          ],
+          [
+            "winter"
+          ]
+        ]
+      },
+      {
+        "id": "brasskey",
+        "name": "brass key",
+        "a": "a brass key",
+        "weight": 1,
+        "when": null
+      },
+      {
+        "id": "knittedheart",
+        "name": "tiny knitted heart",
+        "a": "a tiny knitted heart",
+        "weight": 1,
+        "when": null,
+        "gift_only": true
       }
     ]
   },
@@ -191,6 +442,83 @@
         "name": "sea star",
         "hours": "day"
       }
+    ],
+    "finds": [
+      {
+        "id": "greenseaglass",
+        "name": "green sea glass",
+        "a": "some green sea glass",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "scallopshell",
+        "name": "scallop shell",
+        "a": "a scallop shell",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "periwinkle",
+        "name": "periwinkle shell",
+        "a": "a periwinkle shell",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "sanddollar",
+        "name": "sand dollar",
+        "a": "a sand dollar",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "blueseaglass",
+        "name": "blue sea glass",
+        "a": "some blue sea glass",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "gullfeather",
+        "name": "gull feather",
+        "a": "a gull feather",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "urchinshell",
+        "name": "sea urchin shell",
+        "a": "a sea urchin shell",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "redseaglass",
+        "name": "red sea glass",
+        "a": "some red sea glass",
+        "weight": 1,
+        "when": null
+      },
+      {
+        "id": "bottle",
+        "name": "message in a bottle",
+        "a": "a message in a bottle",
+        "weight": 1,
+        "when": [
+          [
+            "rainy"
+          ]
+        ]
+      },
+      {
+        "id": "pearl",
+        "name": "pearl",
+        "a": "a pearl",
+        "weight": 1,
+        "when": null,
+        "gift_only": true
+      }
     ]
   },
   "pond": {
@@ -241,6 +569,83 @@
         "hours": "day",
         "leaves": "heronfeather"
       }
+    ],
+    "finds": [
+      {
+        "id": "lilyflower",
+        "name": "lily flower",
+        "a": "a lily flower",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "cattailfluff",
+        "name": "cattail fluff",
+        "a": "some cattail fluff",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "corkfloat",
+        "name": "cork float",
+        "a": "a cork float",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "watersnailshell",
+        "name": "water-snail shell",
+        "a": "a water-snail shell",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "heronfeather",
+        "name": "heron feather",
+        "a": "a heron feather",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "willowleaf",
+        "name": "willow leaf",
+        "a": "a willow leaf",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "reedwhistle",
+        "name": "reed whistle",
+        "a": "a reed whistle",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "frogbit",
+        "name": "frogbit leaf",
+        "a": "a frogbit leaf",
+        "weight": 4,
+        "when": [
+          [
+            "sunny"
+          ]
+        ]
+      },
+      {
+        "id": "koiscale",
+        "name": "golden koi scale",
+        "a": "a golden koi scale",
+        "weight": 1,
+        "when": null
+      },
+      {
+        "id": "paperboat",
+        "name": "paper boat",
+        "a": "a paper boat",
+        "weight": 1,
+        "when": null,
+        "gift_only": true
+      }
     ]
   },
   "nightsky": {
@@ -289,6 +694,96 @@
         "id": "raccoon",
         "name": "raccoon",
         "hours": "night"
+      }
+    ],
+    "finds": [
+      {
+        "id": "stardust",
+        "name": "stardust",
+        "a": "some stardust",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "paperstar",
+        "name": "paper star",
+        "a": "a paper star",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "moonflower",
+        "name": "moonflower",
+        "a": "a moonflower",
+        "weight": 10,
+        "when": [
+          [
+            "night"
+          ]
+        ]
+      },
+      {
+        "id": "constellation",
+        "name": "constellation card",
+        "a": "a constellation card",
+        "weight": 10,
+        "when": null
+      },
+      {
+        "id": "nighthawkfeather",
+        "name": "nighthawk feather",
+        "a": "a nighthawk feather",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "tinyrocket",
+        "name": "tiny rocket",
+        "a": "a tiny rocket",
+        "weight": 4,
+        "when": null
+      },
+      {
+        "id": "moonstone",
+        "name": "moonstone",
+        "a": "a moonstone",
+        "weight": 4,
+        "when": [
+          [
+            "full_moon"
+          ]
+        ]
+      },
+      {
+        "id": "lantern",
+        "name": "little lantern",
+        "a": "a little lantern",
+        "weight": 4,
+        "when": [
+          [
+            "night"
+          ]
+        ]
+      },
+      {
+        "id": "fallenstar",
+        "name": "fallen star",
+        "a": "a fallen star",
+        "weight": 1,
+        "when": [
+          [
+            "night",
+            "!rainy"
+          ]
+        ]
+      },
+      {
+        "id": "telescope",
+        "name": "tiny telescope",
+        "a": "a tiny telescope",
+        "weight": 1,
+        "when": null,
+        "gift_only": true
       }
     ]
   }
