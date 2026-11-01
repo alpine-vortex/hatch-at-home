@@ -3830,6 +3830,7 @@ async function main() {
             for (let i = 0; i < 30; i++) {
               s.nextCostume = 1;
               s.sayUntil = 0; // the real season may be mid-line (a costume line, a countdown): not this check's
+              s.pet.classList.remove("hop", "greethop"); // the greets above leave a 1.4 s greethop: not this check's
               el._seasonTick(s);
               said.add(out.line);
               catchy.add(out.catchy);
