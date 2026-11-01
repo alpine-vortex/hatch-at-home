@@ -200,6 +200,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         # world change waits for the egg, otherwise this world's.
         self.egg_roster: tuple[str, ...] = ()
         self.egg_species_names: dict[str, str] = {}
+        # World visitors (worlds.json): this world's, in roster order, and the
+        # ids every world knows (for the collection's check after load).
+        self.visitors: list[dict[str, Any]] = []
+        self.known_visitors: dict[str, set[str]] = {}
         self.rng = random.Random()
         # Each ready creature's favourite-snack choices, and the stages with
         # food words of their own (a moth: no snacks there).
@@ -334,6 +338,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             else None
         )
         self.roster = tuple(catalog.roster(self.world))
+        self.visitors = list(catalog.visitors.get(self.world, []))
+        self.known_visitors = {
+            world: {v["id"] for v in visitors}
+            for world, visitors in catalog.visitors.items()
+        }
         self.species_names = {s: catalog.species[s].get("name", s) for s in self.roster}
         self.egg_roster = (
             tuple(catalog.roster(next_world)) if next_world else self.roster
@@ -435,6 +444,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.state.hatched_on = (
                 dt_util.as_local(dt_util.utc_from_timestamp(hatch)).date().isoformat()
             )
+        self._check_visits()
         self._pick_favourite()
         self._save()
         self._first_saved()
@@ -494,6 +504,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._advance(now)
         self._sense_home(now)  # time-based signals: motion going quiet, away
         self._want_forecast(now)
+        self._daily_visit(now)
         self._fire(self._daily_wish(now))
         return self.state
 
@@ -1029,6 +1040,62 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if (forecast := self.forecast.get(today)) and forecast.condition in RAINY:
             wishes.add("rain")  # only on a day the forecast says it will rain
         return wishes
+
+    def _check_visits(self) -> None:
+        """After load (finding #12, #9): drop collection entries no worlds.json
+        knows (a world, or a visitor of its world; finds are V-B's to check),
+        and make a visit from another world, or by a visitor this world no
+        longer has, no visit that day (the next day picks from this world)."""
+        state = self.state
+        assert state is not None
+        known = self.known_visitors
+        state.collection = {
+            world: {
+                **page,
+                "visitors": {
+                    k: day for k, day in page["visitors"].items() if k in known[world]
+                },
+            }
+            for world, page in state.collection.items()
+            if world in known
+        }
+        visit = state.visit
+        if visit and (
+            visit["world"] != self.world
+            or (visit["id"] and visit["id"] not in known.get(self.world, set()))
+        ):
+            state.visit = {"day": visit["day"], "world": self.world, "id": None}
+
+    def _daily_visit(self, now: float) -> None:
+        """The day's visit (plan visitors v2 §1): credit the last one once its
+        window is over, then pick today's on the first tick of the local day.
+        In every stage, asleep, away or an egg: it is the server's, not the
+        pet's."""
+        assert self.state is not None
+        if model.daily_visit(
+            self.state,
+            now,
+            self._today(now)[0],
+            self.world,
+            self.visitors,
+            self.pet_id,
+            self.rng,
+            dt_util.get_default_time_zone(),
+        ):
+            self._save()
+
+    def _visit_view(self) -> dict[str, Any] | None:
+        """Today's visit for every screen: {day, id, hours, from, until} (epoch
+        seconds), only today's, only with a visitor, only this world's. It
+        names nobody."""
+        if self.state is None:
+            return None
+        visit = model.live_visit(self.state, self.world)
+        if not visit or not visit.get("id"):
+            return None
+        if visit["day"] != self._today(self._now())[0]:
+            return None
+        return {k: visit[k] for k in ("day", "id", "hours", "from", "until")}
 
     def _daily_wish(self, now: float) -> list[model.Event]:
         """Today's wish, once the pet is up for the day (a morning moment, or the
@@ -2001,8 +2068,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         }
 
     def _house_view(self) -> dict[str, Any]:
-        """What every screen sees, shared ones too: the latest show or song, and
-        this morning's dream of one (other dreams are on the sensor)."""
+        """What every screen sees, shared ones too: the latest show or song,
+        this morning's dream of one (other dreams are on the sensor), and
+        today's world visit (it names nobody)."""
         dream = self.state.dream if self.state else None
         if (
             dream
@@ -2014,6 +2082,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         else:
             seen = None
         view: dict[str, Any] = {"media": self._house.get("media"), "dream": seen}
+        # Always present (None on a day with no visit), so a card can tell a
+        # no-visit day from an older server that sends none (v1's fallback).
+        view["visit"] = self._visit_view()
         if self._powered_on:
             view["powered_on"] = {"at": self._powered_on}
         return view

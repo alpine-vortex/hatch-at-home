@@ -317,6 +317,12 @@ WISH_FOR_CHANCE = 0.35  # a person's wish is aimed at a close friend
 DREAM_SEEDS_KEPT = 12  # the day's moments a dream can be about
 DREAM_SEED_HOURS = 30.0  # older seeds are forgotten
 DREAM_PLAIN_CHANCE = 0.5  # with nothing to dream about: a plain dream, or none
+# World visitors (docs/plan-2026-11-01-visitors-v2.md §1): the server's day plan.
+VISIT_CYCLE_DAYS = 7  # a visit on VISIT_DAYS of every VISIT_CYCLE_DAYS
+VISIT_DAYS = 4
+VISIT_HOURS = 3  # the window's length
+VISIT_DAY_STARTS = (9, 15)  # a day visitor's window starts in this hour range (local)
+VISIT_NIGHT_STARTS = (19, 20)  # a night visitor's
 FAVOURITE_SNACK_CHANCE = 0.4  # a snack is its favourite (said at most once a day)
 
 # A bond with each person (HA user). Points never go down. A typical day (a

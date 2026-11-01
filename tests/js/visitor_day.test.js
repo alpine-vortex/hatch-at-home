@@ -1,5 +1,6 @@
 // visitorDay (the card's world-visitor seed) and visitorMissed (the catch-up's pick) as pure functions: node --test tests/js
-// The card isn't a module: the function and VISITORS are read from its source.
+// The card isn't a module: the functions and VISITOR_PLAY are read from its source; the
+// roster is worlds.json's (the server's too).
 const test = require("node:test");
 const assert = require("node:assert");
 const fs = require("fs");
@@ -8,11 +9,15 @@ const vm = require("vm");
 
 const src = fs.readFileSync(path.join(__dirname, "..", "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
 const fn = src.match(/\nfunction visitorDay\([\s\S]*?\n\}\n/)[0];
-const table = src.match(/\nconst VISITORS = (\{[\s\S]*?\n\});/)[1];
+const table = src.match(/\nconst VISITOR_PLAY = (\{[\s\S]*?\n\});/)[1];
+const listFn = src.match(/\nconst visitorList = [\s\S]*?;\n/)[0];
+const WORLDS = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
 const missedFn = src.match(/\nfunction visitorMissed\([\s\S]*?\n\}\n/)[0];
 const ctx = {};
-vm.runInNewContext(`${fn}; ${missedFn}; this.visitorDay = visitorDay; this.visitorMissed = visitorMissed; this.VISITORS = ${table};`, ctx);
-const { visitorDay, visitorMissed, VISITORS } = ctx;
+vm.runInNewContext(`${fn}; ${missedFn}; const VISITOR_PLAY = ${table}; ${listFn}; this.visitorDay = visitorDay;
+  this.visitorMissed = visitorMissed; this.VISITOR_PLAY = VISITOR_PLAY; this.visitorList = visitorList;`, ctx);
+const { visitorDay, visitorMissed, VISITOR_PLAY, visitorList } = ctx;
+const VISITORS = Object.fromEntries(Object.entries(WORLDS).map(([w, world]) => [w, visitorList(world)]));
 
 const START = new Date(2026, 0, 1, 12);
 const days = (n, from = START) => Array.from({ length: n }, (_, i) => new Date(from.getFullYear(), from.getMonth(), from.getDate() + i, 12));
@@ -121,4 +126,21 @@ test("VISITORS: a name each (the catch-up's 'a <name>'), the shooting star its o
   assert.strictEqual(star.catchup, "a shooting star went by! ♪");
   assert.strictEqual(VISITORS.hearth.find((v) => v.id === "robin").name, "robin");
   assert.strictEqual(VISITORS.woodland.find((v) => v.id === "stellersjay").name, "Steller's jay");
+});
+
+test("the play table and worlds.json's roster name the same visitors, one for one", () => {
+  const roster = Object.values(WORLDS).flatMap((w) => (w.visitors || []).map((v) => v.id));
+  assert.deepStrictEqual([...roster].sort(), Object.keys(VISITOR_PLAY).sort());
+  assert.strictEqual(new Set(roster).size, roster.length);
+  for (const w of Object.values(WORLDS)) {
+    for (const v of w.visitors) {
+      assert.ok(typeof v.name === "string" && v.name, v.id);
+      assert.ok(!("name" in VISITOR_PLAY[v.id]) && !("hours" in VISITOR_PLAY[v.id]), v.id);
+    }
+  }
+  // v1's order is kept (visitorDay's turn is an index into it).
+  assert.deepStrictEqual(VISITORS.woodland.map((v) => v.id), ["chickadee", "stellersjay", "snail"]);
+  assert.deepStrictEqual(VISITORS.nightsky.map((v) => v.id), ["shootingstar", "nighthawk", "raccoon"]);
+  assert.strictEqual(visitorList({}).length, 0);
+  assert.strictEqual(visitorList({ visitors: [{ id: "nobody", hours: "day" }] }).length, 0);
 });

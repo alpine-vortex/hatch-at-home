@@ -28,7 +28,25 @@
       "top": "trim_woodland_top",
       "plate": "trim_woodland_plate",
       "corner": "trim_woodland_corner"
-    }
+    },
+    "visitors": [
+      {
+        "id": "chickadee",
+        "name": "chickadee",
+        "hours": "day"
+      },
+      {
+        "id": "stellersjay",
+        "name": "Steller's jay",
+        "hours": "day",
+        "leaves": "jayfeather"
+      },
+      {
+        "id": "snail",
+        "name": "garden snail",
+        "hours": "day"
+      }
+    ]
   },
   "terrarium": {
     "name": "Terrarium",
@@ -59,7 +77,24 @@
     "trim": {
       "top": "trim_terrarium_top",
       "plate": "trim_terrarium_plate"
-    }
+    },
+    "visitors": [
+      {
+        "id": "pillbug",
+        "name": "pill bug",
+        "hours": "day"
+      },
+      {
+        "id": "ladybird",
+        "name": "ladybird",
+        "hours": "day"
+      },
+      {
+        "id": "moth",
+        "name": "moth",
+        "hours": "night"
+      }
+    ]
   },
   "hearth": {
     "name": "Hearth",
@@ -89,7 +124,24 @@
       "top": "trim_hearth_top",
       "plate": "trim_hearth_plate",
       "corner": "trim_hearth_corner"
-    }
+    },
+    "visitors": [
+      {
+        "id": "robin",
+        "name": "robin",
+        "hours": "day"
+      },
+      {
+        "id": "mouse",
+        "name": "house mouse",
+        "hours": "night"
+      },
+      {
+        "id": "cricket",
+        "name": "hearth cricket",
+        "hours": "night"
+      }
+    ]
   },
   "tidepool": {
     "name": "Tidepool",
@@ -121,7 +173,25 @@
       "top": "trim_tidepool_top",
       "plate": "trim_tidepool_plate",
       "corner": "trim_tidepool_corner"
-    }
+    },
+    "visitors": [
+      {
+        "id": "gull",
+        "name": "gull",
+        "hours": "day",
+        "leaves": "gullfeather"
+      },
+      {
+        "id": "shorecrab",
+        "name": "shore crab",
+        "hours": "day"
+      },
+      {
+        "id": "seastar",
+        "name": "sea star",
+        "hours": "day"
+      }
+    ]
   },
   "pond": {
     "name": "Pond",
@@ -153,7 +223,25 @@
       "top": "trim_pond_top",
       "plate": "trim_pond_plate",
       "corner": "trim_pond_corner"
-    }
+    },
+    "visitors": [
+      {
+        "id": "dragonfly",
+        "name": "dragonfly",
+        "hours": "day"
+      },
+      {
+        "id": "strider",
+        "name": "water strider",
+        "hours": "day"
+      },
+      {
+        "id": "heron",
+        "name": "heron",
+        "hours": "day",
+        "leaves": "heronfeather"
+      }
+    ]
   },
   "nightsky": {
     "name": "Night Sky",
@@ -184,6 +272,24 @@
       "top": "trim_nightsky_top",
       "plate": "trim_nightsky_plate",
       "corner": "trim_nightsky_corner"
-    }
+    },
+    "visitors": [
+      {
+        "id": "shootingstar",
+        "name": "shooting star",
+        "hours": "night"
+      },
+      {
+        "id": "nighthawk",
+        "name": "nighthawk",
+        "hours": "night",
+        "leaves": "nighthawkfeather"
+      },
+      {
+        "id": "raccoon",
+        "name": "raccoon",
+        "hours": "night"
+      }
+    ]
   }
 }

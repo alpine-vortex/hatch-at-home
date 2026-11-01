@@ -33,11 +33,8 @@ const allSpecies = () => fs.readdirSync(path.join(FRONTEND, "sprites"))
   .filter((d) => fs.existsSync(path.join(FRONTEND, "sprites", d, "species.json")));
 const worldOf = (species) => Object.keys(WORLDS).find((w) => WORLDS[w].roster.includes(species)) || "woodland";
 
-// The card's world visitors, read from its source (the card isn't a module).
-const VISITORS = (() => {
-  const src = fs.readFileSync(path.join(FRONTEND, "hatch-pet-card.js"), "utf8");
-  return require("vm").runInNewContext(`(${src.match(/\nconst VISITORS = (\{[\s\S]*?\n\});/)[1]})`);
-})();
+// The world visitors: worlds.json's roster (the play data is the card's).
+const VISITORS = Object.fromEntries(Object.entries(WORLDS).map(([w, world]) => [w, world.visitors || []]));
 
 // --- Presets ---------------------------------------------------------------
 
