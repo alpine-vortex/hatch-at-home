@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""Pick the card-check sections a change touches, for a worker's narrow gate.
+
+    scripts/pick-sections [base]      # default base: origin/main
+
+Prints the reasoning on stderr and the comma list on stdout, so
+`scripts/gate -- --only "$(scripts/pick-sections)"` runs just those. "all"
+means run everything (or use scripts/ci-gate).
+
+How: the card's changed lines give methods (the one each hunk sits in, and any
+`_name` or CONSTANT on the line); a section that mentions one is picked. A
+method no section mentions is traced to the methods that call it, once.
+A helper a changed line only calls (not one whose body changed) counts only
+if a few sections use it, so a call to _state doesn't pick everything.
+Changes in card-check itself pick the sections whose lines changed. Python
+outside tests is the server: all.
+"""
+
+import re
+import subprocess
+import sys
+
+CARD = "custom_components/virtual_pet/frontend/hatch-pet-card.js"
+CHECK = "scripts/card-check.js"
+NARROW = 4  # a helper a changed line only calls counts if this few sections use it
+base = sys.argv[1] if len(sys.argv) > 1 else "origin/main"
+
+
+def git(*args):
+    return subprocess.run(["git", *args], capture_output=True, text=True, check=True).stdout
+
+
+def say(msg):
+    print(msg, file=sys.stderr)
+
+
+files = [f for f in git("diff", "--name-only", f"{base}...HEAD").split("\n") if f]
+files += [f for f in git("diff", "--name-only", "HEAD").split("\n") if f and f not in files]
+if not files:
+    say("pick-sections: no changes")
+    print("")
+    sys.exit(0)
+
+check_src = open(CHECK).read().split("\n")
+starts = [(i, m.group(1)) for i, line in enumerate(check_src) if (m := re.search(r'if \((?:enter|want)\("(\w+)"\)\)', line))]
+ranges = [(name, i, starts[k + 1][0] if k + 1 < len(starts) else len(check_src)) for k, (i, name) in enumerate(starts)]
+text = {name: "\n".join(check_src[a:b]) for name, a, b in ranges}
+
+
+def changed_lines(path):
+    """New-file line numbers of changed lines (and the line where a deletion was)."""
+    out = []
+    diff = git("diff", "-U0", base, "--", path)
+    for m in re.finditer(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", diff, re.M):
+        start, n = int(m.group(1)), int(m.group(2) or 1)
+        out += list(range(start, start + max(n, 1)))
+    return out
+
+
+picked = set()
+everything = False
+for f in files:
+    if f.endswith(".py") and not f.startswith("tests/"):
+        say(f"  {f}: server code -> all")
+        everything = True
+    elif f == CHECK:
+        lines = changed_lines(f)
+        hit = {name for name, a, b in ranges for n in lines if a < n <= b}
+        say(f"  {f}: its own sections {', '.join(sorted(hit)) or '(prelude: all)'}")
+        if not hit and lines:
+            everything = True
+        picked |= hit
+    elif f == CARD:
+        card = open(CARD).read().split("\n")
+        method_at = []
+        cur = None
+        for line in card:
+            if m := re.match(r"  (?:async )?(_\w+)\(.*\) \{$", line):
+                cur = m.group(1)
+            method_at.append(cur)
+        own = set()  # methods whose body changed: they and their callers count
+        used = set()  # names a changed line only mentions: they count if narrow
+        for n in changed_lines(f):
+            if 0 < n <= len(card):
+                if method_at[n - 1]:
+                    own.add(method_at[n - 1])
+                used |= set(re.findall(r"\b(_[a-z]\w+|[A-Z][A-Z0-9_]{3,})\b", card[n - 1]))
+        used -= own | {"_hass", "_slides", "_index", "_config"}
+        for name in sorted(own | used):
+            hit = {s for s, t in text.items() if re.search(rf"\b{name}\b", t)}
+            via = ""
+            if name in used and len(hit) > NARROW:
+                say(f"  {name}: only called here, used by {len(hit)} sections: skipped")
+                continue
+            if not hit and name in own:
+                callers = {method_at[i] for i, line in enumerate(card) if f"this.{name}(" in line and method_at[i]}
+                hit = {s for s, t in text.items() for c in callers if re.search(rf"\b{c}\b", t)}
+                via = f" (via {', '.join(sorted(callers))})" if callers else ""
+            if hit:
+                say(f"  {name}{via}: {', '.join(sorted(hit))}")
+                picked |= hit
+            else:
+                say(f"  {name}: no section mentions it")
+    elif "/sprites/" in f or f.endswith("species.json"):
+        say(f"  {f}: art -> types, pat, react")
+        picked |= {"types", "pat", "react"}
+    elif f.endswith(".md") or f.startswith(("docs/", "tests/", ".github/", "art/", "dev/bench/")):
+        continue
+    elif f.startswith("scripts/") and f not in ("scripts/develop", "scripts/setup"):
+        say(f"  {f}: tooling, not the card")
+    else:
+        say(f"  {f}: unknown to the map -> all")
+        everything = True
+
+if everything:
+    print("all")
+else:
+    order = [name for name, _, _ in ranges]
+    print(",".join(n for n in order if n in picked))

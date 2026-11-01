@@ -51,10 +51,13 @@ The manual route, if you need it:
 ## Partial card-check runs
 
 `scripts/card-check.js --list` prints its section names; `--only a,b` runs just those.
-Ship workers run `scripts/gate -- --only <the sections their slice touches>` (or
-`card-check --only ...` on their own scratch HA, as above). A partial run
-writes no gate marker. The full `scripts/gate` is the first mate's,
-once per merged batch. Login, the dashboard, stubs and the pet-finding prelude always
+Ship workers run `scripts/gate --auto`: `scripts/pick-sections` reads the diff against
+origin/main (the card methods and constants it changes, the card-check lines it
+edits, art) and runs just the sections that use them, printing why. Add a neighbour
+with `scripts/gate -- --only <list>` when a section needs one. If it picks `all`
+(server code), use `scripts/ci-gate`. A partial run writes no gate marker. The full
+gate is the first mate's, once per merged batch, through `scripts/ci-gate`; CI runs
+card-check as four parallel shards (`--shard k/4`), about 5-6 min. Login, the dashboard, stubs and the pet-finding prelude always
 run, and `restart` puts dev's seeded bond and wish back. Sections lean on state their
 predecessors leave (the open sheet, the bond, the slide on show), so a lone section may
 need its neighbour in `--only`; `oldcard` pulls in `restart` by itself.
