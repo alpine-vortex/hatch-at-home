@@ -2250,7 +2250,6 @@ const STYLE = `
     margin-left: calc(var(--px, 2px) * -8); image-rendering: pixelated; }
   .screen .reveal .rf.pop { animation: pop .3s ease-out; transform-origin: 50% 100%; }
   .screen .reveal .burst { top: auto; bottom: 90%; }
-  .compact .screen .basket, .compact .screen .reveal { display: none; }
   .season .bunting { position: absolute; top: calc(var(--edge, 0%) * .3); left: var(--edge, 0%);
     right: var(--edge, 0%); height: 8.4%;
     background-repeat: repeat-x; background-size: 18.75% 100%; image-rendering: pixelated; }
@@ -8328,9 +8327,8 @@ class HatchPetCard extends HTMLElement {
     return this._basketCount(s) > 0 && !s.egg && !!s.species && !this._booting &&
       !s.collecting && !s.reveal && this._visitorLive(s);
   }
-
-  // Shown with something in it, live or not (the CSS hides it in the compact layout and
-  // under the status). While a tap waits on its reply, the picture is held as it was:
+  // Shown with something in it, live or not (compact too; the CSS hides it under the
+  // status). While a tap waits on its reply, the picture is held as it was:
   // the server's publish of the empty basket can come first (review C2).
   _basketSync(s) {
     const b = s.basket;
