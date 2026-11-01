@@ -76,6 +76,7 @@ function digit(n, px = 6) {
 function gameIcon(key) {
   if (key === "left_right") return `${icon("prev", 16)}${icon("next", 16)}`;
   if (key === "higher_lower") return `${digit(1, 2)}<span class="gi-arrow">↕</span>${digit(9, 2)}`;
+  if (key === "dig") return `<img src="${BASE}/ui/catch_decoy_1.png?v=${VERSION}" width="20" height="20" alt="">`;
   return `<img src="${BASE}/ui/flair_player.png?v=${VERSION}" width="20" height="20" alt="">`;
 }
 
@@ -98,9 +99,12 @@ const ACTIONS = [
 const GAMES = [
   { key: "left_right", label: "left or right", guesses: ["left", "right"] },
   { key: "higher_lower", label: "higher or lower", guesses: ["lower", "higher"] },
+  { key: "dig", label: "berry dig", guesses: ["keep", "dig"] },
 ];
-// Matches rates.GAME_IDLE_MINUTES: the server drops a Left/Right or Higher/Lower
-// game left idle this long, and the card closes its own copy then, silently.
+// The server games (all of GAMES; Catch is the card's own).
+const SERVER_GAMES = new Set(GAMES.map((g) => g.key));
+// Matches rates.GAME_IDLE_MINUTES: the server drops a server game left idle
+// this long, and the card closes its own copy then, silently.
 const GAME_IDLE_MS = 3 * 60 * 1000;
 const LAST_GAME_KEY = "hatch-last-game";
 // Catch, the Giga Pets reflex game: a prototype, offered only with the card
@@ -2131,6 +2135,10 @@ const STYLE = `
     width: 40px; height: 28px; border-radius: 8px; background: var(--hp-screen-tint, #f3e7c9); }
   .game .gpick .gi img { image-rendering: pixelated; }
   .game .gpick .gi-arrow { font-size: 12px; margin: 0 1px; }
+  /* Three games on a narrow screen: stacked from the bottom, under the prompt. */
+  .compact .game .gpick { inset: 18% 0 2%; gap: 4px; justify-content: flex-end; }
+  .compact .game .gpick button { min-height: 40px; font-size: 13px; }
+  .compact .game .gpick .gi { height: 24px; }
   .game .gnum { position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
     display: grid; place-items: center; min-width: 52px; min-height: 56px; padding: 6px 10px;
     border-radius: 10px; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
@@ -2287,13 +2295,14 @@ const STYLE = `
   .confetti i { position: absolute; top: -6%; left: var(--x); width: 5px; height: 8px; background: var(--c);
     animation: confetti 2.6s linear var(--d) forwards; }
   @keyframes confetti { to { top: 106%; rotate: 540deg; } }
-  .game .gcatch { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
+  .game .gprop { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
     pointer-events: none; will-change: left, transform; }
-  .game .gcatch[hidden] { display: none; }
+  .game .gprop[hidden] { display: none; }
   .game .hl { font: inherit; font-size: 14px; }
   .game .gscore { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
+  .game .gscore.two { white-space: pre; text-align: center; line-height: 1.25; } /* the dig: round, then bank and basket */
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
   .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
   .screen.show-status .bondhearts, .screen.show-status .linkhearts,
@@ -3343,7 +3352,7 @@ class HatchPetCard extends HTMLElement {
             <div class="game" hidden>
               <div class="gpick" role="group" aria-label="Pick a game">${this._games().map((g) =>
                 `<button data-game="${g.key}">${g.label}</button>`).join("")}</div>
-              <img class="gcatch" alt="" hidden>
+              <img class="gprop" alt="" hidden>
               <span class="gnum" aria-live="polite" hidden></span>
               <button class="gl" aria-label="Guess left">${icon("prev", 22)}</button>
               <span class="gscore" aria-live="polite"></span>
@@ -3367,7 +3376,7 @@ class HatchPetCard extends HTMLElement {
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
-      catchEl: q(".gcatch"), live: q(".sr[role=status]"), seasonBox: q(".season"),
+      propEl: q(".gprop"), live: q(".sr[role=status]"), seasonBox: q(".season"),
       basket: q(".basket"),
     };
     // The LCD grid: one cell per world art pixel, measured on the screen itself
@@ -4477,7 +4486,7 @@ class HatchPetCard extends HTMLElement {
     }
     const egg = stage === "egg";
     if (s.game && (asleep || away || egg)) this._endGame(s, null);
-    else if (s.game && (s.game.kind === "left_right" || s.game.kind === "higher_lower") &&
+    else if (s.game && SERVER_GAMES.has(s.game.kind) &&
         !s.game.busy && s.game.lastAt && Date.now() - s.game.lastAt >= GAME_IDLE_MS) {
       this._endGame(s, null); // the server has dropped it already: no call, no line
     }
@@ -6069,7 +6078,8 @@ class HatchPetCard extends HTMLElement {
       case "bond_record": { // only its person
         if (sharedScreen()) break; // nothing personal on a shared screen
         const game = GAMES.find((g) => g.key === m.game);
-        line(`new best at ${game ? game.label : "a game"}! ${m.wins}/5 ♥`, 4500, () => this._sparkle(s), { perk: true });
+        const best = m.game === "dig" ? `${m.wins} berries` : `${m.wins}/5`; // the dig's best is berries banked
+        line(`new best at ${game ? game.label : "a game"}! ${best} ♥`, 4500, () => this._sparkle(s), { perk: true });
         break;
       }
       case "tucked_in": {
@@ -7726,16 +7736,17 @@ class HatchPetCard extends HTMLElement {
     const box = s.gameBox;
     box.hidden = false;
     box.querySelector(".gpick").hidden = view !== "pick";
-    s.gameNum.hidden = view !== "higher_lower";
+    s.gameNum.hidden = view !== "higher_lower" && view !== "dig";
     const [gl, gr] = [box.querySelector(".gl"), box.querySelector(".gr")];
     gl.hidden = gr.hidden = view === "pick";
     s.gameScore.hidden = view === "pick";
     const hl = view === "higher_lower";
-    gl.innerHTML = hl ? '<span class="hl">lo</span>' : icon("prev", 22);
-    gr.innerHTML = hl ? '<span class="hl">hi</span>' : icon("next", 22);
+    const dig = view === "dig";
+    gl.innerHTML = hl ? '<span class="hl">lo</span>' : dig ? '<span class="hl">keep</span>' : icon("prev", 22);
+    gr.innerHTML = hl ? '<span class="hl">hi</span>' : dig ? '<span class="hl">dig</span>' : icon("next", 22);
     const katch = view === "catch";
-    gl.setAttribute("aria-label", hl ? "Guess lower" : katch ? "Catch it on the left" : "Guess left");
-    gr.setAttribute("aria-label", hl ? "Guess higher" : katch ? "Catch it on the right" : "Guess right");
+    gl.setAttribute("aria-label", hl ? "Guess lower" : dig ? "Keep the basket" : katch ? "Catch it on the left" : "Guess left");
+    gr.setAttribute("aria-label", hl ? "Guess higher" : dig ? "Dig a leaf" : katch ? "Catch it on the right" : "Guess right");
     box.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
   }
 
@@ -7771,7 +7782,12 @@ class HatchPetCard extends HTMLElement {
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
     s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
     // The prompt is kept on the game: a care line said over it gives way to it again.
-    if (kind === "left_right") {
+    if (kind === "dig") {
+      // A fresh pile, or a parked dig carried on: the same round, bank and basket.
+      g.basket = info.basket;
+      this._digShow(s, info);
+      this._write(s, (g.prompt = "dig or keep?"));
+    } else if (kind === "left_right") {
       this._write(s, (g.prompt = "left or right? guess where I'll go!"));
     } else {
       // Higher or Lower shows its number before the next guess.
@@ -7834,6 +7850,10 @@ class HatchPetCard extends HTMLElement {
     }
     const game = GAMES.find((g) => g.key === kind);
     const guess = game.guesses[side === "left" ? 0 : 1];
+    if (kind === "dig") {
+      await this._digTap(s, guess); // a tap isn't a round: its own checks, not the ones below
+      return;
+    }
     const g = s.game;
     g.busy = true;
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
@@ -7878,6 +7898,74 @@ class HatchPetCard extends HTMLElement {
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
       this._write(s, (g.prompt = kind === "higher_lower" ? "higher or lower?" : "again! left or right?"));
+    });
+  }
+
+  // Berry dig: the pile's leaves left in .gnum, the bank and basket on the
+  // score line, keep only with something in the basket.
+  _digShow(s, info) {
+    this._showNumber(s, info.leaves);
+    s.gameNum.setAttribute("aria-label", `${info.leaves} leaves left`);
+    s.gameScore.classList.add("two");
+    s.gameScore.textContent = `round ${Math.min(info.round + 1, info.rounds)}/${info.rounds}\n` +
+      `${info.wins} banked · basket ${info.basket}`;
+    s.gameBox.querySelector(".gl").setAttribute("aria-disabled", info.basket ? "false" : "true");
+    s.gameBox.querySelector(".gr").setAttribute("aria-disabled", "false");
+  }
+
+  // One tap of a Berry dig. A dig that finds a berry doesn't finish a round, so
+  // the reply must follow from the card's own game: a berry is the same round
+  // and bank with one more in the basket; a bee is the next round, the same
+  // bank; a keep (or the sixth berry) is the next round with the basket banked.
+  // Anything else means someone else is playing the same server game.
+  async _digTap(s, guess) {
+    const g = s.game;
+    if (guess === "keep" && !g.basket) return; // nothing to keep: the server would refuse it
+    g.busy = true;
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+    s.gameScore.textContent = "thinking…";
+    const info = await this._playCall(s, { game: "dig", guess });
+    if (!info) return;
+    const next = info.round === g.round + 1 && info.basket === 0;
+    const fits = info.found === "berry" && !info.round_over
+      ? info.round === g.round && info.wins === g.wins && info.basket === g.basket + 1
+      : info.found === "bee" ? next && info.wins === g.wins
+      : info.found === "kept" ? next && info.wins === g.wins + g.basket
+      : info.found === "berry" && next && info.wins === g.wins + g.basket + 1;
+    if (!fits) {
+      this._endGame(s, "oh! someone else is playing with me");
+      return;
+    }
+    g.round = info.round;
+    g.wins = info.wins;
+    g.basket = info.basket;
+    g.lastAt = Date.now();
+    this._digShow(s, info);
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+    this._animate(s, s.gameNum, "flip", 300);
+    if (info.found === "bee") {
+      s.propEl.src = BEE_FRAMES[0];
+      s.propEl.style.left = "10%"; // beside the pile, clear of the score and the buttons
+      s.propEl.style.bottom = "40%";
+      s.propEl.style.transform = "";
+      s.propEl.hidden = false;
+      this._write(s, "bzz! the berries rolled away");
+    } else if (info.round_over) {
+      this._animate(s, s.pet, "perk", 300);
+      this._write(s, "safe in the basket ♪");
+    } else {
+      this._write(s, "a berry!");
+    }
+    this._gameLater(s, g, info.round_over ? 900 : 300, () => {
+      s.propEl.hidden = true;
+      if (info.done) {
+        if (info.won) this._chirp(s, "win");
+        this._endGame(s, info.won ? `${info.wins} berries! you win ♪` : `${info.wins} berries... again sometime?`);
+        return;
+      }
+      g.busy = false;
+      this._digShow(s, info);
+      this._write(s, (g.prompt = "dig or keep?"));
     });
   }
 
@@ -9033,7 +9121,7 @@ class HatchPetCard extends HTMLElement {
       calm: isCalm, travel: lerp(CATCH.travel) * (isCalm ? 1.6 : 1),
       window: lerp(CATCH.window) * (isCalm ? 2 : 1),
     };
-    const el = s.catchEl;
+    const el = s.propEl;
     if (decoy) el.src = BEE_FRAMES[0];
     else this._show(s, el, prop);
     el.hidden = false;
@@ -9113,7 +9201,7 @@ class HatchPetCard extends HTMLElement {
     if (!c || c.done) return;
     c.done = true;
     cancelAnimationFrame(c.raf);
-    s.catchEl.hidden = true;
+    s.propEl.hidden = true;
     g.round += 1;
     g.wins += ok ? 1 : 0;
     this._write(s, line);
@@ -9153,12 +9241,15 @@ class HatchPetCard extends HTMLElement {
   }
 
   // The player (or the card, moving off a game) ends a game: the server drops
-  // it too, with no reward or penalty. Fire and forget; a failed call is silent.
-  // Catch lives only on the card, so it makes no call.
+  // it too, with no reward or penalty, or parks a Berry dig that has shown
+  // something, so the next dig carries on. Every card-driven quit (✕, Escape,
+  // a swipe, the status sheet, Play mid-game) comes here, so each one parks.
+  // Fire and forget; a failed call is silent. Catch lives only on the card,
+  // so it makes no call.
   _quitGame(s, line) {
     const kind = s.game?.kind;
     const id = s.ids?.["sensor.mood"];
-    if (id && (kind === "left_right" || kind === "higher_lower")) {
+    if (id && SERVER_GAMES.has(kind)) {
       try {
         Promise.resolve(this._hass.callService(
           "virtual_pet", "play_game", { entity_id: id, game: kind, end: true },
@@ -9170,7 +9261,9 @@ class HatchPetCard extends HTMLElement {
 
   _endGame(s, line) {
     cancelAnimationFrame(s.game?.cur?.raf);
-    s.catchEl.hidden = true;
+    s.propEl.hidden = true;
+    s.propEl.style.bottom = ""; // the dig's bee sits higher than Catch's ball
+    s.gameScore.classList.remove("two");
     s.game = null;
     s.gameTimers?.forEach(clearTimeout);
     s.gameTimers?.clear();

@@ -2188,7 +2188,7 @@ async function main() {
   await button(2).click();
   await page.waitForTimeout(600);
   check("play offers a choice of games",
-    (await cur().locator(".gpick button").count()) === 2 && await cur().locator(".gpick").isVisible());
+    (await cur().locator(".gpick button").count()) === 3 && await cur().locator(".gpick").isVisible());
   await shot("04a-pick");
   await cur().locator('.gpick [data-game="left_right"]').click();
   await page.waitForTimeout(400);
@@ -2245,7 +2245,7 @@ async function main() {
   await button(2).click();
   await page.waitForTimeout(600);
   check("catch joins the picker with the option",
-    (await cur().locator(".gpick button").count()) === 3);
+    (await cur().locator(".gpick button").count()) === 4);
   await cur().locator('.gpick [data-game="catch"]').click();
   const catchShot = page.waitForTimeout(2600).then(() => shot("04d-catch"));
   const catchRounds = await page.locator("hatch-pet-card").evaluate(async (el) => {
@@ -2294,11 +2294,11 @@ async function main() {
       const at = async (sec) => { // jump the round clock to sec seconds in
         c.start = performance.now() - sec * 1000;
         await frame();
-        seen.add(s.catchEl.style.left);
-        return { left: s.catchEl.style.left, transform: s.catchEl.style.transform };
+        seen.add(s.propEl.style.left);
+        return { left: s.propEl.style.left, transform: s.propEl.style.transform };
       };
       const boundary = c.travel - c.window;
-      const first = { left: s.catchEl.style.left, calm: c.calm, side: c.side, decoy: c.decoy };
+      const first = { left: s.propEl.style.left, calm: c.calm, side: c.side, decoy: c.decoy };
       const early = await at(boundary / 2);
       const justBefore = await at(boundary - 0.2);
       const last = await at(boundary - 0.04); // the last step's first frames
@@ -2479,6 +2479,108 @@ async function main() {
     check("idle drop, Higher/Lower: no_game ends the game with let's start over",
       !idle.hl.live && idle.hl.said === "let's start over", JSON.stringify(idle.hl));
 
+    // Berry dig (playtime 2a): the per-tap contract, with stubbed replies (the
+    // pytest owns the odds). A berry isn't a round; a bee and a keep end one; keep
+    // is disabled on an empty basket and sends nothing; a reply out of step is
+    // someone else; the x sends end (which parks it on the server).
+    const dig = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const hass = el._hass;
+      const real = hass.callService;
+      const sent = [];
+      const base = { result: "ok", game: "dig", rounds: 5, win_at: 5, done: false };
+      const queue = [];
+      hass.callService = async (d, svc, data) => { sent.push(data); return { response: queue.shift() }; };
+      const keep = () => s.gameBox.querySelector(".gl").getAttribute("aria-disabled");
+      const out = {};
+      try {
+        s.game = { picking: true };
+        queue.push({ ...base, round: 0, wins: 0, basket: 0, leaves: 8 });
+        await el._pickGame(s, "dig");
+        out.start = { keep: keep(), num: s.gameNum.dataset.n, score: s.gameScore.textContent, said: s.bubble.textContent,
+          labels: [...s.gameBox.querySelectorAll(".gl, .gr")].map((b) => b.getAttribute("aria-label")) };
+        await el._guess(s, "left"); // keep on an empty basket: nothing sent
+        out.emptyKeep = sent.length;
+        queue.push({ ...base, round: 0, wins: 0, basket: 1, leaves: 7, found: "berry", round_over: false });
+        await el._guess(s, "right");
+        out.berry = { round: s.game.round, basket: s.game.basket, num: s.gameNum.dataset.n, said: s.bubble.textContent,
+          score: s.gameScore.textContent, guess: sent.at(-1)?.guess };
+        await new Promise((r) => setTimeout(r, 400));
+        out.berryKeep = keep();
+        queue.push({ ...base, round: 1, wins: 1, basket: 0, leaves: 8, found: "kept", round_over: true });
+        await el._guess(s, "left");
+        out.kept = { round: s.game.round, wins: s.game.wins, said: s.bubble.textContent, guess: sent.at(-1)?.guess };
+        await new Promise((r) => setTimeout(r, 1000));
+        queue.push({ ...base, round: 2, wins: 1, basket: 0, leaves: 8, found: "bee", round_over: true });
+        await el._guess(s, "right");
+        out.bee = { round: s.game.round, wins: s.game.wins, said: s.bubble.textContent, prop: !s.propEl.hidden };
+        await new Promise((r) => setTimeout(r, 1000));
+        out.afterBee = { prop: !s.propEl.hidden, said: s.bubble.textContent, keep: keep() };
+        el._quitGame(s, null);
+        out.end = sent.at(-1);
+        // A reply out of step (a berry while we think the basket holds 0, banked 2).
+        s.game = { picking: true };
+        queue.push({ ...base, round: 2, wins: 1, basket: 0, leaves: 8 });
+        await el._pickGame(s, "dig");
+        queue.push({ ...base, round: 2, wins: 1, basket: 3, leaves: 5, found: "berry", round_over: false });
+        await el._guess(s, "right");
+        out.stray = { live: !!s.game, said: s.bubble.textContent };
+        // A won game ends with the berries banked, no "/5".
+        s.game = { picking: true };
+        queue.push({ ...base, round: 2, wins: 3, basket: 1, leaves: 7 });
+        await el._pickGame(s, "dig");
+        queue.push({ ...base, round: 3, wins: 4, basket: 0, leaves: 8, found: "kept", round_over: true });
+        await el._guess(s, "left");
+        await new Promise((r) => setTimeout(r, 1000));
+        queue.push({ ...base, round: 3, wins: 4, basket: 1, leaves: 7, found: "berry", round_over: false });
+        await el._guess(s, "right");
+        await new Promise((r) => setTimeout(r, 400));
+        queue.push({ ...base, round: 4, wins: 5, basket: 0, leaves: 8, found: "kept", round_over: true, done: true, won: true });
+        await el._guess(s, "left");
+        await new Promise((r) => setTimeout(r, 1000));
+        out.won = { live: !!s.game, said: s.bubble.textContent };
+      } finally {
+        hass.callService = real;
+        if (s.game) el._endGame(s, null);
+      }
+      return out;
+    });
+    check("dig: a fresh pile reads 8 leaves, round 1, keep disabled, its prompt and labels",
+      dig.start.keep === "true" && dig.start.num === "8" && dig.start.score === "round 1/5\n0 banked · basket 0" &&
+        dig.start.said === "dig or keep?" && dig.start.labels.join("|") === "Keep the basket|Dig a leaf",
+      JSON.stringify(dig.start));
+    check("dig: keep on an empty basket sends nothing", dig.emptyKeep === 1, String(dig.emptyKeep));
+    check("dig: a berry is not a round (round 0, basket 1, 7 leaves), keep enabled after",
+      dig.berry.round === 0 && dig.berry.basket === 1 && dig.berry.num === "7" && dig.berry.guess === "dig" &&
+        dig.berry.said === "a berry!" && dig.berryKeep === "false", JSON.stringify(dig.berry) + dig.berryKeep);
+    check("dig: a keep banks the basket and ends the round",
+      dig.kept.round === 1 && dig.kept.wins === 1 && dig.kept.guess === "keep" && dig.kept.said === "safe in the basket ♪",
+      JSON.stringify(dig.kept));
+    check("dig: a bee ends the round, shows the bee, then asks again with keep disabled",
+      dig.bee.round === 2 && dig.bee.wins === 1 && dig.bee.prop && dig.bee.said === "bzz! the berries rolled away" &&
+        !dig.afterBee.prop && dig.afterBee.said === "dig or keep?" && dig.afterBee.keep === "true",
+      JSON.stringify([dig.bee, dig.afterBee]));
+    check("dig: the x sends end for the dig (the server parks it)",
+      dig.end?.game === "dig" && dig.end?.end === true, JSON.stringify(dig.end));
+    check("dig: a reply out of step ends the game as someone else's",
+      !dig.stray.live && dig.stray.said === "oh! someone else is playing with me", JSON.stringify(dig.stray));
+    check("dig: a won game says the berries banked, no /5",
+      !dig.won.live && dig.won.said === "5 berries! you win ♪", JSON.stringify(dig.won));
+
+    // The real server: one dig, the x, and reopening carries on (parked).
+    {
+      await open("dig");
+      await cur().locator(".gr").click();
+      await page.waitForTimeout(1400);
+      const played = await score();
+      await stop();
+      await open("dig");
+      const back = await score();
+      check("dig: after the x, reopening carries on from the parked pile",
+        /^round \d\/5\n\d+ banked · basket \d$/.test(played) && back === played, `${played} -> ${back}`);
+      await stop();
+    }
+
     // Batch 6 audit #4: after an HA restart the server's dropped-games memory is gone,
     // so a stale guess's round-1 reply has no `restarted` flag. Round 1 past round 0
     // still means a new game: adopted quietly.
@@ -2558,14 +2660,14 @@ async function main() {
     const catchLive = () => card.evaluate(async (el) => {
       const s = el._slides[el._index];
       for (let w = 0; w < 300 && !(s.game?.cur && !s.game.cur.done); w++) await new Promise((r) => requestAnimationFrame(r));
-      return s.game?.kind === "catch" && !s.catchEl.hidden;
+      return s.game?.kind === "catch" && !s.propEl.hidden;
     });
     await open("catch");
     const statusLive = await catchLive();
     const statusEnd = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       el._toggleStatus(s);
-      const out = { game: !!s.game, ball: !s.catchEl.hidden };
+      const out = { game: !!s.game, ball: !s.propEl.hidden };
       await new Promise((r) => setTimeout(r, 300));
       el._toggleStatus(s);
       return out;
@@ -2578,7 +2680,7 @@ async function main() {
     await page.waitForTimeout(400);
     const playEnd = await card.evaluate((el) => {
       const s = el._slides[el._index];
-      return { picking: !!s.game?.picking, ball: !s.catchEl.hidden };
+      return { picking: !!s.game?.picking, ball: !s.propEl.hidden };
     });
     check("Play mid-Catch ends the round: the picker, and no ball over it",
       playLive && playEnd.picking && !playEnd.ball, `${playLive} ${JSON.stringify(playEnd)}`);
@@ -2590,7 +2692,7 @@ async function main() {
         const back = el._index;
         const s = el._slides[back];
         el._go(back + 1);
-        const out = { game: !!s.game, ball: !s.catchEl.hidden };
+        const out = { game: !!s.game, ball: !s.propEl.hidden };
         await new Promise((r) => setTimeout(r, 400));
         el._go(back);
         return out;

@@ -26,6 +26,8 @@
   };
 
   const NAMES = ["Pip", "Mochi", "Bean", "Juniper", "Waffle", "Comet", "Nori", "Sprout"];
+  // A dig shot's start with no `digReplies`: round 2, 2 banked, 2 in the basket.
+  const DIG_REPLY = { result: "ok", game: "dig", round: 1, rounds: 5, wins: 2, basket: 2, leaves: 6, win_at: 5, done: false };
 
   // The virtual_pet/collection reply for the lead pet's world. `collection`: true, a
   // part-met page (two visitors; three plain finds and one with a `when`; gifts: one met,
@@ -116,7 +118,9 @@
       themes: {}, selectedTheme: null,
       // The card asks once for a server clock reading; none arrives here.
       connection: { subscribeEvents: noop, subscribeMessage: noop },
-      callService: async (domain, service) => ({ response: service === "visit" ? (shot.visit || { counted: true }) : {} }),
+      // `digReplies`: play_game answers, in order, for a `game: "dig"` shot (the server's dig is random).
+      callService: async (domain, service) => ({ response: service === "visit" ? (shot.visit || { counted: true })
+        : service === "play_game" && shot.digReplies?.length ? shot.digReplies.shift() : {} }),
       callWS: async (msg) => {
         if (msg.type === "virtual_pet/photos") return { photos: [] };
         // The finds page (visitors v2 §4): `collection` ({visitors, finds, gifts?}, see
@@ -449,6 +453,15 @@
       }
       const sec = shot.catch === "near" ? c.travel - c.window + 0.2 : 0.1;
       await new Promise((r) => requestAnimationFrame((ts) => { c.start = ts - sec * 1000; r(); }));
+    }
+    // `game: "dig"`: a Berry dig started through the card's own picker, then `digTaps`
+    // ("dig" or "keep") played, each answered by the next of `digReplies` (scripted).
+    // Held on the last reply, before its pause (a bee still shows).
+    if (shot.game === "dig") {
+      shot.digReplies = [...(shot.digReplies || [DIG_REPLY])];
+      card._startGame(cur, cur.buttons.play);
+      await card._pickGame(cur, "dig");
+      for (const tap of shot.digTaps || []) await card._guess(cur, tap === "keep" ? "left" : "right");
     }
     // `classes`: screen states the fake hass cannot pin (`lit`, `faded`...), put on last.
     for (const c of shot.classes || []) cur.screen.classList.add(c);
