@@ -976,6 +976,7 @@ const PERSONA = {
     mood_excited: ["hehe, that was nice", "mm, that was fun"],
     mood_cozy: ["mm, perfect nap spot", "warm and comfy... ♪"],
     mood_bored: ["a nap sounds nice...", "just lazing about"],
+    visit: ["oh, hi there... ♪", "mm, a visitor... nice"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `oh hey, ${n}... ♪`, (n) => `${n}... come sit a while ♥`],
     link_guest: [(n) => `mm, hi, ${n}... ♪`],
     link_kindred: [(n) => `${n}, we do cosy well ♥`, "mm, a nap with you sounds nice ♪"],
@@ -998,6 +999,7 @@ const PERSONA = {
     mood_excited: ["that was lovely!", "hehe, that was fun ♥"],
     mood_cozy: ["all snug ♥", "warm and happy ♥"],
     mood_bored: ["wish someone would visit ♥", "waiting for a friend ♥"],
+    visit: ["a visitor! welcome ♥", "hello, little friend ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! hi! so glad you came ♥`, (n) => `hello hello, ${n} ♥`],
     link_guest: [(n) => `hi, ${n}! ♥ hello ♥`],
     link_kindred: [(n) => `${n}, we think alike ♥`, "it's nice to meet a kind heart ♥"],
@@ -1020,6 +1022,7 @@ const PERSONA = {
     mood_excited: ["that was great!", "woo! so much fun!"],
     mood_cozy: ["cozy... but ready to hop!", "warm paws, happy hops"],
     mood_bored: ["need to hop about!", "so... much... sitting"],
+    visit: ["a visitor! hup hup, hi!", "hiya, friend! *bounce*"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! hup hup, hi!`, (n) => `hiya, ${n}! *bounce*`],
     link_guest: [(n) => `hup! hi, ${n}!`],
     link_kindred: [(n) => `${n}! race you to the corner! hup`, "two of us, twice the hops!"],
@@ -1042,6 +1045,7 @@ const PERSONA = {
     mood_excited: ["what a show!", "bravo! that was fun ★"],
     mood_cozy: ["cozy, like backstage ★", "a warm spotlight ♪"],
     mood_bored: ["no audience today...", "waiting for my cue ★"],
+    visit: ["a guest star! ★", "welcome to the show! ★"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! my co-star ★`, (n) => `ah, ${n}! cue the music ★`],
     link_guest: [(n) => `hello, ${n}! ★ take a bow`],
     link_kindred: [(n) => `${n}! a duet, you and me ★`, "we shine best together ★"],
@@ -1064,6 +1068,7 @@ const PERSONA = {
     mood_excited: ["heh. that was nice", "well, that was fun"],
     mood_cozy: ["a fine warm spot", "cozy. as it should be."],
     mood_bored: ["hm. quiet day.", "nothing doing. hm."],
+    visit: ["well, hello there.", "ah. a visitor. welcome."], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `hello, ${n}. come in.`, (n) => `${n}. good to see you.`],
     link_guest: [(n) => `hm. hello, ${n}.`],
     link_kindred: [(n) => `hm. ${n}. we understand each other.`, "good company, you."],
@@ -1086,6 +1091,7 @@ const PERSONA = {
     mood_excited: ["oh, how lovely!", "that was divine ♥"],
     mood_cozy: ["cozy and fabulous ♥", "warm and lovely ♥"],
     mood_bored: ["how dull...", "nothing lovely to do"],
+    visit: ["oh, a visitor! how lovely ♥", "welcome, welcome, dear ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}, darling! how lovely ♥`, (n) => `oh, ${n}! welcome, welcome ♥`],
     link_guest: [(n) => `${n}, darling! ♥`],
     link_kindred: [(n) => `${n}, darling, we have such taste ♥`, "a fellow connoisseur ♥"],
@@ -1108,6 +1114,7 @@ const PERSONA = {
     mood_excited: ["simply splendid!", "what a marvellous time"],
     mood_cozy: ["splendidly cozy", "warm as a welcome"],
     mood_bored: ["a bit dull today, I must say", "awaiting company"],
+    visit: ["a visitor! what an honour", "do come in, friend ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `ah, ${n}! a delight ♥`, (n) => `${n}! what an honour ♥`],
     link_guest: [(n) => `${n}! how splendid ♥`],
     link_kindred: [(n) => `${n}! two of a kind, you and I ♥`, "such a grand pair we make ♥"],
@@ -1130,6 +1137,7 @@ const PERSONA = {
     mood_excited: ["hah! that was great", "heck yes, that was fun"],
     mood_cozy: ["cozy post, all clear", "warm and on watch"],
     mood_bored: ["nothing to guard...", "waiting for orders!"],
+    visit: ["who goes there? oh, hi!", "visitor spotted! hi! ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `yo, ${n}! all clear here`, (n) => `${n}! reporting in ♥`],
     link_guest: [(n) => `hey, ${n}! ♥ hi hi`],
     link_kindred: [(n) => `${n}! good team, you and me ♥`, "we've got each other's backs ♥"],

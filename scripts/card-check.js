@@ -4439,7 +4439,7 @@ async function main() {
     const TYPES = [...py.split("\nPERSONALITIES = (")[1].split("\n)")[0].matchAll(/"(\w+)"/g)].map((m) => m[1]);
     const KEYS = ["reveal", "hello", "hello_shared", "hello_warm", "hello_hearts",
       "good_morning", "sunset", "fell_asleep", "wish_granted", "favourite_snack",
-      "idle", "idle_bored", "idle_excited", "mood_content", "mood_excited", "mood_cozy", "mood_bored"];
+      "idle", "idle_bored", "idle_excited", "mood_content", "mood_excited", "mood_cozy", "mood_bored", "visit"];
     const HELLOS = ["hello", "hello_shared", "hello_warm", "hello_hearts"];
     const longName = "Wwwwwwwwwwwwwwww"; // 16, as _greet leaves a name
     const longFood = "sunflower seeds"; // 15, the longest likes entry
@@ -4463,7 +4463,9 @@ async function main() {
           if (/!!!/.test(line)) bad.push(`${type}.${key}: "${line}" !!!`);
           if (/\b(still|again|why|never|pleas\w*|sad|cry|alone|forgot\w*)\b/i.test(line)) bad.push(`${type}.${key}: "${line}" nags`);
           if (words.some((w, i) => i > 1 && w === words[i - 1] && w === words[i - 2])) bad.push(`${type}.${key}: "${line}" three in a row`);
-          if (line.includes("?")) bad.push(`${type}.${key}: "${line}" asks`);
+          // One approved exception (owner, 2026-11-01, gaps-seams 4b): a sentry's call, not a question to the player.
+          const ASKS_OK = ["who goes there? oh, hi!"];
+          if (line.includes("?") && !ASKS_OK.includes(line)) bad.push(`${type}.${key}: "${line}" asks`);
           if (line.length > 40) bad.push(`${type}.${key}: "${line}" ${line.length} long`);
           if (key === "wish_granted" && /thank|you remembered|too kind/i.test(line)) bad.push(`${type}.${key}: "${line}" credits someone`);
           if (HELLOS.includes(key) && /\b(favourite|best|morning|afternoon|evening|night|tonight|tomorrow)\b/i.test(line)) {
@@ -7060,7 +7062,9 @@ async function main() {
     return { src: s.pet.getAttribute("src"), text: s.bubble.textContent, drawn: s.drawn, acts: s.species?.acts?.cheer ?? null, waves: !!s.species?.waves?.[s.drawn],
       leftOn: !!s.visitor, keys: Object.keys(localStorage), calls: el.__vcalls };
   });
-  const lines = [...VLINES, ...V0.lines];
+  // A teen or adult may greet in its type's words (gaps-seams 4b).
+  const VPERSONA = require("vm").runInNewContext(`(${vsrc.match(/const PERSONA = (\{[\s\S]*?\n\});/)[1]})`);
+  const lines = [...VLINES, ...V0.lines, ...Object.values(VPERSONA).flatMap((t) => t.visit)];
   const waves = greeted.drawn !== "child" && greeted.waves;
   const greetFrame = greeted.drawn === "child" || (waves ? /_wave_\d/.test(greeted.src) : /_(cheer|excited)_\d/.test(greeted.src));
   check("visitors: the pet greets it with its wave frames (child: the greet as before; no waves: cheer or excited) and one of its lines",
