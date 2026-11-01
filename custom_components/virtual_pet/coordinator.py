@@ -1790,6 +1790,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         assert self.state is not None
         person = self.people.person(user)
         today, hour = self._today(now)
+        if self._phone_ask_due(user, person):
+            # Ahead of the day's questions: it matters now, and comes once ever.
+            person["phone_asked"] = True
+            P.mark_asked(person, today, hour)
+            self.people.save()
+            return "phone"
         kind = P.choose_question(
             person,
             today,
@@ -1811,6 +1817,25 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._save()
         self.people.save()
         return kind
+
+    def _phone_ask_due(self, user: str, person: dict[str, Any]) -> bool:
+        """Whether the pet asks this person "can I call your phone?" (top10 1a):
+        once ever, house-wide (`phone_asked` in the people store; "forget my
+        data" clears it); only with the Home Assistant app signed in as them
+        (their own phones, never anyone else's); not if they already get this
+        pet's calls; and only after a missed call, or while a real call is open."""
+        state = self.state
+        assert state is not None
+        if (
+            person.get("phone_asked")
+            or user in state.notify_users
+            or model.life_stage(state) == "egg"
+        ):
+            return False
+        call = state.call
+        if not state.recent_misses and (call is None or call.reason == "fake"):
+            return False
+        return bool(notify.phones(self.hass, user))
 
     def _pet_once(self, user: str, today: str) -> tuple[str, ...]:
         """The pet's own one-time questions still open for this person: its

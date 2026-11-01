@@ -3656,3 +3656,55 @@ async def test_unload_after_startup_does_not_remove_a_spent_listener(
     assert await hass.config_entries.async_unload(config.entry_id)
     await hass.async_block_till_done()
     assert "Unable to remove unknown job listener" not in caplog.text
+
+
+async def test_phone_question_once_after_a_miss_with_the_app_only(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """top10 1a: after a missed call the pet asks "can I call your phone?" once
+    ever, only someone signed in to the HA app on a phone of their own, never
+    someone already getting its calls; "forget my data" clears the flag."""
+    freezer.move_to("2026-10-28 17:00:00+00:00")
+    now = dt_util.utcnow().timestamp()
+    me = await friend(hass, 0)
+    other = await hass.auth.async_create_user("Other")
+    hass_storage[STORE_KEY] = hatched_pet(now, recent_misses=[now - 600])
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    # Another person's phone is not mine: no question for me yet.
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": other.id, "device_name": "Their Phone"}
+    ).add_to_hass(hass)
+    async_mock_service(hass, "notify", "mobile_app_their_phone")
+    assert (await look(hass, me.id))["ask"] != "phone"
+    assert "phone_asked" not in coordinator.people.person(me.id)
+    # With my own phone: asked, once.
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": me.id, "device_name": "My Phone"}
+    ).add_to_hass(hass)
+    async_mock_service(hass, "notify", "mobile_app_my_phone")
+    coordinator._visits.clear()
+    coordinator.people.person(me.id).pop("asked", None)  # the earlier look's question
+    assert (await look(hass, me.id))["ask"] == "phone"
+    assert coordinator.people.person(me.id)["phone_asked"] is True
+    coordinator._visits.clear()
+    coordinator.people.person(me.id).pop("asked", None)
+    assert (await look(hass, me.id))["ask"] != "phone"
+    # Forget my data: the flag goes with the rest (asked again, once).
+    await coordinator.people.forget(me.id)
+    assert "phone_asked" not in coordinator.people.person(me.id)
+    # Already getting this pet's calls: never asked.
+    coordinator.state.notify_users.append(me.id)
+    coordinator._visits.clear()
+    assert (await look(hass, me.id))["ask"] != "phone"
+    # And no miss, no open call: not asked either.
+    coordinator.state.notify_users.remove(me.id)
+    coordinator.state.recent_misses.clear()
+    coordinator._visits.clear()
+    coordinator.people.person(me.id).pop("asked", None)
+    assert (await look(hass, me.id))["ask"] != "phone"
+    # Nothing about it on any state.
+    for state in hass.states.async_all():
+        assert "phone_asked" not in json.dumps(dict(state.attributes))

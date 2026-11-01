@@ -1151,6 +1151,11 @@ const QUESTIONS = {
   fav_season: { q: "what's your favourite season?", keep: true, answers: {
     spring: ["spring! flowers everywhere ♪"], summer: ["summer! sunshine! ☀"],
     autumn: ["autumn! crunchy leaves ♪"], winter: ["winter! snuggly ❄"] } },
+  // Asked once ever, after a missed call, of someone with the HA app (top10 1a; the
+  // server decides). "yes" turns on "notify me" for this pet (_ask).
+  phone: { q: "can I call your phone when I need you?", answers: {
+    yes: ["yay! I'll ring you ♥"], "not now": ["ok! it's in my settings if you change your mind"] },
+  label: (a) => (a === "yes" ? "yes ♥" : a) },
   dream: { q: "what should I dream about tonight?", keep: true, answers: {
     stars: ["the stars... ok!"], sea: ["the sea! ok!"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ ok!"] } },
   guess: { q: "rain or sun tomorrow?", keep: true, answers: {
@@ -5793,6 +5798,11 @@ class HatchPetCard extends HTMLElement {
       else if (["tough", "not really"].includes(answer) && !isCalm) this._bondHearts(s);
       else this._animate(s, s.pet, "perk", 320);
       if (question.keep) this._keepAnswer(s, kind, answer, entity);
+      if (kind === "phone" && answer === "yes") {
+        this._setNotify(s, true).then((ok) => {
+          if (!ok && s.ids?.["sensor.life_stage"] === entity) this._write(s, "hm, that one slipped away ♪", 3500);
+        });
+      }
     });
     s.screen.append(box);
     s.askTimer = setTimeout(done, ASK_MS);
@@ -6928,7 +6938,7 @@ class HatchPetCard extends HTMLElement {
   // Phone notifications are per user: this only changes them for whoever is signed in.
   async _setNotify(s, enabled) {
     const id = s.ids?.["sensor.life_stage"];
-    if (!id) return;
+    if (!id) return false;
     const button = s.status.querySelector(".bell.notify");
     if (button) {
       button.classList.add("pending");
@@ -6940,6 +6950,7 @@ class HatchPetCard extends HTMLElement {
     try {
       await this._callOwn("notify_me", { entity_id: id, enabled });
       this._statusMessage(s, enabled ? "I'll ping your phone!" : "Phone pings off.");
+      return true;
     } catch (err) {
       if (s.mine) s.mine.notify_me = !enabled;
       if (button) {
@@ -6947,6 +6958,7 @@ class HatchPetCard extends HTMLElement {
         button.textContent = !enabled ? "on" : "off";
       }
       this._statusMessage(s, "That didn't work. Try again.");
+      return false;
     } finally {
       button?.classList.remove("pending");
     }

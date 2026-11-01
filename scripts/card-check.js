@@ -1588,6 +1588,39 @@ async function main() {
     return before && !s.screen.querySelector(".askday") && !s.asking;
   });
   check("a question gives way to a game", gaveWay);
+  // top10 1a: the phone question. "yes ♥" turns on "notify me" for this pet (stubbed
+  // here: nothing reaches the server) and the pet answers; "not now" changes nothing.
+  const phoneAsk = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const realOwn = el._callOwn;
+    const calls = [];
+    el._callOwn = async (type, data) => { calls.push({ type, ...data }); };
+    const wasMine = s.mine ? s.mine.notify_me : undefined;
+    const run = async (answer) => {
+      Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0, asking: false });
+      el._ask(s, "phone");
+      const box = s.screen.querySelector(".askday");
+      const labels = [...(box?.querySelectorAll("button") || [])].map((b) => b.textContent);
+      box?.querySelector(`button[data-answer="${answer}"]`)?.click();
+      await new Promise((r) => setTimeout(r, 200));
+      return { labels, aria: box?.getAttribute("aria-label"), said: s.bubble.textContent || s.say || "" };
+    };
+    try {
+      const no = await run("not now");
+      const callsAfterNo = calls.length;
+      const yes = await run("yes");
+      return { no, yes, callsAfterNo, calls };
+    } finally {
+      el._callOwn = realOwn;
+      if (s.mine) s.mine.notify_me = wasMine;
+      el._clearAsk(s);
+    }
+  });
+  check("top10 1a: the phone question asks with \"yes ♥\" / \"not now\"; not now calls nothing; yes turns notify me on",
+    phoneAsk.yes.aria === "can I call your phone when I need you?" &&
+    JSON.stringify(phoneAsk.yes.labels) === JSON.stringify(["yes ♥", "not now"]) && phoneAsk.callsAfterNo === 0 &&
+    phoneAsk.calls.length === 1 && phoneAsk.calls[0].type === "notify_me" && phoneAsk.calls[0].enabled === true,
+    JSON.stringify(phoneAsk));
   // Screen readers hear plain words: no hearts or notes; a bare heart is "thank you!".
   const heard = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const s = el._slides[el._index];

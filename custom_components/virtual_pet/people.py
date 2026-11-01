@@ -235,6 +235,7 @@ _PERSON_KEYS: dict[str, Any] = {
     "birthday_sent": lambda v: isinstance(v, str),  # the year, "2026"
     "once_last": lambda v: isinstance(v, str),  # a day
     "asked": lambda v: isinstance(v, dict) and isinstance(v.get("day"), str),
+    "phone_asked": lambda v: isinstance(v, bool),  # the phone question (top10 1a)
 }
 
 

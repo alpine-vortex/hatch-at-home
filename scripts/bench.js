@@ -91,8 +91,10 @@ const PRESETS = {
   ui() {
     const out = [];
     for (const world of ["woodland", "tidepool", "nightsky"]) {
-      for (const [view, extra] of [["status", {}], ["games", {}], ["bubble", { say: "hi, Sam! I missed you~" }]]) {
-        out.push({ name: `ui/${world}-${view}`, group: "ui", label: `${world} ${view}`, world, view: view === "bubble" ? "card" : view, ...extra });
+      for (const [view, extra] of [["status", {}], ["games", {}], ["bubble", { say: "hi, Sam! I missed you~" }],
+        ["phone", { ask: "phone", say: "can I call your phone when I need you?" }]]) { // top10 1a
+        out.push({ name: `ui/${world}-${view}`, group: "ui", label: `${world} ${view}`, world,
+          view: ["bubble", "phone"].includes(view) ? "card" : view, ...extra });
       }
     }
     return out;

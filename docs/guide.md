@@ -653,6 +653,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   or Scold for a plea to play), and it clears itself once the call is answered or
   missed. A need asking again is an ordinary notification, and poop calls stay on
   the card. Fast-forward never notifies.
+  The pet asks once: after a call is missed (or while one is waiting), it may ask
+  "can I call your phone when I need you?". It asks only people signed in to the Home
+  Assistant app on a phone, never someone already getting its calls, and never again
+  after an answer (unless you "forget my data"). "yes ♥" turns "notify me" on for that pet.
 - **Sounds:** off until you turn them on. In settings (the gear on the status screen), tap "sounds here"
   for little chirps when the pet calls, hatches, learns a trait or wins a game. It
   only changes this browser, and the pet stays quiet while it sleeps and from 21:00
