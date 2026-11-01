@@ -1,7 +1,10 @@
 # Winter lights, 2026-10-31 (plan; card only, date-based, art-gated)
 
-**Status: BUILT 2026-10-31** (crew s2559, on fm-batch5) with code stand-in art; the
-final art swaps files only. See *Built* at the end: the review (s2558) and the owner's
+**Status: BUILT 2026-10-31** (crew s2559) with code stand-in art; the final art swaps
+files only. *Reconciled 2026-10-31 against git:* the code (`f6b9b29f` … `d647f3d0`) is in
+batch 6 (`fm-batch6c`, gating), not on main; release 0.39.0 follows. **Left:** the final
+art (Luna; queued after the reaction poses) must land in a release **before 1 Dec**, and
+`costume-preview.js winter` is re-run with it (the earmuffs' sink, see *Built*). See *Built* at the end: the review (s2558) and the owner's
 decisions of 2026-10-31 win over the sections below where they differ.
 
 **Owner decided 2026-10-31:** the next Luna seasonal set is **winter lights**: generic
@@ -141,12 +144,19 @@ Recommendation: **set A for lines and treat, B for the first look**. Both avoid 
 
 ## 9. Owner questions (each with a recommendation)
 
+*Reconciled 2026-10-31:* all answered. The owner decided 5 (yes, a hare), 7 (set A for
+lines, treat, snack and baby; the first-look row was later dropped) and the named-day
+lines with the "holiday names" toggle, which hides **all** festival names, Halloween's and
+Thanksgiving's too. The first mate took the rest as recommended (1-31 Dec, "winter
+lights", a 21 Dec treat day, four hats, the `harvest` chirp, the night glow).
+
 1. **Dates?** *Recommend 1–31 Dec.* (Alternative: to 6 Jan; then new year can't have its own.)
 2. **Name?** *Recommend "winter lights" in all copy, key `winter`.*
 3. **A 21 Dec treat day?** *Recommend yes* (quiet, secular); no gift on the 25th.
 4. **Four hats or three?** *Recommend four*; drop `star_cap` if art is short.
 5. **A season visitor (a small creature at the edge)?** *Recommend no for v1*; keep the
-   world visitors apart and add one next year with Sol.
+   world visitors apart and add one next year with Sol. **Superseded: the owner said yes
+   (2026-10-31): the snow hare** (see *Built*).
 6. **A new chirp?** *Recommend reuse* (`harvest`) for now.
 7. **Copy set A or B** (section 5)? *Recommend A for lines, B for the first look.*
 8. **Glow at night on the lamp?** *Recommend yes* (CSS only, free).
