@@ -3,7 +3,10 @@
 **Status: PLAN, docs only. Reviewed + folded 2026-11-01** (tier-2 review s2580, findings
 #1-#23, and the owner's answers; see "Decided" in §13). **V-A built 2026-10-31** (s2582,
 branch `crew/hatch-at-home-s2582-v-a-the-server-owns-the-day-s`; see "V-A as built" under
-§11). V-B is next.
+§11). **V-B built 2026-11-01** (s2591, branch
+`crew/hatch-at-home-s2591-visitors-v2-v-b-finds-and-the`; its adversarial review s2590,
+findings #1-#21, is folded in, marked "V-B review #n"; see "V-B as built" under §11). V-C
+and V-D are next.
 Next-stages slice 2d (`plan-2026-10-31-next-stages.md`).
 This plan is the server half of daily check-ins item 1 (`plan-2026-10-28-daily-checkins.md`).
 It builds on visitors v1 as built (`plan-2026-10-31-visitors.md`: 18 visitors, final art,
@@ -101,14 +104,19 @@ saw it or not.
 **The visitor's gift** (check-ins: "a missed visitor still says hello"):
 
 - On about 1 visit in 3 (`R.VISIT_LEAVES_FIND` 0.33), the visitor leaves a find in the
-  basket when its window ends. It is the visitor's `leaves` find if it has one, else picked from that world's common
-  finds, and the basket entry carries `from: <visitor id>`.
+  basket when its window ends. It is the visitor's `leaves` find if it has one, else picked
+  uniformly from that world's plain commons (weight 10, `when: null`, not gift-only; Night
+  Sky's moonflower is a common with a condition, so it is never left), and the basket entry
+  carries `from: <visitor id>`. It is credited to the collection then, like a rolled find.
+- **Where (V-B review #6):** in `model.daily_visit`, right after `credit_visit` returns
+  True (it has the rng); `credit_visit` itself is unchanged. **A left find fires no
+  `found`** (owner Q4, 2026-11-02): "found a jay feather" would misreport the jay's gift.
 - A visitor with a `leaves` id in `worlds.json` leaves that find (finding #5): the
   Steller's jay its jay feather, the gull its gull feather, the heron its heron feather,
   the nighthawk its nighthawk feather. Any other visitor leaves a common find.
   The feathers are uncommon in the pool too, so they can also be found.
 - If the basket is full, the find goes straight to the collection (R1), like a rolled
-  one. Nobody is told.
+  one, not to the basket. Nobody is told.
 
 ### Where the card reads it
 
@@ -139,12 +147,32 @@ saw it or not.
 
 - **A roll every ~4 hours** while the pet is awake and home, and not an egg. The basket
   being full doesn't stop it (R1).
-  - `R.FIND_EVERY_HOURS` is 4, jittered ±1 h.
+  - `R.FIND_EVERY_HOURS` is (3, 5): the gap is `rng.uniform(3, 5)` hours (V-B review #19).
   - `R.FIND_CHANCE` is 0.6, so about 2-3 finds on a normal day.
-  - The roll runs on the tick and saves `state.next_find_at`.
+  - **Where it runs (V-B review #5):** `home.find_flags(...)` reads the tokens in
+    `_sense_home`, kept as `self._find_flags`; the pure `model.roll_find(state, now, day,
+    world, finds, flags, known, rng)` runs in `_tick` **after** `_sense_home`, outside
+    `advance`, so catch-up and `fast_forward` never roll. It saves `state.next_find_at`.
+  - **Nothing rolls before the house has been read once** (`_home_started` and a first
+    reading, V-B review #3): `_find_flags` is None until then.
 - **Asleep, away or an egg: no roll,** with one exception (R2): **only Night Sky rolls
-  while the pet sleeps** (its finds are of the night). Time doesn't pile up: the next roll
-  is scheduled from when the pet is free again, never caught up.
+  while the pet sleeps** (its finds are of the night). Away is no roll for Night Sky too.
+- **The find clock (V-B review #8, owner Q2 2026-11-02).** A nap, the night's sleep, away
+  and the egg **pause** the clock; they don't reset it:
+  - while the pet can't roll, `next_find_at` is left as it is;
+  - on a tick it can roll with `next_find_at` None (a new save, an old one, a salvaged
+    one, a fresh egg's), the next roll is scheduled `now + uniform(3, 5) h`, with no roll;
+  - once `now >= next_find_at`, **one** roll, however long it was due (a nap, downtime,
+    an upgrade back from V-A, `fast_forward`), and the next is scheduled from now;
+  - `lay_egg` sets None (the egg can't roll; the hatchling starts fresh).
+  So a nap costs no roll, and the 2.4 a day the bound assumes holds. (The review's line
+  "set `next_find_at = None` while it can't roll" would make every nap a reset, which Q2
+  rules out; "paused" is built as "left alone".)
+- **A find is credited when it is rolled (or left), whether or not it goes in the basket**
+  (V-B review #1, owner Q1): `collection[world].finds[id]` gets the day if it is new, and the
+  basket entry stores `new` (first of its kind then). The reveal reads it; the ×0.5 and a
+  weekly tapper's collection never wait for a tap. A find still in the basket already shows
+  as met on the collection page.
 - **A full basket (R1).** Rolls continue. A find that has no room goes **straight to the
   collection** (`collection[world].finds[id]`, if new), unseen, with no `found` moment and
   no line. Nothing waits on a tap, so emptying the basket is never a chore. The find rate
@@ -163,14 +191,23 @@ saw it or not.
     - **`autumn` / `winter`** (finding #4, R5) come from `people.py` `season(day,
       latitude)` (`people.py:277`, used at `coordinator.py:1522`), so they follow the
       hemisphere. It returns None in the tropics: no season is then set.
-    - **The fallback (R5), only where the signal is missing.** Where `season()` is None
-      (a tropical latitude), season finds (chanterelle, pine sprig) are unconditional at the
-      **rare weight (1)**. Where the home has no weather entity (`condition` is None,
-      `home.py:164-177`), weather finds (rainy, snowy, sunny, foggy) are unconditional at
-      weight 1 too. Everywhere else the condition gates: false means no chance. So a
-      find that is already rare (four-leaf clover, message in a bottle) keeps its
-      condition. `night` and `full_moon` finds have no fallback: they happen everywhere.
-      A home *with* a weather entity that never sees a condition is Open question 2.
+    - **The fallback (R5), per token (V-B review #2).** Each token is true, false or
+      **missing**. Missing comes from the **configuration** (V-B review #3), never from a
+      reading that is None for now (a restart, an entity briefly unavailable reads false):
+      `rainy` is missing with no weather entity and no rain gauge; `sunny` with no weather
+      entity and no solar sensor; `snowy` and `foggy` with no weather entity; `autumn` and
+      `winter` where `season()` is None (the tropics). `night` and `full_moon` are never
+      missing. A missing token, `!` ones included, drops out of its AND. A clause with every
+      token present and true gets the tier weight; one true only because tokens dropped
+      out gets **weight 1**; a false token makes it 0. The best clause wins. So chanterelle
+      in the tropics is weight 1 on a rainy or foggy day and 0 on a dry one; a fallen star
+      with no weather entity is weight 1 at night; four-leaf clover is weight 1 when sunny,
+      0 when not, and 1 with no sun signal at all. A home *with* a weather entity that
+      never sees a condition is Open question 2.
+    - **The moon with no moon sensor (V-B review #4, owner Q3):** worked out from the date
+      (a mean synodic month; "full" within ±1 day of mid-cycle, `R.FIND_FULL_MOON_DAYS`),
+      so moonstone happens everywhere. A mapped `moon_phase` or `moon_illumination`
+      entity wins.
 - **Finds already in the collection are weighted ×0.5**, never 0, so new ones come a little
   sooner, but repeats still happen and still delight.
 - **Rare enough to be special, never a worry.** A pytest works out each find's expected
@@ -181,17 +218,33 @@ saw it or not.
   weight, so about 22 days; the ×0.5 on met finds only shortens it). The bound
   holds **whether or not anyone taps the basket** (R1): rolls and the collection credit
   don't wait for a tap. Only what is *seen* depends on tapping.
-- **The coverage run (finding #1, #21).** A fixed-seed **90-day** run (one length
-  everywhere) must see every non-gift find. It uses the **real sleep hours** (not
-  "each condition true on half the days"): a pet that sleeps 22:00-07:00, the sun down by
-  the real day length, Night Sky rolling asleep. It runs twice: once with weather and
-  seasons varying, and once with **no weather entity and a tropical latitude**, which
-  proves the fallbacks (the second run also sees every weather and season find). The run is seeded, so it can't flake.
-- **A moment, `found`** `{id, world}`, with no user. It goes to the moments and the bus,
-  like other house moments. The away note can then say "found a pine cone"
+- **The guarantee is analytic (V-B review #7).** `tests/test_finds.py` works out each
+  find's expected wait at 2.4 a day (Night Sky 3.6: it rolls asleep too):
+  - every world's rarest **unconditional** find, with every condition find in the pool
+    (the worst case): at most **30 days** (Terrarium, Hearth, Pond 23.8; Tidepool 22.5);
+  - **condition finds** at a stated frequency (sunny 1 roll in 3, rain 1 in 4, fog and snow
+    1 in 10, a season 1 in 4, night 1 in 2, full moon 3 days a month at night): at most
+    **100 days**. As built: message in a bottle ~89, moonstone ~62, four-leaf clover ~58,
+    dew drop ~56, chanterelle ~55, frosted leaf ~48, fallen star ~34, snail shell ~19,
+    frogbit ~17, pine sprig ~16. Their tiles stay hidden until met (§13b #2).
+- **The coverage run (finding #1, #21) is a regression snapshot**, not the guarantee
+  (V-B review #7). A fixed-seed **90-day** run from a **pinned start, 2026-10-15** (it
+  crosses into winter), on a **pinned weather schedule** (a 10-day cycle: sunny, cloudy,
+  rainy, sunny, fog, cloudy, rainy, sunny, partly cloudy, snowy; from mid-November every
+  other rainy day is snowy), latitude 45, the **real sleep hours** (22:00-07:00, the sun
+  down by the real day length, Night Sky rolling asleep), no moon entity (the moon from the
+  date). It runs twice per world: with weather, and with **no weather entity at latitude
+  10** (the fallbacks). Seed 2026 sees every non-gift find in both. Over seeds 0-19, the
+  weather run misses something for Tidepool in 10 (the bottle), Night Sky in 6 and Woodland
+  in 2, and the no-weather run for Night Sky in 7 (moonstone): it is pinned, so it can't
+  flake, but a change in what the rng is asked for can move it; check the waits, then
+  re-pin.
+- **A moment, `found`** `{id, world}`, with no user. It is in `MOMENTS` (V-B review #13),
+  so it goes to the moments and the bus, like other house moments (`moments` is
+  unrecorded, `sensor.py:299`); on the bus it carries only `{id, world, pet_id}`. The away note can then say "found a pine cone"
   (`MOMENT_BITS.found`). No consumer yet beyond the away note; it is on the bus like the
   other house moments, for later. A find that went straight to a full basket's collection
-  fires none.
+  fires none, nor does a visitor's left find (owner Q4).
 
 ### The finds (10 per world, 60 in all; PROPOSED lists, Q6)
 
@@ -231,7 +284,9 @@ Pond visitor and leaves it). ⟲ marks PROPOSED replacements for the owner to pi
 - `when` is null, or a **list of lists: an OR of ANDs** (finding #3). `[["autumn","rainy"],
   ["autumn","foggy"]]` is "autumn and (rainy or foggy)" written out; `[["snowy"],["winter"]]`
   is "snowy or winter"; `[["night","!rainy"]]` is "night and not rainy". A `!` prefix is
-  NOT. Tokens: `rainy snowy sunny foggy night full_moon autumn winter`.
+  NOT. Tokens: `rainy snowy sunny foggy night full_moon autumn winter`. `null` means
+  always; `[]` and `[[]]` are invalid (V-B review #19), as is an unknown token: the catalog
+  skips such a find with a warning, and the tests fail it.
   **A pytest and a Node test check that every `when` token is a known flag** (a typo would
   otherwise be a find that never comes).
 - `leaves` (on a visitor, not a find): the find id it leaves (finding #5). The same test
@@ -241,8 +296,10 @@ Pond visitor and leaves it). ⟲ marks PROPOSED replacements for the owner to pi
   Lines use `<a find>`, so none says "a acorn" or "a stardust". A Node test checks that
   every find has an `a`, and that it starts with "a ", "an " or "some ".
 
-The server reads it in `species.py` beside the roster. The card reads names and art from
-the same file.
+The server reads it in `species.py` beside the roster: **`Catalog.finds` reads every world
+in `worlds.json`, ready or not, as `visitors` does** (V-B review #14), so a world gone
+not-ready keeps its finds known. **Find ids are unique across worlds** (a test holds it,
+V-B review #10). The card reads names and art from the same file.
 
 ## 3. The basket (card)
 
@@ -256,8 +313,9 @@ the same file.
   - Compact layout: hidden, as `.compact .deco` is. The finds just wait.
 - **Open the card** with something in the basket: nothing is said, and the basket sits
   there. (A "look!" line would turn it into a chore.)
-- **A tap on the basket** sends `virtual_pet/collect {entity_id}`. The reply lists the finds
-  in order, each `{id, new, from?}`. The card reveals them one by one, 2.5 s each:
+- **A tap on the basket** sends `virtual_pet/collect {entity_id}`. The reply is
+  `{finds: [...]}`, in order, each `{id, world, new, from?}` (V-B review #10: an old world's
+  find shows that world's art and line). The card reveals them one by one, 2.5 s each:
   - the find pops up over the basket, drawn **16 cells wide** (its art is drawn at 16 cells,
     so the scale is 1:1, finding #23);
   - the pet says its line (§7);
@@ -272,6 +330,14 @@ the same file.
   between** (atomic on the event loop; there is no coordinator-wide lock, only
   `_chores_locks`, finding #13), so the first tap gets the finds and the second gets `[]`.
   The second screen's basket just goes, without a line.
+  - **As built (V-B review #11, #18):** the sync `PetCoordinator.collect()` reads and clears
+    (only known entries, V-B review #9) and `_publish()`es, so every screen's
+    `house.basket` drops at once; no `_advance` first. The ws handler awaits nothing before
+    it, sends the reply, then **saves at once** (`async_save_now`), so a crash can't bring
+    the basket back.
+  - **`house.basket`** (V-B review #12) is always a key: an int 0-3, the known entries
+    waiting, no ids (so no screen sees what's inside before the tap). V-C picks
+    `basket_<n>.png` from it; 0 hides the basket.
 - **The tap target** is a `<button>` with `aria-label` "the basket". It is not a pet tap,
   so it never counts as a pat.
 
@@ -368,8 +434,8 @@ From check-ins item 1: "I saved this pine cone for you! ♥", with "good variety
 | Field | Shape | Carried by `lay_egg` | Validation (F5) |
 |---|---|---|---|
 | `visit` | `{day, world, id, hours, from, until, credited}` or null | yes; a `world` that isn't the current one counts as no visit (on load too), so no special case in `lay_egg` | dict with str `day` and `world`. Else null, and the next tick re-picks. |
-| `basket` | list of up to 3 `{id, world, from?, at}` | yes (finds wait, even across a world change) | list of dicts with str `id` and `world`, cut to 3. An id no world knows is kept in the save and skipped where the basket is revealed or counted (finding #12, V-A audit #1). |
-| `next_find_at` | float or null | yes | `_float` |
+| `basket` | list of `{id, world, new, from?}`: up to 3 known entries, plus any unknown ones | yes (finds wait, even across a world change) | list of dicts with str `id` and `world`; `new` is `is True`; a `from` that isn't a str is dropped; a later version's keys are kept. **At load the first 3 known entries and every unknown one are kept** (V-B review #9, `trim_basket`); unknown entries don't count toward the 3, aren't counted in `house.basket`, and `collect` leaves them in place. No `at` (V-B review #17: nothing read it). |
+| `next_find_at` | float or null | **no: `lay_egg` sets None** (V-B review #8 e) | `_float`, else None; lifecycle in §2 "The find clock" |
 | `collection` | `{world: {visitors: {id: day}, finds: {id: day}}}` | yes | the world key is a str, the inner maps are str→str; a bad world is dropped, the rest kept |
 | `bonds[u].gift` | `{id, day}` or absent | (bonds already) | the bond loader (`model.py:239` area) drops a bad one and keeps the bond |
 | `bonds[u].gifts` | `[id, …]` (ids only, R6) | (bonds already) | a list of str; bad entries dropped |
@@ -393,7 +459,7 @@ From check-ins item 1: "I saved this pine cone for you! ♥", with "good variety
   no-op migrate and save again, and nothing reads the marker. Bump it later if a
   migration needs it (that consumer would name it).
 - **Salvage (finding #8).** `model.py:567-591` `salvage` keeps only name, generation,
-  species, raised, journal, memories and bonds. It gains **`collection`** and the day's `visit` (V-A audit #4; and `basket`),
+  species, raised, journal, memories and bonds. It gains **`collection`** and the day's `visit` (V-A audit #4), and `basket` (V-B),
   so a damaged save doesn't wipe the device's lifelong collection. Tested under F5.
 - **Seeding the collection on upgrade:** none. It starts empty. (v1 saved nothing, so
   there's nothing to credit.)
@@ -402,20 +468,22 @@ From check-ins item 1: "I saved this pine cone for you! ♥", with "good variety
   - a damaged value of each field loads, with the rest kept; `salvage` keeps `collection`
     and `basket` (finding #8);
   - an old v1 save loads empty;
-  - `lay_egg` carries `collection`, `basket` and `visit`;
+  - `lay_egg` carries `collection`, `basket` and `visit`, and sets `next_find_at` None;
   - the day plan survives a restart (no re-roll);
   - a `visit` with another `world` counts as no visit, on load and in `_house_view`;
   - the 4-in-7 and 21-day properties over 365 days (with an unseeded `self.rng`, finding #11);
   - crediting at window end, seen or not, in the egg stage and away (R4);
   - HA down 22:00 to 08:00 next day: the old visit is credited, then today's picked
     (finding #10);
-  - the visitor's left find, and none when the basket is full;
+  - the visitor's left find; basket full: the find goes to the collection, not the basket
+    (V-B review #6);
   - the find roll: none away or egg; none asleep except Night Sky (R2); a full basket still
     rolls and the extra goes to the collection (R1); the 90-day coverage run on the real
     sleep hours, and with no weather entity and a tropical latitude (findings #1, #21);
     every `when` token is a known flag; a `leaves` id names a find of its world;
-  - `collect`: two calls with no `await` between give `[…]` and `[]`;
-  - gift: level 3+ only, per-person clocks, the weighting, gift-only never in a basket;
+    gift-only never rolled or left (moved from V-E, V-B review #15);
+  - `collect`: the ws handler driven twice back to back gives `[…]` and `[]` (V-B review #11);
+  - gift: level 3+ only, per-person clocks, the weighting;
     a taken gift never enters the house `collection` or `finds` map; `gifts` holds ids
     only; `collection {shared: true}` has no `gifts`; `collect {gift: true, shared: true}`
     is refused (findings #6, #7, R3, R6);
@@ -458,7 +526,7 @@ Cut on purpose (they nag or ask): "the basket is full!", "come see what I found"
 | Data | Who sees it | Channel | Recorded? |
 |---|---|---|---|
 | Today's visit plan | every screen | `_house_view` | no |
-| Basket contents | every screen | `_house_view` (`house.basket`, V-B) | no |
+| Basket contents | every screen sees **how many** (0-3), never which, until the tap | `_house_view` (`house.basket`, an int, V-B) | no |
 | `found` moment | every screen, the away note | moments + bus (no user) | the bus, like other house moments |
 | Collect (tap) | the caller | **websocket** `virtual_pet/collect` (not a service and not a button, because a service's `call_service` row records `context_user_id`, rows M/O) | no |
 | Collection | the person who opens it | websocket `virtual_pet/collection` | no |
@@ -511,7 +579,7 @@ follow in either order. V-E comes last.
 | # | Slice | Size | Tier | Art | Needs |
 |---|---|---|---|---|---|
 | V-A ✅ | **Built** (s2582; "V-A as built" below). **The server owns the day's visit**: `worlds.json` `visitors` (with `leaves`); `PetState.visit` with `world` (#9); `_daily_visit` (rng only for the window hour, #11; credit-then-pick on rollover, #10); crediting at window end into `collection[world].visitors`, in every stage (R4); `_house_view.visit`; the card plays from `house.visit`, with the `visitorDay` fallback and the once-a-day flag keyed by `visit.day` (#22); `salvage` keeps `collection` and `visit` (#8, audit #4); unknown ids kept in the save, skipped where counted or shown (#12, audit #1); F5 validators, `lay_egg` carry; **no `STORE_MINOR_VERSION` bump** (#19); pytest; card-check `visitors` extended (crossing the browser's midnight) | M | **2** | none | Q1-Q8 decided |
-| V-B | **Finds and the basket, server**: `worlds.json` `finds` (the `when` grammar, #3; the ⟲ lists, #18; `leaves` ids, #5: V-A already wrote `jayfeather`, `gullfeather`, `heronfeather`, `nighthawkfeather` on the visitors, so the feathers take those ids); unknown find ids in `collection[w].finds` and the basket kept in the save, skipped where counted or shown (V-A's rule, audit #1: no drop at load); the roll with `night`, `full_moon`, `P.season` and the rare fallback (#1, #4, #21, R5); rolls continue while full, extras to the collection (#2, R1); Night Sky rolls asleep (R2); `basket`, `next_find_at`; the visitor's left find; the `found` moment (no consumer yet, #20); `_house_view.basket` (#20); `virtual_pet/collect` (ws; read-and-clear with no `await`, #13); `salvage` keeps `basket`; validators; the stand-in script and 60 + 3 stand-ins at 64 px (#23); pytest incl. the real-sleep-hours 90-day run and the `when` token check | M | **2** | stand-ins | V-A |
+| V-B ✅ | **Built** (s2591; "V-B as built" below). **Finds and the basket, server**: `worlds.json` `finds` (the `when` grammar, #3; the ⟲ lists, #18; `leaves` ids, #5: V-A already wrote `jayfeather`, `gullfeather`, `heronfeather`, `nighthawkfeather` on the visitors, so the feathers take those ids); unknown find ids in `collection[w].finds` and the basket kept in the save, skipped where counted or shown (V-A's rule, audit #1: no drop at load); the roll with `night`, `full_moon`, `P.season` and the rare fallback (#1, #4, #21, R5); rolls continue while full, extras to the collection (#2, R1); Night Sky rolls asleep (R2); `basket`, `next_find_at`; the visitor's left find; the `found` moment (no consumer yet, #20); `_house_view.basket` (#20); `virtual_pet/collect` (ws; read-and-clear with no `await`, #13); `salvage` keeps `basket`; validators; the stand-in script and 60 finds at 64 px + 3 baskets at 48 px (#23, V-B review #16); pytest incl. the real-sleep-hours 90-day run and the `when` token check | M | **2** | stand-ins | V-A |
 | V-C | **The basket and the reveal, card**: the basket button, the reveal queue, lines V1-V4 and V8, calm, compact; the reveal at 16 cells (#23); the no-nagging scan extended to the V1-V11 table, with the longest-name length check (#16); the bench `house` fixture (extending `--mine`, #15) plus `--preset finds`; card-check `finds` (ws spy, not a DB read, #17) | M | 1 | stand-ins | V-B |
 | V-D | **The collection page**: `virtual_pet/collection {entity_id, shared}` ws read (#6); no gift in the house `finds` map (#7, R3); the journal's "finds ›" link; tiles at 16 cells and silhouettes; the bench `--collection` fixture; card-check | M | 1 | stand-ins | V-B |
 | V-E | **Gifts**: bond `gift`/`gifts` (ids only, R6)/`next_gift_at`; the per-person clock; the weighting and gift-only finds; `mine.gift`; the first-look line V5-V7 (collect first, speak on non-empty, #14); `collect {gift: true, shared}` refused when shared (#6); gifts only on the receiver's ♥ page (#7, R3); diagnostics; the privacy pytest and card-check (two tabs) | M | **2** | none new | V-B, V-D |
@@ -530,8 +598,9 @@ follow in either order. V-E comes last.
   `basket`).
   Rates: `R.VISIT_CYCLE_DAYS`, `VISIT_DAYS`, `VISIT_HOURS`, `VISIT_DAY_STARTS`,
   `VISIT_NIGHT_STARTS`.
-- **The visitor's left find (V-B) hooks into `model.credit_visit`**, the one place a
-  window's end is seen.
+- **The visitor's left find (V-B)** was planned to hook into `model.credit_visit`; V-B put
+  it in `daily_visit` right after `credit_visit` returns True instead (V-B review #6), and
+  `credit_visit` is unchanged.
 - Coordinator: `_daily_visit` runs on **every** tick (no awake or sleep-hours gate, R4).
   `_check_visits` runs after load and checks only the visit: a saved visit from another
   world, or by a visitor this world lacks, becomes a no-visit record
@@ -561,6 +630,50 @@ follow in either order. V-E comes last.
   play table and the roster match one for one. card-check `visitors`: the plan, a second
   card in another time zone, the browser's midnight, and no v1 pick without a channel; `restart` seeds today's visit and
   checks it survives a restart.
+
+**V-B as built (s2591, for V-C and V-D):**
+
+- `worlds.json` `finds: [{id, name, a, weight, when, gift_only?}]` per world, 10 each, in
+  §2's order (commons, uncommons, rares, then the gift-only one last). Ids (unique across
+  worlds): woodland `pinecone acorn mapleseed wildstrawberry jayfeather snailshell
+  chanterelle frostedleaf fourleafclover acorncup`; terrarium `tinymushroom driedflower
+  curledbark seedpod shedskin crystalcluster dewdrop pressedmoss tinyfossil pressedfern`;
+  hearth `button ribbon spool cookie lostsock toymouse thimble pinesprig brasskey
+  knittedheart`; tidepool `greenseaglass scallopshell periwinkle sanddollar blueseaglass
+  gullfeather urchinshell redseaglass bottle pearl`; pond `lilyflower cattailfluff
+  corkfloat watersnailshell heronfeather willowleaf reedwhistle frogbit koiscale paperboat`;
+  nightsky `stardust paperstar moonflower constellation nighthawkfeather tinyrocket
+  moonstone lantern fallenstar telescope`. Gift-only finds carry `weight: 1` as a
+  placeholder (nothing rolls them; V-E sets the gift weighting). `a` uses "some" for the
+  sea glasses, curled bark, pressed moss, cattail fluff and stardust.
+- Server: `species.Catalog.finds` (every world, `valid_find`/`valid_when`);
+  `home.FIND_TOKENS`, `home.find_flags`, `home.full_moon_by_date`; `model.basket_from`,
+  `find_weight`, `can_find`, `basket_known`, `trim_basket`, `add_find`, `pick_find`,
+  `roll_find`, `leave_find`, `collect_basket`, `FINDS_ASLEEP = {"nightsky"}`;
+  `daily_visit(..., finds=, known=)` (keywords, so V-A's calls stand). Rates:
+  `VISIT_LEAVES_FIND`, `FIND_EVERY_HOURS`, `FIND_CHANCE`, `FIND_MET_WEIGHT`,
+  `FIND_MISSING_WEIGHT`, `FIND_NIGHT_HOURS`, `FIND_FULL_MOON_DAYS`, `BASKET_SIZE`.
+- Coordinator: `self.finds` (this world's), `self.known_finds` (every world's ids),
+  `self._find_flags`; `_roll_find` in `_tick` after `_sense_home` and `_daily_visit`;
+  `trim_basket` after `_check_visits` at load; `collect()` and `async_save_now()`;
+  `_house_view()["basket"]`; `found` in `MOMENTS`.
+- **For V-C:** `virtual_pet/collect {entity_id}` replies `{finds: [{id, world, new,
+  from?}]}`, `[]` when empty; any login (shared and read-only too). `house.basket` is an
+  int, always present (an older server sends no key: show no basket). The card's
+  `MOMENT_CLASS` has `found: FLAVOUR` with no line yet (card-check's "every moment type
+  has a class"); `MOMENT_BITS.found` (V8) is V-C's. Stand-ins: `frontend/ui/find_<world>_
+  <id>.png` (64 px, 16 cells) and `basket_<1|2|3>.png` (48 px), from
+  `art/finds/make_finds.py`.
+- **For V-D:** `collection[world].finds` is `{id: first day}`, credited when rolled or left
+  (a find still in the basket is already met). Skip ids `known_finds` lacks, and
+  gift-only ids (V-E puts gifts on the ♥ page only).
+- A V-B save round-trips through 0.40.0 and back (checked by hand against its
+  `model.py`): `basket` and `next_find_at` sit in V-A's `unknown`, and V-A's `lay_egg`
+  copies them; its egg carries a stale `next_find_at`, which on the upgrade back is one
+  roll at once, never more.
+- Tests: `tests/test_finds.py` (95 cases); `tests/js/finds.test.js`; `test_channel` and
+  `test_init`'s send-off no longer lean on the rng's order. No card-check section (V-B
+  review #21); card-check runs only to show nothing regressed.
 
 **Which slice owns each review finding:** V-A #8 #9 #10 #11 #12 #19 #22; V-B #1 #2 #3 #4 #5
 #13 #18 (lists) #20 #21 and the salvage of `basket`; V-C #15 #16 #17 #23; V-D #6 #7; V-E #6 #7 #14; V-F #18 #23. Review blockers: before V-A, #9 #10 #11
@@ -641,6 +754,17 @@ The review's questions, **all as recommended:**
 Also settled by the first mate: finds are drawn and revealed at 16 cells (64 px); the
 visitor leaves its own feather via a per-visitor `leaves` id; `STORE_MINOR_VERSION` is not
 bumped (no consumer); the `when` grammar is a list of lists with `!`.
+
+The V-B review's questions (s2590), **all as recommended** (owner, 2026-11-02):
+
+1. **A find waiting in the basket already counts as met** in the collection: it is
+   credited when rolled, and its basket entry stores `new`.
+2. **A nap, the night's sleep, away and the egg pause the find clock**; a roll that came
+   due rolls once on waking, never more. Built as "left alone while it can't roll" (§2
+   "The find clock"): the review's "`next_find_at` None while it can't roll" would reset
+   the clock on every nap, which this answer rules out.
+3. **The moon phase comes from the date** with no moon sensor (V-B review #4 a).
+4. **A visitor's left find fires no `found`.**
 
 ## 13b. Answered (owner, 2026-11-01): all four as recommended
 
