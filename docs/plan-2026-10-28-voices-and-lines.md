@@ -1,5 +1,13 @@
 # Voices and lines, 2026-10-28 (plan; draft 3, revised after two audits)
 
+**Status (reconciled 2026-10-31 against git):** phases 1-5 shipped. Phase 1 (lines) went
+with the bond (0.31.0); 2 voices 0.32.0 (`44d8389`); 3 catchphrase and birthdays 0.33.0;
+4 the photo 0.34.0b1; 5 baby talk 0.34.0b2 (both in 0.35.0). Each phase plan carries its
+own status. **Not built:** phase 6, part B "Moths don't eat" (no plan or code yet). The
+"Related" items moved on: personality types are built (`plan-2026-10-28-personality-types.md`);
+gifts wait on finds (check-ins item 1); "neighbours talking" waits on check-ins item 5,
+whose counts conflict with the infrared link's rules (flagged there).
+
 The owner chose all of this on 2026-10-28, after an audit of every line the pet says
 (24 findings) and the question "Do all pets talk identically?" (they did). Animal
 Crossing is the touchstone ("a powerful touchstone for us"): each villager has its
