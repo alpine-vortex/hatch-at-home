@@ -161,6 +161,36 @@ def test_a_later_question_on_most_evenings():
     )  # one a day
 
 
+def test_the_how_day_stand_in_comes_at_most_4_evenings_in_7():
+    """Fresh-moment 5b (review s2622 #5): the stand-in isn't nightly: on
+    ASK_FALLBACK_DAYS of every 7 days only, by the day; the rotation's own
+    how_day is unchanged."""
+    person = {"likes": {"fav_weather": "sun", "fav_season": "autumn"}}
+    first = date(2026, 11, 1).toordinal()
+    stand_ins = 0
+    for day in (date.fromordinal(first + i) for i in range(7)):
+        if P.rotation(day) == "how_day":
+            continue
+        got = ask(
+            person,
+            today=day.isoformat(),
+            hour=17,
+            to_bed_minutes=360,
+            has_forecast=False,
+        )
+        assert got in ("how_day", None)
+        stand_ins += got == "how_day"
+        assert (got == "how_day") == (day.toordinal() % 7 < R.ASK_FALLBACK_DAYS)
+    assert R.ASK_FALLBACK_DAYS == 4 and stand_ins <= 4
+
+
+def test_no_sleep_question_on_a_dream_morning():
+    """Fresh-moment 5b (review s2622 #5): a morning with a dream to tell has
+    that for its say; no "did you sleep well?"."""
+    assert ask({}, hour=8, dreamed=True) is None
+    assert ask({}, hour=8, dreamed=False) == "slept"
+
+
 def test_a_damaged_record_keeps_what_its_readers_can_use():
     record = P._person(
         {

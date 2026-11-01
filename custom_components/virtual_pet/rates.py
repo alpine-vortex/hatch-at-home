@@ -415,6 +415,7 @@ BIRTHDAY_ASK_LEVEL = 4  # "when's your birthday?"
 CATCHPHRASE_LEVEL = 7  # "what should I say at the end of things?"
 BIRTHDAY_QUIET_BELOW = 30.0  # happiness: below it, a quiet "happy birthday ♥"
 ASK_DAY_FROM = 16  # "how was your day?" on its rotation day
+ASK_FALLBACK_DAYS = 4  # of 7 days, how_day may stand in for a kind not askable now
 ASK_DREAM_BEFORE_BED_MINUTES = 240  # "what should I dream about?"
 ASK_GUESS_FROM = 17  # "rain or sun tomorrow?"
 GUESS_FROM_HOUR = 18  # the guessed day is judged from here, or the day after

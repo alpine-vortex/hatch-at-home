@@ -1862,6 +1862,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             came_home=came_home,
             rested=any(n["kind"] == "rested" for n in notes),
             pet_once=self._pet_once(user, today),
+            dreamed=bool(self.state.dream and self.state.dream.get("day") == today),
         )
         if kind is None:
             return None
