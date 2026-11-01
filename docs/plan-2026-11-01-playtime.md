@@ -1,6 +1,6 @@
 # Design note: playtime, the Catch rethink and the slower game (next-stages 2c)
 
-**Status: for the owner.** Docs only; nothing is built. It covers the Catch rethink (FM, Q2) and
+**Status: DECIDED (owner, 2026-11-01): all six recommendations in §5 taken** (drop Catch; build the Berry dig as 4d; slower games only for now; A6 pounce art stays off; ✕ parks the dig, free, no time limit; the dig pays 23). Build: dig + park as one tier-1 PR, then Catch removal (S). Was: for the owner. Docs only; nothing is built. It covers the Catch rethink (FM, Q2) and
 4d's slower game (deferred by the owner, 2026-10-30), and it decides whether A6 pounce art
 comes back. Sources: `plan-2026-10-31-next-stages.md` (2c, "Deferred", "Withdrawn",
 Decided 1-3), `plan-2026-10-28-experience.md` (PR 4d, PR 4f, owner Q9 and A5, the taste
