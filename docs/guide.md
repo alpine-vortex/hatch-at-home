@@ -643,6 +643,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   device's family line: each generation with its traits, stars, upbringing and
   personality. The latest four show; past them, "older generations (N)" opens the rest,
   oldest first.
+  Under the creatures, "every world ›" shows all six worlds, five creatures each: the
+  ones a pet on this card has raised are drawn, the rest are silhouettes.
 - **Notifications:** opt in per person. On the status screen, tap "notify me" to get
   this pet's calls, sickness, hatching, growing up, new or deeper traits, the season's
   first snow and frost, new eggs, and a holiday greeting on the morning of Halloween

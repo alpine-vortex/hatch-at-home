@@ -1258,6 +1258,40 @@ async function main() {
   await page.waitForTimeout(1200);
   check("journal opens", /journal/.test(await cur().locator(".status").innerText()));
   await shot("03-journal");
+  // top10 8a: "every world ›" under the journal's grid opens one row per world, each
+  // creature drawn if a pet on this card raised it and "???" if not; no count; no tile
+  // for a creature that isn't ready; "‹ journal" goes back; nothing runs off at 330.
+  const W8 = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
+  const ready8 = (id) => fs.existsSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "sprites", id, "species.json"));
+  await cur().locator(".status .wlink").click();
+  await page.locator("hatch-pet-card").first().evaluate(async (el) => {
+    const s = el._slides[el._index];
+    for (const t = Date.now(); !s.status.querySelector(".jgrid") && Date.now() - t < 10000;) await new Promise((r) => setTimeout(r, 50));
+  });
+  const every = await page.locator("hatch-pet-card").first().evaluate((el) => {
+    const s = el._slides[el._index];
+    const raised = new Set(el._slides.flatMap((x) => el._state(x, "sensor.life_stage")?.attributes.raised || []));
+    return {
+      head: s.status.querySelector(".jhead")?.textContent.trim(), worlds: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent),
+      tiles: [...s.status.querySelectorAll(".jtile")].map((t) => ({ id: (t.querySelector("img")?.getAttribute("src") || "").match(/sprites\/([^/]+)\//)?.[1],
+        locked: t.classList.contains("locked"), text: t.textContent })),
+      raised: [...raised], back: s.status.querySelector(".jfoot .wlink")?.textContent, text: s.status.textContent,
+      fit: s.status.scrollWidth <= s.status.clientWidth + 1, journal: s.journal, everyWorld: s.everyWorld,
+    };
+  });
+  const want8 = Object.values(W8).flatMap((w) => w.roster.filter(ready8));
+  check("top10 8a: \"every world\" has a row per world and a tile per ready creature, raised ones named, the rest ???",
+    every.head === "every world" && JSON.stringify(every.worlds) === JSON.stringify(Object.values(W8).map((w) => w.name)) &&
+    JSON.stringify(every.tiles.map((t) => t.id)) === JSON.stringify(want8) &&
+    every.tiles.every((t) => (every.raised.includes(t.id) ? !t.locked && t.text !== "???" : t.locked && t.text === "???")) &&
+    every.everyWorld && !every.journal, JSON.stringify(every));
+  check("top10 8a: no count on the page, \"‹ journal\" at its foot, nothing runs off sideways",
+    !/\d+\s*(of|\/)\s*\d+|%/.test(every.text) && every.back === "‹ journal" && every.fit, JSON.stringify({ back: every.back, fit: every.fit }));
+  await shot("03c-every-world");
+  await cur().locator(".status .jfoot .wlink").click();
+  await page.waitForTimeout(1200);
+  check("top10 8a: \"‹ journal\" goes back to the journal",
+    await cur().locator(".status .jgrid").count() > 0 && /journal ·/.test(await cur().locator(".status").innerText()));
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
 

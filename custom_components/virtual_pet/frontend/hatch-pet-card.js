@@ -2708,7 +2708,7 @@ const STYLE = `
      pixels), the unmet ones dark silhouettes with no name, the viewer's gifts with a ♥. */
   .jfoot { display: flex; justify-content: space-between; align-items: flex-end; }
   .jfoot .jlink { align-self: auto; }
-  .flink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
+  .flink, .wlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
     min-height: 44px; min-width: 44px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
   .fgrid { display: flex; flex-wrap: wrap; gap: 6px 8px; }
@@ -2725,7 +2725,8 @@ const STYLE = `
   /* Big text (top10 4b): every size on the status box's pages, about 3 px up. */
   ha-card.bigtext .status { font-size: 16px; }
   ha-card.bigtext .status .log, ha-card.bigtext .status .jlist, ha-card.bigtext .status .photos,
-  ha-card.bigtext .status .status-feedback, ha-card.bigtext .status .sback,
+  ha-card.bigtext .status .status-feedback, ha-card.bigtext .status .sback, ha-card.bigtext .status .jlink,
+  ha-card.bigtext .status .flink, ha-card.bigtext .status .wlink, ha-card.bigtext .status .jolder,
   ha-card.bigtext .status .fheart { font-size: 15px; }
   ha-card.bigtext .status .sec, ha-card.bigtext .status .shellnote, ha-card.bigtext .status .jtile,
   ha-card.bigtext .status .ftile, ha-card.bigtext .status .tile { font-size: 13px; }
@@ -3789,6 +3790,7 @@ class HatchPetCard extends HTMLElement {
     s.wasCalling = undefined; // a call already on doesn't chirp
     s.journal = false;
     s.finds = false;
+    s.everyWorld = false;
     s.settings = false;
     this._closePicker(s);
     this._shellSettled(s);
@@ -3857,6 +3859,7 @@ class HatchPetCard extends HTMLElement {
       slide.screen.querySelector(".linkhearts")?.remove(); // a visit's, mid-way
       slide.journal = false;
       slide.finds = false; // the settings sheet stays, without its personal rows
+      slide.everyWorld = false;
       this._closePicker(slide); // and without the picker (read-only here)
       slide.confirm = null; // an armed "forget" is a personal row
       slide.status.innerHTML = ""; // drawn again, without its personal rows
@@ -4592,6 +4595,7 @@ class HatchPetCard extends HTMLElement {
     s.screen.classList.toggle("show-status", open);
     s.journal = false;
     s.finds = false;
+    s.everyWorld = false;
     s.settings = false;
     this._closePicker(s);
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
@@ -6260,6 +6264,10 @@ class HatchPetCard extends HTMLElement {
   }
 
   _renderStatus(s, log) {
+    if (s.everyWorld) {
+      this._renderEveryWorld(s);
+      return;
+    }
     if (s.finds) {
       this._renderFinds(s);
       return;
@@ -7042,6 +7050,7 @@ class HatchPetCard extends HTMLElement {
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
       <div class="jgrid">${tiles.join("")}</div>
+      <button class="wlink">every world ›</button>
       ${this._photoRow(s)}
       <div class="jlist">${olderLink}<div class="jmore"></div>${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
       <div class="jfoot"><button class="jlink">‹ status</button><button class="flink">${findsShown() ? "finds" : "visitors"} ›</button></div>
@@ -7049,6 +7058,7 @@ class HatchPetCard extends HTMLElement {
     if (!this._setStatus(s, html)) return;
     this._journalLink(s, false);
     this._findsLink(s, true);
+    this._everyWorldLink(s, true);
     const showOlder = () => {
       s.status.querySelector(".jmore").innerHTML = older.map(line).join("");
       s.status.querySelector(".jolder")?.remove();
@@ -7296,6 +7306,55 @@ class HatchPetCard extends HTMLElement {
       if (dialog.showModal) dialog.showModal();
       else dialog.setAttribute("open", "");
     }
+  }
+
+  // --- Every world (top10 8a) ---------------------------------------------------
+  // Each world's creatures, one row a world: drawn and named if a pet on this card has
+  // raised it (any world: a device that changed world keeps its `raised`), "???" if
+  // not, as in the journal. Nothing locked, nothing counted (owner Q6), no new state.
+
+  // "every world ›" under the journal's grid (open) or "‹ journal" on the page (back).
+  _everyWorldLink(s, open) {
+    s.status.querySelector(".wlink")?.addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      this._tapped(e.currentTarget);
+      s.everyWorld = open;
+      s.journal = !open;
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      s.status.scrollTop = 0; // a new view starts at its top
+      s.status.querySelector(open ? ".wlink" : ".jlink")?.focus({ preventScroll: true });
+    });
+  }
+
+  async _renderEveryWorld(s) {
+    const foot = `<div class="jfoot"><button class="wlink">‹ journal</button></div>`;
+    const loading = `<div class="jhead"><span>every world</span><span>opening…</span></div>${foot}`;
+    if (this._setStatus(s, loading)) this._everyWorldLink(s, false);
+    const raised = new Set();
+    for (const other of this._slides) (this._state(other, "sensor.life_stage")?.attributes.raised || []).forEach((r) => raised.add(r));
+    const worlds = Object.entries(this._worlds || {});
+    // A creature whose species.json won't load isn't ready: no tile (never a broken image).
+    const names = {};
+    await Promise.all(worlds.flatMap(([, w]) => (w.roster || []).map((id) => loadJson(`sprites/${id}/species.json`)
+      .then((d) => { names[id] = d.name || id; }).catch(() => {}))));
+    if (!s.everyWorld) return; // closed (or back to the journal) while the names loaded
+    const rows = worlds.map(([, w]) => {
+      const tiles = (w.roster || []).filter((id) => names[id]).map((id) => {
+        const known = raised.has(id);
+        return `<div class="jtile${known ? "" : " locked"}">` +
+          `<img src="${BASE}/sprites/${id}/child_content_1.png?v=${VERSION}" alt="">` +
+          `<span>${known ? escape(names[id]).toLowerCase() : "???"}</span></div>`;
+      });
+      return tiles.length ? `<div class="sec">${escape(w.name || "")}</div><div class="jgrid">${tiles.join("")}</div>` : "";
+    });
+    const html = `
+      <div class="jhead"><span>every world</span></div>
+      ${rows.join("")}
+      ${foot}
+      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
+    if (!this._setStatus(s, html)) return;
+    this._everyWorldLink(s, false);
+    s.status.querySelectorAll(".sec, .jhead").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
   }
 
   // --- The finds page (visitors v2 §4, V-D) --------------------------------------
