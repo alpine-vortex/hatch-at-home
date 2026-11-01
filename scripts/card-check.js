@@ -5,7 +5,7 @@
 // Screenshots go to dev/card-check/. Exits non-zero if any check fails.
 // Needs Playwright with Chromium (preinstalled in the cloud sessions).
 //
-// Environment: HA_URL (default http://localhost:8123); SCALE=2 for sharp
+// Environment: HA_URL (default http://127.0.0.1:8123); SCALE=2 for sharp
 // screenshots (the README art uses them). HA_CONFIG and HA_START: the
 // instance's config dir and the command that starts it, for the restart and
 // the seeded second login (section 8). Without HA_URL they default to
@@ -24,7 +24,9 @@ const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
 
-const HA = process.env.HA_URL || "http://localhost:8123";
+// 127.0.0.1, not localhost: HA registers a service worker on localhost, and page.route
+// never sees what it serves (the sprite and old-card stand-ins would not apply).
+const HA = process.env.HA_URL || "http://127.0.0.1:8123";
 if (!process.env.HA_URL && !process.env.HA_CONFIG && !process.env.HA_START) {
   process.env.HA_CONFIG = path.join(__dirname, "..", "dev", "config");
   process.env.HA_START = `exec ${JSON.stringify(path.join(__dirname, "develop"))}`;
