@@ -6458,13 +6458,14 @@ async function main() {
     // A species that declares "acts" for this stage plays <stage>_eat / _cheer for fed / praised (R1).
     const acts = await card.evaluate((el) => el._slides[el._index].species?.acts || null);
     const own = (act) => (acts && (acts[act] === true || acts[act]?.includes(stage)) ? act : "excited");
+    const refuse = acts && (acts.refuse === true || acts.refuse?.includes(stage)) ? "refuse" : "bored"; // A5 art, else the mood frame
     const cases = [
       ["fed", { action: "feed", result: "ok" }, own("eat"), "munch"],
       ["snack", { action: "snack", result: "ok" }, own("eat"), "munch"],
       ["praised", { action: "praise", result: "ok" }, own("cheer"), "greethop"],
       ["won", { action: "game", result: "won" }, own("cheer"), "greethop"],
       ["tucked in", { action: "blanket", result: "ok" }, "cozy", "settle"],
-      ["refused (full)", { action: "feed", result: "full" }, "bored", "look"],
+      ["refused (full)", { action: "feed", result: "full" }, refuse, "look"],
     ];
     for (const [name, entry, mood, move] of cases) {
       const r = await react(entry);
@@ -6708,7 +6709,7 @@ async function main() {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await page.waitForTimeout(150);
     for (const [entry, mood] of [[{ action: "feed", result: "ok" }, own("eat")], [{ action: "blanket", result: "ok" }, "cozy"],
-      [{ action: "feed", result: "full" }, "bored"]]) {
+      [{ action: "feed", result: "full" }, refuse]]) {
       const r = await react(entry);
       check(`react: ${stage} reduced motion, ${entry.result}: the frame changes, no move, no wander`,
         r.src.includes(`/${stage}_${mood}_1`) && r.moves.length === 0 && !r.moving, JSON.stringify(r));
