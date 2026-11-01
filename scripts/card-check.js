@@ -7271,8 +7271,10 @@ async function main() {
     check("visitors: crossing the browser's own midnight inside one HA day, the visit plays once (flag keyed by house.visit.day)",
       !out.error && out.first.on && !out.again.on && !out.crossed.on && out.crossed.browserDay !== out.first.browserDay &&
       out.crossed.keys.length === 1 && out.crossed.keys[0].endsWith(haKey), JSON.stringify(out));
+    // Only meaningful when the browser's new day differs from HA's day: run near HA's midnight
+    // (CI at about 07:00 UTC), the browser's next day can be HA's day, and v1's key is then the same key.
     check("visitors: (v1's key, with no house.visit, would have played it again past the browser's midnight)",
-      !out.error && out.v1.on, JSON.stringify(out.v1 || out));
+      !out.error && (out.v1.on || out.v1.browserDay === haKey), JSON.stringify(out.v1 || out));
   }
   // v1's fallback (no house.visit: an older server, the bench) over 14 days x 24 hours:
   // 8 visit days, each with one 3-hour window on the matching screen (night 19-23 for a
