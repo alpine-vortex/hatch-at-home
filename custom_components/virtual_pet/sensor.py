@@ -163,6 +163,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "birthday",
             "shell_finish_options",
             "shell_locked",
+            "senses",
         }
     )
 
@@ -223,6 +224,8 @@ class LifeStageSensor(PetEntity, SensorEntity):
             ),
             "shell_finish_options": model.shell_options(self.pet),
             "shell_locked": model.shell_locked(self.pet),
+            # The kinds the house shows it (weather, tv...), never an entity.
+            "senses": self.coordinator.senses,
             "raised": list(self.pet.raised),
             "traits": list(self.pet.traits),
             "trait_levels": {

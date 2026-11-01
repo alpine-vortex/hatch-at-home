@@ -49,12 +49,18 @@ from .backup import (
     async_kept_backup,
 )
 from .const import (
+    CONF_AQI,
     CONF_AWAY_AFTER,
     CONF_BEDTIME,
+    CONF_BEDTIME_LIGHTS,
     CONF_CHORES,
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
     CONF_DASHBOARD,
+    CONF_FIREPLACE,
+    CONF_INDOOR_TEMP,
+    CONF_LUX,
+    CONF_MOON_ALTITUDE,
     CONF_MOON_ILLUMINATION,
     CONF_MOON_PHASE,
     CONF_MUSIC,
@@ -62,6 +68,7 @@ from .const import (
     CONF_NEXT_WORLD,
     CONF_PRIVACY,
     CONF_RAIN,
+    CONF_ROOM_LIGHTS,
     CONF_SITTER_SETTLES,
     CONF_SOLAR,
     CONF_SPECIES,
@@ -148,6 +155,20 @@ MOMENTS_KEPT = 10
 CELEBRATIONS = {"your_birthday", "pet_birthday", "birthday_friends", "friends_for"}
 # Moments a dream can be about, by the dream's kind. (Not news: it stays
 # cosmetic, and changes nothing that's saved.)
+# What the pet notices, as the card's "notices" row names it (top10 2a): a kind
+# shows once any of its options is mapped. Kinds only, never an entity: no
+# presence (zone) or motion, so the row never hints at who's home, and no bedtime
+# (it always has one).
+SENSES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("weather", (CONF_WEATHER, CONF_RAIN, CONF_SOLAR, CONF_INDOOR_TEMP, CONF_AQI)),
+    ("lights", (CONF_ROOM_LIGHTS, CONF_LUX, CONF_BEDTIME_LIGHTS)),
+    ("tv", (CONF_TV,)),
+    ("music", (CONF_MUSIC,)),
+    ("chores", (CONF_CHORES,)),
+    ("fireplace", (CONF_FIREPLACE,)),
+    ("moon", (CONF_MOON_PHASE, CONF_MOON_ILLUMINATION, CONF_MOON_ALTITUDE)),
+)
+
 DREAM_OF = {
     "first_snow": "snow_started",
     "wish_granted": "wish",
@@ -312,6 +333,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     def dashboard(self) -> str | None:
         """The dashboard a tap on this pet's notifications opens, if one is set."""
         return notify.dashboard_path(self.config_entry.options.get(CONF_DASHBOARD))
+
+    @property
+    def senses(self) -> list[str]:
+        """The kinds of house signal mapped in the options (SENSES), never
+        which entities: for the card's "notices" row (top10 2a)."""
+        options = self.config_entry.options
+        return [kind for kind, keys in SENSES if any(options.get(k) for k in keys)]
 
     @property
     def privacy(self) -> bool:

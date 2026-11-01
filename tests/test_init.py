@@ -881,6 +881,7 @@ async def test_busy_attributes_stay_out_of_history(
         "traits",
         "shell_finish_options",
         "shell_locked",
+        "senses",
     ):
         assert key in attrs
         assert key in LifeStageSensor._unrecorded_attributes, key
@@ -3708,3 +3709,45 @@ async def test_phone_question_once_after_a_miss_with_the_app_only(
     # Nothing about it on any state.
     for state in hass.states.async_all():
         assert "phone_asked" not in json.dumps(dict(state.attributes))
+
+
+async def test_senses_are_kinds_never_entities(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    """top10 2a: the life stage's `senses` lists only the kinds mapped (weather,
+    tv...), in a fixed order; never an entity id or name, never presence, motion or
+    bedtime; out of history."""
+    from custom_components.virtual_pet.sensor import LifeStageSensor
+
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    entities = {
+        "weather": "weather.secret_garden",
+        "tv": "media_player.den_tv_xyz",
+        "chores": ["todo.kitchen_jobs"],
+        "moon_phase": "sensor.moon_phase_abc",
+        "zone": "zone.hidden_place",
+        "motion": ["binary_sensor.hall_motion_q"],
+        "bedtime": "21:30:00",
+    }
+    config = await setup_with_house(hass, **entities)
+    attrs = hass.states.get("sensor.pip_life_stage").attributes
+    assert attrs["senses"] == ["weather", "tv", "chores", "moon"]
+    assert "senses" in LifeStageSensor._unrecorded_attributes
+    text = json.dumps(dict(attrs))
+    for value in (
+        "secret_garden",
+        "den_tv",
+        "kitchen_jobs",
+        "moon_phase_abc",
+        "hidden_place",
+        "hall_motion",
+        "motion",
+        "zone",
+        "bedtime",
+    ):
+        assert value not in text, value
+    # Nothing mapped: an empty list.
+    hass.config_entries.async_update_entry(config, options={})
+    await hass.config_entries.async_reload(config.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.pip_life_stage").attributes["senses"] == []
