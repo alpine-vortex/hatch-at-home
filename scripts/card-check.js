@@ -1614,7 +1614,7 @@ async function main() {
     return [...(s.queue || []).map((q) => q.text), s.bubble.textContent].filter((t) => /pumpkin|call you/.test(t));
   });
   check("a bond level-up is said only to its person",
-    mine.includes("can I call you sunbeam? ♥") && theirs.length === 0, `${mine} / ${theirs}`);
+    mine.includes("I'll call you sunbeam now ♥") && theirs.length === 0, `${mine} / ${theirs}`);
   // A wish aimed at a close friend: spoken to them; anyone else sees the plain wish.
   const aimed = await page.locator("hatch-pet-card").evaluate((el) => {
     const s = el._slides[el._index];
@@ -2088,7 +2088,7 @@ async function main() {
   check("a celebration takes the away note's place; yours is by name",
     bday.queue.join("|") === "a|c|I'm 3 months old today! ♥" &&
     /^happy birthday, \S+!! ♥$/.test(bday.yours[0]) &&
-    bday.yours[1] === "I'm 11 months old, and we've been friends all that time! ♥", JSON.stringify(bday));
+    bday.yours[1] === "I'm 11 months old! friends from day one ♥", JSON.stringify(bday));
   check("its birthday brings confetti and a party hat",
     bday.confetti && /season_party_hat/.test(bday.hat) && /party hat on! ♪$/.test(bday.said), JSON.stringify(bday));
   check("your birthday can be forgotten, never shown on a shared screen",
@@ -2349,8 +2349,8 @@ async function main() {
     return out;
   }, me);
   check("private notes, records and goodnights are said to their person",
-    secret[0] === "we've been friends for a month! ♥" && secret[1] === "11,000 steps?! you've been busy!" &&
-    secret[2] === "12 floors of stairs?! you're a climber!" && secret[3] === "new best at left or right! 4/5 ♥" &&
+    secret[0] === "we've been friends for a month! ♥" && secret[1] === "wow, 11,000 steps! you've been busy!" &&
+    secret[2] === "12 floors of stairs! what a climber!" && secret[3] === "new best at left or right! 4/5 ♥" &&
     secret[4] === "thank you for tucking me in, sunbeam ♥" && /night|sleep/.test(secret[5]) &&
     secret[6] === "thank you for tucking me in, sunbeam ♥" && secret[7] === 0 && secret.length === 8,
     secret.join(" | "));
@@ -2450,11 +2450,11 @@ async function main() {
     return out;
   }, me);
   check("the first look: welcome first, three lines at most, no closed wish",
-    look.length === 3 && look[0].startsWith("welcome home") && look[1] === "brr, was it cold out there?" &&
+    look.length === 3 && look[0].startsWith("welcome home") && look[1] === "brr, it looks cold out there!" &&
     !look.some((l) => /play a game/.test(l)), look.join(" | "));
   check("the new private lines read right", lines[0] === "I dreamed about the sea, like you said! ♥" &&
     lines[1] === "I dreamed about the sea..." && lines[2] === "oh, sunny after all! good guess though ♥" &&
-    lines[3] === "back from the gym?! so strong!" && lines[4] === "Thanksgiving in your favourite season! ♥" &&
+    lines[3] === "back from the gym! so strong!" && lines[4] === "Thanksgiving in your favourite season! ♥" &&
     /rain/.test(lines[5]) && lines[7] === "it's wet out there! come get cozy ☂", lines.join(" | "));
   check("a friend coming home is cheered, and nobody else's arrival on a personal card",
     /^(you're home!! ♥|yay, you're back! ♥)$/.test(cheers.out[0]) && cheers.out[1] === "" && cheers.out[2] === "",
@@ -3854,7 +3854,7 @@ async function main() {
     return { lines, queued: sent?.queued, ask: reply?.ask ?? null, asking: s.queue.some((q) => q.ask) };
   });
   check("2a: a look with two lines and a catch-up line sends queued: 3 and asks no question",
-    look.lines.length === 3 && look.lines.some((t) => t === "guess what? I'm a teen now!") &&
+    look.lines.length === 3 && look.lines.some((t) => t === "guess what! I'm a teen now!") &&
       look.queued === 3 && !look.ask && !look.asking, JSON.stringify(look));
   const caught = await card.evaluate((el, at) => {
     const s = el._slides[el._index];
@@ -4643,7 +4643,7 @@ async function main() {
       return out;
     });
     const halloweenBaby = ["boo!", "boo! hehe", "spooky~", "yay, costume!"];
-    const halloweenNormal = ["boo!", "happy Halloween!", "spooky~", "trick or treat?", "do I look spooky?"];
+    const halloweenNormal = ["boo!", "happy Halloween!", "spooky~", "trick or treat! hehe", "look how spooky I am!"];
     check("holidays: a baby has its own costume lines, never with the catchphrase",
       holiday["halloween-baby-on"].said.every((x) => halloweenBaby.includes(x)) &&
       holiday["halloween-baby-on"].said.some((x) => !halloweenNormal.includes(x)) &&

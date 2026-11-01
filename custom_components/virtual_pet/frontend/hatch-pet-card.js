@@ -486,7 +486,7 @@ const SEASONS = [
       terrarium: { corners: ["left", "right"] }, // a tarantula's tank
       nightsky: { dayFlyers: true, nightFlyer: true }, // bats by day too; the witch at night
     },
-    lines: ["boo!", "happy Halloween!", "spooky~", "trick or treat?", "do I look spooky?"],
+    lines: ["boo!", "happy Halloween!", "spooky~", "trick or treat! hehe", "look how spooky I am!"],
     treat: [10, 31],
     treatLine: "trick or treat!",
     countdown: "Halloween", // "3 sleeps till Halloween!" before the treat day
@@ -535,7 +535,7 @@ const SEASONS = [
     corner: "leaves",
     sweet: "plate",
     snack: "pie",
-    snackLines: ["pie!! ♪", "pumpkin pie, my favourite!", "mmm, still warm ♪"],
+    snackLines: ["pie!! ♪", "pumpkin pie, my favourite!", "mmm, warm from the oven ♪"],
     flyer: { art: ["goose_1", "goose_2"], cls: "sgoose", ms: 8000, flock: 3 },
     visitor: { art: ["turkey_1", "turkey_2"], cls: "sturkey", ms: 7000, walk: true, startle: "gobble?!", jump: "perk",
       greet: ["hi, turkey!", "happy Thanksgiving, turkey ♪", "gobble gobble to you too!"] },
@@ -671,20 +671,20 @@ const VISITOR_PLAY = {
   chickadee: { lines: ["chick-a-dee-dee! ♪", "hello, little chickadee!"] },
   stellersjay: { lines: ["ooh, so blue!", "hi, jay! ♪"] },
   snail: { walk: true, in: 2600, stay: 4200, lines: ["take your time, snail~", "hello, slow friend"] },
-  pillbug: { walk: true, lines: ["hi, pill bug! don't roll away~", "a tiny armadillo!"] },
-  ladybird: { lines: ["a ladybird! lucky ♪", "count your spots for me?"] },
-  moth: { lines: ["hi, moth! the light's over there~", "fuzzy friend ♪"] },
+  pillbug: { walk: true, lines: ["hi, pill bug! don't roll away~", "you look like a tiny armadillo!"] },
+  ladybird: { lines: ["a ladybird! lucky ♪", "hi, ladybird! nice spots ♪"] },
+  moth: { lines: ["hi, moth! the light's over there~", "hello, fuzzy friend ♪"] },
   robin: { walk: true, lines: ["hello, robin! ♪", "a robin at the window!"] },
-  mouse: { walk: true, in: 900, lines: ["shh... hi, mouse ♪", "a crumb for you?"] },
+  mouse: { walk: true, in: 900, lines: ["shh... hi, mouse ♪", "here, have a crumb ♪"] },
   cricket: { walk: true, lines: ["cri-cri! ♪", "sing me a song, cricket"] },
-  gull: { lines: ["hi, gull! no snacks here~", "hello from the sea ♪"] },
+  gull: { lines: ["hi, gull! no snacks here~", "you smell like the sea ♪"] },
   shorecrab: { walk: true, lines: ["sideways hello! ♪", "hi, little crab!"] },
   seastar: { walk: true, in: 2600, stay: 4800, lines: ["a star in the water!", "hello, sea star~"] },
   dragonfly: { in: 900, lines: ["zoom! hi, dragonfly ♪", "so shiny!"] },
-  strider: { walk: true, lines: ["walking on water?!", "hi, strider ♪"] },
+  strider: { walk: true, lines: ["whoa, it walks on water!", "hi, strider ♪"] },
   heron: { walk: true, in: 2000, lines: ["a heron! so tall...", "shh, it's fishing~"] },
-  shootingstar: { catchup: "a shooting star went by! ♪", cross: true, lines: ["a shooting star! make a wish ✦", "ooh! did you see that?"] },
-  nighthawk: { lines: ["hi, nighthawk ♪", "night flyer friend!"] },
+  shootingstar: { catchup: "a shooting star went by! ♪", cross: true, lines: ["a shooting star! make a wish ✦", "whoa, look at it go! ✦"] },
+  nighthawk: { lines: ["hi, nighthawk ♪", "my night flyer friend! ♪"] },
   raccoon: { walk: true, lines: ["hello, masked friend!", "a raccoon! say hi ♪"] },
 };
 // A world's visitors: worlds.json's roster ({id, name, hours, leaves?}, the server's
@@ -1216,18 +1216,18 @@ const QUESTIONS = {
     ok: ["a cozy morning then ♥"],
     "not really": ["aww, take it easy today ♥", "a slow morning then... *yawn* ♥"] } },
   fav_weather: { q: "what's your favourite weather?", keep: true, answers: {
-    sun: ["sunny days! me too ☀"], rain: ["ooh, cozy rain ☂"], snow: ["snow!! ❄ I'll remember"],
+    sun: ["sunny days! me too ☀"], rain: ["ooh, rain is so cozy ☂"], snow: ["snow!! ❄ I'll remember"],
     storms: ["storms! so exciting!"] } },
   fav_season: { q: "what's your favourite season?", keep: true, answers: {
-    spring: ["spring! flowers everywhere ♪"], summer: ["summer! sunshine! ☀"],
-    autumn: ["autumn! crunchy leaves ♪"], winter: ["winter! snuggly ❄"] } },
+    spring: ["spring! flowers everywhere ♪"], summer: ["summer! all that sunshine ☀"],
+    autumn: ["autumn! crunchy leaves ♪"], winter: ["winter! snuggle season ❄"] } },
   // Asked once ever, after a missed call, of someone with the HA app (top10 1a; the
   // server decides). "yes" turns on "notify me" for this pet (_ask).
   phone: { q: "can I call your phone when I need you?", answers: {
-    yes: ["yay! I'll ring you ♥"], "not now": ["ok! it's in my settings if you change your mind"] },
+    yes: ["yay! I'll ring you ♥"], "not now": ["ok! you can say yes in settings ♥"] },
   label: (a) => (a === "yes" ? "yes ♥" : a) },
   dream: { q: "what should I dream about tonight?", keep: true, answers: {
-    stars: ["the stars... ok!"], sea: ["the sea! ok!"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ ok!"] } },
+    stars: ["ooh, the stars. ok! ★"], sea: ["the sea it is! ♪"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ I'd like that"] } },
   guess: { q: "rain or sun tomorrow?", keep: true, answers: {
     rain: ["rain! we'll see ☂"], sun: ["sun! we'll see ☀"] } },
   // Theirs, kept privately on the server ("skip" sticks; forgotten on the status screen).
@@ -1256,37 +1256,38 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const dayOptions = (n) => Array.from({ length: n }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
 // Its yearly birthday: a party hat (the season costume code places it) and confetti.
 const PARTY = { key: "party", costumes: [{ art: "hat", sink: 7, width: 56 }],
-  lines: ["party hat on! ♪", "do you like my party hat?", "best birthday ever! ♪"] };
+  lines: ["party hat on! ♪", "look, I'm all dressed up! ♪", "best birthday ever! ♪"] };
 // The visit's celebration lines: one a look, and always a place for it.
 const CELEBRATION_NOTES = new Set(["your_birthday", "pet_birthday", "birthday_friends", "friends_for"]);
 const months = (n) => `${n} month${n === 1 ? "" : "s"}`;
+const berries = (n) => (n ? `${n} ${n === 1 ? "berry" : "berries"}` : "no berries"); // the dig's count, said
 const PLACES = {
-  gym: "back from the gym?! so strong!", work: "home from work! ♥",
-  school: "back from class? ♥", park: "did you have fun at the park?",
+  gym: "back from the gym! so strong!", work: "home from work! ♥",
+  school: "back from class! ♥", park: "I hope the park was fun! ♪",
 };
 const HOME_WEATHER = {
   wet: "it's wet out there! come get cozy ☂", snowy: "snow on your shoes! ❄",
-  cold: "brr, was it cold out there?", hot: "you must be thirsty after that heat!",
+  cold: "brr, it looks cold out there!", hot: "you must be thirsty after that heat!",
 };
 const SEASON_ICONS = { spring: "♪", summer: "☀", autumn: "♥", winter: "❄" };
 // What the pet tells only you (virtual_pet.visit's notes), each once.
 const NOTES = {
   pet_birthday: (n) => (n.years ? `it's my birthday!! I'm ${n.years} today! ♥` : `I'm ${months(n.months)} old today! ♥`),
-  birthday_friends: (n) => `I'm ${months(n.months)} old, and we've been friends all that time! ♥`,
+  birthday_friends: (n) => `I'm ${months(n.months)} old! friends from day one ♥`,
   your_birthday: (n) => (n.quiet ? "happy birthday ♥" : "happy birthday!! ♥"), // _note adds the name
   friends_for: (n) => n.months % 12 === 0
     ? `we've been friends for ${n.months === 12 ? "a whole year" : `${n.months / 12} years`}!! ♥`
     : `we've been friends for ${n.months === 1 ? "a month" : `${n.months} months`}! ♥`,
   tucked_in: () => pick(["thanks for tucking me in last night ♥", "I slept so well after you tucked me in ♥"]),
-  steps: (n) => `${n.steps.toLocaleString()} steps?! you've been busy!`,
-  more_than_usual: () => pick(["you've walked way more than usual today!", "so many steps today! you've been so active!"]),
+  steps: (n) => `wow, ${n.steps.toLocaleString()} steps! you've been busy!`,
+  more_than_usual: () => pick(["you've walked way more than usual today!", "so many steps! you've been on the go!"]),
   best_day: () => "your most active day in weeks!! ♥",
-  bike: () => "were you on a bike?! wheee!",
-  run: () => "did you go for a run?! so fast!",
-  stairs: (n) => `${n.floors} floors of stairs?! you're a climber!`,
+  bike: () => "you went for a bike ride! wheee!",
+  run: () => "you went for a run! so fast!",
+  stairs: (n) => `${n.floors} floors of stairs! what a climber!`,
   rested: () => pick(["you got a good sleep! ♥", "you slept so well! ♥"]),
-  rain_walk: () => pick(["you walked in the rain?! so brave!", "out in the rain and still so many steps! ☂"]),
-  snow_walk: () => "you went walking in the snow?! ❄ so brave!",
+  rain_walk: () => pick(["you walked in the rain! so brave! ☂", "rain or not, look at all those steps! ☂"]),
+  snow_walk: () => "a walk in the snow! ❄ so brave!",
   dream: (n) => n.pick === "you"
     ? (n.yours ? "I dreamed about you, like you said! ♥" : "I dreamed about my friends ♥")
     : `I dreamed about ${{ stars: "the stars", sea: "the sea", snacks: "snacks" }[n.pick] || n.pick}${n.yours ? ", like you said! ♥" : "..."}`,
@@ -1301,7 +1302,7 @@ const NOTES = {
   season: (n) => n.holiday && namedHolidays()
     ? `${n.holiday === "halloween" ? "Halloween" : "Thanksgiving"} in your favourite season! ♥`
     : `it's ${n.season}, your favourite! ${SEASON_ICONS[n.season] || ""}`.trim(),
-  early_alarm: () => "early start tomorrow? sleep well ♥",
+  early_alarm: () => "early start tomorrow! sleep well ♥",
   up_early: () => "mmh... you're up before the sun... zzz ♥",
   photo: () => "I made you something! it's in your journal ♥",
 };
@@ -1314,7 +1315,7 @@ const DREAMS = {
   moon: () => "I dreamed I flew to the moon!",
   game: () => "I dreamed we played and I won!",
   chore: () => "I dreamed about treats...",
-  wish: () => "I dreamed my wish came true again ♥",
+  wish: () => "I dreamed about my wish all night ♥",
   trait: () => "I had such a big dream last night...",
   flying: () => "I dreamed I could fly!",
   clouds: () => "I dreamed I napped on a cloud...",
@@ -5134,9 +5135,9 @@ class HatchPetCard extends HTMLElement {
       const words = this._words(s);
       const lines = this._babySet(s, `idle.${IDLE_LINES.has(s.moodState) ? s.moodState : "default"}`) || {
         sleepy: ["*yawn*", "mm... sleepy", ...(words.home ? [`my ${words.home} looks cozy...`] : [])],
-        bored: ["hmm...", "*rolls around*", "anyone wanna play?"],
+        bored: ["hmm...", "*rolls around*", "I could go for a game ♪"],
         excited: ["hehe!", "wheee"],
-        hungry: ["*tummy rumbles*", "is it snack time?", ...(words.food ? [`mmm... ${words.food}...`] : [])],
+        hungry: ["*tummy rumbles*", "a snack sounds good...", ...(words.food ? [`mmm... ${words.food}...`] : [])],
         dirty: ["ew...", "*sniff sniff*"],
       }[s.moodState] || ["♪ hm hm hm ♪", "...", "*looks around*", "la la la"];
       // A teen or adult says its type's idle lines half the time, except for the
@@ -5838,7 +5839,7 @@ class HatchPetCard extends HTMLElement {
     if (m.type === "stage_changed") {
       if (m.stage === "baby" || !m.stage) return null; // hatching says hello
       const a = /^[aeiou]/.test(m.stage) ? "an" : "a";
-      return this._lines(s, "catchup_stage", `guess what? I'm ${a} ${m.stage} now!`).text;
+      return this._lines(s, "catchup_stage", `guess what! I'm ${a} ${m.stage} now!`).text;
     }
     if (m.type === "trait_learned") {
       return this._lines(s, "catchup_trait", `I learned something: ${String(m.trait).replaceAll("_", " ")}!`).text;
@@ -6325,14 +6326,14 @@ class HatchPetCard extends HTMLElement {
         if (!m.title) break;
         // A long title gets the short lines, so the bubble leaves the pet in view.
         const title = short(m.title);
-        line(pick([`ooh, ${title}!`, `is this ${title}?`, `${title}! I love this one`]), 4500,
+        line(pick([`ooh, ${title}!`, `*watches ${title}*`, `${title}! I love this one`]), 4500,
           () => this._animate(s, s.pet, "perk", 320));
         break;
       }
       case "listening":
         if (!m.title) break;
         line(m.artist && Math.random() < 0.5
-          ? `♪ is this ${short(m.artist)}? ♪`
+          ? `♪ ooh, ${short(m.artist)}! ♪`
           : `♪ ${short(m.title)} ♪`);
         break;
       case "news": { // virtual_pet.share_news: a passing moment, like a TV title
@@ -6356,8 +6357,8 @@ class HatchPetCard extends HTMLElement {
         const t = degrees(m.temperature);
         const lines = {
           rain_started: ["ooh, it's raining!", "pitter patter...", "here comes the rain!"],
-          rain_stopped: ["the rain stopped!", "all dry again~"],
-          rainbow: ["the rain stopped... a rainbow?!", "sun after rain... rainbow?"],
+          rain_stopped: ["the rain stopped!", "all dry now~"],
+          rainbow: ["the rain stopped... a rainbow!", "ooh, a rainbow! so pretty"],
           snow_started: ["it's snowing!! ❄", "snowflakes!! ❄"],
           sun_out: ["the sun came out!", "ooh, sunshine!"],
           hot: t ? [`${t} out there! phew`, `so hot out... ${t}!`] : ["so hot out there!"],
@@ -6377,12 +6378,12 @@ class HatchPetCard extends HTMLElement {
         const hi = degrees(m.high);
         const lines = {
           storm: today ? ["thunder later... eek"] : ["storms tomorrow... eek"],
-          snow: today ? ["snow today?!", "it might snow today!!"] : ["snow tomorrow!!", "ooh, snow tomorrow?!"],
+          snow: today ? ["ooh, snow today!", "it might snow today!!"] : ["snow tomorrow!!", "snow tomorrow! I can't wait ❄"],
           hot: hi ? [today ? `hot one today: ${hi}!` : `${hi} tomorrow! phew`] : [today ? "hot one today!" : "hot tomorrow, phew"],
           cold: hi ? [today ? `cold one today: ${hi}, brr` : `brr, only ${hi} tomorrow`] : [today ? "cold one today, brr" : "cold tomorrow, brr"],
           warmer: hi ? [today ? `warmer today: ${hi}!` : `warmer tomorrow: ${hi}!`] : [today ? "warmer today!" : "warmer tomorrow!"],
           colder: hi ? [today ? `colder today, only ${hi}` : `colder tomorrow... ${hi}`] : [today ? "colder today..." : "colder tomorrow..."],
-          rain: today ? ["rain later today...", "rain's coming later"] : ["rain tomorrow... blanket day?"],
+          rain: today ? ["rain later today...", "rain's coming later"] : ["rain tomorrow... a blanket day ♪"],
           sunny: today ? ["sunny today! yay"] : ["sun tomorrow! yay"],
         }[m.kind];
         if (!lines) break;
@@ -6404,7 +6405,7 @@ class HatchPetCard extends HTMLElement {
         if (sharedScreen()) break; // nothing personal on a shared screen
         const game = GAMES.find((g) => g.key === m.favourite);
         line(game ? `${game.label} is our game now! ♥`
-          : m.nickname ? `can I call you ${m.nickname}? ♥`
+          : m.nickname ? `I'll call you ${m.nickname} now ♥`
           : m.level >= BOND.max ? "you're my very best friend ♥"
           : m.level === BOND.max - 1 ? "you make every day better ♥"
           : m.level >= BOND.hearts ? "I'm always so happy when you're here ♥"
@@ -6432,7 +6433,7 @@ class HatchPetCard extends HTMLElement {
       case "bond_record": { // only its person
         if (sharedScreen()) break; // nothing personal on a shared screen
         const game = GAMES.find((g) => g.key === m.game);
-        const best = m.game === "dig" ? `${m.wins} berries` : `${m.wins}/5`; // the dig's best is berries banked
+        const best = m.game === "dig" ? berries(m.wins) : `${m.wins}/5`; // the dig's best is berries banked
         line(`new best at ${game ? game.label : "a game"}! ${best} ♥`, 4500, () => this._sparkle(s), { perk: true });
         break;
       }
@@ -6457,7 +6458,7 @@ class HatchPetCard extends HTMLElement {
         }
         break;
       case "tv_off_late":
-        say(pick(["*yawn* bedtime?", "all done? sleepy now..."]));
+        say(pick(["*yawn* bedtime soon...", "all done! sleepy now..."]));
         break;
       case "first_snow":
         speak("the first snow!! ❄", 4500, () => {
@@ -8377,13 +8378,13 @@ class HatchPetCard extends HTMLElement {
       if (info.done) {
         if (info.won) this._chirp(s, "win");
         this._endGame(s, info.won ? `${info.wins}/${info.rounds}! you win ♪` :
-          `${info.wins}/${info.rounds}... again sometime?`);
+          `${info.wins}/${info.rounds}. let's play another time ♪`);
         return;
       }
       g.busy = false;
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
-      this._write(s, (g.prompt = kind === "higher_lower" ? "higher or lower?" : "again! left or right?"));
+      this._write(s, (g.prompt = kind === "higher_lower" ? "higher or lower?" : "one more! left or right?"));
     });
   }
 
@@ -8446,7 +8447,7 @@ class HatchPetCard extends HTMLElement {
       s.propEl.hidden = true;
       if (info.done) {
         if (info.won) this._chirp(s, "win");
-        this._endGame(s, info.won ? `${info.wins} berries! you win ♪` : `${info.wins} berries... again sometime?`);
+        this._endGame(s, info.won ? `${info.wins} berries! you win ♪` : `${berries(info.wins)}. let's dig another time ♪`);
         return;
       }
       g.busy = false;
@@ -8590,7 +8591,7 @@ class HatchPetCard extends HTMLElement {
     const [lo, hi] = SEASON_COSTUME_MS;
     s.nextCostume = now + lo + Math.random() * (hi - lo);
     const fresh = season.costumes && oncePerDay(`costume-${season.key}-${s.ids?.device}`);
-    const line = fresh ? { text: "new costume today! do you like it?", baby: false }
+    const line = fresh ? { text: "new costume today! look at me ♪", baby: false }
       : this._lines(s, `season.${season.key}`, seasonLine(season, today));
     this._costume(s, season, line.text, !line.baby);
     if (fresh && season.chirp) this._chirp(s, season.chirp);
