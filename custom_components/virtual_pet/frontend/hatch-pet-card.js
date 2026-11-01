@@ -756,6 +756,19 @@ function oncePerDay(name, day = new Date()) {
   }
   return true;
 }
+// Once on this browser, ever (a key that isn't per day, so pruning leaves it).
+function onceEver(name) {
+  const key = `hatch-${name}`;
+  try {
+    if (localStorage.getItem(key)) return false;
+    localStorage.setItem(key, "1");
+  } catch (err) {
+    if (onceEver.seen?.has(key)) return false;
+    (onceEver.seen ??= new Set()).add(key);
+  }
+  return true;
+}
+const WEEK_OLD = ["one week old today! ♥", "a whole week together! ♥"]; // gaps-seams 1b
 // The card's own per-day keys (oncePerDay's `hatch-<name>-<Date.toDateString()>`, and the
 // treat's `hatch-treat-...-<toDateString>`) older than PRUNE_DAYS go, once at card start.
 // Only keys that start "hatch-" and end in a day like "Fri Oct 31 2026" are touched.
@@ -5331,6 +5344,11 @@ class HatchPetCard extends HTMLElement {
       }
     } else {
       this._seenWrite(device, { said: serverNow() });
+    }
+    // A week old (gaps-seams 1b): on a first look during its 8th day, once per pet and
+    // generation on this browser.
+    if (stage.age_days >= 7 && stage.age_days < 8 && lines.length < FIRST_LOOK_LINES && onceEver(`week-${device}-${stage.generation || 1}`)) {
+      lines.push([this._pick(WEEK_OLD), 5000]);
     }
     const seen = mark?.seen || 0;
     if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS) {
