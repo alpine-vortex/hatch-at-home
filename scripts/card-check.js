@@ -362,8 +362,8 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await shot("02d-shell-picker");
 
   // 4c-rest: every control in the status, the settings sheet and the picker is a real 44x44
-  // target at 330 and 420 (dots and compact answer buttons are out of scope; .pat is hidden
-  // while the status is open), no two overlap, the status shows its wish and meters without
+  // target at 330 and 420 (.pat is hidden while the status is open), plus the slide dots and
+  // the answer buttons, no two overlap, the status shows its wish and meters without
   // scrolling, and the tab order is the page order with no positive tabindex.
   const measure = (view) => card.evaluate((el, view) => {
     const s = el._slides[el._index];
@@ -390,6 +390,39 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   for (const width of [330, 420]) {
     await page.setViewportSize({ width, height: 860 });
     await page.waitForTimeout(500);
+    // The slide dots and the compact answer buttons (330 is the compact layout): 44x44 hit
+    // boxes, the dots edge to edge so none steals a neighbour's tap, the dot itself still 10 px.
+    const tapBoxes = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const dots = [...el.shadowRoot.querySelectorAll(".dots .dot")];
+      const dr = dots.map((d) => d.getBoundingClientRect());
+      const out = { compact: el._card.classList.contains("compact"), dots: dots.length, small: [], overlap: 0,
+        mark: dots.length ? parseFloat(getComputedStyle(dots[0], "::before").height) : 0 };
+      dr.forEach((r, i) => {
+        if (r.width < 43.5 || r.height < 43.5) out.small.push(`dot ${r.width.toFixed(0)}x${r.height.toFixed(0)}`);
+        for (let j = i + 1; j < dr.length; j++) {
+          if (Math.min(r.right, dr[j].right) - Math.max(r.left, dr[j].left) > 1
+            && Math.min(r.bottom, dr[j].bottom) - Math.max(r.top, dr[j].top) > 1) out.overlap++;
+        }
+      });
+      // The sheets hide the screen: look at it for a moment as it is with no sheet open.
+      const wasOpen = s.screen.classList.contains("show-status");
+      s.screen.classList.remove("show-status");
+      await new Promise((r) => setTimeout(r, 60));
+      el._ask(s, "catchphrase");
+      const bs = [...s.screen.querySelectorAll(".askday button")];
+      out.answers = bs.length;
+      for (const b of bs) {
+        const r = b.getBoundingClientRect();
+        if (r.width < 43.5 || r.height < 43.5) out.small.push(`answer ${r.width.toFixed(0)}x${r.height.toFixed(0)}`);
+      }
+      el._clearAsk(s);
+      if (wasOpen) s.screen.classList.add("show-status");
+      return out;
+    });
+    if (tapBoxes.dots < 2 || tapBoxes.answers < 2 || tapBoxes.small.length || tapBoxes.overlap || tapBoxes.mark !== 10
+      || tapBoxes.compact !== (width === 330)) boxIssues.push(`${width} dots/answers: ${JSON.stringify(tapBoxes)}`);
+    boxCounts[`${width}-tapBoxes`] = tapBoxes.dots + "d" + tapBoxes.answers + "a";
     for (const view of ["picker", "settings", "status"]) {
       if (view === "settings") await cur().locator(".status .pback").click();
       if (view === "status") await cur().locator(".status .sback").click();

@@ -65,6 +65,7 @@ A shot (all optional):
 | `costume` | `{season, art, frame}`: the costume put on through the card's own `_costume` (frame 1 or 2 showing). `bench.js` writes the seat it used (`_frames(s)[0]`, `drawn`, `_hatSeat`) to `<name>.json` beside the PNG |
 | `pet.personality`, `hatched_on`, `upbringing` | the first pet's type (teen or adult), birth date and upbringing as `sensor.life_stage` carries them; `pet.reason` / `pet.reason_key` put the server's mood sentence on `sensor.mood`, so the mood line (P2b) shows through the card's own `_say` |
 | `idle` | `{mood}`: the pet's idle mumble through the card's own `_idle` (a mumble, the type's side of the coin) |
+| `ask` | a question kind (`catchphrase`) put through the card's own `_ask`, so its answer buttons show |
 | `say` | text put in the bubble (`""` clears it) |
 | `clip` | `card` (whole card, default), `device` (the toy), `screen` (the LCD only) |
 | `motion` | `reduce` emulates `prefers-reduced-motion: reduce` (`--motion reduce`) |
