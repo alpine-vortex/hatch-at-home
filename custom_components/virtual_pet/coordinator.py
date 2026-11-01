@@ -1150,6 +1150,30 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._publish()
         return taken
 
+    def collection_view(self) -> dict[str, Any]:
+        """The collection page (virtual_pet/collection, plan visitors v2 §4):
+        {world, visitors: [id], finds: {id: day}} for this world's page of
+        state.collection, only ids worlds.json knows for this world, and no
+        gift-only find (known_finds includes them; V-E puts gifts on the
+        receiver's own page, as a later `gifts` key). Pure read: no advance, no
+        save, no publish. Ids it skips stay in the save (V-A's rule)."""
+        assert self.state is not None
+        page = self.state.collection.get(self.world, {})
+        known_visitors = self.known_visitors.get(self.world, set())
+        known_finds = self.known_finds.get(self.world, set())
+        gift_only = {f["id"] for f in self.finds if f.get("gift_only")}
+        visitors = page.get("visitors", {})
+        finds = page.get("finds", {})
+        return {
+            "world": self.world,
+            "visitors": [v for v in visitors if v in known_visitors],
+            "finds": {
+                f: day
+                for f, day in finds.items()
+                if f in known_finds and f not in gift_only
+            },
+        }
+
     async def async_save_now(self) -> None:
         """Write the save at once (after a collect: a crash can't bring the
         basket back)."""

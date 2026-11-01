@@ -159,6 +159,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_my_day)
     websocket_api.async_register_command(hass, websocket_set_shell)
     websocket_api.async_register_command(hass, websocket_collect)
+    websocket_api.async_register_command(hass, websocket_collection)
 
     async def fast_forward(call: ServiceCall) -> ServiceResponse:
         entries: list[PetConfigEntry] = hass.config_entries.async_loaded_entries(DOMAIN)
@@ -614,6 +615,31 @@ async def websocket_collect(
     connection.send_result(msg["id"], {"finds": finds})
     if finds:
         await pet.async_save_now()  # review V-B #18: never revealed twice
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/collection",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("shared"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_collection(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The collection page's read (plan visitors v2 §4): {world, visitors:
+    [id], finds: {id: day}} for the pet's current world. Any login, read-only
+    too. `shared` is required like subscribe's and ignored until V-E adds
+    `gifts` for an unshared screen. Pure: no advance, no save, no publish."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None or pet.state is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    connection.send_result(msg["id"], pet.collection_view())
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:

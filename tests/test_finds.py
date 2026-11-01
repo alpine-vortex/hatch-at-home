@@ -996,6 +996,98 @@ async def test_collect_reads_and_clears_once_for_every_screen(
     assert not missing["success"] and missing["error"]["code"] == "no_pet"
 
 
+COLLECTION = {
+    "woodland": {
+        "visitors": {"stellersjay": "2026-10-20", "ghostvisitor": "2026-10-21"},
+        "finds": {
+            "acorn": "2026-10-22",
+            "acorncup": "2026-10-23",  # gift-only: never in the house page
+            "pearl": "2026-10-24",  # tidepool's, not this world's
+            "nonesuch": "2026-10-25",  # a later version's
+        },
+    },
+    "tidepool": {"visitors": {}, "finds": {"pearl": "2026-10-24"}},
+    "atlantis": {"visitors": {"x": "2026-10-01"}, "finds": {"y": "2026-10-02"}},
+}
+
+
+async def test_collection_reads_this_worlds_known_page_only(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_read_only_access_token: str,
+) -> None:
+    """V-D0: unknown, wrong-world and gift-only ids are skipped, never dropped
+    from the save; shared true and false get the same reply; a read-only login
+    may read; nothing is saved or pushed."""
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, collection=COLLECTION, next_find_at=now + 4 * HOUR
+    )
+    pet = (await setup(hass)).runtime_data
+    await hass.async_block_till_done()
+    assert "acorncup" in pet.known_finds["woodland"]  # known, so filtered by flag
+    watcher = await hass_ws_client(hass)
+    await subscribe(watcher, shared=True)
+    before = dict(hass_storage[STORE_KEY]["data"]["collection"])
+    client = await hass_ws_client(hass, hass_read_only_access_token)
+    entity = "sensor.pip_life_stage"
+    want = {
+        "world": "woodland",
+        "visitors": ["stellersjay"],
+        "finds": {"acorn": "2026-10-22"},
+    }
+    for shared in (True, False):
+        reply = await command(client, "collection", entity_id=entity, shared=shared)
+        assert reply["success"] and reply["result"] == want
+    assert pet.state.collection == COLLECTION  # nothing dropped
+    assert await pushed(watcher) == []  # no publish
+    await hass.async_block_till_done()
+    data = hass_storage[STORE_KEY]["data"]
+    assert data["collection"] == before  # no save written by the read
+    missing = await command(
+        client, "collection", entity_id="sensor.nobody", shared=True
+    )
+    assert not missing["success"] and missing["error"]["code"] == "no_pet"
+    bad = await command(client, "collection", entity_id=entity)  # shared required
+    assert not bad["success"]
+
+
+async def test_collection_empty_reads_as_empty(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+) -> None:
+    """V-D0: a pet with no collection reads as an empty page."""
+    hass_storage[STORE_KEY] = hatched_pet(now, next_find_at=now + 4 * HOUR)
+    await setup(hass)
+    client = await hass_ws_client(hass)
+    entity = "sensor.pip_life_stage"
+    reply = await command(client, "collection", entity_id=entity, shared=False)
+    assert reply["result"] == {"world": "woodland", "visitors": [], "finds": {}}
+
+
+async def test_collection_of_an_egg_still_reads(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+) -> None:
+    """V-D0: an egg (what a world with no ready species stays) still reads its
+    page."""
+    egg = hatched_pet(now, collection=COLLECTION, age_hours=0.0, born=now)
+    hass_storage[STORE_KEY] = egg
+    pet = (await setup(hass)).runtime_data
+    assert pet.state.age_hours < 1
+    client = await hass_ws_client(hass)
+    reply = await command(
+        client, "collection", entity_id="sensor.pip_life_stage", shared=True
+    )
+    assert reply["result"]["visitors"] == ["stellersjay"]
+    assert reply["result"]["finds"] == {"acorn": "2026-10-22"}
+
+
 async def test_a_found_moment_is_public_and_names_nobody(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory, hass_storage: dict[str, Any]
 ) -> None:
