@@ -326,6 +326,7 @@
     };
   }
 
+  let FINDS_DEFAULT;
   async function mount(shot) {
     await customElements.whenDefined("hatch-pet-card");
     const stage = document.getElementById("stage");
@@ -347,6 +348,12 @@
       world.shell = { ...world.shell, ...shot.shell };
       if (shot.shell.finish === "none") delete world.shell.finish;
     }
+
+    // FINDS_SHOWN (the card's release switch, off until V-F): `findsShown: true` turns it
+    // on for this shot; every other shot gets the card's own default back.
+    const Card = customElements.get("hatch-pet-card");
+    if (FINDS_DEFAULT === undefined) FINDS_DEFAULT = Card.findsShown;
+    Card.findsShown = shot.findsShown === undefined ? FINDS_DEFAULT : !!shot.findsShown;
 
     const card = document.createElement("hatch-pet-card");
     card.setConfig({ seasonal: shot.season === "auto" ? undefined : shot.season, ...(shot.config || {}) });
