@@ -2186,6 +2186,31 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return None
         return wish
 
+    def spoken_wish(self) -> dict[str, Any] | None:
+        """Today's wish for Assist (gaps-seams 6a): open, or granted today. Only
+        its kind and whether it came true: never who it's for."""
+        wish = self.state.wish if self.state else None
+        if (
+            wish
+            and wish.get("granted")
+            and wish.get("day") == dt_util.now().date().isoformat()
+        ):
+            return {"kind": wish.get("kind"), "granted": True}
+        open_wish = self._open_wish()
+        return {"kind": open_wish.get("kind")} if open_wish else None
+
+    def spoken_visitor(self) -> str | None:
+        """Today's visitor's name for Assist (gaps-seams 6a), once its window is
+        over (credited); None before then, so the surprise isn't spoiled."""
+        visit = model.live_visit(self.state, self.world) if self.state else None
+        if not visit or not visit.get("id") or not visit.get("credited"):
+            return None
+        if visit.get("day") != self._today(self._now())[0]:
+            return None
+        return next(
+            (v.get("name") for v in self.visitors if v.get("id") == visit["id"]), None
+        )
+
     def _mine(self, user: str) -> dict[str, Any]:
         """What only this person sees: their bond, and their own switches. Read,
         never created: an open card mustn't bring back a forgotten record."""

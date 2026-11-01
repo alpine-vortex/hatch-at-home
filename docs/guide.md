@@ -708,7 +708,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 ## Talking to it through Assist
 
 Ask "how's Pip?" and the pet answers in its own words ("Pip is hungry: a little
-peckish."), and names its traits if it has learned any. Ask "feed Pip" and it's the same as pressing the button, logged under
+peckish. It's a child, day 2. Today it wishes for a bubble bath."): its stage and
+day, today's wish (never who it's for), the day's visitor once its visit is over
+("A robin came by today."), and its traits if it has learned any. A sleeping pet
+just says so. Ask "feed Pip" and it's the same as pressing the button, logged under
 your name.
 
 - **LLM agents** (Claude, OpenAI, Ollama and others set to control Home Assistant)
