@@ -2744,14 +2744,15 @@ async function main() {
       const real = el._hass.callService;
       el._hass.callService = (...a) => { calls.push(a[2]); return real.apply(el._hass, a); };
       try {
+        s.game = { picking: true };
         el._pickGame(s, "left_right"); // started, never tapped
         await new Promise((r) => setTimeout(r, 300));
         el._quitGame(s, null);
       } finally { el._hass.callService = real; }
-      return { ended: !s.game, calls: calls.map((c) => !!c?.end) };
+      return { ended: !s.game, calls: calls.map((c) => (c?.end ? "end" : c?.guess ? "guess" : "start")) };
     });
     check("a game nobody tapped sends only its end: no guess, no result",
-      untapped.ended && untapped.calls.length >= 1 && untapped.calls.at(-1) === true && untapped.calls.filter((c) => !c).length <= 1,
+      untapped.ended && untapped.calls.at(-1) === "end" && !untapped.calls.includes("guess"),
       JSON.stringify(untapped));
 
     // Fresh eyes #7: a care line said over a game's prompt gives way to the prompt again.
