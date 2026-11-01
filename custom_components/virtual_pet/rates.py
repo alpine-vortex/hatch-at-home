@@ -337,7 +337,8 @@ BASKET_SIZE = 3  # finds waiting; more go straight to the collection
 GIFT_EVERY_DAYS = (6.0, 8.0)  # between gifts, calendar days, jittered
 GIFT_ONLY_CHANCE = 1 / 6  # the world's gift-only find, until they have it
 GIFT_HAD_WEIGHT = 0.2  # a find this person was already given
-GIFT_TIER_WEIGHTS = {10: 10, 4: 8, 1: 2}  # the basket's tiers, rarer ones 2x
+GIFT_COMMON_WEIGHT = 10  # a find at this basket weight or more is common: as is
+GIFT_RARE_FACTOR = 2  # any rarer find (below it, retuned weights too) counts double
 FAVOURITE_SNACK_CHANCE = 0.4  # a snack is its favourite (said at most once a day)
 
 # A bond with each person (HA user). Points never go down. A typical day (a

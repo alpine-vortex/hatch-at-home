@@ -98,7 +98,7 @@
         "id": "chanterelle",
         "name": "chanterelle",
         "a": "a chanterelle",
-        "weight": 4,
+        "weight": 6,
         "when": [
           [
             "autumn",
@@ -114,7 +114,7 @@
         "id": "frostedleaf",
         "name": "frosted leaf",
         "a": "a frosted leaf",
-        "weight": 4,
+        "weight": 5,
         "when": [
           [
             "snowy"
@@ -125,7 +125,7 @@
         "id": "fourleafclover",
         "name": "four-leaf clover",
         "a": "a four-leaf clover",
-        "weight": 1,
+        "weight": 3,
         "when": [
           [
             "sunny"
@@ -236,7 +236,7 @@
         "id": "dewdrop",
         "name": "dew drop",
         "a": "a dew drop",
-        "weight": 4,
+        "weight": 6,
         "when": [
           [
             "foggy"
@@ -504,7 +504,7 @@
         "id": "bottle",
         "name": "message in a bottle",
         "a": "a message in a bottle",
-        "weight": 1,
+        "weight": 3,
         "when": [
           [
             "rainy"
@@ -747,7 +747,7 @@
         "id": "moonstone",
         "name": "moonstone",
         "a": "a moonstone",
-        "weight": 4,
+        "weight": 6,
         "when": [
           [
             "full_moon"

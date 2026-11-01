@@ -2262,10 +2262,9 @@ const STYLE = `
     margin-left: calc(var(--px, 2px) * -8); image-rendering: pixelated; }
   .screen .reveal .rf.pop { animation: pop .3s ease-out; transform-origin: 50% 100%; }
   .screen .reveal .burst { top: auto; bottom: 90%; }
-  .compact .screen .basket, .compact .screen .reveal:not(.gift) { display: none; }
   /* A gift (visitors v2 §5): the find alone, 16 cells, no basket, up by the pet's head on
      the right: straight above the pet is the bubble's (left-anchored, up to 69% wide),
-     where its line is said. Shown in compact too: it needs no basket's room. */
+     where its line is said. Shown in compact too, as the basket and its reveal are. */
   .screen .reveal.gift { left: auto; right: calc(6% + var(--edge, 0%)); bottom: 46%;
     width: calc(var(--px, 2px) * 16); }
   .screen .reveal.gift .rf { position: static; display: block; width: 100%; margin: 0; }
@@ -8460,9 +8459,8 @@ class HatchPetCard extends HTMLElement {
     return this._basketCount(s) > 0 && !s.egg && !!s.species && !this._booting &&
       !s.collecting && !s.reveal && this._visitorLive(s);
   }
-
-  // Shown with something in it, live or not (the CSS hides it in the compact layout and
-  // under the status). While a tap waits on its reply, the picture is held as it was:
+  // Shown with something in it, live or not (compact too; the CSS hides it under the
+  // status). While a tap waits on its reply, the picture is held as it was:
   // the server's publish of the empty basket can come first (review C2).
   _basketSync(s) {
     const b = s.basket;

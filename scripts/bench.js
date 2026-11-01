@@ -154,7 +154,7 @@ const PRESETS = {
     extra("baby-terrarium", "baby (V4)", { world: "terrarium", stage: "baby", reveal: { id: "seedpod" },
       storage: { "hatch-baby-talk-bench-user": "on" } });
     extra("calm-pond", "calm: still", { world: "pond", motion: "reduce", reveal: { id: "frogbit", new: true } });
-    extra("compact-330", "compact: no basket", { world: "woodland", width: 330, basket: 3 });
+    extra("compact-330", "compact: the basket shows", { world: "woodland", width: 330, basket: 3 });
     return out;
   },
   // Gifts (visitors v2 §5, V-E2): said at the first look, the find popped above the pet.

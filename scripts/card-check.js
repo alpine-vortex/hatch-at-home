@@ -8979,7 +8979,7 @@ async function main() {
     check("V-C: the finds section has restart's seeded basket (set HA_CONFIG and HA_START)", false,
       "no seeded basket: restart didn't run or its world has too few finds");
   } else {
-  await page.setViewportSize({ width: 420, height: 860 }); // lowbattery ends at 330: compact hides the basket
+  await page.setViewportSize({ width: 420, height: 860 }); // lowbattery ends at 330
   await page.waitForTimeout(500);
   await calm();
   await pinAwake(card, "finds");
@@ -9145,7 +9145,7 @@ async function main() {
   check("V-C: a second collect gets [] and the emptied basket is already saved (no restart can bring it back)",
     Array.isArray(again?.finds) && again.finds.length === 0 && savedLeft.length === 0,
     JSON.stringify({ again, savedLeft }));
-  // On the card alone (no server): compact hides the basket; calm shows the find still.
+  // On the card alone (no server): compact shows the basket; calm shows the find still.
   await page.emulateMedia({ reducedMotion: "reduce" });
   const local = await card.first().evaluate(async (el, f) => {
     const s = el._slides[el._index];
@@ -9154,6 +9154,14 @@ async function main() {
     el._card.classList.add("compact");
     el._basketSync(s);
     const out = { compactShown: getComputedStyle(s.basket).display !== "none", compactShows: el._basketShows(s) };
+    s.screen.classList.remove("show-status");
+    s.basket.scrollIntoView({ block: "center" }); // elementFromPoint needs it on screen
+    const br = s.basket.getBoundingClientRect();
+    const sr = s.basket.closest(".screen").getBoundingClientRect();
+    const hit = el.shadowRoot.elementFromPoint(br.x + br.width / 2, br.y + br.height / 2);
+    // the 44 px tap box is the ::before; it is tappable when the centre hits the button
+    out.tap = { hit: hit === s.basket, inside: br.left >= sr.left && br.right <= sr.right && br.bottom <= sr.bottom + 1,
+      w: br.width, w44: parseFloat(getComputedStyle(s.basket, "::before").width) };
     el._card.classList.remove("compact");
     el._basketSync(s);
     out.src = s.basket.querySelector("img").getAttribute("src");
@@ -9169,8 +9177,8 @@ async function main() {
     return out;
   }, seedB[0]);
   await page.emulateMedia({ reducedMotion: null });
-  check("V-C: compact hides the basket (the finds wait); two waiting show basket_2",
-    !local.compactShown && !local.compactShows && /\/ui\/basket_2\.png/.test(local.src), JSON.stringify(local));
+  check("V-C: compact shows the basket at 330 (owner 2026-11-02), tappable, 44 px box inside the screen; two waiting show basket_2",
+    local.compactShown && local.compactShows && local.tap.hit && local.tap.inside && local.tap.w44 >= 44 && /\/ui\/basket_2\.png/.test(local.src), JSON.stringify(local));
   check("V-C: calm: the find appears still, no pop", local.calm.shown && !local.calm.pop && local.calm.anims === 0 &&
     local.after.hidden && !local.after.reveal, JSON.stringify(local.calm));
   // The away note (V8): one "found <a find>" a find, newest first; the note keeps two bits.

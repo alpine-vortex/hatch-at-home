@@ -2643,6 +2643,12 @@ def collect_basket(state: PetState, known: dict[str, set[str]]) -> list[dict[str
     return [{k: e[k] for k in ("id", "world", "new", "from") if k in e} for e in taken]
 
 
+def gift_weight(weight: float) -> float:
+    """A find's basket weight as a gift: commons as they are, every rarer one
+    doubled (so retuned weights such as 3, 5 or 6 are doubled too)."""
+    return weight if weight >= R.GIFT_COMMON_WEIGHT else weight * R.GIFT_RARE_FACTOR
+
+
 def pick_gift(
     bond: dict[str, Any],
     finds: list[dict[str, Any]],
@@ -2653,7 +2659,7 @@ def pick_gift(
     review #9). First the world's gift-only find, 1 in GIFT_ONLY_CHANCE,
     only while this person hasn't had it. Otherwise the world's other finds
     by tier and condition (`find_weight`, with the R5 fallback), the rarer
-    tiers doubled (GIFT_TIER_WEIGHTS), and one this person was already given
+    tiers doubled (below GIFT_COMMON_WEIGHT, x GIFT_RARE_FACTOR), and one this person was already given
     at GIFT_HAD_WEIGHT. The house's collection plays no part (no x0.5)."""
     had = set(bond.get("gifts", ()))
     only = [f for f in finds if f.get("gift_only") and f["id"] not in had]
@@ -2663,7 +2669,7 @@ def pick_gift(
     for f in finds:
         if f.get("gift_only"):
             continue
-        tier = R.GIFT_TIER_WEIGHTS.get(f["weight"], f["weight"])
+        tier = gift_weight(f["weight"])
         w = find_weight({**f, "weight": tier}, flags)
         if w > 0:
             pool.append((f, w * (R.GIFT_HAD_WEIGHT if f["id"] in had else 1.0)))

@@ -236,9 +236,14 @@ saw it or not.
   - **condition finds** at a stated frequency (sunny 1 roll in 3, rain 1 in 4, fog and snow
     1 in 10, a season 1 in 4, night 1 in 2, full moon `2 × FIND_FULL_MOON_DAYS` days a
     month at night, derived from the constant): at most
-    **100 days**. As built: message in a bottle ~89, moonstone ~62, four-leaf clover ~58,
-    dew drop ~56, chanterelle ~55, frosted leaf ~48, fallen star ~34, snail shell ~19,
-    frogbit ~17, pine sprig ~16. Their tiles stay hidden until met (§13b #2).
+    **45 days** (owner, 2026-11-02; first built at 100). Six weights were raised for it (in
+    `worlds.json`; commons untouched): chanterelle 4→6, frosted leaf 4→5, four-leaf clover
+    1→3, dew drop 4→6, message in a bottle 1→3, moonstone 4→6. As built: moonstone ~42,
+    frosted leaf ~39, chanterelle ~37, dew drop ~37, fallen star ~34, bottle ~30, snail
+    shell ~20, four-leaf clover ~20, frogbit ~17, pine sprig ~16. Their tiles stay hidden
+    until met (§13b #2). The rarest unconditional find is still within 30 days (Terrarium
+    ~24.6). Gifts weigh a find by tier (`model.gift_weight`: commons at 10 as they are, every rarer weight doubled, retuned ones included); a
+    raised weight not in that map counts as itself there.
 - **The coverage run (finding #1, #21) is a regression snapshot**, not the guarantee
   (V-B review #7). A fixed-seed **90-day** run from a **pinned start, 2026-10-15** (it
   crosses into winter), on a **pinned weather schedule** (a 10-day cycle: sunny, cloudy,
@@ -248,7 +253,8 @@ saw it or not.
   date). It runs twice per world: with weather, and with **no weather entity at latitude
   10** (the fallbacks). Seed 2026 sees every non-gift find in both. Over seeds 0-19, the
   weather run misses something for Tidepool in 10 (the bottle), Night Sky in 6 and Woodland
-  in 2, and the no-weather run for Night Sky in 7 (moonstone): it is pinned, so it can't
+  in 2, and the no-weather run for Night Sky in 7 (moonstone); after the 45-day cap
+  (2026-11-02) only Woodland in 1 (weather) and Night Sky in 2 (no weather) of 20: it is pinned, so it can't
   flake, but a change in what the rng is asked for can move it; check the waits, then
   re-pin.
 - **A moment, `found`** `{id, world}`, with no user. It is in `MOMENTS` (V-B review #13),
@@ -322,7 +328,9 @@ V-B review #10). The card reads names and art from the same file.
   - It shows only when the basket has something in it.
   - **No number.** The art shows 1, 2 or 3 things peeking out (`basket_<n>.png`), which is
     a picture, not a count.
-  - Compact layout: hidden, as `.compact .deco` is. The finds just wait.
+  - Compact layout: **shown too** (owner, 2026-11-02; it was hidden, as `.compact .deco` is).
+    Same basket and same tap rules, drawn at the compact card's own `--px`; the 44 px tap box
+    still holds. It sits at the screen's bottom right, clear of the buttons and the pet's spot.
 - **Open the card** with something in the basket: nothing is said, and the basket sits
   there. (A "look!" line would turn it into a chore.)
 - **A tap on the basket** sends `virtual_pet/collect {entity_id}`. The reply is
@@ -431,7 +439,7 @@ V-E2.
   - First, the world's gift-only find, at 1 in 6 (`R.GIFT_ONLY_CHANCE`), only while this
     person hasn't had it, and never again after.
   - Otherwise the world's other finds by `find_weight(f, flags)` (conditions apply, with
-    the R5 fallback at weight 1), with the rarer tiers doubled (`R.GIFT_TIER_WEIGHTS`:
+    the R5 fallback at weight 1), with the rarer tiers doubled (`model.gift_weight`, was `GIFT_TIER_WEIGHTS`:
     10, 4, 1 → 10, 8, 2), and ×0.2 (`R.GIFT_HAD_WEIGHT`) for a find this person was
     already given. **No** house ×0.5: the house's collection plays no part.
   - `gifts` gains an id only if it's absent (so at most 60). The gift-only finds'
@@ -793,7 +801,7 @@ and P1-P2 fixes, with the first mate's picks:
   (C7) couldn't pick a side; right clears the first two poops (left 6% and 18%) and the
   prop; it can sit over the third poop and the season lantern. `_basketSync` (each tick and
   on a house push) shows it when `house.basket` > 0 and there is no reveal, egg, away, game
-  or scene; hidden in compact and under the status by CSS. It is **live** (`_basketLive`)
+  or scene; hidden under the status by CSS (compact shows it, owner 2026-11-02). It is **live** (`_basketLive`)
   only when `_visitorLive` holds, out of the egg, not booting, no tap in flight (C1);
   otherwise it carries `.idle` (`pointer-events: none`) and a tap falls through to the
   screen (the status). A sleeping pet's basket shows but can't be tapped.
@@ -853,7 +861,7 @@ and P1-P2 fixes, with the first mate's picks:
 **V-E1 as built (s2597, for V-E2 and V-D):** server only, no card change.
 
 - `rates.py`: `GIFT_EVERY_DAYS` (6, 8) days, `GIFT_ONLY_CHANCE` 1/6, `GIFT_HAD_WEIGHT`
-  0.2, `GIFT_TIER_WEIGHTS` `{10: 10, 4: 8, 1: 2}`; the level is `BOND_FRIEND_LEVEL` (3).
+  0.2, `gift_weight` (10 as is, rarer x2; FM 2026-11-02 after the rarity retune); the level is `BOND_FRIEND_LEVEL` (3).
 - `model.py`: `_bond` checks `next_gift_at` (`_num`), `gift` (dict with str `id` and
   `world`, extra keys kept) and `gifts` (list, str only, deduplicated), deleting a bad
   value alone and never raising; `pick_gift(bond, finds, flags, rng)`;
@@ -942,8 +950,9 @@ review's D2-D8 and P2, and the V-E review's #19 and #20.
   `visitUntil` held as the reveal does. **Placed up on the pet's right** (`right: 6% +
   edge`, `bottom: 46%`, 16 cells), not straight above: the bubble (left-anchored, up to 69%
   wide) covers the space over the pet's head, and the first bench render hid the find
-  under V5's two-line bubble. Shown in compact too (`.reveal:not(.gift)` keeps the
-  basket reveal's compact rule); hidden under the status like the reveal.
+  under V5's two-line bubble. Shown in compact too, as the basket and its reveal are
+  since a7965007 (no compact rule hides any of them); hidden under the status like the
+  reveal.
 - **Dropped** (`_dropGift`: the pop, a queued gift line, a take in flight) on `_goShared`
   (any `SHARED_EVENT` flip or storage event) and in `_forget`; `disconnectedCallback`
   ends only the pop (a take or line still waiting is said on return). Nothing gift-related
@@ -1128,6 +1137,15 @@ The V-D brief's answers (owner, 2026-11-02):
 3. **V5 = "saved this <find> for you ♥"; V6 = "made this for you ♥" / "found this for you ♥"**
    (approved); the 40-character cap stays.
 4. **Sea glass: three different shapes** (a chip, a round, a shard) in V-F.
+
+## 13c. Answered (owner, 2026-11-02)
+
+1. **The basket shows in the compact card too** (it was hidden under 280 px). Same basket, same
+   tap rules (`_visitorLive` etc.), a 44 px tap box. §3 changed; card-check `finds` asserts it
+   shows and is tappable at 330; the bench's compact shot shows it.
+2. **A rarity cap: no find takes more than ~45 days on average** at the stated condition
+   frequencies (was 89 / 62 / 58 d for bottle, moonstone, clover). §2 changed; six weights
+   raised in `worlds.json`; the analytic test's bound is 45 days. Gift-only finds stay out.
 
 ## 14. Later (not in v2)
 
