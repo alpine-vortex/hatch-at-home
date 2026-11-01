@@ -395,6 +395,7 @@ function playChirp(name) {
 // variants (_1 big, _2 small); otherwise one image.
 const FEED_FULL_AT = 95; // rates.py FEED_FULL_AT: a meal is refused above this
 const TRAIT_CAP = 4; // rates.py TRAIT_CAP, until the server says (life_stage trait_cap)
+const STAGE_DAYS = { teen: 5, adult: 14 }; // rates.py STAGE_STARTS (120 h, 336 h), from the egg
 const LINK_AFTER_MS = [600000, 1500000]; // the infrared link: 10-25 min after the page loads (random)
 const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
 const FLAIR_MS = 4200; // how long a moment lasts
@@ -1346,6 +1347,17 @@ const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
 function weightLabel(v) {
   if (v === null) return "–";
   return `${Math.round(v)} · ${v < 25 ? "a bit light" : v > 75 ? "a bit heavy" : "just right"}`;
+}
+
+// The status row counting down to the next stage (gaps-seams 1a), or null: a child
+// to teen, a teen to grown up. "About", since ageing pauses while it's away.
+function growsUp(stage, ageDays) {
+  const next = { child: "teen", teen: "adult" }[stage];
+  if (!next || typeof ageDays !== "number") return null;
+  const left = Math.round(STAGE_DAYS[next] - ageDays);
+  if (left < 1) return null;
+  const when = left === 1 ? "tomorrow" : `in about ${left} days`;
+  return next === "adult" ? ["grows up", when] : ["next", `teen ${when}`];
 }
 
 // What it would like, in the status sheet (2c, C9): a call's need, else medicine
@@ -6307,6 +6319,7 @@ class HatchPetCard extends HTMLElement {
     // The creature picked for the next egg (if any), and its world if that changes.
     const nextEgg = [stageAttrs.next_egg?.toLowerCase(), stageAttrs.next_world && `in ${stageAttrs.next_world}`]
       .filter(Boolean).join(" ");
+    const nextStage = growsUp(this._state(s, "sensor.life_stage")?.state, stageAttrs.age_days);
     // What it would like most, above today's wish; none asleep, away or in the egg.
     const moodNow = this._state(s, "sensor.mood");
     const wantKey = moodNow?.attributes.reason_key;
@@ -6334,6 +6347,7 @@ class HatchPetCard extends HTMLElement {
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
+      ${nextStage ? row(null, nextStage[0], `<span>${nextStage[1]}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>
