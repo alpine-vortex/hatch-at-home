@@ -97,6 +97,10 @@ const PRESETS = {
           view: ["bubble", "phone"].includes(view) ? "card" : view, ...extra });
       }
     }
+    // Fresh-expand E2: a starry teen's own pat line and praise line (P-a, P-c).
+    const starry = { world: "woodland", view: "card", stage: "teen", pet: { personality: "starry" } };
+    out.push({ name: "ui/woodland-pat-starry", group: "ui", label: "pat, starry", ...starry, say: "my favourite kind of applause ★" });
+    out.push({ name: "ui/woodland-praise-starry", group: "ui", label: "praise, starry", ...starry, say: "I'll take a bow for that ★" });
     return out;
   },
   // The Berry dig (playtime 2a) with scripted replies, at 420 and 330 (compact): a

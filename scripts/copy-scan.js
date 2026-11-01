@@ -15,6 +15,7 @@ const FILL = {
 // Each table: the fill its functions take, and the keys (at any depth) that may ask.
 const COPY_TABLES = {
   PERSONA_FRESH: {},
+  PAT_SPOT: {},
 };
 
 function lines(value, path, out) {

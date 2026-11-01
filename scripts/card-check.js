@@ -6881,6 +6881,9 @@ async function main() {
   await calm();
   await page.waitForTimeout(800);
   await pinAwake(card, "pat");
+  // The coin and the sweet spot (fresh-expand P-a, P-b) pinned to the plain line here;
+  // the fresh checks below set their own.
+  await card.evaluate(() => { window.__patRandom ||= Math.random; Math.random = () => 0.9; });
   await card.evaluate((el) => {
     el._slides.forEach((s) => { s.patAt = 0; s.queue = []; s.sayUntil = 0; s.sayClass = 0; });
     el.__realMoving ||= el._moving;
@@ -7015,6 +7018,61 @@ async function main() {
   check("each mood pats with its C10 line (bored and hungry say the content line)",
     spoke(moodLines.excited, PAT.excited) && spoke(moodLines.sleepy, PAT.sleepy) && spoke(moodLines.sick, PAT.sick) &&
     spoke(moodLines.bored, PAT.content) && spoke(moodLines.hungry, PAT.content), JSON.stringify(moodLines));
+  // Fresh-expand E2: a typed teen's spoken pats take turns with its own two lines (P-a),
+  // never the same twice running, and now and then the sweet spot with a hop (P-b);
+  // random 0 is the sweet spot; a sleepy pat keeps its one line.
+  {
+    const vm = require("vm");
+    const src = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+    const FRESH = vm.runInNewContext(`(${src.match(/const PERSONA_FRESH = (\{[\s\S]*?\n\});/)[1]})`);
+    const spot = src.match(/\nconst PAT_SPOT = "([^"]+)";/)[1];
+    const own = FRESH.mellow.pat;
+    const fresh = await card.evaluate((el, { own }) => {
+      const s = el._slides[el._index];
+      const real = { line: el._line, persona: el._persona, state: el._state, mood: s.moodState };
+      const said = [];
+      el._line = function (sl, cls, text, ...rest) { said.push(text); return real.line.call(this, sl, cls, text, ...rest); };
+      el._persona = () => ({ pat: own });
+      el._state = function (sl, key) {
+        const st = real.state.call(this, sl, key);
+        return key === "sensor.life_stage" && st ? { ...st, state: "teen" } : st;
+      };
+      const pat = () => {
+        Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+        s.pet.classList.remove("greethop");
+        el._pat(s, { detail: 0, stopPropagation() {} });
+      };
+      const out = {};
+      try {
+        s.moodState = "content";
+        s.lastPick = {};
+        Math.random = window.__patRandom;
+        for (let i = 0; i < 40; i++) pat();
+        out.forty = said.splice(0);
+        Math.random = () => 0;
+        s.lastPick = {};
+        pat();
+        out.spot = said.splice(0);
+        out.hop = s.pet.classList.contains("greethop");
+        s.moodState = "sleepy";
+        pat();
+        out.sleepy = said.splice(0);
+      } finally {
+        Object.assign(el, { _line: real.line, _persona: real.persona, _state: real.state });
+        Math.random = () => 0.9;
+        s.moodState = real.mood;
+        Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+      }
+      return out;
+    }, { own });
+    const allowed = new Set([...own, PAT.content, spot]);
+    const runs = fresh.forty.filter((l, i) => i && l === fresh.forty[i - 1]);
+    check("fresh pat (P-a): 40 spoken pats on a typed teen give its lines and the mood line, never twice running",
+      fresh.forty.length === 40 && fresh.forty.every((l) => allowed.has(l)) && runs.length === 0 &&
+      own.every((l) => fresh.forty.includes(l)) && fresh.forty.includes(PAT.content), JSON.stringify(fresh.forty));
+    check("fresh pat (P-b): random 0 is the sweet spot, with a hop", fresh.spot.join() === spot && fresh.hop, JSON.stringify(fresh));
+    check("fresh pat: a sleepy pat keeps its one line", fresh.sleepy.join() === PAT.sleepy, JSON.stringify(fresh.sleepy));
+  }
   // Six spoken pats don't count toward the catchphrase.
   await patReset();
   const cc0 = (await patState()).catchCount;
@@ -7174,6 +7232,7 @@ async function main() {
     if (conn.__realSend) conn.sendMessagePromise = conn.__realSend;
     delete conn.__realSend;
     delete el.__calls;
+    if (window.__patRandom) Math.random = window.__patRandom;
   });
   await patReset();
   await unpinAwake(card);
@@ -7321,6 +7380,34 @@ async function main() {
     });
     check(`react: ${stage} a pat during a reaction speaks, keeps its move, adds no perk`,
       pat.cls.includes("greethop") && !pat.cls.includes("perk") && pat.said.length > 0 && pat.live, JSON.stringify(pat));
+    // Fresh-expand P-c: a typed teen's praise says one of its praise lines or "♥", never
+    // the same twice running.
+    if (stage === "teen") {
+      const vm = require("vm");
+      const src = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+      const own = vm.runInNewContext(`(${src.match(/const PERSONA_FRESH = (\{[\s\S]*?\n\});/)[1]})`).starry.praise;
+      const praised = await card.evaluate((el, own) => {
+        const s = el._slides[el._index];
+        const real = { line: el._line, persona: el._persona };
+        const said = [];
+        el._line = function (sl, cls, text, ...rest) { said.push(text); return real.line.call(this, sl, cls, text, ...rest); };
+        el._persona = () => ({ praise: own });
+        try {
+          s.lastPick = {};
+          for (let i = 0; i < 20; i++) {
+            Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+            el._react(s, { action: "praise", result: "ok", at: Date.now() / 1000 });
+          }
+        } finally {
+          Object.assign(el, { _line: real.line, _persona: real.persona });
+          Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+        }
+        return said;
+      }, own);
+      check("react: a typed teen's praise says its praise lines or ♥, never twice running",
+        praised.length === 20 && praised.every((l) => [...own, "♥"].includes(l)) &&
+        praised.every((l, i) => !i || l !== praised[i - 1]) && own.some((l) => praised.includes(l)), JSON.stringify(praised));
+    }
     // P3 praise moves, live: a plucky pet's win beat in a game (ms 900) is a perk, back in the
     // middle before the next round (1000 ms); bouncy's praise hop is a greethop, which
     // a hass update (_render toggles "hop") leaves running.

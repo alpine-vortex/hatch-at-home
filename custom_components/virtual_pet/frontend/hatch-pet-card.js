@@ -1203,16 +1203,43 @@ const PERSONA = {
 // Every table from here to the end marker is plain data and is named in
 // scripts/copy-scan.js's COPY_TABLES, which card-check and node scan line by line.
 // PERSONA_FRESH: each type's lines for the new keys, merged into PERSONA below.
+// pat (P-a): a spoken pat while content or excited; praise (P-c): in place of "♥".
 const PERSONA_FRESH = {
-  mellow: {},
-  sweet: {},
-  bouncy: {},
-  starry: {},
-  old_soul: {},
-  fancy: {},
-  charming: {},
-  plucky: {},
+  mellow: {
+    pat: ["mm, right there ♪", "*melts a little* ahh ♥"],
+    praise: ["mm, thanks... ♥", "aw, that's nice to hear ♪"],
+  },
+  sweet: {
+    pat: ["aw, you ♥", "that's so nice ♥ hehe"],
+    praise: ["hehe, you're sweet ♥", "you make me so happy ♥"],
+  },
+  bouncy: {
+    pat: ["hee! that tickles!", "pat pat! hup! ♪"],
+    praise: ["yes! *happy hop*", "woo! I'm good! hup!"],
+  },
+  starry: {
+    pat: ["a pat for the star! ★", "my favourite kind of applause ★"],
+    praise: ["a bow, thank you ★", "I'll take a bow for that ★"],
+  },
+  old_soul: {
+    pat: ["hm. that's rather nice.", "ah. just the thing."],
+    praise: ["hm. kind of you.", "much obliged, friend."],
+  },
+  fancy: {
+    pat: ["how very kind ♥", "mind the fluff! ♥ hehe"],
+    praise: ["oh, you flatter me ♥", "I do try, darling ♥"],
+  },
+  charming: {
+    pat: ["oh, how delightful ♥", "a splendid pat, thank you"],
+    praise: ["how lovely of you ♥", "what a splendid thing to say ♥"],
+  },
+  plucky: {
+    pat: ["hah! good pat ♥", "heh, not bad at all ♥"],
+    praise: ["I'll do it even better! ♪", "heck yes, I'm good! hah"],
+  },
 };
+// P-b: now and then a spoken pat finds the sweet spot (any stage but a baby).
+const PAT_SPOT = "that's the spot!! ♥";
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -1451,6 +1478,7 @@ const FLAVOUR = 1; // may be dropped, never replayed as a barrage
 const MINE_MS = 3000;
 // A pat (C10), by mood; any other mood says the content line. Babies and children too.
 const PAT_LINES = { content: "hehe ♥", excited: "hehe! ♪", sleepy: "mmm...", sick: "thanks... ♥" };
+const PAT_SPOT_ODDS = 1 / 12; // a spoken pat's chance of the sweet spot (fresh-expand P-b)
 const PAT_COOLDOWN_MS = 4000; // a pat in this time after a spoken one wiggles, no line
 const PAT_MS = 2500;
 // Reactions to care at baby, teen and adult (PR 3c, O02): the stage's own mood frames
@@ -5470,7 +5498,21 @@ class HatchPetCard extends HTMLElement {
     }
     this._tapped(s.pat, reacting ? undefined : s);
     s.patAt = now;
-    this._line(s, MINE, PAT_LINES[s.moodState] || PAT_LINES.content, PAT_MS);
+    // Sleepy and sick keep their one line (it's news); otherwise the type's own words in
+    // turn with the mood's (P-a), and now and then the sweet spot (P-b): never counted.
+    const plain = !["sleepy", "sick"].includes(s.moodState);
+    const lastSaid = (s.lastPick ??= {})["pat:said"];
+    if (plain && this._state(s, "sensor.life_stage")?.state !== "baby" && lastSaid !== PAT_SPOT && Math.random() < PAT_SPOT_ODDS) {
+      s.lastPick["pat:said"] = PAT_SPOT;
+      this._line(s, MINE, PAT_SPOT, PAT_MS);
+      if (!still && !reacting) {
+        this._animate(s, s.pet, "greethop", 1400);
+        this._bondHearts(s);
+      }
+      return;
+    }
+    const mood = PAT_LINES[s.moodState] || PAT_LINES.content;
+    this._line(s, MINE, plain ? this._lines(s, "pat", mood, undefined, { fresh: true }).text : mood, PAT_MS);
   }
 
   // May a line of this class go into the bubble now? Only a higher class
@@ -6635,7 +6677,7 @@ class HatchPetCard extends HTMLElement {
         said = [this._lines(s, "yum", `yum, ${food}!`, food).text, 2500]; // its own food, in its own words
       }
       if (entry.action === "praise") {
-        said = ["♥", 2500];
+        said = [this._lines(s, "praise", "♥", undefined, { fresh: true }).text, 2500]; // P-c: a baby keeps "♥"
       }
       const season = seasonNow(this._config);
       const candy = season?.snack && key === "snack" ? `../ui/season_${season.key}_${season.snack}` : null;
