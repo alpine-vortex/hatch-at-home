@@ -88,7 +88,7 @@ def test_each_world_has_the_plans_ten_finds() -> None:
         gift = [f["id"] for f in FINDS[world] if f.get("gift_only")]
         assert len(gift) == 1 and FINDS[world][-1]["id"] == gift[0]
         for f in FINDS[world]:
-            assert f["weight"] in (10, 4, 1)
+            assert f["weight"] in (10, 6, 5, 4, 3, 1)  # tiers; the cap raised six rare ones
             assert f["a"].split(" ", 1)[0] in ("a", "an", "some")
 
 
@@ -268,8 +268,8 @@ MISSING: dict[str, bool | None] = {
         ("woodland", "pinecone", {}, 10),
         ("woodland", "jayfeather", {}, 4),
         # Chanterelle: autumn and (rainy or foggy).
-        ("woodland", "chanterelle", {"autumn": True, "rainy": True}, 4),
-        ("woodland", "chanterelle", {"autumn": True, "foggy": True}, 4),
+        ("woodland", "chanterelle", {"autumn": True, "rainy": True}, 6),
+        ("woodland", "chanterelle", {"autumn": True, "foggy": True}, 6),
         ("woodland", "chanterelle", {"autumn": False, "rainy": True}, 0),
         (
             "woodland",
@@ -288,11 +288,11 @@ MISSING: dict[str, bool | None] = {
         ("woodland", "chanterelle", {"autumn": None, "rainy": None, "foggy": None}, 1),
         ("woodland", "chanterelle", {"autumn": False, "rainy": None}, 0),
         # Four-leaf clover (rare, sunny): no "already rare keeps its condition".
-        ("woodland", "fourleafclover", {"sunny": True}, 1),
+        ("woodland", "fourleafclover", {"sunny": True}, 3),
         ("woodland", "fourleafclover", {"sunny": False}, 0),
         ("woodland", "fourleafclover", {"sunny": None}, 1),
         ("woodland", "snailshell", {"rainy": None}, 1),
-        ("woodland", "frostedleaf", {"snowy": True}, 4),
+        ("woodland", "frostedleaf", {"snowy": True}, 5),
         ("terrarium", "dewdrop", {"foggy": None}, 1),
         # Pine sprig: snowy or winter; the best clause wins.
         ("hearth", "pinesprig", {"snowy": None, "winter": True}, 4),
@@ -300,14 +300,14 @@ MISSING: dict[str, bool | None] = {
         ("hearth", "pinesprig", {"snowy": False, "winter": None}, 1),
         ("hearth", "pinesprig", {"snowy": False, "winter": False}, 0),
         ("hearth", "pinesprig", {"snowy": True, "winter": None}, 4),
-        ("tidepool", "bottle", {"rainy": True}, 1),
+        ("tidepool", "bottle", {"rainy": True}, 3),
         ("tidepool", "bottle", {"rainy": None}, 1),
         ("tidepool", "bottle", {"rainy": False}, 0),
         ("pond", "frogbit", {"sunny": None}, 1),
         # Night Sky.
         ("nightsky", "moonflower", {"night": True}, 10),
         ("nightsky", "moonflower", {"night": False}, 0),
-        ("nightsky", "moonstone", {"full_moon": True}, 4),
+        ("nightsky", "moonstone", {"full_moon": True}, 6),
         ("nightsky", "moonstone", {"full_moon": False}, 0),
         # Fallen star: night and not rainy; a missing !rainy drops out.
         ("nightsky", "fallenstar", {"night": True, "rainy": False}, 1),
@@ -325,7 +325,7 @@ def test_the_weight_per_token(
 def test_a_flag_that_is_truthy_but_not_a_bool_still_counts() -> None:
     """V-B audit #3: compared by value, not identity."""
     clover, star = find("woodland", "fourleafclover"), find("nightsky", "fallenstar")
-    assert model.find_weight(clover, {"sunny": 1}) == 1
+    assert model.find_weight(clover, {"sunny": 1}) == 3
     assert model.find_weight(clover, {"sunny": 0}) == 0
     assert model.find_weight(star, {"night": 1, "rainy": 0}) == 1
     assert model.find_weight(star, {"night": 1, "rainy": 1}) == 0
@@ -810,8 +810,8 @@ def test_the_rarest_unconditional_find_comes_within_30_days() -> None:
         assert worst <= 30, (world, worst)
 
 
-def test_conditional_finds_come_within_100_days_at_the_stated_weather() -> None:
-    """Conditional ★ finds included, at FREQUENCY (sunny 1 day in 3, rain 1 in
+def test_every_find_comes_within_45_days_at_the_stated_weather() -> None:
+    """Conditional ★ finds included (owner, 2026-11-02: none over ~45 days), at FREQUENCY (sunny 1 day in 3, rain 1 in
     4, fog and snow 1 in 10, a season 1 in 4). Their tiles are hidden until
     met (§13b #2), so a long wait is never a silhouette."""
     waits = {
@@ -820,16 +820,16 @@ def test_conditional_finds_come_within_100_days_at_the_stated_weather() -> None:
         for f in FINDS[world]
         if f["when"] is not None
     }
-    assert max(waits.values()) <= 100, waits
+    assert max(waits.values()) <= 45, waits
 
 
 # --- The coverage run (a regression snapshot, review #7) --------------------
 # Not the guarantee (the analytic waits above are): a fixed seed, start date and
 # weather schedule, so it can't flake, but a change in what the rng is asked for
-# moves it. Over seeds 0-19 (2026-11-01) every world sees all nine in 90 days
-# except, with weather, Tidepool in 10 of 20 (a message in a bottle: ~89 days)
-# and Woodland in 2; Night Sky in 6 (weather) and 7 (none) of 20 (moonstone:
-# ~62 days). If it fails after such a change, check the waits, then re-pin.
+# moves it. Over seeds 0-19 (2026-11-02, after the 45-day cap) every world sees all
+# nine in 90 days except, with weather, Woodland in 1 of 20; with no weather,
+# Night Sky in 2 of 20 (before the cap: Tidepool 10, Woodland 2, Night Sky 6 and 7).
+# If it fails after such a change, check the waits, then re-pin.
 
 START = date(2026, 10, 15)  # crosses into winter
 DAYS = 90

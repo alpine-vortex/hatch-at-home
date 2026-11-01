@@ -228,7 +228,7 @@ def test_the_weights_rarer_doubled_given_ones_less_no_house_halving() -> None:
     dice = Dice(roll=1.0)
     model.pick_gift(bond, WOOD, ALL_TRUE, dice)
     want = [
-        R.GIFT_TIER_WEIGHTS[f["weight"]]
+        R.GIFT_TIER_WEIGHTS.get(f["weight"], f["weight"])
         * (R.GIFT_HAD_WEIGHT if f["id"] == "pinecone" else 1.0)
         for f in usable
     ]
@@ -243,7 +243,7 @@ def test_the_weights_rarer_doubled_given_ones_less_no_house_halving() -> None:
     by_id = dict(zip([f["id"] for f in usable], dice.weights[0], strict=True))
     for f in conditional:
         assert by_id[f["id"]] == pytest.approx(
-            min(R.GIFT_TIER_WEIGHTS[f["weight"]], R.FIND_MISSING_WEIGHT)
+            min(R.GIFT_TIER_WEIGHTS.get(f["weight"], f["weight"]), R.FIND_MISSING_WEIGHT)
         )
     dice = Dice(roll=1.0)
     model.pick_gift({"points": FRIEND, "gifts": [ONLY]}, WOOD, falsy, dice)
