@@ -8286,7 +8286,7 @@ async function main() {
       timer.wait > 590000 && timer.wait <= 1500000 && !timer.started, JSON.stringify(timer));
     check(`link never starts under the boot screen (${width}px)`, !timer.booting);
     // The day's first (gaps-seams 5a, owner Q7): only 1-3 min into a look someone touched
-    // in the last 5 min, on a shown tab; never untouched, too soon, stale or hidden.
+    // in the last 5 min, on a shown tab; never untouched, too soon, stale, hidden or off screen.
     await prep();
     const first = await card.evaluate((el) => {
       for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k);
@@ -8309,6 +8309,9 @@ async function main() {
       Object.defineProperty(document, "hidden", { get: () => true, configurable: true });
       tryIt("hidden", 1000, 100000);
       delete document.hidden;
+      el._visible = false; // scrolled off screen (the card's IntersectionObserver)
+      tryIt("offscreen", 1000, 100000);
+      el._visible = true;
       tryIt("watched", 1000, 100000);
       const ms = [];
       for (let i = 0; i < 20; i++) { el._linkFirstMs = undefined; el._touchedAt = null; el._linkTick(h); ms.push(el._linkFirstMs); }
@@ -8317,7 +8320,7 @@ async function main() {
       return { tries, lo: Math.min(...ms), hi: Math.max(...ms) };
     });
     check(`the day's first link waits for a touched, shown look 1-3 min in (${width}px)`,
-      first.tries.watched && !first.tries.untouched && !first.tries.soon && !first.tries.stale && !first.tries.hidden
+      first.tries.watched && !first.tries.untouched && !first.tries.soon && !first.tries.stale && !first.tries.hidden && !first.tries.offscreen
       && first.lo >= 60000 && first.hi <= 180000, JSON.stringify(first));
 
     // A full visit, with frames along the way.

@@ -288,6 +288,7 @@ def test_spoken_about_the_stage_wish_and_visitor():
     assert spoken_about("teen", 5.4, {"kind": "play", "granted": True}, None)[1] == (
         "Its wish came true today."
     )
+    assert spoken_about("teen", 5.4, None, "owl")[1] == "An owl came by today."
     assert spoken_about("teen", 5.4, None, "shooting star")[1] == (
         "A shooting star went by today."
     )
@@ -322,7 +323,7 @@ async def test_status_says_the_wish_and_a_visitor_after_its_window(
     said = (
         "A shooting star went by today."
         if visitor["name"] == "shooting star"
-        else f"A {visitor['name']} came by today."
+        else f"{'An' if visitor['name'][:1] in 'aeiou' else 'A'} {visitor['name']} came by today."
     )
     assert text.endswith(said)
     state.asleep = True

@@ -122,7 +122,9 @@ def spoken_about(
     if visitor == "shooting star":
         out.append("A shooting star went by today.")
     elif visitor:
-        out.append(f"A {visitor} came by today.")
+        out.append(
+            f"{'An' if visitor[:1] in 'aeiou' else 'A'} {visitor} came by today."
+        )
     return out
 
 
