@@ -449,26 +449,31 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
         await page.waitForTimeout(250);
       }
     }
-    // Settings, shared screen: the person's rows hide, misses and whines stay, read-only.
+    // Settings, shared screen: the person's rows hide. Misses and whines are on the
+    // status page (top10 4a), shared screens included, and no longer in the sheet.
     const shared = await card.evaluate((el) => {
       const s = el._slides[el._index];
       localStorage.setItem("hatch-shared-screen", "on");
       el._renderStatus(s, []);
       const t = s.status.textContent;
-      const out = { misses: /misses/.test(t), whines: /whines/.test(t), personal: /notify me|my data|baby talk/.test(t),
+      const out = { inSheet: /missed calls|ignored whines/.test(t), personal: /notify me|my data|baby talk/.test(t),
         group: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent).join("|") };
+      s.settings = false;
+      el._renderStatus(s, []);
+      out.onStatus = /missed calls/.test(s.status.textContent) && /ignored whines/.test(s.status.textContent);
+      s.settings = true;
       localStorage.setItem("hatch-shared-screen", "off");
       el._renderStatus(s, []);
       return out;
     });
-    if (!shared.misses || !shared.whines || shared.personal) boxIssues.push(`${width} shared ${JSON.stringify(shared)}`);
+    if (shared.inSheet || !shared.onStatus || shared.personal) boxIssues.push(`${width} shared ${JSON.stringify(shared)}`);
     // Back to the picker for the checks that follow.
     await cur().locator(".status .shellrow").click();
     await page.waitForTimeout(300);
   }
   await page.setViewportSize({ width: 420, height: 860 });
   await page.waitForTimeout(400);
-  check("4c: every status, settings and picker control is 44x44 at 330 and 420, none overlap, the wish and meters show unscrolled, tab order is page order, shared settings keep misses/whines",
+  check("4c: every status, settings and picker control is 44x44 at 330 and 420, none overlap, the wish and meters show unscrolled, tab order is page order, a shared screen's status has misses/whines",
     boxIssues.length === 0, boxIssues.join(" ; ") || JSON.stringify(boxCounts));
 
   // Locked tiles (a pet below teen): shown dimmed with their stage, never hidden; a tap
@@ -696,7 +701,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     el._state = function (slide, key) {
       const st = real.call(this, slide, key);
       if (key !== "sensor.life_stage" || !st) return st;
-      const { shell_finish_options, shell_locked, ...rest } = st.attributes;
+      const { shell_finish_options, shell_locked, senses, ...rest } = st.attributes;
       return { ...st, attributes: rest };
     };
     s.statusHtml = null;
@@ -710,8 +715,8 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     el._renderStatus(s, []);
     return out;
   });
-  check("shell: an older server's sheet has no shell row and no picker (the pet's group stays, for misses and whines)",
-    /^for [^|]+\|for you\|this screen$/.test(older.heads.join("|")) && !older.row && older.tiles === 0, JSON.stringify(older));
+  check("shell: an older server's sheet has no shell row, no picker and no pet group (misses and whines are on status, top10 4a)",
+    /^for you\|this screen$/.test(older.heads.join("|")) && !older.row && older.tiles === 0, JSON.stringify(older));
 
   // Each error line: the shell goes back to its pick and the picker stays open.
   await openPicker();
@@ -751,6 +756,77 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await backToDefault("the error lines", a);
   const restored = await attrOf(a.entity, "shell_finish_options");
   check("shell: the stale list is gone again", JSON.stringify(restored) === JSON.stringify(a.options), JSON.stringify(restored));
+}
+
+// 2d. Big text (top10 4b): the "big text" row in THIS SCREEN, per browser, off by
+// default. On, the status box's words grow (16 px) and no page runs off the box
+// sideways at 330 (status, settings, journal); another tab's change is followed; off
+// puts it back.
+async function bigTextChecks({ page, check, cur, shot }) {
+  const card = page.locator("hatch-pet-card");
+  const state = () => card.first().evaluate((el) => {
+    const s = el._slides[el._index];
+    const bell = s.status.querySelector(".bell.bigtext");
+    return { on: el._card.classList.contains("bigtext"), stored: localStorage.getItem("hatch-big-text"),
+      row: bell && { text: bell.textContent, pressed: bell.getAttribute("aria-pressed"), label: bell.getAttribute("aria-label") },
+      size: getComputedStyle(s.status).fontSize };
+  });
+  const openSheet = async () => {
+    await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      if (!s.screen.classList.contains("show-status")) el._toggleStatus(s);
+    });
+    await page.waitForTimeout(300);
+    if (await cur().locator(".status .gear").count()) await cur().locator(".status .gear").click();
+    await page.waitForTimeout(300);
+  };
+  await card.evaluate((el) => { localStorage.removeItem("hatch-big-text"); el._card.classList.remove("bigtext"); });
+  await openSheet();
+  const off = await state();
+  check("big text: a row in this screen, off by default, 13 px",
+    !off.on && off.stored === null && off.row?.text === "off" && off.row.pressed === "false" &&
+    off.row.label === "big text: larger words on this screen's pages" && off.size === "13px", JSON.stringify(off));
+  await cur().locator(".bell.bigtext").click();
+  await page.waitForTimeout(300);
+  const on = await state();
+  check("big text: on stores \"on\", the row says so and the words are 16 px",
+    on.on && on.stored === "on" && on.row?.text === "on" && on.row.pressed === "true" && on.size === "16px", JSON.stringify(on));
+  // Nothing runs off the box sideways at 330: status, settings, journal.
+  const vp = page.viewportSize();
+  await page.setViewportSize({ width: 330, height: 860 });
+  await page.waitForTimeout(400);
+  const fits = await card.first().evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const fit = () => s.status.scrollWidth <= s.status.clientWidth + 1;
+    const out = {};
+    s.settings = true; s.journal = false; s.finds = false;
+    el._renderStatus(s, []); await wait(200); out.settings = fit();
+    s.settings = false;
+    el._renderStatus(s, []); await wait(200); out.status = fit();
+    s.journal = true;
+    el._renderStatus(s, []); await wait(1500); out.journal = fit();
+    s.journal = false;
+    el._renderStatus(s, []);
+    return out;
+  });
+  await shot("d3-bigtext-330");
+  check("big text at 330: status, settings and the journal fit the box's width", fits.status && fits.settings && fits.journal, JSON.stringify(fits));
+  await page.setViewportSize(vp);
+  // Another tab's change arrives as a storage event (the mono listener reads it too).
+  const kept = await card.first().evaluate((el) => {
+    el._card.classList.remove("bigtext");
+    window.dispatchEvent(new StorageEvent("storage", { key: "hatch-big-text" }));
+    return el._card.classList.contains("bigtext");
+  });
+  check("big text: another tab's change (a storage event) is followed", kept, String(kept));
+  await openSheet();
+  await cur().locator(".bell.bigtext").click();
+  await page.waitForTimeout(300);
+  const back = await state();
+  check("big text: off removes the key and the words are 13 px again", !back.on && back.stored === null && back.size === "13px", JSON.stringify(back));
+  await card.evaluate((el) => { const s = el._slides[el._index]; if (s.screen.classList.contains("show-status")) el._toggleStatus(s); });
+  await page.waitForTimeout(300);
 }
 
 // 2c. The mono screen (gear slice 5): the "mono screen" row in THIS SCREEN, per
@@ -1076,7 +1152,7 @@ async function main() {
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(600);
   const status = await cur().locator(".status").innerText();
-  check("status screen opens, without misses and whines (they live in settings)", /weight/.test(status) && !/whines|misses/.test(status));
+  check("status screen opens, with missed calls and ignored whines (top10 4a)", /weight/.test(status) && /missed calls/.test(status) && /ignored whines/.test(status));
   await shot("02-status");
   // The next egg's creature, picked through its select, shows on the status screen.
   const eggChoice = (await ids())["select.next_egg"];
@@ -1102,13 +1178,70 @@ async function main() {
     const s = el._slides[el._index];
     return { open: s.screen.classList.contains("show-status"), back: !!s.status.querySelector(".sback"),
       focus: el.shadowRoot.activeElement?.className, sound: !!s.status.querySelector(".bell.sound"),
-      stats: /weight/.test(s.status.textContent), pet0: /misses/.test(s.status.textContent) && /whines/.test(s.status.textContent), heads: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent),
+      stats: /weight/.test(s.status.textContent), pet0: /missed calls|ignored whines|misses|whines/.test(s.status.textContent), heads: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent),
       pet: el._linkName(s) };
   });
   check("the status screen has a gear and no switches; the gear opens the settings sheet over it",
     statusRows && sheet.open && sheet.back && sheet.sound && !sheet.stats, JSON.stringify(sheet));
-  check("the settings sheet holds misses and whines under the pet's group", sheet.pet0, JSON.stringify(sheet));
+  check("the settings sheet no longer holds misses and whines (on status now, top10 4a)", !sheet.pet0, JSON.stringify(sheet));
   check("the gear moves focus to the sheet's back row", sheet.focus === "sback", sheet.focus);
+  // top10 2b: "notices" in the pet's group lists the kinds the server sends (never an
+  // entity), "just the clock" with none; an admin gets "connect more ›" (never on a
+  // shared screen), which opens the integration's page in HA.
+  const noticesRow = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    const read = (senses, shared) => {
+      el._state = (x, key) => {
+        const st = real.call(el, x, key);
+        return key === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, senses } } : st;
+      };
+      if (shared) localStorage.setItem("hatch-shared-screen", "on");
+      s.statusHtml = null;
+      el._renderSettings(s);
+      const row = [...s.status.querySelectorAll(".row")].find((r) => /notices/.test(r.textContent));
+      const out = { value: row?.querySelector(".senses")?.textContent ?? null, link: s.status.querySelector(".connect")?.textContent ?? null };
+      if (shared) localStorage.setItem("hatch-shared-screen", "off");
+      return out;
+    };
+    try {
+      return { admin: !!el._hass.user?.is_admin, some: read(["weather", "tv"], false), none: read([], false), shared: read(["weather"], true),
+        server: real.call(el, s, "sensor.life_stage")?.attributes.senses };
+    } finally {
+      el._state = real;
+      s.statusHtml = null;
+      el._renderSettings(s);
+    }
+  });
+  check("top10 2b: \"notices\" lists the kinds (\"just the clock\" with none); an admin's \"connect more ›\", none on a shared screen",
+    Array.isArray(noticesRow.server) && noticesRow.some.value === "weather · tv" && noticesRow.none.value === "just the clock" &&
+    noticesRow.shared.value === "weather" && noticesRow.shared.link === null &&
+    noticesRow.some.link === (noticesRow.admin ? "connect more ›" : null), JSON.stringify(noticesRow));
+  if (noticesRow.admin) {
+    const went = await page.locator("hatch-pet-card").evaluate((el) => {
+      const s = el._slides[el._index];
+      const real = history.pushState;
+      let to = null;
+      history.pushState = (st, t, url) => { to = url; }; // stubbed: the check stays on its page
+      try {
+        s.status.querySelector(".connect")?.click();
+      } finally {
+        history.pushState = real;
+      }
+      return to;
+    });
+    check("top10 2b: \"connect more ›\" goes to the integration's page", went === "/config/integrations/integration/virtual_pet", String(went));
+  }
+  // top10 3a: the family-tablet note sits right under the "shared screen" switch.
+  const tabletNote = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const row = s.status.querySelector(".bell.shared")?.closest(".row");
+    const next = row?.nextElementSibling;
+    return { next: next?.className || null, text: next?.textContent || null };
+  });
+  check("top10 3a: the family-tablet note follows the shared screen switch",
+    /sharednote/.test(tabletNote.next || "") && tabletNote.text === "a family tablet? give it its own login, and we'll make friends ♥",
+    JSON.stringify(tabletNote));
   check("the sheet heads the pet's rows, the viewer's and this screen's",
     sheet.heads.join("|") === `for ${sheet.pet}|for you|this screen`, sheet.heads.join("|"));
   await shot("02c-settings");
@@ -1175,6 +1308,40 @@ async function main() {
   await page.waitForTimeout(1200);
   check("journal opens", /journal/.test(await cur().locator(".status").innerText()));
   await shot("03-journal");
+  // top10 8a: "every world ›" under the journal's grid opens one row per world, each
+  // creature drawn if a pet on this card raised it and "???" if not; no count; no tile
+  // for a creature that isn't ready; "‹ journal" goes back; nothing runs off at 330.
+  const W8 = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
+  const ready8 = (id) => fs.existsSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "sprites", id, "species.json"));
+  await cur().locator(".status .wlink").click();
+  await page.locator("hatch-pet-card").first().evaluate(async (el) => {
+    const s = el._slides[el._index];
+    for (const t = Date.now(); !s.status.querySelector(".jgrid") && Date.now() - t < 10000;) await new Promise((r) => setTimeout(r, 50));
+  });
+  const every = await page.locator("hatch-pet-card").first().evaluate((el) => {
+    const s = el._slides[el._index];
+    const raised = new Set(el._slides.flatMap((x) => el._state(x, "sensor.life_stage")?.attributes.raised || []));
+    return {
+      head: s.status.querySelector(".jhead")?.textContent.trim(), worlds: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent),
+      tiles: [...s.status.querySelectorAll(".jtile")].map((t) => ({ id: (t.querySelector("img")?.getAttribute("src") || "").match(/sprites\/([^/]+)\//)?.[1],
+        locked: t.classList.contains("locked"), text: t.textContent })),
+      raised: [...raised], back: s.status.querySelector(".jfoot .wlink")?.textContent, text: s.status.textContent,
+      fit: s.status.scrollWidth <= s.status.clientWidth + 1, journal: s.journal, everyWorld: s.everyWorld,
+    };
+  });
+  const want8 = Object.values(W8).flatMap((w) => w.roster.filter(ready8));
+  check("top10 8a: \"every world\" has a row per world and a tile per ready creature, raised ones named, the rest ???",
+    every.head === "every world" && JSON.stringify(every.worlds) === JSON.stringify(Object.values(W8).map((w) => w.name)) &&
+    JSON.stringify(every.tiles.map((t) => t.id)) === JSON.stringify(want8) &&
+    every.tiles.every((t) => (every.raised.includes(t.id) ? !t.locked && t.text !== "???" : t.locked && t.text === "???")) &&
+    every.everyWorld && !every.journal, JSON.stringify(every));
+  check("top10 8a: no count on the page, \"‹ journal\" at its foot, nothing runs off sideways",
+    !/\d+\s*(of|\/)\s*\d+|%/.test(every.text) && every.back === "‹ journal" && every.fit, JSON.stringify({ back: every.back, fit: every.fit }));
+  await shot("03c-every-world");
+  await cur().locator(".status .jfoot .wlink").click();
+  await page.waitForTimeout(1200);
+  check("top10 8a: \"‹ journal\" goes back to the journal",
+    await cur().locator(".status .jgrid").count() > 0 && /journal ·/.test(await cur().locator(".status").innerText()));
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
 
@@ -1471,6 +1638,113 @@ async function main() {
     return before && !s.screen.querySelector(".askday") && !s.asking;
   });
   check("a question gives way to a game", gaveWay);
+  // top10 1a: the phone question. "yes ♥" turns on "notify me" for this pet (stubbed
+  // here: nothing reaches the server) and the pet answers; "not now" changes nothing.
+  const phoneAsk = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const realOwn = el._callOwn;
+    const realWS = el._hass.callWS;
+    const calls = [];
+    const acks = [];
+    el._callOwn = async (type, data) => { calls.push({ type, ...data }); };
+    el._hass.callWS = (msg) => { acks.push(msg); return Promise.resolve(null); }; // the "shown" ack
+    const wasMine = s.mine ? s.mine.notify_me : undefined;
+    const run = async (answer) => {
+      Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0, asking: false });
+      el._ask(s, "phone");
+      const box = s.screen.querySelector(".askday");
+      const labels = [...(box?.querySelectorAll("button") || [])].map((b) => b.textContent);
+      box?.querySelector(`button[data-answer="${answer}"]`)?.click();
+      await new Promise((r) => setTimeout(r, 200));
+      return { labels, aria: box?.getAttribute("aria-label"), said: s.bubble.textContent || s.say || "" };
+    };
+    try {
+      const no = await run("not now");
+      const callsAfterNo = calls.length;
+      const yes = await run("yes");
+      return { no, yes, callsAfterNo, calls, acks: acks.filter((m) => m.type === "virtual_pet/answer") };
+    } finally {
+      el._callOwn = realOwn;
+      el._hass.callWS = realWS;
+      if (s.mine) s.mine.notify_me = wasMine;
+      el._clearAsk(s);
+    }
+  });
+  check("top10 1a: the phone question asks with \"yes ♥\" / \"not now\"; not now calls nothing; yes turns notify me on",
+    phoneAsk.yes.aria === "can I call your phone when I need you?" &&
+    JSON.stringify(phoneAsk.yes.labels) === JSON.stringify(["yes ♥", "not now"]) && phoneAsk.callsAfterNo === 0 &&
+    phoneAsk.calls.length === 1 && phoneAsk.calls[0].type === "notify_me" && phoneAsk.calls[0].enabled === true,
+    JSON.stringify(phoneAsk));
+  check("top10 1a (audit #1): each time it's shown, the card tells the server (answer \"shown\")",
+    phoneAsk.acks.length === 2 && phoneAsk.acks.every((m) => m.question === "phone" && m.answer === "shown"), JSON.stringify(phoneAsk.acks));
+  // top10 6b: the social meter. "friends" on the status page from the server's
+  // social_level (hidden at 0, aria "friends this week: n of 10"); a link reports
+  // virtual_pet/linked with both pets; full hearts queue "so many friends this week! ♥"
+  // once a week on this device.
+  const social = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    const withLevel = (lvl) => {
+      el._state = (x, key) => {
+        const st = real.call(el, x, key);
+        return key === "sensor.life_stage" && st && x === s ? { ...st, attributes: { ...st.attributes, social_level: lvl } } : st;
+      };
+    };
+    const rowOf = () => [...s.status.querySelectorAll(".row")].find((r) => /friends/.test(r.textContent));
+    const out = {};
+    const wasSettings = s.settings;
+    s.settings = false; s.journal = false; s.finds = false; s.everyWorld = false;
+    try {
+      withLevel(0);
+      s.statusHtml = null;
+      el._renderStatus(s, []);
+      out.zero = !!rowOf();
+      withLevel(5);
+      s.statusHtml = null;
+      el._renderStatus(s, []);
+      out.five = { aria: rowOf()?.querySelector(".hearts")?.getAttribute("aria-label") || null,
+        full: rowOf()?.querySelectorAll("img[src*='stat_heart_full']").length, half: rowOf()?.querySelectorAll("img[src*='stat_heart_half']").length };
+      // The weekly line: once, then not again this week.
+      withLevel(10);
+      const monday = new Date();
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+      localStorage.removeItem(`hatch-social-full-${s.ids.device}-${monday.toDateString()}`);
+      const keep = { queue: s.queue, sayUntil: s.sayUntil, asleep: s.asleep, game: s.game };
+      Object.assign(s, { queue: [], sayUntil: 0, asleep: false, game: null });
+      el._socialFull(s);
+      out.first = s.queue.map((q) => q.text);
+      s.queue = [];
+      el._socialFull(s);
+      out.again = s.queue.length;
+      Object.assign(s, keep);
+      localStorage.removeItem(`hatch-social-full-${s.ids.device}-${monday.toDateString()}`);
+    } finally {
+      el._state = real;
+      s.settings = wasSettings;
+      s.statusHtml = null;
+    }
+    // The link's report, with the websocket stubbed.
+    const realWS = el._hass.callWS;
+    const sent = [];
+    el._hass.callWS = (msg) => { sent.push(msg); return Promise.resolve(null); };
+    try {
+      const other = el._slides.find((x) => x !== s && x.ids?.["sensor.life_stage"]);
+      if (other) el._linkReport(s, other);
+      out.report = sent.filter((m) => m.type === "virtual_pet/linked");
+      out.want = other ? [s.ids["sensor.life_stage"], other.ids["sensor.life_stage"]] : null;
+    } finally {
+      el._hass.callWS = realWS;
+    }
+    return out;
+  });
+  check("top10 6b: \"friends\" hidden at 0; at 5, two and a half hearts with its aria",
+    !social.zero && social.five.aria === "friends this week: 5 of 10" && social.five.full === 2 && social.five.half === 1, JSON.stringify(social));
+  check("top10 6b: full hearts say \"so many friends this week! ♥\" once a week",
+    JSON.stringify(social.first) === JSON.stringify(["so many friends this week! ♥"]) && social.again === 0, JSON.stringify(social));
+  if (social.want) {
+    check("top10 6b: a link reports virtual_pet/linked with both pets",
+      social.report.length === 1 && social.report[0].entity_id === social.want[0] && social.report[0].other === social.want[1], JSON.stringify(social.report));
+  }
   // Screen readers hear plain words: no hearts or notes; a bare heart is "thank you!".
   const heard = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const s = el._slides[el._index];
@@ -2288,48 +2562,20 @@ async function main() {
   check("the picker remembers the last game",
     await evaluate(() => localStorage.getItem("hatch-last-game")) === "higher_lower");
 
-  // Catch (prototype, behind experimental_catch): the card times the taps, so
-  // play it from inside the page: tap mid-window on the right side, leave the
-  // bees alone, and tap one round too soon on purpose (so 4 of 5).
+  // Catch is gone: a YAML experimental_catch: true in an old card config is ignored
+  // harmlessly. It stays on for the sections below, which must not notice.
   await skip(page, 3500);
   await page.locator("hatch-pet-card").evaluate((el) => el.setConfig({ ...el._config, experimental_catch: true }));
   await inject(pet["sensor.energy"], { state: "80" }); // the card turns play down when tired
   await page.waitForTimeout(800);
   await button(2).click();
   await page.waitForTimeout(600);
-  check("catch joins the picker with the option",
-    (await cur().locator(".gpick button").count()) === 4);
-  await cur().locator('.gpick [data-game="catch"]').click();
-  const catchShot = page.waitForTimeout(2600).then(() => shot("04d-catch"));
-  const catchRounds = await page.locator("hatch-pet-card").evaluate(async (el) => {
-    const s = el._slides[el._index];
-    const out = [];
-    const frame = () => new Promise((r) => requestAnimationFrame(r));
-    for (let i = 0; i < 5; i++) {
-      let c;
-      for (let w = 0; w < 600 && !((c = s.game?.cur) && !c.done && s.game.round === i); w++) await frame();
-      if (!c) return out;
-      const early = i === 2 && !c.decoy;
-      const due = early ? 0.05 : c.travel - c.window / 2;
-      while (!c.done && (performance.now() - c.start) / 1000 < due) await frame();
-      if (!c.decoy && !c.done) s.gameBox.querySelector(c.side === "left" ? ".gl" : ".gr").click();
-      while (!c.done) await frame();
-      out.push({ decoy: c.decoy, early, wins: s.game?.wins });
-      for (let w = 0; w < 200 && s.game && s.game.round === i + 1 && s.game.cur === c; w++) await frame();
-    }
-    return out;
-  });
-  await catchShot;
-  await page.waitForTimeout(1500);
-  const catchLine = await bubble();
-  const expected = 5 - catchRounds.filter((r) => r.early).length;
-  check("catch plays five timed rounds", catchRounds.length === 5 && catchLine.startsWith(`${expected}/5 caught`),
-    `${catchRounds.map((r) => (r.decoy ? "bee" : r.early ? "early" : "catch")).join(" ")} -> ${catchLine}`);
-  check("catch keeps a best score",
-    Number(await evaluate(() => localStorage.getItem("hatch-best-catch"))) >= expected);
-  // 3a. Calm Catch: two steps (far at once, "at the pet" at travel - window - 50 ms), no
-  // slide and no transform; a tap on the last step's first frame catches. Time is moved
-  // through c.start, never waited for.
+  check("experimental_catch: true is ignored: the picker keeps its three games, no catch",
+    (await cur().locator(".gpick button").count()) === 3 && (await cur().locator('.gpick [data-game="catch"]').count()) === 0);
+  await cur().locator(".gx").click();
+  await page.waitForTimeout(300);
+  // 3a. Reduced motion: the pet's src stays one still picture, even in a game. Time is
+  // moved, never waited for.
   {
     await page.emulateMedia({ reducedMotion: "reduce" });
     await skip(page, 4500); // the last result line clears
@@ -2337,39 +2583,10 @@ async function main() {
     await page.waitForTimeout(500);
     await button(2).click();
     await page.waitForTimeout(500);
-    await cur().locator('.gpick [data-game="catch"]').click();
-    const calmCatch = await page.locator("hatch-pet-card").evaluate(async (el) => {
-      const s = el._slides[el._index];
-      const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      for (let w = 0; w < 600 && !(s.game?.cur && !s.game.cur.done); w++) await frame();
-      const c = s.game.cur;
-      const seen = new Set();
-      const at = async (sec) => { // jump the round clock to sec seconds in
-        c.start = performance.now() - sec * 1000;
-        await frame();
-        seen.add(s.propEl.style.left);
-        return { left: s.propEl.style.left, transform: s.propEl.style.transform };
-      };
-      const boundary = c.travel - c.window;
-      const first = { left: s.propEl.style.left, calm: c.calm, side: c.side, decoy: c.decoy };
-      const early = await at(boundary / 2);
-      const justBefore = await at(boundary - 0.2);
-      const last = await at(boundary - 0.04); // the last step's first frames
-      const later = await at(boundary + c.window / 2);
-      const wins = s.game.wins;
-      s.gameBox.querySelector(c.side === "left" ? ".gl" : ".gr").click();
-      return { first, early, justBefore, last, later, seen: [...seen], won: s.game.wins - wins, near: c.side === "left" ? "28%" : "56%",
-        far: c.side === "left" ? "8%" : "76%", done: c.done };
-    });
-    check("3a: calm Catch shows the prop at the far spot at once",
-      calmCatch.first.calm && calmCatch.first.left === calmCatch.far, JSON.stringify(calmCatch));
-    check("3a: calm Catch takes exactly two left values and sets no transform",
-      calmCatch.seen.length === 2 && calmCatch.seen.every((v) => [calmCatch.far, calmCatch.near].includes(v)) &&
-      !calmCatch.early.transform && !calmCatch.last.transform, JSON.stringify(calmCatch));
-    check("3a: calm Catch jumps to the pet at travel - window - 50 ms, not before",
-      calmCatch.justBefore.left === calmCatch.far && calmCatch.last.left === calmCatch.near, JSON.stringify(calmCatch));
-    check("3a: a tap on the last step's first frame catches (not too soon)",
-      calmCatch.won === 1 && calmCatch.done, JSON.stringify(calmCatch));
+    await cur().locator('.gpick [data-game="left_right"]').click();
+    await page.waitForTimeout(600);
+    check("3a: a game under reduced motion opens with no prop showing",
+      await card.evaluate((el) => { const s = el._slides[el._index]; return s.game?.kind === "left_right" && s.propEl.hidden; }));
     await page.locator("hatch-pet-card").evaluate((el) => {
       el._endGame(el._slides[el._index], "");
     });
@@ -2424,7 +2641,7 @@ async function main() {
       await cur().locator(".gx").click();
       await page.waitForTimeout(300);
     };
-    await skip(page, 4500); // let the catch result line clear
+    await skip(page, 4500); // let the result line clear
     for (const kind of ["left_right", "higher_lower"]) {
       await open(kind);
       const fresh = await score();
@@ -2478,23 +2695,24 @@ async function main() {
     check("a game closed during a pending guess throws nothing", errors.length === errorsBefore,
       errors.slice(errorsBefore).join(" | "));
 
-    // Catch (experimental_catch is on above): close and reopen inside 900 ms,
-    // and exactly one round runs (the kickoff timer only).
-    await open("catch");
-    await page.locator("hatch-pet-card").evaluate((el) => {
+    // Close and reopen inside 900 ms (left or right): the old game's guess timer dies
+    // with it, so nothing fires on the new game and nothing throws.
+    const errorsReopen = errors.length;
+    await open("left_right");
+    await cur().locator(".gl").click();
+    const timersLeft = await page.locator("hatch-pet-card").evaluate((el) => {
       const s = el._slides[el._index];
-      window.__catchRounds = 0;
-      const was = el._catchRound.bind(el);
-      el._catchRound = (x) => { window.__catchRounds += x === s && x.game?.kind === "catch" ? 1 : 0; return was(x); };
+      const before = s.gameTimers?.size || 0;
       el._endGame(s, null);
+      return { before, after: s.gameTimers?.size || 0 };
     });
     await page.waitForTimeout(100);
     await button(2).click();
     await page.waitForTimeout(300);
-    await cur().locator('.gpick [data-game="catch"]').click();
+    await cur().locator('.gpick [data-game="left_right"]').click();
     await page.waitForTimeout(1500);
-    check("catch reopened inside 900 ms runs one round",
-      (await evaluate(() => window.__catchRounds)) === 1, String(await evaluate(() => window.__catchRounds)));
+    check("a game reopened inside 900 ms: the old guess timer died and nothing throws",
+      timersLeft.after === 0 && errors.length === errorsReopen, JSON.stringify(timersLeft) + errors.slice(errorsReopen).join(" | "));
     await stop();
 
     // Fresh eyes #1+#2: a game the server dropped for idling. Left/Right: the guess
@@ -2748,67 +2966,68 @@ async function main() {
     if (afterBtn.status) await page.locator("hatch-pet-card .statusbtn").click();
     await page.waitForTimeout(200);
 
-    // Fresh eyes #3+#4: Catch never plays unseen. Opening the status, swiping away and
-    // tapping Play each end the round (the ball goes), and a game nobody tapped keeps no best.
-    const catchLive = () => card.evaluate(async (el) => {
+    // Fresh eyes #3+#4: a game never plays unseen. Opening the status, swiping away and
+    // tapping Play each end it (no prop left showing), and a game nobody tapped sends only an end.
+    const gameLive = () => card.evaluate(async (el) => {
       const s = el._slides[el._index];
-      for (let w = 0; w < 300 && !(s.game?.cur && !s.game.cur.done); w++) await new Promise((r) => requestAnimationFrame(r));
-      return s.game?.kind === "catch" && !s.propEl.hidden;
+      for (let w = 0; w < 300 && !s.game; w++) await new Promise((r) => requestAnimationFrame(r));
+      return s.game?.kind === "left_right" && !s.game.picking;
     });
-    await open("catch");
-    const statusLive = await catchLive();
+    await open("left_right");
+    const statusLive = await gameLive();
     const statusEnd = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       el._toggleStatus(s);
-      const out = { game: !!s.game, ball: !s.propEl.hidden };
+      const out = { game: !!s.game, prop: !s.propEl.hidden };
       await new Promise((r) => setTimeout(r, 300));
       el._toggleStatus(s);
       return out;
     });
-    check("opening the status mid-Catch ends the game and hides the ball",
-      statusLive && !statusEnd.game && !statusEnd.ball, `${statusLive} ${JSON.stringify(statusEnd)}`);
-    await open("catch");
-    const playLive = await catchLive();
+    check("opening the status mid-game ends the game and hides the prop",
+      statusLive && !statusEnd.game && !statusEnd.prop, `${statusLive} ${JSON.stringify(statusEnd)}`);
+    await open("left_right");
+    const playLive = await gameLive();
     await button(2).click();
     await page.waitForTimeout(400);
     const playEnd = await card.evaluate((el) => {
       const s = el._slides[el._index];
-      return { picking: !!s.game?.picking, ball: !s.propEl.hidden };
+      return { picking: !!s.game?.picking, prop: !s.propEl.hidden };
     });
-    check("Play mid-Catch ends the round: the picker, and no ball over it",
-      playLive && playEnd.picking && !playEnd.ball, `${playLive} ${JSON.stringify(playEnd)}`);
+    check("Play mid-game ends the game: the picker, and no prop over it",
+      playLive && playEnd.picking && !playEnd.prop, `${playLive} ${JSON.stringify(playEnd)}`);
     await card.evaluate((el) => el._endGame(el._slides[el._index], null));
     if (slides > 1) {
-      await open("catch");
-      const swipeLive = await catchLive();
+      await open("left_right");
+      const swipeLive = await gameLive();
       const swipe = await card.evaluate(async (el) => {
         const back = el._index;
         const s = el._slides[back];
         el._go(back + 1);
-        const out = { game: !!s.game, ball: !s.propEl.hidden };
+        const out = { game: !!s.game, prop: !s.propEl.hidden };
         await new Promise((r) => setTimeout(r, 400));
         el._go(back);
         return out;
       });
       await page.waitForTimeout(800);
-      check("swiping away mid-Catch ends the game on the slide left",
-        swipeLive && !swipe.game && !swipe.ball, `${swipeLive} ${JSON.stringify(swipe)}`);
+      check("swiping away mid-game ends the game on the slide left",
+        swipeLive && !swipe.game && !swipe.prop, `${swipeLive} ${JSON.stringify(swipe)}`);
     }
     const untapped = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
-      const was = localStorage.getItem("hatch-best-catch");
-      localStorage.removeItem("hatch-best-catch");
-      // The last round of a game nobody tapped, resolved as a decoy dodged (a "catch").
-      s.game = { kind: "catch", round: 4, wins: 4, cur: { done: false, raf: 0 } };
-      el._catchResolve(s, true, "phew, let the bee go!");
-      await new Promise((r) => setTimeout(r, 1200));
-      const stored = localStorage.getItem("hatch-best-catch");
-      if (was === null) localStorage.removeItem("hatch-best-catch");
-      else localStorage.setItem("hatch-best-catch", was);
-      return { stored, ended: !s.game, said: s.bubble.textContent };
+      const calls = [];
+      const real = el._hass.callService;
+      el._hass.callService = (...a) => { calls.push(a[2]); return real.apply(el._hass, a); };
+      try {
+        s.game = { picking: true };
+        el._pickGame(s, "left_right"); // started, never tapped
+        await new Promise((r) => setTimeout(r, 300));
+        el._quitGame(s, null);
+      } finally { el._hass.callService = real; }
+      return { ended: !s.game, calls: calls.map((c) => (c?.end ? "end" : c?.guess ? "guess" : "start")) };
     });
-    check("a Catch game nobody tapped keeps no best score",
-      untapped.ended && untapped.stored === null && /^5\/5 caught/.test(untapped.said), JSON.stringify(untapped));
+    check("a game nobody tapped sends only its end: no guess, no result",
+      untapped.ended && untapped.calls.at(-1) === "end" && !untapped.calls.includes("guess"),
+      JSON.stringify(untapped));
 
     // Fresh eyes #7: a care line said over a game's prompt gives way to the prompt again.
     await skip(page, 4500); // the result line clears
@@ -3274,6 +3493,29 @@ async function main() {
       resumed.first.held.length === 0 && resumed.first.said.includes("I dreamed about Bluey!") &&
       resumed.first.said.includes("can we watch the sunset together?") &&
       !resumed.twice.said.some((t) => /dreamed|sunset together/.test(t)), JSON.stringify(resumed));
+  // top10 6d: a visitor's dream names it from worlds.json; one this card doesn't know
+  // says no dream line at all.
+  const visitorDream = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const said = (dream) => {
+      for (const k of Object.keys(localStorage)) if (/^hatch-dream-/.test(k)) localStorage.removeItem(k);
+      s.lookedFirst = false; s.queue = [];
+      s.house = { ...(s.house || {}), dream };
+      el._firstLook(s);
+      const out = s.queue.map((q) => q.text).filter((t) => /dreamed/.test(t));
+      s.queue = []; s.sayUntil = 0;
+      return out;
+    };
+    try {
+      return { known: said({ kind: "visitor", id: "stellersjay", world: "woodland" }),
+        unknown: said({ kind: "visitor", id: "nobody", world: "woodland" }) };
+    } finally {
+      s.house = { ...(s.house || {}), dream: null };
+    }
+  });
+  check("top10 6d: a visitor's dream names it; an unknown one says nothing",
+    JSON.stringify(visitorDream.known) === JSON.stringify(["I dreamed about the Steller's jay! ♪"]) && visitorDream.unknown.length === 0,
+    JSON.stringify(visitorDream));
   // P3c: the recap's TV and music come from the title-less public tv_on/music_on.
   const recapAt = new Date(Date.now() - 1800 * 1000).toISOString();
   await inject(pet["sensor.last_care"], {
@@ -6173,6 +6415,7 @@ async function main() {
   }
   if (enter("mono")) {
   await monoChecks({ page, context, check, cur, evaluate, shot, errors });
+  await bigTextChecks({ page, check, cur, shot });
 
   }
   if (enter("ghost")) {
@@ -6258,13 +6501,12 @@ async function main() {
 
   // Ghosting (1b): a frame swap and a wander leave a fading trace, on the pet on show only.
   await setLcd(true);
-  const ghostRun = (opts) => card.evaluate(async (el, { catchGame }) => {
+  const ghostRun = (opts) => card.evaluate(async (el) => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const s = el._slides[el._index];
     const op = () => Number(getComputedStyle(s.ghost).opacity);
     const out = { pets: s.screen.querySelectorAll(".pet").length, ghostIsPet: s.ghost.classList.contains("pet") };
     const savedGame = s.game;
-    if (catchGame) s.game = { kind: "catch" };
     // No tick of the card's own while sampling (its idle life moves the pet too).
     const realTick = el._tick;
     el._tick = () => {};
@@ -6325,9 +6567,6 @@ async function main() {
       Math.abs(g.trail - 0.3) < 0.01 && g.trailLater === 0 && g.back === 0, JSON.stringify(g));
     check(`ghosting at ${width} px: the ghost is not a second pet`, g.pets === 1 && !g.ghostIsPet, JSON.stringify(g));
   }
-  const inCatch = await ghostRun({ catchGame: true });
-  check("ghosting stays hidden in Catch",
-    inCatch.frameJust === 0 && inCatch.trail === 0, JSON.stringify(inCatch));
   await page.emulateMedia({ reducedMotion: "reduce" });
   const calmGhost = await ghostRun({});
   check("ghosting never shows with reduced motion",
@@ -6964,7 +7203,7 @@ async function main() {
     });
     check(`react: ${stage} a pat during a reaction speaks, keeps its move, adds no perk`,
       pat.cls.includes("greethop") && !pat.cls.includes("perk") && pat.said.length > 0 && pat.live, JSON.stringify(pat));
-    // P3 praise moves, live: a plucky pet's Catch pounce (ms 900) is a perk, back in the
+    // P3 praise moves, live: a plucky pet's win beat in a game (ms 900) is a perk, back in the
     // middle before the next round (1000 ms); bouncy's praise hop is a greethop, which
     // a hass update (_render toggles "hop") leaves running.
     if (stage === "adult") {
@@ -7006,7 +7245,7 @@ async function main() {
         Object.assign(s, { poseUntil: 0, movingUntil: 0 });
         return out;
       });
-      check("react: plucky's Catch praise is a perk, centred before the next round",
+      check("react: plucky's in-game praise is a perk, centred before the next round",
         moves.pluckyNow.join() === "perk" && moves.pluckyNext.length === 0 && !moves.pluckyMoving &&
         ["none", "0px", "0px 0px"].includes(moves.pluckyX), JSON.stringify(moves));
       check("react: bouncy's praise hop (greethop) survives a hass update",
@@ -7058,9 +7297,9 @@ async function main() {
         r.awwLog = { src: src(), live: s.poseUntil > Date.now() };
         reset(); s.game = { cur: null }; // the picker: nothing yet
         r.picker = { live: s.poseUntil > Date.now() };
-        await el._pickGame(s, "catch"); // the pick starts the game: acts.ready
+        await el._pickGame(s, "left_right"); // the pick starts the game: acts.ready
         r.ready = { src: src(), live: s.poseUntil > Date.now(), ms: s.poseUntil - Date.now() };
-        el._endGame(s);
+        el._quitGame(s, null);
         reset();
         // The clean scene's last beat.
         el._state = function (slide, key) {
@@ -8643,7 +8882,7 @@ async function main() {
         s.screen.classList.remove("show-status");
       }
       for (const [who, s] of [["host", a], ["guest", b]]) {
-        for (const [what, patch] of [["asleep", { asleep: true }], ["calling", { calling: true }], ["game", { game: { kind: "catch" } }], ["queue", { queue: [{ text: "x" }] }]]) {
+        for (const [what, patch] of [["asleep", { asleep: true }], ["calling", { calling: true }], ["game", { game: { kind: "left_right" } }], ["queue", { queue: [{ text: "x" }] }]]) {
           const keep = Object.fromEntries(Object.keys(patch).map((k) => [k, s[k]]));
           Object.assign(s, patch); clear();
           out[`${who} ${what}`] = el._linkPick(a);
@@ -9673,6 +9912,33 @@ async function main() {
   await page.waitForTimeout(500);
   await calm();
   await pinAwake(card, "collection");
+  // top10 7a: with FINDS_SHOWN off, the link and the page are named by what they show,
+  // visitors. Checked before showFinds turns the switch on for the rest of the run.
+  const hidden = await card.first().evaluate(async (el) => {
+    const Card = customElements.get("hatch-pet-card");
+    const was = Card.findsShown;
+    Card.findsShown = false;
+    const s = el._slides[el._index];
+    const wait = async (ok, ms = 10000) => { for (const t = Date.now(); !ok() && Date.now() - t < ms;) await new Promise((r) => setTimeout(r, 50)); };
+    try {
+      if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      el._toggleStatus(s);
+      s.status.querySelector(".jlink").click();
+      await wait(() => s.status.querySelector(".jfoot .flink"));
+      const link = s.status.querySelector(".jfoot .flink")?.textContent;
+      s.status.querySelector(".jfoot .flink")?.click();
+      const head = s.status.querySelector(".jhead span")?.textContent;
+      return { link, head, world: el._worldName(s) };
+    } finally {
+      if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      el._dropFinds(s);
+      s.finds = false;
+      s.journal = false;
+      Card.findsShown = was;
+    }
+  });
+  check("top10 7a: with finds hidden, the journal's link is \"visitors ›\" and the page \"visitors · <world>\"",
+    hidden.link === "visitors ›" && hidden.head === `visitors · ${hidden.world}`, JSON.stringify(hidden));
   await showFinds();
   const W = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
   const cw = basketSeed.world;

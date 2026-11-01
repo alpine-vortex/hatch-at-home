@@ -8,8 +8,8 @@ let the real house (weather, light, bedtime, who's home) shape its mood and
 scenery. **The house can never hurt the pet**; it only changes how the pet
 looks, what it says and what it asks for.
 
-Status: **phase 4, life**, nearly done (bird visits from BirdNET-Pi are still to
-come). The pet lives in HA: stats, calls, care misses, poop, sleep, weight,
+Status: the pet, its house and its family are built (see the Roadmap at the end).
+The pet lives in HA: stats, calls, care misses, poop, sleep, weight,
 discipline, two games (left or right, higher or lower) and chore treats. It sits on a pixel-art **device
 shelf** card and reacts to your house: weather, indoor temperature, lights,
 bedtime, people coming and going, the TV and music, and the moon. It learns traits,
@@ -17,13 +17,10 @@ grows up with an upbringing, and starts new generations that you can follow in i
 journal.
 
 Each pet lives in a **device** themed for its **world**: an orange egg-shaped toy for
-Woodland (the bird, the Douglas squirrel and the black-tailed deer), a sandstone tank for Terrarium (the
-leopard gecko and the Mexican red-knee tarantula), a little red house for Hearth
-(the tabby kitten and the lop bunny), a riveted porthole for Tidepool (the sea otter and the giant Pacific octopus,
-whose water clouds over instead of collecting poop), a lily pad for Pond (the
-Pacific tree frog and the axolotl), and a crescent moon for Night Sky (the little
-brown bat and the luna moth). The egg decides which of that world's
-creatures hatches. See `docs/design-worlds.md`.
+Woodland, a sandstone tank for Terrarium, a little red house for Hearth, a riveted
+porthole for Tidepool (whose water clouds over instead of collecting poop), a lily pad
+for Pond, and a crescent moon for Night Sky. Each world has five creatures, 30 in all.
+The egg decides which of that world's creatures hatches. See `docs/design-worlds.md`.
 
 ## Install
 
@@ -38,8 +35,8 @@ creatures hatches. See `docs/design-worlds.md`.
      SSH add-on or the Studio Code Server add-on all work.
 3. Restart HA: Settings → System → power icon (top right) → Restart Home Assistant.
 4. Settings → Devices & services → Add integration → search **Virtual Pet**,
-   then name your pet and pick its world: Woodland (bird, squirrel, deer), Terrarium
-   (leopard gecko, tarantula), Hearth (kitten, bunny), Tidepool (sea otter, octopus), Pond (tree frog, axolotl) or Night Sky (bat, luna moth). Add the integration again for each extra pet device.
+   then name your pet and pick its world: Woodland, Terrarium, Hearth, Tidepool, Pond
+   or Night Sky (five creatures each). Add the integration again for each extra pet device.
 
 ### Updating
 
@@ -69,7 +66,6 @@ devices:
 # or, as before, any one entity of each pet:
 entities:
   - sensor.pip_mood
-experimental_catch: true  # optional prototype: adds Catch to the game picker
 seasonal: false  # optional: no seasonal touches (on by default; "halloween", "thanksgiving" or "winter" previews one)
 ```
 
@@ -89,7 +85,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   that asks for it. Reduced motion skips the fill.
 - The screen shows the pet, its scene and a speech bubble. The bubble says what's on
   its mind, or why it refused something ("I'm full!").
-- **Play** offers three games (four with Catch). It opens a picker that starts on the
+- **Play** offers three games. It opens a picker that starts on the
   last game you picked. **Left or right:**
   the pet hides on one side and you guess with the arrows; a win cheers it up more than
   plain play. **Higher or lower:** the pet shows a number from 1 to 9 and you guess
@@ -103,10 +99,6 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   round and bank, however much later. Each person has their own; someone else starts
   fresh. (The `play` button entity is still plain play, for
   automations and voice.)
-- **Catch** (prototype, card option `experimental_catch: true`): a toy rolls in from
-  one side; tap that side as it reaches the pet, but let the bee go by. Five rounds,
-  three catches win; the best score stays in this browser. No reward, nothing is sent
-  to Home Assistant.
 - **Every day** there's something new when you look in:
   - **A wish of the day**, picked when it wakes up, only from what your house can grant: play
     a game together, a snack after lunch, a bubble bath, "good job!", being tucked in
@@ -119,7 +111,8 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     tomorrow brings a new one.
   - **A dream**: it may dream about something from the day before (a show it watched,
     the rain, a game it won, its wish coming true) and tells the first person who
-    looks in that morning.
+    looks in that morning. On a quiet day it may dream of the day's world visitor
+    instead ("I dreamed about the chickadee! ♪").
   - **While you were out**: open the card after a few hours away and it tells you what
     happened ("while you were out, I napped, watched the rain and played a game!").
 - **A bond with each person.** The pet gets to know everyone who signs in to Home
@@ -161,7 +154,14 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 
   A bond never changes the pet's stats: it's flavour. The status screen shows "you
   two" in five hearts.
-- **My day** (opt in on the status screen, for yourself only): the pet notices your
+- **Friends this week.** Beside "you two", the status page shows "friends": five
+  hearts for the pet's week beyond the house. A world visitor counts when someone looks
+  in while it's there and the pet is up, and each neighbour it meets over the infrared link counts once a
+  day. It's a rolling week, so it fills and fades with the visits, and it changes
+  nothing about the pet: no stats, no points. A pet that met no neighbour all week (alone
+  in the house, or on a card of its own) gets a little more from each visitor. At full hearts it says "so many friends this week! ♥" (once a
+  week), and a new egg starts its own. The row hides until there's a friend to show.
+- **My day** (turn it on in settings, the gear on the status screen; for yourself only): the pet notices your
   good days from the phones you signed in to the Home Assistant app with. It only
   ever says something when a day stands out for the better, and only to you, at most
   once a day; never a quiet day, a short night, a heart rate or a weight. The closer
@@ -185,9 +185,17 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     week, from the pet you're closest to, and silent (level 3).
 
   On a wall tablet or any screen the whole family looks at but one person is signed
-  in to, turn on "shared screen" on its status page (it's saved in that browser
-  only): it shows nothing personal there, no names, notes, questions, bond or "my
-  day", and doesn't count as anyone's visit.
+  in to, turn on "shared screen" in settings (the gear on the status page; it's saved
+  in that browser only): it shows nothing personal there, no names, notes, questions,
+  bond or "my day", and doesn't count as anyone's visit.
+
+  **A family tablet: which way?** There are two ways to set one up. Give the tablet its
+  own Home Assistant login (a "family" user): the pet then treats the tablet as one
+  more person, with its own household bond, greetings, questions and nickname, and
+  everyone's own phone or login keeps its own bond as well. Or sign the tablet in as one
+  person and turn on "shared screen": nothing personal shows, and the tablet builds no
+  bond at all. The first is warmer for a family; the second suits a screen in a shared
+  or public space. The card says so in a line under the "shared screen" switch.
 
   "My day" is one switch per person, for every pet. Phone focus modes and Do Not
   Disturb are left to your phone: the pet's calls and sickness are time-sensitive
@@ -237,14 +245,18 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   first visit gets "so many lights! ♥" and a little treat. There's no countdown. The
   season goes by the device's date, so it's winter lights in a southern December too.
   All cosmetic. "holiday names" in settings turns festival names off (see below).
-- Tap the screen for the status page: hearts and meters, weight, care misses and
-  ignored whines, traits (n/4) and the one it's learning next, upbringing,
+- Tap the screen for the status page: hearts and meters, weight, traits (n/4) and
+  the one it's learning next, upbringing with "missed calls" and "ignored whines"
+  under it (calls nobody answered in time, and fake calls nobody answered),
   personality (from teen), the next egg, recent care, and a link to the journal.
   Tap again to go back. The switches live behind the gear (below).
 - **The settings gear.** A gear sits at the top of the status page ("settings").
   Tap it for the settings sheet; "‹ settings" at the top of any sub-page takes you
   back. The sheet has up to three parts:
-  - **for the pet** (or **for** its name): the pet's "shell" row, see below.
+  - **for the pet** (or **for** its name): "notices", the kinds of thing the house
+    shows the pet (weather, lights, tv, music, chores, fireplace, moon; "just the clock"
+    with none), then the pet's "shell" row, see below. An admin also gets "connect
+    more ›", which opens the pet's page in Settings → Devices & services.
   - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk and
     my data. These follow your login. A shared screen doesn't show this part.
   - **this screen**: sounds here, babble (for pets with a voice), screen effects
@@ -271,6 +283,9 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   LCD in four greens, like an old handheld. It is per browser, off to begin with,
   and only changes how the screen looks. Safari and iOS can't draw it and keep
   showing colour.
+- **Big text.** "big text" in the same part makes the words on the status page, the
+  journal and the settings sheet bigger (the page scrolls more). It is per browser and
+  off to begin with: handy on a wall tablet, or for younger and older readers.
 - Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
   and phones give a tiny vibration. Then the real reaction follows (a food bowl, a
   sparkle, or a refusal like "I'm full!"). If HA rejects the press, the button shakes
@@ -306,7 +321,7 @@ pet; it's only how the screen looks.
   more contrast.
 - **Ghosting.** Like a slow old LCD, the screen leaves a fading trace of the pet:
   its last frame for a moment when it moves, and a short smear when it wanders or
-  dashes aside in a game. Only on the pet you're looking at, never in Catch, and
+  dashes aside in a game. Only on the pet you're looking at, and
   never with reduced motion. The same "screen effects here" switch turns it off.
   It's off on a mono screen ("mono screen" in the settings), which keeps the grid.
 - **The backlight.** Every device has a little button on its shell: a nub on the
@@ -467,7 +482,7 @@ your alarm times, the last zone you came back from (only while "my day" is on), 
 your "baby talk", "my day" and "birthday on my phone" switches are kept for you alone,
 for every pet. They stay
 when you remove a pet, even the last one, so they're there if you set it up again.
-**"forget my data"** on the status screen (not on a shared screen) erases all of
+**"forget my data"** in settings (the gear on the status screen) (not on a shared screen) erases all of
 that, for you only, at once. Your bond with each pet, its photos and its nickname
 for you stay. So does whether you get notifications: turn "notify me" off for that.
 So does a "forget my birthday": the pets still won't ask for it. Messages already sent to your
@@ -645,7 +660,9 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   device's family line: each generation with its traits, stars, upbringing and
   personality. The latest four show; past them, "older generations (N)" opens the rest,
   oldest first.
-- **Notifications:** opt in per person. On the status screen, tap "notify me" to get
+  Under the creatures, "every world ›" shows all six worlds, five creatures each: the
+  ones a pet on this card has raised are drawn, the rest are silhouettes.
+- **Notifications:** opt in per person. In settings (the gear on the status screen), tap "notify me" to get
   this pet's calls, sickness, hatching, growing up, new or deeper traits, the season's
   first snow and frost, new eggs, and a holiday greeting on the morning of Halloween
   ("Happy Halloween! Pip is dressed up and ready to trick or treat 🎃") and of
@@ -658,7 +675,11 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   or Scold for a plea to play), and it clears itself once the call is answered or
   missed. A need asking again is an ordinary notification, and poop calls stay on
   the card. Fast-forward never notifies.
-- **Sounds:** off until you turn them on. On the status screen, tap "sounds here"
+  The pet asks once: after a call is missed (or while one is waiting), it may ask
+  "can I call your phone when I need you?". It asks only people signed in to the Home
+  Assistant app on a phone, never someone already getting its calls, and at most one
+  question a day. Once you've seen it, it never asks again (unless you "forget my data"). "yes ♥" turns "notify me" on for that pet.
+- **Sounds:** off until you turn them on. In settings (the gear on the status screen), tap "sounds here"
   for little chirps when the pet calls, hatches, learns a trait or wins a game. It
   only changes this browser, and the pet stays quiet while it sleeps and from 21:00
   to 08:00.
@@ -666,7 +687,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   squirrel "chirr", the octopus "bloop". Now and then a line opens with it ("tweet!
   hi, Sam!"), never more than once every two minutes, and never on a sad or sick
   line. Lines type out at the creature's own speed (not with reduced motion turned
-  on). Tap "babble" on the status screen for its voice as it talks, a tiny sound
+  on). Tap "babble" in settings (the gear on the status screen) for its voice as it talks, a tiny sound
   per letter at its own pitch: off by default, only for this browser, and quiet at
   the same times as the chirps. Screen readers hear the words without the sound.
 - **Its favourite snack.** At hatching each pet picks a favourite from its
@@ -686,11 +707,11 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   it asks you, once, when your birthday is (or "skip", which it remembers). Your
   birthday is kept only for you: never on a sensor, an event or diagnostics. On the
   day, the first pet you look at says "happy birthday!!" with a little tune, and
-  if you turn "birthday on my phone" on (status screen; off by default) and have
+  if you turn "birthday on my phone" on (in settings; off by default) and have
   "notify me" on, your phone hears it once that morning from the pet you're closest
   to, by its nickname for you. Like every phone message, that one is in Home
-  Assistant's history, where admins can see it; that's why it starts off. "forget my birthday" on the
-  status screen (two taps) forgets it and stops asking; "forget my data" forgets
+  Assistant's history, where admins can see it; that's why it starts off. "forget my birthday" in
+  settings (the gear on the status screen; two taps) forgets it and stops asking; "forget my data" forgets
   everything the pets remember about you (see Privacy).
 - **A photo, for best friends.** At bond level 10, once a pet is a teen, it makes
   you a framed photo of itself as it was that day ("I made you something! it's in
@@ -698,7 +719,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   only by you and never on a shared screen, a sensor or a phone message. Tap "save"
   to share it or keep it. The Android app can't save it, so there the picture says
   you can save it from a computer.
-- **Baby talk.** Turn "baby talk" on (status screen; off by default) and, while a
+- **Baby talk.** Turn "baby talk" on (in settings; off by default) and, while a
   pet is a baby or a child, its common lines get simpler: "hungy!" for a baby's
   hungry call, "hi hi, Sam!", "yay yay!". Babies get the most changes, children a
   few; teens and adults never change. A pet is a baby for about its first day of
@@ -806,7 +827,8 @@ no `title` or `artist`: for every change, read `media_title` from your media pla
 `virtual_pet_someone_home` (anyone signed in came home; it says nobody's name),
 `virtual_pet_holiday` (with `holiday`: `halloween`, `thanksgiving`, `winter_lights` or `winter_treat`), `virtual_pet_weather` (with `change`),
 `virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
-`virtual_pet_favourite_snack` (with `food`).
+`virtual_pet_favourite_snack` (with `food`),
+`virtual_pet_found` (with `id` and `world`, when the pet finds something; finds aren't shown on the card yet).
 
 No person's bond, nickname, favourite game, notifications or aimed wish is ever on an
 event or a sensor: each person's card gets its own over a private websocket
@@ -908,6 +930,7 @@ HACS's and Home Assistant's checks and the tests on every push.
 4. Life (in progress): ✅ traits, ✅ generations and journal, ✅ moon, ✅ notifications, ✅ adult forms, ✅ upbringing, ✅ weight; still to come: bird visits from BirdNET-Pi
 5. ✅ HACS packaging
 6. Play (in progress): ✅ chore treats, ✅ the left or right game, ✅ higher or lower, ✅ talking to it through Assist, ✅ 30 species
+7. ✅ Friends and seasons: a bond with each person, world visitors, Halloween, Thanksgiving and winter lights, shells and the settings gear, device charm (the infrared link, the backlight, sounds and babble)
 
 ## License
 

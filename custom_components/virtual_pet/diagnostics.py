@@ -59,7 +59,17 @@ REDACT_OPTIONS = {
 }
 # People: who cared for the pet, who gets its notifications, and who's close.
 # "player": whose Berry dig it is.
-REDACT_STATE = {"by", "notify_users", "bonds", "user", "for", "for_name", "player"}
+# "social": the social meter's days (top10 §6).
+REDACT_STATE = {
+    "by",
+    "notify_users",
+    "bonds",
+    "user",
+    "for",
+    "for_name",
+    "player",
+    "social",
+}
 
 
 def _saved(pet: model.PetState) -> dict[str, Any]:

@@ -563,3 +563,40 @@ async def test_the_day_turns_over_at_ha_local_midnight(
     if pet.state.visit["id"]:
         local = datetime.fromtimestamp(pet.state.visit["from"], ZoneInfo("Asia/Tokyo"))
         assert local.date().isoformat() == "2026-10-27"
+
+
+# --- The visitor dream (top10 6d) --------------------------------------------
+
+
+def test_a_credited_visitor_seeds_a_dream_that_other_seeds_beat() -> None:
+    day = first_visit_day("2026-11-02")
+    pet = plan(day)
+    visit = pet.visit
+    assert visit["id"] and not pet.dream_seeds
+    end = visit["until"] + 60
+    model.daily_visit(pet, end, day, "woodland", WOODLAND, PET, random.Random(), UTC)
+    assert pet.dream_seeds[-1]["kind"] == "visitor"
+    assert pet.dream_seeds[-1]["id"] == visit["id"]
+    assert pet.dream_seeds[-1]["world"] == "woodland"
+    # Credited once: no second seed.
+    model.daily_visit(
+        pet, end + 60, day, "woodland", WOODLAND, PET, random.Random(), UTC
+    )
+    assert sum(s["kind"] == "visitor" for s in pet.dream_seeds) == 1
+    # Alone, the next morning dreams of it ...
+    morning = end + 10 * HOUR
+    alone = model.PetState.from_dict(pet.to_dict())
+    events = model.dream_on_waking(alone, morning, "d2", random.Random(0))
+    assert events == [{"type": "dreamed", "kind": "visitor"}]
+    assert alone.dream == {
+        "kind": "visitor",
+        "id": visit["id"],
+        "world": "woodland",
+        "day": "d2",
+    }
+    # ... but any other moment of the day comes first.
+    model.dream_seed(pet, {"kind": "snow_started"}, end + 120)
+    for seed in range(20):
+        again = model.PetState.from_dict(pet.to_dict())
+        model.dream_on_waking(again, morning, "d2", random.Random(seed))
+        assert again.dream["kind"] == "snow_started"
