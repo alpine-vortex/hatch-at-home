@@ -242,7 +242,7 @@ saw it or not.
     frosted leaf ~39, chanterelle ~37, dew drop ~37, fallen star ~34, bottle ~30, snail
     shell ~20, four-leaf clover ~20, frogbit ~17, pine sprig ~16. Their tiles stay hidden
     until met (§13b #2). The rarest unconditional find is still within 30 days (Terrarium
-    ~24.6). Gifts weigh a find by tier (`GIFT_TIER_WEIGHTS`, 10/4/1 doubled for rarer); a
+    ~24.6). Gifts weigh a find by tier (`model.gift_weight`: commons at 10 as they are, every rarer weight doubled, retuned ones included); a
     raised weight not in that map counts as itself there.
 - **The coverage run (finding #1, #21) is a regression snapshot**, not the guarantee
   (V-B review #7). A fixed-seed **90-day** run from a **pinned start, 2026-10-15** (it
@@ -439,7 +439,7 @@ V-E2.
   - First, the world's gift-only find, at 1 in 6 (`R.GIFT_ONLY_CHANCE`), only while this
     person hasn't had it, and never again after.
   - Otherwise the world's other finds by `find_weight(f, flags)` (conditions apply, with
-    the R5 fallback at weight 1), with the rarer tiers doubled (`R.GIFT_TIER_WEIGHTS`:
+    the R5 fallback at weight 1), with the rarer tiers doubled (`model.gift_weight`, was `GIFT_TIER_WEIGHTS`:
     10, 4, 1 → 10, 8, 2), and ×0.2 (`R.GIFT_HAD_WEIGHT`) for a find this person was
     already given. **No** house ×0.5: the house's collection plays no part.
   - `gifts` gains an id only if it's absent (so at most 60). The gift-only finds'
@@ -860,7 +860,7 @@ and P1-P2 fixes, with the first mate's picks:
 **V-E1 as built (s2597, for V-E2 and V-D):** server only, no card change.
 
 - `rates.py`: `GIFT_EVERY_DAYS` (6, 8) days, `GIFT_ONLY_CHANCE` 1/6, `GIFT_HAD_WEIGHT`
-  0.2, `GIFT_TIER_WEIGHTS` `{10: 10, 4: 8, 1: 2}`; the level is `BOND_FRIEND_LEVEL` (3).
+  0.2, `gift_weight` (10 as is, rarer x2; FM 2026-11-02 after the rarity retune); the level is `BOND_FRIEND_LEVEL` (3).
 - `model.py`: `_bond` checks `next_gift_at` (`_num`), `gift` (dict with str `id` and
   `world`, extra keys kept) and `gifts` (list, str only, deduplicated), deleting a bad
   value alone and never raising; `pick_gift(bond, finds, flags, rng)`;
