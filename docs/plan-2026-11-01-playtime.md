@@ -10,7 +10,9 @@ rules), `plan-2026-10-27-feature-gaps.md` C2, and the code at `26b31353`:
 `_catchRound`, `_catchTap`, `_catchResolve`, `_pounce`, `_quitGame`).
 
 **Copy:** every line quoted for the player is a **DRAFT for the owner**, marked "draft".
-No other copy is proposed.
+That includes the game names ("Berry dig", "Pounce"), the button labels (keep/dig,
+pounce/creep) and Pounce's tell glyphs ("z", "!"): all working names and drafts. No other
+copy is proposed.
 
 **Odds:** worked out exactly (dynamic programming over every game state) in scripts kept
 outside the repo. Higher or Lower was also checked by playing 20,000 games through the real
@@ -54,17 +56,21 @@ choice, "naive" = the best simple fixed rule a player might settle on.
   **every finished game in the long run**. Worked out for Higher or Lower, the dig and
   Pounce: each goes to 100% per finished game. The rule only means something if ✕ can't
   reroll the game. The shape that keeps ✕ free:
-  - **Park, don't end.** A person's ✕ after a guess parks the game on the server
-    (round, score, the pile or the toy's mood), one parked game per kind, like Higher or
-    Lower's kept opening (`state.opening`). The next start of that kind carries on from
+  - **Park, don't end.** A person's ✕ parks the game on the server **once it has shown
+    anything that bears on play**: after a guess, or, in Pounce, as soon as a toy's mood is
+    shown. Parked are the round, the score, and the pile or the toy's mood. There is one parked
+    game per kind, like Higher or Lower's kept opening (`state.opening`). (The dig's
+    fresh pile shows nothing, so a ✕ before its first tap can simply end it.) The next start of that kind carries on from
     it. No time limit, so waiting gains nothing. Starting another kind doesn't touch it.
   - It costs and earns nothing, as ✕ does now. The server's own drops (idle, asleep,
     away) stay losses (`drop_game`), as Decided 1 says.
   - The build's simulation then needs no quitting player: a parked game resumes in the
     same state, so quitting can't change the odds.
-- **Found while writing (not for this note to fix):** Higher or Lower can be fished the
-  same way today (✕ after a guess, then Play: a fresh number). It is not held to the rule,
-  and it pays least, so the harm is small. Worth a line in the 1g tuning review.
+- **Found while writing (not for this note to fix):** both server games can be fished
+  this way today. **Left or Right** (✕ after a losing guess, and the next guess deals a
+  fresh game) pays the most of any game (30 a win). **Higher or Lower** (✕ after a guess,
+  then Play: a fresh number) pays 21. Neither is held to the rule, but both belong in the 1g
+  tuning review.
 
 ## 2. The slower game (4d): Berry dig
 
@@ -86,7 +92,7 @@ many leaves are left; the score shows banked and basket.
 | Play | Wins |
 |---|---|
 | best | **76.4%** |
-| random (coin flip each choice) | 41.7% (34.7 points less) |
+| random (coin flip each choice; keep isn't offered on an empty basket, so a round's first tap is a dig) | 41.7% (34.7 points less) |
 | naive: always keep at 3 | 58.5% |
 | naive: always keep at 2 | 56.7% |
 | naive: always keep at 1 | 23.7% |
@@ -198,8 +204,9 @@ the pet is, the surer the catch. 5 rounds, catch 3.
 **What the player does.** Nothing: the picker keeps Left or Right and Higher or Lower,
 plus the dig if it is built.
 
-- **Odds:** n/a. The picker loses its only reflex game. Q9's "a mix of reflex and slower
-  games" would then have none on the reflex side (Q3).
+- **Odds:** n/a. The default picker already has no reflex game (Catch is behind
+  `experimental_catch`), so nothing changes for most players. Dropping it does mean Q9's
+  "a mix of reflex and slower games" would not be met for now (Q3).
 - **Cost:** S, tier 1, removal only:
   - in `hatch-pet-card.js`: `CATCH_GAME`, `CATCH`, `CALM_FAR`, `BEST_CATCH_KEY` (104-118),
     `BEE_FLAP_MS`, the `.gcatch` element and its CSS, `_catchRound`/`_catchTap`/`_catchResolve`
@@ -232,8 +239,8 @@ the owner found weak. **Pounce stays on file** as the pet-first game to add late
 feels thin. If it is built, A6 comes back with it. **A6 stays off the Luna queue.**
 
 Build order if the owner agrees: (1) the park-on-✕ rule for the new kind, and the dig, as one
-tier-1 PR held to its simulation; (2) the Catch removal as an S PR after it, so the picker
-never shrinks to two in a release where the dig isn't in yet.
+tier-1 PR held to its simulation; (2) the Catch removal as an S PR, at any time: Catch is
+only offered with `experimental_catch`, so the default picker (two games) doesn't change.
 
 ## 5. Owner questions
 
@@ -241,7 +248,7 @@ never shrinks to two in a release where the dig isn't in yet.
 |---|---|---|---|
 | Q1 | Catch: rework, replace or drop? | A rework (reflex volley, C2 full) · B replace with Pounce · C drop | **C, drop**: its weakness is the reflex idea, and the dig covers playtime |
 | Q2 | The slower game (4d, deferred 2026-10-30): build one now, and which? | the dig · Pounce · both · not yet | **The dig** (6 berries, 2 bees, win at 5: 76% best, 42% random), one game first |
-| Q3 | Q9 asked for a mix of reflex and slower games. With Catch gone there is no reflex game. OK? | yes, slower games only for now · keep a reflex game (A) | **Yes for now**: revisit if the play counts show people want speed |
+| Q3 | Revise Q9's "a mix of reflex and slower games" to slower games only, for now? (The default picker has no reflex game today; Catch is the only one, behind an option) | yes, for now · keep a reflex game (A) | **Yes for now**: revisit if the play counts show people want speed |
 | Q4 | A6 pounce art back on the Luna queue? | yes · no · only with Pounce or a reworked Catch | **No**: only if B or A is built |
 | Q5 | A person's ✕ in the new game: park it so the next start carries on (still free)? | park, no time limit · park for 30 min · end it as today | **Park, no time limit**: otherwise a free ✕ rerolls every bad game and the 70-80% means nothing |
 | Q6 | The new game's win payout (Play pays 20; Higher or Lower 21 at 95%) | 23 · 25 · as Higher or Lower (21) | **23**: the lowest that expects at least Play's 20 at 76% |
