@@ -309,6 +309,9 @@ const PRESETS = {
   },
 };
 
+// Presets of what the card's FINDS_SHOWN switch hides (off until V-F): run with it on.
+const FINDS_PRESETS = new Set(["finds", "gifts", "collection"]);
+
 // --- Shots -----------------------------------------------------------------
 
 function normalize(raw) {
@@ -349,6 +352,7 @@ function parseArgs(argv) {
     else if (key === "mono") opts.shot.mono = val() !== "off";
     else if (key === "boot") opts.shot.booted = false;
     else if (key === "mine") opts.shot.mine = true;
+    else if (key === "finds-shown") opts.shot.findsShown = true; // FINDS_SHOWN on (off until V-F)
     else if (key === "gift") { const [world, id] = val().split("/"); opts.shot.gift = { id, world }; } // --gift woodland/pinecone
     else if (key === "journal") Object.assign(opts.shot, { journal: true, view: "journal" });
     else if (key === "collection") Object.assign(opts.shot, { collection: true, view: "collection" });
@@ -362,7 +366,9 @@ function loadShots(opts) {
   let shots;
   if (opts.preset) {
     if (!PRESETS[opts.preset]) throw new Error(`no preset "${opts.preset}" (${Object.keys(PRESETS).join(", ")})`);
-    shots = PRESETS[opts.preset]().map((s) => ({ ...opts.shot, ...s, shell: { ...opts.shot.shell, ...s.shell } }));
+    // The finds, gifts and collection presets show what FINDS_SHOWN hides, so turn it on.
+    const finds = FINDS_PRESETS.has(opts.preset) ? { findsShown: true } : {};
+    shots = PRESETS[opts.preset]().map((s) => ({ ...finds, ...opts.shot, ...s, shell: { ...opts.shot.shell, ...s.shell } }));
     shots.forEach((s) => { s.name = `${opts.preset}/${s.name.split("/").slice(1).join("/")}`; });
   } else if (opts.shots) {
     const list = JSON.parse(fs.readFileSync(opts.shots, "utf8"));

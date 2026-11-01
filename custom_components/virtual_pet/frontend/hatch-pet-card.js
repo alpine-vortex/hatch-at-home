@@ -663,6 +663,14 @@ const FIND_LINES = {
 const FIND_STEP_MS = 2500; // the reveal: one find each
 const FIND_LINE_MS = 2200; // its line, gone before the next find's
 const FOUND_BITS = 3; // the away note's "found <a find>" bits, newest first
+// Release switch (owner, 2026-11-01): off until V-F's final art. While off, the card
+// shows no basket, reveal or find line (V1-V4), no "found" bit in the away note (V8),
+// no gift take, line or pop (V5-V7: it never sends collect {gift}, so a gift waits on
+// the server), and the finds page draws its visitors only. The server is unchanged: finds
+// and gifts keep accruing, and turning this on shows them. Read through findsShown(), so
+// card-check and the bench can turn it on (HatchPetCard.findsShown).
+const FINDS_SHOWN = false;
+const findsShown = () => !!HatchPetCard.findsShown;
 // Gifts (plan visitors v2 §5, §7 V5-V7): said once, on the receiver's own screen, at a
 // first look. V5 names the find (its `name`, so "message in a bottle" is 40 characters);
 // a gift-only find has no name in the line: "made" for the three in GIFT_MADE, "found"
@@ -5349,7 +5357,7 @@ class HatchPetCard extends HTMLElement {
   // after being hidden at least AWAY_NOTE_AFTER_MS (owner Q1); never while watching.
 
   _giftDue(s) {
-    return !!s.mine?.gift && !sharedScreen() && !s.gifting;
+    return findsShown() && !!s.mine?.gift && !sharedScreen() && !s.gifting;
   }
 
   // The take: one virtual_pet/collect {gift}, and only a non-empty reply speaks (another
@@ -5358,7 +5366,7 @@ class HatchPetCard extends HTMLElement {
   // older server, or `shared`) is no gift.
   async _giftTake(s) {
     const entity = s.ids?.["sensor.life_stage"];
-    if (!entity || !this._hass) return;
+    if (!entity || !this._hass || !findsShown()) return;
     s.gifting = true;
     const epoch = s.giftEpoch = (s.giftEpoch || 0) + 1;
     let gift = null;
@@ -5565,7 +5573,7 @@ class HatchPetCard extends HTMLElement {
     for (const m of [...(lastCare.moments || [])].reverse()) {
       if (!after(m.at)) continue;
       if (m.type === "found") {
-        if (found < FOUND_BITS && foundBit(this._worlds, m)) {
+        if (findsShown() && found < FOUND_BITS && foundBit(this._worlds, m)) {
           found++;
           add(foundBit(this._worlds, m));
         }
@@ -7324,7 +7332,7 @@ class HatchPetCard extends HTMLElement {
       html = `
       <div class="jhead"><span>${head}</span></div>
       <div class="fgrid">${tiles.filter((t) => t.kind === "visitor").map(tile).join("")}</div>
-      <div class="fgrid">${tiles.filter((t) => t.kind === "find").map(tile).join("")}</div>
+      ${findsShown() ? `<div class="fgrid">${tiles.filter((t) => t.kind === "find").map(tile).join("")}</div>` : ""}
       ${foot}
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     }
@@ -8447,6 +8455,7 @@ class HatchPetCard extends HTMLElement {
 
   // How many wait, as the picture shows them (no number anywhere).
   _basketCount(s) {
+    if (!findsShown()) return 0; // FINDS_SHOWN off: no basket, no tap, no reveal
     const n = s.house?.basket;
     return Number.isInteger(n) && n > 0 ? Math.min(n, 3) : 0;
   }
@@ -9253,6 +9262,7 @@ class HatchPetCardEditor extends HTMLElement {
 HatchPetCard.seasons = SEASONS;
 HatchPetCard.hanukkah = hanukkah;
 HatchPetCard.seasonLines = seasonLines;
+HatchPetCard.findsShown = FINDS_SHOWN; // card-check and the bench turn it on
 HatchPetCard.findLines = FIND_LINES;
 HatchPetCard.giftLines = GIFT_LINES;
 HatchPetCard.giftMade = GIFT_MADE;

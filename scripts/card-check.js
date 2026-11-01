@@ -1180,6 +1180,23 @@ async function main() {
 
   // A content pet that isn't calling: a calling pet is never greeted and has no
   // idle life, and a freshly hatched one may well be calling.
+  // The card's FINDS_SHOWN release switch ships off until V-F's art (no basket, reveal,
+  // gift or finds grid). gifts, finds and collection test the real features, so each turns
+  // it on (HatchPetCard.findsShown): on this page now, and in every tab the context opens
+  // after (an init script, kept for the rest of the run: only these sections follow).
+  let findsInit = false;
+  const showFinds = async () => {
+    if (!findsInit) {
+      findsInit = true;
+      await context.addInitScript(() => customElements.whenDefined("hatch-pet-card").then(() => {
+        customElements.get("hatch-pet-card").findsShown = true;
+      }));
+    }
+    await card.evaluateAll((els) => {
+      customElements.get("hatch-pet-card").findsShown = true;
+      els.forEach((el) => el._slides.forEach((x) => el._basketSync(x)));
+    });
+  };
   const calm = async () => {
     await inject(pet["binary_sensor.calling"], { state: "off" });
     await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [], requests: [] } });
@@ -8761,6 +8778,39 @@ async function main() {
     els.forEach((el) => el._goPersonal());
   }, { e: seedPet, was: poweredWas });
   await pinAwake(card, "gifts");
+  // FINDS_SHOWN off (the default until V-F), with dev's gift and restart's basket both
+  // waiting: no basket shows, a tap, a tab-back and a direct take send no collect, and no
+  // pop or reveal appears. Then it is turned on for the real features below.
+  const off = await card.first().evaluate(async (el, e) => {
+    const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+    const conn = el._hass.connection;
+    const sent = [];
+    const real = conn.sendMessagePromise;
+    conn.sendMessagePromise = function (msg, ...a) {
+      if (msg?.type === "virtual_pet/collect") sent.push(JSON.stringify(msg));
+      return real.call(this, msg, ...a);
+    };
+    const onShow = s === el._slides[el._index];
+    try {
+      el._basketSync(s);
+      s.giftAgain = true;
+      el._giftReturn(s);
+      await el._giftTake(s);
+      await el._basketTap(s);
+      await new Promise((r) => setTimeout(r, 1500));
+    } finally {
+      conn.sendMessagePromise = real;
+      s.giftAgain = false;
+    }
+    const shown = (b) => !!b && !b.hidden && getComputedStyle(b).display !== "none";
+    return { def: customElements.get("hatch-pet-card").findsShown, onShow, gift: !!s.mine?.gift,
+      basket: s.house?.basket ?? null, baskets: el._slides.filter((x) => shown(x.basket)).length,
+      reveals: el._slides.filter((x) => x.screen?.querySelector(".reveal")).length, sent };
+  }, seedPet);
+  check("FINDS_SHOWN off by default: with a gift and a full basket waiting, no basket or pop shows and no collect is sent",
+    off.def === false && off.onShow && off.gift && off.basket > 0 && off.baskets === 0 && off.reveals === 0 &&
+    off.sent.length === 0, JSON.stringify(off));
+  await showFinds();
   // Everything this page sends to the pet from here on, and every event on the bus.
   const held = await card.first().evaluate(async (el, e) => {
     const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
@@ -8993,6 +9043,7 @@ async function main() {
   await page.waitForTimeout(500);
   await calm();
   await pinAwake(card, "finds");
+  await showFinds();
   const W = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
   const fw = W[basketSeed.world];
   const aOf = (id) => fw.finds.find((f) => f.id === id).a;
@@ -9238,6 +9289,7 @@ async function main() {
   await page.waitForTimeout(500);
   await calm();
   await pinAwake(card, "collection");
+  await showFinds();
   const W = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
   const cw = basketSeed.world;
   const fw = W[cw];
