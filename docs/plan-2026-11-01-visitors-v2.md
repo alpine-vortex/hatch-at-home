@@ -345,7 +345,8 @@ V-B review #10). The card reads names and art from the same file.
     it, sends the reply, then **saves at once** (`async_save_now`), so a crash can't bring
     the basket back.
   - **`house.basket`** (V-B review #12) is always a key: an int 0-3, the known entries
-    waiting, no ids (so no screen sees what's inside before the tap). V-C picks
+    waiting. `house.basket` has no ids (the `found` moment does name each find, §8, and a
+    find in the basket already counts as met, V-D; review C9). V-C picks
     `basket_<n>.png` from it; 0 hides the basket.
 - **The tap target** is a `<button>` with `aria-label` "the basket". It is not a pet tap,
   so it never counts as a pat.
@@ -683,6 +684,61 @@ follow in either order. V-E comes last.
 - Tests: `tests/test_finds.py` (97 cases); `tests/js/finds.test.js`; `test_channel` and
   `test_init`'s send-off no longer lean on the rng's order. No card-check section (V-B
   review #21); card-check runs only to show nothing regressed.
+
+**V-C as built (s2595, for V-D and V-E):** card only, no server change. The review's C1-C12
+and P1-P2 fixes, with the first mate's picks:
+
+- **Card** (`hatch-pet-card.js`): `FIND_LINES` (`find` V1, `fresh` V2, `left` V3; functions
+  over the find's `a`, V3 also the visitor's roster `name` as is), exported as
+  `HatchPetCard.findLines`; `findOf(worlds, world, id)`, `foundBit`, `FIND_STEP_MS` 2500,
+  `FIND_LINE_MS` 2200, `FOUND_BITS` 3; `BABY.find` = "yay yay!", "hehe!" (C5). The card keeps
+  every world's data as `this._worlds` (a find is shown by its own world, V-B review #10).
+- **The basket** is a `<button class="basket" aria-label="the basket">` in each slide's
+  screen: 12 cells wide, `bottom: 6%`, **bottom right** inside the porthole's corners
+  (`right: calc(5% + var(--edge))`), z-index 3 over the pat box, a 44 px tap box by a
+  `::before` (C8). The deco sits outside the device on both sides, so "opposite the deco"
+  (C7) couldn't pick a side; right clears the first two poops (left 6% and 18%) and the
+  prop; it can sit over the third poop and the season lantern. `_basketSync` (each tick and
+  on a house push) shows it when `house.basket` > 0 and there is no reveal, egg, away, game
+  or scene; hidden in compact and under the status by CSS. It is **live** (`_basketLive`)
+  only when `_visitorLive` holds, out of the egg, not booting, no tap in flight (C1);
+  otherwise it carries `.idle` (`pointer-events: none`) and a tap falls through to the
+  screen (the status). A sleeping pet's basket shows but can't be tapped.
+- **The tap** (`_basketTap`): stopPropagation (never a pat, never the status), the
+  re-entry guard `s.collecting`, one `virtual_pet/collect` by `callWS`. While it waits, the
+  basket's picture is held (the server's publish of 0 can come first, C2). An error keeps
+  the basket; an empty reply shows nothing and says nothing. Finds this card doesn't know
+  are skipped, at most 3. A slide that is another pet by the reply drops it.
+- **The reveal** (`_revealStart`, `_revealFind`, `_revealEnd`): its own `.reveal` element
+  (the basket drawn once as `basket_<n>` and a `.rf` find image 16 cells wide over it), one
+  find each 2.5 s, a `.burst` sparkle for `new`, the `pop` animation unless calm. The line
+  is `_findLine`: V3 when `from` names a roster visitor (a new one adds only the sparkle,
+  C3), else V2 when `new`, else V1 by `dailyPick` salted `world|id` (C4); routed through
+  `_lines(s, "find", …)` for baby talk. Flavour by `_line`: the reveal's own line still up
+  doesn't hold the next; once anyone else's holds the bubble (`_mayInterrupt` false), the
+  rest of the reveal goes without lines. `flairUntil`/`visitUntil` cover it, so a pat only
+  wiggles and nothing else starts. Each beat checks `_visitorLive`, else the reveal ends.
+- **Visitors wait** while the basket shows (`_basketShows` in `_visitorFree`; and the
+  seasonal walker), C7.
+- **Away note (V8)**: in `_awayNote`, one "found <a find>" bit per `found` moment, newest
+  first, at most `FOUND_BITS` (3), unknown finds skipped; the note still keeps its first
+  two bits overall, so the cap of 3 never shows more than 2.
+- **Bench**: shot fields `house` (an object over the house view), `basket` (0-3) and
+  `reveal` (`{id, world?, new?, from?}` or `{finds: [...], at}`); `--preset finds` (60
+  finds at reveal size, the three baskets, porthole, night, the pat box, a sparkle, V3, an
+  old world's find, the second of three, baby, calm, compact). No collection shots (C11).
+- **Card-check**: `finds` runs after `restart` (it needs restart's seed; `NEEDS.finds =
+  ["restart"]`), so it sits between `restart` and `oldcard` in `SECTIONS` rather than after
+  `visitors` (P2), which would have put it in another shard than its seed. `restart`'s
+  bounce seeds `data.basket` (a met find, a new one, the leaver's own find with `from`) and
+  `data.collection[world]` part met (two visitors, three finds, the gift-only id and
+  `laterfind`, an id no worlds.json knows) for V-D (P1), and `unseed` puts both back. The
+  find lines' scan (V1-V3 over every non-gift find and each leaver's own find, 40 at most)
+  joins the personality scan; `find` joins the baby scan's keys.
+- **Tests**: `tests/js/find_lines.test.js` (the lines' words, scan and cap; `BABY.find`;
+  `foundBit`).
+- **For V-D**: the seeded collection page is restart's; `this._worlds` and `findOf` are
+  there to use. **For V-E**: the gift's first look can reuse `_revealStart` with one find.
 
 **Which slice owns each review finding:** V-A #8 #9 #10 #11 #12 #19 #22; V-B #1 #2 #3 #4 #5
 #13 #18 (lists) #20 #21 and the salvage of `basket`; V-C #15 #16 #17 #23; V-D #6 #7; V-E #6 #7 #14; V-F #18 #23. Review blockers: before V-A, #9 #10 #11

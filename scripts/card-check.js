@@ -40,8 +40,9 @@ const results = [];
 // The gated sections of main(), in file order.
 const SECTIONS = ["shelf", "shell", "play", "resume", "moments", "photos", "personality", "types",
   "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
-  "editor", "boot", "infrared", "lowbattery", "restart", "oldcard"];
-const NEEDS = { oldcard: ["restart"] }; // oldcard asserts restart's seeded bond
+  "editor", "boot", "infrared", "lowbattery", "restart", "finds", "oldcard"];
+// oldcard asserts restart's seeded bond; finds taps the basket restart seeds.
+const NEEDS = { oldcard: ["restart"], finds: ["restart"] };
 const argv = process.argv.slice(2);
 if (argv.includes("--list")) {
   console.log(SECTIONS.join("\n"));
@@ -3706,7 +3707,7 @@ async function main() {
     const seasons = [...src.matchAll(/key: "(halloween|thanksgiving|winter)"/g)].map((m) => m[1]);
     const card = new Set(["greet", "greet.warm", "greet.nickname", "idle.sleepy", "idle.bored", "idle.excited", "idle.hungry",
       "idle.dirty", "idle.default", "yum", "favourite_snack", "wish_granted", "friend_home", "care_miss", "tucked_in", "bond_up",
-      "visit", "link_host", "link_guest"]); // link_*: the infrared link (2b)
+      "visit", "find", "link_host", "link_guest"]); // link_*: the infrared link (2b); find: the basket's reveal
     // The mood line's keys (sensor.mood reason_key), from the model's own tables.
     const py = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "model.py"), "utf8");
     const keysOf = (name) => [...py.split(`\n${name} = {`)[1].split("\n}")[0].matchAll(/"(\w+)":/g)].map((m) => m[1]);
@@ -4415,6 +4416,31 @@ async function main() {
     }
     check("personality lines: all eight types, every key, 2-3 lines, 40 at most, no nagging, no asking, wishes credit nobody",
       bad.length === 0, bad.join(" | "));
+    // The basket's reveal lines (visitors v2 §7, V1-V3): the same scan over every find the
+    // reveal can show (not the gift-only ones) and each visitor's own left find, 40 at most
+    // (no margin: "the nighthawk left a nighthawk feather ♪" is 40). V4 is BABY.find, above.
+    const FIND_LINES = vm.runInNewContext(`(${src.match(/const FIND_LINES = (\{[\s\S]*?\n\});/)[1]})`);
+    const WORLDS = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
+    const findBad = [];
+    let findN = 0;
+    for (const w of Object.values(WORLDS)) {
+      const lines = w.finds.filter((f) => !f.gift_only).flatMap((f) => [...FIND_LINES.find, ...FIND_LINES.fresh].map((fn) => fn(f.a)));
+      for (const v of w.visitors) {
+        const f = v.leaves && w.finds.find((x) => x.id === v.leaves);
+        if (f) lines.push(...FIND_LINES.left.map((fn) => fn(f.a, v.name)));
+      }
+      for (const line of lines) {
+        findN++;
+        const words = line.toLowerCase().match(/[a-z']+/g) || [];
+        if (/!!!/.test(line)) findBad.push(`"${line}" !!!`);
+        if (/\b(still|again|why|never|pleas\w*|sad|cry|alone|forgot\w*)\b/i.test(line)) findBad.push(`"${line}" nags`);
+        if (words.some((w2, i) => i > 1 && w2 === words[i - 1] && w2 === words[i - 2])) findBad.push(`"${line}" three in a row`);
+        if (line.includes("?")) findBad.push(`"${line}" asks`);
+        if (line.length > 40) findBad.push(`"${line}" ${line.length} long`);
+      }
+    }
+    check(`find lines (V1-V3): ${findN} lines over every find, 40 at most, no nagging, no asking`,
+      findN > 150 && findBad.length === 0, findBad.join(" | "));
 
     // One pet on show, as a teen or adult of a type, with this viewer's bond.
     const typeAs = (fn, arg) => page.locator("hatch-pet-card").evaluate(async (el, { fn, arg }) => {
@@ -8489,6 +8515,7 @@ async function main() {
   }
   let seeded = false;
   let unseed = null;
+  let basketSeed = null; // restart's seeded basket, for finds: {entryId, world, basket, back}
   const seedPet = pet["sensor.life_stage"];
   if (enter("restart")) {
   // 8. An HA restart keeps the bond, and a second login sees nothing of the
@@ -8547,11 +8574,32 @@ async function main() {
     const seedFrom = Math.floor(Date.now() / 1000) - 17 * 60 - 7;
     const seedVisit = seedGuest && { day: today, world: seedWorld, id: seedGuest.id, hours: seedGuest.hours,
       from: seedFrom, until: seedFrom + 10800, credited: false };
+    // And a full basket (visitors v2 V-C, the finds section taps it): a find met before, a
+    // first-ever one, and one a visitor left (its own `leaves`, else another find); and a
+    // part-met collection page for the world (V-D's: two visitors and finds met, a gift-only
+    // id and an id no worlds.json knows, both kept by the server and skipped on show).
+    const seedW = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"))[seedWorld] || {};
+    const wFinds = (seedW.finds || []).filter((f) => !f.gift_only);
+    const leaver = (seedW.visitors || []).find((v) => v.leaves) || (seedW.visitors || [])[1];
+    const leftId = leaver?.leaves || wFinds[3]?.id;
+    const seedBasket = wFinds.length >= 4 && leaver ? [
+      { id: wFinds[0].id, world: seedWorld, new: false },
+      { id: wFinds.find((f) => ![wFinds[0].id, leftId].includes(f.id) && f.id !== wFinds[1].id).id, world: seedWorld, new: true },
+      { id: leftId, world: seedWorld, new: false, from: leaver.id },
+    ] : null;
+    const seedPage = seedBasket && { visitors: { [seedW.visitors[0].id]: today, [leaver.id]: today },
+      finds: { [wFinds[0].id]: today, [wFinds[1].id]: today, [leftId]: today,
+        [(seedW.finds.find((f) => f.gift_only) || {}).id || "nogift"]: today, laterfind: today } };
     let before = null;
     const downAt = Date.now();
     const token2 = await bounce(fresh, entryId, (data) => {
-      before = { bond: data.bonds?.[me], wish: data.wish, visit: data.visit };
+      before = { bond: data.bonds?.[me], wish: data.wish, visit: data.visit, basket: data.basket,
+        collection: data.collection };
       if (seedVisit) data.visit = seedVisit;
+      if (seedBasket) {
+        data.basket = seedBasket;
+        data.collection = { ...(data.collection || {}), [seedWorld]: seedPage };
+      }
       // Level 8, one point short of 9 with today's care still to earn: the
       // old-card check's care press makes a real bond_up (8b).
       data.bonds = { ...(data.bonds || {}), [me]: { ...(data.bonds?.[me] || {}), points: 144, nickname: "sunbeam",
@@ -8563,7 +8611,14 @@ async function main() {
       else data.bonds = { ...(data.bonds || {}), [me]: before.bond };
       data.wish = before.wish;
       if (seedVisit) data.visit = before.visit ?? null;
+      if (seedBasket) {
+        if (before.basket === undefined) delete data.basket;
+        else data.basket = before.basket;
+        if (before.collection === undefined) delete data.collection;
+        else data.collection = before.collection;
+      }
     });
+    if (seedBasket) basketSeed = { entryId, world: seedWorld, basket: seedBasket };
     const upAt = Date.now();
     const back = await card.evaluate(async (el, e) => {
       const start = Date.now();
@@ -8576,8 +8631,11 @@ async function main() {
       el._renderStatus(sl, []);
       return { s: Math.round((Date.now() - start) / 1000), bond: sl.mine?.bond, aimed: sl.mine?.wish_for_you,
         you: /you two/.test(sl.status.textContent), wish: sl.status.querySelector(".row")?.textContent.trim(),
-        mark: window.__hatchMark, powered: sl.house?.powered_on?.at ?? null, visit: sl.house?.visit ?? null };
+        mark: window.__hatchMark, powered: sl.house?.powered_on?.at ?? null, visit: sl.house?.visit ?? null,
+        basket: sl.house?.basket };
     }, seedPet);
+    check("visitors v2 V-C: an HA restart keeps the seeded basket (house.basket 3, no ids on the house view)",
+      !!seedBasket && back.basket === 3, JSON.stringify({ seeded: seedBasket, got: back.basket }));
     check("visitors v2: an HA restart keeps the day's visit (no re-roll), and the card gets it as house.visit",
       !!seedVisit && JSON.stringify(back.visit) === JSON.stringify({ day: seedVisit.day, id: seedVisit.id,
         hours: seedVisit.hours, from: seedVisit.from, until: seedVisit.until }), JSON.stringify({ seeded: seedVisit, got: back.visit }));
@@ -8625,6 +8683,232 @@ async function main() {
       "no HA_CONFIG/HA_START: the restart and the seeded second login didn't run");
   }
 
+  }
+  if (enter("finds")) {
+  // 8a. The basket and the reveal (visitors v2 §3, V-C), on the basket restart seeded:
+  // its picture with no number; nothing said on open; a tap is one virtual_pet/collect (a
+  // websocket command: no call_service, so who tapped isn't recorded) and never a pat or
+  // the status; a double tap sends one; the finds come out one by one with their lines
+  // (V1, V2 with its sparkle, V3 by the visitor's name); a second screen loses its basket
+  // at once, quietly; a second tap gets []; the empty basket is saved at once. Then, on
+  // the card alone: not tappable asleep (C1), calm, compact, and the away note's bit (V8).
+  if (!basketSeed) {
+    check("V-C: the finds section has restart's seeded basket (set HA_CONFIG and HA_START)", false,
+      "no seeded basket: restart didn't run or its world has too few finds");
+  } else {
+  await calm();
+  await pinAwake(card, "finds");
+  const W = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
+  const fw = W[basketSeed.world];
+  const aOf = (id) => fw.finds.find((f) => f.id === id).a;
+  const seedB = basketSeed.basket;
+  const leaverName = fw.visitors.find((v) => v.id === seedB[2].from).name;
+  // Any line about a find: its name, or the reveal's words.
+  const findWords = new RegExp(`${fw.finds.map((f) => f.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")}|a new one`, "i");
+  // The pet seeded is on show (restart brought it forward).
+  const onShow = await card.first().evaluate((el, e) => el._slides[el._index].ids?.["sensor.life_stage"] === e, seedPet);
+  // A second screen (the same login, another tab): open with the basket full.
+  const p2 = await context.newPage();
+  p2.on("pageerror", (e) => errors.push(`finds tab: ${e}`));
+  let el2 = null;
+  try {
+    await p2.goto(`${HA}/pet-bench/pet`);
+    await p2.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
+    await settle(p2);
+    await p2.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
+    el2 = p2.locator("hatch-pet-card").first();
+    const n2 = await p2.locator("hatch-pet-card .slide").count();
+    for (let i = 0; i < n2; i++) {
+      if (await el2.evaluate((c, e) => c._slides?.[c._index]?.ids?.["sensor.life_stage"] === e, seedPet)) break;
+      await p2.locator("hatch-pet-card .nav.next").click();
+      await p2.waitForTimeout(700);
+    }
+    // Everything its bubble says from here on, and its collect calls.
+    await el2.evaluate((c) => {
+      const s = c._slides[c._index];
+      c.__said = [s.bubble.textContent, ...(s.queue || []).map((q) => q.text)];
+      new MutationObserver(() => c.__said.push(s.bubble.textContent)).observe(s.bubble, { childList: true, characterData: true, subtree: true });
+      c.__collects = 0;
+      const conn = c._hass.connection;
+      const real = conn.sendMessagePromise;
+      conn.sendMessagePromise = function (msg, ...a) {
+        if (msg?.type === "virtual_pet/collect") c.__collects++;
+        return real.call(this, msg, ...a);
+      };
+    });
+    await p2.waitForTimeout(3000);
+  } catch (err) {
+    errors.push(`finds tab: ${err.message}`);
+  }
+  const open2 = el2 && await el2.evaluate((c) => {
+    const s = c._slides[c._index];
+    return { basket: s.house?.basket, hidden: s.basket.hidden, src: s.basket.querySelector("img").getAttribute("src"),
+      reveal: !!s.reveal, said: c.__said.filter(Boolean), collects: c.__collects };
+  });
+  check("V-C: a second screen opened with a full basket shows it (basket_3) and says nothing about it, sends no collect",
+    onShow && !!open2 && open2.basket === 3 && !open2.hidden && /\/ui\/basket_3\.png/.test(open2.src) && !open2.reveal &&
+    open2.collects === 0 && !open2.said.some((t) => findWords.test(t)), JSON.stringify(open2));
+  // This card: the basket's picture, no number; the tap lands on the basket, not the pet.
+  const look = await card.first().evaluate((el) => {
+    const s = el._slides[el._index];
+    Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0, flairUntil: 0, visitUntil: 0, poseUntil: 0, movingUntil: 0 });
+    s.screen.classList.remove("show-status");
+    el._basketSync(s);
+    const b = s.basket;
+    const r = b.getBoundingClientRect();
+    const hit = el.shadowRoot.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return { hidden: b.hidden, live: !b.classList.contains("idle"), src: b.querySelector("img").getAttribute("src"),
+      text: b.textContent.trim(), label: b.getAttribute("aria-label"), hit: hit === b, w: Math.round(r.width),
+      said: [s.bubble.textContent, ...(s.queue || []).map((q) => q.text)] };
+  });
+  check("V-C: the seeded basket shows its picture (basket_3), no number, labelled \"the basket\", live, on top at its centre",
+    !look.hidden && look.live && /\/ui\/basket_3\.png/.test(look.src) && look.text === "" && look.label === "the basket" &&
+    !/\d/.test(look.label) && look.hit, JSON.stringify(look));
+  check("V-C: nothing is said on open with a full basket", !look.said.some((t) => findWords.test(t || "")), JSON.stringify(look.said));
+  // Asleep (C1): shown, not live, and a tap sends nothing. Then the spy: every service
+  // call and pet message from here on.
+  const asleep = await card.first().evaluate(async (el) => {
+    const s = el._slides[el._index];
+    el.__calls = [];
+    const conn = el._hass.connection;
+    if (!conn.__realSend) {
+      conn.__realSend = conn.sendMessagePromise;
+      conn.sendMessagePromise = function (msg, ...a) {
+        if (msg?.type === "call_service" || /^virtual_pet\//.test(msg?.type || "")) el.__calls?.push(msg.type);
+        return conn.__realSend.call(this, msg, ...a);
+      };
+    }
+    s.asleep = true;
+    el._basketSync(s);
+    const out = { hidden: s.basket.hidden, idle: s.basket.classList.contains("idle"), pe: getComputedStyle(s.basket).pointerEvents };
+    await el._basketTap(s, { stopPropagation() {}, detail: 0 });
+    out.calls = el.__calls.slice();
+    s.asleep = false;
+    el._basketSync(s);
+    return out;
+  });
+  check("V-C: a sleeping pet's basket shows but isn't live (taps go to the screen), and a tap sends nothing (C1)",
+    !asleep.hidden && asleep.idle && asleep.pe === "none" && asleep.calls.length === 0, JSON.stringify(asleep));
+  // The tap: two clicks at once, the reveal watched to its end.
+  const tap = await card.first().evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const said = [];
+    const obs = new MutationObserver(() => said.push(s.bubble.textContent));
+    obs.observe(s.bubble, { childList: true, characterData: true, subtree: true });
+    let pats = 0;
+    const realPat = el._pat;
+    el._pat = function (...a) { pats++; return realPat.apply(this, a); };
+    const patAt = s.patAt;
+    s.basket.click();
+    s.basket.click(); // re-entry: the first is in flight
+    const status = s.screen.classList.contains("show-status");
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let i = 0; i < 50 && !s.reveal; i++) await wait(100);
+    const R = s.reveal;
+    const out = { status, pats, finds: R?.finds || null, bursts: 0 };
+    if (R) new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains("burst")) out.bursts++; })
+      .observe(R.el, { childList: true });
+    await wait(1200);
+    // A pat mid-reveal: the wiggle only (no line, the pat clock untouched).
+    const patAt2 = s.patAt;
+    el._pat(s, { stopPropagation() {}, detail: 0 });
+    out.patMid = s.patAt === patAt2;
+    out.basketHiddenMid = s.basket.hidden;
+    for (let i = 0; i < 120 && s.reveal; i++) await wait(100);
+    obs.disconnect();
+    el._pat = realPat;
+    Object.assign(out, { shown: R?.shown || [], said: [...new Set(said.filter(Boolean))], patAt: s.patAt === patAt,
+      quiet: !!R?.quiet, end: { reveal: !!s.reveal, hidden: s.basket.hidden, basket: s.house?.basket, visitUntil: s.visitUntil },
+      calls: el.__calls.slice(), baby: !!el._babySet(s, "find") });
+    return out;
+  });
+  const ids = seedB.map((f) => `${f.world}/${f.id}`);
+  check("V-C: a basket tap is one virtual_pet/collect and no call_service (two clicks at once: one call)",
+    JSON.stringify(tap.calls) === JSON.stringify(["virtual_pet/collect"]), JSON.stringify(tap.calls));
+  check("V-C: a basket tap is not a pat and doesn't open the status",
+    tap.pats === 0 && tap.patAt && !tap.status, JSON.stringify({ pats: tap.pats, patAt: tap.patAt, status: tap.status }));
+  check("V-C: the reveal shows the basket's finds in order, the basket gone meanwhile, and ends clean",
+    JSON.stringify(tap.shown) === JSON.stringify(ids) && tap.basketHiddenMid &&
+    !tap.end.reveal && tap.end.hidden && tap.end.basket === 0 && !tap.end.visitUntil, JSON.stringify(tap));
+  const v1 = [`${aOf(seedB[0].id)}! ♪`, `look, ${aOf(seedB[0].id)} ♪`, `ooh, ${aOf(seedB[0].id)}~`];
+  const v2 = `${aOf(seedB[1].id)}! a new one ✦`;
+  const v3 = `the ${leaverName} left ${aOf(seedB[2].id)} ♪`;
+  const linesOk = tap.baby
+    ? tap.said.some((t) => /yay yay!|hehe!/.test(t))
+    : tap.said.some((t) => v1.some((x) => t.includes(x))) && tap.said.some((t) => t.includes(v2)) &&
+      tap.said.some((t) => t.includes(v3)); // the bubble may carry the pet's sound first
+  check("V-C: the reveal's lines: V1 for a find met before, V2 for a first-ever one, V3 by the visitor's name (baby: BABY.find)",
+    !tap.quiet && linesOk, JSON.stringify({ said: tap.said, want: tap.baby ? "baby" : [v1, v2, v3] }));
+  check("V-C: a first-ever find sparkles (one sparkle for one new find); a pat mid-reveal only wiggles",
+    tap.bursts === 1 && tap.patMid, JSON.stringify({ bursts: tap.bursts, patMid: tap.patMid }));
+  const after2 = el2 && await el2.evaluate((c) => {
+    const s = c._slides[c._index];
+    return { basket: s.house?.basket, hidden: s.basket.hidden, reveal: !!s.reveal, said: c.__said.filter(Boolean), collects: c.__collects };
+  });
+  check("V-C: the second screen's basket goes at once, with no line and no reveal (review C2)",
+    !!after2 && after2.basket === 0 && after2.hidden && !after2.reveal && after2.collects === 0 &&
+    !after2.said.some((t) => findWords.test(t)), JSON.stringify(after2));
+  await p2.close().catch(() => {});
+  // A second tap (another screen late): [] and nothing shown; the empty basket was saved at once.
+  const again = await card.first().evaluate(async (el, e) => (await el._hass.callWS({ type: "virtual_pet/collect", entity_id: e })), seedPet);
+  const saved = JSON.parse(fs.readFileSync(path.join(process.env.HA_CONFIG, ".storage", `virtual_pet.${basketSeed.entryId}`), "utf8")).data;
+  const savedLeft = (saved.basket || []).filter((b) => seedB.some((x) => x.id === b.id && x.world === b.world));
+  check("V-C: a second collect gets [] and the emptied basket is already saved (no restart can bring it back)",
+    Array.isArray(again?.finds) && again.finds.length === 0 && savedLeft.length === 0,
+    JSON.stringify({ again, savedLeft }));
+  // On the card alone (no server): compact hides the basket; calm shows the find still.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const local = await card.first().evaluate(async (el, f) => {
+    const s = el._slides[el._index];
+    const was = s.house;
+    s.house = { ...(s.house || {}), basket: 2 };
+    el._card.classList.add("compact");
+    el._basketSync(s);
+    const out = { compactShown: getComputedStyle(s.basket).display !== "none", compactShows: el._basketShows(s) };
+    el._card.classList.remove("compact");
+    el._basketSync(s);
+    out.src = s.basket.querySelector("img").getAttribute("src");
+    s.house = was;
+    Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0 });
+    const R = el._revealStart(s, [f]);
+    await new Promise((r) => setTimeout(r, 300));
+    const img = R.el.querySelector(".rf");
+    out.calm = { shown: !img.hidden, pop: img.classList.contains("pop"), anims: img.getAnimations().length };
+    el._revealEnd(s);
+    el._basketSync(s);
+    out.after = { hidden: s.basket.hidden, reveal: !!s.reveal };
+    return out;
+  }, seedB[0]);
+  await page.emulateMedia({ reducedMotion: null });
+  check("V-C: compact hides the basket (the finds wait); two waiting show basket_2",
+    !local.compactShown && !local.compactShows && /\/ui\/basket_2\.png/.test(local.src), JSON.stringify(local));
+  check("V-C: calm: the find appears still, no pop", local.calm.shown && !local.calm.pop && local.calm.anims === 0 &&
+    local.after.hidden && !local.after.reveal, JSON.stringify(local.calm));
+  // The away note (V8): one "found <a find>" a find, newest first; the note keeps two bits.
+  const note = await card.first().evaluate((el, { world, ids }) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    const t = (m) => new Date(Date.now() - m * 60000).toISOString();
+    const moments = [
+      { type: "found", id: ids[0], world, at: t(50) },
+      { type: "found", id: "laterfind", world, at: t(40) },
+      { type: "found", id: ids[1], world, at: t(30) },
+      { type: "found", id: ids[2], world, at: t(20) },
+    ];
+    el._state = function (slide, key) {
+      if (key === "sensor.last_care") return { state: "ok", attributes: { moments, log: [] } };
+      return real.call(this, slide, key);
+    };
+    try {
+      return el._awayNote(s, Date.now() - 3600000);
+    } finally {
+      el._state = real;
+    }
+  }, { world: basketSeed.world, ids: seedB.map((f) => f.id) });
+  check("V-C: the away note says \"found <a find>\", newest first, an unknown find skipped (V8)",
+    note === `while you were out, I found ${aOf(seedB[2].id)} and found ${aOf(seedB[1].id)}!`, JSON.stringify(note));
+  await card.first().evaluate((el) => { const s = el._slides[el._index]; el._revealEnd(s); s.queue = []; delete el.__calls; });
+  }
   }
   if (enter("oldcard")) {
   // 8b. An old card on a stale tablet (privacy P3b): the one just before P3b

@@ -21,6 +21,7 @@ node scripts/bench.js --preset settings-shared  # the same on a shared screen
 node scripts/bench.js --preset picker     # the shell picker: egg (locked) and teen, 420/330
 node scripts/bench.js --preset winter     # winter lights at 330: worlds day/night, mono night, hats, snow hare, auto, holiday names
 node scripts/bench.js --preset visitors   # 28 shots at 330: every world visitor greeting, beats, night, calm, baby, child
+node scripts/bench.js --preset finds      # 74 shots: every find at reveal size, the baskets, sparkle, V3, baby, calm, compact
 node scripts/bench.js --preset mono       # the mono screen: 2498 shots, ~2.5 min, plus the pass rule
 ```
 
@@ -78,6 +79,8 @@ A shot (all optional):
 | `patTap` | `true`: one pat through the card's own `_pat` (R2: `acts.pat` shows ~900 ms). With `acts`, the new poses (`pat refuse aww ready splash`) are served the species' `eat` frames, bench only. `react` also takes `lost` (acts.aww) and `ready` (acts.ready); `care: "clean"` with `careAt: 2000` shows `acts.splash` |
 | `visitor` | a world visitor pinned through the card's own `_visitorStart`/`_visitorGreet`, timers stopped, moves paused: `{id, beat: "arrive"\|"greet"\|"leave", frame: 1\|2, side: "left"\|"right"}` (default its world's first, `greet`, left). With `motion: reduce` it is the still visit. Baby talk needs `storage: {"hatch-baby-talk-bench-user": "on"}` |
 | `seasonVisitor` | the season's own visitor (the turkey, the snow hare) through the card's own `_seasonFly`, paused: `{season, at, frame, side}` (`at` 0-1 of its crossing, default .45; its first greet in the bubble) |
+| `house`, `basket` | the house view the private channel would send (`house`, an object over it), and `basket`: how many finds wait (`house.basket`, 0-3), so the basket shows (visitors v2 §3) |
+| `reveal` | the basket's reveal pinned through the card's own `_revealStart`/`_revealFind`, timers stopped: `{id, world?, new?, from?}` (one find; `world` defaults to the pet's) or `{finds: [...], at}` (shown up to the find at `at`). Its line in the bubble, its pop and a `new` find's sparkle paused just in; with `motion: reduce` it is still |
 | `storage` | any other localStorage keys to seed (`hatch-named-holidays: "off"` turns holiday names off) |
 | `config` | extra card config (`setConfig`) |
 | `visit` | the reply the fake `virtual_pet.visit` service gives (`{notes: [...]}` makes the pet tell the viewer things) |

@@ -96,6 +96,28 @@
     };
   }
 
+  // The basket's reveal through the card's own _revealStart and _revealFind, timers
+  // stopped: `{finds: [{id, world?, new?, from?}], at}` (or one find as the object), shown
+  // up to the find at `at` (default the last), its line in the bubble and its pop and
+  // sparkle paused just in. world defaults to the pet's. Under motion "reduce" the
+  // find is still, as the card shows it.
+  async function revealShot(card, s, rv) {
+    const finds = (rv.finds || [rv]).map((f) => ({ world: s.worldKey, new: false, ...f }));
+    for (const f of finds) if (!findOf(card._worlds, f.world, f.id)) throw new Error(`no find ${f.world}/${f.id}`);
+    Object.assign(s, { sayUntil: 0, queue: [] }); // the greeting's line gives way
+    const R = card._revealStart(s, finds);
+    R.timers.forEach(clearTimeout);
+    const last = Math.min(rv.at ?? finds.length - 1, finds.length - 1);
+    for (let i = 0; i <= last; i++) card._revealFind(s, R, finds[i], calm());
+    await settled(card);
+    for (const el of R.el.querySelectorAll(".rf, .burst")) {
+      for (const a of el.getAnimations()) {
+        a.pause();
+        a.currentTime = el.classList.contains("burst") ? 120 : 300;
+      }
+    }
+  }
+
   async function settled(card) {
     const deadline = Date.now() + 8000;
     for (;;) {
@@ -301,6 +323,15 @@
       const mine = { bond: { level: 6, nickname: null }, notify_me: true, my_day: true, birthday_kept: true, birthday_phone: false };
       slides.forEach((s) => { s.mine = { ...mine, ...(typeof shot.mine === "object" ? shot.mine : {}) }; });
     }
+    // The house view the channel would send (`house`, an object over it), and `basket`:
+    // how many finds wait (house.basket, 0-3), so the basket shows through _basketSync.
+    if (shot.house || shot.basket !== undefined) {
+      slides.forEach((s) => {
+        s.house = { ...(s.house || {}), ...(typeof shot.house === "object" ? shot.house : {}) };
+        if (shot.basket !== undefined) s.house.basket = shot.basket;
+        card._basketSync(s);
+      });
+    }
     // A seasonal costume put on through the card's own _costume: {season, art, frame}.
     // The seat it used is kept in bench.info (bench.js writes it beside the shot).
     window.bench.info = null;
@@ -354,6 +385,8 @@
     // `visitor`: one world visit pinned (see visitorShot).
     if (shot.visitor) await visitorShot(card, cur, shot.visitor, shot.petAt);
     if (shot.seasonVisitor) await seasonVisitorShot(card, cur, shot.seasonVisitor);
+    // `reveal`: the basket's reveal pinned (see revealShot).
+    if (shot.reveal) await revealShot(card, cur, shot.reveal);
     for (const c of shot.petClasses || []) cur.pet.classList.add(c);
     if (shot.petAt !== undefined) {
       for (const a of cur.pet.getAnimations()) {

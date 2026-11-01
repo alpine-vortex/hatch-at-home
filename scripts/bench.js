@@ -127,6 +127,36 @@ const PRESETS = {
     extra("wave-otter-child", "otter child (no wave)", { world: "woodland", species: "otter", stage: "child", visitor: { id: "snail" } });
     return out;
   },
+  // The basket and the reveal (visitors v2 §3, V-C): every find at reveal size (16 cells)
+  // over its own world's backdrop, one sheet a world; then the three baskets, a first-ever
+  // find (its sparkle), a visitor's, an old world's, a baby, calm, a night basket and the
+  // compact layout (no basket). The collection page is V-D's.
+  finds() {
+    const out = [];
+    for (const [world, w] of Object.entries(WORLDS)) {
+      for (const f of w.finds || []) {
+        out.push({ name: `finds/${world}-${f.id}`, group: `finds-${world}`, label: `${world} ${f.id}`, world,
+          reveal: { id: f.id } });
+      }
+    }
+    const extra = (name, label, shot) => out.push({ group: "finds-basket", name: `finds/${name}`, label, ...shot });
+    for (const n of [1, 2, 3]) extra(`basket-${n}`, `basket ${n}`, { world: "woodland", basket: n });
+    extra("basket-porthole", "basket 3, porthole", { world: "tidepool", basket: 3 });
+    extra("basket-night", "basket 2, night", { world: "nightsky", scene: "night", basket: 2 });
+    extra("basket-patbox", "basket over the pat box (wander-r)", { world: "woodland", basket: 3, patBox: true, petClasses: ["wander-r"] });
+    extra("new-woodland-pinecone", "a first-ever find: sparkle", { world: "woodland", reveal: { id: "pinecone", new: true } });
+    extra("left-nightsky-nighthawk", "a visitor's (V3)", { world: "nightsky", scene: "night",
+      reveal: { id: "nighthawkfeather", from: "nighthawk", new: true } });
+    extra("left-woodland-jay", "Steller's jay's", { world: "woodland", reveal: { id: "jayfeather", from: "stellersjay" } });
+    extra("oldworld-pond-in-woodland", "an old world's find", { world: "woodland", reveal: { id: "lilyflower", world: "pond" } });
+    extra("second-of-three", "the second of three", { world: "hearth",
+      reveal: { finds: [{ id: "button" }, { id: "spool", new: true }, { id: "cookie" }], at: 1 } });
+    extra("baby-terrarium", "baby (V4)", { world: "terrarium", stage: "baby", reveal: { id: "seedpod" },
+      storage: { "hatch-baby-talk-bench-user": "on" } });
+    extra("calm-pond", "calm: still", { world: "pond", motion: "reduce", reveal: { id: "frogbit", new: true } });
+    extra("compact-330", "compact: no basket", { world: "woodland", width: 330, basket: 3 });
+    return out;
+  },
   // The settings sheet (the status screen's gear) with the viewer's own rows, at
   // both card widths, day and night.
   settings() {

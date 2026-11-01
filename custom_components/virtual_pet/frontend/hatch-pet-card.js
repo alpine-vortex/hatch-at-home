@@ -651,6 +651,26 @@ const VISITOR_PLAY = {
 // too), in its order, each with its play data here; one with none is skipped.
 const visitorList = (world) => (Array.isArray(world?.visitors) ? world.visitors : [])
   .filter((v) => VISITOR_PLAY[v?.id]).map((v) => ({ ...VISITOR_PLAY[v.id], ...v }));
+// Finds (plan visitors v2 §3, §7): the reveal's lines, over a find's `a` from worlds.json
+// ("a pine cone"). find (V1): one per find, by dailyPick salted with world|id; fresh (V2):
+// a first-ever find; left (V3): a find a visitor left, by its roster name as is (a new one
+// it left gets this line and the sparkle). A baby says BABY.find (V4).
+const FIND_LINES = {
+  find: [(a) => `${a}! ♪`, (a) => `look, ${a} ♪`, (a) => `ooh, ${a}~`],
+  fresh: [(a) => `${a}! a new one ✦`],
+  left: [(a, who) => `the ${who} left ${a} ♪`],
+};
+const FIND_STEP_MS = 2500; // the reveal: one find each
+const FIND_LINE_MS = 2200; // its line, gone before the next find's
+const FOUND_BITS = 3; // the away note's "found <a find>" bits, newest first
+// A find in worlds.json ({id, name, a, ...}), or null for one this card doesn't know.
+const findOf = (worlds, world, id) => (Array.isArray(worlds?.[world]?.finds) &&
+  worlds[world].finds.find((f) => f?.id === id)) || null;
+// The away note's bit for a `found` moment ({id, world}), or null.
+const foundBit = (worlds, m) => {
+  const f = findOf(worlds, m?.world, m?.id);
+  return f?.a ? `found ${f.a}` : null;
+};
 const VISIT_IN_MS = 1400; // to arrive (or leave), unless the visitor says
 const VISIT_STAY_MS = 3000; // at the edge, past the greet's start
 const VISIT_CALM_MS = 5000; // reduced motion: still, then gone
@@ -822,6 +842,7 @@ const BABY = {
   "friend_home": { baby: ["you're home! yay yay ♥"] },
   "care_miss": { baby: ["oh! hi hi ♥"] },
   "visit": { baby: ["hi hi!", "oh! hi hi ♥", "yay yay!", "hehe!"] }, // a world visitor (any of them)
+  "find": { baby: ["yay yay!", "hehe!"] }, // a find in the basket's reveal: visit's own, not its greetings
   // The infrared link (_linkStart): host greets the guest by name, the guest replies with the host's.
   "link_host": { baby: [(n) => `hi hi, ${n}! ♪`, (n) => `${n}! yay yay!`], child: [(n) => `hi, ${n}! hello ♪`] },
   "link_guest": { baby: [(n) => `hi hi, ${n}! ♪`], child: [(n) => `hi hi, ${n}! ♪`] },
@@ -1249,7 +1270,7 @@ const MOMENT_CLASS = {
   sunrise: FLAVOUR, sunset: FLAVOUR, weather: FLAVOUR, forecast: FLAVOUR, news: FLAVOUR,
   pooped: FLAVOUR, tv_off_late: FLAVOUR, watching: FLAVOUR, listening: FLAVOUR,
   tv_on: FLAVOUR, music_on: FLAVOUR, // public: no line (the channel's watching/listening says it)
-  found: FLAVOUR, // a find went in the basket: the away note's (V-C); no line
+  found: FLAVOUR, // a find went in the basket: the away note's "found <a find>" (V8); no line
 };
 // Kept moments the catch-up leaves out: the look welcomes a friend home itself,
 // and a thank-you for the tuck-in reads oddly the next morning (first mate, 2026-10-31).
@@ -2192,6 +2213,23 @@ const STYLE = `
   /* The art faces right; leaving, it turns back the way it came. */
   .season .vis.rtl img, .season .vis.ltr.out img { transform: scaleX(-1); }
   .season .vis.rtl.out img { transform: none; }
+  /* The basket (visitors v2 §3): 12 world cells wide on the floor line, bottom right
+     (inside the porthole's corners), over the pet's tap box; its own tap box is 44 px at
+     least. Not live (asleep, a call, a neighbour's): taps go through to the screen. The
+     reveal: the basket drawn once, and each find over it, 16 cells wide (its art's scale). */
+  .screen .basket, .screen .reveal { position: absolute; z-index: 3; bottom: 6%;
+    right: calc(5% + var(--edge, 0%)); width: calc(var(--px, 2px) * 12); padding: 0; border: 0;
+    background: none; -webkit-tap-highlight-color: transparent; }
+  .screen .basket { cursor: pointer; }
+  .screen .basket::before { content: ""; position: absolute; left: 50%; top: 50%;
+    width: max(44px, 100%); height: max(44px, 100%); translate: -50% -50%; }
+  .screen .basket.idle, .screen .reveal { pointer-events: none; }
+  .screen .basket img, .screen .reveal .rb { position: static; display: block; width: 100%; pointer-events: none; }
+  .screen .reveal .rf { position: absolute; left: 50%; bottom: 60%; width: calc(var(--px, 2px) * 16);
+    margin-left: calc(var(--px, 2px) * -8); image-rendering: pixelated; }
+  .screen .reveal .rf.pop { animation: pop .3s ease-out; transform-origin: 50% 100%; }
+  .screen .reveal .burst { top: auto; bottom: 90%; }
+  .compact .screen .basket, .compact .screen .reveal { display: none; }
   .season .bunting { position: absolute; top: calc(var(--edge, 0%) * .3); left: var(--edge, 0%);
     right: var(--edge, 0%); height: 8.4%;
     background-repeat: repeat-x; background-size: 18.75% 100%; image-rendering: pixelated; }
@@ -2220,7 +2258,8 @@ const STYLE = `
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
   .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
-  .screen.show-status .bondhearts, .screen.show-status .linkhearts { display: none !important; }
+  .screen.show-status .bondhearts, .screen.show-status .linkhearts,
+  .screen.show-status .basket, .screen.show-status .reveal { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
   .pet.sulk { animation: shake .35s 2; }
@@ -3007,6 +3046,7 @@ class HatchPetCard extends HTMLElement {
       if ("house" in msg) {
         s.house = msg.house || null;
         this._powerNews(s);
+        this._basketSync(s); // a basket emptied on another screen just goes, no line
       }
       const m = msg.moment;
       if (m?.type) {
@@ -3232,6 +3272,7 @@ class HatchPetCard extends HTMLElement {
             <div class="bubble"></div>
             <div class="sr" role="status"></div>
             <button class="pat" type="button" hidden></button>
+            <button class="basket" type="button" aria-label="the basket" hidden><img alt=""></button>
             <div class="game" hidden>
               <div class="gpick" role="group" aria-label="Pick a game">${this._games().map((g) =>
                 `<button data-game="${g.key}">${g.label}</button>`).join("")}</div>
@@ -3260,6 +3301,7 @@ class HatchPetCard extends HTMLElement {
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
       catchEl: q(".gcatch"), live: q(".sr[role=status]"), seasonBox: q(".season"),
+      basket: q(".basket"),
     };
     // The LCD grid: one cell per world art pixel, measured on the screen itself
     // (its width depends on the shell's padding as well as the slide's).
@@ -3309,6 +3351,8 @@ class HatchPetCard extends HTMLElement {
     }).observe(s.bubble, { childList: true, characterData: true, subtree: true });
     // A pat (PR 3b): a tap on the pet itself, card only. A tap beside it still opens the status.
     s.pat.addEventListener("click", (e) => this._pat(s, e));
+    // The basket (visitors v2 §3): its own button, never a pat, never the status.
+    s.basket.addEventListener("click", (e) => this._basketTap(s, e));
     // The CSS hides it at once for a game, a question or the status; if it had focus,
     // that goes to the Status button rather than to the page.
     s.pat.addEventListener("focusout", (e) => {
@@ -3561,6 +3605,7 @@ class HatchPetCard extends HTMLElement {
       this._sig = null; // try again on the next update
       return;
     }
+    this._worlds = worlds; // every world's (a find, its art and lines, is its own world's)
     while (this._slides.length < devices.length) this._slides.push(this._buildSlide());
     while (this._slides.length > devices.length) this._dropSlide(this._slides.pop());
     if (!this._bootChecked) {
@@ -3651,6 +3696,8 @@ class HatchPetCard extends HTMLElement {
     // The last pet's private lines and question aren't this one's.
     this._clearAsk(s);
     s.queue = [];
+    this._revealEnd(s);
+    s.collecting = false; // a reply on its way is the last pet's: dropped
     s.visitedAt = 0;
     s.lookedFirst = false;
     s.wishDay = null;
@@ -4555,6 +4602,7 @@ class HatchPetCard extends HTMLElement {
       }
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
       this._patSync(s);
+      this._basketSync(s);
       if (s === this._slides[this._index]) {
         if (!this._booting) this._greet(s); // the boot screen waits: only the speaking does
         this._powerTick(s);
@@ -5335,8 +5383,16 @@ class HatchPetCard extends HTMLElement {
     };
     const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow", rainbow: "saw a rainbow", sun_out: "sunbathed" };
     const CARE_BITS = { feed: "had a meal", snack: "had a snack", play: "played", game: "played a game", clean: "had a bath", chore_treat: "got a chore treat" };
+    let found = 0; // "found <a find>": one a find (V8), newest first, FOUND_BITS at most
     for (const m of [...(lastCare.moments || [])].reverse()) {
       if (!after(m.at)) continue;
+      if (m.type === "found") {
+        if (found < FOUND_BITS && foundBit(this._worlds, m)) {
+          found++;
+          add(foundBit(this._worlds, m));
+        }
+        continue;
+      }
       add(m.type === "weather" ? WEATHER_BITS[m.change] : MOMENT_BITS[m.type]);
     }
     for (const e of [...(lastCare.log || [])].reverse()) {
@@ -7641,7 +7697,8 @@ class HatchPetCard extends HTMLElement {
         return;
       }
     }
-    if (season.visitor && !isCalm) {
+    // A walker waits while the basket shows (the same floor line).
+    if (season.visitor && !isCalm && !(season.visitor.walk && this._basketShows(s))) {
       if (!s.nextVisitor) s.nextVisitor = now + 60000 + Math.random() * 60000;
       if (now >= s.nextVisitor) {
         const [lo, hi] = SEASON_VISITOR_MS;
@@ -8000,10 +8057,12 @@ class HatchPetCard extends HTMLElement {
 
   // May a visit start? The pet on show VISIT_SHOWN_MS and past its first look, free
   // (_linkFree: idle and awake, nothing queued or said, no game, scene, status or egg),
-  // no link, low-battery gag or call, and not within VISIT_AFTER_MS of a link.
+  // no link, low-battery gag or call, not within VISIT_AFTER_MS of a link, and no
+  // basket on show.
   _visitorFree(s, now = Date.now()) {
     return s === this._slides[this._index] && !this._booting && !!s.lookedFirst && !s.visitor &&
       !this._link && !s.linking && !s.power && !s.calling && !s.away && this._linkFree(s) &&
+      !this._basketShows(s) && // the basket's floor line: the visitor waits (review C7)
       now - (this._visitShown?.s === s ? this._visitShown.at : now) >= VISIT_SHOWN_MS &&
       now - (this._linkEndedAt ?? -Infinity) >= VISIT_AFTER_MS;
   }
@@ -8097,6 +8156,165 @@ class HatchPetCard extends HTMLElement {
     V.el.remove();
     if (s.flairUntil === V.until) s.flairUntil = 0;
     if (s.visitUntil === V.until) s.visitUntil = 0;
+  }
+
+  // --- The basket (docs/plan-2026-11-01-visitors-v2.md §3) ---------------------
+  // The server rolls finds into the basket; house.basket says how many wait (0-3, no
+  // ids: an older server sends no key, so no basket). Opening the card says nothing. A
+  // tap sends virtual_pet/collect (a websocket command: who tapped isn't recorded) and
+  // the reply's finds are shown one by one over the basket, the pet saying a line for
+  // each (flavour). The server empties the basket for every screen at once; a screen
+  // that didn't tap (or lost the race: an empty reply) just loses the basket, quietly.
+
+  // How many wait, as the picture shows them (no number anywhere).
+  _basketCount(s) {
+    const n = s.house?.basket;
+    return Number.isInteger(n) && n > 0 ? Math.min(n, 3) : 0;
+  }
+
+  // May the basket be tapped? The pet on show and free as for a visitor (_visitorLive:
+  // awake, no game, scene, link, gag, call or status), out of its egg, not booting, and
+  // no tap or reveal already going. Else a tap never reaches the server (review C1: a
+  // basket emptied unseen is lost to this screen), and goes through to the screen.
+  _basketLive(s) {
+    return this._basketCount(s) > 0 && !s.egg && !!s.species && !this._booting &&
+      !s.collecting && !s.reveal && this._visitorLive(s);
+  }
+
+  // Shown with something in it, live or not (the CSS hides it in the compact layout and
+  // under the status). While a tap waits on its reply, the picture is held as it was:
+  // the server's publish of the empty basket can come first (review C2).
+  _basketSync(s) {
+    const b = s.basket;
+    if (!b || s.collecting) return;
+    const n = this._basketCount(s);
+    const show = n > 0 && !s.reveal && !s.egg && !!s.species && !s.away && !s.game && !s.scene;
+    if (show) {
+      const src = `${BASE}/ui/basket_${n}.png?v=${VERSION}`;
+      const img = b.firstElementChild;
+      if (img.getAttribute("src") !== src) img.src = src;
+    }
+    if (b.hidden === show) b.hidden = !show;
+    const live = show && this._basketLive(s);
+    b.classList.toggle("idle", !live);
+    b.tabIndex = live ? 0 : -1;
+  }
+
+  // Is the basket on show (a visitor waits while it is: the same floor line)?
+  _basketShows(s) {
+    return !!s.reveal || !!s.collecting ||
+      (!!s.basket && !s.basket.hidden && getComputedStyle(s.basket).display !== "none");
+  }
+
+  // The tap: once (re-entry guarded until the reply), then the reveal. An error keeps
+  // the basket; an empty reply (another screen was first) shows nothing and says nothing.
+  async _basketTap(s, e) {
+    e?.stopPropagation(); // not the status, not a pat
+    if (s !== this._slides[this._index] || (e && e.detail !== 0 && this._swiped)) return;
+    this._basketSync(s);
+    if (!this._basketLive(s)) return;
+    const entity = s.ids?.["sensor.life_stage"];
+    if (!entity) return;
+    s.collecting = true;
+    this._tapped(s.basket);
+    let finds = null;
+    try {
+      const reply = await this._hass.callWS({ type: "virtual_pet/collect", entity_id: entity });
+      finds = Array.isArray(reply?.finds) ? reply.finds : [];
+    } catch (err) {
+      console.warn("hatch-pet-card: the basket", err?.message || err);
+    }
+    if (s.ids?.["sensor.life_stage"] !== entity) return; // another pet here now
+    s.collecting = false;
+    // Only finds this card knows (a newer server's are skipped), at most the basket's three.
+    const known = (finds || []).filter((f) => findOf(this._worlds, f?.world, f?.id)).slice(0, 3);
+    if (finds && finds.length) {
+      s.house = { ...(s.house || {}), basket: 0 }; // gone here too, whatever came first
+    }
+    if (known.length && s === this._slides[this._index]) this._revealStart(s, known);
+    this._basketSync(s);
+  }
+
+  // The reveal: the basket drawn once, and every FIND_STEP_MS the next find pops up over
+  // it, the pet says its line, and a first-ever find sparkles. Calm: the find appears,
+  // still. Flavour, started by a person: a line goes out only when the bubble is free of
+  // anyone else's; once one can't, the rest of the reveal is shown without lines. A pat
+  // meanwhile wiggles; nothing else starts. Each beat checks _visitorLive, else it ends.
+  _revealStart(s, finds) {
+    this._revealEnd(s);
+    const isCalm = calm();
+    const el = document.createElement("div");
+    el.className = "reveal";
+    el.innerHTML = `<img class="rb" alt="" src="${BASE}/ui/basket_${Math.min(finds.length, 3)}.png?v=${VERSION}">` +
+      '<img class="rf" alt="" hidden>';
+    s.screen.append(el);
+    const total = finds.length * FIND_STEP_MS;
+    const R = s.reveal = { el, finds, timers: [], until: Date.now() + total, quiet: false, said: null, shown: [] };
+    s.flairUntil = s.visitUntil = R.until; // a pat wiggles, no line; nothing else meanwhile
+    s.basket.hidden = true;
+    const at = (ms, fn) => R.timers.push(setTimeout(() => {
+      if (s.reveal !== R) return;
+      if (this._visitorLive(s)) fn();
+      else this._revealEnd(s);
+    }, ms));
+    finds.forEach((f, i) => at(i * FIND_STEP_MS, () => this._revealFind(s, R, f, isCalm)));
+    at(total, () => this._revealEnd(s));
+    return R;
+  }
+
+  // One find out of the basket: its picture, its sparkle (first-ever), its line.
+  _revealFind(s, R, f, isCalm) {
+    const img = R.el.querySelector(".rf");
+    img.classList.remove("pop");
+    img.src = `${BASE}/ui/find_${f.world}_${f.id}.png?v=${VERSION}`;
+    img.dataset.find = `${f.world}/${f.id}`;
+    img.hidden = false;
+    if (!isCalm) {
+      void img.offsetWidth; // restart the pop
+      img.classList.add("pop");
+    }
+    R.shown.push(`${f.world}/${f.id}`);
+    if (f.new) {
+      const ring = document.createElement("span");
+      ring.className = "burst";
+      R.el.append(ring);
+      setTimeout(() => ring.remove(), 600);
+    }
+    if (R.quiet) return;
+    // The reveal's own line still up doesn't hold the next one; anyone else's does.
+    const own = R.said && s.sayEntry?.text === R.said && s.sayUntil > Date.now();
+    if (own) s.sayUntil = 0;
+    if (!this._mayInterrupt(s, FLAVOUR)) {
+      R.quiet = true;
+      return;
+    }
+    R.said = this._findLine(s, f);
+    this._line(s, FLAVOUR, R.said, FIND_LINE_MS);
+  }
+
+  // A find's line (§7): V3 when a visitor left it (its roster name, a new one too: the
+  // sparkle says new), else V2 for a first-ever find, else one of V1 for the day. Baby
+  // talk: BABY.find. Each from the find's own world (an old world's find, its own line).
+  _findLine(s, f) {
+    const find = findOf(this._worlds, f.world, f.id);
+    const a = find?.a || find?.name || "something";
+    const roster = this._worlds?.[f.world]?.visitors;
+    const who = f.from && Array.isArray(roster) && roster.find((v) => v?.id === f.from)?.name;
+    const normal = who ? FIND_LINES.left[0](a, who)
+      : f.new ? FIND_LINES.fresh[0](a)
+        : dailyPick(FIND_LINES.find, `${f.world}|${f.id}`)(a);
+    return this._lines(s, "find", normal).text;
+  }
+
+  _revealEnd(s) {
+    const R = s.reveal;
+    if (!R) return;
+    s.reveal = null;
+    R.timers.forEach(clearTimeout);
+    R.el.remove();
+    if (s.flairUntil === R.until) s.flairUntil = 0;
+    if (s.visitUntil === R.until) s.visitUntil = 0;
+    this._basketSync(s);
   }
 
   // --- The infrared link ------------------------------------------------------
@@ -8757,6 +8975,7 @@ class HatchPetCardEditor extends HTMLElement {
 HatchPetCard.seasons = SEASONS;
 HatchPetCard.hanukkah = hanukkah;
 HatchPetCard.seasonLines = seasonLines;
+HatchPetCard.findLines = FIND_LINES;
 HatchPetCard.momentClasses = Object.fromEntries(Object.entries(MOMENT_CLASS)
   .map(([type, c]) => [type, { [KEPT]: "kept", [BEAT]: "beat", [FLAVOUR]: "flavour" }[c]]));
 HatchPetCard.seasonNow = seasonNow;
