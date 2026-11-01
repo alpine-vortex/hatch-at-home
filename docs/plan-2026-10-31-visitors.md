@@ -209,10 +209,11 @@ says its babble version. Under 2a's classes the visit line is **flavour**.
 ## 7. Art batch
 
 - **Count:** 6 worlds × 3 visitors × 2 frames = **36 PNGs**.
-- **Size:** a 64 × 64 canvas at 2 frame px per art px (the 128 grid's pixel, so
-  visitors match the pets): **32 × 32 art px**, the creature sitting on the canvas's
-  bottom edge (walkers) or centred (flyers). The heron gets a 64 × 96 canvas. Shown at
-  13–15% of the screen width, like `.sghost`/`.sturkey` (68 px canvases at 4 px).
+- **Size:** as the canvas spec above: a 72 × 72 canvas = **18 × 18 world cells** at
+  4 px a cell (`WORLD_GRID` 64, like props, hats and seasonal pieces), shown
+  `calc(var(--px) * 18)` wide, so one art pixel is one world cell. The creature sits on
+  the canvas's bottom row (walkers) or is centred (flyers). The heron uses the same
+  canvas, tall and narrow.
 - **Palette:** the world's own (the backdrop's and its creatures' tones), the same dark
   outline as the 128 sprites; stored as exact palettes (`scripts/art/palette.py`);
   transparent background; facing right (the card mirrors for `rtl`).
