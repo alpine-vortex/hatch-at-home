@@ -52,7 +52,7 @@ Order (owner, Q7): **the wave pose first**, then kindred pairs.
 | 2b | **Kindred pairs + persona link lines**: one extra line when a kindred pair links (personality "Later"), and each type's link-line variants (device charm "Left"); card only, nothing counted (FM, Q6) | M | 0 copy plan (`plan-2026-11-01-kindred-pairs.md`, 45 PROPOSED lines, 5 owner questions), then 1 | none | — | the owner picks the PROPOSED lines first (new lines stay proposals, Q4) |
 | 2c | **Playtime design note**: the Catch rethink (FM, Q2) and 4d's slower game in one note (shapes, odds, the 70-80% rule); decides whether pounce art comes back | — | 0 | none for the note | — | — |
 | 2d | **Visitors v2 plan** (finds, basket, collection, gifts: check-ins item 1), from v1's 18-visitor roster; plan in stage 2, build after (FM, Q10) | — | 0, then an L/tier-2 build | ~60 finds | no | the seed moves to the server |
-| 2e | Older generations (4g), unbundled from the forms book (FM, Q8) | S | 1 | none | — | — |
+| 2e | Older generations (4g), unbundled from the forms book (FM, Q8) — **built** (s2574) | S | 1 | none | — | — |
 
 **Dependencies.**
 - 2a: built, needing no art (the wave frames already existed in `species.json` "waves").
@@ -62,7 +62,11 @@ Order (owner, Q7): **the wave pose first**, then kindred pairs.
 - 2d: v1 picks the visitor on the card and saves nothing. A collection can't credit a
   visit until the server owns the day's seed, so this is the plan's first design point.
 - 2e touches the same `_renderJournal` code as the forms book's PR 2a. Whichever ships
-  second rebases.
+  second rebases. **2e is built:** `_renderJournal` now keeps `every` (all records plus
+  now), `past = every.slice(-4)` for the line and `older` for the link; the species-name
+  load covers `every`, and `line(p)` is the per-generation renderer. If 2a restyles the
+  family line, keep those three names and the `.jolder`/`.jmore` nodes, or card-check
+  2e fails.
 
 ## Decided (2026-10-31)
 

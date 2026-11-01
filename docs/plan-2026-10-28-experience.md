@@ -944,7 +944,7 @@ on main since v0.38.0, unreleased. "deferred" = the owner's 2026-10-30 release s
 | 4d | A slower game: design note, then a build held to 70-80% (O06) | M-L | 1 | the owner's pick of the design | deferred |
 | 4e | README and guide counts, `art.py` re-laid (F13) | M | 1 | the new axolotl and moth adults | main |
 | 4f | Catch, a normal game (O06) | M | 1 | 1a, 3a, the decoy prop | **withdrawn** (FM, 10-31) |
-| 4g | Older generations (F10) | S | 1 | forms book 2a (unbundled, FM 10-31) | next-stages 2e |
+| 4g | Older generations (F10) | S | 1 | forms book 2a (unbundled, FM 10-31) | next-stages 2e — **built** |
 
 ## 5. Copy (proposals; the owner decides the words)
 
