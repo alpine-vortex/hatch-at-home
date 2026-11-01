@@ -7424,6 +7424,9 @@ async function main() {
     // Due only inside __vtick: the card's own 700 ms tick never starts one meanwhile.
     el._visitorDue = () => el.__vdue || null;
     el.__vdue = null;
+    // A missed day visitor coming late (fresh-moment 3): only where a case asks (__late).
+    if (!el.__realLate) el.__realLate = el._visitorLate;
+    el._visitorLate = function (t) { return el.__late ? el.__realLate.call(this, t) : null; };
     // It clears the 20 s throttle too: the card's own tick may have looked (nothing due) since.
     el.__vtick = (t) => {
       el.__vdue = due;
@@ -7638,12 +7641,17 @@ async function main() {
   // _visitorMissed (the window) is stubbed; its clock is walked below and in node.
   await vprep(null);
   const VSTAR = VIS.nightsky.find((v) => v.id === "shootingstar");
-  const catchUp = await card.evaluate((el, { V0, VSTAR }) => {
+  const VDAY = list.find((v) => v.hours !== "night" && !v.cross) || list.find((v) => v.hours !== "night");
+  const VNIGHT = Object.values(VIS).flat().find((v) => v.hours === "night");
+  const catchUp = await card.evaluate((el, { V0, VSTAR, VDAY, VNIGHT }) => {
     const s = el._slides[el._index];
     const device = s.ids?.device;
     const spent = Object.keys(localStorage).filter((k) => /^hatch-(dream|wish|wishmention|welcomed|seen|upbringing)-/.test(k))
       .map((k) => [k, localStorage.getItem(k)]);
-    const real = { missed: el._visitorMissed, heard: el._channelHeard, catchUp: el._catchUp, seenRead: el._seenRead, away: el._awayNote };
+    const real = { missed: el._visitorMissed, heard: el._channelHeard, catchUp: el._catchUp, seenRead: el._seenRead, away: el._awayNote,
+      dark: el._screenDark };
+    // A dark screen: the catch-up line (a day screen's live visit is checked below).
+    el._screenDark = () => true;
     // Room for it: no kept catch-up, away note, dream, wish or upbringing line this look.
     el._catchUp = () => [];
     el._awayNote = () => null;
@@ -7714,17 +7722,51 @@ async function main() {
       el._seenRead = function (d) { return { ...(real.seenRead.call(this, d) || {}), said: 0 }; };
       el._catchUp = () => [["kept one", "2026-01-01T00:00:00Z"], ["kept two", "2026-01-01T00:00:01Z"], ["kept three", "2026-01-01T00:00:02Z"]];
       out.full = look(V0);
+      // Fresh-moment 3 (owner Q3, Q7): on a day screen a missed day visitor isn't told at
+      // the first look; it comes by live (nothing due), once; a night visitor stays a line.
+      el._seenRead = real.seenRead; el._catchUp = () => [];
+      el._screenDark = () => false;
+      el.__late = true;
+      clearFlag();
+      out.dayLook = look(VDAY);
+      const late = () => {
+        Object.assign(s, { poseUntil: 0, sayUntil: 0, sayClass: 0, visitUntil: 0, flairUntil: 0, queue: [], nextVisitCheck: 0 });
+        el._visitShown = { s, at: Date.now() - 60000 };
+        el._visitorMissed = () => VDAY;
+        el._visitorTick(s);
+        const id = s.visitor?.v.id || null;
+        el._visitorEnd(s);
+        Object.assign(s, { poseUntil: 0, sayUntil: 0, visitUntil: 0, flairUntil: 0, queue: [] });
+        return { id, flag: flag() };
+      };
+      out.dayLive = late();
+      out.dayAgain = late();
+      out.dayLookAfter = look(VDAY);
+      clearFlag();
+      out.dayNight = look(VNIGHT);
+      el._screenDark = () => true;
+      clearFlag();
+      out.darkLive = late();
+      out.darkLook = look(VDAY);
     } finally {
+      el.__late = false;
       el._visitorMissed = real.missed; el._channelHeard = real.heard; el._catchUp = real.catchUp; el._seenRead = real.seenRead;
-      el._awayNote = real.away;
+      el._awayNote = real.away; el._screenDark = real.dark;
       for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish|wishmention|welcomed|seen|upbringing)-/.test(k)) localStorage.removeItem(k);
       for (const [k, v] of spent) localStorage.setItem(k, v);
       Object.assign(s, { lookedFirst: true, queue: [], sayUntil: 0 });
       clearFlag();
     }
     return out;
-  }, { V0, VSTAR });
+  }, { V0, VSTAR, VDAY, VNIGHT });
   const cu = catchUp;
+  check("fresh-moment 3: a missed day visitor on a day screen: no line, it comes by live once, and no line after",
+    cu.dayLook.said.length === 0 && !cu.dayLook.flag && cu.dayLive.id === VDAY.id && cu.dayLive.flag &&
+      cu.dayAgain.id === null && cu.dayLookAfter.said.length === 0,
+    JSON.stringify({ dayLook: cu.dayLook, dayLive: cu.dayLive, dayAgain: cu.dayAgain, after: cu.dayLookAfter }));
+  check("fresh-moment 3: a dark screen keeps the line, no late visit (Q7); a night visitor stays a line",
+    cu.darkLive.id === null && !cu.darkLive.flag && cu.darkLook.said.length === 1 && cu.dayNight.said.length === 1,
+    JSON.stringify({ darkLive: cu.darkLive, darkLook: cu.darkLook, dayNight: cu.dayNight }));
   check("visitors: catch-up: nothing said before the window ends; the day's flag unused",
     cu.before.said.length === 0 && !cu.before.flag, JSON.stringify(cu.before));
   check(`visitors: catch-up: after the window, "a ${V0.name} came by today ♪" once, flavour, last; the flag used`,
@@ -7988,6 +8030,7 @@ async function main() {
     const s = el._slides[el._index];
     el._visitorEnd(s);
     if (el.__realDue) { el._visitorDue = el.__realDue; delete el.__realDue; }
+    if (el.__realLate) { el._visitorLate = el.__realLate; delete el.__realLate; delete el.__late; }
     Object.assign(s, { poseUntil: 0, sayUntil: 0, visitUntil: 0, flairUntil: 0, queue: [] });
   });
   await holdVisits();

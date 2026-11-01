@@ -5544,7 +5544,8 @@ class HatchPetCard extends HTMLElement {
     // Very last, flavour: today's visitor came and went with nobody here to see it
     // (its window over, the day's visit flag unset). Said once, and the flag used up,
     // so the visit can't also play; only with room, so it never pushes a line out.
-    const missed = this._visitorMissed(s);
+    // A day visitor on a day screen isn't told: it comes by live instead (_visitorLate).
+    const missed = !this._visitorLate(s) && this._visitorMissed(s);
     if (missed && lines.length < room && oncePerDay(`visit-${device}`, this._visitDay(s))) {
       const baby = this._babyStage(s) === "baby";
       lines.push([baby ? "hi hi! ♪" : missed.catchup || `a ${missed.name} came by today ♪`, 4500, { cls: FLAVOUR }]);
@@ -8747,7 +8748,7 @@ class HatchPetCard extends HTMLElement {
   _visitorDue(s, date) {
     const list = visitorList(s.world);
     if (!list.length) return null;
-    const dark = s.screen.classList.contains("night") || s.screen.classList.contains("dim");
+    const dark = this._screenDark(s);
     const plan = this._visitPlan(s);
     if (plan !== undefined) {
       const v = plan && list.find((x) => x.id === plan.id);
@@ -8762,6 +8763,19 @@ class HatchPetCard extends HTMLElement {
     if (!v || (v.hours === "night") !== dark) return null;
     const start = v.hours === "night" ? d.night : d.day;
     return date.getHours() >= start && date.getHours() < start + 3 ? v : null;
+  }
+
+  // A night (or dim) screen: night visitors only.
+  _screenDark(s) {
+    return s.screen.classList.contains("night") || s.screen.classList.contains("dim");
+  }
+
+  // A day visitor whose window is over with nobody here to see it (the day's flag, used
+  // by the caller, unset on this device): it comes by live at a daytime look instead of
+  // the catch-up line (fresh-moment 3, owner Q3). Never on a dark screen (Q7).
+  _visitorLate(s) {
+    const v = this._visitorMissed(s);
+    return v && v.hours !== "night" && !this._screenDark(s) ? v : null;
   }
 
   // Today's visitor if its window is over (the first look's catch-up line).
@@ -8806,7 +8820,7 @@ class HatchPetCard extends HTMLElement {
     if (now < (s.nextVisitCheck || 0)) return;
     s.nextVisitCheck = now + VISIT_CHECK_MS;
     if (!this._visitorFree(s, now)) return;
-    const v = this._visitorDue(s);
+    const v = this._visitorDue(s) || this._visitorLate(s);
     if (v && oncePerDay(`visit-${s.ids?.device}`, this._visitDay(s))) this._visitorStart(s, v);
   }
 
