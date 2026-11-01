@@ -4992,6 +4992,12 @@ async function main() {
     }
     check("personality lines: all eight types, every key, 2-3 lines, 40 at most, no nagging, no asking, wishes credit nobody",
       bad.length === 0, bad.join(" | "));
+    // Fresh-expand copy (E1): every table in the card's fresh-expand block is named in
+    // COPY_TABLES (scripts/copy-scan.js) and scanned: no nagging, 40 at most with the
+    // longest fill, asks only in a question slot, no digits.
+    const freshScan = require("./copy-scan.js").scanFreshCopy(src);
+    check(`fresh-expand copy: ${freshScan.tables.length} tables, ${freshScan.count} lines, every table scanned, 40 at most, no nagging, no asking`,
+      freshScan.bad.length === 0 && freshScan.tables.length > 0, freshScan.bad.join(" | "));
     // The basket's reveal lines (visitors v2 §7, V1-V3): the same scan over every find the
     // reveal can show (not the gift-only ones) and each visitor's own left find, 40 at most
     // (no margin: "the nighthawk left a nighthawk feather ♪" is 40). V4 is BABY.find, above.

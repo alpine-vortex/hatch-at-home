@@ -654,6 +654,38 @@ const dailyPick = (list, salt = "") => {
   for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return list[h % list.length];
 };
+// Fresh-expand E1 (docs/plan-2026-11-01-fresh-expand.md): a line said once a day, in
+// turns. The local date as a day number (read as UTC, so a DST day is still one day).
+const dayOrdinal = (date = new Date()) => Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 864e5);
+const turnHash = (text) => {
+  let h = 2166136261;
+  for (const ch of text) h = Math.imul(h ^ ch.codePointAt(0), 16777619) >>> 0;
+  return h;
+};
+// One cycle's order of n: a shuffle seeded by the salt and the cycle.
+const turnOrder = (n, salt, cycle) => {
+  const order = [...Array(n).keys()];
+  let x = turnHash(`${salt}|${cycle}`) || 1;
+  for (let i = n - 1; i > 0; i--) {
+    x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0;
+    const j = x % (i + 1);
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return order;
+};
+// The list in turns, a day each: no line twice within n days, each cycle of n days in
+// its own order (a cycle never opens with the last one's last line), and two salts
+// (pets, keys) not in step. Pure: the same list, salt and day give the same line.
+function turnPick(list, salt = "", date = new Date()) {
+  const n = list?.length || 0;
+  if (n < 2) return list?.[0];
+  const day = dayOrdinal(date);
+  if (n === 2) return list[(day + turnHash(salt)) % 2];
+  const cycle = Math.floor(day / n);
+  const order = turnOrder(n, salt, cycle);
+  if (order[0] === turnOrder(n, salt, cycle - 1)[n - 1]) [order[0], order[1]] = [order[1], order[0]];
+  return list[order[day % n]];
+}
 // World visitors (docs/plan-2026-10-31-visitors.md, v2: plan-2026-11-01-visitors-v2.md):
 // on about 4 days in 7 a small creature from the pet's world drops by at the scene's
 // edge and the pet greets it. The server picks the day's visit and its window
@@ -1167,6 +1199,22 @@ const PERSONA = {
     link_kindred: [(n) => `${n}! good team, you and me ♥`, "we've got each other's backs ♥"],
   },
 };
+// --- fresh-expand copy (docs/plan-2026-11-01-fresh-expand.md; APPROVED 2026-11-01) ---
+// Every table from here to the end marker is plain data and is named in
+// scripts/copy-scan.js's COPY_TABLES, which card-check and node scan line by line.
+// PERSONA_FRESH: each type's lines for the new keys, merged into PERSONA below.
+const PERSONA_FRESH = {
+  mellow: {},
+  sweet: {},
+  bouncy: {},
+  starry: {},
+  old_soul: {},
+  fancy: {},
+  charming: {},
+  plucky: {},
+};
+// --- end fresh-expand copy ---
+for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
 // types are partners here, or the same type, are kindred. On KINDRED_ODDS of their
 // links the host adds a line of its own (link_kindred). Nothing is counted or kept.
@@ -5070,12 +5118,32 @@ class HatchPetCard extends HTMLElement {
   // A line in baby talk, else half the time in its personality's words, else
   // the normal one: {text, baby}. A baby line never carries the catchphrase
   // (callers pass catch: !baby); a personality line may, as the normal one does.
-  _lines(s, key, normal, arg) {
+  // { fresh: true } (fresh-expand E1): the type's lines by _fresh, and never the same
+  // text as this key said last on this slide (the other side of the coin instead).
+  _lines(s, key, normal, arg, { fresh = false } = {}) {
     const set = this._babySet(s, key);
     const own = !set && this._persona(s)?.[key];
-    const line = set ? pick(set) : own && Math.random() < 0.5 ? pick(own) : null;
+    const take = (list) => (fresh ? this._fresh(s, key, list) : pick(list));
+    const fill = (line) => (typeof line === "function" ? line(arg) : line);
+    let line = set ? take(set) : own && Math.random() < 0.5 ? take(own) : null;
+    if (fresh && !set && own) {
+      const said = (s.lastPick ??= {})[`${key}:said`];
+      const text = line === null ? normal : fill(line);
+      if (text === said) line = line === null ? take(own) : null;
+      s.lastPick[`${key}:said`] = line === null ? normal : fill(line);
+    }
     if (line === null) return { text: normal, baby: false };
-    return { text: typeof line === "function" ? line(arg) : line, baby: !!set };
+    return { text: fill(line), baby: !!set };
+  }
+
+  // A random line, never the one this key gave last on this slide (memory only).
+  _fresh(s, key, list) {
+    if (!list?.length) return undefined;
+    const last = (s.lastPick ??= {})[key];
+    const pool = list.length > 1 ? list.filter((line) => line !== last) : list;
+    const line = pick(pool.length ? pool : list);
+    s.lastPick[key] = line;
+    return line;
   }
 
   // The moves _idle picks from (P3): the common ones, and the copies this
