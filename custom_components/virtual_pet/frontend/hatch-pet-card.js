@@ -405,7 +405,30 @@ function playChirp(name) {
 // variants (_1 big, _2 small); otherwise one image.
 const FEED_FULL_AT = 95; // rates.py FEED_FULL_AT: a meal is refused above this
 const TRAIT_CAP = 4; // rates.py TRAIT_CAP, until the server says (life_stage trait_cap)
+const STAGE_DAYS = { teen: 5, adult: 14 }; // rates.py STAGE_STARTS (120 h, 336 h), from the egg
 const LINK_AFTER_MS = [600000, 1500000]; // the infrared link: 10-25 min after the page loads (random)
+// The day's first link waits for someone watching (gaps-seams 5a, owner Q7): 1-3 min into
+// a look (the first tap or swipe on a shown card, after none for LINK_TOUCHED_MS), and
+// only while the last one was under LINK_TOUCHED_MS ago. Never on a hidden tab or an
+// untouched wall tablet. Later links keep LINK_AFTER_MS.
+// An idle line about a neighbour on the shelf (gaps-seams 5b), 1 in 6 idle lines.
+const NEIGHBOUR_ODDS = 1 / 6;
+const NEIGHBOUR_LINES = [(n) => `wonder what ${n} is up to ♪`, (n) => `*waves toward ${n}*`, (n) => `I hope ${n} is having a nice day`];
+const LINK_FIRST_MS = [60000, 180000];
+const LINK_TOUCHED_MS = 300000;
+// A link already today on this browser (oncePerDay's `hatch-link-<pair>-<day>` keys).
+function linkedToday(day = new Date()) {
+  const end = `-${day.toDateString()}`;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("hatch-link-") && key.endsWith(end)) return true;
+    }
+  } catch (err) {
+    // no storage: oncePerDay's own memory
+  }
+  return [...(oncePerDay.seen || [])].some((key) => key.startsWith("hatch-link-") && key.endsWith(end));
+}
 const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
 const FLAIR_MS = 4200; // how long a moment lasts
 const FLAIR = {
@@ -765,6 +788,19 @@ function oncePerDay(name, day = new Date()) {
   }
   return true;
 }
+// Once on this browser, ever (a key that isn't per day, so pruning leaves it).
+function onceEver(name) {
+  const key = `hatch-${name}`;
+  try {
+    if (localStorage.getItem(key)) return false;
+    localStorage.setItem(key, "1");
+  } catch (err) {
+    if (onceEver.seen?.has(key)) return false;
+    (onceEver.seen ??= new Set()).add(key);
+  }
+  return true;
+}
+const WEEK_OLD = ["one week old today! ♥", "a whole week together! ♥"]; // gaps-seams 1b
 // The card's own per-day keys (oncePerDay's `hatch-<name>-<Date.toDateString()>`, and the
 // treat's `hatch-treat-...-<toDateString>`) older than PRUNE_DAYS go, once at card start.
 // Only keys that start "hatch-" and end in a day like "Fri Oct 31 2026" are touched.
@@ -948,6 +984,9 @@ const PERSONA = {
     idle_excited: ["hehe! ok, nap now", "mm! that was fun ♪", "hehe, nice ♥"],
     mood_content: ["taking it easy", "comfy and calm"],
     mood_excited: ["hehe, that was nice", "mm, that was fun"],
+    mood_cozy: ["mm, perfect nap spot", "warm and comfy... ♪"],
+    mood_bored: ["a nap sounds nice...", "just lazing about"],
+    visit: ["oh, hi there... ♪", "mm, a visitor... nice"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `oh hey, ${n}... ♪`, (n) => `${n}... come sit a while ♥`],
     link_guest: [(n) => `mm, hi, ${n}... ♪`],
     link_kindred: [(n) => `${n}, we do cosy well ♥`, "mm, a nap with you sounds nice ♪"],
@@ -968,6 +1007,9 @@ const PERSONA = {
     idle_excited: ["hehe, so happy!", "yay! ♥", "that was lovely ♥"],
     mood_content: ["all warm and happy", "nice and homey ♥"],
     mood_excited: ["that was lovely!", "hehe, that was fun ♥"],
+    mood_cozy: ["all snug ♥", "warm and happy ♥"],
+    mood_bored: ["wish someone would visit ♥", "waiting for a friend ♥"],
+    visit: ["a visitor! welcome ♥", "hello, little friend ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! hi! so glad you came ♥`, (n) => `hello hello, ${n} ♥`],
     link_guest: [(n) => `hi, ${n}! ♥ hello ♥`],
     link_kindred: [(n) => `${n}, we think alike ♥`, "it's nice to meet a kind heart ♥"],
@@ -988,6 +1030,9 @@ const PERSONA = {
     idle_excited: ["wheee! hup hup!", "woo! yes!", "*bounce bounce*"],
     mood_content: ["full of beans", "ready for anything"],
     mood_excited: ["that was great!", "woo! so much fun!"],
+    mood_cozy: ["cozy... but ready to hop!", "warm paws, happy hops"],
+    mood_bored: ["need to hop about!", "so... much... sitting"],
+    visit: ["a visitor! hup hup, hi!", "hiya, friend! *bounce*"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! hup hup, hi!`, (n) => `hiya, ${n}! *bounce*`],
     link_guest: [(n) => `hup! hi, ${n}!`],
     link_kindred: [(n) => `${n}! race you to the corner! hup`, "two of us, twice the hops!"],
@@ -1008,6 +1053,9 @@ const PERSONA = {
     idle_excited: ["ta-da! ★", "what a show! ★", "♪ tra la la! ♪"],
     mood_content: ["humming a little tune", "ready for my close-up ★"],
     mood_excited: ["what a show!", "bravo! that was fun ★"],
+    mood_cozy: ["cozy, like backstage ★", "a warm spotlight ♪"],
+    mood_bored: ["no audience today...", "waiting for my cue ★"],
+    visit: ["a guest star! ★", "welcome to the show! ★"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! my co-star ★`, (n) => `ah, ${n}! cue the music ★`],
     link_guest: [(n) => `hello, ${n}! ★ take a bow`],
     link_kindred: [(n) => `${n}! a duet, you and me ★`, "we shine best together ★"],
@@ -1028,6 +1076,9 @@ const PERSONA = {
     idle_excited: ["heh. not bad at all.", "heh. well, well.", "ha. that was fun."],
     mood_content: ["all's well", "a fine day"],
     mood_excited: ["heh. that was nice", "well, that was fun"],
+    mood_cozy: ["a fine warm spot", "cozy. as it should be."],
+    mood_bored: ["hm. quiet day.", "nothing doing. hm."],
+    visit: ["well, hello there.", "ah. a visitor. welcome."], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `hello, ${n}. come in.`, (n) => `${n}. good to see you.`],
     link_guest: [(n) => `hm. hello, ${n}.`],
     link_kindred: [(n) => `hm. ${n}. we understand each other.`, "good company, you."],
@@ -1048,6 +1099,9 @@ const PERSONA = {
     idle_excited: ["oh, how lovely!", "divine! ♥", "*twirls prettily*"],
     mood_content: ["looking my best", "all pretty and calm ♥"],
     mood_excited: ["oh, how lovely!", "that was divine ♥"],
+    mood_cozy: ["cozy and fabulous ♥", "warm and lovely ♥"],
+    mood_bored: ["how dull...", "nothing lovely to do"],
+    visit: ["oh, a visitor! how lovely ♥", "welcome, welcome, dear ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}, darling! how lovely ♥`, (n) => `oh, ${n}! welcome, welcome ♥`],
     link_guest: [(n) => `${n}, darling! ♥`],
     link_kindred: [(n) => `${n}, darling, we have such taste ♥`, "a fellow connoisseur ♥"],
@@ -1068,6 +1122,9 @@ const PERSONA = {
     idle_excited: ["simply splendid!", "marvellous! ♥", "what an occasion!"],
     mood_content: ["life is splendid", "all quite marvellous"],
     mood_excited: ["simply splendid!", "what a marvellous time"],
+    mood_cozy: ["splendidly cozy", "warm as a welcome"],
+    mood_bored: ["a bit dull today, I must say", "awaiting company"],
+    visit: ["a visitor! what an honour", "do come in, friend ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `ah, ${n}! a delight ♥`, (n) => `${n}! what an honour ♥`],
     link_guest: [(n) => `${n}! how splendid ♥`],
     link_kindred: [(n) => `${n}! two of a kind, you and I ♥`, "such a grand pair we make ♥"],
@@ -1088,6 +1145,9 @@ const PERSONA = {
     idle_excited: ["hah! nailed it!", "yes! heck yes!", "hah! go team!"],
     mood_content: ["all under control", "all clear here"],
     mood_excited: ["hah! that was great", "heck yes, that was fun"],
+    mood_cozy: ["cozy post, all clear", "warm and on watch"],
+    mood_bored: ["nothing to guard...", "waiting for orders!"],
+    visit: ["who goes there? oh, hi!", "visitor spotted! hi! ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `yo, ${n}! all clear here`, (n) => `${n}! reporting in ♥`],
     link_guest: [(n) => `hey, ${n}! ♥ hi hi`],
     link_kindred: [(n) => `${n}! good team, you and me ♥`, "we've got each other's backs ♥"],
@@ -1355,7 +1415,24 @@ const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
 // The same bands as rates.py (WEIGHT_LIGHT_BELOW, WEIGHT_HEAVY_ABOVE).
 function weightLabel(v) {
   if (v === null) return "–";
-  return `${Math.round(v)} · ${v < 25 ? "a bit light" : v > 75 ? "a bit heavy" : "just right"}`;
+  return `${Math.round(v)} · ${v < 25 ? "a bit light · a meal would help" : v > 75 ? "a bit heavy · snacks add up" : "just right"}`;
+}
+const isHeavy = (v) => v !== null && v > 75; // rates.py WEIGHT_HEAVY_ABOVE
+// A heavy pet's snack, half the time (gaps-seams 2a): snacks are what tip it.
+// Sick from weight (gaps-seams 2b, owner Q3), and in baby talk.
+const SICK_WEIGHT = ["ugh... too many snacks, I think", "my tummy's grumbly... too many snacks"];
+const SICK_WEIGHT_BABY = "tummy hurts... too many snacks";
+const HEAVY_SNACK = ["one more and I'll be round as a ball!", "*pats tummy* getting a bit round..."];
+
+// The status row counting down to the next stage (gaps-seams 1a), or null: a child
+// to teen, a teen to grown up. "About", since ageing pauses while it's away.
+function growsUp(stage, ageDays) {
+  const next = { child: "teen", teen: "adult" }[stage];
+  if (!next || typeof ageDays !== "number") return null;
+  const left = Math.round(STAGE_DAYS[next] - ageDays);
+  if (left < 1) return null;
+  const when = left === 1 ? "tomorrow" : `in about ${left} days`;
+  return next === "adult" ? ["grows up", when] : ["next", `teen ${when}`];
 }
 
 // What it would like, in the status sheet (2c, C9): a call's need, else medicine
@@ -2088,6 +2165,8 @@ const STYLE = `
   .screen.dim .bg { filter: brightness(.5) saturate(.75); }
   .screen.dim .pet { filter: brightness(.8); }
   .pet, .perch, .screen .pat { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%; }
+  /* Heavy (gaps-seams 2c): 6% wider, height and feet kept, still centred. */
+  .pet.heavy, .ghost.heavy { aspect-ratio: 1.06; margin-left: -24.645%; }
   /* The pat (PR 3b): a clear button over the pet's box (the img takes no taps), above the
      bubble and below a question, a game, the status and the boot screen. Written as
      ".screen .pat" so _tapped's .tap-feedback (position: relative) can't move it. */
@@ -2951,6 +3030,7 @@ class HatchPetCard extends HTMLElement {
       (this._slides || []).forEach((x) => { x.giftAgain = true; });
     }
     this._hiddenAt = null;
+    this._touchedAt = null; // a new look begins at its first touch (gaps-seams 5a)
   };
 
   connectedCallback() {
@@ -3327,6 +3407,12 @@ class HatchPetCard extends HTMLElement {
       }
     };
     for (const type of ["touchend", "pointerup", "click"]) this._card.addEventListener(type, unlock, true);
+    // Someone is watching (gaps-seams 5a): a tap or swipe; the first after a gap starts a look.
+    this._card.addEventListener("pointerdown", () => {
+      const now = Date.now();
+      if (!this._touchedAt || now - this._touchedAt >= LINK_TOUCHED_MS) this._lookAt = now;
+      this._touchedAt = now;
+    }, true);
     this._resize = new ResizeObserver(() => this._layout());
     this._resize.observe(this._viewport);
     this._visible = true;
@@ -4453,6 +4539,11 @@ class HatchPetCard extends HTMLElement {
     const drawn = sp.stages?.includes(stage) ? stage : sp.stage_fallback?.[stage];
     s.drawn = drawn;
     s.pet.style.scale = String(sp.scale?.[drawn] || 1);
+    // A heavy pet is drawn a little wider (gaps-seams 2c, owner: x1.06, only while heavy).
+    const weight = Number.parseFloat(this._state(s, "sensor.weight")?.state);
+    const heavy = stage !== "egg" && isHeavy(Number.isFinite(weight) ? weight : null);
+    s.pet.classList.toggle("heavy", heavy);
+    s.ghost?.classList.toggle("heavy", heavy);
     // Baby, teen and adult have no house poses: a hop dances, a shake shivers.
     const standIn = drawn !== "child" && !away && !asleep && POSE_MOODS.has(mood?.state);
     s.pet.classList.toggle("dance", standIn && flags.includes("dancing"));
@@ -4576,11 +4667,12 @@ class HatchPetCard extends HTMLElement {
     return mine ? dailyPick([reason, reason, ...mine], `${born}|${key}`) : this._lines(s, `reason.${key}`, reason).text;
   }
 
-  // A teen or adult's own content/excited mood line (P2b), or null. It is picked
-  // by dailyPick (no Math.random): the sentence is redrawn every tick, so it must
-  // not change until the date does. Babies and children keep baby talk.
+  // A teen or adult's own content, excited, cozy or bored mood line (P2b; cozy and
+  // bored since gaps-seams 4a), or null. It is picked by dailyPick (no Math.random):
+  // the sentence is redrawn every tick, so it must not change until the date does.
+  // Babies and children keep baby talk.
   _moodOwn(s, key) {
-    if (key !== "content" && key !== "excited") return null;
+    if (!["content", "excited", "cozy", "bored"].includes(key)) return null;
     return this._persona(s)?.[`mood_${key}`] || null;
   }
 
@@ -4918,8 +5010,12 @@ class HatchPetCard extends HTMLElement {
       // body's own (sleepy, hungry, dirty, sick), which stay normal.
       const bodily = ["sleepy", "hungry", "dirty", "sick"].includes(s.moodState);
       const key = s.moodState === "bored" ? "idle_bored" : s.moodState === "excited" ? "idle_excited" : "idle";
+      // Now and then a neighbour on the shelf, by name (gaps-seams 5b): flavour, nothing counted.
+      const others = this._slides.filter((x) => x !== s);
+      const neighbour = !bodily && !this._babyStage(s) && others.length && Math.random() < NEIGHBOUR_ODDS
+        && this._linkName(pick(others));
       const normal = pick(lines);
-      this._write(s, bodily ? normal : this._lines(s, key, normal).text, 2500);
+      this._write(s, neighbour ? pick(NEIGHBOUR_LINES)(neighbour) : bodily ? normal : this._lines(s, key, normal).text, 2500);
       s.plain = s.bubble.textContent; // idle chatter isn't read out
     }
   }
@@ -5343,6 +5439,11 @@ class HatchPetCard extends HTMLElement {
       }
     } else {
       this._seenWrite(device, { said: serverNow() });
+    }
+    // A week old (gaps-seams 1b): on a first look during its 8th day, once per pet and
+    // generation on this browser.
+    if (stage.age_days >= 7 && stage.age_days < 8 && lines.length < FIRST_LOOK_LINES && onceEver(`week-${device}-${stage.generation || 1}`)) {
+      lines.push([this._pick(WEEK_OLD), 5000]);
     }
     const seen = mark?.seen || 0;
     if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS) {
@@ -5920,7 +6021,9 @@ class HatchPetCard extends HTMLElement {
         say("ok, ok... ♪");
         break;
       case "became_sick": // feeling poorly (2b): said once, dropped if it's well by then
-        line(this._lines(s, "became_sick", "I don't feel so good...").text, 4500,
+        // From weight, the public moment keeps its cause (gaps-seams 2b): it says why.
+        line(m.cause === "weight" ? (this._babyStage(s) ? SICK_WEIGHT_BABY : pick(SICK_WEIGHT))
+          : this._lines(s, "became_sick", "I don't feel so good...").text, 4500,
           () => this._animate(s, s.pet, "droop", 2800),
           { write: true, still: () => this._isSick(s) });
         break;
@@ -6243,6 +6346,10 @@ class HatchPetCard extends HTMLElement {
       if (candy) {
         said = [pick(season.snackLines || ["a treat! ♪"]), 2500];
       }
+      const weight = Number.parseFloat(this._state(s, "sensor.weight")?.state);
+      if (entry.action === "snack" && isHeavy(Number.isFinite(weight) ? weight : null) && Math.random() < 0.5) {
+        said = [pick(HEAVY_SNACK), 3000];
+      }
       const prop = candy || s.species?.props?.[key] || FALLBACK_PROPS[key];
       if (prop) {
         this._show(s, s.prop, prop);
@@ -6332,6 +6439,7 @@ class HatchPetCard extends HTMLElement {
     // The creature picked for the next egg (if any), and its world if that changes.
     const nextEgg = [stageAttrs.next_egg?.toLowerCase(), stageAttrs.next_world && `in ${stageAttrs.next_world}`]
       .filter(Boolean).join(" ");
+    const nextStage = growsUp(this._state(s, "sensor.life_stage")?.state, stageAttrs.age_days);
     // What it would like most, above today's wish; none asleep, away or in the egg.
     const moodNow = this._state(s, "sensor.mood");
     const wantKey = moodNow?.attributes.reason_key;
@@ -6339,7 +6447,8 @@ class HatchPetCard extends HTMLElement {
       : (moodNow?.attributes.requests || []).find((r) => r !== "lay_egg" && WANT_WORDS[r]
         && this._state(s, `button.${r}`));
     const want = s.asleep || moodNow?.state === "away" || isEgg ? null
-      : (String(wantKey).startsWith("call_") && WANT_WORDS[wantKey]) || WANT_WORDS[wantsNow] || null;
+      : (String(wantKey).startsWith("call_") && WANT_WORDS[wantKey]) || WANT_WORDS[wantsNow]
+        || (isHeavy(value("weight")) ? "a game, to run it off" : null);
     // Today's wish comes first of the rest: it changes daily, the rest is there every day.
     const html = `
       <div class="shead">${this._gearButton()}</div>
@@ -6359,6 +6468,7 @@ class HatchPetCard extends HTMLElement {
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
+      ${nextStage ? row(null, nextStage[0], `<span>${nextStage[1]}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>
@@ -8791,8 +8901,16 @@ class HatchPetCard extends HTMLElement {
     if (this._booting || this._link || this._slides.length < 2) return;
     const now = Date.now();
     const [lo, hi] = LINK_AFTER_MS;
-    this._linkAt ??= now + lo + Math.random() * (hi - lo);
-    if (now < this._linkAt) return;
+    if (!linkedToday()) {
+      const [first, last] = LINK_FIRST_MS;
+      this._linkFirstMs ??= first + Math.random() * (last - first);
+      const watched = !document.hidden && this._visible !== false && this._touchedAt
+        && now - this._touchedAt < LINK_TOUCHED_MS && now - this._lookAt >= this._linkFirstMs;
+      if (!watched) return;
+    } else {
+      this._linkAt ??= now + lo + Math.random() * (hi - lo);
+      if (now < this._linkAt) return;
+    }
     const guest = this._linkPick(host);
     if (!guest) return;
     this._linkAt = now + lo + Math.random() * (hi - lo);
@@ -9387,18 +9505,23 @@ class HatchPetCardEditor extends HTMLElement {
         await entities?.constructor?.getConfigElement?.();
       }
       this._form = document.createElement("ha-form");
-      this._form.computeLabel = () => "Pets on this shelf";
-      this._form.computeHelper = () =>
-        "Leave empty to show every pet. The shelf shows them in this order.";
+      const LABELS = { devices: "Pets on this shelf", seasonal: "Seasonal decorations" };
+      const HELPERS = {
+        devices: "Leave empty to show every pet. The shelf shows them in this order.",
+        // gaps-seams 7a: the YAML `seasonal: false`, in the editor.
+        seasonal: "Halloween, Thanksgiving and winter lights on this card. Off hides them on this card only.",
+      };
+      this._form.computeLabel = (field) => LABELS[field.name];
+      this._form.computeHelper = (field) => HELPERS[field.name];
       this._form.schema = [{
         name: "devices",
         selector: { device: { multiple: true, filter: { integration: "virtual_pet" } } },
-      }];
+      }, { name: "seasonal", selector: { boolean: {} } }];
       this._form.addEventListener("value-changed", (e) => this._changed(e.detail.value));
       this.append(this._form);
     }
     this._form.hass = this._hass;
-    this._form.data = { devices: this._devicesOf(this._config) };
+    this._form.data = { devices: this._devicesOf(this._config), seasonal: this._config.seasonal !== false };
   }
 
   _changed(value) {
@@ -9407,6 +9530,9 @@ class HatchPetCardEditor extends HTMLElement {
     delete config.entity;
     if (value.devices?.length) config.devices = value.devices;
     else delete config.devices;
+    // Off is `seasonal: false`; on drops the key, but keeps a preview (`seasonal: "winter"`).
+    if (value.seasonal === false) config.seasonal = false;
+    else if (typeof config.seasonal !== "string") delete config.seasonal;
     this._config = config;
     this.dispatchEvent(new CustomEvent("config-changed", {
       detail: { config }, bubbles: true, composed: true,
