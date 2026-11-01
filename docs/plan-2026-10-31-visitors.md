@@ -59,6 +59,22 @@ person named on a shared screen.
   studies already in `art/visitors/` (frames/, source/, manifest.json) are an older,
   different roster and are **not** what the card uses.
 
+## Catch-up (owner, 2026-10-31, s2566)
+
+Visitors were too easy to miss. Two changes, card only:
+
+- `VISIT_SHOWN_MS` 30 s -> **10 s**.
+- **Catch-up line:** once today's visitor's 3-hour window is over (`visitorMissed(list,
+  date, device)`, pure, by the clock alone) and the day's `hatch-visit-<device>-<date>`
+  flag is unset (the visit never played on this device), the next first look that
+  same day says, once: **"a <name> came by today ♪"** (`name` from the roster below,
+  new on each `VISITORS` entry), or the shooting star's own `catchup`: **"a shooting
+  star went by! ♪"**. Flavour class, last of the first look and only with room (never
+  pushes out a kept moment, dream or wish); it uses up the day's flag, so it's never
+  said twice and the visit can't also play. No visitor art; under calm the same line.
+  It names no person, so a shared screen says it too. A baby says the plain line for
+  now (open question: `BABY.visit` babbles for the greet).
+
 **Builds after R1 and R2** (`_actPose`, `STAGE_POSES`, the `acts.cheer` pose). Both are
 on `fm-batch4` / s2549, not yet on main. Names in this plan win over line numbers.
 
@@ -86,14 +102,15 @@ smaller than the pet, at the scene edge on the side away from the pet's current 
 - **Its window:** a seeded 3-hour window inside the visitor's hours. Day visitors
   09:00–18:00 local time; night visitors 20:00–23:00 (when the scene is `night`/`dim`
   and the pet is still awake). If nobody looks during the window, there's no visit
-  today and nothing is said about it later (no "you missed...").
+  today; the next first look that day says it came by (see *Catch-up*, below).
 - **Only on the slide on show**, after `s.lookedFirst`, with `this._linkFree(s)`
   true (`_free`, no queue, not an egg). On top of that it also needs: not `s.power`,
   not `this._link` running, not `s.calling`, not asleep (`_free`), not away (`away`
   is not in `IDLE_MOODS`), no game or scene (`_free`), the status closed (`_free`).
   Checked from `_seasonTick`'s caller (`_tick`, next to `_linkTick`), at most once
   every 20 s.
-- **Not in its first 30 s** on screen (let the first-look lines go first), and never
+- **Not in its first 10 s** on screen (was 30 s; owner, 2026-10-31: a phone glance
+  rarely sat 30 s) (let the first-look lines go first), and never
   within 2 minutes of a link visit.
 - **Seasons:** on a day when the season has a `visitor` (Halloween, Thanksgiving), the
   world visitor still comes (the seed decides), but `flairUntil` keeps them apart, and
