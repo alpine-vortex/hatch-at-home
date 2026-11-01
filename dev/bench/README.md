@@ -22,6 +22,7 @@ node scripts/bench.js --preset picker     # the shell picker: egg (locked) and t
 node scripts/bench.js --preset winter     # winter lights at 330: worlds day/night, mono night, hats, snow hare, auto, holiday names
 node scripts/bench.js --preset visitors   # 28 shots at 330: every world visitor greeting, beats, night, calm, baby, child
 node scripts/bench.js --preset finds      # 74 shots: every find at reveal size, the baskets, sparkle, V3, baby, calm, compact
+node scripts/bench.js --preset collection # 21 shots: the finds page, each world at 420/330, shared, empty, all met, mono, an older server
 node scripts/bench.js --preset mono       # the mono screen: 2498 shots, ~2.5 min, plus the pass rule
 ```
 
@@ -53,7 +54,7 @@ A shot (all optional):
 | `season` | `false` (default: no seasonal touches), `"auto"` (by `time`), or a season key such as `halloween` |
 | `time` | pinned clock, ISO (default `2026-06-15T12:00:00Z`; the browser runs in UTC) |
 | `width` | card width in px (420, or 330 for the compact layout); `dpr` pixel ratio |
-| `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `picker` (the sheet's shell picker; needs `shellOptions`), `journal` (see below), `games` (game picker) |
+| `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `picker` (the sheet's shell picker; needs `shellOptions`), `journal` (see below), `collection` (the journal's "finds ›" page; see `collection`), `games` (game picker) |
 | `shellOptions`, `shellFinish`, `shellLocked` | the lead pet's `shell_finish_options` (finish keys it may wear), `shell_finish` (its pick, default none: the world's own) and `shell_locked` (`{key: stage}`). Without `shellOptions` the card has no shell row, as with an older server |
 | `preview` | in the picker, the tile tapped: that finish on the live shell, unsaved (`""` is the world's own) |
 | `scroll` | a selector in the status box brought into view (the picker scrolls), e.g. `.tile.now` or `.sec[data-group="specials"]` (its top just under the back row) |
@@ -79,6 +80,7 @@ A shot (all optional):
 | `patTap` | `true`: one pat through the card's own `_pat` (R2: `acts.pat` shows ~900 ms). With `acts`, the new poses (`pat refuse aww ready splash`) are served the species' `eat` frames, bench only. `react` also takes `lost` (acts.aww) and `ready` (acts.ready); `care: "clean"` with `careAt: 2000` shows `acts.splash` |
 | `visitor` | a world visitor pinned through the card's own `_visitorStart`/`_visitorGreet`, timers stopped, moves paused: `{id, beat: "arrive"\|"greet"\|"leave", frame: 1\|2, side: "left"\|"right"}` (default its world's first, `greet`, left). With `motion: reduce` it is the still visit. Baby talk needs `storage: {"hatch-baby-talk-bench-user": "on"}` |
 | `seasonVisitor` | the season's own visitor (the turkey, the snow hare) through the card's own `_seasonFly`, paused: `{season, at, frame, side}` (`at` 0-1 of its crossing, default .45; its first greet in the bubble) |
+| `collection` | the finds page's `virtual_pet/collection` reply (`--collection` also sets `view: "collection"`): `true`, part met (two visitors; three plain finds and one with a `when`; gifts on a met find, an unfound one and the gift-only one), `"empty"`, `"error"` (an older server: the page goes back to the journal), or `{visitors, finds, gifts}` (`finds` ids or an `{id: day}` map). `gifts` reach only an unshared screen, as from the server. `scrollEnd: true` scrolls the status box to its foot |
 | `house`, `basket` | the house view the private channel would send (`house`, an object over it), and `basket`: how many finds wait (`house.basket`, 0-3), so the basket shows (visitors v2 §3) |
 | `reveal` | the basket's reveal pinned through the card's own `_revealStart`/`_revealFind`, timers stopped: `{id, world?, new?, from?}` (one find; `world` defaults to the pet's) or `{finds: [...], at}` (shown up to the find at `at`). Its line in the bubble, its pop and a `new` find's sparkle paused just in; with `motion: reduce` it is still |
 | `storage` | any other localStorage keys to seed (`hatch-named-holidays: "off"` turns holiday names off) |

@@ -27,8 +27,34 @@
 
   const NAMES = ["Pip", "Mochi", "Bean", "Juniper", "Waffle", "Comet", "Nori", "Sprout"];
 
+  // The virtual_pet/collection reply for the lead pet's world. `collection`: true, a
+  // part-met page (two visitors; three plain finds and one with a `when`; gifts: one met,
+  // one the house never found, the gift-only one); "empty"; or an object
+  // {visitors, finds, gifts} given as is (`finds` a list of ids or an {id: day} map).
+  function collectionOf(spec, worlds, world) {
+    const w = worlds[world] || {};
+    const day = "2026-10-30";
+    if (spec && typeof spec === "object") {
+      const finds = Array.isArray(spec.finds) ? Object.fromEntries(spec.finds.map((id) => [id, day])) : (spec.finds || {});
+      return { world, visitors: [...(spec.visitors || [])], finds, gifts: [...(spec.gifts || [])] };
+    }
+    if (spec === "empty") return { world, visitors: [], finds: {}, gifts: [] };
+    const fs = w.finds || [];
+    const plain = fs.filter((f) => !f.gift_only && !f.when?.length);
+    const timed = fs.filter((f) => !f.gift_only && f.when?.length);
+    const gift = fs.find((f) => f.gift_only);
+    const v = w.visitors || [];
+    return {
+      world,
+      visitors: [v[0], v[2]].filter(Boolean).map((x) => x.id),
+      finds: Object.fromEntries([plain[0], plain[1], plain[2], timed[0]].filter(Boolean).map((f) => [f.id, day])),
+      gifts: [plain[0], plain[4], gift].filter(Boolean).map((f) => f.id),
+    };
+  }
+
   function buildHass(shot, worlds) {
     const now = new Date(shot.time);
+    const base0World = worlds[shot.pets[0]?.world] ? shot.pets[0].world : Object.keys(worlds)[0];
     const iso = (min) => new Date(now.getTime() + min * 60000).toISOString();
     const states = {};
     const entities = {};
@@ -91,7 +117,18 @@
       // The card asks once for a server clock reading; none arrives here.
       connection: { subscribeEvents: noop, subscribeMessage: noop },
       callService: async (domain, service) => ({ response: service === "visit" ? (shot.visit || { counted: true }) : {} }),
-      callWS: async (msg) => (msg.type === "virtual_pet/photos" ? { photos: [] } : {}),
+      callWS: async (msg) => {
+        if (msg.type === "virtual_pet/photos") return { photos: [] };
+        // The finds page (visitors v2 §4): `collection` ({visitors, finds, gifts?}, see
+        // collectionOf); its gifts only to an unshared screen, as the server sends them.
+        if (msg.type === "virtual_pet/collection") {
+          if (shot.collection === "error") throw { code: "unknown_command" };
+          const page = collectionOf(shot.collection, worlds, base0World);
+          if (msg.shared) delete page.gifts;
+          return page;
+        }
+        return {};
+      },
       callApi: async () => ({}),
     };
   }
@@ -356,6 +393,16 @@
       // The journal loads the species names first: wait for its tiles.
       // (Date is pinned, so count the tries instead of reading the clock.)
       for (let n = 0; !root.querySelector(".jgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+    }
+    if (shot.view === "collection") {
+      root.querySelector(".statusbtn").click();
+      root.querySelector(".jlink").click();
+      for (let n = 0; !root.querySelector(".flink") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+      root.querySelector(".flink").click();
+      // The page reads virtual_pet/collection: wait for its tiles, then their art.
+      for (let n = 0; !root.querySelector(".fgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+      await Promise.all([...root.querySelectorAll(".fgrid img")].map((img) => img.decode().catch(() => {})));
+      if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight; // the foot's links
     }
     if (shot.view === "games") card._startGame(cur, cur.buttons.play); // the button itself can be disabled
     // `catch`: a Catch round (needs config.experimental_catch) held at its `far` or `near` spot.

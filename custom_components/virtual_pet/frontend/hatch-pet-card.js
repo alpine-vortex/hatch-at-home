@@ -666,6 +666,27 @@ const FOUND_BITS = 3; // the away note's "found <a find>" bits, newest first
 // A find in worlds.json ({id, name, a, ...}), or null for one this card doesn't know.
 const findOf = (worlds, world, id) => (Array.isArray(worlds?.[world]?.finds) &&
   worlds[world].finds.find((f) => f?.id === id)) || null;
+// The collection page's tiles (plan visitors v2 §4, V-D) for one world (worlds.json's
+// entry) from the virtual_pet/collection reply ({visitors: [id], finds: {id: day},
+// gifts?}); `own` is the viewer's own unshared screen, the only one that reads `gifts`.
+// Each tile is {kind: "visitor"|"find", id, name, met, heart}: met is drawn with its
+// name, unmet is a silhouette with none. A find with a `when` and a gift-only one get no
+// tile until met (owner, 2026-11-02); a find the viewer got as a gift is drawn with a ♥
+// on their own screen, found by the house or not. Ids worlds.json lacks are skipped.
+const collectionTiles = (world, reply, own) => {
+  const seen = new Set(Array.isArray(reply?.visitors) ? reply.visitors : []);
+  const found = reply?.finds && typeof reply.finds === "object" ? reply.finds : {};
+  const gifts = new Set(own && Array.isArray(reply?.gifts) ? reply.gifts : []);
+  const out = visitorList(world).map((v) => ({ kind: "visitor", id: v.id, name: v.name, met: seen.has(v.id), heart: false }));
+  for (const f of Array.isArray(world?.finds) ? world.finds : []) {
+    if (!f?.id) continue;
+    const heart = gifts.has(f.id);
+    const met = (!f.gift_only && Object.hasOwn(found, f.id)) || heart;
+    if (!met && (f.gift_only || (Array.isArray(f.when) && f.when.length))) continue; // hidden until met
+    out.push({ kind: "find", id: f.id, name: f.name, met, heart });
+  }
+  return out;
+};
 // The away note's bit for a `found` moment ({id, world}), or null.
 const foundBit = (worlds, m) => {
   const f = findOf(worlds, m?.world, m?.id);
@@ -2642,6 +2663,24 @@ const STYLE = `
     text-align: center; line-height: 1.1; }
   .jtile img { width: 48px; height: 48px; image-rendering: pixelated; }
   .jtile.locked img { filter: brightness(0); opacity: .3; }
+  /* The journal's foot (back to the status, on to the finds) and the finds page (V-D):
+     a visitor at 18 cells and a find at 16 (--px a cell: their art 1:1 in whole device
+     pixels), the unmet ones dark silhouettes with no name, the viewer's gifts with a ♥. */
+  .jfoot { display: flex; justify-content: space-between; align-items: flex-end; }
+  .jfoot .jlink { align-self: auto; }
+  .flink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
+    min-height: 44px; min-width: 44px;
+    font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
+  .fgrid { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+  .fgrid + .fgrid { margin-top: 4px; padding-top: 6px; border-top: 2px dotted #2f3a24; }
+  .ftile { position: relative; display: flex; flex-direction: column; align-items: center;
+    width: max(calc(var(--px, 2px) * 18), 62px); font-size: 11px; text-align: center; line-height: 1.1;
+    overflow-wrap: break-word; }
+  .ftile img { width: calc(var(--px, 2px) * 16); height: calc(var(--px, 2px) * 16); image-rendering: pixelated; }
+  .ftile.vis img { width: calc(var(--px, 2px) * 18); height: calc(var(--px, 2px) * 18); }
+  .ftile.locked img { filter: brightness(0); opacity: .3; }
+  ha-card.mono .ftile.locked img { opacity: .5; }
+  .ftile .fheart { position: absolute; top: 0; right: 0; font-size: 12px; line-height: 1; }
   .jlist { font-size: 12px; opacity: .9; display: flex; flex-direction: column; gap: 3px; }
   .photos { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
   .prow { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px; }
@@ -2910,6 +2949,7 @@ class HatchPetCard extends HTMLElement {
       this._powerEnd(s);
       s.powerPending = null;
       this._dropPhotos(s);
+      this._dropFinds(s);
       this._unsubscribe(s);
     }
   }
@@ -3688,6 +3728,7 @@ class HatchPetCard extends HTMLElement {
     s.excitedSince = 0;
     s.wasCalling = undefined; // a call already on doesn't chirp
     s.journal = false;
+    s.finds = false;
     s.settings = false;
     this._closePicker(s);
     this._shellSettled(s);
@@ -3702,6 +3743,7 @@ class HatchPetCard extends HTMLElement {
     s.lookedFirst = false;
     s.wishDay = null;
     this._dropPhotos(s);
+    this._dropFinds(s);
     // Its other timers, and what each would have tidied away.
     clearTimeout(s.breezeTimer);
     s.screen?.classList.remove("breezy");
@@ -3742,6 +3784,7 @@ class HatchPetCard extends HTMLElement {
       this._clearAsk(slide);
       slide.queue = [];
       this._dropPhotos(slide);
+      this._dropFinds(slide); // the ♥ is the viewer's own: gone with the page
       this._stopTyping(slide); // writes the whole line in, so it's cleared after
       slide.bubble.textContent = "";
       slide.plain = undefined;
@@ -3749,7 +3792,8 @@ class HatchPetCard extends HTMLElement {
       slide.live.textContent = "";
       slide.screen.querySelector(".bondhearts")?.remove();
       slide.screen.querySelector(".linkhearts")?.remove(); // a visit's, mid-way
-      slide.journal = false; // the settings sheet stays, without its personal rows
+      slide.journal = false;
+      slide.finds = false; // the settings sheet stays, without its personal rows
       this._closePicker(slide); // and without the picker (read-only here)
       slide.confirm = null; // an armed "forget" is a personal row
       slide.status.innerHTML = ""; // drawn again, without its personal rows
@@ -3767,6 +3811,8 @@ class HatchPetCard extends HTMLElement {
   _goPersonal() {
     this._sharedSeen = false;
     for (const slide of this._slides || []) {
+      this._dropFinds(slide); // the shared screen's page, read again with the viewer's own ♥
+      if (slide.finds) this._loadFinds(slide);
       slide.statusHtml = null;
       slide.drawnSig = null;
       this._subscribe(slide, true);
@@ -4481,6 +4527,7 @@ class HatchPetCard extends HTMLElement {
     if (open && s.game) this._quitGame(s, null); // the sheet covers it: nobody plays it unseen
     s.screen.classList.toggle("show-status", open);
     s.journal = false;
+    s.finds = false;
     s.settings = false;
     this._closePicker(s);
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
@@ -6048,6 +6095,10 @@ class HatchPetCard extends HTMLElement {
   }
 
   _renderStatus(s, log) {
+    if (s.finds) {
+      this._renderFinds(s);
+      return;
+    }
     if (s.journal) {
       this._renderJournal(s);
       return;
@@ -6741,6 +6792,7 @@ class HatchPetCard extends HTMLElement {
       e.stopPropagation(); // the screen behind would close the status
       this._tapped(e.currentTarget);
       s.journal = open;
+      s.finds = false;
       s.olderOpen = false; // older generations fold up with the journal
       if (open) this._loadPhotos(s); // a best friend's photos, theirs only
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
@@ -6780,7 +6832,7 @@ class HatchPetCard extends HTMLElement {
     const names = {};
     await Promise.all(ids.map((id) => loadJson(`sprites/${id}/species.json`)
       .then((d) => { names[id] = d.name; }).catch(() => { names[id] = id; })));
-    if (!s.journal) return; // closed while the names loaded
+    if (!s.journal || s.finds) return; // closed (or on to the finds) while the names loaded
     const tiles = roster.map((id) => {
       const known = raised.has(id);
       return `<div class="jtile${known ? "" : " locked"}">` +
@@ -6807,10 +6859,11 @@ class HatchPetCard extends HTMLElement {
       <div class="jgrid">${tiles.join("")}</div>
       ${this._photoRow(s)}
       <div class="jlist">${olderLink}<div class="jmore"></div>${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
-      <button class="jlink">‹ status</button>
+      <div class="jfoot"><button class="jlink">‹ status</button><button class="flink">finds ›</button></div>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     this._journalLink(s, false);
+    this._findsLink(s, true);
     const showOlder = () => {
       s.status.querySelector(".jmore").innerHTML = older.map(line).join("");
       s.status.querySelector(".jolder")?.remove();
@@ -6894,7 +6947,7 @@ class HatchPetCard extends HTMLElement {
     }
     for (const [gen, p] of kept) if (next.get(gen) !== p) URL.revokeObjectURL(p.url);
     s.photos = next;
-    if (s.journal) this._renderJournal(s);
+    if (s.journal && !s.finds) this._renderJournal(s); // never over the finds page
   }
 
   // A photo as a PNG: the Blob, its URL, and the File a share sheet takes
@@ -7058,6 +7111,101 @@ class HatchPetCard extends HTMLElement {
       if (dialog.showModal) dialog.showModal();
       else dialog.setAttribute("open", "");
     }
+  }
+
+  // --- The finds page (visitors v2 §4, V-D) --------------------------------------
+  // This world's visitors and finds, read on open from virtual_pet/collection (never a
+  // sensor) and kept only while the page is: never in localStorage. The viewer's gifts
+  // (`gifts`, sent only when `shared` is false) put a ♥ on their tiles, on their own
+  // screen only; a shared screen's flip drops the page and its ♥ (_dropFinds).
+
+  // "finds ›" in the journal's foot (open) or "‹ journal" on the page (back).
+  _findsLink(s, open) {
+    s.status.querySelector(".flink")?.addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      this._tapped(e.currentTarget);
+      s.finds = open;
+      s.journal = !open;
+      if (open) {
+        this._dropFinds(s); // read again on each open: the page only grows
+        this._loadFinds(s);
+      }
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      s.status.scrollTop = 0; // a new view starts at its top
+    });
+  }
+
+  // Read the page once per open (one read in flight a slide); a reply for another pet,
+  // or from before a shared-screen flip, is dropped. An error (an older server) goes
+  // back to the journal, with nothing said.
+  _loadFinds(s) {
+    if (!s.findsLoad) {
+      const load = this._fetchFinds(s).finally(() => { if (s.findsLoad === load) s.findsLoad = null; });
+      s.findsLoad = load;
+    }
+    return s.findsLoad;
+  }
+
+  async _fetchFinds(s) {
+    const id = s.ids?.["sensor.life_stage"];
+    const epoch = s.findsEpoch || 0;
+    const shared = sharedScreen();
+    const stale = () => (s.findsEpoch || 0) !== epoch || s.ids?.["sensor.life_stage"] !== id || sharedScreen() !== shared;
+    let reply = null;
+    try {
+      if (!id) throw new Error("no pet");
+      reply = await this._hass.callWS({ type: "virtual_pet/collection", entity_id: id, shared });
+      if (!reply || typeof reply !== "object") throw new Error("no page");
+    } catch (err) {
+      if (stale() || !s.finds) return;
+      s.finds = false;
+      s.journal = true;
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      return;
+    }
+    if (stale()) return;
+    s.findsData = { reply, own: !shared };
+    if (s.finds) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+  }
+
+  _renderFinds(s) {
+    const data = s.findsData;
+    if (!data && !s.findsLoad) this._loadFinds(s); // dropped meanwhile (a shared-screen flip)
+    const key = data?.reply?.world || s.worldKey;
+    const world = this._worlds?.[key];
+    const head = `finds · ${escape(world?.name || this._worldName(s))}`;
+    const foot = `<button class="flink">‹ journal</button>`;
+    let html;
+    if (!data) {
+      html = `<div class="jhead"><span>${head}</span><span>opening…</span></div>${foot}`;
+    } else {
+      const own = data.own && !sharedScreen();
+      const tile = (t) => {
+        const src = t.kind === "visitor" ? `${BASE}/ui/visitor_${key}_${t.id}_1.png?v=${VERSION}`
+          : `${BASE}/ui/find_${key}_${t.id}.png?v=${VERSION}`;
+        const cls = `ftile${t.kind === "visitor" ? " vis" : ""}${t.met ? "" : " locked"}`;
+        // An unmet one: the art's silhouette, with no name, no alt and no label.
+        if (!t.met) return `<div class="${cls}"><img src="${src}" alt=""></div>`;
+        return `<div class="${cls}"><img src="${src}" alt=""><span>${escape(t.name || "")}</span>` +
+          `${t.heart ? `<span class="fheart">♥</span>` : ""}</div>`;
+      };
+      const tiles = collectionTiles(world, data.reply, own);
+      html = `
+      <div class="jhead"><span>${head}</span></div>
+      <div class="fgrid">${tiles.filter((t) => t.kind === "visitor").map(tile).join("")}</div>
+      <div class="fgrid">${tiles.filter((t) => t.kind === "find").map(tile).join("")}</div>
+      ${foot}
+      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
+    }
+    if (!this._setStatus(s, html)) return;
+    this._findsLink(s, false);
+  }
+
+  // Forget a slide's finds page (another pet, a shared-screen flip, the sheet closed).
+  _dropFinds(s) {
+    s.findsEpoch = (s.findsEpoch || 0) + 1;
+    s.findsLoad = null; // a read still running will find its epoch stale
+    s.findsData = null;
   }
 
   // Forget a slide's photos (another pet on it, or a shared screen now).
@@ -8976,6 +9124,7 @@ HatchPetCard.seasons = SEASONS;
 HatchPetCard.hanukkah = hanukkah;
 HatchPetCard.seasonLines = seasonLines;
 HatchPetCard.findLines = FIND_LINES;
+HatchPetCard.collectionTiles = collectionTiles;
 HatchPetCard.momentClasses = Object.fromEntries(Object.entries(MOMENT_CLASS)
   .map(([type, c]) => [type, { [KEPT]: "kept", [BEAT]: "beat", [FLAVOUR]: "flavour" }[c]]));
 HatchPetCard.seasonNow = seasonNow;
