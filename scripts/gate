@@ -43,6 +43,23 @@ fi
 echo "gate: scripts/test ok ($(grep -Eo '[0-9]+ passed' "$LOGS/test.log" | tail -1))"
 [ "$TESTS_ONLY" = 1 ] && exit 0
 
+# Docs only: if the nearest ancestor whose tree passed the full gate differs from
+# HEAD by Markdown and docs/ alone (committed, clean tree), the card can't have
+# changed: skip HA and card-check and mark HEAD's tree as passed too.
+M=$(git rev-parse --git-common-dir)/gate-passed
+if [ ${#CC_ARGS[@]} = 0 ] && [ -z "$(git status --porcelain --untracked-files=no)" ]; then
+  for c in $(git rev-list --max-count=50 HEAD); do
+    [ -e "$M/$(git rev-parse "$c^{tree}")" ] || continue
+    code=$(git diff --name-only "$c" HEAD | grep -vE '(\.md$|^docs/)')
+    if [ -z "$code" ]; then
+      touch "$M/$(git rev-parse 'HEAD^{tree}')"
+      echo "gate: PASS, docs only since $(git rev-parse --short "$c") (gate passed there); card-check skipped, marker written"
+      exit 0
+    fi
+    break
+  done
+fi
+
 listening() { ss -ltn "sport = :$1" | grep -q LISTEN; }
 if [ -z "$PORT" ]; then
   for p in $(shuf -i 8400-8499); do listening "$p" || { PORT=$p; break; }; done
@@ -84,6 +101,7 @@ HA_URL=$URL HA_CONFIG=$S HA_START="exec $HASS --config $S" \
 CC=$?
 echo "gate: card-check exit $CC, $(grep -c '^PASS' "$LOGS/card-check.log") PASS, $(grep -c '^FAIL' "$LOGS/card-check.log") FAIL"
 grep -E '^(FAIL|SKIP)' "$LOGS/card-check.log" | cut -c1-160 | head -20
+grep '^time:' "$LOGS/card-check.log" | cut -c1-400
 
 if [ $CC = 0 ] && [ ${#CC_ARGS[@]} = 0 ]; then
   if [ -z "$(git status --porcelain --untracked-files=no)" ]; then

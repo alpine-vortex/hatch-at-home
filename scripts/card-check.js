@@ -67,6 +67,14 @@ if (ONLY) {
   }
 }
 const want = (name) => !ONLY || ONLY.has(name);
+// Seconds per section (and the prelude before the first), printed at the end.
+const T0 = Date.now();
+const timings = [];
+const enter = (name) => {
+  if (!want(name)) return false;
+  timings.push({ name, at: Date.now() });
+  return true;
+};
 
 // Keep dev pets awake for a section (they go to bed at night, and `_apply` re-sets
 // `asleep` from binary_sensor.asleep on every hass push). Overrides el._state for
@@ -114,6 +122,18 @@ async function unpinAwake(card) {
       return st && el._hass.callApi("POST", `states/${id}`, { state: "off", attributes: st.attributes });
     }));
   }, !!process.env.CARD_CHECK_NIGHT).catch(() => {});
+}
+
+// The frontend may reload itself once after a page opens: wait until the page has
+// gone `quiet` ms without a navigation (at most `max`), not a fixed 16 s. A fresh
+// HA on 127.0.0.1 doesn't reload at all, so this is usually 3 s.
+async function settle(pg, quiet = 3000, max = 16000) {
+  let last = Date.now();
+  const start = last;
+  const on = (f) => { if (f === pg.mainFrame()) last = Date.now(); };
+  pg.on("framenavigated", on);
+  while (Date.now() - last < quiet && Date.now() - start < max) await pg.waitForTimeout(250);
+  pg.off("framenavigated", on);
 }
 
 function check(name, ok, detail = "") {
@@ -797,7 +817,7 @@ async function monoChecks({ page, context, check, cur, evaluate, shot, errors })
   tab.on("pageerror", (e) => errors.push(`mono tab: ${e}`));
   await tab.goto(`${HA}/pet-bench/pet`);
   await tab.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
-  await tab.waitForTimeout(16000); // the frontend reloads itself once
+  await settle(tab); // the frontend may reload itself once
   await tab.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 }).catch(() => reloadFor(tab, "hatch-pet-card .statusbtn", 30000));
   const opened = await tab.locator("hatch-pet-card").first().evaluate((el) => el._card.classList.contains("mono"));
   await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
@@ -901,7 +921,7 @@ async function main() {
   await page.evaluate(() => localStorage.setItem("hatch-lcd", "off"));
   await page.goto(`${HA}/pet-bench/pet`);
   await signedIn();
-  await page.waitForTimeout(16000); // the frontend reloads itself once after the first load
+  await settle(page); // the frontend may reload itself once
   try {
     await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
   } catch (err) {
@@ -961,12 +981,12 @@ async function main() {
     });
   }, { entity, patch });
 
-  // The sections below are gated with `if (want(...)) {` lines, left unindented on
+  // The sections below are gated with `if (enter(...)) {` lines, left unindented on
   // purpose: re-indenting ~5000 lines would conflict with every branch that edits a check.
   // What a section hands to a later one is declared here or in the ungated lines between.
   const slides = await page.locator("hatch-pet-card .slide").count();
   const card = page.locator("hatch-pet-card");
-  if (want("shelf")) {
+  if (enter("shelf")) {
   // 1. The shelf draws its devices.
   check("shelf shows the pets", slides >= 2, `${slides} devices`);
   check("sprites load", !(await bubble()).startsWith("missing sprites"));
@@ -1079,7 +1099,7 @@ async function main() {
   await page.waitForTimeout(400);
 
   }
-  if (want("shell")) {
+  if (enter("shell")) {
   // 2b. The pet's shell picker.
   await shellChecks({ page, context, check, cur, evaluate, inject, shot, after: {
     url: CLIENT,
@@ -1129,7 +1149,7 @@ async function main() {
     for (const s of el._slides || []) localStorage.setItem(`hatch-visit-${s.ids?.device}-${new Date().toDateString()}`, "1");
   });
   await holdVisits();
-  if (want("play")) {
+  if (enter("play")) {
   // Greeted by first name: forget past greetings, reload, come back to this pet.
   await evaluate(() => Object.keys(localStorage)
     .filter((k) => k.startsWith("hatch-greet-")).forEach((k) => localStorage.removeItem(k)));
@@ -2239,7 +2259,7 @@ async function main() {
 
   await unpinAwake(card);
   }
-  if (want("resume")) {
+  if (enter("resume")) {
   // 3a. Games carry on (Wave 1 PR 1a): stopping a game and reopening it within
   // the server's window picks up the same round and wins; old timers die with
   // their game.
@@ -2526,7 +2546,7 @@ async function main() {
     tab.on("pageerror", (e) => errors.push(`tab 2: ${e}`));
     await tab.goto(`${HA}/pet-bench/pet`);
     await tab.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
-    await tab.waitForTimeout(16000); // the frontend reloads itself once
+    await settle(tab); // the frontend may reload itself once
     await tab.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
     await tab.waitForTimeout(1500);
     const curB = () => tab.locator("hatch-pet-card .slide:not(.away-slide)");
@@ -2553,7 +2573,7 @@ async function main() {
   }
 
   }
-  if (want("moments")) {
+  if (enter("moments")) {
   await pinAwake(card, "moments");
   // 4. Moments make the pet react.
   for (const [type, extra, expect] of [
@@ -3384,7 +3404,7 @@ async function main() {
 
   await unpinAwake(card);
   }
-  if (want("photos")) {
+  if (enter("photos")) {
   // 4b. A best friend's photo (phase 4). The viewer's photos come from the
   // virtual_pet/photos command, stubbed here with two generations.
   const PHOTOS = [
@@ -4110,7 +4130,7 @@ async function main() {
   }
 
   }
-  if (want("personality")) {
+  if (enter("personality")) {
   // 4c. Personality (P1): a "personality" row for a teen and an adult, none for a
   // baby or an older server; the type on the journal line, none on an old record.
   // The life stage is stubbed in-page and kept until the screenshot is taken.
@@ -4196,7 +4216,7 @@ async function main() {
   }
 
   }
-  if (want("types")) {
+  if (enter("types")) {
   // 4d. Personality (P2a): each type's hellos, reveal and moments. The table is
   // read from the card's source; the stage, the type and the viewer's bond are
   // stubbed in-page, and Math.random is pinned where a check needs one side of
@@ -4682,7 +4702,7 @@ async function main() {
   }
 
   }
-  if (want("egg")) {
+  if (enter("egg")) {
   // 5. The egg wiggles, then cracks, before it hatches.
   // A pet update can replace the injected egg, so inject until it shows (or 3 tries).
   for (const [minutes, frames] of [[12, "egg_wiggle"], [4, "egg_crack"]]) {
@@ -4698,7 +4718,7 @@ async function main() {
   }
 
   }
-  if (want("sharedscreen")) {
+  if (enter("sharedscreen")) {
   await pinAwake(card, "sharedscreen");
   // 5b. FA: turning on "shared screen" clears every personal line, typed or
   // typing, on every slide of every card on the page and in every tab (privacy P1).
@@ -4718,7 +4738,7 @@ async function main() {
     tab.on("pageerror", (e) => errors.push(`tab 2: ${e}`));
     await tab.goto(`${HA}/pet-bench/pet`);
     await tab.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
-    await tab.waitForTimeout(16000); // the frontend reloads itself once
+    await settle(tab); // the frontend may reload itself once
     // That reload can catch the frontend mid-fetch and leave a failed module import
     // (see reloadFor): if the card isn't up, reload once more before giving up.
     await tab.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 }).catch(() => reloadFor(tab, "hatch-pet-card .statusbtn", 30000)).catch(async (err) => {
@@ -5006,7 +5026,7 @@ async function main() {
 
   await unpinAwake(card);
   }
-  if (want("forget")) {
+  if (enter("forget")) {
   // 5c. "forget my data" (privacy P2): personal screens only, two taps, then the
   // pets start fresh with you, here and on the server. Late in the run: its real
   // visits redraw the sensors over the stubs that earlier checks inject.
@@ -5124,7 +5144,7 @@ async function main() {
     forgot.after.baby === false && (forgot.after.counted === false || (forgot.after.kept === false && forgot.after.myDay === false)),
     JSON.stringify(forgot));
   }
-  if (want("prefs")) {
+  if (enter("prefs")) {
   // 6. The card editor loads and offers the pets.
   // 5d. Preferences on every visit, quiet samples (Wave 1, PR 1c).
   // "my day" reads "…" until a visit reply sets it, never "off" (with no
@@ -5201,7 +5221,7 @@ async function main() {
   second.on("pageerror", (e) => errors.push(`tab 3: ${e}`));
   await second.goto(`${HA}/pet-bench/pet`);
   await second.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
-  await second.waitForTimeout(16000);
+  await settle(second); // the frontend may reload itself once
   await second.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
   // From the private channel's "mine" now, with no visit reply needed.
   const reopened = await second.locator("hatch-pet-card").evaluate(async (el) => {
@@ -5271,7 +5291,7 @@ async function main() {
     JSON.stringify(samples.babbleNight));
 
   }
-  if (want("channel")) {
+  if (enter("channel")) {
   // 7. The private channel (privacy P3a-card): the viewer's bond, switches and
   // own moments, and the house's shows, come only from virtual_pet/subscribe.
   {
@@ -5598,7 +5618,7 @@ async function main() {
     }, [off.toString("base64"), on.toString("base64")]);
   };
 
-  if (want("lcd")) {
+  if (enter("lcd")) {
   // The "screen effects here" row: on by default, per browser.
   await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
   await page.waitForTimeout(400);
@@ -5635,11 +5655,11 @@ async function main() {
   await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
   await page.waitForTimeout(400);
   }
-  if (want("mono")) {
+  if (enter("mono")) {
   await monoChecks({ page, context, check, cur, evaluate, shot, errors });
 
   }
-  if (want("ghost")) {
+  if (enter("ghost")) {
   for (const width of [420, 330]) {
     await page.setViewportSize({ width, height: 860 });
     await page.waitForTimeout(600);
@@ -5824,7 +5844,7 @@ async function main() {
   await page.waitForTimeout(600);
 
   }
-  if (want("backlight")) {
+  if (enter("backlight")) {
   // The backlight (1c): a button on each shell. Its 44 px target gets the taps,
   // and without it they'd land on the shell: not the screen, a toy, the label or
   // the request, and not past the slide's sides (the gap to the next device).
@@ -5969,7 +5989,7 @@ async function main() {
   await page.setViewportSize({ width: 420, height: 860 });
   await page.waitForTimeout(600);
   }
-  if (want("pat")) {
+  if (enter("pat")) {
   // The pat (PR 3b): a clear button over the pet. A tap on it gives a C10 line and no
   // status; a tap beside it still opens the status. Card only: nothing sent or stored.
   await calm();
@@ -6272,7 +6292,7 @@ async function main() {
   await patReset();
   await unpinAwake(card);
   }
-  if (want("react")) {
+  if (enter("react")) {
   // Reactions at baby, teen and adult (PR 3c): the stage's own mood frame and a bounded move.
   await calm();
   await page.waitForTimeout(800);
@@ -6610,7 +6630,7 @@ async function main() {
     species.length >= 30 && loaded.nbad === 0, JSON.stringify(loaded));
   await unpinAwake(card);
   }
-  if (want("visitors")) {
+  if (enter("visitors")) {
   // World visitors (docs/plan-2026-10-31-visitors.md): card only, seeded by date,
   // nothing kept but the day's flag. The decision (_visitorDue) is stubbed for the
   // gates; the real one is walked over 14 days x 24 hours. The day flag persists
@@ -6966,7 +6986,7 @@ async function main() {
   await holdVisits();
   await unpinAwake(card);
   }
-  if (want("winter")) {
+  if (enter("winter")) {
   // Winter lights (docs/plan-2026-10-31-winter-lights.md): 1-31 December after
   // Thanksgiving, card only. The scene and its night glow (the float's bob kept),
   // every hat seated, the walking snow hare (a world visitor waits after it), the
@@ -7194,7 +7214,7 @@ async function main() {
     await card.evaluate((el) => el._slides[el._index].seasonBox.children.length === 0));
   await unpinAwake(card);
   }
-  if (want("care")) {
+  if (enter("care")) {
   // Care scenes: medicine and clean play out (about 2 s) before the screen shows
   // the news. No call reaches the server here: each check plays its answer.
   {
@@ -7468,7 +7488,7 @@ async function main() {
   }
 
   }
-  if (want("editor")) {
+  if (enter("editor")) {
   const editor = await evaluate(async () => {
     const hass = document.querySelector("home-assistant").hass;
     const el = document.createElement("hatch-pet-card-editor");
@@ -7490,7 +7510,7 @@ async function main() {
   check("card editor saves the picked pets", Array.isArray(editor.config?.devices), JSON.stringify(editor.config));
 
   }
-  if (want("boot")) {
+  if (enter("boot")) {
   // 3a. The power-on boot screen, at two widths. A page of its own, flagged so the
   // seeded "already booted" doesn't apply; Date.getHours and the oscillator count
   // are stubbed per step.
@@ -7619,7 +7639,7 @@ async function main() {
 
 
   }
-  if (want("infrared")) {
+  if (enter("infrared")) {
   // 2a. The infrared link: a visit between the pet on show and a neighbour, at two
   // widths and with three pets. Sounds off; every visit is forced (the day's
   // random timer is checked separately), the lines are the card's own.
@@ -7847,7 +7867,7 @@ async function main() {
   }
   check("no errors in the browser console", errors.length === 0, errors.slice(0, 3).join(" | "));
 
-  if (want("lowbattery")) {
+  if (enter("lowbattery")) {
   // 7b. The low-battery gag after an HA restart (D5): the card compares the house
   // view's powered_on.at with its stored hatch-power-<pet>, through the real
   // channel path. The real restart's snapshot is asserted in section 8.
@@ -8023,7 +8043,7 @@ async function main() {
   let seeded = false;
   let unseed = null;
   const seedPet = pet["sensor.life_stage"];
-  if (want("restart")) {
+  if (enter("restart")) {
   // 8. An HA restart keeps the bond, and a second login sees nothing of the
   // first's (privacy P3a-card). After the console check: a restart's lost
   // connection is noise there. The restart is opt-in, as card-check stops
@@ -8147,7 +8167,7 @@ async function main() {
   }
 
   }
-  if (want("oldcard")) {
+  if (enter("oldcard")) {
   // 8b. An old card on a stale tablet (privacy P3b): the one just before P3b
   // (v0.37.0) and the last before the channel (v0.35.0, the only one P3b
   // changes visibly), served in place of this card against this server. P3b
@@ -8194,7 +8214,7 @@ async function main() {
         await p.keyboard.press("Enter");
       }
       await p.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
-      await p.waitForTimeout(16000); // the frontend reloads itself once
+      await settle(p); // the frontend may reload itself once
       await p.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
       const el = p.locator("hatch-pet-card").first();
       const slideCount = await p.locator("hatch-pet-card .slide").count();
@@ -8383,7 +8403,7 @@ async function main() {
     await page2.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
     await page2.goto(`${HA}/pet-bench/pet`);
     await page2.waitForFunction(() => !!document.querySelector("home-assistant")?.hass?.user, null, { timeout: 60000 });
-    await page2.waitForTimeout(16000); // the frontend reloads itself once
+    await settle(page2); // the frontend may reload itself once
     await page2.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
     const card2 = page2.locator("hatch-pet-card").first();
     // Every payload of Other's channel, from a fresh subscribe on every slide.
@@ -8478,6 +8498,11 @@ async function main() {
   }
   await browser.close();
 
+  const ends = [...timings.slice(1).map((t) => t.at), Date.now()];
+  const secs = [{ name: "prelude", s: ((timings[0]?.at ?? Date.now()) - T0) / 1000 },
+    ...timings.map((t, i) => ({ name: t.name, s: (ends[i] - t.at) / 1000 }))];
+  console.log(`\ntime: ${Math.round((Date.now() - T0) / 1000)} s; by section: ${secs.sort((a, b) => b.s - a.s)
+    .map((t) => `${t.name} ${Math.round(t.s)}`).join(", ")}`);
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed${ONLY ? ` (partial: ${SECTIONS.filter(want).join(",")})` : ""}. Screenshots: ${OUT}`);
   process.exit(failed.length ? 1 : 0);

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# The merge gate on GitHub instead of this machine: push the branch, run the
+# Validate workflow on it (lint, tests, hassfest, HACS, the full card-check),
+# wait, and on a pass write the same gate-passed marker scripts/gate writes.
+# Same checks, none of the local load. Needs gh and a clean, committed tree.
+#
+#   scripts/ci-gate          # gate HEAD's branch on GitHub (~15 min)
+#
+# A failed run prints the failing card-checks and the run's link.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  echo "ci-gate: commit first (the run gates what is pushed)" >&2; exit 2
+fi
+BRANCH=$(git branch --show-current)
+[ -n "$BRANCH" ] || { echo "ci-gate: not on a branch" >&2; exit 2; }
+SHA=$(git rev-parse HEAD)
+TREE=$(git rev-parse 'HEAD^{tree}')
+M=$(git rev-parse --git-common-dir)/gate-passed
+if [ -e "$M/$TREE" ]; then echo "ci-gate: tree $(git rev-parse --short "$TREE") already passed"; exit 0; fi
+
+git push -q -u origin "$BRANCH" || { echo "ci-gate: push failed" >&2; exit 1; }
+gh workflow run validate.yml --ref "$BRANCH" || exit 1
+# The dispatched run shows up a few seconds later; find it by its commit.
+ID=""
+for _ in $(seq 1 30); do
+  ID=$(gh run list -w Validate -b "$BRANCH" -e workflow_dispatch -L 5 --json databaseId,headSha \
+    -q "[.[] | select(.headSha == \"$SHA\")][0].databaseId // empty")
+  [ -n "$ID" ] && break
+  sleep 4
+done
+[ -n "$ID" ] || { echo "ci-gate: the run never appeared" >&2; exit 1; }
+echo "ci-gate: run $ID on $BRANCH @$(git rev-parse --short "$SHA")"
+gh run watch "$ID" --interval 30 >/dev/null 2>&1
+CONC=$(gh run view "$ID" --json conclusion -q .conclusion)
+gh run view "$ID" --json jobs -q '.jobs[] | "  \(.name) \(.conclusion)"'
+if [ "$CONC" = success ]; then
+  mkdir -p "$M" && touch "$M/$TREE"
+  echo "ci-gate: PASS, marker written for tree $(git rev-parse --short "$TREE")"
+  exit 0
+fi
+JOB=$(gh run view "$ID" --json jobs -q '.jobs[] | select(.name == "card" and .conclusion == "failure") | .databaseId')
+# (--log-failed comes back empty for long jobs; the job log endpoint doesn't.)
+[ -n "$JOB" ] && gh api "repos/{owner}/{repo}/actions/jobs/$JOB/logs" 2>/dev/null |
+  grep -E ' FAIL ' | sed -E 's/^[^ ]* //' | cut -c1-160 | head -20
+echo "ci-gate: FAIL ($CONC), https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/actions/runs/$ID"
+exit 1

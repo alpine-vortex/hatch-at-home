@@ -22,9 +22,15 @@ falling back to HA.
 
 `scripts/gate` does all of the below for you: lint and tests, then a throwaway HA
 from `dev/config` with a fresh `.storage` on a free port (never 8123), card-check with
-`HA_URL`/`HA_CONFIG`/`HA_START` set, and cleanup. Arguments after
-`--` go to card-check. Prefer it over a hand-built scratch HA. To have commits refuse
-unformatted Python, run `git config core.hooksPath scripts/hooks` once.
+`HA_URL`/`HA_CONFIG`/`HA_START` set, and cleanup. Arguments after `--` go to
+card-check. Prefer it over a hand-built scratch HA. It prints card-check's seconds per
+section, and a range that changes only Markdown and `docs/` since a gated tree skips HA
+and card-check. To have commits refuse unformatted Python, run
+`git config core.hooksPath scripts/hooks` once.
+
+`scripts/ci-gate` runs the same checks on GitHub instead (push, the Validate workflow,
+wait) and writes the same gate-passed marker on a pass. Prefer it for the batch gate:
+it takes none of this machine's CPU, so workers aren't slowed while it runs.
 
 The manual route, if you need it:
 
