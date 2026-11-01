@@ -4937,6 +4937,13 @@ class HatchPetCard extends HTMLElement {
       !(s.poseUntil > now) && !(s.propUntil > now) && !(s.flairUntil > now) && !(s.movingUntil > now);
   }
 
+  // Only a question on show, its 60 s hold the one thing busy: a visitor or flair may
+  // still come (fresh-moment 5a), the question keeping its bubble and buttons.
+  _askOnly(s) {
+    return this._questionOn(s) && !!this._freeBody(s) && !s.queue?.length &&
+      this._state(s, "sensor.life_stage")?.state !== "egg";
+  }
+
   // A first look's one early move (fresh-moment 7), so a 30 s look sees the pet do
   // something, not only talk: its flair (traits), else a look around (not when calm).
   // Over a line, as it has no bubble. Then flair and idle keep their own timers.
@@ -8795,7 +8802,7 @@ class HatchPetCard extends HTMLElement {
   // basket on show.
   _visitorFree(s, now = Date.now()) {
     return s === this._slides[this._index] && !this._booting && !!s.lookedFirst && !s.visitor &&
-      !this._link && !s.linking && !s.power && !s.calling && !s.away && this._linkFree(s) &&
+      !this._link && !s.linking && !s.power && !s.calling && !s.away && (this._linkFree(s) || this._askOnly(s)) &&
       !this._basketShows(s) && // the basket's floor line: the visitor waits (review C7)
       now - (this._visitShown?.s === s ? this._visitShown.at : now) >= VISIT_SHOWN_MS &&
       now - (this._linkEndedAt ?? -Infinity) >= VISIT_AFTER_MS;
@@ -8866,7 +8873,8 @@ class HatchPetCard extends HTMLElement {
   // and one flavour line, said now or not at all (a kept line, a game or a question
   // wins; the visitor still passes). A baby says baby talk.
   _visitorGreet(s, v) {
-    if (!this._mayInterrupt(s, FLAVOUR)) return;
+    const asking = this._questionOn(s); // its bubble stays: the greet is a move, no line (5a)
+    if (!asking && !this._mayInterrupt(s, FLAVOUR)) return;
     const before = s.poseUntil;
     this._reactFrames(s, "greet");
     // The wave frames (the link greeting's loader and fallbacks) replace the greet
@@ -8878,6 +8886,7 @@ class HatchPetCard extends HTMLElement {
       s.poseFrames = mine;
       this._show(s, s.pet, mine[0]);
     }
+    if (asking) return;
     const { text } = this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]));
     this._line(s, FLAVOUR, text, 3000);
   }
@@ -9342,7 +9351,7 @@ class HatchPetCard extends HTMLElement {
     if (now < s.nextFlair) return;
     const [lo, hi] = FLAIR_EVERY_MS;
     s.nextFlair = now + lo + Math.random() * (hi - lo);
-    if (this._free(s)) this._flair(s);
+    if (this._free(s) || this._askOnly(s)) this._flair(s);
   }
 
   // One flair moment: each place shows one of the pet's traits there.

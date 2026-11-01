@@ -7496,6 +7496,37 @@ async function main() {
   }
   check("visitors: no visit when asleep, away, egg, in a game or scene, linking, calling, power, status open, queued, " +
     "early or off-slide; the day's flag unused", bad.length === 0, bad.join(" | "));
+  // Fresh-moment 5a: a question on show (its 60 s hold) no longer stops a visit or a flair;
+  // the question keeps its bubble and buttons, and the visitor's greet says no line.
+  {
+    await vprep(V0);
+    const r = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const box = document.createElement("div");
+      box.className = "askday";
+      s.screen.append(box);
+      el._write(s, "how was your day?", 60000);
+      try {
+        el.__vtick(s);
+        const started = !!s.visitor;
+        if (s.visitor) el._visitorGreet(s, s.visitor.v);
+        const said = s.bubble.textContent;
+        el._visitorEnd(s);
+        Object.assign(s, { flairUntil: 0, poseUntil: 0, movingUntil: 0, nextFlair: 1 });
+        let flair = false;
+        const realFlair = el._flair;
+        el._flair = () => { flair = true; return []; };
+        try { el._flairTick(s); } finally { el._flair = realFlair; }
+        return { started, said, flair, box: !!s.screen.querySelector(".askday") };
+      } finally {
+        box.remove();
+        Object.assign(s, { sayUntil: 0, flairUntil: 0, poseUntil: 0 });
+        for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
+      }
+    });
+    check("fresh-moment 5a: with a question on show a visitor and a flair still come, no line over it, and the question stays",
+      r.started && r.said === "how was your day?" && r.flair && r.box, JSON.stringify(r));
+  }
   // VISIT_SHOWN_MS is 10 s (owner, 2026-10-31): 9 s on show, no visit; 10.5 s, it starts.
   {
     await vprep(V0);
