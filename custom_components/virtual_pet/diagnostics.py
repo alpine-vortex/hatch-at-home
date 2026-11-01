@@ -58,7 +58,8 @@ REDACT_OPTIONS = {
     CONF_ZONE,
 }
 # People: who cared for the pet, who gets its notifications, and who's close.
-REDACT_STATE = {"by", "notify_users", "bonds", "user", "for", "for_name"}
+# "player": whose Berry dig it is.
+REDACT_STATE = {"by", "notify_users", "bonds", "user", "for", "for_name", "player"}
 
 
 def _saved(pet: model.PetState) -> dict[str, Any]:
@@ -67,6 +68,12 @@ def _saved(pet: model.PetState) -> dict[str, Any]:
     saved = pet.to_dict()
     for key in getattr(pet, "unknown", {}):
         saved[key] = REDACTED
+    # Parked digs are keyed by HA user id: kept apart, but not saying whose.
+    slots = iter(range(1, len(pet.parked) + 1))
+    saved["parked"] = {
+        slot if slot == model.PARK_HOUSEHOLD else f"person {next(slots)}": game
+        for slot, game in saved.get("parked", {}).items()
+    }
     return saved
 
 

@@ -2351,6 +2351,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._publish()
         return result
 
+    async def async_forget_games(self, user: str) -> None:
+        """Forget my data: this person's parked dig goes, and a dig in progress
+        no longer names them (it's the household's now). Written at once, as
+        the people store is."""
+        assert self.state is not None
+        dropped = self.state.parked.pop(user, None) is not None
+        game = self.state.game
+        if game is not None and game.player == user:
+            game.player = None
+            dropped = True
+        if dropped:
+            await self.store.async_save(self.state.to_dict())
+
     async def async_end_game(
         self, kind: str, context: Context | None = None, shared: bool = False
     ) -> dict[str, Any]:

@@ -408,6 +408,7 @@ async def websocket_forget_me(
         pet._moved.pop(user, None)  # today's moves go with the rest
         pet._private.pop(user, None)  # and their private moments
         if pet.state is not None:
+            await pet.async_forget_games(user)  # their parked Berry dig names them
             pet.async_set_updated_data(pet.state)
     connection.send_result(msg["id"])
 
