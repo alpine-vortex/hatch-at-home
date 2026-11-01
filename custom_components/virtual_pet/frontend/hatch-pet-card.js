@@ -783,6 +783,7 @@ const foundBit = (worlds, m) => {
   const f = findOf(worlds, m?.world, m?.id);
   return f?.a ? `found ${f.a}` : null;
 };
+const VISIT_FRIEND_AFTER = 3; // sighting days on this screen before a visitor is a friend (E3)
 const VISIT_IN_MS = 1400; // to arrive (or leave), unless the visitor says
 const VISIT_STAY_MS = 3000; // at the edge, past the greet's start
 const VISIT_CALM_MS = 5000; // reduced motion: still, then gone
@@ -1240,6 +1241,28 @@ const PERSONA_FRESH = {
 };
 // P-b: now and then a spoken pat finds the sweet spot (any stage but a baby).
 const PAT_SPOT = "that's the spot!! ♥";
+// V-a (E3): a visitor seen here on VISIT_FRIEND_AFTER days is a friend; its greet is one
+// of these half the time, in turns (turnPick). They name the visitor, never a person.
+const VISIT_FRIENDS = {
+  chickadee: ["my chickadee pal! dee-dee ♪", "chickadee! you came by ♪", "hi, little chickadee friend ♥"],
+  stellersjay: ["my blue jay friend! hi!", "ooh, it's my jay pal ♪", "jay! looking so blue today ♥"],
+  snail: ["the snail! my slow pal ♪", "hi, snail buddy, no rush ♥", "my snail friend! take it easy~"],
+  pillbug: ["my pill bug pal! hi hi ♪", "oh, my roly-poly friend! ♥", "pill bug! good to see you ♪"],
+  ladybird: ["my ladybird friend! ♪", "hi, spotty pal! ♥", "ladybird! my lucky friend ♪"],
+  moth: ["my fuzzy moth friend ♪", "moth pal! hello, hello ♥", "hi, moth! my night buddy ♪"],
+  robin: ["robin! my window pal ♪", "hi, robin friend! ♥", "my robin! looking cheery ♪"],
+  mouse: ["shh... hi, mouse pal ♥", "my mouse friend! hi hi ♪", "mouse pal! a crumb's waiting ♪"],
+  cricket: ["my cricket pal! cri-cri ♪", "cricket! my little singer ♥", "hi, cricket friend ♪"],
+  gull: ["my gull pal! hello ♪", "gull friend! fresh from the sea ♪", "hi, gull! my sky buddy ♥"],
+  shorecrab: ["hi hi, little crab pal ♪", "my sideways friend! ♥", "crab pal! snip snip ♪"],
+  seastar: ["my sea star friend ✦", "hi, starry pal! ♥", "sea star! good to see you ♪"],
+  dragonfly: ["my dragonfly pal! zoom ♪", "hi, shiny friend! ♥", "dragonfly! my zippy pal ♪"],
+  strider: ["strider pal! hi hi ♪", "my water-walking friend ♥", "hi, strider buddy ♪"],
+  heron: ["my tall heron friend ♥", "heron pal! happy fishing ♪", "hi, heron! my quiet pal ♪"],
+  shootingstar: ["oh! my shooting star ✦", "my wishing star friend ✦", "my star friend! whoosh ✦"],
+  nighthawk: ["my nighthawk pal ♪", "nighthawk! my night friend ♥", "hi, sky buddy! swoop ♪"],
+  raccoon: ["the raccoon! my night buddy", "my masked friend! hi hi ♥", "raccoon pal! hello ♪"],
+};
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -9098,8 +9121,9 @@ class HatchPetCard extends HTMLElement {
   // and it goes back the way it came; a crosser streaks straight over. Reduced motion:
   // the first frame, standing still at the edge for VISIT_CALM_MS; the greet's frame
   // and the line, no look or hop.
-  _visitorStart(s, v, { ltr = Math.random() < 0.5 } = {}) {
+  _visitorStart(s, v, { ltr = Math.random() < 0.5, count = true } = {}) {
     this._visitorEnd(s);
+    if (count) this._visitFriendCount(s, v);
     const isCalm = calm();
     const world = s.worldKey;
     const inMs = v.in || (v.cross ? 1800 : VISIT_IN_MS);
@@ -9157,8 +9181,52 @@ class HatchPetCard extends HTMLElement {
       this._show(s, s.pet, mine[0]);
     }
     if (asking) return;
-    const { text } = this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]));
+    const friend = this._visitFriendLine(s, v);
+    const { text } = friend ? { text: friend } : this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]));
     this._line(s, FLAVOUR, text, 3000);
+  }
+
+  // Visitors become friends (fresh-expand E3, V-a). This pet's sighting days of each
+  // visitor on this browser: {id: {n, day}}, one key per pet and generation (a new
+  // generation hasn't met anyone yet). Never shown or sent; names no person.
+  _visitFriendKey(s) {
+    return `hatch-visitfriends-${s.ids?.device}-${this._state(s, "sensor.life_stage")?.attributes?.generation || 1}`;
+  }
+
+  _visitFriends(s) {
+    try {
+      const tally = JSON.parse(localStorage.getItem(this._visitFriendKey(s)) || "{}");
+      return tally && typeof tally === "object" ? tally : {};
+    } catch (err) {
+      return {};
+    }
+  }
+
+  // A live visit adds 1 on a day this visitor wasn't counted yet; this pet's keys from
+  // other generations go, so one key per pet.
+  _visitFriendCount(s, v) {
+    const key = this._visitFriendKey(s);
+    const day = this._visitDay(s).toDateString();
+    const tally = this._visitFriends(s);
+    if (tally[v.id]?.day === day) return;
+    tally[v.id] = { n: Math.min((Number(tally[v.id]?.n) || 0) + 1, 99), day };
+    try {
+      const mine = new RegExp(`^hatch-visitfriends-${s.ids?.device}-\\d+$`);
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k !== key && mine.test(k)) localStorage.removeItem(k);
+      }
+      localStorage.setItem(key, JSON.stringify(tally));
+    } catch (err) {
+      // no storage: no friends, the usual greet
+    }
+  }
+
+  // A friend's greet half the time (not a baby: it keeps its baby talk), else null.
+  _visitFriendLine(s, v) {
+    const lines = VISIT_FRIENDS[v.id];
+    if (!lines || this._babySet(s, "visit") || (Number(this._visitFriends(s)[v.id]?.n) || 0) < VISIT_FRIEND_AFTER) return null;
+    return Math.random() < 0.5 ? turnPick(lines, `${s.ids?.device}|${v.id}`) : null;
   }
 
   _visitorEnd(s) {

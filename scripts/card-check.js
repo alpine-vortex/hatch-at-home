@@ -7645,7 +7645,7 @@ async function main() {
     el._booting = false;
     el._visitShown = { s, at: Date.now() - 60000 };
     el._linkEndedAt = undefined;
-    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
+    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-") || k.startsWith("hatch-visitfriends-")) localStorage.removeItem(k);
     return { world: s.worldKey, device: s.ids?.device, key: `hatch-visit-${s.ids?.device}-${new Date().toDateString()}` };
   }, due);
   const where = await vprep(null);
@@ -7833,8 +7833,9 @@ async function main() {
   check("visitors: the greet falls back to the excited frames when the waves failed to load",
     fb.skip || (fb.frames?.length && fb.frames.every((f) => !/_wave_/.test(f))), JSON.stringify(fb));
   const added = greeted.keys.filter((k) => !before.includes(k));
-  check("visitors: nothing sent (no callService or callWS), only hatch-visit-* kept",
-    greeted.calls.length === 0 && added.length === 1 && added[0].startsWith("hatch-visit-"), JSON.stringify({ calls: greeted.calls, added }));
+  check("visitors: nothing sent (no callService or callWS), only hatch-visit-* kept (and E3's friends tally)",
+    greeted.calls.length === 0 && added.filter((k) => k.startsWith("hatch-visit-")).length === 1 &&
+    added.every((k) => /^hatch-visit(-|seen-|friends-)/.test(k)), JSON.stringify({ calls: greeted.calls, added }));
   await card.evaluate((el) => { el._hass.callService = el.__realCalls.svc; el._hass.callWS = el.__realCalls.ws; });
   // A kept line arriving mid-visit keeps its bubble: the greet is skipped.
   await vprep(V0);
@@ -7902,6 +7903,61 @@ async function main() {
     return { text };
   }, { key: babyKey, ms: (V0.in || 1400) + 1300 });
   check("visitors: a baby says baby talk (BABY.visit)", VBABY.some((l) => baby.text.includes(l)), JSON.stringify(baby));
+  // Fresh-expand E3 (V-a): a visitor seen here on 3 days is a friend: half its greets are
+  // its friend lines (random stubbed to the friend side). At 2, never. Two starts on one
+  // day add 1. A new generation's tally starts at 0 (its key carries the generation).
+  {
+    const FRIENDS = require("vm").runInNewContext(`(${vsrc.match(/\nconst VISIT_FRIENDS = (\{[\s\S]*?\n\});/)[1]})`);
+    const friendCase = async (n) => {
+      await vprep(V0);
+      return card.evaluate(async (el, { id, n, ms }) => {
+        const s = el._slides[el._index];
+        const key = el._visitFriendKey(s);
+        const real = Math.random;
+        // Counted already today (so this start adds nothing), at n days.
+        localStorage.setItem(key, JSON.stringify({ [id]: { n, day: el._visitDay(s).toDateString() } }));
+        Math.random = () => 0.2;
+        try {
+          el.__vtick(s);
+          await new Promise((r) => setTimeout(r, ms));
+        } finally {
+          Math.random = real;
+        }
+        const out = { text: s.bubble.textContent, tally: JSON.parse(localStorage.getItem(key) || "{}") };
+        el._visitorEnd(s);
+        return out;
+      }, { id: V0.id, n, ms: (V0.in || 1400) + 1300 });
+    };
+    const three = await friendCase(3);
+    const two = await friendCase(2);
+    check(`fresh E3: a visitor seen on 3 days greets as a friend (${V0.id})`,
+      FRIENDS[V0.id].some((l) => three.text.includes(l)), JSON.stringify(three));
+    check("fresh E3: at 2 days, never a friend line", !FRIENDS[V0.id].some((l) => two.text.includes(l)) && two.text.length > 0,
+      JSON.stringify(two));
+    const counted = await card.evaluate((el, v) => {
+      const s = el._slides[el._index];
+      const key = el._visitFriendKey(s);
+      localStorage.removeItem(key);
+      el._visitFriendCount(s, v);
+      el._visitFriendCount(s, v);
+      const one = JSON.parse(localStorage.getItem(key) || "{}")[v.id]?.n;
+      // A new generation: another key, and the old one gone.
+      const real = el._state;
+      el._state = function (slide, k) {
+        const st = real.call(this, slide, k);
+        return k === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, generation: (st.attributes?.generation || 1) + 1 } } : st;
+      };
+      const next = el._visitFriendKey(s);
+      const fresh = el._visitFriends(s)[v.id]?.n || 0;
+      el._visitFriendCount(s, v);
+      const after = { oldGone: localStorage.getItem(key) === null, nextN: JSON.parse(localStorage.getItem(next) || "{}")[v.id]?.n };
+      el._state = real;
+      localStorage.removeItem(next);
+      return { one, differ: next !== key, fresh, ...after };
+    }, V0);
+    check("fresh E3: two starts on one day add 1; a new generation reads 0, and its key replaces the old",
+      counted.one === 1 && counted.differ && counted.fresh === 0 && counted.oldGone && counted.nextN === 1, JSON.stringify(counted));
+  }
   // The catch-up (owner, 2026-10-31): today's visitor's window over and the visit
   // never played here, the next first look says "a <name> came by today ♪" once
   // (flavour, last, only with room), using up the day's flag so the visit can't play.

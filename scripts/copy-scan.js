@@ -16,6 +16,7 @@ const FILL = {
 const COPY_TABLES = {
   PERSONA_FRESH: {},
   PAT_SPOT: {},
+  VISIT_FRIENDS: {},
 };
 
 function lines(value, path, out) {

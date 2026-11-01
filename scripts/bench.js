@@ -161,6 +161,18 @@ const PRESETS = {
     extra("wave-otter-child", "otter child (no wave)", { world: "woodland", species: "otter", stage: "child", visitor: { id: "snail" } });
     return out;
   },
+  // Visitors as friends (fresh-expand E3): every world's visitors greeting with a friend
+  // line (the line is the shot's point), one sheet row per world.
+  "visitors-friends"() {
+    const out = [];
+    for (const [world, list] of Object.entries(VISITORS)) {
+      for (const v of list) {
+        out.push({ width: 330, group: `friends-${world}`, name: `visitors-friends/${world}-${v.id}`, label: `${v.id}, a friend`, world,
+          scene: v.hours === "night" ? "night" : "day", visitor: { id: v.id, beat: "greet", friend: true } });
+      }
+    }
+    return out;
+  },
   // The basket and the reveal (visitors v2 §3, V-C): every find at reveal size (16 cells)
   // over its own world's backdrop, one sheet a world; then the three baskets, a first-ever
   // find (its sparkle), a visitor's, an old world's, a baby, calm, a night basket and the

@@ -262,11 +262,22 @@
     const list = visitorList(s.world);
     const v = list.find((x) => x.id === vis.id) || list[0];
     if (!v) throw new Error(`no visitor ${vis.id} in ${s.worldKey}`);
+    // `friend` (fresh-expand E3): seen here on enough days already, so the greet is a
+    // friend line (the coin pinned to the friend side).
+    if (vis.friend) {
+      localStorage.setItem(card._visitFriendKey(s), JSON.stringify({ [v.id]: { n: 3, day: card._visitDay(s).toDateString() } }));
+    }
     const V = card._visitorStart(s, v, { ltr: vis.side !== "right" });
     V.timers.forEach(clearTimeout);
     const beat = vis.beat || "greet";
     if (beat === "leave") V.el.classList.replace("in", "out");
-    if (beat === "greet") card._visitorGreet(s, v);
+    const random = Math.random;
+    if (vis.friend) Math.random = () => 0;
+    try {
+      if (beat === "greet") card._visitorGreet(s, v);
+    } finally {
+      Math.random = random;
+    }
     await settled(card);
     const inMs = parseFloat(V.el.style.getPropertyValue("--in-ms")) || 1400;
     for (const a of V.el.getAnimations()) {
