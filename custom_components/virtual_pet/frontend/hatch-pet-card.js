@@ -6315,6 +6315,10 @@ class HatchPetCard extends HTMLElement {
         && this._state(s, `button.${r}`));
     const want = s.asleep || moodNow?.state === "away" || isEgg ? null
       : (String(wantKey).startsWith("call_") && WANT_WORDS[wantKey]) || WANT_WORDS[wantsNow] || null;
+    // How care is going, beside the upbringing it shapes (top10 4a; was in settings).
+    const careMisses = this._state(s, "sensor.care_misses");
+    const misses = row(null, "missed calls", `<span>${Number.parseFloat(careMisses?.state) || 0}</span>`)
+      + row(null, "ignored whines", `<span>${careMisses?.attributes.discipline_misses ?? 0}</span>`);
     // Today's wish comes first of the rest: it changes daily, the rest is there every day.
     const html = `
       <div class="shead">${this._gearButton()}</div>
@@ -6333,6 +6337,7 @@ class HatchPetCard extends HTMLElement {
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
+      ${isEgg ? "" : misses}
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
@@ -6363,18 +6368,16 @@ class HatchPetCard extends HTMLElement {
     const shellOptions = this._state(s, "sensor.life_stage")?.attributes.shell_finish_options;
     const shellName = escape(this._shellName(s, this._shellChoice(s)));
     const shellSwatch = `<span class="sw" style="background: ${finishSwatch(this._shellKey(s), s.world.shell?.color || "#e8834a")}"></span>`;
-    // The pet's group always renders: misses and whines (read-only, also on a shared screen),
-    // then the shell where the server offers it.
-    const missRows = row(null, "misses", `<span>${Number.parseFloat(this._state(s, "sensor.care_misses")?.state) || 0}</span>`)
-      + row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0}</span>`);
-    const shellRows = sharedScreen()
-      ? `<div class="sec">for the pet</div>
-      ${missRows}
-      ${Array.isArray(shellOptions) ? row(null, "shell", `<span class="shellro">${shellSwatch}${shellName}</span>`) + `
-      <div class="shellnote">ask a grown-up to change it</div>` : ""}`
-      : `<div class="sec">for ${escape(this._linkName(s))}</div>
-      ${missRows}
-      ${Array.isArray(shellOptions) ? row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`) : ""}`;
+    // The pet's group: the shell, where the server offers it (read-only on a shared
+    // screen). Misses and whines moved to the status page (top10 4a), so an older
+    // server's sheet has no pet group at all.
+    const shellRows = !Array.isArray(shellOptions) ? ""
+      : sharedScreen()
+        ? `<div class="sec">for the pet</div>
+      ${row(null, "shell", `<span class="shellro">${shellSwatch}${shellName}</span>`)}
+      <div class="shellnote">ask a grown-up to change it</div>`
+        : `<div class="sec">for ${escape(this._linkName(s))}</div>
+      ${row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`)}`;
     // Who each part changes: the pet (everyone), the viewer (follows their login),
     // or this browser.
     const html = `

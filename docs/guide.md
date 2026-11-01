@@ -230,8 +230,9 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   first visit gets "so many lights! ♥" and a little treat. There's no countdown. The
   season goes by the device's date, so it's winter lights in a southern December too.
   All cosmetic. "holiday names" in settings turns festival names off (see below).
-- Tap the screen for the status page: hearts and meters, weight, care misses and
-  ignored whines, traits (n/4) and the one it's learning next, upbringing,
+- Tap the screen for the status page: hearts and meters, weight, traits (n/4) and
+  the one it's learning next, upbringing with "missed calls" and "ignored whines"
+  under it (calls nobody answered in time, and fake calls nobody answered),
   personality (from teen), the next egg, recent care, and a link to the journal.
   Tap again to go back. The switches live behind the gear (below).
 - **The settings gear.** A gear sits at the top of the status page ("settings").
