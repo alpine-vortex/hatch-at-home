@@ -359,14 +359,19 @@ def choose_question(
     (before noon) and one later, per person per day, across every pet. A
     one-time question that's due comes first in the later slot; pet_once are
     the pet's own still open for this person. dreamed: the pet has a dream to
-    tell this morning, which is its morning's say (no "did you sleep well?")."""
+    tell this morning, which is its morning's say instead of "did you sleep
+    well?" on alternate days (by the day), so that's still asked about half
+    the mornings."""
     if level < R.ASK_LEVEL:
         return None
     asked = person.get("asked") or {}
     if asked.get("day") != today:
         asked = {"day": today}
     if hour < 12:
-        if "morning" in asked or rested or dreamed or hour < R.ASK_MORNING_FROM:
+        # A dream to tell is the morning's say on alternate days only (by the day), so
+        # "did you sleep well?" still comes about half the mornings (FM, 5b review).
+        dream_says = dreamed and date.fromisoformat(today).toordinal() % 2 == 0
+        if "morning" in asked or rested or dream_says or hour < R.ASK_MORNING_FROM:
             return None
         return "slept"
     if "later" in asked:
@@ -376,13 +381,16 @@ def choose_question(
     if came_home in DAY_ZONES or came_home == "home":
         return "how_day"  # back from work or school, or a friend just home
     kind = rotation(date.fromisoformat(today))
+    if kind == "how_day" and hour >= R.ASK_DAY_FROM:
+        return "how_day"
     if kind == "dream" and 0 < to_bed_minutes <= R.ASK_DREAM_BEFORE_BED_MINUTES:
         return "dream"
     if kind == "guess" and has_forecast and hour >= R.ASK_GUESS_FROM:
         return "guess"
-    # Today's kind can't be asked now (the dream before its window, a guess with no
-    # forecast or too early): how_day stands in on ASK_FALLBACK_DAYS of every 7, by the
-    # day (fresh-moment 5b), so most evenings get a question but it isn't nightly.
+    # Today's dream or guess can't be asked now (the dream before its window, a guess
+    # with no forecast or too early): how_day stands in on ASK_FALLBACK_DAYS of every 7,
+    # by the day (fresh-moment 5b), so most evenings get a question but it isn't nightly.
+    # The rotation's own how_day days, above, aren't capped.
     # Still one later question a day: "later" is marked either way.
     fallback_day = date.fromisoformat(today).toordinal() % 7 < R.ASK_FALLBACK_DAYS
     if fallback_day and hour >= R.ASK_DAY_FROM:

@@ -129,7 +129,11 @@ same first look (its dream line takes a third `worlds` argument), so its form is
   guess with no forecast or too early.
   - It does so only on `ASK_FALLBACK_DAYS` (4) of every 7 days, by the day, so it isn't
     nightly (review s2622 #5).
-- No "did you sleep well?" on a morning the pet has a dream to tell (`dreamed`).
+  - The rotation's own how_day days are always asked; the cap is only on the stand-in
+    (FM diff review).
+- On a morning the pet has a dream to tell (`dreamed`), the dream stands in for "did you
+  sleep well?" on alternate days only, by the day. Slice 6 makes a dream nearly every
+  morning, so the question still comes about half the mornings (FM diff review).
 - `ASK_DREAM_BEFORE_BED_MINUTES` goes from 180 to 240, so a 19:30 look before a 23:00 bed
   can get it.
 - Still one later question per person a day. Personal screens only, as now.
@@ -138,7 +142,9 @@ same first look (its dream line takes a third `worlds` argument), so its form is
   - On a guess day with no forecast, how_day.
   - Already asked: none.
   - At most 4 stand-ins in 7 days.
-  - No "slept" after a dream.
+  - A rotation how_day day is always asked, cap or not.
+  - On dream mornings, "slept" on alternate days (7 of 14); every morning without a
+    dream.
 
 ### 4. An evening "today" line (owner Q4)
 
@@ -298,3 +304,5 @@ All slices built on 2026-11-01, on `crew/hatch-at-home-s2621-fresh-moment-every-
   - #7: `25183284`
   - #9: `e9e3e87d`
   - the today line's 40-character cap on a bit: in the plan-text commit
+- **FM diff review of 5b**: the rotation's own how_day restored, and the dream replacing
+  "slept" on alternate days only (see §5b): in the commit after `b4364e4e`.

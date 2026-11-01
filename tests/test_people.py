@@ -162,15 +162,14 @@ def test_a_later_question_on_most_evenings():
 
 
 def test_the_how_day_stand_in_comes_at_most_4_evenings_in_7():
-    """Fresh-moment 5b (review s2622 #5): the stand-in isn't nightly: on
-    ASK_FALLBACK_DAYS of every 7 days only, by the day; the rotation's own
-    how_day is unchanged."""
+    """Fresh-moment 5b (review s2622 #5, FM): the stand-in for an unaskable dream
+    or guess isn't nightly: on ASK_FALLBACK_DAYS of every 7 days only, by the
+    day. The rotation's own how_day days are always asked, cap or not."""
     person = {"likes": {"fav_weather": "sun", "fav_season": "autumn"}}
     first = date(2026, 11, 1).toordinal()
     stand_ins = 0
-    for day in (date.fromordinal(first + i) for i in range(7)):
-        if P.rotation(day) == "how_day":
-            continue
+    own = 0
+    for day in (date.fromordinal(first + i) for i in range(21)):
         got = ask(
             person,
             today=day.isoformat(),
@@ -178,17 +177,27 @@ def test_the_how_day_stand_in_comes_at_most_4_evenings_in_7():
             to_bed_minutes=360,
             has_forecast=False,
         )
+        if P.rotation(day) == "how_day":
+            assert got == "how_day"  # never capped (FM regression check)
+            own += day.toordinal() % 7 >= R.ASK_FALLBACK_DAYS
+            continue
         assert got in ("how_day", None)
-        stand_ins += got == "how_day"
         assert (got == "how_day") == (day.toordinal() % 7 < R.ASK_FALLBACK_DAYS)
-    assert R.ASK_FALLBACK_DAYS == 4 and stand_ins <= 4
+        stand_ins += got == "how_day"
+    assert own > 0  # a how_day day off the cap's days was covered
+    assert R.ASK_FALLBACK_DAYS == 4 and stand_ins <= 3 * 4
 
 
-def test_no_sleep_question_on_a_dream_morning():
-    """Fresh-moment 5b (review s2622 #5): a morning with a dream to tell has
-    that for its say; no "did you sleep well?"."""
-    assert ask({}, hour=8, dreamed=True) is None
-    assert ask({}, hour=8, dreamed=False) == "slept"
+def test_sleep_question_on_alternate_dream_mornings():
+    """Fresh-moment 5b (FM): a dream to tell stands in for "did you sleep well?"
+    on alternate days only, so with a dream nearly every morning (slice 6) the
+    question still comes about half the mornings; with no dream, every morning."""
+    first = date(2026, 11, 1).toordinal()
+    days = [date.fromordinal(first + i).isoformat() for i in range(14)]
+    asked = [ask({}, today=d, hour=8, dreamed=True) for d in days]
+    assert asked.count("slept") == 7 and asked.count(None) == 7
+    assert all(a != b for a, b in zip(asked, asked[1:], strict=False))  # alternate
+    assert all(ask({}, today=d, hour=8, dreamed=False) == "slept" for d in days)
 
 
 def test_a_damaged_record_keeps_what_its_readers_can_use():
