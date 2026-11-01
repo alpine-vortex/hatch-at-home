@@ -2,7 +2,8 @@
 
 The owner chose all twelve of these on 2026-10-28 ("These are wonderful"). They
 build on the bond with each person (`docs/plan-2026-10-28-daily-checkins.md`, item
-3, and its second and third passes), which is on the branch but not yet released.
+3, and its second and third passes), which is on the branch but not yet released
+*(2026-10-31: stale; all of it shipped in 0.31.0, `d1dfa89`; see "Status")*.
 
 ## The rules (unchanged from the bond)
 
@@ -202,6 +203,9 @@ Open questions, **as built** (the code's behaviour, not a new decision; owner to
 - **Cost:** about L in total, each piece S.
 
 ## Open questions
+
+*2026-10-31: the same three as "Open questions, as built" in "Status" above, which wins.
+Still unconfirmed by the owner.*
 
 - Should the send-off (2) have its own switch, or ride "notify me"?
 - Quiet mode (6) on by default for everyone with "notify me"?
