@@ -4260,9 +4260,13 @@ async function main() {
     const fill = (line, arg) => (typeof line === "function" ? line(arg) : line);
     const bad = [];
     if (Object.keys(PERSONA).sort().join() !== [...TYPES].sort().join()) bad.push(`types ${Object.keys(PERSONA)} vs ${TYPES}`);
+    // The infrared link's keys (2b) have their own counts and scan: tests/js/link_lines.test.js.
+    const LINK_KEYS = ["link_host", "link_guest", "link_kindred"];
     for (const [type, keys] of Object.entries(PERSONA)) {
-      if (Object.keys(keys).join() !== KEYS.join()) bad.push(`${type}: keys ${Object.keys(keys)}`);
+      if (Object.keys(keys).filter((k) => !LINK_KEYS.includes(k)).join() !== KEYS.join()) bad.push(`${type}: keys ${Object.keys(keys)}`);
+      if (!LINK_KEYS.every((k) => keys[k]?.length)) bad.push(`${type}: no link lines`);
       for (const [key, lines] of Object.entries(keys)) {
+        if (LINK_KEYS.includes(key)) continue;
         if (lines.length < 2 || lines.length > 3) bad.push(`${type}.${key}: ${lines.length} lines`);
         const named = ["hello", "hello_warm", "hello_hearts"].includes(key);
         const food = key === "favourite_snack";
@@ -7807,7 +7811,8 @@ async function main() {
       JSON.stringify([lines.hostSays, lines.guestSays, lines.guestBubble]));
     await lp.waitForTimeout(1500);
     await strip("6-farewell");
-    await lp.waitForTimeout(3500); // 9 s since the start
+    // About 9 s since the start; a kindred pair's extra line (2b) can hold the visit longer.
+    await until((el) => !el._link, null, 6000);
     const over = await state();
     check(`the visit is over and nothing is left behind by 9 s (${width}px)`,
       over.left === 0 && !over.beam, JSON.stringify(over));
@@ -7907,6 +7912,7 @@ async function main() {
       const x = await state();
       sawBeam ||= x.beam; sawHop ||= x.hop; sawBoth ||= x.guestImg === 1 && x.hostPos;
     }
+    await until((el) => !el._link, null, 4000); // a kindred extra stretches the visit
     await lp.emulateMedia({ reducedMotion: null });
     const calmEnd = await state();
     check(`reduced motion: no beam and no hops, the pets just appear together (${width}px)`,
