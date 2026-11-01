@@ -3825,7 +3825,10 @@ async function main() {
           const saved = { moodState: s.moodState, drawn: s.drawn };
           Object.assign(s, { moodState: mood, drawn: "adult", sayUntil: 0, nextIdle: 1, poseUntil: 0, movingUntil: 0 });
           s.plain = undefined;
+          const shelf = el._slides;
+          el._slides = [s]; // no neighbour lines (gaps-seams 5b, checked on their own)
           el._idle(s);
+          el._slides = shelf;
           const out = s.plain === undefined ? "" : s.bubble.textContent;
           Object.assign(s, saved, { sayUntil: 0 });
           return out;
@@ -4827,7 +4830,10 @@ async function main() {
           Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, nextIdle: 1 });
           let calls = 0; // draws: the next-idle delay, the move (0: mumble, first of the list), then the coin
           t.random(() => (calls++ < 2 ? 0 : r));
+          const shelf = el._slides;
+          el._slides = [s]; // no neighbour lines (gaps-seams 5b, checked on their own)
           el._idle(s);
+          el._slides = shelf;
         }
         return s.bubble.textContent || `(idle did not run: free=${!!el._free(s)} mood=${s.moodState} moves=${el._idleMoves(s, false, false)} st=${JSON.stringify([s.asleep, s.calling, !!s.game, !!s.scene, s.sayUntil - Date.now(), s.poseUntil - Date.now(), s.propUntil - Date.now(), s.flairUntil - Date.now(), s.movingUntil - Date.now()])})`;
       };
@@ -4849,6 +4855,32 @@ async function main() {
     }
     check("P2b idle mumble: the type's lines by mood (default, bored, excited) on the heads side, sleepy/hungry/dirty and the tails side stay normal",
       idleBad.length === 0, idleBad.join(" | "));
+    // gaps-seams 5b: with a neighbour on the shelf, the neighbour roll (1 in 6) names it,
+    // never for a bodily mood; alone on the shelf, never.
+    const near = await typeAs(async (el, s, t) => {
+      const say = (moodState, r, alone) => {
+        t.pet("adult", null);
+        s.moodState = moodState;
+        s.bubble.textContent = "";
+        const shelf = el._slides;
+        const other = { ids: { device: "cc-neighbour" } };
+        el._slides = alone ? [s] : [s, other];
+        const devices = el._hass.devices;
+        el._hass.devices = { ...devices, "cc-neighbour": { name: "Nib" } };
+        for (let i = 0; i < 5 && !s.bubble.textContent; i++) {
+          Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, nextIdle: 1 });
+          let calls = 0;
+          t.random(() => (calls++ < 2 ? 0 : r));
+          el._idle(s);
+        }
+        el._slides = shelf;
+        el._hass.devices = devices;
+        return s.bubble.textContent;
+      };
+      return { named: say("content", 0.1), bodily: say("hungry", 0.1), alone: say("content", 0.1, true), off: say("content", 0.5) };
+    });
+    check("gaps-seams 5b: an idle line may name a neighbour on the shelf, never for a bodily mood or alone",
+      /Nib/.test(near.named) && !/Nib/.test(near.bodily) && !/Nib/.test(near.alone) && !/Nib/.test(near.off), JSON.stringify(near));
 
     // The upbringing lines: an adult at most once a week at the first look; never
     // a baby, child or teen; every upbringing has a happy line of its own.

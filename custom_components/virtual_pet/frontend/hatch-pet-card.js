@@ -401,6 +401,9 @@ const LINK_AFTER_MS = [600000, 1500000]; // the infrared link: 10-25 min after t
 // a look (the first tap or swipe on a shown card, after none for LINK_TOUCHED_MS), and
 // only while the last one was under LINK_TOUCHED_MS ago. Never on a hidden tab or an
 // untouched wall tablet. Later links keep LINK_AFTER_MS.
+// An idle line about a neighbour on the shelf (gaps-seams 5b), 1 in 6 idle lines.
+const NEIGHBOUR_ODDS = 1 / 6;
+const NEIGHBOUR_LINES = [(n) => `wonder what ${n} is up to ♪`, (n) => `*waves toward ${n}*`, (n) => `I hope ${n} is having a nice day`];
 const LINK_FIRST_MS = [60000, 180000];
 const LINK_TOUCHED_MS = 300000;
 // A link already today on this browser (oncePerDay's `hatch-link-<pair>-<day>` keys).
@@ -4965,8 +4968,12 @@ class HatchPetCard extends HTMLElement {
       // body's own (sleepy, hungry, dirty, sick), which stay normal.
       const bodily = ["sleepy", "hungry", "dirty", "sick"].includes(s.moodState);
       const key = s.moodState === "bored" ? "idle_bored" : s.moodState === "excited" ? "idle_excited" : "idle";
+      // Now and then a neighbour on the shelf, by name (gaps-seams 5b): flavour, nothing counted.
+      const others = this._slides.filter((x) => x !== s);
+      const neighbour = !bodily && !this._babyStage(s) && others.length && Math.random() < NEIGHBOUR_ODDS
+        && this._linkName(pick(others));
       const normal = pick(lines);
-      this._write(s, bodily ? normal : this._lines(s, key, normal).text, 2500);
+      this._write(s, neighbour ? pick(NEIGHBOUR_LINES)(neighbour) : bodily ? normal : this._lines(s, key, normal).text, 2500);
       s.plain = s.bubble.textContent; // idle chatter isn't read out
     }
   }
