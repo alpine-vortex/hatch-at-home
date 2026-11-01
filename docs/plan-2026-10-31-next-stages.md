@@ -51,7 +51,7 @@ Order (owner, Q7): **the wave pose first**, then kindred pairs.
 | 2a | **BUILT (v0.39.x).** World visitors' greet plays the species' existing `waves` frames (the link greeting's loader and fallbacks, `_linkPose`); no `acts.wave`, no new art (the wave art already existed). The baby's visitor catch-up line "hi hi! ♪" (owner, Q9) shipped with it. Seasonal visitors keep their startle/perk | S | 1 | 0 (was ~90: the art existed) | no | none |
 | 2b | **Kindred pairs + persona link lines**: one extra line when a kindred pair links (personality "Later"), and each type's link-line variants (device charm "Left"); card only, nothing counted (FM, Q6) | M | 0 copy plan (`plan-2026-11-01-kindred-pairs.md`), then 1: **built** (2026-11-01, branch `crew/hatch-at-home-s2577-2b-kindred-pairs-persona-link`): the 45 lines approved verbatim by the owner, both kindred tiers, extra 1 in 2, host only | none | — | done |
 | 2c | **Playtime design note**: the Catch rethink (FM, Q2) and 4d's slower game in one note (shapes, odds, the 70-80% rule); decides whether pounce art comes back | — | 0 | none for the note | — | — |
-| 2d | **Visitors v2 plan** (finds, basket, collection, gifts: check-ins item 1), from v1's 18-visitor roster; plan in stage 2, build after (FM, Q10) | — | 0, then an L/tier-2 build | ~60 finds | no | the seed moves to the server |
+| 2d | **Visitors v2 plan** (finds, basket, collection, gifts: check-ins item 1), from v1's 18-visitor roster; plan in stage 2, build after (FM, Q10). **Plan written:** `plan-2026-11-01-visitors-v2.md` (the server saves the day's visit; 6 slices V-A..V-F, 3 of them tier 2; 8 owner questions, all decided) | — | 0 plan (done), then an L build: V-A, V-B, V-E tier 2 | 60 finds + 3 baskets | no | reviewed + folded 2026-11-01; V-A **built** (batch 8) |
 | 2e | Older generations (4g), unbundled from the forms book (FM, Q8) — **built** (s2574) | S | 1 | none | — | — |
 
 **Dependencies.**
@@ -60,7 +60,9 @@ Order (owner, Q7): **the wave pose first**, then kindred pairs.
 - 2b reads the built personality (P1-P3) and the infrared link (D6). It has no server or
   save change.
 - 2d: v1 picks the visitor on the card and saves nothing. A collection can't credit a
-  visit until the server owns the day's seed, so this is the plan's first design point.
+  visit until the server owns the day's seed, so this is the plan's first design point. *Answered in
+  the plan, §1:* the server picks and saves the day's visit (HA's time zone, absolute window
+  times on the house view), and credits it when its window ends.
 - 2e touches the same `_renderJournal` code as the forms book's PR 2a. Whichever ships
   second rebases. **2e is built:** `_renderJournal` now keeps `every` (all records plus
   now), `past = every.slice(-4)` for the line and `older` for the link; the species-name

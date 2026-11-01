@@ -6,6 +6,7 @@
 #   scripts/gate --tests-only     # just scripts/test
 #   scripts/gate --port 8472      # pick the port (default: a free one in 8400-8499)
 #   scripts/gate -- --only shell  # anything after -- goes to card-check
+#   scripts/gate --auto           # a worker's gate: the sections its diff touches (scripts/pick-sections)
 #
 # A partial run writes no marker. A full run takes ~20 min, mostly card-check.
 # Costume previews are screenshots, not checks: they left the gate (owner,
@@ -18,11 +19,12 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 
-PORT="" TESTS_ONLY=0 CC_ARGS=()
+PORT="" TESTS_ONLY=0 AUTO=0 CC_ARGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --port) PORT=$2; shift 2 ;;
     --tests-only) TESTS_ONLY=1; shift ;;
+    --auto) AUTO=1; shift ;;
     --) shift; CC_ARGS=("$@"); break ;;
     *) echo "gate: unknown option $1" >&2; exit 2 ;;
   esac
@@ -42,6 +44,14 @@ if ! scripts/test -q >"$LOGS/test.log" 2>&1; then
 fi
 echo "gate: scripts/test ok ($(grep -Eo '[0-9]+ passed' "$LOGS/test.log" | tail -1))"
 [ "$TESTS_ONLY" = 1 ] && exit 0
+if [ "$AUTO" = 1 ]; then
+  PICK=$(scripts/pick-sections)
+  case "$PICK" in
+    "") echo "gate: nothing for card-check to look at (--auto)"; exit 0 ;;
+    all) echo "gate: --auto picked all sections; run scripts/ci-gate instead (no local load)"; exit 2 ;;
+    *) echo "gate: --auto sections: $PICK"; CC_ARGS=(--only "$PICK") ;;
+  esac
+fi
 
 # Docs only: if the nearest ancestor whose tree passed the full gate differs from
 # HEAD by Markdown and docs/ alone (committed, clean tree), the card can't have

@@ -19,6 +19,7 @@
 // dev's seeded bond and wish back). Sections lean on the state their
 // predecessors leave (the open sheet, the bond, the slide on show), so a lone
 // one may need its neighbour: add it to --only. oldcard pulls in restart.
+// --shard k/4 runs the k-th of four contiguous runs (see SHARD_STARTS).
 
 const { chromium } = require("playwright");
 const fs = require("fs");
@@ -46,10 +47,29 @@ if (argv.includes("--list")) {
   console.log(SECTIONS.join("\n"));
   process.exit(0);
 }
+// --shard k/4 runs one of four contiguous runs of sections, split where these
+// start (CI runs them side by side). A new section lands in whichever run it
+// falls in, so none is skipped. Balanced by CI's seconds per section (2026-11-01:
+// about 225, 225, 200 and 175 s each, plus the prelude).
+const SHARD_STARTS = ["shelf", "moments", "backlight", "infrared"];
 let ONLY = null;
 for (let i = 0; i < argv.length; i++) {
+  if (argv[i] === "--shard") {
+    const n = SHARD_STARTS.length;
+    const m = /^(\d+)\/(\d+)$/.exec(argv[++i] || "");
+    const k = Number(m?.[1]);
+    if (!m || Number(m[2]) !== n || !(k >= 1 && k <= n)) {
+      console.error(`card-check: --shard needs k/${n}, k from 1 to ${n}`);
+      process.exit(2);
+    }
+    const from = SECTIONS.indexOf(SHARD_STARTS[k - 1]);
+    const to = k < n ? SECTIONS.indexOf(SHARD_STARTS[k]) : SECTIONS.length;
+    ONLY ||= new Set();
+    for (const n of SECTIONS.slice(from, to)) ONLY.add(n);
+    continue;
+  }
   if (argv[i] !== "--only") {
-    console.error(`card-check: unknown argument ${argv[i]} (--list, --only <name>[,<name>...])`);
+    console.error(`card-check: unknown argument ${argv[i]} (--list, --only <name>[,<name>...], --shard k/4)`);
     process.exit(2);
   }
   ONLY ||= new Set();
@@ -1174,11 +1194,22 @@ async function main() {
     await page.waitForTimeout(700);
   }
   await calm();
+  // Idle chatter ("all good!") can take the bubble before or after the hello, and a
+  // sample of the bubble can miss a 4 s line: hold idle life and keep every line said.
+  await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.nextIdle = Date.now() + 600000;
+    el.__said = [];
+    const speak = el._speak;
+    el._speak = function (slide, line, ...rest) { if (slide === s) el.__said.push(String(line)); return speak.call(this, slide, line, ...rest); };
+  });
   let greeting = "";
   for (let i = 0; i < 30 && !greeting.includes(USER.name); i++) {
     await page.waitForTimeout(500);
-    greeting = await bubble();
+    const said = await card.evaluate((el) => el.__said);
+    greeting = said.find((l) => l.includes(USER.name)) || await bubble();
   }
+  await card.evaluate((el) => { delete el._speak; delete el.__said; el._slides[el._index].nextIdle = 0; }); // idle life back
   check("greets the viewer by first name", greeting.includes(USER.name), greeting);
   await shot("04a-greeting");
 
@@ -2729,12 +2760,18 @@ async function main() {
   const spooky = await card.evaluate(async (el) => {
     const s = el._slides[el._index];
     s.sayUntil = 0; s.flairUntil = 0;
+    s.nextIdle = Date.now() + 600000; s.greeted = true; // no idle line or hello over "boo!"
     const [hx0, hy0] = el._hatSpot(s) || s.species.head[s.drawn];
     el._headTopAll(s, hx0, hy0); // load every frame first, as the season's ticks do
     await new Promise((r) => setTimeout(r, 600));
+    // A late reaction (a treat from play) can take the bubble after "boo!": keep what's said.
+    const said = [];
+    const speak = el._speak;
+    el._speak = function (slide, line, ...rest) { if (slide === s) said.push(String(line)); return speak.call(this, slide, line, ...rest); };
     el._costume(s, { key: "halloween" }, "boo!");
     await new Promise((r) => setTimeout(r, 900));
     const hat = s.screen.querySelector(".costume .hat")?.getBoundingClientRect();
+    s.nextIdle = 0; // idle life back (the greeting stays done)
     const at = el._flairAnchors(s);
     const sr = s.screen.getBoundingClientRect();
     const r = s.pet.getBoundingClientRect();
@@ -2744,7 +2781,7 @@ async function main() {
     return {
       pieces: [...s.seasonBox.querySelectorAll("img")].map((i) => i.className).join(" ").split(" "),
       hatBottom: hat && hat.bottom - sr.top, headTop: r.top - sr.top + top * (r.height / 256),
-      fy: at.fy, said: s.bubble.textContent,
+      fy: at.fy, said: (delete el._speak, said.includes("boo!") ? "boo!" : s.bubble.textContent),
     };
   });
   check("halloween dresses the scene", spooky.pieces.includes("lantern") && spooky.pieces.includes("web"),
@@ -2753,7 +2790,7 @@ async function main() {
   check("the costume hat sits on the head",
     spooky.hatBottom > spooky.headTop && spooky.hatBottom < spooky.headTop + 20 &&
       spooky.hatBottom < spooky.fy && spooky.said === "boo!",
-    `hat bottom ${Math.round(spooky.hatBottom)} vs head top ${Math.round(spooky.headTop)}`);
+    `hat bottom ${Math.round(spooky.hatBottom)} vs head top ${Math.round(spooky.headTop)}, flair y ${Math.round(spooky.fy)}, said "${spooky.said}"`);
   await shot("05-halloween");
   // An [x, y, "exact"] hat point seats the brim at y itself: no scan, no lowering.
   // Seat the pose on show at y 60 (far above any head scan would put it).
