@@ -175,6 +175,8 @@ async def test_pushes_go_to_their_person_only(
     await setup(hass)
     coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
     coordinator.state.wish = {"kind": "bath", "day": today(), "granted": False}
+    # No visit today: a window ending mid-test may leave a find (a house push).
+    coordinator.state.visit = {"day": today(), "world": "woodland", "id": None}
     mine_client = await hass_ws_client(hass)
     theirs_client = await hass_ws_client(hass, ada_token)
     await subscribe(mine_client)
