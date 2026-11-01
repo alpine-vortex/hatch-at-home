@@ -4433,7 +4433,7 @@ async function main() {
     const TYPES = [...py.split("\nPERSONALITIES = (")[1].split("\n)")[0].matchAll(/"(\w+)"/g)].map((m) => m[1]);
     const KEYS = ["reveal", "hello", "hello_shared", "hello_warm", "hello_hearts",
       "good_morning", "sunset", "fell_asleep", "wish_granted", "favourite_snack",
-      "idle", "idle_bored", "idle_excited", "mood_content", "mood_excited"];
+      "idle", "idle_bored", "idle_excited", "mood_content", "mood_excited", "mood_cozy", "mood_bored"];
     const HELLOS = ["hello", "hello_shared", "hello_warm", "hello_hearts"];
     const longName = "Wwwwwwwwwwwwwwww"; // 16, as _greet leaves a name
     const longFood = "sunflower seeds"; // 15, the longest likes entry
@@ -4790,6 +4790,8 @@ async function main() {
         out.types[type].hungry = says("hungry", "a little hungry");
         out.types[type].home = says("home_rain", "listening to the rain");
         out.types[type].excited = says("excited", "that was fun!");
+        out.types[type].cozy = says("cozy", "nice and cozy");
+        out.types[type].bored = says("bored", "nothing to do");
       }
       t.pet("child", null, null, { hatched_on: "2026-01-01" });
       out.child = says("content", "all good");
@@ -4804,6 +4806,9 @@ async function main() {
       if (m.flicker) moodBad.push(m.flicker);
       if (m.hungry !== "a little hungry" || m.home !== "listening to the rain") moodBad.push(`${type}: needs/house not plain`);
       if (m.excited !== "that was fun!" && !PERSONA[type].mood_excited.includes(m.excited)) moodBad.push(`${type}: excited ${m.excited}`);
+      // gaps-seams 4a: cozy and bored swap the same way.
+      if (m.cozy !== "nice and cozy" && !PERSONA[type].mood_cozy.includes(m.cozy)) moodBad.push(`${type}: cozy ${m.cozy}`);
+      if (m.bored !== "nothing to do" && !PERSONA[type].mood_bored.includes(m.bored)) moodBad.push(`${type}: bored ${m.bored}`);
     }
     if (mood.noType !== "all good") moodBad.push(`no type: ${mood.noType}`);
     check("P2b mood line: content swaps by hash for every type, same all day (no flicker, random-free), needs and home stay plain, no type is plain",

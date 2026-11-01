@@ -952,6 +952,8 @@ const PERSONA = {
     idle_excited: ["hehe! ok, nap now", "mm! that was fun ♪", "hehe, nice ♥"],
     mood_content: ["taking it easy", "comfy and calm"],
     mood_excited: ["hehe, that was nice", "mm, that was fun"],
+    mood_cozy: ["mm, perfect nap spot", "warm and comfy... ♪"],
+    mood_bored: ["a nap sounds nice...", "just lazing about"],
     link_host: [(n) => `oh hey, ${n}... ♪`, (n) => `${n}... come sit a while ♥`],
     link_guest: [(n) => `mm, hi, ${n}... ♪`],
     link_kindred: [(n) => `${n}, we do cosy well ♥`, "mm, a nap with you sounds nice ♪"],
@@ -972,6 +974,8 @@ const PERSONA = {
     idle_excited: ["hehe, so happy!", "yay! ♥", "that was lovely ♥"],
     mood_content: ["all warm and happy", "nice and homey ♥"],
     mood_excited: ["that was lovely!", "hehe, that was fun ♥"],
+    mood_cozy: ["all snug ♥", "warm and happy ♥"],
+    mood_bored: ["wish someone would visit ♥", "waiting for a friend ♥"],
     link_host: [(n) => `${n}! hi! so glad you came ♥`, (n) => `hello hello, ${n} ♥`],
     link_guest: [(n) => `hi, ${n}! ♥ hello ♥`],
     link_kindred: [(n) => `${n}, we think alike ♥`, "it's nice to meet a kind heart ♥"],
@@ -992,6 +996,8 @@ const PERSONA = {
     idle_excited: ["wheee! hup hup!", "woo! yes!", "*bounce bounce*"],
     mood_content: ["full of beans", "ready for anything"],
     mood_excited: ["that was great!", "woo! so much fun!"],
+    mood_cozy: ["cozy... but ready to hop!", "warm paws, happy hops"],
+    mood_bored: ["need to hop about!", "so... much... sitting"],
     link_host: [(n) => `${n}! hup hup, hi!`, (n) => `hiya, ${n}! *bounce*`],
     link_guest: [(n) => `hup! hi, ${n}!`],
     link_kindred: [(n) => `${n}! race you to the corner! hup`, "two of us, twice the hops!"],
@@ -1012,6 +1018,8 @@ const PERSONA = {
     idle_excited: ["ta-da! ★", "what a show! ★", "♪ tra la la! ♪"],
     mood_content: ["humming a little tune", "ready for my close-up ★"],
     mood_excited: ["what a show!", "bravo! that was fun ★"],
+    mood_cozy: ["cozy, like backstage ★", "a warm spotlight ♪"],
+    mood_bored: ["no audience today...", "waiting for my cue ★"],
     link_host: [(n) => `${n}! my co-star ★`, (n) => `ah, ${n}! cue the music ★`],
     link_guest: [(n) => `hello, ${n}! ★ take a bow`],
     link_kindred: [(n) => `${n}! a duet, you and me ★`, "we shine best together ★"],
@@ -1032,6 +1040,8 @@ const PERSONA = {
     idle_excited: ["heh. not bad at all.", "heh. well, well.", "ha. that was fun."],
     mood_content: ["all's well", "a fine day"],
     mood_excited: ["heh. that was nice", "well, that was fun"],
+    mood_cozy: ["a fine warm spot", "cozy. as it should be."],
+    mood_bored: ["hm. quiet day.", "nothing doing. hm."],
     link_host: [(n) => `hello, ${n}. come in.`, (n) => `${n}. good to see you.`],
     link_guest: [(n) => `hm. hello, ${n}.`],
     link_kindred: [(n) => `hm. ${n}. we understand each other.`, "good company, you."],
@@ -1052,6 +1062,8 @@ const PERSONA = {
     idle_excited: ["oh, how lovely!", "divine! ♥", "*twirls prettily*"],
     mood_content: ["looking my best", "all pretty and calm ♥"],
     mood_excited: ["oh, how lovely!", "that was divine ♥"],
+    mood_cozy: ["cozy and fabulous ♥", "warm and lovely ♥"],
+    mood_bored: ["how dull...", "nothing lovely to do"],
     link_host: [(n) => `${n}, darling! how lovely ♥`, (n) => `oh, ${n}! welcome, welcome ♥`],
     link_guest: [(n) => `${n}, darling! ♥`],
     link_kindred: [(n) => `${n}, darling, we have such taste ♥`, "a fellow connoisseur ♥"],
@@ -1072,6 +1084,8 @@ const PERSONA = {
     idle_excited: ["simply splendid!", "marvellous! ♥", "what an occasion!"],
     mood_content: ["life is splendid", "all quite marvellous"],
     mood_excited: ["simply splendid!", "what a marvellous time"],
+    mood_cozy: ["splendidly cozy", "warm as a welcome"],
+    mood_bored: ["a bit dull today, I must say", "awaiting company"],
     link_host: [(n) => `ah, ${n}! a delight ♥`, (n) => `${n}! what an honour ♥`],
     link_guest: [(n) => `${n}! how splendid ♥`],
     link_kindred: [(n) => `${n}! two of a kind, you and I ♥`, "such a grand pair we make ♥"],
@@ -1092,6 +1106,8 @@ const PERSONA = {
     idle_excited: ["hah! nailed it!", "yes! heck yes!", "hah! go team!"],
     mood_content: ["all under control", "all clear here"],
     mood_excited: ["hah! that was great", "heck yes, that was fun"],
+    mood_cozy: ["cozy post, all clear", "warm and on watch"],
+    mood_bored: ["nothing to guard...", "waiting for orders!"],
     link_host: [(n) => `yo, ${n}! all clear here`, (n) => `${n}! reporting in ♥`],
     link_guest: [(n) => `hey, ${n}! ♥ hi hi`],
     link_kindred: [(n) => `${n}! good team, you and me ♥`, "we've got each other's backs ♥"],
@@ -4580,11 +4596,12 @@ class HatchPetCard extends HTMLElement {
     return mine ? dailyPick([reason, reason, ...mine], `${born}|${key}`) : this._lines(s, `reason.${key}`, reason).text;
   }
 
-  // A teen or adult's own content/excited mood line (P2b), or null. It is picked
-  // by dailyPick (no Math.random): the sentence is redrawn every tick, so it must
-  // not change until the date does. Babies and children keep baby talk.
+  // A teen or adult's own content, excited, cozy or bored mood line (P2b; cozy and
+  // bored since gaps-seams 4a), or null. It is picked by dailyPick (no Math.random):
+  // the sentence is redrawn every tick, so it must not change until the date does.
+  // Babies and children keep baby talk.
   _moodOwn(s, key) {
-    if (key !== "content" && key !== "excited") return null;
+    if (!["content", "excited", "cozy", "bored"].includes(key)) return null;
     return this._persona(s)?.[`mood_${key}`] || null;
   }
 
