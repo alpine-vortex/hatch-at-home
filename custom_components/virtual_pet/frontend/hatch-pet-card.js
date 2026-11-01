@@ -618,7 +618,7 @@ const dailyPick = (list, salt = "") => {
 // on about 4 days in 7 a small creature from the pet's world drops by at the scene's
 // edge and the pet greets it. The server picks the day's visit and its window
 // (house.visit); the card plays it, and keeps only "this screen played it" (the day's
-// localStorage flag). With no house.visit (an older server, the bench) the card picks
+// localStorage flag). With no house.visit (a subscribed older server) the card picks
 // as v1 did (visitorDay). The roster (id, name, hours: "day" on a day screen, "night"
 // on a night or dim one) is worlds.json's; the play data is here, by id: walk (on the
 // ground line, else it flies in), cross (no stop: straight over), in (ms to arrive),
@@ -8159,9 +8159,9 @@ class HatchPetCard extends HTMLElement {
     const hostName = this._linkName(host);
     const guestName = this._linkName(guest);
     const hello = this._lines(host, "link_host", this._pick(["hi, {guest}!", "oh! {guest}! hello hello ♪"])
-      .replace("{guest}", guestName), guestName).text;
+      .replace("{guest}", () => guestName), guestName).text;
     const reply = this._lines(guest, "link_guest", this._pick(["hi hi, {host}! ♪", "*waves* hi, {host}!"])
-      .replace("{host}", hostName), hostName).text;
+      .replace("{host}", () => hostName), hostName).text;
     // The kindred extra: its own roll, never through _lines (it has no normal line).
     const own = this._kindred(host, guest) && Math.random() < KINDRED_ODDS && this._pick(PERSONA[this._typeKey(host)].link_kindred);
     const extra = own ? (typeof own === "function" ? own(guestName) : own) : null;
