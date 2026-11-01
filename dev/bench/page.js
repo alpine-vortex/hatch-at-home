@@ -215,7 +215,7 @@
     card._show(cur, cur.pet, frames[(frame - 1) % frames.length]);
     card._hatSeat(cur); // load every frame the scan reads
     await new Promise((r) => setTimeout(r, 300));
-    card._costume(cur, { ...base, costumes: [costume] }, "boo!", false);
+    card._costume(cur, { ...base, costumes: [costume] }, base.treatLine || base.lines?.[0] || "", false);
     await new Promise((r) => setTimeout(r, 450));
     const hat = cur.screen.querySelector(".costume .hat").getBoundingClientRect();
     const pet = cur.pet.getBoundingClientRect();

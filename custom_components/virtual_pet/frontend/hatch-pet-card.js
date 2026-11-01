@@ -1735,8 +1735,14 @@ const STYLE = `
   /* Porthole: a riveted ring (the rivets are cut with the bezel) around a rounded window. */
   .porthole .body { border-radius: 40px; padding: 22px 18px 26px; }
   .porthole .bezel { padding: 14px; border-radius: 30% / 38%; }
-  .porthole .screen { border-radius: 28% / 36%; }
-  .porthole .bubble { left: 13%; top: 10%; }
+  /* --edge: how far the porthole's round corners eat into the screen (a share of its width;
+     heights take ~.75 of it); what stands in a corner or on the ground keeps that far in.
+     --go: how far go-left / go-right carry the pet (of its own width); less in the round window. */
+  .porthole .screen { border-radius: 28% / 36%; --edge: 12%; --go: 45%; }
+  /* Clear of the round corners, as wide as on the other shapes (the window is a little narrower). */
+  .porthole .bubble { left: 11%; top: 11%; max-width: 66%; }
+  .porthole .screen { container-type: inline-size; }
+  .porthole .status { --sy: 6cqw; --sx: 11cqw; } /* the sheet's padding, its bands kept flush */
   .porthole .attention { right: 13%; top: 9%; }
   /* Pad: a lily pad, its notch and veins cut with the body. */
   .pad .body { border-radius: 50% / 30%; padding: 40px 22px 40px; }
@@ -2069,7 +2075,7 @@ const STYLE = `
   @keyframes fl-glow { to { opacity: .55; } }
   /* Seasonal touches (SEASONS): behind the pet, sized to the screen. */
   .season { position: absolute; inset: 0; pointer-events: none; }
-  .season .lantern { right: 5%; bottom: 5%; width: 17%; }
+  .season .lantern { right: calc(5% + var(--edge, 0%)); bottom: calc(5% + var(--edge, 0%) * .25); width: 17%; }
   .season .lantern.lantern-float { bottom: 30%; animation: s-bob 3s ease-in-out infinite alternate; }
   @keyframes s-bob { to { transform: translateY(-8%) rotate(-4deg); } }
   .screen.s-halloween.night .season .lantern, .screen.s-halloween.dim .season .lantern {
@@ -2087,10 +2093,10 @@ const STYLE = `
   @keyframes s-shine { 50% { filter: drop-shadow(0 0 4px rgba(255, 230, 180, .75)); } }
   .screen.s-winter .season .bunting { animation: s-twinkle 2.4s steps(1) infinite; }
   @keyframes s-twinkle { 50% { filter: brightness(1.2); } }
-  .season .corner { top: 0; width: 17%; opacity: .85; }
-  .season .corner.right { right: 0; }
-  .season .corner.left { left: 0; transform: scaleX(-1); }
-  .season .sweet { right: 23%; bottom: 5%; width: 7%; }
+  .season .corner { top: calc(var(--edge, 0%) * .45); width: 17%; opacity: .85; }
+  .season .corner.right { right: calc(var(--edge, 0%) * .75); }
+  .season .corner.left { left: calc(var(--edge, 0%) * .75); transform: scaleX(-1); }
+  .season .sweet { right: calc(23% + var(--edge, 0%)); bottom: calc(5% + var(--edge, 0%) * .25); width: 7%; }
   .season .sfly { position: absolute; animation: s-fly var(--fly-ms, 5s) linear forwards; }
   .season .sfly img { position: static; display: block; width: 100%; }
   .season .sfly.flap img + img { position: absolute; inset: 0; }
@@ -2118,8 +2124,8 @@ const STYLE = `
      resting at the scene's edge (--stop). It comes in from --from and leaves back to it;
      a crosser carries on to --to. Under reduced motion it just stands at --stop. */
   .season .vis { position: absolute; width: calc(var(--px, 2px) * 18); left: var(--stop);
-    --from: -25%; --stop: 5%; --to: 112%; }
-  .season .vis.rtl { --from: 112%; --stop: calc(95% - var(--px, 2px) * 18); --to: -25%; }
+    --from: -25%; --stop: calc(5% + var(--edge, 0%)); --to: 112%; }
+  .season .vis.rtl { --from: 112%; --stop: calc(95% - var(--edge, 0%) - var(--px, 2px) * 18); --to: -25%; }
   .season .vis img { position: static; display: block; width: 100%; }
   .season .vis.flap img + img { position: absolute; inset: 0; }
   .season .vis.flap img { animation: fl-frame-a .5s steps(1) infinite; }
@@ -2135,7 +2141,8 @@ const STYLE = `
   /* The art faces right; leaving, it turns back the way it came. */
   .season .vis.rtl img, .season .vis.ltr.out img { transform: scaleX(-1); }
   .season .vis.rtl.out img { transform: none; }
-  .season .bunting { position: absolute; top: 0; left: 0; right: 0; height: 8.4%;
+  .season .bunting { position: absolute; top: calc(var(--edge, 0%) * .3); left: var(--edge, 0%);
+    right: var(--edge, 0%); height: 8.4%;
     background-repeat: repeat-x; background-size: 18.75% 100%; image-rendering: pixelated; }
   .season .mist { position: absolute; left: -10%; right: -10%; bottom: 0; height: 26%; display: none;
     background: radial-gradient(ellipse at 30% 100%, rgba(214, 206, 240, .45), transparent 65%),
@@ -2209,8 +2216,6 @@ const STYLE = `
   ha-card.lcd-on .ghost { display: block; }
   .ghost.wander-l { translate: -16% 0; transition-duration: .9s; }
   .ghost.wander-r { translate: 16% 0; transition-duration: .9s; }
-  .ghost.go-left { translate: -60% 0; }
-  .ghost.go-right { translate: 60% 0; }
   .screen.dim .ghost { filter: brightness(.8); }
   /* The backlight (_backlight): an Indiglo glow over the scene, under the bubble.
      It comes on at once and fades out; the dimmed scene brightens under it. */
@@ -2427,13 +2432,17 @@ const STYLE = `
       radial-gradient(ellipse 10% 4% at 50% 90%, transparent 55%, rgba(255,255,255,.95) 62%, transparent 75%);
     animation: ripple 1.4s ease-out infinite; }
   @keyframes ripple { 0% { opacity: 0; transform: scale(.7); } 30% { opacity: 1; } 100% { opacity: 0; transform: scale(1.25); } }
-  .pet.go-left, .perch.go-left, .screen .pat.go-left { translate: -60% 0; }
-  .pet.go-right, .perch.go-right, .screen .pat.go-right { translate: 60% 0; }
+  /* Off to one side, but never past the screen's edge: the pet's box is 46.5% of the screen,
+     grown by --k (its scale) about its middle, so its edge reaches 0 at 107.5% - k * 50%. */
+  .pet.go-left, .perch.go-left, .ghost.go-left, .screen .pat.go-left {
+    translate: max(var(--go, 60%) * -1, var(--k, 1) * 50% - 107.5%) 0; }
+  .pet.go-right, .perch.go-right, .ghost.go-right, .screen .pat.go-right {
+    translate: min(var(--go, 60%), 107.5% - var(--k, 1) * 50%) 0; }
   /* What the pet stands on (species.json "perch"); it follows the pet around. */
   .perch, .screen .pat { transition: translate .25s ease-out; }
   .perch.wander-l, .screen .pat.wander-l { translate: -16% 0; transition-duration: .9s; }
   .perch.wander-r, .screen .pat.wander-r { translate: 16% 0; transition-duration: .9s; }
-  .status { position: absolute; inset: 0; background: #e9e2c6; color: #2f3a24; padding: 9px 12px;
+  .status { position: absolute; inset: 0; background: #e9e2c6; color: #2f3a24; padding: var(--sy, 9px) var(--sx, 12px);
     display: none; flex-direction: column; gap: 4px; font-size: 13px; overflow: auto; }
   .screen.show-status .status { display: flex; }
   .screen.show-status .bubble { display: none; }
@@ -2481,8 +2490,8 @@ const STYLE = `
     min-height: 44px; min-width: 44px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
   /* The status view's gear and the settings sheet's back row and headings. */
-  .shead { position: sticky; top: -9px; z-index: 1; display: flex; align-items: center;
-    margin-top: -9px; padding-top: 3px; background: #e9e2c6; }
+  .shead { position: sticky; top: calc(var(--sy, 9px) * -1); z-index: 1; display: flex; align-items: center;
+    margin-top: calc(var(--sy, 9px) * -1); padding-top: calc(var(--sy, 9px) - 6px); background: #e9e2c6; }
   .gear { margin-left: auto; display: flex; align-items: center; justify-content: center;
     min-width: 44px; min-height: 44px; padding: 0 5px; border: none; background: none;
     color: inherit; cursor: pointer; }
@@ -2515,16 +2524,18 @@ const STYLE = `
      so the list scrolls out of sight under them; its headings sit closer. */
   .status:has(.pback) { gap: 2px; }
   .status:has(.pback) .sec { margin-top: 1px; }
-  .shead:has(.pback) { z-index: 2; margin: -9px -12px 0; padding: 0 12px; }
-  .pbtns { flex: none; position: sticky; bottom: -9px; z-index: 2; display: flex; justify-content: flex-end; gap: 6px;
-    margin: 0 -12px -9px; padding: 3px 12px 7px; background: #e9e2c6; }
+  .shead:has(.pback) { z-index: 2; margin: calc(var(--sy, 9px) * -1) calc(var(--sx, 12px) * -1) 0;
+    padding: calc(var(--sy, 9px) - 9px) var(--sx, 12px) 0; }
+  .pbtns { flex: none; position: sticky; bottom: calc(var(--sy, 9px) * -1); z-index: 2; display: flex;
+    justify-content: flex-end; gap: 6px; margin: 0 calc(var(--sx, 12px) * -1) calc(var(--sy, 9px) * -1);
+    padding: 3px var(--sx, 12px) calc(var(--sy, 9px) - 2px); background: #e9e2c6; }
   .status-feedback.over { bottom: 30px; z-index: 3; }
   /* A narrow card: tighter still, so two whole rows of tiles show between the bands. */
   .compact .status:has(.pback) { gap: 1px; }
   .compact .status:has(.pback) .sec { margin-top: 0; padding-bottom: 1px; }
   .compact .tile { padding: 0 1px; font-size: 10px; }
   .compact .tile .tsub { font-size: 9px; }
-  .compact .pbtns { padding: 2px 12px 3px; }
+  .compact .pbtns { padding: 2px var(--sx, 12px) calc(var(--sy, 9px) - 6px); }
   .bell { border: 2px solid #2f3a24; border-radius: 10px; background: none; color: inherit;
     font: 400 12px 'Tiny5', monospace; padding: 3px 10px; min-width: 44px; min-height: 44px;
     cursor: pointer; }
@@ -3223,6 +3234,7 @@ class HatchPetCard extends HTMLElement {
         s.pat.classList.toggle(c, s.pet.classList.contains(c));
       }
       s.perch.style.scale = s.ghost.style.scale = s.pat.style.scale = s.pet.style.scale;
+      s.screen.style.setProperty("--k", s.pet.style.scale || 1); // go-left / go-right stop at the edge
       if (moved) this._ghostTrail(s);
     }).observe(s.pet, { attributes: true, attributeFilter: ["class", "style"] });
     // What the pet says to someone (a refusal, a game's result, a moment) is read
@@ -8050,6 +8062,12 @@ class HatchPetCard extends HTMLElement {
     const track = this._track.getBoundingClientRect();
     const a = host.device.getBoundingClientRect();
     const b = guest.device.getBoundingClientRect();
+    // Ride over the highest part of either toy: a tank's lid, a roof, the moon, a top trim
+    // (parts a shape hasn't are display: none, with an empty rect), but inside the viewport,
+    // which clips: a tank's tall trim keeps it at the very top, over the leaves.
+    const top = Math.min(...[host.device, guest.device].flatMap((d) =>
+      [d, ...d.querySelectorAll(".lid, .roof, .crescent, .trim-top, .trim-top2")])
+      .map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height).map((r) => r.top));
     const u = Math.max(1, Math.round(((host.screen.clientWidth * 0.465) / WORLD_GRID) * 4) / 4);
     const x0 = a.left + a.width / 2 - track.left;
     const x1 = b.left + b.width / 2 - track.left;
@@ -8060,7 +8078,9 @@ class HatchPetCard extends HTMLElement {
     const beam = document.createElement("div");
     beam.className = "irbeam";
     beam.setAttribute("aria-hidden", "true");
-    beam.style.cssText = `left:0;top:${a.top - track.top - 16 * u + 3}px;width:1px;height:1px;--u:${u}px;` +
+    // (the art starts 11 cells down its 32: the cells above it may hang outside)
+    const room = this._track.parentElement.getBoundingClientRect().top - track.top - 11 * u;
+    beam.style.cssText = `left:0;top:${Math.max(room, top - track.top - 16 * u + 3)}px;width:1px;height:1px;--u:${u}px;` +
       `--ir-ms:${ms}ms;--ir-steps:${n};--ir-d:${n * step * (toRight ? 1 : -1)}px`;
     const img = (name, cls, cx, cell) => {
       const el = document.createElement("img");
