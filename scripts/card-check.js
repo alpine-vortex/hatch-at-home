@@ -41,8 +41,8 @@ const results = [];
 const SECTIONS = ["shelf", "shell", "play", "resume", "moments", "photos", "personality", "types",
   "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "gifts", "finds", "oldcard"];
-// oldcard asserts restart's seeded bond; finds taps the basket restart seeds; gifts takes
-// the gift restart seeds (right after it: a later section's fresh tab would take it first).
+// oldcard asserts restart's seeded bond; finds taps the basket restart seeds; gifts uses
+// restart's bounce (and seeded bond) to seed dev's gift in its own restart.
 const NEEDS = { oldcard: ["restart"], finds: ["restart"], gifts: ["restart"] };
 const argv = process.argv.slice(2);
 if (argv.includes("--list")) {
@@ -8520,7 +8520,7 @@ async function main() {
   let seeded = false;
   let unseed = null;
   let basketSeed = null; // restart's seeded basket, for finds: {entryId, world, basket, back}
-  let giftSeed = null; // restart's seeded gift for dev, for gifts: {id, world}
+  let giftBounce = null; // for gifts: {bounce, entryId, world} (its own bounce seeds dev's gift)
   const seedPet = pet["sensor.life_stage"];
   if (enter("restart")) {
   // 8. An HA restart keeps the bond, and a second login sees nothing of the
@@ -8595,19 +8595,6 @@ async function main() {
     const seedPage = seedBasket && { visitors: { [seedW.visitors[0].id]: today, [leaver.id]: today },
       finds: { [wFinds[0].id]: today, [wFinds[1].id]: today, [leftId]: today,
         [(seedW.finds.find((f) => f.gift_only) || {}).id || "nogift"]: today, laterfind: today } };
-    // And a gift waiting for dev (V-E2, the gifts section takes it): the world's gift-only
-    // find, which nothing else shows, so the absence checks can't meet it some other way.
-    // Only when gifts runs: any fresh tab of dev's would take it at its first look.
-    const giftOnly = want("gifts") && (seedW.finds || []).find((f) => f.gift_only);
-    const seedGift = giftOnly ? { id: giftOnly.id, world: seedWorld } : null;
-    // The seeded pet's slide has had its first look (restart just brought it on show): the
-    // gift then waits on an open card, and gifts checks that nothing takes it.
-    if (seedGift) {
-      await card.evaluate((el, e) => {
-        const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
-        if (s) s.lookedFirst = true;
-      }, seedPet);
-    }
     let before = null;
     const downAt = Date.now();
     const token2 = await bounce(fresh, entryId, (data) => {
@@ -8622,7 +8609,7 @@ async function main() {
       // old-card check's care press makes a real bond_up (8b).
       const { gift: _was, ...bond } = data.bonds?.[me] || {}; // no gift but the seeded one
       data.bonds = { ...(data.bonds || {}), [me]: { ...bond, points: 144, nickname: "sunbeam",
-        day: today, today: 0, visited: true, ...(seedGift ? { gift: seedGift } : {}) } };
+        day: today, today: 0, visited: true } };
       data.wish = { kind: "play", day: today, granted: false, for: me, for_name: USER.name };
     });
     unseed = () => bounce(token2, entryId, (data) => {
@@ -8638,7 +8625,7 @@ async function main() {
       }
     });
     if (seedBasket) basketSeed = { entryId, world: seedWorld, basket: seedBasket };
-    giftSeed = seedGift;
+    giftBounce = { bounce, entryId, world: seedWorld };
     const upAt = Date.now();
     const back = await card.evaluate(async (el, e) => {
       const start = Date.now();
@@ -8724,13 +8711,44 @@ async function main() {
   // looks: exactly one non-empty take and one gift line across both. After: the house
   // page has no gift, dev's own has it, and no state or event carried it. Then the
   // tab-back rule (owner Q1) on the card, with the take stubbed.
-  if (!giftSeed) {
-    check("V-E2: the gifts section has restart's seeded gift (set HA_CONFIG and HA_START)", false,
-      "no seeded gift: restart didn't run or its world has no gift-only find");
+  const giftOnly = giftBounce && (JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet",
+    "frontend", "worlds.json"), "utf8"))[giftBounce.world]?.finds || []).find((f) => f.gift_only);
+  if (!giftOnly) {
+    check("V-E2: the gifts section can seed a gift (restart ran with HA_CONFIG and HA_START; its world has a gift-only find)", false,
+      "no bounce: restart didn't run, or no gift-only find");
   } else {
   await calm();
-  await pinAwake(card, "gifts");
+  const giftSeed = { id: giftOnly.id, world: giftBounce.world };
   const gid = giftSeed.id;
+  // Seeded in this section's own bounce (review #15), with every card on the page a
+  // shared screen meanwhile: after a restart a card may see its slides' pets anew (a
+  // first look again, which would take the gift). Back personal, every slide's look done.
+  const everyCard = (fn, arg) => page.locator("hatch-pet-card").evaluateAll(fn, arg);
+  const poweredWas = await everyCard(async (els, e) => {
+    localStorage.setItem("hatch-shared-screen", "on");
+    els.forEach((el) => el._goShared());
+    for (let i = 0; i < 50 && !els[0]._slides.find((x) => x.ids?.["sensor.life_stage"] === e)?.subscribed; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return els[0]._slides.find((x) => x.ids?.["sensor.life_stage"] === e)?.house?.powered_on?.at ?? null;
+  }, seedPet);
+  await giftBounce.bounce(await signIn(), giftBounce.entryId, (data) => {
+    data.bonds = { ...(data.bonds || {}), [me]: { ...(data.bonds?.[me] || {}), gift: giftSeed } };
+  });
+  // HA is back when the card hears the new powered_on (as restart's D5 check reads it).
+  await everyCard(async (els, { e, was }) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let i = 0; i < 900; i++) {
+      const s = els[0]?._slides?.find((x) => x.ids?.["sensor.life_stage"] === e);
+      if (s?.subscribed && (s.house?.powered_on?.at ?? null) !== was) break;
+      await wait(100);
+    }
+    await wait(1000);
+    els.forEach((el) => el._slides.forEach((x) => { x.lookedFirst = true; }));
+    localStorage.setItem("hatch-shared-screen", "off");
+    els.forEach((el) => el._goPersonal());
+  }, { e: seedPet, was: poweredWas });
+  await pinAwake(card, "gifts");
   // Everything this page sends to the pet from here on, and every event on the bus.
   const held = await card.first().evaluate(async (el, e) => {
     const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
