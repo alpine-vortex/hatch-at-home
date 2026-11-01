@@ -1,6 +1,14 @@
 # Plan: the experience review (13 defects, 8 opportunities) and a balance wave
 
-**DRAFT 3, 2026-10-28.** A plan for the owner's review: nothing here is built. Draft 1
+**Status (reconciled 2026-10-31 against git):** Waves 0-1 shipped (0.35-0.36). Wave 2
+(2a `e0422553`, 2b+2c `172b1e27`), Wave 3 (3a `b54017b7`, 3b `4c7c0102`, 3c `0197ad0b`),
+4c-rest `cbe9fc3d` and 4e `11ca8685`/`92d07795` are on main (after v0.38.0,
+batch 5, unreleased), with R1/R2 from "Week of 2026-10-31". **Deferred by the owner
+(2026-10-30):** 4a, 4b, 4d, 4f, 4g. **4f is now contradicted** by the owner's call on
+Catch (2026-10-31; see "Week of 2026-10-31"). The status column in section 4 is current.
+
+**DRAFT 3, 2026-10-28.** A plan for the owner's review: nothing here is built *(true when
+written; see the status above)*. Draft 1
 was audited adversarially (25 findings, all checked against main and folded in), the
 owner answered its questions (Q1-Q13 and the audit's A1-A10), and a separate gameplay
 balance audit added **Wave 0: balance**, which goes first. **Draft 3 rewrites Wave 0**
@@ -830,6 +838,10 @@ and moth adults land** (the art session is redrawing them now).
 
 **PR 4f: Catch, a normal game (O06, owner A4).** Size **M**, tier 1. After PR 1a and
 PR 3a (both change Catch's code).
+- **ON HOLD (2026-10-31), contradiction flagged:** Q9/A4 decided "Catch ships as a normal
+  game". On 2026-10-31 the owner said Catch "doesn't seem like a strong game": it stays
+  card-only and not counted, and a rethink is a tududi task, not a plan. Don't build 4f
+  until the owner says which holds.
 - Feature-gaps **C2 full** (`plan-2026-10-27-feature-gaps.md` 224-312): the start call
   returns the five rounds; a `caught: n` finish call; rewards, play counts, bond and
   favourite, like the other games; the per-pet best in place of the browser-wide
@@ -902,32 +914,35 @@ axolotl and moth adults are being redrawn now (A9).
 
 ## 4. Sizes at a glance (build order)
 
-| PR | What | Size | Tier | Waits on |
-|---|---|---|---|---|
-| 0a | Sleep pauses calls (energy too, until really rested); naps need tiredness; the switch shows sleep (C1, m5) | S-M | 1 | — |
-| 0c | Weight (with a restoring term) and game rewards retuned (M1, M6) | S | 1 | 0a |
-| 0d | Fake calls disguised; only care answers a happiness call; real needs first (C3, m3) | S-M | 1 | 0c |
-| 0b | A missed call calls again after 4 h, one clock per pet; one push per sickness (M2) | S-M | 2 | 0d; re-calls bundled (owner, Wave 0 Q1); poop calls don't push (owner, Wave 0 Q4) |
-| 0f | Games: carry on, a drop is a loss, no reroll, Play spoils a whine (M3, M4, A2) | M | 2 | 0d (before 1a) |
-| 0e | Upbringing measures care; praise can't be farmed; migration at half weight (C4, C2) | M | 2 | 0b, 0f (last in Wave 0) |
-| 0g | Fast-forward helper, chores, tuck-in, snacks (M5, m1, m2, m4) | S | 1 | — |
-| 0h | Hearts, server clock, one refusal line (m8-m10) | S | 1 | — |
-| 1a | Games carry on, old timers die (F01, F02, m6, m7) | S-M | 1 | 0f (privacy P1 merged) |
-| 1b | Taps coalesced, one confirm guard, answers that wait (F07, F06, A1, A7) | S | 1 | 1c (build order); the guard is merged |
-| 1c | Preferences on every visit, quiet samples (F05, F09) | S | 1 | — |
-| 2a | Classes on the existing queue, bursts, catch-up (F08) | M | 1 | privacy P3a, P3c |
-| 2b | Feeling poorly, all better (O03) | S | 1 | 2a, privacy P3b |
-| 2c | Wants in order, no clock (O04) | S | 1 | 2a |
-| 3a | Reduced motion throughout (F11) | S-M | 1 | — |
-| 3b | A pat (O01) | M | 1 | 2a (can ship before with a plain `_speak`) |
-| 3c | Reactions at every stage, no art (O02) | M | 1 | — (art slice later: L) |
-| 4a | Milestones kept, then into the journal record (O08) | M | 2 | privacy P1, 2a |
-| 4b | Next egg on the card (O05) | M | 1 | forms book 2a |
-| 4c | Status and settings apart, 44 px (O07) | M | 1 | privacy P2/P3a, forms book 2a |
-| 4d | A slower game: design note, then a build held to 70-80% (O06) | M-L | 1 | the owner's pick of the design |
-| 4e | README and guide counts, `art.py` re-laid (F13) | M | 1 | the new axolotl and moth adults |
-| 4f | Catch, a normal game (O06) | M | 1 | 1a, 3a, the decoy prop |
-| 4g | Older generations (F10) | S | 1 | forms book 2a |
+*Status column (2026-10-31):* "shipped" = in a release (Waves 0-1 in 0.35-0.36); "main" =
+on main, unreleased (batch 5). "deferred" = the owner's 2026-10-30 release scope.
+
+| PR | What | Size | Tier | Waits on | Status 10-31 |
+|---|---|---|---|---|---|
+| 0a | Sleep pauses calls (energy too, until really rested); naps need tiredness; the switch shows sleep (C1, m5) | S-M | 1 | — | shipped |
+| 0c | Weight (with a restoring term) and game rewards retuned (M1, M6) | S | 1 | 0a | shipped |
+| 0d | Fake calls disguised; only care answers a happiness call; real needs first (C3, m3) | S-M | 1 | 0c | shipped |
+| 0b | A missed call calls again after 4 h, one clock per pet; one push per sickness (M2) | S-M | 2 | 0d; re-calls bundled (owner, Wave 0 Q1); poop calls don't push (owner, Wave 0 Q4) | shipped |
+| 0f | Games: carry on, a drop is a loss, no reroll, Play spoils a whine (M3, M4, A2) | M | 2 | 0d (before 1a) | shipped |
+| 0e | Upbringing measures care; praise can't be farmed; migration at half weight (C4, C2) | M | 2 | 0b, 0f (last in Wave 0) | shipped |
+| 0g | Fast-forward helper, chores, tuck-in, snacks (M5, m1, m2, m4) | S | 1 | — | shipped |
+| 0h | Hearts, server clock, one refusal line (m8-m10) | S | 1 | — | shipped |
+| 1a | Games carry on, old timers die (F01, F02, m6, m7) | S-M | 1 | 0f (privacy P1 merged) | shipped |
+| 1b | Taps coalesced, one confirm guard, answers that wait (F07, F06, A1, A7) | S | 1 | 1c (build order); the guard is merged | shipped |
+| 1c | Preferences on every visit, quiet samples (F05, F09) | S | 1 | — | shipped |
+| 2a | Classes on the existing queue, bursts, catch-up (F08) | M | 1 | privacy P3a, P3c | main |
+| 2b | Feeling poorly, all better (O03) | S | 1 | 2a, privacy P3b | main |
+| 2c | Wants in order, no clock (O04) | S | 1 | 2a | main |
+| 3a | Reduced motion throughout (F11) | S-M | 1 | — | main |
+| 3b | A pat (O01) | M | 1 | 2a (can ship before with a plain `_speak`) | main |
+| 3c | Reactions at every stage, no art (O02) | M | 1 | — (art slice later: L) | main |
+| 4a | Milestones kept, then into the journal record (O08) | M | 2 | privacy P1, 2a | deferred |
+| 4b | Next egg on the card (O05) | M | 1 | forms book 2a | deferred |
+| 4c | Status and settings apart, 44 px (O07) | M | 1 | privacy P2/P3a, forms book 2a | main (4c-rest) |
+| 4d | A slower game: design note, then a build held to 70-80% (O06) | M-L | 1 | the owner's pick of the design | deferred |
+| 4e | README and guide counts, `art.py` re-laid (F13) | M | 1 | the new axolotl and moth adults | main |
+| 4f | Catch, a normal game (O06) | M | 1 | 1a, 3a, the decoy prop | **on hold** (Catch call, 10-31) |
+| 4g | Older generations (F10) | S | 1 | forms book 2a | deferred |
 
 ## 5. Copy (proposals; the owner decides the words)
 
@@ -1105,3 +1120,19 @@ part: M5's "same for `stayed_up_since`" (`shift_times` already shifts it, model
 - `pat`: `acts.pat` ~900 ms in `s.patPoseUntil` (not `poseUntil`, so the next pat's `reacting` is unchanged); not asleep, calling, child or over a reaction; calm shows one still frame. `refuse`: `refused` uses `acts.refuse`, else bored + look. `ready`: `_pickGame` plays `acts.ready` 1200 ms with `inGame` (not on the picker). `splash`: clean scene's last beat (t>=1800), else the cheer frames.
 - Bench: `acts` serves the new poses' PNGs as eat frames (bench only); `react: lost|ready`, `patTap`. `missing` now ignores the `?v=` query. card-check `react` runs every hook with and without `acts`.
 - Open question (unshipped): none. A6 pounce is not in R2.
+
+**✕ ends the game on the server (owner, 2026-10-31): built in batch 6** (`f1e90a9a`).
+`play_game` takes `end: true` (`model.end_game`); the card sends it on ✕/Escape, status,
+swipe, and Play during Left or Right or Higher or Lower. Catch stays card-only. A person's quit
+costs and earns nothing, isn't a drop, and keeps an unguessed Higher or Lower opening.
+- **Contradiction (flagged, not resolved):** `end_game` ends a game **with guesses** for
+  free too. PR 0f (audit finding 5) made "a dropped game with a guess" a loss, so a
+  restart can't farm records, bond points or dream seeds. With ✕, a person who is losing
+  can quit and start over with no loss. The owner decides whether a quit after a guess
+  counts as a loss (as a drop does), or stays free.
+
+**Catch (owner, 2026-10-31):** "doesn't seem like a strong game": it stays card-only and
+not counted; a rethink is a tududi task, not a plan. This contradicts Q9/A4 and puts
+PR 4f on hold (above). It also leaves **A6 pounce** (queued last in the Luna art order) with
+nothing to play it: Catch's pounce is the only player, and no `acts.pounce` hook exists.
+Under "art merges with the code that plays it", hold A6 until the Catch rethink.
