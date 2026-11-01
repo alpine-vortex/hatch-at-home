@@ -9322,6 +9322,33 @@ async function main() {
   await page.waitForTimeout(500);
   await calm();
   await pinAwake(card, "collection");
+  // top10 7a: with FINDS_SHOWN off, the link and the page are named by what they show,
+  // visitors. Checked before showFinds turns the switch on for the rest of the run.
+  const hidden = await card.first().evaluate(async (el) => {
+    const Card = customElements.get("hatch-pet-card");
+    const was = Card.findsShown;
+    Card.findsShown = false;
+    const s = el._slides[el._index];
+    const wait = async (ok, ms = 10000) => { for (const t = Date.now(); !ok() && Date.now() - t < ms;) await new Promise((r) => setTimeout(r, 50)); };
+    try {
+      if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      el._toggleStatus(s);
+      s.status.querySelector(".jlink").click();
+      await wait(() => s.status.querySelector(".jfoot .flink"));
+      const link = s.status.querySelector(".jfoot .flink")?.textContent;
+      s.status.querySelector(".jfoot .flink")?.click();
+      const head = s.status.querySelector(".jhead span")?.textContent;
+      return { link, head, world: el._worldName(s) };
+    } finally {
+      if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      el._dropFinds(s);
+      s.finds = false;
+      s.journal = false;
+      Card.findsShown = was;
+    }
+  });
+  check("top10 7a: with finds hidden, the journal's link is \"visitors ›\" and the page \"visitors · <world>\"",
+    hidden.link === "visitors ›" && hidden.head === `visitors · ${hidden.world}`, JSON.stringify(hidden));
   await showFinds();
   const W = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
   const cw = basketSeed.world;

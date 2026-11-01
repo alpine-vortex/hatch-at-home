@@ -6999,7 +6999,7 @@ class HatchPetCard extends HTMLElement {
       <div class="jgrid">${tiles.join("")}</div>
       ${this._photoRow(s)}
       <div class="jlist">${olderLink}<div class="jmore"></div>${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
-      <div class="jfoot"><button class="jlink">‹ status</button><button class="flink">finds ›</button></div>
+      <div class="jfoot"><button class="jlink">‹ status</button><button class="flink">${findsShown() ? "finds" : "visitors"} ›</button></div>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     this._journalLink(s, false);
@@ -7313,7 +7313,8 @@ class HatchPetCard extends HTMLElement {
     if (!data && !s.findsLoad) this._loadFinds(s); // dropped meanwhile (a shared-screen flip)
     const key = data?.reply?.world || s.worldKey;
     const world = this._worlds?.[key];
-    const head = `finds · ${escape(world?.name || this._worldName(s))}`;
+    // Named by what it shows: visitors only while FINDS_SHOWN is off (top10 7a).
+    const head = `${findsShown() ? "finds" : "visitors"} · ${escape(world?.name || this._worldName(s))}`;
     const foot = `<button class="flink">‹ journal</button>`;
     let html;
     if (!data) {

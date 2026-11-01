@@ -787,7 +787,8 @@ no `title` or `artist`: for every change, read `media_title` from your media pla
 `virtual_pet_someone_home` (anyone signed in came home; it says nobody's name),
 `virtual_pet_holiday` (with `holiday`), `virtual_pet_weather` (with `change`),
 `virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
-`virtual_pet_favourite_snack` (with `food`).
+`virtual_pet_favourite_snack` (with `food`),
+`virtual_pet_found` (with `id` and `world`, when the pet finds something; finds aren't shown on the card yet).
 
 No person's bond, nickname, favourite game, notifications or aimed wish is ever on an
 event or a sensor: each person's card gets its own over a private websocket
