@@ -347,3 +347,16 @@ zoom. species.json `"acts"` lists them; the care scenes play them. One world per
 - Woodland: robin, deer, fox, banana slug cut; the squirrel's (shipped 2026-10-30) gain their
   `"acts"` entry, so they play now.
 
+
+## Aww at 128 (2026-11-01)
+
+The `aww` act (a good-sport loss after a game: "aww, oh well"): `<stage>_aww_1/2` for every species'
+baby, teen and adult, drawn by `gpt-5.6-luna` on 2026-11-01 from each stage's `content_1` frame (the
+only reference), then cut at 2 px per art pixel with `cut_react` (scale from `content_1`, stage
+palette, outline closed), limbs counted at zoom. The look, approved on the fourth probe: brows up
+and a little worried, eyes open and soft, a small closed mouth (no smile), the head tilted, the
+idle pose kept, one paw palm-up beside the chest; species with no paw to raise (snake, slug,
+lizards, turtles, insects) droop and tilt instead. species.json `"acts"` lists them. One world per
+commit.
+
+- Woodland: banana slug, robin, deer, fox, squirrel.
