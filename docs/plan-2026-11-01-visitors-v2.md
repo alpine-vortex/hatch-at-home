@@ -452,8 +452,7 @@ V-E2.
     (an older server): nothing, and the slot goes unused.
   - **A gift that arrives while the card is open (V-E review #7): OPEN, owner Q1.** The
     review recommends the next first look, or the tab coming back after being hidden at
-    least `AWAY_NOTE_AFTER_MS`; never an interruption while you watch. Until the owner
-    answers, V-E2 says it only at a first look.
+    least `AWAY_NOTE_AFTER_MS`; never an interruption while you watch.
   - Not on a shared screen; there it waits. Nothing expires: a gift waits as long as it
     has to, and a second gift doesn't come until the first is taken.
   - **Two screens (finding #14).** A person may have two screens (phone and laptop), and
@@ -870,6 +869,11 @@ and P1-P2 fixes, with the first mate's picks:
   `invalid_format` from a pre-V-E1 server) as "no gift". `mine.gift.world` names the art
   (`find_<world>_<id>.png`), which may be another world's.
 - **For V-D:** the reply has `gifts` only when `shared` is false; draw ♥ from it.
+- A V-E1 save round-trips through main before V-E1 (`44cb24ba`, checked by hand against
+  its `model.py`, V-E review #14): its `_bond` starts from `dict(bond)` and deletes only
+  the keys it checks, so `gift`, `gifts` and `next_gift_at` are kept as they are, and
+  `lay_egg` deep-copies bonds. Its card ignores `mine.gift`, never stores `mine`, and
+  card-check asserts no exact `mine` shape.
 - Tests: `tests/test_gifts.py` (20 cases); `test_finds`' V-D0 collection tests rewritten
   for `gifts` (#17); `test_channel`'s `mine` shape gains `gift: null`; `test_public`'s
   scripted day sets aside and takes `acorncup` and scans for it.
