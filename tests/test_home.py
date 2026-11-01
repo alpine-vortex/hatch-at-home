@@ -29,7 +29,7 @@ def test_rain_gauge_beats_the_forecast():
 def test_rain_asks_for_a_blanket():
     e = evaluate(Readings(night=False, condition="rainy"))
     assert e.requests == ["blanket"]
-    assert e.reason() == "rainy day, blanket please?"
+    assert e.reason() == "rainy day... a blanket would be nice"
 
 
 def test_bonuses_never_exceed_the_cap_and_never_drain():
@@ -152,7 +152,7 @@ def test_blanket_request_answered():
     now = at(14)
     pet = hatched(now, happiness=50.0)
     assert model.action_available(pet, "blanket", now, rainy)
-    assert model.mood(pet, now, rainy)[2] == "rainy day, blanket please?"
+    assert model.mood(pet, now, rainy)[2] == "rainy day... a blanket would be nice"
     result, _ = model.apply_action(pet, "blanket", now, NoLuck(), settings=rainy)
     assert result == model.OK
     assert pet.happiness == pytest.approx(50 + R.BLANKET_HAPPINESS)
