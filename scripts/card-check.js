@@ -2769,6 +2769,11 @@ async function main() {
       };
       const keep = () => s.gameBox.querySelector(".gl").getAttribute("aria-disabled");
       const out = {};
+      // The plain lines here: no watcher (E5 D-a), no shiny berry (D-b), no type line (G-c).
+      const realSeen = el._visitSeen;
+      const realRandom = Math.random;
+      el._visitSeen = () => null;
+      Math.random = () => 0.5;
       try {
         s.game = { picking: true };
         queue.push({ ...base, round: 0, wins: 0, basket: 0, leaves: 8 });
@@ -2825,6 +2830,8 @@ async function main() {
       } finally {
         delete el._playCall;
         if (s.game) el._endGame(s, null);
+        el._visitSeen = realSeen;
+        Math.random = realRandom;
       }
       return out;
     });
@@ -2839,6 +2846,110 @@ async function main() {
     check("dig: a keep banks the basket and ends the round",
       dig.kept.round === 1 && dig.kept.wins === 1 && dig.kept.guess === "keep" && dig.kept.said === "safe in the basket ♪",
       JSON.stringify(dig.kept));
+    // Fresh-expand E5: the lucky number (G-b), the type's line after the count (G-c), the
+    // shiny berry (D-b), the dig's watcher (D-a) and the game of the day leading (G-a).
+    {
+      const src5 = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+      const lit = (name) => require("vm").runInNewContext(src5.match(new RegExp(`\\nconst ${name} = ("[^"\\n]*");`))[1]);
+      const [LUCKY, SHINY] = [lit("LUCKY_LINE"), lit("SHINY_LINE")];
+      const play5 = require("vm").runInNewContext(`(${src5.match(/\nconst VISITOR_PLAY = (\{[\s\S]*?\n\});/)[1]})`);
+      const worlds5 = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
+      // Each world's first walking day visitor (by name), for D-a.
+      const walkers = Object.fromEntries(Object.entries(worlds5).map(([w, x]) =>
+        [w, (x.visitors || []).find((v) => play5[v.id]?.walk && v.hours !== "night")?.name || null]));
+      const e5 = await card.evaluate(async (el, walkers) => {
+        const s = el._slides[el._index];
+        const base = { result: "ok", rounds: 5, win_at: 5, done: false };
+        const queue = [];
+        el._playCall = async (x) => (x.game ? queue.shift() : null);
+        const real = { seen: el._visitSeen, random: Math.random, persona: el._persona, line: el._line };
+        const out = {};
+        try {
+          el._visitSeen = () => null;
+          Math.random = () => 0.5;
+          // G-b: the opening number is the lucky one.
+          const lucky = el._lucky(s);
+          s.game = { picking: true };
+          queue.push({ ...base, game: "higher_lower", round: 0, wins: 0, number: lucky });
+          await el._pickGame(s, "higher_lower");
+          out.lucky = { said: s.bubble.textContent, score: s.gameScore.textContent, n: s.gameNum.dataset.n };
+          await new Promise((r) => setTimeout(r, 1700));
+          out.luckyAfter = s.bubble.textContent;
+          el._endGame(s, null);
+          // G-c: a won game's end is the count line, then the type's line 4 s on (random 0).
+          const said = [];
+          el._line = function (sl, cls, text, ...rest) { said.push(text); return real.line.call(this, sl, cls, text, ...rest); };
+          el._persona = () => ({ game_win: ["a winning show! ★"], game_lose: ["bravo, both of us ★"] });
+          s.game = { picking: true };
+          queue.push({ ...base, game: "left_right", round: 4, wins: 4 });
+          await el._pickGame(s, "left_right");
+          Math.random = () => 0;
+          queue.push({ ...base, game: "left_right", round: 5, wins: 5, correct: true, went: "left", done: true, won: true });
+          await el._guess(s, "left");
+          await new Promise((r) => setTimeout(r, 1100));
+          out.count = s.bubble.textContent;
+          await new Promise((r) => setTimeout(r, 4200));
+          out.typeLine = said.slice();
+          el._line = real.line;
+          el._persona = real.persona;
+          // D-b: random 0 on a berry is the shiny one; the basket is the server's, as for any berry.
+          s.game = { picking: true };
+          queue.push({ ...base, game: "dig", round: 0, wins: 0, basket: 0, leaves: 8 });
+          Math.random = () => 0.5;
+          await el._pickGame(s, "dig");
+          Math.random = () => 0;
+          queue.push({ ...base, game: "dig", round: 0, wins: 0, basket: 1, leaves: 7, found: "berry", round_over: false });
+          await el._guess(s, "right");
+          out.shiny = { said: s.bubble.textContent, basket: s.game?.basket };
+          el._endGame(s, null);
+          Math.random = () => 0.5;
+          // D-a: a walking day visitor seen here today watches; a tap on dig still lands.
+          const walker = walkers[s.worldKey] ? { name: walkers[s.worldKey] } : null;
+          el._visitSeen = () => walker?.name || null;
+          s.screen.classList.remove("night", "dim");
+          s.game = { picking: true };
+          queue.push({ ...base, game: "dig", round: 0, wins: 0, basket: 0, leaves: 8 });
+          await el._pickGame(s, "dig");
+          const w = s.gameBox.querySelector(".gwatch");
+          const gr = s.gameBox.querySelector(".gr").getBoundingClientRect();
+          const hit = el.shadowRoot.elementFromPoint(gr.left + gr.width / 2, gr.top + gr.height / 2);
+          out.watch = { on: !!w, who: w?.dataset.visitor, said: s.bubble.textContent, hit: hit?.closest?.(".gr") ? "gr" : hit?.className,
+            walker: walker?.name };
+          el._endGame(s, null);
+          out.watchGone = !s.gameBox.querySelector(".gwatch");
+          s.screen.classList.add("night");
+          s.game = { picking: true };
+          queue.push({ ...base, game: "dig", round: 0, wins: 0, basket: 0, leaves: 8 });
+          await el._pickGame(s, "dig");
+          out.dark = !!s.gameBox.querySelector(".gwatch");
+          el._endGame(s, null);
+          s.screen.classList.remove("night");
+          // G-a: the picker leads with the game of the day.
+          s.game = null;
+          el._startGame(s, s.buttons.play);
+          out.today = el._gameOfDay(s);
+          out.order = [...s.gameBox.querySelectorAll(".gpick button")].map((b) => b.dataset.game);
+          el._endGame(s, null);
+        } finally {
+          delete el._playCall;
+          if (s.game) el._endGame(s, null);
+          Object.assign(el, { _visitSeen: real.seen, _persona: real.persona, _line: real.line });
+          Math.random = real.random;
+        }
+        return out;
+      }, walkers);
+      check("fresh E5 (G-a): the picker leads with the pet's game of the day", e5.order?.[0] === e5.today && e5.order.length === 3,
+        JSON.stringify([e5.today, e5.order]));
+      check("fresh E5 (G-b): the lucky number opening a game says its line, then the prompt; the score is untouched",
+        e5.lucky.said === LUCKY && e5.lucky.score === "round 1/5 · 0 right" && e5.luckyAfter !== LUCKY, JSON.stringify(e5.lucky) + e5.luckyAfter);
+      check("fresh E5 (G-c): a won game ends on the count line, then the type's line 4 s later",
+        e5.count === "5/5! you win ♪" && e5.typeLine.includes("a winning show! ★"), JSON.stringify([e5.count, e5.typeLine]));
+      check("fresh E5 (D-b): random 0 on a berry is the shiny one; the basket is the server's (1)",
+        e5.shiny.said === SHINY && e5.shiny.basket === 1, JSON.stringify(e5.shiny));
+      check("fresh E5 (D-a): today's walking visitor watches a dig on a day screen, a dig tap still lands, gone after; none when dark",
+        !e5.watch.walker || (e5.watch.on && e5.watch.said.includes(e5.watch.walker) && e5.watch.hit === "gr" && e5.watchGone && !e5.dark),
+        JSON.stringify({ watch: e5.watch, gone: e5.watchGone, dark: e5.dark }));
+    }
     check("dig: a bee ends the round, shows the bee, then asks again with keep disabled",
       dig.bee.round === 2 && dig.bee.wins === 1 && dig.bee.prop && dig.bee.said === "bzz! the berries rolled away" &&
         !dig.afterBee.prop && dig.afterBee.said === "dig or keep?" && dig.afterBee.keep === "true",

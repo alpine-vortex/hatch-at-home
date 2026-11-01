@@ -23,6 +23,10 @@ const COPY_TABLES = {
   MEAL_LINES: {},
   CRUMB_LINE: { fill: "visitor" },
   CURED_LINES: {},
+  GAME_PICK_LINES: {},
+  LUCKY_LINE: {},
+  DIG_WATCH: { fill: "visitor" },
+  SHINY_LINE: {},
 };
 
 function lines(value, path, out) {

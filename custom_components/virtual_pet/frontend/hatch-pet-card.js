@@ -107,6 +107,16 @@ const SERVER_GAMES = new Set(GAMES.map((g) => g.key));
 // this long, and the card closes its own copy then, silently.
 const GAME_IDLE_MS = 3 * 60 * 1000;
 const LAST_GAME_KEY = "hatch-last-game";
+// The game of the day (fresh-expand G-a): a type leans to one game (twice in a list
+// of four, the others once); a pet with no type, to left or right.
+const GAME_LEAN = { bouncy: "dig", plucky: "dig", old_soul: "higher_lower", fancy: "higher_lower" };
+const gameDayList = (type) => {
+  const lean = GAME_LEAN[type] || "left_right";
+  return [lean, lean, ...GAMES.map((g) => g.key).filter((k) => k !== lean)];
+};
+const SHINY_ODDS = 1 / 25; // a berry's chance of being the shiny one (D-b, a card roll)
+const GAME_TYPE_ODDS = 0.5; // a game's end: the type's own line after the count, 4 s on (G-c)
+const GAME_TYPE_MS = 4000;
 // Sounds: little square-wave chirps, off until someone turns them on for this
 // device (status screen). Never while the pet sleeps, nor late at night.
 const SOUND_KEY = "hatch-sounds";
@@ -1213,34 +1223,50 @@ const PERSONA_FRESH = {
   mellow: {
     pat: ["mm, right there ♪", "*melts a little* ahh ♥"],
     praise: ["mm, thanks... ♥", "aw, that's nice to hear ♪"],
+    game_win: ["mm, nice game ♪"],
+    game_lose: ["close one! that was cozy ♥"],
   },
   sweet: {
     pat: ["aw, you ♥", "that's so nice ♥ hehe"],
     praise: ["hehe, you're sweet ♥", "you make me so happy ♥"],
+    game_win: ["you're so good at this ♥"],
+    game_lose: ["that was fun anyway ♥"],
   },
   bouncy: {
     pat: ["hee! that tickles!", "pat pat! hup! ♪"],
     praise: ["yes! *happy hop*", "woo! I'm good! hup!"],
+    game_win: ["woo! what a game! hup!"],
+    game_lose: ["phew! rematch soon! hup"],
   },
   starry: {
     pat: ["a pat for the star! ★", "my favourite kind of applause ★"],
     praise: ["a bow, thank you ★", "I'll take a bow for that ★"],
+    game_win: ["a winning show! ★"],
+    game_lose: ["bravo, both of us ★"],
   },
   old_soul: {
     pat: ["hm. that's rather nice.", "ah. just the thing."],
     praise: ["hm. kind of you.", "much obliged, friend."],
+    game_win: ["a fine match, well played."],
+    game_lose: ["hm. a good game, all told."],
   },
   fancy: {
     pat: ["how very kind ♥", "mind the fluff! ♥ hehe"],
     praise: ["oh, you flatter me ♥", "I do try, darling ♥"],
+    game_win: ["you play beautifully ♥"],
+    game_lose: ["a lovely little game ♥"],
   },
   charming: {
     pat: ["oh, how delightful ♥", "a splendid pat, thank you"],
     praise: ["how lovely of you ♥", "what a splendid thing to say ♥"],
+    game_win: ["a splendid victory ♥"],
+    game_lose: ["a grand game, truly ♥"],
   },
   plucky: {
     pat: ["hah! good pat ♥", "heh, not bad at all ♥"],
     praise: ["I'll do it even better! ♪", "heck yes, I'm good! hah"],
+    game_win: ["hah! great game! ♥"],
+    game_lose: ["rematch tomorrow. you're on! hah"],
   },
 };
 // P-b: now and then a spoken pat finds the sweet spot (any stage but a baby).
@@ -1284,6 +1310,17 @@ const MEAL_LINES = {
 const CRUMB_LINE = (v) => `saving a crumb for the ${v} ♪`;
 // M-a: the day after a cure, at the first look. Never says "sick".
 const CURED_LINES = ["feeling much better today ♪", "I feel all better today ♥"];
+// G-a (E5): the game of the day, said once a day as the picker opens; a pet with no
+// type yet says the generic one.
+const GAME_PICK_LINES = {
+  dig: "ooh, berry dig today ♪",
+  left_right: "I'm extra sneaky today ♪",
+  higher_lower: "I feel lucky today ♪",
+  generic: "I picked a game for us ♪",
+};
+const LUCKY_LINE = "my lucky number! ★"; // G-b, over higher or lower's number
+const DIG_WATCH = (v) => `the ${v} is watching ♪`; // D-a, a dig on a day it came by
+const SHINY_LINE = "a shiny one! ✦"; // D-b, in place of "a berry!"
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -2437,6 +2474,9 @@ const STYLE = `
     border-radius: 10px; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
     box-shadow: 2px 2px 0 #3a2a1a; }
   .game .gnum.flip { animation: perk .3s ease-out; }
+  /* D-a: today's visitor watching a dig, still, behind the buttons (fresh-expand E5). */
+  .game .gwatch { position: absolute; left: 66%; bottom: 30%; height: 18%; image-rendering: pixelated;
+    pointer-events: none; transform: scaleX(-1); }
   /* Trait flair: placed in JS from the head point and the feet line. Every piece
      must read standing still too (reduced motion turns all animation off). */
   .flair { position: absolute; inset: 0; z-index: 2; pointer-events: none;
@@ -8402,13 +8442,18 @@ class HatchPetCard extends HTMLElement {
     }
     if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
     s.screen.querySelector(".flair")?.remove();
-    const games = GAMES;
+    // The pet's game of the day leads the list (G-a); the last game played keeps the focus.
+    const today = this._gameOfDay(s);
+    const games = [...GAMES].sort((a, b) => (b.key === today) - (a.key === today));
     if (games.length === 1) {
       this._pickGame(s, games[0].key);
       return;
     }
     // The long prompt wraps to two lines (over the picker) on a slide under 300 px.
-    s.game = { picking: true, prompt: this._slideW < 300 ? "pick a game!" : "what shall we play?" };
+    // Once a day the wide prompt is the game of the day's line (G-a).
+    const dayLine = this._slideW >= 300 && oncePerDay(`gamepick-${s.ids?.device}`) &&
+      (this._typeKey(s) ? GAME_PICK_LINES[today] : GAME_PICK_LINES.generic);
+    s.game = { picking: true, prompt: dayLine || (this._slideW < 300 ? "pick a game!" : "what shall we play?") };
     // Built each time: the card's options decide which games are offered.
     s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
       `<button data-game="${g.key}"><span class="gi" aria-hidden="true">${gameIcon(g.key)}</span>` +
@@ -8507,7 +8552,10 @@ class HatchPetCard extends HTMLElement {
       // A fresh pile, or a parked dig carried on: the same round, bank and basket.
       g.basket = info.basket;
       this._digShow(s, info);
-      this._write(s, (g.prompt = "dig or keep?"));
+      g.prompt = "dig or keep?";
+      const watcher = this._digWatcher(s);
+      this._write(s, watcher ? DIG_WATCH(watcher.name) : g.prompt);
+      if (watcher) this._gameLater(s, g, 1500, () => this._write(s, g.prompt, 60000));
       s.sayUntil = Date.now() + 60000;
       // Keep is disabled on an empty basket: start on dig then.
       s.gameBox.querySelector(info.basket ? ".gl" : ".gr").focus({ preventScroll: true });
@@ -8517,7 +8565,8 @@ class HatchPetCard extends HTMLElement {
     } else {
       // Higher or Lower shows its number before the next guess.
       this._showNumber(s, info.number);
-      this._write(s, (g.prompt = "will the next one be higher or lower?"));
+      g.prompt = "will the next one be higher or lower?";
+      if (!this._luckyNumber(s, g, info.number)) this._write(s, g.prompt);
     }
     s.sayUntil = Date.now() + 60000;
     s.gameBox.querySelector(".gl").focus({ preventScroll: true });
@@ -8617,13 +8666,62 @@ class HatchPetCard extends HTMLElement {
         if (info.won) this._chirp(s, "win");
         this._endGame(s, info.won ? `${info.wins}/${info.rounds}! you win ♪` :
           `${info.wins}/${info.rounds}. let's play another time ♪`);
+        this._gameEndType(s, info.won);
         return;
       }
       g.busy = false;
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
-      this._write(s, (g.prompt = kind === "higher_lower" ? "higher or lower?" : "one more! left or right?"));
+      g.prompt = kind === "higher_lower" ? "higher or lower?" : "one more! left or right?";
+      if (kind !== "higher_lower" || !this._luckyNumber(s, g, info.number)) this._write(s, g.prompt);
     });
+  }
+
+  // --- Fresh-expand E5: games and dig --------------------------------------------
+
+  // G-a: this pet's game of the day (the same all day; a type leans to its game).
+  _gameOfDay(s) {
+    return dailyPick(gameDayList(this._typeKey(s)), `${s.ids?.device}|game`);
+  }
+
+  // G-b: this pet's lucky number today, 1-9 (the server's numbers).
+  _lucky(s) {
+    return dailyPick([1, 2, 3, 4, 5, 6, 7, 8, 9], `${s.ids?.device}|lucky`);
+  }
+
+  // When higher or lower shows the lucky number: a sparkle and the line over the
+  // number for 1.5 s, then the prompt; once a game, no score change. True: said.
+  _luckyNumber(s, g, n) {
+    if (g.lucky || n !== this._lucky(s)) return false;
+    g.lucky = true;
+    this._sparkle(s);
+    this._write(s, LUCKY_LINE);
+    this._gameLater(s, g, 1500, () => this._write(s, g.prompt, 60000));
+    return true;
+  }
+
+  // G-c: the count line stays; half the time a teen or adult's own line 4 s later.
+  _gameEndType(s, won) {
+    const key = won ? "game_win" : "game_lose";
+    const own = this._persona(s)?.[key];
+    if (!own || Math.random() >= GAME_TYPE_ODDS) return;
+    const line = this._fresh(s, key, own);
+    setTimeout(() => { if (!s.game) this._line(s, FLAVOUR, line, 3500); }, GAME_TYPE_MS);
+  }
+
+  // D-a: a walking day visitor that came by here today watches a dig on a day screen:
+  // its first frame, still, at the pile's other side, behind the buttons. The visitor, or null.
+  _digWatcher(s) {
+    const name = this._visitSeen(s);
+    const v = name && visitorList(s.world).find((x) => x.name === name);
+    if (!v || !v.walk || v.hours === "night" || this._screenDark(s)) return null;
+    const img = document.createElement("img");
+    img.className = "gwatch";
+    img.alt = "";
+    img.dataset.visitor = `${s.worldKey}/${v.id}`;
+    img.src = `${BASE}/ui/visitor_${s.worldKey}_${v.id}_1.png?v=${VERSION}`;
+    s.gameBox.prepend(img);
+    return v;
   }
 
   // Berry dig: the pile's leaves left in .gnum, the bank and basket on the
@@ -8678,6 +8776,9 @@ class HatchPetCard extends HTMLElement {
     } else if (info.round_over) {
       this._animate(s, s.pet, "perk", 300);
       this._write(s, "safe in the basket ♪");
+    } else if (Math.random() < SHINY_ODDS) {
+      this._sparkle(s); // D-b: a shiny one, said only (the berry is the server's, the same)
+      this._write(s, SHINY_LINE);
     } else {
       this._write(s, "a berry!");
     }
@@ -8686,6 +8787,7 @@ class HatchPetCard extends HTMLElement {
       if (info.done) {
         if (info.won) this._chirp(s, "win");
         this._endGame(s, info.won ? `${info.wins} berries! you win ♪` : `${berries(info.wins)}. let's dig another time ♪`);
+        this._gameEndType(s, info.won);
         return;
       }
       g.busy = false;
@@ -9973,6 +10075,7 @@ class HatchPetCard extends HTMLElement {
 
   _endGame(s, line) {
     cancelAnimationFrame(s.game?.cur?.raf);
+    s.gameBox.querySelector(".gwatch")?.remove(); // D-a's visitor goes with the game
     s.propEl.hidden = true;
     s.propEl.style.bottom = ""; // the dig's bee sits higher
     s.gameScore.classList.remove("two");
