@@ -27,7 +27,7 @@ CALLS = {
     "hunger": "is hungry",
     "happiness": "wants to play",
     "energy": "is sleepy. Lights out?",
-    "dirty": "needs a clean",
+    "dirty": "needs a clean-up",
     "sick": "feels sick. Medicine?",
 }
 

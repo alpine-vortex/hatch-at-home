@@ -3549,7 +3549,7 @@ _WEIGHT_REASONS = {
 
 
 _CALL_REASONS = {
-    "sick": "feeling sick, medicine please?",
+    "sick": "feeling sick... medicine?",
     "hunger": "tummy rumbling!",
     "dirty": "it's getting stinky in here",
     "energy": "so tired... sleep time?",

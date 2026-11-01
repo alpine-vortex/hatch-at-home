@@ -126,7 +126,7 @@ async def test_unknown_and_ambiguous_pets(
     with pytest.raises(intent.IntentHandleError, match="Which pet, Pip or Moss"):
         await ask(hass, "VirtualPetStatus")
     response = await ask(hass, "VirtualPetStatus", pet="Moss")
-    assert speech(response).startswith("Moss is still in its egg")
+    assert speech(response).startswith("Moss is snug in its egg")
 
 
 async def test_care_presses_the_button_for_you(

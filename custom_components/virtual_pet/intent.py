@@ -34,7 +34,7 @@ CARE_ACTIONS = (*model.ACTIONS, *model.REQUEST_ACTIONS, LIGHTS_OUT)
 # "Pip is ...", then what the pet says.
 MOOD_WORDS = {
     "away": "at the sitter's",
-    "egg": "still in its egg",
+    "egg": "snug in its egg",
     "sick": "sick",
     "asleep": "asleep",
     "calling": "calling for you",
@@ -52,7 +52,7 @@ DONE = {
     "feed": "is eating",
     "snack": "loved the snack",
     "play": "had fun playing",
-    "clean": "has a clean home again",
+    "clean": "has a clean home now",
     "medicine": "took the medicine",
     "scold": "got the message",
     "praise": "is beaming",

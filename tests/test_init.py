@@ -442,7 +442,7 @@ async def test_rain_makes_a_blanket_request(
     hass.states.async_set("weather.home", "rainy")
     await settle(hass, freezer)
     mood = hass.states.get("sensor.pip_mood")
-    assert mood.attributes["reason"] == "rainy day, blanket please?"
+    assert mood.attributes["reason"] == "rainy day... a blanket would be nice"
     assert mood.attributes["requests"] == ["blanket"]
     assert hass.states.get("button.pip_blanket").state != STATE_UNAVAILABLE
 
