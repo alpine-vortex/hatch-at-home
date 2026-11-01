@@ -193,7 +193,8 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 - **Visitors**: on about 4 days in 7 a small creature from the pet's world (a robin, a
   heron, a shooting star...) drops by during a 3-hour window and the pet greets it, once
   a day on each screen; if the window passed while nobody was looking, the next look
-  that day says so ("a robin came by today ♪").
+  that day says so ("a robin came by today ♪"). Home Assistant picks the day's visitor
+  and its window, so every screen agrees and a restart doesn't change it.
 - **Seasons** (by the viewing device's date; card option `seasonal: false` turns them
   off): from 20 to 31 October it's **Halloween**. Bunting hangs across the scene, a
   jack-o'-lantern with a new carved face each day sits by the pet and glows at night (it
@@ -317,7 +318,10 @@ pet; it's only how the screen looks.
   shows a little "♪" meanwhile. It's a surprise, not a button; nothing is counted or
   remembered, and it never happens while either pet is asleep, calling, playing,
   mid-care or the status is open. A swipe ends it at once; with reduced motion the
-  pets just appear together, speak and go. With sounds on it chirps.
+  pets just appear together, speak and go. With sounds on it chirps. Teens and adults
+  greet in their own personality's words, and two of the same type or of partner types
+  (mellow and sweet, bouncy and starry, old soul and fancy, charming and plucky)
+  sometimes get one more line from the host.
 - **Low battery after a restart.** When Home Assistant itself restarts, the pet's
   screen flickers once, a little battery blinks in the corner and the pet says it
   nearly lost power, then perks up and the battery fills and goes (about four
@@ -625,7 +629,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 - **The journal:** on the status screen, tap "journal". It shows the world's
   creatures (ones nobody in this home has raised yet are silhouettes) and this
   device's family line: each generation with its traits, stars, upbringing and
-  personality.
+  personality. The latest four show; past them, "older generations (N)" opens the rest,
+  oldest first.
 - **Notifications:** opt in per person. On the status screen, tap "notify me" to get
   this pet's calls, sickness, hatching, growing up, new or deeper traits, the season's
   first snow and frost, new eggs, and a holiday greeting on the morning of Halloween

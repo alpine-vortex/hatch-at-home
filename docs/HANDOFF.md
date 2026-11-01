@@ -4,7 +4,8 @@ Default branch: **`main`** (renamed on 2026-10-27 from the fourth session's bran
 `ccr-a5f628ca-979gik`, so blueprint import URLs can name a lasting branch). Sessions
 work on their own branch and land work in `main` through a PR, unless the owner says
 a session may push to `main` (the fifth session may: owner, 2026-10-27). Latest
-release **0.33.1** (2026-10-28: catchphrase, birthdays and the one-time
+release **0.40.0** (2026-11-01; see the GitHub release notes and `git log` for
+everything after 0.33.1). Before that, **0.33.1** (2026-10-28: catchphrase, birthdays and the one-time
 question fix, #27, #29); 0.32.0 brought each creature's voice, typing, babble and a
 favourite snack, #26); 0.31.0 brought the bond with each person, bond connections and
 phase 1 of the voices plan, #25); 0.30.0 brought Thanksgiving (#18) and the squirrel's paws-up poses
