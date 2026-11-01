@@ -8696,6 +8696,8 @@ async function main() {
     check("V-C: the finds section has restart's seeded basket (set HA_CONFIG and HA_START)", false,
       "no seeded basket: restart didn't run or its world has too few finds");
   } else {
+  await page.setViewportSize({ width: 420, height: 860 }); // lowbattery ends at 330: compact hides the basket
+  await page.waitForTimeout(500);
   await calm();
   await pinAwake(card, "finds");
   const W = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
@@ -8759,7 +8761,11 @@ async function main() {
     const hit = el.shadowRoot.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
     return { hidden: b.hidden, live: !b.classList.contains("idle"), src: b.querySelector("img").getAttribute("src"),
       text: b.textContent.trim(), label: b.getAttribute("aria-label"), hit: hit === b, w: Math.round(r.width),
-      said: [s.bubble.textContent, ...(s.queue || []).map((q) => q.text)] };
+      said: [s.bubble.textContent, ...(s.queue || []).map((q) => q.text)],
+      hitEl: hit ? `${hit.tagName}.${hit.className}` : null, path: location.pathname, vis: document.visibilityState,
+      screenW: Math.round(s.screen.getBoundingClientRect().width), px: getComputedStyle(b).width,
+      none: (() => { const out = []; for (let n = b; n && n !== el.shadowRoot; n = n.parentNode) {
+        if (n.nodeType === 1 && getComputedStyle(n).display === "none") out.push(`${n.tagName}.${n.className}`); } return out; })() };
   });
   check("V-C: the seeded basket shows its picture (basket_3), no number, labelled \"the basket\", live, on top at its centre",
     !look.hidden && look.live && /\/ui\/basket_3\.png/.test(look.src) && look.text === "" && look.label === "the basket" &&
