@@ -1,7 +1,7 @@
 # Plan: gaps and seams (the review's non-Top-10 items)
 
-**Status: answered 2026-11-01 (§4a); building.** New drafts (§4b) await the owner's approval
-before those parts ship.
+**Status: built 2026-11-01** (§4c). Left: spring/summer (8, a plan in Feb) and a level-5
+bond unlock (a later bond plan, Q8).
 
 Source: the fresh-eyes review `~/.local/state/crew/research/gaps.md` (and `features.md`), at
 origin/main `dcbb8367` (0.41.0), 2026-11-01. The review's Top 10 belongs to another agent; where one
@@ -363,6 +363,10 @@ that no other cause leaks.
 | 5a watched first link | `e1703495` | card-check marks the day's link done on its pages |
 | 5b neighbour lines | `004f82e4` | |
 | 7a editor switch | `7c7fade2` | |
+| 4b persona visitor greetings | `29d59c8c` | plucky's approved "who goes there? oh, hi!" passes the no-asking scan by name |
+| 2c heavy stretch x1.06 | `12c37479` | `.heavy` aspect-ratio 1.06, pet and ghost, not an egg; `s2c-heavy-sheet.png` |
+| 2b sick from weight (tier 2) | `8808878f` | `MOMENT_CAUSES_SHOWN = {"weight"}`; leak test in test_channel |
+| 6a Assist (tier 2) | `67dded2a` | "to ..." wishes read "wishes to ..." (no "for"); asleep adds nothing (privacy); an egg skips "It's still an egg." (its mood already says it) |
 
 ## 5. Build order
 
