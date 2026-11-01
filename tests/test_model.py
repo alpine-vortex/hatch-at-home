@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections import Counter
 from datetime import UTC, datetime
 import math
+import os
 import random
+import subprocess
+import sys
+import zlib
 
 import pytest
 
@@ -2185,13 +2189,56 @@ def test_it_dreams_of_yesterday_and_forgets_old_seeds():
     # The event says what kind only: the title stays in state.dream.
     assert events == [{"type": "dreamed", "kind": "watching"}]
     assert pet.dream_seeds == []
-    # Nothing to dream of: a plain dream, or none.
-    kinds = set()
-    for seed in range(20):
-        pet.dream = None
-        model.dream_on_waking(pet, at(7, day=3), "d3", random.Random(seed))
-        kinds.add(pet.dream and pet.dream["kind"])
-    assert None in kinds and kinds - {None} <= {"flying", "clouds", "feast"}
+    # Nothing to dream of: a plain dream every morning (fresh-moment 6).
+    pet.dream = None
+    model.dream_on_waking(pet, at(7, day=3), "2026-11-03", random.Random(0), "pet-a")
+    assert pet.dream["kind"] in model.PLAIN_DREAMS
+
+
+def test_plain_dreams_turn_through_the_whole_list():
+    """Fresh-moment 6: with no seeds, each cycle of len(PLAIN_DREAMS) mornings gives
+    every plain kind once, in a per-pet shuffled order (two pets don't keep step),
+    never the same two mornings running, the same after a restart (a fixed hash,
+    unlike hash()); no saved history."""
+    n = len(model.PLAIN_DREAMS)
+    assert n == len(set(model.PLAIN_DREAMS)) >= 15
+    first = datetime(2026, 11, 1).toordinal()
+
+    def day(i: int) -> str:
+        return datetime.fromordinal(first + i).date().isoformat()
+
+    for pet_id in ("pet-a", "01JBX9Q7ZK"):
+        # A cycle starts where (ordinal + offset) is a multiple of n.
+        start = next(
+            i
+            for i in range(n)
+            if (first + i + zlib.crc32(f"dream|{pet_id}".encode()) % n) % n == 0
+        )
+        pet = hatched(at(20))
+        kinds = []
+        for i in range(start, start + n):
+            pet.dream = None
+            model.dream_on_waking(pet, at(7, day=2), day(i), random.Random(i), pet_id)
+            kinds.append(pet.dream["kind"])
+        assert sorted(kinds) == sorted(model.PLAIN_DREAMS)
+        run = [model.plain_dream(pet_id, day(i)) for i in range(4 * n)]
+        assert all(a != b for a, b in zip(run, run[1:], strict=False))
+        assert (
+            run[:n] != run[n : 2 * n] or run[n : 2 * n] != run[2 * n : 3 * n]
+        )  # cycles differ
+    a = [model.plain_dream("pet-a", day(i)) for i in range(n)]
+    b = [model.plain_dream("pet-b", day(i)) for i in range(n)]
+    assert sum(x == y for x, y in zip(a, b, strict=True)) < n // 2
+    # The same in another process with another hash seed.
+    code = "from custom_components.virtual_pet import model; print(model.plain_dream('pet-a', '2026-11-05'))"
+    other = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "PYTHONHASHSEED": "12345"},
+    )
+    assert other.stdout.strip() == model.plain_dream("pet-a", "2026-11-05")
 
 
 def test_dream_seeds_are_capped():

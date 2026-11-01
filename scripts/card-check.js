@@ -3192,6 +3192,32 @@ async function main() {
       embers.every((e) => e.bottom < flair.at.fy + 8),
     `cloud bottom ${Math.round(cloud?.bottom)} vs head ${Math.round(flair.at.hy)}`);
   check("a flair moment clears itself", flair.after === 0);
+  // Fresh-moment 7: a first look plans one move within 10 s, and it plays over a line
+  // being said (flair has no bubble); with no flair, a look around.
+  const firstMove = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    Object.assign(s, { lookedFirst: false, queue: [], flairUntil: 0, poseUntil: 0, movingUntil: 0, propUntil: 0 });
+    const t0 = Date.now();
+    el._firstLook(s);
+    const planned = s.firstMoveAt - t0;
+    s.queue = [];
+    s.firstMoveAt = Date.now() - 1;
+    el._write(s, "a line on show", 5000);
+    el._firstMove(s);
+    const out = { planned, flair: !!s.screen.querySelector(".flair"), done: s.firstMoveAt === 0, said: s.bubble.textContent };
+    s.screen.querySelector(".flair")?.remove();
+    Object.assign(s, { flairUntil: 0, sayUntil: 0 });
+    const real = el._flair;
+    el._flair = () => [];
+    s.firstMoveAt = Date.now() - 1;
+    el._firstMove(s);
+    el._flair = real;
+    out.look = s.pet.classList.contains("look");
+    return out;
+  });
+  check("fresh-moment 7: a first look's one move comes within 10 s, over a line (flair, else a look around)",
+    firstMove.planned > 0 && firstMove.planned <= 10000 && firstMove.flair && firstMove.done &&
+      firstMove.said === "a line on show" && firstMove.look, JSON.stringify(firstMove));
   await inject(pet["sensor.life_stage"], { attributes: { traits: [], trait_levels: {} } });
 
   // Seasons: forced to Halloween, the lantern and web are in the scene, and a
@@ -3417,9 +3443,9 @@ async function main() {
     }));
     await shot(name);
   }
-  check("the first look tells the day's news, dream and wish",
-    /^while you were out, I (napped|watched the rain)/.test(firstLook[0]) && firstLook[1] === "I dreamed about Bluey!" &&
-      firstLook[2] === "can we watch the sunset together?", firstLook.join(" | "));
+  check("the first look tells the dream and wish first, then the day's news (fresh-moment 2)",
+    firstLook[0] === "I dreamed about Bluey!" && firstLook[1] === "can we watch the sunset together?" &&
+      /^while you were out, I (napped|watched the rain)/.test(firstLook[2]), firstLook.join(" | "));
   // P3c: the media dream (sensor null, house.dream titled) is said once a day.
   const dreamAgain = await card.evaluate((el) => {
     const s = el._slides[el._index];
@@ -3432,6 +3458,89 @@ async function main() {
   });
   check("P3c: a show's dream comes from house.dream, once",
     !dreamAgain.some((t) => /dreamed/.test(t)), JSON.stringify(dreamAgain));
+  // Fresh-moment 1 (owner Q1): a tab back after AWAY_NOTE_AFTER_MS hidden is a new look
+  // (greeting, first look, visit, the wish mention from scratch), once the house's states
+  // come; a short absence changes nothing, and each line's once-key stops a double.
+  const resumed = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const back = (hiddenMs) => {
+      Object.assign(s, { lookedFirst: true, greeted: true, visitedAt: Date.now(), nextWish: Date.now() + 1, queue: [], lastMoment: "m" });
+      s.sayUntil = Date.now() + 60000; // nothing said meanwhile: the tick mustn't greet or speak
+      el._hiddenAt = Date.now() - hiddenMs;
+      el._onHidden(); // visible again
+      return { looked: s.lookedFirst, greeted: s.greeted, visited: s.visitedAt, mention: s.nextWish, replay: s.lastMoment === undefined };
+    };
+    const look = (fresh = true) => {
+      s.house = { ...(s.house || {}), dream: { kind: "watching", title: "Bluey" } };
+      el._firstLook(s);
+      const held = s.queue.map((q) => q.text);
+      el.hass = el._hass; // a set hass with the same states (a connection change): still held
+      el._firstLook(s);
+      held.push(...s.queue.map((q) => q.text));
+      if (fresh) el.hass = { ...el._hass, states: { ...el._hass.states } }; // fresh states
+      else el._resumedAt = Date.now() - 6000; // the hold ran out on the old states
+      el._firstLook(s);
+      const said = s.queue.map((q) => q.text);
+      el._resumedAt = el._resumeStates = null;
+      return { held, said };
+    };
+    for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish)-/.test(k)) localStorage.removeItem(k);
+    const short = back(60 * 1000);
+    const device = s.ids.device;
+    const seenWas = localStorage.getItem(`hatch-seen-${device}`);
+    const hoursAgo = Date.now() - 5 * 3600 * 1000;
+    el._seenWrite(device, { seen: hoursAgo });
+    const long = back(3 * 3600 * 1000 + 1000);
+    s.seenAt = 0;
+    el._seen(s); // a tick while held mustn't move the mark: the away note reads it
+    long.seen = el._seenRead(device)?.seen === hoursAgo;
+    const first = look();
+    if (seenWas === null) localStorage.removeItem(`hatch-seen-${device}`); else localStorage.setItem(`hatch-seen-${device}`, seenWas);
+    back(3 * 3600 * 1000 + 1000);
+    const twice = look();
+    // Timed out on old states: no dream or wish, and their keys left for the next look.
+    for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish)-/.test(k)) localStorage.removeItem(k);
+    back(3 * 3600 * 1000 + 1000);
+    const stale = look(false);
+    stale.keys = Object.keys(localStorage).filter((k) => /^hatch-(dream|wish)-/.test(k));
+    // A screen left on (no hide): a new day, or the pet up for the day seen live, is a new
+    // look; the same day isn't.
+    let fresh = null;
+    el._firstLook = function (t) { if (t === s && fresh === null) fresh = !t.lookedFirst; };
+    el._visit = () => {}; // no server visit from these ticks
+    const roll = (day) => {
+      fresh = null;
+      Object.assign(s, { lookedFirst: true, greeted: true, sayUntil: Date.now() + 60000 });
+      el._lookDay = day;
+      el._tick();
+      return fresh;
+    };
+    let rolled, sameDay;
+    try {
+      rolled = roll("Mon Jan 01 2001");
+      sameDay = roll(new Date().toDateString());
+    } finally {
+      delete el._firstLook;
+      delete el._visit;
+    }
+    s.lookedFirst = true;
+    el._moment(s, { type: "woke_up", how: "morning", at: new Date().toISOString() });
+    const woke = !s.lookedFirst;
+    s.queue = []; s.sayUntil = 0; s.lookedFirst = true;
+    return { short, long, first, twice, stale, rolled, sameDay, woke };
+  });
+  check("fresh-moment 1: a tab back after 3 h hidden looks again (the dream and wish once, after fresh states); 1 min changes nothing",
+    resumed.short.looked && resumed.short.greeted && resumed.short.visited > 0 && resumed.short.mention > 0 &&
+      !resumed.long.looked && !resumed.long.greeted && resumed.long.visited === 0 && resumed.long.mention === 0 && resumed.long.seen &&
+      resumed.long.replay && !resumed.short.replay &&
+      resumed.first.held.length === 0 && resumed.first.said.includes("I dreamed about Bluey!") &&
+      resumed.first.said.includes("can we watch the sunset together?") &&
+      !resumed.twice.said.some((t) => /dreamed|sunset together/.test(t)), JSON.stringify(resumed));
+  check("fresh-moment 1: a set hass with the same states keeps the hold; timed out, no dream or wish and their keys unused",
+    resumed.first.held.length === 0 && !resumed.stale.said.some((t) => /dreamed|sunset together/.test(t)) &&
+      resumed.stale.keys.length === 0, JSON.stringify(resumed.stale));
+  check("fresh-moment 1: a screen left on looks again on a new day or a live morning wake-up, not on the same day",
+    resumed.rolled === true && resumed.sameDay === false && resumed.woke, JSON.stringify(resumed));
   // top10 6d: a visitor's dream names it from worlds.json; one this card doesn't know
   // says no dream line at all.
   const visitorDream = await card.evaluate((el) => {
@@ -3469,6 +3578,19 @@ async function main() {
   });
   check("P3c: the recap keeps TV and music (tv_on, music_on)",
     recap === "while you were out, I watched TV and listened to music!", recap);
+  // Fresh-moment 2 (owner Q2): a note whose only news is a nap isn't said.
+  const napAt = new Date(Date.now() - 1800 * 1000).toISOString();
+  await inject(pet["sensor.last_care"], {
+    attributes: { moments: [{ type: "woke_up", at: napAt }, { type: "fell_asleep", how: "house", at: napAt }], log: [] },
+  });
+  const napOnly = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    for (let i = 0; i < 30 && el._state(s, "sensor.last_care")?.attributes.moments?.[0]?.type !== "woke_up"; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    return el._awayNote(s, Date.now() - 3600 * 1000);
+  });
+  check("fresh-moment 2: an away note that would only say it napped isn't said", napOnly === null, String(napOnly));
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(500);
   check("the wish is on the status screen", /wish\s*♡ watch the sunset together/.test(await cur().locator(".status").innerText()));
@@ -4833,7 +4955,7 @@ async function main() {
     const TYPES = [...py.split("\nPERSONALITIES = (")[1].split("\n)")[0].matchAll(/"(\w+)"/g)].map((m) => m[1]);
     const KEYS = ["reveal", "hello", "hello_shared", "hello_warm", "hello_hearts",
       "good_morning", "sunset", "fell_asleep", "wish_granted", "favourite_snack",
-      "idle", "idle_bored", "idle_excited", "mood_content", "mood_excited", "mood_cozy", "mood_bored", "visit"];
+      "idle", "idle_bored", "idle_excited", "mood_content", "mood_excited", "mood_cozy", "mood_bored", "today", "visit"];
     const HELLOS = ["hello", "hello_shared", "hello_warm", "hello_hearts"];
     const longName = "Wwwwwwwwwwwwwwww"; // 16, as _greet leaves a name
     const longFood = "sunflower seeds"; // 15, the longest likes entry
@@ -4953,6 +5075,70 @@ async function main() {
     }, { fn: fn.toString(), arg });
     const filled = (type, key, arg) => PERSONA[type][key].map((line) => fill(line, arg));
     await page.emulateMedia({ reducedMotion: "reduce" });
+
+    // Fresh-moment 4 (owner Q4): the evening's today line. A granted wish's line, else a
+    // visitor seen here today, else today's newest bit (not a nap), else the type's line;
+    // a teen or adult only. At the first look from TODAY_FROM_HOUR, once a day, in the
+    // away note's place; never in the morning.
+    const TODAY_WISH = vm.runInNewContext(`(${src.match(/\nconst TODAY_WISH = (\{[\s\S]*?\n\});/)[1]})`);
+    const todayBad = Object.entries(TODAY_WISH).filter(([, l]) =>
+      /\b(still|again|why|never|pleas\w*|sad|cry|alone|forgot\w*)\b/i.test(l) || l.includes("?") || l.length > 40);
+    const todayOut = await typeAs(async (el, s, t) => {
+      const out = {};
+      const real = { bits: el._dayBits, seen: el._visitSeen, evening: el._evening, catchUp: el._catchUp };
+      const dreamKey = `hatch-dream-${s.ids?.device}-${new Date().toDateString()}`;
+      const dreamWas = localStorage.getItem(dreamKey);
+      const clearToday = () => { for (const k of Object.keys(localStorage)) if (/^hatch-today-/.test(k)) localStorage.removeItem(k); };
+      try {
+        el._visitSeen = () => null;
+        t.pet("adult", "mellow", 6, { wish: { kind: "bath", granted: true } });
+        out.wish = el._todayLine(s);
+        el._dayBits = (sl, since, care) => (care === false ? [] : ["had a meal"]);
+        out.wishTold = el._todayLine(s, true); // the catch-up told it: the type's line
+        t.pet("adult", "mellow", 6, { wish: { kind: "bath", granted: false } });
+        out.noCare = el._todayLine(s); // care alone isn't a bit: the type's line
+        el._visitSeen = () => "chickadee";
+        out.visitor = el._todayLine(s);
+        el._visitSeen = () => null;
+        el._dayBits = () => ["napped", "watched the sunset"];
+        out.bit = el._todayLine(s);
+        el._dayBits = () => ["napped"];
+        out.type = el._todayLine(s);
+        t.pet("child", "mellow", 6, {});
+        out.child = el._todayLine(s);
+        t.pet("adult", "mellow", 6, { wish: null });
+        el._catchUp = () => [];
+        localStorage.setItem(dreamKey, "1"); // no dream line: room for the rest
+        const look = (evening) => {
+          el._evening = () => evening;
+          Object.assign(s, { lookedFirst: false, queue: [], asleep: false, away: false });
+          el._firstLook(s);
+          const q = s.queue.map((x) => x.text);
+          s.queue = [];
+          return q;
+        };
+        clearToday();
+        out.morning = look(false);
+        out.evening = look(true);
+        out.again = look(true);
+      } finally {
+        Object.assign(el, { _dayBits: real.bits, _visitSeen: real.seen, _evening: real.evening, _catchUp: real.catchUp });
+        if (dreamWas === null) localStorage.removeItem(dreamKey); else localStorage.setItem(dreamKey, dreamWas);
+        clearToday();
+        s.lookedFirst = true;
+      }
+      return out;
+    });
+    const mellowToday = PERSONA.mellow.today;
+    check("fresh-moment 4: the today line: the wish's (not after its catch-up), a visitor seen, today's bit (no care), else the type's; none for a child",
+      todayBad.length === 0 && todayOut.wish === TODAY_WISH.bath && todayOut.visitor === "a chickadee visited me today ♪" &&
+        todayOut.bit === "today I watched the sunset! ♪" && mellowToday.includes(todayOut.type) && todayOut.child === null &&
+        mellowToday.includes(todayOut.wishTold) && mellowToday.includes(todayOut.noCare),
+      JSON.stringify({ todayBad, ...todayOut }));
+    check("fresh-moment 4: said at an evening first look, once a day; never in the morning",
+      todayOut.evening.some((l) => mellowToday.includes(l)) && !todayOut.morning.some((l) => mellowToday.includes(l)) &&
+        !todayOut.again.some((l) => mellowToday.includes(l)),
+      JSON.stringify({ morning: todayOut.morning, evening: todayOut.evening, again: todayOut.again }));
 
     // The half rule, at every site: heads the type's line, tails the normal pick.
     const MOMENTS = [["good_morning", { type: "good_morning" }], ["sunset", { type: "sunset" }],
@@ -7350,6 +7536,9 @@ async function main() {
     // Due only inside __vtick: the card's own 700 ms tick never starts one meanwhile.
     el._visitorDue = () => el.__vdue || null;
     el.__vdue = null;
+    // A missed day visitor coming late (fresh-moment 3): only where a case asks (__late).
+    if (!el.__realLate) el.__realLate = el._visitorLate;
+    el._visitorLate = function (t) { return el.__late ? el.__realLate.call(this, t) : null; };
     // It clears the 20 s throttle too: the card's own tick may have looked (nothing due) since.
     el.__vtick = (t) => {
       el.__vdue = due;
@@ -7419,6 +7608,68 @@ async function main() {
   }
   check("visitors: no visit when asleep, away, egg, in a game or scene, linking, calling, power, status open, queued, " +
     "early or off-slide; the day's flag unused", bad.length === 0, bad.join(" | "));
+  // Fresh-moment 5a: a question on show (its 60 s hold) no longer stops a visit or a flair;
+  // the question keeps its bubble and buttons, and the visitor's greet says no line.
+  {
+    await vprep(V0);
+    const r = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const box = document.createElement("div");
+      box.className = "askday";
+      s.screen.append(box);
+      el._write(s, "how was your day?", 60000);
+      try {
+        el.__vtick(s);
+        const started = !!s.visitor;
+        if (s.visitor) el._visitorGreet(s, s.visitor.v);
+        const said = s.bubble.textContent;
+        el._visitorEnd(s);
+        Object.assign(s, { flairUntil: 0, poseUntil: 0, movingUntil: 0, nextFlair: 1 });
+        let flair = false;
+        const realFlair = el._flair;
+        el._flair = () => { flair = true; return []; };
+        try { el._flairTick(s); } finally { el._flair = realFlair; }
+        return { started, said, flair, box: !!s.screen.querySelector(".askday") };
+      } finally {
+        box.remove();
+        Object.assign(s, { sayUntil: 0, flairUntil: 0, poseUntil: 0 });
+        for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
+      }
+    });
+    check("fresh-moment 5a: with a question on show a visitor and a flair still come, no line over it, and the question stays",
+      r.started && r.said === "how was your day?" && r.flair && r.box, JSON.stringify(r));
+  }
+  // Review s2622 #9: an answer tapped while the visitor is on screen still lands (a real
+  // click, so nothing of the visit covers the buttons); the question goes, its reply said.
+  {
+    await vprep(V0);
+    const started = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      el._ask(s, "how_day");
+      el._write(s, "how was your day?", 60000);
+      el.__vtick(s);
+      return !!s.visitor;
+    });
+    let clicked = true;
+    try {
+      await cur().locator(".askday button").first().click({ timeout: 3000 });
+    } catch (err) {
+      clicked = String(err.message).split("\n")[0];
+    }
+    const after = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const out = { box: !!s.screen.querySelector(".askday"), said: s.bubble.textContent, visitor: !!s.visitor };
+      el._visitorEnd(s);
+      s.screen.querySelector(".askday")?.remove();
+      clearTimeout(s.askTimer);
+      Object.assign(s, { asking: false, sayUntil: 0, poseUntil: 0, flairUntil: 0, visitUntil: 0 });
+      for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
+      return out;
+    });
+    check("fresh-moment 5a: an answer tapped mid-visit lands: the question goes and its reply is said",
+      started && clicked === true && !after.box && after.said !== "how was your day?",
+      JSON.stringify({ started, clicked, ...after }));
+  }
   // VISIT_SHOWN_MS is 10 s (owner, 2026-10-31): 9 s on show, no visit; 10.5 s, it starts.
   {
     await vprep(V0);
@@ -7564,12 +7815,17 @@ async function main() {
   // _visitorMissed (the window) is stubbed; its clock is walked below and in node.
   await vprep(null);
   const VSTAR = VIS.nightsky.find((v) => v.id === "shootingstar");
-  const catchUp = await card.evaluate((el, { V0, VSTAR }) => {
+  const VDAY = list.find((v) => v.hours !== "night" && !v.cross) || list.find((v) => v.hours !== "night");
+  const VNIGHT = Object.values(VIS).flat().find((v) => v.hours === "night");
+  const catchUp = await card.evaluate((el, { V0, VSTAR, VDAY, VNIGHT }) => {
     const s = el._slides[el._index];
     const device = s.ids?.device;
     const spent = Object.keys(localStorage).filter((k) => /^hatch-(dream|wish|wishmention|welcomed|seen|upbringing)-/.test(k))
       .map((k) => [k, localStorage.getItem(k)]);
-    const real = { missed: el._visitorMissed, heard: el._channelHeard, catchUp: el._catchUp, seenRead: el._seenRead, away: el._awayNote };
+    const real = { missed: el._visitorMissed, heard: el._channelHeard, catchUp: el._catchUp, seenRead: el._seenRead, away: el._awayNote,
+      dark: el._screenDark };
+    // A dark screen: the catch-up line (a day screen's live visit is checked below).
+    el._screenDark = () => true;
     // Room for it: no kept catch-up, away note, dream, wish or upbringing line this look.
     el._catchUp = () => [];
     el._awayNote = () => null;
@@ -7640,17 +7896,74 @@ async function main() {
       el._seenRead = function (d) { return { ...(real.seenRead.call(this, d) || {}), said: 0 }; };
       el._catchUp = () => [["kept one", "2026-01-01T00:00:00Z"], ["kept two", "2026-01-01T00:00:01Z"], ["kept three", "2026-01-01T00:00:02Z"]];
       out.full = look(V0);
+      // Fresh-moment 3 (owner Q3, Q7): on a day screen a missed day visitor isn't told at
+      // the first look; it comes by live (nothing due), once; a night visitor stays a line.
+      el._seenRead = real.seenRead; el._catchUp = () => [];
+      el._screenDark = () => false;
+      el.__late = true;
+      clearFlag();
+      out.dayLook = look(VDAY);
+      const late = () => {
+        Object.assign(s, { poseUntil: 0, sayUntil: 0, sayClass: 0, visitUntil: 0, flairUntil: 0, queue: [], nextVisitCheck: 0 });
+        el._visitShown = { s, at: Date.now() - 60000 };
+        el._visitorMissed = () => VDAY;
+        el._visitorTick(s);
+        const id = s.visitor?.v.id || null;
+        el._visitorEnd(s);
+        Object.assign(s, { poseUntil: 0, sayUntil: 0, visitUntil: 0, flairUntil: 0, queue: [] });
+        return { id, flag: flag() };
+      };
+      out.dayLive = late();
+      out.dayAgain = late();
+      out.dayLookAfter = look(VDAY);
+      clearFlag();
+      out.dayNight = look(VNIGHT);
+      el._screenDark = () => true;
+      clearFlag();
+      out.darkLive = late();
+      out.darkLook = look(VDAY);
+      // It comes right after the look's first line, the rest still queued (review s2622 #7).
+      el._screenDark = () => false;
+      clearFlag();
+      look(VDAY);
+      out.dayPending = !!s.lateVisit;
+      el._visitorMissed = () => VDAY;
+      Object.assign(s, { visitor: null, poseUntil: 0, flairUntil: 0, movingUntil: 0, sayUntil: Date.now() + 3000,
+        queue: [{ text: "one", ms: 5000, cls: 3 }, { text: "two", ms: 5000, cls: 3 }] });
+      s.lateVisit = { left: 1, made: Date.now() };
+      el._visitorTick(s);
+      const early = !!s.visitor; // two lines waiting: not yet
+      s.queue.shift();
+      el._visitorTick(s);
+      const during = !!s.visitor; // the first line still on show
+      s.lateVisit.after = Date.now() - 1;
+      s.sayUntil = 0;
+      el._visitorTick(s);
+      out.firstLine = { early, during, after: s.visitor?.v.id || null, queued: s.queue.length };
+      el._visitorEnd(s);
+      Object.assign(s, { queue: [], lateVisit: null, poseUntil: 0, flairUntil: 0, visitUntil: 0 });
     } finally {
+      el.__late = false;
       el._visitorMissed = real.missed; el._channelHeard = real.heard; el._catchUp = real.catchUp; el._seenRead = real.seenRead;
-      el._awayNote = real.away;
+      el._awayNote = real.away; el._screenDark = real.dark;
       for (const k of Object.keys(localStorage)) if (/^hatch-(dream|wish|wishmention|welcomed|seen|upbringing)-/.test(k)) localStorage.removeItem(k);
       for (const [k, v] of spent) localStorage.setItem(k, v);
       Object.assign(s, { lookedFirst: true, queue: [], sayUntil: 0 });
       clearFlag();
     }
     return out;
-  }, { V0, VSTAR });
+  }, { V0, VSTAR, VDAY, VNIGHT });
   const cu = catchUp;
+  check("fresh-moment 3: a missed day visitor on a day screen: no line, it comes by live once, and no line after",
+    cu.dayLook.said.length === 0 && !cu.dayLook.flag && cu.dayLive.id === VDAY.id && cu.dayLive.flag &&
+      cu.dayAgain.id === null && cu.dayLookAfter.said.length === 0,
+    JSON.stringify({ dayLook: cu.dayLook, dayLive: cu.dayLive, dayAgain: cu.dayAgain, after: cu.dayLookAfter }));
+  check("fresh-moment 3: the missed visitor comes right after the look's first line, the rest still queued",
+    cu.dayPending && !cu.firstLine.early && !cu.firstLine.during && cu.firstLine.after === VDAY.id && cu.firstLine.queued === 1,
+    JSON.stringify({ pending: cu.dayPending, firstLine: cu.firstLine }));
+  check("fresh-moment 3: a dark screen keeps the line, no late visit (Q7); a night visitor stays a line",
+    cu.darkLive.id === null && !cu.darkLive.flag && cu.darkLook.said.length === 1 && cu.dayNight.said.length === 1,
+    JSON.stringify({ darkLive: cu.darkLive, darkLook: cu.darkLook, dayNight: cu.dayNight }));
   check("visitors: catch-up: nothing said before the window ends; the day's flag unused",
     cu.before.said.length === 0 && !cu.before.flag, JSON.stringify(cu.before));
   check(`visitors: catch-up: after the window, "a ${V0.name} came by today ♪" once, flavour, last; the flag used`,
@@ -7914,6 +8227,7 @@ async function main() {
     const s = el._slides[el._index];
     el._visitorEnd(s);
     if (el.__realDue) { el._visitorDue = el.__realDue; delete el.__realDue; }
+    if (el.__realLate) { el._visitorLate = el.__realLate; delete el.__realLate; delete el.__late; }
     Object.assign(s, { poseUntil: 0, sayUntil: 0, visitUntil: 0, flairUntil: 0, queue: [] });
   });
   await holdVisits();
@@ -9548,10 +9862,15 @@ async function main() {
       s.mine = { ...(s.mine || {}), gift: g };
       el._hiddenAt = Date.now() - hiddenMs;
       el._onHidden(); // the page is visible: a return
+      el.hass = { ...el._hass, states: { ...el._hass.states } }; // fresh states: a long absence's new look may begin (fresh-moment 1)
       const said = [];
       const was = el._sayLine;
       el._sayLine = function (sl, q) { said.push(q.text); return was.call(this, sl, q); };
-      await wait(2500);
+      // The new look's greeting and lines come first: skip through them to the gift's.
+      for (let i = 0; i < 25; i++) {
+        await wait(100);
+        s.sayUntil = 0;
+      }
       delete el._sayLine;
       const pop = !!s.screen.querySelector(".reveal.gift");
       el._dropGift(s);

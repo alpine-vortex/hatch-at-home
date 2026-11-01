@@ -431,6 +431,13 @@ function linkedToday(day = new Date()) {
 }
 const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
 const FLAIR_MS = 4200; // how long a moment lasts
+// A first look's one early move (fresh-moment 7): this long after the look begins (the
+// greeting's line done, the first look's first one on), and given up if not free by
+// FIRST_MOVE_LATE_MS after.
+const FIRST_MOVE_MS = 6000;
+const FIRST_MOVE_LATE_MS = 15000;
+// A first look's missed day visitor waits at most this long for its turn (fresh-moment 3).
+const LATE_VISIT_MS = 60000;
 const FLAIR = {
   storm_watcher: { place: "head", art: "frames" },
   thunder_heart: { place: "head", art: "frames" },
@@ -985,6 +992,7 @@ const PERSONA = {
     mood_excited: ["hehe, that was nice", "mm, that was fun"],
     mood_cozy: ["mm, perfect nap spot", "warm and comfy... ♪"],
     mood_bored: ["a nap sounds nice...", "just lazing about"],
+    today: ["a slow, cozy sort of day ♪", "mm, a comfy kind of day", "today was nice and lazy ♪"], // the evening's line about its day (fresh-moment 4)
     visit: ["oh, hi there... ♪", "mm, a visitor... nice"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `oh hey, ${n}... ♪`, (n) => `${n}... come sit a while ♥`],
     link_guest: [(n) => `mm, hi, ${n}... ♪`],
@@ -1008,6 +1016,7 @@ const PERSONA = {
     mood_excited: ["that was lovely!", "hehe, that was fun ♥"],
     mood_cozy: ["all snug ♥", "warm and happy ♥"],
     mood_bored: ["wish someone would visit ♥", "waiting for a friend ♥"],
+    today: ["today was a lovely day ♥", "such a warm, homey day ♥", "a nice, gentle day today ♥"], // the evening's line about its day (fresh-moment 4)
     visit: ["a visitor! welcome ♥", "hello, little friend ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! hi! so glad you came ♥`, (n) => `hello hello, ${n} ♥`],
     link_guest: [(n) => `hi, ${n}! ♥ hello ♥`],
@@ -1031,6 +1040,7 @@ const PERSONA = {
     mood_excited: ["that was great!", "woo! so much fun!"],
     mood_cozy: ["cozy... but ready to hop!", "warm paws, happy hops"],
     mood_bored: ["need to hop about!", "so... much... sitting"],
+    today: ["today was a hoppy one!", "what a zippy day! hup!", "today went boing boing! ♪"], // the evening's line about its day (fresh-moment 4)
     visit: ["a visitor! hup hup, hi!", "hiya, friend! *bounce*"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! hup hup, hi!`, (n) => `hiya, ${n}! *bounce*`],
     link_guest: [(n) => `hup! hi, ${n}!`],
@@ -1054,6 +1064,7 @@ const PERSONA = {
     mood_excited: ["what a show!", "bravo! that was fun ★"],
     mood_cozy: ["cozy, like backstage ★", "a warm spotlight ♪"],
     mood_bored: ["no audience today...", "waiting for my cue ★"],
+    today: ["today was a little show ★", "a day worth an encore ★", "today had its own sparkle ★"], // the evening's line about its day (fresh-moment 4)
     visit: ["a guest star! ★", "welcome to the show! ★"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! my co-star ★`, (n) => `ah, ${n}! cue the music ★`],
     link_guest: [(n) => `hello, ${n}! ★ take a bow`],
@@ -1077,6 +1088,7 @@ const PERSONA = {
     mood_excited: ["heh. that was nice", "well, that was fun"],
     mood_cozy: ["a fine warm spot", "cozy. as it should be."],
     mood_bored: ["hm. quiet day.", "nothing doing. hm."],
+    today: ["hm. a good, quiet day.", "a fine day, all told.", "hm. today was well spent."], // the evening's line about its day (fresh-moment 4)
     visit: ["well, hello there.", "ah. a visitor. welcome."], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `hello, ${n}. come in.`, (n) => `${n}. good to see you.`],
     link_guest: [(n) => `hm. hello, ${n}.`],
@@ -1100,6 +1112,7 @@ const PERSONA = {
     mood_excited: ["oh, how lovely!", "that was divine ♥"],
     mood_cozy: ["cozy and fabulous ♥", "warm and lovely ♥"],
     mood_bored: ["how dull...", "nothing lovely to do"],
+    today: ["a rather elegant day ♥", "today was simply divine ♥", "such a stylish day, darling ♥"], // the evening's line about its day (fresh-moment 4)
     visit: ["oh, a visitor! how lovely ♥", "welcome, welcome, dear ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}, darling! how lovely ♥`, (n) => `oh, ${n}! welcome, welcome ♥`],
     link_guest: [(n) => `${n}, darling! ♥`],
@@ -1123,6 +1136,7 @@ const PERSONA = {
     mood_excited: ["simply splendid!", "what a marvellous time"],
     mood_cozy: ["splendidly cozy", "warm as a welcome"],
     mood_bored: ["a bit dull today, I must say", "awaiting company"],
+    today: ["what a splendid day it was ♥", "a marvellous little day ♥", "today was quite grand ♥"], // the evening's line about its day (fresh-moment 4)
     visit: ["a visitor! what an honour", "do come in, friend ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `ah, ${n}! a delight ♥`, (n) => `${n}! what an honour ♥`],
     link_guest: [(n) => `${n}! how splendid ♥`],
@@ -1146,6 +1160,7 @@ const PERSONA = {
     mood_excited: ["hah! that was great", "heck yes, that was fun"],
     mood_cozy: ["cozy post, all clear", "warm and on watch"],
     mood_bored: ["nothing to guard...", "waiting for orders!"],
+    today: ["today was a good run! hah", "all handled today ♥", "today went great. heck yes!"], // the evening's line about its day (fresh-moment 4)
     visit: ["who goes there? oh, hi!", "visitor spotted! hi! ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `yo, ${n}! all clear here`, (n) => `${n}! reporting in ♥`],
     link_guest: [(n) => `hey, ${n}! ♥ hi hi`],
@@ -1304,6 +1319,34 @@ const DREAMS = {
   flying: () => "I dreamed I could fly!",
   clouds: () => "I dreamed I napped on a cloud...",
   feast: (d, w) => `I dreamed about a mountain of ${w?.food || "snacks"}!`,
+  // Plain dreams (fresh-moment 6; model.PLAIN_DREAMS turns through them, one a morning).
+  swim_fish: () => "I dreamed I swam with the fish ♪",
+  acorn: () => "I dreamed of a giant acorn!",
+  tall: () => "I dreamed I was really, really tall!",
+  stars_sang: () => "I dreamed the stars sang to me ★",
+  blanket: () => "I dreamed of a big warm blanket...",
+  secret_door: () => "I dreamed I found a secret door!",
+  leaf_ride: () => "I dreamed I rode a leaf down a stream",
+  bubbles: () => "I dreamed of bubbles, so many bubbles!",
+  birds_talk: () => "I dreamed I could talk to birds ♪",
+  tiny_boat: () => "I dreamed I was a tiny boat ♪",
+  pillow_hill: () => "I dreamed of a hill made of pillows",
+  moon_dance: () => "I dreamed I danced in the moonlight ★",
+  pie: () => "I dreamed I baked the biggest pie!",
+  rainbow_slide: () => "I dreamed I slid down a rainbow ♪",
+  candy_clouds: () => "I dreamed the clouds were candy floss",
+  tiny_hat: () => "I dreamed I wore a teeny tiny hat ♪",
+  giant_sock: () => "I dreamed I hid in a giant sock!",
+  parade: () => "I dreamed of a parade just for me ★",
+  juggling: () => "I dreamed I juggled shiny pebbles!",
+  pink_sky: () => "I dreamed I painted the sky pink ♪",
+  big_puddle: () => "I dreamed of a puddle as big as a lake",
+  sing_along: () => "I dreamed I sang and everyone joined ♪",
+  bean: () => "I dreamed I was the size of a bean!",
+  cake_house: () => "I dreamed of a house made of cake!",
+  jelly: () => "I dreamed I bounced on a big jelly ♪",
+  lantern: () => "I dreamed of a lantern that hummed ♪",
+  whistle: () => "I dreamed I learned to whistle ♪",
   // Yesterday's world visitor (top10 6d), by its name in worlds.json; none known: no dream line.
   visitor: (d, w, worlds) => {
     const v = worlds?.[d.world]?.visitors?.find((x) => x.id === d.id);
@@ -1311,6 +1354,22 @@ const DREAMS = {
   },
 };
 const AWAY_NOTE_AFTER_MS = 3 * 3600 * 1000;
+// The evening's line about its own day (fresh-moment 4, owner 2026-11-01): from this hour,
+// at the first look; a granted wish's line by kind (tuck_in is granted at bedtime, after).
+const TODAY_FROM_HOUR = 17;
+const TODAY_WISH = {
+  play: "I got to play a game today! ♪",
+  snack: "I got a snack after lunch! ♥",
+  bath: "I got my bubble bath today! ♥",
+  praise: "somebody said I'm good today ♥",
+  sunset: "I got to watch the sunset today ♥",
+  music: "I got some music today ♪",
+  tv: "I got to watch TV today ♪",
+  chore: "I got a chore treat today! ♥",
+  rain: "I got to see the rain today! ♪",
+  say_hi: "I got a hello this afternoon ♥",
+};
+const RESUME_HOLD_MS = 5000; // a tab back after AWAY_NOTE_AFTER_MS: its first look waits for fresh states
 // A bond with each person (only the viewer's own, from the private channel's
 // "mine"). What each level brings, as in rates.py: a warmer hello, a
 // hop when they look in, the nickname it picked, its favourite of their games,
@@ -2975,6 +3034,9 @@ class HatchPetCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (this._resumedAt && !document.hidden && hass?.states !== this._resumeStates) {
+      this._resumedAt = this._resumeStates = null; // fresh states: the look may begin
+    }
     this._listenReady(hass?.connection);
     this._watchServerClock(hass);
     this._resendAnswers();
@@ -3044,9 +3106,14 @@ class HatchPetCard extends HTMLElement {
       this._hiddenAt ??= Date.now();
       return;
     }
-    // Back after a long while (owner Q1): a gift waiting is said, as at a first look.
+    // Back after a long while (owner Q1): a new look, as a fresh page would have, a gift
+    // waiting too (fresh-moment 1). The look waits for fresh states (RESUME_HOLD_MS at
+    // most): a phone back from sleep holds yesterday's, and a set hass with the same
+    // states object (a connection change) isn't fresh.
     if (this._hiddenAt && Date.now() - this._hiddenAt >= AWAY_NOTE_AFTER_MS) {
-      (this._slides || []).forEach((x) => { x.giftAgain = true; });
+      this._newLook(this._slides || [], { resumed: true });
+      this._resumedAt = Date.now();
+      this._resumeStates = this._hass?.states;
     }
     this._hiddenAt = null;
     this._touchedAt = null; // a new look begins at its first touch (gaps-seams 5a)
@@ -4810,6 +4877,12 @@ class HatchPetCard extends HTMLElement {
   _tick() {
     if (!this._slides || !this._visible || document.hidden) return;
     this._ticks = (this._ticks || 0) + 1;
+    // A screen left on overnight (a wall tablet never hides): a new day is a new look.
+    const day = new Date().toDateString();
+    if (this._lookDay !== day) {
+      if (this._lookDay) this._newLook(this._slides);
+      this._lookDay = day;
+    }
     this._slides.forEach((s, i) => {
       if (s.poseUntil && Date.now() > s.poseUntil) s.poseUntil = 0;
       if (s.patPoseUntil && Date.now() > s.patPoseUntil) s.patPoseUntil = 0;
@@ -4843,6 +4916,7 @@ class HatchPetCard extends HTMLElement {
         this._seen(s);
         this._idle(s);
         this._flairTick(s);
+        this._firstMove(s);
         this._seasonTick(s);
         this._partyTick(s);
         this._linkTick(s);
@@ -4910,6 +4984,40 @@ class HatchPetCard extends HTMLElement {
       !s.screen.classList.contains("show-status") &&
       !(s.sayUntil > now) && !(s.poseUntil > now) && !(s.propUntil > now) &&
       !(s.flairUntil > now) && !(s.movingUntil > now);
+  }
+
+  // Free but for a line being said: a move with no words may play over it (fresh-moment 7).
+  _freeBody(s) {
+    const now = Date.now();
+    return s.species && !s.asleep && !s.calling && !s.game && !s.scene && !s.linking && !s.power && !s.visitor &&
+      IDLE_MOODS.has(s.moodState) && !s.screen.classList.contains("show-status") &&
+      !(s.poseUntil > now) && !(s.propUntil > now) && !(s.flairUntil > now) && !(s.movingUntil > now);
+  }
+
+  // Only a question on show, its 60 s hold the one thing busy: a visitor or flair may
+  // still come (fresh-moment 5a), the question keeping its bubble and buttons.
+  _askOnly(s) {
+    return this._questionOn(s) && !!this._freeBody(s) && !s.queue?.length &&
+      this._state(s, "sensor.life_stage")?.state !== "egg";
+  }
+
+  // A first look's one early move (fresh-moment 7), so a 30 s look sees the pet do
+  // something, not only talk: its flair (traits), else a look around (not when calm).
+  // Over a line, as it has no bubble. Then flair and idle keep their own timers.
+  _firstMove(s) {
+    const now = Date.now();
+    if (!s.firstMoveAt || now < s.firstMoveAt) return;
+    if (!this._freeBody(s)) {
+      if (now - s.firstMoveAt > FIRST_MOVE_LATE_MS) s.firstMoveAt = 0;
+      return;
+    }
+    s.firstMoveAt = 0;
+    if (this._flair(s).length) {
+      const [lo, hi] = FLAIR_EVERY_MS;
+      s.nextFlair = now + lo + Math.random() * (hi - lo);
+    } else if (!calm()) {
+      this._look(s, 1800);
+    }
   }
 
   // A wander or a look moves the pet off its spot for a while; a hat placed
@@ -5432,16 +5540,38 @@ class HatchPetCard extends HTMLElement {
     if (said === null || said === undefined || t > said) this._seenWrite(device, { said: t });
   }
 
+  // A new look on the same page (fresh-moment 1): the greeting, the first look, the visit
+  // and the wish mention start over; each line's own once-key still stops a double. A
+  // tab back from hiding also says a gift waiting, and leaves what happened meanwhile
+  // to the catch-up (no live replay of moments, as _forget).
+  _newLook(slides, { resumed = false } = {}) {
+    for (const x of slides) {
+      x.lookedFirst = x.greeted = false;
+      x.visitedAt = x.nextWish = 0;
+      if (resumed) {
+        x.giftAgain = true;
+        x.lastMoment = x.lastLogAt = undefined;
+      }
+    }
+  }
+
+  // A tab just back after a long while, its states not yet fresh (fresh-moment 1).
+  _resumeHeld() {
+    return !!this._resumedAt && Date.now() - this._resumedAt < RESUME_HOLD_MS;
+  }
+
   // The first look at this pet on this device: what happened while you were
   // out, this morning's dream and today's wish (each once a day per device).
   _firstLook(s) {
     if (!this._channelHeard(s)) return; // the viewer's bond and wish first
+    if (this._resumeHeld()) return; // fresh states first
     const away = this._state(s, "sensor.mood")?.state === "away";
     if (s.lookedFirst || !s.species || s.asleep || away || this._eggMinutes(this._state(s, "sensor.life_stage")) !== null) return;
     s.lookedFirst = true;
+    s.firstMoveAt = Date.now() + FIRST_MOVE_MS;
     const stage = this._state(s, "sensor.life_stage")?.attributes || {};
     const device = s.ids?.device;
-    // At most FIRST_LOOK_LINES lines, in this order; what doesn't fit isn't said
+    // At most FIRST_LOOK_LINES lines, in this order, the newest first; what doesn't fit isn't said
     // (the dream and wish come again at the next first look; the visit's notes
     // are budgeted on the server from what's queued here).
     const lines = [];
@@ -5455,12 +5585,14 @@ class HatchPetCard extends HTMLElement {
       if (HOME_WEATHER[home.weather]) lines.push([HOME_WEATHER[home.weather], 4500]);
     }
     const mark = this._seenRead(device);
+    let wishTold = false;
     // Kept milestones said nowhere here (the card was closed): once, as lines of
     // this look. A browser with no record yet starts from now, so a new one
     // never replays the house's history.
     if (typeof mark?.said === "number") {
-      for (const [text, at] of this._catchUp(s, mark.said, FIRST_LOOK_LINES - lines.length)) {
+      for (const [text, at, type] of this._catchUp(s, mark.said, FIRST_LOOK_LINES - lines.length)) {
         lines.push([text, 5000, { at }]);
+        if (type === "wish_granted") wishTold = true; // the today line won't tell it again
       }
     } else {
       this._seenWrite(device, { said: serverNow() });
@@ -5470,18 +5602,25 @@ class HatchPetCard extends HTMLElement {
     if (stage.age_days >= 7 && stage.age_days < 8 && lines.length < FIRST_LOOK_LINES && onceEver(`week-${device}-${stage.generation || 1}`)) {
       lines.push([this._pick(WEEK_OLD), 5000]);
     }
-    const seen = mark?.seen || 0;
-    if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS) {
-      const note = this._awayNote(s, seen);
-      if (note) lines.push([note, 5500, { away: true }]);
-    }
     const dreamt = s.house?.dream || stage.dream; // a show or song's, from the house
-    const dreamLine = dreamt && DREAMS[dreamt.kind]?.(dreamt, this._words(s), this._worlds);
+    // The hold ran out on states that may be yesterday's: no dream or wish this look (their
+    // keys stay unused for the next).
+    const stale = !!this._resumedAt;
+    const dreamLine = !stale && dreamt && DREAMS[dreamt.kind]?.(dreamt, this._words(s), this._worlds);
     if (dreamLine && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
       lines.push([dreamLine, 5000]);
     }
-    const wish = stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
+    const wish = !stale && stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
     if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);
+    // What happened while you were out comes after what's new (fresh-moment 2, owner Q2).
+    // From TODAY_FROM_HOUR, once a day here: a line about its day, in the away note's place.
+    const today = this._evening() && lines.length < FIRST_LOOK_LINES && this._todayLine(s, wishTold);
+    const seen = mark?.seen || 0;
+    if (today && oncePerDay(`today-${device}`)) lines.push([today, 5000, { away: true }]);
+    else if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS && lines.length < FIRST_LOOK_LINES) {
+      const note = this._awayNote(s, seen);
+      if (note) lines.push([note, 5500, { away: true }]);
+    }
     // Last, and only if there is room: an adult on how it was raised, once a week.
     const raised = this._state(s, "sensor.life_stage")?.state === "adult" && UPBRINGING_LINES[stage.upbringing];
     if (raised && lines.length < FIRST_LOOK_LINES && upbringingDue(device)) lines.push([raised, 5000]);
@@ -5492,12 +5631,17 @@ class HatchPetCard extends HTMLElement {
     // Very last, flavour: today's visitor came and went with nobody here to see it
     // (its window over, the day's visit flag unset). Said once, and the flag used up,
     // so the visit can't also play; only with room, so it never pushes a line out.
-    const missed = this._visitorMissed(s);
+    // A day visitor on a day screen isn't told: it comes by live instead (_visitorLate).
+    const missed = !this._visitorLate(s) && this._visitorMissed(s);
     if (missed && lines.length < room && oncePerDay(`visit-${device}`, this._visitDay(s))) {
       const baby = this._babyStage(s) === "baby";
       lines.push([baby ? "hi hi! ♪" : missed.catchup || `a ${missed.name} came by today ♪`, 4500, { cls: FLAVOUR }]);
     }
     for (const [text, ms, opts] of lines.slice(0, FIRST_LOOK_LINES)) this._queue(s, text, ms, opts);
+    // A missed day visitor comes by right after this look's first line, not after them
+    // all (fresh-moment 3, review s2622 #7): _visitorTick starts it once the queue is down
+    // to the rest and the line on show is done.
+    s.lateVisit = this._visitorLate(s) ? { left: Math.max(Math.min(lines.length, FIRST_LOOK_LINES) - 1, 0), made: Date.now() } : null;
     s.giftAgain = false; // this look is the one a tab coming back would have had
     if (gift) this._giftTake(s);
   }
@@ -5655,6 +5799,7 @@ class HatchPetCard extends HTMLElement {
   // When this device last saw the pet (for the away note), every minute.
   _seen(s) {
     const now = Date.now();
+    if (this._resumeHeld()) return; // a tab back: its first look reads the old mark first (fresh-moment 1)
     if (s.seenAt && now - s.seenAt < 60000) return;
     s.seenAt = now;
     this._seenWrite(s.ids?.device, { seen: now }); // said stays as it is
@@ -5683,7 +5828,7 @@ class HatchPetCard extends HTMLElement {
       if (m.type === "care_miss" && miss) continue;
       if (m.type === "care_miss") miss = true;
       const text = this._catchUpLine(s, m);
-      if (text) out.push([text, m.at]);
+      if (text) out.push([text, m.at, m.type]);
     }
     return out.reverse();
   }
@@ -5708,6 +5853,17 @@ class HatchPetCard extends HTMLElement {
   // "while you were out, I napped, watched the rain and had a snack!": up to
   // three things from the moments and care since the device last looked.
   _awayNote(s, since) {
+    const bits = this._dayBits(s, since);
+    // A nap alone isn't news (fresh-moment 2, owner Q2): no note.
+    if (bits.every((b) => b === "napped")) return null;
+    const list = bits.slice(0, 2); // two at most: a bubble on a 330 px card
+    return `while you were out, I ${list.join(" and ")}!`;
+  }
+
+  // What the pet did since then, newest first, as bits ("watched TV"): its moments, the
+  // finds while shown, then care unless care is false (the away note's, and the
+  // evening's today line's, which leaves care out).
+  _dayBits(s, since, care = true) {
     const lastCare = this._state(s, "sensor.last_care")?.attributes || {};
     const after = (at) => new Date(at).getTime() > since;
     const bits = [];
@@ -5732,12 +5888,46 @@ class HatchPetCard extends HTMLElement {
       }
       add(m.type === "weather" ? WEATHER_BITS[m.change] : MOMENT_BITS[m.type]);
     }
-    for (const e of [...(lastCare.log || [])].reverse()) {
+    for (const e of care ? [...(lastCare.log || [])].reverse() : []) {
       if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) add(CARE_BITS[e.action]);
     }
-    if (!bits.length) return null;
-    const list = bits.slice(0, 2); // two at most: a bubble on a 330 px card
-    return `while you were out, I ${list.join(" and ")}!`;
+    return bits;
+  }
+
+  // The evening's line about the pet's own day (fresh-moment 4, owner Q4), a teen's or
+  // adult's: today's wish come true (unless this look's catch-up just told it), else a
+  // visitor seen here today, else the newest of today's moments as a bit (not a nap, no
+  // care), else its type's line. Names nobody and never an open wish, so a shared
+  // screen gets it too. null: nothing to say (the away note's turn).
+  _todayLine(s, wishTold = false) {
+    const life = this._state(s, "sensor.life_stage");
+    if (life?.state !== "teen" && life?.state !== "adult") return null;
+    const wish = life.attributes?.wish;
+    if (wish?.granted && !wishTold && TODAY_WISH[wish.kind]) return TODAY_WISH[wish.kind];
+    const seen = this._visitSeen(s);
+    if (seen) return `a ${seen} visited me today ♪`;
+    const midnight = new Date().setHours(0, 0, 0, 0);
+    const bit = this._dayBits(s, midnight, false) // a find's bit, once shown, only if the line fits
+      .find((b) => b !== "napped" && b !== "got my wish" && `today I ${b}! ♪`.length <= 40);
+    if (bit) return `today I ${bit}! ♪`;
+    const type = this._persona(s);
+    return type ? dailyPick(type.today, `${s.ids?.device}|today`) : null;
+  }
+
+  // The evening, for the today line: from TODAY_FROM_HOUR on this device's clock.
+  _evening() {
+    return new Date().getHours() >= TODAY_FROM_HOUR;
+  }
+
+  // The name of today's world visitor if it came by live on this device (for the today
+  // line), else null. One key per device, overwritten: nothing piles up.
+  _visitSeen(s) {
+    try {
+      const seen = JSON.parse(localStorage.getItem(`hatch-visitseen-${s.ids?.device}`) || "null");
+      return seen?.day === this._visitDay(s).toDateString() ? seen.name : null;
+    } catch (err) {
+      return null;
+    }
   }
 
   _hourHello(first) {
@@ -5805,7 +5995,7 @@ class HatchPetCard extends HTMLElement {
     // Not before the first look has run (it needs the creature and the
     // channel's first word): it says what's queued.
     if (!id || !s.species || !this._channelHeard(s) || !this._hass.user || sharedScreen() ||
-      Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
+      Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS || this._resumeHeld()) return;
     s.visitedAt = Date.now();
     // Only kept lines count: a waiting beat or flavour may yet be dropped.
     const queued = Math.min((s.queue || []).filter((q) => lineClass(q) >= KEPT).length, 6);
@@ -6108,6 +6298,7 @@ class HatchPetCard extends HTMLElement {
       case "woke_up":
         if (m.how === "morning") {
           say("*yaaawn*", 4500, () => this._animate(s, s.pet, "stretch", 1100));
+          if (!capture) this._newLook([s]); // up for the day, seen live: the morning's look begins (fresh-moment 1)
         } else if (m.how === "night") {
           say("...so sleepy");
         }
@@ -8694,7 +8885,7 @@ class HatchPetCard extends HTMLElement {
   _visitorDue(s, date) {
     const list = visitorList(s.world);
     if (!list.length) return null;
-    const dark = s.screen.classList.contains("night") || s.screen.classList.contains("dim");
+    const dark = this._screenDark(s);
     const plan = this._visitPlan(s);
     if (plan !== undefined) {
       const v = plan && list.find((x) => x.id === plan.id);
@@ -8709,6 +8900,40 @@ class HatchPetCard extends HTMLElement {
     if (!v || (v.hours === "night") !== dark) return null;
     const start = v.hours === "night" ? d.night : d.day;
     return date.getHours() >= start && date.getHours() < start + 3 ? v : null;
+  }
+
+  // A first look's missed day visitor (s.lateVisit): once its first line is said and done,
+  // it comes by, the look's other lines going on (its greet is a move, no line, while
+  // they wait). Not over a link, game, call, the basket or a busy pet; given up after
+  // LATE_VISIT_MS, when the usual check may still bring it. True: it started.
+  _lateVisitTick(s, now) {
+    const late = s.lateVisit;
+    if (now - late.made > LATE_VISIT_MS) {
+      s.lateVisit = null;
+      return false;
+    }
+    if ((s.queue?.length || 0) > late.left) return false; // the first line not said yet
+    late.after ??= Math.max(s.sayUntil || 0, now); // the line on show is done
+    if (now < late.after || s !== this._slides[this._index] || this._booting || this._link || s.linking ||
+      s.power || s.calling || s.away || this._basketShows(s) || !this._freeBody(s)) return false;
+    s.lateVisit = null;
+    const v = this._visitorLate(s);
+    if (!v || !oncePerDay(`visit-${s.ids?.device}`, this._visitDay(s))) return false;
+    this._visitorStart(s, v);
+    return true;
+  }
+
+  // A night (or dim) screen: night visitors only.
+  _screenDark(s) {
+    return s.screen.classList.contains("night") || s.screen.classList.contains("dim");
+  }
+
+  // A day visitor whose window is over with nobody here to see it (the day's flag, used
+  // by the caller, unset on this device): it comes by live at a daytime look instead of
+  // the catch-up line (fresh-moment 3, owner Q3). Never on a dark screen (Q7).
+  _visitorLate(s) {
+    const v = this._visitorMissed(s);
+    return v && v.hours !== "night" && !this._screenDark(s) ? v : null;
   }
 
   // Today's visitor if its window is over (the first look's catch-up line).
@@ -8728,7 +8953,7 @@ class HatchPetCard extends HTMLElement {
   // basket on show.
   _visitorFree(s, now = Date.now()) {
     return s === this._slides[this._index] && !this._booting && !!s.lookedFirst && !s.visitor &&
-      !this._link && !s.linking && !s.power && !s.calling && !s.away && this._linkFree(s) &&
+      !this._link && !s.linking && !s.power && !s.calling && !s.away && (this._linkFree(s) || this._askOnly(s)) &&
       !this._basketShows(s) && // the basket's floor line: the visitor waits (review C7)
       now - (this._visitShown?.s === s ? this._visitShown.at : now) >= VISIT_SHOWN_MS &&
       now - (this._linkEndedAt ?? -Infinity) >= VISIT_AFTER_MS;
@@ -8750,10 +8975,11 @@ class HatchPetCard extends HTMLElement {
       if (!this._visitorLive(s)) this._visitorEnd(s);
       return;
     }
+    if (s.lateVisit && this._lateVisitTick(s, now)) return;
     if (now < (s.nextVisitCheck || 0)) return;
     s.nextVisitCheck = now + VISIT_CHECK_MS;
     if (!this._visitorFree(s, now)) return;
-    const v = this._visitorDue(s);
+    const v = this._visitorDue(s) || this._visitorLate(s);
     if (v && oncePerDay(`visit-${s.ids?.device}`, this._visitDay(s))) this._visitorStart(s, v);
   }
 
@@ -8780,6 +9006,13 @@ class HatchPetCard extends HTMLElement {
     s.seasonBox.append(el);
     const now = Date.now();
     const V = s.visitor = { el, v, timers: [], until: now + total, greetAt };
+    if (!v.cross) { // seen here today, for the evening's today line (fresh-moment 4)
+      try {
+        localStorage.setItem(`hatch-visitseen-${s.ids?.device}`, JSON.stringify({ day: this._visitDay(s).toDateString(), name: v.name }));
+      } catch (err) {
+        // no storage: no visitor in the today line
+      }
+    }
     s.flairUntil = s.visitUntil = V.until; // nothing else meanwhile; a pat wiggles, no line
     s.nextVisitor = Math.max(s.nextVisitor || 0, now + total + VISIT_AFTER_MS); // a seasonal one later
     const at = (ms, fn) => V.timers.push(setTimeout(() => {
@@ -8799,7 +9032,8 @@ class HatchPetCard extends HTMLElement {
   // and one flavour line, said now or not at all (a kept line, a game or a question
   // wins; the visitor still passes). A baby says baby talk.
   _visitorGreet(s, v) {
-    if (!this._mayInterrupt(s, FLAVOUR)) return;
+    const asking = this._questionOn(s); // its bubble stays: the greet is a move, no line (5a)
+    if (!asking && !this._mayInterrupt(s, FLAVOUR)) return;
     const before = s.poseUntil;
     this._reactFrames(s, "greet");
     // The wave frames (the link greeting's loader and fallbacks) replace the greet
@@ -8811,6 +9045,7 @@ class HatchPetCard extends HTMLElement {
       s.poseFrames = mine;
       this._show(s, s.pet, mine[0]);
     }
+    if (asking) return;
     const { text } = this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]));
     this._line(s, FLAVOUR, text, 3000);
   }
@@ -9275,7 +9510,7 @@ class HatchPetCard extends HTMLElement {
     if (now < s.nextFlair) return;
     const [lo, hi] = FLAIR_EVERY_MS;
     s.nextFlair = now + lo + Math.random() * (hi - lo);
-    if (this._free(s)) this._flair(s);
+    if (this._free(s) || this._askOnly(s)) this._flair(s);
   }
 
   // One flair moment: each place shows one of the pet's traits there.

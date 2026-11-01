@@ -112,7 +112,9 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   - **A dream**: it may dream about something from the day before (a show it watched,
     the rain, a game it won, its wish coming true) and tells the first person who
     looks in that morning. On a quiet day it may dream of the day's world visitor
-    instead ("I dreamed about the chickadee! ♪").
+    instead ("I dreamed about the chickadee! ♪"), and with nothing to dream about it
+    has a dream of its own ("I dreamed I found a secret door!"), a different one each
+    morning for a month.
   - **While you were out**: open the card after a few hours away and it tells you what
     happened ("while you were out, I napped, watched the rain and played a game!").
 - **A bond with each person.** The pet gets to know everyone who signs in to Home
