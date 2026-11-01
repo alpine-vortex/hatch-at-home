@@ -1452,6 +1452,32 @@ async function main() {
     out.favourite = [s.bubble.textContent, ...s.queue.map((q) => q.text)].filter((t) => /hazelnuts/.test(t));
     s.queue = [];
     s.sayUntil = 0;
+    // A kept line for a slide that is NOT on show waits in its queue, unspent and unmarked.
+    const off = el._slides.find((x) => x !== s);
+    if (off) {
+      off.queue = [];
+      off.sayUntil = 0;
+      const marked = [];
+      const markWas = el._markSaid;
+      el._markSaid = (...a) => { marked.push(a[1]); };
+      el._line(off, 3, "off-show kept line", 300, { at: new Date().toISOString() });
+      out.offShow = { said: off.sayUntil > 0, queued: off.queue.length, marked: marked.length };
+      el._index = el._slides.indexOf(off);
+      el._sayQueued(off);
+      out.offShow.after = { queued: off.queue.length, marked: marked.length, bubble: off.bubble.textContent };
+      el._index = el._slides.indexOf(s);
+      el._markSaid = markWas;
+      off.queue = [];
+      off.sayUntil = 0;
+    }
+    // Per-day keys: the card's own, older than 14 days, go; newer ones and others stay.
+    const day = (n) => new Date(Date.now() - n * 86400000).toDateString();
+    const keys = [`hatch-visit-x-${day(30)}`, `hatch-treat-a-x-${day(20)}`, `hatch-wish-x-${day(2)}`,
+      `hatch-seen-x`, `other-thing-${day(30)}`, `hatch-upbringing-x`];
+    keys.forEach((k) => localStorage.setItem(k, "1"));
+    el._pruneKeys();
+    out.prune = keys.map((k) => !!localStorage.getItem(k));
+    keys.forEach((k) => localStorage.removeItem(k));
     s.voicedAt = Date.now() + 1e9; // hushed again for the checks after
     return out;
   });
@@ -1468,6 +1494,12 @@ async function main() {
   check("sad lines and lines with their own opener stay plain",
     voices.miss === "ok, ok... ♪" && voices.opener === "hmm... sleepy", `${voices.miss} | ${voices.opener}`);
   check("opening the status screen finishes the line", voices.finished);
+  check("a kept line for a slide off show waits, then is said and marked when it is on show",
+    !voices.offShow || (!voices.offShow.said && voices.offShow.queued === 1 && voices.offShow.marked === 0 &&
+      voices.offShow.after.queued === 0 && voices.offShow.after.marked === 1 && /off-show kept line/.test(voices.offShow.after.bubble)),
+    JSON.stringify(voices.offShow));
+  check("old per-day keys are pruned, newer and foreign keys stay",
+    voices.prune.join() === "false,false,true,true,true,true", voices.prune.join());
   check("its favourite snack is said", voices.favourite.length === 1 && voices.favourite[0].startsWith("hazelnuts, my favourite!!"),
     voices.favourite.join());
   // Reduced motion: no typing.

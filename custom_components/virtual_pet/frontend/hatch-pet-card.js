@@ -700,6 +700,25 @@ function oncePerDay(name) {
   }
   return true;
 }
+// The card's own per-day keys (oncePerDay's `hatch-<name>-<Date.toDateString()>`, and the
+// treat's `hatch-treat-...-<toDateString>`) older than PRUNE_DAYS go, once at card start.
+// Only keys that start "hatch-" and end in a day like "Fri Oct 31 2026" are touched.
+const PRUNE_DAYS = 14;
+const DATED_KEY = /^hatch-.+-((?:Sun|Mon|Tue|Wed|Thu|Fri|Sat) (?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{2} \d{4})$/;
+function pruneDatedKeys(now = Date.now()) {
+  try {
+    const old = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      const day = key && DATED_KEY.exec(key);
+      const at = day && new Date(day[1]).getTime();
+      if (at && now - at > PRUNE_DAYS * 86400000) old.push(key);
+    }
+    old.forEach((key) => localStorage.removeItem(key));
+  } catch (err) {
+    // no storage: nothing piles up
+  }
+}
 const seasonPart = (season, world) => ({ ...season.worlds["*"], ...season.worlds[world] });
 function seasonNow(config, date = new Date()) {
   if (config?.seasonal === false) return null;
@@ -2711,10 +2730,18 @@ class HatchPetCard extends HTMLElement {
   }
 
   setConfig(config) {
+    if (!pruneDatedKeys.done) {
+      pruneDatedKeys.done = true;
+      this._pruneKeys();
+    }
     this._config = config || {};
     this._sig = null;
     this._epoch = (this._epoch || 0) + 1; // every slide draws again
     this._index = this._index || 0;
+  }
+
+  _pruneKeys() {
+    pruneDatedKeys();
   }
 
   getCardSize() {
@@ -5010,7 +5037,10 @@ class HatchPetCard extends HTMLElement {
   // moment's time, noted as said for the catch-up.
   _line(s, cls, text, ms = 4500, { then, at, write, type, perk, still, ...opts } = {}) {
     const entry = { text, ms, cls, then, at, write, type, perk, still, opts };
-    if (this._mayInterrupt(s, cls, type)) {
+    // A kept line for a slide that is not on show waits in its queue (said, and
+    // marked said, when the slide comes to show) instead of being spent unseen.
+    const offShow = cls === KEPT && s !== this._slides?.[this._index];
+    if (!offShow && this._mayInterrupt(s, cls, type)) {
       this._sayLine(s, entry);
       return;
     }
@@ -6712,6 +6742,7 @@ class HatchPetCard extends HTMLElement {
     };
     s.status.querySelector(".jolder")?.addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
+      this._tapped(e.currentTarget);
       showOlder();
     });
     if (older.length && s.olderOpen) showOlder();
