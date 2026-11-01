@@ -273,6 +273,9 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   LCD in four greens, like an old handheld. It is per browser, off to begin with,
   and only changes how the screen looks. Safari and iOS can't draw it and keep
   showing colour.
+- **Big text.** "big text" in the same part makes the words on the status page, the
+  journal and the settings sheet bigger (the page scrolls more). It is per browser and
+  off to begin with: handy on a wall tablet, or for younger and older readers.
 - Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
   and phones give a tiny vibration. Then the real reaction follows (a food bowl, a
   sparkle, or a refusal like "I'm full!"). If HA rejects the press, the button shakes

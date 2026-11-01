@@ -24,6 +24,7 @@ node scripts/bench.js --preset visitors   # 28 shots at 330: every world visitor
 node scripts/bench.js --preset finds      # 74 shots: every find at reveal size, the baskets, sparkle, V3, baby, calm, compact
 node scripts/bench.js --preset gifts      # 11 shots: a gift's first look, V5 (longest name), V6 made/found, V7 baby, calm, compact, asleep
 node scripts/bench.js --preset collection # 21 shots: the finds page, each world at 420/330, shared, empty, all met, mono, an older server
+node scripts/bench.js --preset bigtext    # 18 shots: "big text" on, every status-box page at 420, 330 and 260
 node scripts/bench.js --preset mono       # the mono screen: 2498 shots, ~2.5 min, plus the pass rule
 ```
 
@@ -71,6 +72,7 @@ A shot (all optional):
 | `motion` | `reduce` emulates `prefers-reduced-motion: reduce` (`--motion reduce`) |
 | `catch` | `far` or `near`: a Catch round started (set `config: {experimental_catch: true}`) and held there by moving its clock. With `motion: reduce` those are calm Catch's two steps. `catchSide: "left"|"right"` and `catchDecoy: true` force the round (a bee is a later round) |
 | `lcd`, `booted`, `mono` | per-browser settings, see below |
+| `bigText` | `true` (`--big-text`): the "big text" switch on (larger words on the status box's pages) |
 | `classes` | an array of classes put on `.screen` last, before the transitions finish: `faded`, `raining`, `lit`... (the bench's `scene: "rain"` is woodland's rain backdrop without `raining`) |
 | `petClasses`, `petAt` | classes put on the pet itself (`["droop"]`), and `petAt` ms to pause its animation at, so a mid-motion frame is the same every run |
 | `react` | `fed`, `praised`, `refused` or `tucked`: that care reaction (PR 3c, teen/adult/baby only) started through the card's own `_reactFrames`: the stage's excited/bored/cozy frame and its move; `petAt` pauses the move mid-way |
