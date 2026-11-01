@@ -362,3 +362,5 @@ commit.
 - Woodland: banana slug, robin, deer, fox, squirrel.
 - Hearth: bunny, corgi, ferret, hamster, kitten (corgi teen and adult and kitten teen redrawn once:
   four feet down plus the raised paw made five legs).
+- Terrarium: ball python (adult from the probe), bearded dragon, gecko, tarantula, tortoise (droop and
+  tilt, feet down; the tarantula raises a front leg).
