@@ -243,7 +243,10 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 - **The settings gear.** A gear sits at the top of the status page ("settings").
   Tap it for the settings sheet; "‹ settings" at the top of any sub-page takes you
   back. The sheet has up to three parts:
-  - **for the pet** (or **for** its name): the pet's "shell" row, see below.
+  - **for the pet** (or **for** its name): "notices", the kinds of thing the house
+    shows the pet (weather, lights, tv, music, chores, fireplace, moon; "just the clock"
+    with none), then the pet's "shell" row, see below. An admin also gets "connect
+    more ›", which opens the pet's page in Settings → Devices & services.
   - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk and
     my data. These follow your login. A shared screen doesn't show this part.
   - **this screen**: sounds here, babble (for pets with a voice), screen effects

@@ -701,7 +701,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     el._state = function (slide, key) {
       const st = real.call(this, slide, key);
       if (key !== "sensor.life_stage" || !st) return st;
-      const { shell_finish_options, shell_locked, ...rest } = st.attributes;
+      const { shell_finish_options, shell_locked, senses, ...rest } = st.attributes;
       return { ...st, attributes: rest };
     };
     s.statusHtml = null;
@@ -1182,6 +1182,53 @@ async function main() {
     statusRows && sheet.open && sheet.back && sheet.sound && !sheet.stats, JSON.stringify(sheet));
   check("the settings sheet no longer holds misses and whines (on status now, top10 4a)", !sheet.pet0, JSON.stringify(sheet));
   check("the gear moves focus to the sheet's back row", sheet.focus === "sback", sheet.focus);
+  // top10 2b: "notices" in the pet's group lists the kinds the server sends (never an
+  // entity), "just the clock" with none; an admin gets "connect more ›" (never on a
+  // shared screen), which opens the integration's page in HA.
+  const noticesRow = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    const read = (senses, shared) => {
+      el._state = (x, key) => {
+        const st = real.call(el, x, key);
+        return key === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, senses } } : st;
+      };
+      if (shared) localStorage.setItem("hatch-shared-screen", "on");
+      s.statusHtml = null;
+      el._renderSettings(s);
+      const row = [...s.status.querySelectorAll(".row")].find((r) => /notices/.test(r.textContent));
+      const out = { value: row?.querySelector(".senses")?.textContent ?? null, link: s.status.querySelector(".connect")?.textContent ?? null };
+      if (shared) localStorage.setItem("hatch-shared-screen", "off");
+      return out;
+    };
+    try {
+      return { admin: !!el._hass.user?.is_admin, some: read(["weather", "tv"], false), none: read([], false), shared: read(["weather"], true),
+        server: real.call(el, s, "sensor.life_stage")?.attributes.senses };
+    } finally {
+      el._state = real;
+      s.statusHtml = null;
+      el._renderSettings(s);
+    }
+  });
+  check("top10 2b: \"notices\" lists the kinds (\"just the clock\" with none); an admin's \"connect more ›\", none on a shared screen",
+    Array.isArray(noticesRow.server) && noticesRow.some.value === "weather · tv" && noticesRow.none.value === "just the clock" &&
+    noticesRow.shared.value === "weather" && noticesRow.shared.link === null &&
+    noticesRow.some.link === (noticesRow.admin ? "connect more ›" : null), JSON.stringify(noticesRow));
+  if (noticesRow.admin) {
+    const went = await page.locator("hatch-pet-card").evaluate((el) => {
+      const s = el._slides[el._index];
+      const real = history.pushState;
+      let to = null;
+      history.pushState = (st, t, url) => { to = url; }; // stubbed: the check stays on its page
+      try {
+        s.status.querySelector(".connect")?.click();
+      } finally {
+        history.pushState = real;
+      }
+      return to;
+    });
+    check("top10 2b: \"connect more ›\" goes to the integration's page", went === "/config/integrations/integration/virtual_pet", String(went));
+  }
   // top10 3a: the family-tablet note sits right under the "shared screen" switch.
   const tabletNote = await page.locator("hatch-pet-card").evaluate((el) => {
     const s = el._slides[el._index];

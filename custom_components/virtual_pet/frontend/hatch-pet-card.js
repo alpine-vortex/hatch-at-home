@@ -6411,16 +6411,25 @@ class HatchPetCard extends HTMLElement {
     const shellOptions = this._state(s, "sensor.life_stage")?.attributes.shell_finish_options;
     const shellName = escape(this._shellName(s, this._shellChoice(s)));
     const shellSwatch = `<span class="sw" style="background: ${finishSwatch(this._shellKey(s), s.world.shell?.color || "#e8834a")}"></span>`;
-    // The pet's group: the shell, where the server offers it (read-only on a shared
-    // screen). Misses and whines moved to the status page (top10 4a), so an older
-    // server's sheet has no pet group at all.
-    const shellRows = !Array.isArray(shellOptions) ? ""
+    // What the house shows it (top10 2b): the kinds the server lists, never an
+    // entity; everyone sees it, and an admin gets a link to the options.
+    const senses = this._state(s, "sensor.life_stage")?.attributes.senses;
+    const notices = !Array.isArray(senses) ? ""
+      : row(null, "notices", `<span class="senses">${senses.length ? senses.map(escape).join(" · ") : "just the clock"}</span>`)
+        + (this._hass.user?.is_admin && !sharedScreen() ? `<button class="wlink connect">connect more ›</button>` : "");
+    // The pet's group: what it notices, then the shell, where the server offers it
+    // (read-only on a shared screen). Misses and whines moved to the status page
+    // (top10 4a), so an older server's sheet has no pet group at all.
+    const hasShell = Array.isArray(shellOptions);
+    const shellRows = !hasShell && !notices ? ""
       : sharedScreen()
         ? `<div class="sec">for the pet</div>
-      ${row(null, "shell", `<span class="shellro">${shellSwatch}${shellName}</span>`)}
-      <div class="shellnote">ask a grown-up to change it</div>`
+      ${notices}
+      ${hasShell ? `${row(null, "shell", `<span class="shellro">${shellSwatch}${shellName}</span>`)}
+      <div class="shellnote">ask a grown-up to change it</div>` : ""}`
         : `<div class="sec">for ${escape(this._linkName(s))}</div>
-      ${row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`)}`;
+      ${notices}
+      ${hasShell ? row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`) : ""}`;
     // Who each part changes: the pet (everyone), the viewer (follows their login),
     // or this browser.
     const html = `
@@ -6463,6 +6472,13 @@ class HatchPetCard extends HTMLElement {
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
       s.status.querySelector(".pback")?.focus({ preventScroll: true });
+    });
+    // An admin's way to the pet's options (Settings → Devices & services → Virtual Pet).
+    s.status.querySelector(".connect")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      history.pushState(null, "", "/config/integrations/integration/virtual_pet");
+      window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
     });
     s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
       e.stopPropagation();
