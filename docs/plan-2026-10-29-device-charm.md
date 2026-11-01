@@ -19,7 +19,11 @@ gear.** Verified against git tags.
 | Part 4 shell picker (settings gear) | 0fca154, 3ad1211 | 0.36.0; its docs 1671f44 in 0.38.0 |
 
 Left: persona link-line variants (later); Q5 (links across separate cards) and Q6
-(a drawn wave pose) stay deferred. The body below is the original plan.
+(a drawn wave pose) stay deferred. *2026-10-31:* the persona link lines are unblocked
+(personality P2a-P3 are built) and are the same slice as personality's "kindred pairs".
+Q6 would now be an art-only `acts` entry played through `_actPose` (R2's pattern), not
+new card code. Batch 6 (`fm-batch6c`) adds shell fixes: the porthole edge inset and the
+IR beam over the trim (`a6e0c044`). The body below is the original plan.
 
 **Line numbers are for `origin/main` at `29d77c2`.** P3a-card (in flight) rewrites
 parts of the card, so re-check every reference against main before building; the
