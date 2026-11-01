@@ -88,7 +88,14 @@ def test_each_world_has_the_plans_ten_finds() -> None:
         gift = [f["id"] for f in FINDS[world] if f.get("gift_only")]
         assert len(gift) == 1 and FINDS[world][-1]["id"] == gift[0]
         for f in FINDS[world]:
-            assert f["weight"] in (10, 6, 5, 4, 3, 1)  # tiers; the cap raised six rare ones
+            assert f["weight"] in (
+                10,
+                6,
+                5,
+                4,
+                3,
+                1,
+            )  # tiers; the cap raised six rare ones
             assert f["a"].split(" ", 1)[0] in ("a", "an", "some")
 
 
