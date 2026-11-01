@@ -526,7 +526,7 @@ Cut on purpose (they nag or ask): "the basket is full!", "come see what I found"
 | Data | Who sees it | Channel | Recorded? |
 |---|---|---|---|
 | Today's visit plan | every screen | `_house_view` | no |
-| Basket contents | every screen sees **how many** (0-3), never which, until the tap | `_house_view` (`house.basket`, an int, V-B) | no |
+| Basket contents | every screen: `house.basket` is **how many** (0-3), with no ids; the `found` moment does name each find that went in (for the away note, below) | `_house_view` (`house.basket`, an int, V-B) | no |
 | `found` moment | every screen, the away note | moments + bus (no user) | the bus, like other house moments |
 | Collect (tap) | the caller | **websocket** `virtual_pet/collect` (not a service and not a button, because a service's `call_service` row records `context_user_id`, rows M/O) | no |
 | Collection | the person who opens it | websocket `virtual_pet/collection` | no |
