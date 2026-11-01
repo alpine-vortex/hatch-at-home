@@ -5702,7 +5702,18 @@ async function main() {
     const once = await card.evaluate(async (el, { media, me }) => {
       const s = el._slides[el._index];
       const fromPublic = window.__spoken.filter((t) => t.includes("Bluey Check")).length;
-      const kept = { mine: s.mine, house: s.house };
+      const kept = { mine: s.mine, house: s.house, game: s.game, calling: s.calling };
+      // A media line is flavour: _mayInterrupt/_line drop it while the pet is in a
+      // game, has a question up, or is calling for care (the record below is kept
+      // and gets through regardless, which is the flake: media 0, record 1). Those
+      // states come and go with the dev pet's own timers, so pin them off for the
+      // measurement and put them back after.
+      const busy = { game: !!s.game, calling: !!s.calling, question: el._questionOn(s) };
+      s.game = null;
+      s.calling = false;
+      const askday = s.screen?.querySelector(".askday");
+      const askHome = askday && { parent: askday.parentNode, next: askday.nextSibling };
+      askday?.remove();
       const house = { media, dream: null };
       const record = { type: "bond_record", game: "left_right", wins: 4, at: new Date().toISOString() };
       Object.assign(s, { sayUntil: 0, queue: [] });
@@ -5717,9 +5728,13 @@ async function main() {
         fromPublic, media: window.__spoken.filter((t) => t.includes("Bluey Check")).length,
         record: window.__spoken.filter((t) => /new best/.test(t)).length,
         house: s.house?.media?.title,
+        ...(busy.game || busy.calling || busy.question ? { busy } : {}),
       };
       s.queue = [];
       s.house = kept.house;
+      s.game = kept.game;
+      s.calling = kept.calling;
+      if (askHome) askHome.parent.insertBefore(askday, askHome.next);
       return out;
     }, { media, me });
     check("P3a: one media line: the public moment is skipped, the channel's is said once",
