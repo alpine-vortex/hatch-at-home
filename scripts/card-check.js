@@ -40,9 +40,10 @@ const results = [];
 // The gated sections of main(), in file order.
 const SECTIONS = ["shelf", "shell", "play", "resume", "moments", "photos", "personality", "types",
   "egg", "sharedscreen", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
-  "editor", "boot", "infrared", "lowbattery", "restart", "finds", "oldcard"];
-// oldcard asserts restart's seeded bond; finds taps the basket restart seeds.
-const NEEDS = { oldcard: ["restart"], finds: ["restart"] };
+  "editor", "boot", "infrared", "lowbattery", "restart", "finds", "collection", "oldcard"];
+// oldcard asserts restart's seeded bond; finds taps the basket restart seeds; collection
+// opens the finds page on the collection restart seeds.
+const NEEDS = { oldcard: ["restart"], finds: ["restart"], collection: ["restart"] };
 const argv = process.argv.slice(2);
 if (argv.includes("--list")) {
   console.log(SECTIONS.join("\n"));
@@ -8928,6 +8929,184 @@ async function main() {
   check("V-C: the away note says \"found <a find>\", newest first, an unknown find skipped (V8)",
     note === `while you were out, I found ${aOf(seedB[2].id)} and found ${aOf(seedB[1].id)}!`, JSON.stringify(note));
   await card.first().evaluate((el) => { const s = el._slides[el._index]; el._revealEnd(s); s.queue = []; delete el.__calls; });
+  }
+  }
+  if (enter("collection")) {
+  // 8a2. The finds page (visitors v2 §4, V-D: _findsLink, _loadFinds, _fetchFinds,
+  // _renderFinds, _dropFinds, collectionTiles), on the collection restart seeded (two
+  // visitors, three finds, the gift-only id and `laterfind`): "finds ›" in the journal's
+  // foot opens it with one virtual_pet/collection {shared: false} (a websocket read: no
+  // call_service); "finds · <world>", "‹ journal"; met tiles drawn with their names,
+  // unmet ones silhouettes with no name, alt or label; a find with a `when` and the
+  // gift-only find hidden until met, the gift-only id and laterfind never in the house's
+  // page (D7); no count (D8); no overflow at 420 or 330 (D6); a photo load doesn't flip
+  // back to the journal (D3, _fetchPhotos). Then, with the server's reply given gifts on
+  // the card's side: the ♥ on the viewer's own screen, dropped on a shared-screen flip
+  // (_goShared) and kept in no localStorage key; a shared screen's page has none even if
+  // a reply carried them; an error goes back to the journal with no text.
+  if (!basketSeed) {
+    check("V-D: the collection section has restart's seeded page (set HA_CONFIG and HA_START)", false,
+      "no seeded collection: restart didn't run or its world has too few finds");
+  } else {
+  await page.setViewportSize({ width: 420, height: 860 });
+  await page.waitForTimeout(500);
+  await calm();
+  await pinAwake(card, "collection");
+  const W = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
+  const cw = basketSeed.world;
+  const fw = W[cw];
+  const stored = JSON.parse(fs.readFileSync(path.join(process.env.HA_CONFIG, ".storage", `virtual_pet.${basketSeed.entryId}`), "utf8")).data;
+  const savedPage = stored.collection?.[cw] || {};
+  const giftOnly = fw.finds.filter((f) => f.gift_only).map((f) => f.id);
+  const timed = (f) => Array.isArray(f.when) && f.when.length > 0;
+  const nameOf = (id) => (fw.finds.find((f) => f.id === id) || fw.visitors.find((v) => v.id === id))?.name;
+  // The server's own page first (no stub yet): the house map, and gifts only when not shared.
+  const real = await card.first().evaluate(async (el, e) => {
+    const ask = (shared) => el._hass.callWS({ type: "virtual_pet/collection", entity_id: e, shared })
+      .catch((err) => ({ error: err?.code || String(err) }));
+    return { own: await ask(false), shared: await ask(true) };
+  }, seedPet);
+  const metV = fw.visitors.map((v) => v.id).filter((id) => real.own.visitors?.includes(id));
+  const metF = fw.finds.map((f) => f.id).filter((id) => real.own.finds?.[id]);
+  check("V-D: the server's page has the seeded finds but neither the gift-only id nor laterfind (D7), and gifts only when not shared",
+    !real.own.error && real.own.world === cw && metV.length >= 1 && metF.length >= 2 &&
+    giftOnly.every((id) => savedPage.finds?.[id] && !(id in (real.own.finds || {})) && !(id in (real.shared.finds || {}))) &&
+    !("laterfind" in (real.own.finds || {})) && Array.isArray(real.own.gifts) && !("gifts" in real.shared),
+    JSON.stringify({ saved: savedPage, real }));
+  // Open it through the journal's foot, with a spy on every message the card sends.
+  const open = async (stub) => card.first().evaluate(async (el, { e, stub }) => {
+    const s = el._slides[el._index];
+    const conn = el._hass.connection;
+    el.__fmsgs = [];
+    if (!el.__fprev) {
+      el.__fprev = conn.sendMessagePromise;
+      conn.sendMessagePromise = function (msg, ...a) {
+        el.__fmsgs?.push({ type: msg?.type, entity_id: msg?.entity_id, shared: msg?.shared });
+        if (msg?.type === "virtual_pet/collection" && el.__fstub === "error") return Promise.reject({ code: "unknown_command" });
+        const p = el.__fprev.call(this, msg, ...a);
+        // The server's reply, given gifts here (any screen: the card must ignore them shared).
+        return msg?.type === "virtual_pet/collection" && el.__fstub ? p.then((r) => ({ ...r, gifts: el.__fstub })) : p;
+      };
+    }
+    el.__fstub = stub;
+    const wait = async (ok, ms = 10000) => { for (const t = Date.now(); !ok() && Date.now() - t < ms;) await new Promise((r) => setTimeout(r, 50)); };
+    if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+    el._toggleStatus(s);
+    s.status.querySelector(".jlink").click();
+    await wait(() => s.status.querySelector(".jfoot .flink"));
+    const foot = [...(s.status.querySelector(".jfoot")?.querySelectorAll("button") || [])].map((b) => b.textContent);
+    s.status.querySelector(".jfoot .flink").click();
+    const loading = [...s.status.querySelectorAll(".jhead span")].map((x) => x.textContent);
+    await wait(() => s.status.querySelector(".fgrid") || !s.finds);
+    await wait(() => s.status.querySelector(".fgrid") || s.status.querySelector(".jgrid"), 5000); // an error: the journal
+    await new Promise((r) => setTimeout(r, 300));
+    const grids = [...s.status.querySelectorAll(".fgrid")];
+    const tile = (t) => ({ id: (t.querySelector("img")?.getAttribute("src") || "").match(/\/ui\/(?:visitor|find)_[a-z]+_([a-z]+)(?:_1)?\.png/)?.[1],
+      locked: t.classList.contains("locked"), alt: t.querySelector("img")?.getAttribute("alt"), label: t.getAttribute("aria-label"),
+      text: t.textContent.trim(), heart: !!t.querySelector(".fheart") });
+    const box = s.status.getBoundingClientRect();
+    return { e: s.ids?.["sensor.life_stage"] === e, finds: s.finds, journal: s.journal, foot, loading,
+      head: s.status.querySelector(".jhead")?.textContent.replace(/\s+/g, " ").trim(),
+      back: s.status.querySelector(".flink")?.textContent, text: s.status.textContent,
+      visitors: grids[0] ? [...grids[0].children].map(tile) : null, tiles: grids[1] ? [...grids[1].children].map(tile) : null,
+      fit: s.status.scrollWidth <= s.status.clientWidth && [...s.status.querySelectorAll(".ftile")].every((t) => t.getBoundingClientRect().right <= box.right + 0.5),
+      jgrid: !!s.status.querySelector(".jgrid"), note: s.status.querySelector(".status-feedback")?.textContent || "",
+      msgs: el.__fmsgs.slice() };
+  }, { e: seedPet, stub });
+  const a = await open(null);
+  const calls = a.msgs.filter((m) => m.type === "virtual_pet/collection");
+  check("V-D: \"finds ›\" sits in the journal's foot with \"‹ status\", and opens with \"opening…\"",
+    JSON.stringify(a.foot) === JSON.stringify(["‹ status", "finds ›"]) &&
+    JSON.stringify(a.loading) === JSON.stringify([`finds · ${fw.name}`, "opening…"]), JSON.stringify({ foot: a.foot, loading: a.loading }));
+  check("V-D: one virtual_pet/collection {shared: false} for this pet, and no call_service",
+    calls.length === 1 && calls[0].entity_id === seedPet && calls[0].shared === false && !a.msgs.some((m) => m.type === "call_service"),
+    JSON.stringify(a.msgs));
+  check("V-D: the page is \"finds · <world>\" with \"‹ journal\"", a.e && a.finds && a.head === `finds · ${fw.name}` && a.back === "‹ journal",
+    JSON.stringify({ head: a.head, back: a.back, finds: a.finds }));
+  const wantV = fw.visitors.map((v) => ({ id: v.id, locked: !metV.includes(v.id) }));
+  const wantF = fw.finds.filter((f) => !f.gift_only && (metF.includes(f.id) || !timed(f))).map((f) => ({ id: f.id, locked: !metF.includes(f.id) }));
+  const same = (got, want) => JSON.stringify((got || []).map((t) => ({ id: t.id, locked: t.locked }))) === JSON.stringify(want);
+  const named = (t) => (t.locked ? t.text === "" && t.alt === "" && t.label === null : t.text === nameOf(t.id) && t.alt === "");
+  check("V-D: three visitor tiles, the met ones drawn with their names, the other a silhouette", same(a.visitors, wantV) &&
+    a.visitors.every(named), JSON.stringify({ want: wantV, got: a.visitors }));
+  check("V-D: find tiles: met ones drawn with names; unmet plain ones silhouettes with no name, alt or label; unmet `when` finds, the gift-only one and laterfind absent",
+    same(a.tiles, wantF) && a.tiles.every(named) && !a.tiles.some((t) => giftOnly.includes(t.id) || t.id === "laterfind") &&
+    !a.tiles.some((t) => t.heart) && !/\?\?\?/.test(a.text), JSON.stringify({ want: wantF, got: a.tiles }));
+  check("V-D: no count on the page (no \"x of y\", %, or progress, D8)", !/\d+\s*(of|\/)\s*\d+|%|progress/i.test(a.text), a.text);
+  // D3: a photo load while on the page draws the journal under it no more.
+  const photos = await card.first().evaluate(async (el) => {
+    const s = el._slides[el._index];
+    await el._loadPhotos(s);
+    await new Promise((r) => setTimeout(r, 300));
+    return { finds: s.finds, grid: !!s.status.querySelector(".fgrid"), journal: !!s.status.querySelector(".jgrid") };
+  });
+  check("V-D: a photo load while the page is open leaves it open (D3)", photos.finds && photos.grid && !photos.journal, JSON.stringify(photos));
+  check("V-D: no overflow at 420 (D6)", a.fit, "");
+  await page.setViewportSize({ width: 330, height: 860 });
+  await page.waitForTimeout(800);
+  const fit330 = await card.first().evaluate((el) => {
+    const s = el._slides[el._index];
+    const box = s.status.getBoundingClientRect();
+    return { compact: el._card.classList.contains("compact"), grid: !!s.status.querySelector(".fgrid"), sw: s.status.scrollWidth, cw: s.status.clientWidth,
+      out: [...s.status.querySelectorAll(".ftile")].filter((t) => t.getBoundingClientRect().right > box.right + 0.5).length };
+  });
+  check("V-D: no overflow at 330 (D6)", fit330.grid && fit330.sw <= fit330.cw && fit330.out === 0, JSON.stringify(fit330));
+  await page.setViewportSize({ width: 420, height: 860 });
+  await page.waitForTimeout(500);
+  const back = await card.first().evaluate(async (el) => {
+    const s = el._slides[el._index];
+    s.status.querySelector(".flink").click();
+    for (const t = Date.now(); !s.status.querySelector(".jgrid") && Date.now() - t < 10000;) await new Promise((r) => setTimeout(r, 50));
+    return { finds: s.finds, journal: s.journal, grid: !!s.status.querySelector(".jgrid") };
+  });
+  check("V-D: \"‹ journal\" goes back to the journal", !back.finds && back.journal && back.grid, JSON.stringify(back));
+  // The ♥: the reply given gifts here (a met find, one the house never found, the
+  // gift-only one, and a `when` find never met, if any).
+  const plain = fw.finds.filter((f) => !f.gift_only && !timed(f));
+  const unmet = plain.find((f) => !metF.includes(f.id));
+  const unmetTimed = fw.finds.find((f) => !f.gift_only && timed(f) && !metF.includes(f.id));
+  const gifts = [metF[0], unmet?.id, giftOnly[0], unmetTimed?.id].filter(Boolean);
+  const h = await open(gifts);
+  const hearts = (h.tiles || []).filter((t) => t.heart).map((t) => t.id).sort();
+  check("V-D: on the viewer's own screen their gifts are drawn with a ♥, the house's unfound and the gift-only one too (owner, 2026-11-02)",
+    JSON.stringify(hearts) === JSON.stringify([...gifts].sort()) && gifts.every((id) => { const t = h.tiles.find((x) => x.id === id); return t && !t.locked && t.text.startsWith(nameOf(id)); }),
+    JSON.stringify({ gifts, tiles: h.tiles }));
+  // A shared-screen flip: the page and its ♥ go; nothing of them is kept in localStorage.
+  await page.evaluate(() => {
+    localStorage.setItem("hatch-shared-screen", "on");
+    window.dispatchEvent(new CustomEvent("hatch-shared-changed", { detail: { on: true } }));
+  });
+  await page.waitForTimeout(500);
+  const flip = await card.first().evaluate((el, ids) => {
+    const s = el._slides[el._index];
+    const store = Object.keys(localStorage).map((k) => `${k}=${localStorage.getItem(k)}`).join("\n");
+    return { finds: s.finds, data: s.findsData, hearts: el.shadowRoot.querySelectorAll(".fheart").length,
+      kept: ids.filter((id) => store.includes(id)), words: /collection|gift|♥/.test(store) };
+  }, gifts);
+  check("V-D: a shared-screen flip drops the page and its ♥; no localStorage key holds them (V-E review #12)",
+    !flip.finds && flip.data === null && flip.hearts === 0 && flip.kept.length === 0 && !flip.words, JSON.stringify(flip));
+  const sh = await open(gifts);
+  const shCalls = sh.msgs.filter((m) => m.type === "virtual_pet/collection");
+  check("V-D: a shared screen asks with shared: true and draws no ♥, no gift-only tile, and no unfound gift, even if the reply carried them",
+    shCalls.length === 1 && shCalls[0].shared === true && sh.finds && !(sh.tiles || []).some((t) => t.heart || giftOnly.includes(t.id)) &&
+    (!unmet || sh.tiles.find((t) => t.id === unmet.id)?.locked) && same(sh.tiles, wantF),
+    JSON.stringify({ msgs: sh.msgs, tiles: sh.tiles }));
+  await page.evaluate(() => {
+    localStorage.setItem("hatch-shared-screen", "off");
+    window.dispatchEvent(new CustomEvent("hatch-shared-changed", { detail: { on: false } }));
+  });
+  await page.waitForTimeout(800);
+  // An older server (an error): back to the journal, nothing said.
+  const err = await open("error");
+  check("V-D: an error stays on the journal with no text", !err.finds && err.journal && err.jgrid && err.note === "" &&
+    !/opening…/.test(err.text), JSON.stringify({ finds: err.finds, journal: err.journal, grid: err.jgrid, note: err.note }));
+  await card.first().evaluate((el) => {
+    const s = el._slides[el._index];
+    if (el.__fprev) el._hass.connection.sendMessagePromise = el.__fprev;
+    delete el.__fprev; delete el.__fstub; delete el.__fmsgs;
+    if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+  });
+  await unpinAwake(card);
   }
   }
   if (enter("oldcard")) {
