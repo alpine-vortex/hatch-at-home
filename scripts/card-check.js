@@ -4188,6 +4188,30 @@ async function main() {
       .filter((line) => /^gen \d/.test(line));
     check("D1: a teen's journal line shows it", teenJournal.length === 1 && / · fancy( |$)/.test(teenJournal[0]),
       JSON.stringify(teenJournal));
+    // 2e: seven generations: the newest four, then "older generations (3)", a tap
+    // opens the other three, oldest first, at 44 px.
+    const seven = [1, 2, 3, 4, 5, 6].map((g) => record(g, `Checkgen${g}`, {}));
+    const sevenLines = (await asPet("adult", { generation: 7, journal: seven }, true))
+      .filter((line) => /^gen \d/.test(line));
+    const olderBtn = cur().locator(".jolder");
+    check("2e: seven generations show four and a link saying 3",
+      sevenLines.length === 4 && /^gen 4 /.test(sevenLines[0]) && /^gen 7 \(now\)/.test(sevenLines[3]) &&
+      (await olderBtn.innerText()) === "older generations (3)", JSON.stringify(sevenLines));
+    const box = await olderBtn.boundingBox();
+    check("2e: the link is 44 px", box.height >= 44 && box.width >= 44, JSON.stringify(box));
+    await shot("07e-older-generations-closed");
+    await olderBtn.click();
+    const all = (await cur().locator(".gen").allInnerTexts()).map((l) => l.replace(/\s+/g, " ").trim().split(" ")[1]);
+    check("2e: a tap opens the rest, oldest first, and the link goes",
+      all.join() === "1,2,3,4,5,6,7" && (await cur().locator(".jolder").count()) === 0, all.join());
+    await shot("07f-older-generations-open");
+    await page.locator("hatch-pet-card").evaluate((el) => { el._slides[el._index].olderOpen = false; });
+    await asPet("adult", { generation: 5, journal: seven.slice(0, 4) }, true);
+    check("2e: five generations: the link says 1",
+      (await cur().locator(".jolder").count()) === 1 && (await olderBtn.innerText()) === "older generations (1)", "");
+    const three = await asPet("adult", { generation: 4, journal: seven.slice(0, 3) }, true);
+    check("2e: four generations show no link", (await cur().locator(".jolder").count()) === 0 && three.length >= 4,
+      JSON.stringify(three));
     await unstubState();
     await page.locator("hatch-pet-card .statusbtn").click();
     await page.waitForTimeout(400);

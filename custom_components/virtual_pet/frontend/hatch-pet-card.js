@@ -2489,6 +2489,8 @@ const STYLE = `
   .bar div { height: 100%; background: #2f3a24; }
   .hearts { letter-spacing: 2px; }
   .hearts .off { opacity: .25; }
+  .jolder { display: block; border: none; background: none; padding: 0; min-height: 44px; min-width: 44px;
+    font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
   .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
     min-height: 44px; min-width: 44px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
@@ -6585,6 +6587,7 @@ class HatchPetCard extends HTMLElement {
       e.stopPropagation(); // the screen behind would close the status
       this._tapped(e.currentTarget);
       s.journal = open;
+      s.olderOpen = false; // older generations fold up with the journal
       if (open) this._loadPhotos(s); // a best friend's photos, theirs only
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
@@ -6616,8 +6619,10 @@ class HatchPetCard extends HTMLElement {
       personality: ["teen", "adult"].includes(this._state(s, "sensor.life_stage")?.state) ? stage.personality : null,
       current: true,
     };
-    const past = [...(stage.journal || []), now].slice(-4);
-    const ids = [...new Set([...roster, ...past.map((p) => p.species).filter(Boolean)])];
+    const every = [...(stage.journal || []), now];
+    const past = every.slice(-4);
+    const older = every.slice(0, -4); // behind "older generations (N)"
+    const ids = [...new Set([...roster, ...every.map((p) => p.species).filter(Boolean)])];
     const names = {};
     await Promise.all(ids.map((id) => loadJson(`sprites/${id}/species.json`)
       .then((d) => { names[id] = d.name; }).catch(() => { names[id] = id; })));
@@ -6629,7 +6634,7 @@ class HatchPetCard extends HTMLElement {
         `<span>${known ? escape(names[id]).toLowerCase() : "???"}</span></div>`;
     });
     // The family line, oldest first: each generation and its traits.
-    const lines = past.map((p) =>
+    const line = (p) =>
       `<div class="gen${p.current ? " now" : ""}">gen ${p.generation}${p.current ? " (now)" : ""} · ` +
       `${escape(p.name)} · ${escape((names[p.species] || "egg").toLowerCase())}` +
       `${p.age_days != null ? ` · ${Math.round(p.age_days)} d` : ""}` +
@@ -6637,17 +6642,31 @@ class HatchPetCard extends HTMLElement {
       `${p.personality ? ` · ${escape(String(p.personality).replaceAll("_", " "))}` : ""}` +
       `${gamesPlayed(p.games) ? ` · ${gamesPlayed(p.games)} games` : ""}` +
       `${p.traits?.length ? `<br><span class="gt">${p.traits.map((t) =>
-        traitLabel(t, p.levels?.[t], t === p.inherited)).join(" ")}</span>` : ""}</div>`);
+        traitLabel(t, p.levels?.[t], t === p.inherited)).join(" ")}</span>` : ""}</div>`;
+    const lines = past.map(line);
+    // The rest, oldest first, above the newest four; opened for as long as the journal is.
+    const olderLink = older.length
+      ? `<button class="jolder">older generations (${older.length})</button>` : "";
     const html = `
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
       <div class="jgrid">${tiles.join("")}</div>
       ${this._photoRow(s)}
-      <div class="jlist">${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
+      <div class="jlist">${olderLink}<span class="jmore"></span>${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
       <button class="jlink">‹ status</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     this._journalLink(s, false);
+    const showOlder = () => {
+      s.status.querySelector(".jmore").innerHTML = older.map(line).join("");
+      s.status.querySelector(".jolder")?.remove();
+      s.olderOpen = true;
+    };
+    s.status.querySelector(".jolder")?.addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      showOlder();
+    });
+    if (older.length && s.olderOpen) showOlder();
     s.status.querySelectorAll(".psave").forEach((button) => button.addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
       this._tapped(e.currentTarget);
