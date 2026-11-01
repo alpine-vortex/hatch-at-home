@@ -11,7 +11,7 @@ from __future__ import annotations
 import calendar
 from collections.abc import Collection
 import copy
-from dataclasses import asdict, dataclass, field, fields
+from dataclasses import MISSING, asdict, dataclass, field, fields
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
 import math
 import random
@@ -858,6 +858,78 @@ def fast_forward(
     if state.asleep and not state.napping:
         state.wake_at = next_wake(now, settings)
     return events
+
+
+# Debug restore (the restore_pet service). "heal" undoes what a long run of
+# card checks does to a dev pet: needs topped up, nothing pending that would
+# make it sick again on the next tick (misses, old poops, an unanswered call).
+HEAL: dict[str, Any] = {
+    "sick": False,
+    "sick_unannounced": None,
+    "health": 100.0,
+    "energy": 90.0,
+    "hunger": 80.0,
+    "happiness": 80.0,
+    "weight": R.WEIGHT_START,
+    "call": None,
+    "latched": [],
+    "latched_at": {},
+    "recent_misses": [],
+    "poops": [],
+    "digesting": [],
+}
+# "reset" also puts its care record and passing moods back to a new pet's.
+# Who it is stays: name, species, age, traits, personality, upbringing,
+# journal, bonds (the household's), favourites, sleep and the house settings.
+RESET_KEYS = (
+    *HEAL,
+    "discipline",
+    "care_misses",
+    "discipline_misses",
+    "counted_misses",
+    "miss_day_at",
+    "miss_day_count",
+    "last_care_at",
+    "praised_care",
+    "praise_window_at",
+    "praise_count",
+    "praise_day_at",
+    "praise_day_count",
+    "last_excite",
+    "cozy_until",
+    "cool_until",
+    "kept_up_until",
+    "game",
+    "opening",
+    "opening_at",
+    "treats_waiting",
+    "chore_treats",
+)
+
+
+def restore(state: PetState, mode: str = "heal") -> list[str]:
+    """Debug: heal the pet ("heal") or put its needs and care record back to
+    a new pet's ("reset"; a game in progress is dropped without counting).
+    Returns the keys it changed."""
+    if mode == "heal":
+        values = HEAL
+    elif mode == "reset":
+        defaults = {
+            f.name: f.default_factory()
+            if f.default_factory is not MISSING
+            else f.default
+            for f in fields(PetState)
+            if f.name in RESET_KEYS
+        }
+        values = {**defaults, **HEAL}
+    else:
+        raise ValueError(f"unknown restore mode {mode!r}")
+    changed = []
+    for key, value in values.items():
+        if getattr(state, key) != value:
+            setattr(state, key, copy.deepcopy(value))
+            changed.append(key)
+    return changed
 
 
 def next_wake(ts: float, settings: Settings) -> float:

@@ -2281,6 +2281,25 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "events": [e["type"] for e in events],
         }
 
+    async def async_restore(self, mode: str) -> dict[str, Any]:
+        """Debug: heal the pet, or reset its needs and care record (model.restore)."""
+        assert self.state is not None
+        self._advance(self._now())
+        changed = model.restore(self.state, mode)
+        # No event ends the call or the sickness, so take them off the phones
+        # here, as _notify does when one ends in play.
+        if self._call_notified and self.state.notify_users:
+            self._send(
+                list(self.state.notify_users),
+                "clear_notification",
+                notify.call_tag(self.pet_id),
+            )
+        self._call_notified = self._sick_told = False
+        self.update_recalls()
+        self._save()
+        self._publish()
+        return {"mode": mode, "changed": changed}
+
     async def _who(self, context: Context | None) -> str | None:
         """Name of the HA user behind an action, for the who-fed log."""
         if context is None or context.user_id is None:

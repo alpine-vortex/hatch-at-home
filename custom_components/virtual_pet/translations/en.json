@@ -293,6 +293,20 @@
         }
       }
     },
+    "restore_pet": {
+      "name": "Restore pet",
+      "description": "Debug tool for test pets: heals the pet (needs topped up, not sick, no misses, poops or call waiting), or with reset also puts its care record back to a new pet's. Who it is stays: species, age, traits, journal and bonds.",
+      "fields": {
+        "mode": {
+          "name": "Mode",
+          "description": "Heal: full health and needs. Reset: heal, and clear its care misses, discipline and other counters."
+        },
+        "config_entry_id": {
+          "name": "Pet",
+          "description": "Which pet. Leave empty for all pets."
+        }
+      }
+    },
     "notify_me": {
       "name": "Notify me",
       "description": "Turns this pet's phone notifications on or off for you, the user calling it. They go to your phones through the Home Assistant app: calls, sickness, hatching, growing up, traits, the season's first snow and frost, and new eggs.",
@@ -406,6 +420,14 @@
     "people_damaged": {
       "title": "The pets' memories of people were damaged",
       "description": "The file where the pets keep what they know about each person (birthdays, answers, settings) couldn't be read, so they start fresh with everyone. Your pets and your bonds with them are fine. The file as it was is kept as `.storage/{backup}`. To go back to it: stop Home Assistant, fix the file, rename it to `.storage/virtual_pet.people`, and start Home Assistant again."
+    }
+  },
+  "selector": {
+    "restore_mode": {
+      "options": {
+        "heal": "Heal",
+        "reset": "Reset"
+      }
     }
   }
 }

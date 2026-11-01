@@ -2927,3 +2927,59 @@ def test_an_away_pet_does_not_become_sick():
     pet.away = True
     events = run(pet, start + 5 * HOUR)
     assert "became_sick" not in types(events)
+
+
+def drifted(now: float) -> model.PetState:
+    """A dev pet after many card-check runs: sick, thin, missed, mid-call."""
+    pet = hatched(now, health=10.0, energy=5.0, hunger=0.0, weight=0.0, sick=True)
+    pet.species = "bird"
+    pet.traits = ["brave"]
+    pet.bonds = {"user1": {"points": 5}}
+    pet.recent_misses = [now - 60, now - 120, now - 180, now - 240]
+    pet.care_misses = 9
+    pet.discipline = 40.0
+    pet.poops = [now - 6 * 3600]
+    pet.latched = ["hunger"]
+    pet.latched_at = {"hunger": now - 60}
+    pet.call = model.Call("hunger", now - 60, now + 600)
+    return pet
+
+
+def test_restore_heal_tops_up_and_stays_well():
+    now = at(12)
+    pet = drifted(now)
+    changed = model.restore(pet, "heal")
+    assert "sick" in changed and "call" in changed
+    assert not pet.sick and pet.call is None and pet.latched == []
+    assert (pet.health, pet.energy, pet.hunger) == (100.0, 90.0, 80.0)
+    assert pet.weight == R.WEIGHT_START
+    assert pet.recent_misses == [] and pet.poops == []
+    # The care record and who it is are a heal's business no more than a medicine's.
+    assert pet.care_misses == 9 and pet.discipline == 40.0
+    assert pet.species == "bird" and pet.traits == ["brave"] and pet.bonds
+    # Nothing left to make it sick again over the next hours.
+    assert "became_sick" not in types(run(pet, now + 3 * 3600))
+    assert not pet.sick
+    assert model.restore(pet, "heal") != []  # needs moved since; it tops them up
+    assert model.restore(pet, "heal") == []  # and a second call changes nothing
+
+
+def test_restore_reset_clears_the_care_record_and_keeps_who_it_is():
+    now = at(12)
+    pet = drifted(now)
+    pet.age_hours = 80.0
+    model.restore(pet, "reset")
+    assert pet.care_misses == 0 and pet.discipline == 0.0
+    assert pet.health == 100.0 and not pet.sick
+    assert pet.age_hours == 80.0 and pet.species == "bird"
+    assert pet.traits == ["brave"] and pet.bonds == {"user1": {"points": 5}}
+    with pytest.raises(ValueError):
+        model.restore(pet, "nonsense")
+
+
+def test_restore_keys_are_pet_fields():
+    by_name = {f.name: f for f in model.fields(model.PetState)}
+    assert set(model.RESET_KEYS) <= set(by_name)
+    for key in model.RESET_KEYS:  # each has a default to go back to
+        f = by_name[key]
+        assert f.default is not model.MISSING or f.default_factory is not model.MISSING

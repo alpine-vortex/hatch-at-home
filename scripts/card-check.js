@@ -191,6 +191,9 @@ async function ensurePets(access) {
     entries = await api("GET", "/api/config/config_entries/entry?domain=virtual_pet", access);
   }
   await api("POST", "/api/services/virtual_pet/fast_forward", access, { hours: 1 });
+  // Many runs wear the dev pets down (sick, thin, missed calls), which breaks checks
+  // like idle life: start every run from a healed pet.
+  await api("POST", "/api/services/virtual_pet/restore_pet", access, {});
 }
 
 // Reload once HA's frontend has finished loading, then wait for `sel`. A reload while

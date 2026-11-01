@@ -102,6 +102,9 @@
     "fast_forward": {
       "service": "mdi:fast-forward"
     },
+    "restore_pet": {
+      "service": "mdi:medical-bag"
+    },
     "play_game": {
       "service": "mdi:gamepad-variant"
     },

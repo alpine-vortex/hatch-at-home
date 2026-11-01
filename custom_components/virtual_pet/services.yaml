@@ -14,6 +14,21 @@ fast_forward:
       selector:
         config_entry:
           integration: virtual_pet
+restore_pet:
+  fields:
+    mode:
+      example: heal
+      default: heal
+      selector:
+        select:
+          translation_key: restore_mode
+          options:
+            - heal
+            - reset
+    config_entry_id:
+      selector:
+        config_entry:
+          integration: virtual_pet
 notify_me:
   fields:
     entity_id:
