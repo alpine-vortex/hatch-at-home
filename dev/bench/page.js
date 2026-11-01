@@ -146,12 +146,29 @@
     const mm = window.matchMedia.bind(window);
     // `link.cheer`: the full visit (beam and all, ~2.5 s) so the cheer at "hi hi" plays; wait ~1900 past the screen.
     if (!link.cheer) window.matchMedia = (q) => (String(q).includes("reduced-motion") ? { matches: true, addListener() {}, addEventListener() {} } : mm(q));
+    // `link.rolls`: what Math.random gives _linkStart first (all its rolls are made there),
+    // in order: the host's normal pick, its type coin and pick, the guest's the same, then
+    // the kindred odds and pick. E.g. [0, 0, 0, 0, 0, 0, 0, 0] is type lines and the extra.
+    const seeded = Math.random;
+    const rolls = [...(link.rolls || [])];
+    Math.random = () => (rolls.length ? rolls.shift() : seeded());
     card._linkStart(host, guest);
+    Math.random = seeded;
     window.matchMedia = mm;
     for (const t = Date.now() + 3000; !(host.linkFrames && card._link?.img?.getAttribute("src")) && Date.now() < t;) await new Promise((r) => setTimeout(r, 25));
     // Past the sprite check (150 ms), before the guest's first swap (700 ms), unless
     // `link.wait` waits for it: a wave that fails to load is dropped at that swap.
     await new Promise((r) => setTimeout(r, link.wait ?? 150));
+    // `link.say`: "host" or "extra", the host's queued line on show (the tick is stopped,
+    // so the bench says it through the card's own _sayQueued). The visit is held there.
+    if (link.say) {
+      card._link.timers.forEach(clearTimeout);
+      for (let n = link.say === "extra" ? 2 : 1; n > 0; n--) {
+        host.sayUntil = 0;
+        card._sayQueued(host);
+      }
+      card._stopTyping?.(host, false);
+    }
     card._show(host, host.pet, host.linkFrames[0]);
     await settled(card);
     // The guest steps in and the host shifts over: bring both to rest.

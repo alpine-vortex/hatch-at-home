@@ -7731,7 +7731,7 @@ async function main() {
     check(`the visit screen shows a connecting band, then both pets (${width}px)`,
       band.band === 1 && both.guestImg === 1 && both.hostPos && both.band === 0, JSON.stringify([band.band, both.guestImg, both.hostPos]));
     check(`both pets speak, each in their own voice (${width}px)`,
-      new RegExp(`hi.*${names[1]}|${names[1]}.*hello`).test(lines.hostSays) && lines.guestSays.includes(names[0]) && lines.guestBubble.includes("♪"),
+      lines.hostSays.includes(names[1]) && lines.guestSays.includes(names[0]) && lines.guestBubble.includes("♪"),
       JSON.stringify([lines.hostSays, lines.guestSays, lines.guestBubble]));
     await lp.waitForTimeout(1500);
     await strip("6-farewell");
@@ -7839,6 +7839,59 @@ async function main() {
     const calmEnd = await state();
     check(`reduced motion: no beam and no hops, the pets just appear together (${width}px)`,
       !sawBeam && !sawHop && sawBoth && calmEnd.left === 0, JSON.stringify([sawBeam, sawHop, sawBoth, calmEnd.left]));
+
+    // Kindred pairs (2b): a mellow host and a sweet guest, every roll 0 (type lines, and
+    // the extra, mellow's first: "<guest>, we do cosy well ♥"). The extra is said and
+    // announced in the visit, never after it, nor after a swipe away and back.
+    if (width === 420) {
+      const kindred = (run) => card.evaluate(async (el, run) => {
+        const [host, guest] = [el._slides[0], el._slides[1]];
+        if (!el.__linkTypes) {
+          const before = el._state;
+          el._state = function (slide, key) {
+            const st = before.call(this, slide, key);
+            const type = this.__linkTypes?.get(slide);
+            return key === "sensor.life_stage" && st && type ? { ...st, state: "adult", attributes: { ...st.attributes, personality: type } } : st;
+          };
+        }
+        el.__linkTypes = new Map([[host, "mellow"], [guest, "sweet"]]);
+        const nm = (s) => { const d = el._hass.devices[s.ids.device]; return d.name_by_user || d.name; };
+        const extra = `${nm(guest)}, we do cosy well ♥`;
+        const real = Math.random;
+        Math.random = () => 0;
+        try { el._linkStart(host, guest); } finally { Math.random = real; }
+        const seen = { during: false, live: false, after: false, endMs: 0, hello: false };
+        const t0 = Date.now();
+        for (let i = 0; i < 110; i++) {
+          if (run === "swipe" && i === 10) el._go(1);
+          if (run === "swipe" && i === 15) el._go(-1);
+          await new Promise((r) => setTimeout(r, 100));
+          const says = host.bubble.textContent.includes(extra);
+          if (el._link) {
+            seen.during ||= says;
+            seen.live ||= host.live.textContent.includes(extra.replace(" ♥", "")); // read out without the heart
+            seen.hello ||= host.bubble.textContent.includes(`oh hey, ${nm(guest)}... ♪`); // mellow's first
+            seen.endMs = Date.now() - t0;
+          } else seen.after ||= says && host.sayEntry?.shownAt > t0 + seen.endMs;
+        }
+        seen.left = host.queue.filter((q) => q.text === extra).length;
+        el.__linkTypes = null;
+        el._linkEnd();
+        return seen;
+      }, run);
+      for (const run of ["visit", "calm", "swipe"]) {
+        await prep();
+        if (run === "calm") await lp.emulateMedia({ reducedMotion: "reduce" });
+        const k = await kindred(run);
+        await lp.emulateMedia({ reducedMotion: null });
+        if (run === "swipe") {
+          check("kindred: a swipe away and back leaves no extra line said after the visit", !k.after && k.left === 0, JSON.stringify(k));
+        } else {
+          check(`kindred: the host greets in its type and adds its line, announced, inside the visit (${run})`,
+            k.during && k.live && !k.after && k.left === 0 && k.hello, JSON.stringify(k));
+        }
+      }
+    }
     await lp.close();
   }
 
