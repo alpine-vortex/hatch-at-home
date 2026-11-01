@@ -1,7 +1,8 @@
 # Plan: a fresh moment on every daily visit
 
-**Status: drafts for the owner, 2026-11-01.** Slices 1, 2 and 7 add no lines and are
-being built. Slices 3-6 wait for these drafts.
+**Status: building, 2026-11-01.** The owner approved the drafts for slices 4 and 6
+(below) and chose no new lines for slice 3. The FM approved 5a, 5b and 6 from this text.
+Slice 6b (15 more dreams) is still a draft.
 
 Source: the scout's research `~/.local/state/crew/research/fresh-moment.md` (s2619, at
 origin/main `f37a0cc8`). The owner took every recommendation (2026-11-01): Q1-Q4, Q6, Q7
@@ -22,14 +23,14 @@ slot in the first look and the basket's turn before a visitor stay as they are.
 | 1 | A resumed tab is a new look | S | 1 | none |
 | 2 | The first look leads with what's new | S | 1 | none |
 | 7 | One move in the first 10 s | S | 1 | none |
-| 3 | A missed day visitor plays live at the next daytime look | M | 1 | none (option: 2) |
+| 3 | A missed day visitor plays live at the next daytime look | M | 1 | none |
 | 5a | A question no longer freezes visitors and moves | S | 2 | none |
 | 5b | A later question on most evenings; the dream question 4 h before bed | S | 2 | none |
 | 4 | An evening "today" line | S-M | 1 | about 36 |
 | 6 | A plain dream every unmapped morning, from 15 | S | 2 | 12 |
 
-The first mate reviews 5a, 5b and 6 before they're built (`people.py`, `model.py`,
-`rates.py`). Each slice merges origin/main first. The top-10 branch (s2614) touches the
+The FM approved the 5a, 5b and 6 approaches before the build and reads their diffs
+before the merge. Each slice merges origin/main first. The top-10 branch (s2614) touches the
 same first look (its dream line takes a third `worlds` argument), so its form is kept.
 
 ### 1. A resumed tab is a new look (owner Q1)
@@ -84,8 +85,7 @@ same first look (its dream line takes a third `worlds` argument), so its form is
   visitor whose window has passed.
 - The visit still waits for the basket and for the queue to empty. The server's
   collection credit at the window's end is unchanged.
-- Greeting: the visitor's own lines as now (no new copy). The optional variant is in
-  Drafts.
+- Greeting: the visitor's own lines as now (owner: no new lines).
 - **Test:** card-check `visitors`: after the window, a day screen plays the visit and
   says no catch-up line. A dark screen says the line and plays no visit. A second look
   that day plays neither.
@@ -132,15 +132,21 @@ same first look (its dream line takes a third `worlds` argument), so its form is
 ### 6. A plain dream every unmapped morning (tier 2)
 
 - `dream_on_waking`: with no seeds, always a plain dream (`DREAM_PLAIN_CHANCE` 0.5 → 1).
-- 15 plain kinds (the 3 now plus 12 below). The kind turns by day ordinal with a per-pet
-  offset, so it doesn't repeat within 15 days. There is no saved history, so no save
-  change.
+- Plain kinds are a plain list: the 3 now, plus the 12 below, plus 6b's once approved.
+  The kind turns by day ordinal with a per-pet offset, so it doesn't repeat for as many
+  days as the list is long, whatever its length.
+- The offset is a fixed hash of `pet_id` (`zlib.crc32`, never Python's salted `hash()`),
+  so it holds across restarts. No new saved field (FM, 2026-11-01).
 - The top-10 branch's visitor dream (6d) is the visitor seed, so this slice adds none.
 - No season keying: the server doesn't know the card's seasons.
-- **Test:** pytest `tests/test_model.py`: no seeds, 15 mornings in a row give 15
-  different kinds, and a seed still wins. Card-check `moments`: each kind has a line.
+- **Test:** pytest `tests/test_model.py`: with no seeds, as many mornings in a row as the
+  list is long give that many different kinds. The same pet gets the same kind from a
+  fresh process, and a seed still wins. Card-check `moments`: each kind has a line.
 
-## Drafts (owner to approve)
+## Drafts
+
+Approved (owner, 2026-11-01): slice 4's wish branch A, its 2 moment lines and its 24 type
+lines, and slice 6's 12 dreams. Slice 3 adds no lines. Slice 6b is a DRAFT.
 
 Each draft is 40 characters at most, with no question and none of the no-nag words
 (still, again, why, never, please, sad, cry, alone, forgot).
@@ -205,15 +211,26 @@ Pick one:
 11. "I dreamed of a hill made of pillows"
 12. "I dreamed I danced in the moonlight ★"
 
-### Slice 3: optional greet variant (2)
+### Slice 6b: more dreams (DRAFT, 15)
 
-Recommendation: no new lines, since the visitor's own greet lines fit. If you'd like the
-visitor to show it waited, these are added to its lines:
+The owner wants a bigger pool, since a plain dream comes most mornings. They join the list
+once approved.
 
-- "oh! you came back for me ♪"
-- "there you are, little {visitor}!"
-
-(The research's "still here…" would fail the no-nag scan.)
+1. "I dreamed I baked the biggest pie!"
+2. "I dreamed I slid down a rainbow ♪"
+3. "I dreamed the clouds were candy floss"
+4. "I dreamed I wore a teeny tiny hat ♪"
+5. "I dreamed I hid in a giant sock!"
+6. "I dreamed of a parade just for me ★"
+7. "I dreamed I juggled shiny pebbles!"
+8. "I dreamed I painted the sky pink ♪"
+9. "I dreamed of a puddle as big as a lake"
+10. "I dreamed I sang and everyone joined ♪"
+11. "I dreamed I was the size of a bean!"
+12. "I dreamed of a house made of cake!"
+13. "I dreamed I bounced on a big jelly ♪"
+14. "I dreamed of a lantern that hummed ♪"
+15. "I dreamed I learned to whistle ♪"
 
 ## Build log
 
