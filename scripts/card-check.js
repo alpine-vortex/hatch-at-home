@@ -4300,6 +4300,36 @@ async function main() {
     check("fresh E4 (M-a): a cure says nothing the same day; the next day's first look says a line once, and the mark goes",
       e4.sameDay[0] === null && e4.sameDay[1] && CURED.includes(e4.nextDay[0]) && e4.nextDay[1] === null && e4.nextDay[2] === null,
       JSON.stringify({ sameDay: e4.sameDay, nextDay: e4.nextDay }));
+    // Fresh-expand E8 (A-a): a first look 3 days after the last starts with a welcome and
+    // has no away note; 5 hours after, no welcome.
+    const WELCOME = require("vm").runInNewContext(src4.match(/\nconst WELCOME_BACK = (\[[^\n]*\]);/)[1]);
+    const e8 = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const real = { heard: el._channelHeard, held: el._resumeHeld, today: el._todayLine };
+      const key = `hatch-seen-${s.ids.device}`;
+      const had = localStorage.getItem(key);
+      const look = (agoH) => {
+        localStorage.setItem(key, JSON.stringify({ seen: Date.now() - agoH * 3600e3, said: Date.now() }));
+        Object.assign(s, { lookedFirst: false, queue: [], asleep: false });
+        el._firstLook(s);
+        const out = s.queue.map((q) => ({ text: q.text, away: !!q.away }));
+        s.queue = [];
+        return out;
+      };
+      try {
+        el._channelHeard = () => true;
+        el._resumeHeld = () => false;
+        el._todayLine = () => null; // the away note's own slot, not the evening's
+        return { long: look(72), short: look(5) };
+      } finally {
+        Object.assign(el, { _channelHeard: real.heard, _resumeHeld: real.held, _todayLine: real.today });
+        if (had === null) localStorage.removeItem(key); else localStorage.setItem(key, had);
+        Object.assign(s, { lookedFirst: true, queue: [], sayUntil: 0, sayClass: 0 });
+      }
+    });
+    check("fresh E8 (A-a): back after 3 days, the look starts with a welcome and has no away note; after 5 h, none",
+      WELCOME.includes(e8.long[0]?.text) && !e8.long.some((q) => q.away) && !e8.short.some((q) => WELCOME.includes(q.text)),
+      JSON.stringify(e8));
   }
 
   await unpinAwake(card);
@@ -5175,6 +5205,47 @@ async function main() {
       }
       return said;
     }, own);
+    // Fresh-expand E8 (LS-a): an adult 45 days old has its first trick (a spin) in its idle
+    // moves, and the month's first look says a trick line once; a teen has none.
+    const TRICK7 = require("vm").runInNewContext(src7.match(/\nconst TRICK_LINES = (\[[^\n]*\]);/)[1]);
+    const ls = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const real = { state: el._state, heard: el._channelHeard, held: el._resumeHeld };
+      const as = (stage, age) => {
+        el._state = function (sl, k) {
+          const st = real.state.call(this, sl, k);
+          return k === "sensor.life_stage" && st ? { ...st, state: stage, attributes: { ...st.attributes, age_days: age, generation: 77 } } : st;
+        };
+      };
+      const out = {};
+      try {
+        for (const k of Object.keys(localStorage)) if (k.startsWith(`hatch-trick-${s.ids.device}-77-`)) localStorage.removeItem(k);
+        as("adult", 45);
+        out.moves = el._idleMoves(s, false, false);
+        out.calmMoves = el._idleMoves(s, false, true);
+        el._channelHeard = () => true;
+        el._resumeHeld = () => false;
+        const look = () => {
+          Object.assign(s, { lookedFirst: false, queue: [], asleep: false });
+          el._firstLook(s);
+          const said = s.queue.map((q) => q.text);
+          s.queue = [];
+          return said;
+        };
+        out.first = look();
+        out.again = look();
+        as("teen", 45);
+        out.teen = el._idleMoves(s, false, false);
+      } finally {
+        Object.assign(el, { _state: real.state, _channelHeard: real.heard, _resumeHeld: real.held });
+        for (const k of Object.keys(localStorage)) if (k.startsWith(`hatch-trick-${s.ids.device}-77-`)) localStorage.removeItem(k);
+        Object.assign(s, { lookedFirst: true, queue: [], sayUntil: 0, sayClass: 0 });
+      }
+      return out;
+    });
+    check("fresh E8 (LS-a): an adult of 45 days spins in its idle moves (none when calm, none for a teen); its trick line once",
+      ls.moves.includes("spin") && !ls.calmMoves.includes("spin") && !ls.teen.includes("spin") &&
+      ls.first.some((l) => TRICK7.includes(l)) && !ls.again.some((l) => TRICK7.includes(l)), JSON.stringify(ls));
     check("fresh E7 (Q-a): how_day's tough answer says the type's reply (random 0) or a base one (0.9); great says either",
       e7[0] === own.reply_tough[0] && base.tough.includes(e7[1]) &&
       e7.slice(2).every((l) => [...own.reply_great, ...base.great].includes(l)), JSON.stringify(e7));
@@ -5820,6 +5891,45 @@ async function main() {
   }
   if (enter("sharedscreen")) {
   await pinAwake(card, "sharedscreen");
+  // Fresh-expand E8: a best friend's weekly line (B-a) never on a shared screen; a
+  // visitor stays twice as long there (Sh-a).
+  {
+    const e8s = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const mine = s.mine;
+      const favKey = `hatch-fav-${s.ids.device}`;
+      const had = { fav: localStorage.getItem(favKey), shared: localStorage.getItem("hatch-shared-screen") };
+      const out = {};
+      try {
+        s.mine = { ...(mine || {}), bond: { level: 10 } };
+        localStorage.removeItem(favKey);
+        localStorage.setItem("hatch-shared-screen", "on");
+        out.sharedFav = el._favLine(s);
+        const v = { id: "snail", name: "snail", walk: true, lines: ["hi"] };
+        const stay = () => {
+          const V = el._visitorStart(s, v, { count: false });
+          const ms = V.until - Date.now();
+          el._visitorEnd(s);
+          return ms;
+        };
+        out.shared = stay();
+        localStorage.removeItem("hatch-shared-screen");
+        out.personal = stay();
+        out.personalFav = el._favLine(s);
+        out.again = el._favLine(s);
+      } finally {
+        s.mine = mine;
+        if (had.fav === null) localStorage.removeItem(favKey); else localStorage.setItem(favKey, had.fav);
+        if (had.shared === null) localStorage.removeItem("hatch-shared-screen"); else localStorage.setItem("hatch-shared-screen", had.shared);
+        Object.assign(s, { flairUntil: 0, visitUntil: 0 });
+      }
+      return out;
+    });
+    check("fresh E8 (B-a): bond 10 gets its weekly line on a personal screen, once a week, never on a shared one",
+      e8s.sharedFav === null && typeof e8s.personalFav === "string" && e8s.again === null, JSON.stringify(e8s));
+    check("fresh E8 (Sh-a): a visitor stays longer on a shared screen (its stay twice over)",
+      e8s.shared - e8s.personal >= 2900, JSON.stringify(e8s));
+  }
   // 5b. FA: turning on "shared screen" clears every personal line, typed or
   // typing, on every slide of every card on the page and in every tab (privacy P1).
   {

@@ -115,6 +115,13 @@ const gameDayList = (type) => {
   return [lean, lean, ...GAMES.map((g) => g.key).filter((k) => k !== lean)];
 };
 const SHINY_ODDS = 1 / 25; // a berry's chance of being the shiny one (D-b, a card roll)
+const LONG_AWAY_MS = 48 * 3600 * 1000; // a first look this long after the last: a welcome (E8 A-a)
+// An adult's tricks (E8 LS-a): one more each month from its 14th day, all three by month 3,
+// in its idle moves. CSS moves only (no art): a spin, a double perk, a look around.
+const TRICKS = ["spin", "perk2", "look"];
+const ADULT_FROM_DAY = 14;
+const trickMonth = (ageDays) => Math.max(0, Math.floor((Number(ageDays) - ADULT_FROM_DAY) / 30));
+const tricksBy = (month) => TRICKS.slice(0, Math.min(month, TRICKS.length)); // month 1: spin; 2: + perk2; 3: all
 const GAME_TYPE_ODDS = 0.5; // a game's end: the type's own line after the count, 4 s on (G-c)
 const GAME_TYPE_MS = 4000;
 // Sounds: little square-wave chirps, off until someone turns them on for this
@@ -1369,6 +1376,12 @@ const WISH_MORE = {
   rain: ["I'd love to see some rain today ☂", "rain today would be fun to watch ☂"],
   say_hi: ["a hello this afternoon would be nice", "I'm hoping for an afternoon hello ♥"],
 };
+// A-a (E8): a first look after two days or more away; names nobody, says nothing of the gap.
+const WELCOME_BACK = ["you're here! ♥ hop hop", "yay, a visit! ♥", "hello hello! ♥ come in"];
+// B-a: a best friend's (bond 10) own screen, at most once a week. Never on a shared one.
+const FAV_LINES = ["I made up a song for you ♪", "you're my favourite ♥", "I saved you the comfy spot ♥", "*hums your song* ♪"];
+// LS-a: an adult's new trick, the first look of each month it learns one.
+const TRICK_LINES = ["look what I can do! ♪", "ta-da! a new trick ♪", "I learned a new move! ♪"];
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -3189,6 +3202,8 @@ const STYLE = `
   @keyframes bondheart { 0% { transform: translateY(0) scale(.7); opacity: 0; } 20% { opacity: 1; }
     100% { transform: translateY(-70px) scale(1); opacity: 0; } }
   .pet.perk { animation: perk .3s ease-out; }
+  .pet.spin { animation: spin .9s ease-in-out; } /* an adult's trick (fresh-expand LS-a) */
+  @keyframes spin { to { rotate: y 360deg; } }
   @keyframes perk { 40% { transform: translateY(-6%) scale(1.04, .96); } }
   .toy.wanted .cap { background: #ffe9a8; }
   /* Wanted: a ring of light round the cap, cut on the grid too. */
@@ -5320,8 +5335,55 @@ class HatchPetCard extends HTMLElement {
       moves.push("look", "look", "wander", "perk", "speck");
       if (s.moodState === "excited") moves.push("hop", "hop");
       moves.push(...this._typeAdds(s));
+      moves.push(...this._tricks(s)); // an adult's monthly tricks (E8 LS-a)
     }
     return moves;
+  }
+
+  // --- Fresh-expand E8: an adult's tricks, a best friend's line ---------------------
+
+  // The tricks an adult has learned (one a month from its 14th day), else none.
+  _tricks(s) {
+    const st = this._state(s, "sensor.life_stage");
+    return st?.state === "adult" ? tricksBy(trickMonth(st.attributes?.age_days)) : [];
+  }
+
+  // The trick new this month, the first look of the month on this browser (once), or null.
+  _trickNew(s, stage) {
+    if (this._state(s, "sensor.life_stage")?.state !== "adult") return null;
+    const month = trickMonth(stage.age_days);
+    if (month < 1 || month > TRICKS.length) return null;
+    return onceEver(`trick-${s.ids?.device}-${stage.generation || 1}-${month}`) ? TRICKS[month - 1] : null;
+  }
+
+  // One trick: a spin, a double perk or a look around (CSS moves; none when calm).
+  _trickMove(s, move) {
+    if (calm()) return;
+    if (move === "spin") {
+      this._animate(s, s.pet, "spin", 900);
+      this._moving(s, 900);
+    } else if (move === "perk2") {
+      this._animate(s, s.pet, "perk", 320);
+      setTimeout(() => this._animate(s, s.pet, "perk", 320), 420);
+    } else {
+      this._look(s, 1800);
+    }
+  }
+
+  // A best friend (bond 10) on their own screen: a line at most once a week, or null.
+  _favLine(s) {
+    if (sharedScreen() || this._bond(s)?.level !== BOND.max) return null;
+    const monday = new Date();
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    const week = monday.toDateString();
+    const key = `hatch-fav-${s.ids?.device}`;
+    try {
+      if (localStorage.getItem(key) === week) return null;
+      localStorage.setItem(key, week);
+    } catch (err) {
+      return null;
+    }
+    return turnPick(FAV_LINES, `${s.ids?.device}|fav`);
   }
 
   // The moves a teen or adult's type adds to its idle list (IDLE_ADDS), in the table's order.
@@ -5354,6 +5416,8 @@ class HatchPetCard extends HTMLElement {
       setTimeout(() => s.pet.classList.remove(side), 2200);
     } else if (move === "perk") {
       this._animate(s, s.pet, "perk", 320);
+    } else if (move === "spin" || move === "perk2") {
+      this._trickMove(s, move);
     } else if (move === "hop") {
       this._animate(s, s.pet, "greethop", 1400); // two happy bounces (_render clears "hop")
     } else if (move === "speck") {
@@ -5823,6 +5887,14 @@ class HatchPetCard extends HTMLElement {
     // (the dream and wish come again at the next first look; the visit's notes
     // are budgeted on the server from what's queued here).
     const lines = [];
+    const mark = this._seenRead(device);
+    // Back after two days or more (E8 A-a): a hop and a welcome first, the news before the
+    // care misses, and no away note (this takes its slot). Once per return: seen is rewritten.
+    const longAway = !!mark?.seen && Date.now() - mark.seen >= LONG_AWAY_MS;
+    if (longAway) {
+      lines.push([turnPick(WELCOME_BACK, `${device}|welcome`), 4500]);
+      if (!calm()) this._animate(s, s.pet, "greethop", 1400);
+    }
     const home = (s.privateMoments || []).find((m) => m.type === "friend_home");
     const at = home && new Date(home.at).getTime();
     if (at && !sharedScreen() && Date.now() - at < FRIEND_WELCOME_MS && this._welcomeDue(s, at)) {
@@ -5832,13 +5904,12 @@ class HatchPetCard extends HTMLElement {
       lines.push([`welcome home, ${(bond?.level >= BOND.nickname && bond.nickname) || first || "friend"}! ♥`, 5000]);
       if (HOME_WEATHER[home.weather]) lines.push([HOME_WEATHER[home.weather], 4500]);
     }
-    const mark = this._seenRead(device);
     let wishTold = false;
     // Kept milestones said nowhere here (the card was closed): once, as lines of
     // this look. A browser with no record yet starts from now, so a new one
     // never replays the house's history.
     if (typeof mark?.said === "number") {
-      for (const [text, at, type] of this._catchUp(s, mark.said, FIRST_LOOK_LINES - lines.length)) {
+      for (const [text, at, type] of this._catchUp(s, mark.said, FIRST_LOOK_LINES - lines.length, { news: longAway })) {
         lines.push([text, 5000, { at }]);
         if (type === "wish_granted") wishTold = true; // the today line won't tell it again
       }
@@ -5865,12 +5936,24 @@ class HatchPetCard extends HTMLElement {
     if (cured) lines.push([cured, 4500]);
     // What happened while you were out comes after what's new (fresh-moment 2, owner Q2).
     // From TODAY_FROM_HOUR, once a day here: a line about its day, in the away note's place.
-    const today = this._evening() && lines.length < FIRST_LOOK_LINES && this._todayLine(s, wishTold);
+    const today = !longAway && this._evening() && lines.length < FIRST_LOOK_LINES && this._todayLine(s, wishTold);
     const seen = mark?.seen || 0;
     if (today && oncePerDay(`today-${device}`)) lines.push([today, 5000, { away: true }]);
-    else if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS && lines.length < FIRST_LOOK_LINES) {
+    else if (!longAway && seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS && lines.length < FIRST_LOOK_LINES) {
       const note = this._awayNote(s, seen);
       if (note) lines.push([note, 5500, { away: true }]);
+    }
+    // A best friend's own screen, at most once a week (E8 B-a).
+    const fav = lines.length < FIRST_LOOK_LINES && this._favLine(s);
+    if (fav) {
+      lines.push([fav, 4500]);
+      this._chirp(s, "win");
+    }
+    // An adult's new trick, the first look of the month it learns one (E8 LS-a).
+    const trick = lines.length < FIRST_LOOK_LINES && this._trickNew(s, stage);
+    if (trick) {
+      lines.push([turnPick(TRICK_LINES, `${device}|trick`), 4500]);
+      if (!calm()) setTimeout(() => this._trickMove(s, trick), 600);
     }
     // Last, and only if there is room: an adult on how it was raised, once a week.
     const raised = this._state(s, "sensor.life_stage")?.state === "adult" && UPBRINGING_LINES[stage.upbringing];
@@ -6063,7 +6146,7 @@ class HatchPetCard extends HTMLElement {
   // oldest first, the newest room of them. The public list, and on a personal
   // screen the viewer's own (s.privateMoments); never friend_home or tucked_in
   // (CATCHUP_SKIP) and never flavour; at most one care_miss.
-  _catchUp(s, said, room) {
+  _catchUp(s, said, room, { news = false } = {}) {
     if (room <= 0) return [];
     const pub = (this._state(s, "sensor.last_care")?.attributes.moments || []).filter((m) => !CHANNEL_ONLY.has(m.type));
     const own = sharedScreen() ? [] : s.privateMoments || [];
@@ -6074,6 +6157,8 @@ class HatchPetCard extends HTMLElement {
       .filter((m) => m?.type && MOMENT_CLASS[m.type] === KEPT && !CATCHUP_SKIP.has(m.type) &&
         new Date(m.at).getTime() > said && !waiting.has(new Date(m.at).getTime()) && !seen.has(momentKey(m)) && seen.add(momentKey(m)))
       .sort((a, b) => new Date(b.at) - new Date(a.at));
+    // Back after days (E8 A-a): what happened goes before the care misses.
+    if (news) missed.sort((a, b) => (a.type === "care_miss") - (b.type === "care_miss"));
     const out = [];
     let miss = false;
     for (const m of missed) {
@@ -9393,7 +9478,7 @@ class HatchPetCard extends HTMLElement {
     const isCalm = calm();
     const world = s.worldKey;
     const inMs = v.in || (v.cross ? 1800 : VISIT_IN_MS);
-    const stay = v.stay || VISIT_STAY_MS;
+    const stay = (v.stay || VISIT_STAY_MS) * (sharedScreen() ? 2 : 1); // a shared screen: longer (E8 Sh-a)
     const greetAt = isCalm ? 600 : v.cross ? Math.round(inMs * 0.6) : inMs + 1000;
     const total = isCalm ? VISIT_CALM_MS : v.cross ? greetAt + 3000 : greetAt + stay + inMs;
     const frames = isCalm ? [1] : [1, 2];

@@ -28,6 +28,9 @@ const COPY_TABLES = {
   DIG_WATCH: { fill: "visitor" },
   SHINY_LINE: {},
   WISH_MORE: {},
+  WELCOME_BACK: {},
+  FAV_LINES: {},
+  TRICK_LINES: {},
 };
 
 function lines(value, path, out) {
