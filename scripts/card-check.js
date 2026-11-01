@@ -19,6 +19,7 @@
 // dev's seeded bond and wish back). Sections lean on the state their
 // predecessors leave (the open sheet, the bond, the slide on show), so a lone
 // one may need its neighbour: add it to --only. oldcard pulls in restart.
+// --shard k/3 runs the k-th of three contiguous runs (see SHARD_STARTS).
 
 const { chromium } = require("playwright");
 const fs = require("fs");
@@ -46,10 +47,26 @@ if (argv.includes("--list")) {
   console.log(SECTIONS.join("\n"));
   process.exit(0);
 }
+// --shard k/3 runs one of three contiguous runs of sections, split where these
+// start (CI runs the three side by side). A new section lands in whichever run
+// it falls in, so none is skipped. Balanced by the gate's seconds per section.
+const SHARD_STARTS = ["shelf", "photos", "editor"];
 let ONLY = null;
 for (let i = 0; i < argv.length; i++) {
+  if (argv[i] === "--shard") {
+    const k = Number(/^(\d)\/3$/.exec(argv[++i] || "")?.[1]);
+    if (!(k >= 1 && k <= 3)) {
+      console.error("card-check: --shard needs 1/3, 2/3 or 3/3");
+      process.exit(2);
+    }
+    const from = SECTIONS.indexOf(SHARD_STARTS[k - 1]);
+    const to = k < 3 ? SECTIONS.indexOf(SHARD_STARTS[k]) : SECTIONS.length;
+    ONLY ||= new Set();
+    for (const n of SECTIONS.slice(from, to)) ONLY.add(n);
+    continue;
+  }
   if (argv[i] !== "--only") {
-    console.error(`card-check: unknown argument ${argv[i]} (--list, --only <name>[,<name>...])`);
+    console.error(`card-check: unknown argument ${argv[i]} (--list, --only <name>[,<name>...], --shard k/3)`);
     process.exit(2);
   }
   ONLY ||= new Set();
