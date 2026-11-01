@@ -27,6 +27,7 @@ const COPY_TABLES = {
   LUCKY_LINE: {},
   DIG_WATCH: { fill: "visitor" },
   SHINY_LINE: {},
+  WISH_MORE: {},
 };
 
 function lines(value, path, out) {

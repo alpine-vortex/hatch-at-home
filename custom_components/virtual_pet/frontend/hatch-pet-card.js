@@ -842,6 +842,15 @@ function oncePerDay(name, day = new Date()) {
   }
   return true;
 }
+// Was oncePerDay(name) used today on this browser? (Read only.)
+function usedToday(name, day = new Date()) {
+  const key = `hatch-${name}-${day.toDateString()}`;
+  try {
+    return !!localStorage.getItem(key);
+  } catch (err) {
+    return !!oncePerDay.seen?.has(key);
+  }
+}
 // Once on this browser, ever (a key that isn't per day, so pruning leaves it).
 function onceEver(name) {
   const key = `hatch-${name}`;
@@ -1321,6 +1330,20 @@ const GAME_PICK_LINES = {
 const LUCKY_LINE = "my lucky number! ★"; // G-b, over higher or lower's number
 const DIG_WATCH = (v) => `the ${v} is watching ♪`; // D-a, a dig on a day it came by
 const SHINY_LINE = "a shiny one! ✦"; // D-b, in place of "a berry!"
+// W-a (E6): more ways to say a wish, in turns with its first line (WISHES[kind][0]).
+const WISH_MORE = {
+  play: ["a game today would be fun ♪", "I'm in a playing mood today ♪"],
+  snack: ["a snack after lunch sounds nice ♥", "I've got room for an afternoon snack"],
+  bath: ["I hope it's a bubble bath day ♪", "I'd love some bubbles today ♥"],
+  praise: ["I'm hoping for a kind word today", "a little praise would be nice ♥"],
+  tuck_in: ["a tuck-in tonight would be cozy ♥", "I'd love to be tucked in tonight"],
+  sunset: ["a sunset together would be nice ♥", "I'd love to watch the sky tonight ♪"],
+  music: ["some music today would be nice ♪", "I'm in the mood for a song ♪"],
+  tv: ["a show together would be fun ♪", "I'd love some TV time today ♪"],
+  chore: ["a chore treat would be lovely ♥", "I'm hoping for a chore treat ♪"],
+  rain: ["I'd love to see some rain today ☂", "rain today would be fun to watch ☂"],
+  say_hi: ["a hello this afternoon would be nice", "I'm hoping for an afternoon hello ♥"],
+};
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -5974,9 +5997,12 @@ class HatchPetCard extends HTMLElement {
 
   // The wish as the pet says it: in baby talk if it's on (not an aimed wish:
   // that keeps its words; the status screen's short text never changes).
-  _wishSaid(s, wish, line) {
+  _wishSaid(s, wish, line, date = new Date()) {
     if (this._aimedAtMe(wish, s)) return line[0];
-    return this._lines(s, `WISHES.${wish.kind}`, line[0]).text;
+    // W-a (fresh-expand E6): its first line and WISH_MORE's take turns, a day each.
+    const more = WISH_MORE[wish.kind];
+    const said = more ? turnPick([line[0], ...more], `${s.ids?.device}|wish|${wish.kind}`, date) : line[0];
+    return this._lines(s, `WISHES.${wish.kind}`, said).text;
   }
 
   // An open wish comes up once more after the first look (never all day), and
@@ -6106,7 +6132,8 @@ class HatchPetCard extends HTMLElement {
     const life = this._state(s, "sensor.life_stage");
     if (life?.state !== "teen" && life?.state !== "adult") return null;
     const wish = life.attributes?.wish;
-    if (wish?.granted && !wishTold && TODAY_WISH[wish.kind]) return TODAY_WISH[wish.kind];
+    const toldLive = usedToday(`todaywish-${s.ids?.device}`); // said live already (E6 W-b)
+    if (wish?.granted && !wishTold && !toldLive && TODAY_WISH[wish.kind]) return TODAY_WISH[wish.kind];
     const seen = this._visitSeen(s);
     if (seen) return `a ${seen} visited me today ♪`;
     const midnight = new Date().setHours(0, 0, 0, 0);
@@ -6596,7 +6623,12 @@ class HatchPetCard extends HTMLElement {
         break;
       }
       case "wish_granted": { // lines that arrive together queue, so none is lost
-        const granted = this._lines(s, "wish_granted", pick(["my wish came true! thank you ♥", "yay, my wish! ♥", "best day ever! ♥"]));
+        // W-b (fresh-expand E6): half the time live, what it got (TODAY_WISH); the evening's
+        // today line then doesn't tell the wish again.
+        const got = !capture && TODAY_WISH[m.kind] && !this._babySet(s, "wish_granted") && Math.random() < 0.5;
+        if (got) oncePerDay(`todaywish-${s.ids?.device}`);
+        const granted = got ? { text: TODAY_WISH[m.kind], baby: false }
+          : this._lines(s, "wish_granted", pick(["my wish came true! thank you ♥", "yay, my wish! ♥", "best day ever! ♥"]));
         line(granted.text, 4500, () => {
           this._sparkle(s);
           this._chirp(s, "trait");

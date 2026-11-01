@@ -4255,6 +4255,48 @@ async function main() {
       e4.dream.every((l, i) => !i || l !== e4.dream[i - 1]), JSON.stringify(e4));
     check("fresh E4 (S-b): lights out after a visitor seen here says its callback once a day; no visitor or sunset, the usual",
       /robin/.test(e4.night[0] || "") && e4.night[1] === null && e4.plain === null, JSON.stringify(e4.night));
+    // Fresh-expand E6 (W-a, W-b): a wish's phrasing takes turns a day each; a live grant
+    // with random 0 says what it got (TODAY_WISH), and that evening's today line isn't it.
+    const TODAY_WISH6 = require("vm").runInNewContext(`(${src4.match(/\nconst TODAY_WISH = (\{[\s\S]*?\n\});/)[1]})`);
+    const e6 = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const real = { baby: el._babySet, aimed: el._aimedAtMe, line: el._line, state: el._state, seen: el._visitSeen, random: Math.random };
+      const out = {};
+      const key = `hatch-todaywish-${s.ids?.device}-${new Date().toDateString()}`;
+      const had = localStorage.getItem(key);
+      try {
+        el._babySet = () => null;
+        el._aimedAtMe = () => false;
+        // Three days from a cycle's start (the list's length, 3): each line once.
+        let d0 = 3;
+        while (Math.round(Date.UTC(2026, 10, d0) / 864e5) % 3) d0++;
+        out.days = [0, 1, 2].map((i) => el._wishSaid(s, { kind: "play" }, ["base play line", "play"], new Date(2026, 10, d0 + i, 9)));
+        localStorage.removeItem(key);
+        const said = [];
+        el._line = function (sl, cls, text, ...rest) { said.push(text); return real.line.call(this, sl, cls, text, ...rest); };
+        Math.random = () => 0;
+        el._moment(s, { type: "wish_granted", kind: "bath", at: new Date().toISOString() });
+        out.live = said.slice();
+        el._line = real.line;
+        Math.random = real.random;
+        el._visitSeen = () => null;
+        el._state = function (sl, k) {
+          const st = real.state.call(this, sl, k);
+          return k === "sensor.life_stage" && st
+            ? { ...st, state: "adult", attributes: { ...st.attributes, personality: "mellow", wish: { kind: "bath", granted: true } } } : st;
+        };
+        out.today = el._todayLine(s);
+      } finally {
+        Object.assign(el, { _babySet: real.baby, _aimedAtMe: real.aimed, _line: real.line, _state: real.state, _visitSeen: real.seen });
+        Math.random = real.random;
+        if (had === null) localStorage.removeItem(key); else localStorage.setItem(key, had);
+        Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0 });
+      }
+      return out;
+    });
+    check("fresh E6 (W-a): a wish over 3 days is said 3 ways", new Set(e6.days).size === 3, JSON.stringify(e6.days));
+    check("fresh E6 (W-b): a live grant (random 0) says what it got; the evening's today line then isn't the wish",
+      e6.live.includes(TODAY_WISH6.bath) && e6.today !== TODAY_WISH6.bath, JSON.stringify({ live: e6.live, today: e6.today }));
     check("fresh E4 (M-a): a cure says nothing the same day; the next day's first look says a line once, and the mark goes",
       e4.sameDay[0] === null && e4.sameDay[1] && CURED.includes(e4.nextDay[0]) && e4.nextDay[1] === null && e4.nextDay[2] === null,
       JSON.stringify({ sameDay: e4.sameDay, nextDay: e4.nextDay }));
