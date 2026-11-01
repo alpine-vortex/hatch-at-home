@@ -973,6 +973,9 @@ async function main() {
     try {
       if (!sessionStorage.getItem("cc-boot-test") && v) localStorage.setItem("hatch-booted", v);
       for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-power-")) localStorage.removeItem(k);
+      // Today's infrared link counts as done, so a page with taps never starts the day's
+      // first one by itself (gaps-seams 5a); the link checks clear it.
+      localStorage.setItem(`hatch-link-cardcheck-${new Date().toDateString()}`, "1");
     } catch (err) {
       // no storage
     }
@@ -8152,6 +8155,7 @@ async function main() {
     // Everyone free, on this page, no leftovers from earlier pages' storage.
     const prep = (index = 0) => card.evaluate((el, index) => {
       for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k);
+      localStorage.setItem(`hatch-link-cardcheck-${new Date().toDateString()}`, "1"); // not the day's first
       el._linkEnd();
       el._linkAt = Date.now() + 1e9; // only the forced visits run
       el._index = index;
@@ -8198,7 +8202,8 @@ async function main() {
     };
     const strip = (name) => card.locator(".viewport").screenshot({ path: `${lshots}-${name}.png` });
 
-    // The timer: the day's visit is 10-25 minutes away, and never while the boot screen is up.
+    // The timer: after the day's first, a visit is 10-25 minutes away, and never while the
+    // boot screen is up.
     await prep();
     const timer = await card.evaluate((el) => {
       const h = el._slides[el._index];
@@ -8209,9 +8214,43 @@ async function main() {
       el._booting = false;
       return { wait, booting, started: !!el._link };
     });
-    check(`link waits 10-25 minutes after the page loads (${width}px)`,
+    check(`link waits 10-25 minutes after the day's first (${width}px)`,
       timer.wait > 590000 && timer.wait <= 1500000 && !timer.started, JSON.stringify(timer));
     check(`link never starts under the boot screen (${width}px)`, !timer.booting);
+    // The day's first (gaps-seams 5a, owner Q7): only 1-3 min into a look someone touched
+    // in the last 5 min, on a shown tab; never untouched, too soon, stale or hidden.
+    await prep();
+    const first = await card.evaluate((el) => {
+      for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k);
+      const h = el._slides[el._index];
+      const now = Date.now();
+      const tries = {};
+      const tryIt = (name, touched, look) => {
+        el._linkEnd();
+        el._touchedAt = touched === null ? null : now - touched;
+        el._lookAt = now - look;
+        el._linkFirstMs = 90000;
+        el._linkTick(h);
+        tries[name] = !!el._link;
+        el._linkEnd();
+        for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k);
+      };
+      tryIt("untouched", null, 100000);
+      tryIt("soon", 1000, 30000);
+      tryIt("stale", 310000, 400000);
+      Object.defineProperty(document, "hidden", { get: () => true, configurable: true });
+      tryIt("hidden", 1000, 100000);
+      delete document.hidden;
+      tryIt("watched", 1000, 100000);
+      const ms = [];
+      for (let i = 0; i < 20; i++) { el._linkFirstMs = undefined; el._touchedAt = null; el._linkTick(h); ms.push(el._linkFirstMs); }
+      el._linkAt = Date.now() + 1e9;
+      localStorage.setItem(`hatch-link-cardcheck-${new Date().toDateString()}`, "1");
+      return { tries, lo: Math.min(...ms), hi: Math.max(...ms) };
+    });
+    check(`the day's first link waits for a touched, shown look 1-3 min in (${width}px)`,
+      first.tries.watched && !first.tries.untouched && !first.tries.soon && !first.tries.stale && !first.tries.hidden
+      && first.lo >= 60000 && first.hi <= 180000, JSON.stringify(first));
 
     // A full visit, with frames along the way.
     await prep();

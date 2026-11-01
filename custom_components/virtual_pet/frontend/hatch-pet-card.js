@@ -397,6 +397,25 @@ const FEED_FULL_AT = 95; // rates.py FEED_FULL_AT: a meal is refused above this
 const TRAIT_CAP = 4; // rates.py TRAIT_CAP, until the server says (life_stage trait_cap)
 const STAGE_DAYS = { teen: 5, adult: 14 }; // rates.py STAGE_STARTS (120 h, 336 h), from the egg
 const LINK_AFTER_MS = [600000, 1500000]; // the infrared link: 10-25 min after the page loads (random)
+// The day's first link waits for someone watching (gaps-seams 5a, owner Q7): 1-3 min into
+// a look (the first tap or swipe on a shown card, after none for LINK_TOUCHED_MS), and
+// only while the last one was under LINK_TOUCHED_MS ago. Never on a hidden tab or an
+// untouched wall tablet. Later links keep LINK_AFTER_MS.
+const LINK_FIRST_MS = [60000, 180000];
+const LINK_TOUCHED_MS = 300000;
+// A link already today on this browser (oncePerDay's `hatch-link-<pair>-<day>` keys).
+function linkedToday(day = new Date()) {
+  const end = `-${day.toDateString()}`;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("hatch-link-") && key.endsWith(end)) return true;
+    }
+  } catch (err) {
+    // no storage: oncePerDay's own memory
+  }
+  return [...(oncePerDay.seen || [])].some((key) => key.startsWith("hatch-link-") && key.endsWith(end));
+}
 const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
 const FLAIR_MS = 4200; // how long a moment lasts
 const FLAIR = {
@@ -2972,6 +2991,7 @@ class HatchPetCard extends HTMLElement {
       (this._slides || []).forEach((x) => { x.giftAgain = true; });
     }
     this._hiddenAt = null;
+    this._touchedAt = null; // a new look begins at its first touch (gaps-seams 5a)
   };
 
   connectedCallback() {
@@ -3348,6 +3368,12 @@ class HatchPetCard extends HTMLElement {
       }
     };
     for (const type of ["touchend", "pointerup", "click"]) this._card.addEventListener(type, unlock, true);
+    // Someone is watching (gaps-seams 5a): a tap or swipe; the first after a gap starts a look.
+    this._card.addEventListener("pointerdown", () => {
+      const now = Date.now();
+      if (!this._touchedAt || now - this._touchedAt >= LINK_TOUCHED_MS) this._lookAt = now;
+      this._touchedAt = now;
+    }, true);
     this._resize = new ResizeObserver(() => this._layout());
     this._resize.observe(this._viewport);
     this._visible = true;
@@ -8699,8 +8725,16 @@ class HatchPetCard extends HTMLElement {
     if (this._booting || this._link || this._slides.length < 2) return;
     const now = Date.now();
     const [lo, hi] = LINK_AFTER_MS;
-    this._linkAt ??= now + lo + Math.random() * (hi - lo);
-    if (now < this._linkAt) return;
+    if (!linkedToday()) {
+      const [first, last] = LINK_FIRST_MS;
+      this._linkFirstMs ??= first + Math.random() * (last - first);
+      const watched = !document.hidden && this._visible !== false && this._touchedAt
+        && now - this._touchedAt < LINK_TOUCHED_MS && now - this._lookAt >= this._linkFirstMs;
+      if (!watched) return;
+    } else {
+      this._linkAt ??= now + lo + Math.random() * (hi - lo);
+      if (now < this._linkAt) return;
+    }
     const guest = this._linkPick(host);
     if (!guest) return;
     this._linkAt = now + lo + Math.random() * (hi - lo);
