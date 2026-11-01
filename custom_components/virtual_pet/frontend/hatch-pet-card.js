@@ -5583,12 +5583,14 @@ class HatchPetCard extends HTMLElement {
       if (HOME_WEATHER[home.weather]) lines.push([HOME_WEATHER[home.weather], 4500]);
     }
     const mark = this._seenRead(device);
+    let wishTold = false;
     // Kept milestones said nowhere here (the card was closed): once, as lines of
     // this look. A browser with no record yet starts from now, so a new one
     // never replays the house's history.
     if (typeof mark?.said === "number") {
-      for (const [text, at] of this._catchUp(s, mark.said, FIRST_LOOK_LINES - lines.length)) {
+      for (const [text, at, type] of this._catchUp(s, mark.said, FIRST_LOOK_LINES - lines.length)) {
         lines.push([text, 5000, { at }]);
+        if (type === "wish_granted") wishTold = true; // the today line won't tell it again
       }
     } else {
       this._seenWrite(device, { said: serverNow() });
@@ -5610,7 +5612,7 @@ class HatchPetCard extends HTMLElement {
     if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);
     // What happened while you were out comes after what's new (fresh-moment 2, owner Q2).
     // From TODAY_FROM_HOUR, once a day here: a line about its day, in the away note's place.
-    const today = this._evening() && lines.length < FIRST_LOOK_LINES && this._todayLine(s);
+    const today = this._evening() && lines.length < FIRST_LOOK_LINES && this._todayLine(s, wishTold);
     const seen = mark?.seen || 0;
     if (today && oncePerDay(`today-${device}`)) lines.push([today, 5000, { away: true }]);
     else if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS && lines.length < FIRST_LOOK_LINES) {
@@ -5820,7 +5822,7 @@ class HatchPetCard extends HTMLElement {
       if (m.type === "care_miss" && miss) continue;
       if (m.type === "care_miss") miss = true;
       const text = this._catchUpLine(s, m);
-      if (text) out.push([text, m.at]);
+      if (text) out.push([text, m.at, m.type]);
     }
     return out.reverse();
   }
@@ -5853,8 +5855,9 @@ class HatchPetCard extends HTMLElement {
   }
 
   // What the pet did since then, newest first, as bits ("watched TV"): its moments, the
-  // finds while shown, then care (the away note's, and the evening's today line).
-  _dayBits(s, since) {
+  // finds while shown, then care unless care is false (the away note's, and the
+  // evening's today line's, which leaves care out).
+  _dayBits(s, since, care = true) {
     const lastCare = this._state(s, "sensor.last_care")?.attributes || {};
     const after = (at) => new Date(at).getTime() > since;
     const bits = [];
@@ -5879,25 +5882,26 @@ class HatchPetCard extends HTMLElement {
       }
       add(m.type === "weather" ? WEATHER_BITS[m.change] : MOMENT_BITS[m.type]);
     }
-    for (const e of [...(lastCare.log || [])].reverse()) {
+    for (const e of care ? [...(lastCare.log || [])].reverse() : []) {
       if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) add(CARE_BITS[e.action]);
     }
     return bits;
   }
 
   // The evening's line about the pet's own day (fresh-moment 4, owner Q4), a teen's or
-  // adult's: today's wish come true, else a visitor seen here today, else the newest
-  // of today's bits (not a nap), else its type's line. Names nobody and never an open
-  // wish, so a shared screen gets it too. null: nothing to say (the away note's turn).
-  _todayLine(s) {
+  // adult's: today's wish come true (unless this look's catch-up just told it), else a
+  // visitor seen here today, else the newest of today's moments as a bit (not a nap, no
+  // care), else its type's line. Names nobody and never an open wish, so a shared
+  // screen gets it too. null: nothing to say (the away note's turn).
+  _todayLine(s, wishTold = false) {
     const life = this._state(s, "sensor.life_stage");
     if (life?.state !== "teen" && life?.state !== "adult") return null;
     const wish = life.attributes?.wish;
-    if (wish?.granted && TODAY_WISH[wish.kind]) return TODAY_WISH[wish.kind];
+    if (wish?.granted && !wishTold && TODAY_WISH[wish.kind]) return TODAY_WISH[wish.kind];
     const seen = this._visitSeen(s);
     if (seen) return `a ${seen} visited me today ♪`;
     const midnight = new Date().setHours(0, 0, 0, 0);
-    const bit = this._dayBits(s, midnight).find((b) => b !== "napped" && b !== "got my wish");
+    const bit = this._dayBits(s, midnight, false).find((b) => b !== "napped" && b !== "got my wish");
     if (bit) return `today I ${bit}! ♪`;
     const type = this._persona(s);
     return type ? dailyPick(type.today, `${s.ids?.device}|today`) : null;

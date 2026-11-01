@@ -5093,7 +5093,10 @@ async function main() {
         el._visitSeen = () => null;
         t.pet("adult", "mellow", 6, { wish: { kind: "bath", granted: true } });
         out.wish = el._todayLine(s);
+        el._dayBits = (sl, since, care) => (care === false ? [] : ["had a meal"]);
+        out.wishTold = el._todayLine(s, true); // the catch-up told it: the type's line
         t.pet("adult", "mellow", 6, { wish: { kind: "bath", granted: false } });
+        out.noCare = el._todayLine(s); // care alone isn't a bit: the type's line
         el._visitSeen = () => "chickadee";
         out.visitor = el._todayLine(s);
         el._visitSeen = () => null;
@@ -5127,9 +5130,10 @@ async function main() {
       return out;
     });
     const mellowToday = PERSONA.mellow.today;
-    check("fresh-moment 4: the today line: the wish's, a visitor seen, today's bit, else the type's; none for a child",
+    check("fresh-moment 4: the today line: the wish's (not after its catch-up), a visitor seen, today's bit (no care), else the type's; none for a child",
       todayBad.length === 0 && todayOut.wish === TODAY_WISH.bath && todayOut.visitor === "a chickadee visited me today ♪" &&
-        todayOut.bit === "today I watched the sunset! ♪" && mellowToday.includes(todayOut.type) && todayOut.child === null,
+        todayOut.bit === "today I watched the sunset! ♪" && mellowToday.includes(todayOut.type) && todayOut.child === null &&
+        mellowToday.includes(todayOut.wishTold) && mellowToday.includes(todayOut.noCare),
       JSON.stringify({ todayBad, ...todayOut }));
     check("fresh-moment 4: said at an evening first look, once a day; never in the morning",
       todayOut.evening.some((l) => mellowToday.includes(l)) && !todayOut.morning.some((l) => mellowToday.includes(l)) &&
