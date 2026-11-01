@@ -330,7 +330,7 @@ FIND_CHANCE = 0.6  # a roll finds something (about 2.4 finds on a normal day)
 FIND_MET_WEIGHT = 0.5  # a find already in the collection: less likely, never 0
 FIND_MISSING_WEIGHT = 1  # a condition true only for want of a signal (R5)
 FIND_NIGHT_HOURS = (20, 6)  # "night" with no sun entity: 20:00-06:00 local
-FIND_FULL_MOON_DAYS = 1.0  # with no moon entity: full within a day of mid-cycle
+FIND_FULL_MOON_DAYS = 1.5  # finds: full within 1.5 days of mid-cycle (3 nights)
 BASKET_SIZE = 3  # finds waiting; more go straight to the collection
 FAVOURITE_SNACK_CHANCE = 0.4  # a snack is its favourite (said at most once a day)
 

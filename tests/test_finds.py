@@ -123,7 +123,11 @@ def test_a_bad_find_is_skipped_by_the_catalog(monkeypatch: pytest.MonkeyPatch) -
     assert not species.valid_find({"id": "x", "a": "an x", "weight": 1, "when": []})
     assert not species.valid_find({"id": "x", "a": "an x", "weight": True})
     assert not species.valid_find({"id": "x", "weight": 1})
-    assert species.valid_find({"id": "x", "a": "an x", "weight": 4, "when": None})
+    # V-B audit #4: the tiles and captions read `name`.
+    assert not species.valid_find({"id": "x", "a": "an x", "weight": 4, "when": None})
+    named = {"id": "x", "name": "x", "a": "an x", "weight": 4, "when": None}
+    assert species.valid_find(named)
+    assert not species.valid_find({**named, "name": 3})
 
 
 def test_a_visitors_leaves_names_a_find_of_its_world() -> None:
@@ -214,28 +218,36 @@ NEW = datetime(2026, 11, 9, 7, 2, tzinfo=UTC).timestamp()  # a new moon
 
 
 def test_the_moon_comes_from_the_date_with_no_moon_entity() -> None:
-    """Review #4 (a), owner Q3: moonstone happens everywhere."""
+    """Review #4 (a), owner Q3: moonstone happens everywhere; 3 nights a month
+    (V-B audit #1)."""
+    assert R.FIND_FULL_MOON_DAYS == 1.5
     assert full_moon_by_date(FULL) and not full_moon_by_date(NEW)
-    assert full_moon_by_date(FULL + 0.9 * 86400) and not full_moon_by_date(
-        FULL + 1.6 * 86400
+    assert full_moon_by_date(FULL + 1.4 * 86400) and not full_moon_by_date(
+        FULL + 1.7 * 86400
     )
+    assert full_moon_by_date(FULL - 1.4 * 86400)
     year = datetime(2026, 1, 1, tzinfo=UTC).timestamp()
     days = sum(full_moon_by_date(year + d * 86400) for d in range(365))
-    assert 12 * 2 <= days <= 13 * 3
+    assert 12 * 3 <= days <= 13 * 3 + 1
     # With the sun down only.
     assert flags(sun_up=False, now=FULL)["full_moon"] is True
     assert flags(sun_up=True, now=FULL)["full_moon"] is False
     assert flags(sun_up=False, now=NEW)["full_moon"] is False
 
 
-def test_a_moon_entity_wins_over_the_date() -> None:
+def test_a_moon_entity_or_the_date_says_full() -> None:
+    """V-B audit #1 (first mate): for finds, a mapped entity saying full OR the
+    date's 3-night window. HA's phase sensor says full for about a day only."""
     mapped = {"moon"}
     assert flags(mapped, sun_up=False, now=NEW, moon_phase="Full Moon")["full_moon"]
-    assert not flags(mapped, sun_up=False, now=FULL, moon_phase="waning_gibbous")[
+    assert flags(mapped, sun_up=False, now=NEW, moon_illumination=0.99)["full_moon"]
+    # The sensor has moved on (or is unavailable): the date's window still counts.
+    assert flags(mapped, sun_up=False, now=FULL, moon_phase="waning_gibbous")[
         "full_moon"
     ]
-    assert not flags(mapped, sun_up=False, now=FULL)["full_moon"]  # unavailable
-    assert flags(mapped, sun_up=False, now=NEW, moon_illumination=0.99)["full_moon"]
+    assert flags(mapped, sun_up=False, now=FULL)["full_moon"]
+    assert not flags(mapped, sun_up=False, now=NEW, moon_phase="new_moon")["full_moon"]
+    assert not flags(mapped, sun_up=True, now=NEW, moon_phase="Full Moon")["full_moon"]
 
 
 # --- The weight (the per-token rule, review #2) ------------------------------
@@ -310,6 +322,15 @@ def test_the_weight_per_token(
     assert model.find_weight(find(world, find_id), flag_values) == weight
 
 
+def test_a_flag_that_is_truthy_but_not_a_bool_still_counts() -> None:
+    """V-B audit #3: compared by value, not identity."""
+    clover, star = find("woodland", "fourleafclover"), find("nightsky", "fallenstar")
+    assert model.find_weight(clover, {"sunny": 1}) == 1
+    assert model.find_weight(clover, {"sunny": 0}) == 0
+    assert model.find_weight(star, {"night": 1, "rainy": 0}) == 1
+    assert model.find_weight(star, {"night": 1, "rainy": 1}) == 0
+
+
 def test_an_uncommon_true_only_for_want_of_a_signal_falls_to_weight_1() -> None:
     uncommon = {"id": "x", "weight": 4, "when": [["rainy", "night"]]}
     assert model.find_weight(uncommon, {"rainy": None, "night": True}) == 1
@@ -348,6 +369,20 @@ def test_the_clock_schedules_first_then_rolls_once_when_due() -> None:
     events = roll(pet, due)
     assert events == [{"type": "found", "id": pet.basket[0]["id"], "world": "woodland"}]
     assert due + 3 * HOUR <= pet.next_find_at <= due + 5 * HOUR
+
+
+def test_a_clock_that_went_back_reschedules_from_now() -> None:
+    """V-B audit #2: a next roll further ahead than any gap (an RTC ahead
+    before NTP, a restored snapshot) is scheduled again from now, no roll."""
+    pet, t = awake_pet(), 1_000_000.0
+    pet.next_find_at = t + 30 * 86400
+    assert roll(pet, t) == [] and pet.basket == []
+    assert t + 3 * HOUR <= pet.next_find_at <= t + 5 * HOUR
+    pet.next_find_at = t + 5 * HOUR  # at the edge: kept
+    assert roll(pet, t) == [] and pet.next_find_at == t + 5 * HOUR
+    # Paused (asleep), it is left alone until the pet can roll.
+    pet.next_find_at, pet.asleep = t + 30 * 86400, True
+    assert roll(pet, t) == [] and pet.next_find_at == t + 30 * 86400
 
 
 def test_a_long_wait_is_one_roll_never_caught_up() -> None:
@@ -726,7 +761,9 @@ FREQUENCY = {
     "night": 1 / 2,  # Night Sky rolls asleep too
     "autumn": 1 / 4,
     "winter": 1 / 4,
-    "full_moon": 3 / 29.53 / 2,  # three days a month, the sun down
+    # The date's window (V-B audit #1: from the constant, so the bound tracks
+    # it), the sun down.
+    "full_moon": 2 * R.FIND_FULL_MOON_DAYS / 29.53 / 2,
 }
 NIGHTSKY_FINDS_A_DAY = 24 / 4 * R.FIND_CHANCE  # asleep too
 

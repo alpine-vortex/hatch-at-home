@@ -120,6 +120,7 @@ def valid_find(find: Any) -> bool:
     ok = (
         isinstance(find, dict)
         and isinstance(find.get("id"), str)
+        and isinstance(find.get("name"), str)
         and isinstance(find.get("a"), str)
         and isinstance(find.get("weight"), int | float)
         and not isinstance(find.get("weight"), bool)

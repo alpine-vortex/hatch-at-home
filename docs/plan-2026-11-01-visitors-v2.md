@@ -164,7 +164,12 @@ saw it or not.
     one, a fresh egg's), the next roll is scheduled `now + uniform(3, 5) h`, with no roll;
   - once `now >= next_find_at`, **one** roll, however long it was due (a nap, downtime,
     an upgrade back from V-A, `fast_forward`), and the next is scheduled from now;
-  - `lay_egg` sets None (the egg can't roll; the hatchling starts fresh).
+  - `lay_egg` sets None (the egg can't roll; the hatchling starts fresh);
+  - **a `next_find_at` further ahead than `FIND_EVERY_HOURS[1]` (5 h)**, on a tick the pet
+    can roll, means the clock went back (an RTC ahead before NTP, a restored snapshot):
+    it is scheduled again from now, with no roll (V-B audit #2, first mate). It is not in
+    `shift_times`, which would also move it over downtime and break "one roll after
+    downtime".
   So a nap costs no roll, and the 2.4 a day the bound assumes holds. (The review's line
   "set `next_find_at = None` while it can't roll" would make every nap a reset, which Q2
   rules out; "paused" is built as "left alone".)
@@ -204,10 +209,13 @@ saw it or not.
       with no weather entity is weight 1 at night; four-leaf clover is weight 1 when sunny,
       0 when not, and 1 with no sun signal at all. A home *with* a weather entity that
       never sees a condition is Open question 2.
-    - **The moon with no moon sensor (V-B review #4, owner Q3):** worked out from the date
-      (a mean synodic month; "full" within ±1 day of mid-cycle, `R.FIND_FULL_MOON_DAYS`),
-      so moonstone happens everywhere. A mapped `moon_phase` or `moon_illumination`
-      entity wins.
+    - **The moon (V-B review #4, owner Q3; V-B audit #1, first mate):** for finds,
+      `full_moon` is the sun down and **either** a mapped `moon_phase` or
+      `moon_illumination` entity saying full **or** the date's window (a mean synodic
+      month; within ±1.5 days of mid-cycle, `R.FIND_FULL_MOON_DAYS`, so 3 nights a
+      month). So moonstone happens everywhere. HA's phase sensor says full for only
+      about a day, which alone would make moonstone ~178 days. The house's own
+      `full_moon` mood flag is unchanged (the entity wins there).
 - **Finds already in the collection are weighted ×0.5**, never 0, so new ones come a little
   sooner, but repeats still happen and still delight.
 - **Rare enough to be special, never a worry.** A pytest works out each find's expected
@@ -223,7 +231,8 @@ saw it or not.
   - every world's rarest **unconditional** find, with every condition find in the pool
     (the worst case): at most **30 days** (Terrarium, Hearth, Pond 23.8; Tidepool 22.5);
   - **condition finds** at a stated frequency (sunny 1 roll in 3, rain 1 in 4, fog and snow
-    1 in 10, a season 1 in 4, night 1 in 2, full moon 3 days a month at night): at most
+    1 in 10, a season 1 in 4, night 1 in 2, full moon `2 × FIND_FULL_MOON_DAYS` days a
+    month at night, derived from the constant): at most
     **100 days**. As built: message in a bottle ~89, moonstone ~62, four-leaf clover ~58,
     dew drop ~56, chanterelle ~55, frosted leaf ~48, fallen star ~34, snail shell ~19,
     frogbit ~17, pine sprig ~16. Their tiles stay hidden until met (§13b #2).
@@ -671,7 +680,7 @@ follow in either order. V-E comes last.
   `model.py`): `basket` and `next_find_at` sit in V-A's `unknown`, and V-A's `lay_egg`
   copies them; its egg carries a stale `next_find_at`, which on the upgrade back is one
   roll at once, never more.
-- Tests: `tests/test_finds.py` (95 cases); `tests/js/finds.test.js`; `test_channel` and
+- Tests: `tests/test_finds.py` (97 cases); `tests/js/finds.test.js`; `test_channel` and
   `test_init`'s send-off no longer lean on the rng's order. No card-check section (V-B
   review #21); card-check runs only to show nothing regressed.
 
@@ -765,6 +774,15 @@ The V-B review's questions (s2590), **all as recommended** (owner, 2026-11-02):
    the clock on every nap, which this answer rules out.
 3. **The moon phase comes from the date** with no moon sensor (V-B review #4 a).
 4. **A visitor's left find fires no `found`.**
+
+The V-B audit (s2592, FIX FIRST), decided by the first mate (2026-11-01) as it recommended:
+
+- **#1** For finds, full moon = a mapped entity says full **or** the date's window, now
+  ±1.5 days (3 nights); the analytic test's full-moon frequency comes from the constant.
+- **#2** A `next_find_at` more than 5 h ahead (a clock that went back) is scheduled again
+  from now, with no roll.
+- #3-#5 (nits): `find_weight` compares by value; `valid_find` needs a str `name`; a known
+  id under the wrong world counts as unknown (a comment says so, for V-D).
 
 ## 13b. Answered (owner, 2026-11-01): all four as recommended
 

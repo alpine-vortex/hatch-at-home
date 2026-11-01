@@ -2472,7 +2472,7 @@ def find_weight(find: dict[str, Any], flags: dict[str, bool | None]) -> float:
             value = flags.get(token.removeprefix("!"))
             if value is None:
                 missing = True
-            elif value is token.startswith("!"):
+            elif bool(value) == token.startswith("!"):
                 break
         else:
             best = max(best, min(tier, R.FIND_MISSING_WEIGHT) if missing else tier)
@@ -2489,7 +2489,9 @@ def can_find(state: PetState, world: str) -> bool:
 
 def basket_known(state: PetState, known: dict[str, set[str]]) -> list[dict[str, Any]]:
     """The basket's entries some world knows (V-A's rule: the rest are a
-    later version's, kept in the save, never counted or shown)."""
+    later version's, kept in the save, never counted or shown). A known id
+    under the wrong world (a hand-edited save) counts as unknown too: ids are
+    looked up in their own world only (V-B audit #5)."""
     return [e for e in state.basket if e["id"] in known.get(e["world"], ())]
 
 
@@ -2569,6 +2571,14 @@ def roll_find(
     is a `found` moment; one with no room goes to the collection alone."""
     if not finds or not can_find(state, world):
         return []
+    if (
+        state.next_find_at is not None
+        and state.next_find_at - now > R.FIND_EVERY_HOURS[1] * 3600
+    ):
+        # Further ahead than any gap: the clock went back (an RTC ahead before
+        # NTP, a restored snapshot). Scheduled again from now, no roll (V-B
+        # audit #2), rather than no finds until the wall clock catches up.
+        state.next_find_at = None
     if state.next_find_at is not None and now < state.next_find_at:
         return []
     due = state.next_find_at is not None

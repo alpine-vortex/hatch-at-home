@@ -155,8 +155,8 @@ _SYNODIC_DAYS = 29.530588853
 
 
 def full_moon_by_date(now: float) -> bool:
-    """With no moon entity mapped: the moon is full within a day of the
-    middle of its cycle (a mean month: good to well under a day)."""
+    """The moon is full for finds within FIND_FULL_MOON_DAYS of the middle of
+    its cycle (a mean month: good to well under a day), 3 nights a month."""
     age = ((now - _NEW_MOON_EPOCH) / 86400) % _SYNODIC_DAYS
     return abs(age - _SYNODIC_DAYS / 2) <= R.FIND_FULL_MOON_DAYS
 
@@ -175,8 +175,10 @@ def find_flags(
 
     - `night` is the sun being down (no sun entity: 20:00-06:00 local), not
       the sleep hours.
-    - `full_moon` is the phase with the sun down; with no moon entity mapped,
-      the phase comes from the date.
+    - `full_moon` is the sun down and the moon full: a mapped phase or
+      illumination entity says so, or the date's 3-night window does (HA's
+      phase sensor says full for only about a day, which would make moonstone
+      a half-year wait; V-B audit #1).
     - `autumn` / `winter` come from the season (None in the tropics).
     - Weather tokens are read on their own, not as the house's one flag."""
     weather = "weather" in configured
@@ -185,10 +187,10 @@ def find_flags(
     else:
         start, end = R.FIND_NIGHT_HOURS
         night = local_hour >= start or local_hour < end
-    if "moon" in configured:
-        full = moon_phase(r.moon_phase, r.moon_illumination) == "full_moon"
-    else:
-        full = full_moon_by_date(now)
+    full = full_moon_by_date(now) or (
+        "moon" in configured
+        and moon_phase(r.moon_phase, r.moon_illumination) == "full_moon"
+    )
     return {
         "rainy": is_raining(r) if weather or "rain" in configured else None,
         "snowy": r.condition in SNOWY if weather else None,
