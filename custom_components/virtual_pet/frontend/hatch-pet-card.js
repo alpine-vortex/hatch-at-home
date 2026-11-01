@@ -1033,7 +1033,6 @@ const KINDRED = { mellow: "sweet", sweet: "mellow", bouncy: "starry", starry: "b
   old_soul: "fancy", fancy: "old_soul", charming: "plucky", plucky: "charming" };
 const KINDRED_ODDS = 0.5; // a kindred link's chance of the host's extra line
 const FRIEND_WELCOME_MS = 6 * 3600 * 1000; // "welcome home!" at the next look, this long after
-const REPLY_MIN_MS = 1500; // a kindred visit's guest reply stays on show at least this long
 const FIRST_LOOK_LINES = 3; // lines queued at the first look (the visit's notes fill what's left)
 // An adult's say on how it was raised (P2b): all happy, any type, at most once a
 // week per pet, at a first look that has room (docs/plan-2026-10-28-personality-types.md).
@@ -8183,13 +8182,11 @@ class HatchPetCard extends HTMLElement {
       const still = () => this._link === L;
       if (!extra) this._queue(host, hello, 3400, { still });
       else {
-        this._queue(host, hello, 2200, { still });
+        // 3300 ms: the extra starts no earlier than t0+3300, after the guest's reply (t0+1800) has shown 1.5 s.
+        this._queue(host, hello, 3300, { still });
         // Said late (the first line typed slowly): the visit waits for it to be read.
         this._queue(host, extra, 1600, { still, then: () => {
-          // The guest's reply has had its turn (at least REPLY_MIN_MS on show): the bubbles would overlap.
-          const shown = L.replyAt ? Date.now() - L.replyAt : REPLY_MIN_MS;
-          if (shown >= REPLY_MIN_MS) L.say.hidden = true;
-          else at(REPLY_MIN_MS - shown, () => { L.say.hidden = true; });
+          L.say.hidden = true; // the guest's reply has had its turn: the bubbles would overlap
           const left = host.sayUntil - Date.now();
           if (left <= L.endsIn - Date.now()) return;
           clearTimeout(L.hideAt);
@@ -8208,7 +8205,6 @@ class HatchPetCard extends HTMLElement {
       if (!isCalm) this._animate(host, host.pet, "greethop", 1400);
     });
     at(t0 + 1800, () => {
-      L.replyAt = Date.now();
       L.say.textContent = reply; // visual only: the visit screen is aria-hidden
       L.say.hidden = false;
       if (!isCalm) this._animate(guest, L.img, "greethop", 1400);
