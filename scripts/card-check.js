@@ -4223,7 +4223,8 @@ async function main() {
     check("2e: the link is 44 px", box.height >= 44 && box.width >= 44, JSON.stringify(box));
     await shot("07e-older-generations-closed");
     await olderBtn.click();
-    const all = (await cur().locator(".gen").allInnerTexts()).map((l) => l.replace(/\s+/g, " ").trim().split(" ")[1]);
+    const all = (await cur().locator(".gen").allInnerTexts()).map((l) => l.replace(/\s+/g, " ").trim())
+      .filter((l) => /^gen \d/.test(l)).map((l) => l.split(" ")[1]); // not the memories line
     check("2e: a tap opens the rest, oldest first, and the link goes",
       all.join() === "1,2,3,4,5,6,7" && (await cur().locator(".jolder").count()) === 0, all.join());
     await shot("07f-older-generations-open");
