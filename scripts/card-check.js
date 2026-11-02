@@ -3592,7 +3592,7 @@ async function main() {
           Math.random = () => 0;
           queue.push({ ...base, game: "left_right", round: 5, wins: 5, correct: true, went: "left", done: true, won: true });
           await el._guess(s, "left");
-          await new Promise((r) => setTimeout(r, 1100));
+          await new Promise((r) => setTimeout(r, 2100)); // the last result is read first (1.8 s)
           out.count = s.bubble.textContent;
           await new Promise((r) => setTimeout(r, 4200));
           out.typeLine = said.slice();

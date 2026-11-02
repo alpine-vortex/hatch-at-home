@@ -2073,13 +2073,13 @@ const REACTIONS = {
   refused: { mood: "bored", move: "look", ms: 1200 },
   tucked: { mood: "cozy", move: "settle", ms: REACT_MS },
   // Only with the species' own act (STAGE_POSES): without it these do nothing (R2).
-  lost: { mood: "content", move: "settle", ms: 1200, poseOnly: true }, // a good sport; the log can land before the game closes
+  lost: { mood: "content", move: "settle", ms: 1200 }, // a good sport (acts.aww, else content frames: UX fix 6, F5); the log can land before the game closes
   ready: { mood: "content", move: null, ms: 1200, poseOnly: true }, // a game just began
 };
 const READY_MS = 1200;
 const PAT_POSE_MS = 900; // acts.pat on a pat; apart from poseUntil so the next pat's `reacting` is unchanged
 // Which species.json "acts" pose a reaction plays at baby, teen and adult (R1, R2).
-// refused: the act, else the bored frame; lost and ready: the act, else nothing.
+// refused and lost: the act, else the mood frame; ready: the act, else nothing (the game perks instead).
 const STAGE_POSES = { fed: "eat", praised: "cheer", greet: "cheer", refused: "refuse", lost: "aww", ready: "ready" };
 // Idle manner (P3): the copies of moves each type adds to _idle's list, in the
 // plan's order (docs/plan-2026-10-28-personality-types.md, "Idle manner"). Only
@@ -8384,7 +8384,7 @@ class HatchPetCard extends HTMLElement {
         this._show(s, s.pet, s.poseFrames[0]);
       } else {
         const ok = entry.result === "ok";
-        // A lost game: a good sport, only with acts.aww (else no reaction, as before).
+        // A lost game: a good sport, acts.aww, else the content frames settle.
         const kind = entry.result === "lost" ? "lost" : entry.result === "won" ? "praised"
           : ok && (entry.action === "feed" || entry.action === "snack") ? "fed"
           : ok && entry.action === "praise" ? "praised"
