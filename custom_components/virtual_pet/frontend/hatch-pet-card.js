@@ -3552,9 +3552,10 @@ const STYLE = `
   .screen:has(> .game:not([hidden])) .bubble { max-width: 54%; }
   /* A narrow card: status rows fit four hearts. */
   .compact .row { grid-template-columns: 16px 70px minmax(0, 1fr); gap: 5px; }
-  .compact .hearts img { width: 14px; height: 14px; }
+  .compact .hearts img { flex-basis: 14px; width: 14px; }
   /* Every row: an icon slot (maybe empty), the label, the value; all on one grid. */
   .row { display: grid; grid-template-columns: 18px 84px minmax(0, 1fr); align-items: center; gap: 6px; }
+  ha-card:not(.bigtext) .porthole .row { grid-template-columns: 16px 60px minmax(0, 1fr); gap: 5px; } /* the rim cuts the value column (UX8 F7) */
   .bar { height: 9px; border: 2px solid #2f3a24; padding: 1px; }
   .bar div { height: 100%; background: #2f3a24; }
   .hearts { letter-spacing: 2px; }
@@ -3720,7 +3721,8 @@ const STYLE = `
   .screen .status img { position: static; } /* not scene sprites */
   .row .picon { width: 18px; height: 18px; }
   .hearts { display: flex; gap: 3px; }
-  .hearts img { width: 18px; height: 18px; image-rendering: pixelated; }
+  /* The hearts shrink to the value column (UX8 F7): five of them clipped in the porthole at 300. */
+  .hearts img { flex: 0 1 18px; min-width: 0; width: 18px; height: auto; aspect-ratio: 1; image-rendering: pixelated; }
   /* A cap is a domed button cut on the grid (_mould): its face is the cap's own
      background, its side (below the box) and the light on it are pseudo-elements, and
      it sinks two cells when pressed. */
