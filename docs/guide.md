@@ -148,7 +148,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     favourite! ♥" once a season (no season talk in the tropics), "Thanksgiving in
     your favourite season! ♥";
   - says what it's like out there when you come home ("it's wet out there! come
-    get cozy ☂", "brr, was it cold out there?");
+    get cozy ☂", "brr, it looks cold out there!");
   - greets you sleepily if you look in before sunrise ("mmh... you're up before the
     sun... zzz ♥").
 
@@ -175,12 +175,12 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   works through Home Assistant's long-term statistics. "Usual" is your own median
   over the last two weeks, from that history; the pet stores none of it. With "my
   day" on, it also notices:
-  - a walk in the rain or snow ("you walked in the rain?! so brave!", level 4);
+  - a walk in the rain or snow ("you walked in the rain! so brave! ☂", level 4);
   - coming back from a zone you made, when its name has gym, work, office, school,
-    college, university or park in it ("back from the gym?! so strong!", level 3;
-    other zones are never named);
+    college, university or park in it ("back from the gym! so strong!", "back from
+    class! ♥", level 3; other zones are never named);
   - an early alarm tomorrow on an Android phone (the Next alarm sensor, which is
-    off by default in the app): "early start tomorrow? sleep well ♥", from 19:00,
+    off by default in the app): "early start tomorrow! sleep well ♥", from 19:00,
     when it's at least 45 minutes before your usual (level 3);
   - a send-off on your phone on a notable morning as you leave ("Pip says: rain
     today, take an umbrella, sunbeam ☂"), with "notify me" on, at most three times a
@@ -370,7 +370,7 @@ lay the egg, then rename it.
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline`, `_weight` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. Weight is healthy between 25 and 75. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `reason_key` (which sentence that is, for the card's baby talk), `call_deadline`. |
-| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `memories` (first snow and frost), `hatches_at` (while an egg), `next_world`, `next_egg` and `journal` (the device's retired pets). |
+| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `memories` (first snow, frost and fog, and the first warm day), `hatches_at` (while an egg), `next_world`, `next_egg` and `journal` (the device's retired pets). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far (attribute `discipline_misses`: fake calls nobody answered). |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them; `moments`: the last 10 things that happened to it, for the card to react to. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
@@ -575,7 +575,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
     only when the day is worth a word: a storm, snow, a hot or cold day, a jump of 8 °C
     from the day before, rain, or sun after rain ("snow tomorrow!!").
   - The season's first snow and first frost (from the weather entity's temperature) are
-    a moment once each winter, kept as memories in the journal. They notify too.
+    a moment once each winter, kept as memories in the journal. They notify too. So are
+    the first fog of each winter-year (July to June) and the year's first warm day (20 °C
+    or more, from March in the north or September in the south, through the six warm
+    months; never in the tropics), on the card only.
   - It passes on news an automation tells it ("did you hear? Tamagotchi turns 30!"),
     at most every 30 minutes. See [Sharing news with the pet](#sharing-news-with-the-pet).
 - **Sickness:** health below 25, four care misses in a day, old poop, or being too heavy.
@@ -665,7 +668,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   Under the creatures, "every world ›" shows all six worlds, five creatures each: the
   ones a pet on this card has raised are drawn, the rest are silhouettes.
 - **Notifications:** opt in per person. In settings (the gear on the status screen), tap "notify me" to get
-  this pet's calls, sickness, hatching, growing up, new or deeper traits, the season's
+  this pet's calls (each need has three phrasings, one a day: "Pip is hungry!" one day,
+  "Pip's tummy is rumbling!" another), sickness, hatching, growing up, new or deeper traits, the season's
   first snow and frost, new eggs, and a holiday greeting on the morning of Halloween
   ("Happy Halloween! Pip is dressed up and ready to trick or treat 🎃") and of
   Thanksgiving ("Happy Thanksgiving! Pip is thankful for you 🦃"), and two winter lights

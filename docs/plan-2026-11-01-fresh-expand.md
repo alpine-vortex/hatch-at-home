@@ -744,3 +744,23 @@ The first of each pool is the shipped line, as the dialogue pass s2625 left it.
 Branch `crew/hatch-at-home-s2627-fresh-expand-fold-review-build`.
 
 - **Plan** (this file): the scout's plan with the review folded in and the copy approved.
+- **E1** `de4f41ed`: `dayOrdinal`, `turnHash`, `turnOrder`, `turnPick`, `_fresh`, `_lines`'
+  `fresh`; the copy block between its markers, every table named in `scripts/copy-scan.js`
+  and scanned by node and card-check `types`.
+- **E2** `aee234f1`: pat P-a/P-b, praise P-c. Card-check `pat`, `react`, `types`; bench `ui`
+  adds the pat, praise shots.
+- **E3** `f63a0874`: visitor friends (per screen, `hatch-visitfriends-<device>`). Card-check
+  `visitors`; bench preset `visitors-friends`.
+- **E4** `70a1930e`: wake, night visitor and sunset callbacks, meals, crumb, cured, bubble pop.
+  F-b's crumb isn't limited to babies; M-a only when the cure was yesterday and the pet is
+  well. Card-check `moments`, `care`.
+- **E5** `a2dd9afb`: game of the day (typed pets say their game's line, untyped the generic;
+  the prompt only on cards ≥300 px), lucky number, win/lose, dig watcher, shiny berry. The
+  dig checks live in card-check `resume`.
+- **E6** `b539472f`, **E7** `638357e0`, **E8** `8026b319`: wishes in turns and W-b; how_day
+  replies; welcome back, L10 favourite, monthly trick (spin is a new CSS turn, no art),
+  shared stay ×2. Card-check `moments`, `personality`, `sharedscreen`.
+- **E9** `94179001`: link news, journal dream, status today. Card-check `infrared`, `moments`.
+- **E10** `17cb2014`: rare pair and guest. Card-check `visitors`; bench preset
+  `visitors-rare` (`5568458b`).
+- **F3** `098176b1`: the promise. Node `promise.test.js`; card-check `personality`.
