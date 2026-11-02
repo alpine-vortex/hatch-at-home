@@ -867,10 +867,15 @@ Branch `crew/hatch-at-home-s2627-fresh-expand-fold-review-build`.
   errors 1-3, 5. **Critique 4, 6-10** `00c210fc`.
 - **Owner Q1, Q2** `ca0d848f`: the typing browser's own copy of the words
   (`hatch-followtext-<user>`, to the event's `until`), said there or on a phone or the app.
-- **Owner Q3** (opp #1, #2, #4; copy held for the FM's review): "anything big this week?"
+- **Owner Q3** `dbd0fd46` (opp #1, #2, #4; copy held for the FM's review): "anything big this week?"
   Sundays and Mondays, the day picked from the next six (`day` in the answer, checked by
   `people.big_day_pick`); the early-alarm rule is gone. The big day's evening, from 19, asks
   "how did it go?" in the later slot (`big_how`, how_day's answers; asking it closes the
   event, so no evening beat besides); its `{it}` comes only from the typing browser's copy.
   The favourite visitor's missed visit is its own first-look line; its greet is two by the
   day. Pytest; card-check `moments`, `visitors`, `types`.
+- **E14** `7b3cab07`: the week strip on `state.social`'s days (`dream`, `visit`, `weather`;
+  `model.week_mark`, `week_weather`, `week_strip`), the sensor's unrecorded `week`, the
+  journal's strip (glyphs, aria-labels, the visitor only with finds shown). Pytest
+  `test_week.py`; card-check `moments`; bench shots in the worker's `renders/e14/`. Its
+  labels are held for the FM's copy review with Q3's lines.
