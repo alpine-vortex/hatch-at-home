@@ -42,6 +42,8 @@ from pytest_homeassistant_custom_component.common import (
 from custom_components.virtual_pet import model, notify, people as P
 from custom_components.virtual_pet.const import DOMAIN
 
+from .test_config_flow import open_topic, save_topic, shown
+
 STORE_KEY = f"{DOMAIN}.test_pet"
 
 # The one-time likes, all answered (the favourite visitor in every world, F4).
@@ -412,25 +414,20 @@ async def test_options_flow_saves_a_flat_mapping(
 ) -> None:
     config = await setup_with_house(hass)
     result = await hass.config_entries.options.async_init(config.entry_id)
-    assert result["type"] is FlowResultType.FORM
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "sleep": {
-                "bedtime": "22:30:00",
-                "wake_time": "06:45:00",
-                "bedtime_lights": ["light.bed"],
-            },
-            "weather": {"weather": "weather.home"},
-            "room": {},
-            "activity": {"zone": "zone.home", "tv": ["media_player.tv"]},
-            "sky": {},
-            "privacy": {"privacy": True},
-            "house": {},
-            "notifications": {},
+    assert result["type"] is FlowResultType.MENU
+    for topic, entered in {
+        "bedtime": {
+            "bedtime": "22:30:00",
+            "wake_time": "06:45:00",
+            "bedtime_lights": ["light.bed"],
         },
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
+        "weather": {"weather": "weather.home"},
+        "people": {"zone": "zone.home"},
+        "room": {"tv": ["media_player.tv"]},
+    }.items():
+        result = await save_topic(hass, config.entry_id, topic, entered)
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+    # Only the topics that were opened and saved wrote their defaults.
     assert config.options == {
         "bedtime": "22:30:00",
         "wake_time": "06:45:00",
@@ -444,9 +441,6 @@ async def test_options_flow_saves_a_flat_mapping(
         "comfort_high": 26.5,
         "away_after": 2.0,
         "sitter_settles": True,
-        "notice_robot": True,
-        "notice_doorbell": True,
-        "appliance_watts": 5.0,
     }
 
 
@@ -715,35 +709,17 @@ async def test_options_show_fahrenheit_and_store_celsius(
 
     hass.config.units = US_CUSTOMARY_SYSTEM
     config = await setup_with_house(hass)
-    result = await hass.config_entries.options.async_init(config.entry_id)
-    weather = result["data_schema"].schema["weather"].schema.schema
-    defaults = {
-        str(k): k.default()
-        for k in weather
-        if hasattr(k, "default") and callable(k.default)
-    }
-    assert defaults["comfort_low"] == 64.5  # 18 °C, to the nearest half degree
-    sections = {
-        "sleep": {"bedtime": "23:00:00", "wake_time": "07:00:00"},
-        "weather": {"comfort_low": 80, "comfort_high": 70},
-        "room": {},
-        "activity": {"zone": "zone.home", "away_after": 2},
-        "sky": {},
-        "privacy": {"privacy": True},
-        "house": {},
-        "notifications": {},
-    }
+    form = await open_topic(hass, config.entry_id, "weather")
+    assert shown(form)["comfort_low"] == 64.5  # 18 °C, to the nearest half degree
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], sections
+        form["flow_id"], {"comfort_low": 80, "comfort_high": 70}
     )
-    assert result["errors"] == {"weather": "comfort_range"}
+    assert result["errors"] == {"comfort_low": "comfort_range"}
     # The form comes back with what was entered (in °F), not the saved options.
-    weather = result["data_schema"].schema["weather"].schema.schema
-    shown = {str(k): k.default() for k in weather if callable(getattr(k, "default", 0))}
-    assert shown["comfort_low"] == 80 and shown["comfort_high"] == 70
-    sections["weather"] = {"comfort_low": 64, "comfort_high": 80}
+    again = shown(result)
+    assert again["comfort_low"] == 80 and again["comfort_high"] == 70
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], sections
+        result["flow_id"], {"comfort_low": 64, "comfort_high": 80}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert config.options["comfort_low"] == pytest.approx(17.78, abs=0.01)
@@ -933,29 +909,22 @@ async def test_options_reject_impossible_settings(
         {"device_class": "temperature", "unit_of_measurement": "°C"},
     )
     config = await setup_with_house(hass)
-    result = await hass.config_entries.options.async_init(config.entry_id)
-    sections = {
-        "sleep": {"bedtime": "23:00:00", "wake_time": "23:00:00"},
-        "weather": {},
-        "room": {"fireplace": "sensor.fire_temp"},
-        "activity": {"zone": "zone.home"},
-        "sky": {},
-        "privacy": {"privacy": True},
-        "house": {},
-        "notifications": {},
-    }
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], sections
+    result = await save_topic(
+        hass,
+        config.entry_id,
+        "bedtime",
+        {"bedtime": "23:00:00", "wake_time": "23:00:00"},
     )
-    assert result["errors"] == {
-        "sleep": "same_times",
-        "room": "fireplace_temperature",
-    }
-    sections["sleep"]["wake_time"] = "07:00:00"
-    sections["room"] = {}
+    assert result["errors"] == {"wake_time": "same_times"}
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], sections
+        result["flow_id"], {"bedtime": "23:00:00", "wake_time": "07:00:00"}
     )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    result = await save_topic(
+        hass, config.entry_id, "room", {"fireplace": "sensor.fire_temp"}
+    )
+    assert result["errors"] == {"fireplace": "fireplace_temperature"}
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
@@ -1498,6 +1467,7 @@ async def test_repairs_warn_about_entities_that_are_gone(
     assert issue.translation_placeholders == {
         "pet": "Pip",
         "entities": "media_player.gone",
+        "topics": '"The pet\'s room"',
     }
     # Fixing the options clears it (the entry reloads).
     hass.config_entries.async_update_entry(config, options={"weather": "weather.home"})

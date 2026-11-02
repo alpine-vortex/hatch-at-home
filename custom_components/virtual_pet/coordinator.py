@@ -111,6 +111,7 @@ from .home import (
 from .names import pet_name
 from .react import counts as react_counts, is_native as react_native
 from .species import load_catalog
+from .topics import topics_text
 from .watcher import Watcher, daily_forecast, doorbell_rang
 
 type PetConfigEntry = ConfigEntry[PetCoordinator]
@@ -707,6 +708,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             {
                 "pet": pet_name(self.hass, self.config_entry),
                 "entities": ", ".join(missing),
+                "topics": topics_text(self.config_entry.options, missing),
             },
         )
 
@@ -1101,7 +1103,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _want_forecast(self, now: float) -> None:
         """Refresh the daily forecast in the background, at most hourly."""
-        if not self._home_started or not self.config_entry.options.get(CONF_WEATHER):
+        # The watcher's options, not the entry's: a save lands before the reload.
+        if not self._home_started or not self.watcher._ids(CONF_WEATHER):
             return
         if now - self._forecast_at < R.HOME_FORECAST_REFRESH_MINUTES * 60:
             return

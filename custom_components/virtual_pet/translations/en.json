@@ -36,136 +36,144 @@
     "step": {
       "init": {
         "title": "What {name} notices",
-        "description": "Connect parts of your home to the pet. Every field is optional, and anything you leave empty is ignored. The house never hurts the pet: it only changes its mood, its scene and what it asks for.",
-        "sections": {
-          "sleep": {
-            "name": "Sleep",
-            "description": "Lights out always wins. Otherwise the pet goes to bed when the bedtime lights are off and the house is quiet, from an hour before bedtime. If nobody does either, it dozes off on its own an hour after bedtime. The house never wakes it; it wakes at wake time.",
-            "data": {
-              "bedtime": "Bedtime",
-              "wake_time": "Wake time",
-              "bedtime_lights": "Bedtime lights",
-              "motion": "Motion sensors"
-            },
-            "data_description": {
-              "bedtime": "It gets drowsy 30 minutes before. Switching \"Lights out\" off again after bedtime costs a little happiness.",
-              "wake_time": "It wakes up on its own at this time.",
-              "bedtime_lights": "When all of these are off, it's time for bed. Bedroom lights work well. A light left on late doesn't keep the pet up past its own bedtime.",
-              "motion": "Indoor motion, occupancy or presence sensors. Movement in the last 10 minutes means the house isn't quiet yet."
-            }
-          },
-          "weather": {
-            "name": "Weather and air",
-            "description": "Rain brings a rainy scene and a blanket request. Sun, snow and fog change its mood. Indoor temperature outside your comfort range makes it shiver or sweat and ask for a blanket or a fan.",
-            "data": {
-              "rain": "Rain sensor",
-              "weather": "Weather forecast",
-              "indoor_temperature": "Indoor temperature",
-              "comfort_low": "Too cold below",
-              "comfort_high": "Too warm above",
-              "aqi": "Air quality index",
-              "solar": "Solar radiation (optional)"
-            },
-            "data_description": {
-              "rain": "An on/off \"it's raining\" entity, or a rain rate where anything above 0 means rain. This beats the forecast, which only says what's likely.",
-              "weather": "A weather entity. Used for sunny, snow and fog, and for rain when there's no rain sensor.",
-              "indoor_temperature": "One temperature sensor in the main living space.",
-              "comfort_low": "Below this the pet shivers and asks for a blanket. Never when the fireplace is lit.",
-              "comfort_high": "Above this the pet sweats and asks for a fan.",
-              "aqi": "An air quality index sensor. Above 100 the pet wears a little mask and stays in. Cosmetic only.",
-              "solar": "Only if your weather station reports solar radiation in W/m². 300 or more counts as sunny, more precise than the forecast."
-            }
-          },
-          "room": {
-            "name": "The pet's room",
-            "description": "The room the pet lives in. Lights still bright after bedtime make it squint; dim evening light makes it cozy. Daylight is never too bright.",
-            "data": {
-              "room_lights": "Room lights",
-              "fireplace": "Fireplace",
-              "lux": "Light sensors"
-            },
-            "data_description": {
-              "room_lights": "Lights in that room, for example the living room. Still on at half brightness or more after bedtime counts as too bright; before bedtime they never do.",
-              "fireplace": "Any entity that's on, heating or above 0 when the fire is lit. The pet curls up by it, gets a little happier, and won't ask for a blanket.",
-              "lux": "Optional. 100 lx or more after bedtime also counts as too bright."
-            }
-          },
-          "activity": {
-            "name": "People and activity",
-            "description": "Someone arriving gets an excited greeting, at most once every 30 minutes. When nobody is home for a while, the pet goes to the sitter's and time stops for it, so it never gets lonely or hungry. Music makes it dance and the TV makes it watch along, each with a small happiness bonus. Ticking off chores on a to-do list earns the pet treats.",
-            "data": {
-              "zone": "Home zone",
-              "away_after": "Go to the sitter's after",
-              "sitter_settles": "The sitter calms a fussy pet",
-              "tv": "TVs",
-              "music": "Music players",
-              "chores": "Chore lists"
-            },
-            "data_description": {
-              "zone": "The pet counts the people in this zone. Only people tracked in Home Assistant count.",
-              "away_after": "How long the house has to be empty first.",
-              "sitter_settles": "On: if the pet was fussing for attention when it left (not a real need), the sitter settles it, so it comes home happy. Off: the fussing waits for you. Real needs, like hunger, always wait.",
-              "tv": "Media players that are TVs. On or playing counts as watching.",
-              "music": "Speakers and displays. Playing anything that isn't video counts as music.",
-              "chores": "To-do lists. Each item someone ticks off earns the pet a treat (up to 5 a day); it waits if the pet is asleep or away."
-            }
-          },
-          "sky": {
-            "name": "Sky",
-            "description": "The full moon makes the pet happy if it's up late, and a new moon is a starry night. Any moon phase sensor works, such as the Moon integration's; or give the lit fraction instead.",
-            "data": {
-              "moon_phase": "Moon phase",
-              "moon_illumination": "Moon illumination",
-              "moon_altitude": "Moon altitude"
-            },
-            "data_description": {
-              "moon_phase": "A sensor whose state is the phase, like \"full_moon\" or \"Full Moon\".",
-              "moon_illumination": "Optional. The lit fraction, 0–1 or a percentage; 97% or more counts as full.",
-              "moon_altitude": "Optional. Degrees above the horizon; the moon only counts while it's up."
-            }
-          },
-          "house": {
-            "name": "The house helps",
-            "description": "When the heating comes on while the pet is chilly, or the fan or air conditioning while it is warm, the house answers for you: the pet gets cozy or cool, and says so. While the heating is on the pet doesn't ask for a blanket, and likewise for the fan. At most twice a day. A blanket for rain or thunder stays yours. A thermostat is a good fit for heating.",
-            "data": {
-              "heating": "Heating",
-              "cooling": "Cooling",
-              "notice_robot": "Notice robot vacuums",
-              "notice_doorbell": "Notice doorbells",
-              "appliances": "Washer, dryer, dishwasher",
-              "appliance_watts": "Idle power"
-            },
-            "data_description": {
-              "heating": "A thermostat, switch or toggle that is on when the heating is. A thermostat counts while it is heating (or set to heat and below its target). Pick the one for the pet's room: many homes run the heating when nobody is cold.",
-              "cooling": "A fan, thermostat, switch or toggle that is on when the room is being cooled. A thermostat counts while it is cooling or running its fan.",
-              "notice_robot": "Every vacuum in the house counts. One added later is noticed once these settings are saved again.",
-              "notice_doorbell": "Every doorbell in the house counts. One added later is noticed once these settings are saved again.",
-              "appliances": "Machines that finish a cycle. A switch or sensor that reports power, a sensor that says running and finished, or a binary sensor that is on while it runs. When one finishes the pet says so, once.",
-              "appliance_watts": "For power readings: at or below this many watts means the machine is not running. A cycle is seen after 10 minutes running, and over after about 3 minutes idle."
-            }
-          },
-          "privacy": {
-            "name": "Privacy",
-            "description": "For wall tablets and shared dashboards.",
-            "data": {
-              "privacy": "Keep presence private",
-              "house_words_private": "Keep house words off sensors"
-            },
-            "data_description": {
-              "privacy": "On: an empty house shows the pet napping, never at the sitter's, and the pet never names anyone. Off: dashboards show \"at the sitter's\".",
-              "house_words_private": "On: news headlines and a house moment's own words are said on the card only, never kept on the pet's sensors (automations still get a headline). Off: they sit on the last-care sensor for a while, like the pet's other moments."
-            }
-          },
-          "notifications": {
-            "name": "Notifications",
-            "description": "Phone notifications go to whoever taps \"notify me\" on the pet's status screen.",
-            "data": {
-              "dashboard": "Dashboard to open"
-            },
-            "data_description": {
-              "dashboard": "Tapping one of this pet's notifications opens this dashboard. Pick one or type a path, like /lovelace/pets. Empty opens the app as it was."
-            }
-          }
+        "description": "Pick what {name} notices. Everything is optional, and the house never hurts the pet: it only changes its mood, its scene and what it asks for.",
+        "menu_options": {
+          "bedtime": "Bedtime",
+          "people": "People and privacy",
+          "weather": "Weather and air",
+          "room": "The pet's room",
+          "house": "The house helps",
+          "sky": "Moon and sky",
+          "notifications": "Where notifications open"
+        },
+        "menu_option_descriptions": {
+          "bedtime": "When the pet goes to bed and wakes up",
+          "people": "Who's home, the sitter, and privacy",
+          "weather": "Rain, sun, indoor temperature and air",
+          "room": "Lights, fireplace, TV and music",
+          "house": "Heating, fans, machines, chores and visitors",
+          "sky": "The moon",
+          "notifications": "Which dashboard a tap opens"
+        }
+      },
+      "bedtime": {
+        "title": "{name}'s bedtime",
+        "description": "Bedtime and wake time are targets: the pet may turn in up to an hour either side, and lights out always wins. It sleeps when the bedtime lights are off and the house is quiet.",
+        "data": {
+          "bedtime": "Bedtime",
+          "wake_time": "Wake time",
+          "bedtime_lights": "Bedtime lights",
+          "motion": "Motion sensors"
+        },
+        "data_description": {
+          "bedtime": "It gets drowsy 30 minutes before. Switching \"Lights out\" off again after bedtime costs a little happiness.",
+          "wake_time": "It wakes up on its own at this time.",
+          "bedtime_lights": "When all of these are off, it's time for bed. Bedroom lights work well. A light left on late doesn't keep the pet up past its own bedtime.",
+          "motion": "Indoor motion, occupancy or presence sensors. Movement in the last 10 minutes means the house isn't quiet yet."
+        }
+      },
+      "people": {
+        "title": "People and privacy",
+        "description": "Who is home decides whether the pet is with you or at the sitter's. The privacy switches decide what dashboards and sensors may show.",
+        "data": {
+          "zone": "Home zone",
+          "away_after": "Off to the sitter's after",
+          "sitter_settles": "The sitter calms a fussy pet",
+          "privacy": "Keep presence private",
+          "house_words_private": "Keep house words off sensors"
+        },
+        "data_description": {
+          "zone": "The pet counts the people in this zone. Only people tracked in Home Assistant count.",
+          "away_after": "How long the house has to be empty first.",
+          "sitter_settles": "On: if the pet was fussing for attention when it left (not a real need), the sitter settles it, so it comes home happy. Off: the fussing waits for you. Real needs, like hunger, always wait.",
+          "privacy": "On: an empty house shows the pet napping, never at the sitter's, and the pet never names anyone on sensors. For a wall tablet, also turn on \"shared screen\" in the card's settings.",
+          "house_words_private": "On: news headlines and a house moment's own words are said on the card only, never kept on the pet's sensors (automations still get a headline). Off: they sit on the last-care sensor for a while, like the pet's other moments."
+        }
+      },
+      "weather": {
+        "title": "Weather and air",
+        "description": "The pet sees the weather outside and feels the room's temperature and air. It never gets sick from them.",
+        "data": {
+          "rain": "Rain sensor",
+          "weather": "Weather",
+          "indoor_temperature": "Indoor temperature",
+          "comfort_low": "Too cold below",
+          "comfort_high": "Too warm above",
+          "aqi": "Air quality sensor",
+          "solar": "Sunlight sensor"
+        },
+        "data_description": {
+          "rain": "An on/off \"it's raining\" entity, or a rain rate where anything above 0 means rain. This beats the forecast, which only says what's likely.",
+          "weather": "A weather entity. Used for sunny, snow and fog, and for rain when there's no rain sensor.",
+          "indoor_temperature": "One temperature sensor in the main living space.",
+          "comfort_low": "Below this the pet shivers and asks for a blanket. Never when the fireplace is lit.",
+          "comfort_high": "Above this the pet sweats and asks for a fan.",
+          "aqi": "An air quality index sensor. Above 100 the pet wears a little mask and stays in. Cosmetic only.",
+          "solar": "Only if your weather station reports solar radiation in W/m². 300 or more counts as sunny, more precise than the forecast."
+        }
+      },
+      "room": {
+        "title": "{name}'s room",
+        "description": "Lights, a fireplace, the TV and music change the pet's scene and mood.",
+        "data": {
+          "room_lights": "Room lights",
+          "fireplace": "Fireplace",
+          "lux": "Light sensors",
+          "tv": "TVs",
+          "music": "Music players"
+        },
+        "data_description": {
+          "room_lights": "Lights in that room, for example the living room. Still on at half brightness or more after bedtime counts as too bright; before bedtime they never do.",
+          "fireplace": "Any entity that's on, heating or above 0 when the fire is lit. The pet curls up by it, gets a little happier, and won't ask for a blanket.",
+          "lux": "Optional. 100 lx or more after bedtime also counts as too bright.",
+          "tv": "Media players that are TVs. On or playing counts as watching.",
+          "music": "Speakers and displays. Playing anything that isn't video counts as music."
+        }
+      },
+      "house": {
+        "title": "The house helps",
+        "description": "When the heating or a fan comes on as the pet asks, the house answers for you. Finished machines, ticked-off chores, robot vacuums and the doorbell give it something to notice.",
+        "data": {
+          "heating": "Heating",
+          "cooling": "Cooling",
+          "notice_robot": "Robot vacuums",
+          "notice_doorbell": "Doorbells",
+          "appliances": "Washer, dryer, dishwasher",
+          "appliance_watts": "Counts as off at or below",
+          "chores": "Chore lists"
+        },
+        "data_description": {
+          "heating": "A thermostat, switch or toggle that is on when the heating is. A thermostat counts while it is heating (or set to heat and below its target). Pick the one for the pet's room: many homes run the heating when nobody is cold.",
+          "cooling": "A fan, thermostat, switch or toggle that is on when the room is being cooled. A thermostat counts while it is cooling or running its fan.",
+          "notice_robot": "Every vacuum in the house counts. One added later is noticed once these settings are saved again.",
+          "notice_doorbell": "Every doorbell in the house counts. One added later is noticed once these settings are saved again.",
+          "appliances": "Machines that finish a cycle. A switch or sensor that reports power, a sensor that says running and finished, or a binary sensor that is on while it runs. When one finishes the pet says so, once.",
+          "appliance_watts": "For power readings: at or below this many watts means the machine is not running. A cycle is seen after 10 minutes running, and over after about 3 minutes idle.",
+          "chores": "To-do lists. Each item someone ticks off earns the pet a treat (up to 5 a day); it waits if the pet is asleep or away."
+        }
+      },
+      "sky": {
+        "title": "Moon and sky",
+        "description": "The moon sensors make the pet's night sky match yours, full moons and all.",
+        "data": {
+          "moon_phase": "Moon phase",
+          "moon_illumination": "Moon illumination",
+          "moon_altitude": "Moon altitude"
+        },
+        "data_description": {
+          "moon_phase": "A sensor whose state is the phase, like \"full_moon\" or \"Full Moon\".",
+          "moon_illumination": "Optional. The lit fraction, 0–1 or a percentage; 97% or more counts as full.",
+          "moon_altitude": "Optional. Degrees above the horizon; the moon only counts while it's up."
+        }
+      },
+      "notifications": {
+        "title": "Where notifications open",
+        "description": "Phone notifications go to whoever taps \"notify me\" on the pet's status screen.",
+        "data": {
+          "dashboard": "Dashboard to open"
+        },
+        "data_description": {
+          "dashboard": "Tapping one of this pet's notifications opens this dashboard. Pick one or type a path, like /lovelace/pets. Empty opens the app as it was."
         }
       }
     },
@@ -463,7 +471,7 @@
   "issues": {
     "missing_entities": {
       "title": "{pet} is listening for entities that are gone",
-      "description": "{pet}'s settings mention entities that no longer exist in Home Assistant, probably because they were renamed or removed: {entities}.\n\nThe pet ignores them, so nothing breaks, but it misses that part of your house. Open Settings → Devices & services → Hatch at Home → the gear next to {pet}, and pick the new entities or clear those fields. This warning goes away once the settings are saved."
+      "description": "{pet}'s settings mention entities that no longer exist in Home Assistant, probably because they were renamed or removed: {entities}.\n\nThe pet ignores them, so nothing breaks, but it misses that part of your house. Open Settings → Devices & services → Hatch at Home → the gear next to {pet}, then {topics}, and pick the new entities or clear those fields. This warning goes away once that's saved."
     },
     "world_not_ready": {
       "title": "{pet}'s world has no creatures yet",

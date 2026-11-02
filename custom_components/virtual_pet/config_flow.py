@@ -15,7 +15,6 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_NAME, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.data_entry_flow import section
 from homeassistant.helpers.selector import (
     BooleanSelector,
     EntitySelector,
@@ -78,6 +77,7 @@ from .defaults import default_weather
 from .model import parse_hhmm
 from .names import clear_device_name, name_taken, pet_name
 from .species import load_catalog
+from .topics import TOPICS
 from .watcher import is_temperature
 
 PET_NAMES = ("Pip", "Fern", "Nutmeg", "Mochi", "Juniper", "Pebble", "Bramble", "Clover")
@@ -294,106 +294,69 @@ def _number(low: float, high: float, step: float, unit: str) -> NumberSelector:
 
 
 class PetOptionsFlow(OptionsFlowWithReload):
-    """Map the house to the pet. Every field is optional; unmapped is skipped."""
+    """Map the house to the pet, one topic at a time. Every field is optional."""
 
-    def _sections(self) -> dict[str, list[tuple[str, Any, Any]]]:
-        """section -> [(key, selector, default)]. Only fields with a default are required.
+    def _fields(self) -> dict[str, tuple[Any, Any]]:
+        """key -> (selector, default). Only fields with a default are required.
 
         Temperatures are stored in °C and shown in the owner's unit.
         """
         unit = self.hass.config.units.temperature_unit
         low, high = (40, 95) if unit == UnitOfTemperature.FAHRENHEIT else (5, 35)
         return {
-            "sleep": [
-                (CONF_BEDTIME, TimeSelector(), R.DEFAULT_BEDTIME + ":00"),
-                (CONF_WAKE_TIME, TimeSelector(), R.DEFAULT_WAKE_TIME + ":00"),
-                (CONF_BEDTIME_LIGHTS, _entities("light", True), None),
-                (
-                    CONF_MOTION,
-                    _entities(
-                        "binary_sensor", True, ["motion", "occupancy", "presence"]
-                    ),
-                    None,
-                ),
-            ],
-            "weather": [
-                (
-                    CONF_RAIN,
-                    _entities(["sensor", "binary_sensor", "input_boolean"]),
-                    None,
-                ),
-                (CONF_WEATHER, _entities("weather"), None),
-                (
-                    CONF_INDOOR_TEMP,
-                    _entities("sensor", device_class="temperature"),
-                    None,
-                ),
-                (
-                    CONF_COMFORT_LOW,
-                    _number(low, high, 0.5, unit),
-                    self._to_unit(R.HOME_COMFORT_LOW_C),
-                ),
-                (
-                    CONF_COMFORT_HIGH,
-                    _number(low, high, 0.5, unit),
-                    self._to_unit(R.HOME_COMFORT_HIGH_C),
-                ),
-                (CONF_AQI, _entities("sensor"), None),
-                (CONF_SOLAR, _entities("sensor"), None),
-            ],
-            "room": [
-                (CONF_ROOM_LIGHTS, _entities("light", True), None),
-                (CONF_FIREPLACE, _entities(), None),
-                (CONF_LUX, _entities("sensor", True, "illuminance"), None),
-            ],
-            "activity": [
-                (CONF_ZONE, _entities("zone"), DEFAULT_ZONE),
-                (
-                    CONF_AWAY_AFTER,
-                    _number(0.5, 24, 0.5, "hours"),
-                    R.HOME_AWAY_AFTER_HOURS,
-                ),
-                (CONF_SITTER_SETTLES, BooleanSelector(), True),
-                (CONF_TV, _entities("media_player", True), None),
-                (CONF_MUSIC, _entities("media_player", True), None),
-                (CONF_CHORES, _entities("todo", True), None),
-            ],
-            "sky": [
-                (CONF_MOON_PHASE, _entities("sensor"), None),
-                (CONF_MOON_ILLUMINATION, _entities("sensor"), None),
-                (CONF_MOON_ALTITUDE, _entities("sensor"), None),
-            ],
-            "house": [
-                (
-                    CONF_HEATING,
-                    _entities(["climate", "switch", "input_boolean"], True),
-                    None,
-                ),
-                (
-                    CONF_COOLING,
-                    _entities(["fan", "climate", "switch", "input_boolean"], True),
-                    None,
-                ),
-                (CONF_NOTICE_ROBOT, BooleanSelector(), True),
-                (CONF_NOTICE_DOORBELL, BooleanSelector(), True),
-                (
-                    CONF_APPLIANCES,
-                    _entities(["binary_sensor", "sensor", "switch"], True),
-                    None,
-                ),
-                (
-                    CONF_APPLIANCE_WATTS,
-                    _number(0, 100, 1, "W"),
-                    R.APPLIANCE_WATTS,
-                ),
-            ],
-            "privacy": [
-                (CONF_PRIVACY, BooleanSelector(), True),
-                (CONF_HOUSE_WORDS_PRIVATE, BooleanSelector(), False),
-            ],
-            "notifications": [
-                (CONF_DASHBOARD, _dashboards(self.hass), None),
-            ],
+            CONF_BEDTIME: (TimeSelector(), R.DEFAULT_BEDTIME + ":00"),
+            CONF_WAKE_TIME: (TimeSelector(), R.DEFAULT_WAKE_TIME + ":00"),
+            CONF_BEDTIME_LIGHTS: (_entities("light", True), None),
+            CONF_MOTION: (
+                _entities("binary_sensor", True, ["motion", "occupancy", "presence"]),
+                None,
+            ),
+            CONF_RAIN: (
+                _entities(["sensor", "binary_sensor", "input_boolean"]),
+                None,
+            ),
+            CONF_WEATHER: (_entities("weather"), None),
+            CONF_INDOOR_TEMP: (_entities("sensor", device_class="temperature"), None),
+            CONF_COMFORT_LOW: (
+                _number(low, high, 0.5, unit),
+                self._to_unit(R.HOME_COMFORT_LOW_C),
+            ),
+            CONF_COMFORT_HIGH: (
+                _number(low, high, 0.5, unit),
+                self._to_unit(R.HOME_COMFORT_HIGH_C),
+            ),
+            CONF_AQI: (_entities("sensor"), None),
+            CONF_SOLAR: (_entities("sensor"), None),
+            CONF_ROOM_LIGHTS: (_entities("light", True), None),
+            CONF_FIREPLACE: (_entities(), None),
+            CONF_LUX: (_entities("sensor", True, "illuminance"), None),
+            CONF_TV: (_entities("media_player", True), None),
+            CONF_MUSIC: (_entities("media_player", True), None),
+            CONF_ZONE: (_entities("zone"), DEFAULT_ZONE),
+            CONF_AWAY_AFTER: (_number(0.5, 24, 0.5, "hours"), R.HOME_AWAY_AFTER_HOURS),
+            CONF_SITTER_SETTLES: (BooleanSelector(), True),
+            CONF_PRIVACY: (BooleanSelector(), True),
+            CONF_HOUSE_WORDS_PRIVATE: (BooleanSelector(), False),
+            CONF_HEATING: (
+                _entities(["climate", "switch", "input_boolean"], True),
+                None,
+            ),
+            CONF_COOLING: (
+                _entities(["fan", "climate", "switch", "input_boolean"], True),
+                None,
+            ),
+            CONF_NOTICE_ROBOT: (BooleanSelector(), True),
+            CONF_NOTICE_DOORBELL: (BooleanSelector(), True),
+            CONF_APPLIANCES: (
+                _entities(["binary_sensor", "sensor", "switch"], True),
+                None,
+            ),
+            CONF_APPLIANCE_WATTS: (_number(0, 100, 1, "W"), R.APPLIANCE_WATTS),
+            CONF_CHORES: (_entities("todo", True), None),
+            CONF_MOON_PHASE: (_entities("sensor"), None),
+            CONF_MOON_ILLUMINATION: (_entities("sensor"), None),
+            CONF_MOON_ALTITUDE: (_entities("sensor"), None),
+            CONF_DASHBOARD: (_dashboards(self.hass), None),
         }
 
     def _to_unit(self, celsius: float) -> float:
@@ -412,56 +375,123 @@ class PetOptionsFlow(OptionsFlowWithReload):
             TemperatureConverter.convert(value, unit, UnitOfTemperature.CELSIUS), 2
         )
 
+    def _placeholders(self) -> dict[str, str]:
+        return {"name": pet_name(self.hass, self.config_entry)}
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """The menu: one entry per topic."""
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=list(TOPICS),
+            description_placeholders=self._placeholders(),
+        )
+
+    async def async_step_bedtime(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._topic_step("bedtime", user_input)
+
+    async def async_step_people(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._topic_step("people", user_input)
+
+    async def async_step_weather(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._topic_step("weather", user_input)
+
+    async def async_step_room(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._topic_step("room", user_input)
+
+    async def async_step_house(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._topic_step("house", user_input)
+
+    async def async_step_sky(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._topic_step("sky", user_input)
+
+    async def async_step_notifications(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        return await self._topic_step("notifications", user_input)
+
+    def _merge(self, topic: str, entered: dict[str, Any]) -> dict[str, Any]:
+        """The options after saving this topic.
+
+        Every other topic's options are kept exactly; this topic's become what was
+        entered (without empty values), in °C. A comfort value that equals the
+        rounded display of the stored one keeps the stored one (no drift).
+        """
+        stored = self.config_entry.options
+        keys = TOPICS[topic]
+        kept = {k: v for k, v in stored.items() if k not in keys}
+        new = dict(entered)
+        for key in (CONF_COMFORT_LOW, CONF_COMFORT_HIGH):
+            if key in new:
+                if key in stored and new[key] == self._to_unit(stored[key]):
+                    new[key] = stored[key]
+                else:
+                    new[key] = self._to_celsius(new[key])
+        if CONF_DASHBOARD in new:
+            new[CONF_DASHBOARD] = notify.dashboard_path(new[CONF_DASHBOARD])
+        return kept | new
+
+    def _errors(self, topic: str, new: dict[str, Any]) -> dict[str, str]:
+        """Problems with this topic's values, each on a field of the topic."""
+        errors: dict[str, str] = {}
+        if topic == "weather" and new.get(CONF_COMFORT_LOW, 0) >= new.get(
+            CONF_COMFORT_HIGH, 1e9
+        ):
+            errors[CONF_COMFORT_LOW] = "comfort_range"
+        if topic == "bedtime" and parse_hhmm(new[CONF_BEDTIME]) == parse_hhmm(
+            new[CONF_WAKE_TIME]
+        ):
+            errors[CONF_WAKE_TIME] = "same_times"
+        if topic == "room" and is_temperature(
+            self.hass.states.get(new.get(CONF_FIREPLACE, ""))
+        ):
+            errors[CONF_FIREPLACE] = "fireplace_temperature"
+        return errors
+
+    async def _topic_step(
+        self, topic: str, user_input: dict[str, Any] | None
+    ) -> ConfigFlowResult:
+        """Show one topic's form; on submit, check it and save it."""
+        keys = TOPICS[topic]
         errors: dict[str, str] = {}
         if user_input is not None:
-            flat: dict[str, Any] = {}
-            for group in user_input.values():
-                flat.update({k: v for k, v in group.items() if v not in (None, "", [])})
-            entered = dict(flat)  # as typed (the user's units), to show again
-            for key in (CONF_COMFORT_LOW, CONF_COMFORT_HIGH):
-                if key in flat:
-                    flat[key] = self._to_celsius(flat[key])
-            if CONF_DASHBOARD in flat:
-                flat[CONF_DASHBOARD] = notify.dashboard_path(flat[CONF_DASHBOARD])
-            if flat.get(CONF_COMFORT_LOW, 0) >= flat.get(CONF_COMFORT_HIGH, 1e9):
-                errors["weather"] = "comfort_range"
-            if parse_hhmm(flat[CONF_BEDTIME]) == parse_hhmm(flat[CONF_WAKE_TIME]):
-                errors["sleep"] = "same_times"
-            if is_temperature(self.hass.states.get(flat.get(CONF_FIREPLACE, ""))):
-                errors["room"] = "fireplace_temperature"
+            entered = {k: v for k, v in user_input.items() if v not in (None, "", [])}
+            new = self._merge(topic, entered)
+            errors = self._errors(topic, new)
             if not errors:
-                return self.async_create_entry(data=flat)
-
-        if user_input is not None:
-            current = entered  # an error: keep what was entered, not the saved options
+                return self.async_create_entry(data=new)
+            current = entered  # an error: keep what was entered, in the user's unit
         else:
-            current = dict(self.config_entry.options)
+            current = {k: v for k, v in self.config_entry.options.items() if k in keys}
             for key in (CONF_COMFORT_LOW, CONF_COMFORT_HIGH):
                 if key in current:
                     current[key] = self._to_unit(current[key])
+        fields = self._fields()
         schema: dict[Any, Any] = {}
-        for name, fields in self._sections().items():
-            inner: dict[Any, Any] = {}
-            for key, selector, default in fields:
-                if default is not None:
-                    inner[vol.Required(key, default=current.get(key, default))] = (
-                        selector
-                    )
-                else:
-                    inner[
-                        vol.Optional(
-                            key, description={"suggested_value": current.get(key)}
-                        )
-                    ] = selector
-            schema[vol.Required(name)] = section(
-                vol.Schema(inner), {"collapsed": name not in ("sleep", "weather")}
-            )
+        for key in keys:
+            selector, default = fields[key]
+            if default is not None:
+                schema[vol.Required(key, default=current.get(key, default))] = selector
+            else:
+                schema[
+                    vol.Optional(key, description={"suggested_value": current.get(key)})
+                ] = selector
         return self.async_show_form(
-            step_id="init",
+            step_id=topic,
             data_schema=vol.Schema(schema),
             errors=errors,
-            description_placeholders={"name": pet_name(self.hass, self.config_entry)},
+            description_placeholders=self._placeholders(),
         )
