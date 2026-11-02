@@ -32,17 +32,17 @@ test("the note reads the list in turns by the device, not one fixed string", () 
   for (const w of WEATHERS) assert.ok(TABLE[w].includes(NOTE({ weather: w }, "dev1")), w);
 });
 
-test("a weather's list never repeats back to back and holds every line once a cycle", () => {
-  // The shipped lists have one approved line each so far (the plan's three are owed), so the
-  // rule is proved on a three-line probe and held for the shipped lists once they have three.
-  // turnPick promises this, not "distinct in every window of 3" (a cycle's end can meet the
-  // next cycle's start two days on): the plan's acceptance wording needs 4+ lines for that.
-  const lists = { ...TABLE, probe: ["a", "b", "c"] };
-  for (const [w, list] of Object.entries(lists)) {
-    if (list.length < 3) continue;
-    for (let start = 0; start < 30; start++) {
-      const run = Array.from({ length: list.length + 1 }, (_, i) => turnPick(list, "dev|favweather", day(start + i)));
-      for (let i = 1; i < run.length; i++) assert.notStrictEqual(run[i], run[i - 1], `${w} @${start}`);
+test("each weather has 4 lines, and none repeats back to back", () => {
+  // turnPick's promise (turn_pick.test.js). Not "no repeat within 3 days": a cycle's end can
+  // meet the next cycle's start two days on (a, b | a), for n = 4 as for n = 3. Held to
+  // the first mate to decide (the report); the memory plan's M0-b acceptance wording asks more.
+  for (const w of WEATHERS) assert.strictEqual(TABLE[w].length, 4, w);
+  for (const [w, list] of Object.entries(TABLE)) {
+    for (const salt of ["dev1|favweather", "dev2|favweather", "x|favweather"]) {
+      for (let start = 0; start < 120; start++) {
+        const run = Array.from({ length: 5 }, (_, i) => turnPick(list, salt, day(start + i)));
+        for (let i = 1; i < run.length; i++) assert.notStrictEqual(run[i], run[i - 1], `${w} ${salt} @${start}`);
+      }
     }
   }
 });
