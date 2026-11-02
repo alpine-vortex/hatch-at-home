@@ -5,7 +5,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 target-version = "py313"
-extend-exclude = ["art"]
+extend-exclude = ["art", "scripts/readme"]  # one-off art tools, like art/
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP"]
