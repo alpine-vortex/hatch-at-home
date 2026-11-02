@@ -11339,6 +11339,7 @@ class HatchPetCard extends HTMLElement {
   _visitorStart(s, v, { ltr = Math.random() < 0.5, count = true, world = s.worldKey, guest = false } = {}) {
     this._visitorEnd(s);
     if (count && !guest) this._visitFriendCount(s, v);
+    if (count && !guest && !v.cross) this._visitorReport(s);
     const isCalm = calm();
     const inMs = v.in || (v.cross ? 1800 : VISIT_IN_MS);
     const stay = (v.stay || VISIT_STAY_MS) * (sharedScreen() ? 2 : 1); // a shared screen: longer (E8 Sh-a)
@@ -11449,6 +11450,17 @@ class HatchPetCard extends HTMLElement {
 
   // A live visit adds 1 on a day this visitor wasn't counted yet; this pet's keys from
   // other generations go, so one key per pet.
+  // Tell the server the day's visitor was played here (UX8 F4, the social meter): on any
+  // screen, a shared one too, which the hourly visit call never credits. The server counts
+  // it once a day, inside the visit's window. Nobody's name goes.
+  _visitorReport(s) {
+    const id = s.ids?.["sensor.life_stage"];
+    if (!id || !this._visitPlan(s)?.id) return;
+    this._hass.callWS({ type: "virtual_pet/greeted", entity_id: id }).catch(() => {
+      // an older integration has no such command: the visit's own credit stands
+    });
+  }
+
   _visitFriendCount(s, v) {
     const key = this._visitFriendKey(s);
     const day = this._visitDay(s).toDateString();

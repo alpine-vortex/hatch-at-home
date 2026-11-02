@@ -385,6 +385,18 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._save()
             self._publish()
 
+    def social_greet(self) -> None:
+        """The card played the day's visitor to someone (any screen, shared ones
+        too): the day counts a greeted visitor, inside the visit's window only.
+        Nothing about who was looking is kept."""
+        assert self.state is not None
+        now = self._now()
+        if self._awake() and model.social_greet(
+            self.state, now, self._today(now)[0], self.world
+        ):
+            self._save()
+            self._publish()
+
     @property
     def senses(self) -> list[str]:
         """The kinds of house signal mapped in the options (SENSES), never
