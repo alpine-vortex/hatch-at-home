@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from pathlib import Path
 
@@ -178,6 +179,18 @@ FAST_FORWARD_SCHEMA = vol.Schema(
 )
 
 
+CARD_PATH = Path(__file__).parent / "frontend" / CARD_FILENAME
+
+
+def _card_hash() -> str | None:
+    """First 8 hex of the card file's sha256, or None if it can't be read."""
+    try:
+        return hashlib.sha256(CARD_PATH.read_bytes()).hexdigest()[:8]
+    except OSError as err:
+        _LOGGER.debug("card hash unavailable, using plain version: %s", err)
+        return None
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Serve the card, load it on every dashboard, register the debug service."""
     # Long cache headers: every URL the card asks for carries ?v=VERSION, so an
@@ -185,8 +198,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(FRONTEND_URL, str(Path(__file__).parent / "frontend"), True)]
     )
-    # The version in the URL makes browsers fetch the new card after an update.
-    add_extra_js_url(hass, f"{FRONTEND_URL}/{CARD_FILENAME}?v={VERSION}")
+    # The card's URL carries the version and a hash of the card file, so
+    # browsers fetch a changed card even when VERSION was not bumped (dev, a
+    # forgotten bump). The hash is taken once, here: a dev edit to the card
+    # needs an HA restart to show up, as before.
+    card_hash = await hass.async_add_executor_job(_card_hash)
+    version = f"{VERSION}-{card_hash}" if card_hash else VERSION
+    add_extra_js_url(hass, f"{FRONTEND_URL}/{CARD_FILENAME}?v={version}")
     # What the pets know about each person, shared; the loaded pets; and the
     # re-call notification each person gets for all of them.
     people = People(hass)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import hashlib
 import json
 import random
 from typing import Any
@@ -377,9 +378,52 @@ async def test_card_is_loaded_on_every_dashboard(
     await setup(hass)
     manifest = Path(__file__).parents[1] / "custom_components/virtual_pet/manifest.json"
     assert json.loads(manifest.read_text())["version"] == VERSION
+    card = (
+        Path(__file__).parents[1]
+        / "custom_components/virtual_pet/frontend/hatch-pet-card.js"
+    )
+    digest = hashlib.sha256(card.read_bytes()).hexdigest()[:8]
     assert (
-        f"/virtual_pet/frontend/hatch-pet-card.js?v={VERSION}"
+        f"/virtual_pet/frontend/hatch-pet-card.js?v={VERSION}-{digest}"
         in hass.data[DATA_EXTRA_MODULE_URL].urls
+    )
+
+
+async def _card_url(hass: HomeAssistant) -> str:
+    from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+
+    await setup(hass)
+    (url,) = [u for u in hass.data[DATA_EXTRA_MODULE_URL].urls if "hatch-pet-card" in u]
+    return url
+
+
+async def test_card_url_changes_with_the_card_file(
+    hass: HomeAssistant, now: float, tmp_path, monkeypatch
+) -> None:
+    import custom_components.virtual_pet as vp
+
+    card = tmp_path / "hatch-pet-card.js"
+    card.write_text("// one")
+    monkeypatch.setattr(vp, "CARD_PATH", card)
+    one = vp._card_hash()
+    card.write_text("// two")
+    assert one and vp._card_hash() and vp._card_hash() != one
+    card.write_text("// one")
+    assert vp._card_hash() == one
+    assert await _card_url(hass) == (
+        f"/virtual_pet/frontend/hatch-pet-card.js?v={vp.VERSION}-{one}"
+    )
+
+
+async def test_card_url_falls_back_to_version_without_the_file(
+    hass: HomeAssistant, now: float, tmp_path, monkeypatch
+) -> None:
+    import custom_components.virtual_pet as vp
+
+    monkeypatch.setattr(vp, "CARD_PATH", tmp_path / "missing.js")
+    assert (
+        await _card_url(hass)
+        == f"/virtual_pet/frontend/hatch-pet-card.js?v={vp.VERSION}"
     )
 
 
