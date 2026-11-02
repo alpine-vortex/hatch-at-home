@@ -439,7 +439,7 @@ the pet comes home.
 | Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Rain sensor | none | On/off "it's raining", or a rain rate where anything above 0 means rain. Beats the forecast. Rain brings a rainy scene and a **blanket?** request. | `input_boolean.raining` |
-| Weather forecast | none | Sunny, snow and fog, and rain when there's no rain sensor. Wind from the condition or the wind speed (30 km/h, or gusts of 50). Its daily forecast, if it has one, gives the pet something to talk about (see Passing moments). | `weather.forecast_home` |
+| Weather forecast | none | Sunny, snow and fog, and rain when there's no rain sensor. Wind from the condition or the wind speed (30 km/h, or gusts of 50). Its daily forecast, if it has one, gives the pet something to talk about (see Passing moments). A new pet starts with your Met home weather here (or your only weather entity), and pets made before this update were given it once. To undo it, clear the field and Submit: it stays clear. | `weather.forecast_home` |
 | Indoor temperature | none | Outside the comfort range: shivers or sweats and asks for a **blanket** or a **fan**. | `sensor.indoor_temperature` |
 | Too cold below | 18 °C / 64.5 °F | Shown in your unit system. No blanket request while the fireplace is lit. | default |
 | Too warm above | 26.5 °C / 79.5 °F | | default |
