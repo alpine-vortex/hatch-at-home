@@ -742,6 +742,14 @@ The first of each pool is the shipped line, as the dialogue pass s2625 left it.
 - **FM on reconcile s2631 (part 2)** (2026-11-01, `reconcile-fresh-expand-p2.md`): all
   five answers A; its per-slice edits are folded below (*Part 2, as reconciled*). Where they
   and the slice sections above differ, these win.
+- **Owner decisions on critique s2632 (part 2)** (2026-11-01, via FM;
+  `critique-part2.md`):
+  - Q1 A: hybrid. Server memory as now, plus the typing browser keeps {it} in localStorage under the user id until the event's `until`; fills {it} when the server reply has no text. Never on HA disk/backups. Guide states forget_me from another device can't clear it (expires on its own).
+  - Q2 A: typed text is said only on the device that typed it, or a phone / HA companion app. Other screens get the no-text line.
+  - Q3 A: build opp #1 (big-day evening "how did it go?" -> soft morning after tough), opp #4 (saved preferences used on their day), and opp #2 (replace "big day tomorrow?" with "anything big this week?").
+  - Q4: no wordless echo on shared screens.
+  - FM: built as part 2 slices after the critique's errors 1-10, tier 2 (privacy); every new
+    player line goes to the FM for review (needs-you) before it ships.
 
 ## Part 2, as reconciled (s2631; FM answers all A)
 
