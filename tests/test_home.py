@@ -618,3 +618,16 @@ def test_the_house_tucks_the_pet_in_without_a_care_entry():
     assert fan == [{"type": "house_answered", "request": "fan"}]
     pet.asleep = True
     assert model.house_answer(pet, "fan", at(18, 0)) == []
+
+
+def test_a_finished_appliance_is_a_house_moment_once_per_kind():
+    m = home.HouseMoments()
+    assert moments(m, Readings(night=False)) == []
+    done = Readings(night=False, appliances_done=("dishwasher", "washer"))
+    assert moments(m, done) == [
+        {"type": "appliance_done", "kind": "dishwasher"},
+        {"type": "appliance_done", "kind": "washer"},
+    ]
+    # It is dropped while the pet is asleep, away or an egg: no catching up.
+    assert moments(m, done, awake=False) == []
+    assert moments(m, Readings(night=False)) == []

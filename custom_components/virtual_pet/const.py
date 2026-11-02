@@ -79,6 +79,10 @@ CONF_HEATING = "heating"
 CONF_COOLING = "cooling"
 # Robot vacuums (ha-signals H4): every vacuum.* counts; this turns it off.
 CONF_NOTICE_ROBOT = "notice_robot"
+# Appliances that finish a cycle (ha-signals H6): washer, dryer, dishwasher.
+# appliance_watts: at or under this a power reading means "not running" (W).
+CONF_APPLIANCES = "appliances"
+CONF_APPLIANCE_WATTS = "appliance_watts"
 CONF_COMFORT_LOW = "comfort_low"  # stored in °C, shown in the owner's unit
 CONF_COMFORT_HIGH = "comfort_high"
 CONF_AWAY_AFTER = "away_after"  # hours

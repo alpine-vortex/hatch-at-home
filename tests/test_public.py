@@ -346,3 +346,33 @@ async def test_an_old_saves_wish_name_stays_off_the_sensor(
     await setup(hass)
     wish = hass.states.get("sensor.pip_life_stage").attributes["wish"]
     assert wish == {"kind": "play", "granted": False, "open": True}
+
+
+async def test_an_appliance_done_moment_holds_only_type_kind_and_at(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """H6: a washer finishing is a public moment; the kind is all that leaves."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("binary_sensor.upstairs_washing_machine", "on")
+    await setup_with_house(hass, appliances=["binary_sensor.upstairs_washing_machine"])
+    heard = async_capture_events(hass, f"{DOMAIN}_appliance_done")
+    assert "machines" in hass.states.get("sensor.pip_life_stage").attributes["senses"]
+    for _ in range(3):  # 15 minutes running, on the 5-minute tick
+        await settle(hass, freezer, 5 * 60)
+    assert not heard
+    hass.states.async_set("binary_sensor.upstairs_washing_machine", "off")
+    await settle(hass, freezer)
+    assert len(heard) == 1 and heard[0].data == {
+        "kind": "washer",
+        "pet_id": heard[0].data["pet_id"],
+    }
+    moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
+    done = [m for m in moments if m["type"] == "appliance_done"]
+    assert len(done) == 1 and set(done[0]) == {"type", "kind", "at"}
+    assert done[0]["kind"] == "washer"
+    # No entity id, and not its words, on the bus or the list.
+    text = json.dumps([e.data for e in heard] + done, default=str)
+    assert "upstairs" not in text and "binary_sensor" not in text

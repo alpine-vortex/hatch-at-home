@@ -49,6 +49,7 @@ from .backup import (
     async_kept_backup,
 )
 from .const import (
+    CONF_APPLIANCES,
     CONF_AQI,
     CONF_AWAY_AFTER,
     CONF_BEDTIME,
@@ -144,6 +145,7 @@ MOMENTS = {
     "house_answered",  # {request}: the heating or the fan came on for the pet
     "robot_out",  # a robot vacuum started a run
     "robot_home",  # ... and went home
+    "appliance_done",  # {kind}: a washer, dryer or dishwasher finished
     "wish_granted",
     "bond_up",
     "bond_favourite",
@@ -180,6 +182,7 @@ SENSES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("heater", (CONF_HEATING,)),
     ("fan", (CONF_COOLING,)),
     ("robot", ()),  # every vacuum in the house, unless notice_robot is off
+    ("machines", (CONF_APPLIANCES,)),
     ("moon", (CONF_MOON_PHASE, CONF_MOON_ILLUMINATION, CONF_MOON_ALTITUDE)),
 )
 

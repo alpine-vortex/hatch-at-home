@@ -317,6 +317,10 @@ HOUSE_ANSWERS_PER_DAY = (
     2  # the house turning heating or cooling on for the pet, a local day
 )
 ROBOT_MOMENTS_PER_DAY = 3  # a robot vacuum starting a run, a local day (memory)
+APPLIANCE_COOLDOWN_MINUTES = 60  # one "done" an hour per appliance (memory)
+APPLIANCE_RUN_MINUTES = 10  # a binary "on" or a power draw this long is a cycle
+APPLIANCE_IDLE_MINUTES = 3  # at or under the watts this long: the cycle is over
+APPLIANCE_WATTS = 5.0  # the default draw at or under which it isn't running (W)
 COMFORT_HAPPINESS = 1.0  # per hour while cozy or cool
 HOME_FIRE_HAPPINESS = 1.0  # a lit fireplace (counts toward the cap)
 

@@ -33,6 +33,8 @@ import voluptuous as vol
 
 from . import notify, rates as R
 from .const import (
+    CONF_APPLIANCE_WATTS,
+    CONF_APPLIANCES,
     CONF_AQI,
     CONF_AWAY_AFTER,
     CONF_BEDTIME,
@@ -317,6 +319,16 @@ class PetOptionsFlow(OptionsFlowWithReload):
                     None,
                 ),
                 (CONF_NOTICE_ROBOT, BooleanSelector(), True),
+                (
+                    CONF_APPLIANCES,
+                    _entities(["binary_sensor", "sensor", "switch"], True),
+                    None,
+                ),
+                (
+                    CONF_APPLIANCE_WATTS,
+                    _number(0, 100, 1, "W"),
+                    R.APPLIANCE_WATTS,
+                ),
             ],
             "privacy": [
                 (CONF_PRIVACY, BooleanSelector(), True),

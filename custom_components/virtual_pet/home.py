@@ -70,6 +70,7 @@ class Readings:
     cooling_on: bool = False  # a mapped fan, or thermostat cooling, is on
     robot_cleaning: bool = False  # a vacuum is cleaning
     robot_docked: bool = False  # a vacuum is returning to its dock, or docked
+    appliances_done: tuple[str, ...] = ()  # kinds that finished a cycle just now
     company: bool | None = None  # someone is home
     moon_phase: str | None = None  # normalized: "full_moon", "new_moon", ...
     moon_illumination: float | None = None  # lit fraction, 0-1
@@ -425,6 +426,7 @@ class HouseMoments:
         events: list[dict[str, Any]] = []
         events += self._house_answered(r, awake, today, comfort, satisfied)
         events += self._robot(r, awake, today)
+        events += self._appliances(r, awake)
         if r.sun_up is not None and self.sun_up is not None and r.sun_up != self.sun_up:
             if awake:
                 events.append({"type": "sunrise" if r.sun_up else "sunset"})
@@ -517,6 +519,15 @@ class HouseMoments:
             if seen and awake and r.robot_docked:
                 return [{"type": "robot_home"}]
         return []
+
+    def _appliances(self, r: Readings, awake: bool) -> list[dict[str, Any]]:
+        """A washer, dryer or dishwasher finishing (appliance_done {kind}): the
+        watcher keeps each machine's cycle and cooldown and passes only the
+        kinds. Said once, never repeated; dropped while the pet is asleep, away
+        or an egg."""
+        if not awake:
+            return []
+        return [{"type": "appliance_done", "kind": kind} for kind in r.appliances_done]
 
     def _weather(
         self, r: Readings, now: float, awake: bool, today: str

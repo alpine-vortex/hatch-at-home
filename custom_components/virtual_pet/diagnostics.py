@@ -14,6 +14,7 @@ from homeassistant.util import dt as dt_util
 
 from . import model
 from .const import (
+    CONF_APPLIANCES,
     CONF_AQI,
     CONF_BEDTIME_LIGHTS,
     CONF_CHORES,
@@ -40,6 +41,7 @@ from .coordinator import PetConfigEntry
 
 # Which entities the owner mapped says a lot about their house.
 REDACT_OPTIONS = {
+    CONF_APPLIANCES,
     CONF_AQI,
     CONF_BEDTIME_LIGHTS,
     CONF_CHORES,
