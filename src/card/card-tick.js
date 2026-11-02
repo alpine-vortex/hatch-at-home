@@ -236,6 +236,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
       moves.push("look", "look", "wander", "perk", "speck");
       if (s.moodState === "excited") moves.push("hop", "hop");
       moves.push(...this._typeAdds(s));
+      moves.push(...this._speciesAdds(s));
       moves.push(...this._tricks(s)); // an adult's monthly tricks (E8 LS-a)
     }
     return moves;
@@ -346,16 +347,32 @@ class HatchPetCardTick extends HatchPetCardLayout {
     return (st?.state === "teen" || st?.state === "adult") && IDLE_ADDS[st.attributes?.personality] || [];
   }
 
+  // The moves a teen or adult's habit adds to its idle list (SPECIES_ADDS): copies of existing
+  // moves, flavour only. None without a nature.
+  _speciesAdds(s) {
+    const st = this._state(s, "sensor.life_stage");
+    const n = nature(s.species);
+    return n && (st?.state === "teen" || st?.state === "adult") && SPECIES_ADDS[n.habit] || [];
+  }
+
+  // The idle cadence's scale for this species' pace: 1 for a calm card, a baby or no nature.
+  _idleScale(s) {
+    const stage = this._state(s, "sensor.life_stage")?.state;
+    return !nature(s.species) || calm() || stage === "baby" || stage === "egg" ? 1 : PACE_SCALE[paceOf(s.species)];
+  }
+
   _idle(s) {
     const now = Date.now();
-    if (!s.nextIdle) s.nextIdle = now + IDLE_MIN_MS / 2 + Math.random() * IDLE_SPREAD_MS;
+    const scale = s.vroom ? 1 : this._idleScale(s); // a multiplier, no draw: the Math.random order is as before
+    if (!s.nextIdle) s.nextIdle = now + scale * (IDLE_MIN_MS / 2 + Math.random() * IDLE_SPREAD_MS);
     if (now < s.nextIdle) return;
-    s.nextIdle = now + IDLE_MIN_MS + Math.random() * (s.vroom ? 20000 : IDLE_SPREAD_MS); // vroom: every 20-40 s
+    s.nextIdle = now + scale * (IDLE_MIN_MS + Math.random() * (s.vroom ? 20000 : IDLE_SPREAD_MS)); // vroom: every 20-40 s
     if (!this._free(s)) return;
     const isCalm = calm();
     const own = s.drawn === "child"
       ? Object.keys(s.species.extras || {}).filter((k) => !SHARED_POSES.has(k)) : [];
     if (this._promisePractice(s)) return; // the promise's practice, days 1-3 (F3)
+    if (this._skyReact(s, isCalm)) return; // its sky is up: a body reaction, once a day (species nature)
     // While a robot is cleaning (vroom) it is the choice: across the floor, and the pet perks.
     const move = s.vroom && !isCalm && !s.screen.classList.contains("fx-robot")
       ? "robot" : pick(this._idleMoves(s, own.length > 0, isCalm));
@@ -376,6 +393,12 @@ class HatchPetCardTick extends HatchPetCardLayout {
       setTimeout(() => s.pet.classList.remove(side), 2200);
     } else if (move === "perk") {
       this._animate(s, s.pet, "perk", 320);
+    } else if (move === "settle") { // the species' habit moves (SPECIES_ADDS): CSS that was already there
+      this._animate(s, s.pet, "settle", 2500);
+    } else if (move === "munch") {
+      this._animate(s, s.pet, "munch", 1500);
+    } else if (move === "rock") {
+      this._animate(s, s.pet, "rock", 600);
     } else if (move === "spin" || move === "perk2") {
       this._trickMove(s, move);
     } else if (move === "hop") {

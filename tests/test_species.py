@@ -236,3 +236,110 @@ def test_creatures_in_one_world_sound_different() -> None:
             if s in READY
         ]
         assert len(set(sounds)) == len(sounds), key
+
+
+# Species nature (plan-2026-11-02-species-nature.md section 4): clock, sky, company, habit.
+# The table is the test's data, so changing one species is a deliberate diff here too.
+NATURE = {
+    "bird": ("day", "sun", "social", "performer"),
+    "squirrel": ("day", "wind", "solo", "hoarder"),
+    "deer": ("dusk", "fog", "social", "watcher"),
+    "fox": ("dusk", "snow", "solo", "explorer"),
+    "bananaslug": ("night", "rain", "solo", "explorer"),
+    "gecko": ("night", "fire", "solo", "groomer"),
+    "tarantula": ("night", "fire", "solo", "builder"),
+    "tortoise": ("day", "sun", "solo", "basker"),
+    "beardeddragon": ("day", "sun", "social", "basker"),
+    "ballpython": ("night", "fire", "solo", "watcher"),
+    "kitten": ("dusk", "fire", "solo", "groomer"),
+    "bunny": ("dusk", "fire", "social", "groomer"),
+    "corgi": ("day", "snow", "social", "explorer"),
+    "hamster": ("night", "fire", "solo", "hoarder"),
+    "ferret": ("dusk", "fire", "social", "hoarder"),
+    "otter": ("day", "rain", "social", "groomer"),
+    "octopus": ("night", "fog", "solo", "explorer"),
+    "seal": ("day", "sun", "social", "basker"),
+    "hermitcrab": ("night", "rain", "social", "hoarder"),
+    "puffin": ("day", "wind", "social", "builder"),
+    "treefrog": ("night", "rain", "social", "performer"),
+    "axolotl": ("night", "fog", "solo", "watcher"),
+    "pondturtle": ("day", "sun", "solo", "basker"),
+    "duckling": ("day", "rain", "social", "explorer"),
+    "beaver": ("night", "snow", "social", "builder"),
+    "bat": ("night", "moon", "social", "performer"),
+    "lunamoth": ("night", "moon", "solo", "performer"),
+    "owl": ("night", "fog", "solo", "watcher"),
+    "firefly": ("night", "rain", "social", "performer"),
+    "opossum": ("night", "fire", "solo", "builder"),
+}
+NATURE_VALUES = {
+    "clock": {"day", "dusk", "night"},
+    "sky": {"sun", "rain", "snow", "fog", "wind", "fire", "moon"},
+    "company": {"social", "solo"},
+    "habit": {
+        "hoarder",
+        "builder",
+        "basker",
+        "groomer",
+        "explorer",
+        "watcher",
+        "performer",
+    },
+}
+
+
+def pace_of(pace: int) -> str:
+    return "quick" if pace >= 40 else "slow" if pace <= 29 else "steady"
+
+
+@pytest.mark.parametrize("species", READY)
+def test_nature_block_is_valid(species: str) -> None:
+    sp = json.loads((SPRITES / species / "species.json").read_text())
+    nature = sp["nature"]
+    assert set(nature) == set(NATURE_VALUES), species
+    for key, allowed in NATURE_VALUES.items():
+        assert nature[key] in allowed, f"{species} nature.{key}={nature[key]!r}"
+    assert "pace" not in nature  # derived from voice.pace
+    pace = sp["voice"]["pace"]
+    assert isinstance(pace, int) and 20 <= pace <= 50, species
+    assert (
+        tuple(nature[k] for k in ("clock", "sky", "company", "habit"))
+        == NATURE[species]
+    )
+
+
+def test_nature_table_covers_every_ready_species() -> None:
+    assert sorted(NATURE) == READY
+
+
+def test_nature_counts_do_not_drift() -> None:
+    from collections import Counter
+
+    def count(i: int) -> dict[str, int]:
+        return dict(Counter(row[i] for row in NATURE.values()))
+
+    assert count(0) == {"day": 10, "dusk": 5, "night": 15}
+    assert count(1) == {
+        "fire": 8,
+        "rain": 6,
+        "sun": 5,
+        "fog": 4,
+        "snow": 3,
+        "wind": 2,
+        "moon": 2,
+    }
+    assert count(2) == {"social": 15, "solo": 15}
+    assert count(3) == {
+        "explorer": 5,
+        "performer": 5,
+        "hoarder": 4,
+        "builder": 4,
+        "basker": 4,
+        "groomer": 4,
+        "watcher": 4,
+    }
+    paces = Counter(
+        pace_of(json.loads((SPRITES / s / "species.json").read_text())["voice"]["pace"])
+        for s in READY
+    )
+    assert dict(paces) == {"quick": 10, "steady": 12, "slow": 8}

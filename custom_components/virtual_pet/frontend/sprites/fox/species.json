@@ -11,6 +11,7 @@
   "backgrounds": {"day": "bird/bg_day", "night": "bird/bg_night", "rain": "bird/bg_rain", "dim": "bird/bg_dim"},
   "words": {"food": "berries", "home": "den"},
   "voice": { "sound": "yip", "catchphrase": "pounce", "pitch": 980, "pace": 42, "likes": ["blackberries", "beetles", "apples"] },
+  "nature": { "clock": "dusk", "sky": "snow", "company": "solo", "habit": "explorer" },
   "reactions": {"play": "pounce", "won": "pounce", "praise": "tail_wrap", "scold": "yip"},
   "head": {"baby": [174, 108], "child": [192, 88], "teen": [154, 60], "adult": [162, 68]},
   "hat": {

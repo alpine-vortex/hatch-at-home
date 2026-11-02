@@ -70,6 +70,7 @@
     "home": "shell"
   },
   "voice": { "sound": "clack", "catchphrase": "cozy shell", "pitch": 720, "pace": 30, "likes": ["seaweed", "sea lettuce", "shrimp"] },
+  "nature": { "clock": "night", "sky": "rain", "company": "social", "habit": "hoarder" },
   "reactions": {
     "play": "shell_try",
     "won": "claw_wave",

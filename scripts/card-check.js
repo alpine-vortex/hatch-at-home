@@ -1187,10 +1187,13 @@ async function main() {
     el.__typeless = true;
     // Rolls by device and day (a fresh .storage is a new device on every run), off unless
     // a check turns one on (audit 2026-11-01b A1-A3): the lucky number (0: never a game's),
-    // the rare pair and guest days, the promise's looks and practice, a guest's start.
+    // the rare pair and guest days, the promise's looks and practice, a guest's start, the sky reaction.
     // A check that needs one calls the prototype's (protoCall) or sets its own.
     Object.assign(el, { _lucky: () => 0, _rareDay: () => false, _promiseLook: () => null,
-      _promisePractice: () => false, _visitorGuest: () => null });
+      _promisePractice: () => false, _visitorGuest: () => null,
+      // Species nature: the dev house may have the pet's sky up, and its once-a-day reaction would
+      // take an idle and its draws. The sky cases are on the bench and in the JS tests.
+      _skyReact: () => false });
     const realState = el._state;
     const typeless = new WeakMap(); // one copy per state, so a check can still edit what it's given
     el._state = function (slide, key) {
@@ -3439,8 +3442,9 @@ async function main() {
   let idle = "";
   // The first idle move is due 10-35 s in, but it's skipped if the pet is busy
   // then (the greeting's bubble, a call), and the next is 20-45 s later: allow
-  // 90 s rather than the 56 s that a skipped first move could overrun.
-  for (let i = 0; i < 225 && !idle; i++) {
+  // 120 s rather than the 56 s that a skipped first move could overrun (a slow species'
+  // cadence is x1.25, so the worst case is about 100 s).
+  for (let i = 0; i < 300 && !idle; i++) {
     await page.waitForTimeout(400);
     idle = await idleSign();
     const said = await bubble();
