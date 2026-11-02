@@ -3411,11 +3411,20 @@ const STYLE = `
   .visit .vguest.greethop { animation: hop .7s ease-in-out 2; }
   @keyframes ir-in { from { translate: 160% 0; } }
   @keyframes ir-out { to { translate: 160% 0; } }
+  /* The guest came from the left (UX8 F5): the visit is mirrored, the guest at 30% facing
+     right, the host on the right facing left, the reply on the left. */
+  .visit.left .vguest { left: 30%; animation-name: ir-in-l; }
+  .visit.left .vguest.greethop { animation: hop .7s ease-in-out 2; }
+  .visit.left .vguest.out { animation: ir-out-l .5s steps(5, end) forwards; }
+  @keyframes ir-in-l { from { translate: -160% 0; } }
+  @keyframes ir-out-l { to { translate: -160% 0; } }
+  .visit.left .vsay { right: auto; left: 5%; }
   .visit .vsay { position: absolute; right: 5%; top: 27%; max-width: 46%; padding: 5px 9px; border-radius: 10px;
     background: #fff; color: #2a2a2a; font-size: 13px; line-height: 1.25; }
   ha-card.bigtext .visit .vsay { font-size: 15px; } /* UX8 F3 */
   .screen.linking .perch { display: none; }
   .pet.linking { translate: -43% 0; transition-duration: .5s; }
+  .screen.linkleft .pet.linking { translate: 43% 0; }
   .speck { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff6c9;
     box-shadow: 0 0 6px 2px rgba(255,240,170,.8); top: 45%; z-index: 2; pointer-events: none;
     animation: speck 2.6s ease-in-out forwards; }
@@ -11740,7 +11749,7 @@ class HatchPetCard extends HTMLElement {
     at(L.beamMs ? 1400 : 0, () => {
       host.linking = true;
       const box = document.createElement("div");
-      box.className = "visit";
+      box.className = toRight ? "visit" : "visit left";
       box.setAttribute("aria-hidden", "true");
       if (!isCalm) box.innerHTML = '<div class="vband"><i></i><i></i><i></i><i></i><i></i></div>';
       host.screen.append(box);
@@ -11750,6 +11759,8 @@ class HatchPetCard extends HTMLElement {
     at(t0, () => {
       L.box.querySelector(".vband")?.remove();
       host.screen.classList.add("linking");
+      host.screen.classList.toggle("linkleft", !toRight);
+      if (!toRight) host.pet.classList.add("look"); // faces the guest on its left
       host.linkFrames = this._linkPose(host.species, host.drawn || "adult", host.speciesId, (f) => {
         if (host.linkFrames) host.linkFrames = f;
       });
@@ -11758,7 +11769,7 @@ class HatchPetCard extends HTMLElement {
       const img = document.createElement("img");
       img.className = "vguest";
       img.alt = "";
-      img.style.scale = `${-gScale} ${gScale}`; // mirrored, to face the host
+      img.style.scale = `${toRight ? -gScale : gScale} ${gScale}`; // faces the host
       this._show(guest, img, gFrames[0]);
       L.box.append(img);
       L.img = img;
@@ -11917,8 +11928,8 @@ class HatchPetCard extends HTMLElement {
     const { host, guest } = L;
     host.linking = false;
     host.linkFrames = null;
-    host.screen.classList.remove("linking");
-    host.pet.classList.remove("linking", "greethop");
+    host.screen.classList.remove("linking", "linkleft");
+    host.pet.classList.remove("linking", "greethop", "look");
     host.pet.style.scale = L.hostScale;
     host.screen.querySelector(".linkhearts")?.remove();
     guest.pet.classList.remove("look");
