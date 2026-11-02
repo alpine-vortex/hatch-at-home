@@ -3554,8 +3554,12 @@ async function main() {
     }));
     await shot(name);
   }
+  // The wish as said takes turns by device and day (fresh-expand E6 W-a): any of sunset's.
+  const SUNSET_SAID = ["can we watch the sunset together?", ...require("vm").runInNewContext(`(${fs.readFileSync(
+    path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8")
+    .match(/\nconst WISH_MORE = (\{[\s\S]*?\n\});/)[1]})`).sunset];
   check("the first look tells the dream and wish first, then the day's news (fresh-moment 2)",
-    firstLook[0] === "I dreamed about Bluey!" && firstLook[1] === "can we watch the sunset together?" &&
+    firstLook[0] === "I dreamed about Bluey!" && SUNSET_SAID.includes(firstLook[1]) &&
       /^while you were out, I (napped|watched the rain)/.test(firstLook[2]), firstLook.join(" | "));
   // P3c: the media dream (sensor null, house.dream titled) is said once a day.
   const dreamAgain = await card.evaluate((el) => {
@@ -3645,10 +3649,10 @@ async function main() {
       !resumed.long.looked && !resumed.long.greeted && resumed.long.visited === 0 && resumed.long.mention === 0 && resumed.long.seen &&
       resumed.long.replay && !resumed.short.replay &&
       resumed.first.held.length === 0 && resumed.first.said.includes("I dreamed about Bluey!") &&
-      resumed.first.said.includes("can we watch the sunset together?") &&
-      !resumed.twice.said.some((t) => /dreamed|sunset together/.test(t)), JSON.stringify(resumed));
+      resumed.first.said.some((t) => SUNSET_SAID.includes(t)) &&
+      !resumed.twice.said.some((t) => /dreamed/.test(t) || SUNSET_SAID.includes(t)), JSON.stringify(resumed));
   check("fresh-moment 1: a set hass with the same states keeps the hold; timed out, no dream or wish and their keys unused",
-    resumed.first.held.length === 0 && !resumed.stale.said.some((t) => /dreamed|sunset together/.test(t)) &&
+    resumed.first.held.length === 0 && !resumed.stale.said.some((t) => /dreamed/.test(t) || SUNSET_SAID.includes(t)) &&
       resumed.stale.keys.length === 0, JSON.stringify(resumed.stale));
   check("fresh-moment 1: a screen left on looks again on a new day or a live morning wake-up, not on the same day",
     resumed.rolled === true && resumed.sameDay === false && resumed.woke, JSON.stringify(resumed));
@@ -3709,12 +3713,15 @@ async function main() {
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(300);
   await inject(pet["sensor.life_stage"], { attributes: { wish: { kind: "sunset", granted: true } } });
+  // The usual grant line, not E6 W-b's "what it got" (half the time; checked in E6's own).
+  await card.evaluate(() => { window.__grantRandom = Math.random; Math.random = () => 0.9; });
   await inject(pet["sensor.last_care"], {
     attributes: { moments: [{ type: "wish_granted", kind: "sunset", at: new Date().toISOString() },
       { type: "sunset", at: new Date().toISOString() }] },
   });
   await page.waitForTimeout(600);
   const granted = await card.evaluate(async (el) => {
+    Math.random = window.__grantRandom;
     const s = el._slides[el._index];
     const first = s.bubble.textContent; // the wish's line: kept, over the sunset (flavour)
     s.sayUntil = 0;
@@ -5428,6 +5435,9 @@ async function main() {
       const s = el._slides[el._index];
       const realState = el._state;
       const realRandom = Math.random;
+      // F3's practice takes an idle on its days (by the device: any run), and a draw.
+      const realPractice = el._promisePractice;
+      el._promisePractice = () => false;
       const me = el._hass.user.id;
       const keep = { voicedAt: s.voicedAt, queue: s.queue, catchCount: s.catchCount, asleep: s.asleep, calling: s.calling };
       const kept = { shared: localStorage.getItem("hatch-shared-screen"), baby: localStorage.getItem(`hatch-baby-talk-${me}`) };
@@ -5468,6 +5478,7 @@ async function main() {
         return await new Function("el", "s", "t", "arg", `return (${fn})(el, s, t, arg);`)(el, s, t, arg);
       } finally {
         el._state = realState;
+        el._promisePractice = realPractice;
         Math.random = realRandom;
         s.mine = keptMine;
         for (const [k, v] of [["hatch-shared-screen", kept.shared], [`hatch-baby-talk-${me}`, kept.baby]]) {
@@ -5496,6 +5507,8 @@ async function main() {
       const clearToday = () => { for (const k of Object.keys(localStorage)) if (/^hatch-today-/.test(k)) localStorage.removeItem(k); };
       try {
         el._visitSeen = () => null;
+        // A live grant earlier may have told the wish today (E6 W-b): that skips the wish.
+        localStorage.removeItem(`hatch-todaywish-${s.ids?.device}-${new Date().toDateString()}`);
         t.pet("adult", "mellow", 6, { wish: { kind: "bath", granted: true } });
         out.wish = el._todayLine(s);
         el._dayBits = (sl, since, care) => (care === false ? [] : ["had a meal"]);
