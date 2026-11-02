@@ -117,6 +117,26 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     morning for a month.
   - **While you were out**: open the card after a few hours away and it tells you what
     happened ("while you were out, I napped, watched the rain and played a game!").
+    Back after two days or more, it hops and welcomes you back first, with the news
+    before anything else.
+  - **Its day, in the evening**: from 17:00 a teen or adult tells you about its day once
+    (on each screen): its wish come true, a visitor it saw, something it did ("today I
+    watched the sunset! ♪"), or a line of its own. The status screen shows it too, and
+    before 17:00 it shows today's dream; the journal shows today's dream under its title.
+  - **Its own words, in turns**: most everyday lines (waking up, a pat, "good job!",
+    meals at breakfast, lunch and supper, its wish, its answer to "how was your day?")
+    take turns day by day, and a teen or adult often says them in its own way. Now and
+    then a pat finds the sweet spot ("that's the spot!! ♥"). At lights out it may
+    remember the day's visitor or the sunset; the day after a cure it says it feels all
+    better.
+  - **A promise**: every three weeks a teen or adult says it's practising something (a
+    hop, a spin, a song), practises now and then, and a few days later shows you.
+  - **Tricks**: an adult learns a trick a month for its first three months (a spin, a
+    double perk, a look around), shows it off once, and does it now and then after.
+  - **Games**: each day it has a favourite game, first in the list (with a word about it
+    on a wide card), and a lucky number that sparkles when it comes up in Higher or
+    Lower. After a game a teen or adult sometimes adds a word of its own; in Berry dig a
+    berry now and then is a shiny one.
 - **A bond with each person.** The pet gets to know everyone who signs in to Home
   Assistant with their own login, separately (a shared wall-tablet login counts as one
   person). Looking in once a day, caring for it, playing games and granting its wish
@@ -209,9 +229,14 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   looked in with `virtual_pet.visit`, counted at most hourly.)
 - **Visitors**: on about 4 days in 7 a small creature from the pet's world (a robin, a
   heron, a shooting star...) drops by during a 3-hour window and the pet greets it, once
-  a day on each screen; if the window passed while nobody was looking, the next look
-  that day says so ("a robin came by today ♪"). Home Assistant picks the day's visitor
-  and its window, so every screen agrees and a restart doesn't change it.
+  a day on each screen. If a day visitor's window passed while nobody was looking, it
+  still comes by when you next look in that day (on a night or dimmed screen the pet
+  just says so instead: "a robin came by today ♪"). Home Assistant picks the day's
+  visitor and its window, so every screen agrees and a restart doesn't change it. A
+  visitor seen on a screen on three days becomes a friend there and greets it with its
+  own lines; a visitor stays longer on a shared screen; on rare days two come together,
+  or one drops in from another world. On a visitor day the pet may save it a crumb, let
+  it watch a Berry dig, or tell a linked pet about it.
 - **Seasons** (by the viewing device's date; card option `seasonal: false`, or "Seasonal
   decorations" in the card editor, turns them off): from 20 to 31 October it's **Halloween**. Bunting hangs across the scene, a
   jack-o'-lantern with a new carved face each day sits by the pet and glows at night (it
