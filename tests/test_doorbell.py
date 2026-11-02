@@ -19,11 +19,12 @@ from homeassistant.core import Event, HomeAssistant, State
 from homeassistant.util import dt as dt_util
 import pytest
 from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
     async_capture_events,
     async_mock_service,
 )
 
-from custom_components.virtual_pet import rates as R
+from custom_components.virtual_pet import notify, rates as R
 from custom_components.virtual_pet.const import DOMAIN, LIVE_EVENTS
 from custom_components.virtual_pet.react import is_native
 from custom_components.virtual_pet.watcher import doorbell_rang
@@ -148,11 +149,17 @@ async def test_a_press_is_said_live_to_every_watcher_and_kept_nowhere(
     caplog: pytest.LogCaptureFixture,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    hass_storage[STORE_KEY] = hatched_pet(now, notify_users=["someone"])
+    someone = await hass.auth.async_create_user("Someone")
+    hass_storage[STORE_KEY] = hatched_pet(now, notify_users=[someone.id])
     bell(hass)
     config = await setup_with_house(hass, privacy=False)
     assert "doorbell" in hass.states.get("sensor.pip_life_stage").attributes["senses"]
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": someone.id, "device_name": "phone"}
+    ).add_to_hass(hass)
     phone = async_mock_service(hass, "notify", "mobile_app_phone")
+    # The phone is one the pet could reach, so that it stays silent means something.
+    assert notify.phones(hass, someone.id) == ["mobile_app_phone"]
     bus: list[Event] = async_capture_events(hass, MATCH_ALL)
     card, shared = await watchers(hass, hass_ws_client)
     pressed = stamp(0.123)[:23]  # to the millisecond: nothing else has this time
@@ -186,6 +193,89 @@ async def test_a_press_is_said_live_to_every_watcher_and_kept_nowhere(
     ]
     late = await subscribe(await hass_ws_client(hass))
     assert "doorbell_live" not in json.dumps(late)
+
+
+async def test_a_press_moves_no_clock_and_writes_nothing(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The press instant (off the 5-minute grid) is held nowhere we keep: not
+    the pet's last_updated, the debug tick, diagnostics, storage, or a sensor
+    rewritten at that moment (review s2653 #1)."""
+    from custom_components.virtual_pet.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    bell(hass)
+    config = await setup_with_house(hass)
+    await settle(hass, freezer, 61)  # the first save lands: a baseline to compare
+    coordinator = config.runtime_data
+    client = await rings(hass, hass_ws_client)
+    state = coordinator.state
+
+    def kept() -> tuple[Any, ...]:
+        return (
+            state.last_updated,
+            coordinator.debug.get("last_tick"),
+            coordinator.debug.get("last_step_minutes"),
+            json.dumps(hass_storage.get(STORE_KEY), default=str),
+        )
+
+    sensors = {
+        s.entity_id: s.last_updated
+        for s in hass.states.async_all()
+        if not s.entity_id.startswith("event.")
+    }
+    before = kept()
+    freezer.tick(timedelta(seconds=137))  # off the grid
+    at = dt_util.utcnow()
+    ring(hass)
+    await hass.async_block_till_done()
+    assert len(await said(client)) == 1  # it was heard ...
+    await settle(hass, freezer, 61)  # ... and a save would have landed by now
+
+    assert kept() == before  # ... and moved and wrote nothing
+    assert state.last_updated != at.timestamp()
+    assert {
+        s.entity_id: s.last_updated
+        for s in hass.states.async_all()
+        if not s.entity_id.startswith("event.")
+    } == sensors
+    diagnostics = json.dumps(
+        await async_get_config_entry_diagnostics(hass, config), default=str
+    )
+    for trace in (str(at.timestamp()), at.isoformat(), at.isoformat()[:19]):
+        assert trace not in diagnostics
+        assert trace not in json.dumps(hass_storage, default=str)
+
+
+async def test_a_bell_added_after_start_is_unheard_everywhere_until_reload(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    config = await setup_with_house(hass)  # no bell yet
+    client = await rings(hass, hass_ws_client)
+    assert (
+        "doorbell" not in hass.states.get("sensor.pip_life_stage").attributes["senses"]
+    )
+    bell(hass)  # added after start
+    ring(hass)
+    await hass.async_block_till_done()
+    assert await said(client) == []
+    assert (
+        "doorbell" not in hass.states.get("sensor.pip_life_stage").attributes["senses"]
+    )
+    # react is the same: it does not step aside for a bell nothing listens to.
+    fields = {"source": BELL, "from_state": stamp(3600), "to_state": stamp()}
+    assert await react(hass, "feeder", **fields) == "shared"
+    assert config.runtime_data._bells == ()
 
 
 async def rings(hass: HomeAssistant, hass_ws_client: Any) -> Any:

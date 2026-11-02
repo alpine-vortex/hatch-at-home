@@ -7529,10 +7529,13 @@ class HatchPetCard extends HTMLElement {
       }
       case "doorbell_live": { // a doorbell press, said live and kept nowhere: a startle and two notes (H5)
         if (s.game) break; // a game's prompt owns the bubble
-        speak(pick(HOUSE_LINES.doorbell), 4500, () => {
+        // The startle and the chime are the bell's own: at once, not waiting on the
+        // line (a FLAVOUR line can wait up to FLAVOUR_WAIT_MS, or be dropped).
+        now(() => {
           this._animate(s, s.pet, REACT_POSE.startle.move, REACT_POSE.startle.ms);
           this._houseFx(s, "fx-chime");
         });
+        speak(pick(HOUSE_LINES.doorbell), 4500);
         break;
       }
       case "house_moment": // virtual_pet.react: something in the house, by category (H8)

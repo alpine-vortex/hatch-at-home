@@ -7649,6 +7649,12 @@ async function main() {
         said = [];
         el._channel(s, { moment: ring }, me); // the same press again
         out.again = [...said];
+        // A line that is dropped or waits (FLAVOUR): the startle and chime still come at once.
+        el._line = function (slide, cls, text) { if (slide === s) said.push(text); };
+        said = []; moves = []; fxs = [];
+        el._channel(s, { moment: { ...ring, at: new Date(Date.now() + 1).toISOString() } }, me);
+        out.unsaid = { moves: [...moves], fxs: [...fxs] };
+        el._line = function (slide, cls, text, ms, opts) { if (slide === s) { said.push(text); opts?.then?.(); } };
         said = [];
         el._channel(s, { mine: s.mine, house: s.house, moments: [ring], now: new Date().toISOString() }, me);
         out.replay = [...said];
@@ -7662,6 +7668,8 @@ async function main() {
     check("H5: a doorbell_live is said once (one of the three lines, a startle and fx-chime), from the channel only",
       h5.once.said.length === 1 && pool.includes(h5.once.said[0]) && h5.once.fxs.join() === "fx-chime"
         && h5.once.moves.includes("startle") && h5.again.length === 0, JSON.stringify(h5));
+    check("H5: the startle and fx-chime come at once, even when the line is dropped or waits",
+      h5.unsaid.fxs.join() === "fx-chime" && h5.unsaid.moves.includes("startle"), JSON.stringify(h5.unsaid));
     check("H5: a replayed snapshot holding a doorbell_live says nothing", h5.replay.length === 0, JSON.stringify(h5.replay));
     const publicNow = await evaluate((e) =>
       document.querySelector("home-assistant").hass.states[e].attributes.moments || [], pet["sensor.last_care"]);
