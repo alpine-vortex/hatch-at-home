@@ -289,7 +289,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   Tap it for the settings sheet; "‹ settings" at the top of any sub-page takes you
   back. The sheet has up to three parts:
   - **for the pet** (or **for** its name): "notices", the kinds of thing the house
-    shows the pet (weather, lights, tv, music, chores, fireplace, heater, fan, moon; the moon always
+    shows the pet (weather, lights, tv, music, chores, fireplace, heater, fan, robot, moon; the moon always
     shows), then the pet's "shell" row, see below. An admin also gets "connect
     more ›", which opens the pet's page in Settings → Devices & services.
   - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk and
@@ -504,6 +504,7 @@ the pet comes home.
 | --- | --- | --- | --- |
 | Heating | none | Thermostats (heating, or set to heat and below the target), switches and toggles that are on. While it's on the chilly pet doesn't ask for a blanket and shows "nice and cozy". If it comes on while the pet is chilly and awake, the house tucks it in (as a blanket would), at most twice a day. A blanket for rain or thunder stays yours. | your living-room thermostat |
 | Cooling | none | Fans, thermostats (cooling or running the fan), switches and toggles that are on. The same for a warm pet and the fan. | `fan.bedroom` |
+| Notice robot vacuums | on | Every `vacuum.*` in the house counts, with nothing to pick. While one is cleaning the pet watches the robot go by ("a robot's zooming around!"); when it starts and when it heads home the pet says so (at most 3 starts a day; nothing while the pet is asleep or at the sitter's). Cosmetic only. A vacuum added after the pet started listening needs the integration reloaded (Settings → Devices & services → Hatch at Home → ⋮ → Reload) before it's noticed. Off: the pet ignores robots. | all your vacuums |
 
 ### Sky
 
@@ -893,7 +894,7 @@ no `title` or `artist`: for every change, read `media_title` from your media pla
 `virtual_pet_wish_made` and `virtual_pet_wish_granted` (with `kind`),
 `virtual_pet_someone_home` (anyone signed in came home; it says nobody's name),
 `virtual_pet_holiday` (with `holiday`: `halloween`, `thanksgiving`, `winter_lights` or `winter_treat`), `virtual_pet_weather` (with `change`),
-`virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_house_answered` (with `request`: `blanket` or `fan`; the heating or cooling came on for the pet), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
+`virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_house_answered` (with `request`: `blanket` or `fan`; the heating or cooling came on for the pet), `virtual_pet_robot_out` and `virtual_pet_robot_home` (a robot vacuum started a run and went home; no vacuum is named), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
 `virtual_pet_favourite_snack` (with `food`),
 `virtual_pet_found` (with `id` and `world`, when the pet finds something; finds aren't shown on the card yet).
 

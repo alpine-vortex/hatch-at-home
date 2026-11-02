@@ -164,6 +164,35 @@ def test_heating_and_cooling_read_from_climates_switches_and_fans(
     assert not r.cooling_on and not r.heating_on
 
 
+def test_a_cleaning_vacuum_sets_robot_cleaning(hass: HomeAssistant) -> None:
+    watcher = Watcher(hass, {})
+    hass.states.async_set("vacuum.x", "docked")
+    assert not watcher.read(0, night=False).robot_cleaning
+    hass.states.async_set("vacuum.x", "cleaning")
+    r = watcher.read(0, night=False)
+    assert r.robot_cleaning and not r.robot_docked
+    hass.states.async_set("vacuum.x", "returning")
+    r = watcher.read(0, night=False)
+    assert not r.robot_cleaning and r.robot_docked
+    hass.states.async_set("vacuum.x", "docked")
+    assert watcher.read(0, night=False).robot_docked
+    # notice_robot off: vacuums are neither read nor listened to.
+    hass.states.async_set("vacuum.x", "cleaning")
+    off = Watcher(hass, {"notice_robot": False})
+    assert not off.read(0, night=False).robot_cleaning
+    assert "vacuum.x" not in off.entity_ids()
+
+
+def test_vacuums_are_found_by_domain_and_listened_to(hass: HomeAssistant) -> None:
+    hass.states.async_set("vacuum.b", "docked")
+    hass.states.async_set("vacuum.a", "docked")
+    hass.states.async_set("lawn_mower.m", "mowing")
+    watcher = Watcher(hass, {})
+    assert watcher.robot_ids() == ["vacuum.a", "vacuum.b"]
+    assert {"vacuum.a", "vacuum.b"} <= set(watcher.entity_ids())
+    assert "lawn_mower.m" not in watcher.entity_ids()
+
+
 def test_heating_and_cooling_are_off_when_unmapped(hass: HomeAssistant) -> None:
     hass.states.async_set("climate.hall", "heat", {"hvac_action": "heating"})
     r = Watcher(hass, {}).read(0, night=False)

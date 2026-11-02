@@ -126,11 +126,13 @@
             "description": "When the heating comes on while the pet is chilly, or the fan or air conditioning while it is warm, the house answers for you: the pet gets cozy or cool, and says so. While the heating is on the pet doesn't ask for a blanket, and likewise for the fan. At most twice a day. A blanket for rain or thunder stays yours. A thermostat is a good fit for heating.",
             "data": {
               "heating": "Heating",
-              "cooling": "Cooling"
+              "cooling": "Cooling",
+              "notice_robot": "Notice robot vacuums"
             },
             "data_description": {
               "heating": "A thermostat, switch or toggle that is on when the heating is. A thermostat counts while it is heating (or set to heat and below its target). Pick the one for the pet's room: many homes run the heating when nobody is cold.",
-              "cooling": "A fan, thermostat, switch or toggle that is on when the room is being cooled. A thermostat counts while it is cooling or running its fan."
+              "cooling": "A fan, thermostat, switch or toggle that is on when the room is being cooled. A thermostat counts while it is cooling or running its fan.",
+              "notice_robot": "Every vacuum in the house counts. A vacuum added later needs the integration reloaded."
             }
           },
           "privacy": {

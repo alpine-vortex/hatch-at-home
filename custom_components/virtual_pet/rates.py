@@ -316,6 +316,7 @@ COMFORT_MINUTES = 120  # cozy (blanket) or cool (fan) lasts this long
 HOUSE_ANSWERS_PER_DAY = (
     2  # the house turning heating or cooling on for the pet, a local day
 )
+ROBOT_MOMENTS_PER_DAY = 3  # a robot vacuum starting a run, a local day (memory)
 COMFORT_HAPPINESS = 1.0  # per hour while cozy or cool
 HOME_FIRE_HAPPINESS = 1.0  # a lit fireplace (counts toward the cap)
 

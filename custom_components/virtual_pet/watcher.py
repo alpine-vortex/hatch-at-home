@@ -36,6 +36,7 @@ from .const import (
     CONF_MOON_PHASE,
     CONF_MOTION,
     CONF_MUSIC,
+    CONF_NOTICE_ROBOT,
     CONF_RAIN,
     CONF_ROOM_LIGHTS,
     CONF_SOLAR,
@@ -200,9 +201,17 @@ class Watcher:
     def zone(self) -> str:
         return self.options.get(CONF_ZONE) or DEFAULT_ZONE
 
+    def robot_ids(self) -> list[str]:
+        """Every vacuum in the house, found by domain (no mapping), unless the
+        owner turned notice_robot off. Listed when the pet starts listening: a
+        vacuum added later is heard after the integration reloads."""
+        if not self.options.get(CONF_NOTICE_ROBOT, True):
+            return []
+        return sorted(self.hass.states.async_entity_ids("vacuum"))
+
     def entity_ids(self) -> list[str]:
         """Everything worth listening to."""
-        ids = [self.zone, "sun.sun"]
+        ids = [self.zone, "sun.sun", *self.robot_ids()]
         for key in (*MULTI, *SINGLE):
             ids += self._ids(key)
         return sorted(set(ids))
@@ -233,6 +242,7 @@ class Watcher:
         """A snapshot of the house."""
         sun = self._get("sun.sun", now)
         weather = self._one(CONF_WEATHER, now)
+        robots = [s for eid in self.robot_ids() if (s := self._get(eid, now))]
         playing_tv = [s for s in self._all(CONF_TV, now) if s.state == "playing"]
         playing_music = [
             s
@@ -265,6 +275,8 @@ class Watcher:
             fireplace=self._lit(self._one(CONF_FIREPLACE, now)),
             heating_on=any(heating_on(s) for s in self._all(CONF_HEATING, now)),
             cooling_on=any(cooling_on(s) for s in self._all(CONF_COOLING, now)),
+            robot_cleaning=any(s.state == "cleaning" for s in robots),
+            robot_docked=any(s.state in ("returning", "docked") for s in robots),
             company=None if (people := self.people_home(now)) is None else people > 0,
             moon_phase=(
                 moon.state if (moon := self._one(CONF_MOON_PHASE, now)) else None

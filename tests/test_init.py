@@ -443,6 +443,7 @@ async def test_options_flow_saves_a_flat_mapping(
         "comfort_high": 26.5,
         "away_after": 2.0,
         "sitter_settles": True,
+        "notice_robot": True,
     }
 
 
@@ -504,6 +505,57 @@ async def test_the_house_answers_a_chilly_pet_when_the_heating_comes_on(
     answered = [m for m in moments if m["type"] == "house_answered"]
     assert len(answered) == 2
     assert set(answered[0]) == {"type", "request", "at"}  # no entity, no more
+
+
+async def test_a_vacuum_nobody_mapped_is_heard_and_moves_the_pet(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """H4: every vacuum.* counts. Its state change alone, with nothing else
+    changing, reaches the pet within the debounce."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("vacuum.robo", "docked")
+    await setup_with_house(hass)
+    assert "robot" in hass.states.get("sensor.pip_life_stage").attributes["senses"]
+    out = async_capture_events(hass, f"{DOMAIN}_robot_out")
+    home = async_capture_events(hass, f"{DOMAIN}_robot_home")
+    assert "vroom" not in hass.states.get("sensor.pip_mood").attributes["flags"]
+
+    hass.states.async_set("vacuum.robo", "cleaning")
+    await settle(hass, freezer)
+    mood = hass.states.get("sensor.pip_mood")
+    assert "vroom" in mood.attributes["flags"]
+    assert mood.attributes["reason"] == "a robot's zooming around!"
+    assert len(out) == 1 and set(out[0].data) == {"pet_id"}  # no vacuum named
+
+    hass.states.async_set("vacuum.robo", "returning")
+    await settle(hass, freezer)
+    assert "vroom" not in hass.states.get("sensor.pip_mood").attributes["flags"]
+    assert len(home) == 1
+    types = [
+        m["type"]
+        for m in hass.states.get("sensor.pip_last_care").attributes["moments"]
+    ]
+    assert types[:2] == ["robot_home", "robot_out"]
+
+
+async def test_notice_robot_off_gives_no_vroom(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("vacuum.robo", "docked")
+    await setup_with_house(hass, notice_robot=False)
+    out = async_capture_events(hass, f"{DOMAIN}_robot_out")
+    assert "robot" not in hass.states.get("sensor.pip_life_stage").attributes["senses"]
+    hass.states.async_set("vacuum.robo", "cleaning")
+    await settle(hass, freezer)
+    assert "vroom" not in hass.states.get("sensor.pip_mood").attributes["flags"]
+    assert not out
 
 
 async def test_dropout_holds_then_counts_as_no_signal(

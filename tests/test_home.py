@@ -537,6 +537,62 @@ def test_cooling_turning_on_while_warm_is_a_house_moment():
     ]
 
 
+def robot(**kw):
+    return Readings(night=False, **kw)
+
+
+def test_cleaning_then_docked_gives_robot_out_then_robot_home():
+    m = home.HouseMoments()
+    assert moments(m, robot(robot_docked=True)) == []  # the baseline
+    assert moments(m, robot(robot_cleaning=True)) == [{"type": "robot_out"}]
+    assert moments(m, robot(robot_cleaning=True)) == []  # still at it
+    assert moments(m, robot(robot_docked=True)) == [{"type": "robot_home"}]
+    assert moments(m, robot(robot_docked=True)) == []  # once per run
+
+
+def test_a_run_already_going_at_the_first_reading_says_nothing():
+    m = home.HouseMoments()
+    assert moments(m, robot(robot_cleaning=True)) == []
+    assert moments(m, robot(robot_docked=True)) == []
+
+
+def test_a_fourth_run_in_a_day_gives_no_moment():
+    m = home.HouseMoments()
+    moments(m, robot(robot_docked=True))
+    heard = []
+    for _ in range(4):
+        heard += moments(m, robot(robot_cleaning=True))
+        heard += moments(m, robot(robot_docked=True))
+    assert R.ROBOT_MOMENTS_PER_DAY == 3
+    assert heard == [{"type": "robot_out"}, {"type": "robot_home"}] * 3
+    tomorrow = "2026-11-02"
+    assert moments(m, robot(robot_cleaning=True), today=tomorrow) == [
+        {"type": "robot_out"}
+    ]
+
+
+def test_the_robot_is_dropped_while_asleep_or_away():
+    m = home.HouseMoments()
+    moments(m, robot(robot_docked=True))
+    assert moments(m, robot(robot_cleaning=True), awake=False) == []
+    # The run it didn't see has no homecoming, even if the pet woke meanwhile.
+    assert moments(m, robot(robot_docked=True)) == []
+    moments(m, robot(robot_cleaning=True))  # seen, now it sleeps
+    assert moments(m, robot(robot_docked=True), awake=False) == []
+    # The paused or errored robot isn't "home".
+    moments(m, robot(robot_cleaning=True))
+    assert moments(m, Readings(night=False)) == []
+
+
+def test_a_cleaning_robot_is_the_vroom_flag_and_nothing_more():
+    e = evaluate(Readings(night=False, robot_cleaning=True))
+    assert e.flags == ["vroom"] and e.bonus == {} and e.requests == []
+    assert e.reason() == "a robot's zooming around!"
+    fire = evaluate(Readings(night=False, robot_cleaning=True, fireplace=True))
+    assert fire.reason() == "toasty by the fire~"  # fireside outranks it
+    assert evaluate(Readings(night=False)).flags == []
+
+
 def test_the_house_answers_at_most_twice_a_day():
     m = home.HouseMoments()
     moments(m, cold())

@@ -53,6 +53,7 @@ from .const import (
     CONF_MUSIC,
     CONF_NEW_PET,
     CONF_NEXT_WORLD,
+    CONF_NOTICE_ROBOT,
     CONF_PRIVACY,
     CONF_RAIN,
     CONF_ROOM_LIGHTS,
@@ -315,6 +316,7 @@ class PetOptionsFlow(OptionsFlowWithReload):
                     _entities(["fan", "climate", "switch", "input_boolean"], True),
                     None,
                 ),
+                (CONF_NOTICE_ROBOT, BooleanSelector(), True),
             ],
             "privacy": [
                 (CONF_PRIVACY, BooleanSelector(), True),
