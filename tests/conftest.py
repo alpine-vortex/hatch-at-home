@@ -1,12 +1,25 @@
 """Shared fixtures."""
 
 import os
+from pathlib import Path
 import random
+import shutil
+import subprocess
 from types import SimpleNamespace
 
 import pytest
 
 from custom_components.virtual_pet import coordinator
+
+
+@pytest.fixture(scope="session", autouse=True)
+def built_card():
+    """Join src/card/ into the card HA serves (scripts/build-card.js; gitignored)."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.exit("node required to build the card (scripts/build-card.js)", 1)
+    root = Path(__file__).resolve().parent.parent
+    subprocess.run([node, str(root / "scripts" / "build-card.js")], check=True)
 
 
 @pytest.fixture(autouse=True)

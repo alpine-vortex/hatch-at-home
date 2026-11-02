@@ -9,7 +9,7 @@ const path = require("path");
 const vm = require("vm");
 
 const PET = path.join(__dirname, "..", "..", "custom_components", "virtual_pet");
-const src = fs.readFileSync(path.join(PET, "frontend", "hatch-pet-card.js"), "utf8");
+const src = require("./card-source");
 const ctx = {};
 vm.runInNewContext(`const short = (t) => t;
 ${src.match(/\nconst DREAMS = \{[\s\S]*?\n\};\n/)[0]}

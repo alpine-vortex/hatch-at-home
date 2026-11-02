@@ -28,26 +28,17 @@ The egg decides which of that world's creatures hatches. See `docs/design-worlds
 2. Get the files, through HACS (recommended) or by hand:
    - **HACS:** HACS → ⋮ (top right) → Custom repositories. Paste
      `https://github.com/alpine-vortex/hatch-at-home`, pick type **Integration**
-     and press Add. Then search HACS for **Virtual Pet** and press Download.
+     and press Add. Then search HACS for **Hatch at Home** and press Download.
    - **By hand:** copy `custom_components/virtual_pet/` from this repo into your
      HA config folder, so you end up with
      `/config/custom_components/virtual_pet/manifest.json`. The Samba share, the
      SSH add-on or the Studio Code Server add-on all work.
 3. Restart HA: Settings → System → power icon (top right) → Restart Home Assistant.
-4. Settings → Devices & services → Add integration → search **Virtual Pet**,
+4. Settings → Devices & services → Add integration → search **Hatch at Home**,
    then name your pet and pick its world: Woodland, Terrarium, Hearth, Tidepool, Pond
    or Night Sky (five creatures each). Add the integration again for each extra pet device.
-
-### Updating
-
-With HACS, new versions appear under Settings → Updates. Install, restart HA,
-then reload the browser page. By hand, copy the folder over the old one and do the
-same. Either way your pets are safe: they live in HA's own storage
-(`/config/.storage/virtual_pet.<entry id>`), not in the integration folder. Restoring
-an HA backup rewinds the pet to that point, which is fine.
-
-Moving a manual install to HACS needs nothing special: add the custom repository,
-download, restart. HACS replaces the folder you copied.
+5. **Add the card:** edit a dashboard → Add card → **Hatch at Home pet shelf** (see *Add the
+   card* below). The egg hatches in about half an hour.
 
 ### Add the card
 
@@ -73,10 +64,21 @@ seasonal: false  # optional: no seasonal touches (on by default; "halloween", "t
 Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 `hatch-pet-card.js` row), or an old cached copy may load first.
 
+### Updating
+
+With HACS, new versions appear under Settings → Updates. Install, restart HA,
+then reload the browser page. By hand, copy the folder over the old one and do the
+same. Either way your pets are safe: they live in HA's own storage
+(`/config/.storage/virtual_pet.<entry id>`), not in the integration folder. Restoring
+an HA backup rewinds the pet to that point, which is fine.
+
+Moving a manual install to HACS needs nothing special: add the custom repository,
+download, restart. HACS replaces the folder you copied.
+
 ### Using the card
 
 - Each pet stands in its device on its world's backdrop. Use the arrows, the dots or a
-  swipe to move to the next device.
+  swipe to move to the next device (a mostly vertical drag, reading or selecting, does nothing). A reload comes back to the pet you were looking at.
 - **Power-on:** the first time a browser shows the card, the screen starts like a
   new toy: a pale-green screen with the HATCH logo and a blinking "▶ tap to start".
   A tap fills in the logo and cuts to the pet (with a rising beep if you turned
@@ -84,7 +86,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   five seconds, silently. It shows once per browser, and again only after an update
   that asks for it. Reduced motion skips the fill.
 - The screen shows the pet, its scene and a speech bubble. The bubble says what's on
-  its mind, or why it refused something ("I'm full!").
+  its mind, or why it refused something ("i'm full!").
 - **Play** offers three games. It opens a picker that starts on the
   last game you picked. **Left or right:**
   the pet hides on one side and you guess with the arrows; a win cheers it up more than
@@ -162,14 +164,16 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     school), "what should I dream about tonight?" (the next morning everyone hears the
     dream's story, and you hear it was your idea), "rain or sun tomorrow?" (judged
     the next evening, no score), "anything big this week?" (Sunday or Monday, at
-    most once a week; "yes" asks which day, then lets you type what it is, and on that
+    most once a week; "yes" asks which day (today included), then lets you type what it is, and on that
     day the pet cheers you on in the morning and, from 7 pm, asks how it went or is
     there for you), and once
     each "what's your favourite weather?" and "...season?", and "who's your favourite
     visitor?" once in each world (its visitors as buttons). After a tough day it's a
     little softer with you the next morning. It remembers favourites, tonight's
     dream, your guess and a big day (see Privacy); the rest of your answers stay on
-    your screen;
+    your screen. While it asks, the pet steps back a little, "lay an egg?" waits out of
+    the way, and a tap beside the buttons does nothing. Every answer gets a reply that
+    stays on show for a few seconds, and a tap right after an answer opens nothing;
   - remembers your favourites: "it's snowing, your favourite!! ❄", "it's autumn, your
     favourite! ♥" once a season (no season talk in the tropics), "Thanksgiving in
     your favourite season! ♥"; your favourite visitor gets its own hello on your
@@ -284,19 +288,37 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   the one it's learning next, upbringing with "missed calls" and "ignored whines"
   under it (calls nobody answered in time, and fake calls nobody answered),
   personality (from teen), the next egg, recent care, and a link to the journal.
-  Tap again to go back. The switches live behind the gear (below).
+  The pet's head and name sit at the top left. Tap again to go back, or press Escape;
+  Escape on the journal or the pages under it goes back one page first. An egg's page
+  has just "you two" and when it hatches ("warm and growing ♪", then "wiggling! any
+  minute ♪", then "cracking! ♥"). The status draws in as a four-step wipe (instant
+  with reduced motion). A care button tapped with the status open closes it first, so the
+  pet is seen eating. The switches live behind the gear (below).
 - **The settings gear.** A gear sits at the top of the status page ("settings").
-  Tap it for the settings sheet; "‹ settings" at the top of any sub-page takes you
-  back. The sheet has up to three parts:
-  - **for the pet** (or **for** its name): "notices", the kinds of thing the house
-    shows the pet (weather, lights, tv, music, chores, fireplace, heater, fan, robot, doorbell, machines, moon; the moon always
-    shows), then the pet's "shell" row, see below. An admin also gets "connect
-    more ›", which opens the pet's page in Settings → Devices & services.
+  Tap it for the settings sheet. On the sheet, "‹ status" (or the Escape key) takes
+  you back to the status page; on a sub-page such as the shell picker, "‹ settings"
+  takes you back to the sheet. A tap on a label or the empty space beside a switch
+  leaves the sheet open. When the pet has something to say about a change ("no phone
+  pings, ok ♪"), it says it in a small bubble with its head under the top row; and when
+  you leave the sheet after some changes, the pet may remark on the last one. The sheet has
+up to four parts, in this order:
+  - **this screen**, in two groups. *sound*: sounds here, and babble (for pets with a
+    voice). Babble waits for "sounds here": with that off its row reads "needs sounds"
+    and can't be switched. *look*: screen effects here, holiday names, mono screen and
+    big text. These are saved in this browser only.
   - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk and
     my data. These follow your login. A shared screen doesn't show this part.
-  - **this screen**: sounds here, babble (for pets with a voice), screen effects
-    here, holiday names, mono screen and shared screen. These are saved in this
-    browser only.
+  - **for the pet** (or **for** its name): "notices", the kinds of thing the house
+    shows the pet (weather, lights, tv, music, chores, fireplace, heater, fan, robot, doorbell, machines, moon; the moon always
+    shows); an admin also gets "connect more ›", which opens the pet's own page in
+    Settings → Devices & services. Then "bedtime", read only: the pet's bedtime and
+    wake time as "about … · up …", in the 12 or 24 hour format of your Home Assistant
+    language and settings. It is the pet's own schedule, not a person's, so a shared
+    screen shows it too. Then the pet's "shell" row, see below. An older server shows
+    no bedtime row.
+  - **shared screen**, at the foot: its switch, a note ("a family tablet? give it its
+    own login, and we'll make friends ♥"), and for an admin (not on a shared screen) a
+    line, "sensor privacy is in the pet's options".
 - **Holiday names.** "holiday names" in the sheet's "this screen" part is on to begin
   with. Turned off, the pet on this screen never names a festival: no Christmas,
   Hanukkah or New Year's Eve lines in December, no "happy Halloween!" or "happy
@@ -307,9 +329,10 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 - **The shell picker.** On a server that offers it, the sheet has a "shell" row
   showing the pet's current shell. Tap it to open the picker, a list of finishes in
   groups (world plastics, specials, prints), starting with the world's own. Tap a
-  tile to see it on the pet's shell as a preview, then **use** to keep it, or
-  **world default** to go back to the world's own. "‹ settings" leaves without
-  saving. Each pet has its own shell. The earned shells (glitter, glow, smoke,
+  tile to see it on the pet's shell as a preview, then **use** (top right, dimmed until
+  the preview differs from the saved pick) to keep it. The world's own shell is the
+  first tile, marked "default"; use it to go back to the world's own. "‹ settings"
+  leaves without saving. Each pet has its own shell. The earned shells (glitter, glow, smoke,
   sunset, constellation and stars) unlock when the pet is a teen: before that their
   tiles are dimmed with the stage they open at, and tapping one says "I get this one
   as a teen ♪". On a shared screen the row is read-only: it shows the shell and says
@@ -319,11 +342,13 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   and only changes how the screen looks. Safari and iOS can't draw it and keep
   showing colour.
 - **Big text.** "big text" in the same part makes the words on the status page, the
-  journal and the settings sheet bigger (the page scrolls more). It is per browser and
-  off to begin with: handy on a wall tablet, or for younger and older readers.
+  journal and the settings sheet bigger (the page scrolls more), and the pet's words
+  too: its speech bubble and its answer buttons, with each line held half as long
+  again. It is per browser and off to begin with: handy on a wall tablet, or for
+  younger and older readers.
 - Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
   and phones give a tiny vibration. Then the real reaction follows (a food bowl, a
-  sparkle, or a refusal like "I'm full!"). If HA rejects the press, the button shakes
+  sparkle, or a refusal like "i'm full!"). If HA rejects the press, the button shakes
   and the pet says so.
 - The toy buttons press the pet's button entities, so anything you do here works
   from automations and voice too. A button glows when the pet needs it, for example
@@ -363,7 +388,8 @@ pet; it's only how the screen looks.
   egg's shoulder, the tank lid's right grip, a lamp on the house's chimney, the
   porthole's top-right rivet, a dewdrop on the lily pad's rim and a star on the
   moon. Tap it ("Light up the screen") and the screen glows blue-green for three
-  seconds, then fades; tap again to keep it lit. It shows best at night, when a
+  seconds, then fades; tap again for three more seconds. It lights the status page and
+  the settings sheet too. It shows best at night, when a
   sleeping pet glows under it (it stays asleep). It only lights the screen: it
   doesn't turn the lights on, wake the pet or tell Home Assistant anything. With
   sounds on it clicks, except at night and while the pet sleeps.
@@ -393,11 +419,16 @@ pet; it's only how the screen looks.
 ## What you get
 
 One device named after your pet, with the entities below. To rename the pet or move
-it to another world, open Settings → Devices & services → Virtual Pet → ⋮ next to the
-pet → **Reconfigure**. Entity IDs stay the same, and notifications and the journal
-follow the new name. A pet that has hatched stays in its world; its next egg starts
-in the new one (the status screen says "next egg in …"). To name a new generation,
-lay the egg, then rename it.
+it to another world, open Settings → Devices & services → Hatch at Home → ⋮ next to the
+pet → **Reconfigure**. A rename keeps the entity IDs, and notifications and the journal
+follow the new name. A newly laid egg can also be named on the card during its first
+day.
+
+Two words are easy to mix up. The **world** is which creatures can hatch and how the
+device looks; Reconfigure changes it. The **shell finish** is this pet's colour, picked
+on the card in settings (the gear); Reconfigure leaves it alone. A pet that has hatched
+stays in its world; a new world starts with its next egg (the status screen says "next
+egg in …"). A pet still in its egg moves at once.
 
 | Entity | What it is |
 | --- | --- |
@@ -446,15 +477,20 @@ entities:
 
 ## Connect it to your house (options)
 
-Settings → Devices & services → **Virtual Pet** → the gear (⚙) next to your pet. The
-dialog is titled **"What <name> notices"**. Every field is optional except the ones
-with defaults, and anything left empty is ignored. Saving applies the changes straight
+Settings → Devices & services → **Hatch at Home** → the gear (⚙) next to your pet. The
+dialog is titled **"What <name> notices"** and opens a menu of seven pages, one topic
+each: Bedtime, People and privacy, Weather and air, The pet's room, The house helps,
+Moon and sky, and Where notifications open. Pick a page, change what you like and
+submit; you come back to the menu. Every field is optional except the ones with
+defaults, and anything left empty is ignored. Saving applies the changes straight
 away. Each pet has its own settings.
 
 The house never hurts the pet. It changes its mood, its scene and what it asks for,
 and it adds at most +3 happiness an hour.
 
-### Sleep
+### Bedtime
+
+Bedtime and wake time are targets: the pet may turn in up to an hour either side.
 
 | Field | Default | What it does | Example |
 | --- | --- | --- | --- |
@@ -481,22 +517,27 @@ the pet comes home.
 
 ### The pet's room
 
+Lights, a fireplace, the TV and music change the pet's scene and mood.
+
 | Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Room lights | none | Still on at half brightness or more after bedtime: squints, "too bright, it's late!". Dim evening light makes it cozy. Daylight and the evening before bedtime never count, so lights kept at full until bed are fine. | living room lights |
 | Fireplace | none | Any entity that's on, heating or above 0 when lit (not a thermometer: that's always above 0). Curls up by it and gets a little happier. | `switch.fireplace` |
 | Light sensors | none | 100 lx or more after bedtime also counts as too bright. | optional |
+| TVs | none | On or playing: watches along (small bonus). | `media_player.tv` |
+| Music players | none | Playing anything but video: dances (small bonus). | your speakers |
 
-### People and activity
+### People and privacy
+
+Who is home decides whether the pet is with you or at the sitter's. The two switches at the end decide what dashboards and sensors may show.
 
 | Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Home zone | `zone.home` | Counts the people in it. Someone arriving gets an excited greeting, at most once every 30 minutes. | `zone.home` |
-| Go to the sitter's after | 2 h | With nobody home this long, the pet is frozen: no hunger, no aging, no calls. | 2 h |
-| The sitter settles whining | on | If the pet was whining for attention (a fake call) when it left, the sitter settles it and it comes home happy. Off: the whine waits for you. Real needs always wait. | on |
-| TVs | none | On or playing: watches along (small bonus). | `media_player.tv` |
-| Music players | none | Playing anything but video: dances (small bonus). | your speakers |
-| Chore lists | none | To-do lists. Each item someone ticks off earns the pet a treat (a little food and happiness, up to 5 a day). Treats wait if it's asleep or away. | your chores list |
+| Off to the sitter's after | 2 h | With nobody home this long, the pet is frozen: no hunger, no aging, no calls. | 2 h |
+| The sitter calms a fussy pet | on | If the pet was fussing for attention (not a real need) when it left, the sitter settles it and it comes home happy. Off: the fussing waits for you. Real needs always wait. | on |
+| Keep presence private | on | An empty house shows the pet napping, never at the sitter's (care while it's away is refused as "asleep"), and the pet never says who came or went. For a wall tablet, also turn on "shared screen" in the card's settings. Turn it off to see "at the sitter's". | default |
+| Keep house words off sensors | off | Off: a news headline (`virtual_pet.share_news`) and a Custom house moment's own words (`virtual_pet.react`) sit on the pet's last-care sensor for a while, like its other moments, where any dashboard or template can read them. On: the open cards say them live, shared screens too, and they're kept nowhere: not on a sensor, not for a card opened later. The `virtual_pet_news` event keeps its headline either way (it's your automation's own words); `virtual_pet_house_moment` never carries the words while this is on. Per pet. | default |
 
 ### The house helps
 
@@ -508,8 +549,9 @@ the pet comes home.
 | Notice doorbells | on | Every doorbell in the house counts, with nothing to pick: any `event.*` entity whose device class is `doorbell` (Ring, UniFi Protect, Nest and DoorBird provide one). A press makes the pet startle, with two notes and a line. Nothing while the pet is asleep, away or an egg, and at most one every 30 minutes for each pet, however many doorbells. A restart, a reconnect or an old press never counts, only a press that just happened. The pet's "notices" row says "doorbell" and nothing more. **Privacy:** the press is said once, live, on every card open at that moment (remote viewers and shared screens too: anyone in the room heard the bell), and kept nowhere. It is never on a `virtual_pet_*` event, our logs or diagnostics, the sensors, the journal or the debug sensor, and a card opened later doesn't hear it. HA's own event entity and recorder still hold the press, as they always do. A doorbell added after the pet started listening needs the integration reloaded (Settings → Devices & services → Hatch at Home → ⋮ → Reload) before it's noticed. A doorbell you point the house moment blueprint at is heard once, by this setting. Off: the pet ignores doorbells. | all your doorbells |
 | Washer, dryer, dishwasher | none | Pick any number of switches, sensors and binary sensors; the pet says so when one finishes a cycle (once, never repeated or reminded; nothing while the pet is asleep or at the sitter's; at most once an hour per machine). A **binary sensor** counts as running after 10 minutes on, and done when it goes off. A **sensor that names a state** (Home Connect, SmartThings, LG ThinQ, Miele) is done when it moves from a running state to one with "finish", "end", "complete", "done" or "ready" in it. A **power sensor** (device class power) or a **switch that reports `current_power_w`** is running above the idle power for 10 minutes and done after about 3 minutes at or under it. A plain switch that reports no power says nothing. The 10 and 3 minutes are checked when the machine changes and every 5 minutes, so they can run up to about 5 minutes long. The pet says "the washer's finished!", "the dishes are all done!", "the dryer's done!" or "a machine finished", from the entity's device class or name (wash, dry, dish), else machine. After a restart the pet times a machine that is already running from the restart, and one that finished meanwhile isn't counted. Cosmetic only; only the kind is shared, never which machine. | `binary_sensor.washing_machine_running` |
 | Idle power | 5 W | For power readings: at or under this many watts counts as not running. | `5` |
+| Chore lists | none | To-do lists. Each item someone ticks off earns the pet a treat (a little food and happiness, up to 5 a day). Treats wait if it's asleep or away. | your chores list |
 
-### Sky
+### Moon and sky
 
 | Field | Default | What it does |
 | --- | --- | --- |
@@ -517,12 +559,13 @@ the pet comes home.
 | Moon illumination | none | Optional, the lit fraction (0–1 or %). Used when there's no phase sensor: 97% or more is full, 3% or less is new. |
 | Moon altitude | none | Optional, degrees. The moon only counts while it's above the horizon. |
 
-### Privacy
+### Where notifications open
 
 | Field | Default | What it does |
 | --- | --- | --- |
-| Keep presence private | on | An empty house shows the pet napping, never at the sitter's (care while it's away is refused as "asleep"), and the pet never says who came or went. Turn it off to see "at the sitter's". |
-| Keep house words off sensors | off | Off: a news headline (`virtual_pet.share_news`) and a Custom house moment's own words (`virtual_pet.react`) sit on the pet's last-care sensor for a while, like its other moments, where any dashboard or template can read them. On: the open cards say them live, shared screens too, and they're kept nowhere: not on a sensor, not for a card opened later. The `virtual_pet_news` event keeps its headline either way (it's your automation's own words); `virtual_pet_house_moment` never carries the words while this is on. Per pet. |
+| Dashboard to open | none | Tapping one of this pet's phone notifications opens this dashboard. Pick one or type a path, like `/lovelace/pets`. Empty opens the app as it was. Setup offers a second pet the first pet's dashboard to start with. |
+
+### Privacy: what the pets remember
 
 **What the pets remember about you.** Your birthday, your answers to its questions,
 your alarm times, the last zone you came back from (only while "my day" is on), and
@@ -560,7 +603,8 @@ With no pets left there's no card, so no "forget my data" button. An admin can
 delete `.storage/virtual_pet.people` (and any `virtual_pet.people.damaged.*` copies) then, with Home Assistant stopped.
 
 If an entity named in these settings is later renamed or removed, Settings →
-**Repairs** says which ones, so you can pick the new ones here.
+**Repairs** says which ones. Submit the repair to make the pet forget them (nothing else
+in its settings changes), or open the options page it names to pick the new ones.
 
 ### Fixed rules (not settings)
 
@@ -734,8 +778,12 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   device's family line: each generation with its traits, stars, upbringing and
   personality. The latest four show; past them, "older generations (N)" opens the rest,
   oldest first.
-  Under the creatures, "every world ›" shows all six worlds, five creatures each: the
-  ones a pet on this card has raised are drawn, the rest are silhouettes.
+  Under the creatures, "every world ›" shows all six worlds, five creatures each, the
+  pet's own world first: the ones a pet on this card has raised are drawn, the rest are
+  silhouettes. The journal, finds and every-world pages each have a "‹" back link in a
+  band at the top, like the settings sheet. A tap on a creature's tile keeps the page
+  open and the pet says a line about it, once a tile (the page keeps its place when the
+  pet updates, too).
 - **Notifications:** opt in per person. In settings (the gear on the status screen), tap "notify me" to get
   this pet's calls (each need has three phrasings, one a day: "Pip is hungry!" one day,
   "Pip's tummy is rumbling!" another), sickness, hatching, growing up, new or deeper traits, the season's
@@ -779,7 +827,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   sensor; for a pet from before 0.33, worked out from when its egg was laid). In
   its first year it tells you each month ("I'm 3 months old today!"), then once a
   year it has a party: confetti and a party hat, on every screen. At bond level 4
-  it asks you, once, when your birthday is (or "skip", which it remembers). Your
+  it asks you, once, when your birthday is (two steppers for the month and the day, or "skip", which it remembers). Your
   birthday is kept only for you: never on a sensor, an event or diagnostics. On the
   day, the first pet you look at says "happy birthday!!" with a little tune, and
   if you turn "birthday on my phone" on (in settings; off by default) and have
@@ -806,10 +854,16 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   the card changes: phone messages, Assist, the journal and the status screen keep
   their words, and a shared screen has no switch and no baby talk.
 - **A welcome for every new pet.** Adding a pet puts a note in the sidebar's
-  notifications: "Pip, a new virtual pet, just moved in! Say hi ♥". It also goes to
+  notifications: "Pip, a new virtual pet, just moved in! Its egg hatches in about half an hour.
+  Say hi ♥". It also goes to
   the phones of anyone who has "notify me" on for another pet in the house. A new
   generation laid as an egg isn't a new pet, and restarts never welcome again.
-- **Dashboard to open:** when you add a pet (or later, in its options under
+  The sidebar note also says where the pet shows: with no dashboard named anywhere it
+  asks you to add the pet shelf card to one; the first pet with a dashboard gets the link and
+  a line for when the card isn't there; a later pet on a dashboard the house already named
+  gets the link alone. Setup offers a later pet the first pet's dashboard to start with, and
+  on an empty card an admin gets "add a pet ›", which opens Home Assistant's add dialog.
+- **Dashboard with the pet shelf:** when you add a pet (or later, in its options under
   Notifications), pick the dashboard that tapping its notifications opens, the
   welcome included, or type a path like `/lovelace/pets`.
 - **Restarts never hurt it.** HA downtime freezes the pet: nothing decays,
@@ -861,7 +915,7 @@ on the card for a few seconds, like a TV title: "did you hear? …", "guess what
   `asleep`, `away` (only with privacy off; otherwise `asleep`), `egg` or `too_soon`.
 - **Where the headline goes.** On the `virtual_pet_news` event, and for a while on the
   pet's last-care sensor (its `moments`), so the card can say it. With "Keep house
-  words off sensors" on (Privacy), the sensor gets only that there was news, and the
+  words off sensors" on (People and privacy), the sensor gets only that there was news, and the
   open cards hear the headline live instead.
 
 For example, when a news sensor's latest headline changes:
@@ -943,7 +997,7 @@ and doorbells have their own settings (The house helps).
   the journal or diagnostics. A card opened later doesn't hear it.
 - **Custom words** are your automation's own. They're on the `virtual_pet_house_moment`
   event and for a while on the last-care sensor, unless "Keep house words off sensors"
-  is on (Privacy): then they're said live on the open cards only. Either way they're
+  is on (People and privacy): then they're said live on the open cards only. Either way they're
   never in our logs or diagnostics. Home Assistant itself keeps a service call's data
   in its own `call_service` event and in automation traces; those are out of our hands.
 
@@ -972,7 +1026,7 @@ no `title` or `artist`: for every change, read `media_title` from your media pla
 `virtual_pet_holiday` (with `holiday`: `halloween`, `thanksgiving`, `winter_lights` or `winter_treat`), `virtual_pet_weather` (with `change`),
 `virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_house_answered` (with `request`: `blanket` or `fan`; the heating or cooling came on for the pet), `virtual_pet_robot_out` and `virtual_pet_robot_home` (a robot vacuum started a run and went home; no vacuum is named), `virtual_pet_appliance_done` (with `kind`: `washer`, `dryer`, `dishwasher` or `machine`; no machine is named; there is no doorbell event: a press is never on the bus), `virtual_pet_house_moment` (with `category`, and for Custom `reaction` and its `text` unless the words are kept off sensors; never for oven, coffee, EV, delivery or timer, and never naming the entity), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
 `virtual_pet_favourite_snack` (with `food`),
-`virtual_pet_found` (with `id` and `world`, when the pet finds something; finds aren't shown on the card yet).
+`virtual_pet_found` (with `id` and `world`, when the pet finds something).
 
 No person's bond, nickname, favourite game, notifications or aimed wish is ever on an
 event or a sensor: each person's card gets its own over a private websocket
@@ -1031,7 +1085,7 @@ then make one automation from it for each thing.
 
 ## Testing with fast-forward
 
-Developer Tools → Actions → **Virtual Pet: Fast forward**, with `hours: 6`. The
+Developer Tools → Actions → **Hatch at Home: Fast forward**, with `hours: 6`. The
 pet lives those hours instantly at normal rates, with nobody caring for it, so
 unanswered calls become care misses. Tick "return response" to see the
 events. Admin only.
@@ -1076,12 +1130,17 @@ creates two pets if there are none. It then checks the shelf, status and journal
 screens, a full game, the reactions to moments, the egg's frames and the card editor,
 and saves screenshots to `dev/card-check/`.
 
+The card is built: `src/card/*.js` are joined into
+`custom_components/virtual_pet/frontend/hatch-pet-card.js`, which git does not track.
+The scripts above build it themselves; a copy of `custom_components/` from a branch or
+a clone has no card until you run `node scripts/build-card.js` (the release zip has it).
+
 `dev/config/configuration.yaml` has stand-in entities (fake weather, lux,
 indoor temperature, AQI, motion, presence and music) for the home-awareness
 phases.
 
 To release: bump the version in `const.py`, `manifest.json` and
-`frontend/hatch-pet-card.js` and push. Then on GitHub open Actions → Release →
+`src/card/prefs.js` (`VERSION`; `BOOT_VERSION` lives there too) and push. Then on GitHub open Actions → Release →
 Run workflow. It tags that commit with the manifest's version and publishes a
 GitHub release, which is what HACS offers as an update. (Pushing a tag like
 `v0.6.1` does the same.) The Validate workflow runs

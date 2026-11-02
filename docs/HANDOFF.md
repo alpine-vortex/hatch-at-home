@@ -564,7 +564,7 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   such tests their own `hass.config.config_dir`. `OptionsFlowWithReload` forbids update
   listeners. Use `async_get_device_by_identifier`, not the deprecated `async_get_device`.
 - **Release:** bump the version in `const.py`, `manifest.json` and
-  `frontend/hatch-pet-card.js` (the card URL's `?v=` busts the service-worker cache),
+  `src/card/prefs.js` (the card URL's `?v=` busts the service-worker cache),
   push, wait for Validate to go green, then run the Release workflow: the GitHub MCP
   tool `actions_run_trigger` with `release.yml` and ref = `main`.
   **Betas:** a version like `0.26.0b1` (or `rc1`) is published as a GitHub

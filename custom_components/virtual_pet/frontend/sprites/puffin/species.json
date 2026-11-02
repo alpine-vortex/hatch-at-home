@@ -77,6 +77,7 @@
     "won": "waddle",
     "scold": "bill_clack"
   },
+  "face": {"baby": [143, 153, 64], "child": [170, 110, 64], "teen": [160, 90, 72], "adult": [174, 97, 64]},
   "head": {
     "baby": [
       140,

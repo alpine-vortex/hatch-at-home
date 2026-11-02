@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+import hashlib
 import json
 import random
 from typing import Any
@@ -41,6 +42,8 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.virtual_pet import model, notify, people as P
 from custom_components.virtual_pet.const import DOMAIN
+
+from .test_config_flow import open_topic, save_topic, shown
 
 STORE_KEY = f"{DOMAIN}.test_pet"
 
@@ -375,9 +378,57 @@ async def test_card_is_loaded_on_every_dashboard(
     await setup(hass)
     manifest = Path(__file__).parents[1] / "custom_components/virtual_pet/manifest.json"
     assert json.loads(manifest.read_text())["version"] == VERSION
+    card = (
+        Path(__file__).parents[1]
+        / "custom_components/virtual_pet/frontend/hatch-pet-card.js"
+    )
+    digest = hashlib.sha256(card.read_bytes()).hexdigest()[:8]
     assert (
-        f"/virtual_pet/frontend/hatch-pet-card.js?v={VERSION}"
+        f"/virtual_pet/frontend/hatch-pet-card.js?v={VERSION}-{digest}"
         in hass.data[DATA_EXTRA_MODULE_URL].urls
+    )
+
+
+async def _card_url(hass: HomeAssistant) -> str:
+    from homeassistant.components.frontend import DATA_EXTRA_MODULE_URL
+
+    await setup(hass)
+    (url,) = [u for u in hass.data[DATA_EXTRA_MODULE_URL].urls if "hatch-pet-card" in u]
+    return url
+
+
+async def test_card_url_changes_with_the_card_file(
+    hass: HomeAssistant, now: float, tmp_path, monkeypatch
+) -> None:
+    import custom_components.virtual_pet as vp
+
+    card = tmp_path / "hatch-pet-card.js"
+    card.write_text("// one")
+    monkeypatch.setattr(vp, "CARD_PATH", card)
+    one = vp._card_hash()
+    card.write_text("// two")
+    assert one and vp._card_hash() and vp._card_hash() != one
+    card.write_text("// one")
+    assert vp._card_hash() == one
+    assert await _card_url(hass) == (
+        f"/virtual_pet/frontend/hatch-pet-card.js?v={vp.VERSION}-{one}"
+    )
+
+
+async def test_card_url_falls_back_to_version_without_the_file(
+    hass: HomeAssistant, now: float, tmp_path, monkeypatch, caplog
+) -> None:
+    import custom_components.virtual_pet as vp
+
+    monkeypatch.setattr(vp, "CARD_PATH", tmp_path / "missing.js")
+    assert (
+        await _card_url(hass)
+        == f"/virtual_pet/frontend/hatch-pet-card.js?v={vp.VERSION}"
+    )
+    # An unbuilt copy (a git clone) says how to build the card.
+    assert any(
+        r.levelname == "ERROR" and "scripts/build-card.js" in r.getMessage()
+        for r in caplog.records
     )
 
 
@@ -412,25 +463,20 @@ async def test_options_flow_saves_a_flat_mapping(
 ) -> None:
     config = await setup_with_house(hass)
     result = await hass.config_entries.options.async_init(config.entry_id)
-    assert result["type"] is FlowResultType.FORM
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "sleep": {
-                "bedtime": "22:30:00",
-                "wake_time": "06:45:00",
-                "bedtime_lights": ["light.bed"],
-            },
-            "weather": {"weather": "weather.home"},
-            "room": {},
-            "activity": {"zone": "zone.home", "tv": ["media_player.tv"]},
-            "sky": {},
-            "privacy": {"privacy": True},
-            "house": {},
-            "notifications": {},
+    assert result["type"] is FlowResultType.MENU
+    for topic, entered in {
+        "bedtime": {
+            "bedtime": "22:30:00",
+            "wake_time": "06:45:00",
+            "bedtime_lights": ["light.bed"],
         },
-    )
-    assert result["type"] is FlowResultType.CREATE_ENTRY
+        "weather": {"weather": "weather.home"},
+        "people": {"zone": "zone.home"},
+        "room": {"tv": ["media_player.tv"]},
+    }.items():
+        result = await save_topic(hass, config.entry_id, topic, entered)
+        assert result["type"] is FlowResultType.CREATE_ENTRY
+    # Only the topics that were opened and saved wrote their defaults.
     assert config.options == {
         "bedtime": "22:30:00",
         "wake_time": "06:45:00",
@@ -444,9 +490,6 @@ async def test_options_flow_saves_a_flat_mapping(
         "comfort_high": 26.5,
         "away_after": 2.0,
         "sitter_settles": True,
-        "notice_robot": True,
-        "notice_doorbell": True,
-        "appliance_watts": 5.0,
     }
 
 
@@ -715,36 +758,20 @@ async def test_options_show_fahrenheit_and_store_celsius(
 
     hass.config.units = US_CUSTOMARY_SYSTEM
     config = await setup_with_house(hass)
-    result = await hass.config_entries.options.async_init(config.entry_id)
-    weather = result["data_schema"].schema["weather"].schema.schema
-    defaults = {
-        str(k): k.default()
-        for k in weather
-        if hasattr(k, "default") and callable(k.default)
-    }
-    assert defaults["comfort_low"] == 64.5  # 18 °C, to the nearest half degree
-    sections = {
-        "sleep": {"bedtime": "23:00:00", "wake_time": "07:00:00"},
-        "weather": {"comfort_low": 80, "comfort_high": 70},
-        "room": {},
-        "activity": {"zone": "zone.home", "away_after": 2},
-        "sky": {},
-        "privacy": {"privacy": True},
-        "house": {},
-        "notifications": {},
-    }
+    form = await open_topic(hass, config.entry_id, "weather")
+    assert shown(form)["comfort_low"] == 64.5  # 18 °C, to the nearest half degree
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], sections
+        form["flow_id"], {"comfort_low": 80, "comfort_high": 70}
     )
-    assert result["errors"] == {"weather": "comfort_range"}
+    await hass.async_block_till_done()  # the save's reload
+    assert result["errors"] == {"comfort_low": "comfort_range"}
     # The form comes back with what was entered (in °F), not the saved options.
-    weather = result["data_schema"].schema["weather"].schema.schema
-    shown = {str(k): k.default() for k in weather if callable(getattr(k, "default", 0))}
-    assert shown["comfort_low"] == 80 and shown["comfort_high"] == 70
-    sections["weather"] = {"comfort_low": 64, "comfort_high": 80}
+    again = shown(result)
+    assert again["comfort_low"] == 80 and again["comfort_high"] == 70
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], sections
+        result["flow_id"], {"comfort_low": 64, "comfort_high": 80}
     )
+    await hass.async_block_till_done()  # the save's reload
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert config.options["comfort_low"] == pytest.approx(17.78, abs=0.01)
     assert config.options["comfort_high"] == pytest.approx(26.67, abs=0.01)
@@ -933,29 +960,24 @@ async def test_options_reject_impossible_settings(
         {"device_class": "temperature", "unit_of_measurement": "°C"},
     )
     config = await setup_with_house(hass)
-    result = await hass.config_entries.options.async_init(config.entry_id)
-    sections = {
-        "sleep": {"bedtime": "23:00:00", "wake_time": "23:00:00"},
-        "weather": {},
-        "room": {"fireplace": "sensor.fire_temp"},
-        "activity": {"zone": "zone.home"},
-        "sky": {},
-        "privacy": {"privacy": True},
-        "house": {},
-        "notifications": {},
-    }
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"], sections
+    result = await save_topic(
+        hass,
+        config.entry_id,
+        "bedtime",
+        {"bedtime": "23:00:00", "wake_time": "23:00:00"},
     )
-    assert result["errors"] == {
-        "sleep": "same_times",
-        "room": "fireplace_temperature",
-    }
-    sections["sleep"]["wake_time"] = "07:00:00"
-    sections["room"] = {}
+    assert result["errors"] == {"wake_time": "same_times"}
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], sections
+        result["flow_id"], {"bedtime": "23:00:00", "wake_time": "07:00:00"}
     )
+    await hass.async_block_till_done()  # the save's reload
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    result = await save_topic(
+        hass, config.entry_id, "room", {"fireplace": "sensor.fire_temp"}
+    )
+    assert result["errors"] == {"fireplace": "fireplace_temperature"}
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    await hass.async_block_till_done()  # the save's reload
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 
@@ -994,6 +1016,7 @@ async def test_busy_attributes_stay_out_of_history(
         "shell_finish_options",
         "shell_locked",
         "senses",
+        "egg_roster",
     ):
         assert key in attrs
         assert key in LifeStageSensor._unrecorded_attributes, key
@@ -1174,7 +1197,8 @@ async def test_a_parked_berry_dig_carries_on_across_a_restart(
     coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
     started = await game(hass, game="dig")
     assert (started["round"], started["basket"], started["leaves"]) == (0, 0, 8)
-    assert await game(hass, game="dig", guess="keep") == {"result": "empty_basket"}
+    refused = await game(hass, game="dig", guess="keep")
+    assert refused["result"] == "empty_basket" and refused["basket"] == 0
     # Dig until something is shown, then ✕.
     tap = await game(hass, game="dig", guess="dig")
     shown = (tap["round"], tap["wins"], tap["basket"])
@@ -1496,6 +1520,7 @@ async def test_repairs_warn_about_entities_that_are_gone(
     assert issue.translation_placeholders == {
         "pet": "Pip",
         "entities": "media_player.gone",
+        "topics": '"The pet\'s room"',
     }
     # Fixing the options clears it (the entry reloads).
     hass.config_entries.async_update_entry(config, options={"weather": "weather.home"})
@@ -1541,6 +1566,44 @@ async def test_reconfigure_renames_and_moves_an_egg_now(
     assert config.data["world"] == "tidepool" and "next_world" not in config.data
     # Entity IDs stay; the pet answers to its new name.
     assert hass.states.get("sensor.pip_life_stage").attributes["world"] == "tidepool"
+
+
+async def test_reconfigure_labels_follow_the_pet_stage(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    """An egg moves now (reconfigure); a hatched pet and an unloaded entry wait
+    for the next egg (reconfigure_hatched), and the form says so."""
+    config = await setup(hass)  # a fresh egg
+    egg = await config.start_reconfigure_flow(hass)
+    assert egg["step_id"] == "reconfigure"
+    # Unloaded, it may have hatched: its move waits, so the label matches.
+    assert await hass.config_entries.async_unload(config.entry_id)
+    unloaded = await config.start_reconfigure_flow(hass)
+    assert unloaded["step_id"] == "reconfigure_hatched"
+    result = await hass.config_entries.flow.async_configure(
+        unloaded["flow_id"], {"name": "Pip", "world": "pond"}
+    )
+    await hass.async_block_till_done()
+    assert result["reason"] == "reconfigure_successful"
+    assert config.data["next_world"] == "pond"
+
+
+async def test_reconfigure_labels_a_hatched_pet_for_the_next_egg(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    age = 14 * 24 + 7 * 24 + 1.0
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, age_hours=age, born=now - age * 3600, species="bird", raised=["bird"]
+    )
+    config = await setup(hass)
+    result = await config.start_reconfigure_flow(hass)
+    assert result["step_id"] == "reconfigure_hatched"
+    assert result["description_placeholders"] == {"name": "Pip"}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Pip", "world": "pond"}
+    )
+    await hass.async_block_till_done()
+    assert config.data["world"] == "woodland" and config.data["next_world"] == "pond"
 
 
 async def test_reconfigure_moves_a_hatched_pet_with_its_next_egg(
@@ -1715,6 +1778,36 @@ async def test_a_world_change_drops_a_choice_from_the_old_world(
     )
     await hass.async_block_till_done()
     assert hass.states.get("select.pip_next_egg").state == "Surprise me"
+
+
+async def test_egg_roster_names_match_the_selects_options(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    # The card's lay sheet names its offer from egg_roster and sends the name
+    # back to the select, so the names are the select's options minus the
+    # surprise, in order, with and without a move waiting.
+    age = 14 * 24 + 7 * 24 + 1.0
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, age_hours=age, born=now - age * 3600, species="bird", raised=["bird"]
+    )
+    config = await setup(hass)
+
+    def roster() -> list[dict[str, str]]:
+        return hass.states.get("sensor.pip_life_stage").attributes["egg_roster"]
+
+    options = hass.states.get("select.pip_next_egg").attributes["options"]
+    assert [r["name"] for r in roster()] == options[1:]
+    assert [r["id"] for r in roster()][:2] == ["bird", "squirrel"]
+    assert all(set(r) == {"id", "name"} for r in roster())
+    result = await config.start_reconfigure_flow(hass)
+    await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Pip", "world": "pond"}
+    )
+    await hass.async_block_till_done()
+    options = hass.states.get("select.pip_next_egg").attributes["options"]
+    assert options[1] == "Pacific tree frog"
+    assert [r["name"] for r in roster()] == options[1:]
+    assert hass.states.get("sensor.pip_life_stage").attributes["next_world"] == "Pond"
 
 
 async def test_next_egg_rejects_a_creature_it_cannot_hatch(
@@ -3999,9 +4092,12 @@ async def test_senses_are_kinds_never_entities(
         "hall_motion",
         "motion",
         "zone",
-        "bedtime",
     ):
         assert value not in text, value
+    # Bedtime is the pet's own `sleep_times` target (owner-approved, settings Q-G),
+    # never a sense: the kinds list never names it.
+    assert "bedtime" not in json.dumps(attrs["senses"])
+    assert attrs["sleep_times"] == {"bedtime": "21:30", "wake": "07:00"}
     # Nothing mapped: only the moon, which every pet reads from the date.
     hass.config_entries.async_update_entry(config, options={})
     await hass.config_entries.async_reload(config.entry_id)
@@ -4098,6 +4194,65 @@ async def test_social_meter_links_and_a_greeted_visitor(
     assert diag["pet"]["social"] == "**REDACTED**"
 
 
+async def test_greeted_credits_the_visitor_the_card_played_inside_its_window(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """UX8 F4: the card's virtual_pet/greeted counts the day's greeted visitor on any
+    screen (no `visit` call, no person), once, and only inside the visit's window; an
+    unknown entity is refused; the hourly `visit` credit still stands."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    pet = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    today = pet._today(now)[0]
+
+    def visit(start: float, end: float) -> None:
+        pet.state.visit = {
+            "day": today,
+            "world": pet.world,
+            "id": "hedgehog",
+            "hours": "day",
+            "from": start,
+            "until": end,
+            "credited": False,
+        }
+
+    def greeted() -> bool:
+        return bool(pet.state.social.get(today, {}).get("visitor"))
+
+    client = await hass_ws_client(hass)
+
+    async def send(entity_id: str = "sensor.pip_mood") -> dict[str, Any]:
+        await client.send_json_auto_id(
+            {"type": "virtual_pet/greeted", "entity_id": entity_id}
+        )
+        reply = await client.receive_json()
+        await hass.async_block_till_done()
+        return reply
+
+    # Outside the window (later today, or already over): nothing.
+    visit(now + 3600, now + 7200)
+    assert (await send())["success"]
+    assert not greeted()
+    visit(now - 7200, now - 3600)
+    assert (await send())["success"]
+    assert not greeted()
+    # Inside it: the day counts a greeted visitor, once.
+    visit(now - 600, now + 3600)
+    assert (await send())["success"]
+    assert greeted()
+    assert (await send())["success"]
+    assert hass.states.get("sensor.pip_life_stage").attributes["social_level"] == (
+        model.R.SOCIAL_VISITOR_SOLO
+    )
+    # Asleep: the visitor isn't greeted.
+    pet.state.social.clear()
+    pet.state.asleep = True
+    assert (await send())["success"]
+    assert not greeted()
+    # Not a pet's entity: refused.
+    assert not (await send("sensor.nobody"))["success"]
+
+
 async def test_a_visitor_dream_names_its_visitor_and_no_other_dream_grows(
     hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
 ) -> None:
@@ -4178,12 +4333,14 @@ async def _load(hass: HomeAssistant, config: MockConfigEntry) -> MockConfigEntry
     return config
 
 
-async def _new_pet_options(hass: HomeAssistant) -> dict[str, Any]:
+async def _new_pet_options(
+    hass: HomeAssistant, name: str = "Juniper"
+) -> dict[str, Any]:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_NAME: "Juniper", "world": "woodland"}
+        result["flow_id"], {CONF_NAME: name, "world": "woodland"}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     return dict(result["options"])
@@ -4202,7 +4359,7 @@ async def test_a_new_pet_uses_a_yaml_weather_without_a_registry_entry(
     hass.states.async_set("weather.yaml_one", "sunny")
     assert (await _new_pet_options(hass))["weather"] == "weather.yaml_one"
     hass.states.async_set("weather.yaml_two", "rainy")
-    assert "weather" not in await _new_pet_options(hass)  # two: not clear
+    assert "weather" not in await _new_pet_options(hass, "Fern")  # two: not clear
 
 
 async def test_a_new_pet_with_no_weather_has_none(hass: HomeAssistant) -> None:
@@ -4347,3 +4504,25 @@ async def test_migration_never_lowers_a_newer_minor_and_still_loads(
 async def test_a_newer_major_version_is_not_migrated(hass: HomeAssistant) -> None:
     config = await _load(hass, _old_pet(version=2))
     assert config.state is ConfigEntryState.MIGRATION_ERROR
+
+
+async def test_the_forecast_guard_reads_the_watchers_weather_not_the_entrys(
+    hass: HomeAssistant, hass_storage: dict[str, Any], now: float
+) -> None:
+    """A save lands in entry.options before the reload: the coordinator must go
+    by the weather ids its watcher has, so no IndexError when options gained one."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    calls = forecast_service(hass, [])
+    config = await setup_with_house(hass)  # no weather mapped
+    pet = config.runtime_data
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert pet._home_started and not calls
+    hass.config_entries.async_update_entry(config, options={"weather": "weather.new"})
+    pet._want_forecast(now + 99 * 3600)  # the entry has weather, the watcher none
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert not calls
+    # And the other way round: the watcher's weather still counts.
+    pet.watcher.options = {"weather": "weather.home"}
+    pet._want_forecast(now + 99 * 3600)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(calls) == 1

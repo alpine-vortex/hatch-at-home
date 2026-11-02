@@ -2001,7 +2001,13 @@ def lay_egg(
 def action_available(
     state: PetState, action: str, now: float = 0.0, settings: Settings | None = None
 ) -> bool:
-    """Whether the button for an action should be available."""
+    """Whether the button for an action should be available.
+
+    An egg can't be cared for (a press would do nothing), so the care buttons
+    fade on its device page, as the card already greys them.
+    """
+    if action in ACTIONS and life_stage(state) == "egg":
+        return False
     if action == "medicine":
         return state.sick
     if action in REQUEST_ACTIONS:
@@ -2422,7 +2428,8 @@ def play_game(
     first. dig: one tap of a Berry dig (dig a leaf, or keep the basket); a
     berry doesn't finish a round, so "round" in the reply is rounds finished.
     start_game starts it, and keep on an empty basket is refused
-    (empty_basket) with nothing changed. The caller advances the pet to now
+    (empty_basket) with nothing changed. A dig's reply says whether it is
+    the caller's own (yours). The caller advances the pet to now
     first. Returns what the card needs to draw the round, and events.
     """
     if guess not in GAMES.get(kind, ()):
@@ -2436,7 +2443,13 @@ def play_game(
         and kind == "dig"
         and game.basket == 0
     ):
-        return {"result": "empty_basket"}, events  # nothing to keep; nothing changes
+        # Nothing to keep; nothing changes. The reply says where the dig stands and
+        # whether it is this caller's own, so a second screen of theirs can adopt it.
+        return {
+            **_round_info(game),
+            "result": "empty_basket",
+            "yours": game.player == player,
+        }, events
     refusal = _refuse_play(state)
     if refusal is None or (
         refusal == "too_tired" and game is not None and game.kind == kind
@@ -2464,7 +2477,9 @@ def play_game(
     game.last_at = now
     if kind == "dig":
         extra = _dig(game, guess, rng)
-        info = {**_round_info(game), **extra}
+        # yours: the dig is this caller's own (a bool, never an id), so their other
+        # screen, out of step with it, can adopt the round instead of ending.
+        info = {**_round_info(game), **extra, "yours": game.player == player}
     else:
         info = _guess_round(game, guess, rng)
     if not info["done"]:

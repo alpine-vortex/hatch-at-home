@@ -1,5 +1,5 @@
 blueprint:
-  name: Virtual pet house moment
+  name: "Hatch at Home: house moment"
   description: >-
     Pick an entity and say what it is, and the pet notices it: a line of its
     own, a little reaction, and a house effect where there is one (warm air,

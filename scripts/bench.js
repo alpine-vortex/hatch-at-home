@@ -8,6 +8,8 @@
 const fs = require("fs");
 const path = require("path");
 const { startServer } = require("../dev/bench/server");
+// The card is built from src/card/ (gitignored); rebuild if the parts changed.
+require("./build-card.js").ensureBuilt();
 
 const ROOT = path.join(__dirname, "..");
 const FRONTEND = path.join(ROOT, "custom_components", "virtual_pet", "frontend");
@@ -104,7 +106,7 @@ const PRESETS = {
     out.push({ name: "ui/woodland-praise-starry", group: "ui", label: "praise, starry", ...starry, say: "I'll take a bow for that ★" });
     // Fresh-expand E4: a dream morning's wake line, and a clean's extra bubble mid-pop.
     out.push({ name: "ui/woodland-wake-dream", group: "ui", label: "wake, a dream day", world: "woodland", view: "card",
-      say: "*yawn* I had the best dream" });
+      say: "*yawn* i had the best dream" });
     out.push({ name: "ui/woodland-bubble-pop", group: "ui", label: "clean, a bubble pops", world: "woodland", view: "card",
       bubblePop: true });
     return out;
@@ -342,6 +344,57 @@ const PRESETS = {
     }
     return out;
   },
+  // The lay sheet (settings S2): the offer in two worlds at both card widths, big text at
+  // 330, a pick made in HA outside the offer, and a waiting world change (the offer is the
+  // new world's, raised by a second pet there).
+  lay() {
+    const out = [];
+    const lead = (world, pet = {}) => ({ world, stage: "adult", view: "lay", pet: { lay: true, raised: "world", ...pet } });
+    for (const world of ["woodland", "tidepool"]) {
+      for (const width of [420, 330]) {
+        out.push({ name: `lay/${width}/${world}`, group: `lay-${width}`, label: world, width, ...lead(world) });
+      }
+      out.push({ name: `lay/330/${world}-big`, group: "lay-330", label: `${world}, big text`, width: 330, bigText: true,
+        ...lead(world) });
+    }
+    out.push({ name: "lay/330/picked", group: "lay-330", label: "one picked", width: 330, scroll: '.layrow[aria-pressed="true"]', ...lead("woodland", { next_egg: "Black-tailed deer" }) });
+    out.push({ name: "lay/330/outside", group: "lay-330", label: "set in HA, not offered", width: 330, scroll: ".layrow.ro",
+      ...lead("woodland", { next_egg: "Banana slug", raised: ["bird", "squirrel", "deer"] }) });
+    out.push({ name: "lay/330/next-world", group: "lay-330", label: "next world: tidepool", width: 330,
+      ...lead("woodland", { lay: { egg_world: "tidepool" }, next_world: "Tidepool" }),
+      pets: [{}, { world: "tidepool", stage: "adult", raised: "world" }] });
+    return out;
+  },
+  // The name sheet (settings S3), opened as a lay that hatched a new egg opens it: an empty
+  // field and a 20-character name at 300/330/420, every error line, a baby, night, dim, big text,
+  // and the status page's "name" row (egg and baby).
+  name() {
+    const out = [];
+    const long = "Wwwwwwwwwwwwwwwwwwww"; // 20
+    const base = { world: "woodland", view: "name", pet: { stage: "egg", generation: 2, hatch_minutes: 1400 } };
+    for (const width of [420, 330, 300]) {
+      out.push({ name: `name/${width}/name`, group: `name-${width}`, label: "Pip", width, ...base, pet: { ...base.pet, name: "Pip" } });
+      out.push({ name: `name/${width}/empty`, group: `name-${width}`, label: "empty", width, ...base, nameText: "", rename: "bad_name" });
+      out.push({ name: `name/${width}/long`, group: `name-${width}`, label: "20 characters", width, ...base,
+        pet: { ...base.pet, name: long } });
+    }
+    for (const [code, label] of [["taken", "taken"], ["not_now", "not now"], ["read_only", "read only"], ["unknown", "anything else"]]) {
+      out.push({ name: `name/330/error-${code}`, group: "name-330", label, width: 330, ...base, nameText: "Moss", rename: code });
+    }
+    out.push({ name: "name/330/baby", group: "name-330", label: "baby", width: 330, ...base, pet: { stage: "baby", generation: 2, name: "Moss" } });
+    out.push({ name: "name/330/night", group: "name-330", label: "night", width: 330, ...base, scene: "night", pet: { ...base.pet, name: "Pip" } });
+    out.push({ name: "name/330/dim", group: "name-330", label: "dim (lights out)", width: 330, ...base, scene: "dim", pet: { ...base.pet, name: "Pip" } });
+    out.push({ name: "name/330/big", group: "name-330", label: "big text", width: 330, ...base, bigText: true, pet: { ...base.pet, name: long } });
+    out.push({ name: "name/330/big-error", group: "name-330", label: "big text, error", width: 330, ...base, bigText: true, nameText: "", rename: "bad_name" });
+    out.push({ name: "name/330/mono", group: "name-330", label: "mono", width: 330, ...base, mono: true });
+    for (const width of [420, 330, 300]) {
+      out.push({ name: `name/${width}/row-egg`, group: `namerow-${width}`, label: "egg: name row", width, world: "woodland", view: "status",
+        pet: { stage: "egg", generation: 2, name: long, hatch_minutes: 1400 } });
+      out.push({ name: `name/${width}/row-baby`, group: `namerow-${width}`, label: "baby: name row", width, world: "woodland", view: "status",
+        pet: { stage: "baby", generation: 2, name: "Moss" } });
+    }
+    return out;
+  },
   // The settings sheet (the status screen's gear) with the viewer's own rows, at
   // both card widths, day and night.
   settings() {
@@ -455,6 +508,25 @@ const PRESETS = {
     });
     return out;
   },
+  // The S7 rows of the sheet at 330 (and big text at 300): the sub-headings (sound, look), the
+  // bedtime row in 12 h and 24 h, and N24 at the foot (an admin), day, night, mono and big text.
+  "settings-s7"() {
+    const out = [];
+    const base = { world: "woodland", width: 330, view: "settings", mine: true };
+    const parts = [["top", {}], ["bedtime", { scroll: ".sleeprow" }], ["end", { scrollEnd: true }]];
+    for (const [label, extra] of [["day", {}], ["night", { scene: "night" }], ["mono", { mono: true }], ["big", { bigText: true }]]) {
+      for (const [part, scroll] of parts) {
+        out.push({ ...base, ...extra, ...scroll, name: `settings-s7/330-${label}-${part}`, group: `settings-s7-${label}`, label: `${label} ${part}` });
+      }
+    }
+    out.push({ ...base, timeFormat: "12", scroll: ".sleeprow", name: "settings-s7/330-12h", group: "settings-s7-time", label: "12 h" });
+    out.push({ ...base, timeFormat: "24", scroll: ".sleeprow", name: "settings-s7/330-24h", group: "settings-s7-time", label: "24 h" });
+    for (const [part, scroll] of parts) {
+      out.push({ ...base, width: 300, bigText: true, timeFormat: "12", ...scroll, name: `settings-s7/300-big-${part}`, group: "settings-s7-300", label: `300 big ${part}` });
+    }
+    out.push({ ...base, admin: false, scroll: ".sleeprow", name: "settings-s7/330-nonadmin", group: "settings-s7-time", label: "not an admin" });
+    return out;
+  },
   // The same sheet on a shared screen: nothing personal, only this screen's rows.
   "settings-shared"() {
     const out = [];
@@ -468,7 +540,7 @@ const PRESETS = {
   },
 };
 
-// Presets of what the card's FINDS_SHOWN switch hides (off until V-F): run with it on.
+// Presets of what the card's FINDS_SHOWN switch gates: run with it on, whatever the default.
 const FINDS_PRESETS = new Set(["finds", "gifts", "collection"]);
 
 // --- Shots -----------------------------------------------------------------
@@ -512,7 +584,7 @@ function parseArgs(argv) {
     else if (key === "big-text") opts.shot.bigText = true; // the "big text" switch on (top10 4b)
     else if (key === "boot") opts.shot.booted = false;
     else if (key === "mine") opts.shot.mine = true;
-    else if (key === "finds-shown") opts.shot.findsShown = true; // FINDS_SHOWN on (off until V-F)
+    else if (key === "finds-shown") opts.shot.findsShown = true; // FINDS_SHOWN on
     else if (key === "gift") { const [world, id] = val().split("/"); opts.shot.gift = { id, world }; } // --gift woodland/pinecone
     else if (key === "journal") Object.assign(opts.shot, { journal: true, view: "journal" });
     else if (key === "collection") Object.assign(opts.shot, { collection: true, view: "collection" });
@@ -526,7 +598,7 @@ function loadShots(opts) {
   let shots;
   if (opts.preset) {
     if (!PRESETS[opts.preset]) throw new Error(`no preset "${opts.preset}" (${Object.keys(PRESETS).join(", ")})`);
-    // The finds, gifts and collection presets show what FINDS_SHOWN hides, so turn it on.
+    // The finds, gifts and collection presets show what FINDS_SHOWN gates, so turn it on.
     const finds = FINDS_PRESETS.has(opts.preset) ? { findsShown: true } : {};
     shots = PRESETS[opts.preset]().map((s) => ({ ...finds, ...opts.shot, ...s, shell: { ...opts.shot.shell, ...s.shell } }));
     shots.forEach((s) => { s.name = `${opts.preset}/${s.name.split("/").slice(1).join("/")}`; });
@@ -570,6 +642,7 @@ async function runShots(browser, base, shots, outDir, workers) {
         const motion = shot.motion === "reduce" ? "reduce" : "no-preference";
         if (page.motion !== motion && (page.motion || motion === "reduce")) await page.emulateMedia({ reducedMotion: motion });
         page.motion = motion;
+        await page.emulateMedia({ colorScheme: shot.os || null }); // `os`: the OS's colour scheme (dark / light)
         // `missing`: sprite file names (e.g. "adult_eat_1") the server answers 404, for a load-fail shot.
         const miss = (shot.missing || []).map((n) => `${n}.png`);
         // `acts`: the new poses' PNGs are not drawn yet; a shot that fakes them is served the species'

@@ -7,7 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-const src = fs.readFileSync(path.join(__dirname, "..", "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+const src = require("./card-source");
 const fn = src.match(/\nfunction visitorDay\([\s\S]*?\n\}\n/)[0];
 const table = src.match(/\nconst VISITOR_PLAY = (\{[\s\S]*?\n\});/)[1];
 const listFn = src.match(/\nconst visitorList = [\s\S]*?;\n/)[0];

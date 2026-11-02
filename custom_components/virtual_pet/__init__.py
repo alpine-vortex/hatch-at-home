@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from pathlib import Path
 
+from homeassistant.auth.permissions.const import POLICY_CONTROL
 from homeassistant.components import persistent_notification, websocket_api
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
@@ -67,7 +69,13 @@ from .const import (
     STORE_VERSION,
     VERSION,
 )
-from .coordinator import PetConfigEntry, PetCoordinator, PetStore
+from .coordinator import (
+    PetConfigEntry,
+    PetCoordinator,
+    PetStore,
+    RenameError,
+    async_rename,
+)
 from .defaults import default_weather
 from .home import news_text
 from .model import GAMES
@@ -171,6 +179,27 @@ FAST_FORWARD_SCHEMA = vol.Schema(
 )
 
 
+CARD_PATH = Path(__file__).parent / "frontend" / CARD_FILENAME
+
+
+def _card_hash() -> str | None:
+    """First 8 hex of the card file's sha256, or None if it can't be read."""
+    try:
+        return hashlib.sha256(CARD_PATH.read_bytes()).hexdigest()[:8]
+    except FileNotFoundError:
+        # The card is built from src/card/ and gitignored: a copy of
+        # custom_components/ from a branch or a git clone has none.
+        _LOGGER.error(
+            "The card file %s is missing: run `node scripts/build-card.js` in "
+            "the repo, or install the release zip through HACS",
+            CARD_PATH,
+        )
+        return None
+    except OSError as err:
+        _LOGGER.debug("card hash unavailable, using plain version: %s", err)
+        return None
+
+
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Serve the card, load it on every dashboard, register the debug service."""
     # Long cache headers: every URL the card asks for carries ?v=VERSION, so an
@@ -178,8 +207,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(FRONTEND_URL, str(Path(__file__).parent / "frontend"), True)]
     )
-    # The version in the URL makes browsers fetch the new card after an update.
-    add_extra_js_url(hass, f"{FRONTEND_URL}/{CARD_FILENAME}?v={VERSION}")
+    # The card's URL carries the version and a hash of the card file, so
+    # browsers fetch a changed card even when VERSION was not bumped (dev, a
+    # forgotten bump). The hash is taken once, here: a dev edit to the card
+    # needs an HA restart to show up, as before.
+    card_hash = await hass.async_add_executor_job(_card_hash)
+    version = f"{VERSION}-{card_hash}" if card_hash else VERSION
+    add_extra_js_url(hass, f"{FRONTEND_URL}/{CARD_FILENAME}?v={version}")
     # What the pets know about each person, shared; the loaded pets; and the
     # re-call notification each person gets for all of them.
     people = People(hass)
@@ -202,8 +236,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_subscribe)
     websocket_api.async_register_command(hass, websocket_notify_me)
     websocket_api.async_register_command(hass, websocket_linked)
+    websocket_api.async_register_command(hass, websocket_greeted)
     websocket_api.async_register_command(hass, websocket_my_day)
     websocket_api.async_register_command(hass, websocket_set_shell)
+    websocket_api.async_register_command(hass, websocket_rename)
     websocket_api.async_register_command(hass, websocket_collect)
     websocket_api.async_register_command(hass, websocket_collection)
 
@@ -701,6 +737,31 @@ def websocket_linked(
 
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): f"{DOMAIN}/greeted",
+        vol.Required("entity_id"): cv.entity_id,
+    }
+)
+@callback
+def websocket_greeted(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The card played the day's visitor to someone, on any screen (a shared
+    one too, which the hourly `visit` call never credits): the pet counts a
+    greeted visitor for the social meter, once a day and only while the visit
+    is on. It carries nobody's name, and nothing about who was looking is kept."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    pet.social_greet()
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): f"{DOMAIN}/my_day",
         vol.Required("entity_id"): cv.entity_id,
         vol.Required("enabled"): bool,
@@ -751,6 +812,39 @@ async def websocket_set_shell(
         connection.send_error(msg["id"], "shell_locked", "Not grown into that yet")
         return
     connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/rename",
+        vol.Required("entity_id"): cv.entity_id,
+        # Any value passes the schema (a schema failure is logged with it); the
+        # handler takes only a clean string of 1-20 characters (bad_name).
+        vol.Required("name"): object,
+    }
+)
+@websocket_api.async_response
+async def websocket_rename(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Name the new generation, in its first day (egg or baby), for any login that
+    may control the pet. A websocket command is not covered by the service layer's
+    permission check, so this one asks for POLICY_CONTROL itself. Like set_shell,
+    who renamed isn't recorded. A not_ready answer is retryable: the entry is
+    reloading (a lay that moved the world)."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    if entity is None or entity.platform != DOMAIN or not entity.config_entry_id:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    if not connection.user.permissions.check_entity(msg["entity_id"], POLICY_CONTROL):
+        connection.send_error(msg["id"], "read_only", "This login can't name the pet")
+        return
+    try:
+        name = await async_rename(hass, entity.config_entry_id, msg["name"])
+    except RenameError as err:
+        connection.send_error(msg["id"], err.code, "The pet was not renamed")
+        return
+    connection.send_result(msg["id"], {"name": name})
 
 
 @websocket_api.websocket_command(

@@ -395,3 +395,15 @@ Splash pose (`acts.splash`), Luna (gpt-5.6-luna), probe kitten teen / ball pytho
 - Pond (axolotl, beaver, duckling, pondturtle, treefrog): splash baby/teen/adult, all facing right.
 - Tidepool (hermitcrab, octopus, otter, puffin, seal): splash baby/teen/adult, all facing right.
 - Night Sky (bat, firefly, lunamoth, opossum, owl): splash baby/teen/adult, all facing right.
+
+## Finds (V-F, 2026-11-01)
+
+Final art for the visitors-v2 finds (docs/plan-2026-11-01-visitors-v2.md §9): 64 x 64, 16 world cells at 4 px, centred, the silhouette ring snapped to the 128 outline (34, 20, 10). One Luna (gpt-5.6-luna) sheet per world, 5 x 2, style from the world's finished visitors and one 128 sprite; each find given a distinct outline shape (the collection shows unmet finds as silhouettes). Drawn at ~13 art px on a ~18 px pitch and read back 1:1; drawn finer, the cut had to shrink and the insides went to mush.
+
+- Baskets: hand-placed in `art/finds/make_baskets.py` (12 cells is below where the model holds a shape); one wicker body shared by basket_1/2/3, only the peeking things change.
+- Tidepool: green sea glass a chip, blue a round, red a shard (owner 2026-11-01); the pearl in a grey oyster (the cutter fills inside the outline so grey insides are kept).
+- Woodland: the acorn and the wild strawberry share a round-with-a-stem outline; their colours and the cap/leaf tops tell them apart.
+- Terrarium: the pressed fern and the seed pod are both leaf-shaped; the fern keeps its stem and jagged edge.
+- Hearth: the button and the cookie are both round; the cookie's edge is lumpy and bitten.
+- Pond: the cattail keeps its loose white fluff specks (the cutter keeps every part in a cell and leaves 1-3 px specks unoutlined); the frogbit's notch closes at 16 cells, so it reads by size and green against the gold koi scale.
+- Night Sky: redrawn once (the paper star now hangs on a thread so its silhouette differs from the gold fallen star; the constellation card's stars made bigger).

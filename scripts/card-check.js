@@ -24,6 +24,8 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
+// Every read of the card below (and the page HA serves) is the join of src/card/.
+require("./build-card.js").ensureBuilt();
 
 // 127.0.0.1, not localhost: HA registers a service worker on localhost, and page.route
 // never sees what it serves (the sprite and old-card stand-ins would not apply).
@@ -362,7 +364,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await shot("02d-shell-picker");
 
   // 4c-rest: every control in the status, the settings sheet and the picker is a real 44x44
-  // target at 330 and 420 (.pat is hidden while the status is open), plus the slide dots and
+  // target at 300, 330 and 420 (300: the meters need not fit unscrolled, as the box is shorter) (.pat is hidden while the status is open), plus the slide dots and
   // the answer buttons, no two overlap, the status shows its wish and meters without
   // scrolling, and the tab order is the page order with no positive tabindex.
   const measure = (view) => card.evaluate((el, view) => {
@@ -381,17 +383,34 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     }
     const seen = view === "status" ? [...s.status.querySelectorAll(".row")]
       .filter((r) => /^(would like|wish|hunger|happy|energy)/.test(r.children[1]?.textContent || ""))
-      .map((r) => ({ k: r.children[1].textContent, ok: r.getBoundingClientRect().bottom <= sr.bottom + 1 })) : [];
+      .map((r) => ({ k: `${r.children[1].textContent} ${Math.round(r.getBoundingClientRect().bottom)}>${Math.round(sr.bottom)}`,
+        ok: r.getBoundingClientRect().bottom <= sr.bottom + 1 })) : [];
     return { n: ctl.length, small, overlap, hidden: seen.filter((x) => !x.ok).map((x) => x.k), rows: seen.length,
       posTab: ctl.filter((c) => Number(c.tab) > 0).length, scroll: s.status.scrollTop };
   }, view);
+  // A fresh hatchling's server-side call (the status's "would like" row) takes a row of
+  // this 158 px box at 330 and pushes the energy meter off it: measure the pet not calling,
+  // as the pinned sections do, and draw the status again so it shows.
+  await pinAwake(card, "shell 4c");
+  // The friends row (a button) shows with any social level above 0: measure the status with it, as a
+  // pet with friends has it (S7: a 44 px target, and the meters still show unscrolled at 330).
+  await card.evaluate((el) => {
+    const real = el._state;
+    el._realState4c = real;
+    el._state = (x, key) => {
+      const st = real.call(el, x, key);
+      return key === "sensor.life_stage" && st && x === el._slides[el._index] ? { ...st, attributes: { ...st.attributes, social_level: 5 } } : st;
+    };
+    for (const s of el._slides) { s.statusHtml = null; s.drawnSig = null; }
+    el._redraw();
+  });
   const boxIssues = [];
   const boxCounts = {};
-  for (const width of [330, 420]) {
+  for (const width of [300, 330, 420]) {
     await page.setViewportSize({ width, height: 860 });
     await page.waitForTimeout(500);
     // The slide dots and the compact answer buttons (330 is the compact layout): 44x44 hit
-    // boxes, the dots edge to edge so none steals a neighbour's tap, the dot itself still 10 px.
+    // boxes, the dots edge to edge so none steals a neighbour's tap, the dot itself a 16 px head (UX7 F8).
     const tapBoxes = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       const dots = [...el.shadowRoot.querySelectorAll(".dots .dot")];
@@ -420,8 +439,8 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
       if (wasOpen) s.screen.classList.add("show-status");
       return out;
     });
-    if (tapBoxes.dots < 2 || tapBoxes.answers < 2 || tapBoxes.small.length || tapBoxes.overlap || tapBoxes.mark !== 10
-      || tapBoxes.compact !== (width === 330)) boxIssues.push(`${width} dots/answers: ${JSON.stringify(tapBoxes)}`);
+    if (tapBoxes.dots < 2 || tapBoxes.answers < 2 || tapBoxes.small.length || tapBoxes.overlap || tapBoxes.mark !== 16
+      || tapBoxes.compact !== (width < 400)) boxIssues.push(`${width} dots/answers: ${JSON.stringify(tapBoxes)}`);
     boxCounts[`${width}-tapBoxes`] = tapBoxes.dots + "d" + tapBoxes.answers + "a";
     for (const view of ["picker", "settings", "status"]) {
       if (view === "settings") await cur().locator(".status .pback").click();
@@ -429,9 +448,27 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
       await page.waitForTimeout(300);
       const m = await measure(view);
       boxCounts[`${width}-${view}`] = m.n;
-      if (m.small.length || m.overlap.length || m.hidden.length || m.posTab || m.n < 2) boxIssues.push(`${width} ${view}: ${JSON.stringify(m)}`);
+      if (m.small.length || m.overlap.length || (m.hidden.length && width > 300) || m.posTab || m.n < 2) boxIssues.push(`${width} ${view}: ${JSON.stringify(m)}`);
       if (view === "status" && m.rows < 3) boxIssues.push(`${width} status: only ${m.rows} meter rows found`);
-      if (view === "status") { await cur().locator(".status .gear").click(); await page.waitForTimeout(250); }
+      if (view === "status" && !await cur().locator(".status .friendsrow").count()) boxIssues.push(`${width} status: no friends row to measure`);
+      if (view === "status") {
+        // A tap on the friends row (below the meters) shows its note, and the note does not cover the row.
+        const tap = await card.evaluate(async (el) => {
+          const s = el._slides[el._index];
+          const row = s.status.querySelector(".friendsrow");
+          if (!row) return null;
+          row.scrollIntoView({ block: "nearest" });
+          await new Promise((r) => setTimeout(r, 100));
+          row.click();
+          await new Promise((r) => setTimeout(r, 100));
+          const note = s.status.querySelector(".status-feedback");
+          const a = row.getBoundingClientRect(), b = note.getBoundingClientRect();
+          return { shown: !note.hidden, row: [a.top, a.bottom].map(Math.round), note: [b.top, b.bottom].map(Math.round),
+            hit: !note.hidden && b.bottom > a.top && b.top < a.bottom };
+        });
+        if (!tap?.shown || tap.hit) boxIssues.push(`${width} friends note: ${JSON.stringify(tap)}`);
+        await cur().locator(".status .gear").click(); await page.waitForTimeout(250);
+      }
       if (view === "settings") {
         // Tab from the back row visits the buttons in page order.
         await cur().locator(".status .sback").focus();
@@ -459,8 +496,14 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
       const out = { inSheet: /missed calls|ignored whines/.test(t), personal: /notify me|my data|baby talk/.test(t),
         group: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent).join("|") };
       s.settings = false;
+      // The two rows come with the first miss (UX fix 4, F12): give this pet one.
+      const missId = s.ids["sensor.care_misses"];
+      const realHass = el._hass;
+      const was = realHass.states[missId];
+      el._hass = { ...realHass, states: { ...realHass.states, [missId]: { ...was, state: "2", attributes: { ...was?.attributes, discipline_misses: 1 } } } };
       el._renderStatus(s, []);
       out.onStatus = /missed calls/.test(s.status.textContent) && /ignored whines/.test(s.status.textContent);
+      el._hass = realHass;
       s.settings = true;
       localStorage.setItem("hatch-shared-screen", "off");
       el._renderStatus(s, []);
@@ -471,10 +514,12 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     await cur().locator(".status .shellrow").click();
     await page.waitForTimeout(300);
   }
+  await card.evaluate((el) => { delete el._state; delete el._realState4c; for (const s of el._slides) { s.statusHtml = null; s.drawnSig = null; } el._redraw(); });
   await page.setViewportSize({ width: 420, height: 860 });
   await page.waitForTimeout(400);
   check("4c: every status, settings and picker control is 44x44 at 330 and 420, none overlap, the wish and meters show unscrolled, tab order is page order, a shared screen's status has misses/whines",
     boxIssues.length === 0, boxIssues.join(" ; ") || JSON.stringify(boxCounts));
+  await unpinAwake(card);
 
   // Locked tiles (a pet below teen): shown dimmed with their stage, never hidden; a tap
   // says when, saves nothing and leaves the shell as it is.
@@ -509,10 +554,15 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   const camoAria = await useAria();
   await tap("");
   const ownAria = await useAria();
+  const useOffOnOwn = await cur().locator(".status .puse").getAttribute("aria-disabled"); // nothing new to save (F7)
   await tap("camo");
+  const useOnOnCamo = await cur().locator(".status .puse").getAttribute("aria-disabled");
+  check("shell: use is dimmed until the preview differs from the saved pick (settings UX F7)",
+    useOffOnOwn === "true" && useOnOnCamo === "false", JSON.stringify([useOffOnOwn, useOnOnCamo]));
   check("shell: use is labelled for the tile on the shell, the world's own as such",
     camoAria === "use camo shell" && ownAria === "use the world's own shell", JSON.stringify([camoAria, ownAria]));
   // ...and survives a hass update: a mood tick, then the sun going down and up.
+  const preTick = await look(); // the list's scroll now (the taps above moved it)
   const sun = await evaluate(() => { const st = document.querySelector("home-assistant").hass.states["sun.sun"]; return { state: st.state, attributes: st.attributes }; });
   await inject(a.entity.replace("life_stage", "mood"), { attributes: { cc_tick: Date.now() } });
   await page.waitForTimeout(500);
@@ -523,8 +573,8 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await inject("sun.sun", sun);
   await page.waitForTimeout(300);
   check("shell: the preview survives a mood tick and the sun's change, and the list doesn't redraw",
-    [ticked, sunned].every((l) => l.finish === "finish-camo" && l.sel === "camo" && l.picker && l.scroll === camo.scroll),
-    JSON.stringify({ ticked: ticked.finish, sunned: sunned.finish, scroll: [camo.scroll, ticked.scroll, sunned.scroll] }));
+    [ticked, sunned].every((l) => l.finish === "finish-camo" && l.sel === "camo" && l.picker && l.scroll === preTick.scroll),
+    JSON.stringify({ ticked: ticked.finish, sunned: sunned.finish, scroll: [preTick.scroll, ticked.scroll, sunned.scroll] }));
 
   // Leaving without saving puts the shell back, by every way out.
   const reverted = (l) => l.finish === ownClass(a) && !l.picker && l.preview === "none";
@@ -585,7 +635,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   });
   check("shell: a shared screen turned on here reverts the preview and closes the picker", reverted(l) && l.sheet, brief(l));
   check("shell: on a shared screen the row is read-only, named for no one, with its note; the picker is unreachable",
-    shared.heads[0] === "for the pet" && !shared.heads.some((h) => h.includes(a.name.toLowerCase()) || h.includes(a.name)) &&
+    shared.heads.join("|") === "this screen|for the pet|shared screen" && !shared.heads.some((h) => h.includes(a.name.toLowerCase()) || h.includes(a.name)) &&
       !shared.button && shared.ro === `${a.world} (default)` && shared.note === "ask a grown-up to change it" &&
       shared.tiles === 0 && !shared.picker, JSON.stringify(shared));
   await shot("02f-shell-shared");
@@ -607,7 +657,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await tab.close();
   await backToDefault("the ways out", a);
 
-  // Pick, use, and a reload keeps it; `world default` clears it.
+  // Pick, use, and a reload keeps it; the world's own tile + `use` clears it (F6: no `world default` button).
   await openPicker();
   await cur().locator('.status .tile[data-finish="stripes"]').scrollIntoViewIfNeeded();
   await tap("stripes");
@@ -624,11 +674,12 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   l = await look(a.entity);
   check("shell: a reload keeps the saved shell", l.finish === "finish-stripes", brief(l));
   await openPicker();
-  await cur().locator(".status .pdefault").click();
+  await tap("");
+  await cur().locator(".status .puse").click();
   const cleared = await waitAttr(a.entity, null);
   await page.waitForTimeout(300);
   l = await look();
-  check("shell: world default clears it: the line, the sensor, `now` and the shell",
+  check("shell: the world's own tile and use clear it: the line, the sensor, `now` and the shell",
     cleared === null && l.note === "back to the world's own ♪" && l.now === "" && l.finish === ownClass(a), brief({ cleared, ...l }));
   await backToDefault("save and reload", a);
 
@@ -701,7 +752,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     el._state = function (slide, key) {
       const st = real.call(this, slide, key);
       if (key !== "sensor.life_stage" || !st) return st;
-      const { shell_finish_options, shell_locked, senses, ...rest } = st.attributes;
+      const { shell_finish_options, shell_locked, senses, sleep_times, ...rest } = st.attributes;
       return { ...st, attributes: rest };
     };
     s.statusHtml = null;
@@ -716,7 +767,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     return out;
   });
   check("shell: an older server's sheet has no shell row, no picker and no pet group (misses and whines are on status, top10 4a)",
-    /^for you\|this screen$/.test(older.heads.join("|")) && !older.row && older.tiles === 0, JSON.stringify(older));
+    older.heads.join("|") === "this screen|for you|shared screen" && !older.row && older.tiles === 0, JSON.stringify(older));
 
   // Each error line: the shell goes back to its pick and the picker stays open.
   await openPicker();
@@ -1089,8 +1140,10 @@ async function main() {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
+  const missingSprites = []; // the card warns on the console, never in the bubble (UX fix 4, F11)
   page.on("console", (m) => {
     if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errors.push(m.text());
+    if (m.type() === "warning" && /missing sprites/.test(m.text())) missingSprites.push(m.text());
   });
   await page.goto(CLIENT);
   await page.waitForSelector('input[autocomplete="username"]', { timeout: 60000 });
@@ -1181,14 +1234,110 @@ async function main() {
   if (enter("shelf")) {
   // 1. The shelf draws its devices.
   check("shelf shows the pets", slides >= 2, `${slides} devices`);
-  check("sprites load", !(await bubble()).startsWith("missing sprites"));
+  // S4: the empty card gives an admin "add a pet ›" (one tap to HA's add-integration dialog) and a
+  // non-admin only the text; a pet that moves in takes the button away.
+  const emptyCard = await card.evaluate(async (el) => {
+    const out = {};
+    const bare = { ...el._hass, devices: {}, entities: {}, states: { "sun.sun": el._hass.states["sun.sun"] } };
+    const real = history.pushState;
+    const mount = () => {
+      const one = document.createElement("hatch-pet-card");
+      one.style.cssText = "position:fixed;left:0;top:0;width:400px;z-index:-1";
+      one.setConfig({ ...el._config, entities: undefined, entity: undefined, devices: undefined });
+      document.body.append(one);
+      return one;
+    };
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    let one = null;
+    try {
+      for (const admin of [true, false]) { // a viewer's role never changes, so one card each
+        one = mount();
+        one.hass = { ...bare, user: { ...el._hass.user, is_admin: admin } };
+        for (let i = 0; i < 30 && !one.shadowRoot?.querySelector(".sub")?.textContent; i++) await wait(100);
+        await wait(300);
+        const button = one.shadowRoot.querySelector(".addpet");
+        out[admin ? "admin" : "user"] = { shown: !button.hidden, text: button.textContent,
+          sub: one.shadowRoot.querySelector(".sub").textContent };
+        if (admin) {
+          let to = null;
+          history.pushState = (st, t, url) => { to = url; }; // stubbed: the check stays on its page
+          button.click();
+          history.pushState = real;
+          out.to = to;
+          // The page's own pets move in: no empty state, no button.
+          one.setConfig(el._config);
+          one.hass = el._hass;
+          for (let i = 0; i < 30 && !one._slides?.[0]?.species; i++) await wait(100);
+          out.after = !one.shadowRoot.querySelector(".addpet").hidden;
+        }
+        one.remove();
+        one = null;
+      }
+    } finally {
+      history.pushState = real;
+      one?.remove();
+    }
+    return out;
+  });
+  check("S4: the empty card's \"add a pet ›\" is for an admin and goes to HA's add-integration dialog; a user gets the text only",
+    emptyCard.admin?.shown && emptyCard.admin.text === "add a pet ›" && emptyCard.to === "/_my_redirect/config_flow_start?domain=virtual_pet" &&
+    emptyCard.user && !emptyCard.user.shown && emptyCard.user.sub === "Ask whoever runs Home Assistant to add a pet." &&
+    emptyCard.after === false, JSON.stringify(emptyCard));
+  // UX fix 4, F1: while a pet's states are `unavailable` (an Options reload, an HA restart) it stays in
+  // its own world's device, says one line and has no live buttons; back, the real bubble returns.
+  const gone = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const real = el._hass;
+    const out = { world: s.worldKey, shape: s.device.className };
+    try {
+      const now = new Date().toISOString();
+      const states = { ...real.states };
+      for (const id of Object.values(s.ids)) {
+        if (states[id] && id !== "sun.sun") states[id] = { ...states[id], state: "unavailable", attributes: { restored: true }, last_updated: now };
+      }
+      el._hass = { ...real, states };
+      el._sig = null;
+      await el._update();
+      out.worldDuring = s.worldKey;
+      out.shapeDuring = s.device.className;
+      out.bubble = s.bubble.textContent;
+      out.buttonsOff = Object.values(s.buttons).every((b) => b.disabled);
+      out.patOn = el._patOn(s);
+    } finally {
+      el._hass = real;
+      el._sig = null;
+      await el._update();
+    }
+    out.bubbleBack = s.bubble.textContent;
+    return out;
+  });
+  check("UX4 F1: an unavailable pet keeps its world's device, says one line, has its buttons and pat off",
+    gone.worldDuring === gone.world && gone.shapeDuring === gone.shape && gone.bubble === "one moment... ♪" &&
+    gone.buttonsOff && !gone.patOn && gone.bubbleBack !== "one moment... ♪", JSON.stringify(gone));
+  check("sprites load", !missingSprites.length && !(await bubble()).startsWith("missing sprites"), missingSprites[0]);
   await shot("01-shelf");
 
   // 2. Status and journal.
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(600);
   const status = await cur().locator(".status").innerText();
-  check("status screen opens, with missed calls and ignored whines (top10 4a)", /weight/.test(status) && /missed calls/.test(status) && /ignored whines/.test(status));
+  // A new pet's page has no zero counters (UX fix 4, F12): the rows come with the first miss (top10 4a).
+  const missRows = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const none = /missed calls|ignored whines/.test(s.status.textContent);
+    const missId = s.ids["sensor.care_misses"];
+    const realHass = el._hass;
+    const was = realHass.states[missId];
+    const zero = Number.parseFloat(was?.state) || Number(was?.attributes?.discipline_misses) || 0;
+    el._hass = { ...realHass, states: { ...realHass.states, [missId]: { ...was, state: "2", attributes: { ...was?.attributes, discipline_misses: 1 } } } };
+    el._renderStatus(s, []);
+    const both = /missed calls/.test(s.status.textContent) && /ignored whines/.test(s.status.textContent);
+    el._hass = realHass;
+    el._renderStatus(s, []);
+    return { zero, none, both };
+  });
+  check("status screen opens; missed calls and ignored whines show with a miss, not at zero (top10 4a, UX fix 4 F12)",
+    /weight/.test(status) && missRows.both && (missRows.zero ? missRows.none : !missRows.none), JSON.stringify(missRows));
   await shot("02-status");
   // The next egg's creature, picked through its select, shows on the status screen.
   const eggChoice = (await ids())["select.next_egg"];
@@ -1198,16 +1347,19 @@ async function main() {
     .callService("select", "select_option", { entity_id: e, option }), { e: eggChoice, option });
   await pickEgg(options[1]);
   await page.waitForTimeout(800);
-  check("the next egg's creature shows",
-    (await cur().locator(".status").innerText()).toLowerCase().includes(options[1].toLowerCase()),
-    options[1]);
+  // Only an offered creature (raised in the egg's world) is named; any other pick reads "surprise" (settings S2, F22).
+  const named = await page.locator("hatch-pet-card").evaluate((el) => el._eggOffer(el._slides[el._index])?.choice?.name);
+  check("the next egg's creature shows, or a surprise when it is not offered",
+    (await cur().locator(".status .row", { hasText: /next egg|hatching/ }).innerText()).toLowerCase()
+      .includes((named || "surprise").toLowerCase()),
+    `${options[1]} -> ${named || "surprise"}`);
   await cur().locator(".status .row", { hasText: /next egg|hatching/ }).scrollIntoViewIfNeeded();
   await shot("02b-next-egg");
   await pickEgg(options[0]); // back to a surprise
   await page.waitForTimeout(400);
   // The gear opens the settings sheet in the same screen: the status stays up, the
   // switches are there and the stats are not, and focus lands on its back row.
-  const statusRows = /weight/.test(await cur().locator(".status").innerText()) && !await cur().locator(".status .bell").count();
+  const statusRows = /weight/.test(await cur().locator(".status").innerText()) && !await cur().locator(".status .bell:not(.namechange)").count(); // the first day's name row has its own "change" (S3)
   await cur().locator(".status .gear").click();
   await page.waitForTimeout(300);
   const sheet = await page.locator("hatch-pet-card").evaluate((el) => {
@@ -1266,7 +1418,10 @@ async function main() {
       }
       return to;
     });
-    check("top10 2b: \"connect more ›\" goes to the integration's page", went === "/config/integrations/integration/virtual_pet", String(went));
+    // S4: this pet's own entry (the device's config entry), not the integration list.
+    const entry = await page.locator("hatch-pet-card").evaluate((el) => el._hass.devices?.[el._slides[el._index].ids?.device]?.config_entries?.[0]);
+    check("S4: \"connect more ›\" goes to this pet's entry on the integration's page",
+      !!entry && went === `/config/integrations/integration/virtual_pet#config_entry=${entry}`, `${went} (entry ${entry})`);
   }
   // top10 3a: the family-tablet note sits right under the "shared screen" switch.
   const tabletNote = await page.locator("hatch-pet-card").evaluate((el) => {
@@ -1278,8 +1433,65 @@ async function main() {
   check("top10 3a: the family-tablet note follows the shared screen switch",
     /sharednote/.test(tabletNote.next || "") && tabletNote.text === "a family tablet? give it its own login, and we'll make friends ♥",
     JSON.stringify(tabletNote));
-  check("the sheet heads the pet's rows, the viewer's and this screen's",
-    sheet.heads.join("|") === `for ${sheet.pet}|for you|this screen`, sheet.heads.join("|"));
+  // S7: the pet's bedtime, a read-only row in the pet's group under "notices", in the viewer's HA time
+  // format, on personal and shared screens alike; "sound" and "look" under "this screen"; the shared
+  // screen's switch on its own at the foot, with N24 for an admin only (and never on a shared screen).
+  const sleepSheet = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    const realHass = el._hass;
+    const draw = (sleep, format, shared, admin) => {
+      el._state = (x, key) => {
+        const st = real.call(el, x, key);
+        return key === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, sleep_times: sleep, senses: ["weather"] } } : st;
+      };
+      el._hass = { ...realHass, locale: { ...realHass.locale, time_format: format }, user: { ...realHass.user, is_admin: admin } };
+      localStorage.setItem("hatch-shared-screen", shared ? "on" : "off");
+      s.statusHtml = null;
+      el._renderSettings(s);
+      const kids = [...s.status.children];
+      const row = kids.find((r) => /^bedtime/.test(r.textContent));
+      const at = (n) => kids.indexOf(n);
+      const heads = kids.filter((n) => n.classList.contains("sec"));
+      const notices = kids.find((r) => /^notices/.test(r.textContent));
+      return { text: row?.querySelector(".sleeptimes")?.textContent ?? null, controls: row ? row.querySelectorAll("button, [tabindex]").length : -1,
+        afterNotices: !!row && !!notices && at(row) > at(notices),
+        inPetGroup: !!row && heads.some((h) => at(h) < at(row) && /^for /.test(h.textContent)) && at(row) < at(heads[heads.length - 1]),
+        subs: [...s.status.querySelectorAll(".ssub")].map((h) => h.textContent).join("|"),
+        order: kids.filter((n) => n.matches(".sec, .ssub, .bell.sound, .bell.babble, .bell.lcdfx, .bell.named, .bell.mono, .bell.bigtext, .bell.shared") || n.querySelector(".bell.sound, .bell.babble, .bell.lcdfx, .bell.named, .bell.mono, .bell.bigtext, .bell.shared"))
+          .map((n) => n.matches(".sec, .ssub") ? n.textContent : n.querySelector(".bell").className.split(" ")[1]).join(">"),
+        n24: s.status.querySelector(".sharedprivacy")?.textContent ?? null,
+        lastIsShared: heads[heads.length - 1]?.textContent === "shared screen" && !!kids.slice(at(heads[heads.length - 1])).find((n) => n.querySelector(".bell.shared")) };
+    };
+    try {
+      return { twentyFour: draw({ bedtime: "21:30", wake: "06:45" }, "24", false, true), twelve: draw({ bedtime: "21:30", wake: "06:45" }, "12", false, true),
+        shared: draw({ bedtime: "23:00", wake: "07:00" }, "24", true, true), plain: draw({ bedtime: "23:00", wake: "07:00" }, "24", false, false),
+        none: draw(undefined, "24", false, true) };
+    } finally {
+      el._state = real;
+      el._hass = realHass;
+      localStorage.setItem("hatch-shared-screen", "off");
+      s.statusHtml = null;
+      el._renderSettings(s);
+    }
+  });
+  check("S7: the bedtime row is a read-only target in the pet's group under notices, in the viewer's 12 or 24 hour format",
+    sleepSheet.twentyFour.text === "about 21:30 · up 06:45" && sleepSheet.twelve.text === "about 9:30 pm · up 6:45 am" &&
+    sleepSheet.twentyFour.controls === 0 && sleepSheet.twentyFour.afterNotices && sleepSheet.twentyFour.inPetGroup &&
+    sleepSheet.none.text === null, JSON.stringify(sleepSheet));
+  check("S7: the bedtime row shows on a shared screen too, still with no control",
+    sleepSheet.shared.text === "about 23:00 · up 07:00" && sleepSheet.shared.controls === 0 && sleepSheet.shared.inPetGroup, JSON.stringify(sleepSheet.shared));
+  check("S7: \"this screen\" has the sub-headings sound (sounds, babble) then look (effects, holiday names, mono, big text); the shared screen switch is last, under its own heading",
+    sleepSheet.twentyFour.subs === "sound|look" && sleepSheet.twentyFour.lastIsShared &&
+    /^this screen>sound>sound(>babble)?>look>lcdfx>named>mono>bigtext>for you/.test(sleepSheet.twentyFour.order) &&
+    /shared screen>shared$/.test(sleepSheet.twentyFour.order), sleepSheet.twentyFour.order);
+  check("S7: N24 (sensor privacy) is for an admin only, and not on a shared screen",
+    sleepSheet.twentyFour.n24 === "sensor privacy is in the pet's options" && sleepSheet.plain.n24 === null && sleepSheet.shared.n24 === null,
+    JSON.stringify({ admin: sleepSheet.twentyFour.n24, plain: sleepSheet.plain.n24, shared: sleepSheet.shared.n24 }));
+  // S7 (F15: order by use): this screen first (sound, then look), then the viewer's, then the pet's,
+  // and the shared screen on its own at the foot.
+  check("the sheet heads this screen's rows, the viewer's, the pet's and the shared screen's, in that order",
+    sheet.heads.join("|") === `this screen|for you|for ${sheet.pet}|shared screen`, sheet.heads.join("|"));
   await shot("02c-settings");
   // A heading is not a button: tapping it leaves the sheet up.
   await cur().locator(".status .sec").first().click();
@@ -1289,6 +1501,94 @@ async function main() {
   await page.waitForTimeout(300);
   check("tapping a heading or the back row's empty end leaves the sheet open",
     await cur().locator(".screen.show-status .sback").count() === 1);
+  // Settings UX fix 1: the sheet keeps the player's place (F1), Escape is a way out (F8), a toggle keeps keyboard
+  // focus (F4), the note is the pet's bubble under the back row and lets taps through (F2/F13), and the pet
+  // has a word when the sheet closes after a change (F14).
+  {
+    const rowBox = await cur().locator(".status .row.srow").first().boundingBox();
+    await page.mouse.click(rowBox.x + 6, rowBox.y + rowBox.height / 2); // a row's label
+    await page.waitForTimeout(250);
+    const afterLabel = await cur().locator(".screen.show-status .sback").count() === 1;
+    await page.mouse.click(rowBox.x + rowBox.width / 2, rowBox.y + rowBox.height / 2); // the gap in the row
+    await page.waitForTimeout(250);
+    const afterGap = await cur().locator(".screen.show-status .sback").count() === 1;
+    check("settings UX F1: a tap on a row's label or the gap in it leaves the sheet open", afterLabel && afterGap, JSON.stringify({ afterLabel, afterGap }));
+    await cur().locator(".status .bell.named").focus();
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(250);
+    const kept = await card.evaluate((el) => el.shadowRoot.activeElement?.className || "");
+    await page.keyboard.press("Enter"); // back to what it was
+    await page.waitForTimeout(250);
+    check("settings UX F4: a toggle pressed by keyboard keeps focus through its redraw", /\bnamed\b/.test(kept), kept);
+    const bubble = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.status.scrollTop = 0;
+      el._tapRect = null;
+      el._statusMessage(s, "no phone pings, ok ♪");
+      const note = s.status.querySelector(".status-feedback");
+      const head = s.status.querySelector(".shead").getBoundingClientRect();
+      const box = note.getBoundingClientRect();
+      const out = { shown: !note.hidden, text: note.textContent, under: box.top >= head.bottom - 1, tapsThrough: getComputedStyle(note).pointerEvents === "none",
+        head: getComputedStyle(note, "::before").backgroundImage.includes("sprites/") };
+      clearTimeout(s.statusMessageTimer);
+      note.hidden = true;
+      note.textContent = "";
+      return out;
+    });
+    check("settings UX F13: a note is the pet's bubble with its head, under the back row, and taps go through it",
+      bubble.shown && bubble.under && bubble.tapsThrough && bubble.head, JSON.stringify(bubble));
+    // A tap under the bubble's place: the note drops to the foot of the box, still clear of it, never over the row (F13).
+    const low = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.status.scrollTop = 0;
+      const head = s.status.querySelector(".shead").getBoundingClientRect();
+      el._tapRect = { top: head.bottom + 4, bottom: head.bottom + 40, at: Date.now() };
+      el._statusMessage(s, "no phone pings, ok ♪");
+      const note = s.status.querySelector(".status-feedback");
+      const box = note.getBoundingClientRect();
+      const foot = s.status.getBoundingClientRect();
+      const out = { atFoot: Math.abs(foot.bottom - 4 - box.bottom) < 3, clear: box.top > head.bottom + 40 };
+      clearTimeout(s.statusMessageTimer);
+      note.hidden = true;
+      note.textContent = "";
+      note.style.top = "";
+      el._tapRect = null;
+      return out;
+    });
+    check("settings UX F13: when the row just tapped sits under the bubble, it drops to the foot of the box", low.atFoot && low.clear, JSON.stringify(low));
+    await cur().locator(".status .sback").focus();
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    const escaped = { gear: await cur().locator(".screen.show-status .gear").count(), sback: await cur().locator(".status .sback").count() };
+    check("settings UX F8: Escape on the sheet goes back to the status", escaped.gear === 1 && escaped.sback === 0, JSON.stringify(escaped));
+    await cur().locator(".status .gear").click();
+    await page.waitForTimeout(250);
+    const react = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const real = Date.prototype.getHours;
+      const out = {};
+      const close = async (key, hour) => {
+        Date.prototype.getHours = () => hour;
+        Object.assign(s, { asleep: false, lightsOut: false });
+        s.bubble.textContent = "";
+        el._settingsChanged(s, key);
+        el._toggleStatus(s); // the status closes from the sheet
+        await new Promise((r) => setTimeout(r, 1500)); // typed out
+        const said = s.bubble.textContent;
+        Date.prototype.getHours = real;
+        el._toggleStatus(s);
+        s.status.querySelector(".gear")?.click();
+        return said;
+      };
+      s.settings = true;
+      out.day = await close("monoOn", 12);
+      out.night = await close("monoOff", 23);
+      out.none = await close("effectsOn", 12); // no such line: nothing said
+      return out; // the sheet is open again
+    });
+    check("settings UX F14: the pet says its line for the last change when the sheet closes, not at night",
+      /all green/.test(react.day) && react.night === "" && react.none === "", JSON.stringify(react));
+  }
   // Sounds start off and turn on for this browser only.
   const sound = cur().locator(".bell.sound");
   const soundBefore = await sound.getAttribute("aria-pressed");
@@ -1299,6 +1599,16 @@ async function main() {
     await evaluate(() => localStorage.getItem("hatch-sounds")) === "on");
   await cur().locator(".bell.sound").click(); // off again for the rest of the run
   await page.waitForTimeout(300);
+  // UX7 F11: "sounds here" is the master. With it off the babble row says "needs sounds", is disabled
+  // and a tap changes nothing; with it on, babble starts off and turns on here.
+  const needs = await cur().locator(".bell.babble").evaluate((b) => ({ text: b.textContent, disabled: b.getAttribute("aria-disabled") }));
+  await cur().locator(".bell.babble").click({ force: true });
+  await page.waitForTimeout(200);
+  check("UX7 F11: with sounds here off, the babble row says \"needs sounds\" and a tap changes nothing",
+    needs.text === "needs sounds" && needs.disabled === "true" &&
+    await evaluate(() => localStorage.getItem("hatch-babble")) !== "on", JSON.stringify(needs));
+  await cur().locator(".bell.sound").click(); // sounds on for the babble switch
+  await page.waitForTimeout(300);
   const babbleBefore = await cur().locator(".bell.babble").getAttribute("aria-pressed");
   await cur().locator(".bell.babble").click();
   await page.waitForTimeout(300);
@@ -1306,6 +1616,8 @@ async function main() {
     babbleBefore === "false" && await cur().locator(".bell.babble").getAttribute("aria-pressed") === "true" &&
     await evaluate(() => localStorage.getItem("hatch-babble")) === "on");
   await cur().locator(".bell.babble").click(); // off again
+  await page.waitForTimeout(300);
+  await cur().locator(".bell.sound").click(); // and sounds off again for the rest of the run
   await page.waitForTimeout(300);
   // "notify me" has its own switch; a shared screen has none, and babble is still babble.
   const bells = await page.locator("hatch-pet-card").evaluate((el) => {
@@ -1358,28 +1670,113 @@ async function main() {
     const s = el._slides[el._index];
     const raised = new Set(el._slides.flatMap((x) => el._state(x, "sensor.life_stage")?.attributes.raised || []));
     return {
-      head: s.status.querySelector(".jhead")?.textContent.trim(), worlds: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent),
+      head: s.status.querySelector(".shead .stitle")?.textContent.trim(), own: s.worldKey,
+      worlds: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent),
       tiles: [...s.status.querySelectorAll(".jtile")].map((t) => ({ id: (t.querySelector("img")?.getAttribute("src") || "").match(/sprites\/([^/]+)\//)?.[1],
         locked: t.classList.contains("locked"), text: t.textContent })),
-      raised: [...raised], back: s.status.querySelector(".jfoot .wlink")?.textContent, text: s.status.textContent,
+      raised: [...raised], back: s.status.querySelector(".shead .sback")?.textContent, text: s.status.textContent,
       fit: s.status.scrollWidth <= s.status.clientWidth + 1, journal: s.journal, everyWorld: s.everyWorld,
     };
   });
-  const want8 = Object.values(W8).flatMap((w) => w.roster.filter(ready8));
+  // The pet's own world first, then the rest in catalog order; the names lowercase (UX fix 2, F11, F16).
+  const order8 = Object.entries(W8).sort(([a], [b]) => (b === every.own) - (a === every.own)).map(([, w]) => w);
+  const want8 = order8.flatMap((w) => w.roster.filter(ready8));
   check("top10 8a: \"every world\" has a row per world and a tile per ready creature, raised ones named, the rest ???",
-    every.head === "every world" && JSON.stringify(every.worlds) === JSON.stringify(Object.values(W8).map((w) => w.name)) &&
+    every.head === "every world" && JSON.stringify(every.worlds) === JSON.stringify(order8.map((w) => w.name.toLowerCase())) &&
     JSON.stringify(every.tiles.map((t) => t.id)) === JSON.stringify(want8) &&
     every.tiles.every((t) => (every.raised.includes(t.id) ? !t.locked && t.text !== "???" : t.locked && t.text === "???")) &&
     every.everyWorld && !every.journal, JSON.stringify(every));
-  check("top10 8a: no count on the page, \"‹ journal\" at its foot, nothing runs off sideways",
+  check("top10 8a: no count on the page, \"‹ journal\" in the top band, nothing runs off sideways",
     !/\d+\s*(of|\/)\s*\d+|%/.test(every.text) && every.back === "‹ journal" && every.fit, JSON.stringify({ back: every.back, fit: every.fit }));
   await shot("03c-every-world");
-  await cur().locator(".status .jfoot .wlink").click();
+  await cur().locator(".status .shead .sback").click();
   await page.waitForTimeout(1200);
   check("top10 8a: \"‹ journal\" goes back to the journal",
     await cur().locator(".status .jgrid").count() > 0 && /journal ·/.test(await cur().locator(".status").innerText()));
+  // Status UX fix 2 (review 2). The journal keeps the player's place: a tap on a tile does not close the
+  // status (F1) and the pet says one line, once (F14); a state push keeps the scroll (F2); the top band
+  // carries the way back (F3, F5); Escape steps back a page and then closes (F4).
+  const ux2 = () => page.locator("hatch-pet-card").first().evaluate((el) => {
+    const s = el._slides[el._index];
+    const note = s.status.querySelector(".status-feedback");
+    return { open: s.screen.classList.contains("show-status"), journal: s.journal, every: s.everyWorld, finds: s.finds,
+      say: note && !note.hidden ? note.textContent : "", scroll: Math.round(s.status.scrollTop),
+      room: s.status.scrollHeight - s.status.clientHeight, back: s.status.querySelector(".shead .sback")?.textContent || "",
+      focus: el.shadowRoot.activeElement?.className || "", gear: !!s.status.querySelector(".gear") };
+  });
+  await cur().locator(".status .jtile").first().scrollIntoViewIfNeeded();
+  await cur().locator(".status .jtile").first().click();
+  await page.waitForTimeout(300);
+  const tile1 = await ux2();
+  check("UX2 F1/F14: a tap on a journal tile keeps the journal open, and the pet says one line about it",
+    tile1.open && tile1.journal && /^(.+! my old pal ♥|not met one of those yet)$/.test(tile1.say), JSON.stringify(tile1));
+  await page.waitForTimeout(100);
+  await cur().locator(".status .jtile").first().click();
+  const tile2 = await ux2();
+  check("UX2 F1: a second tap on the same tile keeps the journal open", tile2.open && tile2.journal, JSON.stringify(tile2));
+  await card.first().evaluate((el) => { const s = el._slides[el._index]; s.status.scrollTop = Math.min(60, s.status.scrollHeight - s.status.clientHeight); });
+  const before2 = await ux2();
+  await card.first().evaluate((el) => { // a pet update: the energy moves, as at every server tick
+    const s = el._slides[el._index];
+    const id = s.ids["sensor.energy"];
+    const st = el._hass.states[id];
+    el.hass = { ...el._hass, states: { ...el._hass.states, [id]: { ...st, state: String(Number(st.state || 50) - 1), last_updated: new Date().toISOString() } } };
+  });
+  await page.waitForTimeout(600);
+  const after2 = await ux2();
+  check("UX2 F2: a pet update leaves the journal where it was scrolled", before2.scroll > 0 && after2.journal && after2.scroll === before2.scroll,
+    JSON.stringify({ before2, after2 }));
+  check("UX2 F3: the journal's way back is in a top band: \"‹ status\"", after2.back === "‹ status", after2.back);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  const esc1 = await ux2();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(500);
+  const esc2 = await ux2();
+  check("UX2 F4: Escape on the journal goes back to the status, and on the status closes it", esc1.open && !esc1.journal && esc1.gear && !esc2.open,
+    JSON.stringify({ esc1, esc2 }));
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
+  await cur().locator(".jlink").click();
+  await page.waitForTimeout(800);
+  const opened = await ux2();
+  check("UX2 F5: opening the journal puts keyboard focus on its top back link", /sback/.test(opened.focus), JSON.stringify(opened));
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(400);
+  // F6: a mostly vertical drag over the card is not a swipe; a sideways one is. F8: the pet on show is kept per browser.
+  // F7: a care tap with the status open closes it first.
+  const drag = async (dx, dy) => {
+    const vp = await card.first().evaluate((el) => { const r = el._viewport.getBoundingClientRect(); return [r.x + r.width / 2, r.y + 10]; });
+    await card.first().evaluate((el) => { el._swiped = false; });
+    await page.mouse.move(vp[0], vp[1]);
+    await page.mouse.down();
+    await page.mouse.move(vp[0] + dx, vp[1] + dy, { steps: 5 });
+    await page.mouse.up();
+    return card.first().evaluate((el) => ({ swiped: el._swiped, index: el._index }));
+  };
+  const vert = await drag(-50, 90);
+  check("UX2 F6: a mostly vertical drag does not switch pets", !vert.swiped, JSON.stringify(vert));
+  const side = await drag(-80, 10);
+  check("UX2 F6: a sideways drag still does", side.swiped, JSON.stringify(side));
+  const kept = await card.first().evaluate((el) => ({ key: localStorage.getItem(`hatch-shelf-${el._slides[0].ids.device}`), now: el._slides[el._index].ids.device, n: el._slides.length }));
+  check("UX2 F8: the pet on show is kept for a reload (hatch-shelf-<first device>)", kept.key === kept.now, JSON.stringify(kept));
+  await card.first().evaluate((el) => el._go(0));
+  await page.waitForTimeout(600);
+  const care = await card.first().evaluate((el) => {
+    const s = el._slides[el._index];
+    const call = el._call;
+    const calls = [];
+    el._call = (...a) => { calls.push(a[3] + "." + a[4]); };
+    try {
+      if (!s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      const was = s.screen.classList.contains("show-status");
+      el._press(s, "feed");
+      return { was, after: s.screen.classList.contains("show-status"), calls };
+    } finally {
+      el._call = call;
+    }
+  });
+  check("UX2 F7: a care tap with the status open closes it first, then goes out", care.was && !care.after && care.calls.length === 1, JSON.stringify(care));
 
   }
   if (enter("shell")) {
@@ -1419,10 +1816,10 @@ async function main() {
 
   // A content pet that isn't calling: a calling pet is never greeted and has no
   // idle life, and a freshly hatched one may well be calling.
-  // The card's FINDS_SHOWN release switch ships off until V-F's art (no basket, reveal,
-  // gift or finds grid). gifts, finds and collection test the real features, so each turns
-  // it on (HatchPetCard.findsShown): on this page now, and in every tab the context opens
-  // after (an init script, kept for the rest of the run: only these sections follow).
+  // The card's FINDS_SHOWN release switch ships on. gifts, finds and collection still call
+  // showFinds, which sets it true (HatchPetCard.findsShown) on this page and in every tab
+  // the context opens after (an init script), so they hold even after the off-path checks
+  // below set it false and put it back.
   let findsInit = false;
   const showFinds = async () => {
     if (!findsInit) {
@@ -1467,6 +1864,14 @@ async function main() {
   await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
   await seasonsOff(); // the reload brought the card back with its own config
   await hush(); // new slides: no sound unless a check asks for one
+  // Record every line the card speaks from the reload on, for every slide: with the pet
+  // pinned awake the hello can come while this check is still walking to the pet, before
+  // a hook installed after the walk (a sample of the bubble would then find a call line).
+  await card.evaluate((el) => {
+    el.__spoken = [];
+    const speak = el._speak;
+    el._speak = function (slide, line, ...rest) { el.__spoken.push([slide, String(line)]); return speak.call(this, slide, line, ...rest); };
+  });
   await pinAwake(card, "play");
   for (let i = 0; i < slides; i++) {
     if ((await page.locator("hatch-pet-card .title").innerText()).trim() === petName) break;
@@ -1479,7 +1884,7 @@ async function main() {
   await card.evaluate((el) => {
     const s = el._slides[el._index];
     s.nextIdle = Date.now() + 600000;
-    el.__said = [];
+    el.__said = el.__spoken.filter(([slide]) => slide === s).map(([, line]) => line);
     const speak = el._speak;
     el._speak = function (slide, line, ...rest) { if (slide === s) el.__said.push(String(line)); return speak.call(this, slide, line, ...rest); };
   });
@@ -1489,7 +1894,7 @@ async function main() {
     const said = await card.evaluate((el) => el.__said);
     greeting = said.find((l) => l.includes(USER.name)) || await bubble();
   }
-  await card.evaluate((el) => { delete el._speak; delete el.__said; el._slides[el._index].nextIdle = 0; }); // idle life back
+  await card.evaluate((el) => { delete el._speak; delete el.__said; delete el.__spoken; el._slides[el._index].nextIdle = 0; }); // idle life back
   check("greets the viewer by first name", greeting.includes(USER.name), greeting);
   await shot("04a-greeting");
 
@@ -1707,7 +2112,7 @@ async function main() {
     }
   });
   check("top10 1a: the phone question asks with \"yes ♥\" / \"not now\"; not now calls nothing; yes turns notify me on",
-    phoneAsk.yes.aria === "can I call your phone when I need you?" &&
+    phoneAsk.yes.aria === "can i call your phone when i need you?" &&
     JSON.stringify(phoneAsk.yes.labels) === JSON.stringify(["yes ♥", "not now"]) && phoneAsk.callsAfterNo === 0 &&
     phoneAsk.calls.length === 1 && phoneAsk.calls[0].type === "notify_me" && phoneAsk.calls[0].enabled === true,
     JSON.stringify(phoneAsk));
@@ -1739,7 +2144,8 @@ async function main() {
       s.statusHtml = null;
       el._renderStatus(s, []);
       out.five = { aria: rowOf()?.querySelector(".hearts")?.getAttribute("aria-label") || null,
-        full: rowOf()?.querySelectorAll("img[src*='stat_heart_full']").length, half: rowOf()?.querySelectorAll("img[src*='stat_heart_half']").length };
+        full: rowOf()?.querySelectorAll(".hearts img[src*='stat_heart_full']").length, half: rowOf()?.querySelectorAll(".hearts img[src*='stat_heart_half']").length,
+        icon: !!rowOf()?.querySelector("img.picon[src*='stat_heart_full']") }; // the row's own icon is a heart too (UX8 F9)
       // The weekly line: once, then not again this week.
       withLevel(10);
       const monday = new Date();
@@ -1774,13 +2180,41 @@ async function main() {
     return out;
   });
   check("top10 6b: \"friends\" hidden at 0; at 5, two and a half hearts with its aria",
-    !social.zero && social.five.aria === "friends this week: 5 of 10" && social.five.full === 2 && social.five.half === 1, JSON.stringify(social));
+    !social.zero && social.five.aria === "friends this week: 5 of 10" && social.five.full === 2 && social.five.half === 1 && social.five.icon, JSON.stringify(social));
   check("top10 6b: full hearts say \"so many friends this week! ♥\" once a week",
     JSON.stringify(social.first) === JSON.stringify(["so many friends this week! ♥"]) && social.again === 0, JSON.stringify(social));
   if (social.want) {
     check("top10 6b: a link reports virtual_pet/linked with both pets",
       social.report.length === 1 && social.report[0].entity_id === social.want[0] && social.report[0].other === social.want[1], JSON.stringify(social.report));
   }
+  // UX8 F9: a tap on the friends row says what it counts, and the status stays open.
+  const hint = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    const was = { settings: s.settings, journal: s.journal, finds: s.finds, everyWorld: s.everyWorld };
+    el._state = (x, key) => {
+      const st = real.call(el, x, key);
+      return key === "sensor.life_stage" && st && x === s ? { ...st, attributes: { ...st.attributes, social_level: 5 } } : st;
+    };
+    try {
+      Object.assign(s, { settings: false, journal: false, finds: false, everyWorld: false });
+      s.statusHtml = null;
+      el._renderStatus(s, []);
+      s.screen.classList.add("show-status");
+      const row = s.status.querySelector(".friendsrow");
+      row?.click();
+      const note = s.status.querySelector(".status-feedback");
+      return { row: !!row, text: note?.textContent || null, shown: note ? !note.hidden : false,
+        open: s.screen.classList.contains("show-status") };
+    } finally {
+      el._state = real;
+      Object.assign(s, was);
+      s.screen.classList.remove("show-status");
+      s.statusHtml = null;
+    }
+  });
+  check("UX8 F9: a tap on the friends row says what it counts and keeps the status open",
+    hint.row && hint.text === "visitors and neighbours this week ♪" && hint.shown && hint.open, JSON.stringify(hint));
   // Screen readers hear plain words: no hearts or notes; a bare heart is "thank you!".
   const heard = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const s = el._slides[el._index];
@@ -1828,6 +2262,7 @@ async function main() {
     counter.disconnect();
     // Babble (on for this check) never while asleep, in a game or behind the status.
     localStorage.setItem("hatch-babble", "on");
+    localStorage.setItem("hatch-sounds", "on"); // babble needs sounds here too (UX7 F11)
     el._card.dispatchEvent(new Event("touchend")); // a tap unlocks audio
     await wait(300);
     const hour = new Date().getHours();
@@ -1848,6 +2283,7 @@ async function main() {
     out.babbleGame = babbles(() => { s.game = { kind: "left_right" }; });
     out.babbleStatus = babbles(() => el._toggleStatus(s));
     localStorage.setItem("hatch-babble", "off");
+    localStorage.setItem("hatch-sounds", "off");
     // A burst: three queued lines, said one after another; only the first voiced.
     s.voicedAt = 0;
     out.burst = [];
@@ -2037,6 +2473,58 @@ async function main() {
   check("a friend can give it a catchphrase: five choices in two rows on the screen",
     catchy.labels.join("|") === `hehe|yay|and stuff|la la|keep "${p}"` && catchy.rows === 2 && catchy.inside,
     JSON.stringify(catchy));
+  // UX7 F1: an asking pet never hides behind its own bubble, and the question is never cut under
+  // the chips. A sea otter in tidepool (the porthole, the smallest screen) at 330 and 300: the pet's box
+  // and the bubble's don't intersect (or its head is in the bubble and the pet is out of the way), and
+  // the bubble's bottom is above the chips' top. At 300 the porthole may not have the room: it is
+  // looked at but only the other worlds are held to it (see the report), so it is measured, not failed.
+  const lifeId = await page.locator("hatch-pet-card").evaluate((el) => el._slides[el._index].ids["sensor.life_stage"]);
+  const lifeWas = await evaluate((e) => document.querySelector("home-assistant").hass.states[e].attributes, lifeId);
+  const viewWas = page.viewportSize();
+  const askFit = {};
+  try {
+    for (const [world, species] of [["tidepool", "otter"], ["woodland", "fox"]]) {
+      await inject(lifeId, { attributes: { species, world } });
+      for (let i = 0; i < 30; i++) {
+        if (await card.evaluate((el, sp) => el._slides[el._index].speciesId === sp && el._slides[el._index].species, species)) break;
+        await page.waitForTimeout(200);
+      }
+      for (const width of [330, 300]) {
+        await page.setViewportSize({ width, height: 860 });
+        await page.waitForTimeout(500);
+        askFit[`${world}-${width}`] = await card.evaluate(async (el) => {
+          const s = el._slides[el._index];
+          s.screen.classList.remove("show-status");
+          s.voicedAt = Date.now() + 1e9;
+          el._ask(s, "catchphrase");
+          el._write(s, el._askLine("catchphrase"), 1e9);
+          el._askPlace(s, s.screen.querySelector(".askday"));
+          await new Promise((r) => setTimeout(r, 600)); // the two-step move
+          const box = (e) => e.getBoundingClientRect();
+          const bubble = box(s.bubble);
+          const chips = box(s.screen.querySelector(".askday"));
+          const pet = box(s.pet);
+          const nopet = s.screen.querySelector(".askday.nopet");
+          const apart = Math.min(pet.right, bubble.right) - Math.max(pet.left, bubble.left) <= 0
+            || Math.min(pet.bottom, bubble.bottom) - Math.max(pet.top, bubble.top) <= 0;
+          const out = { w: Math.round(box(s.screen).width), apart: apart || !!nopet, head: !!nopet,
+            petTop: Math.round(pet.top - box(s.screen).top), cut: Math.round(bubble.bottom - chips.top) };
+          el._clearAsk(s);
+          s.sayUntil = 0;
+          return out;
+        });
+      }
+    }
+  } finally {
+    await page.setViewportSize(viewWas);
+    await inject(lifeId, { attributes: lifeWas });
+    await page.waitForTimeout(600);
+  }
+  check("UX7 F1: at 330 in tidepool the asking pet and its bubble don't overlap, the question clears the chips",
+    askFit["tidepool-330"]?.apart && askFit["tidepool-330"].cut <= 0, JSON.stringify(askFit["tidepool-330"]));
+  check("UX7 F1: at 300 in a tank world the same holds, and the pet is never above the screen",
+    askFit["woodland-300"]?.apart && askFit["woodland-300"].cut <= 0 && askFit["woodland-300"].petTop >= 0
+    && askFit["tidepool-300"]?.apart && (askFit["tidepool-300"].head || askFit["tidepool-300"].petTop >= 0), JSON.stringify(askFit));
   // Birthdays: yours, picked in the question box (a tap on a picker stays in the
   // box); a celebration takes the away note's place; the pet's party; forgetting.
   const bday = await page.locator("hatch-pet-card").evaluate(async (el) => {
@@ -2045,14 +2533,20 @@ async function main() {
     const out = {};
     el._ask(s, "birthday");
     const box = s.screen.querySelector(".askday");
-    const month = box.querySelector(".bmonth");
-    month.value = "2";
-    month.dispatchEvent(new Event("change", { bubbles: true }));
-    out.febDays = box.querySelector(".bday").options.length;
-    month.click();
-    box.querySelector(".bday").click();
+    // Steppers, "‹ Feb ›" and "‹ 29 ›" (UX 3 F10): the day wraps, a month change keeps it inside.
+    const step = (which, dir) => box.querySelector(`[data-step="${which}"][data-dir="${dir}"]`).click();
+    out.stepperKeys = [...box.querySelectorAll(".stepb")].map((b) => Math.round(b.getBoundingClientRect().height));
+    step("day", -1); // 1 -> 31
+    out.wrap31 = box.querySelector(".bday").dataset.v;
+    step("month", 1); // Jan -> Feb, 31 -> 29
+    out.febDays = Number(box.querySelector(".bday").dataset.v);
+    out.febName = box.querySelector(".bmonth").textContent;
+    step("day", 1); // 29 -> 1
+    step("day", -1); // back to 29
     out.statusAfterPick = s.screen.classList.contains("show-status");
-    box.querySelector(".bday").value = "14";
+    for (let i = 0; i < 15; i++) step("day", -1); // 29 -> 14
+    out.day14 = box.querySelector(".bday").textContent;
+    box.querySelector(".bmonth").click();
     box.querySelector('[data-answer="ok"]').click();
     for (let i = 0; i < 100 && s.bubble.dataset.typing; i++) await wait(50);
     out.reply = s.bubble.textContent;
@@ -2120,11 +2614,12 @@ async function main() {
     return out;
   });
   check("your birthday is picked in the box, and a tap on a picker stays there",
-    bday.febDays === 29 && !bday.statusAfterPick && /Feb 14! I'll remember ♥$/.test(bday.reply), JSON.stringify(bday));
+    bday.febDays === 29 && bday.febName === "Feb" && bday.wrap31 === "31" && bday.day14 === "14" &&
+    bday.stepperKeys.every((h) => h >= 44) && !bday.statusAfterPick && /Feb 14! i'll remember ♥$/.test(bday.reply), JSON.stringify(bday));
   check("a celebration takes the away note's place; yours is by name",
-    bday.queue.join("|") === "a|c|I'm 3 months old today! ♥" &&
+    bday.queue.join("|") === "a|c|i'm 3 months old today! ♥" &&
     /^happy birthday, \S+!! ♥$/.test(bday.yours[0]) &&
-    bday.yours[1] === "I'm 11 months old! friends from day one ♥", JSON.stringify(bday));
+    bday.yours[1] === "i'm 11 months old! friends from day one ♥", JSON.stringify(bday));
   check("its birthday brings confetti and a party hat",
     bday.confetti && /season_party_hat/.test(bday.hat) && /party hat on! ♪$/.test(bday.said), JSON.stringify(bday));
   check("your birthday can be forgotten, never shown on a shared screen",
@@ -2241,6 +2736,192 @@ async function main() {
   });
   check("on all three guarded controls a second tap a second later confirms",
     slow.forgetbday && slow.forgetme && slow.egg === "lay_egg", JSON.stringify(slow));
+  // The lay sheet (settings S2): the next egg chosen in the lay confirm. The server's egg_roster is
+  // real; the pet's raised creatures, its stage and the calls are stubbed on this card's own hass
+  // (a copy, put back at the end), so each state is pinned.
+  const lay = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const realHass = el._hass;
+    const realPress = el._press;
+    const lifeId = s.ids["sensor.life_stage"], selId = s.ids["select.next_egg"], moodId = s.ids["sensor.mood"];
+    const life = realHass.states[lifeId], sel = realHass.states[selId], mood = realHass.states[moodId];
+    const roster = life.attributes.egg_roster || [];
+    const out = { rosterNames: Array.isArray(roster) && roster.length >= 3
+      && roster.map((r) => r.name).join("|") === sel.attributes.options.slice(1).join("|") };
+    const calls = [], pressed = [];
+    let fail = null;
+    const was = s.request.dataset.key;
+    // The state this pet would send: stage, its raised creatures, its pick, a waiting world, the requests.
+    const put = ({ stage = "adult", raised, pick = null, nextWorld = null, eggRoster = roster, requests = ["lay_egg"], others = {} }) => {
+      const states = { ...realHass.states,
+        [lifeId]: { ...life, state: stage, attributes: { ...life.attributes, raised, egg_roster: eggRoster, next_egg: pick, next_world: nextWorld } },
+        [moodId]: { ...mood, attributes: { ...mood.attributes, requests } },
+        [selId]: { ...sel, state: pick || sel.attributes.options[0] } };
+      for (const [i, attrs] of Object.entries(others)) {
+        const other = el._slides[i], id = other.ids["sensor.life_stage"];
+        states[id] = { ...realHass.states[id], attributes: { ...realHass.states[id].attributes, ...attrs } };
+      }
+      el._hass = { ...realHass, states, callService: async (d, svc, data) => {
+        calls.push(`${d}.${svc}:${data.option ?? data.entity_id}`);
+        if (fail) throw fail;
+      } };
+      s.drawnSig = null;
+    };
+    const ids = (offer) => offer?.offered.map((r) => r.id).join();
+    const rows = () => [...s.status.querySelectorAll(".layrow")].map((b) => b.textContent);
+    const open = async () => {
+      s.request.dataset.key = "lay_egg";
+      s.request.click();
+      await wait(30);
+      return s.laySheet && s.screen.classList.contains("show-status") && !!s.status.querySelector(".laygo");
+    };
+    const closed = () => !s.laySheet && !s.screen.classList.contains("show-status");
+    const shut = () => { if (s.laySheet) el._closeLay(s); };
+    el._press = (slide, key) => pressed.push(key);
+    const a = roster[0], b = roster[1], c = roster[2];
+    try {
+      // The offer: raised creatures of the egg's world, in egg_roster order; another world's id is dropped.
+      put({ raised: [c.id, a.id, "not-in-this-roster"] });
+      out.offer = ids(el._eggOffer(s)) === `${a.id},${c.id}`;
+      // Two or more offered: the first tap opens the sheet and presses nothing.
+      out.opens = await open() && pressed.length === 0 && s.confirm == null;
+      out.listed = rows().join("|") === ["surprise me", a.name, c.name].map((x) => x.toLowerCase()).join("|")
+        && s.status.querySelector(".layrow[aria-pressed=true]")?.textContent === "surprise me";
+      out.lines = s.status.querySelector(".sec").textContent === "a new egg"
+        && s.status.querySelector(".shellnote").textContent === "pick who hatches"
+        && s.status.querySelector(".laygo").textContent === "lay the egg"
+        && s.status.querySelector(".layback").textContent === "‹ not yet"
+        && /^lay the egg: .+ retires to the journal and a new egg takes its place$/.test(s.status.querySelector(".laygo").getAttribute("aria-label"));
+      // A creature row sends the select's own option string; the surprise row options[0], case and all.
+      s.status.querySelector(`.layrow[data-id="${c.id}"]`).click();
+      await wait(30);
+      s.status.querySelector('.layrow[data-id=""]').click();
+      await wait(30);
+      out.calls = calls.join("|") === `select.select_option:${c.name}|select.select_option:${sel.attributes.options[0]}`
+        && calls[1].endsWith(":Surprise me") === (sel.attributes.options[0] === "Surprise me");
+      // The row marks follow the state, and a pick outside the offer is read-only (N25), never named.
+      put({ raised: [a.id, c.id], pick: c.name });
+      el._renderStatus(s, []);
+      out.marked = s.status.querySelector(".layrow[aria-pressed=true]")?.textContent === c.name.toLowerCase();
+      put({ raised: [a.id, c.id], pick: b.name });
+      el._renderStatus(s, []);
+      out.outside = s.status.querySelector(".layrow.ro")?.textContent === "set in home assistant"
+        && !s.status.textContent.toLowerCase().includes(b.name.toLowerCase())
+        && s.status.querySelector(".layrow[aria-pressed=true]") === null;
+      // A refused select_option (a read-only login): C13', the sheet stays.
+      put({ raised: [a.id, c.id] });
+      fail = { code: "unauthorized", message: "Unauthorized" };
+      el._renderStatus(s, []);
+      s.status.querySelector(`.layrow[data-id="${a.id}"]`).click();
+      await wait(60);
+      out.refused = s.status.querySelector(".status-feedback")?.textContent === "this login can't choose, sorry" && s.laySheet;
+      fail = null;
+      // "‹ not yet" lays nothing and closes; the guard keeps a fast second tap from laying.
+      s.status.querySelector(".layback").click();
+      out.back = closed() && pressed.length === 0;
+      await open();
+      s.status.querySelector(".laygo").click(); // inside the guard window: the tap that opened it
+      out.fast = pressed.length === 0 && s.laySheet;
+      await wait(700);
+      s.status.querySelector(".laygo").click();
+      out.lays = pressed.join() === "lay_egg" && closed();
+      pressed.length = 0;
+      // Every other exit: the status chip, the pet leaving (a swipe), the shared-screen switch, a pet that
+      // can no longer lay, a world change that leaves one raised creature, the lay itself (above).
+      await open();
+      el._toggleStatus(s);
+      out.chip = closed();
+      const n = el._slides.length;
+      if (n > 1) {
+        await open();
+        el._go((el._index + 1) % n);
+        const gone = closed();
+        el._go(el._slides.indexOf(s));
+        out.swipe = gone;
+      } else out.swipe = true;
+      await open();
+      localStorage.setItem("hatch-shared-screen", "on");
+      el._goShared();
+      out.sharedExit = closed();
+      // Shared screens may lay: the sheet opens and lays there too.
+      put({ raised: [a.id, c.id] });
+      out.sharedOpens = await open();
+      await wait(700);
+      s.status.querySelector(".laygo").click();
+      out.sharedLays = pressed.join() === "lay_egg" && closed();
+      pressed.length = 0;
+      localStorage.setItem("hatch-shared-screen", "off");
+      el._goPersonal();
+      put({ raised: [a.id, c.id] });
+      await open();
+      put({ raised: [a.id, c.id], requests: [] });
+      el._redraw(s);
+      await wait(300); // _update is async
+      out.cannotLay = closed();
+      put({ raised: [a.id, c.id] });
+      await open();
+      put({ raised: [a.id] });
+      el._redraw(s);
+      await wait(300); // _update is async
+      out.oneLeft = closed();
+      // Fewer than two offered (one, none, or a state without `raised`): the old two taps, no sheet.
+      for (const raised of [[a.id], [], undefined]) {
+        put({ raised });
+        s.request.dataset.key = "lay_egg";
+        s.confirm = null;
+        s.request.click();
+        await wait(30);
+        out[`twoTaps${raised?.length ?? "none"}`] = closed() && s.request.textContent === "sure? tap again" && pressed.length === 0;
+        s.confirm = null;
+      }
+      // A waiting world change: the offer is that world's, raised by this card's pets there.
+      const worlds = el._worlds, own = life.attributes.world;
+      const other = Object.keys(worlds).find((k) => k !== own);
+      const theirs = worlds[other].roster.slice(0, 3).map((id) => ({ id, name: id }));
+      put({ raised: [a.id, b.id, c.id], nextWorld: worlds[other].name, eggRoster: theirs });
+      out.nextWorldNone = ids(el._eggOffer(s)) === "";
+      if (el._slides.length > 1) {
+        const second = el._slides.findIndex((x) => x !== s);
+        put({ raised: [a.id, b.id, c.id], nextWorld: worlds[other].name, eggRoster: theirs,
+          others: { [second]: { world: other, raised: theirs.map((t) => t.id).slice(0, 2).concat([a.id]) } } });
+        out.nextWorld = ids(el._eggOffer(s)) === theirs.slice(0, 2).map((t) => t.id).join();
+      } else out.nextWorld = true;
+      // The status row: "surprise" for an adult with nothing picked or a pick outside the offer; the
+      // offered pick by name. The egg's first look: once, only for an offered pick.
+      const statusRow = () => {
+        if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+        el._toggleStatus(s);
+        return [...s.status.querySelectorAll(".row")].find((r) => /next egg|hatching/.test(r.textContent))?.textContent || "";
+      };
+      put({ raised: [a.id, c.id] });
+      out.rowNone = /next egg\s*surprise$/.test(statusRow());
+      put({ raised: [a.id, c.id], pick: c.name });
+      out.rowPick = statusRow().endsWith(c.name.toLowerCase());
+      put({ raised: [a.id, c.id], pick: b.name });
+      out.rowOutside = /next egg\s*surprise$/.test(statusRow());
+      el._toggleStatus(s);
+      const key = `hatch-eggcoming-${s.ids.device}-${life.attributes.generation ?? 1}`;
+      localStorage.removeItem(key);
+      put({ stage: "egg", raised: [a.id, c.id], pick: b.name });
+      out.comingOutside = el._eggComing(s) === null;
+      put({ stage: "egg", raised: [a.id, c.id], pick: c.name });
+      out.coming = el._eggComing(s) === `a ${c.name.toLowerCase()} is coming` && el._eggComing(s) === null;
+      localStorage.removeItem(key);
+    } finally {
+      el._press = realPress;
+      el._hass = realHass;
+      localStorage.setItem("hatch-shared-screen", "off");
+      shut();
+      if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      s.request.dataset.key = was ?? "";
+      if (!was) delete s.request.dataset.key;
+      s.confirm = null;
+      s.drawnSig = null;
+    }
+    return out;
+  });
+  for (const [name, ok] of Object.entries(lay)) check(`settings S2 lay sheet: ${name}`, ok === true, JSON.stringify(lay));
   // Answers that wait: a failed save is retried once, then kept on this device.
   const waits = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -2296,6 +2977,12 @@ async function main() {
       // Dream, birthday: never stashed.
       await answerAs("dream", "sea");
       out.dream = localStorage.getItem(key);
+      out.dreamBubble = s.bubble.textContent; // not stashed, so lost: the pet says so
+      // The server will not take it (not_asked): the pet said it will remember, and says nothing more (UX 3 F6).
+      mode = "notasked";
+      await answerAs("dream", "stars");
+      out.notAskedBubble = s.bubble.textContent;
+      mode = "fail";
       await answerAs("birthday", "skip");
       out.birthday = localStorage.getItem(key);
       // A shared screen stores nothing.
@@ -2336,8 +3023,10 @@ async function main() {
     }
     return out;
   });
-  check("a failed save is retried once, the bubble says it slipped away, and the answer is kept for this person",
-    waits.tries === 2 && waits.bubble === "hm, that one slipped away ♪" && waits.stash === "fav_weather=snow", JSON.stringify(waits));
+  check("a failed save of a stashed kind is retried once, kept for this person and the pet stays quiet (UX 3 F6)",
+    waits.tries === 2 && waits.bubble === "snow!! ❄ i'll remember" && waits.stash === "fav_weather=snow", JSON.stringify(waits));
+  check("a failed save of a kind that is not stashed says it slipped away; a refused one (not_asked) says nothing",
+    waits.dreamBubble === "hm, that one slipped away ♪" && waits.notAskedBubble === "ooh, the stars. ok! ★", JSON.stringify(waits));
   check("a kept answer is sent when the card next gets hass with a user, and cleared",
     waits.resent === "fav_weather=snow" && waits.cleared === null, JSON.stringify(waits));
   check("a kept answer the server did not ask for is dropped, a transport error keeps it",
@@ -2346,6 +3035,168 @@ async function main() {
     waits.dream === null && waits.birthday === null && waits.shared === null, JSON.stringify(waits));
   check("forgetting my data removes kept answers", waits.forgotten === null, JSON.stringify(waits));
   check("a retry after the slide changed writes no bubble", waits.late === "", JSON.stringify(waits));
+  // UX fix 3 (review 3): talking with the pet, by real pointer taps where a tap is the point.
+  const card3 = page.locator("hatch-pet-card");
+  const talkSetup = (kind, pill = false) => card3.evaluate((el, [kind, pill]) => {
+    const s = el._slides[el._index];
+    el.scrollIntoView({ block: "center" });
+    s.queue = []; s.sayUntil = 0; s.sayClass = 0; s.game = null; s.confirm = null; s.answeredAt = 0;
+    s.screen.classList.remove("show-status");
+    el._ask(s, kind);
+    if (pill) {
+      s.request.dataset.key = "lay_egg";
+      s.request.textContent = "lay an egg?";
+      s.request.classList.add("show");
+    }
+    const r = (node) => { const b = node.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
+    return { chips: [...s.screen.querySelectorAll(".askday button")].map((b) => ({ a: b.dataset.answer, ...r(b) })),
+      screen: r(s.screen), pill: getComputedStyle(s.request).display };
+  }, [kind, pill]);
+  const talkAfter = () => card3.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { asking: !!s.screen.querySelector(".askday"), status: s.screen.classList.contains("show-status"),
+      said: s.sayEntry?.text ?? s.bubble.textContent, bubble: s.bubble.textContent, confirm: s.confirm?.key || null,
+      pill: s.request.textContent, until: s.sayUntil - Date.now() };
+  });
+  // F1: the lay pill is hidden under a question, so the third chip's right edge answers it.
+  let t3 = await talkSetup("how_day", true);
+  const third = t3.chips[2];
+  await page.mouse.click(third.x + third.w - 4, third.y + third.h / 2);
+  let a3 = await talkAfter();
+  check("UX3 F1: the lay pill is hidden while a question is open, and a tap on the third chip's edge answers it",
+    t3.pill === "none" && !a3.asking && a3.confirm === null && a3.pill === "lay an egg?", JSON.stringify([t3.pill, a3]));
+  // F2: a double tap on an answer leaves the pet's reply on show, not the status.
+  t3 = await talkSetup("how_day");
+  const ok = t3.chips[1];
+  await page.mouse.click(ok.x + ok.w / 2, ok.y + ok.h / 2);
+  await page.waitForTimeout(120);
+  await page.mouse.click(ok.x + ok.w / 2, ok.y + ok.h / 2);
+  await page.waitForTimeout(200);
+  a3 = await talkAfter();
+  check("UX3 F2: a double tap on an answer opens no status, and the reply is on show", !a3.status && !a3.asking && a3.bubble.length > 0, JSON.stringify(a3));
+  // F3: a tap beside the chips during a question opens no status; the question stays.
+  t3 = await talkSetup("how_day");
+  await page.mouse.click(t3.screen.x + t3.screen.w / 2, t3.screen.y + t3.screen.h * 0.5);
+  await page.waitForTimeout(150);
+  a3 = await talkAfter();
+  check("UX3 F3: a tap on the screen during a question does not open the status", !a3.status && a3.asking, JSON.stringify(a3));
+  // F8: the pet steps back while it asks, and is back after.
+  const step = () => card3.evaluate(async (el) => {
+    await new Promise((r) => setTimeout(r, 500));
+    const s = el._slides[el._index];
+    const cs = getComputedStyle(s.pet);
+    return { translate: cs.translate, scale: cs.scale, base: s.pet.style.scale };
+  });
+  const stepIn = await step();
+  await card3.evaluate((el) => el._slides[el._index].screen.querySelector(".askday")?.remove());
+  const stepOut = await step();
+  check("UX3 F8: the pet steps back while a question is open (smaller and up), and returns after",
+    stepIn.translate !== "none" && stepOut.translate === "none" && Number(stepIn.scale) < Number(stepOut.scale),
+    JSON.stringify({ stepIn, stepOut }));
+  // F8, measured: the pet's feet stand on the chips' top, and its head is not under the chip block.
+  const stood = {};
+  for (const kind of ["how_day", "catchphrase", "birthday", "big_day_day"]) {
+    await talkSetup(kind);
+    await page.waitForTimeout(450);
+    stood[kind] = await card3.evaluate((el) => {
+      const s = el._slides[el._index];
+      const p = s.pet.getBoundingClientRect();
+      const c = s.screen.querySelector(".askday").getBoundingClientRect();
+      return { petBottom: Math.round(p.bottom), chipsTop: Math.round(c.top), petTop: Math.round(p.top), petH: Math.round(p.height),
+        chips: s.screen.querySelectorAll(".askday button").length };
+    });
+    await card3.evaluate((el) => el._slides[el._index].screen.querySelector(".askday")?.remove());
+  }
+  check("UX3 F8: with any question open, the pet stands above the chips (feet at their top, at least 20 px tall)",
+    Object.values(stood).every((r) => r.petBottom <= r.chipsTop + 3 && r.petH >= 20), JSON.stringify(stood));
+  // F4: "yes" to the big day gives the day chips at once, not after the question's minute.
+  t3 = await talkSetup("big_day");
+  await card3.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.queue.push({ text: "anything big this week?", ms: 60000, ask: true, cls: 3 });
+    el._sayQueued(s);
+  });
+  await page.mouse.click(t3.chips[0].x + t3.chips[0].w / 2, t3.chips[0].y + t3.chips[0].h / 2);
+  await page.waitForTimeout(1200);
+  const days = await card3.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { chips: [...s.screen.querySelectorAll(".askday button")].map((b) => b.textContent), said: s.bubble.textContent,
+      first: s.screen.querySelector(".askday button")?.dataset.answer };
+  });
+  check("UX3 F4/F14: after \"yes\", the day chips show within 1.2 s, and the first is \"today\"",
+    days.chips.length === 7 && days.chips[0] === "today" && /which day/.test(days.said) &&
+    /^\d{4}-\d\d-\d\d$/.test(days.first), JSON.stringify(days));
+  // F5: the reply to an answer is kept: a flavour line and a beat don't replace it.
+  await talkSetup("how_day");
+  const kept5 = await card3.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    s.screen.querySelector('.askday button[data-answer="tough"]').click();
+    const reply = s.sayEntry?.text;
+    el._line(s, 1, "flavour line", 4500);
+    el._line(s, 2, "a beat", 4500);
+    await new Promise((r) => setTimeout(r, 300));
+    return { reply, bubbleHasOther: /flavour line|a beat/.test(s.bubble.textContent), cls: s.sayClass, queued: s.queue.map((q) => q.text) };
+  });
+  check("UX3 F5: an answer's reply is the viewer's own line: no flavour line or beat replaces it",
+    !!kept5.reply && kept5.cls === 4 && !kept5.bubbleHasOther, JSON.stringify(kept5));
+  // F15: a care press that cuts the question line brings it back for what is left, and only while the question is open.
+  const f15 = await card3.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    s.queue = []; s.sayUntil = 0; s.sayClass = 0; s.game = null;
+    el._ask(s, "how_day");
+    s.queue.push({ text: "how was your day?", ms: 60000, ask: true, cls: 3 });
+    el._sayQueued(s);
+    await new Promise((r) => setTimeout(r, 300));
+    el._line(s, 4, "a care line", 3000);
+    const open = s.queue.map((q) => q.ms);
+    s.screen.querySelector(".askday")?.remove();
+    s.queue = [];
+    s.sayEntry = { text: "how was your day?", ms: 60000, ask: true, cls: 3, shownAt: Date.now() - 300 };
+    s.sayUntil = Date.now() + 59000;
+    el._line(s, 4, "another care line", 3000);
+    return { open, closed: s.queue.length };
+  });
+  check("UX3 F15: a cut question comes back for the time left only while open", f15.open.length === 1 && f15.open[0] < 60000 &&
+    f15.open[0] > 58000 && f15.closed === 0, JSON.stringify(f15));
+  // F9: big text reaches the bubble and the chips, and lines stay longer.
+  const f9 = await card3.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const speak = (ms) => { s.sayUntil = 0; el._speak(s, "ok", ms); return s.sayUntil - Date.now(); };
+    localStorage.setItem("hatch-big-text", "off");
+    el._card.classList.remove("bigtext");
+    const normal = speak(4500);
+    const fontOff = getComputedStyle(s.bubble).fontSize;
+    localStorage.setItem("hatch-big-text", "on");
+    el._card.classList.add("bigtext");
+    const big = speak(4500);
+    const fontOn = getComputedStyle(s.bubble).fontSize;
+    el._ask(s, "how_day");
+    const chip = getComputedStyle(s.screen.querySelector(".askday button")).fontSize;
+    s.screen.querySelector(".askday")?.remove();
+    localStorage.setItem("hatch-big-text", "off");
+    el._card.classList.remove("bigtext");
+    return { normal, big, fontOff, fontOn, chip };
+  });
+  check("UX3 F9: big text makes the bubble 16 px and the chips 15 px, and holds a line 1.5 times as long",
+    f9.fontOff === "14px" && f9.fontOn === "16px" && f9.chip === "15px" && f9.big - f9.normal > 2000 && f9.big - f9.normal < 2500, JSON.stringify(f9));
+  // F12: the lay's first tap is answered by the pet itself.
+  const f12 = await card3.evaluate((el) => {
+    const s = el._slides[el._index];
+    const press = el._press;
+    el._press = () => {};
+    s.queue = []; s.sayUntil = 0; s.sayClass = 0; s.confirm = null; s.game = null;
+    s.screen.querySelector(".askday")?.remove();
+    s.request.dataset.key = "lay_egg";
+    s.request.click();
+    const out = { said: s.sayEntry?.text, cls: s.sayClass, armed: s.request.textContent };
+    el._press = press;
+    s.confirm = null;
+    s.request.dataset.key = "";
+    delete s.request.dataset.key;
+    return out;
+  });
+  check("UX3 F12: the lay's \"sure?\" is also said by the pet, once",
+    f12.said === "i'll wait for you in the journal ♥" && f12.cls === 4 && f12.armed === "sure? tap again", JSON.stringify(f12));
   // A close friend coming home: "you're home!!" to them (their own channel's
   // friend_home), and nothing for anyone else's arrival on a personal card.
   await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
@@ -2425,7 +3276,7 @@ async function main() {
   });
   check("a favourite is kept through the answer command",
     kept.sent.length === 1 && kept.sent[0].type === "virtual_pet/answer" && kept.sent[0].question === "fav_weather" &&
-    kept.sent[0].answer === "snow" && kept.said === "snow!! ❄ I'll remember", JSON.stringify(kept));
+    kept.sent[0].answer === "snow" && kept.said === "snow!! ❄ i'll remember", JSON.stringify(kept));
   // The new lines: a dream someone picked, a guess, a zone, the season, coming home wet.
   const lines = await page.locator("hatch-pet-card").evaluate((el, me) => {
     const s = el._slides[el._index];
@@ -2493,8 +3344,8 @@ async function main() {
   check("the first look: welcome first, three lines at most, no closed wish",
     look.length === 3 && look[0].startsWith("welcome home") && look[1] === "brr, it looks cold out there!" &&
     !look.some((l) => /play a game/.test(l)), look.join(" | "));
-  check("the new private lines read right", lines[0] === "I dreamed about the sea, like you said! ♥" &&
-    lines[1] === "I dreamed about the sea..." && lines[2] === "oh, sunny after all! good guess though ♥" &&
+  check("the new private lines read right", lines[0] === "i dreamed about the sea, like you said! ♥" &&
+    lines[1] === "i dreamed about the sea..." && lines[2] === "oh, sunny after all! good guess though ♥" &&
     lines[3] === "back from the gym! so strong!" && lines[4] === "Thanksgiving in your favourite season! ♥" &&
     /rain/.test(lines[5]) && lines[7] === "it's wet out there! come get cozy ☂", lines.join(" | "));
   check("a friend coming home is cheered, and nobody else's arrival on a personal card",
@@ -2565,7 +3416,19 @@ async function main() {
   for (let r = 0; r < 5 && !(await cur().locator(".game").isHidden()); r++) {
     gameSaid.push(await cur().locator(".bubble").textContent());
     await cur().locator(r % 2 ? ".gr" : ".gl").click();
-    await page.waitForTimeout(1400);
+    if (r === 0) {
+      // UX fix 6 (F4, F1): while the pet shows where it went the guess buttons are faded, and
+      // the result is still in the bubble 1.5 s after the guess (the prompt waits for 2.5 s).
+      await page.waitForTimeout(350);
+      const faded = await cur().locator(".gl").evaluate((el) => Number(getComputedStyle(el).opacity));
+      await page.waitForTimeout(1150);
+      const held = await cur().locator(".bubble").textContent();
+      check("left or right: the guess buttons fade while the pet shows where it went, and the result stays readable",
+        faded <= 0.2 && /yes|nope/.test(held), `opacity ${faded}, bubble ${held}`);
+      await page.waitForTimeout(400);
+    } else {
+      await page.waitForTimeout(1400);
+    }
     rounds++;
   }
   const moodLine = await evaluate((id) => document.querySelector("home-assistant").hass.states[id]?.attributes.reason || "",
@@ -2590,7 +3453,17 @@ async function main() {
   for (let r = 0; r < 5 && !(await cur().locator(".game").isHidden()); r++) {
     const shown = Number(await cur().locator(".gnum").getAttribute("data-n"));
     numbers.push(shown);
-    if (r === 2) await shot("04c-higher-lower");
+    if (r === 2) {
+      await shot("04c-higher-lower");
+      // UX fix 6 (F2): the number card sits clear of the pet, so its face shows all game.
+      const clear = await cur().locator(".gnum").evaluate((num) => {
+        const a = num.getBoundingClientRect();
+        const b = num.getRootNode().querySelector(".pet").getBoundingClientRect();
+        return { clear: a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom,
+          num: [a.left, a.top, a.right, a.bottom].map(Math.round), pet: [b.left, b.top, b.right, b.bottom].map(Math.round) };
+      });
+      check("higher or lower: the number card doesn't cover the pet", clear.clear, JSON.stringify(clear));
+    }
     await cur().locator(shown > 5 ? ".gl" : ".gr").click();
     await page.waitForTimeout(1400);
     hlRounds++;
@@ -2778,7 +3651,11 @@ async function main() {
         el._gameView(s, "higher_lower");
         reply({ result: "no_game" });
         await el._guess(s, "right");
-        out.hl = { live: !!s.game, said: s.bubble.textContent };
+        out.hl = { live: !!s.game, said: s.bubble.textContent, busy: s.game?.busy };
+        // F13: the line comes true: a new game of the same kind starts after it.
+        reply({ result: "ok", game: "higher_lower", round: 0, rounds: 5, wins: 0, number: 4, done: false });
+        await new Promise((r) => setTimeout(r, 1900));
+        out.hl2 = { kind: s.game?.kind, round: s.game?.round, number: s.gameNum.dataset.n, busy: s.game?.busy };
       } finally {
         hass.callService = real;
         if (s.game) el._endGame(s, null);
@@ -2788,8 +3665,10 @@ async function main() {
     check("idle drop, Left/Right: a restarted game is adopted as its round 1, no someone-else line",
       idle.lr.live && idle.lr.round === 1 && idle.lr.wins === 1 && idle.lr.said === "yes! you found me" &&
         idle.lr.score === "round 1/5 · 1 right", JSON.stringify(idle.lr));
-    check("idle drop, Higher/Lower: no_game ends the game with let's start over",
-      !idle.hl.live && idle.hl.said === "let's start over", JSON.stringify(idle.hl));
+    check("idle drop, Higher/Lower: no_game says let's start over, ignores taps, then starts a new game",
+      idle.hl.live && idle.hl.busy && idle.hl.said === "let's start over" &&
+        idle.hl2.kind === "higher_lower" && idle.hl2.round === 0 && idle.hl2.number === "4" && !idle.hl2.busy,
+      JSON.stringify(idle.hl) + JSON.stringify(idle.hl2));
 
     // Berry dig (playtime 2a): the per-tap contract, with stubbed replies (the
     // pytest owns the odds). A berry isn't a round; a bee and a keep end one; keep
@@ -2823,12 +3702,20 @@ async function main() {
           labels: [...s.gameBox.querySelectorAll(".gl, .gr")].map((b) => b.getAttribute("aria-label")) };
         await el._guess(s, "left"); // keep on an empty basket: nothing sent
         out.emptyKeep = sent.length;
+        out.emptySaid = s.bubble.textContent; // F12: it says so, then asks again after 2 s
+        await new Promise((r) => setTimeout(r, 2100));
+        out.emptyAfter = s.bubble.textContent;
         queue.push({ ...base, round: 0, wins: 0, basket: 1, leaves: 7, found: "berry", round_over: false });
         await el._guess(s, "right");
         out.berry = { round: s.game.round, basket: s.game.basket, num: s.gameNum.dataset.n, said: s.bubble.textContent,
           score: s.gameScore.textContent, guess: sent.at(-1)?.guess };
         await new Promise((r) => setTimeout(r, 400));
         out.berryKeep = keep();
+        // F1: the result is still in the bubble at 1.5 s, and the prompt is back by 2.8 s.
+        await new Promise((r) => setTimeout(r, 1100));
+        out.berryHeld = s.bubble.textContent;
+        await new Promise((r) => setTimeout(r, 1300));
+        out.berryPrompt = s.bubble.textContent;
         queue.push({ ...base, round: 1, wins: 1, basket: 0, leaves: 8, found: "kept", round_over: true });
         await el._guess(s, "left");
         out.kept = { round: s.game.round, wins: s.game.wins, said: s.bubble.textContent, guess: sent.at(-1)?.guess };
@@ -2838,6 +3725,10 @@ async function main() {
         out.bee = { round: s.game.round, wins: s.game.wins, said: s.bubble.textContent, prop: !s.propEl.hidden };
         await new Promise((r) => setTimeout(r, 1000));
         out.afterBee = { prop: !s.propEl.hidden, said: s.bubble.textContent, keep: keep() };
+        await new Promise((r) => setTimeout(r, 1700));
+        out.beePrompt = s.bubble.textContent;
+        out.quitLine = [el._quitLine(s), el._quitLine({ game: { kind: "dig", round: 0, wins: 0, basket: 0 } }),
+          el._quitLine({ game: { kind: "left_right", round: 2, wins: 1 } })];
         const hass = el._hass;
         const real = hass.callService;
         hass.callService = async (d, svc, data) => { out.end = data; return { response: {} }; };
@@ -2850,7 +3741,10 @@ async function main() {
         // A reply out of step (a berry while we think the basket holds 0, banked 2).
         s.game = { picking: true };
         queue.push({ ...base, round: 2, wins: 1, basket: 0, leaves: 8 });
+        s.greeted = false; // F7: playing together is the hello
         await el._pickGame(s, "dig");
+        out.resume = s.bubble.textContent; // F8: a parked dig carried on says so
+        out.greeted = s.greeted;
         queue.push({ ...base, round: 2, wins: 1, basket: 3, leaves: 5, found: "berry", round_over: false });
         await el._guess(s, "right");
         out.stray = { live: !!s.game, said: s.bubble.textContent };
@@ -2866,7 +3760,7 @@ async function main() {
         await new Promise((r) => setTimeout(r, 400));
         queue.push({ ...base, round: 4, wins: 5, basket: 0, leaves: 8, found: "kept", round_over: true, done: true, won: true });
         await el._guess(s, "left");
-        await new Promise((r) => setTimeout(r, 1000));
+        await new Promise((r) => setTimeout(r, 2100)); // the last result is read first (1.8 s)
         out.won = { live: !!s.game, said: s.bubble.textContent };
       } finally {
         delete el._playCall;
@@ -2881,6 +3775,13 @@ async function main() {
         dig.start.said === "dig or keep?" && dig.start.labels.join("|") === "Keep the basket|Dig a leaf",
       JSON.stringify(dig.start));
     check("dig: keep on an empty basket sends nothing", dig.emptyKeep === 1, String(dig.emptyKeep));
+    check("dig: keep on an empty basket says dig first, then asks again",
+      dig.emptySaid === "dig first! the basket's empty" && dig.emptyAfter === "dig or keep?", JSON.stringify([dig.emptySaid, dig.emptyAfter]));
+    check("dig: the result stays in the bubble at 1.5 s, the prompt is back after",
+      dig.berryHeld === "a berry!" && dig.berryPrompt === "dig or keep?", JSON.stringify([dig.berryHeld, dig.berryPrompt]));
+    check("dig: a ✕ that parks says so; a fresh pile or another game says maybe later; the resume says it's back; playing is the hello",
+      dig.quitLine.join("|") === "ok! i'll keep our pile safe ♪|maybe later!|maybe later!" &&
+        dig.resume === "we're back! dig or keep ♪" && dig.greeted === true, JSON.stringify([dig.quitLine, dig.resume, dig.greeted]));
     check("dig: a berry is not a round (round 0, basket 1, 7 leaves), keep enabled after",
       dig.berry.round === 0 && dig.berry.basket === 1 && dig.berry.num === "7" && dig.berry.guess === "dig" &&
         dig.berry.said === "a berry!" && dig.berryKeep === "false", JSON.stringify(dig.berry) + dig.berryKeep);
@@ -2928,7 +3829,7 @@ async function main() {
           Math.random = () => 0;
           queue.push({ ...base, game: "left_right", round: 5, wins: 5, correct: true, went: "left", done: true, won: true });
           await el._guess(s, "left");
-          await new Promise((r) => setTimeout(r, 1100));
+          await new Promise((r) => setTimeout(r, 2100)); // the last result is read first (1.8 s)
           out.count = s.bubble.textContent;
           await new Promise((r) => setTimeout(r, 4200));
           out.typeLine = said.slice();
@@ -2994,8 +3895,9 @@ async function main() {
     }
     check("dig: a bee ends the round, shows the bee, then asks again with keep disabled",
       dig.bee.round === 2 && dig.bee.wins === 1 && dig.bee.prop && dig.bee.said === "bzz! the berries rolled away" &&
-        !dig.afterBee.prop && dig.afterBee.said === "dig or keep?" && dig.afterBee.keep === "true",
-      JSON.stringify([dig.bee, dig.afterBee]));
+        !dig.afterBee.prop && dig.afterBee.said === "bzz! the berries rolled away" && dig.afterBee.keep === "true" &&
+        dig.beePrompt === "dig or keep?",
+      JSON.stringify([dig.bee, dig.afterBee, dig.beePrompt]));
     check("dig: the x sends end for the dig (the server parks it), and the pile's label goes",
       dig.end?.game === "dig" && dig.end?.end === true && dig.numLabel === null, JSON.stringify([dig.end, dig.numLabel]));
     check("dig: a reply out of step ends the game as someone else's",
@@ -3003,22 +3905,36 @@ async function main() {
     check("dig: a won game says the berries banked, no /5",
       !dig.won.live && dig.won.said === "5 berries! you win ♪", JSON.stringify(dig.won));
 
-    // Replies across screens (audit s2616 #8/#9), stubbed with no waits: keep on a
-    // basket another screen kept first is someone else; no game while this person's
-    // dig is parked (another screen's x) is "maybe later!", not "let's start over".
+    // Replies across screens (audit s2616 #8/#9, UX6 F16), stubbed with no waits: a reply
+    // out of step ends as someone else's unless the server says the dig is this person's own
+    // (`yours`: their other screen played), which adopts the server's round, bank and basket
+    // and says "oh! you dug there too ♪"; no game while this person's dig is parked (their
+    // other screen's x) closes with the parked line, not "let's start over".
     const across = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       const hass = el._hass;
       const real = hass.callService;
       const out = {};
       try {
-        for (const [key, response] of [["empty", { result: "empty_basket" }],
+        const state = { game: "dig", rounds: 5, done: false, win_at: 5 };
+        for (const [key, response] of [
+          ["empty", { result: "empty_basket" }],
+          ["emptyMine", { ...state, result: "empty_basket", round: 2, wins: 2, basket: 0, leaves: 8, yours: true }],
+          ["emptyOther", { ...state, result: "empty_basket", round: 2, wins: 2, basket: 0, leaves: 8, yours: false }],
+          ["berryMine", { ...state, result: "ok", round: 1, wins: 0, basket: 4, leaves: 4, found: "berry",
+            round_over: false, yours: true }],
+          ["berryOther", { ...state, result: "ok", round: 1, wins: 0, basket: 4, leaves: 4, found: "berry",
+            round_over: false, yours: false }],
+          ["beeMine", { ...state, result: "ok", round: 3, wins: 1, basket: 0, leaves: 8, found: "bee",
+            round_over: true, yours: true }],
           ["parked", { result: "no_game", parked: true }]]) {
           s.game = { kind: "dig", round: 1, wins: 0, basket: 2, busy: false };
           el._gameView(s, "dig");
           hass.callService = async () => ({ response });
-          await el._guess(s, key === "empty" ? "left" : "right");
-          out[key] = { live: !!s.game, said: s.bubble.textContent };
+          await el._guess(s, key === "empty" || key.startsWith("empty") ? "left" : "right");
+          out[key] = { live: !!s.game, said: s.bubble.textContent, round: s.game?.round, wins: s.game?.wins,
+            basket: s.game?.basket, busy: s.game?.busy, score: s.gameScore.textContent };
+          if (s.game) el._endGame(s, null);
         }
       } finally {
         hass.callService = real;
@@ -3026,10 +3942,25 @@ async function main() {
       }
       return out;
     });
-    check("dig: empty_basket from another screen's keep says someone else is playing",
+    check("dig: empty_basket with no word it is this person's says someone else is playing",
       !across.empty.live && across.empty.said === "oh! someone else is playing with me", JSON.stringify(across.empty));
-    check("dig: no game while this person's dig is parked says maybe later",
-      !across.parked.live && across.parked.said === "maybe later!", JSON.stringify(across.parked));
+    check("dig: no game while this person's dig is parked closes with the parked line",
+      !across.parked.live && across.parked.said === "ok! i'll keep our pile safe ♪", JSON.stringify(across.parked));
+    check("dig F16: a berry out of step from this person's other screen is adopted, said once",
+      across.berryMine.live && across.berryMine.said === "oh! you dug there too ♪" &&
+        across.berryMine.round === 1 && across.berryMine.basket === 4 && across.berryMine.wins === 0,
+      JSON.stringify(across.berryMine));
+    check("dig F16: a bee out of step from this person's other screen is adopted too",
+      across.beeMine.live && across.beeMine.said === "oh! you dug there too ♪" &&
+        across.beeMine.round === 3 && across.beeMine.wins === 1 && across.beeMine.basket === 0, JSON.stringify(across.beeMine));
+    check("dig F16: empty_basket from this person's other screen's keep is adopted, the pile redrawn",
+      across.emptyMine.live && across.emptyMine.said === "oh! you dug there too ♪" && !across.emptyMine.busy &&
+        across.emptyMine.round === 2 && across.emptyMine.wins === 2 && across.emptyMine.basket === 0 &&
+        /round 3\/5/.test(across.emptyMine.score), JSON.stringify(across.emptyMine));
+    check("dig F16: another person's reply out of step still says someone else is playing",
+      !across.berryOther.live && across.berryOther.said === "oh! someone else is playing with me" &&
+        !across.emptyOther.live && across.emptyOther.said === "oh! someone else is playing with me",
+      JSON.stringify([across.berryOther, across.emptyOther]));
 
     // The real server: one dig, the x, and reopening carries on (parked).
     {
@@ -3043,6 +3974,51 @@ async function main() {
       check("dig: after the x, reopening carries on from the parked pile",
         /^round \d\/5\n\d+ banked · basket \d$/.test(played) && back === played, `${played} -> ${back}`);
       await stop();
+    }
+
+    // UX6 F16, the real server: one person, two screens on the dig. The other screen is a
+    // play_game call from the page (the same user). This card's next tap adopts the server's
+    // round and basket and both keep playing; the other screen's x makes this card's next
+    // tap close with the parked line, not "maybe later!".
+    {
+      await open("dig");
+      const other = (data) => card.evaluate(async (el, d) => {
+        const id = el._slides[el._index].ids["sensor.mood"];
+        const res = await el._hass.callService("virtual_pet", "play_game",
+          { entity_id: id, game: "dig", ...d }, undefined, false, true);
+        return res?.response;
+      }, data);
+      // Their screen digs first, and keeps what it found, so a round is done on the server
+      // whatever this card's next tap turns up (a lone bee could look like a normal one).
+      let theirs = await other({ guess: "dig" });
+      if (theirs?.found === "berry") theirs = await other({ guess: "keep" });
+      await cur().locator(".gr").click(); // ours, one step behind
+      await page.waitForTimeout(400);
+      const adopted = await cur().evaluate((slide) => {
+        const el = slide.getRootNode().host;
+        const s = el._slides[el._index];
+        return { live: !!s.game, said: s.bubble.textContent, basket: s.game?.basket, round: s.game?.round,
+          score: s.gameScore.textContent };
+      });
+      await page.waitForTimeout(1400);
+      const again = await score();
+      await cur().locator(".gr").click(); // and it plays on
+      await page.waitForTimeout(1400);
+      const live = await cur().locator(".gx").count();
+      check("dig F16: the second screen of one person adopts the server's round, and both keep playing",
+        theirs?.result === "ok" && adopted.live && adopted.said === "oh! you dug there too ♪" &&
+          adopted.round >= 1 && live === 1,
+        JSON.stringify([theirs, adopted, again, await score()]));
+      await other({ end: true }); // their x
+      await cur().locator(".gr").click();
+      await page.waitForTimeout(400);
+      const closed = await cur().evaluate((slide) => {
+        const s = slide.getRootNode().host._slides[slide.getRootNode().host._index];
+        return { live: !!s.game, said: s.bubble.textContent };
+      });
+      check("dig F16: the other screen's x closes this one quietly with the parked line",
+        !closed.live && closed.said === "ok! i'll keep our pile safe ♪",
+        JSON.stringify(closed));
     }
 
     // Batch 6 audit #4: after an HA restart the server's dropped-games memory is gone,
@@ -3094,6 +4070,22 @@ async function main() {
     });
     check("an idle Left/Right game stays at 2 min and closes silently at 3 min, no server call",
       idleClose.at2 && !idleClose.at3 && idleClose.hidden && idleClose.calls === 0, JSON.stringify(idleClose));
+    // UX fix 6 (Q8): a dig left idle is closed by the card with its own line (no auto-park).
+    const idleDig = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const realNow = Date.now;
+      try {
+        s.game = { kind: "dig", round: 1, wins: 0, basket: 1, busy: false, prompt: "dig or keep?", lastAt: realNow.call(Date) };
+        el._gameView(s, "dig");
+        Date.now = () => realNow.call(Date) + 3 * 60 * 1000 + 1000;
+        el._renderSlide(s);
+        return { live: !!s.game, said: s.bubble.textContent };
+      } finally {
+        Date.now = realNow;
+        if (s.game) el._endGame(s, null);
+      }
+    });
+    check("an idle dig closes with \"let's dig another time\"", !idleDig.live && idleDig.said === "let's dig another time ♪", JSON.stringify(idleDig));
 
     // Batch 6 audit #1: a tap on the scene mid-game keeps the game; Status ends it.
     await open("left_right");
@@ -4063,7 +5055,7 @@ async function main() {
     return { lines, queued: sent?.queued, ask: reply?.ask ?? null, asking: s.queue.some((q) => q.ask) };
   });
   check("2a: a look with two lines and a catch-up line sends queued: 3 and asks no question",
-    look.lines.length === 3 && look.lines.some((t) => t === "guess what! I'm a teen now!") &&
+    look.lines.length === 3 && look.lines.some((t) => t === "guess what! i'm a teen now!") &&
       look.queued === 3 && !look.ask && !look.asking, JSON.stringify(look));
   const caught = await card.evaluate((el, at) => {
     const s = el._slides[el._index];
@@ -4080,7 +5072,7 @@ async function main() {
     return { said, again, mark: el._seenRead(s.ids.device), at: new Date(at).getTime() };
   }, stageAt);
   check("2a: a stage_changed 40 s old is said once at the next look",
-    caught.said.filter((t) => /guess what! I'm a teen/.test(t)).length === 1 &&
+    caught.said.filter((t) => /guess what! i'm a teen/.test(t)).length === 1 &&
       !caught.again.some((t) => /guess what/.test(t)) && caught.mark?.said >= caught.at &&
       caught.mark?.seen > 0, JSON.stringify(caught));
   // Fold #12: the catch-up reads the viewer's own moments too (a bond line),
@@ -4206,6 +5198,11 @@ async function main() {
     { type: "good_morning", at: new Date(sickAt + 1).toISOString() },
     { type: "woke_up", how: "morning", at: new Date(sickAt).toISOString() },
   ] } });
+  const sickState = await card.evaluate((el) => { const s = el._slides[el._index]; return {
+    shared: localStorage.getItem("hatch-shared-screen"), calling: !!s.calling, game: !!s.game, q: s.queue?.length, say: s.sayUntil - Date.now(),
+    sick: el._isSick(s), reloading: !!s.reloading, nameSheet: !!s.nameSheet, status: s.screen.classList.contains("show-status"),
+    asleep: !!s.asleep, away: !!s.away, lastMoment: s.lastMoment, stage: s.egg, booting: !!el._booting, sharedSeen: !!el._sharedSeen,
+    lastUpd: el._hass.states[s.ids["sensor.last_care"]]?.last_updated, now: new Date().toISOString() }; });
   const heardSick = [];
   for (let i = 0; i < 50; i++) {
     const t = await cur().locator(".bubble").innerText();
@@ -4215,7 +5212,7 @@ async function main() {
   const iSick = heardSick.findIndex((t) => /don't feel so good/.test(t));
   const iCheer = heardSick.findIndex((t) => /morning/.test(t) && !isWake(t));
   check("2b: C6 comes before a coinciding good morning (the cheer waits)",
-    iSick >= 0 && iCheer > iSick, heardSick.join(" | "));
+    iSick >= 0 && iCheer > iSick, heardSick.join(" | ") + (iSick >= 0 ? "" : " " + JSON.stringify(sickState)));
   // C8: someone else's medicine, the viewer's own after the scene's cheer, and one whose scene is over.
   await moodBack();
   await quiet2a();
@@ -4353,6 +5350,60 @@ async function main() {
       e4.dream.every((l, i) => !i || l !== e4.dream[i - 1]), JSON.stringify(e4));
     check("fresh E4 (S-b): lights out after a visitor seen here says its callback once a day; no visitor or sunset, the usual",
       /robin/.test(e4.night[0] || "") && e4.night[1] === null && e4.plain === null, JSON.stringify(e4.night));
+    // The first night (s2682): a new pet's first bedtime says its line once, when it is said live;
+    // not on day 2, not again on a reload, not for an egg, not in the catch-up, and a new
+    // generation has a first night of its own.
+    const fn = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const real = { state: el._state, night: el._nightLine, line: el._line };
+      const key = (g) => `hatch-firstnight-${s.ids?.device}-${g}`;
+      const had = [1, 2].map((g) => localStorage.getItem(key(g)));
+      const out = {};
+      const as = (state, age, generation) => {
+        el._state = function (sl, k) {
+          const st = real.state.call(this, sl, k);
+          return k === "sensor.life_stage" && st
+            ? { ...st, state, attributes: { ...st.attributes, age_days: age, generation } } : st;
+        };
+      };
+      const asleep = (capture) => {
+        const said = [];
+        el._line = function (sl, cls, text, ...rest) { said.push(text); return real.line.call(this, sl, cls, text, ...rest); };
+        Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0 });
+        el._moment(s, { type: "fell_asleep", how: "house", at: "fn" }, capture);
+        el._line = real.line;
+        return said;
+      };
+      try {
+        el._nightLine = () => null;
+        [1, 2].forEach((g) => localStorage.removeItem(key(g)));
+        as("egg", 0.2, 1);
+        out.egg = asleep();
+        as("baby", 0.5, 1);
+        const cap = [];
+        asleep(cap);
+        out.catchUp = cap;
+        out.first = asleep();
+        out.reload = asleep(); // the same moment seen again: it is spent
+        as("baby", 1.6, 1);
+        out.day2 = asleep();
+        as("baby", 0.5, 2);
+        out.newPet = asleep();
+        as("baby", 0.5, 1);
+        localStorage.removeItem(key(1));
+        as("baby", 1.6, 1);
+        out.late = asleep();
+      } finally {
+        Object.assign(el, { _state: real.state, _nightLine: real.night, _line: real.line });
+        [1, 2].forEach((g, i) => { if (had[i] === null) localStorage.removeItem(key(g)); else localStorage.setItem(key(g), had[i]); });
+        Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0 });
+      }
+      return out;
+    });
+    const FN = "my first night here... \u2665";
+    check("first night: day-1 bedtime says the line once; not for an egg, in the catch-up, on day 2 or again on a reload; a new pet has its own",
+      fn.first.includes(FN) && !fn.egg.includes(FN) && !fn.catchUp.includes(FN) && !fn.reload.includes(FN) &&
+      !fn.day2.includes(FN) && fn.newPet.includes(FN) && !fn.late.includes(FN), JSON.stringify(fn));
     // Fresh-expand E6 (W-a, W-b): a wish's phrasing takes turns a day each; a live grant
     // with random 0 says what it got (TODAY_WISH), and that evening's today line isn't it.
     const TODAY_WISH6 = require("vm").runInNewContext(`(${src4.match(/\nconst TODAY_WISH = (\{[\s\S]*?\n\});/)[1]})`);
@@ -4753,14 +5804,15 @@ async function main() {
         const weekBox = s.screen.querySelector(".askday");
         out.week = { buttons: [...(weekBox?.querySelectorAll("button") || [])].map((b) => b.textContent) };
         weekBox?.querySelector('button[data-answer="yes"]')?.click();
-        out.week.which = runAsk();
+        // "yes" says "which day?" at once (UX 3 F4), not after the question's minute: it is on show, not queued.
+        out.week.which = s.queue.some((x) => x.ask) ? runAsk() : s.sayEntry?.text;
         const dayBox = s.screen.querySelector(".askday");
         out.week.days = [...(dayBox?.querySelectorAll("button") || [])].map((b) => [b.dataset.answer, b.textContent]);
         const ahead = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
-        out.week.want = [1, 2, 3, 4, 5, 6].map((n) => {
+        out.week.want = [0, 1, 2, 3, 4, 5, 6].map((n) => { // today first (UX 3 F14), then the next six
           const d = ahead(n);
           return [`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-            ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][d.getDay()]];
+            n === 0 ? "today" : ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][d.getDay()]];
         });
         Object.assign(s, { sayUntil: 0, sayClass: 0 });
         dayBox?.querySelector("button")?.click();
@@ -4926,7 +5978,7 @@ async function main() {
     check("fresh E13: a soft morning says a soft line; a shared screen asks the server nothing and says nothing",
       [...SOFT, ...typeLines("soft"), "*snuggle* hi hi ♥"].includes(f1.soft[0]) && f1.shared.length === 0 && f1.sharedCalls === 0,
       JSON.stringify({ soft: f1.soft, shared: f1.shared, calls: f1.sharedCalls }));
-    check("owner Q3 opp #2: anything big this week? yes / not really; which day? the next six by name; a day's tap cheers, asks what, sends its date",
+    check("owner Q3 opp #2: anything big this week? yes / not really; which day? today, then the next six by name; a day's tap cheers, asks what, sends its date",
       f1.week.buttons.join() === "yes,not really" && f1.week.which === BIG.which &&
         JSON.stringify(f1.week.days) === JSON.stringify(f1.week.want) && BIG.yes.includes(f1.week.reply) &&
         f1.week.what === BIG.what && f1.sent[0]?.day === f1.week.want[0][0], JSON.stringify({ week: f1.week, sent: f1.sent }));
@@ -5189,7 +6241,7 @@ async function main() {
     s.queue = [];
     return out;
   });
-  check("the pet says it made you something", photoLine.join() === "I made you something! it's in your journal ♥",
+  check("the pet says it made you something", photoLine.join() === "i made you something! it's in your journal ♥",
     photoLine.join());
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
@@ -5464,7 +6516,7 @@ async function main() {
       lines.home[0]?.text === "you're home! yay yay ♥" && lines.bond[0]?.text === "yay, you! ♥" &&
       lines.miss === "oh! hi hi ♥" && /^night night, \S+ ♥$/.test(lines.tucked), JSON.stringify(lines));
     check("a baby's refusals and wish; an aimed wish keeps its words",
-      lines.refusal.join("|") === "tummy full!|too sleepy to play|I'm not sick!" && lines.wish === "wish... snack after lunch" &&
+      lines.refusal.join("|") === "tummy full!|too sleepy to play|i'm not sick!" && lines.wish === "wish... snack after lunch" &&
       lines.aimed === "will you bring me a snack after lunch?", JSON.stringify(lines));
     check("a refused snack says the full line once",
       lines.snackFull === 1 && lines.snackTotal === 1, JSON.stringify(lines));
@@ -5525,8 +6577,8 @@ async function main() {
       return out;
     });
     check("device clock 10 min fast: the hatch countdown reads the server's after one state event",
-      /^hatching in about 2[01] min$/.test(clock.before) // 20, or 21 with a few seconds of offset left over
-       && clock.after === "hatching in about 30 min" &&
+      /^hatching in about 2[01]\u00a0min$/.test(clock.before) // 20, or 21 with a few seconds of offset left over
+       && clock.after === "hatching in about 30\u00a0min" &&
       clock.unsubscribed === 1 && clock.again === 0, JSON.stringify(clock));
     check("no catchphrase on a baby line, and the count doesn't move",
       lines.granted[0]?.opts?.catch === false && lines.favourite[0]?.opts?.catch === false && lines.count === 2 &&
@@ -5699,9 +6751,9 @@ async function main() {
     check("the baby talk switch: one call per tap, the button follows, a failed call goes back",
       toggle.before === "false" && toggle.after === "true" && toggle.text === "on" && toggle.calls === 1 &&
       toggle.type === "virtual_pet/baby_talk" && toggle.enabled === true && toggle.cache === "on" &&
-      toggle.note === "OK, baby talk for babies and children ♥" &&
-      toggle.failed.pressed === "true" && toggle.failed.calls === 2 && toggle.failed.note === "That didn't work. Try again." &&
-      toggle.failed.cache === "on" && toggle.babyNote === "OK, baby talk for babies and children ♥", JSON.stringify(toggle));
+      toggle.note === "ok, baby talk for babies and kids ♥" &&
+      toggle.failed.pressed === "true" && toggle.failed.calls === 2 && toggle.failed.note === "hm, that didn't work. try again soon" &&
+      toggle.failed.cache === "on" && toggle.babyNote === "ok, baby talk for babies and kids ♥", JSON.stringify(toggle));
     await page.locator("hatch-pet-card").evaluate((el) => { // the switch, on, without the failed tap's note
       const s = el._slides[el._index];
       el._renderStatus(s, []);
@@ -5777,10 +6829,10 @@ async function main() {
         return { ...st, state: stage, attributes: out };
       };
       s.journal = journal;
-      el._renderStatus(s, []);
-      for (let i = 0; i < 40 && journal && !s.status.querySelector(".gen"); i++) {
-        await new Promise((r) => setTimeout(r, 100));
-      }
+      // The journal page, once drawn, stays on show while a redraw gathers its data (UX fix 2, F2):
+      // a stale .gen is already there, so wait for the redraw itself, not for a .gen to appear.
+      if (journal) await el._renderJournal(s);
+      else el._renderStatus(s, []);
       const text = (sel) => [...s.status.querySelectorAll(sel)].map((r) => r.innerText.replace(/\s+/g, " ").trim());
       return journal ? text(".gen") : text(".row");
     }, { stage, attrs, journal });
@@ -6337,7 +7389,7 @@ async function main() {
     check("hellos by type: nameless on a shared screen and never a bond line; bond lines only with the viewer's own bond",
       helloBad.length === 0, helloBad.slice(0, 6).join(" | "));
 
-    // The reveal: "I'm a teen now!", then the type's line in a bubble of its
+    // The reveal: "i'm a teen now!", then the type's line in a bubble of its
     // own (with its catchphrase allowed); none for an adult or without a type.
     const reveal = await typeAs(async (el, s, t, types) => {
       t.pet("teen", null, 0);
@@ -6347,10 +7399,10 @@ async function main() {
       out.none = t.moment({ type: "stage_changed", stage: "teen", from: "child" });
       return out;
     }, TYPES);
-    check("a new teen says its type after \"I'm a teen now!\", in a bubble of its own; an adult or no type, none",
-      TYPES.every((type) => reveal[type].said === "I'm a teen now!" && reveal[type].queued.length === 1 &&
+    check("a new teen says its type after \"i'm a teen now!\", in a bubble of its own; an adult or no type, none",
+      TYPES.every((type) => reveal[type].said === "i'm a teen now!" && reveal[type].queued.length === 1 &&
         PERSONA[type].reveal.includes(reveal[type].queued[0].text) && reveal[type].queued[0].catch) &&
-      reveal.adult.queued.length === 0 && reveal.none.queued.length === 0 && reveal.none.said === "I'm a teen now!",
+      reveal.adult.queued.length === 0 && reveal.none.queued.length === 0 && reveal.none.said === "i'm a teen now!",
       JSON.stringify([reveal.plucky, reveal.adult, reveal.none]));
     await page.emulateMedia({ reducedMotion: null });
 
@@ -6368,7 +7420,7 @@ async function main() {
       revealLine = (await bubble()).trim();
     }
     await shot("07f-reveal-charming");
-    check("live, the reveal shows after the stage line, neither lost", stageLine.trim() === "I'm a teen now!" &&
+    check("live, the reveal shows after the stage line, neither lost", stageLine.trim() === "i'm a teen now!" &&
       PERSONA.charming.reveal.includes(revealLine), `${stageLine} -> ${revealLine}`);
 
     // Side by side, for the owner: a named hello, a shared-screen hello and a
@@ -6645,6 +7697,291 @@ async function main() {
     }
     check(`egg shows ${frames}`, src.includes(frames), src.split("/").slice(-1)[0]);
   }
+  // UX fix 2, F12: an egg's status page is "you two" and when it hatches, none of the care meters.
+  for (const [minutes, line] of [[25, "warm and growing ♪"], [10, "wiggling! any minute ♪"], [4, "cracking! ♥"]]) {
+    await inject(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + minutes * 60000).toISOString() } });
+    await page.waitForTimeout(1200);
+    const egg = await card.first().evaluate((el) => {
+      const s = el._slides[el._index];
+      if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      el._toggleStatus(s);
+      const out = { rows: [...s.status.querySelectorAll(".row")].map((r) => r.textContent.trim()), text: s.status.textContent };
+      el._toggleStatus(s);
+      return out;
+    });
+    check(`UX2 F12: an egg ${minutes} min out says "${line}" and shows no care meters`,
+      egg.rows.some((r) => r === `hatching${line}`) && !/hunger|happy|energy|health|discipline|weight|traits|no care yet|all new here/.test(egg.text), JSON.stringify(egg));
+  }
+  // UX fix 4, F2: an egg can be patted (it rocks, says "♪", the status stays shut) and doesn't greet
+  // by name (its greeting waits for the hatch). F10: the bubble counts "N min" with a no-break
+  // space, and says what the status says in the last 6 minutes.
+  await inject(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + 25 * 60000).toISOString() } });
+  await page.waitForTimeout(1200);
+  const eggPat = await card.first().evaluate((el) => {
+    const s = el._slides[el._index];
+    if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+    const out = { patOn: el._patOn(s) };
+    const greeted = s.greeted;
+    s.greeted = false;
+    el._greet(s); // an egg doesn't greet: the flag stays down for the hatch
+    out.greetedAfter = s.greeted;
+    s.greeted = greeted;
+    s.patAt = 0;
+    s.sayUntil = 0;
+    out.say25 = el._say(s, null, false);
+    s.hatchesAt = new Date(Date.now() + 4 * 60000).toISOString();
+    out.say4 = el._say(s, null, false);
+    s.hatchesAt = new Date(Date.now() + 25 * 60000).toISOString();
+    s.pat.click();
+    out.bubble = s.bubble.textContent;
+    out.rocked = s.pet.classList.contains("rock");
+    out.status = s.screen.classList.contains("show-status");
+    return out;
+  });
+  check("UX4 F2: an egg's pat rocks it and says ♪, opens no status, and it hasn't greeted",
+    eggPat.patOn && eggPat.bubble === "♪" && eggPat.rocked && !eggPat.status && !eggPat.greetedAfter, JSON.stringify(eggPat));
+  check("UX4 F10: the egg's bubble keeps '25 min' together, and says 'cracking! ♥' at 6 or fewer",
+    /^hatching in about 25\u00a0min$/.test(eggPat.say25) && eggPat.say4 === "cracking! ♥", JSON.stringify(eggPat));
+  // The name sheet (settings S3): naming the new generation. It lives here, after the moments section, because
+  // it swaps the pet's states for a while; the moments checks near the layout and timing limit are touchy about that.
+  // (SKIP_S3 leaves it out, to tell its effects from others'.) The lay press, the server's answers and the
+  // pet's stage and generation are stubbed on this card's own hass (a copy, put back at the end).
+  const naming = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const realTimeout = window.setTimeout; // the expiry check swaps setTimeout for a while: waits keep the real one
+    const wait = (ms) => new Promise((r) => realTimeout(r, ms));
+    const s = el._slides[el._index];
+    const realHass = el._hass;
+    const lifeId = s.ids["sensor.life_stage"];
+    const life = realHass.states[lifeId];
+    const gen = Number(life.attributes.generation ?? 1);
+    const had = s.ids["button.lay_egg"];
+    const sent = [], pressed = [];
+    let answer = () => ({ name: "x" }); // what the fake server says to a rename (may throw {code})
+    let layFails = false;
+    // The pet's state: its stage and generation ("gone" is the entry reloading: unavailable, no attributes).
+    const put = (stage, generation) => {
+      const state = stage === "gone" ? { ...life, state: "unavailable", attributes: {} }
+        : { ...life, state: stage, attributes: { ...life.attributes, generation } };
+      el._hass = { ...realHass, states: { ...realHass.states, [lifeId]: state },
+        callService: async (d, svc, data) => { pressed.push(`${d}.${svc}`); if (layFails) throw new Error("no"); },
+        callWS: async (msg) => {
+          if (msg.type !== "virtual_pet/rename") return realHass.callWS.call(realHass, msg);
+          sent.push(msg);
+          return answer(msg);
+        } };
+      s.drawnSig = null;
+    };
+    const settle = async () => { el._redraw(s); await wait(300); }; // _update is async
+    const closed = () => !s.nameSheet && !s.screen.classList.contains("show-status");
+    const isOpen = () => s.nameSheet && s.screen.classList.contains("show-status") && !!s.status.querySelector(".nameinput");
+    const lay = async () => { // the tap of a lay, as the card sends it
+      s.ids["button.lay_egg"] = s.ids["button.lay_egg"] || "button.nobody_lay_egg";
+      el._press(s, "lay_egg");
+      await wait(40);
+    };
+    const reopen = async (stage = "egg") => {
+      put("adult", gen);
+      await settle();
+      await lay();
+      put(stage, gen + 1);
+      await settle();
+      return isOpen();
+    };
+    const type = (text) => { const f = s.status.querySelector(".nameinput"); f.value = text; return f; };
+    const save = async () => { s.nameSheetAt = 0; s.status.querySelector(".namego").click(); await wait(60); };
+    const err = () => s.status.querySelector(".nameerr");
+    const out = {};
+    const timers = [];
+    try {
+      // The trigger: the sheet opens when the sensor shows an egg of the next generation, and not before.
+      put("adult", gen);
+      await settle();
+      out.noneYet = closed() && !s.layAt;
+      await lay();
+      out.waiting = s.layAt?.generation === gen && closed() && pressed.at(-1) === "button.press";
+      put("adult", gen);
+      await settle();
+      out.sameGeneration = closed() && !!s.layAt; // nothing changed: nothing opens
+      put("egg", gen); // an egg, but not a newer one
+      await settle();
+      out.notNewer = closed();
+      put("gone"); // the entry reloading after a lay that moves the world: keep waiting
+      await settle();
+      out.waitsThroughGone = closed() && !!s.layAt;
+      put("egg", gen + 1);
+      await settle();
+      out.opens = isOpen() && !s.layAt;
+      const field = s.status.querySelector(".nameinput");
+      out.fieldName = field.value === el._petName(s) && field.maxLength === 20 && field.getAttribute("aria-label") === "the new egg's name, up to 20 characters"
+        && document.activeElement !== null;
+      out.lines = s.status.querySelector(".sec").textContent === "a name for the egg"
+        && s.status.querySelector(".namego").textContent === "name it"
+        && s.status.querySelector(".nameback").textContent === `keep ${el._petName(s)}`;
+      // The save: sends {type, entity_id, name} (spaces as typed; the server tidies), says N13 on the screen, closes.
+      answer = (msg) => ({ name: msg.name });
+      type("Fern");
+      await save();
+      out.sends = sent.length === 1 && sent[0].type === "virtual_pet/rename" && sent[0].entity_id === lifeId && sent[0].name === "Fern";
+      out.saved = closed() && s.bubble.textContent === "Fern! i like it ♥";
+      sent.length = 0;
+      // Enter submits; the same text twice is one rename.
+      await reopen();
+      type("  Fern   Two ").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await wait(60);
+      out.enter = sent.length === 1 && sent[0].name === "Fern Two" && closed();
+      sent.length = 0;
+      // Empty or blank: N14 without asking the server; the field and sheet stay.
+      await reopen();
+      type("   ");
+      await save();
+      out.blank = sent.length === 0 && isOpen() && err().textContent === "keep it short, and not blank" && !err().hidden;
+      type("a");
+      s.status.querySelector(".nameinput").dispatchEvent(new Event("input", { bubbles: true }));
+      out.errClears = err().hidden;
+      // Each error key shows its own line under the field; the sheet and the typed text stay.
+      const want = { bad_name: "keep it short, and not blank", taken: "another pet here has that name",
+        not_now: "only a new egg or baby can be named", read_only: "this login can't name, sorry",
+        unknown_command: "hm, that name didn't stick ♪", no_pet: "hm, that name didn't stick ♪" };
+      out.errors = true;
+      for (const [code, line] of Object.entries(want)) {
+        answer = () => { throw { code }; };
+        type("Moss");
+        await save();
+        if (!(isOpen() && err().textContent === line && s.status.querySelector(".nameinput").value === "Moss")) out.errors = `${code}: ${err()?.textContent}`;
+      }
+      // Hatching resets nothing here: the cap is on the field.
+      out.cap = s.status.querySelector(".nameinput").maxLength === 20;
+      // not_ready (the entry reloading): once more after 2 s, then it succeeds; twice shows N18.
+      let calls = 0;
+      answer = (msg) => { calls++; if (calls === 1) throw { code: "not_ready" }; return { name: msg.name }; };
+      sent.length = 0;
+      type("Moss");
+      await save();
+      out.retryWaits = sent.length === 1 && isOpen();
+      await wait(2300);
+      out.retryOnce = sent.length === 2 && closed() && s.bubble.textContent === "Moss! i like it ♥";
+      await reopen();
+      calls = 0;
+      sent.length = 0;
+      answer = () => { calls++; throw { code: "not_ready" }; };
+      type("Moss");
+      await save();
+      await wait(2300);
+      out.retryThenFails = sent.length === 2 && isOpen() && err().textContent === "hm, that name didn't stick ♪";
+      // The exits: keep (no call), Escape in the field, the status chip, a swipe, the shared-screen switch,
+      // the pet leaving the baby stage, and another generation.
+      sent.length = 0;
+      s.nameSheetAt = 0;
+      s.status.querySelector(".nameback").click();
+      out.keep = closed() && sent.length === 0;
+      await reopen();
+      s.status.querySelector(".nameinput").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      out.escape = closed() && sent.length === 0;
+      await reopen();
+      el._toggleStatus(s);
+      out.chip = closed();
+      const n = el._slides.length;
+      if (n > 1) {
+        await reopen();
+        el._go((el._index + 1) % n);
+        const gone = closed();
+        el._go(el._slides.indexOf(s));
+        out.swipe = gone;
+      } else out.swipe = true;
+      await reopen();
+      put("child", gen + 1);
+      await settle();
+      out.child = closed();
+      await reopen(); // a new generation always starts as an egg; the sheet stays open as it turns baby
+      put("baby", gen + 1);
+      await settle();
+      out.baby = isOpen();
+      put("baby", gen + 2);
+      await settle();
+      out.otherGeneration = closed();
+      // Shared screen: the sheet opens and saves there too; the switch closes it.
+      localStorage.setItem("hatch-shared-screen", "on");
+      el._goShared();
+      out.sharedOpens = await reopen();
+      answer = (msg) => ({ name: msg.name });
+      type("Fern");
+      await save();
+      out.sharedSaves = sent.at(-1)?.name === "Fern" && closed();
+      await reopen();
+      localStorage.setItem("hatch-shared-screen", "off");
+      el._goPersonal();
+      out.sharedExit = closed();
+      // A lay that fails to press drops the wait; a lay refused by the server (nothing changes) opens
+      // nothing and the wait is dropped after 30 s, longer while the pet is reloading.
+      put("adult", gen);
+      await settle();
+      layFails = true;
+      await lay();
+      await wait(60);
+      out.failedPress = !s.layAt && closed();
+      layFails = false;
+      window.setTimeout = (fn, ms, ...rest) => { timers.push([fn, ms]); return realTimeout(() => {}, 1e9); };
+      await lay();
+      const expire = timers.find(([, ms]) => ms === 30000);
+      window.setTimeout = realTimeout;
+      out.expiry = !!expire && !!s.layAt;
+      s.reloading = true;
+      expire?.[0]();
+      out.expiryWaitsWhileReloading = !!s.layAt;
+      s.reloading = false;
+      expire?.[0]();
+      out.expires = !s.layAt;
+      // A pet change drops the wait.
+      const other = el._buildSlide(); // a slide that now shows another pet: _forget on one of its own
+      other.layAt = { generation: gen, at: Date.now() };
+      other.nameSheet = true;
+      el._forget(other);
+      out.petChange = !other.layAt && !other.nameSheet;
+      other.el.remove(); // _buildSlide put it in the track
+      // The status row: on an egg and a baby, not a child; "change" opens the sheet, keep goes back to the page.
+      const row = async (stage) => {
+        put(stage, gen);
+        if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+        await settle();
+        el._toggleStatus(s);
+        return !!s.status.querySelector(".namechange");
+      };
+      out.rowEgg = await row("egg");
+      const rowText = [...s.status.querySelectorAll(".row")].find((r) => r.querySelector(".namechange"))?.textContent || "";
+      out.rowLines = rowText.startsWith("name") && rowText.endsWith("change") && rowText.includes(el._petName(s));
+      s.status.querySelector(".namechange").click();
+      out.rowOpens = isOpen() && s.nameFrom === "status";
+      s.nameSheetAt = 0;
+      s.status.querySelector(".nameback").click();
+      out.rowKeep = !s.nameSheet && s.screen.classList.contains("show-status") && !!s.status.querySelector(".namechange");
+      out.rowSave = true;
+      s.status.querySelector(".namechange").click();
+      answer = (msg) => ({ name: msg.name });
+      type("Pip2");
+      await save();
+      out.rowSave = !s.nameSheet && s.screen.classList.contains("show-status") && s.status.querySelector(".status-feedback")?.textContent === "Pip2! i like it ♥";
+      out.rowBaby = await row("baby");
+      out.rowChild = !(await row("child"));
+      out.rowAdult = !(await row("adult"));
+      el._toggleStatus(s);
+    } finally {
+      window.setTimeout = realTimeout;
+      // Home Assistant's own hass as it is now, not the copy taken at the start (this block ran for seconds).
+      el.hass = document.querySelector("home-assistant").hass;
+      s.sayUntil = 0;
+      s.queue = [];
+      s.wasGone = false;
+      localStorage.setItem("hatch-shared-screen", "off");
+      if (had === undefined) delete s.ids["button.lay_egg"];
+      el._layDrop(s);
+      s.nameSheet = false;
+      if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      s.confirm = null;
+      s.drawnSig = null;
+    }
+    return out;
+  });
+  for (const [name, ok] of Object.entries(naming)) check(`settings S3 name sheet: ${name}`, ok === true, JSON.stringify(naming));
 
   }
   if (enter("sharedscreen")) {
@@ -6831,7 +8168,7 @@ async function main() {
     check("FA: shared screen clears a personal line still typing, on every slide, card and tab",
       typingRound.before.said.includes("sunbeam") && typingRound.before.live.includes("sunbeam") &&
       typingRound.before.otherStatus && typingRound.before.sheetPersonal && typingRound.after.sheetKept && typingRound.clean &&
-      typingRound.after.message === "Nothing personal on this screen now.",
+      typingRound.after.message === "shh, nothing personal here now",
       JSON.stringify({ ...typingRound, typedWhenPressed: typingRound.before.typing }));
     check("FA: every card and tab asks its channel again as a shared screen",
       typingRound.subs.page.shared >= typingRound.subs.page.slides && typingRound.subs.tab.shared >= typingRound.subs.tab.slides,
@@ -7072,7 +8409,7 @@ async function main() {
     const button = () => s.status.querySelector(".bell.forgetme");
     out.label = button()?.closest(".row")?.textContent.trim();
     out.aria = button()?.getAttribute("aria-label");
-    out.order = [...s.status.querySelectorAll(".row")].map((r) => r.children[1]?.textContent)
+    out.order = [...s.status.querySelectorAll(".row")].map((r) => r.children[0]?.textContent) // a sheet row: label first (no icon slot, F5)
       .filter((t) => ["baby talk", "my data", "sounds here"].includes(t)).join();
     const sent = [];
     const realWS = el._hass.callWS.bind(el._hass);
@@ -7134,10 +8471,10 @@ async function main() {
   const unarmed = "forget my data: your birthday, answers and settings for every pet; your bonds stay";
   check("an armed forget goes back to forget when its window closes, and after a failure",
     lapse.armed.text === "sure? tap again" && lapse.lapsed.text === "forget" && lapse.lapsed.aria === unarmed &&
-    lapse.sent.join() === "virtual_pet/forget_me" && lapse.message === "That didn't work. Try again." &&
+    lapse.sent.join() === "virtual_pet/forget_me" && lapse.message === "hm, that didn't work. try again soon" &&
     lapse.failed.text === "forget" && lapse.failed.aria === unarmed && lapse.inSheet, JSON.stringify(lapse));
   check("forget my data is a personal row, after baby talk",
-    !forgot.shared && forgot.sharedSheet && forgot.label === "my dataforget" && forgot.order === "baby talk,my data,sounds here" &&
+    !forgot.shared && forgot.sharedSheet && forgot.label === "my dataforget" && forgot.order === "sounds here,baby talk,my data" &&
     forgot.aria === "forget my data: your birthday, answers and settings for every pet; your bonds stay",
     JSON.stringify(forgot));
   check("one tap on forget my data only asks",
@@ -7147,7 +8484,7 @@ async function main() {
     // A visit within the hour isn't counted (fast_forward doesn't move the clock),
     // and then says only baby talk: that it's off proves the server forgot.
     (forgot.before.counted === false || forgot.before.kept === true) && forgot.before.baby === true &&
-    forgot.sent.join() === "virtual_pet/forget_me" && forgot.message === "Forgotten. The pets start fresh with you ♥" &&
+    forgot.sent.join() === "virtual_pet/forget_me" && forgot.message === "forgotten. we'll start fresh ♥" &&
     !forgot.bdayRows && forgot.babyTalk === "false" && !forgot.myDay && forgot.myDayRow !== "true" &&
     forgot.storage.length === 0 && forgot.othersKept &&
     forgot.after.baby === false && (forgot.after.counted === false || (forgot.after.kept === false && forgot.after.myDay === false)),
@@ -7261,7 +8598,7 @@ async function main() {
       Object.assign(s, { asleep: false, lightsOut: false });
       Date.prototype.getHours = realHours;
       setup();
-      localStorage.setItem("hatch-sounds", "off");
+      localStorage.setItem("hatch-sounds", bell === ".bell.babble" ? "on" : "off"); // babble needs sounds here (UX7 F11)
       localStorage.setItem("hatch-babble", "off");
       s.statusHtml = null;
       s.settings = true; // the switches live in the settings sheet
@@ -7450,7 +8787,7 @@ async function main() {
     check("P3a: the bell and my day fall back to the services on unknown_command, and only then",
       fallback.ws.join() === "virtual_pet/notify_me,virtual_pet/my_day,virtual_pet/notify_me" &&
       fallback.svc.join() === "virtual_pet.notify_me:true,virtual_pet.my_day:true" &&
-      fallback.message === "That didn't work. Try again.", JSON.stringify(fallback));
+      fallback.message === "hm, that didn't work. try again soon", JSON.stringify(fallback));
     // Retries: a subscribe refused (HA still starting, the pet mid-reload) is
     // asked again after 2 s and 5 s (then 15 s, then every minute); the first
     // look goes ahead meanwhile. And a new socket ("ready") asks again at once.
@@ -8435,8 +9772,9 @@ async function main() {
   await flagged("power", (el) => { el._slides[el._index].power = { timers: [] }; }, (el) => { el._slides[el._index].power = null; });
   await flagged("boot", (el) => { el._slides[el._index].boot.hidden = false; }, (el) => { el._slides[el._index].boot.hidden = true; });
   await flagged("away", (el) => { el._slides[el._index].away = true; }, (el) => { el._slides[el._index].away = false; });
-  await flagged("egg", (el) => { el._slides[el._index].egg = true; }, (el) => { el._slides[el._index].egg = false; });
-  check("the pat box is hidden in the status, a game, a question, a scene, a link, low battery, boot, away and the egg",
+  // An egg is patted now (UX fix 4, F2); a pet whose states are reloading is not.
+  await flagged("reloading", (el) => { el._slides[el._index].reloading = true; }, (el) => { el._slides[el._index].reloading = false; });
+  check("the pat box is hidden in the status, a game, a question, a scene, a link, low battery, boot, away and while reloading",
     Object.values(hiddenIn).length === 9 && Object.values(hiddenIn).every(Boolean), JSON.stringify(hiddenIn));
   check("the pat box is back after", (await patState()).shown);
   // A peeking neighbour: its box is hidden and its device inert, so a real tap there reaches
@@ -8545,6 +9883,15 @@ async function main() {
       check(`react: ${stage} ${name} shows ${stage}_${mood} and ${move}`,
         r.src.includes(`/${stage}_${mood}_`) && r.live && r.moves.join() === move && (move !== "look" || r.moving), JSON.stringify(r));
     }
+    for (const [action, line] of [["blanket", "so cozy now... thank you ♥"], ["fan", "ahh, a breeze! thank you ♪"]]) {
+      const said = await card.evaluate((el, action) => {
+        const s = el._slides[el._index];
+        s.queue = []; s.sayUntil = 0; s.sayClass = 0;
+        el._react(s, { at: Date.now() / 1000, action, result: "ok" });
+        return s.bubble.textContent;
+      }, action);
+      check(`UX3 F11: ${stage} the ${action} answered gets a thank-you line`, said === line, said);
+    }
     for (const result of ["not_needed", "already_clean", "not_sick", "not_sleepy", "too_tired"]) {
       const r = await react({ action: "play", result });
       check(`react: ${stage} refusal ${result} reacts`, r.live && r.moves.join() === "look" && r.src.includes(`/${stage}_`), JSON.stringify(r));
@@ -8559,7 +9906,7 @@ async function main() {
       return out;
     });
     check(`react: ${stage} a won game's log reacts even if the game is still open`, won.live && won.src.includes(`/${stage}_${own("cheer")}_`), JSON.stringify(won));
-    for (const result of ["asleep", "egg", "away", "no_game", "unfair", "spoiled", "lost"]) {
+    for (const result of ["asleep", "egg", "away", "no_game", "unfair", "spoiled"]) {
       const r = await react({ action: "play", result });
       check(`react: ${stage} ${result} does nothing`, !r.live && r.moves.length === 0, JSON.stringify(r));
     }
@@ -8575,6 +9922,10 @@ async function main() {
     check(`react: ${stage} back to the mood frame after 2.5 s`,
       !after.live && after.shown && new RegExp(`/${stage}_${after.mood}_|/${stage}_content_`).test(after.src) &&
       !after.moves.some((c) => ["munch", "greethop", "look", "settle"].includes(c)), JSON.stringify(after));
+    // UX fix 6 (F5): a lost game settles on the content frames (a species with acts.aww plays it).
+    const lostReact = await react({ action: "play", result: "lost" });
+    check(`react: ${stage} lost settles on the content frames`,
+      lostReact.live && lostReact.moves.includes("settle") && lostReact.src.includes(`/${stage}_content_`), JSON.stringify(lostReact));
     // Fallback: an act whose sprites do not load swaps back to the mood frames, and is remembered
     // (_poseOk, keyed species/stage/act, apart from the waves). No broken image left on show.
     if (acts) {
@@ -8786,8 +10137,9 @@ async function main() {
     check(`react: ${stage} without acts a pat is as before`, !N.pat.src.includes("_pat_") && !N.pat.live && !N.patInReaction.live, JSON.stringify(N.pat));
     check(`react: ${stage} acts.refuse plays, else the bored frame and look`,
       H.refuse.src.includes(`${sg}refuse_`) && H.refuse.live && N.refuse.src.includes(`${sg}bored_`) && N.refuse.look && N.refuse.live, JSON.stringify([H.refuse, N.refuse]));
-    check(`react: ${stage} acts.aww plays after a lost game (even with the game still open); none without`,
-      H.aww.live && H.aww.src.includes(`${sg}aww_`) && H.awwLog.live && H.awwLog.src.includes(`${sg}aww_`) && !N.aww.live && !N.awwLog.live, JSON.stringify([H.aww, H.awwLog, N.aww, N.awwLog]));
+    check(`react: ${stage} acts.aww plays after a lost game (even with the game still open); without it the content frames settle (UX fix 6, F5)`,
+      H.aww.live && H.aww.src.includes(`${sg}aww_`) && H.awwLog.live && H.awwLog.src.includes(`${sg}aww_`) &&
+        N.aww.live && N.awwLog.live && !N.aww.src.includes("aww_") && N.aww.src.includes(`${sg}content_`), JSON.stringify([H.aww, H.awwLog, N.aww, N.awwLog]));
     check(`react: ${stage} acts.ready plays ~1.2 s at a game's start; none without`,
       !H.picker.live && H.ready.live && H.ready.src.includes(`${sg}ready_`) && H.ready.ms <= 1300 && !N.ready.live, JSON.stringify([H.ready, N.ready]));
     check(`react: ${stage} acts.splash is the clean scene's last beat; without it the cheer or clean frames`,
@@ -8959,6 +10311,56 @@ async function main() {
   }
   check("visitors: no visit when asleep, away, egg, in a game or scene, linking, calling, power, status open, queued, " +
     "early or off-slide; the day's flag unused", bad.length === 0, bad.join(" | "));
+  // UX8 F2: the pet faces a visitor coming from the left and holds the look through the greet; it
+  // never turns away from one coming in on the right. UX8 F4: a played day visitor reports
+  // virtual_pet/greeted (any screen); a counted-off start, a guest and a seasonal cross-over don't.
+  {
+    await vprep(V0);
+    const r = await card.evaluate(async (el, v) => {
+      const s = el._slides[el._index];
+      const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+      const out = {};
+      const realPlan = el._visitPlan;
+      el._visitPlan = () => ({ id: v.id });
+      try {
+        for (const ltr of [true, false]) {
+          el._visitorEnd(s);
+          s.pet.classList.remove("look");
+          el._visitorStart(s, v, { ltr, count: false });
+          const inMs = v.in || 1400;
+          await wait(inMs + 400);
+          const arriving = s.pet.classList.contains("look");
+          await wait(1500); // past the greet (in + 1000)
+          out[ltr ? "ltr" : "rtl"] = [arriving, s.pet.classList.contains("look")];
+          el._visitorEnd(s);
+          s.pet.classList.remove("look");
+        }
+        const sent = [];
+        const real = el._hass.callWS;
+        el._hass.callWS = (m) => (m.type === "virtual_pet/greeted" ? (sent.push(m), Promise.resolve(null)) : real.call(el._hass, m));
+        try {
+          el._visitorStart(s, v); // counted: reported
+          el._visitorStart(s, v, { count: false });
+          el._visitorStart(s, v, { guest: true, world: s.worldKey });
+          el._visitorStart(s, { ...v, cross: true });
+        } finally {
+          el._hass.callWS = real;
+        }
+        out.sent = sent.map((m) => m.entity_id === s.ids["sensor.life_stage"]);
+      } finally {
+        el._visitPlan = realPlan;
+        el._visitorEnd(s);
+        s.pet.classList.remove("look");
+        for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-") || k.startsWith("hatch-visitfriends-")) localStorage.removeItem(k);
+        Object.assign(s, { sayUntil: 0, flairUntil: 0, poseUntil: 0, visitUntil: 0, queue: [] });
+      }
+      return out;
+    }, V0);
+    check("UX8 F2: the pet faces a visitor from the left through the greet, and never turns from one on the right",
+      r.ltr?.[0] === true && r.ltr?.[1] === true && r.rtl?.[0] === false && r.rtl?.[1] === false, JSON.stringify(r));
+    check("UX8 F4: a played day visitor reports greeted for this pet; an uncounted start, a guest and a cross-over don't",
+      JSON.stringify(r.sent) === "[true]", JSON.stringify(r.sent));
+  }
   // Fresh-moment 5a: a question on show (its 60 s hold) no longer stops a visit or a flair;
   // the question keeps its bubble and buttons, and the visitor's greet says no line.
   {
@@ -9091,8 +10493,9 @@ async function main() {
   check("visitors: the greet falls back to the excited frames when the waves failed to load",
     fb.skip || (fb.frames?.length && fb.frames.every((f) => !/_wave_/.test(f))), JSON.stringify(fb));
   const added = greeted.keys.filter((k) => !before.includes(k));
-  check("visitors: nothing sent (no callService or callWS), only hatch-visit-* kept (and E3's friends tally)",
-    greeted.calls.length === 0 && added.filter((k) => k.startsWith("hatch-visit-")).length === 1 &&
+  // (UX8 F4: the played day visitor reports virtual_pet/greeted, the one thing sent.)
+  check("visitors: nothing sent but the greeted report (no callService or callWS), only hatch-visit-* kept (and E3's friends tally)",
+    greeted.calls.every((c) => /greeted/.test(c)) && added.filter((k) => k.startsWith("hatch-visit-")).length === 1 &&
     added.every((k) => /^hatch-visit(-|seen-|friends-)/.test(k)), JSON.stringify({ calls: greeted.calls, added }));
   await card.evaluate((el) => { el._hass.callService = el.__realCalls.svc; el._hass.callWS = el.__realCalls.ws; });
   // A kept line arriving mid-visit keeps its bubble: the greet is skipped.
@@ -9308,7 +10711,7 @@ async function main() {
       }, { ms: (host.in || 1400) + 1600 });
       check("fresh E10 (V-b): a pair day brings a second visitor of the world and a pair line; both go; nothing sent; only the planned one counted",
         pair.vis.length === 2 && new Set(pair.vis).size === 2 && PAIRS.includes(pair.said) && pair.after === 0 &&
-        pair.calls.length === 0 && Object.keys(pair.tally).length === 1, JSON.stringify(pair));
+        pair.calls.every((c) => c === "virtual_pet/greeted") && Object.keys(pair.tally).length === 1, JSON.stringify(pair));
     }
     await vprep(null);
     const guest = await card.evaluate(async (el) => {
@@ -10603,6 +12006,10 @@ async function main() {
     await prep();
     const first = await card.evaluate((el) => {
       for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k);
+      // This is about the day's first-link timer, not who is free: with finds shown a line can
+      // land (a find, a gift) between prep and here, and a pet with a line waiting is not free.
+      // So clear them again in this same step, and report what was left if a try still fails.
+      for (const s of el._slides) Object.assign(s, { queue: [], sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
       const h = el._slides[el._index];
       const now = Date.now();
       const tries = {};
@@ -10630,7 +12037,8 @@ async function main() {
       for (let i = 0; i < 20; i++) { el._linkFirstMs = undefined; el._touchedAt = null; el._linkTick(h); ms.push(el._linkFirstMs); }
       el._linkAt = Date.now() + 1e9;
       localStorage.setItem(`hatch-link-cardcheck-${new Date().toDateString()}`, "1");
-      return { tries, lo: Math.min(...ms), hi: Math.max(...ms) };
+      return { tries, lo: Math.min(...ms), hi: Math.max(...ms),
+        free: el._slides.map((x) => [el._free(x), x.queue?.length || 0, x.moodState]) };
     });
     check(`the day's first link waits for a touched, shown look 1-3 min in (${width}px)`,
       first.tries.watched && !first.tries.untouched && !first.tries.soon && !first.tries.stale && !first.tries.hidden && !first.tries.offscreen
@@ -10713,6 +12121,66 @@ async function main() {
     const swiped = await state();
     check(`a swipe mid-visit leaves nothing behind (${width}px)`, midway.guestImg === 1 && swiped.left === 0 && !swiped.beam, JSON.stringify([midway.guestImg, swiped.left]));
 
+    // UX8 F1: a tap on the visit perks the host and keeps the visit; the Status chip ends it before the
+    // page opens, so the guest never stands over it. F3: the guest's reply clears the host's line.
+    await prep();
+    await card.evaluate((el) => el._linkStart(el._slides[0], el._slides[1]));
+    await until((el) => el._slides[0].screen.querySelector(".vsay:not([hidden])"), null, 6000);
+    const reply = await card.evaluate((el) => {
+      const h = el._slides[0];
+      const say = h.screen.querySelector(".vsay:not([hidden])")?.getBoundingClientRect();
+      const bub = h.bubble.getBoundingClientRect();
+      return { hostSays: h.bubble.textContent, gap: say && bub.height ? Math.round(say.top - bub.bottom) : null };
+    });
+    check(`UX8 F3: the guest's reply sits under the host's line, not over it (${width}px)`,
+      reply.hostSays && reply.gap !== null && reply.gap >= 0, JSON.stringify(reply));
+    const tapped = await card.evaluate((el) => {
+      const h = el._slides[0];
+      const out = {};
+      h.screen.click();
+      out.statusAfterTap = h.screen.classList.contains("show-status");
+      out.linkAfterTap = !!el._link;
+      el._toggleStatus(h); // the Status chip
+      out.guestOverPage = h.screen.querySelectorAll(".vguest").length;
+      out.linkAfterChip = !!el._link;
+      out.statusAfterChip = h.screen.classList.contains("show-status");
+      el._toggleStatus(h);
+      return out;
+    });
+    check(`UX8 F1: a tap mid-visit keeps it and never opens Status; the chip ends it with no guest over the page (${width}px)`,
+      !tapped.statusAfterTap && tapped.linkAfterTap && tapped.guestOverPage === 0 && !tapped.linkAfterChip && tapped.statusAfterChip,
+      JSON.stringify(tapped));
+
+    // UX8 F5: a guest from the left is mirrored (guest at 30%, the host turned to it, the reply on the left).
+    await prep(1);
+    await card.evaluate((el) => el._linkStart(el._slides[1], el._slides[0]));
+    await until((el) => el._slides[1].screen.querySelector(".vsay:not([hidden])"), null, 6000);
+    const mirrored = await card.evaluate((el) => {
+      const h = el._slides[1];
+      const box = h.screen.querySelector(".visit");
+      const g = h.screen.querySelector(".vguest")?.getBoundingClientRect();
+      const hp = h.pet.getBoundingClientRect();
+      return { left: box?.classList.contains("left"), look: h.pet.classList.contains("look"),
+        guestLeftOfHost: !!g && g.left + g.width / 2 < hp.left + hp.width / 2,
+        sayLeft: getComputedStyle(h.screen.querySelector(".vsay")).left !== "auto" };
+    });
+    await card.evaluate((el) => el._linkEnd());
+    const cleared = await card.evaluate((el) => el._slides.some((s) => s.pet.classList.contains("look") || s.screen.classList.contains("linkleft")));
+    check(`UX8 F5: a guest from the left is mirrored, and the mirror is gone after (${width}px)`,
+      mirrored.left && mirrored.look && mirrored.guestLeftOfHost && mirrored.sayLeft && !cleared, JSON.stringify([mirrored, cleared]));
+
+    // UX8 F8: a visit cut short (the guest falls asleep) takes the host's hello with it.
+    await prep();
+    await card.evaluate((el) => el._linkStart(el._slides[0], el._slides[1]));
+    const said = await until((el) => el._slides[0].linking && el._slides[0].bubble.textContent.length > 0 && el._slides[0].sayUntil > Date.now(), null, 6000);
+    const cut = await card.evaluate((el) => {
+      el._slides[1].asleep = true;
+      el._linkTick(el._slides[0]);
+      return { link: !!el._link, bubble: el._slides[0].bubble.textContent };
+    });
+    check(`UX8 F8: a cut-short visit leaves no hello to an empty room (${width}px)`,
+      said && !cut.link && cut.bubble === "", JSON.stringify([said, cut]));
+
     // Not when either pet is asleep, calling or in a game, nor with a line waiting; once a day per pair.
     await prep();
     const gates = await card.evaluate((el) => {
@@ -10724,6 +12192,10 @@ async function main() {
         Object.assign(s, { asleep: false, calling: false, game: null, moodState: "content", lookedFirst: true, queue: [], scene: null, sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
         s.screen.classList.remove("show-status");
       }
+      // With three pets the wrap makes the third pet a neighbour of the first (UX8 F6): hold it
+      // back here, so these cases are about the second; the wrap has its own check below.
+      const rest = el._slides.slice(2);
+      for (const s of rest) s.queue = [{ text: "x" }];
       for (const [who, s] of [["host", a], ["guest", b]]) {
         for (const [what, patch] of [["asleep", { asleep: true }], ["calling", { calling: true }], ["game", { game: { kind: "left_right" } }], ["queue", { queue: [{ text: "x" }] }]]) {
           const keep = Object.fromEntries(Object.keys(patch).map((k) => [k, s[k]]));
@@ -10735,11 +12207,21 @@ async function main() {
       clear();
       out.first = !!el._linkPick(a);
       out.second = !!el._linkPick(a);
+      for (const s of rest) s.queue = [];
+      // UX8 F6: exactly three pets: the first pet's other neighbour is the third (the way the nav wraps).
+      if (el._slides.length === 3) {
+        b.queue = [{ text: "x" }];
+        clear();
+        out.wrap = el._linkPick(a) === el._slides[2];
+        b.queue = [];
+        clear();
+      }
       return out;
     });
-    const blocked = Object.entries(gates).filter(([k]) => k !== "first" && k !== "second").every(([, v]) => v === null);
+    const blocked = Object.entries(gates).filter(([k]) => k !== "first" && k !== "second" && k !== "wrap").every(([, v]) => v === null);
     check(`no visit while either pet is asleep, calling, in a game or has a line waiting (${width}px)`, blocked, JSON.stringify(gates));
     check(`a pair visits once a day (${width}px)`, gates.first && !gates.second, JSON.stringify([gates.first, gates.second]));
+    if (gates.wrap !== undefined) check(`UX8 F6: with three pets the end pets are neighbours across the wrap (${width}px)`, gates.wrap, JSON.stringify(gates.wrap));
 
     // Three pets: the pet in the middle can send the beam either way.
     for (const toRight of [true, false]) {
@@ -10827,6 +12309,9 @@ async function main() {
         }
       }
     }
+    // The swipes above kept a place in this browser (UX fix 2, F8: hatch-shelf-*, shared by every
+    // tab of the origin). Put it back, or a later page load (restart's) would open on pet 2, not 1.
+    await lp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("hatch-shelf-")).forEach((k) => localStorage.removeItem(k)));
     await lp.close();
   }
 
@@ -11238,10 +12723,32 @@ async function main() {
     localStorage.setItem("hatch-shared-screen", "off");
     els.forEach((el) => el._goPersonal());
   }, { e: seedPet, was: poweredWas });
+  // _goPersonal asks the channel again; dev's own view (mine, with the seeded gift) is
+  // back when it answers, which on a slow runner after a restart takes more than the
+  // checks below would wait. Wait for that answer (a dev with a bond has a mine).
+  await everyCard(async (els, e) => {
+    for (let i = 0; i < 300; i++) {
+      const s = els[0]?._slides?.find((x) => x.ids?.["sensor.life_stage"] === e);
+      if (s?.subscribed && s.mine) return;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }, seedPet);
   await pinAwake(card, "gifts");
-  // FINDS_SHOWN off (the default until V-F), with dev's gift and restart's basket both
-  // waiting: no basket shows, a tap, a tab-back and a direct take send no collect, and no
-  // pop or reveal appears. Then it is turned on for the real features below.
+  // FINDS_SHOWN on (the default): with restart's basket waiting, the basket shows on the
+  // slide on screen.
+  const on = await card.first().evaluate((el, e) => {
+    const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+    el._basketSync(s);
+    const b = s.basket;
+    return { def: customElements.get("hatch-pet-card").findsShown, onShow: s === el._slides[el._index],
+      basket: s.house?.basket ?? null, shown: !!b && !b.hidden && getComputedStyle(b).display !== "none" };
+  }, seedPet);
+  check("FINDS_SHOWN on by default: with a full basket waiting, the basket shows",
+    on.def === true && on.onShow && on.basket > 0 && on.shown, JSON.stringify(on));
+  // The switch still works off (HatchPetCard.findsShown = false), with dev's gift and
+  // restart's basket both waiting: no basket shows, a tap, a tab-back and a direct take
+  // send no collect, and no pop or reveal appears. Then it goes back on for the real
+  // features below.
   const off = await card.first().evaluate(async (el, e) => {
     const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
     const conn = el._hass.connection;
@@ -11252,6 +12759,8 @@ async function main() {
       return real.call(this, msg, ...a);
     };
     const onShow = s === el._slides[el._index];
+    const Card = customElements.get("hatch-pet-card");
+    Card.findsShown = false;
     try {
       el._basketSync(s);
       s.giftAgain = true;
@@ -11264,11 +12773,14 @@ async function main() {
       s.giftAgain = false;
     }
     const shown = (b) => !!b && !b.hidden && getComputedStyle(b).display !== "none";
-    return { def: customElements.get("hatch-pet-card").findsShown, onShow, gift: !!s.mine?.gift,
+    const res = { def: Card.findsShown, onShow, gift: !!s.mine?.gift,
       basket: s.house?.basket ?? null, baskets: el._slides.filter((x) => shown(x.basket)).length,
       reveals: el._slides.filter((x) => x.screen?.querySelector(".reveal")).length, sent };
+    Card.findsShown = true;
+    el._slides.forEach((x) => el._basketSync(x));
+    return res;
   }, seedPet);
-  check("FINDS_SHOWN off by default: with a gift and a full basket waiting, no basket or pop shows and no collect is sent",
+  check("FINDS_SHOWN set false: with a gift and a full basket waiting, no basket or pop shows and no collect is sent",
     off.def === false && off.onShow && off.gift && off.basket > 0 && off.baskets === 0 && off.reveals === 0 &&
     off.sent.length === 0, JSON.stringify(off));
   await showFinds();
@@ -11755,8 +13267,8 @@ async function main() {
   await page.waitForTimeout(500);
   await calm();
   await pinAwake(card, "collection");
-  // top10 7a: with FINDS_SHOWN off, the link and the page are named by what they show,
-  // visitors. Checked before showFinds turns the switch on for the rest of the run.
+  // top10 7a: with FINDS_SHOWN set false, the link and the page are named by what they
+  // show, visitors. The switch goes back on after.
   const hidden = await card.first().evaluate(async (el) => {
     const Card = customElements.get("hatch-pet-card");
     const was = Card.findsShown;
@@ -11770,8 +13282,8 @@ async function main() {
       await wait(() => s.status.querySelector(".jfoot .flink"));
       const link = s.status.querySelector(".jfoot .flink")?.textContent;
       s.status.querySelector(".jfoot .flink")?.click();
-      const head = s.status.querySelector(".jhead span")?.textContent;
-      return { link, head, world: el._worldName(s) };
+      const head = s.status.querySelector(".shead .stitle")?.textContent.replace(" · opening…", "");
+      return { link, head, world: el._worldName(s).toLowerCase() };
     } finally {
       if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
       el._dropFinds(s);
@@ -11827,7 +13339,7 @@ async function main() {
     await wait(() => s.status.querySelector(".jfoot .flink"));
     const foot = [...(s.status.querySelector(".jfoot")?.querySelectorAll("button") || [])].map((b) => b.textContent);
     s.status.querySelector(".jfoot .flink").click();
-    const loading = [...s.status.querySelectorAll(".jhead span")].map((x) => x.textContent);
+    const loading = s.status.querySelector(".shead .stitle")?.textContent;
     await wait(() => s.status.querySelector(".fgrid") || !s.finds);
     await wait(() => s.status.querySelector(".fgrid") || s.status.querySelector(".jgrid"), 5000); // an error: the journal
     await new Promise((r) => setTimeout(r, 300));
@@ -11837,8 +13349,8 @@ async function main() {
       text: t.textContent.trim(), heart: !!t.querySelector(".fheart") });
     const box = s.status.getBoundingClientRect();
     return { e: s.ids?.["sensor.life_stage"] === e, finds: s.finds, journal: s.journal, foot, loading,
-      head: s.status.querySelector(".jhead")?.textContent.replace(/\s+/g, " ").trim(),
-      back: s.status.querySelector(".flink")?.textContent, text: s.status.textContent,
+      head: s.status.querySelector(".shead .stitle")?.textContent.replace(/\s+/g, " ").trim(),
+      back: s.status.querySelector(".shead .sback")?.textContent, text: s.status.textContent,
       visitors: grids[0] ? [...grids[0].children].map(tile) : null, tiles: grids[1] ? [...grids[1].children].map(tile) : null,
       fit: s.status.scrollWidth <= s.status.clientWidth && [...s.status.querySelectorAll(".ftile")].every((t) => t.getBoundingClientRect().right <= box.right + 0.5),
       jgrid: !!s.status.querySelector(".jgrid"), note: s.status.querySelector(".status-feedback")?.textContent || "",
@@ -11846,13 +13358,13 @@ async function main() {
   }, { e: seedPet, stub });
   const a = await open(null);
   const calls = a.msgs.filter((m) => m.type === "virtual_pet/collection");
-  check("V-D: \"finds ›\" sits in the journal's foot with \"‹ status\", and opens with \"opening…\"",
-    JSON.stringify(a.foot) === JSON.stringify(["‹ status", "finds ›"]) &&
-    JSON.stringify(a.loading) === JSON.stringify([`finds · ${fw.name}`, "opening…"]), JSON.stringify({ foot: a.foot, loading: a.loading }));
+  check("V-D: \"finds ›\" sits in the journal's foot (\"‹ status\" is in its top band), and opens with \"opening…\"",
+    JSON.stringify(a.foot) === JSON.stringify(["finds ›"]) &&
+    a.loading === `finds · ${fw.name.toLowerCase()} · opening…`, JSON.stringify({ foot: a.foot, loading: a.loading }));
   check("V-D: one virtual_pet/collection {shared: false} for this pet, and no call_service",
     calls.length === 1 && calls[0].entity_id === seedPet && calls[0].shared === false && !a.msgs.some((m) => m.type === "call_service"),
     JSON.stringify(a.msgs));
-  check("V-D: the page is \"finds · <world>\" with \"‹ journal\"", a.e && a.finds && a.head === `finds · ${fw.name}` && a.back === "‹ journal",
+  check("V-D: the page is \"finds · <world>\" with \"‹ journal\"", a.e && a.finds && a.head === `finds · ${fw.name.toLowerCase()}` && a.back === "‹ journal",
     JSON.stringify({ head: a.head, back: a.back, finds: a.finds }));
   const wantV = fw.visitors.map((v) => ({ id: v.id, locked: !metV.includes(v.id) }));
   const wantF = fw.finds.filter((f) => !f.gift_only && (metF.includes(f.id) || !timed(f))).map((f) => ({ id: f.id, locked: !metF.includes(f.id) }));
@@ -11895,7 +13407,7 @@ async function main() {
   await page.waitForTimeout(500);
   const back = await card.first().evaluate(async (el) => {
     const s = el._slides[el._index];
-    s.status.querySelector(".flink").click();
+    s.status.querySelector(".shead .sback").click();
     for (const t = Date.now(); !s.status.querySelector(".jgrid") && Date.now() - t < 10000;) await new Promise((r) => setTimeout(r, 50));
     return { finds: s.finds, journal: s.journal, grid: !!s.status.querySelector(".jgrid") };
   });

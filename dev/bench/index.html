@@ -14,6 +14,14 @@
 <script>
   // The card defines itself once HA's own element exists; stand one in.
   customElements.define("home-assistant", class extends HTMLElement {});
+  // ...and HA's ha-card, a block box: without it the card's world backdrop and
+  // rounded corners never paint and every shot shows the card on page black.
+  customElements.define("ha-card", class extends HTMLElement {
+    constructor() {
+      super();
+      this.attachShadow({ mode: "open" }).innerHTML = "<style>:host{display:block}</style><slot></slot>";
+    }
+  });
 </script>
 <script src="/dev/bench/page.js"></script>
 <script src="/virtual_pet/frontend/hatch-pet-card.js"></script>

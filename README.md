@@ -91,6 +91,8 @@ Connect what you already have in Home Assistant, and your pet may:
 | ✅ ticks off a chore | earns a treat |
 | 🌙 reaches bedtime | says good night and goes to sleep |
 | 🚪 welcomes you home | gets excited to see you |
+| 🔔 rings the doorbell | startles, with two notes and a line |
+| 🔌 has anything else you point it at | notices it with the [house moment blueprint](docs/guide.md#let-the-pet-notice-things-house-moment-blueprint) |
 
 Every connection is optional. Away for a while? It waits safely with the sitter.
 
@@ -101,8 +103,8 @@ Batteries not required!
 
 1. In HACS, open **⋮ → Custom repositories**, add
    `https://github.com/alpine-vortex/hatch-at-home` as an **Integration**, then
-   download **Virtual Pet** and restart Home Assistant.
-2. **Settings → Devices & services → Add integration → Virtual Pet.** Name your
+   download **Hatch at Home** and restart Home Assistant.
+2. **Settings → Devices & services → Add integration → Hatch at Home.** Name your
    pet and pick a world.
 3. Add the **Hatch at Home pet shelf** card to a dashboard. Say hi!
 

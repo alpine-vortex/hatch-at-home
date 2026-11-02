@@ -11,6 +11,10 @@ dev/costumes/
 dev/readme-shots/
 node_modules/
 
+# The card is built from src/card/ by scripts/build-card.js (AGENTS.md "The card is built").
+custom_components/virtual_pet/frontend/hatch-pet-card.js
+src/card/.last-build.sha256
+
 # Private art-generation runs and call log (never committed)
 private-content/
 art/seasonal/out/

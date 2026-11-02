@@ -316,6 +316,10 @@ async def test_nothing_personal_on_a_state(
     stage = attrs["sensor.pip_life_stage"]
     assert "bonds" not in stage and "notify_users" not in stage
     assert set(stage["wish"]) == {"kind", "granted", "open"}
+    # The next egg's offer is creature ids and names, the select's own list.
+    assert stage["egg_roster"] and all(
+        set(r) == {"id", "name"} for r in stage["egg_roster"]
+    )
     # This morning's dream was of a show: none on the sensor, the title on the
     # channel's house view.
     assert stage["dream"] is None
@@ -346,6 +350,33 @@ async def test_an_old_saves_wish_name_stays_off_the_sensor(
     await setup(hass)
     wish = hass.states.get("sensor.pip_life_stage").attributes["wish"]
     assert wish == {"kind": "play", "granted": False, "open": True}
+
+
+async def test_sleep_times_hold_only_the_two_times(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+) -> None:
+    """Q-G: the pet's bedtime and wake time are a state attribute every login
+    and the event bus can see. It holds those two times and nothing else; the
+    options' defaults show when unset, and the options when set."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup_with_house(hass)
+    stage = hass.states.get("sensor.pip_life_stage")
+    assert stage.attributes["sleep_times"] == {"bedtime": "23:00", "wake": "07:00"}
+
+
+async def test_sleep_times_follow_the_options(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+) -> None:
+    """The options store the time selector's "HH:MM:SS"; the attribute is "HH:MM"
+    and holds only `bedtime` and `wake`."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup_with_house(hass, bedtime="21:30:00", wake_time="06:45:00")
+    sleep = hass.states.get("sensor.pip_life_stage").attributes["sleep_times"]
+    assert sleep == {"bedtime": "21:30", "wake": "06:45"}
 
 
 async def test_an_appliance_done_moment_holds_only_type_kind_and_at(

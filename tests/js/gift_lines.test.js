@@ -10,7 +10,7 @@ const path = require("path");
 const vm = require("vm");
 
 const FRONTEND = path.join(__dirname, "..", "..", "custom_components", "virtual_pet", "frontend");
-const src = fs.readFileSync(path.join(FRONTEND, "hatch-pet-card.js"), "utf8");
+const src = require("./card-source");
 const grab = (re) => src.match(re)[0];
 const ctx = {};
 vm.runInNewContext(`${grab(/\nconst GIFT_MADE = .*\n/)}

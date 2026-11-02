@@ -339,7 +339,15 @@ def birthday(name: str, nickname: str | None) -> str:
 
 def welcome(name: str) -> str:
     """The message when a pet is added to the house."""
-    return f"{name}, a new virtual pet, just moved in! Say hi ♥"
+    return f"{name}, a new virtual pet, just moved in! Its egg hatches in about half an hour. Say hi ♥"
+
+
+WELCOME_IF_MISSING = "If it isn't there, add the Hatch at Home pet shelf card."  # N20b
+
+
+def welcome_no_dashboard(name: str) -> str:
+    """The sidebar note's line when no setup named a dashboard (N20)."""
+    return f"To meet {name}, add the Hatch at Home pet shelf card to a dashboard."
 
 
 def dashboard_path(value: str | None) -> str | None:

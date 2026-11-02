@@ -8,10 +8,12 @@ import copy
 from datetime import date, datetime, timedelta
 import random
 from typing import Any
+import unicodedata
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
+    CONF_NAME,
     EVENT_HOMEASSISTANT_STARTED,
     STATE_HOME,
     STATE_UNAVAILABLE,
@@ -31,7 +33,6 @@ from homeassistant.core import (
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
     device_registry as dr,
-    entity_registry as er,
     issue_registry as ir,
 )
 from homeassistant.helpers.debounce import Debouncer
@@ -82,7 +83,6 @@ from .const import (
     CONF_WEATHER,
     CONF_WORLD,
     DEFAULT_WORLD,
-    DEFAULT_ZONE,
     DOMAIN,
     LIVE_EVENTS,
     LOGGER,
@@ -109,7 +109,9 @@ from .home import (
     forecast_moment,
     is_raining,
 )
+from .names import name_taken, pet_name
 from .react import counts as react_counts, is_native as react_native
+from .repairs import missing_entity_ids, placeholders
 from .species import load_catalog
 from .watcher import Watcher, daily_forecast, doorbell_rang
 
@@ -385,6 +387,18 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._save()
             self._publish()
 
+    def social_greet(self) -> None:
+        """The card played the day's visitor to someone (any screen, shared ones
+        too): the day counts a greeted visitor, inside the visit's window only.
+        Nothing about who was looking is kept."""
+        assert self.state is not None
+        now = self._now()
+        if self._awake() and model.social_greet(
+            self.state, now, self._today(now)[0], self.world
+        ):
+            self._save()
+            self._publish()
+
     @property
     def senses(self) -> list[str]:
         """The kinds of house signal mapped in the options (SENSES), never
@@ -481,12 +495,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             LOGGER.warning(
                 "World %s has no ready species yet; %s stays an egg until it does",
                 self.world,
-                self.config_entry.title,
+                pet_name(self.hass, self.config_entry),
             )
         self._issue(
             "world_not_ready",
             not self.roster,
-            {"pet": self.config_entry.title, "world": self.world_name},
+            {"pet": pet_name(self.hass, self.config_entry), "world": self.world_name},
         )
         now = self._now()
         title = self.config_entry.title
@@ -578,7 +592,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 self.hass, self.store.key, STORE_VERSION, data
             )
         await self.store.async_save(self.state.to_dict())
-        placeholders = {"pet": self.config_entry.title, "entry_id": self.pet_id}
+        placeholders = {
+            "pet": pet_name(self.hass, self.config_entry),
+            "entry_id": self.pet_id,
+        }
         if self._damage_backup is None:  # no file, nothing read, no .corrupt copy
             key = "save_damaged_missing"
         else:
@@ -650,6 +667,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         active: bool,
         placeholders: dict[str, str],
         translation_key: str | None = None,
+        data: dict[str, str] | None = None,
+        fixable: bool = False,
     ) -> None:
         """Raise or clear one of this pet's repair issues (Settings → Repairs).
         A damaged save's stays across restarts until it's dismissed, the pet
@@ -662,7 +681,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.hass,
             DOMAIN,
             issue_id,
-            is_fixable=False,
+            is_fixable=fixable,
+            data=data,
             is_persistent=key == "save_damaged",
             severity=ir.IssueSeverity.WARNING,
             translation_key=translation_key or key,
@@ -675,21 +695,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         An entity that exists but is unavailable is fine: the watcher holds its
         last value for a while and then ignores it.
         """
-        registry = er.async_get(self.hass)
-        # sun.sun and the default zone are always watched, not picked by the owner.
-        mapped = [
-            e for e in self.watcher.entity_ids() if e not in ("sun.sun", DEFAULT_ZONE)
-        ]
-        mapped += self.config_entry.options.get(CONF_CHORES) or []
-        missing = sorted(
-            e
-            for e in set(mapped)
-            if self.hass.states.get(e) is None and registry.async_get(e) is None
-        )
+        missing = missing_entity_ids(self.hass, self.config_entry.options)
         self._issue(
             "missing_entities",
             bool(missing),
-            {"pet": self.config_entry.title, "entities": ", ".join(missing)},
+            placeholders(self.hass, self.config_entry, missing),
+            data={"entry_id": self.config_entry.entry_id},
+            fixable=True,
         )
 
     def _listen(self) -> None:
@@ -1083,7 +1095,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _want_forecast(self, now: float) -> None:
         """Refresh the daily forecast in the background, at most hourly."""
-        if not self._home_started or not self.config_entry.options.get(CONF_WEATHER):
+        # The watcher's options, not the entry's: a save lands before the reload.
+        if not self._home_started or not self.watcher._ids(CONF_WEATHER):
             return
         if now - self._forecast_at < R.HOME_FORECAST_REFRESH_MINUTES * 60:
             return
@@ -1119,10 +1132,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """Follow renames: the device's own name if the owner set one, else the
         entry's title. Notifications and the journal use it."""
         assert self.state is not None
-        device = dr.async_get(self.hass).async_get_device_by_identifier(
-            (DOMAIN, self.pet_id), self.pet_id
-        )
-        name = (device and device.name_by_user) or self.config_entry.title
+        name = pet_name(self.hass, self.config_entry)
         if name != self.state.name:
             self.state.name = name
 
@@ -2422,12 +2432,32 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """A new pet: a note in the sidebar, and on the phones of people who
         turned "notify me" on for another pet here (the first pet in a house
         welcomes in the sidebar only). The event names nobody."""
-        text = notify.welcome(self.config_entry.title)
-        link = f"\n\n[Open the pet shelf]({self.dashboard})" if self.dashboard else ""
+        name = pet_name(self.hass, self.config_entry)
+        text = notify.welcome(name)
+        # The shelf card shows every pet, so a household needs it on one dashboard once.
+        # "Named" = this pet's setup or another pet's (a second pet carries the first's).
+        own = self.dashboard
+        elsewhere = next(
+            (
+                path
+                for other in self.hass.config_entries.async_entries(DOMAIN)
+                if other.entry_id != self.config_entry.entry_id
+                and (path := notify.dashboard_path(other.options.get(CONF_DASHBOARD)))
+            ),
+            None,
+        )
+        if not (own or elsewhere):
+            link = f"\n\n{notify.welcome_no_dashboard(name)}"
+        else:
+            link = f"\n\n[Open the pet shelf]({own or elsewhere})"
+            if (
+                not elsewhere
+            ):  # the first pet: its dashboard may be an auto-generated one
+                link += f"\n\n{notify.WELCOME_IF_MISSING}"
         persistent_notification.async_create(
             self.hass,
             text + link,
-            title="Virtual Pet",
+            title=f"{name} moved in ♥",
             notification_id=f"{DOMAIN}_{self.pet_id}_welcome",
         )
         pets: dict[str, PetCoordinator] = self.hass.data[DOMAIN]["pets"]
@@ -2954,6 +2984,31 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.hass.config_entries.async_update_entry(self.config_entry, data=data)
             self.hass.config_entries.async_schedule_reload(self.config_entry.entry_id)
 
+    async def async_rename(self, name: str) -> None:
+        """Name the new generation (the card's rename, only the first day: egg and
+        baby). `name` is already clean (clean_name) and free (name_taken). Writes the
+        entry's title, the device's name (clearing an admin's own, so this one shows)
+        and the state's name, with no reload. Entity IDs, and the journal's record of
+        the old generation, keep what they had."""
+        assert self.state is not None
+        self._advance(self._now())  # the age is the minute's, not the last tick's
+        if model.life_stage(self.state) not in ("egg", "baby"):
+            raise RenameError("not_now")
+        if name == self.config_entry.title and name == self.state.name:
+            return
+        data = {**self.config_entry.data, CONF_NAME: name}
+        self.hass.config_entries.async_update_entry(
+            self.config_entry, title=name, data=data
+        )
+        registry = dr.async_get(self.hass)
+        if device := registry.async_get_device_by_identifier(
+            (DOMAIN, self.pet_id), self.pet_id
+        ):
+            registry.async_update_device(device.id, name=name, name_by_user=None)
+        self._sync_name()
+        self._save()
+        self._publish()
+
     async def async_set_egg_choice(self, species: str | None) -> None:
         """Pick the species the next egg hatches into; None leaves it a surprise."""
         assert self.state is not None
@@ -3036,6 +3091,56 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if self.state is not None:
             await self.store.async_save(self.state.to_dict())
         await self.people.async_save_now()
+
+
+class RenameError(Exception):
+    """Why a rename was refused; `code` is the websocket error key."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+NAME_MAX = 20  # characters; the card's field and Reconfigure's old habit
+# Letters and symbols that draw nothing (Hangul fillers, the blank braille cell).
+_NAME_FILLERS = frozenset("\u3164\u115f\u1160\u2800")
+
+
+def clean_name(raw: object) -> str:
+    """A pet's name as typed, made tidy: NFC, edges stripped, inner spaces
+    collapsed, 1-NAME_MAX characters, no control characters. Else bad_name."""
+    if not isinstance(raw, str) or len(raw) > 10 * NAME_MAX:
+        raise RenameError("bad_name")
+    if any(unicodedata.category(c) in ("Cc", "Zl", "Zp") for c in raw):
+        raise RenameError("bad_name")
+    name = " ".join(unicodedata.normalize("NFC", raw).split())
+    if not 1 <= len(name) <= NAME_MAX:
+        raise RenameError("bad_name")
+    # At least one character you can see: not only zero-width, format or filler characters.
+    if not any(
+        unicodedata.category(c)[0] in "LNPS" and c not in _NAME_FILLERS for c in name
+    ):
+        raise RenameError("bad_name")
+    return name
+
+
+async def async_rename(hass: HomeAssistant, entry_id: str, raw_name: object) -> str:
+    """The card's rename (virtual_pet/rename) for the pet of this entry; returns
+    the name kept. Raises RenameError: bad_name, no_pet, not_ready (the entry is
+    reloading: retry), not_now (past the first day) or taken."""
+    name = clean_name(raw_name)
+    # Taken from the pets at call time: an entry that is reloading has none, and
+    # writing to a coordinator being torn down would be lost.
+    pet: PetCoordinator | None = hass.data.get(DOMAIN, {}).get("pets", {}).get(entry_id)
+    if pet is None or pet.state is None:
+        entry = hass.config_entries.async_get_entry(entry_id)
+        if entry is not None and entry.domain == DOMAIN and not entry.disabled_by:
+            raise RenameError("not_ready")
+        raise RenameError("no_pet")
+    if name_taken(hass, name, entry_id):
+        raise RenameError("taken")
+    await pet.async_rename(name)
+    return name
 
 
 def _pick(event: model.Event, keys: tuple[str, ...]) -> dict[str, Any]:

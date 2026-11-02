@@ -5,7 +5,7 @@ const fs = require("fs");
 const path = require("path");
 const { scanFreshCopy } = require("../../scripts/copy-scan.js");
 
-const src = fs.readFileSync(path.join(__dirname, "..", "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+const src = require("./card-source");
 
 test("every fresh-expand table is scanned and every line passes", () => {
   const { bad, tables } = scanFreshCopy(src);

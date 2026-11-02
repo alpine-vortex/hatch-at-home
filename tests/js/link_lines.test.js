@@ -7,7 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-const src = fs.readFileSync(path.join(__dirname, "..", "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+const src = require("./card-source");
 const slice = (from, to) => {
   const a = src.indexOf(from);
   const b = src.indexOf(to, a);

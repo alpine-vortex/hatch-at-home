@@ -76,6 +76,7 @@
     "praise": "blink",
     "scold": "dim"
   },
+  "face": {"baby": [176, 197, 56], "child": [196, 202, 64], "teen": [206, 197, 64], "adult": [201, 192, 64]},
   "head": {
     "baby": [
       160,

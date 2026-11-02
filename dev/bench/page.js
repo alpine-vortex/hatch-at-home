@@ -6,6 +6,7 @@
   const BASE = "/virtual_pet/frontend";
   let WORLDS = null; // the one object the card's cache holds; reset per shot
   let HAVE = new Set(); // species with a species.json, as the server's catalog.roster keeps
+  let SPECIES_NAME = {}; // id -> its species.json name, for the lay sheet's egg_roster
   const rosterOf = (world) => world.roster.filter((sp) => HAVE.has(sp));
 
   // The card reads worlds.json through fetch and keeps the parsed object, so
@@ -62,11 +63,11 @@
     const entities = {};
     const devices = {};
     states["sun.sun"] = { state: shot.scene === "night" ? "below_horizon" : "above_horizon", attributes: {}, last_updated: iso(-60) };
-    shot.pets.forEach((pet, i) => {
+    (shot.empty ? [] : shot.pets).forEach((pet, i) => { // `empty`: no pets at all (first run)
       const device = `bench_dev_${i}`;
       const base = `bench_${i}`;
       const world = worlds[pet.world] ? pet.world : Object.keys(worlds)[0];
-      devices[device] = { id: device, name: pet.name || NAMES[i % NAMES.length], name_by_user: null };
+      devices[device] = { id: device, name: pet.name || NAMES[i % NAMES.length], name_by_user: null, config_entries: [`bench_entry_${i}`] };
       const put = (domain, key, state, attributes = {}) => {
         const id = `${domain}.${base}_${key}`;
         entities[id] = { entity_id: id, platform: "virtual_pet", translation_key: key, device_id: device };
@@ -79,7 +80,19 @@
       if (pet.hatched_on) attrs.hatched_on = pet.hatched_on;
       if (pet.upbringing) attrs.upbringing = pet.upbringing;
       // Today's wish and dream (`{kind, granted}`, `{kind}`) and traits, for a `look` shot.
-      for (const key of ["wish", "dream", "traits", "trait_levels"]) if (pet[key]) attrs[key] = pet[key];
+      for (const key of ["wish", "dream", "traits", "trait_levels", "raised", "generation", "next_egg", "next_world"]) {
+        if (pet[key]) attrs[key] = pet[key];
+      }
+      // The lay sheet (settings S2): `lay: true` (or `{next_world, outside}`) makes this pet ask to
+      // lay: egg_roster for the egg's world, the next-egg select and the lay_egg request.
+      // `raised` (ids, default the first three of the world's) sets the offer.
+      if (attrs.raised === "world") attrs.raised = rosterOf(worlds[world]).slice(0, 3); // a few of its own world's
+      if (pet.lay) {
+        const lay = pet.lay === true ? {} : pet.lay;
+        const eggWorld = worlds[lay.egg_world || world];
+        attrs.egg_roster = rosterOf(eggWorld).map((id) => ({ id, name: SPECIES_NAME[id] || id }));
+        if (!attrs.raised) attrs.raised = rosterOf(worlds[world]).slice(0, 3);
+      }
       if (shot.journal && i === 0) {
         // The journal's data: every creature of the world raised, the two pets before
         // this one, a trait or two and a memory. `journal: {..}` overrides any of it.
@@ -94,6 +107,8 @@
       // The shell the server would send (the lead pet): its pick, the finishes it may
       // wear and the locked ones with their stage. Left out, the card hides the row.
       if (i === 0 && shot.senses !== undefined) attrs.senses = shot.senses; // top10 2b: the kinds the house shows it
+      // S7: the pet's bedtime target (the options' defaults unless the shot says; `false`: an older server).
+      if (i === 0 && shot.sleepTimes !== false) attrs.sleep_times = shot.sleepTimes || { bedtime: "23:00", wake: "07:00" };
       if (i === 0 && shot.social !== undefined) attrs.social_level = shot.social; // top10 §6: the social meter, 0-10
       if (i === 0 && shot.shellOptions !== undefined) {
         Object.assign(attrs, { shell_finish: shot.shellFinish ?? null, shell_finish_options: shot.shellOptions,
@@ -104,7 +119,7 @@
       // The mood's own need shows as a flag (the button it wants lights up).
       const flags = [...new Set([...(["hungry", "bored", "dirty", "sick", "sleepy"].includes(mood) ? [mood] : []), ...(pet.flags || [])])];
       if (shot.scene === "rain" && !flags.includes("rainy")) flags.push("rainy");
-      put("sensor", "mood", mood, { flags, ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) });
+      put("sensor", "mood", mood, { flags, ...(pet.lay ? { requests: ["lay_egg"] } : {}), ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) });
       // `moments`: [{type, ago (minutes), ...}], the public moments the away note reads.
       const moments = (pet.moments || []).map(({ ago = 30, ...m }) => ({ ...m, at: iso(-ago) }));
       put("sensor", "last_care", iso(-45), { log: pet.log || [], ...(pet.moments ? { moments } : {}) });
@@ -114,15 +129,19 @@
       put("sensor", "care_misses", "0");
       put("binary_sensor", "calling", pet.calling || mood === "calling" ? "on" : "off");
       put("binary_sensor", "asleep", mood === "asleep" ? "on" : "off");
-      for (const key of ["feed", "snack", "play", "clean", "medicine", "scold", "praise"]) put("button", key, "unknown");
+      for (const key of ["feed", "snack", "play", "clean", "medicine", "scold", "praise", ...(pet.lay ? ["lay_egg"] : [])]) put("button", key, "unknown");
+      if (pet.lay) { // the select: "Surprise me" then the names, its state the pick
+        const names = attrs.egg_roster.map((r) => r.name);
+        put("select", "next_egg", attrs.next_egg || "Surprise me", { options: ["Surprise me", ...names] });
+      }
       put("switch", "lights_out", shot.scene === "dim" ? "on" : "off");
     });
     const noop = () => Promise.resolve(() => {});
     return {
       states, entities, devices,
-      user: { id: "bench-user", name: "Sam Bench", is_admin: true },
-      locale: { language: "en" }, language: "en",
-      themes: {}, selectedTheme: null,
+      user: { id: "bench-user", name: "Sam Bench", is_admin: shot.admin !== false },
+      locale: { language: "en", ...(shot.timeFormat ? { time_format: shot.timeFormat } : {}) }, language: "en",
+      themes: shot.haDark === undefined ? {} : { darkMode: !!shot.haDark }, selectedTheme: null,
       // The card asks once for a server clock reading; none arrives here.
       connection: { subscribeEvents: noop, subscribeMessage: noop },
       // `digReplies`: play_game answers, in order, for a `game: "dig"` shot (the server's dig is random).
@@ -130,6 +149,11 @@
         : service === "play_game" && shot.digReplies?.length ? shot.digReplies.shift() : {} }),
       callWS: async (msg) => {
         if (msg.type === "virtual_pet/photos") return { photos: [] };
+        // The name sheet (settings S3): `rename` is an error code the server would answer with.
+        if (msg.type === "virtual_pet/rename") {
+          if (shot.rename) throw { code: shot.rename };
+          return { name: msg.name };
+        }
         // The finds page (visitors v2 §4): `collection` ({visitors, finds, gifts?}, see
         // collectionOf); its gifts only to an unshared screen, as the server sends them.
         if (msg.type === "virtual_pet/collection") {
@@ -432,15 +456,19 @@
       Object.assign(WORLDS, fresh);
     } else WORLDS = fresh;
     const every = [...new Set(Object.values(WORLDS).flatMap((w) => w.roster || []))];
-    HAVE = new Set((await Promise.all(every.map(async (sp) =>
-      (await realFetch(`${BASE}/sprites/${sp}/species.json`)).ok ? sp : null))).filter(Boolean));
+    SPECIES_NAME = {};
+    HAVE = new Set((await Promise.all(every.map(async (sp) => {
+      const res = await realFetch(`${BASE}/sprites/${sp}/species.json`);
+      if (res.ok) SPECIES_NAME[sp] = (await res.json()).name || sp;
+      return res.ok ? sp : null;
+    }))).filter(Boolean));
     const world = WORLDS[shot.pets[0].world];
     if (world && shot.shell) {
       world.shell = { ...world.shell, ...shot.shell };
       if (shot.shell.finish === "none") delete world.shell.finish;
     }
 
-    // FINDS_SHOWN (the card's release switch, off until V-F): `findsShown: true` turns it
+    // FINDS_SHOWN (the card's release switch): `findsShown: true` turns it
     // on for this shot; every other shot gets the card's own default back.
     const Card = customElements.get("hatch-pet-card");
     if (FINDS_DEFAULT === undefined) FINDS_DEFAULT = Card.findsShown;
@@ -465,6 +493,13 @@
     if (shot.look) lookStart(card, cur, shot.look);
     if (shot.ask) card._ask(cur, shot.ask);
     if (shot.say !== undefined) card._write(cur, shot.say, 1e9);
+    // `fx`: a house effect class (fx-heat, fx-cool, fx-suds, fx-tumble, fx-chime) held on the screen, its
+    // animation paused 1 s in (at full strength; reduced motion has none, so it just shows).
+    if (shot.fx) {
+      cur.screen.classList.add(shot.fx);
+      for (const a of cur.screen.getAnimations({ subtree: true })) { a.pause(); a.currentTime = 1000; }
+    }
+    if (shot.ask && shot.say !== undefined) card._askPlace(cur, cur.screen.querySelector(".askday")); // the line is in the bubble now
     // `idle`: the pet's idle mumble through the card's own _idle, the first move (a mumble)
     // and the type's side of the coin forced (draws: next-idle delay, move, coin).
     if (shot.idle) {
@@ -500,10 +535,31 @@
     if (shot.costume) await dress(card, cur, shot.costume);
     if (["status", "settings", "picker"].includes(shot.view)) root.querySelector(".statusbtn").click();
     if (shot.view === "settings" || shot.view === "picker") root.querySelector(".gear").click();
+    if (shot.view === "lay") cur.request.click(); // settings S2: the lay sheet opens
+    // Settings S3: the name sheet, opened as a lay that hatched a new egg opens it. `nameText` is what
+    // is typed in the field; `rename` an error code the fake server answers a tap on "name it" with.
+    if (shot.view === "name") {
+      card._openName(cur, "lay");
+      const field = cur.status.querySelector(".nameinput");
+      if (shot.nameText !== undefined) field.value = shot.nameText;
+      if (shot.rename) {
+        cur.nameSheetAt = 0;
+        await card._nameSave(cur);
+      }
+    }
     if (shot.view === "picker") {
       root.querySelector(".shellrow").click();
       // `preview`: a tile tapped (its finish on the live shell, unsaved); "" is the world's own.
       if (shot.preview !== undefined) root.querySelector(`.tile[data-finish="${shot.preview}"]`).click();
+    }
+    // `note`: a line in the sheet's or picker's feedback bubble, as the card's own _statusMessage shows it.
+    if (shot.note && ["settings", "picker"].includes(shot.view)) card._statusMessage(cur, shot.note);
+    // `afterChange`: the sheet closed after that change (a SETTINGS_REACT key such as "monoOn"), through the
+    // card's own _settingsChanged and Status chip: the pet perks and says its line (settings UX F14).
+    if (shot.afterChange && shot.view === "settings") {
+      card._settingsChanged(cur, shot.afterChange);
+      root.querySelector(".statusbtn").click();
+      await new Promise((r) => setTimeout(r, shot.afterWait ?? 1500));
     }
     // `scrollEnd` on the status box's own views: its end (the bigtext preset's status-end).
     if (shot.scrollEnd && ["status", "settings", "picker"].includes(shot.view)) cur.status.scrollTop = cur.status.scrollHeight;
@@ -546,11 +602,18 @@
     // `game: "dig"`: a Berry dig started through the card's own picker, then `digTaps`
     // ("dig" or "keep") played, each answered by the next of `digReplies` (scripted).
     // Held on the last reply, before its pause (a bee still shows).
-    if (shot.game === "dig") {
-      shot.digReplies = [...(shot.digReplies || [DIG_REPLY])];
+    // `game: "left_right"` or `"higher_lower"` the same way (UX fix 6): `digReplies` answers the
+    // start (default: round 0, number 5) and the guesses; `digTaps` are "left" / "right" (or
+    // "lower" / "higher"). A held shot is taken at the last reply.
+    if (shot.game === "dig" || shot.game === "left_right" || shot.game === "higher_lower") {
+      const start = shot.game === "dig" ? DIG_REPLY
+        : { result: "ok", game: shot.game, round: 0, rounds: 5, wins: 0, number: 5 };
+      shot.digReplies = [...(shot.digReplies || [start])];
       card._startGame(cur, cur.buttons.play);
-      await card._pickGame(cur, "dig");
-      for (const tap of shot.digTaps || []) await card._guess(cur, tap === "keep" ? "left" : "right");
+      await card._pickGame(cur, shot.game);
+      for (const tap of shot.digTaps || []) {
+        await card._guess(cur, tap === "keep" || tap === "left" || tap === "lower" ? "left" : "right");
+      }
     }
     // `classes`: screen states the fake hass cannot pin (`lit`, `faded`...), put on last.
     for (const c of shot.classes || []) cur.screen.classList.add(c);
@@ -610,6 +673,8 @@
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     // The shelf and slides come to rest at once: a shot mid-slide is off the pixel grid.
     for (const a of root.getAnimations()) if (a instanceof CSSTransition) a.finish();
+    // The status's LCD wipes (UX fix 2, F13) run to their end too: a shot never catches a half-drawn page.
+    for (const a of root.getAnimations()) if (/^lcd-wipe/.test(a.animationName || "")) a.finish();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     await settled(card);
     window.bench.screenClass = cur.screen.className;

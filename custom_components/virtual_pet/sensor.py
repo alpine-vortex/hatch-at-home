@@ -149,6 +149,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
         {
             "raised",
             "roster",
+            "egg_roster",
             "hatches_at",
             "traits",
             "trait_levels",
@@ -167,6 +168,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "shell_finish_options",
             "shell_locked",
             "senses",
+            "sleep_times",
             "social_level",
             "week",
         }
@@ -181,6 +183,15 @@ class LifeStageSensor(PetEntity, SensorEntity):
         if not record or record.get("day") != dt_util.now().date().isoformat():
             return None
         return {k: record[k] for k in keys if k in record}
+
+    def _sleep_times(self) -> dict[str, str]:
+        """Bedtime and wake time as "HH:MM": a target, the pet may turn in up to
+        an hour either side."""
+        settings = self.coordinator.settings
+        return {
+            "bedtime": settings.bedtime.strftime("%H:%M"),
+            "wake": settings.wake_time.strftime("%H:%M"),
+        }
 
     def _dream(self) -> dict[str, Any] | None:
         """This morning's dream, its kind only (a visitor's dream adds which
@@ -239,6 +250,10 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "shell_locked": model.shell_locked(self.pet),
             # The kinds the house shows it (weather, tv...), never an entity.
             "senses": self.coordinator.senses,
+            # The pet's schedule target ("HH:MM", the options or their defaults):
+            # not a person's, so it shows on shared screens too. Visible to every
+            # login and on the event bus, never in history (owner-approved, Q-G).
+            "sleep_times": self._sleep_times(),
             # The social meter, 0-10 over the week (top10 §6); the days stay saved.
             "social_level": self.coordinator.social_level,
             # The journal's week strip (E14): days with a dream, a visitor or weather.
@@ -259,6 +274,13 @@ class LifeStageSensor(PetEntity, SensorEntity):
                 for t, p in model.trait_progress(self.pet).items()
             },
             "roster": list(self.coordinator.roster),
+            # The next egg's creatures, in the select's option order (it tracks
+            # next_world, not the current world): the card's lay sheet names its
+            # offer from these. Exactly the select's options minus "Surprise me".
+            "egg_roster": [
+                {"id": s, "name": n}
+                for s, n in self.coordinator.egg_species_names.items()
+            ],
             # Daily check-ins: today's wish and this morning's dream, for the card
             # (who granted it, and whom it's for, stay on the server: the
             # viewer's own card hears "for you" on its private channel).

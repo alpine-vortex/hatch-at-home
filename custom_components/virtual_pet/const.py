@@ -1,11 +1,11 @@
-"""Constants for the Virtual Pet integration."""
+"""Constants for the Hatch at Home integration."""
 
 from __future__ import annotations
 
 import logging
 
 DOMAIN = "virtual_pet"
-VERSION = "0.43.0"  # keep in step with manifest.json (a test checks)
+VERSION = "0.45.0"  # keep in step with manifest.json (a test checks)
 LOGGER = logging.getLogger(__package__)
 
 CONF_BEDTIME = "bedtime"

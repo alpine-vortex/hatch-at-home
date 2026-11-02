@@ -1,5 +1,59 @@
 # Notes for coding agents
 
+## The card is built
+
+The card is `src/card/*.js`, joined in the order of `src/card/manifest.txt` by
+`scripts/build-card.js` into `custom_components/virtual_pet/frontend/hatch-pet-card.js`
+(gitignored, unminified, same name and URL). Edit the parts, never the built file: the
+next build overwrites a hand edit and says so. A new part goes in `manifest.txt`.
+
+- The manifest's order is load order. A reorder can hit a TDZ error that only card-check
+  shows; `node --check` sees syntax only.
+- The class is an extends chain, one link per `card-*` part (`HatchPetCardBase` ...
+  `HatchPetCard`, the last link, the one defined). A method sits in one part.
+- The build runs by itself from `scripts/test`, pytest, `scripts/gate`, `scripts/develop`,
+  the bench and card-check. For a quick look: `node scripts/build-card.js` (`--watch`
+  rebuilds on save; HA still needs a restart).
+- Console stacks and card-check failures point at the built file:
+  `node scripts/build-card.js --where <line>` gives the part and line.
+- JS tests read the joined text through `tests/js/card-source.js`.
+- History before the move: `git blame -C -C src/card/<part>.js` follows the lines into
+  the old file (`.git-blame-ignore-revs` lists the move commit).
+
+Where things live:
+
+| part | holds |
+|---|---|
+| prefs | VERSION, BOOT_VERSION, icons, actions, games, sound/lcd/mono/shared prefs, chirps |
+| world | odds, ms, flair, SEASONS, hanukkah, turn/visitor day, once-per-day, season helpers |
+| lines | poses, wishes, BABY, PERSONA |
+| lines-fresh | the fresh-expand copy block (scripts/copy-scan.js's COPY_TABLES) |
+| ui-copy | screen copy, kindred, follow text, QUESTIONS, notes, dreams, moment consts, helpers |
+| shell-data | moulded shell, finishes, traits, server clock, `timeAgo` |
+| style | `STYLE`, `SCENE_STYLE` (CSS strings; the one part over 1,000 lines) |
+| card-base | setConfig, hass, connect, channel, finding pets |
+| card-build | `_build`, `_buildSlide`, low battery, power-on, `_update`, `_forget`, `_go` |
+| card-layout | `_layout`, `_mould`, `_renderShelf`, `_dress`, `_renderSlide`, `_say`, frames |
+| card-tick | `_tick`, ghosting, idle, tricks, promise, `_speak`, `_pat`, `_sayLine` |
+| card-looks | `_firstLook`, follow-ups, gifts, welcome, wishes |
+| card-visit | `_catchUp`, greet, `_visit`, `_ask`, hearts, chirp, fx |
+| card-moment | `_moment`, `_care`, dreams, night/meal, `_react` |
+| card-status | `_renderStatus`, `_renderSettings` |
+| card-sheets | shell picker, lay sheet, name sheet, `_set*` |
+| card-journal | journal, photos, every world, finds page |
+| card-actions | actions, care scenes |
+| card-games | games, dig |
+| card-season | seasons, party, costume |
+| card-visitors | world visitors, basket, reveal |
+| card-link | infrared link |
+| card-flair | trait flair, quit/end game; ends the class (`HatchPetCard`) |
+| editor | `HatchPetCardEditor` |
+| boot | statics on the card, `customElements.define`, `customCards`, banner |
+
+`scripts/split-card.js` cut the old one-file card and ports a branch made before the
+move: `node scripts/split-card.js --port <merge-base> <branch>` (see
+docs/plan-2026-11-02-card-split.md section 6). It goes once no such branch is left.
+
 ## Screenshots: use the card bench, not Home Assistant
 
 The default for any screenshot, render, contact sheet or visual review of the card

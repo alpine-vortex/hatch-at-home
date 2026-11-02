@@ -1,6 +1,7 @@
 # Card bench
 
-Screenshots of the **real** `hatch-pet-card.js` without Home Assistant: fast
+Screenshots of the **real** `hatch-pet-card.js` (built from `src/card/` by
+`scripts/bench.js` itself) without Home Assistant: fast
 (about 100 ms a shot) and deterministic. For art reviews, shell work and README
 shots. It loads the card unchanged, gives it a fake `hass`, and serves sprites,
 `worlds.json` and fonts from this repo. Nothing leaves localhost.
@@ -18,6 +19,9 @@ node scripts/bench.js --preset ui         # status, game picker, bubble
 node scripts/bench.js --preset finishes   # 576 shots: every shell finish, every world
 node scripts/bench.js --preset settings         # the gear's sheet, 420/330, day/night
 node scripts/bench.js --preset settings-shared  # the same on a shared screen
+node scripts/bench.js --preset settings-s7 # 18 shots: the sheet's sub-headings, bedtime row (12/24 h) and N24 at 330 and 300, day, night, mono, big text
+node scripts/bench.js --preset lay        # 9 shots: the lay sheet (settings S2), two worlds at 420/330, big text, a pick, a pick made in HA, a waiting world
+node scripts/bench.js --preset name        # 25 shots: the name sheet (settings S3) at 420/330/300, empty and 20-character, each error line, baby, night, dim, big text, mono; the status page's name row
 node scripts/bench.js --preset picker     # the shell picker: egg (locked) and teen, 420/330
 node scripts/bench.js --preset winter     # winter lights at 330: worlds day/night, mono night, hats, snow hare, auto, holiday names
 node scripts/bench.js --preset seasons    # ha-signals H7: the eight season-start lines at 330, the journal's season labels at 420/330
@@ -55,14 +59,15 @@ A shot (all optional):
 | --- | --- |
 | `name` | output path under `out/`, without `.png` |
 | `species`, `stage`, `mood`, `world` | the first pet (default: the world's first species, adult, content, woodland). Stages: egg baby child teen adult. |
-| `pet` | more of the first pet: `name`, `age_days`, `flags`, `energy`, `weight` (none by default: the row shows –), `hatch_minutes`... |
+| `pet` | more of the first pet: `name`, `age_days`, `flags`, `energy`, `weight` (none by default: the row shows –), `hatch_minutes`, `raised` (ids, or `"world"`: three of its world's), `next_egg` (a name), `next_world` (a name), `lay` (`true` or `{egg_world}`: the lay request, the next-egg select and `egg_roster`; settings S2)... |
 | `pets` | a number (extra pets are children from the world's roster) or an array of pet overrides; the first is on show, the card gets its dots |
+| `empty`, `admin` | `empty: true`: no pets at all (the first-run card, its "add a pet ›" for an admin); `admin: false`: the viewer is not an admin (default admin). The fake devices carry a `config_entries` id |
 | `shell` | `{shape, color, bezel, finish}` over the world's own; `finish: "none"` drops it. Shapes: egg tank house porthole pad moon |
 | `scene` | `day` (default), `night`, `dim` (lights out), `rain` |
 | `season` | `false` (default: no seasonal touches), `"auto"` (by `time`), or a season key such as `halloween` |
 | `time` | pinned clock, ISO (default `2026-06-15T12:00:00Z`; the browser runs in UTC) |
 | `width` | card width in px (420, or 330 for the compact layout); `dpr` pixel ratio |
-| `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `picker` (the sheet's shell picker; needs `shellOptions`), `journal` (see below), `everyworld` (the journal's "every world ›" page; `journal: {raised}` sets what's drawn), `collection` (the journal's "finds ›" page; see `collection`), `games` (game picker) |
+| `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `picker` (the sheet's shell picker; needs `shellOptions`), `journal` (see below), `everyworld` (the journal's "every world ›" page; `journal: {raised}` sets what's drawn), `collection` (the journal's "finds ›" page; see `collection`), `games` (game picker), `lay` (the lay sheet: needs `pet: {lay: true}`), `name` (the name sheet a lay opens, settings S3: an egg or baby pet with a `generation`; `nameText` is what is typed in the field, `rename` an error code the fake server answers a tap on "name it" with) |
 | `shellOptions`, `shellFinish`, `shellLocked` | the lead pet's `shell_finish_options` (finish keys it may wear), `shell_finish` (its pick, default none: the world's own) and `shell_locked` (`{key: stage}`). Without `shellOptions` the card has no shell row, as with an older server |
 | `preview` | in the picker, the tile tapped: that finish on the live shell, unsaved (`""` is the world's own) |
 | `scroll` | a selector in the status box brought into view (the picker scrolls), e.g. `.tile.now` or `.sec[data-group="specials"]` (its top just under the back row) |
@@ -73,12 +78,17 @@ A shot (all optional):
 | `pet.personality`, `hatched_on`, `upbringing` | the first pet's type (teen or adult), birth date and upbringing as `sensor.life_stage` carries them; `pet.reason` / `pet.reason_key` put the server's mood sentence on `sensor.mood`, so the mood line (P2b) shows through the card's own `_say` |
 | `idle` | `{mood}`: the pet's idle mumble through the card's own `_idle` (a mumble, the type's side of the coin) |
 | `ask` | a question kind (`catchphrase`) put through the card's own `_ask`, so its answer buttons show |
+| `note` | on `settings` / `picker`: a line shown in the feedback bubble (the pet's head and the note, under the back row), through the card's own `_statusMessage` |
+| `afterChange`, `afterWait` | on `settings`: the sheet closed after that change (a `SETTINGS_REACT` key: `monoOn`, `monoOff`, `effectsOff`, `shell`, `sharedOn`, `notifyOn`), through the card's own `_settingsChanged` and Status chip, so the pet perks and says its line (settings UX F14); `afterWait` ms to let it type (default 1500) |
+| `haDark`, `os` | HA's dark mode (`hass.themes.darkMode`: `true`, `false`; unset = HA says nothing) and the OS's colour scheme (`"dark"` / `"light"`), for the glow finish's dark look (UX7 F6) |
 | `say` | text put in the bubble (`""` clears it) |
+| `fx` | a house effect class held on the screen (`fx-heat`, `fx-cool`, `fx-suds`, `fx-tumble`, `fx-chime`), its animation paused 1 s in; with `motion: reduce` there is none, so it just shows |
 | `clip` | `card` (whole card, default), `device` (the toy), `screen` (the LCD only) |
 | `motion` | `reduce` emulates `prefers-reduced-motion: reduce` (`--motion reduce`) |
-| `game`, `digReplies`, `digTaps` | `game: "dig"`: a Berry dig started through the picker, answered by `digReplies` (play_game replies in order; default: round 2, 2 banked, basket 2), then `digTaps` (`"dig"`/`"keep"`) played; held on the last reply (a bee still shows) |
+| `game`, `digReplies`, `digTaps` | `game: "dig"`: a Berry dig started through the picker, answered by `digReplies` (play_game replies in order; default: round 2, 2 banked, basket 2), then `digTaps` (`"dig"`/`"keep"`) played; held on the last reply (a bee still shows). `game: "left_right"` / `"higher_lower"` the same way (default start: round 0, number 5; `digTaps` `"left"`/`"right"`, or `"lower"`/`"higher"`; a reply is `{result: "ok", game, round, rounds: 5, wins, correct, went / number}`) |
 | `lcd`, `booted`, `mono` | per-browser settings, see below |
 | `senses` | the kinds the house shows the pet (`["weather", "tv"]`; `[]`: "just the clock"), for the sheet's "notices" row |
+| `sleepTimes`, `timeFormat` | the sheet's "bedtime" row (settings S7): `sleepTimes` is `{bedtime, wake}` as `sensor.life_stage` carries them (default 23:00 and 07:00; `false`: an older server, no row); `timeFormat` is `hass.locale.time_format` (`"12"`, `"24"`; unset: the language's own) |
 | `social` | the social meter's level, 0-10 (`7`: three and a half hearts), for the status page's "friends" row |
 | `bigText` | `true` (`--big-text`): the "big text" switch on (larger words on the status box's pages) |
 | `classes` | an array of classes put on `.screen` last, before the transitions finish: `faded`, `raining`, `lit`... (the bench's `scene: "rain"` is woodland's rain backdrop without `raining`) |
@@ -98,7 +108,7 @@ A shot (all optional):
 | `house`, `basket` | the house view the private channel would send (`house`, an object over it), and `basket`: how many finds wait (`house.basket`, 0-3), so the basket shows (visitors v2 §3) |
 | `look` | a look played over time by the card's own tick: `{at, resumed, seenAgo}`. The driver moves the pinned clock in 250 ms steps to `at` seconds and ticks each step (the first look, greeting, idle and flair run; the channel counts as heard). `resumed: true` is a tab back after 3 h hidden (fresh-moment 1); `seenAgo` is hours since this device last looked (the away note). Writes `<shot>.json`: `{said, moves}`. The pet's `wish`, `dream`, `traits`, `trait_levels` and `moments` (`[{type, ago}]`, minutes) fill it |
 | `gift` | a gift waiting for the viewer (visitors v2 §5): `{id, world}` set as `mine.gift`, the card's own first look forced (its other lines dropped), the take answered by the fake `callWS` (only `collect {gift: true, shared: false}`), the line said and the pop paused just in. `--gift woodland/pinecone` on the command line. Writes `<shot>.json` beside the PNG: `{lookedFirst, said, pop}`. An asleep, away or egg pet's first look doesn't run, so nothing is said |
-| `findsShown` | `true` turns the card's `FINDS_SHOWN` release switch on (off until V-F's art: no basket, reveal, gift or finds grid). `--finds-shown` on the command line; `--preset finds`, `gifts` and `collection` set it themselves. Without it, `basket`, `reveal`, `gift` and the page's finds draw nothing |
+| `findsShown` | sets the card's `FINDS_SHOWN` release switch (on by default; `false` shows the off path: no basket, reveal, gift or finds grid). `--finds-shown` on the command line sets it true; `--preset finds`, `gifts` and `collection` set it themselves |
 | `reveal` | the basket's reveal pinned through the card's own `_revealStart`/`_revealFind`, timers stopped: `{id, world?, new?, from?}` (one find; `world` defaults to the pet's) or `{finds: [...], at}` (shown up to the find at `at`). Its line in the bubble, its pop and a `new` find's sparkle paused just in; with `motion: reduce` it is still |
 | `storage` | any other localStorage keys to seed (`hatch-named-holidays: "off"` turns holiday names off) |
 | `config` | extra card config (`setConfig`) |
@@ -141,6 +151,8 @@ from its unlit twin on more than 5 % of its pixels, or the run exits non-zero.
 
 - `Date` is fixed (so seasons, countdowns and "day N" text hold still) and
   `Math.random` is seeded.
+- The status's LCD wipes (open and between its pages) are run to their end before a shot, so a
+  shot never catches a half-drawn page.
 - The card's tick timer is stopped after one manual tick: frame 1 of every
   animation, no wandering, no idle chatter, no hop. The greeting from that one
   tick is what the bubble shows unless you set `say`.

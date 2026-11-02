@@ -1,0 +1,1294 @@
+const STYLE = `
+  :host { display: block; --hp-backdrop: var(--card-background-color, #2f4a3a);
+    --hp-ground: transparent; --hp-ink: var(--primary-text-color, #222);
+    --hp-subink: var(--secondary-text-color, #555); }
+  button:focus-visible { outline: 3px solid #fff;
+    outline-offset: 2px; box-shadow: 0 0 0 6px #1d2a22; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    .pet.droop { transform: translateY(4px) rotate(-4deg) scaleY(.94); transform-origin: 50% 100%; }
+  }
+  ha-card { overflow: hidden; border-radius: var(--ha-card-border-radius, 24px);
+    background: var(--hp-backdrop, #2f4a3a); transition: background .5s; }
+  .head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 14px 18px 4px; }
+  .head > div:first-child { min-width: 0; } /* the name column shrinks, so the Status chip stays on the card */
+  .head .chips { flex-shrink: 0; }
+  .title { font: 400 24px 'Tiny5', monospace; color: var(--hp-ink); min-width: 0; overflow-wrap: anywhere; }
+  .title.long { font-size: 16px; } /* a long name keeps to two lines */
+  .sub { font-size: 13px; color: var(--hp-subink); margin-top: 2px; }
+  /* S4: the empty card's "add a pet ›", an admin's way to HA's add dialog. */
+  .head .addpet { display: block; margin: 0; padding: 0; border: none; background: none; text-align: left;
+    min-height: 44px; font: inherit; font-size: 13px; color: var(--hp-subink); text-decoration: underline; cursor: pointer; }
+  .head .addpet[hidden] { display: none; }
+  .chips { display: flex; gap: 6px; align-items: center; }
+  .statusbtn { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px;
+    border: none; border-radius: 22px; cursor: pointer; font: 400 14px 'Tiny5', monospace;
+    color: var(--hp-ink); background: color-mix(in srgb, var(--hp-ink) 14%, transparent); }
+  .statusbtn[aria-pressed="true"] { background: var(--hp-ink); color: var(--hp-backdrop); }
+  .tap-feedback { position: relative; overflow: visible; }
+  .tap-feedback.pressed { transform: scale(.94); filter: brightness(.9); }
+  .toy.tap-feedback.pressed { transform: none; filter: none; }
+  .tap-feedback::after { content: ""; position: absolute; inset: 0; border: 2px solid currentColor;
+    border-radius: inherit; pointer-events: none; opacity: 0; }
+  .tap-feedback.tapped::after { animation: tap-ring .38s ease-out; }
+  .toy.tap-feedback::after { display: none; }
+  @keyframes tap-ring { 0% { opacity: .65; transform: scale(.82); } 100% { opacity: 0; transform: scale(1.28); } }
+  .viewport { position: relative; overflow: hidden; padding: 14px 0 22px; touch-action: pan-y; }
+  .ground { position: absolute; left: 0; right: 0; bottom: 0; height: 26%;
+    background: var(--hp-ground); transition: background .5s; }
+  /* No text selection from a mouse swipe (UX fix 2, F6); the typed-text box still takes typing. */
+  .track { user-select: none; -webkit-user-select: none; position: relative; display: flex; gap: 16px; align-items: flex-end;
+    transition: transform .5s cubic-bezier(.2,.8,.2,1); }
+  .track input { user-select: text; -webkit-user-select: text; }
+  .slide { flex-shrink: 0; transition: opacity .5s, transform .5s; transform-origin: 50% 100%; }
+  .slide.away-slide { opacity: .5; transform: scale(.94); }
+  /* Loops pause where nobody watches: the neighbours, or the card scrolled away. */
+  .slide.away-slide .screen *, ha-card.offscreen .screen * { animation-play-state: paused !important; }
+  .foot { display: flex; align-items: center; justify-content: space-between; padding: 0 14px 14px; }
+  .nav { width: 44px; height: 44px; border: none; border-radius: 22px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; color: var(--hp-ink);
+    background: color-mix(in srgb, var(--hp-ink) 14%, transparent); }
+  /* Dots share what room the arrows leave; many pets wrap onto a second row. */
+  .foot { gap: 8px; }
+  .nav { flex-shrink: 0; }
+  .dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0; min-width: 0; }
+  /* 44 x 44 hit area (4c's size); the drawn dot is a 16 px head, and the boxes sit edge to edge. */
+  .dot { width: 44px; height: 44px; border: none; padding: 0; cursor: pointer;
+    background: none; display: flex; align-items: center; justify-content: center; }
+  /* The dot is the pet's head (UX7 F8): 16 px, a 2 px ring, the sprite cropped as the status band's head is
+     (_headCrop). The one on show is full colour; the others sit back at 55%. Before the sprite is drawn the
+     ring alone shows. */
+  .dot::before { content: ""; width: 16px; height: 16px; border-radius: 8px; box-sizing: border-box;
+    border: 2px solid var(--hp-ink); opacity: .55; image-rendering: pixelated;
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 43px) var(--say-size, 43px) no-repeat border-box,
+      color-mix(in srgb, var(--hp-ink) 25%, transparent); }
+  .dot[aria-current="true"]::before { opacity: 1; }
+  /* A pet this browser hasn't shown yet (UX fix 4, F4): a small pulse till its slide is first shown
+     (reduced motion: no pulse, but full colour like the one on show). */
+  .dot.fresh::before { opacity: 1; animation: dotpulse 1.6s ease-in-out infinite; }
+  @keyframes dotpulse { 50% { transform: scale(1.5); } }
+  .slide.away-slide { cursor: pointer; }
+  /* The empty card's toy (UX fix 4, F5): an egg's silhouette (the journal's "???" look), no buttons. */
+  .slide.empty .pet { filter: brightness(0); opacity: .25; }
+  .slide.empty .buttons, .slide.empty .backlight, .slide.empty .lcd, .slide.empty .glow { display: none; }
+  .single .foot { display: none; }
+
+  /* One device */
+  .device { display: flex; flex-direction: column; align-items: center; font-family: 'Tiny5', monospace; }
+  /* The moulded shell (_mould): each part's plastic is a .mould cut on the grid
+     (--px a cell), its own colour in CSS with the cut light and shade (--tones) over
+     it. The parts themselves only give the size and shape. */
+  .mould { position: absolute; left: 0; top: 0; z-index: -1; pointer-events: none;
+    background: var(--d-dark); }
+  .mould::after { content: ""; position: absolute; inset: 0; background: var(--tones) 0 0 / 100% 100%; }
+  .loop, .roof, .feet span, .bezel { isolation: isolate; }
+  .loop { position: relative; width: 46px; height: 28px; margin-bottom: -12px; }
+  .lid { width: 92%; height: 20px; border-radius: 10px 10px 4px 4px; display: flex; justify-content: center;
+    align-items: center; gap: 6px; }
+  .lid span { width: 12%; height: calc(var(--px, 2px) * 2); background: rgba(24,12,4,.34);
+    box-shadow: 0 var(--px, 2px) 0 rgba(255,255,255,.22); }
+  /* The lid sits over the body's top edge. */
+  .lid { position: relative; z-index: 1; margin-bottom: -5px; }
+  .feet { width: 82%; display: flex; justify-content: space-between; }
+  .feet span { position: relative; width: 34px; height: 10px; border-radius: 0 0 6px 6px; }
+  /* House: a pitched roof with a chimney, sitting on the body like a cottage. */
+  .roof { position: relative; width: 108%; height: 64px; margin-bottom: -2px; }
+  .compact .roof { height: 46px; }
+  /* Porthole: a riveted ring (the rivets are cut with the bezel) around a rounded window. */
+  .porthole .body { border-radius: 40px; padding: 22px 18px 26px; }
+  .porthole .bezel { padding: 14px; border-radius: 30% / 38%; }
+  /* --edge: how far the porthole's round corners eat into the screen (a share of its width;
+     heights take ~.75 of it); what stands in a corner or on the ground keeps that far in.
+     --go: how far go-left / go-right carry the pet (of its own width); less in the round window. */
+  .porthole .screen { border-radius: 28% / 36%; --edge: 12%; --go: 45%; }
+  /* Clear of the round corners, as wide as on the other shapes (the window is a little narrower). */
+  .porthole .bubble { left: 11%; top: 11%; max-width: 66%; }
+  .porthole .screen { container-type: inline-size; }
+  .porthole .status { --sy: 6cqw; --sx: 11cqw; } /* the sheet's padding, its bands kept flush */
+  /* Text fades at the lens's rim rather than being sliced mid-letter by the round corners (UX fix 2, F9). */
+  .porthole .status { -webkit-mask-image: linear-gradient(transparent, #000 10px, #000 calc(100% - 10px), transparent);
+    mask-image: linear-gradient(transparent, #000 10px, #000 calc(100% - 10px), transparent); }
+  .porthole .attention { right: 13%; top: 9%; }
+  /* Pad: a lily pad, its notch and veins cut with the body. */
+  .pad .body { border-radius: 50% / 30%; padding: 40px 22px 40px; }
+  .pad .buttons { width: 86%; }
+  /* Moon: a crescent riding on top of a rounded body sprinkled with stars. */
+  .crescent { width: 64px; height: 64px; border-radius: 50%; margin: 0 0 -26px 26px;
+    position: relative; z-index: 1; }
+  .crescent > .mould { background: var(--d-bezel); }
+  .moon .body { border-radius: 34px; padding: 30px 18px 24px; }
+  @supports (width: round(1px, 1px)) {
+  .moon .body > .mould {
+    --star: linear-gradient(rgba(255,255,255,.6), rgba(255,255,255,.6));
+    background: var(--star) round(12%, var(--px)) round(20%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--star) round(88%, var(--px)) round(14%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--star) round(6%, var(--px)) round(62%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--star) round(94%, var(--px)) round(56%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--star) round(5%, var(--px)) round(86%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--star) round(95%, var(--px)) round(90%, var(--px)) / var(--px) var(--px) no-repeat, var(--d-shell); }
+  }
+  .murk { inset: 0; width: 100%; height: 100%; opacity: 0; transition: opacity .8s; }
+  .body { width: 100%; box-sizing: border-box; box-shadow: 0 16px 34px rgba(20,15,5,.32);
+    display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .body { position: relative; isolation: isolate; }
+  .body > .mould { background: var(--d-shell); }
+  /* Shell finishes recolour the moulded plastic, in hard bands on the grid; the cut
+     light and shade stay over them. They leave .bezel and .screen geometry alone:
+     the screen is a fixed opening. A speck is a square of whole cells. */
+  .device { --sq: calc(var(--px) * 2); }
+  @supports (width: round(1px, 1px)) {
+  .finish-woodland .body > .mould {
+    background: linear-gradient(180deg, #f49a55 0 round(down, 20%, var(--px)), var(--d-shell) 0 round(down, 72%, var(--px)),
+      #e07a40 0 round(down, 86%, var(--px)), #d76a35 0); }
+  }
+  @supports (width: round(1px, 1px)) {
+  .finish-aqua .body > .mould {
+    background: linear-gradient(180deg, #80e3df 0 round(down, 16%, var(--px)), #52cbcf 0 round(down, 32%, var(--px)),
+      #36b9c2 0 round(down, 68%, var(--px)), #1fa0ae 0 round(down, 84%, var(--px)), #168d9c 0); }
+  }
+  .finish-aqua .toy:nth-child(4n + 1) .cap { background: #ffd9dc; }
+  .finish-aqua .toy:nth-child(4n + 2) .cap { background: #fff0b7; }
+  .finish-aqua .toy:nth-child(4n + 3) .cap { background: #dcd4ff; }
+  .finish-aqua .toy:nth-child(4n) .cap { background: #c8f1d8; }
+  @supports (width: round(1px, 1px)) {
+  .finish-grove .body > .mould { --sun: linear-gradient(#ffec8f, #ffec8f);
+    background: var(--sun) round(12%, var(--px)) round(23%, var(--px)) / var(--sq) var(--sq) no-repeat,
+      var(--sun) round(88%, var(--px)) round(37%, var(--px)) / var(--sq) var(--sq) no-repeat,
+      var(--sun) round(16%, var(--px)) round(73%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--sun) round(84%, var(--px)) round(81%, var(--px)) / var(--px) var(--px) no-repeat,
+      linear-gradient(180deg, #a9df68 0 round(down, 22%, var(--px)), #8dcd64 0 round(down, 46%, var(--px)),
+        #74bd62 0 round(down, 78%, var(--px)), #4e965c 0); }
+  }
+  .finish-grove .toy .cap { background: #fff0a8; }
+  .finish-grove .toy:nth-child(3n + 2) .cap { background: #ffd1b5; }
+  @supports (width: round(1px, 1px)) {
+  .finish-celestial .body > .mould { --star: linear-gradient(#fff4bb, #fff4bb); --dot: linear-gradient(#fff, #fff);
+    background: var(--star) round(13%, var(--px)) round(16%, var(--px)) / var(--sq) var(--sq) no-repeat,
+      var(--star) round(87%, var(--px)) round(24%, var(--px)) / var(--sq) var(--sq) no-repeat,
+      var(--dot) round(9%, var(--px)) round(66%, var(--px)) / var(--px) var(--px) no-repeat,
+      var(--dot) round(91%, var(--px)) round(75%, var(--px)) / var(--px) var(--px) no-repeat,
+      linear-gradient(180deg, #777be0 0 round(down, 24%, var(--px)), #6255bb 0 round(down, 74%, var(--px)), #413c91 0); }
+  }
+  .finish-celestial .toy .cap { background: #f4d7fa; }
+  .finish-celestial .toy:nth-child(3n + 2) .cap { background: #d4e7ff; }
+  @supports (width: round(1px, 1px)) {
+  .finish-dune .body > .mould { --grain: linear-gradient(rgba(150,104,52,.32), rgba(150,104,52,.32));
+    background: var(--grain) round(10%, var(--px)) round(82%, var(--px)) / var(--sq) var(--sq) no-repeat,
+      var(--grain) round(90%, var(--px)) round(70%, var(--px)) / var(--sq) var(--sq) no-repeat,
+      linear-gradient(180deg, #ecc88f 0 round(down, 20%, var(--px)), var(--d-shell) 0 round(down, 74%, var(--px)),
+        #cc9d62 0 round(down, 88%, var(--px)), #c39257 0); }
+  }
+  .finish-dune .toy .cap { background: #fbefd0; }
+  .finish-dune .toy:nth-child(3n + 2) .cap { background: #f3d6a6; }
+  /* 1990s special editions (any world, any shape). Clear: see-through plastic, the
+     board and its glare showing; the outlines and the cut shade keep it solid. */
+  .finish-clear .body > .mould { --gold: rgba(236,200,104,.6); --bp: calc(var(--bz-x) - var(--px) * 5) calc(var(--bz-y) - var(--px) * 5);
+    --bs: calc(var(--bz-w) + var(--px) * 10) calc(var(--bz-h) + var(--px) * 10);
+    background:
+      repeating-linear-gradient(180deg, transparent 0 calc(var(--px) * 5), var(--gold) 0 calc(var(--px) * 6)) var(--bp) / var(--bs) no-repeat,
+      repeating-linear-gradient(90deg, transparent 0 calc(var(--px) * 13), var(--gold) 0 calc(var(--px) * 14)) var(--bp) / var(--bs) no-repeat,
+      linear-gradient(rgba(40,128,84,.55), rgba(40,128,84,.55)) var(--bp) / var(--bs) no-repeat,
+      color-mix(in srgb, var(--d-shell) 34%, transparent); }
+  .finish-clear .body > .mould::before { content: ""; position: absolute; width: calc(var(--px) * 8); height: calc(var(--px) * 8);
+    top: round(7%, var(--px)); left: round(down, 84% - var(--px) * 8, var(--px)); opacity: .6; image-rendering: pixelated;
+    background: #fff; -webkit-mask: var(--hw-glare) 0 0 / 100% 100%; mask: var(--hw-glare) 0 0 / 100% 100%; }
+  .finish-clear .bezel > .mould::before { background: color-mix(in srgb, var(--d-bezel) 78%, transparent); }
+  .finish-clear .crescent > .mould { background: color-mix(in srgb, var(--d-bezel) 50%, transparent); }
+  .finish-clear .loop > .mould, .finish-clear .lid > .mould, .finish-clear .feet .mould,
+  .finish-clear .roof > .mould { background: color-mix(in srgb, var(--d-dark) 48%, transparent); }
+  .finish-clear .body { box-shadow: none; }
+  .finish-clear .toy .cap { background: color-mix(in srgb, #e6f8ec 72%, transparent); }
+  /* Glitter: sparkle in the plastic, a few flecks twinkling slowly. */
+  .finish-glitter .body > .mould { background: var(--glitter) 0 0 / calc(var(--px) * 29) calc(var(--px) * 23),
+    color-mix(in srgb, var(--d-shell) 80%, #fff2c9); }
+  .finish-glitter .loop > .mould, .finish-glitter .lid > .mould, .finish-glitter .feet .mould,
+  .finish-glitter .roof > .mould { background: color-mix(in srgb, var(--d-dark) 76%, #ffe9ad); }
+  .finish-glitter .hw.flecks { display: block; }
+  .finish-glitter .toy .cap { background: #fff0ce; }
+  /* Glow: pale green by day; at night (or in a dark theme) the plastic itself lights up. */
+  .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 52%, #d4f0b4); }
+  .finish-glow .loop > .mould, .finish-glow .lid > .mould, .finish-glow .feet .mould,
+  .finish-glow .roof > .mould { background: color-mix(in srgb, var(--d-dark) 55%, #bfe4a0); }
+  .finish-glow .toy .cap { background: #e7f3c8; }
+  .finish-glow .toy:nth-child(3n + 2) .cap { background: #d5e8ae; }
+  .finish-glow:has(.screen.night) .body > .mould, .finish-glow:has(.screen.dim) .body > .mould {
+    background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
+  .finish-glow:has(.screen.night) .body, .finish-glow:has(.screen.dim) .body {
+    box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
+  .finish-glow:has(.screen.night) :is(.loop, .lid, .roof) > .mould, .finish-glow:has(.screen.night) .feet .mould,
+  .finish-glow:has(.screen.dim) :is(.loop, .lid, .roof) > .mould, .finish-glow:has(.screen.dim) .feet .mould {
+    background: #9fdc7c; }
+  .finish-glow:has(.screen.night) .crescent > .mould, .finish-glow:has(.screen.dim) .crescent > .mould { background: #d3f7ad; }
+  /* The plastic lights up in a dark HA theme (ha-card.ha-dark, from hass.themes.darkMode: UX7 F6), not
+     in the OS's dark mode; where HA doesn't say, the OS's is the fallback. */
+  ha-card.ha-dark .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
+  ha-card.ha-dark .finish-glow .body { box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
+  ha-card.ha-dark .finish-glow :is(.loop, .lid, .roof) > .mould,
+  ha-card.ha-dark .finish-glow .feet .mould { background: #9fdc7c; }
+  ha-card.ha-dark .finish-glow .crescent > .mould { background: #d3f7ad; }
+  @media (prefers-color-scheme: dark) {
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .body { box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow :is(.loop, .lid, .roof) > .mould,
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .feet .mould { background: #9fdc7c; }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .crescent > .mould { background: #d3f7ad; }
+  }
+  /* Prints any world can wear (FINISHES): a tile of whole cells (--print-<key>) over the
+     plastic's face (--d-face), tiled at the grid's size. */
+  .finish-speckle .body > .mould { background: var(--print-speckle) 0 0 / calc(var(--px) * 14) calc(var(--px) * 10), var(--d-face); }
+  .finish-stripes .body > .mould { background: var(--print-stripes) 0 0 / calc(var(--px) * 8) calc(var(--px) * 8), var(--d-face); }
+  .finish-hearts .body > .mould { background: var(--print-hearts) 0 0 / calc(var(--px) * 12) calc(var(--px) * 12), var(--d-face); }
+  .finish-stars .body > .mould { background: var(--print-stars) 0 0 / calc(var(--px) * 16) calc(var(--px) * 12), var(--d-face); }
+  .finish-gingham .body > .mould { background: var(--print-gingham) 0 0 / calc(var(--px) * 8) calc(var(--px) * 8), var(--d-face); }
+  .finish-dots .body > .mould { background: var(--print-dots) 0 0 / calc(var(--px) * 10) calc(var(--px) * 10), var(--d-face); }
+  .finish-camo .body > .mould { background: var(--print-camo) 0 0 / calc(var(--px) * 22) calc(var(--px) * 12), var(--d-face); }
+  .finish-waves .body > .mould { background: var(--print-waves) 0 0 / calc(var(--px) * 8) calc(var(--px) * 8), var(--d-face); }
+  .finish-scales .body > .mould { background: radial-gradient(circle at 50% 100%, transparent 0 calc(var(--px) * 3),
+    rgba(255,255,255,.38) 0 calc(var(--px) * 4), transparent 0) 0 0 / calc(var(--px) * 8) calc(var(--px) * 5), var(--d-face); }
+  .finish-leaves .body > .mould { background: var(--print-leaves) 0 0 / calc(var(--px) * 12) calc(var(--px) * 12), var(--d-face); }
+  .finish-paws .body > .mould { background: var(--print-paws) 0 0 / calc(var(--px) * 10) calc(var(--px) * 10), var(--d-face); }
+  .finish-constellation .body > .mould { background: var(--print-constellation) 0 0 / calc(var(--px) * 30) calc(var(--px) * 16),
+    linear-gradient(180deg, #45449f 0 var(--cut2, 40%), var(--d-face) 0); }
+  /* A print stops a cell short of a caption's letters, so no mark runs into them. */
+  :is(.finish-speckle, .finish-stripes, .finish-hearts, .finish-stars, .finish-gingham, .finish-dots, .finish-camo,
+    .finish-waves, .finish-scales, .finish-leaves, .finish-paws, .finish-constellation) .toy {
+    text-shadow: var(--px) 0 var(--d-face), calc(var(--px) * -1) 0 var(--d-face), 0 var(--px) var(--d-face),
+      0 calc(var(--px) * -1) var(--d-face); }
+  /* Bands change colour only in the gaps between the label, the bezel and the button
+     rows (_bands), so none cuts a row of buttons or its captions. */
+  .finish-rainbow .body > .mould { background: linear-gradient(180deg, #ffa3b1 0 var(--cut1), #ffd08f 0 var(--cut2),
+    #fff08f 0 var(--cut3), #a8e6a6 0 var(--cut4), #9ed4f2 0 var(--cut5), #c9aef0 0); }
+  .finish-sunset .body > .mould { background: linear-gradient(180deg, #ffd66e 0 var(--cut1), #ffbb63 0 var(--cut2),
+    #ff9f62 0 var(--cut3), #ff8a78 0 var(--cut4), #f37e98 0 var(--cut5), #c96fa8 0); }
+  /* Two-tone: the world's colour over cream, split behind the bezel. */
+  .finish-twotone .body > .mould { background: linear-gradient(180deg, var(--d-shell) 0 var(--cut2), var(--d-face) 0); }
+  .finish-twotone .label { color: var(--d-ink-top); }
+  /* Smoke: dark see-through plastic, the board behind the bezel showing through it.
+     The board is drawn in the body's own plastic, so the body's outline clips it. */
+  .finish-smoke .body > .mould { --gold: rgba(236,200,104,.6); --bp: calc(var(--bz-x) - var(--px) * 5) calc(var(--bz-y) - var(--px) * 5);
+    --bs: calc(var(--bz-w) + var(--px) * 10) calc(var(--bz-h) + var(--px) * 10);
+    background: linear-gradient(rgba(40,34,48,.62), rgba(40,34,48,.62)),
+      repeating-linear-gradient(180deg, transparent 0 calc(var(--px) * 5), var(--gold) 0 calc(var(--px) * 6)) var(--bp) / var(--bs) no-repeat,
+      repeating-linear-gradient(90deg, transparent 0 calc(var(--px) * 13), var(--gold) 0 calc(var(--px) * 14)) var(--bp) / var(--bs) no-repeat,
+      linear-gradient(rgba(40,128,84,.55), rgba(40,128,84,.55)) var(--bp) / var(--bs) no-repeat; }
+  .finish-smoke .bezel > .mould::before { background: rgba(60,56,66,.78); }
+  .finish-smoke .loop > .mould, .finish-smoke .lid > .mould, .finish-smoke .feet .mould,
+  .finish-smoke .roof > .mould, .finish-smoke .crescent > .mould { background: rgba(30,26,38,.7); }
+  .finish-smoke .body { box-shadow: none; }
+  .finish-smoke .toy .cap { background: #d9d6e2; }
+  /* A finish only tints idle buttons: the lit/asleep (.on) and wanted states keep their own look. */
+  .device[class*="finish-"] .toy.wanted .cap { background: #ffe9a8; }
+  .device[class*="finish-"] .toy.on .cap { background: #3a2a1a; color: #ffe9a8; }
+  /* Sol's trim (worlds.json "trim"), drawn at each piece's own size (see _trim) and
+     placed to suit each shell: over the top edge, on the plate, at the bottom corners. */
+  .trim-top, .trim-top2, .trim-corner { position: absolute; pointer-events: none;
+    image-rendering: pixelated; z-index: 1; }
+  .trim-top { top: -12px; left: 50%; transform: translateX(-50%); }
+  .trim-top2 { display: none; }
+  /* Egg (woodland): the garland flipped so it arches with the dome, not against it (owner, 2026-10-30). */
+  .egg .trim-top { transform: translateX(-50%) scaleY(-1); }
+  .trim-corner { bottom: -18px; }
+  .trim-corner.left { left: 14%; } .trim-corner.right { right: 14%; transform: scaleX(-1); }
+  /* Tank: a pair standing on the lid's two ends, clear of its grips. */
+  .tank .trim-top, .tank .trim-top2 { top: auto; bottom: calc(100% + 15px); transform: none; }
+  .tank .trim-top { left: 20px; }
+  .tank .trim-top2 { display: block; right: 20px; transform: scaleX(-1); }
+  /* House: the wreath hangs in the middle of the roof's gable. */
+  .house .trim-top { top: -50px; }
+  .house .trim-corner { bottom: -12px; }
+  .house .trim-corner.left { left: 4%; } .house .trim-corner.right { right: 4%; }
+  /* Lily pad: the garland parts at the notch; the corners sit in on the bottom curve. */
+  .pad .trim-top { top: -18px; }
+  .pad .trim-corner { bottom: 2px; }
+  .pad .trim-corner.left { left: 20%; } .pad .trim-corner.right { right: 20%; }
+  /* Moon: the garland's gap sits under the crescent, which rides right of centre. */
+  .moon .trim-top { top: -10px; transform: translateX(calc(-50% + 13px)); }
+  /* Room under the full-width garlands for the plate, and above the bottom edge for the
+     corners, so neither covers the label or the button captions. */
+  .porthole .label.plate { margin-top: 44px; }
+  .pad .label.plate { margin-top: 30px; }
+  .moon .label.plate { margin-top: 30px; }
+  .porthole .body, .moon .body { padding-bottom: 44px; }
+  .label.plate { display: flex; align-items: center; box-sizing: border-box;
+    justify-content: center; background-size: 100% 100%; image-rendering: pixelated;
+    color: #fff4dc; text-shadow: 0 2px 0 #3a1e0c; margin-top: 10px; letter-spacing: .08em; }
+  .compact .trim-corner { display: none; }
+  .egg .body { border-radius: 50% 50% 46% 46% / 30% 30% 18% 18%; padding: 36px 20px 40px; }
+  .egg .buttons { width: 88%; }
+  .tank .body { border-radius: 18px; padding: 16px 18px 36px; }
+  .house .body { border-radius: 0 0 10px 10px; padding: 18px 18px 38px; }
+  .label { font-size: 14px; letter-spacing: .12em; color: var(--d-ink); }
+  .request { position: absolute; right: 14px; bottom: 14px; z-index: 2; min-height: 44px;
+    display: none; align-items: center; gap: 6px; padding: 0 14px; border: 2px solid #3a2a1a;
+    border-radius: 22px; background: #ffe9a8; color: #3a2a1a; cursor: pointer;
+    font: 400 14px 'Tiny5', monospace; box-shadow: 3px 3px 0 #3a2a1a;
+    animation: pulse 1.6s ease-in-out infinite; }
+  .request.show { display: flex; }
+  .bezel { position: relative; width: 100%; box-sizing: border-box; border-radius: 20px; padding: 9px; }
+  .bezel > .mould { background: none; }
+  .bezel > .mould::before { content: ""; position: absolute; inset: 0; background: var(--d-bezel); clip-path: var(--core); }
+  .bezel > .screen { z-index: 1; }
+  .screen { position: relative; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden;
+    background: #2b2f3a; box-shadow: inset 0 0 0 3px rgba(0,0,0,.35); cursor: pointer; }
+  .screen img { position: absolute; image-rendering: pixelated; user-select: none;
+    -webkit-user-drag: none; pointer-events: none; }
+  .bg { inset: 0; width: 100%; height: 100%; object-fit: cover; transition: filter .6s; }
+  .screen.night .bg { filter: brightness(.85); }
+  .screen.dim .bg { filter: brightness(.5) saturate(.75); }
+  .screen.dim .pet { filter: brightness(.8); }
+  .pet, .perch, .screen .pat { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%; }
+  /* Heavy (gaps-seams 2c): 6% wider, height and feet kept, still centred. */
+  .pet.heavy, .ghost.heavy { aspect-ratio: 1.06; margin-left: -24.645%; }
+  /* The pat (PR 3b): a clear button over the pet's box (the img takes no taps), above the
+     bubble and below a question, a game, the status and the boot screen. Written as
+     ".screen .pat" so _tapped's .tap-feedback (position: relative) can't move it. */
+  .screen .pat { position: absolute; z-index: 2; width: 46.5%; padding: 0; border: 0; border-radius: 12px;
+    background: transparent; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .screen .pat[hidden], .screen.show-status .pat, .screen.linking .pat, .screen:has(> .askday) .pat,
+  .screen:has(> .game:not([hidden])) .pat, .screen:has(> .boot:not([hidden])) .pat,
+  .slide.away-slide .pat { display: none; }
+  .screen .pat.tap-feedback.pressed { transform: none; filter: none; }
+  .screen .pat.tap-feedback::after { display: none; }
+  .screen .pat:focus-visible { outline-offset: -3px; box-shadow: inset 0 0 0 6px #1d2a22; }
+  .pet.pat-soft { animation: pat-soft .3s ease-out; }
+  @keyframes pat-soft { 40% { transform: translateY(-2%) scale(1.02, .98); } }
+  .pet.pat-slow { animation: perk 1.1s ease-in-out; }
+  .pet.rock { animation: rock .6s steps(4, jump-none) 1; transform-origin: 50% 90%; }
+  @keyframes rock { 0% { transform: rotate(-4deg); } 33% { transform: rotate(4deg); } 66% { transform: rotate(-3deg); } 100% { transform: rotate(0); } }
+  .pet.hop { animation: hop .7s ease-in-out infinite; }
+  .pet.munch { animation: munch .5s ease-in-out 3; }
+  @keyframes munch { 50% { transform: translateY(-4%) scale(1.04, .96); } }
+  .pet.settle { animation: settle 2.5s ease-in-out; }
+  @keyframes settle { 25%, 75% { transform: translateY(3%) scale(.97, .95); } }
+  .pet.greethop { animation: hop .7s ease-in-out 2; } /* its own class: the bounce clears "hop" */
+  @keyframes hop { 50% { transform: translateY(-9%); } }
+  .poop { bottom: 5%; height: 15%; }
+  .poop.p0 { left: 6%; } .poop.p1 { left: 18%; bottom: 3%; } .poop.p2 { right: 7%; }
+  .attention { top: 5%; right: 5%; height: 17%; animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.12); } }
+  .prop { left: 67%; bottom: 7%; height: 22%; animation: pop .3s ease-out; }
+  /* A clean's extra bubble (fresh-expand M-b): up 30 px over 1.2 s, then it pops. */
+  .bubblepop { position: absolute; left: 74%; bottom: 24%; height: 16%; image-rendering: pixelated; pointer-events: none;
+    animation: bubblepop 1.2s ease-out forwards; }
+  @keyframes bubblepop { 0% { transform: translateY(0); opacity: 1; } 80% { transform: translateY(-30px) scale(1); opacity: 1; }
+    100% { transform: translateY(-30px) scale(0); opacity: 0; } }
+  @keyframes pop { from { transform: scale(.3); opacity: 0; } }
+  .awaysign { left: 50%; bottom: 12%; height: 40%; margin-left: -20%; }
+  .awaylabel { position: absolute; left: 0; right: 0; bottom: 5%; text-align: center;
+    color: #fff; font-size: 15px; text-shadow: 0 1px 3px #000; }
+  .bubble .untyped { visibility: hidden; } /* laid out whole, so it never grows */
+  .bubble { position: absolute; left: 5%; top: 6%; max-width: 64%; padding: 5px 9px;
+    background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a; border-radius: 8px;
+    font-size: 14px; line-height: 1.2; box-shadow: 3px 3px 0 #3a2a1a; }
+  .bubble:empty { display: none; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
+    white-space: nowrap; }
+  /* The left/right game: two big guess buttons and a score over the scene. */
+  .game { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+  .game[hidden] { display: none; }
+  .game button { pointer-events: auto; position: absolute; display: grid; place-items: center;
+    min-width: 44px; min-height: 44px; border-radius: 50%; border: 2px solid #3a2a1a;
+    background: #fffdf5; color: #3a2a1a; box-shadow: 2px 2px 0 #3a2a1a; cursor: pointer; padding: 0;
+    font: inherit; } /* the card's own font, not the browser's button font (F3) */
+  .game button[aria-disabled="true"] { opacity: .5; cursor: default; }
+  /* F4: while the pet shows where it went, the guess buttons fade out of its way. */
+  .game.showgo .gl, .game.showgo .gr { opacity: .15; }
+  .game button:focus-visible { outline: 3px solid #fffdf5; outline-offset: 2px;
+    box-shadow: 0 0 0 6px #1d2a22; }
+  .game .gl { left: 4%; bottom: 8%; }
+  .game .gr { right: 4%; bottom: 8%; }
+  .game .gx { right: 4%; top: 6%; min-width: 44px; min-height: 44px; font: inherit; font-size: 14px; }
+  .game .gpick { position: absolute; inset: 22% 0 0; display: flex; flex-direction: column; gap: 8px;
+    align-items: center; justify-content: center; }
+  .game .gpick[hidden], .game .gnum[hidden], .game .gl[hidden], .game .gr[hidden] { display: none; }
+  /* The picker: chunky toy buttons like the device's own (cream, inked, pressing down). */
+  .game .gpick button { position: static; display: flex; align-items: center; gap: 8px;
+    border-radius: 14px; padding: 4px 14px 4px 10px; font: inherit; font-size: 14px; min-height: 44px;
+    min-width: 168px; border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a;
+    box-shadow: 0 4px 0 #3a2a1a; transition: transform .08s, box-shadow .08s; }
+  .game .gpick button:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
+  /* _fitPicker puts the picker's top under the close button. When a column of
+     games doesn't fit there, they wrap into rows of labels (no icons), still
+     44 px tall (4c's tap size). */
+  .game .gpick.wrap { left: 3%; right: 3%; flex-flow: row wrap; align-content: center; gap: 6px 4px; }
+  .game .gpick.wrap button { min-width: 0; padding: 0 10px; font-size: 12px; justify-content: center; }
+  .game .gpick.wrap.tight { left: 1%; right: 1%; gap: 4px 3px; } /* still too tall: two a row */
+  .game .gpick.wrap.tight button { padding: 0 6px; font-size: 11px; }
+  /* F2: the pile's leaves, or higher or lower's number, beside the pet (opposite the bubble,
+     under the close button), so its face shows all game. */
+  .game .gnum { position: absolute; right: 5%; top: 34%;
+    display: grid; place-items: center; min-width: 30px; min-height: 36px; padding: 5px 7px;
+    border-radius: 10px; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
+    box-shadow: 2px 2px 0 #3a2a1a; }
+  .game .gnum.flip { animation: perk .3s ease-out; }
+  /* D-a: today's visitor watching a dig, still, behind the buttons (fresh-expand E5). */
+  .game .gwatch { position: absolute; right: 4%; bottom: 26%; height: 18%; image-rendering: pixelated;
+    pointer-events: none; transform: scaleX(-1); }
+  /* Trait flair: placed in JS from the head point and the feet line. Every piece
+     must read standing still too (reduced motion turns all animation off). */
+  .flair { position: absolute; inset: 0; z-index: 2; pointer-events: none;
+    animation: fl-moment var(--fl-ms) ease-in-out both; }
+  @keyframes fl-moment { 0% { opacity: 0; } 12%, 85% { opacity: 1; } 100% { opacity: 0; } }
+  .flair .fx { position: absolute; transform: translate(-50%, -100%); image-rendering: pixelated;
+    animation-duration: var(--d, 2.4s); animation-delay: var(--delay, 0s);
+    animation-iteration-count: infinite; animation-fill-mode: both; }
+  /* .screen img is absolute; flair images stay in flow so the piece has a height
+     and translate(-50%, -100%) stands it on its anchor point. */
+  .flair .fx img { position: static; display: block; width: 100%; image-rendering: pixelated; }
+  .flair .fx.frames img + img { position: absolute; inset: 0; }
+  .flair .fx.frames img { animation: fl-frame-a .6s steps(1) infinite; }
+  .flair .fx.frames img + img { animation-name: fl-frame-b; }
+  @keyframes fl-frame-a { 50% { opacity: 0; } }
+  @keyframes fl-frame-b { 0% { opacity: 0; } 50% { opacity: 1; } }
+  .fx.bob { animation-name: fl-bob; animation-timing-function: ease-in-out; animation-direction: alternate; }
+  @keyframes fl-bob { from { transform: translate(-50%, -100%); } to { transform: translate(-50%, -112%); } }
+  .fx.float { animation-name: fl-float; animation-timing-function: ease-out; }
+  @keyframes fl-float { 0% { opacity: 0; transform: translate(-50%, -100%); } 20% { opacity: 1; }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-100% - var(--rise, 40px))); } }
+  .fx.fall { animation-name: fl-fall; animation-timing-function: linear; }
+  @keyframes fl-fall { 0% { opacity: 0; transform: translate(-50%, -100%); } 15% { opacity: 1; }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 0px)), calc(-100% + var(--rise, 40px))); } }
+  .fx.drift { animation-name: fl-drift; animation-timing-function: ease-in-out; }
+  @keyframes fl-drift { 0% { opacity: 0; transform: translate(-50%, -100%); } 20%, 80% { opacity: 1; }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--dx, 40px)), calc(-100% + var(--rise, 0px))); } }
+  .fx.twinkle { animation-name: fl-twinkle; animation-timing-function: ease-in-out; }
+  @keyframes fl-twinkle { 0%, 100% { opacity: .2; transform: translate(-50%, -100%) scale(.7); }
+    50% { opacity: 1; transform: translate(-50%, -100%) scale(1); } }
+  .fx.bounce { animation-name: fl-bounce; animation-timing-function: ease-in; animation-direction: alternate; }
+  @keyframes fl-bounce { from { transform: translate(-50%, -100%); } to { transform: translate(-50%, -150%); } }
+  .fx.pop { animation-name: fl-pop; animation-iteration-count: 1; }
+  @keyframes fl-pop { 0% { transform: translate(-50%, -100%) scale(.4); } 60% { transform: translate(-50%, -100%) scale(1.1); }
+    100% { transform: translate(-50%, -100%) scale(1); } }
+  .fx.loop { offset-rotate: 0deg; transform: translate(-50%, -50%); animation-name: fl-loop;
+    animation-iteration-count: 1; animation-timing-function: ease-in-out; }
+  @keyframes fl-loop { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+  .fx.glow { border-radius: 50%; transform: translate(-50%, -50%);
+    background: radial-gradient(closest-side, rgba(255, 160, 70, .7), rgba(255, 160, 70, 0));
+    animation-name: fl-glow; animation-direction: alternate; }
+  @keyframes fl-glow { to { opacity: .55; } }
+  /* Seasonal touches (SEASONS): behind the pet, sized to the screen. */
+  .season { position: absolute; inset: 0; pointer-events: none; }
+  .season .lantern { right: calc(5% + var(--edge, 0%)); bottom: calc(5% + var(--edge, 0%) * .25); width: 17%; }
+  .season .lantern.lantern-float { bottom: 30%; animation: s-bob 3s ease-in-out infinite alternate; }
+  @keyframes s-bob { to { transform: translateY(-8%) rotate(-4deg); } }
+  .screen.s-halloween.night .season .lantern, .screen.s-halloween.dim .season .lantern {
+    filter: drop-shadow(0 0 6px rgba(255, 170, 60, .95)); animation: s-flicker 1.6s ease-in-out infinite; }
+  .screen.s-halloween.night .season .lantern.lantern-float,
+  .screen.s-halloween.dim .season .lantern.lantern-float {
+    animation: s-flicker 1.6s ease-in-out infinite, s-bob 3s ease-in-out infinite alternate; }
+  @keyframes s-flicker { 50% { filter: drop-shadow(0 0 3px rgba(255, 150, 50, .7)); } }
+  /* Winter lights: a soft warm-white glow, the float's bob kept. */
+  .screen.s-winter.night .season .lantern, .screen.s-winter.dim .season .lantern {
+    filter: drop-shadow(0 0 6px rgba(255, 238, 196, .95)); animation: s-shine 3.2s ease-in-out infinite; }
+  .screen.s-winter.night .season .lantern.lantern-float,
+  .screen.s-winter.dim .season .lantern.lantern-float {
+    animation: s-shine 3.2s ease-in-out infinite, s-bob 3s ease-in-out infinite alternate; }
+  @keyframes s-shine { 50% { filter: drop-shadow(0 0 4px rgba(255, 230, 180, .75)); } }
+  .screen.s-winter .season .bunting { animation: s-twinkle 2.4s steps(1) infinite; }
+  @keyframes s-twinkle { 50% { filter: brightness(1.2); } }
+  .season .corner { top: calc(var(--edge, 0%) * .45); width: 17%; opacity: .85; }
+  .season .corner.right { right: calc(var(--edge, 0%) * .75); }
+  .season .corner.left { left: calc(var(--edge, 0%) * .75); transform: scaleX(-1); }
+  .season .sweet { right: calc(23% + var(--edge, 0%)); bottom: calc(5% + var(--edge, 0%) * .25); width: 7%; }
+  .season .sfly { position: absolute; animation: s-fly var(--fly-ms, 5s) linear forwards; }
+  .season .sfly img { position: static; display: block; width: 100%; }
+  .season .sfly.flap img + img { position: absolute; inset: 0; }
+  .season .sfly.flap img { animation: fl-frame-a .3s steps(1) infinite; }
+  .season .sfly.flap img + img { animation-name: fl-frame-b; }
+  .season .sbat { width: 9%; }
+  .season .sghost { width: 13%; top: 30%; opacity: .9; }
+  .season .sghost.flap img { animation-duration: .8s; }
+  .season .switch { width: 22%; top: 5%; }
+  .season .sgoose { width: 10%; }
+  .season .stwinkle { width: 10%; }
+  .season .stwinkle.flap img { animation-duration: .6s; }
+  /* A walker keeps to the ground: no flight bob, a slower step. */
+  .season .sturkey { width: 15%; bottom: 6%; }
+  .season .sturkey.flap img { animation-duration: .5s; }
+  .season .snowhare { width: 15%; bottom: 6%; }
+  .season .snowhare.flap img { animation-duration: .4s; }
+  .season .sfly.walk.ltr { animation-name: s-ltr; } .season .sfly.walk.rtl { animation-name: s-rtl; }
+  .season .sfly.ltr { left: -25%; } .season .sfly.rtl { left: 112%; }
+  @keyframes s-fly { 25% { translate: 0 30%; } 50% { translate: 0 -20%; } 75% { translate: 0 25%; } }
+  .season .sfly.ltr { animation-name: s-fly, s-ltr; } .season .sfly.rtl { animation-name: s-fly, s-rtl; }
+  .season .sfly.rtl img { transform: scaleX(-1); } /* the art faces right */
+  @keyframes s-ltr { to { left: 112%; } } @keyframes s-rtl { to { left: -25%; } }
+  /* A world visitor (visitorList): 18 world cells wide (--px a cell: whole device pixels),
+     resting at the scene's edge (--stop). It comes in from --from and leaves back to it;
+     a crosser carries on to --to. Under reduced motion it just stands at --stop. */
+  .season .vis { position: absolute; width: calc(var(--px, 2px) * 18); left: var(--stop);
+    --from: -25%; --stop: calc(5% + var(--edge, 0%)); --to: 112%; }
+  .season .vis.rtl { --from: 112%; --stop: calc(95% - var(--edge, 0%) - var(--px, 2px) * 18); --to: -25%; }
+  .season .vis img { position: static; display: block; width: 100%; }
+  .season .vis.flap img + img { position: absolute; inset: 0; }
+  .season .vis.flap img { animation: fl-frame-a .5s steps(1) infinite; }
+  .season .vis.flap img + img { animation-name: fl-frame-b; }
+  .season .vis.in { animation: v-in var(--in-ms, 1.4s) ease-out both; }
+  .season .vis.out { animation: v-out var(--in-ms, 1.4s) ease-in both; }
+  .season .vis.cross { animation: v-cross var(--in-ms, 1.4s) linear both; }
+  @keyframes v-in { from { left: var(--from); } to { left: var(--stop); } }
+  @keyframes v-out { from { left: var(--stop); } to { left: var(--from); } }
+  @keyframes v-cross { from { left: var(--from); } to { left: var(--to); } }
+  .season .vis.fly { top: 36%; } .season .vis.walk { bottom: 6%; }
+  .season .vis.vis-shootingstar { top: 28%; } /* under the bubble, over the pet's head */
+  /* The art faces right; leaving, it turns back the way it came. */
+  .season .vis.rtl img, .season .vis.ltr.out img { transform: scaleX(-1); }
+  .season .vis.rtl.out img { transform: none; }
+  /* The basket (visitors v2 §3): 12 world cells wide on the floor line, bottom right
+     (inside the porthole's corners), over the pet's tap box; its own tap box is 44 px at
+     least. Not live (asleep, a call, a neighbour's): taps go through to the screen. The
+     reveal: the basket drawn once, and each find over it, 16 cells wide (its art's scale). */
+  .screen .basket, .screen .reveal { position: absolute; z-index: 3; bottom: 6%;
+    right: calc(5% + var(--edge, 0%)); width: calc(var(--px, 2px) * 12); padding: 0; border: 0;
+    background: none; -webkit-tap-highlight-color: transparent; }
+  .screen .basket { cursor: pointer; }
+  .screen .basket::before { content: ""; position: absolute; left: 50%; top: 50%;
+    width: max(44px, 100%); height: max(44px, 100%); translate: -50% -50%; }
+  .screen .basket.idle, .screen .reveal { pointer-events: none; }
+  .screen .basket img, .screen .reveal .rb { position: static; display: block; width: 100%; pointer-events: none; }
+  .screen .reveal .rf { position: absolute; left: 50%; bottom: 60%; width: calc(var(--px, 2px) * 16);
+    margin-left: calc(var(--px, 2px) * -8); image-rendering: pixelated; }
+  .screen .reveal .rf.pop { animation: pop .3s ease-out; transform-origin: 50% 100%; }
+  .screen .reveal .burst { top: auto; bottom: 90%; }
+  /* A gift (visitors v2 §5): the find alone, 16 cells, no basket, up by the pet's head on
+     the right: straight above the pet is the bubble's (left-anchored, up to 69% wide),
+     where its line is said. Shown in compact too, as the basket and its reveal are. */
+  .screen .reveal.gift { left: auto; right: calc(6% + var(--edge, 0%)); bottom: 46%;
+    width: calc(var(--px, 2px) * 16); }
+  .screen .reveal.gift .rf { position: static; display: block; width: 100%; margin: 0; }
+  .season .bunting { position: absolute; top: calc(var(--edge, 0%) * .3); left: var(--edge, 0%);
+    right: var(--edge, 0%); height: 8.4%;
+    background-repeat: repeat-x; background-size: 18.75% 100%; image-rendering: pixelated; }
+  .season .mist { position: absolute; left: -10%; right: -10%; bottom: 0; height: 26%; display: none;
+    background: radial-gradient(ellipse at 30% 100%, rgba(214, 206, 240, .45), transparent 65%),
+      radial-gradient(ellipse at 75% 100%, rgba(214, 206, 240, .4), transparent 60%);
+    animation: s-mist 9s ease-in-out infinite alternate; }
+  .screen.night .season .mist, .screen.dim .season .mist { display: block; }
+  @keyframes s-mist { to { transform: translateX(6%); opacity: .7; } }
+  .season .leaf { top: -6%; width: 3.5%; opacity: 0;
+    animation: s-leaf var(--leaf-ms, 9s) linear var(--leaf-delay, 0s) infinite; }
+  @keyframes s-leaf { 0% { top: -6%; opacity: 0; translate: 0 0; rotate: 0deg; } 8% { opacity: 1; }
+    35% { translate: -140% 0; rotate: 90deg; } 70% { translate: 120% 0; rotate: 200deg; }
+    90% { opacity: 1; } 100% { top: 100%; opacity: 0; translate: -60% 0; rotate: 300deg; } }
+  .costume .fx.hat { transform: translate(-50%, -100%); }
+  .confetti { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
+  .confetti i { position: absolute; top: -6%; left: var(--x); width: 5px; height: 8px; background: var(--c);
+    animation: confetti 2.6s linear var(--d) forwards; }
+  @keyframes confetti { to { top: 106%; rotate: 540deg; } }
+  .game .gprop { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
+    pointer-events: none; will-change: left, transform; }
+  .game .gprop[hidden] { display: none; }
+  .game .hl { font: inherit; font-size: 14px; }
+  .game .gscore { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
+    padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
+    border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
+  .game .gscore.two { white-space: pre; text-align: center; line-height: 1.25; } /* the dig: round, then bank and basket */
+  /* The dig at 300 px: the two-line score between keep and dig, clear of both. */
+  .compact .game .gscore.two { font-size: 10px; padding: 1px 3px; bottom: 3%; letter-spacing: -.3px; }
+  .compact .game.dig .gl { left: 1.5%; }
+  .compact .game.dig .gr { right: 1.5%; }
+  .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
+  .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
+  .screen.show-status .bondhearts, .screen.show-status .linkhearts,
+  .screen.show-status .basket, .screen.show-status .reveal { display: none !important; }
+  .pet { transition: translate .25s ease-out; }
+  /* Reactions to moments (see _moment). */
+  .pet.sulk { animation: shake .35s 2; }
+  /* Feeling poorly (2b): sags and settles back, once. Reduced motion holds the sag. */
+  .pet.droop { animation: droop 2.8s ease-in-out 1; transform-origin: 50% 100%; }
+  @keyframes droop { 0%, 100% { transform: none; }
+    35%, 70% { transform: translateY(4px) rotate(-4deg) scaleY(.94); } }
+  .pet.born { animation: pop .45s ease-out; }
+  .pet.stretch { animation: perk .5s ease-out 2; }
+  .poop.born { animation: pop .4s ease-out; }
+  .screen .burst.big { top: 38%; width: 96px; height: 96px; margin-left: -48px; z-index: 2; }
+  /* Stand-ins for house poses that are only drawn for the child. */
+  .pet.dance { animation: hop .45s ease-in-out infinite; }
+  .pet.jig { animation: hop .45s ease-in-out 4; } /* a house moment's dance (H8): bounded, unlike .dance */
+  .pet.startle { animation: perk .3s ease-out 2; } /* a house moment's startle (H8): a quick double jolt */
+  .pet.shiver { animation: shake .25s linear infinite; }
+  /* The fan: wind lines cross the scene and the pet sways. */
+  .breeze { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1; }
+  .screen.breezy .breeze, .screen.windy .breeze { display: block; }
+  .breeze span { position: absolute; left: 0; height: 2px; width: 34%; border-radius: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.85) 45%, rgba(255,255,255,.6) 80%, transparent);
+    animation: wind 1.1s linear infinite; }
+  .breeze span:nth-child(1) { top: 30%; }
+  .breeze span:nth-child(2) { top: 48%; width: 24%; animation-delay: .35s; }
+  .breeze span:nth-child(3) { top: 64%; animation-delay: .7s; }
+  @keyframes wind { from { transform: translateX(-120%); } to { transform: translateX(330%); } }
+  .screen.breezy .pet { animation: sway .7s ease-in-out infinite; }
+  @keyframes sway { 50% { transform: rotate(-4deg); } }
+  /* Thunder: now and then the scene flashes. */
+  .flash { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 2;
+    background: #fff; opacity: 0; }
+  .screen.stormy .flash { display: block; animation: lightning 9s linear infinite; }
+  @keyframes lightning { 0%, 89%, 92%, 95%, 100% { opacity: 0; } 90% { opacity: .75; } 94% { opacity: .5; } }
+  /* The LCD: a faint dot-matrix grid over the scene, one cell per world art pixel
+     (WORLD_GRID, see _lcdPitch), under the weather, the bubble, the game and the status. */
+  .lcd { position: absolute; inset: 0; pointer-events: none; display: none;
+    background-color: rgba(255,228,170,.035);
+    background-image:
+      repeating-linear-gradient(0deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px)),
+      repeating-linear-gradient(90deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px));
+    background-position: var(--lcd-x, 0) var(--lcd-y, 0); }
+  ha-card.lcd-on .lcd { display: block; }
+  /* Ghosting (_ghostFrame, _ghostTrail): the pet's geometry, not its class. */
+  .ghost { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%;
+    opacity: 0; display: none; transition: translate .25s ease-out .12s; }
+  ha-card.lcd-on .ghost { display: block; }
+  .ghost.wander-l { translate: -16% 0; transition-duration: .9s; }
+  .ghost.wander-r { translate: 16% 0; transition-duration: .9s; }
+  .screen.dim .ghost { filter: brightness(.8); }
+  /* The backlight (_backlight): an Indiglo glow over the scene, under the bubble.
+     It comes on at once and fades out; the dimmed scene brightens under it. */
+  .glow { position: absolute; inset: 0; pointer-events: none; opacity: 0; mix-blend-mode: screen;
+    background: radial-gradient(ellipse at 50% 55%, #4fe3c1 0%, rgba(79,227,193,.8) 45%, rgba(79,227,193,.35) 100%);
+    transition: opacity .6s ease-out; }
+  .screen.lit .glow { opacity: .55; transition: none; }
+  /* By day a real backlight barely shows: a faint lift, not a mint wash. */
+  .screen.lit:not(.night):not(.dim):not(.faded) .glow { opacity: .14; }
+  .screen.lit:not(.night):not(.dim):not(.faded):not(.raining) .bg { filter: brightness(1.07); }
+  .screen.lit.dim .bg, .screen.lit.faded .bg { filter: brightness(.9) saturate(.75); }
+  .screen.lit.dim .pet, .screen.lit.dim .ghost { filter: brightness(.9); }
+  /* Its button: a 44 px target, transparent, around a small domed cap cut on the grid
+     (::before, see _mould) with a bulb on it in the shell's dark tone (::after). Each
+     spot (--bx, --by: the cap's centre) keeps the target clear of the screen, the
+     buttons and the label, and inside the slide. */
+  .backlight { position: absolute; z-index: 1; width: 44px; height: 44px; padding: 0; border: none;
+    border-radius: 8px; background: none; cursor: pointer; --bx: 22px; --by: 22px; }
+  .backlight::before, .backlight::after { content: ""; position: absolute;
+    left: round(var(--bx) - var(--px, 2px) * 4.5, var(--dpx, 1px)); top: round(var(--by) - var(--px, 2px) * 5, var(--dpx, 1px)); }
+  .backlight::before { width: calc(var(--px, 2px) * 9); height: calc(var(--px, 2px) * 11);
+    background: var(--bl-tones) 0 0 / 100% 100%, #fff7ec; clip-path: var(--bl-clip); }
+  .backlight::after { width: calc(var(--px, 2px) * 5); height: calc(var(--px, 2px) * 7);
+    margin: var(--px, 2px) 0 0 calc(var(--px, 2px) * 2); background: var(--d-dark);
+    -webkit-mask: var(--hw-bulb) 0 0 / 100% 100%; mask: var(--hw-bulb) 0 0 / 100% 100%; }
+  .backlight:active::before, .backlight:active::after { translate: 0 var(--px, 2px); }
+  .device:has(.screen.lit) .backlight::before { background: var(--bl-tones) 0 0 / 100% 100%, #dffbf2; }
+  .device:has(.screen.lit) .backlight::after { background: #1fbf9a; }
+  /* Egg: on the shoulder, just above the screen's right corner. */
+  .egg .backlight { right: -18px; top: -34px; --bx: 26px; --by: 27px; }
+  .compact .egg .backlight { right: -14px; }
+  /* Tank: on the lid's right grip. */
+  .lid .backlight { left: calc(62% + 6px - 22px); top: -4px; --by: 14px; }
+  .lid:has(.backlight) span:nth-of-type(3) { visibility: hidden; }
+  /* House: on the chimney (over the roof's triangle). */
+  .roof .backlight { right: calc(20% - 11px); top: 0; --by: 22px; }
+  /* Porthole: the top-right rivet's place on the ring. */
+  .porthole .backlight { left: calc(91.2% - 8px); top: calc(11% - 31px); --bx: 3px; --by: 36px; }
+  /* Pad: on the upper right rim. */
+  .pad .backlight { right: 18%; top: 4px; }
+  /* Moon: on the crescent. */
+  .crescent .backlight { left: 0; top: 10px; }
+  /* Shell hardware (ui/shell_*.png; art/shell-parts/REQUEST.md): each slot is its greyscale
+     --art, tinted from the shell by hard-light and cut out by the art's own alpha.
+     Places are rounded to the grid, from the top left of the part. */
+  .hw { position: absolute; display: none; z-index: -1; pointer-events: none; image-rendering: pixelated;
+    --tint: var(--d-shell); --art: none; background: var(--art) 0 0 / 100% 100%, var(--tint);
+    background-blend-mode: hard-light, normal;
+    -webkit-mask: var(--art) 0 0 / 100% 100%; mask: var(--art) 0 0 / 100% 100%; }
+  /* Screws at the corners of the boxy shells (the egg and the pad snap shut). */
+  .hw.screws { inset: calc(var(--px) * 4); --s: calc(var(--px) * 5); --a: var(--hw-screw);
+    background: var(--a) 0 0 / var(--s) var(--s) no-repeat, var(--a) 100% 0 / var(--s) var(--s) no-repeat,
+      var(--a) 0 100% / var(--s) var(--s) no-repeat, var(--a) 100% 100% / var(--s) var(--s) no-repeat, var(--tint);
+    background-blend-mode: hard-light, hard-light, hard-light, hard-light, normal;
+    -webkit-mask: var(--a) 0 0 / var(--s) var(--s) no-repeat, var(--a) 100% 0 / var(--s) var(--s) no-repeat,
+      var(--a) 0 100% / var(--s) var(--s) no-repeat, var(--a) 100% 100% / var(--s) var(--s) no-repeat;
+    mask: var(--a) 0 0 / var(--s) var(--s) no-repeat, var(--a) 100% 0 / var(--s) var(--s) no-repeat,
+      var(--a) 0 100% / var(--s) var(--s) no-repeat, var(--a) 100% 100% / var(--s) var(--s) no-repeat; }
+  :is(.tank, .house, .porthole, .moon) .hw.screws { display: block; }
+  .porthole .hw.screws { inset: calc(var(--px) * 7); }
+  .moon .hw.screws { inset: calc(var(--px) * 6) calc(var(--px) * 5); }
+  /* The egg mark between two speaker grilles, bottom centre, --hw-b cells up. */
+  .body { --hw-b: 8; }
+  .tank .body { --hw-b: 7; } .pad .body { --hw-b: 9; }
+  .hw.logo, .hw.grille { display: block; top: round(down, 100% - var(--px) * (var(--hw-b) + 9), var(--px)); }
+  .hw.logo { --art: var(--hw-logo); width: calc(var(--px) * 7); height: calc(var(--px) * 9);
+    left: round(down, 50% - var(--px) * 3.5, var(--px)); }
+  .hw.grille { --art: var(--hw-slot); width: calc(var(--px) * 10); height: calc(var(--px) * 5);
+    margin-top: calc(var(--px) * 2); background-size: calc(var(--px) * 2) 100%, auto; background-repeat: repeat-x;
+    -webkit-mask-size: calc(var(--px) * 2) 100%; mask-size: calc(var(--px) * 2) 100%;
+    -webkit-mask-repeat: repeat-x; mask-repeat: repeat-x; }
+  .hw.grille.left { left: round(down, 50% - var(--px) * 15.5, var(--px)); }
+  .hw.grille.right { left: round(down, 50% + var(--px) * 5.5, var(--px)); }
+  /* The world's emblem (full colour, so no tint and no mask) left of the grille, and the
+     battery door's seam right of it, both on the grille's row. */
+  .hw.emblem, .hw.battery { display: block; }
+  .hw.emblem { --art: var(--hw-emblem); width: calc(var(--px) * 9); height: calc(var(--px) * 9);
+    top: round(down, 100% - var(--px) * (var(--hw-b) + 9), var(--px)); left: round(down, 50% - var(--px) * 27.5, var(--px));
+    background: var(--art) 0 0 / 100% 100%; -webkit-mask: none; mask: none; }
+  .hw.battery { --art: var(--hw-battery); width: calc(var(--px) * 24); height: calc(var(--px) * 12);
+    top: round(down, 100% - var(--px) * (var(--hw-b) + 11), var(--px)); left: round(down, 50% + var(--px) * 18.5, var(--px)); }
+  /* No room for the seam where the bottom-corner trim sits on it (a compact card has none),
+     nor beside the curve of the pad, or of a narrow egg. */
+  .device.has-corner .hw.battery, .pad .hw.battery, .compact .egg .hw.battery { display: none; }
+  /* Printed stripes across the top of the bezel (the porthole's ring has rivets). */
+  .hw.stripes { display: block; --art: var(--hw-stripes); --tint: var(--d-bezel); top: var(--px);
+    left: round(18%, var(--px)); width: round(down, 64%, var(--px)); height: calc(var(--px) * 3);
+    background-size: var(--px) 100%, auto; background-repeat: repeat-x;
+    -webkit-mask-size: var(--px) 100%; mask-size: var(--px) 100%; -webkit-mask-repeat: repeat-x; mask-repeat: repeat-x; }
+  .porthole .hw.stripes { display: none; }
+  /* The power light, left of the screen; dark with the lights out. */
+  .hw.light { display: block; --art: var(--hw-light-on); --tint: #e8584a; left: calc(var(--px) * -7);
+    top: round(down, 50% - var(--px) * 2.5, var(--px)); width: calc(var(--px) * 5); height: calc(var(--px) * 5); }
+  .device:has(.screen.dim) .hw.light { --art: var(--hw-light-off); }
+  @supports not (width: round(1px, 1px)) { .hw { display: none !important; } } /* placed on the grid with round() */
+  .compact .egg .hw.light { display: none; } /* no margin left beside a narrow egg's screen */
+  /* Clear: the board behind the screen, seen through the plastic round the bezel,
+     and a glare on the plastic. */
+  .hw.guts { inset: calc(var(--px) * -5); z-index: -2; -webkit-mask: none; mask: none; --gold: rgba(236,200,104,.6);
+    background: repeating-linear-gradient(180deg, transparent 0 calc(var(--px) * 5), var(--gold) 0 calc(var(--px) * 6)),
+      repeating-linear-gradient(90deg, transparent 0 calc(var(--px) * 13), var(--gold) 0 calc(var(--px) * 14)),
+      rgba(40,128,84,.55);
+    box-shadow: inset 0 0 0 var(--px) var(--gold); }
+  .hw.glare { --art: var(--hw-glare); --tint: #fff; opacity: .6; width: calc(var(--px) * 8); height: calc(var(--px) * 8);
+    top: round(7%, var(--px)); left: round(down, 84% - var(--px) * 8, var(--px)); }
+  /* Glitter: three sets of flecks, each twinkling slowly on its own beat. */
+  .hw.flecks { inset: 0; background: var(--tint); --f: calc(var(--px) * 5); --a: var(--hw-fleck);
+    filter: drop-shadow(var(--px) var(--px) 0 rgba(48,24,64,.45)); animation: twinkle 3.2s step-end infinite; }
+  .hw.flecks.a { --tint: #fff6c8;
+    -webkit-mask: var(--a) round(30%, var(--px)) round(4%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(8%, var(--px)) round(40%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(93%, var(--px)) round(66%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(62%, var(--px)) round(96%, var(--px)) / var(--f) var(--f) no-repeat;
+    mask: var(--a) round(30%, var(--px)) round(4%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(8%, var(--px)) round(40%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(93%, var(--px)) round(66%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(62%, var(--px)) round(96%, var(--px)) / var(--f) var(--f) no-repeat; }
+  .hw.flecks.b { --tint: #ffd2e6; animation-duration: 4.4s; animation-delay: -1.3s;
+    -webkit-mask: var(--a) round(70%, var(--px)) round(5%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(5%, var(--px)) round(72%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(94%, var(--px)) round(30%, var(--px)) / var(--f) var(--f) no-repeat;
+    mask: var(--a) round(70%, var(--px)) round(5%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(5%, var(--px)) round(72%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(94%, var(--px)) round(30%, var(--px)) / var(--f) var(--f) no-repeat; }
+  .hw.flecks.c { --tint: #c8f6e6; animation-duration: 5.6s; animation-delay: -2.1s;
+    -webkit-mask: var(--a) round(46%, var(--px)) round(3%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(92%, var(--px)) round(48%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(6%, var(--px)) round(55%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(36%, var(--px)) round(95%, var(--px)) / var(--f) var(--f) no-repeat;
+    mask: var(--a) round(46%, var(--px)) round(3%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(92%, var(--px)) round(48%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(6%, var(--px)) round(55%, var(--px)) / var(--f) var(--f) no-repeat,
+      var(--a) round(36%, var(--px)) round(95%, var(--px)) / var(--f) var(--f) no-repeat; }
+  @keyframes twinkle { 0% { opacity: 1; } 40% { opacity: .25; } 55% { opacity: 1; } }
+  .slide.away-slide .hw.flecks, ha-card.offscreen .hw.flecks { animation-play-state: paused; }
+  @media (prefers-contrast: more) { ha-card.lcd-on .lcd, ha-card.lcd-on .ghost { display: none; } }
+  /* Idle life. */
+  .pet { transition: translate .25s ease-out, rotate .2s ease-out, scale .25s steps(2); }
+  .pet.look { rotate: y 180deg; }
+  .pet.wander-l { translate: -16% 0; transition-duration: .9s; }
+  .pet.wander-r { translate: 16% 0; transition-duration: .9s; }
+  /* The infrared link (_linkStart): the beam runs over the track between the two
+     devices' top edges, where the backlight buttons sit, so it takes no taps. One
+     world art pixel is --u; the sprites are 32 of them square. */
+  .irbeam { position: absolute; pointer-events: none; z-index: 6; }
+  .irbeam img { position: absolute; image-rendering: pixelated; pointer-events: none;
+    width: calc(var(--u) * 32); height: calc(var(--u) * 32); }
+  .irbeam .head { animation: ir-fly var(--ir-ms) steps(var(--ir-steps), end) forwards; }
+  .irbeam .trail { opacity: 0; animation: ir-trail .01s steps(1, end) forwards; }
+  .irbeam .arrive { opacity: 0; animation: ir-arrive .5s steps(4, end) forwards; }
+  .irbeam.gone { opacity: 0; transition: opacity .3s steps(3, end); }
+  /* Mono screen: the LCD (the screen, and the beam that flies over the glass) in the
+     four tones; the plastic (shell, bezel, buttons, label, .request) keeps its colour.
+     The beam's box is 1 px, so each of its images takes the filter. The backlight's
+     blend, the grid and the ghost would flip or snap under the quantise: hidden here,
+     and .mono-grid draws the grid again over the result. */
+  .monodefs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+  ha-card.mono .screen, ha-card.mono .irbeam img { filter: url(#hatch-mono4); }
+  /* The backlight, in mono: the glow is hidden, so the lit screen takes a filter that
+     lifts the scene about one tone before the quantise. */
+  ha-card.mono .screen.lit { filter: url(#hatch-mono4-lit); }
+  ha-card.mono .screen .glow, ha-card.mono .screen .lcd, ha-card.mono .screen .ghost { display: none; }
+  .mono-grid { position: absolute; z-index: 1; pointer-events: none; display: none;
+    left: var(--mg-x, 9px); top: var(--mg-y, 9px); width: var(--mg-w, 0); height: var(--mg-h, 0); border-radius: var(--mg-r, 12px);
+    background-image:
+      repeating-linear-gradient(0deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px)),
+      repeating-linear-gradient(90deg, rgba(20,24,12,.08) 0 var(--lcd-line, 1px), transparent var(--lcd-line, 1px) var(--lcd-pitch, 4px));
+    background-position: var(--lcd-x, 0) var(--lcd-y, 0); }
+  ha-card.lcd-on.mono .mono-grid { display: block; }
+  /* Hidden where .lcd is covered in colour: the sheet, the boot screen and a game. */
+  ha-card.lcd-on.mono .screen.show-status ~ .mono-grid,
+  ha-card.lcd-on.mono .screen:has(.boot:not([hidden])) ~ .mono-grid,
+  ha-card.lcd-on.mono .screen:has(.game:not([hidden])) ~ .mono-grid { display: none; }
+  @media (prefers-contrast: more) { ha-card.lcd-on.mono .mono-grid { display: none; } }
+  @keyframes ir-fly { to { translate: var(--ir-d) 0; } }
+  @keyframes ir-trail { to { opacity: 1; } }
+  @keyframes ir-arrive { 0% { opacity: 1; scale: .6; } 100% { opacity: 0; scale: 1.3; } }
+  .visit { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+  .visit .vband { position: absolute; left: 0; right: 0; top: 38%; height: 20%; display: flex;
+    align-items: center; justify-content: center; gap: 7%; background: color-mix(in srgb, var(--d-ink) 82%, transparent); }
+  .visit .vband i { width: 4%; aspect-ratio: 1; background: #ffe9ec; animation: ir-dots .9s steps(1, end) infinite; }
+  .visit .vband i:nth-child(2) { animation-delay: .15s; } .visit .vband i:nth-child(3) { animation-delay: .3s; }
+  .visit .vband i:nth-child(4) { animation-delay: .45s; } .visit .vband i:nth-child(5) { animation-delay: .6s; }
+  @keyframes ir-dots { 0%, 100% { opacity: .25; } 40% { opacity: 1; } }
+  .visit .vguest { position: absolute; left: 70%; bottom: 4%; height: 62%; margin-left: -23.25%;
+    transform-origin: 50% 100%; image-rendering: pixelated; animation: ir-in .5s steps(5, end) both; }
+  .visit .vguest.out { animation: ir-out .5s steps(5, end) forwards; }
+  .visit .vguest.greethop { animation: hop .7s ease-in-out 2; }
+  @keyframes ir-in { from { translate: 160% 0; } }
+  @keyframes ir-out { to { translate: 160% 0; } }
+  /* The guest came from the left (UX8 F5): the visit is mirrored, the guest at 30% facing
+     right, the host on the right facing left, the reply on the left. */
+  .visit.left .vguest { left: 30%; animation-name: ir-in-l; }
+  .visit.left .vguest.greethop { animation: hop .7s ease-in-out 2; }
+  .visit.left .vguest.out { animation: ir-out-l .5s steps(5, end) forwards; }
+  @keyframes ir-in-l { from { translate: -160% 0; } }
+  @keyframes ir-out-l { to { translate: -160% 0; } }
+  .visit.left .vsay { right: auto; left: 5%; }
+  .visit .vsay { position: absolute; right: 5%; top: 27%; max-width: 62%; padding: 5px 9px; border-radius: 10px;
+    background: #fff; color: #2a2a2a; font-size: 13px; line-height: 1.25; }
+  ha-card.bigtext .visit .vsay { font-size: 15px; } /* UX8 F3 */
+  .screen.linking .perch { display: none; }
+  .pet.linking { translate: -43% 0; transition-duration: .5s; }
+  .screen.linkleft .pet.linking { translate: 43% 0; }
+  .speck { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff6c9;
+    box-shadow: 0 0 6px 2px rgba(255,240,170,.8); top: 45%; z-index: 2; pointer-events: none;
+    animation: speck 2.6s ease-in-out forwards; }
+  .speck.rtl { animation-name: speck-rtl; }
+  @keyframes speck { from { left: 8%; top: 30%; } 50% { top: 55%; } to { left: 88%; top: 38%; opacity: .2; } }
+  @keyframes speck-rtl { from { left: 88%; top: 35%; } 50% { top: 58%; } to { left: 8%; top: 30%; opacity: .2; } }
+  /* Rain for species with no rain scene of their own. */
+  .rain { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1;
+    background: repeating-linear-gradient(105deg, transparent 0 13px, rgba(215,230,255,.5) 13px 15px);
+    background-size: 40px 40px; animation: rainfall .45s linear infinite; }
+  .screen.raining .rain { display: block; }
+  .screen.raining .bg { filter: brightness(.82) saturate(.75); }
+  @keyframes rainfall { to { background-position: -10px 40px; } }
+  /* The house answers (H3): a warm glow rising from the floor (heat) or a pale frost in the top
+     corners (cool) for 2.5 s. A stand-in for the art. Neither crosses the pet's face (UX7 F3); under
+     reduced motion the same tint just stays for the 2.5 s: an edge glow doesn't read as a flash. */
+  .screen.fx-heat::after, .screen.fx-cool::after { content: ""; position: absolute; inset: 0; z-index: 3;
+    pointer-events: none; animation: house-fx 2.5s ease-in-out both; }
+  .screen.fx-heat::after { background: linear-gradient(to top, rgba(255,150,60,.35), transparent 45%); }
+  .screen.fx-cool::after { background: radial-gradient(circle at 0 0, rgba(210,240,255,.5), transparent 40%),
+    radial-gradient(circle at 100% 0, rgba(210,240,255,.5), transparent 40%); }
+  @keyframes house-fx { 0% { opacity: 0; transform: translateY(6px); } 8%, 70% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-10px); } }
+  @media (prefers-reduced-motion: reduce) { .screen.fx-heat::after, .screen.fx-cool::after { animation: none; opacity: .7; } }
+  /* The robot vacuum (H4): a 22x12 rounded box, dark grey with a light rim and a blinking dot,
+     gliding across the floor line in 6 s. A stand-in for the house_robot art. */
+  .screen.fx-robot::before { content: ""; position: absolute; left: 0; bottom: 3%; z-index: 1; width: 22px; height: 12px;
+    box-sizing: border-box; border-radius: 6px; border: 2px solid #ddd; pointer-events: none;
+    background: radial-gradient(circle at 70% 50%, #f55 0 1.5px, transparent 2px) #444;
+    animation: robot-cross 6s linear both, robot-blink 1s steps(1) infinite; }
+  @keyframes robot-cross { from { translate: -30px 0; } to { translate: calc(var(--robot-w, 400px) + 30px) 0; } }
+  @keyframes robot-blink { 50% { background-color: #444; background-image: none; } }
+  /* A machine finished (H6): suds rise beside the pet (the bath scene's prop_bubbles, half size, reused
+     as is) for washer and dishwasher; dryer is a warm swirl, a CSS stand-in for house_tumble. 2.5 s. */
+  .screen.fx-suds::before, .screen.fx-suds::after { content: ""; position: absolute; bottom: 14%; z-index: 3; width: 38px; height: 64px;
+    background: center bottom / contain no-repeat; image-rendering: pixelated; pointer-events: none;
+    animation: suds-rise 2.5s ease-out both; }
+  .screen.fx-suds::before { left: 72%; background-image: url(${BASE}/ui/prop_bubbles_1.png?v=${VERSION}); }
+  .screen.fx-suds::after { left: 81%; background-image: url(${BASE}/ui/prop_bubbles_2.png?v=${VERSION}); animation-delay: .3s; }
+  @keyframes suds-rise { 0% { opacity: 0; transform: translateY(14px); } 15%, 70% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-34px); } }
+  .screen.fx-tumble::after { content: ""; position: absolute; left: 74%; bottom: 22%; z-index: 3; width: 48px; height: 48px;
+    border-radius: 50%; pointer-events: none; animation: tumble-spin 2.5s ease-in-out both;
+    background: radial-gradient(circle at 70% 30%, #e86a8a 0 5px, transparent 6px),
+      conic-gradient(from 0deg, rgba(255,200,120,.85), rgba(255,160,90,.2), rgba(255,200,120,.85)); }
+  @keyframes tumble-spin { 0% { opacity: 0; transform: rotate(0) scale(.5); } 15%, 70% { opacity: 1; }
+    100% { opacity: 0; transform: rotate(540deg) scale(1.1); } }
+  @media (prefers-reduced-motion: reduce) { .screen.fx-suds::before, .screen.fx-suds::after, .screen.fx-tumble::after { animation: none; opacity: .7; } }
+  @media (prefers-reduced-motion: reduce) { .screen.fx-robot::before { animation: none; left: 40%; } }
+  /* A doorbell press (H5): two notes pop up above the pet's head for 1.8 s. A text stand-in for
+     the house_chime art (H9). Still, and visible, under reduced motion. */
+  .screen.fx-chime::after { content: "♪ ♫"; position: absolute; left: 58%; top: 26%; z-index: 3; translate: -50% 0;
+    font-size: 20px; line-height: 1; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6), 0 0 6px rgba(255,230,140,.8);
+    pointer-events: none; animation: chime-pop 1.8s ease-out both; }
+  @keyframes chime-pop { 0% { opacity: 0; transform: translateY(10px) scale(.6); } 15%, 70% { opacity: 1; transform: none; }
+    100% { opacity: 0; transform: translateY(-12px); } }
+  @media (prefers-reduced-motion: reduce) { .screen.fx-chime::after { animation: none; opacity: 1; } }
+  /* Water worlds: lighter streaks, and rings where the drops land. */
+  .screen.raining.watery .rain { opacity: .6; }
+  .screen.raining.watery .rain::after { content: ""; position: absolute; inset: 0;
+    background:
+      radial-gradient(ellipse 10% 4% at 22% 80%, transparent 55%, rgba(255,255,255,.95) 62%, transparent 75%),
+      radial-gradient(ellipse 10% 4% at 72% 70%, transparent 55%, rgba(255,255,255,.95) 62%, transparent 75%),
+      radial-gradient(ellipse 10% 4% at 50% 90%, transparent 55%, rgba(255,255,255,.95) 62%, transparent 75%);
+    animation: ripple 1.4s ease-out infinite; }
+  @keyframes ripple { 0% { opacity: 0; transform: scale(.7); } 30% { opacity: 1; } 100% { opacity: 0; transform: scale(1.25); } }
+  /* Off to one side, but never past the screen's edge: the pet's box is 46.5% of the screen,
+     grown by --k (its scale) about its middle, so its edge reaches 0 at 107.5% - k * 50%. */
+  .pet.go-left, .perch.go-left, .ghost.go-left, .screen .pat.go-left {
+    translate: max(var(--go, 60%) * -1, var(--k, 1) * 50% - 107.5%) 0; }
+  .pet.go-right, .perch.go-right, .ghost.go-right, .screen .pat.go-right {
+    translate: min(var(--go, 60%), 107.5% - var(--k, 1) * 50%) 0; }
+  /* What the pet stands on (species.json "perch"); it follows the pet around. */
+  .perch, .screen .pat { transition: translate .25s ease-out; }
+  .perch.wander-l, .screen .pat.wander-l { translate: -16% 0; transition-duration: .9s; }
+  .perch.wander-r, .screen .pat.wander-r { translate: 16% 0; transition-duration: .9s; }
+  .status { --sheet-bg: #e9e2c6; position: absolute; inset: 0; background: var(--sheet-bg); color: #2f3a24; padding: var(--sy, 9px) var(--sx, 12px);
+    display: none; flex-direction: column; gap: 4px; font-size: 13px; overflow: auto; }
+  .screen.show-status .status { display: flex; }
+  /* The status draws as a handheld's menu does (UX fix 2, F13): four steps down on open, four
+     across between its pages. Reduced motion makes both instant (the global rule). */
+  @keyframes lcd-wipe-down { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0); } }
+  @keyframes lcd-wipe-side { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
+  .status:focus { outline: none; } /* focused by a tap inside it, so Escape reaches it (UX fix 2, F4) */
+  .screen .status.wipe-down { animation: lcd-wipe-down .16s steps(4) both; }
+  .screen .status.wipe-side { animation: lcd-wipe-side .16s steps(4) both; }
+  /* The backlight lights the menus too (F10): the sheet and its back band lift toward the glow's
+     mint, a faint lift by day and a stronger one in the dark, fading out with the glow. */
+  .status, .shead { transition: background-color .6s ease-out; }
+  /* At night and dim the sheet and the bubble sink into the dark LCD instead of staying daylight-bright
+     (UX7 F5); the backlight (.lit, below) still lifts the sheet. Dark ink stays above 7:1. */
+  .screen.night .status, .screen.dim .status { --sheet-bg: color-mix(in srgb, #e9e2c6 72%, #1d2440); }
+  .screen.night .bubble, .screen.dim .bubble { background: color-mix(in srgb, #fffdf5 80%, #1d2440); }
+  .screen.lit .status { --sheet-bg: color-mix(in srgb, #e9e2c6 55%, #dffbf2); }
+  .screen.lit.night .status, .screen.lit.dim .status, .screen.lit.faded .status { --sheet-bg: color-mix(in srgb, #e9e2c6 15%, #dffbf2); }
+  .screen.lit .status, .screen.lit .shead { transition: none; }
+  .screen.show-status .bubble { display: none; }
+  /* Power-on: a plain pale-green LCD with the logo, over everything on the screen. */
+  .boot { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px; margin: 0; padding: 0; border: 0;
+    border-radius: inherit; cursor: pointer; font: 400 14px 'Tiny5', monospace; color: #2f3a24;
+    background: linear-gradient(rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px,
+      linear-gradient(90deg, rgba(47,58,36,.1) 1px, transparent 1px) 0 0 / 4px 4px, #c6d4a0; }
+  .boot[hidden] { display: none; }
+  /* The low-battery gag: a pixel battery (empty, one bar, full) top-right; the screen blanks twice. */
+  .batt { position: absolute; top: 8px; right: 12px; z-index: 4; width: 36px; height: 18px;
+    box-sizing: border-box; border: 3px solid #2f3a24; background: #c6d4a0; display: flex; gap: 3px;
+    padding: 3px; pointer-events: none; }
+  .batt[hidden] { display: none; }
+  .batt::after { content: ""; position: absolute; right: -6px; top: 3px; width: 3px; height: 6px;
+    background: #2f3a24; }
+  .batt b { flex: 1; background: #2f3a24; visibility: hidden; }
+  .batt[data-level="1"] b:first-child, .batt[data-level="3"] b { visibility: visible; }
+  .batt[data-level="1"].blink b:first-child { animation: bootblink .8s steps(1) infinite; }
+  .screen.blank > *:not(.batt) { visibility: hidden; }
+  .booting .buttons, .booting .request { visibility: hidden; }
+  .boot .logo { position: relative; font-size: 46px; line-height: 1; letter-spacing: 2px; }
+  .boot .logo span { display: block; text-shadow: 2px 2px 0 rgba(47,58,36,.35); }
+  .boot .logo .ink { color: #9aaa72; }
+  .boot .logo .fill { position: absolute; inset: 0; color: #2f3a24; clip-path: inset(0 100% 0 0);
+    transition: clip-path ${BOOT_FILL_MS}ms steps(8); }
+  .boot.filling .logo .fill { clip-path: inset(0); }
+  .boot .go { animation: bootblink 1.2s steps(1) infinite; }
+  @keyframes bootblink { 50% { opacity: 0; } }
+  /* The pet's request waits while the status screen or a game is up (it covered them). */
+  .screen.show-status ~ .request, .screen:has(> .game:not([hidden])) ~ .request { display: none !important; }
+  /* So does an open question: the pill sat over the third answer (UX fix 3, F1). */
+  .screen:has(> .askday) ~ .request { display: none !important; }
+  /* With a game up, the bubble leaves room for its close button. */
+  .screen:has(> .game:not([hidden])) .bubble { max-width: 54%; }
+  /* A narrow card: status rows fit four hearts. */
+  .compact .row { grid-template-columns: 16px 70px minmax(0, 1fr); gap: 5px; }
+  .compact .hearts img { flex-basis: 14px; width: 14px; }
+  /* Every row: an icon slot (maybe empty), the label, the value; all on one grid. */
+  .row { display: grid; grid-template-columns: 18px 84px minmax(0, 1fr); align-items: center; gap: 6px; }
+  ha-card:not(.bigtext) .porthole .row { grid-template-columns: 16px 60px minmax(0, 1fr); gap: 5px; } /* the rim cuts the value column (UX8 F7) */
+  .bar { height: 9px; border: 2px solid #2f3a24; padding: 1px; }
+  .bar div { height: 100%; background: #2f3a24; }
+  .hearts { letter-spacing: 2px; }
+  .hearts .off { opacity: .25; }
+  .jolder { display: block; border: none; background: none; padding: 0; min-height: 44px; min-width: 44px;
+    font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
+  .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
+    min-height: 44px; min-width: 44px;
+    font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
+  /* A sheet row (UX fix 1, F5): the label takes the room, the switch sits at the right edge,
+     so the switches line up in one column; no empty icon slot. */
+  /* The friends row is a button (UX8 F9): a 44 px target, like every other control. */
+  .row.friendsrow { box-sizing: border-box; min-height: 44px; cursor: pointer; }
+  .row.srow, .compact .row.srow { grid-template-columns: minmax(0, 1fr) fit-content(60%); }
+  .srow > :last-child { justify-self: end; text-align: right; }
+  /* The status view's gear and the settings sheet's back row and headings. */
+  .shead { position: sticky; top: calc(var(--sy, 9px) * -1); z-index: 1; display: flex; align-items: center;
+    margin-top: calc(var(--sy, 9px) * -1); padding-top: calc(var(--sy, 9px) - 6px); background: var(--sheet-bg); }
+  /* The pet's head and name at the status band's left (UX fix 2, F10). */
+  .who { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
+  .whohead { flex: none; width: 28px; height: 28px; image-rendering: pixelated;
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 75px) var(--say-size, 75px) no-repeat; }
+  .whoname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gear { margin-left: auto; display: flex; align-items: center; justify-content: center;
+    min-width: 44px; min-height: 44px; padding: 0 5px; border: none; background: none;
+    color: inherit; cursor: pointer; }
+  /* A deeper page's heading (journal, finds, every world), right of its back link (UX fix 2, F3). */
+  .stitle { margin-left: auto; min-width: 0; padding: 0 0 0 8px; text-align: right; font-size: 12px; line-height: 1.1; }
+  .sec.lc { text-transform: none; font-size: 12px; letter-spacing: 0; }
+  .sback { border: none; background: none; padding: 0; min-height: 44px; min-width: 44px; color: inherit;
+    font: 400 12px 'Tiny5', monospace; text-decoration: underline; cursor: pointer; }
+  .sec { margin-top: 4px; padding-bottom: 2px; border-bottom: 2px dotted #2f3a24;
+    font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+  /* The pet's shell: a swatch and its name; on a shared screen dimmed and dashed. */
+  .sw { display: inline-block; flex: none; box-sizing: border-box; width: 26px; height: 20px;
+    border: 2px solid #2f3a24; image-rendering: pixelated; }
+  .shellrow, .shellro { display: inline-flex; align-items: center; gap: 5px; }
+  .shellrow .sw, .shellro .sw { width: 18px; height: 14px; }
+  .shellro { opacity: .6; }
+  .shellro .sw { border-style: dashed; }
+  .shellnote { font-size: 11px; }
+  /* A small sub-heading inside a group (S7: sound, look under "this screen"): no rule, the same ink as .sec. Not .sub: that is the header's paler subtitle. */
+  .ssub { margin-top: 2px; font-size: 11px; letter-spacing: 1px; }
+  /* The bedtime row: the label as wide as it is, the target takes the rest and wraps by itself. */
+  .row.srow.sleeprow, .compact .row.srow.sleeprow { grid-template-columns: auto minmax(0, 1fr); }
+  /* The shell picker: three tiles a row; a locked one dimmed and dashed. */
+  .tiles { flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 4px; }
+  .tiles:last-of-type { padding-bottom: 6px; } /* the last row scrolls clear of the bar */
+  .tile { display: flex; flex-direction: column; align-items: center; gap: 0; min-width: 0;
+    box-sizing: border-box; min-height: 44px; justify-content: center;
+    padding: 1px; border: 2px solid transparent; border-radius: 6px; background: none; color: inherit;
+    font: 400 11px 'Tiny5', monospace; line-height: 1; text-align: center; cursor: pointer; }
+  .tile .tname { max-width: 100%; overflow-wrap: anywhere; }
+  .tile .tsub { font-size: 10px; }
+  .tile .tsub:empty { display: none; }
+  .tile.sel { border-color: #2f3a24; }
+  .tile.locked .sw { opacity: .45; border-style: dashed; }
+  .tile.locked .tname { opacity: .65; }
+  /* The picker's back row ("use" at its right end): a full-width band of the screen's own
+     colour, so the list scrolls out of sight under it; its headings sit closer. */
+  .status:has(.pback) { gap: 2px; }
+  .status:has(.pback) .sec { margin-top: 1px; }
+  .shead:has(.pback) { z-index: 2; margin: calc(var(--sy, 9px) * -1) calc(var(--sx, 12px) * -1) 0;
+    padding: calc(var(--sy, 9px) - 9px) var(--sx, 12px) 0; }
+  .puse { margin-left: auto; }
+  .bell[aria-disabled="true"] { opacity: .55; cursor: default; }
+  /* A narrow card: tighter still, so two whole rows of tiles show under the back row. */
+  .compact .status:has(.pback) { gap: 1px; }
+  .compact .status:has(.pback) .sec { margin-top: 0; padding-bottom: 1px; }
+  .compact .tile { padding: 0 1px; font-size: 10px; }
+  .compact .tile .tsub { font-size: 9px; }
+  .bell { border: 2px solid #2f3a24; border-radius: 10px; background: none; color: inherit;
+    font: 400 12px 'Tiny5', monospace; padding: 3px 10px; min-width: 44px; min-height: 44px;
+    cursor: pointer; }
+  .bell[aria-pressed="true"] { background: #2f3a24; color: #e9e2c6; }
+  .bell.pending { opacity: .65; }
+  /* The lay sheet (plan S2): the offer as a list; a choice made in HA is dashed, read-only. */
+  .laylist { display: flex; flex-direction: column; gap: 4px; padding-bottom: 6px; }
+  .laygo { margin-left: auto; }
+  .layrow { box-sizing: border-box; width: 100%; text-align: left; }
+  .layrow.ro { display: flex; align-items: center; border-style: dashed; cursor: default;
+    background: #2f3a24; color: #e9e2c6; }
+  /* The name sheet (plan S3): the lay sheet's band (keep at the left, "name it" at the right), the
+     field in the sheet's own ink, and the error line under it. 16px in the field so a phone's
+     browser doesn't zoom in on it. */
+  .namego { margin-left: auto; flex: none; }
+  .nameback { min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nameinput { box-sizing: border-box; width: 100%; min-height: 44px; margin-top: 4px; padding: 3px 10px;
+    border: 2px solid #2f3a24; border-radius: 10px; background: transparent; color: inherit;
+    font: 400 16px 'Tiny5', monospace; }
+  .nameinput:focus-visible { outline: 2px solid #2f3a24; outline-offset: 2px; }
+  .nameerr { padding: 4px 2px 0; font-size: 12px; }
+  .nameval { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
+  .nameval .nm { min-width: 0; overflow-wrap: anywhere; }
+  .nameval .bell { flex: none; }
+  .game button[aria-disabled="true"] { opacity: .55; }
+  .status-feedback { position: sticky; bottom: 0; margin-top: auto; padding: 5px 7px;
+    background: #2f3a24; color: #e9e2c6; font-size: 12px; min-height: 14px; }
+  /* The pet speaking (F13): a bubble with its head, hung under the back band; taps go through. */
+  .status-feedback.say { position: absolute; top: 100%; left: 0; right: 0; bottom: auto; margin: 2px 0 0;
+    z-index: 3; pointer-events: none; display: flex; align-items: center; gap: 6px; min-height: 34px;
+    box-sizing: border-box; padding: 3px 8px 3px 5px; border: 2px solid #2f3a24; border-radius: 10px;
+    background: #fbf7e6; color: #2f3a24; line-height: 1.15; }
+  .status-feedback.say[hidden] { display: none; }
+  .status-feedback.say::before { content: ""; flex: none; width: 28px; height: 28px;
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 75px) var(--say-size, 75px) no-repeat; image-rendering: pixelated; }
+  .shead:has(.pback) .status-feedback.say { left: var(--sx, 12px); right: var(--sx, 12px); }
+  .jdream, .stoday { font-size: 13px; color: var(--hp-subink); margin: 2px 0 4px; } /* today's dream, today's line (E9) */
+  .jweek { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; margin: 0 0 6px; } /* E14 */
+  .jweek .wday { display: inline-flex; align-items: center; gap: 3px; }
+  .jweek .wday b { font-weight: 600; font-size: 11px; opacity: .8; }
+  .jweek img { width: 18px; height: 18px; image-rendering: pixelated; }
+  .jgrid { display: flex; flex-wrap: wrap; gap: 6px 10px; }
+  .jtile { display: flex; flex-direction: column; align-items: center; width: 64px; font-size: 11px;
+    text-align: center; line-height: 1.1; }
+  .jtile img { width: 48px; height: 48px; image-rendering: pixelated; }
+  .jtile.locked img { filter: brightness(0); opacity: .3; }
+  /* The journal's foot (back to the status, on to the finds) and the finds page (V-D):
+     a visitor at 18 cells and a find at 16 (--px a cell: their art 1:1 in whole device
+     pixels), the unmet ones dark silhouettes with no name, the viewer's gifts with a ♥. */
+  .jfoot { display: flex; justify-content: flex-end; align-items: flex-end; }
+  .flink, .wlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
+    min-height: 44px; min-width: 44px;
+    font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
+  .fgrid { display: flex; flex-wrap: wrap; gap: 6px 8px; }
+  .fgrid + .fgrid { margin-top: 4px; padding-top: 6px; border-top: 2px dotted #2f3a24; }
+  .ftile { position: relative; display: flex; flex-direction: column; align-items: center;
+    width: max(calc(var(--px, 2px) * 18), 62px); font-size: 11px; text-align: center; line-height: 1.1;
+    overflow-wrap: break-word; }
+  .ftile img { width: calc(var(--px, 2px) * 16); height: calc(var(--px, 2px) * 16); image-rendering: pixelated; }
+  .ftile.vis img { width: calc(var(--px, 2px) * 18); height: calc(var(--px, 2px) * 18); }
+  .ftile.locked img { filter: brightness(0); opacity: .3; }
+  ha-card.mono .ftile.locked img { opacity: .5; }
+  .ftile .fheart { position: absolute; top: 0; right: 0; font-size: 12px; line-height: 1; }
+  .jlist { font-size: 12px; opacity: .9; display: flex; flex-direction: column; gap: 3px; }
+  /* Big text (top10 4b): every size on the status box's pages, about 3 px up. */
+  ha-card.bigtext .status { font-size: 16px; }
+  ha-card.bigtext .status .log, ha-card.bigtext .status .jlist, ha-card.bigtext .status .photos,
+  ha-card.bigtext .status .status-feedback, ha-card.bigtext .status .sback, ha-card.bigtext .status .jlink,
+  ha-card.bigtext .status .flink, ha-card.bigtext .status .wlink, ha-card.bigtext .status .jolder,
+  ha-card.bigtext .status .fheart { font-size: 15px; }
+  ha-card.bigtext .status .layrow, ha-card.bigtext .status .laygo,
+  ha-card.bigtext .status .namego, ha-card.bigtext .status .namechange, ha-card.bigtext .status .nameerr { font-size: 15px; }
+  ha-card.bigtext .status .nameinput { font-size: 18px; }
+  ha-card.bigtext .status .sec, ha-card.bigtext .status .ssub, ha-card.bigtext .status .shellnote, ha-card.bigtext .status .jtile,
+  ha-card.bigtext .status .ftile, ha-card.bigtext .status .tile { font-size: 13px; }
+  ha-card.bigtext .status .tile .tsub { font-size: 12px; }
+  ha-card.bigtext.compact .status .tile { font-size: 12px; } /* "tidepool" whole in the porthole's three columns */
+  ha-card.bigtext.compact .status .tile .tsub { font-size: 11px; }
+  .photos { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+  .prow { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px; }
+  .print { margin: 0; flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+  .screen .status .print img { width: 72px; height: 91px; box-shadow: 2px 2px 0 rgba(58,42,26,.35); }
+  .photo-dialog { width: min(300px, 90vw); box-sizing: border-box; padding: 12px; border: 3px solid #3a2a1a;
+    border-radius: 12px; background: #e9e2c6; color: #2f3a24; font: 400 13px 'Tiny5', monospace; text-align: center; }
+  .photo-dialog::backdrop { background: rgba(20, 16, 10, .65); }
+  /* Press and hold to save: nothing here blocks the long-press menu. */
+  .photo-dialog .pbig { display: block; width: 100%; height: auto; -webkit-touch-callout: default; user-select: auto; }
+  .photo-dialog p { margin: 8px 0 4px; }
+  .photo-dialog a { display: block; margin: 4px 0 8px; color: inherit; word-break: break-all; }
+  .photo-dialog a[hidden], .photo-dialog p[hidden] { display: none; }
+  .jlist .gt { padding-left: 10px; }
+  .ticon { width: 14px; height: 14px; object-fit: contain; vertical-align: -3px; margin-right: 2px;
+    image-rendering: pixelated; }
+  .tnext { display: flex; align-items: center; gap: 4px; min-width: 0; }
+  .tnext .bar { flex: 1; min-width: 30px; }
+  /* A long trait wraps rather than push its bar off the box (big text at 330, fm-batch-043). */
+  .tnext .tname { min-width: 0; overflow-wrap: anywhere; }
+  .jlist .gen.now { font-weight: 700; }
+  .log { margin-top: 3px; font-size: 12px; opacity: .85; }
+  .buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 6px; width: 100%; }
+  .toy { display: flex; flex-direction: column; align-items: center; gap: 5px; border: none;
+    background: none; padding: 0; cursor: pointer; font: 400 13px 'Tiny5', monospace;
+    letter-spacing: .02em; border-radius: 12px;
+    color: var(--d-ink); -webkit-tap-highlight-color: transparent; }
+  .picon { image-rendering: pixelated; display: block; pointer-events: none; }
+  .title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .emblem { width: 32px; height: 32px; image-rendering: pixelated; }
+  .deco { position: absolute; bottom: 6%; width: 48px; height: 48px; image-rendering: pixelated;
+    pointer-events: none; transition: opacity .5s; }
+  .deco.left { left: 4%; } .deco.right { right: 4%; }
+  .compact .deco { display: none; }
+  .screen.faded .bg { filter: brightness(.55) saturate(.8); }
+  .screen .status img { position: static; } /* not scene sprites */
+  .row .picon { width: 18px; height: 18px; }
+  .hearts { display: flex; gap: 3px; }
+  /* The hearts shrink to the value column (UX8 F7): five of them clipped in the porthole at 300. */
+  .hearts img { flex: 0 1 18px; min-width: 0; width: 18px; height: auto; aspect-ratio: 1; image-rendering: pixelated; }
+  /* A cap is a domed button cut on the grid (_mould): its face is the cap's own
+     background, its side (below the box) and the light on it are pseudo-elements, and
+     it sinks two cells when pressed. */
+  .toy { gap: calc(var(--px, 2px) * 3 + 2px); }
+  .toy .cap { position: relative; width: calc(var(--px, 2px) * var(--cap-n, 23));
+    height: calc(var(--px, 2px) * var(--cap-n, 23)); display: flex; align-items: center; justify-content: center;
+    background: #fff7ec; color: #3a2a1a; clip-path: var(--cap-clip); transition: transform .08s, background .2s; }
+  .toy .cap::before, .toy .cap::after { content: ""; position: absolute; left: 0; top: 0; width: 100%;
+    height: calc(var(--px, 2px) * (var(--cap-n, 23) + 3)); z-index: -1; pointer-events: none; }
+  .toy .cap::before { background: var(--d-btn-shadow); clip-path: var(--cap-side); }
+  .toy .cap::after { background: var(--cap-tones) 0 0 / 100% 100%; }
+  .toy .cap > * { position: relative; }
+  /* Pressed: held down for at least 160 ms so even a quick tap reads as a press. */
+  .toy:active .cap, .toy.pressed .cap { transform: translateY(calc(var(--px, 2px) * 2));
+    clip-path: var(--cap-clip-dn); transition-duration: .04s; }
+  .toy:active .cap::before, .toy.pressed .cap::before { clip-path: var(--cap-side-dn); }
+  .toy:active .cap::after, .toy.pressed .cap::after { background-image: var(--cap-tones-dn);
+    height: calc(var(--px, 2px) * (var(--cap-n, 23) + 1)); }
+  .toy.pending .cap { animation: waiting .9s ease-in-out infinite; }
+  @keyframes waiting { 50% { filter: brightness(.9); } }
+  .toy.failed .cap { animation: shake .35s; }
+  @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+  .burst { position: absolute; left: 50%; top: 0; width: 46px; height: 46px; margin-left: -23px;
+    border-radius: 50%; pointer-events: none; border: 3px solid #ffe9a8;
+    animation: burst .45s ease-out forwards; }
+  @keyframes burst { from { transform: scale(.6); opacity: .9; } to { transform: scale(1.5); opacity: 0; } }
+  .toy { position: relative; }
+  .screen .askday { position: absolute; left: 0; right: 0; bottom: 3%; display: flex; gap: 8px;
+    flex-wrap: wrap; justify-content: center; z-index: 3; margin: 0 auto; }
+  .screen .askday.many { max-width: 236px; } /* three a row at most */
+  .screen .askday.many.wide { max-width: 100%; }
+  .screen .askday.wide button { min-width: 52px; padding: 4px 6px; }
+  .screen .askday.asktext input { font: inherit; font-size: 16px; min-height: 44px; width: 9.5em; max-width: 46%;
+    border-radius: 14px; border: 2px solid #3a2a1a; padding: 2px 10px; box-sizing: border-box; } /* F1; 16 px: no iOS zoom */
+  .compact .screen .askday { gap: 4px; bottom: 2%; }
+  .compact .screen .askday.many { max-width: 100%; }
+  .compact .screen .askday button { min-height: 44px; min-width: 44px;
+    font-size: 12px; padding: 2px 7px; border-radius: 10px; }
+  /* The birthday's steppers (F10): "‹ Feb ›", one chip each, 44 px keys either side. */
+  .screen .askday .stepper { display: flex; align-items: center; border: 2px solid #3a2a1a; border-radius: 14px;
+    background: #fffdf5; box-shadow: 0 4px 0 #3a2a1a; color: #3a2a1a; }
+  .screen .askday .stepper output { min-width: 24px; padding: 0 3px; text-align: center; font-size: 14px; }
+  .compact .screen .askday .stepper output { padding: 0; font-size: 13px; } /* both steppers fit one row at 330 */
+  .screen .askday .stepper button.stepb { min-width: 44px; padding: 0; border: 0; background: transparent;
+    box-shadow: none; font-size: 22px; border-radius: 12px; }
+  .compact .screen .askday .stepper button.stepb { min-width: 40px; font-size: 20px; }
+  /* The birthday: steppers, ok and skip in one row where the screen is wide enough (420), with
+     slimmer keys (still 44 px tall); at 330 the steppers take one row and ok, skip the next. */
+  ha-card:not(.compact) .screen .askday.bdaybox { gap: 4px; }
+  .screen .askday.bdaybox .stepper button.stepb { min-width: 34px; }
+  .screen .askday.bdaybox .stepper output { min-width: 0; padding: 0 2px; }
+  ha-card:not(.compact) .screen .askday.bdaybox > button { min-width: 40px; padding: 4px 6px; }
+  .screen .askday .stepper button.stepb:active { transform: none; background: #ffe9a8; }
+  .screen .askday button { font: inherit; font-size: 14px; min-height: 44px; min-width: 64px; padding: 4px 10px;
+    border-radius: 14px; border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a;
+    box-shadow: 0 4px 0 #3a2a1a; transition: transform .08s, box-shadow .08s; }
+  .screen .askday button:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
+  /* Keeping its catchphrase can be a long label ("slow and steady"): smaller, and
+     wrapping inside the button if it must, so the five choices stay in two rows. */
+  .screen .askday button[data-answer="keep"] { font-size: 12px; white-space: normal;
+    max-width: calc(100% - 72px); }
+  .screen.show-status .askday { display: none; }
+  /* In the porthole the round rim cuts a full-width row: the chips take the bubble's inset (F7). */
+  .porthole .screen .askday { left: 4%; right: 4%; bottom: 6%; gap: 3px; }
+  /* While it asks, the pet steps back (2 steps; none under reduced motion) so the chips
+     don't hide it, and its perk then looks at you (F8). --k is its own scale. */
+  .screen:has(> .askday) .pet, .screen:has(> .askday) .perch, .screen:has(> .askday) .ghost {
+    translate: var(--ask-dx, 0px) var(--ask-dy, -14%); /* _askPlace measures the chips and the bubble */
+    scale: calc(var(--k, 1) * var(--ask-f, .9)) !important; } /* !important: the species scale is inline */
+  .screen:has(> .askday) .pet { transition: translate .25s steps(2), rotate .2s ease-out, scale .25s steps(2); }
+  /* Beside the bubble (UX7 F1): it wraps in the room left of the pet's column. No room at all: the
+     pet's head sits in the bubble and the pet itself waits out the question. */
+  .screen:has(> .askday) .bubble { max-width: var(--ask-bw, 64%); }
+  .screen:has(> .askday.nopet) .bubble { top: 2%; padding: 1px 6px 1px 36px; min-height: 20px; font-size: 12px; line-height: 1.15; }
+  .porthole .screen:has(> .askday.nopet) .bubble { top: 4%; left: 7%; }
+  .screen .askday.nopet { bottom: 2%; } /* the chips and the bubble share the whole height */
+  .porthole .screen .askday.nopet { bottom: 2%; }
+  .screen:has(> .askday.nopet) .bubble::before { content: ""; position: absolute; left: 4px; top: 50%;
+    width: 28px; height: 28px; margin-top: -14px; image-rendering: pixelated;
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 75px) var(--say-size, 75px) no-repeat; }
+  .screen:has(> .askday.nopet) .pet, .screen:has(> .askday.nopet) .perch, .screen:has(> .askday.nopet) .ghost { visibility: hidden; }
+  /* Big text reaches the pet's words too (F9). */
+  ha-card.bigtext .bubble { font-size: 16px; }
+  /* Big text reaches the game (UX fix 6, F10): the score, the guess labels and the picker. */
+  ha-card.bigtext .game .gscore { font-size: 14px; }
+  ha-card.bigtext.compact .game .gscore.two { font-size: 12px; }
+  ha-card.bigtext .game .hl { font-size: 16px; }
+  ha-card.bigtext .game .gpick.wrap button { font-size: 14px; }
+  ha-card.bigtext .game .gpick.wrap.tight button { font-size: 13px; }
+  ha-card.bigtext .screen .askday button { font-size: 15px; }
+  .screen .bondhearts img, .screen .linkhearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
+    opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }
+  @keyframes bondheart { 0% { transform: translateY(0) scale(.7); opacity: 0; } 20% { opacity: 1; }
+    100% { transform: translateY(-70px) scale(1); opacity: 0; } }
+  .pet.perk { animation: perk .3s ease-out; }
+  .pet.spin { animation: spin .9s ease-in-out; } /* an adult's trick (fresh-expand LS-a) */
+  .pet.bighop { animation: bighop .7s ease-in-out 2; } /* the promise's payoff (F3): 1.4x a hop */
+  @keyframes bighop { 50% { transform: translateY(-12.6%); } }
+  @keyframes spin { to { rotate: y 360deg; } }
+  @keyframes perk { 40% { transform: translateY(-6%) scale(1.04, .96); } }
+  .toy.wanted .cap { background: #ffe9a8; }
+  /* Wanted: a ring of light round the cap, cut on the grid too. */
+  .toy.wanted::before { content: ""; position: absolute; top: calc(var(--px) * -2); left: calc(var(--cap-x, 0px) - var(--px) * 2);
+    z-index: -1; width: calc(var(--px) * (var(--cap-n) + 4)); height: calc(var(--px) * (var(--cap-n) + 7));
+    background: #ffd76a; clip-path: var(--cap-halo);
+    pointer-events: none; }
+  .toy.on .cap { background: #3a2a1a; color: #ffe9a8; }
+  .toy[disabled] { opacity: .45; cursor: default; }
+  .compact .toy { font-size: 12px; }
+  .compact .egg .body { padding: 28px 14px 32px; }
+  .warn { padding: 16px; color: var(--error-color, #c00); background: var(--card-background-color); }
+`;
+
+// Care scenes (_sceneStart): their props come and go with the scene and are placed
+// each frame by _sceneRender; art is sized by its art pixels (_sceneArt).
+const SCENE_STYLE = `
+  .screen img.scene { left: 0; bottom: 3%; height: 0; }
+  .screen img.scene-pill { left: 74%; bottom: 6%; height: 22%; }
+  .screen .scene-gone { visibility: hidden; }
+  .scene-spark { position: absolute; width: 6%; aspect-ratio: 1; opacity: 0; pointer-events: none;
+    background: #fff6c8; filter: drop-shadow(0 0 2px #ffd76a);
+    clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%); }
+`;
+

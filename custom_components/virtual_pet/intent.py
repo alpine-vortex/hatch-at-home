@@ -195,9 +195,18 @@ def find_pet(intent_obj: intent.Intent, name: str | None) -> PetCoordinator:
         names = " or ".join(pet_name(p) for p in pets)
         raise intent.IntentHandleError(f"Which pet, {names}?")
     wanted = name.strip().casefold()
-    for pet in pets:
-        if wanted in (pet_name(pet).casefold(), pet.config_entry.title.casefold()):
-            return pet
+    found = [
+        pet
+        for pet in pets
+        if wanted in (pet_name(pet).casefold(), pet.config_entry.title.casefold())
+    ]
+    if (
+        len(found) > 1
+    ):  # a renamed pet's old title can still match: never the first by luck
+        names = " or ".join(pet_name(p) for p in found)
+        raise intent.IntentHandleError(f"Which pet, {names}?")
+    if found:
+        return found[0]
     raise intent.IntentHandleError(f"I don't know a pet called {name}")
 
 

@@ -13,7 +13,12 @@ from homeassistant.components.homeassistant.exposed_entities import (
 )
 from homeassistant.const import CONF_NAME
 from homeassistant.core import Context, HomeAssistant
-from homeassistant.helpers import entity_registry as er, intent, llm
+from homeassistant.helpers import (
+    device_registry as dr,
+    entity_registry as er,
+    intent,
+    llm,
+)
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 import pytest
@@ -21,6 +26,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.virtual_pet import model
 from custom_components.virtual_pet.const import DOMAIN
+from custom_components.virtual_pet.coordinator import async_rename
 from custom_components.virtual_pet.llm import PROMPT
 
 from .test_init import STORE_KEY, hatched_pet, setup
@@ -127,6 +133,39 @@ async def test_unknown_and_ambiguous_pets(
         await ask(hass, "VirtualPetStatus")
     response = await ask(hass, "VirtualPetStatus", pet="Moss")
     assert speech(response).startswith("Moss is snug in its egg")
+
+
+async def test_a_word_two_pets_answer_to_asks_which(
+    hass: HomeAssistant, now: float
+) -> None:
+    """A renamed pet's old title can match too; never the first pet by luck."""
+    assert await async_setup_component(hass, "intent", {})
+    pip = await setup(hass)  # a fresh egg: it can still be named
+    fern = MockConfigEntry(
+        domain=DOMAIN,
+        title="Moss",
+        data={CONF_NAME: "Moss", "new_pet": True},
+        entry_id="moss",
+    )
+    fern.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(fern.entry_id)
+    await hass.async_block_till_done()
+    hass.config_entries.async_update_entry(fern, title="Fern")
+    device = dr.async_get(hass).async_get_device_by_identifier(
+        (DOMAIN, fern.entry_id), fern.entry_id
+    )
+    dr.async_get(hass).async_update_device(device.id, name_by_user="Bog")
+    await hass.async_block_till_done()
+    fern.runtime_data._sync_name()
+    # Fern is Moss's title, shown as Bog: one pet answers to Fern.
+    response = await ask(hass, "VirtualPetStatus", pet="Fern")
+    assert speech(response).startswith("Bog is snug in its egg")
+    # Pip is renamed Fern (its old title is free): now two pets answer to Fern.
+    await async_rename(hass, pip.entry_id, "Fern")
+    with pytest.raises(intent.IntentHandleError, match="Which pet, Fern or Bog"):
+        await ask(hass, "VirtualPetStatus", pet="Fern")
+    response = await ask(hass, "VirtualPetStatus", pet="Bog")
+    assert speech(response).startswith("Bog is snug in its egg")
 
 
 async def test_care_presses_the_button_for_you(
