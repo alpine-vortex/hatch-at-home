@@ -626,7 +626,8 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   const shared = await card.evaluate((el) => {
     const s = el._slides[el._index];
     const out = { heads: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent), button: !!s.status.querySelector(".shellrow"),
-      ro: s.status.querySelector(".shellro")?.textContent.trim(), note: s.status.querySelector(".shellnote")?.textContent };
+      ro: s.status.querySelector(".shellro")?.textContent.trim(), note: s.status.querySelector(".shellnote:not(.restnote)")?.textContent, // the resting row (R1) has its own note
+      rest: s.status.querySelector(".restro")?.textContent };
     s.picker = true; // the picker can't be reached, even asked for directly
     el._renderStatus(s, []);
     out.tiles = s.status.querySelectorAll(".tile").length;
@@ -637,7 +638,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   check("shell: on a shared screen the row is read-only, named for no one, with its note; the picker is unreachable",
     shared.heads.join("|") === "this screen|for the pet|shared screen" && !shared.heads.some((h) => h.includes(a.name.toLowerCase()) || h.includes(a.name)) &&
       !shared.button && shared.ro === `${a.world} (default)` && shared.note === "ask a grown-up to change it" &&
-      shared.tiles === 0 && !shared.picker, JSON.stringify(shared));
+      shared.tiles === 0 && !shared.picker && shared.rest === "off", JSON.stringify(shared));
   await shot("02f-shell-shared");
   await evaluate(() => {
     localStorage.setItem("hatch-shared-screen", "off");
@@ -750,6 +751,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     const s = el._slides[el._index];
     const real = el._state;
     el._state = function (slide, key) {
+      if (key === "switch.resting") return undefined; // an older server has no resting switch either (R1)
       const st = real.call(this, slide, key);
       if (key !== "sensor.life_stage" || !st) return st;
       const { shell_finish_options, shell_locked, senses, sleep_times, ...rest } = st.attributes;
