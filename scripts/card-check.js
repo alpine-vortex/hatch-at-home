@@ -1101,8 +1101,10 @@ async function main() {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
+  const missingSprites = []; // the card warns on the console, never in the bubble (UX fix 4, F11)
   page.on("console", (m) => {
     if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errors.push(m.text());
+    if (m.type() === "warning" && /missing sprites/.test(m.text())) missingSprites.push(m.text());
   });
   await page.goto(CLIENT);
   await page.waitForSelector('input[autocomplete="username"]', { timeout: 60000 });
@@ -1193,7 +1195,7 @@ async function main() {
   if (enter("shelf")) {
   // 1. The shelf draws its devices.
   check("shelf shows the pets", slides >= 2, `${slides} devices`);
-  check("sprites load", !(await bubble()).startsWith("missing sprites"));
+  check("sprites load", !missingSprites.length && !(await bubble()).startsWith("missing sprites"), missingSprites[0]);
   await shot("01-shelf");
 
   // 2. Status and journal.

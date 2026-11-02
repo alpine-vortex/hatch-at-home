@@ -139,6 +139,7 @@ const CHIRPS = { // [frequency Hz, length s] notes, played one after another
   harvest: [[523, 0.1], [659, 0.1], [784, 0.1], [659, 0.1], [784, 0.22]],
   birthday: [[523, 0.12], [523, 0.1], [587, 0.22], [523, 0.22], [698, 0.22], [659, 0.4]],
   click: [[1760, 0.04]], // the backlight
+  tap: [[1319, 0.04], [1568, 0.06]], // a pat on the egg (UX fix 4, F2): soft
   link: [[1319, 0.06], [0, 0.03], [1760, 0.09]], // the infrared link
   boot: [[523, 0.08], [784, 0.08], [1047, 0.2]],
 };
@@ -998,6 +999,8 @@ const IDLE_MOODS = new Set(["content", "cozy", "bored", "excited", "sleepy", "hu
 const IDLE_LINES = new Set(["sleepy", "bored", "excited", "hungry", "dirty"]); // the rest say the default lines
 // A viewer is greeted by name at most this often, per pet.
 const GREET_EVERY_MS = 3 * 3600 * 1000;
+const GONE_LINE = "one moment... ♪"; // F1: the bubble while a pet's entities reload
+const GONE_STATES = new Set(["unavailable", "unknown"]); // a pet whose entities are reloading
 // Daily check-ins. The day's wish (life_stage "wish"), in the pet's words and
 // short for the status screen; its dream (life_stage "dream"); the "while you
 // were out" note after this long away (per device).
@@ -2052,6 +2055,7 @@ const PAT_LINES = { content: "hehe ♥", excited: "hehe! ♪", sleepy: "mmm...",
 const PAT_SPOT_ODDS = 1 / 12; // a spoken pat's chance of the sweet spot (fresh-expand P-b)
 const PAT_COOLDOWN_MS = 4000; // a pat in this time after a spoken one wiggles, no line
 const PAT_MS = 2500;
+const EGG_PAT_LINE = "♪"; // an egg's pat: the one sound it makes (UX fix 4, F2)
 // Reactions to care at baby, teen and adult (PR 3c, O02): the stage's own mood frames
 // (no new art) and a bounded CSS move, for one length at every stage.
 const REACT_MS = 2500;
@@ -2916,6 +2920,8 @@ const STYLE = `
   .pet.pat-soft { animation: pat-soft .3s ease-out; }
   @keyframes pat-soft { 40% { transform: translateY(-2%) scale(1.02, .98); } }
   .pet.pat-slow { animation: perk 1.1s ease-in-out; }
+  .pet.rock { animation: rock .6s steps(4, jump-none) 1; transform-origin: 50% 90%; }
+  @keyframes rock { 0% { transform: rotate(-4deg); } 33% { transform: rotate(4deg); } 66% { transform: rotate(-3deg); } 100% { transform: rotate(0); } }
   .pet.hop { animation: hop .7s ease-in-out infinite; }
   .pet.munch { animation: munch .5s ease-in-out 3; }
   @keyframes munch { 50% { transform: translateY(-4%) scale(1.04, .96); } }
@@ -4713,15 +4719,24 @@ class HatchPetCard extends HTMLElement {
         : "Add the Virtual Pet integration to hatch one.";
       return;
     }
-    this._card.querySelector(".chips").style.display = "";
     let worlds;
+    if (!this._slides.length) this._waiting("Hatch at Home"); // worlds.json pending: not a blank card (F11)
     try {
       worlds = await loadJson("worlds.json");
     } catch (err) {
       this._sig = null; // try again on the next update
+      this._waiting("Hatch at Home");
       return;
     }
     this._worlds = worlds; // every world's (a find, its art and lines, is its own world's)
+    // Every pet is still reloading and none has shown yet: its world is unknown, so no slide
+    // is drawn (not the first world's) until the stage has one. The card keeps its title.
+    if (devices.every((d, i) => !this._slides[i]?.world &&
+        GONE_STATES.has(this._hass.states[d["sensor.life_stage"]]?.state))) {
+      this._waiting("Hatch at Home");
+      return;
+    }
+    this._card.querySelector(".chips").style.display = "";
     while (this._slides.length < devices.length) this._slides.push(this._buildSlide());
     while (this._slides.length > devices.length) this._dropSlide(this._slides.pop());
     if (!this._bootChecked) {
@@ -4738,11 +4753,16 @@ class HatchPetCard extends HTMLElement {
 
     for (let i = 0; i < devices.length; i++) {
       const s = this._slides[i];
-      if (s.ids && s.ids.device !== devices[i].device) this._forget(s); // another pet now
+      if (s.ids && s.ids.device !== devices[i].device) {
+        this._forget(s); // another pet now
+        s.worldKey = null;
+      }
       s.ids = devices[i];
       this._subscribe(s); // its private channel (once: a no-op after that)
       const stage = this._state(s, "sensor.life_stage");
-      s.worldKey = worlds[stage?.attributes.world] ? stage.attributes.world : Object.keys(worlds)[0];
+      s.reloading = GONE_STATES.has(stage?.state); // reloading or restarting: no attributes (UX fix 4, F1)
+      // A state with no world keeps the slide's last one (a reload must not move the pet home).
+      s.worldKey = worlds[stage?.attributes.world] ? stage.attributes.world : (s.worldKey || Object.keys(worlds)[0]);
       s.world = worlds[s.worldKey];
       const roster = stage?.attributes.roster || [];
       // An egg is always drawn as its world's egg (the first species on the roster).
@@ -4756,7 +4776,7 @@ class HatchPetCard extends HTMLElement {
           this._sig = null;
           this._update();
         }).catch(() => {
-          this._write(s, `missing sprites for ${speciesId}`);
+          console.warn(`hatch-pet-card: missing sprites for ${speciesId}`); // the console, not the bubble (F11)
           if (s.speciesId === speciesId) s.speciesId = null; // try again on the next update
         });
       }
@@ -4775,6 +4795,16 @@ class HatchPetCard extends HTMLElement {
     }
     this._card.classList.toggle("single", devices.length < 2);
     this._renderShelf();
+  }
+
+  // Nothing to draw yet (worlds.json pending or failed, every pet reloading): the card's
+  // title and no pet. With a pet on show it is left alone.
+  _waiting(title) {
+    if (this._slides.length) return;
+    this._card.classList.add("single");
+    this._card.querySelector(".chips").style.display = "none";
+    this._card.querySelector(".title").textContent = title;
+    this._card.querySelector(".sub").textContent = "";
   }
 
   // Draw again now, though nothing in HA changed: one slide, or all of them.
@@ -5429,6 +5459,22 @@ class HatchPetCard extends HTMLElement {
     }
     this._mould(s); // a new shape can keep the same size, so no resize says so
 
+    // Reloading (every Options save, a restart): the last pose stays, drawn faded, with
+    // buttons and the pat off, one line in the bubble and the status page as it was (F1).
+    if (s.reloading) {
+      s.wasGone = true;
+      s.screen.classList.add("faded");
+      for (const b of Object.values(s.buttons)) b.disabled = true;
+      s.request.classList.remove("show");
+      this._patSync(s);
+      if (s.bubble.textContent !== GONE_LINE) this._write(s, GONE_LINE, 60000);
+      return;
+    }
+    if (s.wasGone) { // back: the held line goes, the real one is said at once
+      s.wasGone = false;
+      s.sayUntil = 0;
+    }
+
     const mood = this._state(s, "sensor.mood");
     const stageState = this._state(s, "sensor.life_stage");
     const stage = stageState?.state;
@@ -5793,7 +5839,7 @@ class HatchPetCard extends HTMLElement {
       }
       this._patSync(s);
       this._basketSync(s);
-      if (s === this._slides[this._index]) {
+      if (s === this._slides[this._index] && !s.reloading) { // a reloading pet greets and asks nothing
         if (!this._booting) this._greet(s); // the boot screen waits: only the speaking does
         this._powerTick(s);
         this._firstLook(s); // before the visit: it tells the server what's queued
@@ -5814,7 +5860,7 @@ class HatchPetCard extends HTMLElement {
         this._linkTick(s);
         this._visitorTick(s);
       }
-      if (!s.sayUntil && s.species) {
+      if (!s.sayUntil && s.species && !s.reloading) {
         const mood = this._state(s, "sensor.mood");
         // A game waiting on a guess asks again (a care line said over it is done).
         const prompt = s.game?.prompt;
@@ -6356,8 +6402,8 @@ class HatchPetCard extends HTMLElement {
   // The pat's box is up: the pet on show, out and about, with nothing over it (the CSS
   // also hides it at once for the status, a game, a question, a link and the boot screen).
   _patOn(s) {
-    return !!s.species && s === this._slides[this._index] && !this._booting && !s.scene && !s.linking &&
-      !s.power && !s.game && !s.away && !s.egg && !this._questionOn(s) &&
+    return !!s.species && !s.reloading && s === this._slides[this._index] && !this._booting && !s.scene && !s.linking &&
+      !s.power && !s.game && !s.away && !this._questionOn(s) &&
       !s.screen.classList.contains("show-status");
   }
 
@@ -6401,6 +6447,19 @@ class HatchPetCard extends HTMLElement {
     if (e.detail !== 0 && this._swiped) return; // the end of a swipe; a key after one still pats
     const now = Date.now();
     const still = calm();
+    if (s.egg) { // an egg rocks a little and chirps: no bond, no server call, one "♪" (F2)
+      this._tapped(s.pat);
+      if (!still) {
+        this._animate(s, s.pet, "rock", 600);
+        this._moving(s, 600);
+      }
+      if (now - (s.patAt || 0) >= PAT_COOLDOWN_MS || !s.sayUntil || now > s.sayUntil) {
+        s.patAt = now;
+        this._chirp(s, "tap");
+        this._line(s, MINE, EGG_PAT_LINE, PAT_MS);
+      }
+      return;
+    }
     if (s.asleep) {
       this._tapped(s.pat);
       if (!still) {
@@ -7245,6 +7304,8 @@ class HatchPetCard extends HTMLElement {
 
   _greet(s) {
     if (s.greeted || !this._channelHeard(s) || !this._free(s)) return;
+    // An egg doesn't talk (C15'): the greeting waits for the hatch, and its key stays unwritten (F2).
+    if (this._state(s, "sensor.life_stage")?.state === "egg") return;
     s.greeted = true;
     const user = this._hass.user;
     const bond = this._bond(s);
