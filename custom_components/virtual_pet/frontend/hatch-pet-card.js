@@ -393,6 +393,8 @@ function saveStashedAnswers(userId, list) {
   }
 }
 
+let lastChirp = {}; // the last chirp any card played: {card, name, device, at} (see _chirp)
+
 function playChirp(name) {
   const notes = CHIRPS[name];
   if (!notes) return;
@@ -7853,6 +7855,14 @@ class HatchPetCard extends HTMLElement {
   // Only the pet on show chirps: the shelf's other slides update too.
   _chirp(s, name) {
     if (!soundsOn() || !this._mayPlay(s)) return;
+    // Two cards on one pet (a big and a small one, or two views) see the same event: only the first
+    // chirps. Another card's chirp for this pet and this sound under 300 ms ago is the same one (UX7 F9);
+    // this card's own quick repeats (taps in a game) all play.
+    const device = s.ids?.device;
+    const now = Date.now();
+    if (lastChirp.card && lastChirp.card !== this && lastChirp.name === name && lastChirp.device === device
+      && now - lastChirp.at < 300) return;
+    lastChirp = { card: this, name, device, at: now };
     try {
       playChirp(name);
     } catch (err) {
