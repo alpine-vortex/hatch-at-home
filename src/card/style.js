@@ -341,7 +341,7 @@ const STYLE = `
   /* Heavy (gaps-seams 2c): 6% wider, height and feet kept, still centred. */
   .pet.heavy, .ghost.heavy { aspect-ratio: 1.06; margin-left: -24.645%; }
   /* Resting (R1): the idle frames, breathing slowly. First of the pet's animations, so any
-     reaction (hop, munch, sway...) wins while it plays; reduced motion stops it (above). */
+     reaction (hop, munch, lean...) wins while it plays; reduced motion stops it (above). */
   .pet.resting { animation: breathe 4.5s ease-in-out infinite; }
   @keyframes breathe { 50% { transform: scale(1.015, 1.03); } }
   /* The pat (PR 3b): a clear button over the pet's box (the img takes no taps), above the
@@ -374,7 +374,23 @@ const STYLE = `
   /* A call arriving (_render, once, hidden to shown): pops in, then pulses as ever. */
   .attention.arrive { animation: pop .3s ease-out, pulse 1s ease-in-out .3s infinite; }
   @keyframes pulse { 50% { transform: scale(1.12); } }
-  .prop { left: 67%; bottom: 7%; height: 22%; animation: pop .3s ease-out; }
+  /* A care prop drops in from above in four steps with a one-frame squash, and leaves in two
+     (_propShow; plan 6). Props that rise, slide or wag keep the drop's place by their own class. */
+  .prop { left: 67%; bottom: 7%; height: 22%; transform-origin: 50% 100%; animation: drop .4s steps(4, jump-none); }
+  @keyframes drop { 0% { transform: translateY(-140%); } 80% { transform: none; } 90% { transform: scale(1.12, .88); } 100% { transform: none; } }
+  .prop.prop-out { animation: prop-out .3s steps(2, jump-none) forwards; }
+  @keyframes prop-out { 50% { opacity: .5; transform: scale(.8); } 100% { opacity: 0; transform: scale(.5); } }
+  /* Praise's star and the scold's finger sit above the pet's head; the star rises, the finger wags. */
+  .prop.above { left: 50%; bottom: 62%; height: 16%; translate: -50% 0; }
+  .prop.rise { animation: prop-rise 1s steps(6, jump-none) forwards; }
+  @keyframes prop-rise { 0% { opacity: 0; transform: translateY(60%); } 30% { opacity: 1; } 100% { opacity: 1; transform: translateY(-30%); } }
+  .prop.wag { animation: drop .4s steps(4, jump-none), wag .3s steps(2, jump-none) .4s 3; }
+  @keyframes wag { 0%, 100% { rotate: 12deg; } 50% { rotate: -12deg; } }
+  /* The fan slides in from the right and out again. */
+  .prop.slide { animation: prop-slide .4s steps(4, jump-none); }
+  @keyframes prop-slide { from { translate: 140% 0; } }
+  .prop.slide.prop-out { animation: prop-slide-out .3s steps(2, jump-none) forwards; }
+  @keyframes prop-slide-out { to { translate: 140% 0; } }
   /* A clean's extra bubble (fresh-expand M-b): up 30 px over 1.2 s, then it pops. */
   .bubblepop { position: absolute; left: 74%; bottom: 24%; height: 16%; image-rendering: pixelated; pointer-events: none;
     animation: bubblepop 1.2s ease-out forwards; }
@@ -597,7 +613,7 @@ const STYLE = `
   .compact .game.dig .gr { right: 1.5%; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
   .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
-  .screen.show-status .bondhearts, .screen.show-status .linkhearts,
+  .screen.show-status .bondhearts, .screen.show-status .linkhearts, .screen.show-status .carehearts,
   .screen.show-status .basket, .screen.show-status .reveal { display: none !important; }
   .pet { transition: translate .25s ease-out; }
   /* Reactions to moments (see _moment). */
@@ -615,7 +631,7 @@ const STYLE = `
   .pet.jig { animation: hop .45s ease-in-out 4; } /* a house moment's dance (H8): bounded, unlike .dance */
   .pet.startle { animation: perk .3s ease-out 2; } /* a house moment's startle (H8): a quick double jolt */
   .pet.shiver { animation: shake .25s linear infinite; }
-  /* The fan: wind lines cross the scene and the pet sways. */
+  /* The fan: wind lines cross the scene and the pet leans into them. */
   .breeze { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1; }
   .screen.breezy .breeze, .screen.windy .breeze { display: block; }
   .breeze span { position: absolute; left: 0; height: 2px; width: 34%; border-radius: 1px;
@@ -625,8 +641,12 @@ const STYLE = `
   .breeze span:nth-child(2) { top: 48%; width: 24%; animation-delay: .35s; }
   .breeze span:nth-child(3) { top: 64%; animation-delay: .7s; }
   @keyframes wind { from { transform: translateX(-120%); } to { transform: translateX(330%); } }
-  .screen.breezy .pet { animation: sway .7s ease-in-out infinite; }
-  @keyframes sway { 50% { transform: rotate(-4deg); } }
+  /* The pet leans into the breeze once (bounded; it replaces the old endless sway). */
+  .pet.lean { animation: lean 2.6s ease-in-out; transform-origin: 50% 100%; }
+  @keyframes lean { 15%, 85% { transform: skewX(-4deg) translateX(-1%); } }
+  /* A praised adult's spin: a quarter-step turn all the way round. */
+  .pet.spin { animation: spin .6s steps(4, jump-none); }
+  @keyframes spin { to { rotate: y 360deg; } }
   /* Thunder: now and then the scene flashes. */
   .flash { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 2;
     background: #fff; opacity: 0; }
@@ -1268,7 +1288,7 @@ const STYLE = `
   ha-card.bigtext .game .gpick.wrap button { font-size: 14px; }
   ha-card.bigtext .game .gpick.wrap.tight button { font-size: 13px; }
   ha-card.bigtext .screen .askday button { font-size: 15px; }
-  .screen .bondhearts img, .screen .linkhearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
+  .screen .bondhearts img, .screen .linkhearts img, .screen .carehearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
     opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }
   @keyframes bondheart { 0% { transform: translateY(0) scale(.7); opacity: 0; } 20% { opacity: 1; }
     100% { transform: translateY(-70px) scale(1); opacity: 0; } }

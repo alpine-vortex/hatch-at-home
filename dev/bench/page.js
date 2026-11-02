@@ -655,6 +655,21 @@
     // `react`: a care reaction (PR 3c) started through the card's own `_reactFrames`
     // (`fed`, `praised`, `refused`, `tucked`); `petAt` pauses its move mid-way.
     if (shot.react) card._reactFrames(cur, shot.react);
+    // `reactEntry`: a care log entry (`{action, result}`) through the card's own `_react`, the whole
+    // floor path (frames, move, prop, hearts, line); `variant` pins its picks (`{"refused.full": "shake"}`,
+    // `{praise: "spin"}`, `{medicine: "sniff"}`); `reactAt` pauses every animation on the screen that many ms in.
+    if (shot.variant) cur.pinVariant = shot.variant;
+    if (shot.reactEntry) {
+      card._react(cur, { at: Date.now() / 1000, ...shot.reactEntry });
+      await new Promise((r) => setTimeout(r, 80)); // the prop's sprite and any pose probe
+      if (shot.reactAt !== undefined) {
+        for (const a of cur.screen.getAnimations({ subtree: true })) {
+          if (a instanceof CSSTransition) continue;
+          a.pause();
+          a.currentTime = shot.reactAt;
+        }
+      }
+    }
     // `care`: "medicine" or "clean" scene started through _sceneStart, paused and seeked to `careAt` ms.
     if (shot.care) {
       card._sceneStart(cur, shot.care);

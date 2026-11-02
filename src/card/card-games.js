@@ -15,6 +15,11 @@ class HatchPetCardGames extends HatchPetCardActions {
     }
     if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
     s.screen.querySelector(".flair")?.remove();
+    // A beat before the picker (care reactions, ship A): the ball drops in from the pad, the pet
+    // perks at it, 600 ms. The picker does not wait: it opens now and the beat plays over its fade.
+    const ball = s.species?.props?.play;
+    if (ball && !s.egg && !s.away) this._propShow(s, ball, 900);
+    this._reactFrames(s, "played");
     // The pet's game of the day leads the list (G-a); the last game played keeps the focus.
     const today = this._gameOfDay(s);
     const games = [...GAMES].sort((a, b) => (b.key === today) - (a.key === today));

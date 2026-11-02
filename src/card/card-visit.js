@@ -497,12 +497,12 @@ class HatchPetCardVisit extends HatchPetCardLooks {
 
   // Hearts that float up around the pet: only for someone it's very close to.
   // The infrared link's hearts are "linkhearts", so they never touch a bond's.
-  _bondHearts(s, kind = "bondhearts") {
+  _bondHearts(s, kind = "bondhearts", n = 4) {
     s.screen.querySelector(`.${kind}`)?.remove();
     const box = document.createElement("div");
     box.className = kind;
     box.setAttribute("aria-hidden", "true");
-    [[-34, 0], [30, 0.35], [-8, 0.7], [16, 1.05]].forEach(([x, delay]) => {
+    [[-34, 0], [30, 0.35], [-8, 0.7], [16, 1.05]].slice(0, n).forEach(([x, delay]) => {
       const img = document.createElement("img");
       img.src = `${BASE}/ui/stat_heart_full.png?v=${VERSION}`;
       img.alt = "";

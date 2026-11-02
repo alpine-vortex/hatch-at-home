@@ -141,6 +141,7 @@ class HatchPetCardActions extends HatchPetCardJournal {
       const front = pet.left + pet.width * 0.72;
       sc.step = Math.max(0, Math.min(box.width * 0.22, pill.left + pill.width / 2 - front));
       sc.eat = this._sceneFrames(s, "eat");
+      sc.sniff = this._floorVariant(s, "medicine", ["plain", "sniff"]) === "sniff"; // a lean to sniff it first (plan 5.5)
       const extras = s.drawn === "child" && s.species.extras?.squint;
       const excited = s.species.moods?.includes("excited") && s.drawn &&
         Array.from({ length: s.species.frames || 1 }, (_, i) => `${s.drawn}_excited_${i + 1}`);
@@ -167,6 +168,7 @@ class HatchPetCardActions extends HatchPetCardJournal {
         return { el, x: r.left - box.left + r.width / 2 };
       });
       sc.murk = s.murk.style.display !== "none" && Number(s.murk.style.opacity) > 0;
+      sc.petX = pet.left - box.left + pet.width / 2; // where the pet stands, for the hop over the broom
     }
     s.scene = sc;
     this._patSync(s);
@@ -229,7 +231,8 @@ class HatchPetCardActions extends HatchPetCardJournal {
       const hop = -0.06 * sh * Math.sin(Math.PI * ramp(1450, 1750));
       s.pet.style.translate = `${step}px ${hop}px`;
       s.perch.style.translate = `${step}px 0`;
-      s.pet.style.rotate = `${(sc.eat ? 4 : 9) * (ease(850, 1000) - ease(1250, 1400))}deg`;
+      const sniff = sc.sniff ? 5 * (ease(550, 650) - ease(850, 950)) : 0; // 300 ms: lean in, look, back
+      s.pet.style.rotate = `${(sc.eat ? 4 : 9) * (ease(850, 1000) - ease(1250, 1400)) + sniff}deg`;
       const gulp = ease(1000, 1250);
       sc.pill.style.opacity = String(1 - gulp);
       sc.pill.style.scale = String((0.3 + 0.7 * ease(0, 200)) * (1 - 0.7 * gulp));
@@ -251,6 +254,17 @@ class HatchPetCardActions extends HatchPetCardJournal {
       sc.tool.style.left = `${left}px`;
       sc.tool.style.display = sweep < 1 ? "" : "none";
       if (sc.water) sc.tool.style.translate = `0 ${Math.sin(t / 150) * 0.02 * sh}px`;
+      // The pet hops over the broom as it passes (the medicine hop's maths); on water it bobs on the
+      // net's wake. Then, as the broom leaves, a two-step shake-off.
+      const near = Math.abs(point - sc.petX) / (0.14 * sw);
+      const hopK = near < 1 && sweep < 1 ? Math.sin(Math.PI * (1 - near) / 2) : 0;
+      const lift = sc.water ? Math.sin(t / 150) * 0.015 * sh * hopK : -0.07 * sh * hopK;
+      s.pet.style.translate = `0 ${lift}px`;
+      if (t >= 1800 && !sc.shook) {
+        sc.shook = true;
+        s.pet.classList.add("rock2");
+        setTimeout(() => s.pet.classList.remove("rock2"), 1300);
+      }
       if (sc.dust) {
         // Dust kicks up behind it.
         this._sceneArt(s, sc.dust, sc.dustArt[Math.floor(t / 220) % sc.dustArt.length]);

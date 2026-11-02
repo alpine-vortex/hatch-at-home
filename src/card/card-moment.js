@@ -89,6 +89,8 @@ class HatchPetCardMoment extends HatchPetCardVisit {
           if (!capture) this._newLook([s]); // up for the day, seen live: the morning's look begins (fresh-moment 1)
         } else if (m.how === "night") {
           say("...so sleepy");
+        } else if (m.how === "lights") {
+          now(() => { if (!s.asleep && !s.scene && !calm()) this._animate(s, s.pet, "stretch", 1100); }); // lights on: a stretch, no line (plan 5.5)
         }
         break;
       case "fell_asleep":
@@ -551,25 +553,37 @@ class HatchPetCardMoment extends HatchPetCardVisit {
       said = ["a treat! someone did a chore ♪", 3500];
     }
     if (cured) said = [this._lines(s, "all_better", "all better! ♪").text, 3000];
-    if (["ok", "won", "lost"].includes(entry.result)) {
+    // A fake call whined for a praise, snack or play (spoiled) is taken as an ok, then the pet is smug.
+    const spoiled = entry.result === "spoiled" && SPOILED_BY.has(entry.action);
+    if (["ok", "won", "lost"].includes(entry.result) || spoiled) {
       const key = PROP_FOR[entry.action] || entry.action;
-      // The species' own reaction pose, drawn for the child only.
+      // A won game's log can land just before the card closes the game: still its reaction.
+      const inGame = entry.result === "won" || entry.result === "lost";
+      const ok = entry.result === "ok" || spoiled;
+      // A lost game: a good sport, acts.aww, else the content frames settle.
+      const kind = entry.result === "lost" ? "lost" : entry.result === "won" ? "praised"
+        : ok && (entry.action === "feed" || entry.action === "snack") ? "fed"
+        : ok && entry.action === "praise" ? "praised"
+        : ok && entry.action === "blanket" ? "tucked"
+        : ok && entry.action === "scold" ? "scolded"
+        : ok && entry.action === "fan" ? "aired" : null;
+      // Praise: a spin for an adult now and then, else the type's move; both with hearts.
+      const praise = kind === "praised" && !inGame;
+      const variant = praise && s.drawn === "adult" ? this._floorVariant(s, "praise", ["hearts", "spin"]) : undefined;
+      const long = kind === "scolded" || kind === "aired" ? REACTIONS[kind].ms : undefined; // a flinch is short, a lean is long
+      // The child's ladder (plan section 7): rung 1, the species' own reaction pose, with the
+      // stage's move; else rung 3, the mood frame (_reactFrames), with the same move.
       const pose = s.species?.reactions?.[entry.result === "won" ? "won" : entry.action];
       const poseFrames = s.drawn === "child" && s.species?.extras?.[pose];
       if (poseFrames) {
         s.poseFrames = Array.isArray(poseFrames) ? poseFrames : [poseFrames];
         s.poseUntil = Date.now() + 2500;
         this._show(s, s.pet, s.poseFrames[0]);
-      } else {
-        const ok = entry.result === "ok";
-        // A lost game: a good sport, acts.aww, else the content frames settle.
-        const kind = entry.result === "lost" ? "lost" : entry.result === "won" ? "praised"
-          : ok && (entry.action === "feed" || entry.action === "snack") ? "fed"
-          : ok && entry.action === "praise" ? "praised"
-          : ok && entry.action === "blanket" ? "tucked" : null;
-        // A won game's log can land just before the card closes the game: still its reaction.
-        if (kind) this._reactFrames(s, kind, { inGame: entry.result === "won" || entry.result === "lost" });
+        if (kind) this._reactFrames(s, kind, { inGame, frames: s.poseFrames, variant });
+      } else if (kind) {
+        this._reactFrames(s, kind, { inGame, ms: long, variant });
       }
+      if (praise && !spoiled && !calm() && !s.asleep) this._bondHearts(s, "carehearts", variant === "spin" ? 1 : 2);
       if (entry.action === "fan") { // the fan stands by, and its breeze crosses the scene
         s.screen.classList.add("breezy");
         clearTimeout(s.breezeTimer);
@@ -581,7 +595,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
         said = [TALK_COPY[entry.action], 3000];
       }
       if (entry.action === "feed" && entry.result === "ok") said = this._mealLine(s, food); // E4 F-a, F-b
-      if (entry.action === "praise") {
+      if (entry.action === "praise" && !spoiled) {
         said = [this._lines(s, "praise", "♥", undefined, { fresh: true }).text, 2500]; // P-c: a baby keeps "♥"
       }
       const season = seasonNow(this._config);
@@ -593,16 +607,34 @@ class HatchPetCardMoment extends HatchPetCardVisit {
       if (entry.action === "snack" && isHeavy(Number.isFinite(weight) ? weight : null) && Math.random() < 0.5) {
         said = [pick(HEAVY_SNACK), 3000];
       }
+      if (spoiled) said = [this._lines(s, "REFUSALS.spoiled", REFUSALS.spoiled).text, 3500]; // "hehe, whining works"
       const prop = candy || s.species?.props?.[key] || FALLBACK_PROPS[key];
-      if (prop) {
-        this._show(s, s.prop, prop);
-        s.propUntil = Date.now() + 2500;
+      if (prop && entry.action !== "play") { // a play is the ball beat at the tap (_startGame), not a prop here
+        // The star rises above the head, the finger wags above it, the fan slides in; else it drops.
+        const cls = entry.action === "praise" ? "above rise" : entry.action === "scold" ? "above wag"
+          : entry.action === "fan" ? "slide" : "";
+        this._propShow(s, prop, entry.action === "fan" ? 2600 : 2500, cls);
+      }
+      // The smug beat (plan 4.4): two rocks after the praise, snack or play it was whining for.
+      if (spoiled && !calm()) {
+        setTimeout(() => {
+          if (!s.scene && !s.asleep && !s.game) this._animate(s, s.pet, "rock2", 1250);
+        }, 1300);
       }
       out();
       return;
     }
     const line = REFUSALS[entry.result];
-    if (REACT_REFUSALS.has(entry.result)) this._reactFrames(s, "refused");
+    if (REACT_REFUSALS.has(entry.result)) {
+      // A refusal is a turn-away, a head shake, a yawn or a flop (not the same one twice).
+      const pool = REFUSAL_VARIANTS[entry.result] || REFUSAL_POOL;
+      const pick1 = this._floorVariant(s, `refused.${entry.result}`, pool);
+      this._reactFrames(s, "refused", { variant: pick1 === "look" ? undefined : pick1 });
+      if (entry.result === "unfair") { // the finger wags at a pet that did nothing
+        const finger = s.species?.props?.scold || FALLBACK_PROPS.scold;
+        this._propShow(s, finger, 1800, "above wag");
+      }
+    }
     if (line) {
       said = [this._lines(s, `REFUSALS.${entry.result}`, line).text, 3500];
     }

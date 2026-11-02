@@ -11,7 +11,6 @@ class HatchPetCardTick extends HatchPetCardLayout {
     this._slides.forEach((s, i) => {
       if (s.poseUntil && Date.now() > s.poseUntil) s.poseUntil = 0;
       if (s.patPoseUntil && Date.now() > s.patPoseUntil) s.patPoseUntil = 0;
-      if (s.excitedSince && Date.now() - s.excitedSince >= BOUNCE_MS) s.pet.classList.remove("hop");
       const frames = this._frames(s);
       const seen = Math.abs(i - this._index) <= 1; // the pet on show and the peeking ones
       if (seen && frames.length && !s.scene && !(s.asleep && this._ticks % 2)) {
@@ -562,20 +561,35 @@ class HatchPetCardTick extends HatchPetCardLayout {
     (s.queue ??= []).push({ text, ms, opts: rest, cls, at, type, still, then, perk: true });
   }
 
-  // A reaction to care for baby, teen and adult (the child has species poses): that
-  // stage's mood frame for REACT_MS and a bounded move. Not over a scene, a link, the
-  // low-battery gag, sleep, away or the egg; a game only with `inGame`.
+  // A reaction to care, at every stage: that stage's mood frame for REACT_MS and a bounded
+  // move. A child has no act poses (_actPose), so it wears its mood frame (the plan's
+  // rung 3, docs/plan-2026-11-02-care-reactions.md section 7); `frames` is the child's own
+  // species pose (rung 1, set by _react), kept as the frames with the move added. Not over
+  // a scene, a link, the low-battery gag, sleep, away or the egg; a game only with `inGame`.
   // Under reduced motion only the frame changes (calm() shows its first). With ms
   // (a win beat), the frame and the move both last that long.
-  _reactFrames(s, kind, { inGame = false, ms } = {}) {
+  _reactFrames(s, kind, { inGame = false, ms, frames, variant } = {}) {
     const r = REACTIONS[kind];
-    if (!r || !s.species || s.drawn === "child" || s.scene || s.linking || s.power ||
+    if (!r || !s.species || s.scene || s.linking || s.power ||
       s.asleep || s.away || s.egg || (s.game && !inGame)) return;
+    // Not care: a child's visitor greet is the line only, and its bored look at a game's bee
+    // (card-games) stays as it was. Ship A lifts the guard for care.
+    if (s.drawn === "child" && (kind === "greet" || (kind === "refused" && inGame))) return;
+    if (frames) { // rung 1: the species pose is already on show (_react), only the move is left
+      this._reactMove(s, kind, r, { inGame, ms });
+      this._poseEnd(s);
+      return;
+    }
     const sp = s.species;
     if (r.poseOnly && !(Array.isArray(sp.acts?.[STAGE_POSES[kind]]) || sp.acts?.[STAGE_POSES[kind]] === true)) return;
+    const moodOf = (m) => {
+      const out = [];
+      const name = sp.moods?.includes(m) ? m : "content";
+      for (let i = 1; i <= (sp.frames || 1); i++) out.push(`${s.drawn}_${name}_${i}`);
+      return out;
+    };
     const mood = sp.moods?.includes(r.mood) ? r.mood : "content";
-    const moodFrames = [];
-    for (let i = 1; i <= (sp.frames || 1); i++) moodFrames.push(`${s.drawn}_${mood}_${i}`);
+    const moodFrames = moodOf(r.mood);
     const own = this._actPose(sp, s.drawn, s.speciesId, STAGE_POSES[kind], () => {
       if (s.poseFrames !== own) return;
       if (r.poseOnly) { // no mood stand-in: the reaction just ends
@@ -590,8 +604,84 @@ class HatchPetCardTick extends HatchPetCardLayout {
     if (r.poseOnly && !own) return; // the act's art failed before: nothing, a running reaction untouched
     s.poseFrames = own || moodFrames;
     s.poseUntil = Date.now() + (kind === "ready" ? READY_MS : ms ?? REACT_MS);
+    // A yawn (not_sleepy): the sleepy face first, then the excited one with a hop (ship A, 5.5).
+    if (variant === "yawn" && !calm() && sp.moods?.includes("sleepy")) {
+      const yawn = moodOf("sleepy");
+      s.poseFrames = yawn;
+      this._show(s, s.pet, yawn[0]);
+      setTimeout(() => {
+        if (s.poseFrames !== yawn || !s.poseUntil) return;
+        s.poseFrames = moodOf("excited");
+        this._show(s, s.pet, s.poseFrames[0]);
+        this._animate(s, s.pet, "greethop", 700);
+      }, 900);
+      this._poseEnd(s);
+      return;
+    }
     this._show(s, s.pet, s.poseFrames[0]);
+    this._reactMove(s, kind, r, { inGame, ms, variant });
+    this._poseEnd(s);
+  }
+
+  // The pose ends on a beat, with its prop (plan 6): a timer at poseUntil puts the mood
+  // frames back, instead of waiting up to a tick (700 ms) for _frames to notice.
+  _poseEnd(s) {
+    const until = s.poseUntil;
+    if (!until) return;
+    setTimeout(() => {
+      if (s.poseUntil !== until) return; // a newer pose owns the end
+      s.poseUntil = 0;
+      s.frame = 0;
+      const frames = this._frames(s);
+      if (frames.length && !s.scene) this._show(s, s.pet, frames[0]);
+    }, Math.max(0, until - Date.now()) + 30);
+  }
+
+  // A care prop onto the floor (or above the head with `cls`), dropped in, then leaving in two
+  // steps 300 ms before propUntil by a timer, not the tick (plan 6). `still` skips the
+  // flourish under reduced motion (the global CSS rule already stills the animation).
+  _propShow(s, sprite, ms, cls = "") {
+    const el = s.prop;
+    clearTimeout(s.propOutTimer);
+    el.className = `prop ${cls}`.trim();
+    el.style.animation = "none";
+    void el.offsetWidth; // restart the drop
+    el.style.animation = "";
+    this._show(s, el, sprite);
+    const until = Date.now() + ms;
+    s.propUntil = until;
+    s.propOutTimer = setTimeout(() => {
+      if (s.propUntil === until && !calm()) el.classList.add("prop-out");
+    }, Math.max(0, ms - 300));
+  }
+
+  // A choice from a short list that is never the one made last time for `key` (ship A's
+  // no-repeat; a bench may pin it with s.pinVariant[key]).
+  _floorVariant(s, key, list) {
+    const pinned = s.pinVariant?.[key];
+    if (pinned && list.includes(pinned)) return pinned;
+    const last = (s.lastVariant ||= {})[key];
+    const pool = list.length > 1 ? list.filter((v) => v !== last) : list;
+    return (s.lastVariant[key] = pick(pool));
+  }
+
+  // The CSS move of a reaction (none under reduced motion).
+  _reactMove(s, kind, r, { inGame = false, ms, variant } = {}) {
     if (calm() || !r.move) return;
+    if (variant === "shake") { // a head shake: the flip, back, and the flip again
+      this._look(s, 300);
+      setTimeout(() => this._look(s, 300), 550);
+      this._moving(s, 1200);
+      return;
+    }
+    if (variant === "spin") { // a praised adult turns right round
+      this._animate(s, s.pet, "spin", 600);
+      return;
+    }
+    if (variant === "flop") {
+      this._animate(s, s.pet, "settle", ms ?? r.ms);
+      return;
+    }
     const move = kind === "praised" ? this._praiseMove(s, inGame) : r.move;
     const moveMs = ms ?? r.ms;
     if (move === "wander") {

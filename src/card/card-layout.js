@@ -559,10 +559,14 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     }
     // Excitement lasts a while (rates.py EXCITED_MINUTES), but the bounce only
     // celebrates its start; after that, idle life adds an occasional hop.
+    // The bounce celebrates the start once: one greethop, not a 10 s loop (care reactions, ship A),
+    // and not over a reaction or a scene already moving the pet.
     const excited = mood?.state === "excited";
-    if (excited && !s.excitedSince) s.excitedSince = Date.now();
+    const excitedNow = excited && !s.excitedSince;
+    if (excitedNow) s.excitedSince = Date.now();
     if (!excited) s.excitedSince = 0;
-    s.pet.classList.toggle("hop", excited && Date.now() - s.excitedSince < BOUNCE_MS);
+    s.pet.classList.remove("hop");
+    if (excitedNow && !calm() && !asleep && !away && !s.scene && !(s.poseUntil > Date.now())) this._animate(s, s.pet, "greethop", 1400);
     s.pet.alt = s.species?.name || "pet";
     // Some stages are drawn smaller in the frame (long adults fit 256 px wide by
     // coming out shorter); species.json "scale" sizes them back up, feet fixed.

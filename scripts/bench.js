@@ -556,6 +556,60 @@ const PRESETS = {
       storage: { "hatch-shared-screen": "on" } });
     return out;
   },
+  // Care reactions ship A, the floor (docs/plan-2026-11-02-care-reactions.md 13): each reaction
+  // through the card's own _react at a few moments, at 330 and 300, an adult (fox, the species'
+  // own acts), a child with its own pose (fox, rung 1) and a child on its mood frame (bird,
+  // rung 3), then reduced motion (the final frame, the prop still).
+  care() {
+    const out = [];
+    const cases = [
+      ["praise", { action: "praise", result: "ok" }, [300, 900]],
+      ["praise-spin", { action: "praise", result: "ok" }, [300, 600], { praise: "spin" }],
+      ["praise-spoiled", { action: "praise", result: "spoiled" }, [300, 1500]],
+      ["scold", { action: "scold", result: "ok" }, [200, 700]],
+      ["scold-unfair", { action: "scold", result: "unfair" }, [200, 700]],
+      ["fan", { action: "fan", result: "ok" }, [300, 1200]],
+      ["feed", { action: "feed", result: "ok" }, [300, 1200]],
+      ["snack", { action: "snack", result: "ok" }, [300, 1200]],
+      ["blanket", { action: "blanket", result: "ok" }, [300, 1200]],
+      ["full-look", { action: "feed", result: "full" }, [200, 500], { "refused.full": "look" }],
+      ["full-shake", { action: "feed", result: "full" }, [200, 500], { "refused.full": "shake" }],
+      ["not-sleepy-yawn", { action: "play", result: "not_sleepy" }, [300, 1000], { "refused.not_sleepy": "yawn" }],
+      ["too-tired-flop", { action: "play", result: "too_tired" }, [300, 1200], { "refused.too_tired": "flop" }],
+    ];
+    const who = [["adult", "fox", "adult"], ["child1", "fox", "child"], ["child3", "bird", "child"]];
+    for (const [id, species, stage] of who) {
+      for (const width of [330, 300]) {
+        for (const [name, entry, ats, variant] of cases) {
+          if (width === 300 && !["praise", "scold", "fan", "feed", "full-shake"].includes(name)) continue;
+          for (const reactAt of ats) {
+            out.push({ name: `care/${id}-${width}/${name}-${reactAt}`, group: `care-${id}-${width}`, label: `${name} ${reactAt}`,
+              species, stage, world: worldOf(species), width, reactEntry: entry, reactAt, variant, clip: "screen", say: "" });
+          }
+        }
+      }
+    }
+    // Reduced motion: the final frame, the prop still, no move.
+    for (const [id, species, stage] of who) {
+      for (const [name, entry, , variant] of cases.filter(([n]) => ["praise", "scold", "fan", "feed", "full-shake", "blanket"].includes(n))) {
+        out.push({ name: `care/${id}-calm/${name}`, group: `care-${id}-calm`, label: `calm ${name}`,
+          species, stage, world: worldOf(species), width: 330, reactEntry: entry, variant, motion: "reduce", clip: "screen", say: "" });
+      }
+    }
+    // The scenes with the floor's tweaks: the clean hop over the broom, the meds sniff.
+    for (const [id, species, stage] of who.slice(0, 2)) {
+      for (const careAt of [800, 1000, 1200]) {
+        out.push({ name: `care/${id}-scene/clean-${careAt}`, group: `care-${id}-scene`, label: `clean ${careAt}`,
+          species, stage, world: worldOf(species), width: 330, care: "clean", careAt, pet: { poop: 1 }, clip: "screen", say: "" });
+      }
+      for (const careAt of [650, 800]) {
+        out.push({ name: `care/${id}-scene/meds-sniff-${careAt}`, group: `care-${id}-scene`, label: `meds sniff ${careAt}`,
+          species, stage, world: worldOf(species), width: 330, care: "medicine", careAt, variant: { medicine: "sniff" },
+          mood: "sick", clip: "screen", say: "" });
+      }
+    }
+    return out;
+  },
   // The same sheet on a shared screen: nothing personal, only this screen's rows.
   "settings-shared"() {
     const out = [];

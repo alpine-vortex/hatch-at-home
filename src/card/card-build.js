@@ -797,6 +797,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
       slide.live.textContent = "";
       slide.screen.querySelector(".bondhearts")?.remove();
       slide.screen.querySelector(".linkhearts")?.remove(); // a visit's, mid-way
+      slide.screen.querySelector(".carehearts")?.remove();
       if (slide.laySheet) this._closeLay(slide); // the shared-screen switch closes the lay sheet (S2)
       if (slide.nameSheet) this._closeName(slide); // and the name sheet (S3)
       slide.journal = false;

@@ -404,6 +404,12 @@ const REACTIONS = {
   greet: { mood: "excited", move: "greethop", ms: 1400 }, // a world visitor (acts.cheer, else this)
   refused: { mood: "bored", move: "look", ms: 1200 },
   tucked: { mood: "cozy", move: "settle", ms: REACT_MS },
+  // Ship A, the floor (docs/plan-2026-11-02-care-reactions.md 5.5): a fair scold flinches and sulks
+  // (the refuse act, else the bored frame); the fan is leant into (the cozy frame); a game start
+  // is a one-pose beat before the picker (the cheer act, else the excited frame).
+  scolded: { mood: "bored", move: "startle", ms: 1200 },
+  aired: { mood: "cozy", move: "lean", ms: 2600 },
+  played: { mood: "excited", move: "perk", ms: 600 },
   // Only with the species' own act (STAGE_POSES): without it these do nothing (R2).
   lost: { mood: "content", move: "settle", ms: 1200 }, // a good sport (acts.aww, else content frames: UX fix 6, F5); the log can land before the game closes
   ready: { mood: "content", move: null, ms: 1200, poseOnly: true }, // a game just began
@@ -412,7 +418,7 @@ const READY_MS = 1200;
 const PAT_POSE_MS = 900; // acts.pat on a pat; apart from poseUntil so the next pat's `reacting` is unchanged
 // Which species.json "acts" pose a reaction plays at baby, teen and adult (R1, R2).
 // refused and lost: the act, else the mood frame; ready: the act, else nothing (the game perks instead).
-const STAGE_POSES = { fed: "eat", praised: "cheer", greet: "cheer", refused: "refuse", lost: "aww", ready: "ready" };
+const STAGE_POSES = { fed: "eat", praised: "cheer", greet: "cheer", refused: "refuse", lost: "aww", ready: "ready", scolded: "refuse", played: "cheer" };
 // Idle manner (P3): the copies of moves each type adds to _idle's list, in the
 // plan's order (docs/plan-2026-10-28-personality-types.md, "Idle manner"). Only
 // existing moves, reweighted. Bouncy's hop is on even when content.
@@ -426,8 +432,15 @@ const IDLE_ADDS = {
   charming: ["look", "perk"],
   plucky: ["wander", "perk"],
 };
-// Only these refusals react; asleep, egg, away, no_game, unfair and spoiled do not.
-const REACT_REFUSALS = new Set(["full", "not_needed", "already_clean", "not_sick", "not_sleepy", "too_tired"]);
+// Only these refusals react; asleep, egg, away and no_game do not (spoiled is a reaction of its
+// own, see SPOILED_BY; an unfair scold turns the pet away).
+const REACT_REFUSALS = new Set(["full", "not_needed", "already_clean", "not_sick", "not_sleepy", "too_tired", "unfair"]);
+// What a refusal does besides the turn-away (ship A, plan 5.5), picked without repeating:
+// a head shake is two flips; not_sleepy yawns then hops; too_tired flops.
+const REFUSAL_VARIANTS = { not_sleepy: ["yawn", "look"], too_tired: ["flop", "look"], unfair: ["look"] };
+const REFUSAL_POOL = ["look", "shake"];
+// A fake call whined for the praise, snack or play: the care is taken as an ok, then the pet is smug.
+const SPOILED_BY = new Set(["praise", "snack", "play"]);
 const MINE_MATCH_MS = 10000; // a press is matched to the first new log entry within this
 const FLAVOUR_WAIT_MS = 8000;
 // Every moment type, coming (became_sick) or channel-only, has a class: card-check
@@ -494,8 +507,6 @@ function graphemes(text) {
 }
 // Whole degrees in the owner's unit (the server converts), with a real minus.
 const degrees = (n) => (Number.isFinite(n) ? `${n}°`.replace("-", "−") : "");
-// How long the happy bounce lasts when the pet gets excited.
-const BOUNCE_MS = 10000;
 const BACKLIGHT_MS = 3000; // a tap on the shell's backlight button lights the screen this long
 const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
 

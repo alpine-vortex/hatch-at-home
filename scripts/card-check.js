@@ -4858,24 +4858,25 @@ async function main() {
     /wish|best day/.test(granted[0]) && !/sun|sky/.test(granted[1]), granted.join(" | "));
   await shot("05-wish-granted");
 
-  // Excitement bounces briefly, not for the whole 15 minutes it lasts. The
-  // bounce starts on becoming excited, and the games above may have excited the
-  // pet already, so calm it first.
+  // Excitement bounces once (one greethop, care reactions ship A; it was a 10 s hop loop), not
+  // for the whole 15 minutes it lasts. The bounce starts on becoming excited, and the games
+  // above may have excited the pet already, so calm it first.
   await inject(pet["sensor.mood"], { state: "content", attributes: { flags: [] } });
   await page.waitForTimeout(600);
   await inject(pet["sensor.mood"], { state: "excited", attributes: { flags: ["excited"] } });
   await page.waitForTimeout(800);
-  const hopsAtFirst = await cur().locator(".pet.hop").count();
-  await skip(page, 11000); // the tick ends the bounce by Date.now()
+  const hopsAtFirst = await cur().locator(".pet.greethop").count();
+  const loops = await cur().locator(".pet.hop").count(); // the old 10 s loop is gone (idle may hop on its own)
+  await skip(page, 11000);
   // Idle life also hops now and then while excited (1.4 s, at most every 20 s),
-  // so look for a moment without a hop over the next 3 s, not at one instant.
+  // so look for a moment without a greethop over the next 3 s, not at one instant.
   let stopped = false;
   for (let i = 0; i < 8 && !stopped; i++) {
-    stopped = (await cur().locator(".pet.hop").count()) === 0;
+    stopped = (await cur().locator(".pet.greethop").count()) === 0;
     if (!stopped) await page.waitForTimeout(400);
   }
-  check("an excited bounce stops by itself", hopsAtFirst === 1 && stopped,
-    `bouncing at first: ${hopsAtFirst === 1}, stopped after 11 s: ${stopped}`);
+  check("an excited bounce is one greethop and stops by itself", hopsAtFirst === 1 && loops === 0 && stopped,
+    `greethop at first: ${hopsAtFirst === 1}, hop loop: ${loops}, stopped after 11 s: ${stopped}`);
 
   // Weather on screen: thunder flashes, wind blows.
   // A pet update can replace the injected mood, so inject until it shows.
@@ -10067,10 +10068,21 @@ async function main() {
       }, action);
       check(`UX3 F11: ${stage} the ${action} answered gets a thank-you line`, said === line, said);
     }
-    for (const result of ["not_needed", "already_clean", "not_sick", "not_sleepy", "too_tired"]) {
-      const r = await react({ action: "play", result });
-      check(`react: ${stage} refusal ${result} reacts`, r.live && r.moves.join() === "look" && r.src.includes(`/${stage}_`), JSON.stringify(r));
+    // A refusal is a pool (ship A): the turn-away, a head shake (its first flip is a look too), a
+    // yawn (not_sleepy: the sleepy face, then a hop) or a flop (too_tired: a settle). Each variant is pinned.
+    const VARIANTS = { not_needed: ["look", "shake"], already_clean: ["look", "shake"], not_sick: ["look", "shake"],
+      not_sleepy: ["look", "yawn"], too_tired: ["look", "flop"], unfair: ["look"] };
+    for (const [result, pool] of Object.entries(VARIANTS)) {
+      for (const variant of pool) {
+        await card.evaluate((el, [result, variant]) => { el._slides[el._index].pinVariant = { [`refused.${result}`]: variant }; }, [result, variant]);
+        const r = await react({ action: "play", result });
+        const move = variant === "flop" ? "settle" : variant === "yawn" ? "" : "look";
+        const face = variant === "yawn" ? `/${stage}_sleepy_` : `/${stage}_`;
+        check(`react: ${stage} refusal ${result} (${variant}) reacts`,
+          r.live && r.moves.join() === move && r.src.includes(face), JSON.stringify(r));
+      }
     }
+    await card.evaluate((el) => { el._slides[el._index].pinVariant = null; });
     const won = await card.evaluate((el) => {
       const s = el._slides[el._index];
       const keep = s.game;
@@ -10081,9 +10093,33 @@ async function main() {
       return out;
     });
     check(`react: ${stage} a won game's log reacts even if the game is still open`, won.live && won.src.includes(`/${stage}_${own("cheer")}_`), JSON.stringify(won));
-    for (const result of ["asleep", "egg", "away", "no_game", "unfair", "spoiled"]) {
+    for (const result of ["asleep", "egg", "away", "no_game"]) {
       const r = await react({ action: "play", result });
       check(`react: ${stage} ${result} does nothing`, !r.live && r.moves.length === 0, JSON.stringify(r));
+    }
+    // spoiled is a reaction now (ship A): praise is taken as an ok, with no hearts, then a smug beat.
+    const spoil = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      Object.assign(s, { poseUntil: 0, movingUntil: 0 });
+      s.screen.querySelector(".carehearts")?.remove();
+      el._react(s, { at: Date.now() / 1000, action: "praise", result: "spoiled" });
+      return { live: s.poseUntil > Date.now(), hearts: !!s.screen.querySelector(".carehearts"), said: s.bubble.textContent,
+        star: s.prop.classList.contains("rise") };
+    });
+    check(`react: ${stage} a spoiled praise reacts, no hearts, says "whining works"`,
+      spoil.live && !spoil.hearts && spoil.star && /whining works/.test(spoil.said), JSON.stringify(spoil));
+    // A fair scold (ok) flinches with the finger above it; the fan is leant into with the breeze.
+    for (const [action, move, cls] of [["scold", "startle", "wag"], ["fan", "lean", "slide"]]) {
+      const r = await card.evaluate((el, [action, move]) => {
+        const s = el._slides[el._index];
+        Object.assign(s, { poseUntil: 0, movingUntil: 0 });
+        s.pet.classList.remove("startle", "lean");
+        el._react(s, { at: Date.now() / 1000, action, result: "ok" });
+        return { live: s.poseUntil > Date.now(), moved: s.pet.classList.contains(move), prop: s.prop.className,
+          src: s.pet.getAttribute("src") };
+      }, [action, move]);
+      check(`react: ${stage} ${action} ok: the pet reacts (${move}), the prop ${cls}s`,
+        r.live && r.moved && r.prop.includes(cls) && r.src.includes(`/${stage}_`), JSON.stringify(r));
     }
     const after = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
@@ -10348,10 +10384,32 @@ async function main() {
     await page.waitForTimeout(150);
     await card.evaluate((el) => { el._slides[el._index].poseUntil = 0; });
   }
-  // A child is left alone (its own species poses).
+  // A child reacts too (care reactions ship A, plan section 7): the species' own pose (rung 1) or
+  // its mood frame (rung 3), with the same move the older stages have. No act poses at child.
   await rs("child");
-  const kid = await react({ action: "feed", result: "full" });
-  check("react: a child gets no stage reaction", kid.drawn === "child" && !kid.live && kid.moves.length === 0, JSON.stringify(kid));
+  const kidCases = [
+    ["a refusal turns away", { action: "feed", result: "full" }, "look", /\/child_/],
+    ["a feed munches", { action: "feed", result: "ok" }, "munch", /\/child_/],
+    ["a blanket settles", { action: "blanket", result: "ok" }, "settle", /\/child_/],
+    ["a praise hops", { action: "praise", result: "ok" }, "greethop", /\/child_/],
+  ];
+  for (const [name, entry, move, face] of kidCases) {
+    const kid = await react(entry);
+    check(`react: a child's care reacts: ${name}`,
+      kid.drawn === "child" && kid.live && kid.moves.join() === move && face.test(kid.src), JSON.stringify(kid));
+  }
+  // The mood-frame rung: a species with no pose for the action wears the stage's mood frame.
+  const rung3 = await card.evaluate((el) => {
+    const s = el._slides[el._index];
+    const sp0 = s.species;
+    s.species = { ...sp0, reactions: {} };
+    Object.assign(s, { poseUntil: 0, movingUntil: 0 });
+    el._react(s, { at: Date.now() / 1000, action: "blanket", result: "ok" });
+    const out = { src: s.pet.getAttribute("src"), live: s.poseUntil > Date.now() };
+    s.species = sp0; s.poseUntil = 0;
+    return out;
+  });
+  check("react: a child with no pose for the blanket wears child_cozy", rung3.live && /\/child_cozy_/.test(rung3.src), JSON.stringify(rung3));
   await rs(null);
   await card.evaluate((el) => { if (el.__realState) { el._state = el.__realState; delete el.__realState; } el._redraw(el._slides[el._index]); });
   // Every species: 4 moods x 3 stages load.
