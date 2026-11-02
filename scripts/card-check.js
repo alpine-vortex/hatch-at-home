@@ -4565,13 +4565,36 @@ async function main() {
         out.shared = await fetch({ kind: "soft", beat: "morning" });
         out.sharedCalls = sent.length - before;
         localStorage.setItem("hatch-shared-screen", "off");
-        // The typed step after a big day's "yes".
+        // "anything big this week?" (owner Q3 A, opp #2): "yes" asks which day, the next
+        // six as buttons; a day's tap says a yes line and opens the typed step.
         el._followOk = true;
         const entity = s.ids["sensor.life_stage"];
         sent.length = 0;
         s.queue = [];
-        el._askTextStart(s, entity);
-        s.queue.find((q) => q.ask)?.then();
+        const runAsk = () => {
+          const q = s.queue.find((x) => x.ask);
+          s.queue = s.queue.filter((x) => x !== q);
+          q?.then();
+          return q?.text;
+        };
+        s.asking = false;
+        el._ask(s, "big_day", entity);
+        const weekBox = s.screen.querySelector(".askday");
+        out.week = { buttons: [...(weekBox?.querySelectorAll("button") || [])].map((b) => b.textContent) };
+        weekBox?.querySelector('button[data-answer="yes"]')?.click();
+        out.week.which = runAsk();
+        const dayBox = s.screen.querySelector(".askday");
+        out.week.days = [...(dayBox?.querySelectorAll("button") || [])].map((b) => [b.dataset.answer, b.textContent]);
+        const ahead = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
+        out.week.want = [1, 2, 3, 4, 5, 6].map((n) => {
+          const d = ahead(n);
+          return [`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
+            ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][d.getDay()]];
+        });
+        Object.assign(s, { sayUntil: 0, sayClass: 0 });
+        dayBox?.querySelector("button")?.click();
+        out.week.reply = s.bubble.textContent;
+        out.week.what = runAsk();
         const input = s.screen.querySelector(".asktext input");
         out.box = !!input && input.maxLength === 20 && input.getAttribute("enterkeyhint") === "done";
         let leaked = 0;
@@ -4586,6 +4609,20 @@ async function main() {
         await new Promise((r) => setTimeout(r, 50));
         out.sent = sent.filter((m) => m.type === "virtual_pet/answer");
         out.kept = s.bubble.textContent;
+        // Opp #1: the big day's evening asks how it went, naming it from this browser's
+        // own copy only; how_day's buttons; "tough" goes to the server as big_how's.
+        ownCopy("big_day", "your exam");
+        out.how = { own: el._askLine("big_how") };
+        localStorage.removeItem(textKey);
+        out.how.plain = el._askLine("big_how");
+        sent.length = 0;
+        s.asking = false;
+        el._ask(s, "big_how", entity);
+        const howBox = s.screen.querySelector(".askday");
+        out.how.buttons = [...(howBox?.querySelectorAll("button") || [])].map((b) => b.textContent);
+        howBox?.querySelector('button[data-answer="tough"]')?.click();
+        out.how.sent = sent.filter((m) => m.type === "virtual_pet/answer").map((m) => [m.question, m.answer]);
+        sent.length = 0;
         out.stash = Object.keys(localStorage).filter((k) => k.startsWith("hatch-answers-"));
         out.boxGone = !s.screen.querySelector(".asktext");
         // Kept: "I'll remember" only once the server took it (critique #7).
@@ -4678,6 +4715,13 @@ async function main() {
     check("fresh E13: a soft morning says a soft line; a shared screen asks the server nothing and says nothing",
       [...SOFT, ...typeLines("soft"), "*snuggle* hi hi ♥"].includes(f1.soft[0]) && f1.shared.length === 0 && f1.sharedCalls === 0,
       JSON.stringify({ soft: f1.soft, shared: f1.shared, calls: f1.sharedCalls }));
+    check("owner Q3 opp #2: anything big this week? yes / not really; which day? the next six by name; a day's tap cheers, asks what, sends its date",
+      f1.week.buttons.join() === "yes,not really" && f1.week.which === BIG.which &&
+        JSON.stringify(f1.week.days) === JSON.stringify(f1.week.want) && BIG.yes.includes(f1.week.reply) &&
+        f1.week.what === BIG.what && f1.sent[0]?.day === f1.week.want[0][0], JSON.stringify({ week: f1.week, sent: f1.sent }));
+    check("owner Q3 opp #1: the big day's evening asks how it went (its words only from this browser), how_day's buttons, tough sent as big_how's",
+      f1.how.own === BIG.howText("your exam") && f1.how.plain === BIG.how && f1.how.buttons.join() === "great,ok,tough" &&
+        JSON.stringify(f1.how.sent) === JSON.stringify([["big_how", "tough"]]), JSON.stringify(f1.how));
     check("fresh F1: the typed step keeps HA's keys, sends yes once with the cleaned text, says it'll remember only once kept, stashes nothing; its time sends no text",
       f1.box && f1.leaked === 0 && f1.sent.length === 1 && f1.sent[0].question === "big_day" && f1.sent[0].answer === "yes" &&
         f1.sent[0].text === "my exam" && f1.kept !== BIG.kept && f1.keptOk === BIG.kept && f1.stash.length === 0 && f1.boxGone &&
@@ -8760,10 +8804,12 @@ async function main() {
     };
     const own = await favCase(false);
     const onShared = await favCase(true);
+    // Either of its two greets: they turn by the day (owner Q3 A).
+    const favGreets = [`your favourite, the ${V0.name}! ♥`, `look who it is! your ${V0.name} ♥`];
     check(`fresh F4: the favourite visitor's greet on the viewer's own screen (${V0.id})`,
-      own.text.includes(`your favourite, the ${V0.name}!`), JSON.stringify(own));
+      favGreets.some((g) => own.text.includes(g)), JSON.stringify(own));
     check("fresh F4: never the favourite greet on a shared screen",
-      !onShared.text.includes("your favourite") && onShared.text.length > 0, JSON.stringify(onShared));
+      !favGreets.some((g) => onShared.text.includes(g)) && onShared.text.length > 0, JSON.stringify(onShared));
     const asked = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       const realWS = el._hass.callWS;
@@ -8911,7 +8957,7 @@ async function main() {
       const q = s.queue.map((x) => ({ text: x.text, cls: x.cls }));
       el._state = realState;
       s.queue = [];
-      return { q, said: q.filter((x) => / came by today ♪$| went by! ♪$|^hi hi! ♪$/.test(x.text)), flag: flag() };
+      return { q, said: q.filter((x) => / came by today [♪♥]$| went by! ♪$|^hi hi! ♪$/.test(x.text)), flag: flag() };
     };
     const out = {};
     try {
@@ -8955,6 +9001,20 @@ async function main() {
       // The shooting star's own line.
       clearFlag();
       out.star = look(VSTAR);
+      // Opp #4: their favourite, in its own line; never on a shared screen.
+      const mineWas = s.mine;
+      const sharedWas = localStorage.getItem("hatch-shared-screen");
+      try {
+        s.mine = { ...(mineWas || {}), fav_visitor: V0.id };
+        clearFlag();
+        out.fav = look(V0);
+        localStorage.setItem("hatch-shared-screen", "on");
+        clearFlag();
+        out.favShared = look(V0);
+      } finally {
+        s.mine = mineWas;
+        if (sharedWas === null) localStorage.removeItem("hatch-shared-screen"); else localStorage.setItem("hatch-shared-screen", sharedWas);
+      }
       // No room: three kept catch-up lines fill the first look; the flag stays unused.
       clearFlag();
       el._seenRead = function (d) { return { ...(real.seenRead.call(this, d) || {}), said: 0 }; };
@@ -9041,6 +9101,9 @@ async function main() {
     cu.twice.said.length === 0 && !cu.playedAfter, JSON.stringify({ twice: cu.twice, playedAfter: cu.playedAfter }));
   check("visitors: catch-up: none if the visit played on this device today",
     cu.played && cu.afterVisit.said.length === 0, JSON.stringify({ played: cu.played, afterVisit: cu.afterVisit }));
+  check("owner Q3 opp #4: their favourite's missed visit is its own line on their screen; a shared screen says the usual",
+    cu.fav.said.length === 1 && cu.fav.said[0].text === `your ${V0.name} came by today ♥` &&
+      cu.favShared.said.every((x) => !x.text.startsWith("your ")), JSON.stringify({ fav: cu.fav, shared: cu.favShared }));
   check("visitors: catch-up: the shooting star says \"a shooting star went by! ♪\"",
     cu.star.said.length === 1 && cu.star.said[0].text === "a shooting star went by! ♪", JSON.stringify(cu.star));
   check("visitors: catch-up: no room after three kept lines, nothing pushed out, the flag unused",

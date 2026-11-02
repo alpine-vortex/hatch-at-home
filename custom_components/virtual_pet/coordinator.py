@@ -1874,7 +1874,6 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             rested=any(n["kind"] == "rested" for n in notes),
             pet_once=self._pet_once(user, today),
             dreamed=bool(self.state.dream and self.state.dream.get("day") == today),
-            early_tomorrow=self._early_tomorrow(user, now),
             world=self.world if self.visitors else None,
             pet_kinds=self._follow_kinds(user),
         )
@@ -1886,6 +1885,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if kind == "catchphrase":
             self._catch_ask(user)["asked"].append(today)
             self._save()
+        if kind == "big_how":
+            self.people.big_how_asked(user)  # the evening's beat (opp #1)
         if kind == "trick":
             # Once a generation-month per person, in this pet's bond (F7).
             if (bond := self.state.bonds.get(user)) is not None:
@@ -1915,19 +1916,6 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if left and bond.get("trick_asked") != self._trick_key():
             kinds.insert(0, "trick")
         return tuple(kinds)
-
-    def _early_tomorrow(self, user: str, now: float) -> bool:
-        """An early alarm tomorrow on their phone ("my day" on), at ask time, any
-        hour (review #13): no "big day tomorrow?" then."""
-        if not self.people.my_day(user):
-            return False
-        minute = self._tomorrows_alarm(
-            user, dt_util.as_local(dt_util.utc_from_timestamp(now))
-        )
-        if minute is None:
-            return False
-        usual = [m for _, m in self.people.person(user).get("alarms", [])[:-1]]
-        return P.early_alarm(minute, usual)
 
     def _phone_ask_due(self, user: str, person: dict[str, Any], today: str) -> bool:
         """Whether the pet asks this person "can I call your phone?" (top10 1a):
@@ -1979,7 +1967,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         return ask
 
     async def async_answer(
-        self, user: str, question: str, answer: str, text: Any = None
+        self,
+        user: str,
+        question: str,
+        answer: str,
+        text: Any = None,
+        day: Any = None,
     ) -> dict[str, Any] | None:
         """A remembered answer: a favourite, tonight's dream, a guess, its
         catchphrase, or a follow-up's (F1: a tough day's softer morning, a big
@@ -1994,7 +1987,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 person = self.people.data["people"].get(user, {})
                 if not P.asked_later(person, today, question):
                     raise ValueError("It didn't ask that")
-                if question == "how_day":
+                if question in ("how_day", "big_how"):
                     self.people.set_mood(user, today)  # memory only (E13)
                 elif question == "game":
                     # The choice, said back by this pet tomorrow (F6).
@@ -2003,7 +1996,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     )
                 elif question == "trick" and answer == "yes":
                     self.people.open_follow(user, "trick", today, pet=self.pet_id)
-                elif answer == "yes":  # big_day, weekend: with their words, if any
+                elif question == "big_day" and answer == "yes":
+                    # The day they picked this week (opp #2); none: nothing kept.
+                    if not P.big_day_pick(today, day):
+                        raise ValueError("Not a day this week")
+                    self.people.open_follow(user, question, today, text, day=day)
+                    kept = {"until": self.people.open_event(user)["until"]}
+                elif answer == "yes":  # weekend: with their words, if any
                     self.people.open_follow(user, question, today, text)
                     kept = {"until": self.people.open_event(user)["until"]}
             self._push_everywhere()  # their follow_at

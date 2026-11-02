@@ -847,3 +847,30 @@ Branch `crew/hatch-at-home-s2627-fresh-expand-fold-review-build`.
 - **E10** `17cb2014`: rare pair and guest. Card-check `visitors`; bench preset
   `visitors-rare` (`5568458b`).
 - **F3** `098176b1`: the promise. Node `promise.test.js`; card-check `personality`.
+- **E11** `93b496e6`: call phrasings, one a day (`notify.py`). Pytest.
+- **E12** `07a44c5e`: the first warm day and the first fog, once a season. Pytest; card-check
+  `moments`.
+- **Part 1 fixes** (on `s2627-p1`, merged here): `9fdca11f` older checks accept the
+  fresh-expand pools; `ac2d59ba` `CARD_CHECK_DAY_SHIFT` moves the card's turn day (gates
+  passed at shifts 1-6 and 9; shift 4 found the plain-pat pin, `21d170f6`); `6836ce1f` audit
+  A1-A4 (device- and day-rolled helpers pinned in `hush()`, a real 2a wake check); `389e045a`
+  audit B1, B2 (a waiting gift keeps its first-look slot; one welcome on a long-away
+  return); `ed19d9b9` audit B4 (how_day's 4 stand-in days in 7 drawn per ISO week);
+  `8f7bd413` audit B3 (the guide for players).
+- **F2** `5cfa80ca`: dream stories (the sensor's `dream` attribute, no save). Pytest;
+  card-check `moments`.
+- **F1 + E13** `12392d3a`: the follow-up store (`People`, memory-only text and mood), the
+  `virtual_pet/follow` command, the big day and the softer morning. Pytest `test_follow.py`
+  (sensor, bus, logs, diagnostics, store, Assist/LLM sources); card-check `moments`.
+- **F4** `0fa8ce88`: the favourite visitor, asked once per world. **F5-F7** `36220d75`:
+  weekend, game tomorrow, new trick, with the reconcile's F1/F2 edits and critique s2632
+  errors 1-3, 5. **Critique 4, 6-10** `00c210fc`.
+- **Owner Q1, Q2** `ca0d848f`: the typing browser's own copy of the words
+  (`hatch-followtext-<user>`, to the event's `until`), said there or on a phone or the app.
+- **Owner Q3** (opp #1, #2, #4; copy held for the FM's review): "anything big this week?"
+  Sundays and Mondays, the day picked from the next six (`day` in the answer, checked by
+  `people.big_day_pick`); the early-alarm rule is gone. The big day's evening, from 19, asks
+  "how did it go?" in the later slot (`big_how`, how_day's answers; asking it closes the
+  event, so no evening beat besides); its `{it}` comes only from the typing browser's copy.
+  The favourite visitor's missed visit is its own first-look line; its greet is two by the
+  day. Pytest; card-check `moments`, `visitors`, `types`.

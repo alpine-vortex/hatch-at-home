@@ -1483,12 +1483,16 @@ const DREAM_CALLBACK = {
 };
 // F1 big day (B7a): the question, its replies, the optional typed answer ({it}: their
 // words, cut to 20), and the due day's morning and evening lines, with the text or not.
-// Warm either way: never "you did it".
+// Warm either way: never "you did it". Asked Sundays and Mondays for the week ahead, with
+// the day picked next (owner Q3 A, opp #2); that day's evening asks how it went (opp #1).
 const BIG_DAY = {
-  q: "big day tomorrow?",
+  q: "anything big this week?",
+  which: "which day? ♪",
   yes: ["ooh! I'll cheer for you ♥"],
-  no: ["a cozy one, then ♪"],
+  no: ["a cozy week, then ♪"],
   what: "what is it?",
+  how: "how did the big day go?",
+  howText: (it) => `how did ${it} go?`,
   kept: "ok! I'll remember ♥",
   amText: [(it) => `good luck with ${it}! ♥`, (it) => `it's ${it} day! go go ♥`, (it) => `cheering you on: ${it} ♥`],
   am: ["good luck today! ♥", "big day! I'm cheering for you ♥", "you've got this today ♥"],
@@ -1503,7 +1507,10 @@ const SOFT_MORNING = ["hope today's a softer one ♥", "I'm right here today ♥
 const FAVV_LINES = {
   q: "who's your favourite visitor?",
   reply: (v) => `the ${v}! good pick ♪`,
-  greet: (v) => `your favourite, the ${v}! ♥`,
+  // Its greet, two by the day (owner Q3 A, critique gap 5), and the first look's line when
+  // it came by while they were out (opp #4): on their own screen only.
+  greet: [(v) => `your favourite, the ${v}! ♥`, (v) => `look who it is! your ${v} ♥`],
+  missed: (v) => `your ${v} came by today ♥`,
 };
 // F5 weekend (B7d): asked on Fridays; "yes" takes the big day's typed step. Monday's
 // line, with their words ({it}) or not.
@@ -1577,6 +1584,12 @@ const TYPED_TAIL = /(?:\s*(?:[.!?,;:]+|[:;=]-?[()DPpOo/|\\[\]]|<3))+$/u;
 // s2632): one key per person, {kind, it, until}, gone after its event's last day or at
 // "forget my data" here. Never on Home Assistant's disk; a restart there doesn't lose it.
 const FOLLOW_TEXT_KEY = "hatch-followtext-";
+// The big day's buttons (opp #2): a day n days from today, as the local date, and its label.
+const DAY_SHORT = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+function daysAhead(n, today = new Date()) {
+  const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 function followTextKeep(user, kind, it, until) {
   try {
     localStorage.setItem(FOLLOW_TEXT_KEY + user, JSON.stringify({ kind, it, until }));
@@ -1618,8 +1631,14 @@ const QUESTIONS = {
     options: (s) => visitorList(s.world).filter((v) => v.name).slice(0, 3).map((v) => v.id),
     label: (a, s) => visitorList(s.world).find((v) => v.id === a)?.name || a,
     reply: (a, s) => FAVV_LINES.reply(visitorList(s.world).find((v) => v.id === a)?.name || a) },
-  // F1: asked the evening before (Sun-Thu); "yes" opens the optional typed answer.
-  big_day: { q: BIG_DAY.q, answers: { yes: BIG_DAY.yes, no: BIG_DAY.no } },
+  // F1: asked Sundays and Mondays (opp #2); "yes" asks which day (the next 6, as
+  // buttons), and the day's tap opens the optional typed answer.
+  big_day: { q: BIG_DAY.q, answers: { yes: [], no: BIG_DAY.no },
+    label: (a) => (a === "no" ? "not really" : a) },
+  big_day_day: { q: BIG_DAY.which, answers: {}, options: () => [1, 2, 3, 4, 5, 6].map((n) => daysAhead(n)),
+    label: (a) => DAY_SHORT[new Date(`${a}T12:00`).getDay()], reply: () => pick(BIG_DAY.yes) },
+  // Opp #1: the big day's evening, from 19 (the server asks it): how_day's answers.
+  big_how: { q: BIG_DAY.how, answers: {} },
   // F5-F7: the weekend (Fridays; "yes" as the big day's), tomorrow's game, a new trick.
   weekend: { q: WEEKEND.q, answers: { yes: WEEKEND.yes, no: WEEKEND.no },
     label: (a) => (a === "no" ? "not really" : a) },
@@ -6265,7 +6284,9 @@ class HatchPetCard extends HTMLElement {
     const missed = !this._visitorLate(s) && this._visitorMissed(s);
     if (missed && lines.length < room && oncePerDay(`visit-${device}`, this._visitDay(s))) {
       const baby = this._babyStage(s) === "baby";
-      lines.push([baby ? "hi hi! ♪" : missed.catchup || `a ${missed.name} came by today ♪`, 4500, { cls: FLAVOUR }]);
+      // Their favourite, on their own screen, in its own line (opp #4).
+      const fav = !baby && !sharedScreen() && s.mine?.fav_visitor === missed.id && FAVV_LINES.missed(missed.name);
+      lines.push([baby ? "hi hi! ♪" : fav || missed.catchup || `a ${missed.name} came by today ♪`, 4500, { cls: FLAVOUR }]);
     }
     for (const [text, ms, opts] of lines.slice(0, FIRST_LOOK_LINES)) this._queue(s, text, ms, opts);
     // A missed day visitor comes by right after this look's first line, not after them
@@ -6360,31 +6381,32 @@ class HatchPetCard extends HTMLElement {
 
   // Their words for this beat: this browser's own copy (it typed them), else the server's
   // on a phone or the app only (owner Q2 A); else none, and the plain line is said.
-  _followIt(reply) {
+  _followIt(reply, server = true) {
     const user = this._hass?.user?.id;
     const own = user && followTextRead(user, reply.kind);
     if (own) return cleanTyped(own);
-    return phoneLike() ? cleanTyped(reply.text) : null;
+    return server && phoneLike() ? cleanTyped(reply.text) : null;
   }
 
   // A follow-up answer, fire and forget: only to a server that takes them, never on a
   // shared screen, never stashed or retried.
-  _sendFollow(s, entity, question, answer, text = null) {
+  _sendFollow(s, entity, question, answer, text = null, day = null) {
     if (!this._followOk || sharedScreen() || !entity) return Promise.resolve(false);
     const msg = { type: "virtual_pet/answer", entity_id: entity, question, answer };
     if (text) msg.text = text;
+    if (day) msg.day = day; // the big day's (opp #2)
     return this._hass.callWS(msg).then((r) => r || true, () => false);
   }
 
   // After a big day's "yes": "what is it?", then one input with "ok" and "skip". However
   // it ends (ok, skip, empty, the time, a slide switch, the tab hiding) the "yes" is sent
   // once, with the text only if there is one.
-  _askTextStart(s, entity, kind = "big_day") {
+  _askTextStart(s, entity, kind = "big_day", day = null) {
     if (!this._followOk || sharedScreen()) {
-      this._sendFollow(s, entity, kind, "yes");
+      this._sendFollow(s, entity, kind, "yes", null, day);
       return;
     }
-    const step = s.textStep = { entity, kind, sent: false, until: Date.now() + ASK_MS * 2 };
+    const step = s.textStep = { entity, kind, day, sent: false, until: Date.now() + ASK_MS * 2 };
     s.asking = true;
     (s.queue ??= []).push({ text: BIG_DAY.what, ms: ASK_MS, ask: true, cls: KEPT, perk: true, then: () => this._askText(s, step) });
   }
@@ -6437,7 +6459,7 @@ class HatchPetCard extends HTMLElement {
     // "I'll remember" only once the server kept it (a step ending past midnight is refused).
     const kind = step.kind || "big_day";
     const user = this._hass?.user?.id;
-    this._sendFollow(s, step.entity, kind, "yes", text).then((ok) => {
+    this._sendFollow(s, step.entity, kind, "yes", text, step.day).then((ok) => {
       if (ok && text && user && typeof ok.until === "string") followTextKeep(user, kind, text, ok.until);
       else if (ok && user) followTextKeep(user, kind, "", "0000-00-00"); // no words: an old copy goes
       if (ok && said && s.ids?.["sensor.life_stage"] === step.entity) this._speak(s, BIG_DAY.kept, 3500);
@@ -6824,7 +6846,7 @@ class HatchPetCard extends HTMLElement {
         const ask = reply.ask;
         if (QUESTIONS[ask] && !s.asking) {
           s.asking = true;
-          (s.queue ??= []).push({ text: QUESTIONS[ask].q, ms: ASK_MS, ask: true, cls: KEPT, perk: true, then: () => this._ask(s, ask, id) });
+          (s.queue ??= []).push({ text: this._askLine(ask), ms: ASK_MS, ask: true, cls: KEPT, perk: true, then: () => this._ask(s, ask, id) });
         }
       })
       .catch(() => {
@@ -6880,6 +6902,13 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
+  // A question's line: the big day's evening names it only from this browser's own copy
+  // (opp #1; the server's words never come with an ask).
+  _askLine(kind) {
+    const it = kind === "big_how" && this._followIt({ kind: "big_day" }, false);
+    return it ? BIG_DAY.howText(it) : QUESTIONS[kind].q;
+  }
+
   // A question with its answers as buttons (the line is already in the bubble).
   _ask(s, kind, entity = s.ids?.["sensor.life_stage"]) {
     const question = QUESTIONS[kind];
@@ -6893,7 +6922,8 @@ class HatchPetCard extends HTMLElement {
     box.setAttribute("role", "group");
     box.setAttribute("aria-label", question.q);
     const mine = this._state(s, "sensor.life_stage")?.attributes.catchphrase || "mine";
-    const answers = question.options ? question.options(s) : Object.keys(question.answers);
+    const answers = question.options ? question.options(s)
+      : Object.keys(kind === "big_how" ? QUESTIONS.how_day.answers : question.answers);
     box.classList.toggle("many", answers.length > 3);
     box.innerHTML = (question.picker?.() || "") + answers
       .map((a) => `<button data-answer="${escape(a)}">${escape(question.label?.(a, s, mine) ?? a)}</button>`).join("");
@@ -6921,10 +6951,20 @@ class HatchPetCard extends HTMLElement {
       if (!answer) return;
       this._tapped(e.target.closest("button"));
       done();
-      const lines = question.answers[answer] ?? question.answers[e.target.closest("button").dataset.answer];
+      // The big day's "yes": which day, as its own ask (opp #2); no reply line before it.
+      if (kind === "big_day" && answer === "yes") {
+        s.asking = true;
+        (s.queue ??= []).push({ text: BIG_DAY.which, ms: ASK_MS, ask: true, cls: KEPT, perk: true,
+          then: () => this._ask(s, "big_day_day", entity) });
+        this._animate(s, s.pet, "perk", 320);
+        return;
+      }
+      const howLike = kind === "how_day" || kind === "big_how"; // opp #1: how_day's replies
+      const lines = howLike ? QUESTIONS.how_day.answers[answer]
+        : question.answers[answer] ?? question.answers[e.target.closest("button").dataset.answer];
       // how_day's answers in the type's own words half the time (fresh-expand E7, Q-a).
       this._speak(s, question.reply ? question.reply(answer, s, mine)
-        : kind === "how_day" ? this._lines(s, `reply_${answer}`, pick(lines)).text : pick(lines), 4500);
+        : howLike ? this._lines(s, `reply_${answer}`, pick(lines)).text : pick(lines), 4500);
       const isCalm = calm();
       if (["great", "you"].includes(answer) && !isCalm) this._animate(s, s.pet, "greethop", 1400);
       else if (["tough", "not really"].includes(answer) && !isCalm) this._bondHearts(s);
@@ -6932,8 +6972,9 @@ class HatchPetCard extends HTMLElement {
       if (question.keep) this._keepAnswer(s, kind, answer, entity);
       // Follow-ups (F1, E13): a tough day goes to the server (memory only, a softer
       // morning tomorrow); a big day's "yes" asks what it is first. Never stashed.
-      if (kind === "how_day" && answer === "tough") this._sendFollow(s, entity, "how_day", "tough");
-      if ((kind === "big_day" || kind === "weekend") && answer === "yes") this._askTextStart(s, entity, kind);
+      if (howLike && answer === "tough") this._sendFollow(s, entity, kind, "tough");
+      if (kind === "big_day_day") this._askTextStart(s, entity, "big_day", answer);
+      if (kind === "weekend" && answer === "yes") this._askTextStart(s, entity, kind);
       if (kind === "game") this._sendFollow(s, entity, "game", answer); // F6: the choice
       if (kind === "trick" && answer === "yes") this._sendFollow(s, entity, "trick", "yes");
       if (kind === "phone" && answer === "yes") {
@@ -10172,7 +10213,7 @@ class HatchPetCard extends HTMLElement {
     const rare = !baby && (V?.guest ? VISIT_GUEST[V.guest] : V?.pair ? turnPick(PAIR_LINES, `${s.ids?.device}|pair`) : null);
     // The favourite: on the viewer's own screen, 1 visit in 2, with a hop and hearts.
     if (!baby && !rare && !sharedScreen() && s.mine?.fav_visitor === v.id && Math.random() < 0.5) {
-      this._line(s, FLAVOUR, FAVV_LINES.greet(v.name), 3000);
+      this._line(s, FLAVOUR, turnPick(FAVV_LINES.greet, `${s.ids?.device}|favv`)(v.name), 3000);
       if (!calm()) {
         this._animate(s, s.pet, "greethop", 1400);
         this._bondHearts(s);

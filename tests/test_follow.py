@@ -68,21 +68,28 @@ def test_a_typed_text_is_cleaned_and_cut():
     ("today", "asked"),
     [
         ("2026-11-01", True),  # Sunday
-        ("2026-11-02", True),
-        ("2026-11-03", True),
-        ("2026-11-04", True),
-        ("2026-11-05", True),  # Thursday
+        ("2026-11-02", True),  # Monday
+        ("2026-11-03", False),
+        ("2026-11-04", False),
+        ("2026-11-05", False),  # Thursday
         ("2026-11-06", False),  # Friday
         ("2026-11-07", False),  # Saturday
     ],
 )
-def test_a_big_day_is_asked_sunday_to_thursday(today: str, asked: bool):
+def test_anything_big_this_week_is_asked_sunday_and_monday(today: str, asked: bool):
+    """Owner Q3 A, opp #2: the week ahead, asked as it starts."""
     assert (P.follow_question({}, today) == "big_day") is asked
+
+
+def test_the_big_day_is_a_day_picked_this_week():
+    assert P.big_day_pick("2026-11-01", "2026-11-05") == "2026-11-05"
+    assert P.big_day_pick("2026-11-01", "2026-11-07") == "2026-11-07"  # 6 ahead
+    for no in ("2026-11-01", "2026-11-08", "2026-10-31", "monday", None, 5):
+        assert P.big_day_pick("2026-11-01", no) is None, no
 
 
 def test_a_big_day_ask_is_weekly_capped_and_never_while_open():
     person: dict[str, Any] = {}
-    assert P.follow_question(person, "2026-11-01", early_tomorrow=True) is None
     P.mark_asked(person, "2026-11-01", 18, "big_day")
     assert person["asked"]["later_kind"] == "big_day"
     assert person["follow_asked"] == ["2026-11-01"]
@@ -127,14 +134,13 @@ def test_a_follow_up_takes_the_slot_but_never_the_rotations_own_how_day():
         near_bed = ask(asked_all(), today, to_bed_minutes=60)  # a dream askable now
         if own == "how_day":
             assert got == near_bed == "how_day", today  # keeps its evening
-        elif day.weekday() in (6, 0, 1, 2, 3):
+        elif day.weekday() in (6, 0):
             assert got == near_bed == "big_day", today
         elif day.weekday() == 4:
             assert got == near_bed == "weekend", today
         else:
-            assert got in (None, "how_day"), today  # Saturday: nothing to follow
+            assert got in (None, "how_day"), today  # nothing of the house's to follow
             assert ask(asked_all(), today, pet_kinds=("game",)) == "game", today
-        assert ask(asked_all(), today, early_tomorrow=True) != "big_day"
         assert ask(asked_all(), today, hour=15) not in P.FOLLOW_QUESTIONS
 
 
@@ -169,7 +175,8 @@ def test_the_follow_ups_are_tried_in_order_each_weekly():
     person: dict[str, Any] = {}
     kinds = ("trick", "game")
     assert P.follow_question(person, "2026-11-06", pet_kinds=kinds) == "weekend"
-    assert P.follow_question(person, "2026-11-05", pet_kinds=kinds) == "big_day"
+    assert P.follow_question(person, "2026-11-02", pet_kinds=kinds) == "big_day"
+    assert P.follow_question(person, "2026-11-05", pet_kinds=kinds) == "trick"
     assert P.follow_question(person, "2026-11-07", pet_kinds=kinds) == "trick"
     assert P.follow_question(person, "2026-11-07", pet_kinds=("game",)) == "game"
     assert P.follow_question(person, "2026-11-07") is None  # no pet's own
@@ -390,16 +397,25 @@ async def test_a_big_day_end_to_end_keeps_its_words_to_itself(
     people.person(ada.id)["asked"] = {"day": "2026-11-01", "later": True}
     P.mark_asked(people.person(ada.id), "2026-11-01", 19, "big_day")
     # A wrong-typed and an over-long text: no log record holds them.
-    msg = await answer(client, "big_day", "yes", text={"secret": "zebra-kite"})
+    # The big day is a day picked this week (opp #2): none, or not this week, refused.
+    for day in ({}, {"day": "2026-11-01"}, {"day": "2026-11-09"}):
+        msg = await answer(client, "big_day", "yes", text="quokka", **day)
+        assert msg["error"]["code"] == "not_asked" and people._texts == {}
+    tomorrow = {"day": "2026-11-02"}
+    msg = await answer(
+        client, "big_day", "yes", text={"secret": "zebra-kite"}, **tomorrow
+    )
     assert msg["success"] and people._texts == {}
-    msg = await answer(client, "big_day", "yes", text="quokka" * 40)
+    msg = await answer(client, "big_day", "yes", text="quokka" * 40, **tomorrow)
     assert msg["success"] and people._texts == {ada.id: "quokka" * 3 + "qu"}
-    msg = await answer(client, "big_day", "yes", text=SECRET)
+    msg = await answer(client, "big_day", "yes", text=SECRET, **tomorrow)
     assert msg["success"] and people._texts == {ada.id: SAID}
     # The typing browser learns how long to keep its own copy (owner Q1 A), never more.
     assert msg["result"] == {"until": people.open_event(ada.id)["until"]}
     # A shared screen's text is refused (the yes stands).
-    msg = await answer(theirs, "big_day", "yes", text="pelican", shared=True)
+    msg = await answer(
+        theirs, "big_day", "yes", text="pelican", shared=True, **tomorrow
+    )
     assert msg["error"]["code"] == "not_asked"  # nobody asked them
     # Nowhere but the reply to them.
     await hass.async_block_till_done()
@@ -426,6 +442,45 @@ async def test_a_big_day_end_to_end_keeps_its_words_to_itself(
     assert await follow(client) == {}
     for secret in ("driving", "zebra", "quokka", "pelican"):
         assert secret not in caplog.text and secret not in repr(bus)
+
+
+async def test_the_big_days_evening_asks_how_it_went_in_place_of_its_beat(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    freezer: FrozenDateTimeFactory,
+    now: float,
+):
+    """Opp #1: on the picked day, from 19, the later question is "how did it go?";
+    asking it closes the event (no evening beat besides), "tough" is how_day's."""
+    ada, token = await a_user(hass)
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    config = await setup(hass)
+    pet = config.runtime_data
+    people = pet.people
+    client = await hass_ws_client(hass, token)
+    P.mark_asked(people.person(ada.id), "2026-11-01", 19, "big_day")
+    msg = await answer(client, "big_day", "yes", text=SECRET, day="2026-11-04")
+    assert msg["result"] == {"until": "2026-11-04"}
+    event = people.open_event(ada.id)
+    assert (event["due"], event["until"]) == ("2026-11-04", "2026-11-04")
+    person = people.person(ada.id)
+    assert ask(person, "2026-11-03", hour=20) != "big_how"  # not its day
+    assert ask(person, "2026-11-04", hour=18) != "big_how"  # not yet evening
+    assert ask(person, "2026-11-04", hour=19) == "big_how"
+    event["said"].append("evening")
+    assert ask(person, "2026-11-04", hour=20) != "big_how"  # the beat came first
+    event["said"].clear()
+    P.mark_asked(person, "2026-11-04", 19, "big_how")
+    people.big_how_asked(ada.id)
+    assert people.open_event(ada.id) is None and people._texts == {}
+    freezer.move_to("2026-11-04 19:30:00+00:00")
+    assert await follow(client) == {}  # no evening beat besides
+    for kept_on_the_card in ("great", "ok"):
+        msg = await answer(client, "big_how", kept_on_the_card)
+        assert msg["error"]["code"] == "invalid_answer"
+    assert (await answer(client, "big_how", "tough"))["success"]
+    assert people._moods == {ada.id: {"kind": "soft", "day": "2026-11-04"}}
 
 
 async def test_a_tough_day_is_a_softer_morning_and_nothing_else(

@@ -161,16 +161,20 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     sleep well?", "how was your day?" (always after you come back from work or
     school), "what should I dream about tonight?" (the next morning everyone hears the
     dream's story, and you hear it was your idea), "rain or sun tomorrow?" (judged
-    the next evening, no score), "big day tomorrow?" (Sunday to Thursday, at most
-    once a week, not before an early alarm; "yes" lets you type what it is, and the
-    pet cheers you on in the morning and is there for you in the evening), and once
-    each "what's your favourite weather?" and "...season?". After a tough day it's a
+    the next evening, no score), "anything big this week?" (Sunday or Monday, at
+    most once a week; "yes" asks which day, then lets you type what it is, and on that
+    day the pet cheers you on in the morning and, from 7 pm, asks how it went or is
+    there for you), and once
+    each "what's your favourite weather?" and "...season?", and "who's your favourite
+    visitor?" once in each world (its visitors as buttons). After a tough day it's a
     little softer with you the next morning. It remembers favourites, tonight's
     dream, your guess and a big day (see Privacy); the rest of your answers stay on
     your screen;
   - remembers your favourites: "it's snowing, your favourite!! ❄", "it's autumn, your
     favourite! ♥" once a season (no season talk in the tropics), "Thanksgiving in
-    your favourite season! ♥";
+    your favourite season! ♥"; your favourite visitor gets its own hello on your
+    screen now and then ("your favourite, the chickadee! ♥"), and if it came by
+    while you were out, "your chickadee came by today ♥";
   - says what it's like out there when you come home ("it's wet out there! come
     get cozy ☂", "brr, it looks cold out there!");
   - greets you sleepily if you look in before sunrise ("mmh... you're up before the
@@ -524,8 +528,8 @@ erase everyone's, an admin can stop Home Assistant and delete
 
 **Follow-ups.** Answer "tough" to "how was your day?" and the pet keeps only the
 date, in memory, to be a little softer the next morning on your own screen; a restart
-forgets it, and "great" or "ok" never leave the card. Say "yes" to "big day tomorrow?"
-or "anything fun this weekend?" and it keeps that day (the date, not what it is) for a
+forgets it, and "great" or "ok" never leave the card. Say "yes" to "anything big this
+week?" (and pick the day) or "anything fun this weekend?" and it keeps that day (the date, not what it is) for a
 week at most, to wish you luck or welcome you back. "what should we play tomorrow?" and
 "should I learn a new trick?" keep only your pick, for that pet. What you type in "what
 is it?" (optional, 20 characters at most) is kept in Home Assistant's memory only (never

@@ -41,7 +41,7 @@ const COPY_TABLES = {
   DREAM_STORIES: {},
   DREAM_TAIL: {},
   DREAM_CALLBACK: {},
-  BIG_DAY: { fill: "it", asks: ["q", "what"] },
+  BIG_DAY: { fill: "it", asks: ["q", "which", "what", "how", "howText"] },
   SOFT_MORNING: {},
   FAVV_LINES: { fill: "visitor", asks: ["q"] },
   WEEKEND: { fill: "it", asks: ["q"] },

@@ -346,6 +346,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         # failure (logged at ERROR with the value) can never echo it; the handler
         # takes only a string, cleans and cuts it (people.clean_text).
         vol.Optional("text"): object,
+        # "anything big this week?": the day they picked (opp #2), an ISO date.
+        vol.Optional("day"): cv.string,
         vol.Optional("shared"): bool,
     }
 )
@@ -377,7 +379,7 @@ async def websocket_answer(
     text = None if msg.get("shared") else msg.get("text")
     try:
         kept = await pet.async_answer(
-            connection.user.id, msg["question"], msg["answer"], text
+            connection.user.id, msg["question"], msg["answer"], text, msg.get("day")
         )
     except ValueError:
         connection.send_error(msg["id"], "not_asked", "It didn't ask that")
