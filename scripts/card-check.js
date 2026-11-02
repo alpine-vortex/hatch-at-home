@@ -3281,6 +3281,10 @@ async function main() {
     // ha-signals H4: the robot vacuum; robot_out shows the stand-in (fx-robot) and it goes again.
     ["robot_out", {}, "the robot's out! vroom|here it comes! \\*hop hop\\*|vroom vroom! ♪"],
     ["robot_home", {}, "the robot's back home|bye, robot! nap well"],
+    // ha-signals H6: a machine finished; the washer's line and suds, the dryer's line and swirl, a bare machine.
+    ["appliance_done", { kind: "washer" }, "the washer's finished! ♪"],
+    ["appliance_done", { kind: "dryer" }, "the dryer's done! warm socks"],
+    ["appliance_done", { kind: "machine" }, "ding! a machine finished|something's done!"],
   ]) {
     // Each from a quiet bubble: under 2a a kept line holds the next one back.
     await card.evaluate((el) => Object.assign(el._slides[el._index], { sayUntil: 0, sayClass: 0, sayEntry: null, queue: [] }));
@@ -3299,6 +3303,11 @@ async function main() {
       const fx = await card.evaluate((el) => [...el._slides[el._index].screen.classList].filter((c) => c.startsWith("fx-")));
       check(`moments: the house answering (${extra.request}) shows ${extra.request === "fan" ? "fx-cool" : "fx-heat"}`,
         fx.join() === (extra.request === "fan" ? "fx-cool" : "fx-heat"), fx.join());
+    }
+    if (type === "appliance_done") {
+      const fx = await card.evaluate((el) => [...el._slides[el._index].screen.classList].filter((c) => c.startsWith("fx-")));
+      const want = { washer: "fx-suds", dryer: "fx-tumble", machine: "fx-suds" }[extra.kind];
+      check(`moments: appliance_done (${extra.kind}) shows ${want}`, fx.join() === want, fx.join());
     }
     if (type === "robot_out" || type === "robot_home") {
       const robot = () => card.evaluate((el) => el._slides[el._index].screen.classList.contains("fx-robot"));

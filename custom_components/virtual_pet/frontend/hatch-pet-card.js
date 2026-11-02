@@ -1537,13 +1537,18 @@ const TRICK_ASK = {
 // HOUSE_LINES (ha-signals H3, owner-approved set D, 2026-11-01): the house answered the
 // pet's request, not a person. heating = the blanket ask, cooling = the fan ask; bits are
 // the evening's "today" and the away note's phrases. robot_out / robot_home: a robot
-// vacuum started a run / went home (H4). No PERSONA keys: every type says these.
+// vacuum started a run / went home (H4). washer / dishwasher / dryer / machine: a
+// machine finished its cycle (H6, plan copy F). No PERSONA keys: every type says these.
 const HOUSE_LINES = {
   heating: ["the heater's on! toasty ♪", "ooh, the house heard me! ♥", "warm air! that's better ♪"],
   cooling: ["ahh, a breeze! that's better ♪", "the house heard me! ahh ♪", "cool air! much better ♪"],
   robot_out: ["ooh, the robot's out! vroom", "here it comes! *hop hop*", "vroom vroom! ♪"],
   robot_home: ["the robot's back home ♪", "bye, robot! nap well ♪"],
-  bits: { heating: "felt the house warm up", cooling: "felt the house cool down", robot: "watched the robot clean" },
+  washer: ["the washer's finished! ♪"],
+  dishwasher: ["the dishes are all done! ♪"],
+  dryer: ["the dryer's done! warm socks ♪"],
+  machine: ["ding! a machine finished ♪", "ooh, something's done! ♪"],
+  bits: { heating: "felt the house warm up", cooling: "felt the house cool down", robot: "watched the robot clean", machine: "heard a machine finish" },
 };
 // --- end fresh-expand copy ---
 const HOUSE_REQUEST = { blanket: "heating", fan: "cooling" }; // the request the house answered
@@ -1928,6 +1933,7 @@ const MOMENT_CLASS = {
   sunrise: FLAVOUR, sunset: FLAVOUR, weather: FLAVOUR, forecast: FLAVOUR, news: FLAVOUR,
   house_answered: FLAVOUR, // {request}: the heating or the fan came on for the pet (H3)
   robot_out: FLAVOUR, robot_home: FLAVOUR, // a robot vacuum started / ended a run (H4)
+  appliance_done: FLAVOUR, // {kind}: a washer, dryer or dishwasher finished (H6)
   pooped: FLAVOUR, tv_off_late: FLAVOUR, watching: FLAVOUR, listening: FLAVOUR,
   tv_on: FLAVOUR, music_on: FLAVOUR, // public: no line (the channel's watching/listening says it)
   found: FLAVOUR, // a find went in the basket: the away note's "found <a find>" (V8); no line
@@ -3237,6 +3243,22 @@ const STYLE = `
     animation: robot-cross 6s linear both, robot-blink 1s steps(1) infinite; }
   @keyframes robot-cross { from { translate: -30px 0; } to { translate: calc(var(--robot-w, 400px) + 30px) 0; } }
   @keyframes robot-blink { 50% { background-color: #444; background-image: none; } }
+  /* A machine finished (H6): suds rise beside the pet (the bath scene's prop_bubbles, half size, reused
+     as is) for washer and dishwasher; dryer is a warm swirl, a CSS stand-in for house_tumble. 2.5 s. */
+  .screen.fx-suds::before, .screen.fx-suds::after { content: ""; position: absolute; bottom: 14%; z-index: 3; width: 38px; height: 64px;
+    background: center bottom / contain no-repeat; image-rendering: pixelated; pointer-events: none;
+    animation: suds-rise 2.5s ease-out both; }
+  .screen.fx-suds::before { left: 72%; background-image: url(${BASE}/ui/prop_bubbles_1.png?v=${VERSION}); }
+  .screen.fx-suds::after { left: 81%; background-image: url(${BASE}/ui/prop_bubbles_2.png?v=${VERSION}); animation-delay: .3s; }
+  @keyframes suds-rise { 0% { opacity: 0; transform: translateY(14px); } 15%, 70% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-34px); } }
+  .screen.fx-tumble::after { content: ""; position: absolute; left: 74%; bottom: 22%; z-index: 3; width: 48px; height: 48px;
+    border-radius: 50%; pointer-events: none; animation: tumble-spin 2.5s ease-in-out both;
+    background: radial-gradient(circle at 70% 30%, #e86a8a 0 5px, transparent 6px),
+      conic-gradient(from 0deg, rgba(255,200,120,.85), rgba(255,160,90,.2), rgba(255,200,120,.85)); }
+  @keyframes tumble-spin { 0% { opacity: 0; transform: rotate(0) scale(.5); } 15%, 70% { opacity: 1; }
+    100% { opacity: 0; transform: rotate(540deg) scale(1.1); } }
+  @media (prefers-reduced-motion: reduce) { .screen.fx-suds::before, .screen.fx-suds::after, .screen.fx-tumble::after { animation: none; opacity: .7; } }
   @media (prefers-reduced-motion: reduce) { .screen.fx-robot::before { animation: none; left: 40%; } }
   /* Water worlds: lighter streaks, and rings where the drops land. */
   .screen.raining.watery .rain { opacity: .6; }
@@ -6780,6 +6802,7 @@ class HatchPetCard extends HTMLElement {
       trait_learned: "learned something new", first_snow: "saw the first snow",
       first_warm: "felt the first warm day", first_fog: "saw the first fog", // E12 Se-a
       robot_out: HOUSE_LINES.bits.robot, robot_home: HOUSE_LINES.bits.robot, // H4
+      appliance_done: HOUSE_LINES.bits.machine, // H6
     };
     const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow", rainbow: "saw a rainbow", sun_out: "sunbathed" };
     const CARE_BITS = { feed: "had a meal", snack: "had a snack", play: "played", game: "played a game", clean: "had a bath", chore_treat: "got a chore treat" };
@@ -7377,6 +7400,16 @@ class HatchPetCard extends HTMLElement {
         speak(pick(HOUSE_LINES[m.type]), 4500, () => {
           this._animate(s, s.pet, "perk", 320);
           if (m.type === "robot_out") this._robotFx(s);
+        });
+        break;
+      }
+      case "appliance_done": { // a washer, dryer or dishwasher finished its cycle (H6)
+        if (s.game) break;
+        const kind = ["washer", "dishwasher", "dryer"].includes(m.kind) ? m.kind : "machine"; // only the kind comes in
+        const lines = HOUSE_LINES[kind];
+        speak(pick(lines), 4500, () => {
+          this._animate(s, s.pet, "perk", 320);
+          this._houseFx(s, kind === "dryer" ? "fx-tumble" : "fx-suds");
         });
         break;
       }
