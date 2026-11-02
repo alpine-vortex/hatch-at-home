@@ -5990,16 +5990,21 @@ class HatchPetCard extends HTMLElement {
     // are budgeted on the server from what's queued here).
     const lines = [];
     const mark = this._seenRead(device);
-    // Back after two days or more (E8 A-a): a hop and a welcome first, the news before the
-    // care misses, and no away note (this takes its slot). Once per return: seen is rewritten.
-    const longAway = !!mark?.seen && Date.now() - mark.seen >= LONG_AWAY_MS;
-    if (longAway) {
-      lines.push([turnPick(WELCOME_BACK, `${device}|welcome`), 4500]);
-      if (!calm()) this._animate(s, s.pet, "greethop", 1400);
-    }
+    // The fresh-expand extras below (the cure, L10, the trick, the promise) leave a waiting
+    // gift its slot (audit 2026-11-01b B1): the gift's place in the look stays as it was.
+    const extras = FIRST_LOOK_LINES - (this._giftDue(s) ? 1 : 0);
     const home = (s.privateMoments || []).find((m) => m.type === "friend_home");
     const at = home && new Date(home.at).getTime();
-    if (at && !sharedScreen() && Date.now() - at < FRIEND_WELCOME_MS && this._welcomeDue(s, at)) {
+    const homeWelcome = at && !sharedScreen() && Date.now() - at < FRIEND_WELCOME_MS && this._welcomeDue(s, at);
+    // Back after two days or more (E8 A-a): a hop and a welcome first, the news before the
+    // care misses, and no away note (this takes its slot). Once per return: seen is rewritten.
+    // A close friend's own "welcome home" says it instead (one welcome, room for the news).
+    const longAway = !!mark?.seen && Date.now() - mark.seen >= LONG_AWAY_MS;
+    if (longAway) {
+      if (!homeWelcome) lines.push([turnPick(WELCOME_BACK, `${device}|welcome`), 4500]);
+      if (!calm()) this._animate(s, s.pet, "greethop", 1400);
+    }
+    if (homeWelcome) {
       // A close friend who came home while the card was closed: welcome them first.
       const bond = this._bond(s);
       const first = short(this._hass.user?.name?.trim().split(/\s+/)[0]);
@@ -6034,7 +6039,7 @@ class HatchPetCard extends HTMLElement {
     const wish = !stale && stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
     if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);
     // The day after a cure seen here (E4 M-a): after the wish, before the away note.
-    const cured = lines.length < FIRST_LOOK_LINES && this._curedLine(s);
+    const cured = lines.length < extras && this._curedLine(s);
     if (cured) lines.push([cured, 4500]);
     // What happened while you were out comes after what's new (fresh-moment 2, owner Q2).
     // From TODAY_FROM_HOUR, once a day here: a line about its day, in the away note's place.
@@ -6046,19 +6051,19 @@ class HatchPetCard extends HTMLElement {
       if (note) lines.push([note, 5500, { away: true }]);
     }
     // A best friend's own screen, at most once a week (E8 B-a).
-    const fav = lines.length < FIRST_LOOK_LINES && this._favLine(s);
+    const fav = lines.length < extras && this._favLine(s);
     if (fav) {
       lines.push([fav, 4500]);
       this._chirp(s, "win");
     }
     // An adult's new trick, the first look of the month it learns one (E8 LS-a).
-    const trick = lines.length < FIRST_LOOK_LINES && this._trickNew(s, stage);
+    const trick = lines.length < extras && this._trickNew(s, stage);
     if (trick) {
       lines.push([turnPick(TRICK_LINES, `${device}|trick`), 4500]);
       if (!calm()) setTimeout(() => this._trickMove(s, trick), 600);
     }
     // The pet's own promise (F3): day 0 says it, day 4 (to 7) the payoff, with the move.
-    const promise = lines.length < FIRST_LOOK_LINES && this._promiseLook(s);
+    const promise = lines.length < extras && this._promiseLook(s);
     if (promise) {
       lines.push([promise.line, 4500]);
       if (promise.move) setTimeout(() => this._promiseMove(s, promise.move), 600);
