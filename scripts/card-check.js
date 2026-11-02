@@ -523,6 +523,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   check("shell: use is labelled for the tile on the shell, the world's own as such",
     camoAria === "use camo shell" && ownAria === "use the world's own shell", JSON.stringify([camoAria, ownAria]));
   // ...and survives a hass update: a mood tick, then the sun going down and up.
+  const preTick = await look(); // the list's scroll now (the taps above moved it)
   const sun = await evaluate(() => { const st = document.querySelector("home-assistant").hass.states["sun.sun"]; return { state: st.state, attributes: st.attributes }; });
   await inject(a.entity.replace("life_stage", "mood"), { attributes: { cc_tick: Date.now() } });
   await page.waitForTimeout(500);
@@ -533,8 +534,8 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await inject("sun.sun", sun);
   await page.waitForTimeout(300);
   check("shell: the preview survives a mood tick and the sun's change, and the list doesn't redraw",
-    [ticked, sunned].every((l) => l.finish === "finish-camo" && l.sel === "camo" && l.picker && l.scroll === camo.scroll),
-    JSON.stringify({ ticked: ticked.finish, sunned: sunned.finish, scroll: [camo.scroll, ticked.scroll, sunned.scroll] }));
+    [ticked, sunned].every((l) => l.finish === "finish-camo" && l.sel === "camo" && l.picker && l.scroll === preTick.scroll),
+    JSON.stringify({ ticked: ticked.finish, sunned: sunned.finish, scroll: [preTick.scroll, ticked.scroll, sunned.scroll] }));
 
   // Leaving without saving puts the shell back, by every way out.
   const reverted = (l) => l.finish === ownClass(a) && !l.picker && l.preview === "none";
@@ -7348,7 +7349,7 @@ async function main() {
     const button = () => s.status.querySelector(".bell.forgetme");
     out.label = button()?.closest(".row")?.textContent.trim();
     out.aria = button()?.getAttribute("aria-label");
-    out.order = [...s.status.querySelectorAll(".row")].map((r) => r.children[1]?.textContent)
+    out.order = [...s.status.querySelectorAll(".row")].map((r) => r.children[0]?.textContent) // a sheet row: label first (no icon slot, F5)
       .filter((t) => ["baby talk", "my data", "sounds here"].includes(t)).join();
     const sent = [];
     const realWS = el._hass.callWS.bind(el._hass);
