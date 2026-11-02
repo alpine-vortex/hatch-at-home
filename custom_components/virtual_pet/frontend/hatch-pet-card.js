@@ -1534,7 +1534,16 @@ const TRICK_ASK = {
   later: ["ok! another time ♪"],
   shown: ["I learned it! look ♪", "you said I should! ta-da ♪"],
 };
+// HOUSE_LINES (ha-signals H3, owner-approved set D, 2026-11-01): the house answered the
+// pet's request, not a person. heating = the blanket ask, cooling = the fan ask; bits are
+// the evening's "today" and the away note's phrases. No PERSONA keys: every type says these.
+const HOUSE_LINES = {
+  heating: ["the heater's on! toasty ♪", "ooh, the house heard me! ♥", "warm air! that's better ♪"],
+  cooling: ["ahh, a breeze! that's better ♪", "the house heard me! ahh ♪", "cool air! much better ♪"],
+  bits: { heating: "felt the house warm up", cooling: "felt the house cool down" },
+};
 // --- end fresh-expand copy ---
+const HOUSE_REQUEST = { blanket: "heating", fan: "cooling" }; // the request the house answered
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
 // types are partners here, or the same type, are kindred. On KINDRED_ODDS of their
@@ -1914,6 +1923,7 @@ const MOMENT_CLASS = {
   call_answered: BEAT, woke_up: BEAT, fell_asleep: BEAT, good_morning: BEAT, discipline_miss: BEAT,
   became_sick: BEAT, someone_home: BEAT,
   sunrise: FLAVOUR, sunset: FLAVOUR, weather: FLAVOUR, forecast: FLAVOUR, news: FLAVOUR,
+  house_answered: FLAVOUR, // {request}: the heating or the fan came on for the pet (H3)
   pooped: FLAVOUR, tv_off_late: FLAVOUR, watching: FLAVOUR, listening: FLAVOUR,
   tv_on: FLAVOUR, music_on: FLAVOUR, // public: no line (the channel's watching/listening says it)
   found: FLAVOUR, // a find went in the basket: the away note's "found <a find>" (V8); no line
@@ -3205,6 +3215,16 @@ const STYLE = `
   .screen.raining .rain { display: block; }
   .screen.raining .bg { filter: brightness(.82) saturate(.75); }
   @keyframes rainfall { to { background-position: -10px 40px; } }
+  /* The house answers (H3): heat shimmer / cool wisps for 2.5 s. A stand-in for the art. */
+  .screen.fx-heat::after, .screen.fx-cool::after { content: ""; position: absolute; inset: 0; z-index: 3;
+    pointer-events: none; animation: house-fx 2.5s ease-in-out both; }
+  .screen.fx-heat::after { background: repeating-linear-gradient(0deg, rgba(255,170,90,.0) 0 7px,
+    rgba(255,150,60,.5) 7px 12px); background-size: 100% 22px; }
+  .screen.fx-cool::after { background: repeating-linear-gradient(100deg, rgba(200,235,255,0) 0 12px,
+    rgba(210,240,255,.6) 12px 16px); background-size: 40px 100%; }
+  @keyframes house-fx { 0% { opacity: 0; transform: translateY(6px); } 8%, 70% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-10px); } }
+  @media (prefers-reduced-motion: reduce) { .screen.fx-heat::after, .screen.fx-cool::after { animation: none; opacity: .5; } }
   /* Water worlds: lighter streaks, and rings where the drops land. */
   .screen.raining.watery .rain { opacity: .6; }
   .screen.raining.watery .rain::after { content: ""; position: absolute; inset: 0;
@@ -6753,7 +6773,8 @@ class HatchPetCard extends HTMLElement {
         }
         continue;
       }
-      add(m.type === "weather" ? WEATHER_BITS[m.change] : MOMENT_BITS[m.type]);
+      add(m.type === "weather" ? WEATHER_BITS[m.change]
+        : m.type === "house_answered" ? HOUSE_LINES.bits[HOUSE_REQUEST[m.request]] : MOMENT_BITS[m.type]);
     }
     for (const e of care ? [...(lastCare.log || [])].reverse() : []) {
       if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) add(CARE_BITS[e.action]);
@@ -7146,6 +7167,13 @@ class HatchPetCard extends HTMLElement {
     return "";
   }
 
+  // Heat shimmer (fx-heat) or cool wisps (fx-cool) over the screen for 2.5 s as the house
+  // answers: a CSS stand-in until the art (house_heat, house_cool) lands.
+  _houseFx(s, cls) {
+    s.screen.classList.add(cls);
+    setTimeout(() => s.screen.classList.remove(cls), 2500);
+  }
+
   _sparkle(s) {
     const ring = document.createElement("span");
     ring.className = "burst big";
@@ -7301,6 +7329,16 @@ class HatchPetCard extends HTMLElement {
           if (m.change === "rainbow" || m.change === "snow_started") this._sparkle(s);
           if (m.change === "cold") this._animate(s, s.pet, "sulk", 800);
           else this._look(s, 2500);
+        });
+        break;
+      }
+      case "house_answered": { // the heating (cooling) came on for a chilly (warm) pet (H3)
+        if (s.game) break;
+        const kind = HOUSE_REQUEST[m.request];
+        if (!kind) break;
+        speak(pick(HOUSE_LINES[kind]), 4500, () => {
+          this._animate(s, s.pet, "perk", 320);
+          this._houseFx(s, kind === "heating" ? "fx-heat" : "fx-cool");
         });
         break;
       }

@@ -3275,6 +3275,9 @@ async function main() {
     ["weather", { change: "cold", temperature: -12 }, "−12°"],
     ["weather", { change: "rainbow" }, "rainbow"],
     ["forecast", { when: "tomorrow", kind: "warmer", high: 72 }, "warmer tomorrow: 72°"],
+    // ha-signals H3: the house answered; a line from the pool (set D), the effect class on.
+    ["house_answered", { request: "blanket" }, "heater's on! toasty|the house heard me! ♥|warm air! that's better"],
+    ["house_answered", { request: "fan" }, "ahh, a breeze|the house heard me! ahh|cool air! much better"],
   ]) {
     // Each from a quiet bubble: under 2a a kept line holds the next one back.
     await card.evaluate((el) => Object.assign(el._slides[el._index], { sayUntil: 0, sayClass: 0, sayEntry: null, queue: [] }));
@@ -3289,6 +3292,11 @@ async function main() {
     await page.waitForTimeout(500);
     const said = await bubble();
     check(`reacts to ${type}`, new RegExp(expect).test(said), said);
+    if (type === "house_answered") {
+      const fx = await card.evaluate((el) => [...el._slides[el._index].screen.classList].filter((c) => c.startsWith("fx-")));
+      check(`moments: the house answering (${extra.request}) shows ${extra.request === "fan" ? "fx-cool" : "fx-heat"}`,
+        fx.join() === (extra.request === "fan" ? "fx-cool" : "fx-heat"), fx.join());
+    }
     await shot(`05-${type}`);
     await page.waitForTimeout(500);
   }

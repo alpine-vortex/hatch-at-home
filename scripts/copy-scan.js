@@ -47,6 +47,7 @@ const COPY_TABLES = {
   WEEKEND: { fill: "it", asks: ["q"] },
   GAME_TOMORROW: { asks: ["q"] },
   TRICK_ASK: { asks: ["q"] },
+  HOUSE_LINES: {},
 };
 
 function lines(value, path, out) {
