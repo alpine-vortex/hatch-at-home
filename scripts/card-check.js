@@ -381,7 +381,8 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     }
     const seen = view === "status" ? [...s.status.querySelectorAll(".row")]
       .filter((r) => /^(would like|wish|hunger|happy|energy)/.test(r.children[1]?.textContent || ""))
-      .map((r) => ({ k: r.children[1].textContent, ok: r.getBoundingClientRect().bottom <= sr.bottom + 1 })) : [];
+      .map((r) => ({ k: `${r.children[1].textContent} ${Math.round(r.getBoundingClientRect().bottom)}>${Math.round(sr.bottom)}`,
+        ok: r.getBoundingClientRect().bottom <= sr.bottom + 1 })) : [];
     return { n: ctl.length, small, overlap, hidden: seen.filter((x) => !x.ok).map((x) => x.k), rows: seen.length,
       posTab: ctl.filter((c) => Number(c.tab) > 0).length, scroll: s.status.scrollTop };
   }, view);
@@ -2833,7 +2834,9 @@ async function main() {
       put("child", gen + 1);
       await settle();
       out.child = closed();
-      await reopen("baby");
+      await reopen(); // a new generation always starts as an egg; the sheet stays open as it turns baby
+      put("baby", gen + 1);
+      await settle();
       out.baby = isOpen();
       put("baby", gen + 2);
       await settle();
@@ -2871,9 +2874,11 @@ async function main() {
       expire?.[0]();
       out.expires = !s.layAt;
       // A pet change drops the wait.
-      await lay();
-      el._forget(s);
-      out.petChange = !s.layAt && closed();
+      const other = el._buildSlide(); // a slide that now shows another pet: _forget on one of its own
+      other.layAt = { generation: gen, at: Date.now() };
+      other.nameSheet = true;
+      el._forget(other);
+      out.petChange = !other.layAt && !other.nameSheet;
       // The status row: on an egg and a baby, not a child; "change" opens the sheet, keep goes back to the page.
       const row = async (stage) => {
         put(stage, gen);
