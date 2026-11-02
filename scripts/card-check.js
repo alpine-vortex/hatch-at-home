@@ -4612,7 +4612,7 @@ async function main() {
       const out = {};
       const base = { follow_at: ["look"] };
       const run = async (mine, extra = {}) => {
-        Object.assign(s, { mine, lookedFirst: true, asleep: false, queue: [], following: false, asking: false, game: false }, extra);
+        Object.assign(s, { mine, lookedFirst: true, asleep: false, queue: [], following: false, asking: false, game: false, followRetry: 0 }, extra);
         const n = calls.length;
         el._followEvening(s);
         await new Promise((r) => setTimeout(r, 20));
@@ -4628,6 +4628,8 @@ async function main() {
         mode = "deferred"; // the server holds the evening for an open question
         out.deferred = await run(eve);
         out.deferredMarker = s.followEve === undefined;
+        // The deferred try waits FOLLOW_RETRY_MS: the next tick doesn't call again.
+        out.backoff = await run(eve, { followRetry: s.followRetry });
         mode = "fail";
         out.failed = await run(eve);
         out.failedMarker = s.followEve === undefined;
@@ -4650,12 +4652,12 @@ async function main() {
         el._hass.callWS = realWS;
         el._channelHeard = real.heard;
         Object.assign(s, { mine: real.mine, asking: real.asking, game: real.game, lookedFirst: real.lookedFirst,
-          asleep: real.asleep, queue: real.queue, followEve: real.eve, following: real.following });
+          asleep: real.asleep, queue: real.queue, followEve: real.eve, following: real.following, followRetry: 0 });
       }
       return out;
     });
-    check("audit 0.43.0 F-01: the evening follow-up isn't fetched while a question or game is up; a deferred reply leaves the day untried",
-      fe.asking === 0 && fe.game === 0 && fe.askingKept && fe.deferred === 1 && fe.deferredMarker, JSON.stringify(fe));
+    check("audit 0.43.0 F-01: the evening follow-up isn't fetched while a question or game is up; a deferred reply leaves the day untried and waits before the next try",
+      fe.asking === 0 && fe.game === 0 && fe.askingKept && fe.deferred === 1 && fe.deferredMarker && fe.backoff === 0, JSON.stringify(fe));
     check("audit 0.43.0 F-02: a failed evening fetch leaves the day's marker unset and is tried again; once answered, no more that day",
       fe.failed === 1 && fe.failedMarker && fe.retried === 1 && fe.marker === "2031-05-06" && fe.again === 0, JSON.stringify(fe));
     check("audit 0.43.0 F-03: the evening gate and marker follow the server's day and evening; an older server's mine falls back to this browser's clock",

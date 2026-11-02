@@ -1594,6 +1594,7 @@ const FOLLOW_TEXT_MAX = 20;
 // From 19 a big day's evening beat (the server's hour; this browser's clock only times the
 // in-tab check, so a traveller's tab may ask at the wrong hour and get {}, critique #10).
 const FOLLOW_EVENING_HOUR = 19;
+const FOLLOW_RETRY_MS = 5 * 60 * 1000; // a deferred or failed evening try: again after this
 // Said inside a line ("good luck with {it}! ♥"): no trailing punctuation or emoticon of
 // its own (critique #8), as the server's clean_text.
 const TYPED_TAIL = /(?:\s*(?:[.!?,;:]+|[:;=]-?[()DPpOo/|\\[\]]|<3))+$/u;
@@ -6418,8 +6419,10 @@ class HatchPetCard extends HTMLElement {
       // F-02: the evening is tried once a day, but only once the server has answered.
       // A deferred evening (the server's open question first) isn't tried yet.
       if (at === "look" && clock.eve && !reply?.deferred) s.followEve = clock.day;
+      else if (at === "look" && clock.eve) s.followRetry = Date.now() + FOLLOW_RETRY_MS;
     } catch (err) {
       reply = null; // an older server: no follow-ups; a failed call tries again later
+      if (at === "look" && clock.eve) s.followRetry = Date.now() + FOLLOW_RETRY_MS;
     }
     s.following = false;
     if (!reply?.kind || sharedScreen() || s.ids?.["sensor.life_stage"] !== entity) return null;
@@ -6472,6 +6475,7 @@ class HatchPetCard extends HTMLElement {
     if (!s.lookedFirst || s.asleep || !clock.eve) return;
     if (s.followEve === clock.day || !this._followWanted(s) || !this._channelHeard(s)) return;
     if (s.queue?.length || s.asking || s.game) return; // the first look's lines first: a fourth would crowd them
+    if (s.followRetry && Date.now() < s.followRetry) return; // a deferred or failed try waits, not every tick
     this._followFetch(s);
   }
 
