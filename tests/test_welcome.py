@@ -18,6 +18,7 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.virtual_pet.const import DOMAIN
 
+from .test_config_flow import save_topic
 from .test_init import (  # noqa: F401
     STORE_KEY,
     call_texts,
@@ -164,23 +165,8 @@ async def test_the_dashboard_opens_from_every_notification(
 ) -> None:
     hass_storage[STORE_KEY] = hatched_pet(now, hunger=26.0)
     entry = await setup(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        {
-            "sleep": {"bedtime": "21:00:00", "wake_time": "07:00:00"},
-            "weather": {"comfort_low": 18, "comfort_high": 26},
-            "room": {},
-            "activity": {
-                "zone": "zone.home",
-                "away_after": 2,
-                "sitter_settles": True,
-            },
-            "sky": {},
-            "privacy": {"privacy": True},
-            "house": {},
-            "notifications": {"dashboard": "/pets"},
-        },
+    result = await save_topic(
+        hass, entry.entry_id, "notifications", {"dashboard": "/pets"}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options["dashboard"] == "/pets"

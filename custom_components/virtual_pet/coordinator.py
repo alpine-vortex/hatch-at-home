@@ -30,7 +30,6 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
-    entity_registry as er,
     issue_registry as ir,
 )
 from homeassistant.helpers.debounce import Debouncer
@@ -81,7 +80,6 @@ from .const import (
     CONF_WEATHER,
     CONF_WORLD,
     DEFAULT_WORLD,
-    DEFAULT_ZONE,
     DOMAIN,
     LIVE_EVENTS,
     LOGGER,
@@ -110,6 +108,7 @@ from .home import (
 )
 from .names import pet_name
 from .react import counts as react_counts, is_native as react_native
+from .repairs import missing_entity_ids, placeholders
 from .species import load_catalog
 from .watcher import Watcher, daily_forecast, doorbell_rang
 
@@ -665,6 +664,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         active: bool,
         placeholders: dict[str, str],
         translation_key: str | None = None,
+        data: dict[str, str] | None = None,
+        fixable: bool = False,
     ) -> None:
         """Raise or clear one of this pet's repair issues (Settings → Repairs).
         A damaged save's stays across restarts until it's dismissed, the pet
@@ -677,7 +678,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.hass,
             DOMAIN,
             issue_id,
-            is_fixable=False,
+            is_fixable=fixable,
+            data=data,
             is_persistent=key == "save_damaged",
             severity=ir.IssueSeverity.WARNING,
             translation_key=translation_key or key,
@@ -690,24 +692,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         An entity that exists but is unavailable is fine: the watcher holds its
         last value for a while and then ignores it.
         """
-        registry = er.async_get(self.hass)
-        # sun.sun and the default zone are always watched, not picked by the owner.
-        mapped = [
-            e for e in self.watcher.entity_ids() if e not in ("sun.sun", DEFAULT_ZONE)
-        ]
-        mapped += self.config_entry.options.get(CONF_CHORES) or []
-        missing = sorted(
-            e
-            for e in set(mapped)
-            if self.hass.states.get(e) is None and registry.async_get(e) is None
-        )
+        missing = missing_entity_ids(self.hass, self.config_entry.options)
         self._issue(
             "missing_entities",
             bool(missing),
-            {
-                "pet": pet_name(self.hass, self.config_entry),
-                "entities": ", ".join(missing),
-            },
+            placeholders(self.hass, self.config_entry, missing),
+            data={"entry_id": self.config_entry.entry_id},
+            fixable=True,
         )
 
     def _listen(self) -> None:
@@ -1101,7 +1092,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _want_forecast(self, now: float) -> None:
         """Refresh the daily forecast in the background, at most hourly."""
-        if not self._home_started or not self.config_entry.options.get(CONF_WEATHER):
+        # The watcher's options, not the entry's: a save lands before the reload.
+        if not self._home_started or not self.watcher._ids(CONF_WEATHER):
             return
         if now - self._forecast_at < R.HOME_FORECAST_REFRESH_MINUTES * 60:
             return
