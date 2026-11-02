@@ -9978,10 +9978,12 @@ async function main() {
     check(`react: ${stage} back to the mood frame after 2.5 s`,
       !after.live && after.shown && new RegExp(`/${stage}_${after.mood}_|/${stage}_content_`).test(after.src) &&
       !after.moves.some((c) => ["munch", "greethop", "look", "settle"].includes(c)), JSON.stringify(after));
-    // UX fix 6 (F5): a lost game settles on the content frames (a species with acts.aww plays it).
+    // UX fix 6 (F5): a lost game settles on the content frames; a species with acts.aww (every
+    // species since the 128 aww art, 2026-11-01) plays its aww frames instead.
     const lostReact = await react({ action: "play", result: "lost" });
-    check(`react: ${stage} lost settles on the content frames`,
-      lostReact.live && lostReact.moves.includes("settle") && lostReact.src.includes(`/${stage}_content_`), JSON.stringify(lostReact));
+    check(`react: ${stage} lost settles on the content frames, or its aww`,
+      lostReact.live && lostReact.moves.includes("settle") &&
+        (lostReact.src.includes(`/${stage}_content_`) || lostReact.src.includes(`/${stage}_aww_`)), JSON.stringify(lostReact));
     // Fallback: an act whose sprites do not load swaps back to the mood frames, and is remembered
     // (_poseOk, keyed species/stage/act, apart from the waves). No broken image left on show.
     if (acts) {
