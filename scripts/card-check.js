@@ -1990,7 +1990,8 @@ async function main() {
       s.statusHtml = null;
       el._renderStatus(s, []);
       out.five = { aria: rowOf()?.querySelector(".hearts")?.getAttribute("aria-label") || null,
-        full: rowOf()?.querySelectorAll("img[src*='stat_heart_full']").length, half: rowOf()?.querySelectorAll("img[src*='stat_heart_half']").length };
+        full: rowOf()?.querySelectorAll(".hearts img[src*='stat_heart_full']").length, half: rowOf()?.querySelectorAll(".hearts img[src*='stat_heart_half']").length,
+        icon: !!rowOf()?.querySelector("img.picon[src*='stat_heart_full']") }; // the row's own icon is a heart too (UX8 F9)
       // The weekly line: once, then not again this week.
       withLevel(10);
       const monday = new Date();
@@ -2025,13 +2026,41 @@ async function main() {
     return out;
   });
   check("top10 6b: \"friends\" hidden at 0; at 5, two and a half hearts with its aria",
-    !social.zero && social.five.aria === "friends this week: 5 of 10" && social.five.full === 2 && social.five.half === 1, JSON.stringify(social));
+    !social.zero && social.five.aria === "friends this week: 5 of 10" && social.five.full === 2 && social.five.half === 1 && social.five.icon, JSON.stringify(social));
   check("top10 6b: full hearts say \"so many friends this week! ♥\" once a week",
     JSON.stringify(social.first) === JSON.stringify(["so many friends this week! ♥"]) && social.again === 0, JSON.stringify(social));
   if (social.want) {
     check("top10 6b: a link reports virtual_pet/linked with both pets",
       social.report.length === 1 && social.report[0].entity_id === social.want[0] && social.report[0].other === social.want[1], JSON.stringify(social.report));
   }
+  // UX8 F9: a tap on the friends row says what it counts, and the status stays open.
+  const hint = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    const was = { settings: s.settings, journal: s.journal, finds: s.finds, everyWorld: s.everyWorld };
+    el._state = (x, key) => {
+      const st = real.call(el, x, key);
+      return key === "sensor.life_stage" && st && x === s ? { ...st, attributes: { ...st.attributes, social_level: 5 } } : st;
+    };
+    try {
+      Object.assign(s, { settings: false, journal: false, finds: false, everyWorld: false });
+      s.statusHtml = null;
+      el._renderStatus(s, []);
+      s.screen.classList.add("show-status");
+      const row = s.status.querySelector(".friendsrow");
+      row?.click();
+      const note = s.status.querySelector(".status-feedback");
+      return { row: !!row, text: note?.textContent || null, shown: note ? !note.hidden : false,
+        open: s.screen.classList.contains("show-status") };
+    } finally {
+      el._state = real;
+      Object.assign(s, was);
+      s.screen.classList.remove("show-status");
+      s.statusHtml = null;
+    }
+  });
+  check("UX8 F9: a tap on the friends row says what it counts and keeps the status open",
+    hint.row && hint.text === "visitors and neighbours this week ♪" && hint.shown && hint.open, JSON.stringify(hint));
   // Screen readers hear plain words: no hearts or notes; a bare heart is "thank you!".
   const heard = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const s = el._slides[el._index];
@@ -9883,8 +9912,9 @@ async function main() {
   check("visitors: the greet falls back to the excited frames when the waves failed to load",
     fb.skip || (fb.frames?.length && fb.frames.every((f) => !/_wave_/.test(f))), JSON.stringify(fb));
   const added = greeted.keys.filter((k) => !before.includes(k));
-  check("visitors: nothing sent (no callService or callWS), only hatch-visit-* kept (and E3's friends tally)",
-    greeted.calls.length === 0 && added.filter((k) => k.startsWith("hatch-visit-")).length === 1 &&
+  // (UX8 F4: the played day visitor reports virtual_pet/greeted, the one thing sent.)
+  check("visitors: nothing sent but the greeted report (no callService or callWS), only hatch-visit-* kept (and E3's friends tally)",
+    greeted.calls.every((c) => /greeted/.test(c)) && added.filter((k) => k.startsWith("hatch-visit-")).length === 1 &&
     added.every((k) => /^hatch-visit(-|seen-|friends-)/.test(k)), JSON.stringify({ calls: greeted.calls, added }));
   await card.evaluate((el) => { el._hass.callService = el.__realCalls.svc; el._hass.callWS = el.__realCalls.ws; });
   // A kept line arriving mid-visit keeps its bubble: the greet is skipped.
@@ -10100,7 +10130,7 @@ async function main() {
       }, { ms: (host.in || 1400) + 1600 });
       check("fresh E10 (V-b): a pair day brings a second visitor of the world and a pair line; both go; nothing sent; only the planned one counted",
         pair.vis.length === 2 && new Set(pair.vis).size === 2 && PAIRS.includes(pair.said) && pair.after === 0 &&
-        pair.calls.length === 0 && Object.keys(pair.tally).length === 1, JSON.stringify(pair));
+        pair.calls.every((c) => c === "virtual_pet/greeted") && Object.keys(pair.tally).length === 1, JSON.stringify(pair));
     }
     await vprep(null);
     const guest = await card.evaluate(async (el) => {
@@ -11581,6 +11611,10 @@ async function main() {
         Object.assign(s, { asleep: false, calling: false, game: null, moodState: "content", lookedFirst: true, queue: [], scene: null, sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
         s.screen.classList.remove("show-status");
       }
+      // With three pets the wrap makes the third pet a neighbour of the first (UX8 F6): hold it
+      // back here, so these cases are about the second; the wrap has its own check below.
+      const rest = el._slides.slice(2);
+      for (const s of rest) s.queue = [{ text: "x" }];
       for (const [who, s] of [["host", a], ["guest", b]]) {
         for (const [what, patch] of [["asleep", { asleep: true }], ["calling", { calling: true }], ["game", { game: { kind: "left_right" } }], ["queue", { queue: [{ text: "x" }] }]]) {
           const keep = Object.fromEntries(Object.keys(patch).map((k) => [k, s[k]]));
@@ -11592,11 +11626,21 @@ async function main() {
       clear();
       out.first = !!el._linkPick(a);
       out.second = !!el._linkPick(a);
+      for (const s of rest) s.queue = [];
+      // UX8 F6: exactly three pets: the first pet's other neighbour is the third (the way the nav wraps).
+      if (el._slides.length === 3) {
+        b.queue = [{ text: "x" }];
+        clear();
+        out.wrap = el._linkPick(a) === el._slides[2];
+        b.queue = [];
+        clear();
+      }
       return out;
     });
-    const blocked = Object.entries(gates).filter(([k]) => k !== "first" && k !== "second").every(([, v]) => v === null);
+    const blocked = Object.entries(gates).filter(([k]) => k !== "first" && k !== "second" && k !== "wrap").every(([, v]) => v === null);
     check(`no visit while either pet is asleep, calling, in a game or has a line waiting (${width}px)`, blocked, JSON.stringify(gates));
     check(`a pair visits once a day (${width}px)`, gates.first && !gates.second, JSON.stringify([gates.first, gates.second]));
+    if (gates.wrap !== undefined) check(`UX8 F6: with three pets the end pets are neighbours across the wrap (${width}px)`, gates.wrap, JSON.stringify(gates.wrap));
 
     // Three pets: the pet in the middle can send the beam either way.
     for (const toRight of [true, false]) {
