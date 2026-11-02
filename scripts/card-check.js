@@ -4958,7 +4958,8 @@ async function main() {
     const seasons = [...src.matchAll(/key: "(halloween|thanksgiving|winter)"/g)].map((m) => m[1]);
     const card = new Set(["greet", "greet.warm", "greet.nickname", "idle.sleepy", "idle.bored", "idle.excited", "idle.hungry",
       "idle.dirty", "idle.default", "yum", "favourite_snack", "wish_granted", "friend_home", "care_miss", "tucked_in", "bond_up",
-      "visit", "find", "gift", "link_host", "link_guest"]); // link_*: the infrared link (2b); find: the basket's reveal; gift: V7
+      "visit", "find", "gift", "link_host", "link_guest", "soft"]); // link_*: the infrared link (2b); find: the basket's reveal; gift: V7
+    // soft: E13's softer morning (_followLine), a baby's or child's own
     // The mood line's keys (sensor.mood reason_key), from the model's own tables.
     const py = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "model.py"), "utf8");
     const keysOf = (name) => [...py.split(`\n${name} = {`)[1].split("\n}")[0].matchAll(/"(\w+)":/g)].map((m) => m[1]);
