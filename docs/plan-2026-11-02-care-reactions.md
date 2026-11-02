@@ -1284,7 +1284,7 @@ the following. B1 builds on it; names win over lines.
   (`above rise`, `above wag`, `slide`, or none), restarts the drop, and adds `prop-out` by a timer at
   `ms - 300`. A direct `_show(s, s.prop, ...)` leaves a stale `prop-out` class and the prop is
   invisible; B1's bowl is `.scene-bowl` (its own element), so it is not affected, but any use of
-  `s.prop` goes through `_propShow`. Under `calm()` there is no `prop-out`; the tick hides the prop.
+  `s.prop` goes through `_propShow` (clean's closing prop now does). Under `calm()` there is no `prop-out`; the tick hides the prop.
 - `.prop` is now `drop .4s steps(4)` (was `pop`); `pop` is still `.born` and `.attention.arrive`.
 - `_floorVariant(s, key, list)` is the no-repeat pick, with `s.pinVariant[key]` for the bench. B1's
   `_careVariant` can wrap or replace it; the bench field `variant` (a map key -> value) already pins it
@@ -1299,8 +1299,8 @@ the following. B1 builds on it; names win over lines.
   `unfair` is in `REACT_REFUSALS` (turn away + the wagging finger). Refusals are a pool
   (`REFUSAL_POOL`, `REFUSAL_VARIANTS`): feed's `full` is `look` or `shake` today, so **B1's push-away
   after the gate must replace or follow this pick, not stack a second flip**.
-- `_bondHearts(s, kind, n)` takes a count; praise uses `carehearts` (cleared with the others in
-  `_forget`'s neighbour in `card-build.js`).
+- `_bondHearts(s, kind, n)` takes a count; praise uses `carehearts` (cleared with `bondhearts` and
+  `linkhearts` on a slide change, `card-build.js`).
 - The excited loop is gone: `_render` plays one `greethop` when a pet becomes excited (not over a
   pose, scene, sleep or away). It replaces the 10 s `hop` loop, so `BOUNCE_MS` is deleted. A snack's
   `fed` (`munch`) and this greethop can overlap: greethop wins in CSS order. B2 should not add its own.
