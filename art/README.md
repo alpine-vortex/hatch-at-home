@@ -355,3 +355,4 @@ Final art for the visitors-v2 finds (docs/plan-2026-11-01-visitors-v2.md §9): 6
 - Baskets: hand-placed in `art/finds/make_baskets.py` (12 cells is below where the model holds a shape); one wicker body shared by basket_1/2/3, only the peeking things change.
 - Tidepool: green sea glass a chip, blue a round, red a shard (owner 2026-11-01); the pearl in a grey oyster (the cutter fills inside the outline so grey insides are kept).
 - Woodland: the acorn and the wild strawberry share a round-with-a-stem outline; their colours and the cap/leaf tops tell them apart.
+- Terrarium: the pressed fern and the seed pod are both leaf-shaped; the fern keeps its stem and jagged edge.
