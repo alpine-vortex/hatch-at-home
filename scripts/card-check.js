@@ -9701,6 +9701,56 @@ async function main() {
   }
   check("visitors: no visit when asleep, away, egg, in a game or scene, linking, calling, power, status open, queued, " +
     "early or off-slide; the day's flag unused", bad.length === 0, bad.join(" | "));
+  // UX8 F2: the pet faces a visitor coming from the left and holds the look through the greet; it
+  // never turns away from one coming in on the right. UX8 F4: a played day visitor reports
+  // virtual_pet/greeted (any screen); a counted-off start, a guest and a seasonal cross-over don't.
+  {
+    await vprep(V0);
+    const r = await card.evaluate(async (el, v) => {
+      const s = el._slides[el._index];
+      const wait = (ms) => new Promise((res) => setTimeout(res, ms));
+      const out = {};
+      const realPlan = el._visitPlan;
+      el._visitPlan = () => ({ id: v.id });
+      try {
+        for (const ltr of [true, false]) {
+          el._visitorEnd(s);
+          s.pet.classList.remove("look");
+          el._visitorStart(s, v, { ltr, count: false });
+          const inMs = v.in || 1400;
+          await wait(inMs + 400);
+          const arriving = s.pet.classList.contains("look");
+          await wait(1500); // past the greet (in + 1000)
+          out[ltr ? "ltr" : "rtl"] = [arriving, s.pet.classList.contains("look")];
+          el._visitorEnd(s);
+          s.pet.classList.remove("look");
+        }
+        const sent = [];
+        const real = el._hass.callWS;
+        el._hass.callWS = (m) => (m.type === "virtual_pet/greeted" ? (sent.push(m), Promise.resolve(null)) : real.call(el._hass, m));
+        try {
+          el._visitorStart(s, v); // counted: reported
+          el._visitorStart(s, v, { count: false });
+          el._visitorStart(s, v, { guest: true, world: s.worldKey });
+          el._visitorStart(s, { ...v, cross: true });
+        } finally {
+          el._hass.callWS = real;
+        }
+        out.sent = sent.map((m) => m.entity_id === s.ids["sensor.life_stage"]);
+      } finally {
+        el._visitPlan = realPlan;
+        el._visitorEnd(s);
+        s.pet.classList.remove("look");
+        for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-") || k.startsWith("hatch-visitfriends-")) localStorage.removeItem(k);
+        Object.assign(s, { sayUntil: 0, flairUntil: 0, poseUntil: 0, visitUntil: 0, queue: [] });
+      }
+      return out;
+    }, V0);
+    check("UX8 F2: the pet faces a visitor from the left through the greet, and never turns from one on the right",
+      r.ltr?.[0] === true && r.ltr?.[1] === true && r.rtl?.[0] === false && r.rtl?.[1] === false, JSON.stringify(r));
+    check("UX8 F4: a played day visitor reports greeted for this pet; an uncounted start, a guest and a cross-over don't",
+      JSON.stringify(r.sent) === "[true]", JSON.stringify(r.sent));
+  }
   // Fresh-moment 5a: a question on show (its 60 s hold) no longer stops a visit or a flair;
   // the question keeps its bubble and buttons, and the visitor's greet says no line.
   {
@@ -11459,6 +11509,66 @@ async function main() {
     await card.evaluate((el) => el._go(1));
     const swiped = await state();
     check(`a swipe mid-visit leaves nothing behind (${width}px)`, midway.guestImg === 1 && swiped.left === 0 && !swiped.beam, JSON.stringify([midway.guestImg, swiped.left]));
+
+    // UX8 F1: a tap on the visit perks the host and keeps the visit; the Status chip ends it before the
+    // page opens, so the guest never stands over it. F3: the guest's reply clears the host's line.
+    await prep();
+    await card.evaluate((el) => el._linkStart(el._slides[0], el._slides[1]));
+    await until((el) => el._slides[0].screen.querySelector(".vsay:not([hidden])"), null, 6000);
+    const reply = await card.evaluate((el) => {
+      const h = el._slides[0];
+      const say = h.screen.querySelector(".vsay:not([hidden])")?.getBoundingClientRect();
+      const bub = h.bubble.getBoundingClientRect();
+      return { hostSays: h.bubble.textContent, gap: say && bub.height ? Math.round(say.top - bub.bottom) : null };
+    });
+    check(`UX8 F3: the guest's reply sits under the host's line, not over it (${width}px)`,
+      reply.hostSays && reply.gap !== null && reply.gap >= 0, JSON.stringify(reply));
+    const tapped = await card.evaluate((el) => {
+      const h = el._slides[0];
+      const out = {};
+      h.screen.click();
+      out.statusAfterTap = h.screen.classList.contains("show-status");
+      out.linkAfterTap = !!el._link;
+      el._toggleStatus(h); // the Status chip
+      out.guestOverPage = h.screen.querySelectorAll(".vguest").length;
+      out.linkAfterChip = !!el._link;
+      out.statusAfterChip = h.screen.classList.contains("show-status");
+      el._toggleStatus(h);
+      return out;
+    });
+    check(`UX8 F1: a tap mid-visit keeps it and never opens Status; the chip ends it with no guest over the page (${width}px)`,
+      !tapped.statusAfterTap && tapped.linkAfterTap && tapped.guestOverPage === 0 && !tapped.linkAfterChip && tapped.statusAfterChip,
+      JSON.stringify(tapped));
+
+    // UX8 F5: a guest from the left is mirrored (guest at 30%, the host turned to it, the reply on the left).
+    await prep(1);
+    await card.evaluate((el) => el._linkStart(el._slides[1], el._slides[0]));
+    await until((el) => el._slides[1].screen.querySelector(".vsay:not([hidden])"), null, 6000);
+    const mirrored = await card.evaluate((el) => {
+      const h = el._slides[1];
+      const box = h.screen.querySelector(".visit");
+      const g = h.screen.querySelector(".vguest")?.getBoundingClientRect();
+      const hp = h.pet.getBoundingClientRect();
+      return { left: box?.classList.contains("left"), look: h.pet.classList.contains("look"),
+        guestLeftOfHost: !!g && g.left + g.width / 2 < hp.left + hp.width / 2,
+        sayLeft: getComputedStyle(h.screen.querySelector(".vsay")).left !== "auto" };
+    });
+    await card.evaluate((el) => el._linkEnd());
+    const cleared = await card.evaluate((el) => el._slides.some((s) => s.pet.classList.contains("look") || s.screen.classList.contains("linkleft")));
+    check(`UX8 F5: a guest from the left is mirrored, and the mirror is gone after (${width}px)`,
+      mirrored.left && mirrored.look && mirrored.guestLeftOfHost && mirrored.sayLeft && !cleared, JSON.stringify([mirrored, cleared]));
+
+    // UX8 F8: a visit cut short (the guest falls asleep) takes the host's hello with it.
+    await prep();
+    await card.evaluate((el) => el._linkStart(el._slides[0], el._slides[1]));
+    const said = await until((el) => el._slides[0].linking && el._slides[0].bubble.textContent.length > 0 && el._slides[0].sayUntil > Date.now(), null, 6000);
+    const cut = await card.evaluate((el) => {
+      el._slides[1].asleep = true;
+      el._linkTick(el._slides[0]);
+      return { link: !!el._link, bubble: el._slides[0].bubble.textContent };
+    });
+    check(`UX8 F8: a cut-short visit leaves no hello to an empty room (${width}px)`,
+      said && !cut.link && cut.bubble === "", JSON.stringify([said, cut]));
 
     // Not when either pet is asleep, calling or in a game, nor with a line waiting; once a day per pair.
     await prep();

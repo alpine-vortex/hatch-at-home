@@ -3420,7 +3420,7 @@ const STYLE = `
   @keyframes ir-in-l { from { translate: -160% 0; } }
   @keyframes ir-out-l { to { translate: -160% 0; } }
   .visit.left .vsay { right: auto; left: 5%; }
-  .visit .vsay { position: absolute; right: 5%; top: 27%; max-width: 46%; padding: 5px 9px; border-radius: 10px;
+  .visit .vsay { position: absolute; right: 5%; top: 27%; max-width: 62%; padding: 5px 9px; border-radius: 10px;
     background: #fff; color: #2a2a2a; font-size: 13px; line-height: 1.25; }
   ha-card.bigtext .visit .vsay { font-size: 15px; } /* UX8 F3 */
   .screen.linking .perch { display: none; }
