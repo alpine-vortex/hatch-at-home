@@ -9,6 +9,7 @@ from typing import Any
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import (
     CONF_NAME,
     EVENT_HOMEASSISTANT_STARTED,
@@ -3879,11 +3880,11 @@ async def test_senses_are_kinds_never_entities(
         "bedtime",
     ):
         assert value not in text, value
-    # Nothing mapped: an empty list.
+    # Nothing mapped: only the moon, which every pet reads from the date.
     hass.config_entries.async_update_entry(config, options={})
     await hass.config_entries.async_reload(config.entry_id)
     await hass.async_block_till_done()
-    assert hass.states.get("sensor.pip_life_stage").attributes["senses"] == []
+    assert hass.states.get("sensor.pip_life_stage").attributes["senses"] == ["moon"]
 
 
 async def test_social_meter_links_and_a_greeted_visitor(
@@ -4001,3 +4002,226 @@ async def test_a_visitor_dream_names_its_visitor_and_no_other_dream_grows(
     }
     # An unknown pick (a hand-edited save) is left out; the user never shows.
     assert shown({"kind": "picked", "pick": "<b>", "user": "abc"}) == {"kind": "picked"}
+
+
+# --- ha-signals H2: the weather default and its one-time migration ---------------
+
+
+def _weather(
+    hass: HomeAssistant,
+    object_id: str,
+    platform: str = "met",
+    *,
+    track_home: bool | None = None,
+    **kwargs: Any,
+) -> str:
+    """Register a weather entity (for met, under a config entry that may track home)."""
+    config = None
+    if track_home is not None:
+        config = MockConfigEntry(domain=platform, data={"track_home": track_home})
+        config.add_to_hass(hass)
+    return (
+        er.async_get(hass)
+        .async_get_or_create(
+            "weather",
+            platform,
+            f"uid_{object_id}",
+            suggested_object_id=object_id,
+            config_entry=config,
+            **kwargs,
+        )
+        .entity_id
+    )
+
+
+def _old_pet(
+    minor: int = 1, options: dict[str, Any] | None = None, version: int = 1
+) -> MockConfigEntry:
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Pip",
+        data={CONF_NAME: "Pip", "new_pet": True},
+        options=options or {},
+        entry_id="test_pet",
+        minor_version=minor,
+        version=version,
+    )
+
+
+async def _load(hass: HomeAssistant, config: MockConfigEntry) -> MockConfigEntry:
+    await hass.config.async_set_time_zone("UTC")
+    config.add_to_hass(hass)
+    await hass.config_entries.async_setup(config.entry_id)
+    await hass.async_block_till_done()
+    return config
+
+
+async def _new_pet_options(hass: HomeAssistant) -> dict[str, Any]:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_NAME: "Juniper", "world": "woodland"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    return dict(result["options"])
+
+
+async def test_a_new_pet_starts_on_the_met_home_weather(hass: HomeAssistant) -> None:
+    home = _weather(hass, "forecast_home", track_home=True)
+    _weather(hass, "zz_other", "other")
+    assert home == "weather.forecast_home"
+    assert (await _new_pet_options(hass))["weather"] == "weather.forecast_home"
+
+
+async def test_a_new_pet_uses_a_yaml_weather_without_a_registry_entry(
+    hass: HomeAssistant,
+) -> None:
+    hass.states.async_set("weather.yaml_one", "sunny")
+    assert (await _new_pet_options(hass))["weather"] == "weather.yaml_one"
+    hass.states.async_set("weather.yaml_two", "rainy")
+    assert "weather" not in await _new_pet_options(hass)  # two: not clear
+
+
+async def test_a_new_pet_with_no_weather_has_none(hass: HomeAssistant) -> None:
+    assert "weather" not in await _new_pet_options(hass)
+
+
+async def test_migration_fills_an_empty_weather_field_once(
+    hass: HomeAssistant,
+) -> None:
+    _weather(hass, "forecast_home", track_home=True)
+    config = await _load(hass, _old_pet())
+    assert config.state is ConfigEntryState.LOADED
+    assert config.options["weather"] == "weather.forecast_home"
+    assert config.minor_version == 2
+    assert config.version == 1
+
+
+async def test_migration_leaves_a_chosen_weather_alone(hass: HomeAssistant) -> None:
+    _weather(hass, "forecast_home", track_home=True)
+    config = await _load(hass, _old_pet(options={"weather": "weather.mine"}))
+    assert config.options["weather"] == "weather.mine"
+    assert config.minor_version == 2
+
+
+async def test_migration_with_no_weather_entity_still_bumps_the_version(
+    hass: HomeAssistant,
+) -> None:
+    config = await _load(hass, _old_pet())
+    assert "weather" not in config.options
+    assert config.minor_version == 2
+
+
+async def test_a_cleared_weather_field_stays_clear_after_a_reload(
+    hass: HomeAssistant,
+) -> None:
+    _weather(hass, "forecast_home", track_home=True)
+    config = await _load(hass, _old_pet(minor=2))
+    assert "weather" not in config.options
+    await hass.config_entries.async_reload(config.entry_id)
+    await hass.async_block_till_done()
+    assert config.state is ConfigEntryState.LOADED
+    assert "weather" not in config.options
+
+
+async def test_migration_ignores_states_and_reads_only_the_registry(
+    hass: HomeAssistant,
+) -> None:
+    hass.states.async_set("weather.yaml_one", "sunny")
+    config = await _load(hass, _old_pet())
+    assert "weather" not in config.options
+    assert config.minor_version == 2
+
+
+async def test_the_weather_default_log_names_no_entity(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("DEBUG", logger="custom_components.virtual_pet")
+    _weather(hass, "forecast_home", track_home=True)
+    await _load(hass, _old_pet())
+    records = [r for r in caplog.records if "weather default set" in r.getMessage()]
+    assert len(records) == 1
+    assert "forecast_home" not in records[0].getMessage()
+    assert "weather." not in records[0].getMessage()
+    assert not records[0].args
+
+
+@pytest.mark.parametrize(
+    ("entities", "expected"),
+    [
+        # Two or more and no met home entry: the player chooses.
+        ([("aa", "other"), ("bb", "other")], None),
+        # Exactly one of any kind is clear.
+        ([("only_one", "other")], "weather.only_one"),
+        # Disabled and hidden ones don't count, so the one left is clear.
+        (
+            [
+                ("off", "other", {"disabled_by": er.RegistryEntryDisabler.USER}),
+                ("hid", "other", {"hidden_by": er.RegistryEntryHider.USER}),
+                ("fine", "other"),
+            ],
+            "weather.fine",
+        ),
+        # All of them disabled or hidden: none.
+        ([("off", "other", {"disabled_by": er.RegistryEntryDisabler.USER})], None),
+    ],
+)
+async def test_migration_fills_only_when_the_weather_is_clear(
+    hass: HomeAssistant, entities: list[tuple], expected: str | None
+) -> None:
+    for object_id, platform, *extra in entities:
+        _weather(hass, object_id, platform, **(extra[0] if extra else {}))
+    config = await _load(hass, _old_pet())
+    assert config.options.get("weather") == expected
+
+
+async def test_migration_prefers_the_entry_that_tracks_home(
+    hass: HomeAssistant,
+) -> None:
+    # A literal weather.forecast_home from a met entry that does not track home
+    # loses to the one that does.
+    _weather(hass, "forecast_home", track_home=False)
+    _weather(hass, "my_town", track_home=True)
+    config = await _load(hass, _old_pet())
+    assert config.options["weather"] == "weather.my_town"
+
+
+async def test_migration_skips_a_disabled_met_home_entity(
+    hass: HomeAssistant,
+) -> None:
+    _weather(
+        hass,
+        "forecast_home",
+        track_home=True,
+        disabled_by=er.RegistryEntryDisabler.USER,
+    )
+    _weather(hass, "elsewhere", track_home=False)
+    config = await _load(hass, _old_pet())
+    assert config.options["weather"] == "weather.elsewhere"  # the one left
+
+
+@pytest.mark.parametrize("key", ["rain", "indoor_temperature", "aqi", "solar"])
+async def test_migration_leaves_a_pet_with_any_weather_section_option(
+    hass: HomeAssistant, key: str
+) -> None:
+    _weather(hass, "forecast_home", track_home=True)
+    config = await _load(hass, _old_pet(options={key: "sensor.mine"}))
+    assert "weather" not in config.options
+    assert config.options[key] == "sensor.mine"
+    assert config.minor_version == 2
+
+
+async def test_migration_never_lowers_a_newer_minor_and_still_loads(
+    hass: HomeAssistant,
+) -> None:
+    _weather(hass, "forecast_home", track_home=True)
+    config = await _load(hass, _old_pet(minor=3))
+    assert config.state is ConfigEntryState.LOADED
+    assert config.minor_version == 3
+    assert "weather" not in config.options
+
+
+async def test_a_newer_major_version_is_not_migrated(hass: HomeAssistant) -> None:
+    config = await _load(hass, _old_pet(version=2))
+    assert config.state is ConfigEntryState.MIGRATION_ERROR

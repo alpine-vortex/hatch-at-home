@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from homeassistant.components import persistent_notification, websocket_api
@@ -39,6 +40,11 @@ from .const import (
     ATTR_HOURS,
     ATTR_TOPIC,
     CARD_FILENAME,
+    CONF_AQI,
+    CONF_INDOOR_TEMP,
+    CONF_RAIN,
+    CONF_SOLAR,
+    CONF_WEATHER,
     DOMAIN,
     FRONTEND_URL,
     SERVICE_FAST_FORWARD,
@@ -52,9 +58,16 @@ from .const import (
     VERSION,
 )
 from .coordinator import PetConfigEntry, PetCoordinator, PetStore
+from .defaults import default_weather
 from .home import news_text
 from .model import GAMES
 from .people import ANSWERS, People
+
+_LOGGER = logging.getLogger(__name__)
+
+# The options of the weather section: the migration fills the field only when
+# none of them is set (the player has already chosen how the pet sees the sky).
+WEATHER_SECTION = (CONF_RAIN, CONF_INDOOR_TEMP, CONF_AQI, CONF_SOLAR, CONF_WEATHER)
 
 PLATFORMS = [
     Platform.BINARY_SENSOR,
@@ -748,6 +761,29 @@ async def websocket_collection(
     connection.send_result(
         msg["id"], pet.collection_view(connection.user.id, msg["shared"])
     )
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:
+    """Bring an old entry up to date.
+
+    Minor 2 (ha-signals H2): a pet with nothing set in the weather section
+    starts on the house's weather, once. After that the options are the
+    player's: clearing the field keeps it clear. Only a lower minor is touched,
+    and a minor is never lowered."""
+    if entry.version > 1:
+        return False
+    if entry.minor_version < 2:
+        options = dict(entry.options)
+        weather = (
+            None
+            if any(options.get(k) for k in WEATHER_SECTION)
+            else default_weather(hass)
+        )
+        if weather:
+            options[CONF_WEATHER] = weather
+            _LOGGER.debug("weather default set")
+        hass.config_entries.async_update_entry(entry, options=options, minor_version=2)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: PetConfigEntry) -> bool:

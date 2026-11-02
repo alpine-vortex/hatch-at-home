@@ -66,6 +66,7 @@ from .const import (
     DEFAULT_ZONE,
     DOMAIN,
 )
+from .defaults import default_weather
 from .model import parse_hhmm
 from .species import load_catalog
 from .watcher import is_temperature
@@ -77,6 +78,7 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
     """Set up a new device with an egg in it."""
 
     VERSION = 1
+    MINOR_VERSION = 2  # 2: new pets start on the house's weather (ha-signals H2)
 
     @staticmethod
     @callback
@@ -165,6 +167,7 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             name = user_input[CONF_NAME].strip() or self._free_name()
             dashboard = notify.dashboard_path(user_input.get(CONF_DASHBOARD))
+            weather = default_weather(self.hass, from_states=True)
             return self.async_create_entry(
                 title=name,
                 data={
@@ -172,7 +175,10 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_WORLD: user_input[CONF_WORLD],
                     CONF_NEW_PET: True,  # welcomed once its first save is made
                 },
-                options={CONF_DASHBOARD: dashboard} if dashboard else {},
+                options={
+                    **({CONF_DASHBOARD: dashboard} if dashboard else {}),
+                    **({CONF_WEATHER: weather} if weather else {}),
+                },
             )
         options = await self._world_options()
         if options is None:

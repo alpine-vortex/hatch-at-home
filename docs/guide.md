@@ -289,8 +289,8 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   Tap it for the settings sheet; "‹ settings" at the top of any sub-page takes you
   back. The sheet has up to three parts:
   - **for the pet** (or **for** its name): "notices", the kinds of thing the house
-    shows the pet (weather, lights, tv, music, chores, fireplace, moon; "just the clock"
-    with none), then the pet's "shell" row, see below. An admin also gets "connect
+    shows the pet (weather, lights, tv, music, chores, fireplace, moon; the moon always
+    shows), then the pet's "shell" row, see below. An admin also gets "connect
     more ›", which opens the pet's page in Settings → Devices & services.
   - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk and
     my data. These follow your login. A shared screen doesn't show this part.
@@ -472,7 +472,7 @@ the pet comes home.
 | Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Rain sensor | none | On/off "it's raining", or a rain rate where anything above 0 means rain. Beats the forecast. Rain brings a rainy scene and a **blanket?** request. | `input_boolean.raining` |
-| Weather forecast | none | Sunny, snow and fog, and rain when there's no rain sensor. Wind from the condition or the wind speed (30 km/h, or gusts of 50). Its daily forecast, if it has one, gives the pet something to talk about (see Passing moments). | `weather.forecast_home` |
+| Weather forecast | none | Sunny, snow and fog, and rain when there's no rain sensor. Wind from the condition or the wind speed (30 km/h, or gusts of 50). Its daily forecast, if it has one, gives the pet something to talk about (see Passing moments). A new pet starts with your Met home weather here (or your only weather entity), and pets made before this update were given it once. To undo it, clear the field and Submit: it stays clear. | `weather.forecast_home` |
 | Indoor temperature | none | Outside the comfort range: shivers or sweats and asks for a **blanket** or a **fan**. | `sensor.indoor_temperature` |
 | Too cold below | 18 °C / 64.5 °F | Shown in your unit system. No blanket request while the fireplace is lit. | default |
 | Too warm above | 26.5 °C / 79.5 °F | | default |
@@ -502,7 +502,7 @@ the pet comes home.
 
 | Field | Default | What it does |
 | --- | --- | --- |
-| Moon phase | none | Any phase sensor, such as `sensor.moon_phase` from HA's Moon integration. Full moon at night: "the moon is so big tonight!" and a little happiness (+1 an hour) if it's awake. New moon: a starry night, cosmetic only. |
+| Moon phase | none | Any phase sensor, such as `sensor.moon_phase` from HA's Moon integration. Full moon at night: "the moon is so big tonight!" and a little happiness (+1 an hour) if it's awake. New moon: a starry night, cosmetic only. With no moon sensor at all, the pet still goes by the date: full for about 3 nights a month, new for about 3. A sensor you map wins. |
 | Moon illumination | none | Optional, the lit fraction (0–1 or %). Used when there's no phase sensor: 97% or more is full, 3% or less is new. |
 | Moon altitude | none | Optional, degrees. The moon only counts while it's above the horizon. |
 

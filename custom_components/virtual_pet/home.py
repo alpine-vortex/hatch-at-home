@@ -68,6 +68,7 @@ class Readings:
     company: bool | None = None  # someone is home
     moon_phase: str | None = None  # normalized: "full_moon", "new_moon", ...
     moon_illumination: float | None = None  # lit fraction, 0-1
+    moon_date: str | None = None  # "full_moon" / "new_moon" from the date alone
     moon_up: bool | None = None
     outdoor_c: float | None = None  # from the weather entity
     wind_kmh: float | None = None  # from the weather entity
@@ -159,6 +160,18 @@ def full_moon_by_date(now: float) -> bool:
     its cycle (a mean month: good to well under a day), 3 nights a month."""
     age = ((now - _NEW_MOON_EPOCH) / 86400) % _SYNODIC_DAYS
     return abs(age - _SYNODIC_DAYS / 2) <= R.FIND_FULL_MOON_DAYS
+
+
+def moon_by_date(now: float) -> str | None:
+    """Full or new from the date alone, for a pet with no moon entity: the same
+    window as the finds' full moon (FIND_FULL_MOON_DAYS), and the same width
+    around age 0 for the new moon (the window wraps the month's end)."""
+    age = ((now - _NEW_MOON_EPOCH) / 86400) % _SYNODIC_DAYS
+    if abs(age - _SYNODIC_DAYS / 2) <= R.FIND_FULL_MOON_DAYS:
+        return "full_moon"
+    if min(age, _SYNODIC_DAYS - age) <= R.FIND_FULL_MOON_DAYS:
+        return "new_moon"
+    return None
 
 
 def find_flags(
@@ -287,7 +300,7 @@ def evaluate(
     e.company = r.company is True
 
     # The moon, at night while it's up (unknown altitude counts as up).
-    phase = moon_phase(r.moon_phase, r.moon_illumination)
+    phase = moon_phase(r.moon_phase, r.moon_illumination) or r.moon_date
     if r.night and r.sun_up is not True and r.moon_up is not False:
         if phase == "full_moon":
             e.flags.append("full_moon")

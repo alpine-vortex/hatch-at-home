@@ -100,3 +100,18 @@ async def test_daily_forecast_by_local_day_in_celsius(hass: HomeAssistant) -> No
     assert days["2026-10-27"].high_c == pytest.approx(15)
     assert days["2026-10-27"].low_c == pytest.approx(10)
     assert days["2026-10-28"] == DayForecast("snowy", pytest.approx(0), None)
+
+
+def test_the_moon_comes_from_the_date_only_when_no_moon_option_is_mapped(
+    hass: HomeAssistant,
+) -> None:
+    from custom_components.virtual_pet.home import moon_by_date
+
+    full = 1795478400.0  # 2026-11-24 00:00 UTC
+    assert moon_by_date(full) == "full_moon"
+    assert Watcher(hass, {}).read(full, night=True).moon_date == "full_moon"
+    mapped = Watcher(hass, {"moon_phase": "sensor.moon"})
+    # Mapped, even if the sensor is briefly gone: the sensor's word is the only one.
+    assert mapped.read(full, night=True).moon_date is None
+    lit = Watcher(hass, {"moon_illumination": "sensor.lit"})
+    assert lit.read(full, night=True).moon_date is None

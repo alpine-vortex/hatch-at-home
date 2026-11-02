@@ -42,7 +42,7 @@ from .const import (
     CONF_ZONE,
     DEFAULT_ZONE,
 )
-from .home import DayForecast, Readings
+from .home import DayForecast, Readings, moon_by_date
 
 BAD = (STATE_UNAVAILABLE, STATE_UNKNOWN)
 VIDEO = {"movie", "tvshow", "video", "episode", "channel"}
@@ -226,6 +226,11 @@ class Watcher:
                 moon.state if (moon := self._one(CONF_MOON_PHASE, now)) else None
             ),
             moon_illumination=self._fraction(self._one(CONF_MOON_ILLUMINATION, now)),
+            moon_date=(
+                None
+                if self._ids(CONF_MOON_PHASE) or self._ids(CONF_MOON_ILLUMINATION)
+                else moon_by_date(now)
+            ),
             moon_up=(
                 None
                 if (alt := _float(self._one(CONF_MOON_ALTITUDE, now))) is None
