@@ -161,7 +161,8 @@ def test_keep_on_an_empty_basket_is_refused_and_changes_nothing():
     model.start_game(pet, "dig", at(9), Pile())
     before = pet.to_dict()
     info, events = dig(pet, "keep", at(9, 1), Pile())
-    assert info == {"result": "empty_basket"} and events == []
+    assert info["result"] == "empty_basket" and events == []
+    assert (info["round"], info["basket"], info["yours"]) == (0, 0, True)
     assert pet.to_dict() == before  # not even last_at
 
 
@@ -396,3 +397,28 @@ def test_whoever_finishes_a_dig_gets_its_record():
     assert info["won"] and pet.parked == {}
     finished = [e for e in events if e["type"] == "game_finished"]
     assert finished[0]["wins"] == 5
+
+
+def test_a_dig_reply_says_whether_the_dig_is_the_callers_own():
+    """UX6 F16: a bool, never an id, so a person's second screen can adopt the
+    server's round and another person's can't."""
+    pet = hatched(at(9))
+    model.start_game(pet, "dig", at(9), Pile(), player="ann")
+    info, _ = dig_as(pet, "dig", at(9, 1), Pile("berry"), "ann")
+    assert info["yours"] is True and info["basket"] == 1
+    info, _ = dig_as(pet, "dig", at(9, 2), Pile("berry"), "bob")
+    assert info["yours"] is False and info["basket"] == 2
+    info, _ = dig_as(pet, "keep", at(9, 3), Pile(), "ann")
+    assert info["yours"] is True and info["found"] == "kept"
+    # An empty-basket keep says it too (the basket is empty after the keep).
+    info, _ = dig_as(pet, "keep", at(9, 4), Pile(), "ann")
+    assert info["result"] == "empty_basket" and info["yours"] is True
+    assert (info["round"], info["wins"], info["basket"]) == (1, 2, 0)
+    info, _ = dig_as(pet, "keep", at(9, 5), Pile(), "bob")
+    assert info["result"] == "empty_basket" and info["yours"] is False
+    assert "ann" not in str(info) and "bob" not in str(info)
+    # A shared screen's (household) dig is its own for another shared screen.
+    pet = hatched(at(9))
+    model.start_game(pet, "dig", at(9), Pile())
+    info, _ = dig_as(pet, "dig", at(9, 1), Pile("berry"), None)
+    assert info["yours"] is True

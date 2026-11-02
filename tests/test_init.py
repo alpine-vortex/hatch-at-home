@@ -1175,7 +1175,8 @@ async def test_a_parked_berry_dig_carries_on_across_a_restart(
     coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
     started = await game(hass, game="dig")
     assert (started["round"], started["basket"], started["leaves"]) == (0, 0, 8)
-    assert await game(hass, game="dig", guess="keep") == {"result": "empty_basket"}
+    refused = await game(hass, game="dig", guess="keep")
+    assert refused["result"] == "empty_basket" and refused["basket"] == 0
     # Dig until something is shown, then ✕.
     tap = await game(hass, game="dig", guess="dig")
     shown = (tap["round"], tap["wins"], tap["basket"])

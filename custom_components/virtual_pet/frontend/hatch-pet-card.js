@@ -1703,6 +1703,7 @@ const GAME_COPY = {
   back: "we're back! dig or keep ♪", // F8, a dig carried on
   empty: "dig first! the basket's empty", // F12, keep on an empty basket
   idle: "let's dig another time ♪", // Q8, the card closes a dig left idle
+  dugThere: "oh! you dug there too ♪", // UX6 F16, a screen adopts the same person's other screen's dig
 };
 // --- end fresh-expand copy ---
 // Approved lines the scan's nag words ("again", "forgot...") would refuse: a retry, "just us",
@@ -10674,8 +10675,13 @@ class HatchPetCard extends HTMLElement {
       // A known refusal is said once, by _react, from the care log; only an
       // unknown result gets a line here. no_game is never logged (a Higher or
       // Lower game the server dropped for idling): said here.
-      // A dig: keep on an empty basket means another screen kept it first; no
-      // game while theirs is parked means another screen put it aside.
+      // A dig: keep on an empty basket means another screen kept it first (the same
+      // person's: adopt the server's round, F16; anyone else's ends); no game while
+      // theirs is parked means another screen of theirs put it aside (closes quietly).
+      if (data.game === "dig" && info?.result === "empty_basket" && info.yours) {
+        this._digAdopt(s, game, info);
+        return null;
+      }
       if (info?.result === "no_game" && !info.parked && data.guess && data.game !== "dig") {
         // F13: the server lost this game (a restart, the idle drop): the line comes true, a
         // new game starts after it (taps are ignored meanwhile: the game is still busy).
@@ -10684,7 +10690,7 @@ class HatchPetCard extends HTMLElement {
         return null;
       }
       this._endGame(s, info?.result === "empty_basket" ? "oh! someone else is playing with me"
-        : info?.result === "no_game" && info.parked ? "maybe later!"
+        : info?.result === "no_game" && info.parked ? GAME_COPY.parked
         : info?.result === "no_game" ? REFUSALS.no_game : REFUSALS[info?.result] ? null : "not now");
       return null;
     }
@@ -10856,10 +10862,15 @@ class HatchPetCard extends HTMLElement {
       : info.found === "bee" ? next && info.wins === g.wins
       : info.found === "kept" ? next && info.wins === g.wins + g.basket
       : info.found === "berry" && next && info.wins === g.wins + g.basket + 1;
-    if (!fits) {
+    // F16: out of step but the server says it is this person's own dig (their other
+    // screen played): adopt the server's round, bank and basket, say so once. Anyone
+    // else's reply out of step still ends.
+    const adopted = !fits && !!info.yours && !!info.found;
+    if (!fits && !adopted) {
       this._endGame(s, "oh! someone else is playing with me");
       return;
     }
+    const say = (line) => this._write(s, adopted ? GAME_COPY.dugThere : line);
     g.round = info.round;
     g.wins = info.wins;
     g.basket = info.basket;
@@ -10873,20 +10884,20 @@ class HatchPetCard extends HTMLElement {
       s.propEl.style.bottom = "40%";
       s.propEl.style.transform = "";
       s.propEl.hidden = false;
-      this._write(s, "bzz! the berries rolled away");
+      say("bzz! the berries rolled away");
       this._reactFrames(s, "refused", { inGame: true }); // F5: a bored look at the bee
       this._chirp(s, "buzz"); // F14
     } else if (info.round_over) {
       this._animate(s, s.pet, "perk", 300);
-      this._write(s, "safe in the basket ♪");
+      say("safe in the basket ♪");
       this._chirp(s, "tap");
     } else if (Math.random() < SHINY_ODDS) {
       this._sparkle(s); // D-b: a shiny one, said only (the berry is the server's, the same)
-      this._write(s, SHINY_LINE);
+      say(SHINY_LINE);
       this._animate(s, s.pet, "perk", 300); // F5
       this._chirp(s, "tap");
     } else {
-      this._write(s, "a berry!");
+      say("a berry!");
       this._animate(s, s.pet, "perk", 300); // F5
       this._chirp(s, "tap");
     }
@@ -10911,6 +10922,22 @@ class HatchPetCard extends HTMLElement {
         s.gameBox.querySelector(".gr").focus({ preventScroll: true });
       }
     });
+  }
+
+  // F16: keep on an empty basket, from this person's own other screen having kept it
+  // first: the reply carries where the dig stands, no tap of ours was played. Adopt it.
+  _digAdopt(s, g, info) {
+    g.round = info.round;
+    g.wins = info.wins;
+    g.basket = info.basket;
+    g.lastAt = Date.now();
+    g.busy = false;
+    g.prompt = "dig or keep?";
+    this._digShow(s, info);
+    this._animate(s, s.gameNum, "flip", 300);
+    this._write(s, GAME_COPY.dugThere, 60000);
+    s.sayUntil = Date.now() + 60000;
+    s.gameBox.querySelector(".gr").focus({ preventScroll: true });
   }
 
   // --- Seasons --------------------------------------------------------------
