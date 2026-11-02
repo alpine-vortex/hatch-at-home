@@ -9296,10 +9296,14 @@ async function main() {
       return out;
     });
     check(`react: ${stage} a won game's log reacts even if the game is still open`, won.live && won.src.includes(`/${stage}_${own("cheer")}_`), JSON.stringify(won));
-    for (const result of ["asleep", "egg", "away", "no_game", "unfair", "spoiled", "lost"]) {
+    for (const result of ["asleep", "egg", "away", "no_game", "unfair", "spoiled"]) {
       const r = await react({ action: "play", result });
       check(`react: ${stage} ${result} does nothing`, !r.live && r.moves.length === 0, JSON.stringify(r));
     }
+    // UX fix 6 (F5): a lost game settles on the content frames (a species with acts.aww plays it).
+    const lostReact = await react({ action: "play", result: "lost" });
+    check(`react: ${stage} lost settles on the content frames`,
+      lostReact.live && lostReact.moves.includes("settle") && lostReact.src.includes(`/${stage}_content_`), JSON.stringify(lostReact));
     const after = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       el._react(s, { action: "feed", result: "ok", at: Date.now() / 1000 });
