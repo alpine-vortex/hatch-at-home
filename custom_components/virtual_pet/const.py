@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 
 DOMAIN = "virtual_pet"
-VERSION = "0.42.0"  # keep in step with manifest.json (a test checks)
+VERSION = "0.43.0"  # keep in step with manifest.json (a test checks)
 LOGGER = logging.getLogger(__package__)
 
 CONF_BEDTIME = "bedtime"
@@ -73,6 +73,16 @@ PRIVATE_READINGS = {
 }
 DEFAULT_ZONE = "zone.home"
 CONF_FIREPLACE = "fireplace"
+# The house answering the pet's requests (ha-signals H3): what counts as the
+# heating being on, and as cooling (a fan, air conditioning).
+CONF_HEATING = "heating"
+CONF_COOLING = "cooling"
+# Robot vacuums (ha-signals H4): every vacuum.* counts; this turns it off.
+CONF_NOTICE_ROBOT = "notice_robot"
+# Appliances that finish a cycle (ha-signals H6): washer, dryer, dishwasher.
+# appliance_watts: at or under this a power reading means "not running" (W).
+CONF_APPLIANCES = "appliances"
+CONF_APPLIANCE_WATTS = "appliance_watts"
 CONF_COMFORT_LOW = "comfort_low"  # stored in °C, shown in the owner's unit
 CONF_COMFORT_HIGH = "comfort_high"
 CONF_AWAY_AFTER = "away_after"  # hours

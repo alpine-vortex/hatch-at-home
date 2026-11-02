@@ -14,11 +14,14 @@ from homeassistant.util import dt as dt_util
 
 from . import model
 from .const import (
+    CONF_APPLIANCES,
     CONF_AQI,
     CONF_BEDTIME_LIGHTS,
     CONF_CHORES,
+    CONF_COOLING,
     CONF_DASHBOARD,
     CONF_FIREPLACE,
+    CONF_HEATING,
     CONF_INDOOR_TEMP,
     CONF_LUX,
     CONF_MOON_ALTITUDE,
@@ -38,11 +41,14 @@ from .coordinator import PetConfigEntry
 
 # Which entities the owner mapped says a lot about their house.
 REDACT_OPTIONS = {
+    CONF_APPLIANCES,
     CONF_AQI,
     CONF_BEDTIME_LIGHTS,
     CONF_CHORES,
+    CONF_COOLING,
     CONF_DASHBOARD,  # the house's dashboard paths
     CONF_FIREPLACE,
+    CONF_HEATING,
     CONF_INDOOR_TEMP,
     CONF_LUX,
     CONF_MOON_ALTITUDE,
@@ -60,6 +66,21 @@ REDACT_OPTIONS = {
 # People: who cared for the pet, who gets its notifications, and who's close.
 # "player": whose Berry dig it is.
 # "social": the social meter's days (top10 §6).
+# The people store isn't in diagnostics. If a later dump adds it, these go (a person's
+# follow-ups and asks, fresh-expand F1; their typed text and mood are never stored).
+# Its own set: "likes" is a voice key in the pet's debug, so the shared ones can't hold it.
+REDACT_PEOPLE = {
+    "follow",
+    "follow_asked",
+    "follow_last",
+    "follow_miss",
+    "asked",
+    "likes",
+    "birthday",
+    "zone",
+    "alarms",
+}
+
 REDACT_STATE = {
     "by",
     "notify_users",

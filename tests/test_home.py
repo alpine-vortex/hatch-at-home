@@ -225,6 +225,51 @@ def test_new_moon_is_a_starry_night_without_a_bonus():
     assert e.bonus == {}
 
 
+def _utc(y, m, d) -> float:
+    import datetime as dt
+
+    return dt.datetime(y, m, d, tzinfo=dt.UTC).timestamp()
+
+
+@pytest.mark.parametrize(
+    ("when", "expected"),
+    [
+        (_utc(2026, 11, 24), "full_moon"),  # age 14.1 d
+        (_utc(2026, 11, 9), "new_moon"),  # age 28.6 d: the window wraps the month end
+        (_utc(2026, 11, 11), "new_moon"),  # just past age 0
+        (_utc(2026, 11, 17), None),  # a quarter
+        (_utc(2026, 12, 2), None),  # the other quarter
+    ],
+)
+def test_moon_by_date_full_and_new_windows_wrap(when, expected):
+    assert home.moon_by_date(when) == expected
+
+
+def test_moon_from_the_date_when_no_sensor_is_mapped():
+    e = evaluate(Readings(night=True, sun_up=False, moon_date="full_moon"))
+    assert "full_moon" in e.flags
+    assert e.bonus["happiness"] == R.HOME_MOON_HAPPINESS
+    new = evaluate(Readings(night=True, sun_up=False, moon_date="new_moon"))
+    assert "new_moon" in new.flags
+
+
+def test_a_mapped_moon_sensor_wins_over_the_date():
+    e = evaluate(
+        Readings(
+            night=True,
+            sun_up=False,
+            moon_phase="waxing_crescent",
+            moon_date="full_moon",
+        )
+    )
+    assert "full_moon" not in e.flags
+
+
+def test_the_date_moon_needs_night():
+    day = evaluate(Readings(night=False, sun_up=True, moon_date="full_moon"))
+    assert "full_moon" not in day.flags and "happiness" not in day.bonus
+
+
 def test_thunder_hides_it_under_a_blanket_and_wind_is_noticed():
     storm = evaluate(Readings(night=False, condition="lightning"))
     assert "storm" in storm.flags and storm.requests == ["blanket"]
@@ -411,3 +456,178 @@ def test_waking_by_hand_before_bedtime_beats_the_dark_house():
     assert not pet.asleep
     model.advance(pet, at(17, 25), quiet, NoLuck(), max_gap=None)
     assert not pet.asleep  # the switch is the top authority for a while
+
+
+# --- ha-signals H3: the house answers blanket and fan requests ---------------
+
+
+def test_heating_on_stops_the_chilly_blanket_ask():
+    cold = evaluate(Readings(night=False, indoor_c=15))
+    assert cold.requests == ["blanket"] and cold.reason() == "brr... a blanket?"
+    warmed = evaluate(Readings(night=False, indoor_c=15, heating_on=True))
+    assert warmed.requests == []
+    assert warmed.reason() == "nice and cozy"  # the owner's Q-B: cozy, not chilly
+
+
+def test_rain_still_asks_for_a_blanket_while_the_heating_is_on():
+    e = evaluate(Readings(night=False, condition="rainy", indoor_c=15, heating_on=True))
+    assert e.requests == ["blanket"]
+    storm = evaluate(
+        Readings(night=False, condition="lightning", indoor_c=21, heating_on=True)
+    )
+    assert storm.requests == ["blanket"]
+
+
+def test_cooling_on_stops_the_warm_fan_ask():
+    assert evaluate(Readings(night=False, indoor_c=29)).requests == ["fan"]
+    cooled = evaluate(Readings(night=False, indoor_c=29, cooling_on=True))
+    assert cooled.requests == []
+    assert cooled.reason() == "ahh, that breeze"
+    # The heating being on says nothing about a warm room.
+    assert evaluate(Readings(night=False, indoor_c=29, heating_on=True)).requests == [
+        "fan"
+    ]
+
+
+def moments(m, r, today="2026-11-01", **kw):
+    return [e for e in m.update(r, 0.0, kw.pop("awake", True), False, today, **kw)]
+
+
+def cold(**kw):
+    return Readings(night=False, indoor_c=15, **kw)
+
+
+def test_heating_turning_on_while_chilly_is_a_house_moment():
+    m = home.HouseMoments()
+    assert moments(m, cold()) == []  # the first reading is a baseline
+    assert moments(m, cold(heating_on=True)) == [
+        {"type": "house_answered", "request": "blanket"}
+    ]
+    assert moments(m, cold(heating_on=True)) == []  # still on: nothing new
+
+
+def test_heating_already_on_or_a_comfortable_room_gives_no_moment():
+    m = home.HouseMoments()
+    assert moments(m, cold(heating_on=True)) == []  # on at the first reading
+    m = home.HouseMoments()
+    moments(m, Readings(night=False, indoor_c=21))
+    assert moments(m, Readings(night=False, indoor_c=21, heating_on=True)) == []
+    m = home.HouseMoments()
+    moments(m, cold(fireplace=True))
+    assert moments(m, cold(fireplace=True, heating_on=True)) == []  # not asking
+
+
+def test_the_house_waits_for_an_awake_pet_and_an_open_request():
+    m = home.HouseMoments()
+    moments(m, cold())
+    assert moments(m, cold(heating_on=True), awake=False) == []
+    m = home.HouseMoments()
+    moments(m, cold())
+    assert (
+        moments(m, cold(heating_on=True), satisfied=frozenset({"blanket"})) == []
+    )  # already tucked in
+
+
+def test_cooling_turning_on_while_warm_is_a_house_moment():
+    m = home.HouseMoments()
+    warm = Readings(night=False, indoor_c=29)
+    moments(m, warm)
+    assert moments(m, Readings(night=False, indoor_c=29, cooling_on=True)) == [
+        {"type": "house_answered", "request": "fan"}
+    ]
+
+
+def robot(**kw):
+    return Readings(night=False, **kw)
+
+
+def test_cleaning_then_docked_gives_robot_out_then_robot_home():
+    m = home.HouseMoments()
+    assert moments(m, robot(robot_docked=True)) == []  # the baseline
+    assert moments(m, robot(robot_cleaning=True)) == [{"type": "robot_out"}]
+    assert moments(m, robot(robot_cleaning=True)) == []  # still at it
+    assert moments(m, robot(robot_docked=True)) == [{"type": "robot_home"}]
+    assert moments(m, robot(robot_docked=True)) == []  # once per run
+
+
+def test_a_run_already_going_at_the_first_reading_says_nothing():
+    m = home.HouseMoments()
+    assert moments(m, robot(robot_cleaning=True)) == []
+    assert moments(m, robot(robot_docked=True)) == []
+
+
+def test_a_fourth_run_in_a_day_gives_no_moment():
+    m = home.HouseMoments()
+    moments(m, robot(robot_docked=True))
+    heard = []
+    for _ in range(4):
+        heard += moments(m, robot(robot_cleaning=True))
+        heard += moments(m, robot(robot_docked=True))
+    assert R.ROBOT_MOMENTS_PER_DAY == 3
+    assert heard == [{"type": "robot_out"}, {"type": "robot_home"}] * 3
+    tomorrow = "2026-11-02"
+    assert moments(m, robot(robot_cleaning=True), today=tomorrow) == [
+        {"type": "robot_out"}
+    ]
+
+
+def test_the_robot_is_dropped_while_asleep_or_away():
+    m = home.HouseMoments()
+    moments(m, robot(robot_docked=True))
+    assert moments(m, robot(robot_cleaning=True), awake=False) == []
+    # The run it didn't see has no homecoming, even if the pet woke meanwhile.
+    assert moments(m, robot(robot_docked=True)) == []
+    moments(m, robot(robot_cleaning=True))  # seen, now it sleeps
+    assert moments(m, robot(robot_docked=True), awake=False) == []
+    # The paused or errored robot isn't "home".
+    moments(m, robot(robot_cleaning=True))
+    assert moments(m, Readings(night=False)) == []
+
+
+def test_a_cleaning_robot_is_the_vroom_flag_and_nothing_more():
+    e = evaluate(Readings(night=False, robot_cleaning=True))
+    assert e.flags == ["vroom"] and e.bonus == {} and e.requests == []
+    assert e.reason() == "a robot's zooming around!"
+    fire = evaluate(Readings(night=False, robot_cleaning=True, fireplace=True))
+    assert fire.reason() == "toasty by the fire~"  # fireside outranks it
+    assert evaluate(Readings(night=False)).flags == []
+
+
+def test_the_house_answers_at_most_twice_a_day():
+    m = home.HouseMoments()
+    moments(m, cold())
+    heard = 0
+    for _ in range(3):
+        heard += len(moments(m, cold(heating_on=True)))
+        moments(m, cold())
+    assert heard == R.HOUSE_ANSWERS_PER_DAY == 2
+    moments(m, cold())
+    assert len(moments(m, cold(heating_on=True), today="2026-11-02")) == 1
+
+
+def test_the_house_tucks_the_pet_in_without_a_care_entry():
+    pet = hatched(at(12, 0))
+    before = pet.happiness
+    events = model.house_answer(pet, "blanket", at(12, 0))
+    assert events == [{"type": "house_answered", "request": "blanket"}]
+    assert pet.cozy_until == at(12, 0) + R.COMFORT_MINUTES * 60
+    assert pet.happiness == min(100.0, before + R.BLANKET_HAPPINESS)
+    assert pet.care_log == []
+    assert model.house_answer(pet, "blanket", at(12, 30)) == []  # already cozy
+    fan = model.house_answer(pet, "fan", at(12, 30))
+    assert fan == [{"type": "house_answered", "request": "fan"}]
+    pet.asleep = True
+    assert model.house_answer(pet, "fan", at(18, 0)) == []
+
+
+def test_a_finished_appliance_is_a_house_moment_once_per_kind():
+    m = home.HouseMoments()
+    assert moments(m, Readings(night=False)) == []
+    done = Readings(night=False, appliances_done=("dishwasher", "washer"))
+    assert moments(m, done) == [
+        {"type": "appliance_done", "kind": "dishwasher"},
+        {"type": "appliance_done", "kind": "washer"},
+    ]
+    # It is dropped while the pet is asleep, away or an egg: no catching up.
+    assert moments(m, done, awake=False) == []
+    assert moments(m, Readings(night=False)) == []

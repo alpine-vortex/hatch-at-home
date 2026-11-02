@@ -9,6 +9,7 @@ from typing import Any
 
 from freezegun.api import FrozenDateTimeFactory
 from homeassistant import config_entries
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import (
     CONF_NAME,
     EVENT_HOMEASSISTANT_STARTED,
@@ -38,10 +39,20 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 
-from custom_components.virtual_pet import model, people as P
+from custom_components.virtual_pet import model, notify, people as P
 from custom_components.virtual_pet.const import DOMAIN
 
 STORE_KEY = f"{DOMAIN}.test_pet"
+
+# The one-time likes, all answered (the favourite visitor in every world, F4).
+ASKED_LIKES = {
+    "fav_weather": "sun",
+    "fav_season": "autumn",
+    **{
+        P.fav_visitor_key(w): "x"
+        for w in ("woodland", "terrarium", "hearth", "tidepool", "pond", "nightsky")
+    },
+}
 
 
 def entry() -> MockConfigEntry:
@@ -80,6 +91,12 @@ async def press(hass: HomeAssistant, entity_id: str) -> None:
     await hass.services.async_call(
         "button", "press", {"entity_id": entity_id}, blocking=True
     )
+
+
+def call_texts(reason: str, name: str = "Pip") -> list[list[str]]:
+    """A call's phone message as one of its phrasings (E11: one a day by the
+    call's start day): each as the one-message list a test compares with."""
+    return [[t.format(name=name)] for t in notify.CALLS[reason]]
 
 
 @pytest.fixture
@@ -409,6 +426,7 @@ async def test_options_flow_saves_a_flat_mapping(
             "activity": {"zone": "zone.home", "tv": ["media_player.tv"]},
             "sky": {},
             "privacy": {"privacy": True},
+            "house": {},
             "notifications": {},
         },
     )
@@ -425,6 +443,8 @@ async def test_options_flow_saves_a_flat_mapping(
         "comfort_high": 26.5,
         "away_after": 2.0,
         "sitter_settles": True,
+        "notice_robot": True,
+        "appliance_watts": 5.0,
     }
 
 
@@ -448,6 +468,94 @@ async def test_rain_makes_a_blanket_request(
 
     await press(hass, "button.pip_blanket")
     assert hass.states.get("sensor.pip_mood").state == "cozy"
+
+
+async def test_the_house_answers_a_chilly_pet_when_the_heating_comes_on(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("sensor.indoor", "21", {"unit_of_measurement": "°C"})
+    hass.states.async_set("input_boolean.fake_heater", "off")
+    await setup_with_house(
+        hass, indoor_temperature="sensor.indoor", heating="input_boolean.fake_heater"
+    )
+    heard = async_capture_events(hass, f"{DOMAIN}_house_answered")
+    asked = async_capture_events(hass, f"{DOMAIN}_request_answered")
+    hass.states.async_set("sensor.indoor", "15", {"unit_of_measurement": "°C"})
+    await settle(hass, freezer)
+    mood = hass.states.get("sensor.pip_mood")
+    assert mood.attributes["requests"] == ["blanket"]
+
+    for cycle in range(3):
+        hass.states.async_set("input_boolean.fake_heater", "on")
+        await settle(hass, freezer)
+        mood = hass.states.get("sensor.pip_mood")
+        # Heating on stops the ask for as long as it is on: the pet is cozy.
+        assert mood.attributes["requests"] == []
+        assert mood.attributes["reason"] == "nice and cozy"
+        assert len(heard) == min(cycle + 1, 2)  # two a day, then none
+        hass.states.async_set("input_boolean.fake_heater", "off")
+        for _ in range(25):  # the comfort runs out
+            await settle(hass, freezer, 5 * 60)
+    assert [e.data["request"] for e in heard] == ["blanket", "blanket"]
+    assert not asked  # nobody pressed anything
+    moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
+    answered = [m for m in moments if m["type"] == "house_answered"]
+    assert len(answered) == 2
+    assert set(answered[0]) == {"type", "request", "at"}  # no entity, no more
+
+
+async def test_a_vacuum_nobody_mapped_is_heard_and_moves_the_pet(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """H4: every vacuum.* counts. Its state change alone, with nothing else
+    changing, reaches the pet within the debounce."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("vacuum.robo", "docked")
+    await setup_with_house(hass)
+    assert "robot" in hass.states.get("sensor.pip_life_stage").attributes["senses"]
+    out = async_capture_events(hass, f"{DOMAIN}_robot_out")
+    home = async_capture_events(hass, f"{DOMAIN}_robot_home")
+    assert "vroom" not in hass.states.get("sensor.pip_mood").attributes["flags"]
+
+    hass.states.async_set("vacuum.robo", "cleaning")
+    await settle(hass, freezer)
+    mood = hass.states.get("sensor.pip_mood")
+    assert "vroom" in mood.attributes["flags"]
+    assert mood.attributes["reason"] == "a robot's zooming around!"
+    assert len(out) == 1 and set(out[0].data) == {"pet_id"}  # no vacuum named
+
+    hass.states.async_set("vacuum.robo", "returning")
+    await settle(hass, freezer)
+    assert "vroom" not in hass.states.get("sensor.pip_mood").attributes["flags"]
+    assert len(home) == 1
+    types = [
+        m["type"] for m in hass.states.get("sensor.pip_last_care").attributes["moments"]
+    ]
+    assert types[:2] == ["robot_home", "robot_out"]
+
+
+async def test_notice_robot_off_gives_no_vroom(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("vacuum.robo", "docked")
+    await setup_with_house(hass, notice_robot=False)
+    out = async_capture_events(hass, f"{DOMAIN}_robot_out")
+    assert "robot" not in hass.states.get("sensor.pip_life_stage").attributes["senses"]
+    hass.states.async_set("vacuum.robo", "cleaning")
+    await settle(hass, freezer)
+    assert "vroom" not in hass.states.get("sensor.pip_mood").attributes["flags"]
+    assert not out
 
 
 async def test_dropout_holds_then_counts_as_no_signal(
@@ -620,6 +728,7 @@ async def test_options_show_fahrenheit_and_store_celsius(
         "activity": {"zone": "zone.home", "away_after": 2},
         "sky": {},
         "privacy": {"privacy": True},
+        "house": {},
         "notifications": {},
     }
     result = await hass.config_entries.options.async_configure(
@@ -715,7 +824,7 @@ async def test_notifications_go_to_the_users_who_opted_in(
     for _ in range(6):  # half an hour: hunger drops below 25 and it calls
         await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
-    assert [c.data["message"] for c in mine] == ["Pip is hungry!"]
+    assert [c.data["message"] for c in mine] in call_texts("hunger")
     assert mine[0].data["data"]["tag"] == "virtual_pet_test_pet_call"
     assert mine[0].data["data"]["actions"] == [
         {"action": "VIRTUAL_PET:test_pet:feed", "title": "Feed"}
@@ -830,6 +939,7 @@ async def test_options_reject_impossible_settings(
         "activity": {"zone": "zone.home"},
         "sky": {},
         "privacy": {"privacy": True},
+        "house": {},
         "notifications": {},
     }
     result = await hass.config_entries.options.async_configure(
@@ -1278,7 +1388,7 @@ async def test_notification_buttons_care_for_the_pet_and_clear_the_call(
     for _ in range(6):  # hunger drops below 25 and it calls
         await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
-    assert [c.data["message"] for c in phone] == ["Pip is hungry!"]
+    assert [c.data["message"] for c in phone] in call_texts("hunger")
 
     hass.bus.async_fire(
         "mobile_app_notification_action",
@@ -2304,7 +2414,7 @@ async def test_back_from_the_gym_then_how_was_your_day(
     coordinator.state.wish["kind"] = "bath"
     coordinator.people.person(me.id)["my_day"] = True
     coordinator.people.person(me.id).update(
-        likes={"fav_weather": "sun", "fav_season": "autumn"}, birthday_skipped=True
+        likes=ASKED_LIKES, birthday_skipped=True
     )  # asked before
     for place in ("not_home", "Gym", "not_home", "home"):
         hass.states.async_set("person.sam", place, {"user_id": me.id})
@@ -2509,7 +2619,8 @@ async def test_tonights_dream_is_the_one_they_picked(
     for _ in range(11 * 12):
         await settle(hass, freezer, 5 * 60)
     assert hass.states.get("sensor.pip_life_stage").attributes["dream"] == {
-        "kind": "picked"
+        "kind": "picked",
+        "pick": "sea",  # what, never who (fresh-expand F2)
     }
     notes = (await coordinator.async_visit(me.id))["notes"]
     assert {"kind": "dream", "pick": "sea", "yours": True} in notes
@@ -2605,7 +2716,7 @@ async def test_coming_home_from_anywhere_still_counts_the_visit(
     )
     config = await setup(hass)
     config.runtime_data.people.person(me.id).update(
-        likes={"fav_weather": "sun", "fav_season": "autumn"}, birthday_skipped=True
+        likes=ASKED_LIKES, birthday_skipped=True
     )  # asked before
     hass.states.async_set("person.sam", "not_home", {"user_id": me.id})
     await settle(hass, freezer, 60)
@@ -2705,7 +2816,7 @@ async def test_two_pets_looked_at_together_say_a_person_line_once(
         pets[-1].state.wish = None
     pets[0].people.person(me.id)["my_day"] = True
     pets[0].people.person(me.id).update(
-        likes={"fav_weather": "sun", "fav_season": "autumn"}, birthday_skipped=True
+        likes=ASKED_LIKES, birthday_skipped=True
     )  # asked before
     # Reading the phones' history awaits the recorder: let the other pet run then.
     from custom_components.virtual_pet import wellbeing
@@ -2831,6 +2942,10 @@ async def test_a_look_has_room_for_three_lines(
     coordinator.state.wish = None
     picked = {"kind": "picked", "pick": "sea", "user": me.id, "day": "2026-10-29"}
     coordinator.state.dream = dict(picked)
+    # No follow-up due this week (one would take the dream's slot, F1).
+    coordinator.people.person(me.id)["follow_last"] = dict.fromkeys(
+        P.FOLLOW_QUESTIONS, "2026-10-29"
+    )
     first = await coordinator.async_visit(me.id, queued=2)
     assert len(first["notes"]) == 1 and first["ask"] is None  # 2 + 1 = 3: no room
     coordinator._visits.clear()
@@ -3458,7 +3573,7 @@ async def test_an_old_latch_recalls_once_in_the_bundle_as_a_normal_push(
     for _ in range(3):
         await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
-    assert [c.data["message"] for c in phone] == ["Pip is hungry!"]
+    assert [c.data["message"] for c in phone] in call_texts("hunger")
     data = phone[0].data["data"]
     assert data["tag"] == "virtual_pet_recalls"
     assert "push" not in data and "actions" not in data  # normal, no buttons
@@ -3467,6 +3582,51 @@ async def test_an_old_latch_recalls_once_in_the_bundle_as_a_normal_push(
     await hass.async_block_till_done()
     assert phone[-1].data["message"] == "clear_notification"
     assert phone[-1].data["data"]["tag"] == "virtual_pet_recalls"
+
+
+async def test_a_call_keeps_its_start_days_phrasing_past_midnight(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    # Review #24: the recall bundle re-sends the open call in the words it was
+    # sent with, so the day is the call's start day, not today.
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    started = now - 15 * 3600  # 23:00 the day before
+    coordinator.state.call = model.Call("hunger", started, started + 3600)
+    day = dt_util.as_local(dt_util.utc_from_timestamp(started)).date()
+    assert coordinator._call_day() == day != dt_util.now().date()
+    said = notify.message({"type": "call_started", "reason": "hunger"}, "Pip", {}, day)
+    assert said == notify.call_line("hunger", "Pip", day)
+    coordinator.state.call = None
+    assert coordinator._call_day() == dt_util.now().date()
+
+
+async def test_became_sick_speaks_today_not_an_older_open_calls_day(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    # Audit 0.43.0 F-04: a pet sick while asleep across midnight, woken by hand
+    # next day, still holds its paused call from the day before; the sickness
+    # message is today's phrase, while that call's own re-call keeps its day.
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    phone = await _notified(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    started = now - 15 * 3600  # 23:00 the day before
+    coordinator.state.call = model.Call("hunger", started, started + 3600)
+    today = dt_util.now().date()
+    before = coordinator._call_day()
+    assert before != today
+    assert notify.call_line("sick", "Pip", before) != notify.call_line(
+        "sick", "Pip", today
+    )
+    coordinator._notify({"type": "became_sick", "cause": "poop"}, False)
+    await hass.async_block_till_done()
+    assert [c.data["message"] for c in phone] == [
+        notify.call_line("sick", "Pip", today)
+    ]
+    assert coordinator._call_day("became_sick") == today
+    assert coordinator._call_day() == before  # call_started keeps the call's day
 
 
 async def test_a_poop_call_sends_no_push(
@@ -3500,7 +3660,7 @@ async def test_falling_ill_sends_one_push(
     await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
     assert hass.states.get("binary_sensor.pip_calling").state == "on"
-    assert [c.data["message"] for c in phone] == ["Pip feels sick. Medicine?"]
+    assert [c.data["message"] for c in phone] in call_texts("sick")
 
 
 async def test_a_poop_call_taking_over_clears_the_call_on_the_phone(
@@ -3516,7 +3676,7 @@ async def test_a_poop_call_taking_over_clears_the_call_on_the_phone(
     phone = await _notified(hass)
     await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
-    assert [c.data["message"] for c in phone] == ["Pip wants to play!"]
+    assert [c.data["message"] for c in phone] in call_texts("happiness")
     await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
     assert phone[-1].data["message"] == "clear_notification"
@@ -3548,7 +3708,7 @@ async def test_a_sickness_woken_by_hand_sends_one_push(
     await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
     assert hass.states.get("binary_sensor.pip_calling").state == "on"
-    assert [c.data["message"] for c in phone] == ["Pip feels sick. Medicine?"]
+    assert [c.data["message"] for c in phone] in call_texts("sick")
 
 
 async def test_removing_the_last_pet_clears_its_recall_bundle(
@@ -3564,7 +3724,7 @@ async def test_removing_the_last_pet_clears_its_recall_bundle(
     phone = await _notified(hass)
     await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
-    assert [c.data["message"] for c in phone] == ["Pip is hungry!"]
+    assert [c.data["message"] for c in phone] in call_texts("hunger")
     # A reload (an options change) keeps it: the pet still asks.
     assert await hass.config_entries.async_reload(config.entry_id)
     await hass.async_block_till_done()
@@ -3840,11 +4000,11 @@ async def test_senses_are_kinds_never_entities(
         "bedtime",
     ):
         assert value not in text, value
-    # Nothing mapped: an empty list.
+    # Nothing mapped: only the moon, which every pet reads from the date.
     hass.config_entries.async_update_entry(config, options={})
     await hass.config_entries.async_reload(config.entry_id)
     await hass.async_block_till_done()
-    assert hass.states.get("sensor.pip_life_stage").attributes["senses"] == []
+    assert hass.states.get("sensor.pip_life_stage").attributes["senses"] == ["moon"]
 
 
 async def test_social_meter_links_and_a_greeted_visitor(
@@ -3957,5 +4117,231 @@ async def test_a_visitor_dream_names_its_visitor_and_no_other_dream_grows(
         "world": "woodland",
     }
     assert shown({"kind": "picked", "pick": "sea", "user": "abc", "id": "x"}) == {
-        "kind": "picked"
+        "kind": "picked",
+        "pick": "sea",
     }
+    # An unknown pick (a hand-edited save) is left out; the user never shows.
+    assert shown({"kind": "picked", "pick": "<b>", "user": "abc"}) == {"kind": "picked"}
+
+
+# --- ha-signals H2: the weather default and its one-time migration ---------------
+
+
+def _weather(
+    hass: HomeAssistant,
+    object_id: str,
+    platform: str = "met",
+    *,
+    track_home: bool | None = None,
+    **kwargs: Any,
+) -> str:
+    """Register a weather entity (for met, under a config entry that may track home)."""
+    config = None
+    if track_home is not None:
+        config = MockConfigEntry(domain=platform, data={"track_home": track_home})
+        config.add_to_hass(hass)
+    return (
+        er.async_get(hass)
+        .async_get_or_create(
+            "weather",
+            platform,
+            f"uid_{object_id}",
+            suggested_object_id=object_id,
+            config_entry=config,
+            **kwargs,
+        )
+        .entity_id
+    )
+
+
+def _old_pet(
+    minor: int = 1, options: dict[str, Any] | None = None, version: int = 1
+) -> MockConfigEntry:
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Pip",
+        data={CONF_NAME: "Pip", "new_pet": True},
+        options=options or {},
+        entry_id="test_pet",
+        minor_version=minor,
+        version=version,
+    )
+
+
+async def _load(hass: HomeAssistant, config: MockConfigEntry) -> MockConfigEntry:
+    await hass.config.async_set_time_zone("UTC")
+    config.add_to_hass(hass)
+    await hass.config_entries.async_setup(config.entry_id)
+    await hass.async_block_till_done()
+    return config
+
+
+async def _new_pet_options(hass: HomeAssistant) -> dict[str, Any]:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_NAME: "Juniper", "world": "woodland"}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    return dict(result["options"])
+
+
+async def test_a_new_pet_starts_on_the_met_home_weather(hass: HomeAssistant) -> None:
+    home = _weather(hass, "forecast_home", track_home=True)
+    _weather(hass, "zz_other", "other")
+    assert home == "weather.forecast_home"
+    assert (await _new_pet_options(hass))["weather"] == "weather.forecast_home"
+
+
+async def test_a_new_pet_uses_a_yaml_weather_without_a_registry_entry(
+    hass: HomeAssistant,
+) -> None:
+    hass.states.async_set("weather.yaml_one", "sunny")
+    assert (await _new_pet_options(hass))["weather"] == "weather.yaml_one"
+    hass.states.async_set("weather.yaml_two", "rainy")
+    assert "weather" not in await _new_pet_options(hass)  # two: not clear
+
+
+async def test_a_new_pet_with_no_weather_has_none(hass: HomeAssistant) -> None:
+    assert "weather" not in await _new_pet_options(hass)
+
+
+async def test_migration_fills_an_empty_weather_field_once(
+    hass: HomeAssistant,
+) -> None:
+    _weather(hass, "forecast_home", track_home=True)
+    config = await _load(hass, _old_pet())
+    assert config.state is ConfigEntryState.LOADED
+    assert config.options["weather"] == "weather.forecast_home"
+    assert config.minor_version == 2
+    assert config.version == 1
+
+
+async def test_migration_leaves_a_chosen_weather_alone(hass: HomeAssistant) -> None:
+    _weather(hass, "forecast_home", track_home=True)
+    config = await _load(hass, _old_pet(options={"weather": "weather.mine"}))
+    assert config.options["weather"] == "weather.mine"
+    assert config.minor_version == 2
+
+
+async def test_migration_with_no_weather_entity_still_bumps_the_version(
+    hass: HomeAssistant,
+) -> None:
+    config = await _load(hass, _old_pet())
+    assert "weather" not in config.options
+    assert config.minor_version == 2
+
+
+async def test_a_cleared_weather_field_stays_clear_after_a_reload(
+    hass: HomeAssistant,
+) -> None:
+    _weather(hass, "forecast_home", track_home=True)
+    config = await _load(hass, _old_pet(minor=2))
+    assert "weather" not in config.options
+    await hass.config_entries.async_reload(config.entry_id)
+    await hass.async_block_till_done()
+    assert config.state is ConfigEntryState.LOADED
+    assert "weather" not in config.options
+
+
+async def test_migration_ignores_states_and_reads_only_the_registry(
+    hass: HomeAssistant,
+) -> None:
+    hass.states.async_set("weather.yaml_one", "sunny")
+    config = await _load(hass, _old_pet())
+    assert "weather" not in config.options
+    assert config.minor_version == 2
+
+
+async def test_the_weather_default_log_names_no_entity(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level("DEBUG", logger="custom_components.virtual_pet")
+    _weather(hass, "forecast_home", track_home=True)
+    await _load(hass, _old_pet())
+    records = [r for r in caplog.records if "weather default set" in r.getMessage()]
+    assert len(records) == 1
+    assert "forecast_home" not in records[0].getMessage()
+    assert "weather." not in records[0].getMessage()
+    assert not records[0].args
+
+
+@pytest.mark.parametrize(
+    ("entities", "expected"),
+    [
+        # Two or more and no met home entry: the player chooses.
+        ([("aa", "other"), ("bb", "other")], None),
+        # Exactly one of any kind is clear.
+        ([("only_one", "other")], "weather.only_one"),
+        # Disabled and hidden ones don't count, so the one left is clear.
+        (
+            [
+                ("off", "other", {"disabled_by": er.RegistryEntryDisabler.USER}),
+                ("hid", "other", {"hidden_by": er.RegistryEntryHider.USER}),
+                ("fine", "other"),
+            ],
+            "weather.fine",
+        ),
+        # All of them disabled or hidden: none.
+        ([("off", "other", {"disabled_by": er.RegistryEntryDisabler.USER})], None),
+    ],
+)
+async def test_migration_fills_only_when_the_weather_is_clear(
+    hass: HomeAssistant, entities: list[tuple], expected: str | None
+) -> None:
+    for object_id, platform, *extra in entities:
+        _weather(hass, object_id, platform, **(extra[0] if extra else {}))
+    config = await _load(hass, _old_pet())
+    assert config.options.get("weather") == expected
+
+
+async def test_migration_prefers_the_entry_that_tracks_home(
+    hass: HomeAssistant,
+) -> None:
+    # A literal weather.forecast_home from a met entry that does not track home
+    # loses to the one that does.
+    _weather(hass, "forecast_home", track_home=False)
+    _weather(hass, "my_town", track_home=True)
+    config = await _load(hass, _old_pet())
+    assert config.options["weather"] == "weather.my_town"
+
+
+async def test_migration_skips_a_disabled_met_home_entity(
+    hass: HomeAssistant,
+) -> None:
+    _weather(
+        hass,
+        "forecast_home",
+        track_home=True,
+        disabled_by=er.RegistryEntryDisabler.USER,
+    )
+    _weather(hass, "elsewhere", track_home=False)
+    config = await _load(hass, _old_pet())
+    assert config.options["weather"] == "weather.elsewhere"  # the one left
+
+
+@pytest.mark.parametrize("key", ["rain", "indoor_temperature", "aqi", "solar"])
+async def test_migration_leaves_a_pet_with_any_weather_section_option(
+    hass: HomeAssistant, key: str
+) -> None:
+    _weather(hass, "forecast_home", track_home=True)
+    config = await _load(hass, _old_pet(options={key: "sensor.mine"}))
+    assert "weather" not in config.options
+    assert config.options[key] == "sensor.mine"
+    assert config.minor_version == 2
+
+
+async def test_migration_never_lowers_a_newer_minor_and_still_loads(
+    hass: HomeAssistant,
+) -> None:
+    _weather(hass, "forecast_home", track_home=True)
+    config = await _load(hass, _old_pet(minor=3))
+    assert config.state is ConfigEntryState.LOADED
+    assert config.minor_version == 3
+    assert "weather" not in config.options
+
+
+async def test_a_newer_major_version_is_not_migrated(hass: HomeAssistant) -> None:
+    config = await _load(hass, _old_pet(version=2))
+    assert config.state is ConfigEntryState.MIGRATION_ERROR

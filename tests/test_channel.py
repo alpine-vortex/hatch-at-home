@@ -98,6 +98,9 @@ async def test_each_person_hears_only_their_own_bond(
     )
     await setup(hass)
     mine = await subscribe(await hass_ws_client(hass))
+    # Audit 0.43.0 F-03: the server's day and evening, for the card's gate.
+    assert isinstance(mine["mine"].pop("follow_day"), str)
+    assert isinstance(mine["mine"].pop("follow_evening"), bool)
     assert mine["mine"] == {
         "bond": {"level": 5, "nickname": "sunbeam", "favourite": "simon"},
         "notify_me": True,
@@ -107,6 +110,8 @@ async def test_each_person_hears_only_their_own_bond(
         "birthday_phone": False,
         "birthday_kept": False,
         "gift": None,  # visitors v2 V-E: their waiting gift, none yet
+        "fav_visitor": None,  # F4: their favourite of this world's visitors
+        "follow_at": [],  # F1: no follow-up beat waiting
     }
     visit = mine["house"].pop("visit")  # today's visit (or none): no person in it
     assert visit is None or set(visit) == {"day", "id", "hours", "from", "until"}
@@ -437,3 +442,32 @@ async def test_became_sick_moment_keeps_only_the_weight_cause(
         for m in coordinator.moments
         if m["type"] == "became_sick"
     )
+
+
+async def test_the_evening_reaches_an_open_card_with_nothing_else_changing(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Audit 0.43.0 F-03: mine.follow_evening is pushed by the coordinator's own
+    5-minute tick (its listener is _push_watchers) when Home Assistant's hour
+    reaches 19, to a card already open, with no care or other change."""
+    me = hass_admin_user.id
+    hass_storage[STORE_KEY] = hatched_pet(now, bonds={me: {"points": LEVELS[1]}})
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.state.visit = {"day": today(), "world": "woodland", "id": None}
+    client = await hass_ws_client(hass)
+    snapshot = await subscribe(client)  # at 14:00
+    assert snapshot["mine"]["follow_evening"] is False
+    freezer.move_to("2026-10-26 18:52:00+00:00")
+    heard: list[bool] = []
+    for _ in range(4):  # the ticks to 19:12; nothing else is touched
+        await settle(hass, freezer, model.R.TICK_MINUTES * 60)
+        heard += [
+            e["mine"]["follow_evening"] for e in await pushed(client) if "mine" in e
+        ]
+    assert heard == [True]  # once, when the hour came

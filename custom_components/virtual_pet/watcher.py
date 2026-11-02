@@ -8,6 +8,8 @@ never reads as "nobody home, pitch dark".
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
+import re
 from typing import Any
 
 from homeassistant.const import (
@@ -24,9 +26,13 @@ from homeassistant.util.unit_conversion import SpeedConverter, TemperatureConver
 
 from . import rates as R
 from .const import (
+    CONF_APPLIANCE_WATTS,
+    CONF_APPLIANCES,
     CONF_AQI,
     CONF_BEDTIME_LIGHTS,
+    CONF_COOLING,
     CONF_FIREPLACE,
+    CONF_HEATING,
     CONF_INDOOR_TEMP,
     CONF_LUX,
     CONF_MOON_ALTITUDE,
@@ -34,6 +40,7 @@ from .const import (
     CONF_MOON_PHASE,
     CONF_MOTION,
     CONF_MUSIC,
+    CONF_NOTICE_ROBOT,
     CONF_RAIN,
     CONF_ROOM_LIGHTS,
     CONF_SOLAR,
@@ -42,7 +49,7 @@ from .const import (
     CONF_ZONE,
     DEFAULT_ZONE,
 )
-from .home import DayForecast, Readings
+from .home import DayForecast, Readings, moon_by_date
 
 BAD = (STATE_UNAVAILABLE, STATE_UNKNOWN)
 VIDEO = {"movie", "tvshow", "video", "episode", "channel"}
@@ -54,6 +61,9 @@ MULTI = (
     CONF_LUX,
     CONF_MUSIC,
     CONF_TV,
+    CONF_HEATING,
+    CONF_COOLING,
+    CONF_APPLIANCES,
 )
 SINGLE = (
     CONF_WEATHER,
@@ -68,6 +78,80 @@ SINGLE = (
 )
 # A fireplace can be a switch, light, climate, fan or sensor: these mean lit.
 LIT = {"on", "heat", "heating", "burning", "playing"}
+
+
+def heating_on(state: State) -> bool:
+    """Whether a mapped entity says the heating is on: a thermostat that is
+    heating (with no hvac_action, set to heat and still below its target), or a
+    switch or boolean that is on."""
+    domain = state.domain
+    if domain == "climate":
+        action = state.attributes.get("hvac_action")
+        if action is not None:
+            return action == "heating"
+        if state.state not in ("heat", "heat_cool"):
+            return False
+        current, target = (
+            _number(state.attributes.get("current_temperature")),
+            _number(state.attributes.get("temperature")),
+        )
+        return current is not None and target is not None and current < target
+    return state.state == "on"
+
+
+def cooling_on(state: State) -> bool:
+    """Whether a mapped entity says cooling is on: a fan that is on, a
+    thermostat that is cooling or running its fan (with no hvac_action, set to
+    cool or fan only), or a switch or boolean that is on."""
+    if state.domain == "climate":
+        action = state.attributes.get("hvac_action")
+        if action is not None:
+            return action in ("cooling", "fan")
+        return state.state in ("cool", "fan_only")
+    return state.state == "on"
+
+
+def _number(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+# Appliances (H6). An enum sensor (home_connect, smartthings, lg_thinq, miele) is
+# "done" in a state with one of these words (case-folded; a word starting with
+# one, so home_connect's "...OperationState.Finished" counts and "pending" doesn't
+# count as "end"), and idle in one of these.
+APPLIANCE_DONE = ("finish", "end", "complete", "done", "ready")
+APPLIANCE_IDLE = {"idle", "off", "standby", "inactive", "none"}
+
+
+def _words(text: str) -> list[str]:
+    return [w for w in re.split(r"[^a-z]+", text.casefold()) if w]
+
+
+def appliance_kind(entity_id: str, device_class: Any = None) -> str:
+    """washer, dryer, dishwasher or machine, from the device class and the
+    entity_id's words (dish before wash, so a dishwasher isn't a washer). Only
+    this word leaves the watcher, never the entity."""
+    words = _words(f"{device_class or ''} {entity_id.partition('.')[2]}")
+    for start, kind in (("dish", "dishwasher"), ("wash", "washer"), ("dry", "dryer")):
+        if any(w.startswith(start) for w in words):
+            return kind
+    return "machine"
+
+
+def _watts(state: State) -> float | None:
+    """A power sensor's draw, or a switch's current_power_w, in watts; None if
+    the entity isn't one."""
+    if state.domain == "switch":
+        return _number(state.attributes.get("current_power_w"))
+    if state.domain == "sensor" and state.attributes.get("device_class") == "power":
+        watts = _number(state.state)
+        if watts is not None and state.attributes.get(ATTR_UNIT_OF_MEASUREMENT) == "kW":
+            watts *= 1000
+        return watts
+    return None
 
 
 def _title(state: State, *keys: str, fallback: bool = True) -> str | None:
@@ -142,6 +226,19 @@ def is_temperature(state: State | None) -> bool:
     )
 
 
+@dataclass
+class _Cycle:
+    """One appliance entity's cycle so far (memory only; never leaves the watcher)."""
+
+    since: float | None = None  # busy (on, or drawing power) since
+    running: bool = False  # busy long enough to count as a cycle
+    low: float | None = None  # a power reading at or under the watts, since
+
+    def reset(self) -> None:
+        self.since = self.low = None
+        self.running = False
+
+
 class Watcher:
     """Holds the mapping and the last good value of each entity."""
 
@@ -149,6 +246,9 @@ class Watcher:
         self.hass = hass
         self.options = options
         self._good: dict[str, tuple[State, float]] = {}
+        # Appliances (H6): each entity's cycle, and when it last said done.
+        self._cycles: dict[str, _Cycle] = {}
+        self._done_at: dict[str, float] = {}
 
     def _ids(self, key: str) -> list[str]:
         value = self.options.get(key) or []
@@ -158,9 +258,17 @@ class Watcher:
     def zone(self) -> str:
         return self.options.get(CONF_ZONE) or DEFAULT_ZONE
 
+    def robot_ids(self) -> list[str]:
+        """Every vacuum in the house, found by domain (no mapping), unless the
+        owner turned notice_robot off. Listed when the pet starts listening: a
+        vacuum added later is heard after the integration reloads."""
+        if not self.options.get(CONF_NOTICE_ROBOT, True):
+            return []
+        return sorted(self.hass.states.async_entity_ids("vacuum"))
+
     def entity_ids(self) -> list[str]:
         """Everything worth listening to."""
-        ids = [self.zone, "sun.sun"]
+        ids = [self.zone, "sun.sun", *self.robot_ids()]
         for key in (*MULTI, *SINGLE):
             ids += self._ids(key)
         return sorted(set(ids))
@@ -182,6 +290,59 @@ class Watcher:
         ids = self._ids(key)
         return self._get(ids[0], now) if ids else None
 
+    def _cycle_done(self, eid: str, state: State, now: float, watts_max: float) -> bool:
+        """Whether this reading ends a cycle the watcher saw run. Called on every
+        read (a state change, and the 5-minute tick), so "for 10 min" and "for 3
+        min" are only checked then: in practice a minute count can run up to
+        about 5 minutes long. No timer of its own."""
+        cycle = self._cycles.setdefault(eid, _Cycle())
+        watts = _watts(state)
+        if state.domain == "binary_sensor" or watts is not None:
+            busy = state.state == "on" if watts is None else watts > watts_max
+            if busy:
+                cycle.low = None
+                if cycle.since is None:
+                    cycle.since = now
+                if now - cycle.since >= R.APPLIANCE_RUN_MINUTES * 60:
+                    cycle.running = True
+                return False
+            if watts is None:  # a binary sensor going off ends the cycle at once
+                done = cycle.running
+            else:  # a power reading has to stay low a while
+                if cycle.low is None:
+                    cycle.low = now
+                done = (
+                    cycle.running and now - cycle.low >= R.APPLIANCE_IDLE_MINUTES * 60
+                )
+            if done or not cycle.running:
+                cycle.reset()
+            return done
+        if state.domain != "sensor":  # a switch with no power reading
+            return False
+        words = _words(state.state)
+        if any(w.startswith(APPLIANCE_DONE) for w in words):
+            done = cycle.running
+            cycle.reset()
+            return done
+        cycle.running = not APPLIANCE_IDLE.intersection(words)
+        return False
+
+    def appliances_done(self, now: float) -> tuple[str, ...]:
+        """The kinds of appliance that finished a cycle since the last read, at
+        most one "done" an hour per entity. Only the kinds, never an entity."""
+        watts_max = _number(self.options.get(CONF_APPLIANCE_WATTS))
+        if watts_max is None:
+            watts_max = R.APPLIANCE_WATTS
+        kinds: set[str] = set()
+        for eid in self._ids(CONF_APPLIANCES):
+            state = self._get(eid, now)
+            if state is None or not self._cycle_done(eid, state, now, watts_max):
+                continue
+            if now - self._done_at.get(eid, -1e12) >= R.APPLIANCE_COOLDOWN_MINUTES * 60:
+                self._done_at[eid] = now
+                kinds.add(appliance_kind(eid, state.attributes.get("device_class")))
+        return tuple(sorted(kinds))
+
     def people_home(self, now: float) -> int | None:
         """Persons in the home zone, or None without a signal."""
         value = _float(self._get(self.zone, now))
@@ -191,6 +352,7 @@ class Watcher:
         """A snapshot of the house."""
         sun = self._get("sun.sun", now)
         weather = self._one(CONF_WEATHER, now)
+        robots = [s for eid in self.robot_ids() if (s := self._get(eid, now))]
         playing_tv = [s for s in self._all(CONF_TV, now) if s.state == "playing"]
         playing_music = [
             s
@@ -221,11 +383,21 @@ class Watcher:
             tv=any(s.state in ("on", "playing") for s in self._all(CONF_TV, now)),
             aqi=_float(self._one(CONF_AQI, now)),
             fireplace=self._lit(self._one(CONF_FIREPLACE, now)),
+            heating_on=any(heating_on(s) for s in self._all(CONF_HEATING, now)),
+            cooling_on=any(cooling_on(s) for s in self._all(CONF_COOLING, now)),
+            robot_cleaning=any(s.state == "cleaning" for s in robots),
+            robot_docked=any(s.state in ("returning", "docked") for s in robots),
+            appliances_done=self.appliances_done(now),
             company=None if (people := self.people_home(now)) is None else people > 0,
             moon_phase=(
                 moon.state if (moon := self._one(CONF_MOON_PHASE, now)) else None
             ),
             moon_illumination=self._fraction(self._one(CONF_MOON_ILLUMINATION, now)),
+            moon_date=(
+                None
+                if self._ids(CONF_MOON_PHASE) or self._ids(CONF_MOON_ILLUMINATION)
+                else moon_by_date(now)
+            ),
             moon_up=(
                 None
                 if (alt := _float(self._one(CONF_MOON_ALTITUDE, now))) is None

@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
 import math
 import random
+import re
 from typing import Any
 import zlib
 
@@ -252,6 +253,7 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
         "day": _str,
         "tucked_at": _num,
         "next_gift_at": _num,
+        "trick_asked": _str,  # F7: "<generation>-<trick month>" of its trick ask
     }
     for key, check in checks.items():
         if key in out and not check(out[key]):
@@ -292,9 +294,17 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+# The journal's week strip (fresh-expand E14) rides on the social days: each day may
+# also keep its dream's kind, the credited visitor's id and the first notable weather.
+WEEK_WEATHER = ("storm", "snow", "rain", "fog", "sun")  # the first seen, this order
+_WEEK_KIND = re.compile(r"[a-z_]{1,32}")
+
+
 def social_from(v: Any) -> dict[str, dict[str, Any]]:
     """The social meter's days as loaded: a day key that is a date, with a bool
-    `visitor` and a list of str `links` (each once); anything else dropped."""
+    `visitor` and a list of str `links` (each once), and the week strip's `dream`
+    (a kind), `visit` (a visitor id) and `weather` (WEEK_WEATHER) where kept;
+    anything else dropped."""
     out: dict[str, dict[str, Any]] = {}
     for day, entry in _mapping(v).items():
         try:
@@ -310,6 +320,55 @@ def social_from(v: Any) -> dict[str, dict[str, Any]]:
             if isinstance(links, list)
             else [],
         }
+        for key in ("dream", "visit"):
+            value = entry.get(key)
+            if isinstance(value, str) and _WEEK_KIND.fullmatch(value):
+                out[day][key] = value
+        if entry.get("weather") in WEEK_WEATHER:
+            out[day]["weather"] = entry["weather"]
+    return out
+
+
+def week_mark(state: PetState, day: str, key: str, value: str) -> bool:
+    """The week strip's first `key` of a day (E14): kept once, never replaced.
+    True if the save changed. The days are pruned by _social_day."""
+    try:
+        date.fromisoformat(day)
+    except (TypeError, ValueError):
+        return False
+    entry = state.social.setdefault(day, {"visitor": False, "links": []})
+    if key in entry:
+        return False
+    entry[key] = value
+    return True
+
+
+def week_weather(state: PetState, today: str, kinds: set[str]) -> bool:
+    """Today's first notable house weather for the strip (the most notable of
+    those seen at once). True if the save changed."""
+    seen = [k for k in WEEK_WEATHER if k in kinds]
+    if not seen:
+        return False
+    _social_day(state, today)
+    return week_mark(state, today, "weather", seen[0])
+
+
+def week_strip(state: PetState, today: str) -> list[dict[str, Any]]:
+    """The last R.SOCIAL_DAYS days that hold something, oldest first: {day,
+    dream?: True, visit?: id, weather?: kind}. A dream is only that there was
+    one (a show's or song's kind is the house's); never who, never a wish."""
+    first = (date.fromisoformat(today) - timedelta(days=R.SOCIAL_DAYS - 1)).isoformat()
+    out = []
+    for day in sorted(d for d in state.social if first <= d <= today):
+        entry = state.social[day]
+        cell: dict[str, Any] = {"day": day}
+        if "dream" in entry:
+            cell["dream"] = True
+        for key in ("visit", "weather"):
+            if key in entry:
+                cell[key] = entry[key]
+        if len(cell) > 1:
+            out.append(cell)
     return out
 
 
@@ -1994,14 +2053,34 @@ def _meets_need(state: PetState, action: str) -> bool:
     return action == "medicine" and state.sick
 
 
+def house_answer(state: PetState, request: str, now: float) -> list[Event]:
+    """The house answers the pet's request itself (the heating or the fan came
+    on): the same comfort and happiness as a player's blanket or fan, but no
+    care-log entry, since no person did it. Nothing if the pet is asleep, away,
+    an egg, or already comfortable."""
+    events: list[Event] = []
+    if (
+        state.asleep
+        or state.away
+        or life_stage(state) == "egg"
+        or now < (state.cozy_until if request == "blanket" else state.cool_until)
+    ):
+        return events
+    _answer_request(state, request, now, None, events, by="house")
+    return events
+
+
 def _answer_request(
     state: PetState,
     action: str,
     now: float,
     settings: Settings | None,
     events: list[Event],
+    by: str | None = None,
 ) -> str:
-    if settings is None or action not in requests(state, now, settings):
+    if by != "house" and (
+        settings is None or action not in requests(state, now, settings)
+    ):
         return "not_needed"
     until = now + R.COMFORT_MINUTES * 60
     if action == "blanket":
@@ -2010,7 +2089,10 @@ def _answer_request(
     else:
         state.happiness = _clamp(state.happiness + R.FAN_HAPPINESS)
         state.cool_until = until
-    events.append({"type": "request_answered", "request": action})
+    if by == "house":
+        events.append({"type": "house_answered", "request": action})
+    else:
+        events.append({"type": "request_answered", "request": action})
     return OK
 
 
@@ -2524,17 +2606,44 @@ def _refuse_play(state: PetState) -> str | None:
 MEMORIES_KEPT = 30
 
 
-def season_first(state: PetState, kind: str, now: float, tz: tzinfo) -> list[Event]:
-    """The first snow (or frost) of the season: a moment once per winter, kept as
-    a memory in the journal. A winter runs from July to June."""
+def warm_start_month(latitude: float) -> int | None:
+    """The month the warm half of the year starts (E12): the spring equinox's,
+    March in the north, September in the south; None in the tropics, as
+    people.season."""
+    if abs(latitude) < R.SEASON_TROPICS_LATITUDE:
+        return None
+    return 3 if latitude > 0 else 9
+
+
+def season_first(
+    state: PetState, kind: str, now: float, tz: tzinfo, start: int = 7
+) -> list[Event]:
+    """The first snow, frost or fog of the season, or the first warm day: a
+    moment once per season-year, kept as a memory in the journal. A season-year
+    runs from the `start` month: July for snow, frost and fog (a winter, July to
+    June); the spring month for warm (warm_start_month)."""
     local = datetime.fromtimestamp(now, tz)
-    season = str(local.year if local.month >= 7 else local.year - 1)
+    season = str(local.year if local.month >= start else local.year - 1)
     if state.firsts.get(kind) == season:
         return []
     state.firsts[kind] = season
     state.memories.append({"kind": f"first_{kind}", "at": now})
     del state.memories[:-MEMORIES_KEPT]
     return [{"type": f"first_{kind}"}]
+
+
+def warm_first(
+    state: PetState, outdoor_c: float | None, now: float, tz: tzinfo, latitude: float
+) -> list[Event]:
+    """The year's first warm day (E12): outdoors at R.HOME_WARM_FIRST_C or more, in
+    the warm half of the year from the spring month (March to August in the north,
+    September to February in the south); never in the tropics."""
+    start = warm_start_month(latitude)
+    if start is None or outdoor_c is None or outdoor_c < R.HOME_WARM_FIRST_C:
+        return []
+    if (datetime.fromtimestamp(now, tz).month - start) % 12 >= 6:
+        return []
+    return season_first(state, "warm", now, tz, start)
 
 
 # --- Daily check-ins: a wish and a dream ---------------------------------------
@@ -2638,6 +2747,7 @@ def credit_visit(state: PetState, now: float, world: str) -> bool:
     page = state.collection.setdefault(world, {"visitors": {}, "finds": {}})
     page.setdefault("visitors", {}).setdefault(visit["id"], visit["day"])
     visit["credited"] = True
+    week_mark(state, visit["day"], "visit", visit["id"])  # its day on the strip (E14)
     return True
 
 
@@ -3100,6 +3210,7 @@ def dream_on_waking(
             "user": chosen["user"],
             "day": today,
         }
+        week_mark(state, today, "dream", "picked")  # the strip's ✦ (E14)
         return [{"type": "dreamed", "kind": "picked"}]
     if fresh:
         # A visitor's dream only when nothing else happened (top10 6d).
@@ -3109,6 +3220,7 @@ def dream_on_waking(
         state.dream = {"kind": plain_dream(pet_id, today), "day": today}
     else:
         return []
+    week_mark(state, today, "dream", state.dream["kind"])  # the strip's ✦ (E14)
     # The event says only what kind: the title, the pick and who asked stay in
     # state.dream (the channel's house.dream, the card's first look).
     return [{"type": "dreamed", "kind": state.dream["kind"]}]

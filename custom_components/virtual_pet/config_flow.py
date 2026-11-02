@@ -33,6 +33,8 @@ import voluptuous as vol
 
 from . import notify, rates as R
 from .const import (
+    CONF_APPLIANCE_WATTS,
+    CONF_APPLIANCES,
     CONF_AQI,
     CONF_AWAY_AFTER,
     CONF_BEDTIME,
@@ -40,8 +42,10 @@ from .const import (
     CONF_CHORES,
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
+    CONF_COOLING,
     CONF_DASHBOARD,
     CONF_FIREPLACE,
+    CONF_HEATING,
     CONF_INDOOR_TEMP,
     CONF_LUX,
     CONF_MOON_ALTITUDE,
@@ -51,6 +55,7 @@ from .const import (
     CONF_MUSIC,
     CONF_NEW_PET,
     CONF_NEXT_WORLD,
+    CONF_NOTICE_ROBOT,
     CONF_PRIVACY,
     CONF_RAIN,
     CONF_ROOM_LIGHTS,
@@ -66,6 +71,7 @@ from .const import (
     DEFAULT_ZONE,
     DOMAIN,
 )
+from .defaults import default_weather
 from .model import parse_hhmm
 from .species import load_catalog
 from .watcher import is_temperature
@@ -77,6 +83,7 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
     """Set up a new device with an egg in it."""
 
     VERSION = 1
+    MINOR_VERSION = 2  # 2: new pets start on the house's weather (ha-signals H2)
 
     @staticmethod
     @callback
@@ -165,6 +172,7 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             name = user_input[CONF_NAME].strip() or self._free_name()
             dashboard = notify.dashboard_path(user_input.get(CONF_DASHBOARD))
+            weather = default_weather(self.hass, from_states=True)
             return self.async_create_entry(
                 title=name,
                 data={
@@ -172,7 +180,10 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_WORLD: user_input[CONF_WORLD],
                     CONF_NEW_PET: True,  # welcomed once its first save is made
                 },
-                options={CONF_DASHBOARD: dashboard} if dashboard else {},
+                options={
+                    **({CONF_DASHBOARD: dashboard} if dashboard else {}),
+                    **({CONF_WEATHER: weather} if weather else {}),
+                },
             )
         options = await self._world_options()
         if options is None:
@@ -295,6 +306,29 @@ class PetOptionsFlow(OptionsFlowWithReload):
                 (CONF_MOON_PHASE, _entities("sensor"), None),
                 (CONF_MOON_ILLUMINATION, _entities("sensor"), None),
                 (CONF_MOON_ALTITUDE, _entities("sensor"), None),
+            ],
+            "house": [
+                (
+                    CONF_HEATING,
+                    _entities(["climate", "switch", "input_boolean"], True),
+                    None,
+                ),
+                (
+                    CONF_COOLING,
+                    _entities(["fan", "climate", "switch", "input_boolean"], True),
+                    None,
+                ),
+                (CONF_NOTICE_ROBOT, BooleanSelector(), True),
+                (
+                    CONF_APPLIANCES,
+                    _entities(["binary_sensor", "sensor", "switch"], True),
+                    None,
+                ),
+                (
+                    CONF_APPLIANCE_WATTS,
+                    _number(0, 100, 1, "W"),
+                    R.APPLIANCE_WATTS,
+                ),
             ],
             "privacy": [
                 (CONF_PRIVACY, BooleanSelector(), True),

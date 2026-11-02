@@ -29,6 +29,7 @@ REASONS: dict[str, str] = {
     "dancing": "♪ dancing ♪",
     "watching_tv": "ooh, something good's on!",
     "fireside": "toasty by the fire~",
+    "vroom": "a robot's zooming around!",
     "cozy": "nice and cozy",
     "cool": "ahh, that breeze",
     "sunny": "sunny day!",
@@ -65,9 +66,15 @@ class Readings:
     music: bool = False
     tv: bool = False
     aqi: float | None = None
+    heating_on: bool = False  # a mapped heater, or thermostat heating, is on
+    cooling_on: bool = False  # a mapped fan, or thermostat cooling, is on
+    robot_cleaning: bool = False  # a vacuum is cleaning
+    robot_docked: bool = False  # a vacuum is returning to its dock, or docked
+    appliances_done: tuple[str, ...] = ()  # kinds that finished a cycle just now
     company: bool | None = None  # someone is home
     moon_phase: str | None = None  # normalized: "full_moon", "new_moon", ...
     moon_illumination: float | None = None  # lit fraction, 0-1
+    moon_date: str | None = None  # "full_moon" / "new_moon" from the date alone
     moon_up: bool | None = None
     outdoor_c: float | None = None  # from the weather entity
     wind_kmh: float | None = None  # from the weather entity
@@ -161,6 +168,18 @@ def full_moon_by_date(now: float) -> bool:
     return abs(age - _SYNODIC_DAYS / 2) <= R.FIND_FULL_MOON_DAYS
 
 
+def moon_by_date(now: float) -> str | None:
+    """Full or new from the date alone, for a pet with no moon entity: the same
+    window as the finds' full moon (FIND_FULL_MOON_DAYS), and the same width
+    around age 0 for the new moon (the window wraps the month's end)."""
+    age = ((now - _NEW_MOON_EPOCH) / 86400) % _SYNODIC_DAYS
+    if abs(age - _SYNODIC_DAYS / 2) <= R.FIND_FULL_MOON_DAYS:
+        return "full_moon"
+    if min(age, _SYNODIC_DAYS - age) <= R.FIND_FULL_MOON_DAYS:
+        return "new_moon"
+    return None
+
+
 def find_flags(
     r: Readings,
     now: float,
@@ -243,15 +262,27 @@ def evaluate(
         e.flags.append("fireside")
         add("happiness", R.HOME_FIRE_HAPPINESS)
 
+    # A robot vacuum at work: something to watch, nothing to gain.
+    if r.robot_cleaning:
+        e.flags.append("vroom")
+
     # Indoor temperature: a request, never a drain.
     if r.indoor_c is not None:
         if r.indoor_c < comfort_low_c and not r.fireplace:
-            e.flags.append("chilly")
-            if "blanket" not in e.requests:
-                e.requests.append("blanket")
+            if r.heating_on:
+                # The house is answering already: no ask, and nothing to shiver
+                # about. (A blanket for rain or thunder stays the player's.)
+                e.flags.append("cozy")
+            else:
+                e.flags.append("chilly")
+                if "blanket" not in e.requests:
+                    e.requests.append("blanket")
         elif r.indoor_c > comfort_high_c:
-            e.flags.append("warm")
-            e.requests.append("fan")
+            if r.cooling_on:
+                e.flags.append("cool")
+            else:
+                e.flags.append("warm")
+                e.requests.append("fan")
 
     # Light, read against the clock: only past bedtime is a light "too bright".
     # (Many homes keep lights at full or off, so brightness alone in the evening
@@ -287,7 +318,7 @@ def evaluate(
     e.company = r.company is True
 
     # The moon, at night while it's up (unknown altitude counts as up).
-    phase = moon_phase(r.moon_phase, r.moon_illumination)
+    phase = moon_phase(r.moon_phase, r.moon_illumination) or r.moon_date
     if r.night and r.sun_up is not True and r.moon_up is not False:
         if phase == "full_moon":
             e.flags.append("full_moon")
@@ -366,13 +397,36 @@ class HouseMoments:
         self.next_weather = 0.0
         self.weather_again: dict[str, float] = {}
         self.said_on: dict[str, str] = {}  # "hot" / "cold": the day it was said
+        # The house answering: whether heating / cooling was on at the last
+        # reading (None before the first), and the answers given today.
+        self.heating_on: bool | None = None
+        self.cooling_on: bool | None = None
+        self.answers: tuple[str, int] = ("", 0)
+        # The robot vacuum: whether one was cleaning at the last reading (None
+        # before the first), whether the pet saw this run start, and the runs
+        # it has seen today.
+        self.robot_cleaning: bool | None = None
+        self.robot_seen = False
+        self.robots: tuple[str, int] = ("", 0)
 
     def update(
-        self, r: Readings, now: float, awake: bool, morning: bool, today: str
+        self,
+        r: Readings,
+        now: float,
+        awake: bool,
+        morning: bool,
+        today: str,
+        comfort: tuple[float, float] = (R.HOME_COMFORT_LOW_C, R.HOME_COMFORT_HIGH_C),
+        satisfied: frozenset[str] | set[str] = frozenset(),
     ) -> list[dict[str, Any]]:
         """Events for what just happened. awake: awake, home and hatched.
-        morning: between wake time and noon, local."""
+        morning: between wake time and noon, local. comfort: the (low, high)
+        indoor temperatures in °C. satisfied: requests already answered
+        ("blanket" / "fan")."""
         events: list[dict[str, Any]] = []
+        events += self._house_answered(r, awake, today, comfort, satisfied)
+        events += self._robot(r, awake, today)
+        events += self._appliances(r, awake)
         if r.sun_up is not None and self.sun_up is not None and r.sun_up != self.sun_up:
             if awake:
                 events.append({"type": "sunrise" if r.sun_up else "sunset"})
@@ -406,6 +460,74 @@ class HouseMoments:
         self.tv_on = r.tv
         events += self._weather(r, now, awake, today)
         return events
+
+    def _house_answered(
+        self,
+        r: Readings,
+        awake: bool,
+        today: str,
+        comfort: tuple[float, float],
+        satisfied: frozenset[str] | set[str],
+    ) -> list[dict[str, Any]]:
+        """The heating (cooling) turning on while the pet is chilly (warm) and
+        hasn't been tucked in (fanned): the house heard it. A real off to on
+        change only: heating that was on already, or on at the first reading,
+        says nothing. At most HOUSE_ANSWERS_PER_DAY a local day."""
+        was_heating, was_cooling = self.heating_on, self.cooling_on
+        self.heating_on, self.cooling_on = r.heating_on, r.cooling_on
+        low, high = comfort
+        asks = (
+            (
+                "blanket",
+                was_heating is False and r.heating_on,
+                r.indoor_c is not None and r.indoor_c < low and not r.fireplace,
+            ),
+            (
+                "fan",
+                was_cooling is False and r.cooling_on,
+                r.indoor_c is not None and r.indoor_c > high,
+            ),
+        )
+        day, count = self.answers
+        events: list[dict[str, Any]] = []
+        for request, turned_on, open_ in asks:
+            if not (turned_on and open_ and awake) or request in satisfied:
+                continue
+            if day == today and count >= R.HOUSE_ANSWERS_PER_DAY:
+                break
+            day, count = today, (count if day == today else 0) + 1
+            events.append({"type": "house_answered", "request": request})
+        self.answers = (day, count)
+        return events
+
+    def _robot(self, r: Readings, awake: bool, today: str) -> list[dict[str, Any]]:
+        """A vacuum starting to clean (robot_out), and heading home after a run
+        the pet saw (robot_home, once per run). Dropped while the pet is asleep,
+        away or an egg; a run already going at the first reading says nothing;
+        at most ROBOT_MOMENTS_PER_DAY starts a local day."""
+        was = self.robot_cleaning
+        self.robot_cleaning = r.robot_cleaning
+        if r.robot_cleaning and was is False:
+            self.robot_seen = False
+            day, count = self.robots
+            if awake and not (day == today and count >= R.ROBOT_MOMENTS_PER_DAY):
+                self.robots = (today, (count if day == today else 0) + 1)
+                self.robot_seen = True
+                return [{"type": "robot_out"}]
+        elif was and not r.robot_cleaning:
+            seen, self.robot_seen = self.robot_seen, False
+            if seen and awake and r.robot_docked:
+                return [{"type": "robot_home"}]
+        return []
+
+    def _appliances(self, r: Readings, awake: bool) -> list[dict[str, Any]]:
+        """A washer, dryer or dishwasher finishing (appliance_done {kind}): the
+        watcher keeps each machine's cycle and cooldown and passes only the
+        kinds. Said once, never repeated; dropped while the pet is asleep, away
+        or an egg."""
+        if not awake:
+            return []
+        return [{"type": "appliance_done", "kind": kind} for kind in r.appliances_done]
 
     def _weather(
         self, r: Readings, now: float, awake: bool, today: str

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 import copy
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import random
 from typing import Any
 
@@ -49,6 +49,7 @@ from .backup import (
     async_kept_backup,
 )
 from .const import (
+    CONF_APPLIANCES,
     CONF_AQI,
     CONF_AWAY_AFTER,
     CONF_BEDTIME,
@@ -56,8 +57,10 @@ from .const import (
     CONF_CHORES,
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
+    CONF_COOLING,
     CONF_DASHBOARD,
     CONF_FIREPLACE,
+    CONF_HEATING,
     CONF_INDOOR_TEMP,
     CONF_LUX,
     CONF_MOON_ALTITUDE,
@@ -88,6 +91,7 @@ from .const import (
     STORE_VERSION,
 )
 from .home import (
+    FOGGY,
     RAINY,
     SNOWY,
     STORMY,
@@ -133,9 +137,15 @@ MOMENTS = {
     "tv_off_late",
     "first_snow",
     "first_frost",
+    "first_warm",
+    "first_fog",
     "news",
     "weather",
     "forecast",
+    "house_answered",  # {request}: the heating or the fan came on for the pet
+    "robot_out",  # a robot vacuum started a run
+    "robot_home",  # ... and went home
+    "appliance_done",  # {kind}: a washer, dryer or dishwasher finished
     "wish_granted",
     "bond_up",
     "bond_favourite",
@@ -169,6 +179,10 @@ SENSES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("music", (CONF_MUSIC,)),
     ("chores", (CONF_CHORES,)),
     ("fireplace", (CONF_FIREPLACE,)),
+    ("heater", (CONF_HEATING,)),
+    ("fan", (CONF_COOLING,)),
+    ("robot", ()),  # every vacuum in the house, unless notice_robot is off
+    ("machines", (CONF_APPLIANCES,)),
     ("moon", (CONF_MOON_PHASE, CONF_MOON_ILLUMINATION, CONF_MOON_ALTITUDE)),
 )
 
@@ -338,6 +352,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         return notify.dashboard_path(self.config_entry.options.get(CONF_DASHBOARD))
 
     @property
+    def week(self) -> list[dict[str, Any]]:
+        """The journal's week strip (E14): the days that hold something."""
+        assert self.state is not None
+        return model.week_strip(self.state, self._today(self._now())[0])
+
+    @property
     def social_level(self) -> int:
         """The social meter, 0-10 over the last week (top10 §6)."""
         assert self.state is not None
@@ -355,7 +375,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """The kinds of house signal mapped in the options (SENSES), never
         which entities: for the card's "notices" row (top10 2a)."""
         options = self.config_entry.options
-        return [kind for kind, keys in SENSES if any(options.get(k) for k in keys)]
+        # The moon always shows: every pet reads it from the date at least.
+        return [
+            kind
+            for kind, keys in SENSES
+            if kind == "moon"
+            or any(options.get(k) for k in keys)
+            or (kind == "robot" and self.watcher.robot_ids())
+        ]
 
     @property
     def privacy(self) -> bool:
@@ -856,6 +883,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
         if kinds:  # the house's weather, while the pet is out too
             self.people.saw_weather(self._today(now)[0], kinds)
+        # The journal's week strip: the day's first notable weather (E14).
+        strip = self._weather_now | ({"fog"} if readings.condition in FOGGY else set())
+        if model.week_weather(self.state, self._today(now)[0], strip):
+            self._save()
         arrivals, self._arrivals = self._arrivals, []
         if self._awake():
             self._fire(
@@ -885,7 +916,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _passing_moments(self, readings: Readings, now: float) -> list[model.Event]:
         """Sunsets, the morning stir, the TV, the weather and its forecast, the
-        season's first snow or frost."""
+        season's first snow, frost or fog, and the year's first warm day."""
         assert self.state is not None
         state = self.state
         settings = self.settings
@@ -899,7 +930,29 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             awake,
             morning=wake <= minute < 12 * 60,
             today=local.date().isoformat(),
+            comfort=(
+                self.config_entry.options.get(CONF_COMFORT_LOW, R.HOME_COMFORT_LOW_C),
+                self.config_entry.options.get(CONF_COMFORT_HIGH, R.HOME_COMFORT_HIGH_C),
+            ),
+            satisfied={
+                request
+                for request, until in (
+                    ("blanket", state.cozy_until),
+                    ("fan", state.cool_until),
+                )
+                if now < until
+            },
         )
+        # The house answering: it is the model that tucks the pet in.
+        events = [
+            answer
+            for e in events
+            for answer in (
+                model.house_answer(state, e["request"], now)
+                if e["type"] == "house_answered"
+                else [e]
+            )
+        ]
         if any(e["type"] == "good_morning" for e in events):
             model.morning_stir(state, now, settings)
             self._forecast_due = now + R.HOME_FORECAST_DELAY_MINUTES * 60
@@ -910,6 +963,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             events += first
         if awake and readings.outdoor_c is not None and readings.outdoor_c <= 0:
             events += model.season_first(state, "frost", now, settings.tz)
+        if awake:  # the year's first warm day (E12)
+            events += model.warm_first(
+                state, readings.outdoor_c, now, settings.tz, self.hass.config.latitude
+            )
+        if awake and readings.condition in FOGGY:
+            events += model.season_first(state, "fog", now, settings.tz)
         events += self._forecast_talk(readings, now, awake, minute >= wake)
         if readings.company and any(e["type"] == "sunset" for e in events):
             events += self._grant("sunset", None, now)  # watched it together
@@ -1027,6 +1086,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.debug["last_step_minutes"] = round((now - before) / 60, 2)
         self._fire(events, simulated)
         self._pick_favourite()
+        self.people.prune_daily(self._today(now)[0])  # follow-ups past their day (F1)
         self._save()
 
     def _pick_favourite(self) -> None:
@@ -1613,6 +1673,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "birthday_kept": bool(fresh.get("birthday")),
             "birthday_phone": bool(fresh.get("birthday_phone")),
             "baby_talk": self.people.baby_talk(user),
+            "follow": 1,  # follow-ups (F1): the card may send a typed text, and fetch
         }
 
     def _up_early(self, user: str, now: float) -> list[dict[str, Any]]:
@@ -1849,7 +1910,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             # Ahead of the day's questions: it matters now. It is the day's
             # question, and asked for good only once the card says it showed it
             # (async_answer "phone"): one the card dropped comes on a later day.
-            P.mark_asked(person, today, hour)
+            P.mark_asked(person, today, hour, "phone")
             self.people.save()
             return "phone"
         kind = P.choose_question(
@@ -1863,17 +1924,46 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             rested=any(n["kind"] == "rested" for n in notes),
             pet_once=self._pet_once(user, today),
             dreamed=bool(self.state.dream and self.state.dream.get("day") == today),
+            world=self.world if self.visitors else None,
+            pet_kinds=self._follow_kinds(user),
         )
         if kind is None:
             return None
-        P.mark_asked(person, today, hour)
+        P.mark_asked(person, today, hour, kind)
         if kind in P.ONCE_KINDS:
-            P.mark_once(person, kind, today)
+            P.mark_once(person, kind, today, self.world)
         if kind == "catchphrase":
             self._catch_ask(user)["asked"].append(today)
             self._save()
+        if kind == "trick":
+            # Once a generation-month per person, in this pet's bond (F7).
+            if (bond := self.state.bonds.get(user)) is not None:
+                bond["trick_asked"] = self._trick_key()
+            self._save()
         self.people.save()
         return kind
+
+    def _trick_key(self) -> str:
+        """This pet's generation and trick month (an adult's month from its 14th
+        day, as the card's trickMonth; a teen's is 0)."""
+        assert self.state is not None
+        adult = dict(R.STAGE_STARTS)["adult"]
+        months = max(0, int((self.state.age_hours - adult) // (30 * 24)))
+        return f"{self.state.generation}-{months}"
+
+    def _follow_kinds(self, user: str) -> tuple[str, ...]:
+        """The follow-ups only this pet asks (F6, F7): a game always; a trick
+        only with one left to learn (a teen, or an adult before its 3rd trick
+        month), at most once a generation-month for this person."""
+        assert self.state is not None
+        kinds = ["game"]
+        stage = model.life_stage(self.state)
+        months = int(self._trick_key().rsplit("-", 1)[1])
+        left = stage == "teen" or (stage == "adult" and months < R.TRICKS_COUNT)
+        bond = self.state.bonds.get(user) or {}
+        if left and bond.get("trick_asked") != self._trick_key():
+            kinds.insert(0, "trick")
+        return tuple(kinds)
 
     def _phone_ask_due(self, user: str, person: dict[str, Any], today: str) -> bool:
         """Whether the pet asks this person "can I call your phone?" (top10 1a):
@@ -1924,10 +2014,54 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             }
         return ask
 
-    async def async_answer(self, user: str, question: str, answer: str) -> None:
+    async def async_answer(
+        self,
+        user: str,
+        question: str,
+        answer: str,
+        text: Any = None,
+        day: Any = None,
+    ) -> dict[str, Any] | None:
         """A remembered answer: a favourite, tonight's dream, a guess, its
-        catchphrase."""
+        catchphrase, or a follow-up's (F1: a tough day's softer morning, a big
+        day's "yes" with its optional text). Nothing here is logged."""
         assert self.state is not None
+        if question in P.LATER_CHECKED:
+            if answer not in P.ANSWERS.get(question, ()):
+                raise ValueError("Not an answer the pet keeps")
+            today = self._today(self._now())[0]
+            kept: dict[str, Any] | None = None
+            async with self.people.lock(user):
+                person = self.people.data["people"].get(user, {})
+                if not P.asked_later(person, today, question):
+                    raise ValueError("It didn't ask that")
+                if question in ("how_day", "big_how"):
+                    self.people.set_mood(user, today)  # memory only (E13)
+                elif question == "game":
+                    # The choice, said back by this pet tomorrow (F6).
+                    self.people.open_follow(
+                        user, "game", today, choice=answer, pet=self.pet_id
+                    )
+                elif question == "trick" and answer == "yes":
+                    self.people.open_follow(user, "trick", today, pet=self.pet_id)
+                elif question == "big_day" and answer == "yes":
+                    # The day they picked this week (opp #2); none: nothing kept.
+                    if not P.big_day_pick(today, day):
+                        raise ValueError("Not a day this week")
+                    self.people.open_follow(user, question, today, text, day=day)
+                    kept = {"until": self.people.open_event(user)["until"]}
+                elif answer == "yes":  # weekend: with their words, if any
+                    self.people.open_follow(user, question, today, text)
+                    kept = {"until": self.people.open_event(user)["until"]}
+                # Audit 0.43.0 F-01: answered, the later slot holds no open question
+                # (the evening's ask may then take it). The dated follow-ups keep it:
+                # their typed step answers the same ask again.
+                asked = person.get("asked")
+                if question in P.SLOT_CLOSED_BY_ANSWER and isinstance(asked, dict):
+                    if asked.pop("later_kind", None):
+                        self.people.save()
+            self._push_everywhere()  # their follow_at
+            return kept
         if question == "birthday":
             # Theirs, kept only in the people store; "skip" sticks. Never echoed.
             person = self.people.person(user)
@@ -1939,6 +2073,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 raise ValueError("Not a birthday")
             self.people.save()
             self._push_everywhere()  # birthday_kept changed
+            return
+        if question == "fav_visitor":
+            # This pet's world's visitors only (F4); asked again in a new world.
+            if answer not in {v.get("id") for v in self.visitors}:
+                raise ValueError("Not a visitor of this world")
+            self.people.person(user).setdefault("likes", {})[
+                P.fav_visitor_key(self.world)
+            ] = answer
+            self.people.save()
+            self._push_everywhere()  # their mine.fav_visitor
             return
         if answer not in P.ANSWERS.get(question, ()):
             raise ValueError(f"{answer} isn't an answer to {question}")
@@ -1978,6 +2122,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._save()
         self.people.save()
         self._push_everywhere()  # a birthday kept
+
+    async def async_follow(self, user: str, at: str = "look") -> dict[str, Any]:
+        """The follow-up beat due for this person now (virtual_pet/follow), marked
+        said under their lock with no await in between: their other screens and
+        pets get {}. at: "look" (a first look, a tab's return) or "picker" (F6)."""
+        today, hour = self._today(self._now())
+        async with self.people.lock(user):
+            beat = self.people.follow_due(user, today, hour, self.pet_id, at)
+        if beat and not beat.get("deferred"):
+            self._push_everywhere()  # their follow_at
+        return beat
 
     async def async_set_birthday_phone(self, user: str, enabled: bool) -> None:
         """Whether this person's phone hears "happy birthday" on the day."""
@@ -2094,11 +2249,21 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 {"type": "call_started", "reason": reason},
                 state.name,
                 self.species_names,
+                self._call_day(),
             )
             or state.name,
             list(state.notify_users),
             lambda user: self.bond_for(user)[1],
         )
+
+    def _call_day(self, event_type: str = "call_started") -> date:
+        """The local day a notification's phrasing uses. A call's is the day the
+        standing call started (so a re-call after midnight reads as the call did);
+        any other event, even with an older call still open (a pet that fell sick
+        asleep and woke by hand next day), speaks today. No call: today."""
+        call = self.state.call if self.state else None
+        when = call.started if call and event_type == "call_started" else self._now()
+        return dt_util.as_local(dt_util.utc_from_timestamp(when)).date()
 
     def update_recalls(self, started: str | None = None) -> None:
         """Bring the house's re-call bundle up to date with every pet."""
@@ -2149,7 +2314,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             # The call is over: take its notification off the phones.
             self._call_notified = False
             self._send(users, "clear_notification", notify.call_tag(self.pet_id))
-        text = notify.message(event, self.state.name, self.species_names)
+        text = notify.message(
+            event, self.state.name, self.species_names, self._call_day(event["type"])
+        )
         if text is None:
             return
         if event["type"] in notify.CALL_EVENTS:
@@ -2318,6 +2485,18 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "birthday_kept": bool(person.get("birthday")),
             # Their waiting gift, {id, world}, or None (plan visitors v2 §5).
             "gift": model.known_gift(bond, self.known_finds),
+            # Their favourite of this world's visitors (an id), or None (F4).
+            "fav_visitor": (person.get("likes") or {}).get(
+                P.fav_visitor_key(self.world)
+            ),
+            # Where a follow-up beat may wait for them today ("look", "picker"), so
+            # their card keeps a first-look slot only then (F1); never what it is.
+            "follow_at": self.people.follow_at(
+                user, *self._today(self._now()), self.pet_id
+            ),
+            # Home Assistant's day and evening, which decide the beats (audit 0.43.0
+            # F-03): the card's evening gate and daily marker follow these.
+            **P.People.follow_clock(*self._today(self._now())),
         }
 
     def _house_view(self) -> dict[str, Any]:

@@ -2147,6 +2147,52 @@ def test_the_first_snow_of_the_season_is_a_memory_once_per_winter():
     assert len(egg.memories) == 2 and egg.firsts == pet.firsts
 
 
+def test_the_first_warm_day_once_a_year_from_spring_and_never_in_the_tropics():
+    # Fresh-expand E12: from the spring month through the warm half of the year.
+    def day(y: int, m: int, d: int = 10) -> float:
+        return datetime(y, m, d, 14, tzinfo=UTC).timestamp()
+
+    north, south, tropics = 52.0, -34.0, 10.0
+    pet = hatched(at(9))
+    assert model.warm_first(pet, 25.0, day(2027, 2), UTC, north) == []  # before March
+    assert model.warm_first(pet, 19.9, day(2027, 3), UTC, north) == []  # not warm
+    assert model.warm_first(pet, None, day(2027, 3), UTC, north) == []
+    assert model.warm_first(pet, 20.0, day(2027, 3), UTC, north) == [
+        {"type": "first_warm"}
+    ]
+    assert model.warm_first(pet, 28.0, day(2027, 6), UTC, north) == []  # once a year
+    assert model.warm_first(pet, 22.0, day(2027, 10), UTC, north) == []  # autumn
+    assert model.warm_first(pet, 21.0, day(2028, 4), UTC, north) == [
+        {"type": "first_warm"}
+    ]
+    assert [m["kind"] for m in pet.memories] == ["first_warm", "first_warm"]
+    # The south's spring: September, through February; its year spans New Year.
+    pet = hatched(at(9))
+    assert model.warm_first(pet, 25.0, day(2027, 4), UTC, south) == []
+    assert model.warm_first(pet, 25.0, day(2027, 9), UTC, south) == [
+        {"type": "first_warm"}
+    ]
+    assert model.warm_first(pet, 30.0, day(2028, 1), UTC, south) == []
+    assert model.warm_first(pet, 25.0, day(2028, 9), UTC, south) == [
+        {"type": "first_warm"}
+    ]
+    # The tropics: never.
+    pet = hatched(at(9))
+    for month in range(1, 13):
+        assert model.warm_first(pet, 30.0, day(2027, month), UTC, tropics) == []
+    assert model.warm_start_month(-23.0) is None
+
+
+def test_the_first_fog_once_a_season_from_july():
+    pet = hatched(at(9))
+    fog = datetime(2027, 6, 20, 8, tzinfo=UTC).timestamp()
+    assert model.season_first(pet, "fog", fog, UTC) == [{"type": "first_fog"}]
+    later = datetime(2027, 7, 2, 8, tzinfo=UTC).timestamp()  # a new July-June
+    assert model.season_first(pet, "fog", later, UTC) == [{"type": "first_fog"}]
+    again = datetime(2028, 3, 2, 8, tzinfo=UTC).timestamp()
+    assert model.season_first(pet, "fog", again, UTC) == []
+
+
 # --- Daily check-ins --------------------------------------------------------
 
 
