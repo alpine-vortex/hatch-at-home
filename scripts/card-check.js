@@ -7009,8 +7009,10 @@ async function main() {
         localStorage.setItem("hatch-shared-screen", "on");
         s.game = null;
         s.calling = false;
+        said = [];
         el._channel(s, { moment: { type: "house_live", category: "custom", reaction: "cozy", text: "Shared words ♪", at: new Date().toISOString() } }, me);
         out.words = said;
+        said = [];
         el._channel(s, { moment: { type: "house_live", category: "delivery", at: new Date(Date.now() + 1).toISOString() } }, me);
         out.delivery = said;
         out.pool = el.constructor.houseMomentLines.delivery;
@@ -7591,15 +7593,13 @@ async function main() {
       try {
         s.game = null;
         s.calling = false;
-        el._channel(s, { moment: live }, me);
-        heard.push(...said);
-        el._channel(s, { moment: live }, me); // the same again
-        heard.push(...said);
-        el._channel(s, { moment: news }, me);
-        heard.push(...said);
+        // Each call's lines alone (said is reset before each).
+        const hear = (msg) => { said = []; el._channel(s, msg, me); heard.push(...said); };
+        hear({ moment: live });
+        hear({ moment: live }); // the same again
+        hear({ moment: news });
         // A replayed snapshot with them says nothing (its moments are the past).
-        el._channel(s, { mine: s.mine, house: s.house, moments: [live, news], now: new Date().toISOString() }, me);
-        heard.push(...said);
+        hear({ mine: s.mine, house: s.house, moments: [live, news], now: new Date().toISOString() });
       } finally {
         delete el._line; delete el._animate; delete el._houseFx;
         Object.assign(s, kept);
