@@ -225,6 +225,51 @@ def test_new_moon_is_a_starry_night_without_a_bonus():
     assert e.bonus == {}
 
 
+def _utc(y, m, d) -> float:
+    import datetime as dt
+
+    return dt.datetime(y, m, d, tzinfo=dt.UTC).timestamp()
+
+
+@pytest.mark.parametrize(
+    ("when", "expected"),
+    [
+        (_utc(2026, 11, 24), "full_moon"),  # age 14.1 d
+        (_utc(2026, 11, 9), "new_moon"),  # age 28.6 d: the window wraps the month end
+        (_utc(2026, 11, 11), "new_moon"),  # just past age 0
+        (_utc(2026, 11, 17), None),  # a quarter
+        (_utc(2026, 12, 2), None),  # the other quarter
+    ],
+)
+def test_moon_by_date_full_and_new_windows_wrap(when, expected):
+    assert home.moon_by_date(when) == expected
+
+
+def test_moon_from_the_date_when_no_sensor_is_mapped():
+    e = evaluate(Readings(night=True, sun_up=False, moon_date="full_moon"))
+    assert "full_moon" in e.flags
+    assert e.bonus["happiness"] == R.HOME_MOON_HAPPINESS
+    new = evaluate(Readings(night=True, sun_up=False, moon_date="new_moon"))
+    assert "new_moon" in new.flags
+
+
+def test_a_mapped_moon_sensor_wins_over_the_date():
+    e = evaluate(
+        Readings(
+            night=True,
+            sun_up=False,
+            moon_phase="waxing_crescent",
+            moon_date="full_moon",
+        )
+    )
+    assert "full_moon" not in e.flags
+
+
+def test_the_date_moon_needs_night():
+    day = evaluate(Readings(night=False, sun_up=True, moon_date="full_moon"))
+    assert "full_moon" not in day.flags and "happiness" not in day.bonus
+
+
 def test_thunder_hides_it_under_a_blanket_and_wind_is_noticed():
     storm = evaluate(Readings(night=False, condition="lightning"))
     assert "storm" in storm.flags and storm.requests == ["blanket"]

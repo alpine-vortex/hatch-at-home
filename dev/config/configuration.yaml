@@ -147,6 +147,14 @@ template:
         temperature_template: "52"
         humidity_template: "85"
         temperature_unit: "°F"
+      # A second weather entity on purpose: with two to choose from, a new dev pet
+      # is not given a weather by default (ha-signals H2 fills only when one is
+      # clear), so card-check's pets stay bare, as its sections expect.
+      - name: Spare weather
+        unique_id: spare_weather
+        condition_template: "sunny"
+        temperature_template: "60"
+        temperature_unit: "°F"
 
 # --- The card -----------------------------------------------------------------
 
