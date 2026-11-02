@@ -8052,7 +8052,7 @@ class HatchPetCard extends HTMLElement {
     // a surprise, and an adult always has the row (S2, N7).
     const offerNow = this._eggOffer(s);
     const picked = offerNow?.choice?.name.toLowerCase();
-    const heldPick = isEgg && stageAttrs.next_egg && !picked ? SETUP_COPY.eggSurprise : null;
+    const heldPick = stageAttrs.next_egg && !picked ? SETUP_COPY.eggSurprise : null; // any stage
     const nextEgg = [picked || heldPick || (adult ? SETUP_COPY.eggSurprise : null),
       stageAttrs.next_world && `in ${stageAttrs.next_world}`].filter(Boolean).join(" ");
     const nextStage = growsUp(this._state(s, "sensor.life_stage")?.state, stageAttrs.age_days);
