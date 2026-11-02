@@ -578,11 +578,18 @@
     // `game: "dig"`: a Berry dig started through the card's own picker, then `digTaps`
     // ("dig" or "keep") played, each answered by the next of `digReplies` (scripted).
     // Held on the last reply, before its pause (a bee still shows).
-    if (shot.game === "dig") {
-      shot.digReplies = [...(shot.digReplies || [DIG_REPLY])];
+    // `game: "left_right"` or `"higher_lower"` the same way (UX fix 6): `digReplies` answers the
+    // start (default: round 0, number 5) and the guesses; `digTaps` are "left" / "right" (or
+    // "lower" / "higher"). A held shot is taken at the last reply.
+    if (shot.game === "dig" || shot.game === "left_right" || shot.game === "higher_lower") {
+      const start = shot.game === "dig" ? DIG_REPLY
+        : { result: "ok", game: shot.game, round: 0, rounds: 5, wins: 0, number: 5 };
+      shot.digReplies = [...(shot.digReplies || [start])];
       card._startGame(cur, cur.buttons.play);
-      await card._pickGame(cur, "dig");
-      for (const tap of shot.digTaps || []) await card._guess(cur, tap === "keep" ? "left" : "right");
+      await card._pickGame(cur, shot.game);
+      for (const tap of shot.digTaps || []) {
+        await card._guess(cur, tap === "keep" || tap === "left" || tap === "lower" ? "left" : "right");
+      }
     }
     // `classes`: screen states the fake hass cannot pin (`lit`, `faded`...), put on last.
     for (const c of shot.classes || []) cur.screen.classList.add(c);
