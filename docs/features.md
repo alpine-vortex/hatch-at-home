@@ -31,7 +31,7 @@ stand-in. **not built** = planned, nothing in the code.
 |---|---|---|---|---|
 | Eight toy buttons | feed, snack, play, clean, meds, scold, praise, sleep/wake. Each button sinks and a ring pops, then the real reaction follows. A rejected press shakes. | card `ACTIONS`, `_press`; `button.py` | none | live |
 | Button glow when needed | Feed glows when hungry, play when bored, and so on. Meds is greyed unless the pet is sick (entity unavailable). | card `_renderSlide` | none | live |
-| Refusals | "I'm full!", "I'm not sick", and so on, in the bubble | card `REFUSALS`; model `_do_action` | none | live |
+| Refusals | "i'm full!", "i'm not sick", and so on, in the bubble | card `REFUSALS`; model `_do_action` | none | live |
 | Care scenes | medicine and clean play a short scene; feeding shows a bowl prop | card `_sceneStart`, `SCENE_PROPS` | none | live |
 | Calls (real) | hunger or happiness under 25, energy under 20, poop over 30 min, or sick: the pet calls, with **20 min** to answer. A miss is a care miss; it asks again every 4 h. Each need has three phrasings, one a day. | model `_calls`, `_start_call` | none | live |
 | Fake calls / whines | nothing is wrong; scold teaches discipline, praise spoils | model `_wants_to_whine` | sitter settles whines (option) | live |

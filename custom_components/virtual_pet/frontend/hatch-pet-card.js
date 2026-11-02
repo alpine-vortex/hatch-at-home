@@ -948,17 +948,17 @@ function seasonNow(config, date = new Date()) {
 const BEE_FRAMES = [1, 2].map((n) => `${BASE}/ui/catch_decoy_${n}.png?v=${VERSION}`);
 
 const REFUSALS = {
-  full: "I'm full!",
-  not_needed: "I'm fine, thanks!",
+  full: "i'm full!",
+  not_needed: "i'm fine, thanks!",
   asleep: "shh... sleeping",
   too_tired: "too tired to play",
   already_clean: "it's already clean!",
-  not_sick: "I'm not sick!",
-  unfair: "hey, I didn't do anything!",
+  not_sick: "i'm not sick!",
+  unfair: "hey, i didn't do anything!",
   spoiled: "hehe, whining works",
   no_game: "let's start over",
   egg: "...",
-  away: "I'm at the sitter's!",
+  away: "i'm at the sitter's!",
   not_sleepy: "not sleepy yet ♪",
 };
 
@@ -5755,7 +5755,9 @@ class HatchPetCard extends HTMLElement {
     if (s.hatchesAt) {
       const minutes = Math.max(1, Math.ceil((new Date(s.hatchesAt) - serverNow()) / 60000));
       if (minutes <= 1) return "crack... crack...";
-      return minutes < 60 ? `hatching in about ${minutes} min` : `hatching in about ${Math.round(minutes / 60)} h`;
+      if (minutes <= 6) return STATUS_COPY.eggCracking; // as the status page says it (UX fix 4, F10)
+      // The number and its unit stay together: big text never leaves "min" alone on a line.
+      return minutes < 60 ? `hatching in about ${minutes}\u00a0min` : `hatching in about ${Math.round(minutes / 60)}\u00a0h`;
     }
     // The server's sentence, or baby talk keyed by which sentence it is (an
     // older integration sends no key: the sentence as it is).
@@ -7295,12 +7297,12 @@ class HatchPetCard extends HTMLElement {
     if (m.type === "stage_changed") {
       if (m.stage === "baby" || !m.stage) return null; // hatching says hello
       const a = /^[aeiou]/.test(m.stage) ? "an" : "a";
-      return this._lines(s, "catchup_stage", `guess what! I'm ${a} ${m.stage} now!`).text;
+      return this._lines(s, "catchup_stage", `guess what! i'm ${a} ${m.stage} now!`).text;
     }
     if (m.type === "trait_learned") {
       return this._lines(s, "catchup_trait", `I learned something: ${String(m.trait).replaceAll("_", " ")}!`).text;
     }
-    if (m.type === "hatched") return this._lines(s, "catchup_hatched", "hello! I hatched while you were away").text;
+    if (m.type === "hatched") return this._lines(s, "catchup_hatched", "hello! i hatched while you were away").text;
     // The rest say what they would have said then (nothing else happens).
     const said = [];
     this._moment(s, m, said);
@@ -7886,7 +7888,7 @@ class HatchPetCard extends HTMLElement {
         if (m.stage === "baby") break; // hatching says hello
         say(m.stage === "adult"
           ? "all grown up! ♥" // the upbringing is on the status screen, not announced
-          : `I'm a ${m.stage} now!`, 4500, () => {
+          : `i'm a ${m.stage} now!`, 4500, () => {
           this._animate(s, s.pet, "stretch", 1100);
           this._sparkle(s);
         });
@@ -8521,8 +8523,11 @@ class HatchPetCard extends HTMLElement {
         || (isHeavy(value("weight")) ? "a game, to run it off" : null);
     // How care is going, beside the upbringing it shapes (top10 4a; was in settings).
     const careMisses = this._state(s, "sensor.care_misses");
-    const misses = row(null, "missed calls", `<span>${Number.parseFloat(careMisses?.state) || 0}</span>`)
-      + row(null, "ignored whines", `<span>${careMisses?.attributes.discipline_misses ?? 0}</span>`);
+    // A new pet's page doesn't open on zeros that count failures: the two rows come with the first miss (UX fix 4, F12).
+    const missed = Number.parseFloat(careMisses?.state) || 0;
+    const whined = Number(careMisses?.attributes.discipline_misses) || 0;
+    const misses = missed || whined
+      ? row(null, "missed calls", `<span>${missed}</span>`) + row(null, "ignored whines", `<span>${whined}</span>`) : "";
     // Today's wish comes first of the rest: it changes daily, the rest is there every day.
     // Its day so far (E9 St-a): the evening's today line, else today's dream. A page, not a bubble.
     const today = !isEgg && ((this._evening() && this._todayLine(s)) || this._dreamSaid(s));
@@ -8561,7 +8566,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
       ${nextStage ? row(null, nextStage[0], `<span>${nextStage[1]}</span>`) : ""}
       ${nextEgg ? row(null, "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
-      <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
+      <div class="log">${lines.join("") || "<div>all new here ♪</div>"}</div>
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;

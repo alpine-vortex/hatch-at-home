@@ -464,8 +464,14 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
       const out = { inSheet: /missed calls|ignored whines/.test(t), personal: /notify me|my data|baby talk/.test(t),
         group: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent).join("|") };
       s.settings = false;
+      // The two rows come with the first miss (UX fix 4, F12): give this pet one.
+      const missId = s.ids["sensor.care_misses"];
+      const realHass = el._hass;
+      const was = realHass.states[missId];
+      el._hass = { ...realHass, states: { ...realHass.states, [missId]: { ...was, state: "2", attributes: { ...was?.attributes, discipline_misses: 1 } } } };
       el._renderStatus(s, []);
       out.onStatus = /missed calls/.test(s.status.textContent) && /ignored whines/.test(s.status.textContent);
+      el._hass = realHass;
       s.settings = true;
       localStorage.setItem("hatch-shared-screen", "off");
       el._renderStatus(s, []);
@@ -1202,7 +1208,23 @@ async function main() {
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(600);
   const status = await cur().locator(".status").innerText();
-  check("status screen opens, with missed calls and ignored whines (top10 4a)", /weight/.test(status) && /missed calls/.test(status) && /ignored whines/.test(status));
+  // A new pet's page has no zero counters (UX fix 4, F12): the rows come with the first miss (top10 4a).
+  const missRows = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const none = /missed calls|ignored whines/.test(s.status.textContent);
+    const missId = s.ids["sensor.care_misses"];
+    const realHass = el._hass;
+    const was = realHass.states[missId];
+    const zero = Number.parseFloat(was?.state) || Number(was?.attributes?.discipline_misses) || 0;
+    el._hass = { ...realHass, states: { ...realHass.states, [missId]: { ...was, state: "2", attributes: { ...was?.attributes, discipline_misses: 1 } } } };
+    el._renderStatus(s, []);
+    const both = /missed calls/.test(s.status.textContent) && /ignored whines/.test(s.status.textContent);
+    el._hass = realHass;
+    el._renderStatus(s, []);
+    return { zero, none, both };
+  });
+  check("status screen opens; missed calls and ignored whines show with a miss, not at zero (top10 4a, UX fix 4 F12)",
+    /weight/.test(status) && missRows.both && (missRows.zero ? missRows.none : !missRows.none), JSON.stringify(missRows));
   await shot("02-status");
   // The next egg's creature, picked through its select, shows on the status screen.
   const eggChoice = (await ids())["select.next_egg"];
@@ -4624,7 +4646,7 @@ async function main() {
     return { lines, queued: sent?.queued, ask: reply?.ask ?? null, asking: s.queue.some((q) => q.ask) };
   });
   check("2a: a look with two lines and a catch-up line sends queued: 3 and asks no question",
-    look.lines.length === 3 && look.lines.some((t) => t === "guess what! I'm a teen now!") &&
+    look.lines.length === 3 && look.lines.some((t) => t === "guess what! i'm a teen now!") &&
       look.queued === 3 && !look.ask && !look.asking, JSON.stringify(look));
   const caught = await card.evaluate((el, at) => {
     const s = el._slides[el._index];
@@ -4641,7 +4663,7 @@ async function main() {
     return { said, again, mark: el._seenRead(s.ids.device), at: new Date(at).getTime() };
   }, stageAt);
   check("2a: a stage_changed 40 s old is said once at the next look",
-    caught.said.filter((t) => /guess what! I'm a teen/.test(t)).length === 1 &&
+    caught.said.filter((t) => /guess what! i'm a teen/.test(t)).length === 1 &&
       !caught.again.some((t) => /guess what/.test(t)) && caught.mark?.said >= caught.at &&
       caught.mark?.seen > 0, JSON.stringify(caught));
   // Fold #12: the catch-up reads the viewer's own moments too (a bond line),
@@ -6026,7 +6048,7 @@ async function main() {
       lines.home[0]?.text === "you're home! yay yay ♥" && lines.bond[0]?.text === "yay, you! ♥" &&
       lines.miss === "oh! hi hi ♥" && /^night night, \S+ ♥$/.test(lines.tucked), JSON.stringify(lines));
     check("a baby's refusals and wish; an aimed wish keeps its words",
-      lines.refusal.join("|") === "tummy full!|too sleepy to play|I'm not sick!" && lines.wish === "wish... snack after lunch" &&
+      lines.refusal.join("|") === "tummy full!|too sleepy to play|i'm not sick!" && lines.wish === "wish... snack after lunch" &&
       lines.aimed === "will you bring me a snack after lunch?", JSON.stringify(lines));
     check("a refused snack says the full line once",
       lines.snackFull === 1 && lines.snackTotal === 1, JSON.stringify(lines));
@@ -6087,8 +6109,8 @@ async function main() {
       return out;
     });
     check("device clock 10 min fast: the hatch countdown reads the server's after one state event",
-      /^hatching in about 2[01] min$/.test(clock.before) // 20, or 21 with a few seconds of offset left over
-       && clock.after === "hatching in about 30 min" &&
+      /^hatching in about 2[01]\u00a0min$/.test(clock.before) // 20, or 21 with a few seconds of offset left over
+       && clock.after === "hatching in about 30\u00a0min" &&
       clock.unsubscribed === 1 && clock.again === 0, JSON.stringify(clock));
     check("no catchphrase on a baby line, and the count doesn't move",
       lines.granted[0]?.opts?.catch === false && lines.favourite[0]?.opts?.catch === false && lines.count === 2 &&
@@ -6899,7 +6921,7 @@ async function main() {
     check("hellos by type: nameless on a shared screen and never a bond line; bond lines only with the viewer's own bond",
       helloBad.length === 0, helloBad.slice(0, 6).join(" | "));
 
-    // The reveal: "I'm a teen now!", then the type's line in a bubble of its
+    // The reveal: "i'm a teen now!", then the type's line in a bubble of its
     // own (with its catchphrase allowed); none for an adult or without a type.
     const reveal = await typeAs(async (el, s, t, types) => {
       t.pet("teen", null, 0);
@@ -6909,10 +6931,10 @@ async function main() {
       out.none = t.moment({ type: "stage_changed", stage: "teen", from: "child" });
       return out;
     }, TYPES);
-    check("a new teen says its type after \"I'm a teen now!\", in a bubble of its own; an adult or no type, none",
-      TYPES.every((type) => reveal[type].said === "I'm a teen now!" && reveal[type].queued.length === 1 &&
+    check("a new teen says its type after \"i'm a teen now!\", in a bubble of its own; an adult or no type, none",
+      TYPES.every((type) => reveal[type].said === "i'm a teen now!" && reveal[type].queued.length === 1 &&
         PERSONA[type].reveal.includes(reveal[type].queued[0].text) && reveal[type].queued[0].catch) &&
-      reveal.adult.queued.length === 0 && reveal.none.queued.length === 0 && reveal.none.said === "I'm a teen now!",
+      reveal.adult.queued.length === 0 && reveal.none.queued.length === 0 && reveal.none.said === "i'm a teen now!",
       JSON.stringify([reveal.plucky, reveal.adult, reveal.none]));
     await page.emulateMedia({ reducedMotion: null });
 
@@ -6930,7 +6952,7 @@ async function main() {
       revealLine = (await bubble()).trim();
     }
     await shot("07f-reveal-charming");
-    check("live, the reveal shows after the stage line, neither lost", stageLine.trim() === "I'm a teen now!" &&
+    check("live, the reveal shows after the stage line, neither lost", stageLine.trim() === "i'm a teen now!" &&
       PERSONA.charming.reveal.includes(revealLine), `${stageLine} -> ${revealLine}`);
 
     // Side by side, for the owner: a named hello, a shared-screen hello and a

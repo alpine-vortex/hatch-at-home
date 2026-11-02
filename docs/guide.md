@@ -37,17 +37,8 @@ The egg decides which of that world's creatures hatches. See `docs/design-worlds
 4. Settings → Devices & services → Add integration → search **Virtual Pet**,
    then name your pet and pick its world: Woodland, Terrarium, Hearth, Tidepool, Pond
    or Night Sky (five creatures each). Add the integration again for each extra pet device.
-
-### Updating
-
-With HACS, new versions appear under Settings → Updates. Install, restart HA,
-then reload the browser page. By hand, copy the folder over the old one and do the
-same. Either way your pets are safe: they live in HA's own storage
-(`/config/.storage/virtual_pet.<entry id>`), not in the integration folder. Restoring
-an HA backup rewinds the pet to that point, which is fine.
-
-Moving a manual install to HACS needs nothing special: add the custom repository,
-download, restart. HACS replaces the folder you copied.
+5. **Add the card:** edit a dashboard → Add card → **Hatch at Home pet shelf** (see *Add the
+   card* below). The egg hatches in about half an hour.
 
 ### Add the card
 
@@ -73,6 +64,17 @@ seasonal: false  # optional: no seasonal touches (on by default; "halloween", "t
 Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 `hatch-pet-card.js` row), or an old cached copy may load first.
 
+### Updating
+
+With HACS, new versions appear under Settings → Updates. Install, restart HA,
+then reload the browser page. By hand, copy the folder over the old one and do the
+same. Either way your pets are safe: they live in HA's own storage
+(`/config/.storage/virtual_pet.<entry id>`), not in the integration folder. Restoring
+an HA backup rewinds the pet to that point, which is fine.
+
+Moving a manual install to HACS needs nothing special: add the custom repository,
+download, restart. HACS replaces the folder you copied.
+
 ### Using the card
 
 - Each pet stands in its device on its world's backdrop. Use the arrows, the dots or a
@@ -84,7 +86,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   five seconds, silently. It shows once per browser, and again only after an update
   that asks for it. Reduced motion skips the fill.
 - The screen shows the pet, its scene and a speech bubble. The bubble says what's on
-  its mind, or why it refused something ("I'm full!").
+  its mind, or why it refused something ("i'm full!").
 - **Play** offers three games. It opens a picker that starts on the
   last game you picked. **Left or right:**
   the pet hides on one side and you guess with the arrows; a win cheers it up more than
@@ -337,7 +339,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   younger and older readers.
 - Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
   and phones give a tiny vibration. Then the real reaction follows (a food bowl, a
-  sparkle, or a refusal like "I'm full!"). If HA rejects the press, the button shakes
+  sparkle, or a refusal like "i'm full!"). If HA rejects the press, the button shakes
   and the pet says so.
 - The toy buttons press the pet's button entities, so anything you do here works
   from automations and voice too. A button glows when the pet needs it, for example
@@ -825,7 +827,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   the card changes: phone messages, Assist, the journal and the status screen keep
   their words, and a shared screen has no switch and no baby talk.
 - **A welcome for every new pet.** Adding a pet puts a note in the sidebar's
-  notifications: "Pip, a new virtual pet, just moved in! Say hi ♥". It also goes to
+  notifications: "Pip, a new virtual pet, just moved in! Its egg hatches in about half an hour.
+  Say hi ♥". It also goes to
   the phones of anyone who has "notify me" on for another pet in the house. A new
   generation laid as an egg isn't a new pet, and restarts never welcome again.
 - **Dashboard to open:** when you add a pet (or later, in its options under

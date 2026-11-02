@@ -27,7 +27,7 @@ from .test_init import (  # noqa: F401
     setup,
 )
 
-WELCOME = "Pip, a new virtual pet, just moved in! Say hi ♥"
+WELCOME = "Pip, a new virtual pet, just moved in! Its egg hatches in about half an hour. Say hi ♥"
 
 
 @pytest.fixture

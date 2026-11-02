@@ -373,6 +373,12 @@ Q-D). Review F8, F15, F21; the deep links were checked (below).
   button **N19** under the existing sub-line. It navigates (as "connect more ›" does,
   `history.pushState` + `location-changed`) to HA's add-integration dialog for
   `virtual_pet`. A non-admin sees today's text only.
+- **Changed by UX fix 4 (first run, review 4), which S4 builds on:** a non-admin's
+  empty-state text is now "Ask whoever runs Home Assistant to add a pet." (not
+  "today's text"), the not-found text no longer says "entities", the empty card draws
+  the first world's toy with an egg silhouette (N19 goes under it), and the welcome
+  text (`notify.welcome`) now says "Its egg hatches in about half an hour." before
+  "Say hi ♥". N20 and N20b follow that new text.
 - **The link:** `/_my_redirect/config_flow_start?domain=virtual_pet` (HA's own "My"
   redirect, handled by the frontend with no internet). Checked by the s2658 review against
   the pinned frontend 20260930.5: the redirect has no `component` gate; the alternative
