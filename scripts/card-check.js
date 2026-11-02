@@ -6159,10 +6159,10 @@ async function main() {
         return { ...st, state: stage, attributes: out };
       };
       s.journal = journal;
-      el._renderStatus(s, []);
-      for (let i = 0; i < 40 && journal && !s.status.querySelector(".gen"); i++) {
-        await new Promise((r) => setTimeout(r, 100));
-      }
+      // The journal page, once drawn, stays on show while a redraw gathers its data (UX fix 2, F2):
+      // a stale .gen is already there, so wait for the redraw itself, not for a .gen to appear.
+      if (journal) await el._renderJournal(s);
+      else el._renderStatus(s, []);
       const text = (sel) => [...s.status.querySelectorAll(sel)].map((r) => r.innerText.replace(/\s+/g, " ").trim());
       return journal ? text(".gen") : text(".row");
     }, { stage, attrs, journal });
@@ -11229,6 +11229,9 @@ async function main() {
         }
       }
     }
+    // The swipes above kept a place in this browser (UX fix 2, F8: hatch-shelf-*, shared by every
+    // tab of the origin). Put it back, or a later page load (restart's) would open on pet 2, not 1.
+    await lp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("hatch-shelf-")).forEach((k) => localStorage.removeItem(k)));
     await lp.close();
   }
 
