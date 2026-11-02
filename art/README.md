@@ -383,3 +383,4 @@ commit.
 - Terrarium: ball python (head up, coiled), bearded dragon, gecko, tarantula, tortoise.
 - Pond: axolotl, beaver, duckling (baby and teen redrawn once to keep the water ring), pond turtle, tree frog.
 - Tidepool: hermit crab, octopus, otter (on its water), puffin and seal (on their rock).
+- Night Sky: bat, firefly, luna moth, opossum, owl. Ready complete for all 30.
