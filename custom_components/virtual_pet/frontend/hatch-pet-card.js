@@ -3780,6 +3780,17 @@ const STYLE = `
     translate: var(--ask-dx, 0px) var(--ask-dy, -14%); /* _askPlace measures the chips and the bubble */
     scale: calc(var(--k, 1) * var(--ask-f, .9)) !important; } /* !important: the species scale is inline */
   .screen:has(> .askday) .pet { transition: translate .25s steps(2), rotate .2s ease-out, scale .25s steps(2); }
+  /* Beside the bubble (UX7 F1): it wraps in the room left of the pet's column. No room at all: the
+     pet's head sits in the bubble and the pet itself waits out the question. */
+  .screen:has(> .askday) .bubble { max-width: var(--ask-bw, 64%); }
+  .screen:has(> .askday.nopet) .bubble { top: 4%; padding: 2px 6px 2px 36px; min-height: 20px; font-size: 12px; line-height: 1.15; }
+  .porthole .screen:has(> .askday.nopet) .bubble { top: 4%; left: 7%; }
+  .screen .askday.nopet { bottom: 2%; } /* the chips and the bubble share the whole height */
+  .porthole .screen .askday.nopet { bottom: 2%; }
+  .screen:has(> .askday.nopet) .bubble::before { content: ""; position: absolute; left: 4px; top: 50%;
+    width: 28px; height: 28px; margin-top: -14px; image-rendering: pixelated;
+    background: var(--say-img, none) var(--say-at, 0 0) / 128px 128px no-repeat; }
+  .screen:has(> .askday.nopet) .pet, .screen:has(> .askday.nopet) .perch, .screen:has(> .askday.nopet) .ghost { visibility: hidden; }
   /* Big text reaches the pet's words too (F9). */
   ha-card.bigtext .bubble { font-size: 16px; }
   /* Big text reaches the game (UX fix 6, F10): the score, the guess labels and the picker. */
@@ -7599,6 +7610,8 @@ class HatchPetCard extends HTMLElement {
     const scr = s.screen;
     const pet = s.pet;
     if (!pet || pet.offsetParent !== scr || !scr.clientHeight) return;
+    scr.style.removeProperty("--ask-bw");
+    box.classList.remove("nopet");
     const k = Number(pet.style.scale) || 1;
     const W = scr.clientWidth;
     const petH = pet.offsetHeight * k;
@@ -7608,11 +7621,26 @@ class HatchPetCard extends HTMLElement {
     const under = bubble ? bubble.offsetTop + bubble.offsetHeight + 2 : 0;
     let f = Math.min(0.9, (stand - under) / petH);
     let dx = 0;
-    if (f < 0.6) { // no room under the bubble: beside it, above the chips
-      f = Math.min(0.9, Math.max(0.4, (stand - 4) / petH));
+    if (f < 0.6) { // no room under the bubble: beside it, in a column of its own (UX7 F1)
+      // Never above the screen: the pet's top stays 2 px down, so it may shrink under .4.
+      f = Math.min(0.9, Math.max(0.25, (stand - 2) / petH));
       const w = petW * f;
-      const right = bubble ? bubble.offsetLeft + bubble.offsetWidth + 4 + w / 2 : W / 2;
-      dx = Math.min(W - 2 - w / 2, Math.max(W / 2, right)) - W / 2;
+      const inset = W * (scr.closest(".porthole") ? 0.09 : 0.04); // the porthole's rim eats the right edge
+      dx = W - inset - w / 2 - W / 2;
+      if (bubble) { // the bubble wraps in what is left of the row, so the two never overlap
+        // The bubble's max-width is its text's: its padding and border come on top.
+        const chrome = () => bubble.offsetWidth - parseFloat(getComputedStyle(bubble).width);
+        const room = (taken) => `${Math.max(60, Math.floor(taken - bubble.offsetLeft - chrome()))}px`;
+        scr.style.setProperty("--ask-bw", room(W - inset - w - 6));
+        // Wrapped, the bubble may still reach down into the chips: then there is no room for the pet
+        // at all. Its head goes in the bubble instead, and the bubble takes its whole width again.
+        if (bubble.offsetTop + bubble.offsetHeight > box.offsetTop - 2 || f < 0.3) {
+          box.classList.add("nopet");
+          scr.style.setProperty("--ask-bw", room(W - inset));
+          this._headCrop(s, bubble, 14, 3);
+          dx = 0;
+        }
+      }
     }
     const dy = Math.min(0, stand - (pet.offsetTop + pet.offsetHeight));
     scr.style.setProperty("--ask-dx", `${Math.round(dx)}px`);

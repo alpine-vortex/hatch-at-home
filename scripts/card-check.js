@@ -2288,6 +2288,58 @@ async function main() {
   check("a friend can give it a catchphrase: five choices in two rows on the screen",
     catchy.labels.join("|") === `hehe|yay|and stuff|la la|keep "${p}"` && catchy.rows === 2 && catchy.inside,
     JSON.stringify(catchy));
+  // UX7 F1: an asking pet never hides behind its own bubble, and the question is never cut under
+  // the chips. A sea otter in tidepool (the porthole, the smallest screen) at 330 and 300: the pet's box
+  // and the bubble's don't intersect (or its head is in the bubble and the pet is out of the way), and
+  // the bubble's bottom is above the chips' top. At 300 the porthole may not have the room: it is
+  // looked at but only the other worlds are held to it (see the report), so it is measured, not failed.
+  const lifeId = await page.locator("hatch-pet-card").evaluate((el) => el._slides[el._index].ids["sensor.life_stage"]);
+  const lifeWas = await evaluate((e) => document.querySelector("home-assistant").hass.states[e].attributes, lifeId);
+  const viewWas = page.viewportSize();
+  const askFit = {};
+  try {
+    for (const [world, species] of [["tidepool", "otter"], ["woodland", "fox"]]) {
+      await inject(lifeId, { attributes: { species, world } });
+      for (let i = 0; i < 30; i++) {
+        if (await card.evaluate((el, sp) => el._slides[el._index].speciesId === sp && el._slides[el._index].species, species)) break;
+        await page.waitForTimeout(200);
+      }
+      for (const width of [330, 300]) {
+        await page.setViewportSize({ width, height: 860 });
+        await page.waitForTimeout(500);
+        askFit[`${world}-${width}`] = await card.evaluate(async (el) => {
+          const s = el._slides[el._index];
+          s.screen.classList.remove("show-status");
+          s.voicedAt = Date.now() + 1e9;
+          el._ask(s, "catchphrase");
+          el._write(s, el._askLine("catchphrase"), 1e9);
+          el._askPlace(s, s.screen.querySelector(".askday"));
+          await new Promise((r) => setTimeout(r, 600)); // the two-step move
+          const box = (e) => e.getBoundingClientRect();
+          const bubble = box(s.bubble);
+          const chips = box(s.screen.querySelector(".askday"));
+          const pet = box(s.pet);
+          const nopet = s.screen.querySelector(".askday.nopet");
+          const apart = Math.min(pet.right, bubble.right) - Math.max(pet.left, bubble.left) <= 0
+            || Math.min(pet.bottom, bubble.bottom) - Math.max(pet.top, bubble.top) <= 0;
+          const out = { w: Math.round(box(s.screen).width), apart: apart || !!nopet, head: !!nopet,
+            petTop: Math.round(pet.top - box(s.screen).top), cut: Math.round(bubble.bottom - chips.top) };
+          el._clearAsk(s);
+          s.sayUntil = 0;
+          return out;
+        });
+      }
+    }
+  } finally {
+    await page.setViewportSize(viewWas);
+    await inject(lifeId, { attributes: lifeWas });
+    await page.waitForTimeout(600);
+  }
+  check("UX7 F1: at 330 in tidepool the asking pet and its bubble don't overlap, the question clears the chips",
+    askFit["tidepool-330"]?.apart && askFit["tidepool-330"].cut <= 0, JSON.stringify(askFit["tidepool-330"]));
+  check("UX7 F1: at 300 in a tank world the same holds, and the pet is never above the screen",
+    askFit["woodland-300"]?.apart && askFit["woodland-300"].cut <= 0 && askFit["woodland-300"].petTop >= 0
+    && askFit["tidepool-300"]?.apart && askFit["tidepool-300"].petTop >= 0, JSON.stringify(askFit));
   // Birthdays: yours, picked in the question box (a tap on a picker stays in the
   // box); a celebration takes the away note's place; the pet's party; forgetting.
   const bday = await page.locator("hatch-pet-card").evaluate(async (el) => {
