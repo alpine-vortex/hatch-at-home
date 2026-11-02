@@ -1651,7 +1651,7 @@ const STATUS_COPY = {
   eggGrowing: "warm and growing ♪", // F12: more than 15 minutes to go
   eggSoon: "wiggling! any minute ♪", // 15 or fewer
   eggCracking: "cracking! ♥", // 6 or fewer
-  tileRaised: (name) => `${name}! we raised one ♥`, // F14
+  tileRaised: (name) => `${name}! my old pal ♥`, // F14 (FM 2026-11-02: 40 with the longest name)
   tileUnmet: "not met one of those yet",
 };
 // --- end fresh-expand copy ---

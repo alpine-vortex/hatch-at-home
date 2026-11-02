@@ -1500,7 +1500,7 @@ async function main() {
   await page.waitForTimeout(300);
   const tile1 = await ux2();
   check("UX2 F1/F14: a tap on a journal tile keeps the journal open, and the pet says one line about it",
-    tile1.open && tile1.journal && /^(.+! we raised one ♥|not met one of those yet)$/.test(tile1.say), JSON.stringify(tile1));
+    tile1.open && tile1.journal && /^(.+! my old pal ♥|not met one of those yet)$/.test(tile1.say), JSON.stringify(tile1));
   await page.waitForTimeout(100);
   await cur().locator(".status .jtile").first().click();
   const tile2 = await ux2();
