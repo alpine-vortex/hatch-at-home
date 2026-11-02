@@ -2434,7 +2434,26 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         welcomes in the sidebar only). The event names nobody."""
         name = pet_name(self.hass, self.config_entry)
         text = notify.welcome(name)
-        link = f"\n\n[Open the pet shelf]({self.dashboard})" if self.dashboard else ""
+        # The shelf card shows every pet, so a household needs it on one dashboard once.
+        # "Named" = this pet's setup or another pet's (a second pet carries the first's).
+        own = self.dashboard
+        elsewhere = next(
+            (
+                path
+                for other in self.hass.config_entries.async_entries(DOMAIN)
+                if other.entry_id != self.config_entry.entry_id
+                and (path := notify.dashboard_path(other.options.get(CONF_DASHBOARD)))
+            ),
+            None,
+        )
+        if not (own or elsewhere):
+            link = f"\n\n{notify.welcome_no_dashboard(name)}"
+        else:
+            link = f"\n\n[Open the pet shelf]({own or elsewhere})"
+            if (
+                not elsewhere
+            ):  # the first pet: its dashboard may be an auto-generated one
+                link += f"\n\n{notify.WELCOME_IF_MISSING}"
         persistent_notification.async_create(
             self.hass,
             text + link,

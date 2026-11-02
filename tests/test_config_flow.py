@@ -110,6 +110,58 @@ async def test_any_world_can_still_be_picked(hass: HomeAssistant) -> None:
     assert result["data"]["world"] == "woodland"
 
 
+async def dashboard_suggestion(hass: HomeAssistant) -> Any:
+    """The Dashboard field's suggested value on the user step."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    marker = next(k for k in result["data_schema"].schema if k == "dashboard")
+    return (marker.description or {}).get("suggested_value")
+
+
+async def test_the_dashboard_field_starts_empty_for_the_first_pet(
+    hass: HomeAssistant,
+) -> None:
+    assert await dashboard_suggestion(hass) is None
+    add_pet(hass, "Pip", world="woodland")  # a pet that named none
+    assert await dashboard_suggestion(hass) is None
+
+
+async def test_a_second_pet_starts_with_the_households_dashboard(
+    hass: HomeAssistant,
+) -> None:
+    add_pet(hass, "Pip", world="woodland")
+    MockConfigEntry(
+        domain=DOMAIN,
+        title="Moss",
+        data={CONF_NAME: "Moss", "world": "terrarium"},
+        options={"dashboard": "/pets/shelf"},
+        entry_id="test_moss",
+    ).add_to_hass(hass)
+    assert await dashboard_suggestion(hass) == "/pets/shelf"
+
+
+async def test_a_cleared_dashboard_stays_cleared_when_the_name_is_taken(
+    hass: HomeAssistant,
+) -> None:
+    MockConfigEntry(
+        domain=DOMAIN,
+        title="Pip",
+        data={CONF_NAME: "Pip", "world": "woodland"},
+        options={"dashboard": "/pets/shelf"},
+        entry_id="test_pip",
+    ).add_to_hass(hass)
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": config_entries.SOURCE_USER}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_NAME: "Pip", "world": "terrarium"}
+    )
+    assert result["errors"] == {"name": "name_taken"}
+    marker = next(k for k in result["data_schema"].schema if k == "dashboard")
+    assert (marker.description or {}).get("suggested_value") is None
+
+
 # --- The options menu (S5) --------------------------------------------------
 
 PACKAGE = Path(config_flow.__file__).parent

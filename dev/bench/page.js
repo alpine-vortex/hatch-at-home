@@ -63,11 +63,11 @@
     const entities = {};
     const devices = {};
     states["sun.sun"] = { state: shot.scene === "night" ? "below_horizon" : "above_horizon", attributes: {}, last_updated: iso(-60) };
-    shot.pets.forEach((pet, i) => {
+    (shot.empty ? [] : shot.pets).forEach((pet, i) => { // `empty`: no pets at all (first run)
       const device = `bench_dev_${i}`;
       const base = `bench_${i}`;
       const world = worlds[pet.world] ? pet.world : Object.keys(worlds)[0];
-      devices[device] = { id: device, name: pet.name || NAMES[i % NAMES.length], name_by_user: null };
+      devices[device] = { id: device, name: pet.name || NAMES[i % NAMES.length], name_by_user: null, config_entries: [`bench_entry_${i}`] };
       const put = (domain, key, state, attributes = {}) => {
         const id = `${domain}.${base}_${key}`;
         entities[id] = { entity_id: id, platform: "virtual_pet", translation_key: key, device_id: device };
@@ -137,7 +137,7 @@
     const noop = () => Promise.resolve(() => {});
     return {
       states, entities, devices,
-      user: { id: "bench-user", name: "Sam Bench", is_admin: true },
+      user: { id: "bench-user", name: "Sam Bench", is_admin: shot.admin !== false },
       locale: { language: "en" }, language: "en",
       themes: shot.haDark === undefined ? {} : { darkMode: !!shot.haDark }, selectedTheme: null,
       // The card asks once for a server clock reading; none arrives here.

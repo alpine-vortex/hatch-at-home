@@ -59,6 +59,7 @@ A shot (all optional):
 | `species`, `stage`, `mood`, `world` | the first pet (default: the world's first species, adult, content, woodland). Stages: egg baby child teen adult. |
 | `pet` | more of the first pet: `name`, `age_days`, `flags`, `energy`, `weight` (none by default: the row shows –), `hatch_minutes`, `raised` (ids, or `"world"`: three of its world's), `next_egg` (a name), `next_world` (a name), `lay` (`true` or `{egg_world}`: the lay request, the next-egg select and `egg_roster`; settings S2)... |
 | `pets` | a number (extra pets are children from the world's roster) or an array of pet overrides; the first is on show, the card gets its dots |
+| `empty`, `admin` | `empty: true`: no pets at all (the first-run card, its "add a pet ›" for an admin); `admin: false`: the viewer is not an admin (default admin). The fake devices carry a `config_entries` id |
 | `shell` | `{shape, color, bezel, finish}` over the world's own; `finish: "none"` drops it. Shapes: egg tank house porthole pad moon |
 | `scene` | `day` (default), `night`, `dim` (lights out), `rain` |
 | `season` | `false` (default: no seasonal touches), `"auto"` (by `time`), or a season key such as `halloween` |

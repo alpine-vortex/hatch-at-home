@@ -836,6 +836,11 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   Say hi ♥". It also goes to
   the phones of anyone who has "notify me" on for another pet in the house. A new
   generation laid as an egg isn't a new pet, and restarts never welcome again.
+  The sidebar note also says where the pet shows: with no dashboard named anywhere it
+  asks you to add the pet shelf card to one; the first pet with a dashboard gets the link and
+  a line for when the card isn't there; a later pet on a dashboard the house already named
+  gets the link alone. Setup offers a later pet the first pet's dashboard to start with, and
+  on an empty card an admin gets "add a pet ›", which opens Home Assistant's add dialog.
 - **Dashboard with the pet shelf:** when you add a pet (or later, in its options under
   Notifications), pick the dashboard that tapping its notifications opens, the
   welcome included, or type a path like `/lovelace/pets`.

@@ -104,6 +104,14 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
             DEFAULT_NAME,
         )
 
+    def _household_dashboard(self) -> str | None:
+        """The dashboard of the first pet here that has one."""
+        for entry in self._async_current_entries():
+            path = notify.dashboard_path(entry.options.get(CONF_DASHBOARD))
+            if path:
+                return path
+        return None
+
     def _first_unused_world(self, keys: list[str]) -> str:
         """The first world, in catalog order, that no pet here lives in or moves to.
 
@@ -258,6 +266,13 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
         keys = [o["value"] for o in options]
         default = self._first_unused_world(keys)
         typed = user_input or {}  # what they had typed, when a name is taken
+        # A second pet carries the household's dashboard; editable, and a cleared
+        # field stays cleared when the form comes back for a taken name.
+        dashboard_default = (
+            self._household_dashboard()
+            if user_input is None
+            else typed.get(CONF_DASHBOARD)
+        )
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
@@ -274,7 +289,7 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
                     ),
                     vol.Optional(
                         CONF_DASHBOARD,
-                        description={"suggested_value": typed.get(CONF_DASHBOARD)},
+                        description={"suggested_value": dashboard_default},
                     ): _dashboards(self.hass),
                 }
             ),

@@ -124,11 +124,70 @@ async def test_without_a_dashboard_the_welcome_has_no_link(
     entry = await add_pet(hass)
     assert entry.options == {}
     note = sidebar(hass)[f"{DOMAIN}_{entry.entry_id}_welcome"]
-    assert note["message"] == WELCOME
+    assert note["message"].startswith(WELCOME)
     await notify_me(hass, "Me", "sensor.pip_mood")
     phones["Me"].clear()
     await add_pet(hass, name="Moss")
     assert "url" not in phones["Me"][0].data["data"]
+
+
+PLAIN_LINK = "[Open the pet shelf](/lovelace-pets/shelf)"
+IF_MISSING = "If it isn't there, add the Hatch at Home pet shelf card."
+NO_DASHBOARD = "To meet Pip, add the Hatch at Home pet shelf card to a dashboard."
+
+
+async def test_no_dashboard_anywhere_tells_the_admin_to_add_the_card(
+    hass: HomeAssistant, phones: dict[str, list]
+) -> None:
+    entry = await add_pet(hass)
+    message = sidebar(hass)[f"{DOMAIN}_{entry.entry_id}_welcome"]["message"]
+    assert message == f"{WELCOME}\n\n{NO_DASHBOARD}"
+    assert "Open the pet shelf" not in message and IF_MISSING not in message
+
+
+async def test_the_first_pet_with_a_dashboard_gets_the_link_and_the_fallback(
+    hass: HomeAssistant, phones: dict[str, list]
+) -> None:
+    entry = await add_pet(hass, dashboard="lovelace-pets/shelf/")
+    message = sidebar(hass)[f"{DOMAIN}_{entry.entry_id}_welcome"]["message"]
+    assert message == f"{WELCOME}\n\n{PLAIN_LINK}\n\n{IF_MISSING}"
+    assert NO_DASHBOARD not in message
+
+
+async def test_a_second_pet_on_a_named_dashboard_is_not_told_to_add_the_card(
+    hass: HomeAssistant, phones: dict[str, list]
+) -> None:
+    await add_pet(hass, dashboard="lovelace-pets/shelf/")
+    # Its own field is empty: the household's dashboard still counts.
+    moss = await add_pet(hass, name="Moss")
+    message = sidebar(hass)[f"{DOMAIN}_{moss.entry_id}_welcome"]["message"]
+    assert message == f"{welcome('Moss')}\n\n{PLAIN_LINK}"
+    # The same dashboard again: the same plain link.
+    fern = await add_pet(hass, name="Fern", dashboard="lovelace-pets/shelf/")
+    message = sidebar(hass)[f"{DOMAIN}_{fern.entry_id}_welcome"]["message"]
+    assert message == f"{welcome('Fern')}\n\n{PLAIN_LINK}"
+
+
+async def test_a_pet_with_a_dashboard_of_its_own_beside_another_gets_the_plain_link(
+    hass: HomeAssistant, phones: dict[str, list]
+) -> None:
+    await add_pet(hass, dashboard="lovelace-pets/shelf/")
+    moss = await add_pet(hass, name="Moss", dashboard="den/pets")
+    message = sidebar(hass)[f"{DOMAIN}_{moss.entry_id}_welcome"]["message"]
+    assert message == f"{welcome('Moss')}\n\n[Open the pet shelf](/den/pets)"
+
+
+async def test_the_phone_text_never_carries_the_sidebar_lines(
+    hass: HomeAssistant, phones: dict[str, list]
+) -> None:
+    await add_pet(hass)
+    await notify_me(hass, "Me", "sensor.pip_mood")
+    phones["Me"].clear()
+    await add_pet(hass, name="Moss")
+    await add_pet(hass, name="Fern", dashboard="lovelace-pets/shelf/")
+    texts = [c.data["message"] for c in phones["Me"]]
+    assert texts == [welcome("Moss"), welcome("Fern")]
+    assert not any("pet shelf" in t for t in texts)
 
 
 async def test_restarts_and_reloads_never_welcome_again(

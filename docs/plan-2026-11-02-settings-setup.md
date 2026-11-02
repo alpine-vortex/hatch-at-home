@@ -411,12 +411,14 @@ Q-D). Review F8, F15, F21; the deep links were checked (below).
   config flow. Alternative: the device page `/config/devices/device/<device_id>` (it
   has the entry's Configure). Both exist; the dev HA check is only whether the entry is
   highlighted.
-- **Two places (F21).** "connect more ›" appears on the status page row and in the
-  settings sheet (card 8076-8082), each with its own handler using the old URL. Both are
-  changed, and card-check covers both.
-- **The status page**, for an admin on a personal screen, when `senses` is an empty list:
-  the row "notices: just the clock" with "connect more ›" (both existing), above the
-  log. Hidden once anything is mapped, hidden for non-admins and on shared screens.
+- **One place (reconciled when S4 was built).** The settings sheet and the status page are
+  one screen now: the "notices" row with "connect more ›" has a single handler
+  (`.connect` in `_renderSettings`), and S4 changes that one. Card-check covers it.
+- **The "notices" row (already built, top10 2b; S4 leaves it as shipped).** Everyone sees
+  the row: the kinds the server lists, or "just the clock" for an empty `senses`; an
+  admin on a personal screen also gets "connect more ›", whatever `senses` holds. A new
+  rule that hid the row once anything is mapped would have removed that list, so it was
+  not built.
 
 ### The welcome (coordinator `_welcome`, 2421-2444) and the second pet
 
@@ -424,8 +426,8 @@ The shelf card shows every pet by itself, so a household needs the card on one d
 once. The welcome must tell a new household that, and must not tell a household that
 already did it (F8).
 
-- **The Dashboard field's default (setup).** `async_step_user` defaults the Dashboard
-  field to the dashboard of the first other entry that has one, so a second pet carries
+- **The Dashboard field's default (setup; BUILT in S4).** `async_step_user` defaults the
+  Dashboard field to the dashboard of the first other entry that has one, so a second pet carries
   the household's choice without retyping. (Editable, as today.)
 - **The welcome's dashboard** = this entry's `CONF_DASHBOARD`, else the first other
   entry's. That is "a dashboard the setup named".

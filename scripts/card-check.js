@@ -1202,6 +1202,45 @@ async function main() {
   if (enter("shelf")) {
   // 1. The shelf draws its devices.
   check("shelf shows the pets", slides >= 2, `${slides} devices`);
+  // S4: the empty card gives an admin "add a pet ›" (one tap to HA's add-integration dialog) and a
+  // non-admin only the text; a pet that moves in takes the button away.
+  const emptyCard = await card.evaluate(async (el) => {
+    const out = {};
+    const one = document.createElement("hatch-pet-card");
+    one.style.cssText = "position:fixed;left:0;top:0;width:400px;z-index:-1";
+    one.setConfig({ ...el._config, entities: undefined, entity: undefined, devices: undefined });
+    document.body.append(one);
+    const bare = { ...el._hass, devices: {}, entities: {}, states: { "sun.sun": el._hass.states["sun.sun"] } };
+    const real = history.pushState;
+    try {
+      for (const admin of [true, false]) {
+        one.hass = { ...bare, user: { ...el._hass.user, is_admin: admin } };
+        for (let i = 0; i < 20 && !one.shadowRoot?.querySelector(".addpet"); i++) await new Promise((r) => setTimeout(r, 100));
+        await new Promise((r) => setTimeout(r, 300));
+        const button = one.shadowRoot.querySelector(".addpet");
+        out[admin ? "admin" : "user"] = { shown: !button.hidden, text: button.textContent,
+          sub: one.shadowRoot.querySelector(".sub").textContent };
+        if (admin) {
+          let to = null;
+          history.pushState = (st, t, url) => { to = url; }; // stubbed: the check stays on its page
+          button.click();
+          out.to = to;
+        }
+      }
+      one.hass = el._hass; // the page's own pets: no empty state, no button
+      one.setConfig(el._config);
+      for (let i = 0; i < 20 && one.shadowRoot.querySelector(".addpet")?.hidden === false; i++) await new Promise((r) => setTimeout(r, 100));
+      out.after = !one.shadowRoot.querySelector(".addpet").hidden;
+    } finally {
+      history.pushState = real;
+      one.remove();
+    }
+    return out;
+  });
+  check("S4: the empty card's \"add a pet ›\" is for an admin and goes to HA's add-integration dialog; a user gets the text only",
+    emptyCard.admin?.shown && emptyCard.admin.text === "add a pet ›" && emptyCard.to === "/_my_redirect/config_flow_start?domain=virtual_pet" &&
+    emptyCard.user && !emptyCard.user.shown && emptyCard.user.sub === "Ask whoever runs Home Assistant to add a pet." &&
+    emptyCard.after === false, JSON.stringify(emptyCard));
   // UX fix 4, F1: while a pet's states are `unavailable` (an Options reload, an HA restart) it stays in
   // its own world's device, says one line and has no live buttons; back, the real bubble returns.
   const gone = await card.evaluate(async (el) => {
@@ -1337,7 +1376,10 @@ async function main() {
       }
       return to;
     });
-    check("top10 2b: \"connect more ›\" goes to the integration's page", went === "/config/integrations/integration/virtual_pet", String(went));
+    // S4: this pet's own entry (the device's config entry), not the integration list.
+    const entry = await page.locator("hatch-pet-card").evaluate((el) => el._hass.devices?.[el._slides[el._index].ids?.device]?.config_entries?.[0]);
+    check("S4: \"connect more ›\" goes to this pet's entry on the integration's page",
+      !!entry && went === `/config/integrations/integration/virtual_pet#config_entry=${entry}`, `${went} (entry ${entry})`);
   }
   // top10 3a: the family-tablet note sits right under the "shared screen" switch.
   const tabletNote = await page.locator("hatch-pet-card").evaluate((el) => {

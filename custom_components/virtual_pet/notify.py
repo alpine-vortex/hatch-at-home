@@ -342,6 +342,14 @@ def welcome(name: str) -> str:
     return f"{name}, a new virtual pet, just moved in! Its egg hatches in about half an hour. Say hi ♥"
 
 
+WELCOME_IF_MISSING = "If it isn't there, add the Hatch at Home pet shelf card."  # N20b
+
+
+def welcome_no_dashboard(name: str) -> str:
+    """The sidebar note's line when no setup named a dashboard (N20)."""
+    return f"To meet {name}, add the Hatch at Home pet shelf card to a dashboard."
+
+
 def dashboard_path(value: str | None) -> str | None:
     """A dashboard path as notifications want it: "/name/view", or None."""
     value = (value or "").strip().strip("/")

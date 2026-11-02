@@ -1663,6 +1663,8 @@ const SETUP_COPY = {
   nameNotNow: "only a new egg or baby can be named", // N16
   nameReadOnly: "this login can't name, sorry", // N17
   nameFailed: "hm, that name didn't stick ♪", // N18
+  // S4: first run. The empty card's button for an admin (N19).
+  addPet: "add a pet ›", // N19
 };
 // Settings UX fix 1 (review 1, F12/F14/F16; copy APPROVED by the first mate 2026-11-02, owner
 // delegated): the sheet's notes in the pet's voice, lowercase, and the pet's word when the
@@ -1718,6 +1720,14 @@ const GAME_COPY = {
   dugThere: "oh! you dug there too ♪", // UX6 F16, a screen adopts the same person's other screen's dig
 };
 // --- end fresh-expand copy ---
+// S4: an admin's way into HA's own screens, the way "connect more ›" has always gone
+// (history.pushState + location-changed). The first is HA's "My" redirect to the
+// add-integration dialog; the second is this pet's entry on the integration page.
+const ADD_PET_PATH = "/_my_redirect/config_flow_start?domain=virtual_pet";
+const goHA = (path) => {
+  history.pushState(null, "", path);
+  window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+};
 // Approved lines the scan's nag words ("again", "forgot...") would refuse: a retry, "just us",
 // and the two that say a forget worked. Not nagging, so unscanned.
 const SETTINGS_AGAIN = {
@@ -2671,6 +2681,10 @@ const STYLE = `
   .title { font: 400 24px 'Tiny5', monospace; color: var(--hp-ink); min-width: 0; overflow-wrap: anywhere; }
   .title.long { font-size: 16px; } /* a long name keeps to two lines */
   .sub { font-size: 13px; color: var(--hp-subink); margin-top: 2px; }
+  /* S4: the empty card's "add a pet ›", an admin's way to HA's add dialog. */
+  .head .addpet { display: block; margin: 0; padding: 0; border: none; background: none; text-align: left;
+    min-height: 44px; font: inherit; font-size: 13px; color: var(--hp-subink); text-decoration: underline; cursor: pointer; }
+  .head .addpet[hidden] { display: none; }
   .chips { display: flex; gap: 6px; align-items: center; }
   .statusbtn { display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 12px;
     border: none; border-radius: 22px; cursor: pointer; font: 400 14px 'Tiny5', monospace;
@@ -4369,7 +4383,8 @@ class HatchPetCard extends HTMLElement {
       <ha-card>
         <div class="head">
           <div><div class="title-row"><img class="emblem" alt=""><div class="title"></div></div>
-            <div class="sub"></div></div>
+            <div class="sub"></div>
+            <button class="wlink addpet" hidden>${SETUP_COPY.addPet}</button></div>
           <div class="chips">
             <button class="statusbtn" aria-pressed="false">${pixelIcon("icon_status", 24)}<span>Status</span></button>
           </div>
@@ -4403,6 +4418,10 @@ class HatchPetCard extends HTMLElement {
       if (s?.px && (e.target === this._track || e.target === s.el)) this._mould(s);
     });
     this._dots = root.querySelector(".dots");
+    root.querySelector(".addpet").addEventListener("click", (e) => {
+      this._tapped(e.currentTarget);
+      goHA(ADD_PET_PATH);
+    });
     root.querySelector(".statusbtn").addEventListener("click", () => {
       const s = this._slides[this._index];
       if (s) {
@@ -4877,6 +4896,8 @@ class HatchPetCard extends HTMLElement {
         : this._hass.user?.is_admin === false
           ? "Ask whoever runs Home Assistant to add a pet."
           : "Add the Hatch at Home integration to hatch one.";
+      // An admin with nothing configured gets a way to the add-integration dialog (S4, N19).
+      this._card.querySelector(".addpet").hidden = configured || this._hass.user?.is_admin !== true;
       if (configured) {
         this._emptyToken = null;
       } else if (keep) {
@@ -4888,6 +4909,7 @@ class HatchPetCard extends HTMLElement {
       return;
     }
     this._emptyToken = null;
+    this._card.querySelector(".addpet").hidden = true;
     if (this._slides[0]?.empty) this._dropSlide(this._slides.pop()); // a pet moved in
     let worlds;
     if (!this._slides.length) this._waiting("Hatch at Home"); // worlds.json pending: not a blank card (F11)
@@ -5034,6 +5056,7 @@ class HatchPetCard extends HTMLElement {
     this._card.querySelector(".chips").style.display = "none";
     this._card.querySelector(".title").textContent = title;
     this._card.querySelector(".sub").textContent = "";
+    this._card.querySelector(".addpet").hidden = true;
   }
 
   // Draw again now, though nothing in HA changed: one slide, or all of them.
@@ -7379,6 +7402,13 @@ class HatchPetCard extends HTMLElement {
 
   // Each "came home" is welcomed once in this browser, by any pet (seen live,
   // or at the next look).
+  // This pet's own entry on the integration page, as HA's frontend opens it after a config
+  // flow; the plain integration page when the device carries no entry id.
+  _petEntryPath(s) {
+    const entry = this._hass.devices?.[s.ids?.device]?.config_entries?.[0];
+    return `/config/integrations/integration/virtual_pet${entry ? `#config_entry=${entry}` : ""}`;
+  }
+
   _welcomeDue(s, at) {
     const key = `hatch-welcomed-${this._hass.user?.id}`;
     try {
@@ -8917,8 +8947,7 @@ class HatchPetCard extends HTMLElement {
     s.status.querySelector(".connect")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);
-      history.pushState(null, "", "/config/integrations/integration/virtual_pet");
-      window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+      goHA(this._petEntryPath(s));
     });
     s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
       e.stopPropagation();
