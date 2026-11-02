@@ -74,10 +74,31 @@
         "default": "mdi:alert-circle-outline"
       },
       "mood": {
-        "default": "mdi:bird"
+        "default": "mdi:paw",
+        "state": {
+          "away": "mdi:bag-suitcase",
+          "egg": "mdi:egg-outline",
+          "sick": "mdi:emoticon-sick-outline",
+          "asleep": "mdi:sleep",
+          "calling": "mdi:bell-ring",
+          "hungry": "mdi:food-apple",
+          "dirty": "mdi:shower",
+          "sleepy": "mdi:power-sleep",
+          "bored": "mdi:emoticon-neutral-outline",
+          "excited": "mdi:emoticon-excited-outline",
+          "cozy": "mdi:fireplace",
+          "content": "mdi:emoticon-happy-outline"
+        }
       },
       "life_stage": {
-        "default": "mdi:egg-outline"
+        "default": "mdi:paw",
+        "state": {
+          "egg": "mdi:egg-outline",
+          "baby": "mdi:baby-face-outline",
+          "child": "mdi:human-child",
+          "teen": "mdi:account-music",
+          "adult": "mdi:paw"
+        }
       },
       "last_care": {
         "default": "mdi:history"

@@ -4209,12 +4209,14 @@ async def _load(hass: HomeAssistant, config: MockConfigEntry) -> MockConfigEntry
     return config
 
 
-async def _new_pet_options(hass: HomeAssistant) -> dict[str, Any]:
+async def _new_pet_options(
+    hass: HomeAssistant, name: str = "Juniper"
+) -> dict[str, Any]:
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": config_entries.SOURCE_USER}
     )
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {CONF_NAME: "Juniper", "world": "woodland"}
+        result["flow_id"], {CONF_NAME: name, "world": "woodland"}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     return dict(result["options"])
@@ -4233,7 +4235,7 @@ async def test_a_new_pet_uses_a_yaml_weather_without_a_registry_entry(
     hass.states.async_set("weather.yaml_one", "sunny")
     assert (await _new_pet_options(hass))["weather"] == "weather.yaml_one"
     hass.states.async_set("weather.yaml_two", "rainy")
-    assert "weather" not in await _new_pet_options(hass)  # two: not clear
+    assert "weather" not in await _new_pet_options(hass, "Fern")  # two: not clear
 
 
 async def test_a_new_pet_with_no_weather_has_none(hass: HomeAssistant) -> None:

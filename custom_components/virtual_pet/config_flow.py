@@ -26,6 +26,7 @@ from homeassistant.helpers.selector import (
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
+    SelectSelectorMode,
     TimeSelector,
 )
 from homeassistant.util.unit_conversion import TemperatureConverter
@@ -75,6 +76,7 @@ from .const import (
 )
 from .defaults import default_weather
 from .model import parse_hhmm
+from .names import clear_device_name, name_taken, pet_name
 from .species import load_catalog
 from .watcher import is_temperature
 
@@ -95,8 +97,10 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
 
     def _free_name(self) -> str:
         """A default name no other pet has, so entity IDs don't get _2 suffixes."""
-        taken = {e.title.casefold() for e in self._async_current_entries()}
-        return next((n for n in PET_NAMES if n.casefold() not in taken), DEFAULT_NAME)
+        return next(
+            (n for n in PET_NAMES if not name_taken(self.hass, n)),
+            DEFAULT_NAME,
+        )
 
     async def _world_options(self) -> list[SelectOptionDict] | None:
         catalog = await self.hass.async_add_executor_job(load_catalog)
@@ -127,8 +131,10 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
             coordinator.world if coordinator is not None else entry.data.get(CONF_WORLD)
         )
         current = entry.data.get(CONF_NEXT_WORLD) or world_now or DEFAULT_WORLD
+        shown = pet_name(self.hass, entry)
         if user_input is not None:
-            name = user_input[CONF_NAME].strip() or entry.title
+            name = user_input[CONF_NAME].strip() or shown
+            renamed = name != shown
             world = user_input[CONF_WORLD]
             data = {k: v for k, v in entry.data.items() if k != CONF_NEXT_WORLD}
             if world_now is not None:
@@ -148,6 +154,11 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
                     data[CONF_WORLD] = world  # still an egg: it moves now
                 else:
                     data[CONF_NEXT_WORLD] = world
+            if renamed:
+                # A device-page name would hide the new one everywhere.
+                clear_device_name(self.hass, entry)
+            else:
+                name = entry.title  # the name shown came from the device page
             return self.async_update_reload_and_abort(
                 entry, title=name, data={**data, CONF_NAME: name}
             )
@@ -158,21 +169,27 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
             step_id="reconfigure",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_NAME, default=entry.title): str,
+                    vol.Required(CONF_NAME, default=shown): str,
                     vol.Required(CONF_WORLD, default=current): SelectSelector(
-                        SelectSelectorConfig(options=options)
+                        SelectSelectorConfig(
+                            options=options, mode=SelectSelectorMode.LIST
+                        )
                     ),
                 }
             ),
-            description_placeholders={"name": entry.title},
+            description_placeholders={"name": shown},
         )
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Name the pet and pick a world."""
+        errors: dict[str, str] = {}
         if user_input is not None:
             name = user_input[CONF_NAME].strip() or self._free_name()
+            if name_taken(self.hass, name):
+                errors[CONF_NAME] = "name_taken"
+        if user_input is not None and not errors:
             dashboard = notify.dashboard_path(user_input.get(CONF_DASHBOARD))
             weather = default_weather(self.hass, from_states=True)
             return self.async_create_entry(
@@ -192,17 +209,28 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="no_worlds")
         keys = [o["value"] for o in options]
         default = DEFAULT_WORLD if DEFAULT_WORLD in keys else keys[0]
+        typed = user_input or {}  # what they had typed, when a name is taken
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_NAME, default=self._free_name()): str,
-                    vol.Required(CONF_WORLD, default=default): SelectSelector(
-                        SelectSelectorConfig(options=options)
+                    vol.Required(
+                        CONF_NAME, default=typed.get(CONF_NAME) or self._free_name()
+                    ): str,
+                    vol.Required(
+                        CONF_WORLD, default=typed.get(CONF_WORLD, default)
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=options, mode=SelectSelectorMode.LIST
+                        )
                     ),
-                    vol.Optional(CONF_DASHBOARD): _dashboards(self.hass),
+                    vol.Optional(
+                        CONF_DASHBOARD,
+                        description={"suggested_value": typed.get(CONF_DASHBOARD)},
+                    ): _dashboards(self.hass),
                 }
             ),
+            errors=errors,
         )
 
 
@@ -298,7 +326,11 @@ class PetOptionsFlow(OptionsFlowWithReload):
             ],
             "activity": [
                 (CONF_ZONE, _entities("zone"), DEFAULT_ZONE),
-                (CONF_AWAY_AFTER, _number(0.5, 24, 0.5, "h"), R.HOME_AWAY_AFTER_HOURS),
+                (
+                    CONF_AWAY_AFTER,
+                    _number(0.5, 24, 0.5, "hours"),
+                    R.HOME_AWAY_AFTER_HOURS,
+                ),
                 (CONF_SITTER_SETTLES, BooleanSelector(), True),
                 (CONF_TV, _entities("media_player", True), None),
                 (CONF_MUSIC, _entities("media_player", True), None),
@@ -409,5 +441,5 @@ class PetOptionsFlow(OptionsFlowWithReload):
             step_id="init",
             data_schema=vol.Schema(schema),
             errors=errors,
-            description_placeholders={"name": self.config_entry.title},
+            description_placeholders={"name": pet_name(self.hass, self.config_entry)},
         )
