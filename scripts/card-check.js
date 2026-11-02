@@ -4321,7 +4321,7 @@ async function main() {
   for (const [type, extra, expect] of [
     ["stage_changed", { stage: "teen", from: "child" }, "teen now"],
     ["trait_learned", { trait: "music_lover", level: 1 }, "new trait"],
-    ["sunset", {}, "sun|sky"],
+    ["sunset", {}, "sun|sky|evening|night is starting"], // or its species' clock line (CLOCK_LINES)
     ["watching", { title: "Bluey" }, "Bluey"],
     ["first_snow", {}, "first snow"],
     ["first_warm", {}, "first warm day"], // fresh-expand E12 (Se-a)
@@ -4966,7 +4966,7 @@ async function main() {
     await page.waitForTimeout(300);
   }
   await card.evaluate((el) => { delete el._wakeLine; });
-  const iMorning = morning.findIndex((t) => /morning/.test(t) && !isWake(t));
+  const iMorning = morning.findIndex((t) => /morning|five more minutes/.test(t) && !isWake(t)); // or a clock line
   const iYawn = morning.findIndex((t) => t.includes("yaaawn"));
   check("2a: wake + good morning + weather: the yawn, then good morning; the weather isn't said",
     iMorning >= 0 && iYawn >= 0 && iYawn < iMorning && !morning.some((t) => /sun came out|sunshine/.test(t)),
@@ -5272,7 +5272,7 @@ async function main() {
     await page.waitForTimeout(300);
   }
   const iSick = heardSick.findIndex((t) => /don't feel so good/.test(t));
-  const iCheer = heardSick.findIndex((t) => /morning/.test(t) && !isWake(t));
+  const iCheer = heardSick.findIndex((t) => /morning|five more minutes/.test(t) && !isWake(t)); // or a clock line
   check("2b: C6 comes before a coinciding good morning (the cheer waits)",
     iSick >= 0 && iCheer > iSick, heardSick.join(" | ") + (iSick >= 0 ? "" : " " + JSON.stringify(sickState)));
   // C8: someone else's medicine, the viewer's own after the scene's cheer, and one whose scene is over.
@@ -7350,8 +7350,9 @@ async function main() {
     }, { types: TYPES, moments: MOMENTS });
     const NORMAL = {
       greet: /^(morning|hi|evening), Dev!$|^Dev!! hi!$/,
-      good_morning: /^morning!! you're up!$|^morning! ♪$/,
-      sunset: /^ooh, the sunset\.\.\.$|^pretty sky tonight$|^the sun's going down$/,
+      // The normal lines, or this species' own clock lines (species nature N1, CLOCK_LINES).
+      good_morning: /^morning!! you're up!$|^morning! ♪$|^morning!! what a bright one ♪$|^morning\.\.\. \*stretch\* getting there$|^five more minutes\.\.\. ♥$/,
+      sunset: /^ooh, the sunset\.\.\.$|^pretty sky tonight$|^the sun's going down$|^\*winds down for the evening\*$|^ooh, evening! \*perks up\* ♪$|^\*stirs\* the night is starting ♪$/,
       fell_asleep: /^good night\.\.\.$|^night night\.\.\.$|^sleep tight\.\.\.$/,
       wish_granted: /^my wish came true! thank you ♥$|^yay, my wish! ♥$|^best day ever! ♥$/,
       favourite_snack: /^hazelnuts, my favourite!!$/,
@@ -7723,6 +7724,12 @@ async function main() {
       out.noType = el._idleMoves(s, false, false).join();
       t.pet("child", "bouncy");
       out.child = el._idleMoves(s, false, false).join();
+      // A child has no species adds (nature N1): the base list without them.
+      const realAdds = el._speciesAdds;
+      el._speciesAdds = () => [];
+      t.pet("adult", null);
+      out.childBase = el._idleMoves(s, false, false).join();
+      el._speciesAdds = realAdds;
       return out;
     }, TYPES);
     const WANT = { mellow: [["mumble", 2]], sweet: [], bouncy: [["hop", 1]], starry: [["mumble", 1], ["perk", 1]],
@@ -7738,7 +7745,7 @@ async function main() {
       if (m.praise !== PRAISE[type]) mannerBad.push(`${type}: praise ${m.praise}`);
       if (m.praiseGame !== (type === "plucky" ? "perk" : PRAISE[type])) mannerBad.push(`${type}: praise in a game ${m.praiseGame}`);
     }
-    if (manner.noType !== manner[TYPES[0]].base || manner.child !== manner[TYPES[0]].base) mannerBad.push("no type / child not the base list");
+    if (manner.noType !== manner[TYPES[0]].base || manner.child !== manner.childBase) mannerBad.push("no type / child not the base list");
     if (!manner.bouncy.base.split(",").every((m) => m !== "hop")) mannerBad.push("hop in the content base list");
     check("P3 manner: each type adds its moves (bouncy a hop even when content), calm leaves mumble and pose, no type or a child is unchanged, praise follows the row",
       mannerBad.length === 0, mannerBad.join(" | "));
