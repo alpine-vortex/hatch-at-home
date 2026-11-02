@@ -4369,7 +4369,7 @@ class HatchPetCard extends HTMLElement {
     // iOS locks audio again after a reload until a tap: any tap unlocks it
     // (the end of a touch counts as a gesture there, its start doesn't).
     const unlock = () => {
-      if (!soundsOn() && !babbleOn()) return;
+      if (!soundsOn()) return; // babble needs sounds here too
       try {
         unlockAudio();
       } catch (err) {
@@ -6463,7 +6463,7 @@ class HatchPetCard extends HTMLElement {
       }, 40);
       s.typing = job;
       s.bubble.dataset.typing = "1";
-      if (sound && babbleOn() && this._mayPlay(s) && !s.game) {
+      if (sound && soundsOn() && babbleOn() && this._mayPlay(s) && !s.game) { // "sounds here" is the master (UX7 F11)
         try {
           s.babbling = babble(text, voice);
         } catch (err) {
@@ -8733,7 +8733,10 @@ class HatchPetCard extends HTMLElement {
       ${sharedScreen() ? "" : row(null, "my data", forgetButton("forgetme", "forget_me", "forget my data: your birthday, answers and settings for every pet; your bonds stay"))}
       <div class="sec">this screen</div>
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
-      ${s.species?.voice ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`) : ""}
+      ${s.species?.voice ? (soundsOn()
+        ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`)
+        // "sounds here" is the master: babble waits for it (its own switch keeps its setting)
+        : row(null, "babble", `<span><button class="bell babble" aria-label="babble: needs sounds here first" aria-pressed="false" aria-disabled="true">needs sounds</button></span>`)) : ""}
       ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "holiday names", `<span><button class="bell named" aria-label="holiday names" aria-pressed="${namedHolidays()}">${namedHolidays() ? "on" : "off"}</button></span>`)}
       ${row(null, "mono screen", `<span><button class="bell mono" aria-label="mono screen: ${monoOn() ? "on" : "off"}, change" aria-pressed="${monoOn()}">${monoOn() ? "on" : "off"}</button></span>`)}
@@ -8971,6 +8974,7 @@ class HatchPetCard extends HTMLElement {
     });
     s.status.querySelector(".bell.babble")?.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (!soundsOn()) return; // disabled: sounds here is off
       this._tapped(e.currentTarget);
       const on = !babbleOn();
       try {

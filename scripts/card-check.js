@@ -1457,6 +1457,16 @@ async function main() {
     await evaluate(() => localStorage.getItem("hatch-sounds")) === "on");
   await cur().locator(".bell.sound").click(); // off again for the rest of the run
   await page.waitForTimeout(300);
+  // UX7 F11: "sounds here" is the master. With it off the babble row says "needs sounds", is disabled
+  // and a tap changes nothing; with it on, babble starts off and turns on here.
+  const needs = await cur().locator(".bell.babble").evaluate((b) => ({ text: b.textContent, disabled: b.getAttribute("aria-disabled") }));
+  await cur().locator(".bell.babble").click({ force: true });
+  await page.waitForTimeout(200);
+  check("UX7 F11: with sounds here off, the babble row says \"needs sounds\" and a tap changes nothing",
+    needs.text === "needs sounds" && needs.disabled === "true" &&
+    await evaluate(() => localStorage.getItem("hatch-babble")) !== "on", JSON.stringify(needs));
+  await cur().locator(".bell.sound").click(); // sounds on for the babble switch
+  await page.waitForTimeout(300);
   const babbleBefore = await cur().locator(".bell.babble").getAttribute("aria-pressed");
   await cur().locator(".bell.babble").click();
   await page.waitForTimeout(300);
@@ -1464,6 +1474,8 @@ async function main() {
     babbleBefore === "false" && await cur().locator(".bell.babble").getAttribute("aria-pressed") === "true" &&
     await evaluate(() => localStorage.getItem("hatch-babble")) === "on");
   await cur().locator(".bell.babble").click(); // off again
+  await page.waitForTimeout(300);
+  await cur().locator(".bell.sound").click(); // and sounds off again for the rest of the run
   await page.waitForTimeout(300);
   // "notify me" has its own switch; a shared screen has none, and babble is still babble.
   const bells = await page.locator("hatch-pet-card").evaluate((el) => {
@@ -2079,6 +2091,7 @@ async function main() {
     counter.disconnect();
     // Babble (on for this check) never while asleep, in a game or behind the status.
     localStorage.setItem("hatch-babble", "on");
+    localStorage.setItem("hatch-sounds", "on"); // babble needs sounds here too (UX7 F11)
     el._card.dispatchEvent(new Event("touchend")); // a tap unlocks audio
     await wait(300);
     const hour = new Date().getHours();
@@ -2099,6 +2112,7 @@ async function main() {
     out.babbleGame = babbles(() => { s.game = { kind: "left_right" }; });
     out.babbleStatus = babbles(() => el._toggleStatus(s));
     localStorage.setItem("hatch-babble", "off");
+    localStorage.setItem("hatch-sounds", "off");
     // A burst: three queued lines, said one after another; only the first voiced.
     s.voicedAt = 0;
     out.burst = [];
