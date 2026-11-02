@@ -109,6 +109,8 @@ async def test_each_person_hears_only_their_own_bond(
         "baby_talk": False,
         "birthday_phone": False,
         "birthday_kept": False,
+        "open_on": False,  # favourite §5.3: their card doesn't open on it
+        "house_open_on": False,  # an admin's: shared screens don't either
         "gift": None,  # visitors v2 V-E: their waiting gift, none yet
         "fav_visitor": None,  # F4: their favourite of this world's visitors
         "fav_weather": None,  # M0-c: their favourites, for "ask me again"
@@ -124,6 +126,7 @@ async def test_each_person_hears_only_their_own_bond(
     theirs = await subscribe(await hass_ws_client(hass, ada_token))
     assert theirs["mine"]["bond"] == {"level": 2}
     assert theirs["mine"]["notify_me"] is False
+    assert "house_open_on" not in theirs["mine"]  # not an admin
     read_only = await subscribe(await hass_ws_client(hass, hass_read_only_access_token))
     assert read_only["mine"]["bond"] is None
     for payload in (theirs, read_only):
@@ -155,7 +158,10 @@ async def test_a_shared_screen_hears_the_house_only(
     assert media == {"type": "watching", "title": "Bluey", "at": media["at"]}
     assert len(events) == 2 and "visit" in events[1]["house"]  # the day's, or None
     events[1]["house"].pop("visit")
-    assert events[1:] == [{"house": {"media": media, "dream": None, "basket": 0}}]
+    # A shared screen's house view also says whether it opens on this pet (§5.3).
+    assert events[1:] == [
+        {"house": {"media": media, "dream": None, "basket": 0, "house_open_on": False}}
+    ]
     assert "sunbeam" not in json.dumps(events) and me not in json.dumps(events)
     # Subscribing again replays the same media moment (the card dedupes by at).
     again = await subscribe(shared, shared=True)
@@ -255,8 +261,8 @@ async def test_the_channel_outlives_a_reload_and_hears_the_pet_go(
     client = await hass_ws_client(hass)
     await subscribe(client)
     watchers = hass.data[DOMAIN]["watchers"]
-    for user, shared, send in watchers[config.entry_id].values():
-        assert (user, shared, callable(send)) == (me, False, True)
+    for user, shared, send, admin in watchers[config.entry_id].values():
+        assert (user, shared, callable(send), admin) == (me, False, True, True)
     # An options save reloads the pet: a fresh snapshot, without asking again.
     assert await hass.config_entries.async_reload(config.entry_id)
     await hass.async_block_till_done()

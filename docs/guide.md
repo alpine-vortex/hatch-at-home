@@ -216,12 +216,14 @@ download, restart. HACS replaces the folder you copied.
     when it's at least 45 minutes before your usual (level 3);
   - a send-off on your phone on a notable morning as you leave ("Pip says: rain
     today, take an umbrella, sunbeam ☂"), with "notify me" on, at most three times a
-    week, from the pet you're closest to, and silent (level 3).
+    week, from the pet you're closest to (or the pet your card opens on, if your bond
+    with it is level 3 or more and it's home and hatched), and silent (level 3).
 
   On a wall tablet or any screen the whole family looks at but one person is signed
   in to, turn on "shared screen" in settings (the gear on the status page; it's saved
   in that browser only): it shows nothing personal there, no names, notes, questions,
-  bond or "my day", and doesn't count as anyone's visit.
+  bond or "my day", and doesn't count as anyone's visit. It opens on the pet an admin
+  picked for shared screens (below), if there is one, and never shows anyone's heart.
 
   **A family tablet: which way?** There are two ways to set one up. Give the tablet its
   own Home Assistant login (a "family" user): the pet then treats the tablet as one
@@ -306,8 +308,18 @@ up to four parts, in this order:
     voice). Babble waits for "sounds here": with that off its row reads "needs sounds"
     and can't be switched. *look*: screen effects here, holiday names, mono screen and
     big text. These are saved in this browser only.
-  - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk and
-    my data. These follow your login. A shared screen doesn't show this part.
+  - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk, your
+    remembered favourites (each with "ask me again"), "♥ open on <pet>" and my data.
+    These follow your login. A shared screen doesn't show this part.
+    "♥ open on <pet>" (with two or more pets) is the favourite pet: the pet your card
+    opens on, on every page load, wherever you last swiped to. Turn it on for the
+    pet you're looking at; it moves from any other, and off clears it. A small heart
+    marks that pet's dot at the foot of the card, on your own screens only; nobody
+    else sees it, and it ranks nothing. Your phone's birthday message and send-off
+    come from that pet when it may send them (home, hatched, and for a send-off a
+    close enough bond); otherwise from the pet you're closest to, as before. An admin
+    gets one more row, "shared screens open on <pet>": the household's pick, where
+    every shared screen opens. It is no one's, so "forget my data" leaves it.
   - **for the pet** (or **for** its name): "notices", the kinds of thing the house
     shows the pet (weather, lights, tv, music, chores, fireplace, heater, fan, robot, doorbell, machines, moon; the moon always
     shows); an admin also gets "connect more ›", which opens the pet's own page in
@@ -573,7 +585,8 @@ Who is home decides whether the pet is with you or at the sitter's. The two swit
 **What the pets remember about you.** Your birthday, your answers to its questions,
 your alarm times, the last zone you came back from (only while "my day" is on), the
 dream you picked for tonight (and, the next morning, that it was your idea), and
-your "baby talk", "my day" and "birthday on my phone" switches are kept for you alone,
+your "baby talk", "my day" and "birthday on my phone" switches, and the pet your card
+opens on, are kept for you alone,
 for every pet. They stay
 when you remove a pet, even the last one, so they're there if you set it up again.
 **"forget my data"** in settings (the gear on the status screen) (not on a shared screen) erases all of

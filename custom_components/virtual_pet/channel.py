@@ -16,7 +16,9 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from .const import DOMAIN
 
 type Send = Callable[[dict[str, Any]], None]
-type Watcher = tuple[str, bool, Send]  # (HA user ID, shared screen, send)
+# (HA user ID, shared screen, send, admin): an admin's own card also learns the
+# house's default (favourite §5.3), for its "shared screens open on" row.
+type Watcher = tuple[str, bool, Send, bool]
 
 
 def of(hass: HomeAssistant, entry_id: str) -> dict[object, Watcher]:
@@ -25,12 +27,17 @@ def of(hass: HomeAssistant, entry_id: str) -> dict[object, Watcher]:
 
 
 def add(
-    hass: HomeAssistant, entry_id: str, user: str, shared: bool, send: Send
+    hass: HomeAssistant,
+    entry_id: str,
+    user: str,
+    shared: bool,
+    send: Send,
+    admin: bool = False,
 ) -> tuple[object, CALLBACK_TYPE]:
     """Watch a pet: its token, and what stops it (when the socket closes)."""
     token = object()
     watchers: dict[str, dict[object, Watcher]] = hass.data[DOMAIN]["watchers"]
-    watchers.setdefault(entry_id, {})[token] = (user, shared, send)
+    watchers.setdefault(entry_id, {})[token] = (user, shared, send, admin)
 
     @callback
     def remove() -> None:
@@ -43,5 +50,5 @@ def add(
 def gone(hass: HomeAssistant, entry_id: str) -> None:
     """The pet was removed: tell its watchers, and forget them."""
     watchers: dict[str, dict[object, Watcher]] = hass.data[DOMAIN]["watchers"]
-    for _, _, send in watchers.pop(entry_id, {}).values():
+    for _, _, send, _ in watchers.pop(entry_id, {}).values():
         send({"gone": True})

@@ -337,8 +337,9 @@ earlier session: `scripts/develop` then exits with "stop the existing instance".
   `sendoffs`, `alarms`, `guess`, `my_day`, and the house's `weather` by day. It
   outlives the pets (removing the last one keeps it); `virtual_pet/forget_me` erases
   one person's record (privacy P2).
-  `hass.data[DOMAIN]["pets"]` lists the loaded pets (`_closest_pet` sends the
-  send-off). `visit` answers `{notes (≤ NOTES_PER_VISIT, best first), ask}`;
+  `hass.data[DOMAIN]["pets"]` lists the loaded pets (`_voice_pet` picks who sends
+  the send-off and the birthday: the person's `open_on` pet if it may, else the
+  closest). `visit` answers `{notes (≤ NOTES_PER_VISIT, best first), ask}`;
   `choose_question` picks the question (rotation by date for the later slot);
   answers come by the websocket command `virtual_pet/answer` (no bus event). Calls
   are `time-sensitive` on phones, send-offs `passive`; focus/DND are not read.

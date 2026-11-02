@@ -512,6 +512,42 @@ class HatchPetCardSheets extends HatchPetCardStatus {
     }
   }
 
+  // The pet a card opens on (favourite §5.3): this person's ("me", one pet: setting it here
+  // moves it from another), or, for an admin, where shared screens open ("house"). A
+  // websocket command, off the event bus; the channel's push confirms it.
+  async _setOpenOn(s, enabled, scope, button) {
+    const id = s.ids?.["sensor.life_stage"];
+    if (!id) return;
+    const key = scope === "house" ? "house_open_on" : "open_on";
+    const before = (this._slides || []).map((x) => x.mine?.[key]);
+    const show = (on) => {
+      button.setAttribute("aria-pressed", String(on));
+      button.textContent = on ? "on" : "off";
+    };
+    button.classList.add("pending");
+    show(enabled);
+    for (const x of this._slides || []) { // at once, so a redraw before the push keeps it
+      if (x.mine && (enabled || x === s)) x.mine[key] = enabled && x === s;
+    }
+    if (scope === "me") {
+      openOnWrite(this._openKey(), enabled ? s.ids.device : null);
+      this._renderShelf(); // the heart moves now
+    }
+    try {
+      await this._hass.callWS({ type: "virtual_pet/open_on", entity_id: id, enabled, scope, shared: sharedScreen() });
+    } catch (err) {
+      (this._slides || []).forEach((x, i) => { if (x.mine) x.mine[key] = before[i]; });
+      if (scope === "me") {
+        this._openOnSync();
+        this._renderShelf();
+      }
+      show(!enabled);
+      this._statusMessage(s, SETTINGS_AGAIN.failed);
+    } finally {
+      button.classList.remove("pending");
+    }
+  }
+
   // "My day" is per person too: steps, stairs and sleep from their own phones.
   async _setMyDay(s, enabled, button) {
     const id = s.ids?.["sensor.life_stage"];

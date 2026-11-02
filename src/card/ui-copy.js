@@ -462,6 +462,12 @@ function restLabel(flags, { away = false, asleep = false, egg = false } = {}) {
   if (!Array.isArray(flags) || !flags.includes("resting") || away || asleep || egg) return "";
   return flags.includes("sick") || flags.includes("away") ? "" : REST_LABEL;
 }
+// The opening-pet rows (favourite §5.3, first-mate-approved lines): no ranking word, just
+// where this card opens, and (admins) where shared screens open.
+const OPEN_ON_COPY = {
+  mine: (name) => `♥ open on ${name}`,
+  house: (name) => `shared screens open on ${name}`,
+};
 // The settings row: a switch on a personal screen; on a shared one its state only (decided).
 function restRow(on, shared, name) {
   const value = shared

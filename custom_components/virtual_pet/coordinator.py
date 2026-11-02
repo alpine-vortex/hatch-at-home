@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import deque
+from collections.abc import Callable
 import copy
 from datetime import date, datetime, timedelta
 import random
@@ -1589,16 +1590,35 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     def people(self) -> P.People:
         return self.hass.data[DOMAIN]["people"]
 
-    def _closest_pet(self, user: str) -> PetCoordinator:
-        """Of the loaded pets that notify this person, the one they're closest
-        to (it speaks for all of them on their phone)."""
+    def _voice_pet(
+        self,
+        user: str,
+        eligible: Callable[[PetCoordinator], bool] = lambda p: True,
+        among: Callable[[PetCoordinator], bool] = lambda p: True,
+    ) -> PetCoordinator:
+        """The pet that speaks for this person on their phone (the birthday and
+        the send-off; plan favourite-resting §5.3). Their card's pet (`open_on`)
+        is a preference among the pets that pass the message's gate, never a
+        replacement for it: it speaks if it is loaded, notifies them, is home,
+        hatched and `eligible`. Otherwise, exactly as before: of the loaded pets
+        that notify them (and pass `among`), the one they're closest to."""
         pets: dict[str, PetCoordinator] = self.hass.data[DOMAIN]["pets"]
+        mine = [
+            p
+            for p in pets.values()
+            if p.state is not None and user in p.state.notify_users
+        ]
+        chosen = pets.get(self.people.open_on(user) or "")
+        if (
+            chosen in mine
+            and chosen.state is not None
+            and not chosen.state.away
+            and model.life_stage(chosen.state) != "egg"
+            and eligible(chosen)
+        ):
+            return chosen
         return max(
-            (
-                p
-                for p in pets.values()
-                if p.state is not None and user in p.state.notify_users
-            ),
+            (p for p in mine if among(p)),
             key=lambda p: (p.bond_for(user)[0], p.pet_id),
             default=self,
         )
@@ -1606,8 +1626,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     def _send_off(self, user: str, now: float) -> None:
         """Someone with "my day" on heads out on a notable morning: one line on
         their phone ("rain later today, take an umbrella ☂"), a few times a week
-        at most, from the pet they're closest to."""
-        if self._closest_pet(user) is not self or self.state is None:
+        at most, from the pet they're closest to (or their card's pet, if it may
+        send one: its bond is close enough, and it's home and hatched)."""
+        voice = self._voice_pet(
+            user, eligible=lambda p: p.bond_for(user)[0] >= R.SENDOFF_LEVEL
+        )
+        if voice is not self or self.state is None:
             return
         level, nickname = self.bond_for(user)
         if (
@@ -2269,10 +2293,31 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             if pet.state is not None:
                 pet.async_set_updated_data(pet.state)
 
+    async def async_set_open_on(
+        self, user: str, enabled: bool, house: bool = False
+    ) -> None:
+        """Open this person's card on this pet, or stop (plan favourite-resting
+        §5.4): one pet per person, so setting it moves it here from any other.
+        With `house`, the household default for shared screens instead (the
+        websocket lets only admins). Every pet's channel hears it: the old
+        pet's view changed too."""
+        who = None if house else user
+        async with self.people.lock(user):
+            now = self.people.house_open_on() if house else self.people.open_on(user)
+            if enabled:
+                self.people.set_open_on(who, self.pet_id)
+                self.people.save()
+            elif now is not None and (
+                now == self.pet_id or now not in self.hass.data[DOMAIN]["pets"]
+            ):
+                self.people.set_open_on(who, None)  # a stale one goes too
+                await self.people.async_save_now()
+        self._push_everywhere()
+
     def _birthday_morning(self) -> None:
         """A friend's birthday: their phone hears it with the first morning of
         any hatched pet at home that notifies them, from the one they're
-        closest to, once a year. Their nickname, never their name. Only if
+        closest to (or their card's pet, if it's home and hatched), once a year. Their nickname, never their name. Only if
         they turned "birthday on my phone" on (off by default: the message is
         in HA's history, which admins can read)."""
         state = self.state
@@ -2280,7 +2325,6 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return
         local = dt_util.now().date()
         today, year = local.isoformat(), str(local.year)
-        pets: dict[str, PetCoordinator] = self.hass.data[DOMAIN]["pets"]
         for user in state.notify_users:
             person = self.people.data["people"].get(user) or {}
             if not person.get("birthday_phone") or not model.birthday_today(
@@ -2291,16 +2335,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 continue
             person["birthday_sent"] = year
             self.people.save()
-            here = [
-                p
-                for p in pets.values()
-                if p.state is not None
-                and user in p.state.notify_users
-                and not p.state.away
-                and model.life_stage(p.state) != "egg"
-            ]
-            closest = max(
-                here, key=lambda p: (p.bond_for(user)[0], p.pet_id), default=self
+            closest = self._voice_pet(
+                user,
+                among=lambda p: (
+                    p.state is not None
+                    and not p.state.away
+                    and model.life_stage(p.state) != "egg"
+                ),
             )
             assert closest.state is not None
             self._send(
@@ -2585,9 +2626,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             (v.get("name") for v in self.visitors if v.get("id") == visit["id"]), None
         )
 
-    def _mine(self, user: str) -> dict[str, Any]:
+    def _mine(self, user: str, admin: bool = False) -> dict[str, Any]:
         """What only this person sees: their bond, and their own switches. Read,
-        never created: an open card mustn't bring back a forgotten record."""
+        never created: an open card mustn't bring back a forgotten record. An
+        admin's also says whether shared screens open on this pet (their row to
+        change it); no one else's does."""
         state = self.state
         bond = state.bonds.get(user) if state else None
         person = self.people.data["people"].get(user, {})
@@ -2605,6 +2648,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "baby_talk": self.people.baby_talk(user),
             "birthday_phone": bool(person.get("birthday_phone")),
             "birthday_kept": bool(person.get("birthday")),
+            # Their card opens on this pet (the favourite, §5.3): only theirs, never
+            # anyone else's choice.
+            "open_on": self.people.open_on(user) == self.pet_id,
+            **(
+                {"house_open_on": self.people.house_open_on() == self.pet_id}
+                if admin
+                else {}
+            ),
             # Their waiting gift, {id, world}, or None (plan visitors v2 §5).
             "gift": model.known_gift(bond, self.known_finds),
             # Their favourite of this world's visitors (an id), or None (F4), and of
@@ -2624,6 +2675,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             # F-03): the card's evening gate and daily marker follow these.
             **P.People.follow_clock(*self._today(self._now())),
         }
+
+    def _shared_house(self, house: dict[str, Any]) -> dict[str, Any]:
+        """A shared screen's house view also says whether it opens on this pet
+        (the admin-set household default, favourite §5.3). It names nobody, and
+        only shared screens get it."""
+        return {**house, "house_open_on": self.people.house_open_on() == self.pet_id}
 
     def _house_view(self) -> dict[str, Any]:
         """What every screen sees, shared ones too: the latest show or song,
@@ -2653,12 +2710,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         return view
 
     def channel_snapshot(
-        self, token: object, user: str, shared: bool
+        self, token: object, user: str, shared: bool, admin: bool = False
     ) -> dict[str, Any]:
         """Everything a watcher sees, at once (on subscribe, and after a reload).
         A shared screen gets no one's own view."""
-        mine = None if shared else self._mine(user)
+        mine = None if shared else self._mine(user, admin)
         house = self._house_view()
+        if shared:
+            house = self._shared_house(house)
         self._sent[token] = (mine, house)
         moments = [] if shared else list(self._private.get(user, ()))
         if house["media"]:
@@ -2674,8 +2733,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """Push on every update, and send the watchers already open (a card
         open across a reload) a fresh snapshot."""
         self.config_entry.async_on_unload(self.async_add_listener(self._push_watchers))
-        for token, (user, shared, send) in list(self._watchers().items()):
-            send(self.channel_snapshot(token, user, shared))
+        for token, (user, shared, send, admin) in list(self._watchers().items()):
+            send(self.channel_snapshot(token, user, shared, admin))
 
     def _current(self) -> bool:
         """This is the pet's live coordinator (not one a reload replaced)."""
@@ -2691,19 +2750,20 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         for token in [t for t in self._sent if t not in watchers]:
             del self._sent[token]
         house = self._house_view()
-        for token, (user, shared, send) in list(watchers.items()):
+        for token, (user, shared, send, admin) in list(watchers.items()):
             if token not in self._sent:
-                send(self.channel_snapshot(token, user, shared))
+                send(self.channel_snapshot(token, user, shared, admin))
                 continue
-            mine = None if shared else self._mine(user)
+            mine = None if shared else self._mine(user, admin)
+            seen = self._shared_house(house) if shared else house
             sent_mine, sent_house = self._sent[token]
             changed: dict[str, Any] = {}
             if mine != sent_mine:
                 changed["mine"] = mine
-            if house != sent_house:
-                changed["house"] = house
+            if seen != sent_house:
+                changed["house"] = seen
             if changed:
-                self._sent[token] = (mine, house)
+                self._sent[token] = (mine, seen)
                 send(changed)
 
     def _push_everywhere(self) -> None:
@@ -2763,14 +2823,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             private = self._private.setdefault(user, deque(maxlen=MOMENTS_KEPT))
             private.appendleft(moment)
             if live:
-                for who, shared, send in list(self._watchers().values()):
+                for who, shared, send, _ in list(self._watchers().values()):
                     if who == user and not shared:
                         send({"moment": moment})
         elif kind in MEDIA_EVENTS and event.get("title"):
             moment = {k: event[k] for k in ("type", "title", "artist") if k in event}
             self._house["media"] = moment | {"at": at}
             if live:
-                for _, _, send in list(self._watchers().values()):
+                for _, _, send, _ in list(self._watchers().values()):
                     send({"moment": self._house["media"]})
                 self._push_watchers()
 
@@ -2778,7 +2838,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """Every watcher open now, once; nothing is kept."""
         if not self._current():
             return
-        for _, _, send in list(self._watchers().values()):
+        for _, _, send, _ in list(self._watchers().values()):
             send({"moment": moment})
 
     def _save(self) -> None:

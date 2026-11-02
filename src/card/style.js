@@ -67,6 +67,10 @@ const STYLE = `
   /* A pet this browser hasn't shown yet (UX fix 4, F4): a small pulse till its slide is first shown
      (reduced motion: no pulse, but full colour like the one on show). */
   .dot.fresh::before { opacity: 1; animation: dotpulse 1.6s ease-in-out infinite; }
+  /* The pet this person's card opens on (favourite §5.3): a small heart on its head dot. */
+  .dot { position: relative; }
+  .dot.open-on::after { content: "♥"; position: absolute; top: 6px; right: 6px; font-size: 10px; line-height: 1;
+    color: var(--hp-ink); pointer-events: none; }
   @keyframes dotpulse { 50% { transform: scale(1.5); } }
   .slide.away-slide { cursor: pointer; }
   /* The empty card's toy (UX fix 4, F5): an egg's silhouette (the journal's "???" look), no buttons. */
