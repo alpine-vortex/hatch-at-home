@@ -422,8 +422,11 @@ async def test_the_missing_entities_repair_names_the_topics(
     assert issue.translation_placeholders["topics"] == (
         '"Weather and air", "The pet\'s room" and "The house helps"'
     )
-    text = _strings()["issues"]["missing_entities"]["description"]
-    assert "then {topics}, and pick" in text
+    # A fixable issue has no description of its own (hassfest): the fix flow's says it.
+    text = _strings()["issues"]["missing_entities"]["fix_flow"]["step"]["confirm"][
+        "description"
+    ]
+    assert "then {topics}." in text
 
 
 def test_topics_text_names_one_topic_alone() -> None:

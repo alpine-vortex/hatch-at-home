@@ -471,7 +471,6 @@
   "issues": {
     "missing_entities": {
       "title": "{pet} is listening for entities that are gone",
-      "description": "{pet}'s settings mention entities that no longer exist in Home Assistant, probably because they were renamed or removed: {entities}.\n\nThe pet ignores them, so nothing breaks, but it misses that part of your house. Open Settings → Devices & services → Hatch at Home → the gear next to {pet}, then {topics}, and pick the new entities or clear those fields. This warning goes away once that's saved.",
       "fix_flow": {
         "step": {
           "confirm": {
