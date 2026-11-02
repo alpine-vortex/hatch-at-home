@@ -3228,6 +3228,8 @@ async function main() {
     ["sunset", {}, "sun|sky"],
     ["watching", { title: "Bluey" }, "Bluey"],
     ["first_snow", {}, "first snow"],
+    ["first_warm", {}, "first warm day"], // fresh-expand E12 (Se-a)
+    ["first_fog", {}, "the first fog"],
     ["weather", { change: "cold", temperature: -12 }, "−12°"],
     ["weather", { change: "rainbow" }, "rainbow"],
     ["forecast", { when: "tomorrow", kind: "warmer", high: 72 }, "warmer tomorrow: 72°"],

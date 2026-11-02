@@ -37,6 +37,7 @@ const COPY_TABLES = {
   VISIT_GUEST: {},
   PROMISE_LINES: {},
   PROMISE_MID: {},
+  SEASON_FIRST_LINES: {},
 };
 
 function lines(value, path, out) {

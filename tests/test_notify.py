@@ -294,3 +294,9 @@ def test_two_neglected_pets_get_named_together(offset_hours: int):
         t += 60
     texts = [text for _, text in phone.sent]
     assert texts and set(texts) == {"Mochi and Pip would like a visit"}
+
+
+def test_the_first_warm_day_and_fog_send_no_push():
+    # Fresh-expand E12: the card says them; the phone stays quiet.
+    for kind in ("first_warm", "first_fog"):
+        assert notify.message({"type": kind}, "Pip", {}) is None

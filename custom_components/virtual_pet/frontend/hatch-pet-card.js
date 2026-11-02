@@ -961,7 +961,9 @@ const POSES = {
 // Shared house poses; a species' other extras are its own (used for idle life).
 const SHARED_POSES = new Set(Object.values(POSES));
 // What the journal calls a memory.
-const MEMORY_LABELS = { first_snow: "first snow", first_frost: "first frost" };
+const MEMORY_LABELS = {
+  first_snow: "first snow", first_frost: "first frost", first_warm: "first warm day", first_fog: "first fog",
+};
 // Idle life: something small every so often when nothing else is going on.
 const IDLE_MIN_MS = 20000;
 const IDLE_SPREAD_MS = 25000;
@@ -1422,6 +1424,8 @@ const PROMISE_LINES = {
   song: ["I'm learning a new song ♪", "I learned my song! ♪ la la"],
 };
 const PROMISE_MID = "hup! getting there ♪"; // days 1-3, now and then, with the move done small
+// Se-a (E12): the year's first warm day and the season's first fog, live.
+const SEASON_FIRST_LINES = { warm: "first warm day! ☀ ♪", fog: "ooh, the first fog ♪" };
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -1703,7 +1707,7 @@ const FLAVOUR_WAIT_MS = 8000;
 const MOMENT_CLASS = {
   hatched: KEPT, stage_changed: KEPT, egg_laid: KEPT, trait_learned: KEPT, trait_deepened: KEPT,
   wish_granted: KEPT, bond_up: KEPT, bond_record: KEPT, bond_favourite: KEPT, friend_home: KEPT,
-  tucked_in: KEPT, favourite_snack: KEPT, first_snow: KEPT, first_frost: KEPT, care_miss: KEPT,
+  tucked_in: KEPT, favourite_snack: KEPT, first_snow: KEPT, first_frost: KEPT, first_warm: KEPT, first_fog: KEPT, care_miss: KEPT,
   call_answered: BEAT, woke_up: BEAT, fell_asleep: BEAT, good_morning: BEAT, discipline_miss: BEAT,
   became_sick: BEAT, someone_home: BEAT,
   sunrise: FLAVOUR, sunset: FLAVOUR, weather: FLAVOUR, forecast: FLAVOUR, news: FLAVOUR,
@@ -6312,6 +6316,7 @@ class HatchPetCard extends HTMLElement {
       tv_on: "watched TV", music_on: "listened to music", // the public stand-ins, with no title
       news: "heard some news", sunset: "watched the sunset", wish_granted: "got my wish",
       trait_learned: "learned something new", first_snow: "saw the first snow",
+      first_warm: "felt the first warm day", first_fog: "saw the first fog", // E12 Se-a
     };
     const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow", rainbow: "saw a rainbow", sun_out: "sunbathed" };
     const CARE_BITS = { feed: "had a meal", snack: "had a snack", play: "played", game: "played a game", clean: "had a bath", chore_treat: "got a chore treat" };
@@ -6914,6 +6919,12 @@ class HatchPetCard extends HTMLElement {
         break;
       case "first_frost":
         speak("brr, frost outside!", 4500, () => this._animate(s, s.pet, "sulk", 800));
+        break;
+      case "first_warm": // E12 Se-a
+        speak(SEASON_FIRST_LINES.warm, 4500, () => this._animate(s, s.pet, "stretch", 1100));
+        break;
+      case "first_fog":
+        speak(SEASON_FIRST_LINES.fog, 4500, () => this._look(s, 900));
         break;
       case "pooped":
         now(() => {

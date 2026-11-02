@@ -88,6 +88,7 @@ from .const import (
     STORE_VERSION,
 )
 from .home import (
+    FOGGY,
     RAINY,
     SNOWY,
     STORMY,
@@ -133,6 +134,8 @@ MOMENTS = {
     "tv_off_late",
     "first_snow",
     "first_frost",
+    "first_warm",
+    "first_fog",
     "news",
     "weather",
     "forecast",
@@ -885,7 +888,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _passing_moments(self, readings: Readings, now: float) -> list[model.Event]:
         """Sunsets, the morning stir, the TV, the weather and its forecast, the
-        season's first snow or frost."""
+        season's first snow, frost or fog, and the year's first warm day."""
         assert self.state is not None
         state = self.state
         settings = self.settings
@@ -910,6 +913,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             events += first
         if awake and readings.outdoor_c is not None and readings.outdoor_c <= 0:
             events += model.season_first(state, "frost", now, settings.tz)
+        if awake:  # the year's first warm day (E12)
+            events += model.warm_first(
+                state, readings.outdoor_c, now, settings.tz, self.hass.config.latitude
+            )
+        if awake and readings.condition in FOGGY:
+            events += model.season_first(state, "fog", now, settings.tz)
         events += self._forecast_talk(readings, now, awake, minute >= wake)
         if readings.company and any(e["type"] == "sunset" for e in events):
             events += self._grant("sunset", None, now)  # watched it together
