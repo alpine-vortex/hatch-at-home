@@ -667,15 +667,19 @@ const SEASON_FLYER_MS = [20000, 45000]; // between bats (or geese) flying by
 const SEASON_VISITOR_MS = [240000, 420000]; // between ghosts (or turkeys)
 const SEASON_NIGHT_FLYER_MS = [120000, 240000];
 // The same pick all day for one pet: a small hash of the device and the date.
+// The day lines take turns by (dailyPick, turnPick, the promise, a dream's callback): today,
+// moved by whole days only under card-check (window.__hatchDayShift), so a run can stand
+// on any day. Nothing else reads it.
+const turnNow = () => new Date(Date.now() + (Number(globalThis.__hatchDayShift) || 0) * 864e5);
 const dailyPick = (list, salt = "") => {
-  const key = `${salt}|${new Date().toDateString()}`;
+  const key = `${salt}|${turnNow().toDateString()}`;
   let h = 0;
   for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return list[h % list.length];
 };
 // Fresh-expand E1 (docs/plan-2026-11-01-fresh-expand.md): a line said once a day, in
 // turns. The local date as a day number (read as UTC, so a DST day is still one day).
-const dayOrdinal = (date = new Date()) => Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 864e5);
+const dayOrdinal = (date = turnNow()) => Math.round(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 864e5);
 const turnHash = (text) => {
   let h = 2166136261;
   for (const ch of text) h = Math.imul(h ^ ch.codePointAt(0), 16777619) >>> 0;
@@ -695,7 +699,7 @@ const turnOrder = (n, salt, cycle) => {
 // The list in turns, a day each: no line twice within n days, each cycle of n days in
 // its own order (a cycle never opens with the last one's last line), and two salts
 // (pets, keys) not in step. Pure: the same list, salt and day give the same line.
-function turnPick(list, salt = "", date = new Date()) {
+function turnPick(list, salt = "", date = turnNow()) {
   const n = list?.length || 0;
   if (n < 2) return list?.[0];
   const day = dayOrdinal(date);
@@ -814,7 +818,7 @@ const PROMISE_CYCLE = 21;
 const PROMISE_TOPICS = ["hop", "spin", "song"];
 const PROMISE_PAYOFF = [4, 7]; // the first look from day 4, up to day 7, then it lapses
 const PROMISE_PRACTICE_ODDS = 1 / 3; // an idle's chance of practice, days 1-3
-function promiseDay(device, date = new Date()) {
+function promiseDay(device, date = turnNow()) {
   const n = dayOrdinal(date) + (turnHash(`promise|${device || ""}`) % PROMISE_CYCLE);
   const cycle = Math.floor(n / PROMISE_CYCLE);
   return { day: n % PROMISE_CYCLE, cycle, topic: PROMISE_TOPICS[cycle % PROMISE_TOPICS.length] };
@@ -5437,7 +5441,7 @@ class HatchPetCard extends HTMLElement {
 
   // At a first look, a teen or adult's promise beat today: {line, move} or null. Day 0
   // the promise; days 4-7 the payoff once a cycle (one overwritten key per pet).
-  _promiseLook(s, date = new Date()) {
+  _promiseLook(s, date = turnNow()) {
     const stage = this._state(s, "sensor.life_stage")?.state;
     if (stage !== "teen" && stage !== "adult") return null;
     const device = s.ids?.device;
@@ -5458,7 +5462,7 @@ class HatchPetCard extends HTMLElement {
   }
 
   // Practice, days 1-3: now and then an idle does the move small, with its line once a day.
-  _promisePractice(s, date = new Date()) {
+  _promisePractice(s, date = turnNow()) {
     const stage = this._state(s, "sensor.life_stage")?.state;
     if (stage !== "teen" && stage !== "adult") return false;
     const p = promiseDay(s.ids?.device, date);
@@ -6209,7 +6213,7 @@ class HatchPetCard extends HTMLElement {
 
   // The wish as the pet says it: in baby talk if it's on (not an aimed wish:
   // that keeps its words; the status screen's short text never changes).
-  _wishSaid(s, wish, line, date = new Date()) {
+  _wishSaid(s, wish, line, date = turnNow()) {
     if (this._aimedAtMe(wish, s)) return line[0];
     // W-a (fresh-expand E6): its first line and WISH_MORE's take turns, a day each.
     const more = WISH_MORE[wish.kind];
@@ -6981,7 +6985,7 @@ class HatchPetCard extends HTMLElement {
   }
 
   // S-a: a morning wake, in turns per pet; the dream line only on a dream day.
-  _wakeLine(s, date = new Date()) {
+  _wakeLine(s, date = turnNow()) {
     const line = turnPick(WAKE_LINES, `${s.ids?.device}|wake`, date);
     return line === WAKE_LINES[WAKE_LINES.length - 1] && !this._dreamToday(s) ? WAKE_LINES[0] : line;
   }

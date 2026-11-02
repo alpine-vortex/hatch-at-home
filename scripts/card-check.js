@@ -1041,6 +1041,11 @@ async function main() {
   // the waits still add up) and every pet's server-side asleep sensor is put "on" whenever a
   // section pins the pets awake (pinAwake), so the pin is what keeps them up.
   if (process.env.CARD_CHECK_NIGHT) await context.addInitScript(() => { Date.prototype.getHours = () => 2; });
+  // CARD_CHECK_DAY_SHIFT=n: the card's turn-taking lines (turnPick, dailyPick, the promise)
+  // stand n days on, so a run can prove its checks hold on any day (fresh-expand).
+  if (process.env.CARD_CHECK_DAY_SHIFT) {
+    await context.addInitScript((n) => { window.__hatchDayShift = n; }, Number(process.env.CARD_CHECK_DAY_SHIFT));
+  }
   // The boot screen shows once per browser: every page here starts as if it had
   // been shown, except the boot checks' (they set the session flag and clear it).
   const bootVersion = /const BOOT_VERSION = "([^"]*)"/.exec(
