@@ -1326,6 +1326,7 @@ async function main() {
     const bubble = await card.evaluate((el) => {
       const s = el._slides[el._index];
       s.status.scrollTop = 0;
+      el._tapRect = null;
       el._statusMessage(s, "no phone pings, ok ♪");
       const note = s.status.querySelector(".status-feedback");
       const head = s.status.querySelector(".shead").getBoundingClientRect();
@@ -1339,6 +1340,25 @@ async function main() {
     });
     check("settings UX F13: a note is the pet's bubble with its head, under the back row, and taps go through it",
       bubble.shown && bubble.under && bubble.tapsThrough && bubble.head, JSON.stringify(bubble));
+    // A tap under the bubble's place: the note drops to the foot of the box, still clear of it, never over the row (F13).
+    const low = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.status.scrollTop = 0;
+      const head = s.status.querySelector(".shead").getBoundingClientRect();
+      el._tapRect = { top: head.bottom + 4, bottom: head.bottom + 40, at: Date.now() };
+      el._statusMessage(s, "no phone pings, ok ♪");
+      const note = s.status.querySelector(".status-feedback");
+      const box = note.getBoundingClientRect();
+      const foot = s.status.getBoundingClientRect();
+      const out = { atFoot: Math.abs(foot.bottom - 4 - box.bottom) < 3, clear: box.top > head.bottom + 40 };
+      clearTimeout(s.statusMessageTimer);
+      note.hidden = true;
+      note.textContent = "";
+      note.style.top = "";
+      el._tapRect = null;
+      return out;
+    });
+    check("settings UX F13: when the row just tapped sits under the bubble, it drops to the foot of the box", low.atFoot && low.clear, JSON.stringify(low));
     await cur().locator(".status .sback").focus();
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
@@ -5976,9 +5996,9 @@ async function main() {
     check("the baby talk switch: one call per tap, the button follows, a failed call goes back",
       toggle.before === "false" && toggle.after === "true" && toggle.text === "on" && toggle.calls === 1 &&
       toggle.type === "virtual_pet/baby_talk" && toggle.enabled === true && toggle.cache === "on" &&
-      toggle.note === "OK, baby talk for babies and children ♥" &&
+      toggle.note === "ok, baby talk for babies and kids ♥" &&
       toggle.failed.pressed === "true" && toggle.failed.calls === 2 && toggle.failed.note === "hm, that didn't work. try again soon" &&
-      toggle.failed.cache === "on" && toggle.babyNote === "OK, baby talk for babies and children ♥", JSON.stringify(toggle));
+      toggle.failed.cache === "on" && toggle.babyNote === "ok, baby talk for babies and kids ♥", JSON.stringify(toggle));
     await page.locator("hatch-pet-card").evaluate((el) => { // the switch, on, without the failed tap's note
       const s = el._slides[el._index];
       el._renderStatus(s, []);
@@ -7424,7 +7444,7 @@ async function main() {
     // A visit within the hour isn't counted (fast_forward doesn't move the clock),
     // and then says only baby talk: that it's off proves the server forgot.
     (forgot.before.counted === false || forgot.before.kept === true) && forgot.before.baby === true &&
-    forgot.sent.join() === "virtual_pet/forget_me" && forgot.message === "Forgotten. The pets start fresh with you ♥" &&
+    forgot.sent.join() === "virtual_pet/forget_me" && forgot.message === "forgotten. we'll start fresh ♥" &&
     !forgot.bdayRows && forgot.babyTalk === "false" && !forgot.myDay && forgot.myDayRow !== "true" &&
     forgot.storage.length === 0 && forgot.othersKept &&
     forgot.after.baby === false && (forgot.after.counted === false || (forgot.after.kept === false && forgot.after.myDay === false)),

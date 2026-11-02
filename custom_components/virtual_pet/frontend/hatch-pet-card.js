@@ -1611,6 +1611,11 @@ const SETTINGS_COPY = {
   myDayOff: "ok, i won't peek",
   sharedOn: "shh, nothing personal here now",
   cantKeep: "this screen can't keep that, sorry",
+  cantKeepSounds: "this screen can't keep sounds, sorry",
+  myDayOn: "i'll notice your good days! ♥",
+  phoneOn: "your phone will hear it on the day ♥",
+  phoneOff: "just here, then ♪",
+  babyTalkOn: "ok, baby talk for babies and kids ♥",
 };
 const SETTINGS_REACT = {
   monoOn: "ooh, all green! like the old days ♪",
@@ -1621,10 +1626,13 @@ const SETTINGS_REACT = {
   notifyOn: "i'll ring if i need you ♥",
 };
 // --- end fresh-expand copy ---
-// Two approved lines the scan's no-"again" rule would refuse (not nagging: a retry, and "just us").
+// Approved lines the scan's nag words ("again", "forgot...") would refuse: a retry, "just us",
+// and the two that say a forget worked. Not nagging, so unscanned.
 const SETTINGS_AGAIN = {
   failed: "hm, that didn't work. try again soon",
   sharedOff: "just us again ♥",
+  forgotBirthday: "ok, forgotten. i won't ask ♪",
+  forgotMe: "forgotten. we'll start fresh ♥",
 };
 const HOUSE_REQUEST = { blanket: "heating", fan: "cooling" }; // the request the house answered
 // The house moment's categories (H8; const.py HOUSE_CATEGORIES, card-check holds the two
@@ -8293,7 +8301,7 @@ class HatchPetCard extends HTMLElement {
       try {
         localStorage.setItem(SOUND_KEY, on ? "on" : "off");
       } catch (err) {
-        this._statusMessage(s, "This browser can't save sound settings.");
+        this._statusMessage(s, SETTINGS_COPY.cantKeepSounds);
         return; // no storage: sounds stay off
       }
       let skipped = null;
@@ -8380,7 +8388,7 @@ class HatchPetCard extends HTMLElement {
         .then(() => {
           this._birthdayPhone = enabled;
           this._setMine("birthday_phone", enabled);
-          this._statusMessage(s, enabled ? "Your phone will hear it on the day ♥" : "Only here, then.");
+          this._statusMessage(s, enabled ? SETTINGS_COPY.phoneOn : SETTINGS_COPY.phoneOff);
           this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
         })
         .catch(() => {
@@ -8409,7 +8417,7 @@ class HatchPetCard extends HTMLElement {
           this._setMine("birthday_kept", false);
           this._setMine("birthday_phone", false);
           redrawStatus(); // first: a redraw replaces the message's line
-          this._statusMessage(s, "Forgotten. I won't ask again.");
+          this._statusMessage(s, SETTINGS_AGAIN.forgotBirthday);
         })
         .catch(() => {
           redrawStatus(); // "forget" again, not "sure?"
@@ -8447,7 +8455,7 @@ class HatchPetCard extends HTMLElement {
             // no storage (a private window): nothing kept here
           }
           redrawStatus(); // first: a redraw replaces the message's line
-          this._statusMessage(s, "Forgotten. The pets start fresh with you ♥");
+          this._statusMessage(s, SETTINGS_AGAIN.forgotMe);
         })
         .catch(() => {
           redrawStatus(); // "forget" again, not "sure?"
@@ -8461,7 +8469,7 @@ class HatchPetCard extends HTMLElement {
       try {
         localStorage.setItem(BABBLE_KEY, on ? "on" : "off");
       } catch (err) {
-        this._statusMessage(s, "This browser can't save sound settings.");
+        this._statusMessage(s, SETTINGS_COPY.cantKeepSounds);
         return;
       }
       let skipped = null;
@@ -8788,7 +8796,7 @@ class HatchPetCard extends HTMLElement {
     try {
       await this._callOwn("my_day", { entity_id: id, enabled });
       this._myDay = enabled; // one switch per person, for every pet
-      this._statusMessage(s, enabled ? "I'll notice your good days! ♥" : SETTINGS_COPY.myDayOff);
+      this._statusMessage(s, enabled ? SETTINGS_COPY.myDayOn : SETTINGS_COPY.myDayOff);
     } catch (err) {
       this._setMine("my_day", !enabled);
       button.setAttribute("aria-pressed", String(!enabled));
@@ -8815,7 +8823,7 @@ class HatchPetCard extends HTMLElement {
       if (enabled) {
         // The status screen hides the bubble, so the note always shows; a baby
         // or child on screen says hello as well, for when the screen closes.
-        this._statusMessage(s, "OK, baby talk for babies and children ♥");
+        this._statusMessage(s, SETTINGS_COPY.babyTalkOn);
         if (this._babyStage(s)) {
           const name = short(this._hass.user?.name?.trim().split(/\s+/)[0], 16);
           const baby = this._babySet(s, "greet"); // a child's hello is the normal one
@@ -8897,6 +8905,16 @@ class HatchPetCard extends HTMLElement {
       note.style.setProperty("--say-at", `${14 - hx / 2}px ${3 - top / 2}px`);
     }
     note.hidden = false;
+    note.style.top = "";
+    const tap = this._tapRect && Date.now() - this._tapRect.at < 6000 ? this._tapRect : null;
+    if (tap && note.classList.contains("say")) { // never hide the row just changed: the bubble drops to the foot
+      const hits = (top, bottom) => bottom > tap.top - 2 && top < tap.bottom + 2;
+      const box = note.getBoundingClientRect();
+      const foot = s.status.getBoundingClientRect().bottom - 4 - box.height;
+      if (hits(box.top, box.bottom) && !hits(foot, foot + box.height)) {
+        note.style.top = `${foot - s.status.querySelector(".shead").getBoundingClientRect().top}px`;
+      }
+    }
     clearTimeout(s.statusMessageTimer);
     s.statusMessageTimer = setTimeout(() => {
       note.hidden = true;
@@ -9427,6 +9445,8 @@ class HatchPetCard extends HTMLElement {
   // The real reaction (a prop, or a refusal in the bubble) follows on response.
   _tapped(button, s) {
     if (!button || button.disabled) return;
+    const at = button.getBoundingClientRect(); // where it was, for a note that must not cover it (F13)
+    this._tapRect = { top: at.top, bottom: at.bottom, at: Date.now() };
     button.classList.add("tap-feedback", "tapped", "pressed");
     setTimeout(() => button.classList.remove("pressed"), 160);
     setTimeout(() => button.classList.remove("tapped"), 400);
