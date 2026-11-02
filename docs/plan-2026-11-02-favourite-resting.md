@@ -683,26 +683,17 @@ Still to read in the build:
   (card-base.js:120-160 not read in full): R2 reads it first.
 - Whether `advance` sets `last_updated` itself (§3.2: no double shift).
 
-## Open questions for the owner
+## Open questions: decided (first mate, 2026-11-02)
 
-Only what is still open. Recommendation first. The five first-draft questions (egg, lay,
-shared screen, who sets the default, the refill) are decided; see §1.
+The five first-draft questions are decided in §1. The three the review left are decided
+with the recommendation:
 
-1. **The refill is a free care button [S7].** Rest-then-wake gives hunger, happiness and
-   energy 55 with no feeding, weight, poop or bond limit, any logged-in user can do it
-   over the ws, and entry also settles an open call before its deadline and clears
-   `recent_misses` (the neglect-sickness window). It cannot hide a miss already counted
-   or heal a sickness. Recommended: **leave it, no cooldown**: feeding and playing are
-   already free and unlimited, and an unanswered call is answered by feeding anyway.
-   Alternative: refill only if the pet was not released from rest in the last N hours
-   (one more stamp).
-2. **Pet birthday while resting [S4].** The plan's default (§3.3): none while resting, and
-   `hatched_on` moves forward by the days rested on leaving. Alternative: ignore it, and a
-   baby that rested a year gets a "1 year" party. Recommended: the default.
-3. **Does anyone else get told when a person rests the others [S10]?** Recommended:
-   **no push** (rest is quiet, no nagging); the card label, the offer's helper line and
-   the guide are the signal. Alternative: one quiet line on the card the next time
-   another person opens it.
+1. **Refill cooldown [S7]:** none. Feeding and playing are already free and unlimited, and
+   entry cannot hide a miss already counted or heal a sickness.
+2. **Pet birthday while resting [S4]:** none while resting; on leaving, `hatched_on` moves
+   forward by the days rested (§3.3).
+3. **Telling others [S10]:** no push. The card label, the offer's helper line and the guide
+   are the signal.
 
 ## Adversarial review checklist
 
