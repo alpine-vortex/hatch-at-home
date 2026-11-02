@@ -111,6 +111,8 @@ async def test_each_person_hears_only_their_own_bond(
         "birthday_kept": False,
         "gift": None,  # visitors v2 V-E: their waiting gift, none yet
         "fav_visitor": None,  # F4: their favourite of this world's visitors
+        "fav_weather": None,  # M0-c: their favourites, for "ask me again"
+        "fav_season": None,
         "follow_at": [],  # F1: no follow-up beat waiting
     }
     visit = mine["house"].pop("visit")  # today's visit (or none): no person in it

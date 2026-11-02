@@ -144,6 +144,62 @@ def test_a_follow_up_takes_the_slot_but_never_the_rotations_own_how_day():
         assert ask(asked_all(), today, hour=15) not in P.FOLLOW_QUESTIONS
 
 
+@pytest.mark.parametrize("came_home", ["work", "school", "home"])
+def test_a_dated_ask_goes_before_a_came_home_how_day(came_home: str):
+    """Memory plan M0-a (first mate, 2026-11-02): a due weekend or big-day ask goes
+    before a came-home "how was your day?", at any hour (no 16:00 floor)."""
+    for today, kind in (
+        ("2026-11-06", "weekend"),  # a Friday
+        ("2026-11-01", "big_day"),  # a Sunday
+        ("2026-11-02", "big_day"),  # a Monday
+    ):
+        for hour in (15, 18):
+            got = ask(asked_all(), today, hour=hour, came_home=came_home)
+            assert got == kind, (today, hour)
+    # Thursday: the came-home how_day, as before.
+    assert ask(asked_all(), "2026-11-05", hour=15, came_home=came_home) == "how_day"
+    # No came_home at 15:00 on a Friday: the 16:00 floor stays, no dated ask.
+    assert ask(asked_all(), "2026-11-06", hour=15) not in P.FOLLOW_QUESTIONS
+
+
+def test_a_came_home_how_day_stands_when_no_dated_ask_is_due():
+    base = asked_all()
+    # An open event, two dated asks this week, or the kind resting: how_day.
+    open_event = base | {"follow": {"event": event()}}
+    assert ask(open_event, "2026-11-06", came_home="work") == "how_day"
+    capped = base | {"follow_asked": ["2026-11-03", "2026-11-04"]}
+    assert ask(capped, "2026-11-06", came_home="work") == "how_day"
+    resting = base | {
+        "follow_miss": {"weekend": 2},
+        "follow_last": {"weekend": "2026-10-30"},
+    }
+    assert ask(resting, "2026-11-06", came_home="work") == "how_day"
+    # The morning is its own slot: the ask is for the later one only.
+    assert ask(base, "2026-11-06", hour=8, came_home="work") == "slept"
+
+
+def test_the_pets_own_asks_stay_after_a_came_home_how_day():
+    """dated_only: trick and game never jump the came-home ask."""
+    person = asked_all()
+    assert (
+        ask(person, "2026-11-04", came_home="work", pet_kinds=("trick",)) == "how_day"
+    )
+    assert ask(person, "2026-11-04", came_home="work", pet_kinds=("game",)) == "how_day"
+    assert P.follow_question(person, "2026-11-04", pet_kinds=("trick",)) == "trick"
+    assert (
+        P.follow_question(person, "2026-11-04", pet_kinds=("trick",), dated_only=True)
+        is None
+    )
+
+
+def test_a_dated_ask_is_marked_as_the_later_question_and_counted():
+    person = asked_all()
+    assert ask(person, "2026-11-06", hour=15, came_home="school") == "weekend"
+    P.mark_asked(person, "2026-11-06", 15, "weekend")
+    assert person["follow_asked"] == ["2026-11-06"]
+    assert ask(person, "2026-11-06", hour=19, came_home="school") is None  # one a day
+
+
 def test_a_follow_up_left_unanswered_twice_rests_two_weeks():
     """Critique s2632 #6: two asks of a kind in a row with no "yes" (no answer,
     "no", "later") and it rests 14 days; a "yes" starts the count over."""

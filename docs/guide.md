@@ -314,8 +314,10 @@ up to four parts, in this order:
     Settings → Devices & services. Then "bedtime", read only: the pet's bedtime and
     wake time as "about … · up …", in the 12 or 24 hour format of your Home Assistant
     language and settings. It is the pet's own schedule, not a person's, so a shared
-    screen shows it too. Then the pet's "shell" row, see below. An older server shows
-    no bedtime row.
+    screen shows it too. Then "resting", the pet's resting switch with what it means
+    (see *Resting* under *How the pet works*); a shared screen shows whether it's on,
+    with no switch, and an egg has no row. Then the pet's "shell" row, see below. An
+    older server shows no bedtime or resting row.
   - **shared screen**, at the foot: its switch, a note ("a family tablet? give it its
     own login, and we'll make friends ♥"), and for an admin (not on a shared screen) a
     line, "sensor privacy is in the pet's options".
@@ -439,6 +441,7 @@ egg in …"). A pet still in its egg moves at once.
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them; `moments`: the last 10 things that happened to it, for the card to react to. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
 | `switch.<pet>_lights_out` | On puts it to bed, off wakes it. |
+| `switch.<pet>_resting` | On rests the pet (see *Resting*), off wakes it. Off by default; an egg can't rest (turning it on does nothing, and logs nothing louder than debug). |
 | `button.<pet>_feed`, `_snack`, `_play`, `_clean`, `_medicine`, `_scold`, `_praise` | Care. Medicine is unavailable unless the pet is sick. |
 | `select.<pet>_next_egg` | `Surprise me` (the default) or a creature of the egg's world, for the next hatch only. Attribute `next_egg` on the life stage sensor shows the choice too. |
 | `button.<pet>_lay_egg` | Starts the next generation. Available from a week into adulthood (day 21), while the pet is well and home. |
@@ -568,7 +571,8 @@ Who is home decides whether the pet is with you or at the sitter's. The two swit
 ### Privacy: what the pets remember
 
 **What the pets remember about you.** Your birthday, your answers to its questions,
-your alarm times, the last zone you came back from (only while "my day" is on), and
+your alarm times, the last zone you came back from (only while "my day" is on), the
+dream you picked for tonight (and, the next morning, that it was your idea), and
 your "baby talk", "my day" and "birthday on my phone" switches are kept for you alone,
 for every pet. They stay
 when you remove a pet, even the last one, so they're there if you set it up again.
@@ -614,6 +618,32 @@ in its settings changes), or open the options page it names to pick the new ones
 - **The numbers:** every one of them is in `custom_components/virtual_pet/rates.py`.
 
 ## How the pet works
+
+### Resting
+
+Each pet has a **resting** switch, off by default: in settings (the gear on the
+status screen, "resting") or as `switch.<pet>_resting`. Turning it on refills
+hunger, happiness and energy to at least 55 (health stays as it is) and settles an
+open call, with no miss and no push left on the phone. While it rests:
+
+- nothing lowers its needs by itself, it makes no hunger, happiness, energy or
+  pretend calls, misses nothing, can't fall ill, and doesn't poop;
+- **aging pauses**: it doesn't grow up, an adult can't lay its egg (wake it first),
+  and there is no birthday party; when it wakes, its hatch day moves on by the whole
+  days it rested, so its years are the time it lived;
+- its day and night go on (bedtime, the morning, naps, the lights-out switch), and
+  you can still visit, feed, play, give medicine (a sick pet may rest: it stays sick
+  until medicine, and its health holds), play games and link it; visitors and finds
+  still come, and chore treats wait until it wakes;
+- the card shows "resting ☁" under it and it says easy-going things now and then.
+
+Care still counts: a lot of play spends energy, so a pet may wake below a call
+level and ask at once, as it would anyway. A sick pet, or one with an old poop, asks
+about that on waking. Otherwise waking ("good stretch! i'm back ♪") brings no calls
+for hours. The sitter's freeze (nobody home) wins while it lasts; resting carries on
+when someone comes home. Every pet may rest at once (a holiday automation can flip
+the switches); nothing wakes it by itself. An egg can't rest, because it would never
+hatch.
 
 All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 
@@ -875,8 +905,11 @@ Ask "how's Pip?" and the pet answers in its own words ("Pip is hungry: a little
 peckish. It's a child, day 2. Today it wishes for a bubble bath."): its stage and
 day, today's wish (never who it's for), the day's visitor once its visit is over
 ("A robin came by today."), and its traits if it has learned any. A sleeping pet
-just says so. Ask "feed Pip" and it's the same as pressing the button, logged under
-your name.
+just says so. A resting pet is "taking it easy" ("Pip is taking it easy."), or keeps
+its mood's word and adds "and resting" ("Pip is hungry and resting"). Ask "feed Pip"
+and it's the same as pressing the button, logged under your name; resting refuses
+nothing. Expose the resting switch and "turn on Pip resting" works through Home
+Assistant's own switch intents.
 
 - **LLM agents** (Claude, OpenAI, Ollama and others set to control Home Assistant)
   get two tools, `virtual_pet__status` and `virtual_pet__care`, with nothing to set
@@ -1013,6 +1046,7 @@ missed re-call, which isn't a care miss),
 `virtual_pet_recovered`, `virtual_pet_fell_asleep`, `virtual_pet_woke_up`,
 `virtual_pet_stage_changed` (with `personality` on becoming a teen, `upbringing` on reaching adulthood), `virtual_pet_care`, `virtual_pet_hatched`,
 `virtual_pet_request_answered`, `virtual_pet_went_away`, `virtual_pet_came_home`,
+`virtual_pet_rest_started` and `virtual_pet_rest_ended` (the resting switch; nobody's name),
 `virtual_pet_game_finished` (with `game`, `won`, `wins`; `dropped: true` for a game left unfinished after a guess, which counts as a loss and grants no wish, record or bond), `virtual_pet_chore_treat`,
 `virtual_pet_sunrise`, `virtual_pet_sunset`, `virtual_pet_good_morning`,
 `virtual_pet_watching` and `virtual_pet_listening` (when the pet notices a new show or song, at most every 20 minutes, with

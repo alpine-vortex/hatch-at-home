@@ -13,6 +13,7 @@ const SETTINGS_AGAIN = {
   sharedOff: "just us again ♥",
   forgotBirthday: "ok, forgotten. i won't ask ♪",
   forgotMe: "forgotten. we'll start fresh ♥",
+  askAgain: "ask me again", // the favourites' button (memory plan M0-c, label DRAFT)
 };
 const HOUSE_REQUEST = { blanket: "heating", fan: "cooling" }; // the request the house answered
 // The house moment's categories (H8; const.py HOUSE_CATEGORIES, card-check holds the two
@@ -280,8 +281,7 @@ const NOTES = {
       ? (n.guess === "rain" ? "oh, sunny after all! good guess though ♥" : "oh, it rained after all! good guess though ♥")
       : "it was cloudy all day! nobody wins ♥",
   back_from: (n) => PLACES[n.place],
-  fav_weather: (n) => ({ sun: "it's sunny, your favourite! ☀", rain: "it's raining, your favourite! ☂",
-    snow: "it's snowing, your favourite!! ❄", storms: "a storm! your favourite!" })[n.weather],
+  fav_weather: (n, device) => turnPick(FAV_WEATHER_LINES[n.weather], `${device}|favweather`),
   season: (n) => n.holiday && namedHolidays()
     ? `${n.holiday === "halloween" ? "Halloween" : "Thanksgiving"} in your favourite season! ♥`
     : `it's ${n.season}, your favourite! ${SEASON_ICONS[n.season] || ""}`.trim(),
@@ -449,7 +449,27 @@ const MOMENT_CLASS = {
   pooped: FLAVOUR, tv_off_late: FLAVOUR, watching: FLAVOUR, listening: FLAVOUR,
   tv_on: FLAVOUR, music_on: FLAVOUR, // public: no line (the channel's watching/listening says it)
   found: FLAVOUR, // a find went in the basket: the away note's "found <a find>" (V8); no line
+  rest_started: FLAVOUR, // the resting switch on (R1): no line
+  rest_ended: BEAT, // ... and off: "good stretch! i'm back ♪" (REST_LINES.back)
 };
+// Resting (plan favourite-resting §4.3-§4.4, R1): the small label under the pet, the
+// settings row's helper. The label shows only when the pet is up and about at home: away
+// shows the sitter's sign, and asleep, sick and egg poses win.
+const REST_LABEL = "resting ☁";
+const REST_DAYDREAM_ODDS = 0.25; // a resting pet's hello is "i was just daydreaming" this often
+const REST_HELP = (name) => `${name} stays content with no calls and no hungry tummy, and doesn't grow up until it's back. Visit any time.`;
+function restLabel(flags, { away = false, asleep = false, egg = false } = {}) {
+  if (!Array.isArray(flags) || !flags.includes("resting") || away || asleep || egg) return "";
+  return flags.includes("sick") || flags.includes("away") ? "" : REST_LABEL;
+}
+// The settings row: a switch on a personal screen; on a shared one its state only (decided).
+function restRow(on, shared, name) {
+  const value = shared
+    ? `<span class="restro">${on ? "on" : "off"}</span>`
+    : `<span><button class="bell resting" aria-label="resting: ${on ? "on" : "off"}, change" aria-pressed="${on}">${on ? "on" : "off"}</button></span>`;
+  return `<div class="row srow restrow"><span>resting</span>${value}</div>
+      <div class="shellnote restnote">${REST_HELP(escape(name))}</div>`;
+}
 // Kept moments the catch-up leaves out: the look welcomes a friend home itself,
 // and a thank-you for the tuck-in reads oddly the next morning (first mate, 2026-10-31).
 const CATCHUP_SKIP = new Set(["friend_home", "tucked_in"]);
@@ -547,6 +567,9 @@ const CONFIRM_ARIA = {
   lay_egg: "Sure? Press again to lay an egg",
   forget_birthday: "Sure? Press again to forget my birthday",
   forget_me: "Sure? Press again to forget my data",
+  ask_again_fav_weather: "Sure? Press again to be asked about your favourite weather",
+  ask_again_fav_season: "Sure? Press again to be asked about your favourite season",
+  ask_again_fav_visitor: "Sure? Press again to be asked about your favourite visitor",
 };
 
 const STAGE_LABELS = { egg: "Egg", baby: "Baby", child: "Child", teen: "Teen", adult: "Adult" };

@@ -626,7 +626,8 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   const shared = await card.evaluate((el) => {
     const s = el._slides[el._index];
     const out = { heads: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent), button: !!s.status.querySelector(".shellrow"),
-      ro: s.status.querySelector(".shellro")?.textContent.trim(), note: s.status.querySelector(".shellnote")?.textContent };
+      ro: s.status.querySelector(".shellro")?.textContent.trim(), note: s.status.querySelector(".shellnote:not(.restnote)")?.textContent, // the resting row (R1) has its own note
+      rest: s.status.querySelector(".restro")?.textContent };
     s.picker = true; // the picker can't be reached, even asked for directly
     el._renderStatus(s, []);
     out.tiles = s.status.querySelectorAll(".tile").length;
@@ -637,7 +638,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   check("shell: on a shared screen the row is read-only, named for no one, with its note; the picker is unreachable",
     shared.heads.join("|") === "this screen|for the pet|shared screen" && !shared.heads.some((h) => h.includes(a.name.toLowerCase()) || h.includes(a.name)) &&
       !shared.button && shared.ro === `${a.world} (default)` && shared.note === "ask a grown-up to change it" &&
-      shared.tiles === 0 && !shared.picker, JSON.stringify(shared));
+      shared.tiles === 0 && !shared.picker && shared.rest === "off", JSON.stringify(shared));
   await shot("02f-shell-shared");
   await evaluate(() => {
     localStorage.setItem("hatch-shared-screen", "off");
@@ -750,6 +751,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     const s = el._slides[el._index];
     const real = el._state;
     el._state = function (slide, key) {
+      if (key === "switch.resting") return undefined; // an older server has no resting switch either (R1)
       const st = real.call(this, slide, key);
       if (key !== "sensor.life_stage" || !st) return st;
       const { shell_finish_options, shell_locked, senses, sleep_times, ...rest } = st.attributes;
@@ -1958,7 +1960,7 @@ async function main() {
   await page.waitForTimeout(800);
   // A shared screen shows nothing personal: no bond row, no "my day", no visit,
   // a greeting without a name.
-  const PERSONAL_BELLS = [".bell.notify", ".bell.myday", ".bell.babytalk", ".bell.forgetme", ".bell.forgetbday", ".bell.bdayphone"]
+  const PERSONAL_BELLS = [".bell.notify", ".bell.myday", ".bell.babytalk", ".bell.forgetme", ".bell.forgetbday", ".bell.bdayphone", ".bell.askagain"]
     .map((q) => `.status ${q}`).join(", ");
   const personalSheet = await cur().evaluate((sl) => !!sl.querySelector(".status .bell.notify") &&
     !!sl.querySelector(".status .bell.myday"));
@@ -2736,6 +2738,62 @@ async function main() {
   });
   check("on all three guarded controls a second tap a second later confirms",
     slow.forgetbday && slow.forgetme && slow.egg === "lay_egg", JSON.stringify(slow));
+  // "Ask me again" for the favourites (memory plan M0-c): a row each in the settings sheet's
+  // personal group, only on a personal screen with a bond and a favourite set; two taps, then one
+  // virtual_pet/ask_again call with shared: false, and the row goes.
+  const asks = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const out = {};
+    const realWS = el._hass.callWS;
+    const sent = [];
+    const mine = s.mine;
+    const kept = { ...(mine || {}) };
+    el._hass.callWS = async (msg) => { sent.push(msg); return null; };
+    const rows = () => [...s.status.querySelectorAll(".bell.askagain")].map((b) => b.dataset.kind);
+    try {
+      s.mine = { ...(mine || {}), bond: mine?.bond || { level: 3 }, fav_weather: "snow", fav_season: "<b>winter</b>", fav_visitor: null };
+      s.confirm = null;
+      s.settings = true;
+      el._renderStatus(s, []);
+      out.rows = rows().join();
+      out.text = s.status.querySelector(".favvalue")?.textContent;
+      out.markup = !!s.status.querySelector(".favvalue b");
+      const first = s.status.querySelector(".bell.askagain");
+      first.click();
+      out.armed = first.textContent;
+      out.calledEarly = sent.length;
+      await wait(1000);
+      s.status.querySelector(".bell.askagain").click();
+      await wait(150);
+      out.sent = sent.map((m) => [m.type, m.kind, m.shared, !!m.entity_id].join("|"));
+      out.after = rows().join();
+      // No bond: no rows. A shared screen: no rows.
+      s.mine = { ...s.mine, bond: null, fav_weather: "snow" };
+      el._renderStatus(s, []);
+      out.noBond = rows().length;
+      s.mine = { ...s.mine, bond: { level: 3 } };
+      localStorage.setItem("hatch-shared-screen", "on");
+      el._renderStatus(s, []);
+      out.shared = rows().length;
+    } finally {
+      localStorage.setItem("hatch-shared-screen", "off");
+      el._hass.callWS = realWS;
+      s.mine = mine;
+      if (mine) Object.assign(mine, kept);
+      s.confirm = null;
+      s.settings = false;
+    }
+    return out;
+  });
+  check("the settings sheet offers 'ask me again' per favourite, as text, behind a confirm tap",
+    asks.rows === "fav_weather,fav_season" && asks.text === "snow" && !asks.markup &&
+    asks.armed === "sure? tap again" && asks.calledEarly === 0, JSON.stringify(asks));
+  check("the second tap sends one ask_again with shared false, and the row goes",
+    asks.sent.length === 1 && asks.sent[0] === "virtual_pet/ask_again|fav_weather|false|true" &&
+    asks.after === "fav_season", JSON.stringify(asks));
+  check("no 'ask me again' row on a pet with no bond, or on a shared screen",
+    asks.noBond === 0 && asks.shared === 0, JSON.stringify(asks));
   // The lay sheet (settings S2): the next egg chosen in the lay confirm. The server's egg_roster is
   // real; the pet's raised creatures, its stage and the calls are stubbed on this card's own hass
   // (a copy, put back at the end), so each state is pinned.
@@ -6260,8 +6318,8 @@ async function main() {
     const seasons = [...src.matchAll(/key: "(halloween|thanksgiving|winter)"/g)].map((m) => m[1]);
     const card = new Set(["greet", "greet.warm", "greet.nickname", "idle.sleepy", "idle.bored", "idle.excited", "idle.hungry",
       "idle.dirty", "idle.default", "yum", "favourite_snack", "wish_granted", "friend_home", "care_miss", "tucked_in", "bond_up",
-      "visit", "find", "gift", "link_host", "link_guest", "soft"]); // link_*: the infrared link (2b); find: the basket's reveal; gift: V7
-    // soft: E13's softer morning (_followLine), a baby's or child's own
+      "visit", "find", "gift", "link_host", "link_guest", "soft", "idle.resting", "rest.visit", "rest.back"]); // link_*: the infrared link (2b); find: the basket's reveal; gift: V7
+    // soft: E13's softer morning (_followLine), a baby's or child's own; idle.resting, rest.*: R1's resting pet
     // The mood line's keys (sensor.mood reason_key), from the model's own tables.
     const py = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "model.py"), "utf8");
     const keysOf = (name) => [...py.split(`\n${name} = {`)[1].split("\n}")[0].matchAll(/"(\w+)":/g)].map((m) => m[1]);
@@ -10039,10 +10097,12 @@ async function main() {
     check(`react: ${stage} back to the mood frame after 2.5 s`,
       !after.live && after.shown && new RegExp(`/${stage}_${after.mood}_|/${stage}_content_`).test(after.src) &&
       !after.moves.some((c) => ["munch", "greethop", "look", "settle"].includes(c)), JSON.stringify(after));
-    // UX fix 6 (F5): a lost game settles on the content frames (a species with acts.aww plays it).
+    // UX fix 6 (F5): a lost game settles on the content frames; a species with acts.aww (every
+    // species since the 128 aww art, 2026-11-01) plays its aww frames instead.
     const lostReact = await react({ action: "play", result: "lost" });
-    check(`react: ${stage} lost settles on the content frames`,
-      lostReact.live && lostReact.moves.includes("settle") && lostReact.src.includes(`/${stage}_content_`), JSON.stringify(lostReact));
+    check(`react: ${stage} lost settles on the content frames, or its aww`,
+      lostReact.live && lostReact.moves.includes("settle") &&
+        (lostReact.src.includes(`/${stage}_content_`) || lostReact.src.includes(`/${stage}_aww_`)), JSON.stringify(lostReact));
     // Fallback: an act whose sprites do not load swaps back to the mood frames, and is remembered
     // (_poseOk, keyed species/stage/act, apart from the waves). No broken image left on show.
     if (acts) {

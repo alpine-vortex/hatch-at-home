@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import json
+import random
 from typing import Any
 
 from homeassistant.auth.const import GROUP_ID_USER
@@ -303,3 +304,112 @@ async def test_diagnostics_hold_no_user_id_from_a_parked_dig(
     parked = diag["pet"]["parked"]
     assert sorted(parked) == ["household", "person 1", "person 2"]
     assert all(g["basket"] == 2 for g in parked.values())
+
+
+async def test_forget_me_drops_my_dream_pick_and_my_name_on_the_dream(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """Memory plan M0-d: a dream pick waiting for tonight and this morning's
+    "your idea" both carry the person's HA user id; forget my data takes both,
+    on every pet, and writes at once. The story and B's pick stay."""
+    ada, token = await a_user(hass)
+    now = dt_util.utcnow().timestamp()
+    picks = [
+        {"user": ada.id, "pick": "sea", "at": now},
+        {"user": "user-b", "pick": "stars", "at": now},
+    ]
+    today = dt_util.now().date().isoformat()
+    told = {"kind": "picked", "pick": "sea", "user": ada.id, "day": today}
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, dream_picks=copy.deepcopy(picks), dream=dict(told)
+    )
+    config = await setup(hass)
+    moss = await add_moss(hass)
+    moss.runtime_data.state.dream_picks = copy.deepcopy(picks)
+    client = await hass_ws_client(hass, token)
+    await client.send_json_auto_id({"type": "virtual_pet/forget_me"})
+    assert (await client.receive_json())["success"]
+    pip = config.runtime_data.state
+    assert pip.dream_picks == [picks[1]]
+    assert pip.dream == {
+        "kind": "picked",
+        "pick": "sea",
+        "day": today,
+    }  # a story to all
+    assert moss.runtime_data.state.dream_picks == [picks[1]]
+    # Written at once: the saves on disk name them nowhere.
+    for key in (STORE_KEY, MOSS_KEY):
+        assert ada.id not in json.dumps(hass_storage[key]["data"]), key
+    # The morning dream still comes from B's pick.
+    events = model.dream_on_waking(pip, now + 60, today, random.Random(1))
+    assert events == [{"type": "dreamed", "kind": "picked"}]
+    assert pip.dream["pick"] == "stars" and pip.dream["user"] == "user-b"
+
+
+async def test_forget_me_leaves_other_peoples_dream_alone(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    ada, token = await a_user(hass)
+    now = dt_util.utcnow().timestamp()
+    today = dt_util.now().date().isoformat()
+    told = {"kind": "picked", "pick": "sea", "user": "user-b", "day": today}
+    picks = [{"user": "user-b", "pick": "stars", "at": now}]
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, dream_picks=copy.deepcopy(picks), dream=dict(told)
+    )
+    config = await setup(hass)
+    client = await hass_ws_client(hass, token)
+    await client.send_json_auto_id({"type": "virtual_pet/forget_me"})
+    assert (await client.receive_json())["success"]
+    pip = config.runtime_data.state
+    assert pip.dream == told and pip.dream_picks == picks
+    assert pip.dream is not None and ada.id not in json.dumps(pip.dream)
+
+
+async def test_a_dream_without_its_asker_loads_and_is_nobodys_idea(
+    hass: HomeAssistant, hass_storage: dict[str, Any]
+) -> None:
+    """The loader takes a dream with no `user`; the asker note then says
+    `yours` is false to everyone."""
+    me, _ = await a_user(hass)
+    now = dt_util.utcnow().timestamp()
+    today = dt_util.now().date().isoformat()
+    hass_storage[STORE_KEY] = hatched_pet(
+        now,
+        dream={"kind": "picked", "pick": "sea", "day": today},
+        bonds={me.id: {"points": model.R.BOND_LEVELS[2]}},
+    )
+    config = await setup(hass)
+    assert config.runtime_data.state.dream == {
+        "kind": "picked",
+        "pick": "sea",
+        "day": today,
+    }
+    notes = (await config.runtime_data.async_visit(me.id))["notes"]
+    assert {"kind": "dream", "pick": "sea", "yours": False} in notes
+
+
+async def test_diagnostics_hold_no_user_id_from_a_dream_pick_after_forget_me(
+    hass: HomeAssistant, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """The dump's `_saved` copy of the pet holds no user id after forget me. This
+    alone does not discriminate: REDACT_STATE already redacts `user`, so it
+    passes without the fix too; the saved-file check above is the one that does."""
+    from custom_components.virtual_pet.diagnostics import (
+        async_get_config_entry_diagnostics,
+    )
+
+    ada, token = await a_user(hass)
+    now = dt_util.utcnow().timestamp()
+    today = dt_util.now().date().isoformat()
+    hass_storage[STORE_KEY] = hatched_pet(
+        now,
+        dream_picks=[{"user": ada.id, "pick": "sea", "at": now}],
+        dream={"kind": "picked", "pick": "sea", "user": ada.id, "day": today},
+    )
+    config = await setup(hass)
+    client = await hass_ws_client(hass, token)
+    await client.send_json_auto_id({"type": "virtual_pet/forget_me"})
+    assert (await client.receive_json())["success"]
+    diag = await async_get_config_entry_diagnostics(hass, config)
+    assert ada.id not in json.dumps(diag, default=str)

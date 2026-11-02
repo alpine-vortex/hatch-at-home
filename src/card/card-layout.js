@@ -510,6 +510,7 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     const asleep = this._state(s, "binary_sensor.asleep")?.state === "on";
     const away = mood?.state === "away";
     s.away = away;
+    s.resting = flags.includes("resting") && !away; // its idle lines (card-tick), the odd hello
     s.egg = stage === "egg";
     const haDevice = this._hass.devices?.[s.ids?.device]; // its given name, as on the title
     s.pat.setAttribute("aria-label", `pat ${haDevice?.name_by_user || haDevice?.name || sp.name || "pet"}`);
@@ -538,12 +539,17 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     this._show(s, s.perch, away ? null : sp.perch);
     if (away) {
       s.frames = [];
+      s.pet.classList.remove("resting");
       this._show(s, s.pet, null);
       this._show(s, s.awaysign, sp.props?.away);
       s.awaylabel.textContent = "at the sitter's";
     } else {
       this._show(s, s.awaysign, null);
-      s.awaylabel.textContent = "";
+      // Resting (R1): a quiet label where the sitter's sign has its own, and slow breathing on
+      // the idle pose; asleep, sick and the egg win (restLabel).
+      const rest = restLabel(flags, { away, asleep, egg: s.egg });
+      s.awaylabel.textContent = rest;
+      s.pet.classList.toggle("resting", !!rest);
       s.frames = this._petFrames(sp, stage, mood?.state, calling, this._eggMinutes(stageState), flags);
       const key = s.frames.join(",");
       if (calm() && s.framesKey !== key) s.frame = 0; // a new mood or stage: its first frame

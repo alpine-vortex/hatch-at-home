@@ -340,6 +340,10 @@ const STYLE = `
   .pet, .perch, .screen .pat { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%; }
   /* Heavy (gaps-seams 2c): 6% wider, height and feet kept, still centred. */
   .pet.heavy, .ghost.heavy { aspect-ratio: 1.06; margin-left: -24.645%; }
+  /* Resting (R1): the idle frames, breathing slowly. First of the pet's animations, so any
+     reaction (hop, munch, sway...) wins while it plays; reduced motion stops it (above). */
+  .pet.resting { animation: breathe 4.5s ease-in-out infinite; }
+  @keyframes breathe { 50% { transform: scale(1.015, 1.03); } }
   /* The pat (PR 3b): a clear button over the pet's box (the img takes no taps), above the
      bubble and below a question, a game, the status and the boot screen. Written as
      ".screen .pat" so _tapped's .tap-feedback (position: relative) can't move it. */

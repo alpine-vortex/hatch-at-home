@@ -53,6 +53,7 @@ UPBRINGINGS = tuple(name for name, _ in R.UPBRINGING_GRADES)
 # Results an action can come back with. "ok" means it did something.
 OK = "ok"
 NOT_SLEEPY = "not_sleepy"
+EGG = "egg"
 LIGHTS_OUT = "lights_out"
 
 
@@ -582,6 +583,11 @@ class PetState:
     praise_day_count: int = 0  # presses that gave happiness that day
     last_excite: float = 0.0
     away: bool = False
+    # The household's resting switch (plan favourite-resting §3): needs, aging,
+    # new calls, misses and new sickness hold; care, games, visitors and finds
+    # go on. Never an egg. rest_since: when it began (the birthday's shift).
+    resting: bool = False
+    rest_since: float | None = None
     care_log: list[dict[str, Any]] = field(default_factory=list)
     species: str | None = None  # decided when the egg hatches
     egg_choice: str | None = None  # the species the next hatch takes; None: a surprise
@@ -684,11 +690,11 @@ class PetState:
         )
         for key, (default, low) in _INTS.items():
             kwargs[key] = _int(kwargs.get(key), default, low)
-        for key in ("sick", "asleep", "napping", "lights_out", "away"):
+        for key in ("sick", "asleep", "napping", "lights_out", "away", "resting"):
             kwargs[key] = kwargs.get(key) is True
         if not isinstance(kwargs.get("lights_before_away"), bool):
             kwargs["lights_before_away"] = None
-        for key in ("stayed_up_since", "wake_at", "next_find_at"):
+        for key in ("stayed_up_since", "wake_at", "next_find_at", "rest_since"):
             kwargs[key] = _float(kwargs.get(key), None)
         for key in ("species", "inherited_from", "shell_finish"):
             kwargs[key] = _opt_str(kwargs.get(key))
@@ -826,6 +832,12 @@ class PetState:
         if state.personality is None and life_stage(state) in ("teen", "adult"):
             # Became a teen before personalities existed: settled now, quietly.
             state.personality = personality_for(state)
+        if not state.resting or life_stage(state) == "egg":
+            # An egg never rests (it would never hatch): one laid by a resting
+            # pet in an older build carries the key over (plan §7, B3).
+            state.resting, state.rest_since = False, None
+        elif state.rest_since is None:
+            state.rest_since = state.last_updated
         return state
 
     @classmethod
@@ -1020,11 +1032,86 @@ def advance(
         t_next = min(now, t + R.MAX_STEP_SECONDS)
         if state.away:
             shift_times(state, t_next - t)  # also moves last_updated
+        elif state.resting:
+            _rest_step(state, t, t_next, settings, events)
+            state.last_updated = t_next
         else:
             _step(state, t, t_next, settings, rng, events)
             state.last_updated = t_next
         t = t_next
     return events
+
+
+def _hold_times(state: PetState, delta: float) -> None:
+    """Resting's narrow freeze: slide only what must hold (pending poops, the
+    re-call and sampling clocks, an open call). Unlike shift_times, everything
+    a visit writes (the praise window and day, last_excite, cozy and cool,
+    kept_up_until, chore_treats, games) stays on the real clock, so care
+    during rest expires as it would (plan §3.2, B1). Not last_updated."""
+    state.poops = [t + delta for t in state.poops]
+    state.digesting = [t + delta for t in state.digesting]
+    state.recent_misses = [t + delta for t in state.recent_misses]
+    state.latched_at = {r: at + delta for r, at in state.latched_at.items()}
+    state.last_recall_at += delta
+    state.last_sample_at += delta
+    state.miss_day_at += delta
+    # Not stayed_up_since: it is the night's own clock, so a resting pet that
+    # nobody puts to bed still dozes off (_sleep), as its night goes on.
+    if state.call is not None:
+        state.call.started += delta
+        state.call.deadline += delta
+
+
+def _rest_step(
+    state: PetState, t0: float, t1: float, settings: Settings, events: list[Event]
+) -> None:
+    """A resting pet's step: its day and night go on (and sleep restores
+    energy), an idle game is dropped; nothing else moves. No aging, decay,
+    digestion, sickness, calls, sampling, learning or chore treats."""
+    _hold_times(state, t1 - t0)
+    if state.game and t1 - state.game.last_at >= R.GAME_IDLE_MINUTES * 60:
+        events += drop_game(state, t1)  # nobody finished it
+    _sleep(state, t1, settings, events)
+    if state.asleep:
+        hours = (t1 - t0) / 3600
+        state.energy = _clamp(state.energy + R.ENERGY_REGEN_ASLEEP * hours)
+
+
+def set_resting(state: PetState, on: bool, now: float) -> tuple[str, list[Event]]:
+    """Flip the resting switch (plan favourite-resting §3.3); the caller
+    advances the pet to now first. Returns the result ("ok", or "egg" when an
+    egg is asked to rest: it would never hatch) and the events. Off works for
+    any pet, an egg included."""
+    events: list[Event] = []
+    if on == state.resting:
+        return OK, events
+    if not on:
+        state.resting = False
+        state.last_updated = now
+        if state.rest_since is not None and state.hatched_on:
+            # Its years are the time it lived: the birthday moves by the whole
+            # days it rested (plan §3.3, S4).
+            days = int(max(0.0, now - state.rest_since) // 86400)
+            if days:
+                born = date.fromisoformat(state.hatched_on) + timedelta(days=days)
+                state.hatched_on = born.isoformat()
+        state.rest_since = None
+        events.append({"type": "rest_ended"})
+        return OK, events
+    if life_stage(state) == "egg":
+        return EGG, events
+    state.resting = True
+    state.rest_since = now
+    for need in ("hunger", "happiness", "energy"):
+        setattr(state, need, max(getattr(state, need), R.REST_FLOOR))
+    # An open call is settled, as feeding it would: no answer, no miss.
+    state.call = None
+    state.recent_misses = []
+    state.stayed_up_since = None
+    state.last_recall_at = now
+    events += drop_game(state, now)
+    events.append({"type": "rest_started"})
+    return OK, events
 
 
 def react(state: PetState, now: float, settings: Settings) -> list[Event]:
@@ -1704,8 +1791,8 @@ def requests(state: PetState, now: float, settings: Settings) -> list[str]:
     """What the pet is asking for (the house's requests, minus what it got),
     then "lay_egg" once it's ready to start the next generation."""
     satisfied = {"blanket": now < state.cozy_until, "fan": now < state.cool_until}
-    if state.asleep or state.away or life_stage(state) == "egg":
-        return []
+    if state.asleep or state.away or state.resting or life_stage(state) == "egg":
+        return []  # a resting pet asks for nothing
     wanted = [r for r in settings.home.requests if not satisfied.get(r)]
     if can_lay_egg(state):
         wanted.append("lay_egg")
@@ -1925,10 +2012,11 @@ def personality_for(state: PetState) -> str:
 
 def can_lay_egg(state: PetState) -> bool:
     """A week into adulthood the owner may start the next generation, unless the
-    pet is sick or away."""
+    pet is sick, away or resting."""
     adult = dict(R.STAGE_STARTS)["adult"]
     return (
         not state.away
+        and not state.resting  # wake it first (decided 2026-11-02)
         and not state.sick
         and state.age_hours >= adult + R.LAY_EGG_AFTER_ADULT_HOURS
     )
@@ -3501,9 +3589,11 @@ def chores_done(state: PetState, count: int, now: float) -> int:
 
 
 def give_treats(state: PetState, now: float) -> list[Event]:
-    """Hand over waiting chore treats now, if the pet can take them."""
+    """Hand over waiting chore treats now, if the pet can take them (awake,
+    home and not resting)."""
     events: list[Event] = []
-    if not state.away and life_stage(state) != "egg":
+    # Resting banks them: they arrive after it wakes (plan §3.2, S5).
+    if not state.away and not state.resting and life_stage(state) != "egg":
         _give_treats(state, now, events)
     return events
 
@@ -3627,6 +3717,8 @@ def mood_keyed(
     flags: list[str] = []
     if state.away:
         flags.append("away")
+    if state.resting:
+        flags.append("resting")  # a flag, never a mood
     if life_stage(state) == "egg":
         flags.append("egg")
     if state.sick:

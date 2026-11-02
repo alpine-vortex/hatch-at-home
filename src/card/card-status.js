@@ -114,6 +114,9 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       ? row(null, "missed calls", `<span>${missed}</span>`) + row(null, "ignored whines", `<span>${whined}</span>`) : "";
     // Today's wish comes first of the rest: it changes daily, the rest is there every day.
     // Its day so far (E9 St-a): the evening's today line, else today's dream. A page, not a bubble.
+    // Resting (R1): said on its page whatever its pose (a sick resting pet shows sick); away
+    // shows the sitter's sign instead.
+    const restNow = !isEgg && moodNow?.state !== "away" && (moodNow?.attributes.flags || []).includes("resting");
     const today = !isEgg && ((this._evening() && this._todayLine(s)) || this._dreamSaid(s));
     // An egg has no meters or traits to read: "you two" and when it hatches (UX fix 2, F12).
     // The status is the pet's own page: its head and name at the band's left (UX fix 2, F10).
@@ -135,6 +138,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>` : `
       ${band}
+      ${restNow ? `<div class="stoday restnow">${REST_LABEL}</div>` : ""}
       ${today ? `<div class="stoday">${escape(today)}</div>` : ""}
       ${want ? row(null, "would like", `<span>${escape(want)}</span>`) : ""}
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
@@ -197,6 +201,18 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       const sure = confirmArmed(s, key);
       return `<span><button class="bell ${cls}" aria-label="${sure ? CONFIRM_ARIA[key] : aria}">${sure ? "sure? tap again" : "forget"}</button></span>`;
     };
+    // Their favourites, each with "ask me again" (memory plan M0-c): only on their own
+    // screen, with a bond, for a favourite that is set. The values come from mine (their
+    // own channel); a favourite visitor shows by name.
+    const favRows = !bond || sharedScreen() ? "" : [
+      ["fav_weather", "favourite weather", s.mine?.fav_weather],
+      ["fav_season", "favourite season", s.mine?.fav_season],
+      ["fav_visitor", "favourite visitor", s.mine?.fav_visitor
+        && (visitorList(s.world).find((v) => v.id === s.mine.fav_visitor)?.name || s.mine.fav_visitor)],
+    ].filter(([, , value]) => typeof value === "string" && value).map(([kind, label, value]) => {
+      const sure = confirmArmed(s, `ask_again_${kind}`);
+      return row(null, label, `<span><span class="favvalue">${escape(value)}</span> <button class="bell askagain" data-kind="${kind}" aria-label="${sure ? CONFIRM_ARIA[`ask_again_${kind}`] : `${label}: ${SETTINGS_AGAIN.askAgain}`}">${sure ? "sure? tap again" : SETTINGS_AGAIN.askAgain}</button></span>`);
+    }).join("");
     // The pet's shell, for everyone who sees it: only if the server offers it, and
     // read-only (no pet name either) on a shared screen.
     const shellOptions = this._state(s, "sensor.life_stage")?.attributes.shell_finish_options;
@@ -217,16 +233,24 @@ class HatchPetCardStatus extends HatchPetCardMoment {
     // (read-only on a shared screen). Misses and whines moved to the status page
     // (top10 4a), so an older server's sheet has no pet group at all.
     const hasShell = Array.isArray(shellOptions);
-    const shellRows = !hasShell && !notices && !bedtime ? ""
+    // Resting (R1): the household's switch, with what it means; hidden for an egg (one that
+    // slipped through a downgrade keeps the row, so it can be woken). An older server has none.
+    const restEnt = this._state(s, "switch.resting");
+    const restOn = restEnt?.state === "on";
+    const resting = restEnt && (restOn || this._state(s, "sensor.life_stage")?.state !== "egg")
+      ? restRow(restOn, sharedScreen(), this._linkName(s)) : "";
+    const shellRows = !hasShell && !notices && !bedtime && !resting ? ""
       : sharedScreen()
         ? `<div class="sec">for the pet</div>
       ${notices}
       ${bedtime}
+      ${resting}
       ${hasShell ? `${row(null, "shell", `<span class="shellro">${shellSwatch}${shellName}</span>`)}
       <div class="shellnote">ask a grown-up to change it</div>` : ""}`
         : `<div class="sec">for ${escape(this._linkName(s))}</div>
       ${notices}
       ${bedtime}
+      ${resting}
       ${hasShell ? row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`) : ""}`;
     // Who each part changes: the pet (everyone), the viewer (follows their login),
     // or this browser.
@@ -251,6 +275,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       ${birthdayKept && !sharedScreen() ? row(null, "my birthday", forgetButton("forgetbday", "forget_birthday", "forget my birthday")) +
         row(null, "birthday on my phone", `<span><button class="bell bdayphone" aria-label="birthday on my phone: a happy birthday message on your phone on the day" aria-pressed="${!!birthdayPhone}">${birthdayPhone ? "on" : "off"}</button></span>`) : ""}
       ${sharedScreen() ? "" : row(null, "baby talk", `<span><button class="bell babytalk" aria-label="baby talk: simpler words while a pet is a baby or child" aria-pressed="${babyTalk(this._hass.user?.id)}">${babyTalk(this._hass.user?.id) ? "on" : "off"}</button></span>`)}
+      ${favRows}
       ${sharedScreen() ? "" : row(null, "my data", forgetButton("forgetme", "forget_me", "forget my data: your birthday, answers and settings for every pet; your bonds stay"))}
       ${shellRows}
       <div class="sec">shared screen</div>
@@ -284,6 +309,13 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       e.stopPropagation();
       this._tapped(e.currentTarget);
       goHA(this._petEntryPath(s));
+    });
+    s.status.querySelector(".bell.resting")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const button = e.currentTarget;
+      if (button.classList.contains("pending")) return; // a call is in flight (F3)
+      this._tapped(button);
+      this._setResting(s, button.getAttribute("aria-pressed") !== "true", button);
     });
     s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -485,6 +517,23 @@ class HatchPetCardStatus extends HatchPetCardMoment {
           this._statusMessage(s, SETTINGS_AGAIN.failed);
         });
     });
+    // "ask me again": two taps, then the favourite is dropped on the server and the pet
+    // asks it afresh on a later look. On this card the row goes with the value.
+    s.status.querySelectorAll(".bell.askagain").forEach((button) => button.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const kind = button.dataset.kind;
+      if (!this._confirmed(s, `ask_again_${kind}`, e.currentTarget, redrawStatus)) return;
+      this._hass.callWS({ type: "virtual_pet/ask_again", entity_id: s.ids?.["sensor.life_stage"], kind, shared: false })
+        .then(() => {
+          this._setMine(kind, null);
+          redrawStatus();
+        })
+        .catch(() => {
+          redrawStatus(); // the row again, not "sure?"
+          this._statusMessage(s, SETTINGS_AGAIN.failed);
+        });
+    }));
     s.status.querySelector(".bell.babble")?.addEventListener("click", (e) => {
       e.stopPropagation();
       if (!soundsOn()) return; // disabled: sounds here is off

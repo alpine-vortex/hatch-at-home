@@ -433,7 +433,10 @@ class HatchPetCardTick extends HatchPetCardLayout {
       const neighbour = !bodily && !this._babyStage(s) && others.length && Math.random() < NEIGHBOUR_ODDS
         && this._linkName(pick(others));
       const normal = pick(lines);
-      this._write(s, neighbour ? pick(NEIGHBOUR_LINES)(neighbour) : bodily ? normal : this._lines(s, key, normal).text, 2500);
+      // Resting (R1): its own easy-going lines, unless its body has something to say.
+      const restful = s.resting && !bodily && (this._babySet(s, "idle.resting") || RESTING_IDLE);
+      this._write(s, restful ? pick(restful)
+        : neighbour ? pick(NEIGHBOUR_LINES)(neighbour) : bodily ? normal : this._lines(s, key, normal).text, 2500);
       s.plain = s.bubble.textContent; // idle chatter isn't read out
     }
   }

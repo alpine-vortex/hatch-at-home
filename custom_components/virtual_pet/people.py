@@ -79,6 +79,8 @@ ONCE = (
     ("birthday", R.BIRTHDAY_ASK_LEVEL),
 )
 ONCE_KINDS = {kind for kind, _ in ONCE} | {"catchphrase"}
+# The favourites a person can have the pet ask again (memory plan M0-c).
+ASK_AGAIN_KINDS = ("fav_weather", "fav_season", "fav_visitor")
 
 
 def fav_visitor_key(world: str | None) -> str:
@@ -716,13 +718,19 @@ def choose_question(
     if once := once_due(person, today, hour, level, pet_once, world):
         return once
     if came_home in DAY_ZONES or came_home == "home":
-        return "how_day"  # back from work or school, or a friend just home
+        # Back from work or school, or a friend just home. A due dated follow-up (weekend,
+        # big day) goes first, at any hour: it takes the place of the how_day asked at
+        # this same hour, because the 16:00 floor would close the later slot on a 15:00
+        # arrival and lose the ask for the day (memory plan M0-a, first mate 2026-11-02,
+        # re-deciding FM Q1 A on the reconcile). Trick and game stay after (dated_only).
+        return follow_question(person, today, dated_only=True) or "how_day"
     kind = rotation(date.fromisoformat(today))
     if kind == "how_day" and hour >= R.ASK_DAY_FROM:
         return "how_day"
     # A due follow-up (F1, FM Q1 A on the reconcile) takes the place of the day's dream
     # or guess, asked now or not, or of the fallback how_day; never of the rotation's
-    # own how_day, a came-home how_day or a one-time question. Capped by the week.
+    # own how_day or a one-time question; a due dated one also goes before a came-home
+    # how_day (above, M0-a). Capped by the week.
     if hour >= R.ASK_DAY_FROM and (
         follow := follow_question(person, today, pet_kinds=pet_kinds)
     ):
@@ -839,13 +847,15 @@ def follow_question(
     today: str,
     *,
     pet_kinds: tuple[str, ...] = (),
+    dated_only: bool = False,
 ) -> str | None:
     """A follow-up question due today, or None: never while an event is open,
     at most FOLLOW_ASK_PER_WEEK dated ones (FOLLOW_DATED) a week, each kind at
     most once a week, tried in
     FOLLOW_QUESTIONS' order. Weekend: Fridays. Big day ("anything big this
     week?"): Sundays and Mondays. Trick and game: only from a pet that can ask
-    them (pet_kinds: a trick left, not asked this month)."""
+    them (pet_kinds: a trick left, not asked this month). dated_only: the dated
+    kinds only (a came-home ask goes before trick and game, M0-a)."""
     if (person.get("follow") or {}).get("event"):
         return None
     day = date.fromisoformat(today)
@@ -868,7 +878,7 @@ def follow_question(
             return kind
         if kind == "big_day" and day.weekday() in BIG_DAY_ASK_DAYS:
             return kind
-        if kind in pet_kinds:
+        if kind in pet_kinds and not dated_only:
             return kind
     return None
 
