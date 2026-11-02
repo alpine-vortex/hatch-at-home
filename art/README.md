@@ -380,3 +380,4 @@ commit.
 
 - Woodland: banana slug, robin, deer, fox, squirrel.
 - Hearth: bunny, corgi, ferret, hamster, kitten.
+- Terrarium: ball python (head up, coiled), bearded dragon, gecko, tarantula, tortoise.
