@@ -11651,8 +11651,10 @@ class HatchPetCard extends HTMLElement {
   _linkPick(host) {
     if (!this._linkFree(host) || !host.lookedFirst) return null;
     const sides = [1, -1].sort(() => Math.random() - 0.5);
+    const n = this._slides.length;
     for (const side of sides) {
-      const guest = this._slides[this._index + side];
+      // Exactly three pets: the end pets are neighbours too, the way the nav wraps (UX8 F6).
+      const guest = this._slides[n === 3 ? (this._index + side + n) % n : this._index + side];
       if (!this._linkFree(guest)) continue;
       const pair = [host.ids?.device, guest.ids?.device].sort().join("-");
       if (oncePerDay(`link-${pair}`)) return guest;
@@ -11733,7 +11735,12 @@ class HatchPetCard extends HTMLElement {
     const news = !extra && Math.random() < LINK_NEWS_ODDS ? this._linkNews(guest) : null;
     L.said = [hello, extra, LINK_NEWS_REPLY]; // the host's lines of this visit (a cut-short visit clears them)
     const stretch = extra ? 1000 : news ? LINK_NEWS_MS : 0; // the visit holds a little longer for it
-    const toRight = this._slides.indexOf(guest) > this._slides.indexOf(host);
+    // With exactly three pets the end pets meet across the wrap: the guest on the far
+    // side stands (and the beam goes) the other way, off the end of the row (UX8 F6).
+    const hi = this._slides.indexOf(host);
+    const gi = this._slides.indexOf(guest);
+    const wrapped = this._slides.length === 3 && Math.abs(gi - hi) === 2;
+    const toRight = wrapped ? gi < hi : gi > hi;
     const k = 0.7; // the pets stand at 70% of their size on the visit screen
     const gs = guest.species;
     const gStage = guest.drawn || "adult";
@@ -11742,7 +11749,7 @@ class HatchPetCard extends HTMLElement {
     L.beamMs = isCalm ? 0 : 1500;
     this._moving(host, 9000);
     this._chirp(host, "link");
-    if (!isCalm) this._linkBeam(host, guest, toRight);
+    if (!isCalm) this._linkBeam(host, guest, toRight, wrapped);
     // the guest's own slide: looking at the host, with a small note
     this._moving(guest, 6500);
     if (toRight) this._look(guest, 6500);
@@ -11862,7 +11869,7 @@ class HatchPetCard extends HTMLElement {
   // The beam: a red head with ripples flies along the tops of the devices, a
   // dotted trail behind it, and a burst where it arrives. Pixel-stepped, in world
   // art pixels (WORLD_GRID of them across the pet's 46.5% of the screen).
-  _linkBeam(host, guest, toRight) {
+  _linkBeam(host, guest, toRight, wrapped = false) {
     const L = this._link;
     const track = this._track.getBoundingClientRect();
     const a = host.device.getBoundingClientRect();
@@ -11875,7 +11882,10 @@ class HatchPetCard extends HTMLElement {
       .map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height).map((r) => r.top));
     const u = Math.max(1, Math.round(((host.screen.clientWidth * 0.465) / WORLD_GRID) * 4) / 4);
     const x0 = a.left + a.width / 2 - track.left;
-    const x1 = b.left + b.width / 2 - track.left;
+    // A wrapped guest is far across the row: the head flies one slide's pitch toward where
+    // it would stand if the row went on, and leaves the card there.
+    const x1 = wrapped ? x0 + (toRight ? 1 : -1) * Math.abs(b.left + b.width / 2 - (a.left + a.width / 2)) / 2
+      : b.left + b.width / 2 - track.left;
     const dist = x1 - x0;
     const step = 2 * u;
     const n = Math.max(2, Math.round(Math.abs(dist) / step));
