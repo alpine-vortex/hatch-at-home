@@ -1900,8 +1900,6 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if kind == "catchphrase":
             self._catch_ask(user)["asked"].append(today)
             self._save()
-        if kind == "big_how":
-            self.people.big_how_asked(user)  # the evening's beat (opp #1)
         if kind == "trick":
             # Once a generation-month per person, in this pet's bond (F7).
             if (bond := self.state.bonds.get(user)) is not None:
@@ -2450,7 +2448,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             # Where a follow-up beat may wait for them today ("look", "picker"), so
             # their card keeps a first-look slot only then (F1); never what it is.
             "follow_at": self.people.follow_at(
-                user, self._today(self._now())[0], self.pet_id
+                user, *self._today(self._now()), self.pet_id
             ),
         }
 

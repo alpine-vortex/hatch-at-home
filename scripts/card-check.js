@@ -4664,6 +4664,40 @@ async function main() {
         howBox?.querySelector('button[data-answer="tough"]')?.click();
         out.how.sent = sent.filter((m) => m.type === "virtual_pet/answer").map((m) => [m.question, m.answer]);
         sent.length = 0;
+        // Audit s2635 H1: the evening beat brings the ask; it's asked in the follow slot
+        // with their words (this browser's copy), and while another ask is up the plain
+        // evening line is said instead.
+        ownCopy("big_day", "your exam");
+        s.asking = false;
+        const eve = { kind: "big_day", beat: "evening", ask: "big_how", text: "your exam" };
+        reply = eve;
+        s.queue = [];
+        s.following = false;
+        await el._followFetch(s);
+        const eveAsk = s.queue.find((q) => q.ask);
+        out.eve = { text: eveAsk?.text, lines: s.queue.length };
+        s.queue = [];
+        eveAsk?.then();
+        out.eve.buttons = [...(s.screen.querySelector(".askday")?.querySelectorAll("button") || [])].map((b) => b.textContent);
+        s.screen.querySelector(".askday")?.remove();
+        s.asking = true; // another ask is up
+        out.eve.busy = await fetch(eve);
+        s.asking = false;
+        localStorage.removeItem(textKey);
+        // M1: at a first look, kept words past their day (or unreadable) go, any person's;
+        // a current one stays.
+        const sweepKeys = { old: "hatch-followtext-old-user", bad: "hatch-followtext-bad-user", now: "hatch-followtext-now-user" };
+        localStorage.setItem(sweepKeys.old, JSON.stringify({ kind: "big_day", it: "your biopsy", until: "2020-01-01" }));
+        localStorage.setItem(sweepKeys.bad, "{not json");
+        localStorage.setItem(sweepKeys.now, JSON.stringify({ kind: "weekend", it: "the fair", until: "2999-12-31" }));
+        const heard = el._channelHeard;
+        el._channelHeard = () => true;
+        const followAt = s.mine;
+        s.mine = { ...(mine || {}), follow_at: [] }; // the sweep alone, no beat fetched
+        Object.assign(s, { lookedFirst: false, queue: [], asleep: false });
+        try { el._firstLook(s); } finally { el._channelHeard = heard; s.queue = []; s.lookedFirst = true; s.mine = followAt; }
+        out.sweep = Object.fromEntries(Object.entries(sweepKeys).map(([k, key]) => [k, localStorage.getItem(key) !== null]));
+        Object.values(sweepKeys).forEach((key) => localStorage.removeItem(key));
         out.stash = Object.keys(localStorage).filter((k) => k.startsWith("hatch-answers-"));
         out.boxGone = !s.screen.querySelector(".asktext");
         // Kept: "I'll remember" only once the server took it (critique #7).
@@ -4760,6 +4794,11 @@ async function main() {
       f1.week.buttons.join() === "yes,not really" && f1.week.which === BIG.which &&
         JSON.stringify(f1.week.days) === JSON.stringify(f1.week.want) && BIG.yes.includes(f1.week.reply) &&
         f1.week.what === BIG.what && f1.sent[0]?.day === f1.week.want[0][0], JSON.stringify({ week: f1.week, sent: f1.sent }));
+    check("audit s2635 H1: the big day's evening beat is its ask, with their words, how_day's buttons; another ask up: the plain evening line",
+      f1.eve.text === BIG.howText("your exam") && f1.eve.lines === 1 && f1.eve.buttons.join() === "great,ok,tough" &&
+        f1.eve.busy.length === 1 && BIG.pmText.map((f) => f("your exam")).includes(f1.eve.busy[0]), JSON.stringify(f1.eve));
+    check("audit s2635 M1: a first look sweeps kept words past their day and unreadable ones, keeps a current one",
+      !f1.sweep.old && !f1.sweep.bad && f1.sweep.now, JSON.stringify(f1.sweep));
     check("owner Q3 opp #1: the big day's evening asks how it went (its words only from this browser), how_day's buttons, tough sent as big_how's",
       f1.how.own === BIG.howText("your exam") && f1.how.plain === BIG.how && f1.how.buttons.join() === "great,ok,tough" &&
         JSON.stringify(f1.how.sent) === JSON.stringify([["big_how", "tough"]]), JSON.stringify(f1.how));

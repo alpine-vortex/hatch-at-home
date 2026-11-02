@@ -183,9 +183,11 @@ def test_the_follow_ups_are_tried_in_order_each_weekly():
     P.mark_asked(person, "2026-11-07", 18, "trick")
     assert P.follow_question(person, "2026-11-09", pet_kinds=kinds) == "big_day"
     P.mark_asked(person, "2026-11-09", 18, "big_day")
-    assert P.follow_question(person, "2026-11-10", pet_kinds=kinds) is None  # cap 2
-    person["follow_asked"] = ["2026-11-07"]
+    # A pet's own ask doesn't count against the week (audit s2635 M2): only the dated.
+    assert person["follow_asked"] == ["2026-11-09"]
     assert P.follow_question(person, "2026-11-10", pet_kinds=kinds) == "game"
+    person["follow_asked"] = ["2026-11-06", "2026-11-09"]
+    assert P.follow_question(person, "2026-11-12") is None  # 2 dated in 7 days
 
 
 def test_each_kinds_dates_and_beat():
@@ -315,7 +317,9 @@ async def test_a_big_days_beats_once_each_then_gone(hass: HomeAssistant):
         "kind": "big_day",
         "beat": "evening",
         "text": SAID,
+        "ask": "big_how",  # audit s2635 H1: the card asks how it went
     }
+    assert P.asked_later(people.person("u1"), "2026-11-02", "big_how")
     assert people.follow_due("u1", "2026-11-02", 20) == {}
     assert people.open_event("u1") is None and people._texts == {}
     # An evening seen first: the morning is skipped. Past its day: pruned.
@@ -444,15 +448,17 @@ async def test_a_big_day_end_to_end_keeps_its_words_to_itself(
         assert secret not in caplog.text and secret not in repr(bus)
 
 
-async def test_the_big_days_evening_asks_how_it_went_in_place_of_its_beat(
+async def test_the_big_days_evening_beat_is_its_how_did_it_go(
     hass: HomeAssistant,
     hass_storage: dict[str, Any],
     hass_ws_client: Any,
     freezer: FrozenDateTimeFactory,
     now: float,
 ):
-    """Opp #1: on the picked day, from 19, the later question is "how did it go?";
-    asking it closes the event (no evening beat besides), "tough" is how_day's."""
+    """Opp #1, audit s2635 H1, L1, L2: on the picked day the morning beat comes from
+    the morning hour, the evening waits for 19 (no slot kept all afternoon), and the
+    evening beat carries "how did it go?", taking the later slot even if used today;
+    "tough" is how_day's; the event closes with it."""
     ada, token = await a_user(hass)
     hass_storage[STORE_KEY] = hatched_pet(now)
     config = await setup(hass)
@@ -464,23 +470,62 @@ async def test_the_big_days_evening_asks_how_it_went_in_place_of_its_beat(
     assert msg["result"] == {"until": "2026-11-04"}
     event = people.open_event(ada.id)
     assert (event["due"], event["until"]) == ("2026-11-04", "2026-11-04")
-    person = people.person(ada.id)
-    assert ask(person, "2026-11-03", hour=20) != "big_how"  # not its day
-    assert ask(person, "2026-11-04", hour=18) != "big_how"  # not yet evening
-    assert ask(person, "2026-11-04", hour=19) == "big_how"
-    event["said"].append("evening")
-    assert ask(person, "2026-11-04", hour=20) != "big_how"  # the beat came first
-    event["said"].clear()
-    P.mark_asked(person, "2026-11-04", 19, "big_how")
-    people.big_how_asked(ada.id)
-    assert people.open_event(ada.id) is None and people._texts == {}
+    freezer.move_to("2026-11-04 00:20:00+00:00")  # a night owl's look
+    assert pet._mine(ada.id)["follow_at"] == []
+    assert await follow(client) == {}
+    freezer.move_to("2026-11-04 08:00:00+00:00")
+    assert pet._mine(ada.id)["follow_at"] == ["look"]
+    assert await follow(client) == {"kind": "big_day", "beat": "morning", "text": SAID}
+    freezer.move_to("2026-11-04 15:00:00+00:00")
+    assert pet._mine(ada.id)["follow_at"] == []  # the evening waits for its hour
+    P.mark_asked(people.person(ada.id), "2026-11-04", 15, "how_day")  # slot used
     freezer.move_to("2026-11-04 19:30:00+00:00")
-    assert await follow(client) == {}  # no evening beat besides
+    assert pet._mine(ada.id)["follow_at"] == ["look"]
+    assert await follow(client) == {
+        "kind": "big_day",
+        "beat": "evening",
+        "text": SAID,
+        "ask": "big_how",
+    }
+    assert people.open_event(ada.id) is None and people._texts == {}
+    assert await follow(client) == {}
     for kept_on_the_card in ("great", "ok"):
         msg = await answer(client, "big_how", kept_on_the_card)
         assert msg["error"]["code"] == "invalid_answer"
     assert (await answer(client, "big_how", "tough"))["success"]
     assert people._moods == {ada.id: {"kind": "soft", "day": "2026-11-04"}}
+    # Its softer morning from the morning hour too (L1).
+    freezer.move_to("2026-11-05 01:00:00+00:00")
+    assert pet._mine(ada.id)["follow_at"] == []
+    assert await follow(client) == {}
+    freezer.move_to("2026-11-05 07:00:00+00:00")
+    assert await follow(client) == {"kind": "soft", "beat": "morning"}
+
+
+def test_twelve_weeks_of_evenings_ask_the_dated_follow_ups_weekly():
+    """Audit s2635 M2: a pet's own game and trick asks don't use up the week, so
+    someone who looks in every evening (and says yes) is asked "anything big this
+    week?" and "anything fun this weekend?" about once a week each."""
+    person = asked_all()
+    counts: dict[str, int] = {}
+    trick_month = None
+    for i in range(84):
+        day = date(2026, 11, 1) + timedelta(days=i)
+        today = day.isoformat()
+        kinds = ("game",) + (("trick",) if trick_month != day.month else ())
+        kind = ask(person, today, hour=20, pet_kinds=kinds)
+        if kind is None:
+            continue
+        P.mark_asked(person, today, 20, kind)
+        if kind == "trick":
+            trick_month = day.month
+        if kind in P.FOLLOW_QUESTIONS:
+            counts[kind] = counts.get(kind, 0) + 1
+            person["follow_miss"].pop(kind, None)  # a "yes" (no event kept here)
+    assert counts.get("big_day", 0) >= 11, counts
+    # Fridays that are the rotation's own how_day keep it (FM Q1 A on the reconcile).
+    assert counts.get("weekend", 0) >= 8, counts
+    assert counts.get("game", 0) >= 1, counts
 
 
 async def test_a_tough_day_is_a_softer_morning_and_nothing_else(
@@ -632,7 +677,7 @@ async def test_another_pets_trick_stays_with_it(
     pet.people.open_follow(ada.id, "trick", today, pet="another-pet")
     for _ in range(3):
         today = P.tomorrow(today)
-    assert pet.people.follow_at(ada.id, today, pet.pet_id) == []
+    assert pet.people.follow_at(ada.id, today, 9, pet.pet_id) == []
     assert pet.people.follow_due(ada.id, today, 9, pet.pet_id) == {}
     assert pet.people.follow_due(ada.id, today, 9, "another-pet")["kind"] == "trick"
 

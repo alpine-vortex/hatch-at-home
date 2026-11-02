@@ -67,6 +67,7 @@ REDACT_PEOPLE = {
     "follow",
     "follow_asked",
     "follow_last",
+    "follow_miss",
     "asked",
     "likes",
     "birthday",

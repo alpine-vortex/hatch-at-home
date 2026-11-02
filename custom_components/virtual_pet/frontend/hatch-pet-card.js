@@ -1616,6 +1616,25 @@ function followTextRead(user, kind, today = new Date()) {
     return null;
   }
 }
+// Every person's kept words whose event is over (by the local date), or unreadable, gone:
+// at card start and at each first look (audit s2635 M1), so none outlives its day unread.
+function followTextSweep(today = new Date()) {
+  try {
+    const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith(FOLLOW_TEXT_KEY)) continue;
+      let kept = null;
+      try {
+        kept = JSON.parse(localStorage.getItem(key));
+      } catch (err) {
+        kept = null;
+      }
+      if (!kept || typeof kept.until !== "string" || typeof kept.it !== "string" || kept.until < day) localStorage.removeItem(key);
+    }
+  } catch (err) {
+    // no storage: nothing kept
+  }
+}
 // A phone, or the Home Assistant app: where typed words may be said back without this
 // browser having typed them (owner Q2 A). A desktop or tablet browser gets the plain line.
 function phoneLike(ua = navigator.userAgent || "") {
@@ -1641,7 +1660,7 @@ const QUESTIONS = {
     label: (a) => (a === "no" ? "not really" : a) },
   big_day_day: { q: BIG_DAY.which, answers: {}, options: () => [1, 2, 3, 4, 5, 6].map((n) => daysAhead(n)),
     label: (a) => DAY_SHORT[new Date(`${a}T12:00`).getDay()], reply: () => pick(BIG_DAY.yes) },
-  // Opp #1: the big day's evening, from 19 (the server asks it): how_day's answers.
+  // Opp #1: the big day's evening, from 19, in its follow beat's place: how_day's answers.
   big_how: { q: BIG_DAY.how, answers: {} },
   // F5-F7: the weekend (Fridays; "yes" as the big day's), tomorrow's game, a new trick.
   weekend: { q: WEEKEND.q, answers: { yes: WEEKEND.yes, no: WEEKEND.no },
@@ -3586,6 +3605,7 @@ class HatchPetCard extends HTMLElement {
   };
 
   connectedCallback() {
+    followTextSweep(); // M1: no typed words past their day
     this._timer = setInterval(() => this._tick(), 700);
     if (this._card) document.addEventListener("visibilitychange", this._onHidden);
     if (this._resize && this._viewport) this._resize.observe(this._viewport);
@@ -6176,6 +6196,7 @@ class HatchPetCard extends HTMLElement {
     const away = this._state(s, "sensor.mood")?.state === "away";
     if (s.lookedFirst || !s.species || s.asleep || away || this._eggMinutes(this._state(s, "sensor.life_stage")) !== null) return;
     s.lookedFirst = true;
+    followTextSweep(); // M1, again at each first look
     s.firstMoveAt = Date.now() + FIRST_MOVE_MS;
     const stage = this._state(s, "sensor.life_stage")?.attributes || {};
     const device = s.ids?.device;
@@ -6334,6 +6355,15 @@ class HatchPetCard extends HTMLElement {
     s.following = false;
     if (!reply?.kind || sharedScreen() || s.ids?.["sensor.life_stage"] !== entity) return null;
     if (at === "picker") return reply; // F6: the picker says it
+    // Audit s2635 H1: a big day's evening is its "how did it go?" (opp #1), asked in this
+    // slot with how_day's buttons; the plain evening line only when an ask can't show.
+    if (reply.ask === "big_how" && !s.asking && !s.game) {
+      const it = this._followIt(reply);
+      s.asking = true;
+      (s.queue ??= []).push({ text: it ? BIG_DAY.howText(it) : BIG_DAY.how, ms: ASK_MS, ask: true, cls: KEPT, perk: true,
+        then: () => this._ask(s, "big_how", entity) });
+      return reply;
+    }
     // F7: one trick line a look: LS-a's monthly one said here today wins (Q5 A).
     if (reply.kind === "trick" && s.trickSaid === new Date().toDateString()) return null;
     const line = this._followLine(s, reply);
@@ -6930,8 +6960,8 @@ class HatchPetCard extends HTMLElement {
     return cells.length ? `<div class="jweek" role="list" aria-label="this week">${cells.join("")}</div>` : "";
   }
 
-  // A question's line: the big day's evening names it only from this browser's own copy
-  // (opp #1; the server's words never come with an ask).
+  // A question's line from the visit's ask. (The big day's evening comes as its follow
+  // beat now, audit s2635 H1, which names it as the beats do; here only this browser's copy.)
   _askLine(kind) {
     const it = kind === "big_how" && this._followIt({ kind: "big_day" }, false);
     return it ? BIG_DAY.howText(it) : QUESTIONS[kind].q;
