@@ -356,3 +356,4 @@ Final art for the visitors-v2 finds (docs/plan-2026-11-01-visitors-v2.md §9): 6
 - Tidepool: green sea glass a chip, blue a round, red a shard (owner 2026-11-01); the pearl in a grey oyster (the cutter fills inside the outline so grey insides are kept).
 - Woodland: the acorn and the wild strawberry share a round-with-a-stem outline; their colours and the cap/leaf tops tell them apart.
 - Terrarium: the pressed fern and the seed pod are both leaf-shaped; the fern keeps its stem and jagged edge.
+- Hearth: the button and the cookie are both round; the cookie's edge is lumpy and bitten.
