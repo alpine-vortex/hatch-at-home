@@ -139,7 +139,7 @@ MOMENTS = {
     "first_frost",
     "first_warm",
     "first_fog",
-    "season_start",  # {season}: the first day of spring, summer, autumn or winter (H7)
+    "season_start",  # with its season: the first day of spring, summer... (H7)
     "news",
     "weather",
     "forecast",
