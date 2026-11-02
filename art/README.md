@@ -365,3 +365,5 @@ commit.
 - Terrarium: ball python (adult from the probe), bearded dragon, gecko, tarantula, tortoise (droop and
   tilt, feet down; the tarantula raises a front leg).
 - Pond: axolotl, beaver, duckling (on its water ring, as in its idle frames), pond turtle (droop), tree frog.
+- Tidepool: hermit crab, octopus, otter (on its water), puffin, seal (puffin and seal teen redrawn once
+  to keep the rock they sit on).
