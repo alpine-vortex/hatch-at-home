@@ -3278,6 +3278,9 @@ async function main() {
     // ha-signals H3: the house answered; a line from the pool (set D), the effect class on.
     ["house_answered", { request: "blanket" }, "heater's on! toasty|the house heard me! ♥|warm air! that's better"],
     ["house_answered", { request: "fan" }, "ahh, a breeze|the house heard me! ahh|cool air! much better"],
+    // ha-signals H4: the robot vacuum; robot_out shows the stand-in (fx-robot) and it goes again.
+    ["robot_out", {}, "the robot's out! vroom|here it comes! \\*hop hop\\*|vroom vroom! ♪"],
+    ["robot_home", {}, "the robot's back home|bye, robot! nap well"],
   ]) {
     // Each from a quiet bubble: under 2a a kept line holds the next one back.
     await card.evaluate((el) => Object.assign(el._slides[el._index], { sayUntil: 0, sayClass: 0, sayEntry: null, queue: [] }));
@@ -3296,6 +3299,15 @@ async function main() {
       const fx = await card.evaluate((el) => [...el._slides[el._index].screen.classList].filter((c) => c.startsWith("fx-")));
       check(`moments: the house answering (${extra.request}) shows ${extra.request === "fan" ? "fx-cool" : "fx-heat"}`,
         fx.join() === (extra.request === "fan" ? "fx-cool" : "fx-heat"), fx.join());
+    }
+    if (type === "robot_out" || type === "robot_home") {
+      const robot = () => card.evaluate((el) => el._slides[el._index].screen.classList.contains("fx-robot"));
+      check(`moments: ${type} ${type === "robot_out" ? "shows the robot stand-in" : "shows no robot"}`,
+        (await robot()) === (type === "robot_out"));
+      if (type === "robot_out") {
+        await page.waitForTimeout(6300); // it crosses in 6 s, then goes
+        check("moments: the robot stand-in goes again", !(await robot()));
+      }
     }
     await shot(`05-${type}`);
     await page.waitForTimeout(500);

@@ -1536,11 +1536,14 @@ const TRICK_ASK = {
 };
 // HOUSE_LINES (ha-signals H3, owner-approved set D, 2026-11-01): the house answered the
 // pet's request, not a person. heating = the blanket ask, cooling = the fan ask; bits are
-// the evening's "today" and the away note's phrases. No PERSONA keys: every type says these.
+// the evening's "today" and the away note's phrases. robot_out / robot_home: a robot
+// vacuum started a run / went home (H4). No PERSONA keys: every type says these.
 const HOUSE_LINES = {
   heating: ["the heater's on! toasty ♪", "ooh, the house heard me! ♥", "warm air! that's better ♪"],
   cooling: ["ahh, a breeze! that's better ♪", "the house heard me! ahh ♪", "cool air! much better ♪"],
-  bits: { heating: "felt the house warm up", cooling: "felt the house cool down" },
+  robot_out: ["ooh, the robot's out! vroom", "here it comes! *hop hop*", "vroom vroom! ♪"],
+  robot_home: ["the robot's back home ♪", "bye, robot! nap well ♪"],
+  bits: { heating: "felt the house warm up", cooling: "felt the house cool down", robot: "watched the robot clean" },
 };
 // --- end fresh-expand copy ---
 const HOUSE_REQUEST = { blanket: "heating", fan: "cooling" }; // the request the house answered
@@ -1924,6 +1927,7 @@ const MOMENT_CLASS = {
   became_sick: BEAT, someone_home: BEAT,
   sunrise: FLAVOUR, sunset: FLAVOUR, weather: FLAVOUR, forecast: FLAVOUR, news: FLAVOUR,
   house_answered: FLAVOUR, // {request}: the heating or the fan came on for the pet (H3)
+  robot_out: FLAVOUR, robot_home: FLAVOUR, // a robot vacuum started / ended a run (H4)
   pooped: FLAVOUR, tv_off_late: FLAVOUR, watching: FLAVOUR, listening: FLAVOUR,
   tv_on: FLAVOUR, music_on: FLAVOUR, // public: no line (the channel's watching/listening says it)
   found: FLAVOUR, // a find went in the basket: the away note's "found <a find>" (V8); no line
@@ -3225,6 +3229,15 @@ const STYLE = `
   @keyframes house-fx { 0% { opacity: 0; transform: translateY(6px); } 8%, 70% { opacity: 1; }
     100% { opacity: 0; transform: translateY(-10px); } }
   @media (prefers-reduced-motion: reduce) { .screen.fx-heat::after, .screen.fx-cool::after { animation: none; opacity: .5; } }
+  /* The robot vacuum (H4): a 22x12 rounded box, dark grey with a light rim and a blinking dot,
+     gliding across the floor line in 6 s. A stand-in for the house_robot art. */
+  .screen.fx-robot::before { content: ""; position: absolute; left: 0; bottom: 3%; z-index: 1; width: 22px; height: 12px;
+    box-sizing: border-box; border-radius: 6px; border: 2px solid #ddd; pointer-events: none;
+    background: radial-gradient(circle at 70% 50%, #f55 0 1.5px, transparent 2px) #444;
+    animation: robot-cross 6s linear both, robot-blink 1s steps(1) infinite; }
+  @keyframes robot-cross { from { translate: -30px 0; } to { translate: calc(var(--robot-w, 400px) + 30px) 0; } }
+  @keyframes robot-blink { 50% { background-color: #444; background-image: none; } }
+  @media (prefers-reduced-motion: reduce) { .screen.fx-robot::before { animation: none; left: 40%; } }
   /* Water worlds: lighter streaks, and rings where the drops land. */
   .screen.raining.watery .rain { opacity: .6; }
   .screen.raining.watery .rain::after { content: ""; position: absolute; inset: 0;
@@ -5148,6 +5161,7 @@ class HatchPetCard extends HTMLElement {
     s.pet.classList.toggle("shiver", standIn && (flags.includes("chilly") || flags.includes("storm")));
     s.screen.classList.toggle("stormy", flags.includes("storm") && !away);
     s.screen.classList.toggle("windy", flags.includes("windy") && !away);
+    s.vroom = flags.includes("vroom") && !away && !asleep; // a robot is cleaning (H4): idle sends it across
     s.moodState = mood?.state;
     s.calling = calling;
     const rainScene = scene === "rain" && !!sp.backgrounds?.rain;
@@ -5733,14 +5747,19 @@ class HatchPetCard extends HTMLElement {
     const now = Date.now();
     if (!s.nextIdle) s.nextIdle = now + IDLE_MIN_MS / 2 + Math.random() * IDLE_SPREAD_MS;
     if (now < s.nextIdle) return;
-    s.nextIdle = now + IDLE_MIN_MS + Math.random() * IDLE_SPREAD_MS;
+    s.nextIdle = now + IDLE_MIN_MS + Math.random() * (s.vroom ? 20000 : IDLE_SPREAD_MS); // vroom: every 20-40 s
     if (!this._free(s)) return;
     const isCalm = calm();
     const own = s.drawn === "child"
       ? Object.keys(s.species.extras || {}).filter((k) => !SHARED_POSES.has(k)) : [];
     if (this._promisePractice(s)) return; // the promise's practice, days 1-3 (F3)
-    const move = pick(this._idleMoves(s, own.length > 0, isCalm));
-    if (move === "pose") {
+    // While a robot is cleaning (vroom) it is the choice: across the floor, and the pet perks.
+    const move = s.vroom && !isCalm && !s.screen.classList.contains("fx-robot")
+      ? "robot" : pick(this._idleMoves(s, own.length > 0, isCalm));
+    if (move === "robot") {
+      this._robotFx(s);
+      this._animate(s, s.pet, "perk", 320);
+    } else if (move === "pose") {
       const frames = s.species.extras[pick(own)];
       s.poseFrames = Array.isArray(frames) ? frames : [frames];
       s.poseUntil = now + 2500;
@@ -6760,6 +6779,7 @@ class HatchPetCard extends HTMLElement {
       news: "heard some news", sunset: "watched the sunset", wish_granted: "got my wish",
       trait_learned: "learned something new", first_snow: "saw the first snow",
       first_warm: "felt the first warm day", first_fog: "saw the first fog", // E12 Se-a
+      robot_out: HOUSE_LINES.bits.robot, robot_home: HOUSE_LINES.bits.robot, // H4
     };
     const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow", rainbow: "saw a rainbow", sun_out: "sunbathed" };
     const CARE_BITS = { feed: "had a meal", snack: "had a snack", play: "played", game: "played a game", clean: "had a bath", chore_treat: "got a chore treat" };
@@ -7174,6 +7194,15 @@ class HatchPetCard extends HTMLElement {
     setTimeout(() => s.screen.classList.remove(cls), 2500);
   }
 
+  // The robot vacuum's stand-in (fx-robot, 6 s across the floor line) until the art
+  // (house_robot) lands; the screen's width sets how far it goes.
+  _robotFx(s) {
+    s.screen.style.setProperty("--robot-w", `${(s.screen.clientWidth || 400) - 22}px`);
+    s.screen.classList.add("fx-robot");
+    clearTimeout(s.robotTimer);
+    s.robotTimer = setTimeout(() => s.screen.classList.remove("fx-robot"), 6000);
+  }
+
   _sparkle(s) {
     const ring = document.createElement("span");
     ring.className = "burst big";
@@ -7339,6 +7368,15 @@ class HatchPetCard extends HTMLElement {
         speak(pick(HOUSE_LINES[kind]), 4500, () => {
           this._animate(s, s.pet, "perk", 320);
           this._houseFx(s, kind === "heating" ? "fx-heat" : "fx-cool");
+        });
+        break;
+      }
+      case "robot_out": // a robot vacuum started a run: the stand-in crosses the floor (H4)
+      case "robot_home": { // ... and went home: a word, no robot
+        if (s.game) break;
+        speak(pick(HOUSE_LINES[m.type]), 4500, () => {
+          this._animate(s, s.pet, "perk", 320);
+          if (m.type === "robot_out") this._robotFx(s);
         });
         break;
       }

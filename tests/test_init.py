@@ -535,8 +535,7 @@ async def test_a_vacuum_nobody_mapped_is_heard_and_moves_the_pet(
     assert "vroom" not in hass.states.get("sensor.pip_mood").attributes["flags"]
     assert len(home) == 1
     types = [
-        m["type"]
-        for m in hass.states.get("sensor.pip_last_care").attributes["moments"]
+        m["type"] for m in hass.states.get("sensor.pip_last_care").attributes["moments"]
     ]
     assert types[:2] == ["robot_home", "robot_out"]
 
