@@ -339,7 +339,7 @@ def birthday(name: str, nickname: str | None) -> str:
 
 def welcome(name: str) -> str:
     """The message when a pet is added to the house."""
-    return f"{name}, a new virtual pet, just moved in! Say hi ♥"
+    return f"{name}, a new virtual pet, just moved in! Its egg hatches in about half an hour. Say hi ♥"
 
 
 def dashboard_path(value: str | None) -> str | None:

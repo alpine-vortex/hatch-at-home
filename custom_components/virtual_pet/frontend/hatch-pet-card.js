@@ -139,6 +139,7 @@ const CHIRPS = { // [frequency Hz, length s] notes, played one after another
   harvest: [[523, 0.1], [659, 0.1], [784, 0.1], [659, 0.1], [784, 0.22]],
   birthday: [[523, 0.12], [523, 0.1], [587, 0.22], [523, 0.22], [698, 0.22], [659, 0.4]],
   click: [[1760, 0.04]], // the backlight
+  tap: [[1319, 0.04], [1568, 0.06]], // a pat on the egg (UX fix 4, F2): soft
   link: [[1319, 0.06], [0, 0.03], [1760, 0.09]], // the infrared link
   boot: [[523, 0.08], [784, 0.08], [1047, 0.2]],
 };
@@ -947,17 +948,17 @@ function seasonNow(config, date = new Date()) {
 const BEE_FRAMES = [1, 2].map((n) => `${BASE}/ui/catch_decoy_${n}.png?v=${VERSION}`);
 
 const REFUSALS = {
-  full: "I'm full!",
-  not_needed: "I'm fine, thanks!",
+  full: "i'm full!",
+  not_needed: "i'm fine, thanks!",
   asleep: "shh... sleeping",
   too_tired: "too tired to play",
   already_clean: "it's already clean!",
-  not_sick: "I'm not sick!",
-  unfair: "hey, I didn't do anything!",
+  not_sick: "i'm not sick!",
+  unfair: "hey, i didn't do anything!",
   spoiled: "hehe, whining works",
   no_game: "let's start over",
   egg: "...",
-  away: "I'm at the sitter's!",
+  away: "i'm at the sitter's!",
   not_sleepy: "not sleepy yet ♪",
 };
 
@@ -998,6 +999,10 @@ const IDLE_MOODS = new Set(["content", "cozy", "bored", "excited", "sleepy", "hu
 const IDLE_LINES = new Set(["sleepy", "bored", "excited", "hungry", "dirty"]); // the rest say the default lines
 // A viewer is greeted by name at most this often, per pet.
 const GREET_EVERY_MS = 3 * 3600 * 1000;
+const KNOWN_KEY = "hatch-known-pets"; // the devices this browser has seen on a shelf (F4)
+const NEIGHBOUR_LINE = "ooh, a new egg next door! ♪"; // a second pet moved in (F4)
+const GONE_LINE = "one moment... ♪"; // F1: the bubble while a pet's entities reload
+const GONE_STATES = new Set(["unavailable", "unknown"]); // a pet whose entities are reloading
 // Daily check-ins. The day's wish (life_stage "wish"), in the pet's words and
 // short for the status screen; its dream (life_stage "dream"); the "while you
 // were out" note after this long away (per device).
@@ -2052,6 +2057,7 @@ const PAT_LINES = { content: "hehe ♥", excited: "hehe! ♪", sleepy: "mmm...",
 const PAT_SPOT_ODDS = 1 / 12; // a spoken pat's chance of the sweet spot (fresh-expand P-b)
 const PAT_COOLDOWN_MS = 4000; // a pat in this time after a spoken one wiggles, no line
 const PAT_MS = 2500;
+const EGG_PAT_LINE = "♪"; // an egg's pat: the one sound it makes (UX fix 4, F2)
 // Reactions to care at baby, teen and adult (PR 3c, O02): the stage's own mood frames
 // (no new art) and a bounded CSS move, for one length at every stage.
 const REACT_MS = 2500;
@@ -2641,7 +2647,14 @@ const STYLE = `
   .dot::before { content: ""; width: 10px; height: 10px; border-radius: 5px;
     background: color-mix(in srgb, var(--hp-ink) 55%, transparent); transition: width .3s; }
   .dot[aria-current="true"]::before { width: 20px; background: var(--hp-ink); }
+  /* A pet this browser hasn't shown yet (UX fix 4, F4): a small pulse till its slide is first shown
+     (reduced motion: no pulse, a darker dot). */
+  .dot.fresh::before { background: var(--hp-ink); animation: dotpulse 1.6s ease-in-out infinite; }
+  @keyframes dotpulse { 50% { transform: scale(1.5); } }
   .slide.away-slide { cursor: pointer; }
+  /* The empty card's toy (UX fix 4, F5): an egg's silhouette (the journal's "???" look), no buttons. */
+  .slide.empty .pet { filter: brightness(0); opacity: .25; }
+  .slide.empty .buttons, .slide.empty .backlight, .slide.empty .lcd, .slide.empty .glow { display: none; }
   .single .foot { display: none; }
 
   /* One device */
@@ -2916,6 +2929,8 @@ const STYLE = `
   .pet.pat-soft { animation: pat-soft .3s ease-out; }
   @keyframes pat-soft { 40% { transform: translateY(-2%) scale(1.02, .98); } }
   .pet.pat-slow { animation: perk 1.1s ease-in-out; }
+  .pet.rock { animation: rock .6s steps(4, jump-none) 1; transform-origin: 50% 90%; }
+  @keyframes rock { 0% { transform: rotate(-4deg); } 33% { transform: rotate(4deg); } 66% { transform: rotate(-3deg); } 100% { transform: rotate(0); } }
   .pet.hop { animation: hop .7s ease-in-out infinite; }
   .pet.munch { animation: munch .5s ease-in-out 3; }
   @keyframes munch { 50% { transform: translateY(-4%) scale(1.04, .96); } }
@@ -4702,26 +4717,50 @@ class HatchPetCard extends HTMLElement {
     this._sig = sig;
 
     if (!devices.length) {
-      while (this._slides.length) this._dropSlide(this._slides.pop());
-      this._card.classList.add("single");
-      this._card.querySelector(".chips").style.display = "none";
       const configured = [].concat(
         this._config.entities || [], this._config.entity || [], this._config.devices || []).length;
+      // No pets yet: the first world's toy, empty, with an egg's silhouette on its screen (F5).
+      const keep = !configured && this._slides.length === 1 && this._slides[0].empty;
+      if (!keep) while (this._slides.length) this._dropSlide(this._slides.pop());
+      this._card.classList.add("single");
+      this._card.querySelector(".chips").style.display = "none";
       this._card.querySelector(".title").textContent = configured ? "Pet not found" : "No pets yet";
+      // Plain card text, not the pet's voice (F6): who can add a pet, and no "entities".
       this._card.querySelector(".sub").textContent = configured
-        ? "None of this card's entities belong to a virtual pet. Edit the card to pick them again."
-        : "Add the Virtual Pet integration to hatch one.";
+        ? "The pets this card shows aren't here any more. Edit the card to pick them again."
+        : this._hass.user?.is_admin === false
+          ? "Ask whoever runs Home Assistant to add a pet."
+          : "Add the Virtual Pet integration to hatch one.";
+      if (configured) {
+        this._emptyToken = null;
+      } else if (keep) {
+        this._renderSlide(this._slides[0]);
+        this._renderShelf();
+      } else {
+        this._emptyDevice();
+      }
       return;
     }
-    this._card.querySelector(".chips").style.display = "";
+    this._emptyToken = null;
+    if (this._slides[0]?.empty) this._dropSlide(this._slides.pop()); // a pet moved in
     let worlds;
+    if (!this._slides.length) this._waiting("Hatch at Home"); // worlds.json pending: not a blank card (F11)
     try {
       worlds = await loadJson("worlds.json");
     } catch (err) {
       this._sig = null; // try again on the next update
+      this._waiting("Hatch at Home");
       return;
     }
     this._worlds = worlds; // every world's (a find, its art and lines, is its own world's)
+    // Every pet is still reloading and none has shown yet: its world is unknown, so no slide
+    // is drawn (not the first world's) until the stage has one. The card keeps its title.
+    if (devices.every((d, i) => !this._slides[i]?.world &&
+        GONE_STATES.has(this._hass.states[d["sensor.life_stage"]]?.state))) {
+      this._waiting("Hatch at Home");
+      return;
+    }
+    this._card.querySelector(".chips").style.display = "";
     while (this._slides.length < devices.length) this._slides.push(this._buildSlide());
     while (this._slides.length > devices.length) this._dropSlide(this._slides.pop());
     if (!this._bootChecked) {
@@ -4738,11 +4777,16 @@ class HatchPetCard extends HTMLElement {
 
     for (let i = 0; i < devices.length; i++) {
       const s = this._slides[i];
-      if (s.ids && s.ids.device !== devices[i].device) this._forget(s); // another pet now
+      if (s.ids && s.ids.device !== devices[i].device) {
+        this._forget(s); // another pet now
+        s.worldKey = null;
+      }
       s.ids = devices[i];
       this._subscribe(s); // its private channel (once: a no-op after that)
       const stage = this._state(s, "sensor.life_stage");
-      s.worldKey = worlds[stage?.attributes.world] ? stage.attributes.world : Object.keys(worlds)[0];
+      s.reloading = GONE_STATES.has(stage?.state); // reloading or restarting: no attributes (UX fix 4, F1)
+      // A state with no world keeps the slide's last one (a reload must not move the pet home).
+      s.worldKey = worlds[stage?.attributes.world] ? stage.attributes.world : (s.worldKey || Object.keys(worlds)[0]);
       s.world = worlds[s.worldKey];
       const roster = stage?.attributes.roster || [];
       // An egg is always drawn as its world's egg (the first species on the roster).
@@ -4756,7 +4800,7 @@ class HatchPetCard extends HTMLElement {
           this._sig = null;
           this._update();
         }).catch(() => {
-          this._write(s, `missing sprites for ${speciesId}`);
+          console.warn(`hatch-pet-card: missing sprites for ${speciesId}`); // the console, not the bubble (F11)
           if (s.speciesId === speciesId) s.speciesId = null; // try again on the next update
         });
       }
@@ -4775,6 +4819,75 @@ class HatchPetCard extends HTMLElement {
     }
     this._card.classList.toggle("single", devices.length < 2);
     this._renderShelf();
+    this._newNeighbour(devices);
+  }
+
+  // A pet that moved in while this browser wasn't looking, or while the card was open (UX fix 4, F4):
+  // the pet on show says so once. The devices this browser has seen on a shelf are kept
+  // (the first time ever is only noted, so a new browser doesn't announce every pet). Only a
+  // newcomer still in its egg counts, and never to itself.
+  _newNeighbour(devices) {
+    let known = null;
+    try {
+      known = JSON.parse(localStorage.getItem(KNOWN_KEY) || "null");
+    } catch (err) {
+      return; // no storage: nothing to compare with
+    }
+    const ids = devices.map((d) => d.device);
+    const fresh = Array.isArray(known) ? ids.filter((id) => !known.includes(id)) : [];
+    if (fresh.length || !Array.isArray(known)) {
+      try {
+        localStorage.setItem(KNOWN_KEY, JSON.stringify([...new Set([...(known || []), ...ids])].slice(-60)));
+      } catch (err) {
+        return;
+      }
+    }
+    const on = this._slides[this._index];
+    const eggs = fresh.some((id) => id !== on?.ids?.device &&
+      this._hass.states[devices[ids.indexOf(id)]["sensor.life_stage"]]?.state === "egg");
+    if (eggs && on && !on.reloading) this._queue(on, NEIGHBOUR_LINE, 4500, { type: "neighbour" }); // kept: said when the pet is free
+  }
+
+  // The empty card's toy: the first world's own shell and room with its first creature's egg
+  // drawn as a flat silhouette (the journal's "???" look), no buttons, nothing moving. It takes no
+  // taps. It is drawn when its art has loaded, unless a pet has moved in or the card has changed.
+  async _emptyDevice() {
+    const token = (this._emptyToken = {});
+    let world;
+    let worldKey;
+    let species;
+    let id;
+    try {
+      const worlds = await loadJson("worlds.json");
+      worldKey = Object.keys(worlds)[0];
+      world = worlds[worldKey];
+      id = world.roster[0];
+      species = await loadJson(`sprites/${id}/species.json`);
+    } catch (err) {
+      return; // the title and text stand alone
+    }
+    if (this._emptyToken !== token || this._slides.length) return;
+    const s = this._buildSlide();
+    s.empty = true;
+    s.world = world;
+    s.worldKey = worldKey;
+    s.species = species;
+    s.speciesId = id;
+    s.el.classList.add("empty");
+    this._slides.push(s);
+    this._index = 0;
+    this._renderSlide(s);
+    this._renderShelf();
+  }
+
+  // Nothing to draw yet (worlds.json pending or failed, every pet reloading): the card's
+  // title and no pet. With a pet on show it is left alone.
+  _waiting(title) {
+    if (this._slides.length) return;
+    this._card.classList.add("single");
+    this._card.querySelector(".chips").style.display = "none";
+    this._card.querySelector(".title").textContent = title;
+    this._card.querySelector(".sub").textContent = "";
   }
 
   // Draw again now, though nothing in HA changed: one slide, or all of them.
@@ -5228,7 +5341,7 @@ class HatchPetCard extends HTMLElement {
     this._slides.forEach((slide, i) => {
       const current = i === this._index;
       slide.el.classList.toggle("away-slide", !current);
-      slide.device.inert = !current;
+      slide.device.inert = !current || !!slide.empty;
       this._patSync(slide);
       slide.el.setAttribute("aria-hidden", current ? "false" : "true");
     });
@@ -5238,13 +5351,15 @@ class HatchPetCard extends HTMLElement {
     this._card.style.setProperty("--hp-ground", world.ground);
     this._card.style.setProperty("--hp-ink", world.ink);
     this._card.style.setProperty("--hp-subink", world.subink);
-    const device = this._hass.devices?.[s.ids.device];
+    const device = this._hass.devices?.[s.ids?.device];
     const stage = this._state(s, "sensor.life_stage");
     const days = stage?.attributes.age_days;
     const kind = stage?.state === "egg" ? "Egg" : s.species?.name || "";
     const title = this._card.querySelector(".title");
-    title.textContent = device?.name_by_user || device?.name || "Pet";
-    title.classList.toggle("long", title.textContent.length > 9);
+    if (!s.empty) { // the empty card keeps its own title and line (_update)
+      title.textContent = device?.name_by_user || device?.name || "Pet";
+      title.classList.toggle("long", title.textContent.length > 9);
+    }
     const emblem = this._card.querySelector(".emblem");
     if (world.emblem) {
       const src = `${BASE}/ui/${world.emblem}.png?v=${VERSION}`;
@@ -5262,9 +5377,11 @@ class HatchPetCard extends HTMLElement {
       if (src && img.getAttribute("src") !== src) img.src = src;
     });
     // The world is on the device's plate and the emblem, so the line stays short.
-    this._card.querySelector(".sub").textContent = [kind,
-      stage?.state !== "egg" ? STAGE_LABELS[stage?.state]?.toLowerCase() : null,
-      days != null ? `day ${Math.floor(days) + 1}` : null].filter(Boolean).join(" · ");
+    if (!s.empty) {
+      this._card.querySelector(".sub").textContent = [kind,
+        stage?.state !== "egg" ? STAGE_LABELS[stage?.state]?.toLowerCase() : null,
+        days != null ? `day ${Math.floor(days) + 1}` : null].filter(Boolean).join(" · ");
+    }
 
     while (this._dots.children.length < this._slides.length) {
       const i = this._dots.children.length;
@@ -5277,7 +5394,10 @@ class HatchPetCard extends HTMLElement {
       this._dots.append(dot);
     }
     while (this._dots.children.length > this._slides.length) this._dots.lastChild.remove();
+    (this._shown ??= new Set()).add(s.ids?.device);
     [...this._dots.children].forEach((dot, i) => {
+      const device = this._slides[i].ids?.device;
+      dot.classList.toggle("fresh", this._slides.length > 1 && !this._shown.has(device) && !this._seenRead(device));
       const name = this._hass.devices?.[this._slides[i].ids?.device];
       dot.setAttribute("aria-label", `Show ${name?.name_by_user || name?.name || `pet ${i + 1}`}`);
       dot.setAttribute("aria-current", i === this._index ? "true" : "false");
@@ -5428,6 +5548,32 @@ class HatchPetCard extends HTMLElement {
       s.label.style.width = s.label.style.height = s.label.style.paddingTop = "";
     }
     this._mould(s); // a new shape can keep the same size, so no resize says so
+
+    if (s.empty) { // the empty card's toy (F5): the room and the egg, flat and still
+      this._show(s, s.bg, sp.backgrounds?.day || Object.values(sp.backgrounds || {})[0]);
+      this._show(s, s.perch, null);
+      this._show(s, s.awaysign, null);
+      for (const img of [...s.poops, s.murk, s.attention, s.prop]) this._show(s, img, null);
+      s.frames = [];
+      this._show(s, s.pet, sp.egg?.idle?.[0]);
+      s.pet.alt = "";
+      return;
+    }
+    // Reloading (every Options save, a restart): the last pose stays, drawn faded, with
+    // buttons and the pat off, one line in the bubble and the status page as it was (F1).
+    if (s.reloading) {
+      s.wasGone = true;
+      s.screen.classList.add("faded");
+      for (const b of Object.values(s.buttons)) b.disabled = true;
+      s.request.classList.remove("show");
+      this._patSync(s);
+      if (s.bubble.textContent !== GONE_LINE) this._write(s, GONE_LINE, 60000);
+      return;
+    }
+    if (s.wasGone) { // back: the held line goes, the real one is said at once
+      s.wasGone = false;
+      s.sayUntil = 0;
+    }
 
     const mood = this._state(s, "sensor.mood");
     const stageState = this._state(s, "sensor.life_stage");
@@ -5609,7 +5755,9 @@ class HatchPetCard extends HTMLElement {
     if (s.hatchesAt) {
       const minutes = Math.max(1, Math.ceil((new Date(s.hatchesAt) - serverNow()) / 60000));
       if (minutes <= 1) return "crack... crack...";
-      return minutes < 60 ? `hatching in about ${minutes} min` : `hatching in about ${Math.round(minutes / 60)} h`;
+      if (minutes <= 6) return STATUS_COPY.eggCracking; // as the status page says it (UX fix 4, F10)
+      // The number and its unit stay together: big text never leaves "min" alone on a line.
+      return minutes < 60 ? `hatching in about ${minutes}\u00a0min` : `hatching in about ${Math.round(minutes / 60)}\u00a0h`;
     }
     // The server's sentence, or baby talk keyed by which sentence it is (an
     // older integration sends no key: the sentence as it is).
@@ -5793,7 +5941,7 @@ class HatchPetCard extends HTMLElement {
       }
       this._patSync(s);
       this._basketSync(s);
-      if (s === this._slides[this._index]) {
+      if (s === this._slides[this._index] && !s.reloading && !s.empty) { // a reloading pet greets and asks nothing
         if (!this._booting) this._greet(s); // the boot screen waits: only the speaking does
         this._powerTick(s);
         this._firstLook(s); // before the visit: it tells the server what's queued
@@ -5814,7 +5962,7 @@ class HatchPetCard extends HTMLElement {
         this._linkTick(s);
         this._visitorTick(s);
       }
-      if (!s.sayUntil && s.species) {
+      if (!s.sayUntil && s.species && !s.reloading && !s.empty) {
         const mood = this._state(s, "sensor.mood");
         // A game waiting on a guess asks again (a care line said over it is done).
         const prompt = s.game?.prompt;
@@ -6356,8 +6504,8 @@ class HatchPetCard extends HTMLElement {
   // The pat's box is up: the pet on show, out and about, with nothing over it (the CSS
   // also hides it at once for the status, a game, a question, a link and the boot screen).
   _patOn(s) {
-    return !!s.species && s === this._slides[this._index] && !this._booting && !s.scene && !s.linking &&
-      !s.power && !s.game && !s.away && !s.egg && !this._questionOn(s) &&
+    return !!s.species && !s.reloading && !s.empty && s === this._slides[this._index] && !this._booting && !s.scene && !s.linking &&
+      !s.power && !s.game && !s.away && !this._questionOn(s) &&
       !s.screen.classList.contains("show-status");
   }
 
@@ -6401,6 +6549,19 @@ class HatchPetCard extends HTMLElement {
     if (e.detail !== 0 && this._swiped) return; // the end of a swipe; a key after one still pats
     const now = Date.now();
     const still = calm();
+    if (s.egg) { // an egg rocks a little and chirps: no bond, no server call, one "♪" (F2)
+      this._tapped(s.pat);
+      if (!still) {
+        this._animate(s, s.pet, "rock", 600);
+        this._moving(s, 600);
+      }
+      if (now - (s.patAt || 0) >= PAT_COOLDOWN_MS || !s.sayUntil || now > s.sayUntil) {
+        s.patAt = now;
+        this._chirp(s, "tap");
+        this._line(s, MINE, EGG_PAT_LINE, PAT_MS);
+      }
+      return;
+    }
     if (s.asleep) {
       this._tapped(s.pat);
       if (!still) {
@@ -7136,12 +7297,12 @@ class HatchPetCard extends HTMLElement {
     if (m.type === "stage_changed") {
       if (m.stage === "baby" || !m.stage) return null; // hatching says hello
       const a = /^[aeiou]/.test(m.stage) ? "an" : "a";
-      return this._lines(s, "catchup_stage", `guess what! I'm ${a} ${m.stage} now!`).text;
+      return this._lines(s, "catchup_stage", `guess what! i'm ${a} ${m.stage} now!`).text;
     }
     if (m.type === "trait_learned") {
       return this._lines(s, "catchup_trait", `I learned something: ${String(m.trait).replaceAll("_", " ")}!`).text;
     }
-    if (m.type === "hatched") return this._lines(s, "catchup_hatched", "hello! I hatched while you were away").text;
+    if (m.type === "hatched") return this._lines(s, "catchup_hatched", "hello! i hatched while you were away").text;
     // The rest say what they would have said then (nothing else happens).
     const said = [];
     this._moment(s, m, said);
@@ -7243,8 +7404,20 @@ class HatchPetCard extends HTMLElement {
       : hour < 12 ? `morning, ${first}!` : hour < 18 ? `hi, ${first}!` : `evening, ${first}!`;
   }
 
+  // Today's greeting is said already (the hatch's hello): no "hi, <name>!" for this person on this device.
+  _greetSpent(s) {
+    s.greeted = true;
+    try {
+      localStorage.setItem(`hatch-greet-${this._hass.user?.id}-${s.ids?.device}`, String(Date.now()));
+    } catch (err) {
+      // no storage: once per page load, as _greet
+    }
+  }
+
   _greet(s) {
     if (s.greeted || !this._channelHeard(s) || !this._free(s)) return;
+    // An egg doesn't talk (C15'): the greeting waits for the hatch, and its key stays unwritten (F2).
+    if (this._state(s, "sensor.life_stage")?.state === "egg") return;
     s.greeted = true;
     const user = this._hass.user;
     const bond = this._bond(s);
@@ -7696,17 +7869,26 @@ class HatchPetCard extends HTMLElement {
         }
         break;
       case "hatched":
-        say("hello!", 4500, () => {
-          this._chirp(s, "hatch");
-          this._animate(s, s.pet, "born", 500);
-          this._sparkle(s);
-        });
+        // The first meeting (UX fix 4, F3): on a personal screen it says the viewer's name, then
+        // "nice to meet you". That spends today's greeting, so the normal one doesn't repeat it.
+        {
+          const first = sharedScreen() ? null : short(this._hass.user?.name?.trim().split(/\s+/)[0], 16);
+          say(first ? `hello, ${first}! ♥` : "hello!", 4500, () => {
+            this._chirp(s, "hatch");
+            this._animate(s, s.pet, "born", 500);
+            this._sparkle(s);
+          });
+          if (!capture) {
+            this._line(s, KEPT, "nice to meet you ♥", 4500, { type: m.type });
+            this._greetSpent(s);
+          }
+        }
         break;
       case "stage_changed":
         if (m.stage === "baby") break; // hatching says hello
         say(m.stage === "adult"
           ? "all grown up! ♥" // the upbringing is on the status screen, not announced
-          : `I'm a ${m.stage} now!`, 4500, () => {
+          : `i'm a ${m.stage} now!`, 4500, () => {
           this._animate(s, s.pet, "stretch", 1100);
           this._sparkle(s);
         });
@@ -8341,8 +8523,11 @@ class HatchPetCard extends HTMLElement {
         || (isHeavy(value("weight")) ? "a game, to run it off" : null);
     // How care is going, beside the upbringing it shapes (top10 4a; was in settings).
     const careMisses = this._state(s, "sensor.care_misses");
-    const misses = row(null, "missed calls", `<span>${Number.parseFloat(careMisses?.state) || 0}</span>`)
-      + row(null, "ignored whines", `<span>${careMisses?.attributes.discipline_misses ?? 0}</span>`);
+    // A new pet's page doesn't open on zeros that count failures: the two rows come with the first miss (UX fix 4, F12).
+    const missed = Number.parseFloat(careMisses?.state) || 0;
+    const whined = Number(careMisses?.attributes.discipline_misses) || 0;
+    const misses = missed || whined
+      ? row(null, "missed calls", `<span>${missed}</span>`) + row(null, "ignored whines", `<span>${whined}</span>`) : "";
     // Today's wish comes first of the rest: it changes daily, the rest is there every day.
     // Its day so far (E9 St-a): the evening's today line, else today's dream. A page, not a bubble.
     const today = !isEgg && ((this._evening() && this._todayLine(s)) || this._dreamSaid(s));
@@ -8381,7 +8566,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
       ${nextStage ? row(null, nextStage[0], `<span>${nextStage[1]}</span>`) : ""}
       ${nextEgg ? row(null, "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
-      <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
+      <div class="log">${lines.join("") || "<div>all new here ♪</div>"}</div>
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
