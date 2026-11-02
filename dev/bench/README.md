@@ -74,7 +74,7 @@ A shot (all optional):
 | `preview` | in the picker, the tile tapped: that finish on the live shell, unsaved (`""` is the world's own) |
 | `scroll` | a selector in the status box brought into view (the picker scrolls), e.g. `.tile.now` or `.sec[data-group="specials"]` (its top just under the back row) |
 | `journal` | `true` (`--journal`, which also sets `view: "journal"`) or an object over the journal attributes the card reads (`raised`, `journal`, `generation`, `traits`, `memories`) |
-| `mine` | `true` (`--mine`) or an object over it: the viewer's own view the private channel would send (a bond, notify me, my day, my birthday kept), so `you two` and the sheet's personal rows show |
+| `mine` | `true` (`--mine`) or an object over it: the viewer's own view the private channel would send (a bond, notify me, my day, my birthday kept), so `you two` and the sheet's personal rows show. An array gives each pet its own (`[{open_on: true}, {}]`: the favourite's heart on the first pet's dot only) |
 | `power` | the low-battery gag pinned mid-play: `battery` (one bar, first line) or `line` (full battery, second line) |
 | `costume` | `{season, art, frame}`: the costume put on through the card's own `_costume` (frame 1 or 2 showing). `bench.js` writes the seat it used (`_frames(s)[0]`, `drawn`, `_hatSeat`) to `<name>.json` beside the PNG |
 | `pet.personality`, `hatched_on`, `upbringing` | the first pet's type (teen or adult), birth date and upbringing as `sensor.life_stage` carries them; `pet.reason` / `pet.reason_key` put the server's mood sentence on `sensor.mood`, so the mood line (P2b) shows through the card's own `_say` |

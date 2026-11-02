@@ -239,6 +239,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_linked)
     websocket_api.async_register_command(hass, websocket_greeted)
     websocket_api.async_register_command(hass, websocket_my_day)
+    websocket_api.async_register_command(hass, websocket_open_on)
     websocket_api.async_register_command(hass, websocket_rest)
     websocket_api.async_register_command(hass, websocket_set_shell)
     websocket_api.async_register_command(hass, websocket_rename)
@@ -709,11 +710,12 @@ def websocket_subscribe(
     def send(payload: dict) -> None:
         connection.send_message(websocket_api.event_message(msg["id"], payload))
 
+    admin = connection.user.is_admin
     token, connection.subscriptions[msg["id"]] = channel.add(
-        hass, pet.pet_id, user, shared, send
+        hass, pet.pet_id, user, shared, send, admin
     )
     connection.send_result(msg["id"])
-    send(pet.channel_snapshot(token, user, shared))
+    send(pet.channel_snapshot(token, user, shared, admin))
 
 
 @websocket_api.websocket_command(
@@ -817,6 +819,47 @@ async def websocket_my_day(
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
     await pet.async_set_my_day(connection.user.id, msg["enabled"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/open_on",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("enabled"): bool,
+        vol.Required("scope"): vol.In(("me", "house")),
+        # No default, and "me" is refused unless False: a card that forgets the flag,
+        # or a shared screen, changes no one's choice (as ask_again; FM, audit s2739).
+        vol.Required("shared"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_open_on(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The pet the signed-in person's card opens on (scope "me"), or the one
+    shared screens open on (scope "house", admins only; plan favourite-resting
+    §5.4). A websocket command, so the choice stays off the event bus."""
+    if msg["scope"] == "me" and msg["shared"] is not False:
+        connection.send_error(
+            msg["id"], "shared", "That is chosen on its person's own screen"
+        )
+        return
+    if msg["scope"] == "house" and not connection.user.is_admin:
+        connection.send_error(
+            msg["id"], websocket_api.ERR_UNAUTHORIZED, "Only an admin sets this"
+        )
+        return
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    await pet.async_set_open_on(
+        connection.user.id, msg["enabled"], house=msg["scope"] == "house"
+    )
     connection.send_result(msg["id"])
 
 
@@ -1070,5 +1113,10 @@ async def async_remove_entry(hass: HomeAssistant, entry: PetConfigEntry) -> None
     persistent_notification.async_dismiss(hass, f"{DOMAIN}_{entry.entry_id}_welcome")
     if DOMAIN in hass.data:
         channel.gone(hass, entry.entry_id)
+        # No card opens on it any more (favourite §5.2). Best effort: a stale id
+        # is ignored on read anyway, and the people store may not be there.
+        people: People | None = hass.data[DOMAIN].get("people")
+        if people is not None and people.drop_open_on(entry.entry_id):
+            await people.async_save_now()
     _refresh_recalls(hass)
     await PetStore(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}").async_remove()

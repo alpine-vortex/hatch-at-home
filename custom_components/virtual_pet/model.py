@@ -588,6 +588,9 @@ class PetState:
     # go on. Never an egg. rest_since: when it began (the birthday's shift).
     resting: bool = False
     rest_since: float | None = None
+    # The last rest that refilled and settled (owner 2026-11-02, R1-1): once per
+    # R.REST_REFILL_HOURS. None (an old save, or never): the next one may.
+    last_rest_refill_at: float | None = None
     care_log: list[dict[str, Any]] = field(default_factory=list)
     species: str | None = None  # decided when the egg hatches
     egg_choice: str | None = None  # the species the next hatch takes; None: a surprise
@@ -694,7 +697,13 @@ class PetState:
             kwargs[key] = kwargs.get(key) is True
         if not isinstance(kwargs.get("lights_before_away"), bool):
             kwargs["lights_before_away"] = None
-        for key in ("stayed_up_since", "wake_at", "next_find_at", "rest_since"):
+        for key in (
+            "stayed_up_since",
+            "wake_at",
+            "next_find_at",
+            "rest_since",
+            "last_rest_refill_at",
+        ):
             kwargs[key] = _float(kwargs.get(key), None)
         for key in ("species", "inherited_from", "shell_finish"):
             kwargs[key] = _opt_str(kwargs.get(key))
@@ -1102,13 +1111,19 @@ def set_resting(state: PetState, on: bool, now: float) -> tuple[str, list[Event]
         return EGG, events
     state.resting = True
     state.rest_since = now
-    for need in ("hunger", "happiness", "energy"):
-        setattr(state, need, max(getattr(state, need), R.REST_FLOOR))
-    # An open call is settled, as feeding it would: no answer, no miss.
-    state.call = None
-    state.recent_misses = []
+    last = state.last_rest_refill_at
+    if last is None or now - last >= R.REST_REFILL_HOURS * 3600:
+        # The settling, at most once per REST_REFILL_HOURS (owner 2026-11-02,
+        # R1-1 from audit s2739): rest and wake can't refill again and again.
+        state.last_rest_refill_at = now
+        for need in ("hunger", "happiness", "energy"):
+            setattr(state, need, max(getattr(state, need), R.REST_FLOOR))
+        # An open call is settled, as feeding it would: no answer, no miss.
+        state.call = None
+        state.recent_misses = []
+        state.last_recall_at = now
+    # Inside the window rest only pauses: an open call and the misses are held.
     state.stayed_up_since = None
-    state.last_recall_at = now
     events += drop_game(state, now)
     events.append({"type": "rest_started"})
     return OK, events

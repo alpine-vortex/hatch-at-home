@@ -212,6 +212,8 @@ class People:
                 if isinstance(day, str) and isinstance(kinds, list)
             },
         }
+        if house := _house(loaded.get("house")):
+            self.data["house"] = house
         raw = _mapping(loaded.get("people"))
         dropped = any(
             isinstance(r, dict) and r.get("follow") != record.get("follow")
@@ -257,6 +259,48 @@ class People:
 
     def person(self, user: str) -> dict[str, Any]:
         return self.data["people"].setdefault(user, {})
+
+    # --- The pet a card opens on (plan favourite-resting §5) ----------------------
+    # A pet's config-entry id. Ranks nothing: it is only where this person's card
+    # opens, and which pet speaks for them on their phone. A stale id (a removed
+    # pet) matches no pet, so it is ignored on read; the next write replaces it.
+
+    def open_on(self, user: str) -> str | None:
+        pet = self.data["people"].get(user, {}).get("open_on")
+        return pet if isinstance(pet, str) else None
+
+    def house_open_on(self) -> str | None:
+        """Where shared screens open: the household's, no person's."""
+        pet = self.data.get("house", {}).get("open_on")
+        return pet if isinstance(pet, str) else None
+
+    def set_open_on(self, user: str | None, pet_id: str | None) -> None:
+        """Set (or, with None, clear) one person's choice, or the house's (user
+        None). Not saved: the caller saves."""
+        if user is None:
+            house = self.data.setdefault("house", {})
+            target = house
+        else:
+            target = self.person(user)
+        if pet_id is None:
+            target.pop("open_on", None)
+        else:
+            target["open_on"] = pet_id
+        if user is None and not self.data["house"]:
+            del self.data["house"]  # an empty house isn't kept
+
+    def drop_open_on(self, pet_id: str) -> bool:
+        """A pet was removed: no person's choice and no house default names it
+        any more. True if anything changed."""
+        changed = False
+        for person in self.data["people"].values():
+            if person.get("open_on") == pet_id:
+                del person["open_on"]
+                changed = True
+        if self.house_open_on() == pet_id:
+            self.set_open_on(None, None)
+            changed = True
+        return changed
 
     def my_day(self, user: str) -> bool:
         return bool(self.data["people"].get(user, {}).get("my_day"))
@@ -491,7 +535,18 @@ _PERSON_KEYS: dict[str, Any] = {
     "once_last": lambda v: isinstance(v, str),  # a day
     "asked": lambda v: isinstance(v, dict) and isinstance(v.get("day"), str),
     "phone_asked": lambda v: isinstance(v, bool),  # the phone question (top10 1a)
+    "open_on": lambda v: isinstance(v, str),  # a pet's entry id (favourite §5.2)
 }
+
+
+def _house(v: Any) -> dict[str, Any]:
+    """The house's own record: an optional `open_on` (a pet's entry id). The
+    wrong shape is dropped quietly, as a person's keys are; keys this version
+    doesn't know are kept."""
+    house = dict(_mapping(v))
+    if "open_on" in house and not isinstance(house["open_on"], str):
+        del house["open_on"]
+    return house
 
 
 def _iso(v: Any) -> date | None:

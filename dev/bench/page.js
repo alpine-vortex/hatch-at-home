@@ -529,7 +529,9 @@
     // so "you two" and "my day" show, and the switches behind the settings rows.
     if (shot.mine) {
       const mine = { bond: { level: 6, nickname: null }, notify_me: true, my_day: true, birthday_kept: true, birthday_phone: false };
-      slides.forEach((s) => { s.mine = { ...mine, ...(typeof shot.mine === "object" ? shot.mine : {}) }; });
+      // An array is one view per pet (the favourite's heart is one pet's, R2).
+      const over = (i) => (Array.isArray(shot.mine) ? shot.mine[i] || {} : typeof shot.mine === "object" ? shot.mine : {});
+      slides.forEach((s, i) => { s.mine = { ...mine, ...over(i) }; });
     }
     // The house view the channel would send (`house`, an object over it), and `basket`:
     // how many finds wait (house.basket, 0-3), so the basket shows through _basketSync.
