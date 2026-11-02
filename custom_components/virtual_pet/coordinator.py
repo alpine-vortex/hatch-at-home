@@ -32,6 +32,7 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
+    device_registry as dr,
     entity_registry as er,
     issue_registry as ir,
 )
@@ -110,7 +111,7 @@ from .home import (
     forecast_moment,
     is_raining,
 )
-from .names import pet_name
+from .names import name_taken, pet_name
 from .react import counts as react_counts, is_native as react_native
 from .species import load_catalog
 from .watcher import Watcher, daily_forecast, doorbell_rang
@@ -3091,28 +3092,6 @@ def clean_name(raw: object) -> str:
     if not 1 <= len(name) <= NAME_MAX:
         raise RenameError("bad_name")
     return name
-
-
-def name_taken(hass: HomeAssistant, name: str, except_entry_id: str | None) -> bool:
-    """Whether another pet here answers to `name` (casefold): its entry title,
-    its device's own name, or the name it shows (`state.name`). Assist's find_pet
-    matches the title and the shown name, so all of them count."""
-    wanted = name.casefold()
-    registry = dr.async_get(hass)
-    pets: dict[str, PetCoordinator] = hass.data.get(DOMAIN, {}).get("pets", {})
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        if entry.entry_id == except_entry_id:
-            continue
-        names = [entry.title]
-        if device := registry.async_get_device_by_identifier(
-            (DOMAIN, entry.entry_id), entry.entry_id
-        ):
-            names.append(device.name_by_user or "")
-        if (pet := pets.get(entry.entry_id)) and pet.state is not None:
-            names.append(pet.state.name)
-        if any(n and n.casefold() == wanted for n in names):
-            return True
-    return False
 
 
 async def async_rename(hass: HomeAssistant, entry_id: str, raw_name: object) -> str:

@@ -147,6 +147,11 @@
         : service === "play_game" && shot.digReplies?.length ? shot.digReplies.shift() : {} }),
       callWS: async (msg) => {
         if (msg.type === "virtual_pet/photos") return { photos: [] };
+        // The name sheet (settings S3): `rename` is an error code the server would answer with.
+        if (msg.type === "virtual_pet/rename") {
+          if (shot.rename) throw { code: shot.rename };
+          return { name: msg.name };
+        }
         // The finds page (visitors v2 §4): `collection` ({visitors, finds, gifts?}, see
         // collectionOf); its gifts only to an unshared screen, as the server sends them.
         if (msg.type === "virtual_pet/collection") {
@@ -523,6 +528,17 @@
     if (["status", "settings", "picker"].includes(shot.view)) root.querySelector(".statusbtn").click();
     if (shot.view === "settings" || shot.view === "picker") root.querySelector(".gear").click();
     if (shot.view === "lay") cur.request.click(); // settings S2: the lay sheet opens
+    // Settings S3: the name sheet, opened as a lay that hatched a new egg opens it. `nameText` is what
+    // is typed in the field; `rename` an error code the fake server answers a tap on "name it" with.
+    if (shot.view === "name") {
+      card._openName(cur, "lay");
+      const field = cur.status.querySelector(".nameinput");
+      if (shot.nameText !== undefined) field.value = shot.nameText;
+      if (shot.rename) {
+        cur.nameSheetAt = 0;
+        await card._nameSave(cur);
+      }
+    }
     if (shot.view === "picker") {
       root.querySelector(".shellrow").click();
       // `preview`: a tile tapped (its finish on the live shell, unsaved); "" is the world's own.

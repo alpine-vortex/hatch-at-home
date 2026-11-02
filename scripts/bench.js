@@ -363,6 +363,36 @@ const PRESETS = {
       pets: [{}, { world: "tidepool", stage: "adult", raised: "world" }] });
     return out;
   },
+  // The name sheet (settings S3), opened as a lay that hatched a new egg opens it: an empty
+  // field and a 20-character name at 300/330/420, every error line, a baby, night, dim, big text,
+  // and the status page's "name" row (egg and baby).
+  name() {
+    const out = [];
+    const long = "Wwwwwwwwwwwwwwwwwwww"; // 20
+    const base = { world: "woodland", view: "name", pet: { stage: "egg", generation: 2, hatch_minutes: 1400 } };
+    for (const width of [420, 330, 300]) {
+      out.push({ name: `name/${width}/name`, group: `name-${width}`, label: "Pip", width, ...base, pet: { ...base.pet, name: "Pip" } });
+      out.push({ name: `name/${width}/empty`, group: `name-${width}`, label: "empty", width, ...base, nameText: "", rename: "bad_name" });
+      out.push({ name: `name/${width}/long`, group: `name-${width}`, label: "20 characters", width, ...base,
+        pet: { ...base.pet, name: long } });
+    }
+    for (const [code, label] of [["taken", "taken"], ["not_now", "not now"], ["read_only", "read only"], ["unknown", "anything else"]]) {
+      out.push({ name: `name/330/error-${code}`, group: "name-330", label, width: 330, ...base, nameText: "Moss", rename: code });
+    }
+    out.push({ name: "name/330/baby", group: "name-330", label: "baby", width: 330, ...base, pet: { stage: "baby", generation: 2, name: "Moss" } });
+    out.push({ name: "name/330/night", group: "name-330", label: "night", width: 330, ...base, scene: "night", pet: { ...base.pet, name: "Pip" } });
+    out.push({ name: "name/330/dim", group: "name-330", label: "dim (lights out)", width: 330, ...base, scene: "dim", pet: { ...base.pet, name: "Pip" } });
+    out.push({ name: "name/330/big", group: "name-330", label: "big text", width: 330, ...base, bigText: true, pet: { ...base.pet, name: long } });
+    out.push({ name: "name/330/big-error", group: "name-330", label: "big text, error", width: 330, ...base, bigText: true, nameText: "", rename: "bad_name" });
+    out.push({ name: "name/330/mono", group: "name-330", label: "mono", width: 330, ...base, mono: true });
+    for (const width of [420, 330, 300]) {
+      out.push({ name: `name/${width}/row-egg`, group: `namerow-${width}`, label: "egg: name row", width, world: "woodland", view: "status",
+        pet: { stage: "egg", generation: 2, name: long, hatch_minutes: 1400 } });
+      out.push({ name: `name/${width}/row-baby`, group: `namerow-${width}`, label: "baby: name row", width, world: "woodland", view: "status",
+        pet: { stage: "baby", generation: 2, name: "Moss" } });
+    }
+    return out;
+  },
   // The settings sheet (the status screen's gear) with the viewer's own rows, at
   // both card widths, day and night.
   settings() {

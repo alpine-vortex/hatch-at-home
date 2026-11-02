@@ -2685,6 +2685,235 @@ async function main() {
     return out;
   });
   for (const [name, ok] of Object.entries(lay)) check(`settings S2 lay sheet: ${name}`, ok === true, JSON.stringify(lay));
+  // The name sheet (settings S3): naming the new generation. The lay press, the server's answers and the
+  // pet's stage and generation are stubbed on this card's own hass (a copy, put back at the end).
+  const naming = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const realHass = el._hass;
+    const lifeId = s.ids["sensor.life_stage"];
+    const life = realHass.states[lifeId];
+    const gen = Number(life.attributes.generation ?? 1);
+    const had = s.ids["button.lay_egg"];
+    const sent = [], pressed = [];
+    let answer = () => ({ name: "x" }); // what the fake server says to a rename (may throw {code})
+    let layFails = false;
+    // The pet's state: its stage and generation ("gone" is the entry reloading: unavailable, no attributes).
+    const put = (stage, generation) => {
+      const state = stage === "gone" ? { ...life, state: "unavailable", attributes: {} }
+        : { ...life, state: stage, attributes: { ...life.attributes, generation } };
+      el._hass = { ...realHass, states: { ...realHass.states, [lifeId]: state },
+        callService: async (d, svc, data) => { pressed.push(`${d}.${svc}`); if (layFails) throw new Error("no"); },
+        callWS: async (msg) => {
+          if (msg.type !== "virtual_pet/rename") return realHass.callWS.call(realHass, msg);
+          sent.push(msg);
+          return answer(msg);
+        } };
+      s.drawnSig = null;
+    };
+    const settle = async () => { el._redraw(s); await wait(300); }; // _update is async
+    const closed = () => !s.nameSheet && !s.screen.classList.contains("show-status");
+    const isOpen = () => s.nameSheet && s.screen.classList.contains("show-status") && !!s.status.querySelector(".nameinput");
+    const lay = async () => { // the tap of a lay, as the card sends it
+      s.ids["button.lay_egg"] = s.ids["button.lay_egg"] || "button.nobody_lay_egg";
+      el._press(s, "lay_egg");
+      await wait(40);
+    };
+    const reopen = async (stage = "egg") => {
+      put("adult", gen);
+      await settle();
+      await lay();
+      put(stage, gen + 1);
+      await settle();
+      return isOpen();
+    };
+    const type = (text) => { const f = s.status.querySelector(".nameinput"); f.value = text; return f; };
+    const save = async () => { s.nameSheetAt = 0; s.status.querySelector(".namego").click(); await wait(60); };
+    const err = () => s.status.querySelector(".nameerr");
+    const out = {};
+    const timers = [];
+    const realTimeout = window.setTimeout;
+    try {
+      // The trigger: the sheet opens when the sensor shows an egg of the next generation, and not before.
+      put("adult", gen);
+      await settle();
+      out.noneYet = closed() && !s.layAt;
+      await lay();
+      out.waiting = s.layAt?.generation === gen && closed() && pressed.at(-1) === "button.press";
+      put("adult", gen);
+      await settle();
+      out.sameGeneration = closed() && !!s.layAt; // nothing changed: nothing opens
+      put("egg", gen); // an egg, but not a newer one
+      await settle();
+      out.notNewer = closed();
+      put("gone"); // the entry reloading after a lay that moves the world: keep waiting
+      await settle();
+      out.waitsThroughGone = closed() && !!s.layAt;
+      put("egg", gen + 1);
+      await settle();
+      out.opens = isOpen() && !s.layAt;
+      const field = s.status.querySelector(".nameinput");
+      out.fieldName = field.value === el._petName(s) && field.maxLength === 20 && field.getAttribute("aria-label") === "the new egg's name, up to 20 characters"
+        && document.activeElement !== null;
+      out.lines = s.status.querySelector(".sec").textContent === "a name for the egg"
+        && s.status.querySelector(".namego").textContent === "name it"
+        && s.status.querySelector(".nameback").textContent === `keep ${el._petName(s)}`;
+      // The save: sends {type, entity_id, name} (spaces as typed; the server tidies), says N13 on the screen, closes.
+      answer = (msg) => ({ name: msg.name });
+      type("Fern");
+      await save();
+      out.sends = sent.length === 1 && sent[0].type === "virtual_pet/rename" && sent[0].entity_id === lifeId && sent[0].name === "Fern";
+      out.saved = closed() && s.bubble.textContent === "Fern! i like it ♥";
+      sent.length = 0;
+      // Enter submits; the same text twice is one rename.
+      await reopen();
+      type("  Fern   Two ").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await wait(60);
+      out.enter = sent.length === 1 && sent[0].name === "Fern Two" && closed();
+      sent.length = 0;
+      // Empty or blank: N14 without asking the server; the field and sheet stay.
+      await reopen();
+      type("   ");
+      await save();
+      out.blank = sent.length === 0 && isOpen() && err().textContent === "keep it short, and not blank" && !err().hidden;
+      type("a");
+      s.status.querySelector(".nameinput").dispatchEvent(new Event("input", { bubbles: true }));
+      out.errClears = err().hidden;
+      // Each error key shows its own line under the field; the sheet and the typed text stay.
+      const want = { bad_name: "keep it short, and not blank", taken: "another pet here has that name",
+        not_now: "only a new egg or baby can be named", read_only: "this login can't name, sorry",
+        unknown_command: "hm, that name didn't stick ♪", no_pet: "hm, that name didn't stick ♪" };
+      out.errors = true;
+      for (const [code, line] of Object.entries(want)) {
+        answer = () => { throw { code }; };
+        type("Moss");
+        await save();
+        if (!(isOpen() && err().textContent === line && s.status.querySelector(".nameinput").value === "Moss")) out.errors = `${code}: ${err()?.textContent}`;
+      }
+      // Hatching resets nothing here: the cap is on the field.
+      out.cap = s.status.querySelector(".nameinput").maxLength === 20;
+      // not_ready (the entry reloading): once more after 2 s, then it succeeds; twice shows N18.
+      let calls = 0;
+      answer = (msg) => { calls++; if (calls === 1) throw { code: "not_ready" }; return { name: msg.name }; };
+      sent.length = 0;
+      type("Moss");
+      await save();
+      out.retryWaits = sent.length === 1 && isOpen();
+      await wait(2300);
+      out.retryOnce = sent.length === 2 && closed() && s.bubble.textContent === "Moss! i like it ♥";
+      await reopen();
+      calls = 0;
+      sent.length = 0;
+      answer = () => { calls++; throw { code: "not_ready" }; };
+      type("Moss");
+      await save();
+      await wait(2300);
+      out.retryThenFails = sent.length === 2 && isOpen() && err().textContent === "hm, that name didn't stick ♪";
+      // The exits: keep (no call), Escape in the field, the status chip, a swipe, the shared-screen switch,
+      // the pet leaving the baby stage, and another generation.
+      sent.length = 0;
+      s.nameSheetAt = 0;
+      s.status.querySelector(".nameback").click();
+      out.keep = closed() && sent.length === 0;
+      await reopen();
+      s.status.querySelector(".nameinput").dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      out.escape = closed() && sent.length === 0;
+      await reopen();
+      el._toggleStatus(s);
+      out.chip = closed();
+      const n = el._slides.length;
+      if (n > 1) {
+        await reopen();
+        el._go((el._index + 1) % n);
+        const gone = closed();
+        el._go(el._slides.indexOf(s));
+        out.swipe = gone;
+      } else out.swipe = true;
+      await reopen();
+      put("child", gen + 1);
+      await settle();
+      out.child = closed();
+      await reopen("baby");
+      out.baby = isOpen();
+      put("baby", gen + 2);
+      await settle();
+      out.otherGeneration = closed();
+      // Shared screen: the sheet opens and saves there too; the switch closes it.
+      localStorage.setItem("hatch-shared-screen", "on");
+      el._goShared();
+      out.sharedOpens = await reopen();
+      answer = (msg) => ({ name: msg.name });
+      type("Fern");
+      await save();
+      out.sharedSaves = sent.at(-1)?.name === "Fern" && closed();
+      await reopen();
+      localStorage.setItem("hatch-shared-screen", "off");
+      el._goPersonal();
+      out.sharedExit = closed();
+      // A lay that fails to press drops the wait; a lay refused by the server (nothing changes) opens
+      // nothing and the wait is dropped after 30 s, longer while the pet is reloading.
+      put("adult", gen);
+      await settle();
+      layFails = true;
+      await lay();
+      await wait(60);
+      out.failedPress = !s.layAt && closed();
+      layFails = false;
+      window.setTimeout = (fn, ms, ...rest) => { timers.push([fn, ms]); return realTimeout(() => {}, 1e9); };
+      await lay();
+      const expire = timers.find(([, ms]) => ms === 30000);
+      window.setTimeout = realTimeout;
+      out.expiry = !!expire && !!s.layAt;
+      s.reloading = true;
+      expire?.[0]();
+      out.expiryWaitsWhileReloading = !!s.layAt;
+      s.reloading = false;
+      expire?.[0]();
+      out.expires = !s.layAt;
+      // A pet change drops the wait.
+      await lay();
+      el._forget(s);
+      out.petChange = !s.layAt && closed();
+      // The status row: on an egg and a baby, not a child; "change" opens the sheet, keep goes back to the page.
+      const row = async (stage) => {
+        put(stage, gen);
+        if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+        await settle();
+        el._toggleStatus(s);
+        return !!s.status.querySelector(".namechange");
+      };
+      out.rowEgg = await row("egg");
+      const rowText = [...s.status.querySelectorAll(".row")].find((r) => r.querySelector(".namechange"))?.textContent || "";
+      out.rowLines = rowText.startsWith("name") && rowText.endsWith("change") && rowText.includes(el._petName(s));
+      s.status.querySelector(".namechange").click();
+      out.rowOpens = isOpen() && s.nameFrom === "status";
+      s.nameSheetAt = 0;
+      s.status.querySelector(".nameback").click();
+      out.rowKeep = !s.nameSheet && s.screen.classList.contains("show-status") && !!s.status.querySelector(".namechange");
+      out.rowSave = true;
+      s.status.querySelector(".namechange").click();
+      answer = (msg) => ({ name: msg.name });
+      type("Pip2");
+      await save();
+      out.rowSave = !s.nameSheet && s.screen.classList.contains("show-status") && s.status.querySelector(".status-feedback")?.textContent === "Pip2! i like it ♥";
+      out.rowBaby = await row("baby");
+      out.rowChild = !(await row("child"));
+      out.rowAdult = !(await row("adult"));
+      el._toggleStatus(s);
+    } finally {
+      window.setTimeout = realTimeout;
+      el._hass = realHass;
+      localStorage.setItem("hatch-shared-screen", "off");
+      if (had === undefined) delete s.ids["button.lay_egg"];
+      el._layDrop(s);
+      s.nameSheet = false;
+      if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      s.confirm = null;
+      s.drawnSig = null;
+    }
+    return out;
+  });
+  for (const [name, ok] of Object.entries(naming)) check(`settings S3 name sheet: ${name}`, ok === true, JSON.stringify(naming));
   // Answers that wait: a failed save is retried once, then kept on this device.
   const waits = await page.locator("hatch-pet-card").evaluate(async (el) => {
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));

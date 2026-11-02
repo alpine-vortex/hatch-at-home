@@ -102,16 +102,15 @@ async def test_another_pets_name_is_taken_in_any_case(
     client = await hass_ws_client(hass)
     reply = await rename(client, "mOsS")
     assert reply["error"]["code"] == "taken"
-    # A pet titled "Moss" that an admin shows as "Bog" answers to both (Assist
-    # matches either), so neither is free.
+    # A pet titled "Moss" that an admin shows as "Bog" goes by "Bog" (names.py,
+    # UX fix 5): that is taken, and the title it was renamed from is free again.
     dr.async_get(hass).async_update_device(
         device(hass, moss.entry_id).id, name_by_user="Bog"
     )
     await hass.async_block_till_done()
     moss.runtime_data._sync_name()  # the next tick would
     assert moss.runtime_data.state.name == "Bog"
-    for name in ("bog", "Moss"):
-        assert (await rename(client, name))["error"]["code"] == "taken"
+    assert (await rename(client, "bog"))["error"]["code"] == "taken"
     assert config.title == "Pip"
     # Its own current name is fine, and so is a case change of it.
     assert (await rename(client, "Pip"))["result"] == {"name": "Pip"}
@@ -119,7 +118,7 @@ async def test_another_pets_name_is_taken_in_any_case(
     assert config.title == "pip"
 
 
-async def test_a_pet_titled_fern_shown_as_bog_blocks_both(
+async def test_a_pet_titled_fern_shown_as_bog_blocks_bog_only(
     hass: HomeAssistant, now: float, hass_ws_client: Any
 ) -> None:
     await setup(hass)
@@ -132,9 +131,10 @@ async def test_a_pet_titled_fern_shown_as_bog_blocks_both(
     fern.runtime_data._sync_name()
     assert fern.runtime_data.state.name == "Bog"
     client = await hass_ws_client(hass)
-    for name in ("Fern", "Bog"):
-        assert (await rename(client, name))["error"]["code"] == "taken"
-    # Its own names are its own: Fern may keep them (a no-op) while still an egg.
+    assert (await rename(client, "Bog"))["error"]["code"] == "taken"
+    # The title it was renamed from is free (UX fix 5): nobody calls it that now.
+    assert (await rename(client, "Fern"))["success"]
+    # Its own name is its own: it may keep it (a no-op) while still an egg.
     reply = await rename(client, "Bog", "sensor.moss_life_stage")
     assert reply["success"] and fern.title == "Bog"
 
