@@ -739,6 +739,81 @@ The first of each pool is the shipped line, as the dialogue pass s2625 left it.
   further question. #16: the strip gates visitor icons on `findsShown()`, shows only filled
   days, no wish icon. #1: a due follow-up takes the fallback how_day's place.
 
+- **FM on reconcile s2631 (part 2)** (2026-11-01, `reconcile-fresh-expand-p2.md`): all
+  five answers A; its per-slice edits are folded below (*Part 2, as reconciled*). Where they
+  and the slice sections above differ, these win.
+
+## Part 2, as reconciled (s2631; FM answers all A)
+
+### F1 + E13
+
+- **Asking (Q1 A).** On the event's eve a follow-up may take the later slot from the
+  fallback how_day, from an unaskable **or askable** dream/guess, but never from the
+  rotation's own how_day, a came-home how_day or a one-time question. The weekly cap
+  (`FOLLOW_ASK_PER_WEEK = 2`) and "never while an event is open" stay; a race replaces the
+  open record (the race rule only).
+- **First look (Q2 A).** The follow beat reserves one slot as the gift does, ranked after
+  `cured` and before today/away, the L10 line, the trick, the dream callback, the promise
+  and raised. The card reserves it only when the viewer's own `mine.follow_waiting` says a
+  beat may be waiting (an open event of theirs, or this pet's, or a mood), so an ordinary
+  first look keeps its three lines. A fetch that returns `{}` leaves the slot unsaid.
+- **Questions under the budget:** the server asks only when `queued + notes < 3`. Pytest: a
+  visit with `queued = 2` still asks.
+- **Ask record:** `mark_asked(person, today, hour, kind)`; `asked.later_kind`; the phone ask
+  passes `"phone"`. `ANSWERS` gains `how_day: ("tough",)`, `big_day`, `weekend`, `game`,
+  `trick`. `fav_visitor` is checked against the world, not `ANSWERS`.
+- **WS:** `text` is `vol.Optional("text"): object`, cleaned on the server (a bad text is
+  dropped, the answer kept); `shared: true` drops it. Capability: the visit reply's
+  `follow: 1`.
+- **Ask box:** the yes of a text kind (big_day, weekend) is sent once, when the text step
+  ends (ok, skip, empty, the time, a slide switch, the tab hiding). Every other kind keeps
+  the old one-click path.
+- **E13 send:** one `callWS`, no bubble, no stash; never on a shared screen.
+- **Reply:** `{kind, beat, text?, choice?}`; a pet's own kinds (game, trick) only to that pet.
+- **Names:** `FOLLOW_*`, `_follow*`; never `fav` (E8's L10 line owns `FAV_LINES`/`_favLine`).
+- **Tests:** card-check checks pool membership (or a `vm`-pinned day), never an exact
+  rotating line; pytest dates are explicit strings.
+
+### F2 dream stories (Q4 A)
+
+- The first look tells the picked dream's story to everyone, once a day per pet
+  (`dream-<device>`). The asker's server note carries the story: if the first look already
+  told it (the once-key is spent) the note says only the tail ("you": the asker's story,
+  then the tail); if it didn't (a full look), the note tells the story, then the tail, and
+  spends the key. Nobody else's note repeats it.
+- `DREAMS` sees the slide (device, persona); journal, status and link news inherit the
+  story; "you" is the friends line there.
+- The callback day is `turnPick([2, 3, 4], <device>|dreamcb)`.
+
+### F4 favourite visitor
+
+- A one-time question in `ONCE` after `fav_season` (`ASK_LIKES_LEVEL`), per world: its
+  tries are keyed `fav_visitor_<world>`, its answer `likes["visitor_<world>"]`, checked
+  against the pet's world's visitors. Not a follow record.
+- Greet priority: guest/pair (E10) > favourite (F4) > friend (E3) > usual. The favourite
+  needs no sightings; 1 visit in 2 (`Math.random() < 0.5`), on the viewer's own screen.
+- Names: `FAVV_LINES`, not `FAV_LINES`.
+
+### F5-F7
+
+- **F5 weekend:** Friday, by Q1 A's rule; yes → the text step, due Monday until Tuesday.
+- **F6 game:** asked in the later slot; the answer is the choice. The beat is fetched when
+  the picker opens (not at the first look), and the picker leads with the choice over
+  G-a's daily pick and says a game line.
+- **F7 trick (Q5 A):** asked only of an adult with a trick left (`trickMonth < 3`) or a teen
+  (the first), at most once a generation-month per person (in that pet's bond). Shown from
+  day 3 to day 5 at a first look, in the follow slot: the payoff line and a move the pet
+  hasn't learned, in its idle list that day only. Skipped (said, not shown) when LS-a's
+  monthly line was said on that look.
+- Game and trick carry `pet` (the entry id); other pets never get their beat.
+
+### E14 week strip (Q3 A)
+
+- No new `PetState.week`: `state.social`'s day entries gain `dream` (kind), `visit` (the
+  credited visitor's id, at `credit_visit`) and `weather` (rain, snow, sun, storm, fog),
+  validated by `_social`. The strip reads them; visitor icons only when `findsShown()`,
+  only days that hold something, no wish icon. `MOMENTS_KEPT` stays 10.
+
 ## Build log
 
 Branch `crew/hatch-at-home-s2627-fresh-expand-fold-review-build`.
