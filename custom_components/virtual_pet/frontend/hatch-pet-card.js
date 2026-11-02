@@ -395,6 +395,19 @@ function saveStashedAnswers(userId, list) {
 
 let lastChirp = {}; // the last chirp any card played: {card, name, device, at} (see _chirp)
 
+// Every chirp goes through one lowpass at about 3 kHz (UX7 F10): the toy's square beep, less shrill
+// next to the voice's soft triangle babble.
+let chirpBus = null;
+function chirpOut() {
+  if (!chirpBus || chirpBus.context !== audio) {
+    chirpBus = audio.createBiquadFilter();
+    chirpBus.type = "lowpass";
+    chirpBus.frequency.value = 3000;
+    chirpBus.connect(audio.destination);
+  }
+  return chirpBus;
+}
+
 function playChirp(name) {
   const notes = CHIRPS[name];
   if (!notes) return;
@@ -408,9 +421,9 @@ function playChirp(name) {
       osc.type = "square";
       osc.frequency.value = freq;
       gain.gain.setValueAtTime(0, t); // a 5 ms ramp in: a note that starts at full gain clicks (UX7 F7)
-      gain.gain.linearRampToValueAtTime(0.06, t + 0.005);
+      gain.gain.linearRampToValueAtTime(0.05, t + 0.005);
       gain.gain.exponentialRampToValueAtTime(0.001, t + len);
-      osc.connect(gain).connect(audio.destination);
+      osc.connect(gain).connect(chirpOut());
       osc.start(t);
       osc.stop(t + len);
     }
