@@ -520,6 +520,7 @@
       // The journal loads the species names first: wait for its tiles.
       // (Date is pinned, so count the tries instead of reading the clock.)
       for (let n = 0; !root.querySelector(".jgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+      if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight; // the memories line (H7's seasons preset)
     }
     // The journal's "every world ›" page (top10 8a); `journal: {raised: [..]}` sets what's drawn.
     if (shot.view === "everyworld") {

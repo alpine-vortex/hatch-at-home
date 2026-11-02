@@ -3272,6 +3272,9 @@ async function main() {
     ["first_snow", {}, "first snow"],
     ["first_warm", {}, "first warm day"], // fresh-expand E12 (Se-a)
     ["first_fog", {}, "the first fog"],
+    // ha-signals H7: a season's first day says one of its season's two lines.
+    ["season_start", { season: "spring" }, "^(first day of spring! ♪|spring's here! hop hop ♪)$"],
+    ["season_start", { season: "autumn" }, "^(autumn's here! crunchy leaves ♪|first day of autumn ♪)$"],
     ["weather", { change: "cold", temperature: -12 }, "−12°"],
     ["weather", { change: "rainbow" }, "rainbow"],
     ["forecast", { when: "tomorrow", kind: "warmer", high: 72 }, "warmer tomorrow: 72°"],
@@ -3835,20 +3838,23 @@ async function main() {
   check("thunder and wind show on screen", /stormy/.test(screen) && /windy/.test(screen), screen);
   await shot("05-storm");
 
-  // The journal keeps the season's firsts. A pet update can replace the injected
-  // memory (and the journal redraws with it), so inject until it shows.
+  // The journal keeps the season's firsts, and a season's first day (H7). A pet update
+  // can replace the injected memories (and the journal redraws with them), so inject
+  // until they show.
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(500);
   await cur().locator(".jlink").click();
   let memory = false;
   for (let i = 0; i < 3 && !memory; i++) {
     await inject(pet["sensor.life_stage"], {
-      attributes: { memories: [{ kind: "first_snow", at: Date.now() / 1000 }] },
+      attributes: { memories: [{ kind: "first_snow", at: Date.now() / 1000 },
+        { kind: "season_spring", at: Date.now() / 1000 }] },
     });
     await page.waitForTimeout(1000);
-    memory = /first snow/.test(await cur().locator(".status").innerText());
+    const text = await cur().locator(".status").innerText();
+    memory = /first snow/.test(text) && /first day of spring/.test(text);
   }
-  check("the journal shows memories", memory);
+  check("the journal shows memories (first snow, first day of spring)", memory);
   await shot("05-memories");
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);

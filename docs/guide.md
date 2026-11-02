@@ -403,7 +403,7 @@ lay the egg, then rename it.
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline`, `_weight` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. Weight is healthy between 25 and 75. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `reason_key` (which sentence that is, for the card's baby talk), `call_deadline`. |
-| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `memories` (first snow, frost and fog, and the first warm day), `hatches_at` (while an egg), `next_world`, `next_egg`, `journal` (the device's retired pets) and `week` (the journal's strip: days with a dream, a credited visitor or notable weather; kept out of history). |
+| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `memories` (first snow, frost and fog, the first warm day, and each season's first day), `hatches_at` (while an egg), `next_world`, `next_egg`, `journal` (the device's retired pets) and `week` (the journal's strip: days with a dream, a credited visitor or notable weather; kept out of history). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far (attribute `discipline_misses`: fake calls nobody answered). |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them; `moments`: the last 10 things that happened to it, for the card to react to. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
@@ -640,6 +640,9 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
     the first fog of each winter-year (July to June) and the year's first warm day (20 °C
     or more, from March in the north or September in the south, through the six warm
     months; never in the tropics), on the card only.
+  - The first day of each season ("first day of spring! ♪", by your latitude; none in
+    the tropics) is a journal memory, said if the pet is awake in the season's first
+    three days; on the card only.
   - It passes on news an automation tells it ("did you hear? Tamagotchi turns 30!"),
     at most every 30 minutes. See [Sharing news with the pet](#sharing-news-with-the-pet).
 - **Sickness:** health below 25, four care misses in a day, old poop, or being too heavy.

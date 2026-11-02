@@ -139,6 +139,7 @@ MOMENTS = {
     "first_frost",
     "first_warm",
     "first_fog",
+    "season_start",  # with its season: the first day of spring, summer... (H7)
     "news",
     "weather",
     "forecast",
@@ -916,7 +917,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _passing_moments(self, readings: Readings, now: float) -> list[model.Event]:
         """Sunsets, the morning stir, the TV, the weather and its forecast, the
-        season's first snow, frost or fog, and the year's first warm day."""
+        season's first snow, frost or fog, the year's first warm day, and the
+        first day of a season."""
         assert self.state is not None
         state = self.state
         settings = self.settings
@@ -969,6 +971,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             )
         if awake and readings.condition in FOGGY:
             events += model.season_first(state, "fog", now, settings.tz)
+        if awake and (start := P.season_start(local.date(), self.hass.config.latitude)):
+            events += model.season_start(state, *start, now)  # H7
         events += self._forecast_talk(readings, now, awake, minute >= wake)
         if readings.company and any(e["type"] == "sunset" for e in events):
             events += self._grant("sunset", None, now)  # watched it together
