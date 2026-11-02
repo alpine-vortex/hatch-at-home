@@ -1,6 +1,7 @@
 # Card bench
 
-Screenshots of the **real** `hatch-pet-card.js` without Home Assistant: fast
+Screenshots of the **real** `hatch-pet-card.js` (built from `src/card/` by
+`scripts/bench.js` itself) without Home Assistant: fast
 (about 100 ms a shot) and deterministic. For art reviews, shell work and README
 shots. It loads the card unchanged, gives it a fake `hass`, and serves sprites,
 `worlds.json` and fonts from this repo. Nothing leaves localhost.

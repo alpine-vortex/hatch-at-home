@@ -11,6 +11,8 @@
 const { chromium } = require("playwright");
 const path = require("path");
 const fs = require("fs");
+// The card is built from src/card/ (gitignored); rebuild if the parts changed.
+require("./build-card.js").ensureBuilt();
 
 const HA = process.env.HA_URL || "http://localhost:8123";
 const SEASON = process.argv[2] || "halloween";

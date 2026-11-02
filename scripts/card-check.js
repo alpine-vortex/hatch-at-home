@@ -24,6 +24,8 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
+// Every read of the card below (and the page HA serves) is the join of src/card/.
+require("./build-card.js").ensureBuilt();
 
 // 127.0.0.1, not localhost: HA registers a service worker on localhost, and page.route
 // never sees what it serves (the sprite and old-card stand-ins would not apply).

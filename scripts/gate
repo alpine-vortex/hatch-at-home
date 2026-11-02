@@ -100,6 +100,8 @@ stop_ha() {
 }
 trap stop_ha EXIT
 
+# HA serves the card built from src/card/ (scripts/test built it too; this does not lean on that).
+node scripts/build-card.js || { echo "gate: FAIL scripts/build-card.js"; exit 1; }
 "$HASS" --config "$S" >"$LOGS/ha.log" 2>&1 &
 HP=$!
 for _ in $(seq 1 120); do curl -s -o /dev/null "http://127.0.0.1:$PORT/" && break; sleep 2; done

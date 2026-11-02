@@ -416,7 +416,7 @@ async def test_card_url_changes_with_the_card_file(
 
 
 async def test_card_url_falls_back_to_version_without_the_file(
-    hass: HomeAssistant, now: float, tmp_path, monkeypatch
+    hass: HomeAssistant, now: float, tmp_path, monkeypatch, caplog
 ) -> None:
     import custom_components.virtual_pet as vp
 
@@ -424,6 +424,11 @@ async def test_card_url_falls_back_to_version_without_the_file(
     assert (
         await _card_url(hass)
         == f"/virtual_pet/frontend/hatch-pet-card.js?v={vp.VERSION}"
+    )
+    # An unbuilt copy (a git clone) says how to build the card.
+    assert any(
+        r.levelname == "ERROR" and "scripts/build-card.js" in r.getMessage()
+        for r in caplog.records
     )
 
 

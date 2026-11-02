@@ -5,4 +5,5 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p dev/config/custom_components
 ln -sfn ../../../custom_components/virtual_pet dev/config/custom_components/virtual_pet
+node scripts/build-card.js # the card from src/card/; each worktree serves its own build
 exec .venv/bin/hass --config dev/config "$@"

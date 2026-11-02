@@ -8,7 +8,7 @@ const path = require("path");
 const vm = require("vm");
 const { execFileSync } = require("child_process");
 
-const src = fs.readFileSync(path.join(__dirname, "..", "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+const src = require("./card-source");
 const grab = (re) => src.match(re)[0];
 const helpers = [
   grab(/\nconst dayOrdinal = [^\n]*\n/),

@@ -9,7 +9,7 @@ is on. For the full rules and numbers read the [guide](guide.md); this page is t
 change the rows they touch, then re-check the "Where the docs and the code disagree"
 list at the end.
 
-Shorthands: **card** = `custom_components/virtual_pet/frontend/hatch-pet-card.js`;
+Shorthands: **card** = `src/card/` (built into `frontend/hatch-pet-card.js`);
 **model**, **coord**, **rates**, **notify**, **people**, **wellbeing**, **home**,
 **watcher**, **intent** = the `.py` files of the same name in
 `custom_components/virtual_pet/`. "Guide" = [guide.md](guide.md); "How-to" =

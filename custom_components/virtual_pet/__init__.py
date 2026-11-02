@@ -186,6 +186,15 @@ def _card_hash() -> str | None:
     """First 8 hex of the card file's sha256, or None if it can't be read."""
     try:
         return hashlib.sha256(CARD_PATH.read_bytes()).hexdigest()[:8]
+    except FileNotFoundError:
+        # The card is built from src/card/ and gitignored: a copy of
+        # custom_components/ from a branch or a git clone has none.
+        _LOGGER.error(
+            "The card file %s is missing: run `node scripts/build-card.js` in "
+            "the repo, or install the release zip through HACS",
+            CARD_PATH,
+        )
+        return None
     except OSError as err:
         _LOGGER.debug("card hash unavailable, using plain version: %s", err)
         return None

@@ -6,8 +6,7 @@ const assert = require("node:assert");
 const fs = require("fs");
 const path = require("path");
 
-const src = fs.readFileSync(path.join(__dirname, "..", "..", "custom_components", "virtual_pet", "frontend",
-  "hatch-pet-card.js"), "utf8");
+const src = require("./card-source");
 
 test("FINDS_SHOWN ships on, and the static starts from it", () => {
   assert.match(src, /\nconst FINDS_SHOWN = true;\n/);

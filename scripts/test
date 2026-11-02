@@ -2,6 +2,7 @@
 # Lint and run the tests (Python, then the card's node unit tests).
 set -euo pipefail
 cd "$(dirname "$0")/.."
+node scripts/build-card.js # the card from src/card/ (pytest's filters can skip conftest's build)
 .venv/bin/ruff check .
 .venv/bin/ruff format --check .
 .venv/bin/pytest "$@"

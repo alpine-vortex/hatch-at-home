@@ -8,6 +8,8 @@
 const fs = require("fs");
 const path = require("path");
 const { startServer } = require("../dev/bench/server");
+// The card is built from src/card/ (gitignored); rebuild if the parts changed.
+require("./build-card.js").ensureBuilt();
 
 const ROOT = path.join(__dirname, "..");
 const FRONTEND = path.join(ROOT, "custom_components", "virtual_pet", "frontend");

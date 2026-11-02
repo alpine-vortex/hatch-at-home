@@ -10,6 +10,8 @@
 // asleep. SEASONAL=1 shoots the Halloween versions as halloween-<world>.png.
 const { chromium } = require("playwright");
 const path = require("path");
+// The card is built from src/card/ (gitignored); rebuild if the parts changed.
+require("../build-card.js").ensureBuilt();
 const HA = "http://localhost:8123";
 const CLIENT = `${HA}/`;
 const OUT = process.env.OUT || path.join(__dirname, "..", "..", "docs", "readme", "src");

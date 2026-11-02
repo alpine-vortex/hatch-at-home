@@ -7,9 +7,10 @@ Prints the reasoning on stderr and the comma list on stdout, so
 `scripts/gate -- --only "$(scripts/pick-sections)"` runs just those. "all"
 means run everything (or use scripts/ci-gate).
 
-How: the card's changed lines give methods (the one each hunk sits in, and any
+How: the changed lines of the card's parts (src/card/*.js) give methods (the one each hunk sits in, and any
 `_name` or CONSTANT on the line); a section that mentions one is picked. A
-method no section mentions is traced to the methods that call it, once.
+method no section mentions is traced to the methods that call it, once
+(searched in all the parts, joined in manifest order).
 A helper a changed line only calls (not one whose body changed) counts only
 if a few sections use it, so a call to _state doesn't pick everything.
 Changes in card-check itself pick the sections whose lines changed. Python
@@ -20,7 +21,8 @@ import re
 import subprocess
 import sys
 
-CARD = "custom_components/virtual_pet/frontend/hatch-pet-card.js"
+CARD = "custom_components/virtual_pet/frontend/hatch-pet-card.js"  # built, gitignored
+PARTS = "src/card/"
 CHECK = "scripts/card-check.js"
 NARROW = 4  # a helper a changed line only calls counts if this few sections use it
 base = sys.argv[1] if len(sys.argv) > 1 else "origin/main"
@@ -57,6 +59,24 @@ def changed_lines(path):
     return out
 
 
+def method_at(lines):
+    """The class method each line sits in (None outside one)."""
+    out, cur = [], None
+    for line in lines:
+        if m := re.match(r"  (?:async )?(_\w+)\(.*\) \{$", line):
+            cur = m.group(1)
+        out.append(cur)
+    return out
+
+
+def joined():
+    """The parts' lines in manifest order: the card without its build header."""
+    out = []
+    for name in open(PARTS + "manifest.txt").read().split():
+        out += open(PARTS + name).read().split("\n")[:-1]
+    return out
+
+
 picked = set()
 everything = False
 for f in files:
@@ -71,19 +91,26 @@ for f in files:
             everything = True
         picked |= hit
     elif f == CARD:
-        card = open(CARD).read().split("\n")
-        method_at = []
-        cur = None
-        for line in card:
-            if m := re.match(r"  (?:async )?(_\w+)\(.*\) \{$", line):
-                cur = m.group(1)
-            method_at.append(cur)
+        say(f"  {f}: the card before src/card/ -> all")
+        everything = True
+    elif f in (PARTS + "manifest.txt", ".gitignore", ".git-blame-ignore-revs"):
+        say(f"  {f}: not card code")
+    elif f.startswith(PARTS) and f.endswith(".js"):
+        try:
+            card = open(f).read().split("\n")
+        except FileNotFoundError:
+            say(f"  {f}: part removed -> all")
+            everything = True
+            continue
+        at = method_at(card)
+        whole = joined()
+        whole_at = method_at(whole)
         own = set()  # methods whose body changed: they and their callers count
         used = set()  # names a changed line only mentions: they count if narrow
         for n in changed_lines(f):
             if 0 < n <= len(card):
-                if method_at[n - 1]:
-                    own.add(method_at[n - 1])
+                if at[n - 1]:
+                    own.add(at[n - 1])
                 used |= set(re.findall(r"\b(_[a-z]\w+|[A-Z][A-Z0-9_]{3,})\b", card[n - 1]))
         used -= own | {"_hass", "_slides", "_index", "_config"}
         for name in sorted(own | used):
@@ -93,7 +120,7 @@ for f in files:
                 say(f"  {name}: only called here, used by {len(hit)} sections: skipped")
                 continue
             if not hit and name in own:
-                callers = {method_at[i] for i, line in enumerate(card) if f"this.{name}(" in line and method_at[i]}
+                callers = {whole_at[i] for i, line in enumerate(whole) if f"this.{name}(" in line and whole_at[i]}
                 hit = {s for s, t in text.items() for c in callers if re.search(rf"\b{c}\b", t)}
                 via = f" (via {', '.join(sorted(callers))})" if callers else ""
             if hit:

@@ -7,7 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const vm = require("vm");
 
-const src = fs.readFileSync(path.join(__dirname, "..", "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+const src = require("./card-source");
 const ctx = {};
 vm.runInNewContext(`${src.match(/\nfunction sleepLine\([\s\S]*?\n\}\n/)[0]}\nthis.sleepLine = sleepLine;`, ctx);
 const { sleepLine } = ctx;

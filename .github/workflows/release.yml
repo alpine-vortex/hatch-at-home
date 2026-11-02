@@ -32,8 +32,17 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
       # HACS downloads this one zip (hacs.json zip_release) instead of fetching
       # thousands of files one by one, which left a half-installed 0.36.0.
+      # The card is built from src/card/ (gitignored, so a checkout has none).
+      - name: Build the card
+        run: node scripts/build-card.js
       - name: Zip the integration
         run: cd custom_components/virtual_pet && zip -qr "$GITHUB_WORKSPACE/virtual_pet.zip" . -x '__pycache__/*' '*/__pycache__/*'
+      # A wrong entry name gives an empty file, which passes --check: the size test bites.
+      - name: The zip holds the card
+        run: |
+          unzip -p virtual_pet.zip frontend/hatch-pet-card.js > "$RUNNER_TEMP/card.js"
+          node --check "$RUNNER_TEMP/card.js"
+          test "$(wc -c < "$RUNNER_TEMP/card.js")" -gt 100000
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}

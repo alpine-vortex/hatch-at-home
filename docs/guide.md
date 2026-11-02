@@ -1108,12 +1108,17 @@ creates two pets if there are none. It then checks the shelf, status and journal
 screens, a full game, the reactions to moments, the egg's frames and the card editor,
 and saves screenshots to `dev/card-check/`.
 
+The card is built: `src/card/*.js` are joined into
+`custom_components/virtual_pet/frontend/hatch-pet-card.js`, which git does not track.
+The scripts above build it themselves; a copy of `custom_components/` from a branch or
+a clone has no card until you run `node scripts/build-card.js` (the release zip has it).
+
 `dev/config/configuration.yaml` has stand-in entities (fake weather, lux,
 indoor temperature, AQI, motion, presence and music) for the home-awareness
 phases.
 
 To release: bump the version in `const.py`, `manifest.json` and
-`frontend/hatch-pet-card.js` and push. Then on GitHub open Actions → Release →
+`src/card/prefs.js` (`VERSION`; `BOOT_VERSION` lives there too) and push. Then on GitHub open Actions → Release →
 Run workflow. It tags that commit with the manifest's version and publishes a
 GitHub release, which is what HACS offers as an update. (Pushing a tag like
 `v0.6.1` does the same.) The Validate workflow runs
