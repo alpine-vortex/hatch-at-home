@@ -2256,11 +2256,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             lambda user: self.bond_for(user)[1],
         )
 
-    def _call_day(self) -> date:
-        """The local day the standing call started (its phrasing's day, so a re-call
-        after midnight reads as the call did), else today."""
+    def _call_day(self, event_type: str = "call_started") -> date:
+        """The local day a notification's phrasing uses. A call's is the day the
+        standing call started (so a re-call after midnight reads as the call did);
+        any other event, even with an older call still open (a pet that fell sick
+        asleep and woke by hand next day), speaks today. No call: today."""
         call = self.state.call if self.state else None
-        when = call.started if call else self._now()
+        when = call.started if call and event_type == "call_started" else self._now()
         return dt_util.as_local(dt_util.utc_from_timestamp(when)).date()
 
     def update_recalls(self, started: str | None = None) -> None:
@@ -2313,7 +2315,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._call_notified = False
             self._send(users, "clear_notification", notify.call_tag(self.pet_id))
         text = notify.message(
-            event, self.state.name, self.species_names, self._call_day()
+            event, self.state.name, self.species_names, self._call_day(event["type"])
         )
         if text is None:
             return

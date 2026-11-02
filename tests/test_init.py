@@ -3602,6 +3602,33 @@ async def test_a_call_keeps_its_start_days_phrasing_past_midnight(
     assert coordinator._call_day() == dt_util.now().date()
 
 
+async def test_became_sick_speaks_today_not_an_older_open_calls_day(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    # Audit 0.43.0 F-04: a pet sick while asleep across midnight, woken by hand
+    # next day, still holds its paused call from the day before; the sickness
+    # message is today's phrase, while that call's own re-call keeps its day.
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    phone = await _notified(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    started = now - 15 * 3600  # 23:00 the day before
+    coordinator.state.call = model.Call("hunger", started, started + 3600)
+    today = dt_util.now().date()
+    before = coordinator._call_day()
+    assert before != today
+    assert notify.call_line("sick", "Pip", before) != notify.call_line(
+        "sick", "Pip", today
+    )
+    coordinator._notify({"type": "became_sick", "cause": "poop"}, False)
+    await hass.async_block_till_done()
+    assert [c.data["message"] for c in phone] == [
+        notify.call_line("sick", "Pip", today)
+    ]
+    assert coordinator._call_day("became_sick") == today
+    assert coordinator._call_day() == before  # call_started keeps the call's day
+
+
 async def test_a_poop_call_sends_no_push(
     hass: HomeAssistant,
     now: float,
