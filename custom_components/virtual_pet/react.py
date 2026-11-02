@@ -15,6 +15,7 @@ security signal, not a moment.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from .const import (
@@ -228,9 +229,18 @@ def counts(
     return False
 
 
-def is_native(category: str, source: str | None, options: dict[str, Any]) -> bool:
-    """H3 (heating, cooling) or H6 (appliances) already watches this entity: its
-    own moment says it, so the house moment steps aside (no double bubble)."""
+def is_native(
+    category: str,
+    source: str | None,
+    options: dict[str, Any],
+    doorbells: Iterable[str] = (),
+) -> bool:
+    """H3 (heating, cooling), H5 (a watched doorbell) or H6 (appliances) already
+    watches this entity: its own moment says it, so the house moment steps aside
+    (no double bubble). doorbells: the doorbells the pet listens to (none when
+    notice_doorbell is off)."""
+    if source and source in doorbells:
+        return True
     option = CATEGORIES.get(category, {}).get("native")
     if not option or not source:
         return False

@@ -56,6 +56,7 @@ from .const import (
     CONF_MUSIC,
     CONF_NEW_PET,
     CONF_NEXT_WORLD,
+    CONF_NOTICE_DOORBELL,
     CONF_NOTICE_ROBOT,
     CONF_PRIVACY,
     CONF_RAIN,
@@ -320,6 +321,7 @@ class PetOptionsFlow(OptionsFlowWithReload):
                     None,
                 ),
                 (CONF_NOTICE_ROBOT, BooleanSelector(), True),
+                (CONF_NOTICE_DOORBELL, BooleanSelector(), True),
                 (
                     CONF_APPLIANCES,
                     _entities(["binary_sensor", "sensor", "switch"], True),

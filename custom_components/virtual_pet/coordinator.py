@@ -111,7 +111,7 @@ from .home import (
 )
 from .react import counts as react_counts, is_native as react_native
 from .species import load_catalog
-from .watcher import Watcher, daily_forecast
+from .watcher import Watcher, daily_forecast, doorbell_rang
 
 type PetConfigEntry = ConfigEntry[PetCoordinator]
 
@@ -191,6 +191,7 @@ SENSES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("heater", (CONF_HEATING,)),
     ("fan", (CONF_COOLING,)),
     ("robot", ()),  # every vacuum in the house, unless notice_robot is off
+    ("doorbell", ()),  # every doorbell event entity, unless notice_doorbell is off
     ("machines", (CONF_APPLIANCES,)),
     ("moon", (CONF_MOON_PHASE, CONF_MOON_ILLUMINATION, CONF_MOON_ALTITUDE)),
 )
@@ -276,6 +277,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._damage_backup: str | None = None  # a damaged save's copy, once
         # Last calculation, for the diagnostic sensor.
         self.debug: dict[str, Any] = {}
+        self._bells: tuple[str, ...] = ()  # snapshot taken in _listen
         # Recent events for the card to react to, newest first (not saved).
         self.moments: list[dict[str, Any]] = []
         # The private channel (virtual_pet/subscribe), in memory only: each
@@ -395,6 +397,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             if kind == "moon"
             or any(options.get(k) for k in keys)
             or (kind == "robot" and self.watcher.robot_ids())
+            or (kind == "doorbell" and self._bells)
         ]
 
     @property
@@ -750,6 +753,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 async_track_state_change_event(self.hass, list(movers), phone_moved)
             )
 
+        # One snapshot: the listener, the senses and react's "native" all use
+        # it, so a bell added after start is unheard everywhere until a reload.
+        self._bells = tuple(self.watcher.doorbell_ids())
+        if self._bells:
+            self.config_entry.async_on_unload(
+                async_track_state_change_event(
+                    self.hass, list(self._bells), self._doorbell_pressed
+                )
+            )
+
         if persons := self.hass.states.async_entity_ids("person"):
             self.config_entry.async_on_unload(
                 async_track_state_change_event(self.hass, persons, person_moved)
@@ -775,6 +788,20 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 self.config_entry.async_create_background_task(
                     self.hass, self._async_chores_changed(entity_id), f"{DOMAIN} chores"
                 )
+
+    @callback
+    def _doorbell_pressed(self, event: Event[EventStateChangedData]) -> None:
+        """A doorbell's own state change (H5): the press is judged here, on the
+        old and new state, and goes no further than the live channel. It is
+        never read into Readings, saved, put in debug or diagnostics, or logged."""
+        if self.state is None or not doorbell_rang(
+            event.data["old_state"], event.data["new_state"], self._now()
+        ):
+            return
+        # No _advance, _save or _publish: each would stamp the press instant
+        # (last_updated, last_tick, a sensor rewrite) where diagnostics and the
+        # recorder can read it. The tick stays on its own 5-minute grid.
+        self._fire(self.house_moments.doorbell(self._now(), self._awake()))
 
     async def _completed_chores(self, entity_id: str) -> set[str] | None:
         """IDs of the list's completed items, or None if it can't be read."""
@@ -2660,6 +2687,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             keys = ("category", "reaction", "text")
             self._say_live({"type": "house_live"} | _pick(event, keys) | {"at": at})
             return
+        if kind == "doorbell_live":
+            self._say_live({"type": kind, "at": at})
+            return
         if kind == "news" and hushed:
             keys = ("headline", "topic")
             self._say_live({"type": "news_live"} | _pick(event, keys) | {"at": at})
@@ -2874,7 +2904,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return "ignored"
         now = self._now()
         self._advance(now)
-        if react_native(category, source, dict(self.config_entry.options)):
+        if react_native(
+            category,
+            source,
+            dict(self.config_entry.options),
+            list(self._bells),
+        ):
             result = "native"
         elif model.life_stage(self.state) == "egg":
             result = "egg"
