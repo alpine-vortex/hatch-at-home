@@ -41,6 +41,8 @@ const COPY_TABLES = {
   DREAM_STORIES: {},
   DREAM_TAIL: {},
   DREAM_CALLBACK: {},
+  BIG_DAY: { fill: "it", asks: ["q", "what"] },
+  SOFT_MORNING: {},
 };
 
 function lines(value, path, out) {

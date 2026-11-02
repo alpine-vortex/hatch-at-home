@@ -1007,6 +1007,7 @@ const withName = (line, name) => (name ? line.replace(/([!?.]*)(\s*♥)?$/, `, $
 // A key or stage that isn't here keeps its normal line. A function takes the
 // name or food; names are never rewritten. Only call lines may ask.
 const BABY = {
+  "soft": { baby: ["*snuggle* hi hi ♥"] }, // E13's softer morning
   "greet": { baby: [(n) => `hi hi, ${n}!`, (n) => `${n}!! hi hi!`] },
   "greet.warm": { baby: [(n) => `${n}!! ♥`, (n) => `yay yay, ${n}!`] },
   "greet.nickname": { baby: [(n) => `hi hi, ${n}!`, (n) => `${n}!! ♥`, (n) => `my ${n}!! yay yay`] },
@@ -1260,7 +1261,8 @@ const PERSONA = {
 // PERSONA_FRESH: each type's lines for the new keys, merged into PERSONA below.
 // pat (P-a): a spoken pat while content or excited; praise (P-c): in place of "♥";
 // game_win / game_lose (G-c): after a game's count line; reply_* (Q-a): how_day's answers;
-// dream_<pick> (F2): the type's own story of a picked dream, with DREAM_STORIES' shared two.
+// dream_<pick> (F2): the type's own story of a picked dream, with DREAM_STORIES' shared two;
+// bigday_am / bigday_pm (F1): a big day's morning and evening; soft (E13): a softer morning.
 const PERSONA_FRESH = {
   mellow: {
     pat: ["mm, right there ♪", "*melts a little* ahh ♥"],
@@ -1272,6 +1274,8 @@ const PERSONA_FRESH = {
     reply_tough: ["*leans on you* I'm here ♥"],
     dream_stars: ["I napped on a star all night ★"], dream_sea: ["I floated on the sea all night ♪"],
     dream_snacks: ["I dreamed I napped in a soft bun ♪"], dream_you: ["we napped in the sun in my dream ♥"],
+    bigday_am: ["deep breath... you'll be ok ♥"], bigday_pm: ["phew, big day. sit with me ♥"],
+    soft: ["let's go slow and easy today ♥", "mm, a soft day for you ♥"],
   },
   sweet: {
     pat: ["aw, you ♥", "that's so nice ♥ hehe"],
@@ -1283,6 +1287,8 @@ const PERSONA_FRESH = {
     reply_tough: ["*sits close* I'm here ♥"],
     dream_stars: ["I dreamed a star tucked me in ★"], dream_sea: ["I dreamed a seal gave me a hug ♥"],
     dream_snacks: ["I dreamed I shared cake with friends ♥"], dream_you: ["I dreamed we held paws all night ♥"],
+    bigday_am: ["sending you a big hug for today ♥"], bigday_pm: ["a hug for after your big day ♥"],
+    soft: ["I saved you a hug today ♥", "a softer day for you, I hope ♥"],
   },
   bouncy: {
     pat: ["hee! that tickles!", "pat pat! hup! ♪"],
@@ -1294,6 +1300,8 @@ const PERSONA_FRESH = {
     reply_tough: ["*hops over softly* I'm here ♥"],
     dream_stars: ["I bounced right up to the stars!"], dream_sea: ["I surfed a giant wave! wheee!"],
     dream_snacks: ["I dreamed of a snack race! I won!"], dream_you: ["we raced in my dream! you won! ♥"],
+    bigday_am: ["big day! hup hup, go go! ♥"], bigday_pm: ["big day over! rest those paws ♥"],
+    soft: ["*gentle hop* morning, pal ♥", "let's have an easy day, pal ♥"],
   },
   starry: {
     pat: ["a pat for the star! ★", "my favourite kind of applause ★"],
@@ -1305,6 +1313,8 @@ const PERSONA_FRESH = {
     reply_tough: ["you're my star anyway ★"],
     dream_stars: ["I dreamed the stars gave me a bow ★"], dream_sea: ["the sea sang me a song in my dream ★"],
     dream_snacks: ["a cake threw me a party ★"], dream_you: ["you were my co-star last night ★"],
+    bigday_am: ["today's your big show! ★"], bigday_pm: ["curtain's down. you showed up ★"],
+    soft: ["today, you're the star ★", "here's to a brighter show today ★"],
   },
   old_soul: {
     pat: ["hm. that's rather nice.", "ah. just the thing."],
@@ -1316,6 +1326,8 @@ const PERSONA_FRESH = {
     reply_tough: ["hm. sit with me a while ♥"],
     dream_stars: ["I dreamed I counted the stars. hm."], dream_sea: ["I dreamed of a quiet, wide sea."],
     dream_snacks: ["I dreamed of soup. it was good."], dream_you: ["we had tea in my dream. nice ♥"],
+    bigday_am: ["steady on today, friend."], bigday_pm: ["hm. a long day. rest now."],
+    soft: ["hm. a kinder day ahead.", "take today slowly, friend."],
   },
   fancy: {
     pat: ["how very kind ♥", "mind the fluff! ♥ hehe"],
@@ -1327,6 +1339,8 @@ const PERSONA_FRESH = {
     reply_tough: ["come here, darling ♥"],
     dream_stars: ["I dreamed I wore a star crown ★"], dream_sea: ["I dreamed of a pearl just my size ♥"],
     dream_snacks: ["I dreamed of a fancy tea party ♥"], dream_you: ["we went to a ball in my dream ♥"],
+    bigday_am: ["go shine today, darling ♥"], bigday_pm: ["feet up, darling. what a day ♥"],
+    soft: ["a gentle day, darling ♥", "only nice things today ♥"],
   },
   charming: {
     pat: ["oh, how delightful ♥", "a splendid pat, thank you"],
@@ -1338,6 +1352,8 @@ const PERSONA_FRESH = {
     reply_tough: ["tea and a cuddle, then ♥"],
     dream_stars: ["I danced with a comet last night ★"], dream_sea: ["I sailed a teacup across the sea ♪"],
     dream_snacks: ["I dreamed of a grand snack ball ♥"], dream_you: ["we waltzed all night in my dream ♥"],
+    bigday_am: ["go on, have a splendid day ♥"], bigday_pm: ["here's to you, big day and all ♥"],
+    soft: ["a lovely day to you ♥", "here's to a kinder day ♥"],
   },
   plucky: {
     pat: ["hah! good pat ♥", "heh, not bad at all ♥"],
@@ -1349,6 +1365,8 @@ const PERSONA_FRESH = {
     reply_tough: ["I've got you. *hug* ♥"],
     dream_stars: ["I raced a shooting star. I won! ★"], dream_sea: ["I dreamed I steered a big ship! hah"],
     dream_snacks: ["I climbed a mountain of muffins! hah"], dream_you: ["we were a team in my dream! hah ♥"],
+    bigday_am: ["go get 'em today! hah ♥"], bigday_pm: ["you faced your big day! rest up ♥"],
+    soft: ["fresh day, fresh start ♥", "I'm on your side today ♥"],
   },
 };
 // P-b: now and then a spoken pat finds the sweet spot (any stage but a baby).
@@ -1463,6 +1481,23 @@ const DREAM_CALLBACK = {
   sea: "I keep thinking of my sea dream ♪",
   snacks: "that snack dream... yum ♪",
 };
+// F1 big day (B7a): the question, its replies, the optional typed answer ({it}: their
+// words, cut to 20), and the due day's morning and evening lines, with the text or not.
+// Warm either way: never "you did it".
+const BIG_DAY = {
+  q: "big day tomorrow?",
+  yes: ["ooh! I'll cheer for you ♥"],
+  no: ["a cozy one, then ♪"],
+  what: "what is it?",
+  kept: "ok! I'll remember ♥",
+  amText: [(it) => `good luck with ${it}! ♥`, (it) => `it's ${it} day! go go ♥`, (it) => `cheering you on: ${it} ♥`],
+  am: ["good luck today! ♥", "big day! I'm cheering for you ♥", "you've got this today ♥"],
+  pmText: [(it) => `hugs after ${it} ♥`, (it) => `${it} is done. rest up ♥`, (it) => `hugs, however ${it} went`],
+  pm: ["big day done. come rest ♥", "however it went, I'm here ♥", "I saved you a cozy spot ♥"],
+};
+// E13: the morning after a tough day, on the answerer's own screen, once. It names nothing.
+const SOFT_MORNING = ["hope today's a softer one ♥", "I'm right here today ♥", "a gentle day to you ♥",
+  "I saved you a cozy spot ♥"];
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -1500,11 +1535,21 @@ const short = (text, max = 30) => {
   return chars.length > max ? `${chars.slice(0, max - 1).join("").trimEnd()}…` : text;
 };
 const WELCOME_SAME_ARRIVAL_MS = 10 * 60 * 1000; // pets' reports this close: one arrival
+// F1: a typed answer as sent and said: control and format characters gone, whitespace
+// collapsed, at most FOLLOW_TEXT_MAX code points (the server cleans it again). Null if empty.
+const FOLLOW_TEXT_MAX = 20;
+const FOLLOW_EVENING_HOUR = 17; // a big day's evening beat could be due from here
+const cleanTyped = (value) => {
+  const kept = String(value ?? "").replace(/\p{C}/gu, "").replace(/\s+/g, " ").trim();
+  return Array.from(kept).slice(0, FOLLOW_TEXT_MAX).join("").trim() || null;
+};
 // Questions the pet asks; the server picks which and when (visit's "ask"), so
 // the daily limit holds across pets and devices. "keep" answers go back to the
 // server (virtual_pet/answer); the others stay on the card.
 const ASK_MS = 60000; // a question stays this long (it was not asked for, so focus stays put)
 const QUESTIONS = {
+  // F1: asked the evening before (Sun-Thu); "yes" opens the optional typed answer.
+  big_day: { q: BIG_DAY.q, answers: { yes: BIG_DAY.yes, no: BIG_DAY.no } },
   how_day: { q: "how was your day?", answers: {
     great: ["yay!! that makes me so happy ♥", "a great day! tell me everything! ♥"],
     ok: ["ok days are good days too ♥", "I'm glad you're here now ♥"],
@@ -3265,6 +3310,8 @@ const STYLE = `
   .screen .askday { position: absolute; left: 0; right: 0; bottom: 3%; display: flex; gap: 8px;
     flex-wrap: wrap; justify-content: center; z-index: 3; margin: 0 auto; }
   .screen .askday.many { max-width: 236px; } /* three a row at most */
+  .screen .askday.asktext input { font: inherit; font-size: 16px; min-height: 44px; width: 9.5em; max-width: 46%;
+    border-radius: 14px; border: 2px solid #3a2a1a; padding: 2px 10px; box-sizing: border-box; } /* F1; 16 px: no iOS zoom */
   .compact .screen .askday { gap: 4px; bottom: 2%; }
   .compact .screen .askday.many { max-width: 100%; }
   .compact .screen .askday button, .compact .screen .askday select { min-height: 44px; min-width: 44px;
@@ -5215,6 +5262,10 @@ class HatchPetCard extends HTMLElement {
         s.propUntil = 0;
       }
       if (s.sayUntil && Date.now() > s.sayUntil) s.sayUntil = 0;
+      // F1: the typed step ends (with no text) on a slide switch, a hidden tab or its time.
+      if (s.textStep && (document.hidden || s !== this._slides[this._index] || Date.now() > s.textStep.until)) {
+        this._askTextEnd(s);
+      }
       this._patSync(s);
       this._basketSync(s);
       if (s === this._slides[this._index]) {
@@ -5222,6 +5273,7 @@ class HatchPetCard extends HTMLElement {
         this._powerTick(s);
         this._firstLook(s); // before the visit: it tells the server what's queued
         this._giftReturn(s);
+        this._followEvening(s);
         this._visit(s);
         if (!this._booting) {
           this._sayQueued(s);
@@ -6113,7 +6165,9 @@ class HatchPetCard extends HTMLElement {
     // Then a gift waiting for the viewer (visitors v2 §5): its slot is kept here, as the
     // reply that says it is async; it wins over the missed visitor (review Q3).
     const gift = this._giftDue(s) && lines.length < FIRST_LOOK_LINES;
-    const room = FIRST_LOOK_LINES - (gift ? 1 : 0);
+    // And a follow-up beat for the viewer (F1, E13): its slot kept the same way.
+    const follow = this._followWanted(s) && lines.length < FIRST_LOOK_LINES - (gift ? 1 : 0);
+    const room = FIRST_LOOK_LINES - (gift ? 1 : 0) - (follow ? 1 : 0);
     // Very last, flavour: today's visitor came and went with nobody here to see it
     // (its window over, the day's visit flag unset). Said once, and the flag used up,
     // so the visit can't also play; only with room, so it never pushes a line out.
@@ -6130,6 +6184,137 @@ class HatchPetCard extends HTMLElement {
     s.lateVisit = this._visitorLate(s) ? { left: Math.max(Math.min(lines.length, FIRST_LOOK_LINES) - 1, 0), made: Date.now() } : null;
     s.giftAgain = false; // this look is the one a tab coming back would have had
     if (gift) this._giftTake(s);
+    if (follow) this._followFetch(s);
+  }
+
+  // --- Follow-ups (fresh-expand F1, E13) ------------------------------------------
+  // The viewer's own: never on a shared screen. The text they type is sent once over the
+  // websocket (never a service, so never on the bus), said back only in the reply to
+  // them, and written as text. Nothing of it is kept in this browser.
+
+  _followWanted(s) {
+    return !sharedScreen() && !!this._hass?.user && !!s.ids?.["sensor.life_stage"] && !s.following;
+  }
+
+  // One virtual_pet/follow: the server marks the beat said for this person (their other
+  // screens get {}). An older server has no command: nothing is said.
+  async _followFetch(s) {
+    const entity = s.ids?.["sensor.life_stage"];
+    if (!this._followWanted(s)) return;
+    s.following = true;
+    if (new Date().getHours() >= FOLLOW_EVENING_HOUR) s.followEve = new Date().toDateString();
+    let reply = null;
+    try {
+      reply = await this._hass.callWS({ type: "virtual_pet/follow", entity_id: entity });
+    } catch (err) {
+      reply = null; // an older server: no follow-ups
+    }
+    s.following = false;
+    if (!reply?.kind || sharedScreen() || s.ids?.["sensor.life_stage"] !== entity) return;
+    const line = this._followLine(s, reply);
+    if (!line) return;
+    const soft = reply.kind === "soft";
+    this._queue(s, line, 5000, {
+      personal: true, type: "follow", still: () => !sharedScreen(),
+      then: soft && !calm() ? () => this._bondHearts(s) : undefined,
+    });
+  }
+
+  // Once at the first tick from FOLLOW_EVENING_HOUR on a day (a big day's evening beat).
+  _followEvening(s) {
+    if (!s.lookedFirst || s.asleep || new Date().getHours() < FOLLOW_EVENING_HOUR) return;
+    if (s.followEve === new Date().toDateString() || !this._followWanted(s) || !this._channelHeard(s)) return;
+    this._followFetch(s);
+  }
+
+  // A beat's line: E13's soft morning (the type's 2 and the shared 4; a baby's own), or
+  // a big day's morning or evening, with their words or the type's and the shared 3.
+  _followLine(s, reply) {
+    const device = s.ids?.device;
+    const type = PERSONA[this._typeKey(s)] || {};
+    if (reply.kind === "soft") {
+      const baby = this._babySet(s, "soft");
+      return baby ? pick(baby) : turnPick([...(type.soft || []), ...SOFT_MORNING], `${device}|soft`);
+    }
+    if (reply.kind === "big_day" && (reply.beat === "morning" || reply.beat === "evening")) {
+      const am = reply.beat === "morning";
+      const it = cleanTyped(reply.text);
+      const salt = `${device}|bigday|${reply.beat}`;
+      if (it) return turnPick(am ? BIG_DAY.amText : BIG_DAY.pmText, salt)(it);
+      return turnPick([...((am ? type.bigday_am : type.bigday_pm) || []), ...(am ? BIG_DAY.am : BIG_DAY.pm)], salt);
+    }
+    return null;
+  }
+
+  // A follow-up answer, fire and forget: only to a server that takes them, never on a
+  // shared screen, never stashed or retried.
+  _sendFollow(s, entity, question, answer, text = null) {
+    if (!this._followOk || sharedScreen() || !entity) return;
+    const msg = { type: "virtual_pet/answer", entity_id: entity, question, answer };
+    if (text) msg.text = text;
+    this._hass.callWS(msg).catch(() => {});
+  }
+
+  // After a big day's "yes": "what is it?", then one input with "ok" and "skip". However
+  // it ends (ok, skip, empty, the time, a slide switch, the tab hiding) the "yes" is sent
+  // once, with the text only if there is one.
+  _askTextStart(s, entity) {
+    if (!this._followOk || sharedScreen()) {
+      this._sendFollow(s, entity, "big_day", "yes");
+      return;
+    }
+    const step = s.textStep = { entity, sent: false, until: Date.now() + ASK_MS * 2 };
+    s.asking = true;
+    (s.queue ??= []).push({ text: BIG_DAY.what, ms: ASK_MS, ask: true, cls: KEPT, perk: true, then: () => this._askText(s, step) });
+  }
+
+  _askText(s, step) {
+    if (s.textStep !== step || s.ids?.["sensor.life_stage"] !== step.entity || sharedScreen()) {
+      this._askTextEnd(s);
+      return;
+    }
+    s.screen.querySelector(".askday")?.remove();
+    const box = document.createElement("div");
+    box.className = "askday asktext";
+    box.setAttribute("role", "group");
+    box.setAttribute("aria-label", BIG_DAY.what);
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = FOLLOW_TEXT_MAX;
+    input.autocomplete = "off";
+    input.setAttribute("enterkeyhint", "done");
+    input.setAttribute("aria-label", BIG_DAY.what);
+    const ok = document.createElement("button");
+    ok.textContent = "ok";
+    const skip = document.createElement("button");
+    skip.textContent = "skip";
+    // Nothing typed here reaches the screen behind, or HA's own shortcuts (e, c, a, m).
+    for (const type of ["click", "change", "pointerdown", "pointerup", "keydown", "keyup", "keypress"]) {
+      box.addEventListener(type, (e) => e.stopPropagation());
+    }
+    ok.addEventListener("click", () => this._askTextEnd(s, cleanTyped(input.value), true));
+    skip.addEventListener("click", () => this._askTextEnd(s, null, true));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") this._askTextEnd(s, cleanTyped(input.value), true);
+    });
+    box.append(input, ok, skip);
+    s.screen.append(box);
+    step.box = box;
+    step.until = Date.now() + ASK_MS + 1000;
+    step.timer = setTimeout(() => this._askTextEnd(s), ASK_MS);
+  }
+
+  _askTextEnd(s, text = null, said = false) {
+    const step = s.textStep;
+    if (!step || step.sent) return;
+    step.sent = true;
+    s.textStep = null;
+    step.box?.remove();
+    clearTimeout(step.timer);
+    s.asking = false;
+    if (s.queue?.length) s.queue = s.queue.filter((q) => q.text !== BIG_DAY.what || !q.ask);
+    this._sendFollow(s, step.entity, "big_day", "yes", text);
+    if (said && s.ids?.["sensor.life_stage"] === step.entity) this._speak(s, BIG_DAY.kept, 3500);
   }
 
   // --- Gifts (plan visitors v2 §5) ----------------------------------------------
@@ -6224,6 +6409,7 @@ class HatchPetCard extends HTMLElement {
     if (!s.species || s.asleep || away || this._eggMinutes(this._state(s, "sensor.life_stage")) !== null) return;
     s.giftAgain = false;
     if (this._giftDue(s)) this._giftTake(s);
+    if (this._followWanted(s)) this._followFetch(s); // F1: a beat may be due now
   }
 
   // Each "came home" is welcomed once in this browser, by any pet (seen live,
@@ -6491,7 +6677,7 @@ class HatchPetCard extends HTMLElement {
       Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS || this._resumeHeld()) return;
     s.visitedAt = Date.now();
     // Only kept lines count: a waiting beat or flavour may yet be dropped.
-    const queued = Math.min((s.queue || []).filter((q) => lineClass(q) >= KEPT).length, 6);
+    const queued = Math.min((s.queue || []).filter((q) => lineClass(q) >= KEPT).length + (s.following ? 1 : 0), 6);
     this._hass.callService("virtual_pet", "visit", { entity_id: id, queued }, undefined, false, true)
       .then((res) => {
         const reply = res?.response || {};
@@ -6506,6 +6692,7 @@ class HatchPetCard extends HTMLElement {
         if (typeof reply.baby_talk === "boolean") setBabyTalk(this._hass.user?.id, reply.baby_talk);
         if (typeof reply.birthday_kept === "boolean") this._birthdayKept = reply.birthday_kept;
         if (typeof reply.birthday_phone === "boolean") this._birthdayPhone = reply.birthday_phone;
+        if (reply.follow === 1) this._followOk = true; // F1: it takes typed text and follow-ups
         (reply.notes || []).forEach((note) => this._note(s, note, !!reply.made_room));
         const ask = reply.ask;
         if (QUESTIONS[ask] && !s.asking) {
@@ -6609,6 +6796,10 @@ class HatchPetCard extends HTMLElement {
       else if (["tough", "not really"].includes(answer) && !isCalm) this._bondHearts(s);
       else this._animate(s, s.pet, "perk", 320);
       if (question.keep) this._keepAnswer(s, kind, answer, entity);
+      // Follow-ups (F1, E13): a tough day goes to the server (memory only, a softer
+      // morning tomorrow); a big day's "yes" asks what it is first. Never stashed.
+      if (kind === "how_day" && answer === "tough") this._sendFollow(s, entity, "how_day", "tough");
+      if (kind === "big_day" && answer === "yes") this._askTextStart(s, entity);
       if (kind === "phone" && answer === "yes") {
         this._setNotify(s, true).then((ok) => {
           if (!ok && s.ids?.["sensor.life_stage"] === entity) this._write(s, "hm, that one slipped away ♪", 3500);

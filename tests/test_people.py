@@ -123,8 +123,13 @@ def _rotation_day(kind: str) -> str:
     )
 
 
+# A big day already open (fresh-expand F1): no follow-up takes the fallback's slot, so
+# these see the rotation and its how_day stand-in alone (test_follow has the follow-ups).
+BUSY = {"follow": {"event": {"kind": "big_day"}}}
+
+
 def test_the_later_question_rotates_by_day():
-    person = {"likes": {"fav_weather": "sun", "fav_season": "autumn"}}
+    person = {"likes": {"fav_weather": "sun", "fav_season": "autumn"}, **BUSY}
     seen = {}
     for kind in P.ROTATION:
         today = _rotation_day(kind)
@@ -144,7 +149,7 @@ def test_a_later_question_on_most_evenings():
     """Fresh-moment 5b (owner Q6): the dream question from 4 h before bed, so a
     19:30 look before a 23:00 bed gets it; a kind that can't be asked now falls
     back to how_day; still one later question per person a day."""
-    person = {"likes": {"fav_weather": "sun", "fav_season": "autumn"}}
+    person = {"likes": {"fav_weather": "sun", "fav_season": "autumn"}, **BUSY}
     dream_day, guess_day = _rotation_day("dream"), _rotation_day("guess")
     assert R.ASK_DREAM_BEFORE_BED_MINUTES == 240
     assert ask(person, today=dream_day, hour=19, to_bed_minutes=210) == "dream"
@@ -166,7 +171,7 @@ def test_the_how_day_stand_in_comes_at_most_4_evenings_in_7():
     """Fresh-moment 5b (review s2622 #5, FM): the stand-in for an unaskable dream
     or guess isn't nightly: on ASK_FALLBACK_DAYS of every 7 days only, by the
     day. The rotation's own how_day days are always asked, cap or not."""
-    person = {"likes": {"fav_weather": "sun", "fav_season": "autumn"}}
+    person = {"likes": {"fav_weather": "sun", "fav_season": "autumn"}, **BUSY}
     first = date(2026, 11, 1).toordinal()
     stand_ins = 0
     own = 0

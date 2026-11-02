@@ -152,6 +152,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         "watchers": {},
     }
     websocket_api.async_register_command(hass, websocket_answer)
+    websocket_api.async_register_command(hass, websocket_follow)
     websocket_api.async_register_command(hass, websocket_forget_birthday)
     websocket_api.async_register_command(hass, websocket_birthday_phone)
     websocket_api.async_register_command(hass, websocket_baby_talk)
@@ -341,6 +342,11 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         vol.Required("entity_id"): cv.entity_id,
         vol.Required("question"): vol.In([*ANSWERS, "birthday"]),
         vol.Required("answer"): cv.string,
+        # A follow-up's typed text (F1): any value passes the schema, so a schema
+        # failure (logged at ERROR with the value) can never echo it; the handler
+        # takes only a string, cleans and cuts it (people.clean_text).
+        vol.Optional("text"): object,
+        vol.Optional("shared"): bool,
     }
 )
 @websocket_api.async_response
@@ -363,12 +369,37 @@ async def websocket_answer(
     if msg["question"] != "birthday" and msg["answer"] not in ANSWERS[msg["question"]]:
         connection.send_error(msg["id"], "invalid_answer", "Not an answer to that")
         return
+    # Never a shared screen's text: it's one person's, said back only to them.
+    text = None if msg.get("shared") else msg.get("text")
     try:
-        await pet.async_answer(connection.user.id, msg["question"], msg["answer"])
+        await pet.async_answer(connection.user.id, msg["question"], msg["answer"], text)
     except ValueError:
         connection.send_error(msg["id"], "not_asked", "It didn't ask that")
         return
     connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/follow",
+        vol.Required("entity_id"): cv.entity_id,
+    }
+)
+@websocket_api.async_response
+async def websocket_follow(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """A follow-up beat due for the person asking (F1): {kind, beat, text?} or
+    {}. Theirs only (connection.user.id), and said once across their screens. A
+    websocket command, so nothing of it is on the event bus or recorded."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None or pet.state is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    connection.send_result(msg["id"], await pet.async_follow(connection.user.id))
 
 
 @websocket_api.websocket_command(

@@ -159,11 +159,15 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   - asks you things now and then (from level 2), at most one question in the morning
     and one later, per person, however many pets and screens you have: "did you
     sleep well?", "how was your day?" (always after you come back from work or
-    school), "what should I dream about tonight?" (and the next morning it dreamed
-    it: "I dreamed about the sea, like you said! ♥"), "rain or sun tomorrow?" (judged
-    the next evening, no score), and once each "what's your favourite weather?" and
-    "...season?". It remembers favourites, tonight's dream and your guess; the rest
-    of your answers stay on your screen;
+    school), "what should I dream about tonight?" (the next morning everyone hears the
+    dream's story, and you hear it was your idea), "rain or sun tomorrow?" (judged
+    the next evening, no score), "big day tomorrow?" (Sunday to Thursday, at most
+    once a week, not before an early alarm; "yes" lets you type what it is, and the
+    pet cheers you on in the morning and is there for you in the evening), and once
+    each "what's your favourite weather?" and "...season?". After a tough day it's a
+    little softer with you the next morning. It remembers favourites, tonight's
+    dream, your guess and a big day (see Privacy); the rest of your answers stay on
+    your screen;
   - remembers your favourites: "it's snowing, your favourite!! ❄", "it's autumn, your
     favourite! ♥" once a season (no season talk in the tropics), "Thanksgiving in
     your favourite season! ♥";
@@ -517,6 +521,19 @@ phone, and switch changes, stay in Home Assistant's history until it clears them
 The pets start fresh with you, and they note again when you next come home. To
 erase everyone's, an admin can stop Home Assistant and delete
 `.storage/virtual_pet.people` (and any `virtual_pet.people.damaged.*` copies).
+
+**Follow-ups.** Answer "tough" to "how was your day?" and the pet keeps only the
+date, in memory, to be a little softer the next morning on your own screen; a restart
+forgets it, and "great" or "ok" never leave the card. Say "yes" to "big day tomorrow?"
+and it keeps that day (the date, not what it is) for a week at most, to wish you luck
+in the morning and ask nothing of it in the evening. What you type in "what is it?"
+(optional, 20 characters at most) is kept in memory only: never on a sensor, in a log,
+a notification, diagnostics, Assist or a backup, and a restart forgets it. The pet says
+it back only to you, on your own screens, never on a shared one. Two things to know:
+if someone turns on debug logging for `homeassistant.components.websocket_api`, Home
+Assistant logs every message, your typed words included; and if a family shares one
+Home Assistant account, every personal screen signed in to it hears it (as with
+birthdays). "forget my data" erases all of it.
 
 With no pets left there's no card, so no "forget my data" button. An admin can
 delete `.storage/virtual_pet.people` (and any `virtual_pet.people.damaged.*` copies) then, with Home Assistant stopped.

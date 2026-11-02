@@ -4491,6 +4491,102 @@ async function main() {
       cb.length === 1 && cb[0] === "I keep thinking of my sea dream ♪" && !f2.later[0] && !f2.later[1] &&
         f2.youLook.includes("I dreamed about my friends ♥") && f2.youMine.length === 2 && TAILS.includes(f2.youMine[1]) &&
         !TAILS.includes(f2.youMine[0]) && f2.youTheirs.length === 0 && f2.youKey === null, JSON.stringify(f2));
+    // Fresh-expand F1 + E13, card side (virtual_pet/follow and the answer stubbed): a big
+    // day's morning and evening say their words, else the type's or the shared lines; an
+    // HTML text shows as text; a soft morning says its line; a shared screen never asks
+    // the server. The typed step keeps HA's shortcuts out, sends "yes" once with the
+    // cleaned text (never stashed, even when the send fails), and with none on its time.
+    const BIG = require("vm").runInNewContext(`(${src4.match(/\nconst BIG_DAY = (\{[\s\S]*?\n\});/)[1]})`);
+    const SOFT = require("vm").runInNewContext(src4.match(/\nconst SOFT_MORNING = (\[[\s\S]*?\]);/)[1]);
+    const typeLines = (key) => [...src4.matchAll(new RegExp(`${key}: \\[("[^"]*")(?:, ("[^"]*"))?\\]`, "g"))]
+      .flatMap((m) => m.slice(1).filter(Boolean).map((x) => JSON.parse(x)));
+    const f1 = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const realWS = el._hass.callWS;
+      const sent = [];
+      let reply = {};
+      el._hass.callWS = (msg) => {
+        sent.push(msg);
+        if (msg.type === "virtual_pet/follow") return Promise.resolve(reply);
+        if (msg.type === "virtual_pet/answer") return Promise.reject({ code: "unknown_error" });
+        return realWS.call(el._hass, msg);
+      };
+      const shared = localStorage.getItem("hatch-shared-screen");
+      const followOk = el._followOk;
+      const out = {};
+      const fetch = async (r) => {
+        reply = r;
+        s.queue = [];
+        s.following = false;
+        await el._followFetch(s);
+        const said = s.queue.map((q) => q.text);
+        return said;
+      };
+      try {
+        localStorage.setItem("hatch-shared-screen", "off");
+        out.am = await fetch({ kind: "big_day", beat: "morning", text: "your exam" });
+        out.pm = await fetch({ kind: "big_day", beat: "evening", text: "your exam" });
+        out.amPlain = await fetch({ kind: "big_day", beat: "morning" });
+        out.pmPlain = await fetch({ kind: "big_day", beat: "evening" });
+        out.soft = await fetch({ kind: "soft", beat: "morning" });
+        out.none = await fetch({});
+        await fetch({ kind: "big_day", beat: "morning", text: "<img src=x onerror=alert(1)>" });
+        Object.assign(s, { sayUntil: 0, sayClass: 0 });
+        el._sayQueued(s);
+        out.html = { text: s.bubble.textContent, img: !!s.bubble.querySelector("img") };
+        localStorage.setItem("hatch-shared-screen", "on");
+        const before = sent.length;
+        out.shared = await fetch({ kind: "soft", beat: "morning" });
+        out.sharedCalls = sent.length - before;
+        localStorage.setItem("hatch-shared-screen", "off");
+        // The typed step after a big day's "yes".
+        el._followOk = true;
+        const entity = s.ids["sensor.life_stage"];
+        sent.length = 0;
+        s.queue = [];
+        el._askTextStart(s, entity);
+        s.queue.find((q) => q.ask)?.then();
+        const input = s.screen.querySelector(".asktext input");
+        out.box = !!input && input.maxLength === 20 && input.getAttribute("enterkeyhint") === "done";
+        let leaked = 0;
+        const onKey = () => leaked++;
+        document.addEventListener("keydown", onKey);
+        input?.dispatchEvent(new KeyboardEvent("keydown", { key: "e", bubbles: true, composed: true }));
+        document.removeEventListener("keydown", onKey);
+        out.leaked = leaked;
+        if (input) input.value = "  my\u200b exam ";
+        Object.assign(s, { sayUntil: 0, sayClass: 0 });
+        s.screen.querySelector(".asktext button")?.click(); // ok
+        await new Promise((r) => setTimeout(r, 50));
+        out.sent = sent.filter((m) => m.type === "virtual_pet/answer");
+        out.kept = s.bubble.textContent;
+        out.stash = Object.keys(localStorage).filter((k) => k.startsWith("hatch-answers-"));
+        out.boxGone = !s.screen.querySelector(".asktext");
+        sent.length = 0;
+        el._askTextStart(s, entity);
+        s.textStep.until = 0;
+        el._askTextEnd(s); // what the tick does once its time is up
+        out.timeout = sent.filter((m) => m.type === "virtual_pet/answer");
+      } finally {
+        el._hass.callWS = realWS;
+        el._followOk = followOk;
+        if (shared === null) localStorage.removeItem("hatch-shared-screen"); else localStorage.setItem("hatch-shared-screen", shared);
+        Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0, asking: false, textStep: null });
+      }
+      return out;
+    });
+    const withIt = (fns) => fns.map((f) => f("your exam"));
+    check("fresh F1: a big day's morning and evening say their words, else the type's or shared lines; HTML shows as text",
+      f1.am.length === 1 && withIt(BIG.amText).includes(f1.am[0]) && withIt(BIG.pmText).includes(f1.pm[0]) &&
+        [...BIG.am, ...typeLines("bigday_am")].includes(f1.amPlain[0]) && [...BIG.pm, ...typeLines("bigday_pm")].includes(f1.pmPlain[0]) &&
+        !f1.html.img && f1.html.text.includes("<img") && f1.none.length === 0, JSON.stringify(f1));
+    check("fresh E13: a soft morning says a soft line; a shared screen asks the server nothing and says nothing",
+      [...SOFT, ...typeLines("soft"), "*snuggle* hi hi ♥"].includes(f1.soft[0]) && f1.shared.length === 0 && f1.sharedCalls === 0,
+      JSON.stringify({ soft: f1.soft, shared: f1.shared, calls: f1.sharedCalls }));
+    check("fresh F1: the typed step keeps HA's keys, sends yes once with the cleaned text, stashes nothing; its time sends no text",
+      f1.box && f1.leaked === 0 && f1.sent.length === 1 && f1.sent[0].question === "big_day" && f1.sent[0].answer === "yes" &&
+        f1.sent[0].text === "my exam" && f1.kept === BIG.kept && f1.stash.length === 0 && f1.boxGone &&
+        f1.timeout.length === 1 && !("text" in f1.timeout[0]), JSON.stringify({ ...f1, am: undefined }));
     check("fresh E8 (A-a): back after 3 days, the look starts with a welcome and has no away note; after 5 h, none",
       WELCOME.includes(e8.long[0]?.text) && !e8.long.some((q) => q.away) && !e8.short.some((q) => WELCOME.includes(q.text)),
       JSON.stringify(e8));

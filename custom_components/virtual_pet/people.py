@@ -18,12 +18,15 @@ import asyncio
 from datetime import date, timedelta
 from pathlib import Path
 import random
+import re
 import statistics
 from typing import Any
+import unicodedata
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.storage import Store
+from homeassistant.util import dt as dt_util
 
 from . import model, rates as R
 from .backup import NOTHING, async_backup, async_clear_if_restored
@@ -55,6 +58,10 @@ ANSWERS: dict[str, tuple[str, ...]] = {
     # The phone question (top10 1a): the card says it showed it, and only then is
     # it asked for good (a question the card dropped comes again).
     "phone": ("shown",),
+    # Follow-ups (fresh-expand F1): only the answers the pet comes back to reach the
+    # server. how_day's "tough" is E13's soft morning; "great" and "ok" stay on the card.
+    "how_day": ("tough",),
+    "big_day": ("yes", "no"),
 }
 # One-time questions about the person, in the order they're asked, with the bond
 # level each needs. (The pet's own one-time question, its catchphrase, comes from
@@ -81,6 +88,32 @@ ZONE_WORDS = {
 # Zones after which "how was your day?" is the question.
 DAY_ZONES = {"work", "school"}
 
+# --- Follow-ups (fresh-expand F1) ------------------------------------------------
+# Retention by class, in one place. mood: memory only (People._moods), the next local
+# day. event: saved without its text (person["follow"]["event"]), until its last beat,
+# at most FOLLOW_EVENT_MAX_DAYS; its typed text memory only (People._texts). The
+# preference class (a favourite visitor, F4) lives in likes.
+FOLLOW_CLASSES: dict[str, tuple[str, ...]] = {
+    "mood": ("soft",),
+    "event": ("big_day",),
+}
+FOLLOW_EVENT_MAX_DAYS = 7
+FOLLOW_ASK_PER_WEEK = 2  # follow-up asks per person per 7 days
+FOLLOW_TEXT_MAX = 20  # code points of a typed answer ({it})
+# Each kind's beats, in order; the last one said closes the event.
+FOLLOW_BEATS: dict[str, tuple[str, ...]] = {
+    "soft": ("morning",),
+    "big_day": ("morning", "evening"),
+}
+FOLLOW_EVENING_HOUR = 17  # big day: the morning beat before, the evening beat from
+# The follow-up questions (asked in the later slot), and those that take a typed text.
+FOLLOW_QUESTIONS = ("big_day",)
+FOLLOW_TEXT_KINDS = {"big_day"}
+# Questions whose answer the server checks against today's later ask.
+LATER_CHECKED = {"how_day", *FOLLOW_QUESTIONS}
+QUESTION_KINDS = {*QUESTIONS, *ANSWERS, *FOLLOW_QUESTIONS, "phone"}
+_SPACES = re.compile(r"\s+")
+
 
 class People:
     """The shared store (hass.data[DOMAIN]["people"])."""
@@ -90,6 +123,12 @@ class People:
         self._store: Store[dict[str, Any]] = Store(hass, STORE_VERSION, STORE_KEY)
         self.data: dict[str, Any] = {"people": {}, "weather": {}}
         self._locks: dict[str, asyncio.Lock] = {}
+        # Memory only, never in self.data (so never on disk, in a backup or a
+        # .corrupt copy, nor kept by an older version): a follow-up's typed text,
+        # and a mood ({kind, day}). A restart drops both (fresh-expand F1, E13).
+        self._texts: dict[str, str] = {}
+        self._moods: dict[str, dict[str, str]] = {}
+        self._pruned: str | None = None  # the local date prune last ran for
 
     def lock(self, user: str) -> asyncio.Lock:
         """One look at a time per person, across every pet."""
@@ -128,6 +167,14 @@ class People:
                 if isinstance(day, str) and isinstance(kinds, list)
             },
         }
+        raw = _mapping(loaded.get("people"))
+        dropped = any(
+            isinstance(r, dict) and r.get("follow") != record.get("follow")
+            for u, record in self.data["people"].items()
+            if isinstance(r := raw.get(u), dict)
+        )
+        if self.prune(model_today(self._hass)) or dropped:
+            await self.async_save_now()  # an expired or bad follow-up isn't kept
 
     async def _damaged(self, data: Any) -> None:
         backup = await async_backup(self._hass, STORE_KEY, STORE_VERSION, data)
@@ -159,6 +206,8 @@ class People:
         old = self.data["people"].pop(user, None)
         if old and old.get("birthday_skipped"):
             self.data["people"][user] = {"birthday_skipped": True}
+        self._texts.pop(user, None)  # memory only: gone with the record
+        self._moods.pop(user, None)
         await self.async_save_now()
 
     def person(self, user: str) -> dict[str, Any]:
@@ -191,6 +240,96 @@ class People:
 
     def weather_on(self, day: str) -> set[str]:
         return set(self.data["weather"].get(day, []))
+
+    # --- Follow-ups (fresh-expand F1) --------------------------------------------
+
+    def prune(self, today: str) -> bool:
+        """Each class past its limit goes: an event after its until day (its text
+        with it), a mood after the day it's for, follow-up asks older than a week.
+        True if the saved data changed."""
+        changed = False
+        day = date.fromisoformat(today)
+        for user, person in self.data["people"].items():
+            event = (person.get("follow") or {}).get("event")
+            if event and date.fromisoformat(event["until"]) < day:
+                del person["follow"]["event"]
+                if not person["follow"]:
+                    del person["follow"]
+                self._texts.pop(user, None)
+                changed = True
+            asked = person.get("follow_asked")
+            if asked:
+                kept = [d for d in asked if (day - date.fromisoformat(d)).days < 7]
+                if kept != asked:
+                    person["follow_asked"] = kept
+                    changed = True
+        for user, mood in list(self._moods.items()):
+            if (day - date.fromisoformat(mood["day"])).days > 1:
+                del self._moods[user]
+        for user in list(self._texts):
+            event = (self.data["people"].get(user, {}).get("follow") or {}).get("event")
+            if not event or event["kind"] not in FOLLOW_TEXT_KINDS:
+                del self._texts[user]
+        self._pruned = today
+        return changed
+
+    def prune_daily(self, today: str) -> None:
+        """Once per house per local date (the first tick that sees it)."""
+        if self._pruned != today and self.prune(today):
+            self.save()
+
+    def open_event(self, user: str) -> dict[str, Any] | None:
+        return (self.data["people"].get(user, {}).get("follow") or {}).get("event")
+
+    def set_mood(self, user: str, today: str) -> None:
+        """A tough day (E13): a softer morning tomorrow, kept in memory only, as
+        a date: not the answer, not a time."""
+        self._moods[user] = {"kind": "soft", "day": today}
+
+    def open_follow(
+        self, user: str, kind: str, today: str, text: Any = None, **extra: str
+    ) -> None:
+        """A "yes" to a follow-up question: the event, due tomorrow (big day). A
+        second answer in a race replaces the open record (asks never come while one
+        is open). The typed text, cleaned, is kept in memory only."""
+        due = tomorrow(today)
+        event = {"kind": kind, "asked": today, "due": due, "until": due, "said": []}
+        event.update(extra)
+        self.person(user).setdefault("follow", {})["event"] = event
+        self._texts.pop(user, None)
+        if kind in FOLLOW_TEXT_KINDS and (cleaned := clean_text(text)):
+            self._texts[user] = cleaned
+        self.save()
+
+    def follow_due(
+        self, user: str, today: str, hour: int, pet: str | None = None
+    ) -> dict[str, Any]:
+        """The beat due for this person now, marked said (the caller holds their
+        lock, with no await before this returns): {kind, beat, text?} or {}. An
+        event's beat comes before a mood's; the next look gets the other."""
+        if self.prune(today):
+            self.save()
+        person = self.data["people"].get(user, {})
+        event = (person.get("follow") or {}).get("event")
+        if event and (beat := _event_beat(event, today, hour, pet)):
+            event["said"].append(beat)
+            out = {"kind": event["kind"], "beat": beat}
+            if user in self._texts:
+                out["text"] = self._texts[user]
+            if beat == FOLLOW_BEATS[event["kind"]][-1]:
+                del person["follow"]["event"]  # its last beat: done
+                if not person["follow"]:
+                    del person["follow"]
+                self._texts.pop(user, None)
+            self.save()
+            return out
+        mood = self._moods.get(user)
+        if mood and date.fromisoformat(mood["day"]) + timedelta(days=1) == (
+            date.fromisoformat(today)
+        ):
+            del self._moods[user]
+            return {"kind": mood["kind"], "beat": "morning"}
+        return {}
 
 
 def _mapping(v: Any) -> dict[Any, Any]:
@@ -243,12 +382,70 @@ _PERSON_KEYS: dict[str, Any] = {
 }
 
 
+def _iso(v: Any) -> date | None:
+    try:
+        return date.fromisoformat(v) if isinstance(v, str) else None
+    except ValueError:
+        return None
+
+
+_EVENT_KEYS = {"kind", "asked", "due", "until", "said", "choice", "pet"}
+
+
+def _event_ok(v: Any) -> bool:
+    """A saved follow-up event (F1): known kind, dates in order and at most a
+    week, beats of its kind, no text (memory only), no other key."""
+    if not isinstance(v, dict) or not set(v) <= _EVENT_KEYS:
+        return False
+    kind = v.get("kind")
+    if kind not in FOLLOW_CLASSES["event"]:
+        return False
+    asked, due, until = (_iso(v.get(k)) for k in ("asked", "due", "until"))
+    if asked is None or due is None or until is None:
+        return False
+    if not asked <= due <= until or (until - asked).days > FOLLOW_EVENT_MAX_DAYS:
+        return False
+    said = v.get("said")
+    if not isinstance(said, list) or not all(b in FOLLOW_BEATS[kind] for b in said):
+        return False
+    if "choice" in v and kind != "game":
+        return False
+    return "pet" not in v or (kind in ("game", "trick") and isinstance(v["pet"], str))
+
+
+def _follow(v: Any) -> dict[str, Any]:
+    """The saved follow-up classes, each dropped on its own if bad. Only events
+    are saved: a mood (or anything else) in the store is dropped."""
+    out = {}
+    if isinstance(v, dict) and _event_ok(v.get("event")):
+        out["event"] = v["event"]
+    return out
+
+
 def _person(record: dict[str, Any]) -> dict[str, Any]:
     """One person's record as loaded, with the shapes its readers expect."""
     out = dict(record)
     for key, ok in _PERSON_KEYS.items():
         if key in out and not ok(out[key]):
             del out[key]
+    if "follow" in out:
+        out["follow"] = _follow(out["follow"])
+        if not out["follow"]:
+            del out["follow"]
+    asked = out.get("asked")
+    if asked and "later_kind" in asked and asked["later_kind"] not in QUESTION_KINDS:
+        out["asked"] = {k: x for k, x in asked.items() if k != "later_kind"}
+    if "follow_asked" in out:
+        days = out["follow_asked"]
+        out["follow_asked"] = [
+            d for d in (days if isinstance(days, list) else []) if _iso(d)
+        ]
+    if "follow_last" in out:
+        out["follow_last"] = {
+            k: d
+            for k, d in _str_dict(out["follow_last"]).items()
+            if k in FOLLOW_QUESTIONS and _iso(d)
+        }
     if out.get("my_day") is not True:
         out.pop("zone", None)  # older saves: kept only while "my day" is on
     for key in ("noted", "likes"):
@@ -355,6 +552,7 @@ def choose_question(
     rested: bool,
     pet_once: tuple[str, ...] = (),
     dreamed: bool = False,
+    early_tomorrow: bool = False,
 ) -> str | None:
     """The question to ask on this visit, or None: at most one in the morning
     (before noon) and one later, per person per day, across every pet. A
@@ -388,6 +586,12 @@ def choose_question(
         return "dream"
     if kind == "guess" and has_forecast and hour >= R.ASK_GUESS_FROM:
         return "guess"
+    # A due follow-up (F1) takes the place of the fallback how_day, or of a dream or
+    # guess that can't be asked now, so the questions a week don't grow.
+    if hour >= R.ASK_DAY_FROM and (
+        follow := follow_question(person, today, early_tomorrow=early_tomorrow)
+    ):
+        return follow
     # Today's dream or guess can't be asked now (the dream before its window, a guess
     # with no forecast or too early): how_day stands in on ASK_FALLBACK_DAYS of every 7
     # (fresh-moment 5b), so most evenings get a question but it isn't nightly.
@@ -455,12 +659,86 @@ def may_ask_again(days: list[str], today: str) -> bool:
     return gap.days >= R.ASK_LIKES_AGAIN_DAYS
 
 
-def mark_asked(person: dict[str, Any], today: str, hour: int) -> None:
+def mark_asked(
+    person: dict[str, Any], today: str, hour: int, kind: str | None = None
+) -> None:
+    """A question was asked today. The later slot keeps its kind, so an answer
+    the server acts on is taken only for today's ask (F1, review #2); a
+    follow-up ask is counted for the week."""
     asked = person.get("asked") or {}
     if asked.get("day") != today:
         asked = {"day": today}
     asked["morning" if hour < 12 else "later"] = True
+    if hour >= 12 and kind is not None:
+        asked["later_kind"] = kind
     person["asked"] = asked
+    if kind in FOLLOW_QUESTIONS:
+        person.setdefault("follow_asked", []).append(today)
+        person.setdefault("follow_last", {})[kind] = today
+
+
+def asked_later(person: dict[str, Any], today: str, kind: str) -> bool:
+    """Whether today's later question for this person was this kind."""
+    asked = person.get("asked") or {}
+    return asked.get("day") == today and asked.get("later_kind") == kind
+
+
+def follow_question(
+    person: dict[str, Any], today: str, *, early_tomorrow: bool = False
+) -> str | None:
+    """A follow-up question due today, or None: never while an event is open,
+    at most FOLLOW_ASK_PER_WEEK a week. Big day: Sunday to Thursday, at most once
+    a week, not with an early alarm tomorrow."""
+    if (person.get("follow") or {}).get("event"):
+        return None
+    day = date.fromisoformat(today)
+    recent = [
+        d
+        for d in person.get("follow_asked", [])
+        if (day - date.fromisoformat(d)).days < 7
+    ]
+    if len(recent) >= FOLLOW_ASK_PER_WEEK:
+        return None
+    last = (person.get("follow_last") or {}).get("big_day")
+    week_ago = last is not None and (day - date.fromisoformat(last)).days < 7
+    if day.weekday() in (6, 0, 1, 2, 3) and not early_tomorrow and not week_ago:
+        return "big_day"
+    return None
+
+
+def clean_text(text: Any) -> str | None:
+    """A typed answer as kept: control and format characters (Unicode C*) gone,
+    whitespace collapsed, cut to FOLLOW_TEXT_MAX code points; a leading "my "
+    becomes "your " only if that still fits. None if nothing is left."""
+    if not isinstance(text, str):
+        return None
+    kept = "".join(c for c in text if not unicodedata.category(c).startswith("C"))
+    kept = _SPACES.sub(" ", kept).strip()[:FOLLOW_TEXT_MAX].strip()
+    if kept[:3] in ("my ", "My "):
+        yours = "your " + kept[3:]
+        if len(yours) <= FOLLOW_TEXT_MAX:
+            kept = yours
+    return kept or None
+
+
+def _event_beat(
+    event: dict[str, Any], today: str, hour: int, pet: str | None
+) -> str | None:
+    """The beat of an open event due now, not yet said."""
+    if event.get("pet") is not None and event["pet"] != pet:
+        return None  # a pet's own follow-up (game, trick) is that pet's
+    said = event["said"]
+    if event["kind"] == "big_day":
+        if today != event["due"]:
+            return None
+        beat = "morning" if hour < FOLLOW_EVENING_HOUR else "evening"
+        return None if beat in said or "evening" in said else beat
+    return None
+
+
+def model_today(hass: HomeAssistant) -> str:
+    """The house's local date (prune's day at load)."""
+    return dt_util.now().date().isoformat()
 
 
 def tomorrow(today: str) -> str:

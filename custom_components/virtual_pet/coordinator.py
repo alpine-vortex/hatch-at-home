@@ -1036,6 +1036,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.debug["last_step_minutes"] = round((now - before) / 60, 2)
         self._fire(events, simulated)
         self._pick_favourite()
+        self.people.prune_daily(self._today(now)[0])  # follow-ups past their day (F1)
         self._save()
 
     def _pick_favourite(self) -> None:
@@ -1622,6 +1623,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "birthday_kept": bool(fresh.get("birthday")),
             "birthday_phone": bool(fresh.get("birthday_phone")),
             "baby_talk": self.people.baby_talk(user),
+            "follow": 1,  # follow-ups (F1): the card may send a typed text, and fetch
         }
 
     def _up_early(self, user: str, now: float) -> list[dict[str, Any]]:
@@ -1858,7 +1860,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             # Ahead of the day's questions: it matters now. It is the day's
             # question, and asked for good only once the card says it showed it
             # (async_answer "phone"): one the card dropped comes on a later day.
-            P.mark_asked(person, today, hour)
+            P.mark_asked(person, today, hour, "phone")
             self.people.save()
             return "phone"
         kind = P.choose_question(
@@ -1872,10 +1874,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             rested=any(n["kind"] == "rested" for n in notes),
             pet_once=self._pet_once(user, today),
             dreamed=bool(self.state.dream and self.state.dream.get("day") == today),
+            early_tomorrow=self._early_tomorrow(user, now),
         )
         if kind is None:
             return None
-        P.mark_asked(person, today, hour)
+        P.mark_asked(person, today, hour, kind)
         if kind in P.ONCE_KINDS:
             P.mark_once(person, kind, today)
         if kind == "catchphrase":
@@ -1883,6 +1886,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._save()
         self.people.save()
         return kind
+
+    def _early_tomorrow(self, user: str, now: float) -> bool:
+        """An early alarm tomorrow on their phone ("my day" on), at ask time, any
+        hour (review #13): no "big day tomorrow?" then."""
+        if not self.people.my_day(user):
+            return False
+        minute = self._tomorrows_alarm(
+            user, dt_util.as_local(dt_util.utc_from_timestamp(now))
+        )
+        if minute is None:
+            return False
+        usual = [m for _, m in self.people.person(user).get("alarms", [])[:-1]]
+        return P.early_alarm(minute, usual)
 
     def _phone_ask_due(self, user: str, person: dict[str, Any], today: str) -> bool:
         """Whether the pet asks this person "can I call your phone?" (top10 1a):
@@ -1933,10 +1949,26 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             }
         return ask
 
-    async def async_answer(self, user: str, question: str, answer: str) -> None:
+    async def async_answer(
+        self, user: str, question: str, answer: str, text: Any = None
+    ) -> None:
         """A remembered answer: a favourite, tonight's dream, a guess, its
-        catchphrase."""
+        catchphrase, or a follow-up's (F1: a tough day's softer morning, a big
+        day's "yes" with its optional text). Nothing here is logged."""
         assert self.state is not None
+        if question in P.LATER_CHECKED:
+            if answer not in P.ANSWERS.get(question, ()):
+                raise ValueError("Not an answer the pet keeps")
+            today = self._today(self._now())[0]
+            async with self.people.lock(user):
+                person = self.people.data["people"].get(user, {})
+                if not P.asked_later(person, today, question):
+                    raise ValueError("It didn't ask that")
+                if question == "how_day":
+                    self.people.set_mood(user, today)  # memory only (E13)
+                elif answer == "yes":
+                    self.people.open_follow(user, question, today, text)
+            return  # "no" keeps nothing
         if question == "birthday":
             # Theirs, kept only in the people store; "skip" sticks. Never echoed.
             person = self.people.person(user)
@@ -1987,6 +2019,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._save()
         self.people.save()
         self._push_everywhere()  # a birthday kept
+
+    async def async_follow(self, user: str) -> dict[str, Any]:
+        """The follow-up beat due for this person now (virtual_pet/follow), marked
+        said under their lock with no await in between: their other screens and
+        pets get {}."""
+        today, hour = self._today(self._now())
+        async with self.people.lock(user):
+            return self.people.follow_due(user, today, hour, self.config_entry.entry_id)
 
     async def async_set_birthday_phone(self, user: str, enabled: bool) -> None:
         """Whether this person's phone hears "happy birthday" on the day."""
