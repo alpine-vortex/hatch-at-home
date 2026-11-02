@@ -4043,9 +4043,12 @@ async def test_senses_are_kinds_never_entities(
         "hall_motion",
         "motion",
         "zone",
-        "bedtime",
     ):
         assert value not in text, value
+    # Bedtime is the pet's own `sleep_times` target (owner-approved, settings Q-G),
+    # never a sense: the kinds list never names it.
+    assert "bedtime" not in json.dumps(attrs["senses"])
+    assert attrs["sleep_times"] == {"bedtime": "21:30", "wake": "07:00"}
     # Nothing mapped: only the moon, which every pet reads from the date.
     hass.config_entries.async_update_entry(config, options={})
     await hass.config_entries.async_reload(config.entry_id)

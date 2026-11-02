@@ -107,6 +107,8 @@
       // The shell the server would send (the lead pet): its pick, the finishes it may
       // wear and the locked ones with their stage. Left out, the card hides the row.
       if (i === 0 && shot.senses !== undefined) attrs.senses = shot.senses; // top10 2b: the kinds the house shows it
+      // S7: the pet's bedtime target (the options' defaults unless the shot says; `false`: an older server).
+      if (i === 0 && shot.sleepTimes !== false) attrs.sleep_times = shot.sleepTimes || { bedtime: "23:00", wake: "07:00" };
       if (i === 0 && shot.social !== undefined) attrs.social_level = shot.social; // top10 §6: the social meter, 0-10
       if (i === 0 && shot.shellOptions !== undefined) {
         Object.assign(attrs, { shell_finish: shot.shellFinish ?? null, shell_finish_options: shot.shellOptions,
@@ -138,7 +140,7 @@
     return {
       states, entities, devices,
       user: { id: "bench-user", name: "Sam Bench", is_admin: shot.admin !== false },
-      locale: { language: "en" }, language: "en",
+      locale: { language: "en", ...(shot.timeFormat ? { time_format: shot.timeFormat } : {}) }, language: "en",
       themes: shot.haDark === undefined ? {} : { darkMode: !!shot.haDark }, selectedTheme: null,
       // The card asks once for a server clock reading; none arrives here.
       connection: { subscribeEvents: noop, subscribeMessage: noop },

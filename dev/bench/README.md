@@ -86,6 +86,7 @@ A shot (all optional):
 | `game`, `digReplies`, `digTaps` | `game: "dig"`: a Berry dig started through the picker, answered by `digReplies` (play_game replies in order; default: round 2, 2 banked, basket 2), then `digTaps` (`"dig"`/`"keep"`) played; held on the last reply (a bee still shows). `game: "left_right"` / `"higher_lower"` the same way (default start: round 0, number 5; `digTaps` `"left"`/`"right"`, or `"lower"`/`"higher"`; a reply is `{result: "ok", game, round, rounds: 5, wins, correct, went / number}`) |
 | `lcd`, `booted`, `mono` | per-browser settings, see below |
 | `senses` | the kinds the house shows the pet (`["weather", "tv"]`; `[]`: "just the clock"), for the sheet's "notices" row |
+| `sleepTimes`, `timeFormat` | the sheet's "bedtime" row (settings S7): `sleepTimes` is `{bedtime, wake}` as `sensor.life_stage` carries them (default 23:00 and 07:00; `false`: an older server, no row); `timeFormat` is `hass.locale.time_format` (`"12"`, `"24"`; unset: the language's own) |
 | `social` | the social meter's level, 0-10 (`7`: three and a half hearts), for the status page's "friends" row |
 | `bigText` | `true` (`--big-text`): the "big text" switch on (larger words on the status box's pages) |
 | `classes` | an array of classes put on `.screen` last, before the transitions finish: `faded`, `raining`, `lit`... (the bench's `scene: "rain"` is woodland's rain backdrop without `raining`) |

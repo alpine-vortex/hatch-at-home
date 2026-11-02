@@ -1665,6 +1665,8 @@ const SETUP_COPY = {
   nameFailed: "hm, that name didn't stick ♪", // N18
   // S4: first run. The empty card's button for an admin (N19).
   addPet: "add a pet ›", // N19
+  // S7: the shared screen's heading holds its switch, its note and, for an admin, this (N24, plan §13).
+  sharedPrivacy: "sensor privacy is in the pet's options", // N24
 };
 // Settings UX fix 1 (review 1, F12/F14/F16; copy APPROVED by the first mate 2026-11-02, owner
 // delegated): the sheet's notes in the pet's voice, lowercase, and the pet's word when the
@@ -2318,6 +2320,22 @@ const inCompanionApp = () => /Home Assistant\//.test(navigator.userAgent || "");
 // The Android app can't save a picture from its page (no share, no long-press save).
 const inAndroidApp = () => inCompanionApp() && /Android/i.test(navigator.userAgent || "");
 // "2026-10-28" as that day where the viewer is (not midnight UTC).
+// The pet's bedtime row (settings S7, N21): a target, "about" so, in the viewer's own HA time
+// format (hass.locale.time_format: "12", "24", or the language's own). Built at run time from
+// digits, so it is not a scanned line.
+function sleepLine(sleep, hass) {
+  const fmt = hass?.locale?.time_format;
+  const show = (hhmm) => {
+    const [h, m] = String(hhmm).split(":").map(Number);
+    const at = new Date(2000, 0, 1, h || 0, m || 0);
+    const opts = fmt === "24" ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }
+      : fmt === "12" ? { hour: "numeric", minute: "2-digit", hour12: true }
+        : { hour: "numeric", minute: "2-digit" };
+    return at.toLocaleTimeString(hass?.locale?.language || undefined, opts).toLowerCase();
+  };
+  return `about ${show(sleep.bedtime)} · up ${show(sleep.wake)}`;
+}
+
 function localDay(iso, locale) {
   const [y, m, d] = String(iso).split("-").map(Number);
   if (!y || !m || !d) return "";
@@ -3655,6 +3673,8 @@ const STYLE = `
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
   /* A sheet row (UX fix 1, F5): the label takes the room, the switch sits at the right edge,
      so the switches line up in one column; no empty icon slot. */
+  /* The friends row is a button (UX8 F9): a 44 px target, like every other control. */
+  .row.friendsrow { box-sizing: border-box; min-height: 44px; cursor: pointer; }
   .row.srow, .compact .row.srow { grid-template-columns: minmax(0, 1fr) fit-content(60%); }
   .srow > :last-child { justify-self: end; text-align: right; }
   /* The status view's gear and the settings sheet's back row and headings. */
@@ -3683,6 +3703,10 @@ const STYLE = `
   .shellro { opacity: .6; }
   .shellro .sw { border-style: dashed; }
   .shellnote { font-size: 11px; }
+  /* A small sub-heading inside a group (S7: sound, look under "this screen"): no rule, a little lighter. */
+  .sub { margin-top: 2px; font-size: 11px; letter-spacing: 1px; }
+  /* The bedtime row: the label as wide as it is, the target takes the rest and wraps by itself. */
+  .row.srow.sleeprow, .compact .row.srow.sleeprow { grid-template-columns: auto minmax(0, 1fr); }
   /* The shell picker: three tiles a row; a locked one dimmed and dashed. */
   .tiles { flex: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 4px; }
   .tiles:last-of-type { padding-bottom: 6px; } /* the last row scrolls clear of the bar */
@@ -3782,7 +3806,7 @@ const STYLE = `
   ha-card.bigtext .status .layrow, ha-card.bigtext .status .laygo,
   ha-card.bigtext .status .namego, ha-card.bigtext .status .namechange, ha-card.bigtext .status .nameerr { font-size: 15px; }
   ha-card.bigtext .status .nameinput { font-size: 18px; }
-  ha-card.bigtext .status .sec, ha-card.bigtext .status .shellnote, ha-card.bigtext .status .jtile,
+  ha-card.bigtext .status .sec, ha-card.bigtext .status .sub, ha-card.bigtext .status .shellnote, ha-card.bigtext .status .jtile,
   ha-card.bigtext .status .ftile, ha-card.bigtext .status .tile { font-size: 13px; }
   ha-card.bigtext .status .tile .tsub { font-size: 12px; }
   ha-card.bigtext.compact .status .tile { font-size: 12px; } /* "tidepool" whole in the porthole's three columns */
@@ -8815,12 +8839,12 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
         ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
-      ${social > 0 && !isEgg ? row("stat_heart_full", "friends", socialHearts(social)).replace('class="row"', 'class="row friendsrow" role="button" tabindex="0"') : ""}
       ${row("icon_feed", "hunger", hearts(value("hunger"), FEED_FULL_AT))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}
       ${row("stat_health", "health", bar(value("health")))}
       ${row("stat_discipline", "discipline", bar(value("discipline")))}
+      ${social > 0 && !isEgg ? row("stat_heart_full", "friends", socialHearts(social)).replace('class="row"', 'class="row friendsrow" role="button" tabindex="0"') : ""}
       ${row(null, "weight", `<span>${weightLabel(value("weight"))}</span>`)}
       ${row(null, traits.length > cap ? "traits" : `traits ${traits.length}/${cap}`, `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
@@ -8883,24 +8907,42 @@ class HatchPetCard extends HTMLElement {
     const notices = !Array.isArray(senses) ? ""
       : row(null, "notices", `<span class="senses">${senses.length ? senses.map(escape).join(" · ") : "just the clock"}</span>`)
         + (this._hass.user?.is_admin && !sharedScreen() ? `<button class="wlink connect">connect more ›</button>` : "");
-    // The pet's group: what it notices, then the shell, where the server offers it
+    // Its bedtime and wake time (S7, N21): a read-only target, the household's own, on shared
+    // screens too. An older server sends none.
+    const sleep = this._state(s, "sensor.life_stage")?.attributes.sleep_times;
+    const bedtime = sleep && typeof sleep.bedtime === "string" && typeof sleep.wake === "string"
+      ? row(null, "bedtime", `<span class="sleeptimes">${escape(sleepLine(sleep, this._hass))}</span>`).replace('class="row srow"', 'class="row srow sleeprow"') : "";
+    // The pet's group: what it notices, its bedtime, then the shell, where the server offers it
     // (read-only on a shared screen). Misses and whines moved to the status page
     // (top10 4a), so an older server's sheet has no pet group at all.
     const hasShell = Array.isArray(shellOptions);
-    const shellRows = !hasShell && !notices ? ""
+    const shellRows = !hasShell && !notices && !bedtime ? ""
       : sharedScreen()
         ? `<div class="sec">for the pet</div>
       ${notices}
+      ${bedtime}
       ${hasShell ? `${row(null, "shell", `<span class="shellro">${shellSwatch}${shellName}</span>`)}
       <div class="shellnote">ask a grown-up to change it</div>` : ""}`
         : `<div class="sec">for ${escape(this._linkName(s))}</div>
       ${notices}
+      ${bedtime}
       ${hasShell ? row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`) : ""}`;
     // Who each part changes: the pet (everyone), the viewer (follows their login),
     // or this browser.
     const html = `
       <div class="shead"><button class="sback">${SETTINGS_COPY.backToStatus}</button>${SAY_NOTE}</div>
-      ${shellRows}
+      <div class="sec">this screen</div>
+      <div class="sub">sound</div>
+      ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
+      ${s.species?.voice ? (soundsOn()
+        ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`)
+        // "sounds here" is the master: babble waits for it (its own switch keeps its setting)
+        : row(null, "babble", `<span><button class="bell babble" aria-label="babble: needs sounds here first" aria-pressed="false" aria-disabled="true">needs sounds</button></span>`)) : ""}
+      <div class="sub">look</div>
+      ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
+      ${row(null, "holiday names", `<span><button class="bell named" aria-label="holiday names" aria-pressed="${namedHolidays()}">${namedHolidays() ? "on" : "off"}</button></span>`)}
+      ${row(null, "mono screen", `<span><button class="bell mono" aria-label="mono screen: ${monoOn() ? "on" : "off"}, change" aria-pressed="${monoOn()}">${monoOn() ? "on" : "off"}</button></span>`)}
+      ${row(null, "big text", `<span><button class="bell bigtext" aria-label="big text: larger words on this screen's pages" aria-pressed="${bigOn()}">${bigOn() ? "on" : "off"}</button></span>`)}
       ${sharedScreen() ? "" : `<div class="sec">for you</div>`}
       ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell notify" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
       ${bond && myDay === undefined ? row(null, "my day", `<span>…</span>`) : ""}
@@ -8909,18 +8951,11 @@ class HatchPetCard extends HTMLElement {
         row(null, "birthday on my phone", `<span><button class="bell bdayphone" aria-label="birthday on my phone: a happy birthday message on your phone on the day" aria-pressed="${!!birthdayPhone}">${birthdayPhone ? "on" : "off"}</button></span>`) : ""}
       ${sharedScreen() ? "" : row(null, "baby talk", `<span><button class="bell babytalk" aria-label="baby talk: simpler words while a pet is a baby or child" aria-pressed="${babyTalk(this._hass.user?.id)}">${babyTalk(this._hass.user?.id) ? "on" : "off"}</button></span>`)}
       ${sharedScreen() ? "" : row(null, "my data", forgetButton("forgetme", "forget_me", "forget my data: your birthday, answers and settings for every pet; your bonds stay"))}
-      <div class="sec">this screen</div>
-      ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
-      ${s.species?.voice ? (soundsOn()
-        ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`)
-        // "sounds here" is the master: babble waits for it (its own switch keeps its setting)
-        : row(null, "babble", `<span><button class="bell babble" aria-label="babble: needs sounds here first" aria-pressed="false" aria-disabled="true">needs sounds</button></span>`)) : ""}
-      ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
-      ${row(null, "holiday names", `<span><button class="bell named" aria-label="holiday names" aria-pressed="${namedHolidays()}">${namedHolidays() ? "on" : "off"}</button></span>`)}
-      ${row(null, "mono screen", `<span><button class="bell mono" aria-label="mono screen: ${monoOn() ? "on" : "off"}, change" aria-pressed="${monoOn()}">${monoOn() ? "on" : "off"}</button></span>`)}
-      ${row(null, "big text", `<span><button class="bell bigtext" aria-label="big text: larger words on this screen's pages" aria-pressed="${bigOn()}">${bigOn() ? "on" : "off"}</button></span>`)}
+      ${shellRows}
+      <div class="sec">shared screen</div>
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
-      <div class="shellnote sharednote">a family tablet? give it its own login, and we'll make friends ♥</div>`;
+      <div class="shellnote sharednote">a family tablet? give it its own login, and we'll make friends ♥</div>
+      ${this._hass.user?.is_admin && !sharedScreen() ? `<div class="shellnote sharedprivacy">${SETUP_COPY.sharedPrivacy}</div>` : ""}`;
     if (!this._setStatus(s, html)) return;
     s.status.querySelector(".sback").addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
@@ -8933,7 +8968,7 @@ class HatchPetCard extends HTMLElement {
     });
     // A heading (or the back row beside its button) is not a button: a tap on it
     // leaves the sheet open.
-    s.status.querySelectorAll(".sec, .shead, .shellnote").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
+    s.status.querySelectorAll(".sec, .sub, .shead, .shellnote").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
     s.status.querySelector(".bell.shellrow")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);

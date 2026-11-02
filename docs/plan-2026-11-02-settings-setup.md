@@ -745,6 +745,25 @@ household's bedtime) to every login.
 - **Out of scope:** editing bedtime in the card (owner Q5); a PIN for the shared screen
   (settings-gear §3).
 
+### As built (s2693; reconciled against S3/S4 and the UX fixes)
+
+- **Order (UX F15, first mate 2026-11-02):** the sheet now reads "this screen" (sub-headings
+  **sound**: sounds here, babble; **look**: screen effects, holiday names, mono screen, big
+  text) → "for you" → "for <pet>" (notices, connect more, **bedtime**, shell) → "shared
+  screen" (the switch, its family-tablet note, N24). "this screen" keeps its heading (it says
+  who the rows change); the sub-headings sit under it.
+- **Bedtime row:** after the "connect more ›" link, so an admin's link stays right under
+  "notices". It follows the shipped S1-S6 code: older servers send no `sleep_times` and get no row.
+  The label is "bedtime"; the value is built in `sleepLine` (outside the scanned tables: digits).
+- **N24** is §13's wording, "sensor privacy is in the pet's options" (`SETUP_COPY.sharedPrivacy`,
+  scanned). It shows for an admin, and not on a shared screen (as "connect more ›" does not).
+- **N22/N23** are inline headings, as the sheet's other headings are.
+- **`test_init.py`:** `test_senses_are_kinds_never_entities` forbade the word "bedtime" anywhere
+  in the attributes; it now forbids it in `senses` and checks `sleep_times`.
+- **Status page (the 4c gotcha):** the friends row is a 44 px target (`.friendsrow`), and card-check
+  4c measures the status with a social level above 0. At 330 a 44 px row above the meters pushed
+  "happy" and "energy" off the box, so the row moved below the meters (after "discipline").
+
 ## 10. The review's other findings: do or skip
 
 | Finding | Call | Why |

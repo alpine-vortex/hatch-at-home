@@ -390,7 +390,18 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   // this 158 px box at 330 and pushes the energy meter off it: measure the pet not calling,
   // as the pinned sections do, and draw the status again so it shows.
   await pinAwake(card, "shell 4c");
-  await card.evaluate((el) => { for (const s of el._slides) { s.statusHtml = null; s.drawnSig = null; } el._redraw(); });
+  // The friends row (a button) shows with any social level above 0: measure the status with it, as a
+  // pet with friends has it (S7: a 44 px target, and the meters still show unscrolled at 330).
+  await card.evaluate((el) => {
+    const real = el._state;
+    el._realState4c = real;
+    el._state = (x, key) => {
+      const st = real.call(el, x, key);
+      return key === "sensor.life_stage" && st && x === el._slides[el._index] ? { ...st, attributes: { ...st.attributes, social_level: 5 } } : st;
+    };
+    for (const s of el._slides) { s.statusHtml = null; s.drawnSig = null; }
+    el._redraw();
+  });
   const boxIssues = [];
   const boxCounts = {};
   for (const width of [330, 420]) {
@@ -437,6 +448,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
       boxCounts[`${width}-${view}`] = m.n;
       if (m.small.length || m.overlap.length || m.hidden.length || m.posTab || m.n < 2) boxIssues.push(`${width} ${view}: ${JSON.stringify(m)}`);
       if (view === "status" && m.rows < 3) boxIssues.push(`${width} status: only ${m.rows} meter rows found`);
+      if (view === "status" && !await cur().locator(".status .friendsrow").count()) boxIssues.push(`${width} status: no friends row to measure`);
       if (view === "status") { await cur().locator(".status .gear").click(); await page.waitForTimeout(250); }
       if (view === "settings") {
         // Tab from the back row visits the buttons in page order.
@@ -483,6 +495,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     await cur().locator(".status .shellrow").click();
     await page.waitForTimeout(300);
   }
+  await card.evaluate((el) => { delete el._state; delete el._realState4c; for (const s of el._slides) { s.statusHtml = null; s.drawnSig = null; } el._redraw(); });
   await page.setViewportSize({ width: 420, height: 860 });
   await page.waitForTimeout(400);
   check("4c: every status, settings and picker control is 44x44 at 330 and 420, none overlap, the wish and meters show unscrolled, tab order is page order, a shared screen's status has misses/whines",
@@ -603,7 +616,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   });
   check("shell: a shared screen turned on here reverts the preview and closes the picker", reverted(l) && l.sheet, brief(l));
   check("shell: on a shared screen the row is read-only, named for no one, with its note; the picker is unreachable",
-    shared.heads[0] === "for the pet" && !shared.heads.some((h) => h.includes(a.name.toLowerCase()) || h.includes(a.name)) &&
+    shared.heads.join("|") === "this screen|for the pet|shared screen" && !shared.heads.some((h) => h.includes(a.name.toLowerCase()) || h.includes(a.name)) &&
       !shared.button && shared.ro === `${a.world} (default)` && shared.note === "ask a grown-up to change it" &&
       shared.tiles === 0 && !shared.picker, JSON.stringify(shared));
   await shot("02f-shell-shared");
@@ -720,7 +733,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     el._state = function (slide, key) {
       const st = real.call(this, slide, key);
       if (key !== "sensor.life_stage" || !st) return st;
-      const { shell_finish_options, shell_locked, senses, ...rest } = st.attributes;
+      const { shell_finish_options, shell_locked, senses, sleep_times, ...rest } = st.attributes;
       return { ...st, attributes: rest };
     };
     s.statusHtml = null;
@@ -735,7 +748,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     return out;
   });
   check("shell: an older server's sheet has no shell row, no picker and no pet group (misses and whines are on status, top10 4a)",
-    /^for you\|this screen$/.test(older.heads.join("|")) && !older.row && older.tiles === 0, JSON.stringify(older));
+    older.heads.join("|") === "this screen|for you|shared screen" && !older.row && older.tiles === 0, JSON.stringify(older));
 
   // Each error line: the shell goes back to its pick and the picker stays open.
   await openPicker();
@@ -1401,8 +1414,65 @@ async function main() {
   check("top10 3a: the family-tablet note follows the shared screen switch",
     /sharednote/.test(tabletNote.next || "") && tabletNote.text === "a family tablet? give it its own login, and we'll make friends ♥",
     JSON.stringify(tabletNote));
-  check("the sheet heads the pet's rows, the viewer's and this screen's",
-    sheet.heads.join("|") === `for ${sheet.pet}|for you|this screen`, sheet.heads.join("|"));
+  // S7: the pet's bedtime, a read-only row in the pet's group under "notices", in the viewer's HA time
+  // format, on personal and shared screens alike; "sound" and "look" under "this screen"; the shared
+  // screen's switch on its own at the foot, with N24 for an admin only (and never on a shared screen).
+  const sleepSheet = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const real = el._state;
+    const realHass = el._hass;
+    const draw = (sleep, format, shared, admin) => {
+      el._state = (x, key) => {
+        const st = real.call(el, x, key);
+        return key === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, sleep_times: sleep, senses: ["weather"] } } : st;
+      };
+      el._hass = { ...realHass, locale: { ...realHass.locale, time_format: format }, user: { ...realHass.user, is_admin: admin } };
+      localStorage.setItem("hatch-shared-screen", shared ? "on" : "off");
+      s.statusHtml = null;
+      el._renderSettings(s);
+      const kids = [...s.status.children];
+      const row = kids.find((r) => /^bedtime/.test(r.textContent));
+      const at = (n) => kids.indexOf(n);
+      const heads = kids.filter((n) => n.classList.contains("sec"));
+      const notices = kids.find((r) => /^notices/.test(r.textContent));
+      return { text: row?.querySelector(".sleeptimes")?.textContent ?? null, controls: row ? row.querySelectorAll("button, [tabindex]").length : -1,
+        afterNotices: !!row && !!notices && at(row) > at(notices),
+        inPetGroup: !!row && heads.some((h) => at(h) < at(row) && /^for /.test(h.textContent)) && at(row) < at(heads[heads.length - 1]),
+        subs: [...s.status.querySelectorAll(".sub")].map((h) => h.textContent).join("|"),
+        order: kids.filter((n) => n.matches(".sec, .sub, .bell.sound, .bell.babble, .bell.lcdfx, .bell.named, .bell.mono, .bell.bigtext, .bell.shared") || n.querySelector(".bell.sound, .bell.babble, .bell.lcdfx, .bell.named, .bell.mono, .bell.bigtext, .bell.shared"))
+          .map((n) => n.matches(".sec, .sub") ? n.textContent : n.querySelector(".bell").className.split(" ")[1]).join(">"),
+        n24: s.status.querySelector(".sharedprivacy")?.textContent ?? null,
+        lastIsShared: heads[heads.length - 1]?.textContent === "shared screen" && !!kids.slice(at(heads[heads.length - 1])).find((n) => n.querySelector(".bell.shared")) };
+    };
+    try {
+      return { twentyFour: draw({ bedtime: "21:30", wake: "06:45" }, "24", false, true), twelve: draw({ bedtime: "21:30", wake: "06:45" }, "12", false, true),
+        shared: draw({ bedtime: "23:00", wake: "07:00" }, "24", true, true), plain: draw({ bedtime: "23:00", wake: "07:00" }, "24", false, false),
+        none: draw(undefined, "24", false, true) };
+    } finally {
+      el._state = real;
+      el._hass = realHass;
+      localStorage.setItem("hatch-shared-screen", "off");
+      s.statusHtml = null;
+      el._renderSettings(s);
+    }
+  });
+  check("S7: the bedtime row is a read-only target in the pet's group under notices, in the viewer's 12 or 24 hour format",
+    sleepSheet.twentyFour.text === "about 21:30 · up 06:45" && sleepSheet.twelve.text === "about 9:30 pm · up 6:45 am" &&
+    sleepSheet.twentyFour.controls === 0 && sleepSheet.twentyFour.afterNotices && sleepSheet.twentyFour.inPetGroup &&
+    sleepSheet.none.text === null, JSON.stringify(sleepSheet));
+  check("S7: the bedtime row shows on a shared screen too, still with no control",
+    sleepSheet.shared.text === "about 23:00 · up 07:00" && sleepSheet.shared.controls === 0 && sleepSheet.shared.inPetGroup, JSON.stringify(sleepSheet.shared));
+  check("S7: \"this screen\" has the sub-headings sound (sounds, babble) then look (effects, holiday names, mono, big text); the shared screen switch is last, under its own heading",
+    sleepSheet.twentyFour.subs === "sound|look" && sleepSheet.twentyFour.lastIsShared &&
+    /^this screen>sound>sound(>babble)?>look>lcdfx>named>mono>bigtext>for you/.test(sleepSheet.twentyFour.order) &&
+    /shared screen>shared$/.test(sleepSheet.twentyFour.order), sleepSheet.twentyFour.order);
+  check("S7: N24 (sensor privacy) is for an admin only, and not on a shared screen",
+    sleepSheet.twentyFour.n24 === "sensor privacy is in the pet's options" && sleepSheet.plain.n24 === null && sleepSheet.shared.n24 === null,
+    JSON.stringify({ admin: sleepSheet.twentyFour.n24, plain: sleepSheet.plain.n24, shared: sleepSheet.shared.n24 }));
+  // S7 (F15: order by use): this screen first (sound, then look), then the viewer's, then the pet's,
+  // and the shared screen on its own at the foot.
+  check("the sheet heads this screen's rows, the viewer's, the pet's and the shared screen's, in that order",
+    sheet.heads.join("|") === `this screen|for you|for ${sheet.pet}|shared screen`, sheet.heads.join("|"));
   await shot("02c-settings");
   // A heading is not a button: tapping it leaves the sheet up.
   await cur().locator(".status .sec").first().click();
@@ -8385,7 +8455,7 @@ async function main() {
     lapse.sent.join() === "virtual_pet/forget_me" && lapse.message === "hm, that didn't work. try again soon" &&
     lapse.failed.text === "forget" && lapse.failed.aria === unarmed && lapse.inSheet, JSON.stringify(lapse));
   check("forget my data is a personal row, after baby talk",
-    !forgot.shared && forgot.sharedSheet && forgot.label === "my dataforget" && forgot.order === "baby talk,my data,sounds here" &&
+    !forgot.shared && forgot.sharedSheet && forgot.label === "my dataforget" && forgot.order === "sounds here,baby talk,my data" &&
     forgot.aria === "forget my data: your birthday, answers and settings for every pet; your bonds stay",
     JSON.stringify(forgot));
   check("one tap on forget my data only asks",
