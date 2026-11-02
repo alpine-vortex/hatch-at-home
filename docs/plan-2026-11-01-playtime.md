@@ -191,6 +191,16 @@ pytest measures its own random figure and asserts the 20-point gap.
   A keep: round + 1, bank + basket. Anything else is "someone else is playing". The
   `round === 1 && g.round > 0` restart guess is not used for the dig (a dig lost to the
   server comes back as `no_game`).
+- **One person's two screens (owner 2026-11-02, UX6 F16).** On the dig only, a reply out of
+  step from the same person's other screen is adopted, not ended: the card takes the server's
+  round, bank and basket and says once "oh! you dug there too ♪". Same person is known from a
+  new `yours` flag on every dig reply (and on `empty_basket`, which now also carries the
+  round, bank and basket): `game.player == the caller`, a bool, never an id, nothing new in
+  state, logs or diagnostics. A different person's reply out of step still says "someone else
+  is playing". `empty_basket` with `yours` is adopted the same way. ✕ on one screen parks the
+  dig; the other screen's next tap gets `no_game` with `parked` and closes with the parked line
+  ("ok! i'll keep our pile safe ♪"), not "maybe later!". Left or Right and Higher or Lower keep
+  the rule above.
 
 **Score, record and pay (3).**
 - Win at **5 banked** (`R.DIG_WIN_AT = 5`); a won game pays **`R.DIG_WIN_HAPPINESS = 23`**, its

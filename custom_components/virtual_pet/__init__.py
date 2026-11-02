@@ -209,6 +209,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_subscribe)
     websocket_api.async_register_command(hass, websocket_notify_me)
     websocket_api.async_register_command(hass, websocket_linked)
+    websocket_api.async_register_command(hass, websocket_greeted)
     websocket_api.async_register_command(hass, websocket_my_day)
     websocket_api.async_register_command(hass, websocket_set_shell)
     websocket_api.async_register_command(hass, websocket_rename)
@@ -704,6 +705,31 @@ def websocket_linked(
         return
     one.social_link(two.pet_id)
     two.social_link(one.pet_id)
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/greeted",
+        vol.Required("entity_id"): cv.entity_id,
+    }
+)
+@callback
+def websocket_greeted(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The card played the day's visitor to someone, on any screen (a shared
+    one too, which the hourly `visit` call never credits): the pet counts a
+    greeted visitor for the social meter, once a day and only while the visit
+    is on. It carries nobody's name, and nothing about who was looking is kept."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    pet.social_greet()
     connection.send_result(msg["id"])
 
 

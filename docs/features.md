@@ -131,7 +131,7 @@ stand-in. **not built** = planned, nothing in the code.
 | Friendship anniversary | "we've been friends for a month! ♥" | model `friends_for` | none | live |
 | Best-friend photo | level 10, teen+, once per generation; in the journal; save | model `take_photo`; card `_renderPhoto` | not on a shared screen | live |
 | My day | positive notes from phone health data (steps, bike, sleep, rain walk, zone return, early alarm, send-off) | wellbeing `notice`; people; card `NOTES` | per person, opt-in | live |
-| Friends this week | status row of 5 hearts for the pet's week beyond the house: a visitor seen while looking in, a neighbour met over the infrared link. Cosmetic, hides until there is a friend. | model (social days); card `_renderStatus` | none | live |
+| Friends this week | status row of 5 hearts for the pet's week beyond the house: a visitor the card played (any screen, `virtual_pet/greeted`; a look inside the window still counts), a neighbour met over the infrared link. A tap on the row says what it counts. Cosmetic, hides until there is a friend. | model (social days); card `_renderStatus`, `_visitorReport`; `virtual_pet/greeted` | none | live |
 | Shared screen | per browser: nothing personal, no visit counted; a note under the switch says which setup suits a family tablet | card `SHARED_KEY`, `_goShared` | settings → this screen | live |
 | Forget my data / birthday | two-tap erase | `virtual_pet/forget_me`, `forget_birthday` | not on a shared screen | live |
 | Private channel | the bond and the rest only over the user's own websocket | `channel.py`; `virtual_pet/subscribe` | none | live |
@@ -170,7 +170,7 @@ stand-in. **not built** = planned, nothing in the code.
 | Ghosting | a fading trace on moves | card `_ghosting` | screen effects; off on mono and with reduced motion | live |
 | Mono screen | four greens | card `MONO_KEY` | per browser; Safari and iOS can't draw it | live/partial (no Safari) |
 | Backlight | a shell nub lights the screen for 3 s | card `_backlight`, `BACKLIGHT_MS` | none | live |
-| Infrared link | two or more pets: once a day per pair, a beam and a visit; kindred personality pairs get an extra line; the day's first waits for someone watching | card `_linkStart`, `KINDRED`, `LINK_AFTER_MS` | none | live |
+| Infrared link | two or more pets: once a day per pair, a beam and a visit; kindred personality pairs get an extra line; the day's first waits for someone watching; with exactly three pets the end pets meet across the wrap; a guest from the left mirrors the visit | card `_linkStart`, `KINDRED`, `LINK_AFTER_MS` | none | live |
 | Low battery after an HA restart | flicker and a battery gag | card `_powerGag`, `POWER_KEY` | reduced motion: no flicker | live |
 | Sounds (chirps) | call, hatch, trait, win; quiet 21:00–08:00 | card `SOUND_KEY`, `_chirp` | sounds here (off) | live |
 | Swipe, arrows, dots | multi-pet shelf | card `_layout` | card `devices` | live |

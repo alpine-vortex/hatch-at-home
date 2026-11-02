@@ -229,7 +229,8 @@ function babble(text, voice) {
       const gain = audio.createGain();
       osc.type = "triangle";
       osc.frequency.value = voice.pitch * 2 ** (semis / 12);
-      gain.gain.setValueAtTime(0.04, t);
+      gain.gain.setValueAtTime(0, t); // a 5 ms ramp in: a note that starts at full gain clicks (UX7 F7)
+      gain.gain.linearRampToValueAtTime(0.04, t + 0.005);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
       osc.connect(gain).connect(audio.destination);
       osc.start(t);
@@ -392,6 +393,21 @@ function saveStashedAnswers(userId, list) {
   }
 }
 
+let lastChirp = {}; // the last chirp any card played: {card, name, device, at} (see _chirp)
+
+// Every chirp goes through one lowpass at about 3 kHz (UX7 F10): the toy's square beep, less shrill
+// next to the voice's soft triangle babble.
+let chirpBus = null;
+function chirpOut() {
+  if (!chirpBus || chirpBus.context !== audio) {
+    chirpBus = audio.createBiquadFilter();
+    chirpBus.type = "lowpass";
+    chirpBus.frequency.value = 3000;
+    chirpBus.connect(audio.destination);
+  }
+  return chirpBus;
+}
+
 function playChirp(name) {
   const notes = CHIRPS[name];
   if (!notes) return;
@@ -404,9 +420,10 @@ function playChirp(name) {
       const gain = audio.createGain();
       osc.type = "square";
       osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.06, t);
+      gain.gain.setValueAtTime(0, t); // a 5 ms ramp in: a note that starts at full gain clicks (UX7 F7)
+      gain.gain.linearRampToValueAtTime(0.05, t + 0.005);
       gain.gain.exponentialRampToValueAtTime(0.001, t + len);
-      osc.connect(gain).connect(audio.destination);
+      osc.connect(gain).connect(chirpOut());
       osc.start(t);
       osc.stop(t + len);
     }
@@ -429,7 +446,7 @@ const LINK_AFTER_MS = [600000, 1500000]; // the infrared link: 10-25 min after t
 // untouched wall tablet. Later links keep LINK_AFTER_MS.
 // An idle line about a neighbour on the shelf (gaps-seams 5b), 1 in 6 idle lines.
 const NEIGHBOUR_ODDS = 1 / 6;
-const NEIGHBOUR_LINES = [(n) => `wonder what ${n} is up to ♪`, (n) => `*waves toward ${n}*`, (n) => `I hope ${n} is having a nice day`];
+const NEIGHBOUR_LINES = [(n) => `wonder what ${n} is up to ♪`, (n) => `*waves toward ${n}*`, (n) => `i hope ${n} is having a nice day`];
 const LINK_FIRST_MS = [60000, 180000];
 const LINK_TOUCHED_MS = 300000;
 // A link already today on this browser (oncePerDay's `hatch-link-<pair>-<day>` keys).
@@ -657,6 +674,7 @@ function thanksgiving(year, days = 0) {
   return [at.getMonth() + 1, at.getDate()];
 }
 const seasonDate = (when, year) => (typeof when === "function" ? when(year) : when);
+const HEAD_SPRITE = 75; // px the sprite is drawn at inside a head crop (UX7 F2)
 const HEAD_TOPS = new Map(); // frame|x -> the top of the head (see _headTop)
 const FRAME_IMGS = new Map(); // src -> Image, for measuring frames not on show
 const SEASON_COSTUME_MS = [600000, 900000]; // between costume moments (10-15 min)
@@ -827,6 +845,7 @@ const BUBBLE_POP_ODDS = 1 / 8; // a clean's chance of one bubble drifting up and
 const mealPart = (hour) => (hour >= 5 && hour < 11 ? "breakfast" : hour >= 11 && hour < 16 ? "lunch" : hour >= 16 && hour < 22 ? "supper" : null);
 const VISIT_IN_MS = 1400; // to arrive (or leave), unless the visitor says
 const VISIT_STAY_MS = 3000; // at the edge, past the greet's start
+const VISIT_SWIPE_GRACE_MS = 600; // a swipe away and back within it keeps the visitor
 const VISIT_CALM_MS = 5000; // reduced motion: still, then gone
 const VISIT_CHECK_MS = 20000; // between looks for a visit
 const VISIT_SHOWN_MS = 10000; // the slide on show this long first
@@ -909,6 +928,15 @@ function onceEver(name) {
     (onceEver.seen ??= new Set()).add(key);
   }
   return true;
+}
+// Whether onceEver(name) has already been spent, without spending it.
+function onceSeen(name) {
+  const key = `hatch-${name}`;
+  try {
+    return !!localStorage.getItem(key);
+  } catch (err) {
+    return !!onceEver.seen?.has(key);
+  }
 }
 const WEEK_OLD = ["one week old today! ♥", "a whole week together! ♥"]; // gaps-seams 1b
 // The card's own per-day keys (oncePerDay's `hatch-<name>-<Date.toDateString()>`, and the
@@ -1252,7 +1280,7 @@ const PERSONA = {
     visit: ["a visitor! what an honour", "do come in, friend ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `ah, ${n}! a delight ♥`, (n) => `${n}! what an honour ♥`],
     link_guest: [(n) => `${n}! how splendid ♥`],
-    link_kindred: [(n) => `${n}! two of a kind, you and I ♥`, "such a grand pair we make ♥"],
+    link_kindred: [(n) => `${n}! two of a kind, you and i ♥`, "such a grand pair we make ♥"],
   },
   plucky: {
     reveal: ["I'm the plucky kind! hmph ♥", "plucky, that's me! ♥"],
@@ -1420,10 +1448,12 @@ const VISIT_FRIENDS = {
 // S-a (E4): a morning's wake line, in turns; the last one only on a day with a dream
 // (on another day its turn says the first).
 const WAKE_LINES = ["*yaaawn*", "*yawn* ...morning already ♪", "*stretch* mm, cozy night ♪", "*yaaawn* ...hi, day ♪",
-  "*blink blink* morning ♪", "*yawn* I had the best dream"];
+  "*blink blink* morning ♪", "*yawn* i had the best dream"];
 // S-b: lights out after a visitor seen here today (by its name), else after today's sunset.
 const NIGHT_VISITOR = [(v) => `night, little ${v} ♪`, (v) => `sweet dreams, ${v} ♪`];
 const NIGHT_SUNSET = "night... what a nice sunset ♥";
+// A new pet's first bedtime, said once (owner, 2026-11-02, UX review 4 Q5).
+const FIRST_NIGHT = "my first night here... ♥";
 // F-a: a meal by the device's clock (none from 22 to 05: "yum" only).
 const MEAL_LINES = {
   breakfast: ["breakfast! ♪", "a good start to the day ♪", "morning munchies! yum", "breakfast time, yum ♥"],
@@ -1666,6 +1696,7 @@ const STATUS_COPY = {
   eggCracking: "cracking! ♥", // 6 or fewer
   tileRaised: (name) => `${name}! my old pal ♥`, // F14 (FM 2026-11-02: 40 with the longest name)
   tileUnmet: "not met one of those yet",
+  friendsHint: "visitors and neighbours this week ♪", // UX8 F9 (FM 2026-11-02, owner delegated): a tap on the friends row
 };
 // Talking with the pet, UX fix 3 (review 3, F11/F12/F14; copy APPROVED by the first mate
 // 2026-11-02, owner delegated): the blanket and the fan answered, the lay's "sure?" in the
@@ -1684,6 +1715,7 @@ const GAME_COPY = {
   back: "we're back! dig or keep ♪", // F8, a dig carried on
   empty: "dig first! the basket's empty", // F12, keep on an empty basket
   idle: "let's dig another time ♪", // Q8, the card closes a dig left idle
+  dugThere: "oh! you dug there too ♪", // UX6 F16, a screen adopts the same person's other screen's dig
 };
 // --- end fresh-expand copy ---
 // Approved lines the scan's nag words ("again", "forgot...") would refuse: a retry, "just us",
@@ -2665,15 +2697,20 @@ const STYLE = `
   .foot { gap: 8px; }
   .nav { flex-shrink: 0; }
   .dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0; min-width: 0; }
-  /* 44 x 44 hit area (4c's size); the drawn dot is still 10 px, and the boxes sit edge to edge. */
+  /* 44 x 44 hit area (4c's size); the drawn dot is a 16 px head, and the boxes sit edge to edge. */
   .dot { width: 44px; height: 44px; border: none; padding: 0; cursor: pointer;
     background: none; display: flex; align-items: center; justify-content: center; }
-  .dot::before { content: ""; width: 10px; height: 10px; border-radius: 5px;
-    background: color-mix(in srgb, var(--hp-ink) 55%, transparent); transition: width .3s; }
-  .dot[aria-current="true"]::before { width: 20px; background: var(--hp-ink); }
+  /* The dot is the pet's head (UX7 F8): 16 px, a 2 px ring, the sprite cropped as the status band's head is
+     (_headCrop). The one on show is full colour; the others sit back at 55%. Before the sprite is drawn the
+     ring alone shows. */
+  .dot::before { content: ""; width: 16px; height: 16px; border-radius: 8px; box-sizing: border-box;
+    border: 2px solid var(--hp-ink); opacity: .55; image-rendering: pixelated;
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 43px) var(--say-size, 43px) no-repeat border-box,
+      color-mix(in srgb, var(--hp-ink) 25%, transparent); }
+  .dot[aria-current="true"]::before { opacity: 1; }
   /* A pet this browser hasn't shown yet (UX fix 4, F4): a small pulse till its slide is first shown
-     (reduced motion: no pulse, a darker dot). */
-  .dot.fresh::before { background: var(--hp-ink); animation: dotpulse 1.6s ease-in-out infinite; }
+     (reduced motion: no pulse, but full colour like the one on show). */
+  .dot.fresh::before { opacity: 1; animation: dotpulse 1.6s ease-in-out infinite; }
   @keyframes dotpulse { 50% { transform: scale(1.5); } }
   .slide.away-slide { cursor: pointer; }
   /* The empty card's toy (UX fix 4, F5): an egg's silhouette (the journal's "???" look), no buttons. */
@@ -2827,11 +2864,19 @@ const STYLE = `
   .finish-glow:has(.screen.dim) :is(.loop, .lid, .roof) > .mould, .finish-glow:has(.screen.dim) .feet .mould {
     background: #9fdc7c; }
   .finish-glow:has(.screen.night) .crescent > .mould, .finish-glow:has(.screen.dim) .crescent > .mould { background: #d3f7ad; }
+  /* The plastic lights up in a dark HA theme (ha-card.ha-dark, from hass.themes.darkMode: UX7 F6), not
+     in the OS's dark mode; where HA doesn't say, the OS's is the fallback. */
+  ha-card.ha-dark .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
+  ha-card.ha-dark .finish-glow .body { box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
+  ha-card.ha-dark .finish-glow :is(.loop, .lid, .roof) > .mould,
+  ha-card.ha-dark .finish-glow .feet .mould { background: #9fdc7c; }
+  ha-card.ha-dark .finish-glow .crescent > .mould { background: #d3f7ad; }
   @media (prefers-color-scheme: dark) {
-    .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
-    .finish-glow .body { box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
-    .finish-glow :is(.loop, .lid, .roof) > .mould, .finish-glow .feet .mould { background: #9fdc7c; }
-    .finish-glow .crescent > .mould { background: #d3f7ad; }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .body { box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow :is(.loop, .lid, .roof) > .mould,
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .feet .mould { background: #9fdc7c; }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .crescent > .mould { background: #d3f7ad; }
   }
   /* Prints any world can wear (FINISHES): a tile of whole cells (--print-<key>) over the
      plastic's face (--d-face), tiled at the grid's size. */
@@ -3429,10 +3474,20 @@ const STYLE = `
   .visit .vguest.greethop { animation: hop .7s ease-in-out 2; }
   @keyframes ir-in { from { translate: 160% 0; } }
   @keyframes ir-out { to { translate: 160% 0; } }
-  .visit .vsay { position: absolute; right: 5%; top: 27%; max-width: 46%; padding: 5px 9px; border-radius: 10px;
+  /* The guest came from the left (UX8 F5): the visit is mirrored, the guest at 30% facing
+     right, the host on the right facing left, the reply on the left. */
+  .visit.left .vguest { left: 30%; animation-name: ir-in-l; }
+  .visit.left .vguest.greethop { animation: hop .7s ease-in-out 2; }
+  .visit.left .vguest.out { animation: ir-out-l .5s steps(5, end) forwards; }
+  @keyframes ir-in-l { from { translate: -160% 0; } }
+  @keyframes ir-out-l { to { translate: -160% 0; } }
+  .visit.left .vsay { right: auto; left: 5%; }
+  .visit .vsay { position: absolute; right: 5%; top: 27%; max-width: 62%; padding: 5px 9px; border-radius: 10px;
     background: #fff; color: #2a2a2a; font-size: 13px; line-height: 1.25; }
+  ha-card.bigtext .visit .vsay { font-size: 15px; } /* UX8 F3 */
   .screen.linking .perch { display: none; }
   .pet.linking { translate: -43% 0; transition-duration: .5s; }
+  .screen.linkleft .pet.linking { translate: 43% 0; }
   .speck { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff6c9;
     box-shadow: 0 0 6px 2px rgba(255,240,170,.8); top: 45%; z-index: 2; pointer-events: none;
     animation: speck 2.6s ease-in-out forwards; }
@@ -3446,16 +3501,17 @@ const STYLE = `
   .screen.raining .rain { display: block; }
   .screen.raining .bg { filter: brightness(.82) saturate(.75); }
   @keyframes rainfall { to { background-position: -10px 40px; } }
-  /* The house answers (H3): heat shimmer / cool wisps for 2.5 s. A stand-in for the art. */
+  /* The house answers (H3): a warm glow rising from the floor (heat) or a pale frost in the top
+     corners (cool) for 2.5 s. A stand-in for the art. Neither crosses the pet's face (UX7 F3); under
+     reduced motion the same tint just stays for the 2.5 s: an edge glow doesn't read as a flash. */
   .screen.fx-heat::after, .screen.fx-cool::after { content: ""; position: absolute; inset: 0; z-index: 3;
     pointer-events: none; animation: house-fx 2.5s ease-in-out both; }
-  .screen.fx-heat::after { background: repeating-linear-gradient(0deg, rgba(255,170,90,.0) 0 7px,
-    rgba(255,150,60,.5) 7px 12px); background-size: 100% 22px; }
-  .screen.fx-cool::after { background: repeating-linear-gradient(100deg, rgba(200,235,255,0) 0 12px,
-    rgba(210,240,255,.6) 12px 16px); background-size: 40px 100%; }
+  .screen.fx-heat::after { background: linear-gradient(to top, rgba(255,150,60,.35), transparent 45%); }
+  .screen.fx-cool::after { background: radial-gradient(circle at 0 0, rgba(210,240,255,.5), transparent 40%),
+    radial-gradient(circle at 100% 0, rgba(210,240,255,.5), transparent 40%); }
   @keyframes house-fx { 0% { opacity: 0; transform: translateY(6px); } 8%, 70% { opacity: 1; }
     100% { opacity: 0; transform: translateY(-10px); } }
-  @media (prefers-reduced-motion: reduce) { .screen.fx-heat::after, .screen.fx-cool::after { animation: none; opacity: .5; } }
+  @media (prefers-reduced-motion: reduce) { .screen.fx-heat::after, .screen.fx-cool::after { animation: none; opacity: .7; } }
   /* The robot vacuum (H4): a 22x12 rounded box, dark grey with a light rim and a blinking dot,
      gliding across the floor line in 6 s. A stand-in for the house_robot art. */
   .screen.fx-robot::before { content: ""; position: absolute; left: 0; bottom: 3%; z-index: 1; width: 22px; height: 12px;
@@ -3521,6 +3577,10 @@ const STYLE = `
   /* The backlight lights the menus too (F10): the sheet and its back band lift toward the glow's
      mint, a faint lift by day and a stronger one in the dark, fading out with the glow. */
   .status, .shead { transition: background-color .6s ease-out; }
+  /* At night and dim the sheet and the bubble sink into the dark LCD instead of staying daylight-bright
+     (UX7 F5); the backlight (.lit, below) still lifts the sheet. Dark ink stays above 7:1. */
+  .screen.night .status, .screen.dim .status { --sheet-bg: color-mix(in srgb, #e9e2c6 72%, #1d2440); }
+  .screen.night .bubble, .screen.dim .bubble { background: color-mix(in srgb, #fffdf5 80%, #1d2440); }
   .screen.lit .status { --sheet-bg: color-mix(in srgb, #e9e2c6 55%, #dffbf2); }
   .screen.lit.night .status, .screen.lit.dim .status, .screen.lit.faded .status { --sheet-bg: color-mix(in srgb, #e9e2c6 15%, #dffbf2); }
   .screen.lit .status, .screen.lit .shead { transition: none; }
@@ -3560,9 +3620,10 @@ const STYLE = `
   .screen:has(> .game:not([hidden])) .bubble { max-width: 54%; }
   /* A narrow card: status rows fit four hearts. */
   .compact .row { grid-template-columns: 16px 70px minmax(0, 1fr); gap: 5px; }
-  .compact .hearts img { width: 14px; height: 14px; }
+  .compact .hearts img { flex-basis: 14px; width: 14px; }
   /* Every row: an icon slot (maybe empty), the label, the value; all on one grid. */
   .row { display: grid; grid-template-columns: 18px 84px minmax(0, 1fr); align-items: center; gap: 6px; }
+  ha-card:not(.bigtext) .porthole .row { grid-template-columns: 16px 60px minmax(0, 1fr); gap: 5px; } /* the rim cuts the value column (UX8 F7) */
   .bar { height: 9px; border: 2px solid #2f3a24; padding: 1px; }
   .bar div { height: 100%; background: #2f3a24; }
   .hearts { letter-spacing: 2px; }
@@ -3582,7 +3643,7 @@ const STYLE = `
   /* The pet's head and name at the status band's left (UX fix 2, F10). */
   .who { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
   .whohead { flex: none; width: 28px; height: 28px; image-rendering: pixelated;
-    background: var(--say-img, none) var(--say-at, 0 0) / 128px 128px no-repeat; }
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 75px) var(--say-size, 75px) no-repeat; }
   .whoname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .gear { margin-left: auto; display: flex; align-items: center; justify-content: center;
     min-width: 44px; min-height: 44px; padding: 0 5px; border: none; background: none;
@@ -3662,7 +3723,7 @@ const STYLE = `
     background: #fbf7e6; color: #2f3a24; line-height: 1.15; }
   .status-feedback.say[hidden] { display: none; }
   .status-feedback.say::before { content: ""; flex: none; width: 28px; height: 28px;
-    background: var(--say-img, none) var(--say-at, 0 0) / 128px 128px no-repeat; image-rendering: pixelated; }
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 75px) var(--say-size, 75px) no-repeat; image-rendering: pixelated; }
   .shead:has(.pback) .status-feedback.say { left: var(--sx, 12px); right: var(--sx, 12px); }
   .jdream, .stoday { font-size: 13px; color: var(--hp-subink); margin: 2px 0 4px; } /* today's dream, today's line (E9) */
   .jweek { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; margin: 0 0 6px; } /* E14 */
@@ -3743,7 +3804,8 @@ const STYLE = `
   .screen .status img { position: static; } /* not scene sprites */
   .row .picon { width: 18px; height: 18px; }
   .hearts { display: flex; gap: 3px; }
-  .hearts img { width: 18px; height: 18px; image-rendering: pixelated; }
+  /* The hearts shrink to the value column (UX8 F7): five of them clipped in the porthole at 300. */
+  .hearts img { flex: 0 1 18px; min-width: 0; width: 18px; height: auto; aspect-ratio: 1; image-rendering: pixelated; }
   /* A cap is a domed button cut on the grid (_mould): its face is the cap's own
      background, its side (below the box) and the light on it are pseudo-elements, and
      it sinks two cells when pressed. */
@@ -3814,6 +3876,17 @@ const STYLE = `
     translate: var(--ask-dx, 0px) var(--ask-dy, -14%); /* _askPlace measures the chips and the bubble */
     scale: calc(var(--k, 1) * var(--ask-f, .9)) !important; } /* !important: the species scale is inline */
   .screen:has(> .askday) .pet { transition: translate .25s steps(2), rotate .2s ease-out, scale .25s steps(2); }
+  /* Beside the bubble (UX7 F1): it wraps in the room left of the pet's column. No room at all: the
+     pet's head sits in the bubble and the pet itself waits out the question. */
+  .screen:has(> .askday) .bubble { max-width: var(--ask-bw, 64%); }
+  .screen:has(> .askday.nopet) .bubble { top: 2%; padding: 1px 6px 1px 36px; min-height: 20px; font-size: 12px; line-height: 1.15; }
+  .porthole .screen:has(> .askday.nopet) .bubble { top: 4%; left: 7%; }
+  .screen .askday.nopet { bottom: 2%; } /* the chips and the bubble share the whole height */
+  .porthole .screen .askday.nopet { bottom: 2%; }
+  .screen:has(> .askday.nopet) .bubble::before { content: ""; position: absolute; left: 4px; top: 50%;
+    width: 28px; height: 28px; margin-top: -14px; image-rendering: pixelated;
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 75px) var(--say-size, 75px) no-repeat; }
+  .screen:has(> .askday.nopet) .pet, .screen:has(> .askday.nopet) .perch, .screen:has(> .askday.nopet) .ghost { visibility: hidden; }
   /* Big text reaches the pet's words too (F9). */
   ha-card.bigtext .bubble { font-size: 16px; }
   /* Big text reaches the game (UX fix 6, F10): the score, the guess labels and the picker. */
@@ -3891,6 +3964,7 @@ class HatchPetCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    this._syncTheme();
     if (this._resumedAt && !document.hidden && hass?.states !== this._resumeStates) {
       this._resumedAt = this._resumeStates = null; // fresh states: the look may begin
     }
@@ -3898,6 +3972,14 @@ class HatchPetCard extends HTMLElement {
     this._watchServerClock(hass);
     this._resendAnswers();
     this._update();
+  }
+
+  // HA's own dark mode, as ha-dark / ha-light on the card (the glow finish lights up in a dark theme);
+  // neither class when the theme doesn't say (an older HA): the OS's colour scheme decides then.
+  _syncTheme() {
+    const dark = this._hass?.themes?.darkMode;
+    this._card?.classList.toggle("ha-dark", dark === true);
+    this._card?.classList.toggle("ha-light", dark === false);
   }
 
   // Answers kept on this device (a failed save, twice) go out one by one when
@@ -4015,6 +4097,8 @@ class HatchPetCard extends HTMLElement {
 
   disconnectedCallback() {
     clearInterval(this._timer);
+    clearTimeout(this._headTimer);
+    this._headTimer = 0;
     this._linkEnd();
     this._resize?.disconnect();
     this._io?.disconnect();
@@ -4294,6 +4378,7 @@ class HatchPetCard extends HTMLElement {
         </div>
       </ha-card>`;
     this._card = root.querySelector("ha-card");
+    this._syncTheme();
     this._card.classList.toggle("lcd-on", lcdOn());
     this._card.classList.toggle("mono", monoOn());
     this._card.classList.toggle("bigtext", bigOn());
@@ -4349,7 +4434,7 @@ class HatchPetCard extends HTMLElement {
     // iOS locks audio again after a reload until a tap: any tap unlocks it
     // (the end of a touch counts as a gesture there, its start doesn't).
     const unlock = () => {
-      if (!soundsOn() && !babbleOn()) return;
+      if (!soundsOn()) return; // babble needs sounds here too
       try {
         unlockAudio();
       } catch (err) {
@@ -4574,6 +4659,12 @@ class HatchPetCard extends HTMLElement {
       // A game on show keeps its screen: a stray tap must not end it unseen (the
       // Status button still does, on purpose).
       if (s.game) return;
+      // A tap on a visit in progress is a pat on the host, not the Status button: it
+      // would end the hello (UX8 F1).
+      if (s.linking) {
+        if (!this._swiped) this._perk(s);
+        return;
+      }
       // A question's chips take no stray tap (F3); a tap right after an answer is its
       // double tap, not the Status button (F2), so the pet's reply is seen.
       if (this._questionOn(s) || Date.now() - (s.answeredAt || 0) < CONFIRM_GAP_MS) return;
@@ -4779,7 +4870,7 @@ class HatchPetCard extends HTMLElement {
         ? "The pets this card shows aren't here any more. Edit the card to pick them again."
         : this._hass.user?.is_admin === false
           ? "Ask whoever runs Home Assistant to add a pet."
-          : "Add the Virtual Pet integration to hatch one.";
+          : "Add the Hatch at Home integration to hatch one.";
       if (configured) {
         this._emptyToken = null;
       } else if (keep) {
@@ -5133,6 +5224,12 @@ class HatchPetCard extends HTMLElement {
       if (x.laySheet && i !== to) this._closeLay(x); // the lay sheet stays with its pet
       if (x.nameSheet && i !== to) this._closeName(x); // and so does the name sheet (S3)
       this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
+      if (x.visitor && i !== to) { // a world visitor goes too, after a grace: a slip of the finger keeps it (UX8 F11)
+        const V = x.visitor;
+        setTimeout(() => {
+          if (x.visitor === V && this._slides[this._index] !== x) this._visitorEnd(x);
+        }, VISIT_SWIPE_GRACE_MS);
+      }
       if (x.picker) { // and leaves the shell picker unsaved: the sheet again
         this._closePicker(x);
         if (x.screen.classList.contains("show-status")) this._renderStatus(x, this._state(x, "sensor.last_care")?.attributes.log || []);
@@ -5413,7 +5510,19 @@ class HatchPetCard extends HTMLElement {
     const days = stage?.attributes.age_days;
     const kind = stage?.state === "egg" ? "Egg" : s.species?.name || "";
     const title = this._card.querySelector(".title");
-    if (!s.empty) { // the empty card keeps its own title and line (_update)
+    // On a swipe the name and the line change when the new pet is half there (250 ms into the
+    // slide), not at once over the old pet (UX7 F4). Under reduced motion they change at once.
+    const swapHead = !!this._headFor && this._headFor !== s && !s.empty && !calm();
+    if (swapHead && !this._headTimer) {
+      this._headTimer = setTimeout(() => {
+        this._headTimer = 0;
+        this._headFor = null;
+        this._renderShelf();
+      }, 250);
+    }
+    const headNow = !this._headTimer;
+    if (headNow && !s.empty) this._headFor = s;
+    if (headNow && !s.empty) { // the empty card keeps its own title and line (_update)
       title.textContent = device?.name_by_user || device?.name || "Pet";
       title.classList.toggle("long", title.textContent.length > 9);
     }
@@ -5434,7 +5543,7 @@ class HatchPetCard extends HTMLElement {
       if (src && img.getAttribute("src") !== src) img.src = src;
     });
     // The world is on the device's plate and the emblem, so the line stays short.
-    if (!s.empty) {
+    if (headNow && !s.empty) {
       this._card.querySelector(".sub").textContent = [kind,
         stage?.state !== "egg" ? STAGE_LABELS[stage?.state]?.toLowerCase() : null,
         days != null ? `day ${Math.floor(days) + 1}` : null].filter(Boolean).join(" · ");
@@ -5457,6 +5566,7 @@ class HatchPetCard extends HTMLElement {
       dot.classList.toggle("fresh", this._slides.length > 1 && !this._shown.has(device) && !this._seenRead(device));
       const name = this._hass.devices?.[this._slides[i].ids?.device];
       dot.setAttribute("aria-label", `Show ${name?.name_by_user || name?.name || `pet ${i + 1}`}`);
+      this._headCrop(this._slides[i], dot, 8, 1.7); // its head, as the dot's mark (UX7 F8)
       dot.setAttribute("aria-current", i === this._index ? "true" : "false");
     });
     this._card.querySelector(".statusbtn").setAttribute(
@@ -5851,6 +5961,7 @@ class HatchPetCard extends HTMLElement {
   _toggleStatus(s, lay = false, name = false) {
     const open = !s.screen.classList.contains("show-status");
     const wasSettings = !open && s.settings && !s.laySheet;
+    if (open && this._link?.host === s) this._linkEnd(); // the guest never stands over the page (UX8 F1)
     if (open) this._stopTyping(s); // the bubble hides: the line is said whole
     if (open && s.game) this._quitGame(s, null); // the sheet covers it: nobody plays it unseen
     s.screen.classList.toggle("show-status", open);
@@ -6446,7 +6557,7 @@ class HatchPetCard extends HTMLElement {
       }, 40);
       s.typing = job;
       s.bubble.dataset.typing = "1";
-      if (sound && babbleOn() && this._mayPlay(s) && !s.game) {
+      if (sound && soundsOn() && babbleOn() && this._mayPlay(s) && !s.game) { // "sounds here" is the master (UX7 F11)
         try {
           s.babbling = babble(text, voice);
         } catch (err) {
@@ -7648,6 +7759,8 @@ class HatchPetCard extends HTMLElement {
     const scr = s.screen;
     const pet = s.pet;
     if (!pet || pet.offsetParent !== scr || !scr.clientHeight) return;
+    scr.style.removeProperty("--ask-bw");
+    box.classList.remove("nopet");
     const k = Number(pet.style.scale) || 1;
     const W = scr.clientWidth;
     const petH = pet.offsetHeight * k;
@@ -7657,11 +7770,26 @@ class HatchPetCard extends HTMLElement {
     const under = bubble ? bubble.offsetTop + bubble.offsetHeight + 2 : 0;
     let f = Math.min(0.9, (stand - under) / petH);
     let dx = 0;
-    if (f < 0.6) { // no room under the bubble: beside it, above the chips
-      f = Math.min(0.9, Math.max(0.4, (stand - 4) / petH));
+    if (f < 0.6) { // no room under the bubble: beside it, in a column of its own (UX7 F1)
+      // Never above the screen: the pet's top stays 2 px down, so it may shrink under .4.
+      f = Math.min(0.9, Math.max(0.25, (stand - 2) / petH));
       const w = petW * f;
-      const right = bubble ? bubble.offsetLeft + bubble.offsetWidth + 4 + w / 2 : W / 2;
-      dx = Math.min(W - 2 - w / 2, Math.max(W / 2, right)) - W / 2;
+      const inset = W * (scr.closest(".porthole") ? 0.09 : 0.04); // the porthole's rim eats the right edge
+      dx = W - inset - w / 2 - W / 2;
+      if (bubble) { // the bubble wraps in what is left of the row, so the two never overlap
+        // The bubble's max-width is its text's: its padding and border come on top.
+        const chrome = () => bubble.offsetWidth - parseFloat(getComputedStyle(bubble).width);
+        const room = (taken) => `${Math.max(60, Math.floor(taken - bubble.offsetLeft - chrome()))}px`;
+        scr.style.setProperty("--ask-bw", room(W - inset - w - 6));
+        // Wrapped, the bubble may still reach down into the chips: then there is no room for the pet
+        // at all. Its head goes in the bubble instead, and the bubble takes its whole width again.
+        if (bubble.offsetTop + bubble.offsetHeight > box.offsetTop - 2 || f < 0.3) {
+          box.classList.add("nopet");
+          scr.style.setProperty("--ask-bw", room(W - inset));
+          this._headCrop(s, bubble, 14, 3);
+          dx = 0;
+        }
+      }
     }
     const dy = Math.min(0, stand - (pet.offsetTop + pet.offsetHeight));
     scr.style.setProperty("--ask-dx", `${Math.round(dx)}px`);
@@ -7838,6 +7966,14 @@ class HatchPetCard extends HTMLElement {
   // Only the pet on show chirps: the shelf's other slides update too.
   _chirp(s, name) {
     if (!soundsOn() || !this._mayPlay(s)) return;
+    // Two cards on one pet (a big and a small one, or two views) see the same event: only the first
+    // chirps. Another card's chirp for this pet and this sound under 300 ms ago is the same one (UX7 F9);
+    // this card's own quick repeats (taps in a game) all play.
+    const device = s.ids?.device;
+    const now = Date.now();
+    if (lastChirp.card && lastChirp.card !== this && lastChirp.name === name && lastChirp.device === device
+      && now - lastChirp.at < 300) return;
+    lastChirp = { card: this, name, device, at: now };
     try {
       playChirp(name);
     } catch (err) {
@@ -7987,6 +8123,13 @@ class HatchPetCard extends HTMLElement {
         if (m.how === "collapsed") {
           say("so... sleepy... zzz", 5000);
         } else if (m.how === "house" || m.how === "lights") {
+          // The pet's first bedtime (its first day, one per pet and generation on this browser):
+          // its own line, spent when it is said, not in the catch-up and not for an egg.
+          const first = !capture && this._firstNightKey(s);
+          if (first) {
+            say(FIRST_NIGHT, 4500, () => onceEver(first));
+            break;
+          }
           say(this._nightLine(s) || this._lines(s, "fell_asleep", pick(["good night...", "night night...", "sleep tight..."])).text, 4000);
         }
         break;
@@ -8329,6 +8472,16 @@ class HatchPetCard extends HTMLElement {
     return line === WAKE_LINES[WAKE_LINES.length - 1] && !this._dreamToday(s) ? WAKE_LINES[0] : line;
   }
 
+  // The once-ever key of this pet's first bedtime while it is still due (a hatched pet in
+  // its first day that has not said it), else null.
+  _firstNightKey(s) {
+    const stage = this._state(s, "sensor.life_stage");
+    // A baby only: the first day ends before a pet is a child (and a test pet of 0 days can be any stage).
+    if (stage?.state !== "baby" || !(stage.attributes?.age_days < 1)) return null;
+    const key = `firstnight-${s.ids?.device}-${stage.attributes.generation || 1}`;
+    return onceSeen(key) ? null : key;
+  }
+
   // S-b: lights out after a visitor seen here today, else after today's sunset: once a
   // day on this device. Null: the usual line.
   _nightLine(s) {
@@ -8621,7 +8774,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
         ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
-      ${social > 0 && !isEgg ? row(null, "friends", socialHearts(social)) : ""}
+      ${social > 0 && !isEgg ? row("stat_heart_full", "friends", socialHearts(social)).replace('class="row"', 'class="row friendsrow" role="button" tabindex="0"') : ""}
       ${row("icon_feed", "hunger", hearts(value("hunger"), FEED_FULL_AT))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}
@@ -8641,6 +8794,17 @@ class HatchPetCard extends HTMLElement {
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
+    // The friends row says what it counts (UX8 F9); the tap is not a tap on the screen behind.
+    const friends = s.status.querySelector(".friendsrow");
+    friends?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const at = friends.getBoundingClientRect(); // the note must not cover the row (as _tapped)
+      this._tapRect = { top: at.top, bottom: at.bottom, at: Date.now() };
+      this._statusMessage(s, STATUS_COPY.friendsHint);
+    });
+    friends?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); friends.click(); }
+    });
     const head = s.status.querySelector(".whohead");
     if (head) this._headCrop(s, head, 14, 3);
     this._journalLink(s, true);
@@ -8706,7 +8870,10 @@ class HatchPetCard extends HTMLElement {
       ${sharedScreen() ? "" : row(null, "my data", forgetButton("forgetme", "forget_me", "forget my data: your birthday, answers and settings for every pet; your bonds stay"))}
       <div class="sec">this screen</div>
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
-      ${s.species?.voice ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`) : ""}
+      ${s.species?.voice ? (soundsOn()
+        ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`)
+        // "sounds here" is the master: babble waits for it (its own switch keeps its setting)
+        : row(null, "babble", `<span><button class="bell babble" aria-label="babble: needs sounds here first" aria-pressed="false" aria-disabled="true">needs sounds</button></span>`)) : ""}
       ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "holiday names", `<span><button class="bell named" aria-label="holiday names" aria-pressed="${namedHolidays()}">${namedHolidays() ? "on" : "off"}</button></span>`)}
       ${row(null, "mono screen", `<span><button class="bell mono" aria-label="mono screen: ${monoOn() ? "on" : "off"}, change" aria-pressed="${monoOn()}">${monoOn() ? "on" : "off"}</button></span>`)}
@@ -8735,7 +8902,7 @@ class HatchPetCard extends HTMLElement {
       this._wipe(s);
       s.status.querySelector(".pback")?.focus({ preventScroll: true });
     });
-    // An admin's way to the pet's options (Settings → Devices & services → Virtual Pet).
+    // An admin's way to the pet's options (Settings → Devices & services → Hatch at Home).
     s.status.querySelector(".connect")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);
@@ -8944,6 +9111,7 @@ class HatchPetCard extends HTMLElement {
     });
     s.status.querySelector(".bell.babble")?.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (!soundsOn()) return; // disabled: sounds here is off
       this._tapped(e.currentTarget);
       const on = !babbleOn();
       try {
@@ -9570,18 +9738,27 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
-  // Set the pet's head, cropped from the sprite on show, as the background of `el` (28 px, the
-  // crop the settings bubble uses); (cx, cy) is where the head's centre and top sit in it.
+  // Set the pet's head, cropped from the sprite on show, as the background of `el` (a square of
+  // 2 * cx px, 28 by default, the crop the settings bubble and the status band use); (cx, cy) is where
+  // the head's centre and top sit in it. The sprite is drawn at 75 px (a 96-sprite-px window), so the box
+  // shows a face and not just the crown that species.head marks (UX7 F2). A species that still
+  // shows a back, a wing or a shell there gives species.json "face": {stage: [x, y, size]}: the face's
+  // centre and the width of the window around it, in sprite px, and that wins.
   _headCrop(s, el, cx, cy) {
     if (!s.pet?.src || !s.drawn) return false;
     const [hx, hy] = s.species?.head?.[s.drawn] || [128, 96];
-    let top = this._headTop(s.pet, hx, hy); // the head's top, where a hat sits
+    const face = s.species?.face?.[s.drawn];
+    let top = face ? hy : this._headTop(s.pet, hx, hy); // the head's top, where a hat sits
     if (top === null && !s.pet.complete) { // not drawn yet (a status opened at once): crop again when it is
       s.pet.addEventListener("load", () => { if (el.isConnected) this._headCrop(s, el, cx, cy); }, { once: true });
     }
     top ??= hy;
+    // px per sprite px: the face's window fills the box; else a fixed 75 px sprite
+    const k = face ? (cx * 2) / face[2] : (HEAD_SPRITE * (cx / 14)) / 256; // the 75 px sprite scales with the box
     el.style.setProperty("--say-img", `url("${s.pet.src}")`);
-    el.style.setProperty("--say-at", `${cx - hx / 2}px ${cy - top / 2}px`);
+    el.style.setProperty("--say-size", `${(256 * k).toFixed(2)}px`);
+    el.style.setProperty("--say-at", face ? `${(cx - face[0] * k).toFixed(2)}px ${(cx - face[1] * k).toFixed(2)}px`
+      : `${(cx - hx * k).toFixed(2)}px ${(cy - top * k).toFixed(2)}px`);
     return true;
   }
 
@@ -10763,8 +10940,13 @@ class HatchPetCard extends HTMLElement {
       // A known refusal is said once, by _react, from the care log; only an
       // unknown result gets a line here. no_game is never logged (a Higher or
       // Lower game the server dropped for idling): said here.
-      // A dig: keep on an empty basket means another screen kept it first; no
-      // game while theirs is parked means another screen put it aside.
+      // A dig: keep on an empty basket means another screen kept it first (the same
+      // person's: adopt the server's round, F16; anyone else's ends); no game while
+      // theirs is parked means another screen of theirs put it aside (closes quietly).
+      if (data.game === "dig" && info?.result === "empty_basket" && info.yours) {
+        this._digAdopt(s, game, info);
+        return null;
+      }
       if (info?.result === "no_game" && !info.parked && data.guess && data.game !== "dig") {
         // F13: the server lost this game (a restart, the idle drop): the line comes true, a
         // new game starts after it (taps are ignored meanwhile: the game is still busy).
@@ -10773,7 +10955,7 @@ class HatchPetCard extends HTMLElement {
         return null;
       }
       this._endGame(s, info?.result === "empty_basket" ? "oh! someone else is playing with me"
-        : info?.result === "no_game" && info.parked ? "maybe later!"
+        : info?.result === "no_game" && info.parked ? GAME_COPY.parked
         : info?.result === "no_game" ? REFUSALS.no_game : REFUSALS[info?.result] ? null : "not now");
       return null;
     }
@@ -10945,10 +11127,15 @@ class HatchPetCard extends HTMLElement {
       : info.found === "bee" ? next && info.wins === g.wins
       : info.found === "kept" ? next && info.wins === g.wins + g.basket
       : info.found === "berry" && next && info.wins === g.wins + g.basket + 1;
-    if (!fits) {
+    // F16: out of step but the server says it is this person's own dig (their other
+    // screen played): adopt the server's round, bank and basket, say so once. Anyone
+    // else's reply out of step still ends.
+    const adopted = !fits && !!info.yours && !!info.found;
+    if (!fits && !adopted) {
       this._endGame(s, "oh! someone else is playing with me");
       return;
     }
+    const say = (line) => this._write(s, adopted ? GAME_COPY.dugThere : line);
     g.round = info.round;
     g.wins = info.wins;
     g.basket = info.basket;
@@ -10962,20 +11149,20 @@ class HatchPetCard extends HTMLElement {
       s.propEl.style.bottom = "40%";
       s.propEl.style.transform = "";
       s.propEl.hidden = false;
-      this._write(s, "bzz! the berries rolled away");
+      say("bzz! the berries rolled away");
       this._reactFrames(s, "refused", { inGame: true }); // F5: a bored look at the bee
       this._chirp(s, "buzz"); // F14
     } else if (info.round_over) {
       this._animate(s, s.pet, "perk", 300);
-      this._write(s, "safe in the basket ♪");
+      say("safe in the basket ♪");
       this._chirp(s, "tap");
     } else if (Math.random() < SHINY_ODDS) {
       this._sparkle(s); // D-b: a shiny one, said only (the berry is the server's, the same)
-      this._write(s, SHINY_LINE);
+      say(SHINY_LINE);
       this._animate(s, s.pet, "perk", 300); // F5
       this._chirp(s, "tap");
     } else {
-      this._write(s, "a berry!");
+      say("a berry!");
       this._animate(s, s.pet, "perk", 300); // F5
       this._chirp(s, "tap");
     }
@@ -11000,6 +11187,22 @@ class HatchPetCard extends HTMLElement {
         s.gameBox.querySelector(".gr").focus({ preventScroll: true });
       }
     });
+  }
+
+  // F16: keep on an empty basket, from this person's own other screen having kept it
+  // first: the reply carries where the dig stands, no tap of ours was played. Adopt it.
+  _digAdopt(s, g, info) {
+    g.round = info.round;
+    g.wins = info.wins;
+    g.basket = info.basket;
+    g.lastAt = Date.now();
+    g.busy = false;
+    g.prompt = "dig or keep?";
+    this._digShow(s, info);
+    this._animate(s, s.gameNum, "flip", 300);
+    this._write(s, GAME_COPY.dugThere, 60000);
+    s.sayUntil = Date.now() + 60000;
+    s.gameBox.querySelector(".gr").focus({ preventScroll: true });
   }
 
   // --- Seasons --------------------------------------------------------------
@@ -11565,6 +11768,7 @@ class HatchPetCard extends HTMLElement {
   _visitorStart(s, v, { ltr = Math.random() < 0.5, count = true, world = s.worldKey, guest = false } = {}) {
     this._visitorEnd(s);
     if (count && !guest) this._visitFriendCount(s, v);
+    if (count && !guest && !v.cross) this._visitorReport(s);
     const isCalm = calm();
     const inMs = v.in || (v.cross ? 1800 : VISIT_IN_MS);
     const stay = (v.stay || VISIT_STAY_MS) * (sharedScreen() ? 2 : 1); // a shared screen: longer (E8 Sh-a)
@@ -11595,7 +11799,9 @@ class HatchPetCard extends HTMLElement {
       if (this._visitorLive(s)) fn();
       else this._visitorEnd(s);
     }, ms));
-    if (!isCalm && !v.cross) at(inMs, () => this._look(s, 900));
+    // The art faces right, so only a visitor on the left is faced (UX8 F2): held through
+    // the greet and the stay, never turned away from one coming in on the right.
+    if (!isCalm && !v.cross && ltr) at(inMs, () => this._look(s, greetAt + stay - inMs));
     // A friend of its world along, now and then (E10 V-b): the other side, a little behind.
     const pal = !guest && this._visitorPair(s, v);
     if (pal) {
@@ -11673,6 +11879,17 @@ class HatchPetCard extends HTMLElement {
 
   // A live visit adds 1 on a day this visitor wasn't counted yet; this pet's keys from
   // other generations go, so one key per pet.
+  // Tell the server the day's visitor was played here (UX8 F4, the social meter): on any
+  // screen, a shared one too, which the hourly visit call never credits. The server counts
+  // it once a day, inside the visit's window. Nobody's name goes.
+  _visitorReport(s) {
+    const id = s.ids?.["sensor.life_stage"];
+    if (!id || !this._visitPlan(s)?.id) return;
+    this._hass.callWS({ type: "virtual_pet/greeted", entity_id: id }).catch(() => {
+      // an older integration has no such command: the visit's own credit stands
+    });
+  }
+
   _visitFriendCount(s, v) {
     const key = this._visitFriendKey(s);
     const day = this._visitDay(s).toDateString();
@@ -11887,8 +12104,10 @@ class HatchPetCard extends HTMLElement {
   _linkPick(host) {
     if (!this._linkFree(host) || !host.lookedFirst) return null;
     const sides = [1, -1].sort(() => Math.random() - 0.5);
+    const n = this._slides.length;
     for (const side of sides) {
-      const guest = this._slides[this._index + side];
+      // Exactly three pets: the end pets are neighbours too, the way the nav wraps (UX8 F6).
+      const guest = this._slides[n === 3 ? (this._index + side + n) % n : this._index + side];
       if (!this._linkFree(guest)) continue;
       const pair = [host.ids?.device, guest.ids?.device].sort().join("-");
       if (oncePerDay(`link-${pair}`)) return guest;
@@ -11967,8 +12186,14 @@ class HatchPetCard extends HTMLElement {
     const extra = own ? (typeof own === "function" ? own(guestName) : own) : null;
     // Or the guest's news of its day (E9 L-a): public, the pets' own; shared screens too.
     const news = !extra && Math.random() < LINK_NEWS_ODDS ? this._linkNews(guest) : null;
+    L.said = [hello, extra, LINK_NEWS_REPLY]; // the host's lines of this visit (a cut-short visit clears them)
     const stretch = extra ? 1000 : news ? LINK_NEWS_MS : 0; // the visit holds a little longer for it
-    const toRight = this._slides.indexOf(guest) > this._slides.indexOf(host);
+    // With exactly three pets the end pets meet across the wrap: the guest on the far
+    // side stands (and the beam goes) the other way, off the end of the row (UX8 F6).
+    const hi = this._slides.indexOf(host);
+    const gi = this._slides.indexOf(guest);
+    const wrapped = this._slides.length === 3 && Math.abs(gi - hi) === 2;
+    const toRight = wrapped ? gi < hi : gi > hi;
     const k = 0.7; // the pets stand at 70% of their size on the visit screen
     const gs = guest.species;
     const gStage = guest.drawn || "adult";
@@ -11977,7 +12202,7 @@ class HatchPetCard extends HTMLElement {
     L.beamMs = isCalm ? 0 : 1500;
     this._moving(host, 9000);
     this._chirp(host, "link");
-    if (!isCalm) this._linkBeam(host, guest, toRight);
+    if (!isCalm) this._linkBeam(host, guest, toRight, wrapped);
     // the guest's own slide: looking at the host, with a small note
     this._moving(guest, 6500);
     if (toRight) this._look(guest, 6500);
@@ -11986,7 +12211,7 @@ class HatchPetCard extends HTMLElement {
     at(L.beamMs ? 1400 : 0, () => {
       host.linking = true;
       const box = document.createElement("div");
-      box.className = "visit";
+      box.className = toRight ? "visit" : "visit left";
       box.setAttribute("aria-hidden", "true");
       if (!isCalm) box.innerHTML = '<div class="vband"><i></i><i></i><i></i><i></i><i></i></div>';
       host.screen.append(box);
@@ -11996,6 +12221,8 @@ class HatchPetCard extends HTMLElement {
     at(t0, () => {
       L.box.querySelector(".vband")?.remove();
       host.screen.classList.add("linking");
+      host.screen.classList.toggle("linkleft", !toRight);
+      if (!toRight) host.pet.classList.add("look"); // faces the guest on its left
       host.linkFrames = this._linkPose(host.species, host.drawn || "adult", host.speciesId, (f) => {
         if (host.linkFrames) host.linkFrames = f;
       });
@@ -12004,7 +12231,7 @@ class HatchPetCard extends HTMLElement {
       const img = document.createElement("img");
       img.className = "vguest";
       img.alt = "";
-      img.style.scale = `${-gScale} ${gScale}`; // mirrored, to face the host
+      img.style.scale = `${toRight ? -gScale : gScale} ${gScale}`; // faces the host
       this._show(guest, img, gFrames[0]);
       L.box.append(img);
       L.img = img;
@@ -12024,7 +12251,7 @@ class HatchPetCard extends HTMLElement {
           clearTimeout(L.hideAt);
           clearTimeout(L.endAt);
           L.hideAt = at(Math.max(0, left - 600), hide);
-          L.endAt = at(left, () => this._linkEnd());
+          L.endAt = at(left, () => this._linkEnd(true));
         } });
       }
       const say = document.createElement("div");
@@ -12039,6 +12266,13 @@ class HatchPetCard extends HTMLElement {
     at(t0 + 1800, () => {
       L.say.textContent = reply; // visual only: the visit screen is aria-hidden
       L.say.hidden = false;
+      // Under the host's line, wherever it ends (a narrow screen or big text wraps it): UX8 F3.
+      const hb = host.bubble.getBoundingClientRect();
+      if (host.bubble.textContent && hb.height) {
+        const sb = host.screen.getBoundingClientRect();
+        const floor = sb.height * 0.27;
+        L.say.style.top = `${Math.max(floor, hb.bottom - sb.top + 4)}px`;
+      }
       if (!isCalm) this._animate(guest, L.img, "greethop", 1400);
       if (!isCalm) { // both cheer on the "hi hi" line (acts.cheer; none for a child)
         const gBefore = gFrames;
@@ -12067,7 +12301,7 @@ class HatchPetCard extends HTMLElement {
     };
     const endMs = t0 + (isCalm ? 3600 : 4600) + stretch;
     L.hideAt = at(t0 + 4000 + stretch, hide);
-    L.endAt = at(endMs, () => this._linkEnd());
+    L.endAt = at(endMs, () => this._linkEnd(true));
     L.endsIn = Date.now() + endMs; // when the visit ends, unless the extra stretches it
     return true;
   }
@@ -12088,7 +12322,7 @@ class HatchPetCard extends HTMLElement {
   // The beam: a red head with ripples flies along the tops of the devices, a
   // dotted trail behind it, and a burst where it arrives. Pixel-stepped, in world
   // art pixels (WORLD_GRID of them across the pet's 46.5% of the screen).
-  _linkBeam(host, guest, toRight) {
+  _linkBeam(host, guest, toRight, wrapped = false) {
     const L = this._link;
     const track = this._track.getBoundingClientRect();
     const a = host.device.getBoundingClientRect();
@@ -12101,7 +12335,10 @@ class HatchPetCard extends HTMLElement {
       .map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height).map((r) => r.top));
     const u = Math.max(1, Math.round(((host.screen.clientWidth * 0.465) / WORLD_GRID) * 4) / 4);
     const x0 = a.left + a.width / 2 - track.left;
-    const x1 = b.left + b.width / 2 - track.left;
+    // A wrapped guest is far across the row: the head flies one slide's pitch toward where
+    // it would stand if the row went on, and leaves the card there.
+    const x1 = wrapped ? x0 + (toRight ? 1 : -1) * Math.abs(b.left + b.width / 2 - (a.left + a.width / 2)) / 2
+      : b.left + b.width / 2 - track.left;
     const dist = x1 - x0;
     const step = 2 * u;
     const n = Math.max(2, Math.round(Math.abs(dist) / step));
@@ -12141,7 +12378,9 @@ class HatchPetCard extends HTMLElement {
   }
 
   // The visit is over (or cut short): leave nothing behind.
-  _linkEnd() {
+  // done: the visit ran its course. Cut short (a sleep, a tap on Status), a hello still
+  // on show is cleared with the guest's bubble: no hello to an empty room (UX8 F8).
+  _linkEnd(done = false) {
     const L = this._link;
     if (!L) return;
     this._link = null;
@@ -12154,8 +12393,8 @@ class HatchPetCard extends HTMLElement {
     const { host, guest } = L;
     host.linking = false;
     host.linkFrames = null;
-    host.screen.classList.remove("linking");
-    host.pet.classList.remove("linking", "greethop");
+    host.screen.classList.remove("linking", "linkleft");
+    host.pet.classList.remove("linking", "greethop", "look");
     host.pet.style.scale = L.hostScale;
     host.screen.querySelector(".linkhearts")?.remove();
     guest.pet.classList.remove("look");
@@ -12163,6 +12402,8 @@ class HatchPetCard extends HTMLElement {
     guest.sayUntil = 0;
     this._stopTyping?.(guest);
     guest.bubble.textContent = "";
+    const said = host.sayEntry?.text;
+    if (!done && said && L.said?.includes(said) && host.sayUntil > Date.now()) this._write(host, "", 0);
   }
 
   // --- Trait flair ----------------------------------------------------------

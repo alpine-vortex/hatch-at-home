@@ -1175,7 +1175,8 @@ async def test_a_parked_berry_dig_carries_on_across_a_restart(
     coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
     started = await game(hass, game="dig")
     assert (started["round"], started["basket"], started["leaves"]) == (0, 0, 8)
-    assert await game(hass, game="dig", guess="keep") == {"result": "empty_basket"}
+    refused = await game(hass, game="dig", guess="keep")
+    assert refused["result"] == "empty_basket" and refused["basket"] == 0
     # Dig until something is shown, then ✕.
     tap = await game(hass, game="dig", guess="dig")
     shown = (tap["round"], tap["wins"], tap["basket"])
@@ -4127,6 +4128,65 @@ async def test_social_meter_links_and_a_greeted_visitor(
         hass, hass.config_entries.async_get_entry("test_pet")
     )
     assert diag["pet"]["social"] == "**REDACTED**"
+
+
+async def test_greeted_credits_the_visitor_the_card_played_inside_its_window(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any], hass_ws_client: Any
+) -> None:
+    """UX8 F4: the card's virtual_pet/greeted counts the day's greeted visitor on any
+    screen (no `visit` call, no person), once, and only inside the visit's window; an
+    unknown entity is refused; the hourly `visit` credit still stands."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    pet = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    today = pet._today(now)[0]
+
+    def visit(start: float, end: float) -> None:
+        pet.state.visit = {
+            "day": today,
+            "world": pet.world,
+            "id": "hedgehog",
+            "hours": "day",
+            "from": start,
+            "until": end,
+            "credited": False,
+        }
+
+    def greeted() -> bool:
+        return bool(pet.state.social.get(today, {}).get("visitor"))
+
+    client = await hass_ws_client(hass)
+
+    async def send(entity_id: str = "sensor.pip_mood") -> dict[str, Any]:
+        await client.send_json_auto_id(
+            {"type": "virtual_pet/greeted", "entity_id": entity_id}
+        )
+        reply = await client.receive_json()
+        await hass.async_block_till_done()
+        return reply
+
+    # Outside the window (later today, or already over): nothing.
+    visit(now + 3600, now + 7200)
+    assert (await send())["success"]
+    assert not greeted()
+    visit(now - 7200, now - 3600)
+    assert (await send())["success"]
+    assert not greeted()
+    # Inside it: the day counts a greeted visitor, once.
+    visit(now - 600, now + 3600)
+    assert (await send())["success"]
+    assert greeted()
+    assert (await send())["success"]
+    assert hass.states.get("sensor.pip_life_stage").attributes["social_level"] == (
+        model.R.SOCIAL_VISITOR_SOLO
+    )
+    # Asleep: the visitor isn't greeted.
+    pet.state.social.clear()
+    pet.state.asleep = True
+    assert (await send())["success"]
+    assert not greeted()
+    # Not a pet's entity: refused.
+    assert not (await send("sensor.nobody"))["success"]
 
 
 async def test_a_visitor_dream_names_its_visitor_and_no_other_dream_grows(

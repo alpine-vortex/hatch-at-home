@@ -21,6 +21,7 @@ const COPY_TABLES = {
   WAKE_LINES: {},
   NIGHT_VISITOR: { fill: "visitor" },
   NIGHT_SUNSET: {},
+  FIRST_NIGHT: {},
   MEAL_LINES: {},
   CRUMB_LINE: { fill: "visitor" },
   CURED_LINES: {},

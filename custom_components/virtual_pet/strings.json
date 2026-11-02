@@ -3,7 +3,7 @@
     "step": {
       "user": {
         "title": "Add a pet",
-        "description": "Each pet lives in its own little handheld device, shown by the Hatch at Home pet shelf card. To add another pet later, add Virtual Pet again.",
+        "description": "Each pet lives in its own little handheld device, shown by the Hatch at Home pet shelf card. To add another pet later, add Hatch at Home again.",
         "data": {
           "name": "Name",
           "world": "World",
@@ -463,7 +463,7 @@
   "issues": {
     "missing_entities": {
       "title": "{pet} is listening for entities that are gone",
-      "description": "{pet}'s settings mention entities that no longer exist in Home Assistant, probably because they were renamed or removed: {entities}.\n\nThe pet ignores them, so nothing breaks, but it misses that part of your house. Open Settings → Devices & services → Virtual Pet → the gear next to {pet}, and pick the new entities or clear those fields. This warning goes away once the settings are saved."
+      "description": "{pet}'s settings mention entities that no longer exist in Home Assistant, probably because they were renamed or removed: {entities}.\n\nThe pet ignores them, so nothing breaks, but it misses that part of your house. Open Settings → Devices & services → Hatch at Home → the gear next to {pet}, and pick the new entities or clear those fields. This warning goes away once the settings are saved."
     },
     "world_not_ready": {
       "title": "{pet}'s world has no creatures yet",

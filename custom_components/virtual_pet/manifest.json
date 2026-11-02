@@ -1,6 +1,6 @@
 {
   "domain": "virtual_pet",
-  "name": "Virtual Pet",
+  "name": "Hatch at Home",
   "after_dependencies": ["recorder"],
   "codeowners": [],
   "config_flow": true,

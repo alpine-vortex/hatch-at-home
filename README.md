@@ -103,8 +103,8 @@ Batteries not required!
 
 1. In HACS, open **⋮ → Custom repositories**, add
    `https://github.com/alpine-vortex/hatch-at-home` as an **Integration**, then
-   download **Virtual Pet** and restart Home Assistant.
-2. **Settings → Devices & services → Add integration → Virtual Pet.** Name your
+   download **Hatch at Home** and restart Home Assistant.
+2. **Settings → Devices & services → Add integration → Hatch at Home.** Name your
    pet and pick a world.
 3. Add the **Hatch at Home pet shelf** card to a dashboard. Say hi!
 
