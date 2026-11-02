@@ -3412,6 +3412,7 @@ const STYLE = `
   @keyframes ir-out { to { translate: 160% 0; } }
   .visit .vsay { position: absolute; right: 5%; top: 27%; max-width: 46%; padding: 5px 9px; border-radius: 10px;
     background: #fff; color: #2a2a2a; font-size: 13px; line-height: 1.25; }
+  ha-card.bigtext .visit .vsay { font-size: 15px; } /* UX8 F3 */
   .screen.linking .perch { display: none; }
   .pet.linking { translate: -43% 0; transition-duration: .5s; }
   .speck { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff6c9;
@@ -11712,6 +11713,7 @@ class HatchPetCard extends HTMLElement {
     const extra = own ? (typeof own === "function" ? own(guestName) : own) : null;
     // Or the guest's news of its day (E9 L-a): public, the pets' own; shared screens too.
     const news = !extra && Math.random() < LINK_NEWS_ODDS ? this._linkNews(guest) : null;
+    L.said = [hello, extra, LINK_NEWS_REPLY]; // the host's lines of this visit (a cut-short visit clears them)
     const stretch = extra ? 1000 : news ? LINK_NEWS_MS : 0; // the visit holds a little longer for it
     const toRight = this._slides.indexOf(guest) > this._slides.indexOf(host);
     const k = 0.7; // the pets stand at 70% of their size on the visit screen
@@ -11769,7 +11771,7 @@ class HatchPetCard extends HTMLElement {
           clearTimeout(L.hideAt);
           clearTimeout(L.endAt);
           L.hideAt = at(Math.max(0, left - 600), hide);
-          L.endAt = at(left, () => this._linkEnd());
+          L.endAt = at(left, () => this._linkEnd(true));
         } });
       }
       const say = document.createElement("div");
@@ -11784,6 +11786,13 @@ class HatchPetCard extends HTMLElement {
     at(t0 + 1800, () => {
       L.say.textContent = reply; // visual only: the visit screen is aria-hidden
       L.say.hidden = false;
+      // Under the host's line, wherever it ends (a narrow screen or big text wraps it): UX8 F3.
+      const hb = host.bubble.getBoundingClientRect();
+      if (host.bubble.textContent && hb.height) {
+        const sb = host.screen.getBoundingClientRect();
+        const floor = sb.height * 0.27;
+        L.say.style.top = `${Math.max(floor, hb.bottom - sb.top + 4)}px`;
+      }
       if (!isCalm) this._animate(guest, L.img, "greethop", 1400);
       if (!isCalm) { // both cheer on the "hi hi" line (acts.cheer; none for a child)
         const gBefore = gFrames;
@@ -11812,7 +11821,7 @@ class HatchPetCard extends HTMLElement {
     };
     const endMs = t0 + (isCalm ? 3600 : 4600) + stretch;
     L.hideAt = at(t0 + 4000 + stretch, hide);
-    L.endAt = at(endMs, () => this._linkEnd());
+    L.endAt = at(endMs, () => this._linkEnd(true));
     L.endsIn = Date.now() + endMs; // when the visit ends, unless the extra stretches it
     return true;
   }
@@ -11886,7 +11895,9 @@ class HatchPetCard extends HTMLElement {
   }
 
   // The visit is over (or cut short): leave nothing behind.
-  _linkEnd() {
+  // done: the visit ran its course. Cut short (a sleep, a tap on Status), a hello still
+  // on show is cleared with the guest's bubble: no hello to an empty room (UX8 F8).
+  _linkEnd(done = false) {
     const L = this._link;
     if (!L) return;
     this._link = null;
@@ -11908,6 +11919,8 @@ class HatchPetCard extends HTMLElement {
     guest.sayUntil = 0;
     this._stopTyping?.(guest);
     guest.bubble.textContent = "";
+    const said = host.sayEntry?.text;
+    if (!done && said && L.said?.includes(said) && host.sayUntil > Date.now()) this._write(host, "", 0);
   }
 
   // --- Trait flair ----------------------------------------------------------
