@@ -1105,6 +1105,12 @@ async function main() {
     el._slides.forEach((s) => { s.voicedAt = Date.now() + 1e9; });
     if (el.__typeless) return;
     el.__typeless = true;
+    // Rolls by device and day (a fresh .storage is a new device on every run), off unless
+    // a check turns one on (audit 2026-11-01b A1-A3): the lucky number (0: never a game's),
+    // the rare pair and guest days, the promise's looks and practice, a guest's start.
+    // A check that needs one calls the prototype's (protoCall) or sets its own.
+    Object.assign(el, { _lucky: () => 0, _rareDay: () => false, _promiseLook: () => null,
+      _promisePractice: () => false, _visitorGuest: () => null });
     const realState = el._state;
     const typeless = new WeakMap(); // one copy per state, so a check can still edit what it's given
     el._state = function (slide, key) {
@@ -2877,7 +2883,8 @@ async function main() {
         try {
           el._visitSeen = () => null;
           Math.random = () => 0.5;
-          // G-b: the opening number is the lucky one.
+          // G-b: the opening number is the lucky one (the real roll; hush pins it to 0).
+          delete el._lucky;
           const lucky = el._lucky(s);
           s.game = { picking: true };
           queue.push({ ...base, game: "higher_lower", round: 0, wins: 0, number: lucky });
@@ -2943,7 +2950,7 @@ async function main() {
         } finally {
           delete el._playCall;
           if (s.game) el._endGame(s, null);
-          Object.assign(el, { _visitSeen: real.seen, _persona: real.persona, _line: real.line });
+          Object.assign(el, { _visitSeen: real.seen, _persona: real.persona, _line: real.line, _lucky: () => 0 });
           Math.random = real.random;
         }
         return out;
@@ -3828,8 +3835,10 @@ async function main() {
     "frontend", "hatch-pet-card.js"), "utf8").match(/\nconst WAKE_LINES = (\[[\s\S]*?\]);/)[1]);
   const isWake = (t) => !!t && WAKE4.some((w) => t.includes(w) || w.startsWith(t));
   // Wake, good morning and weather in one update: the yawn, then good morning,
-  // and nothing about the weather (it would wait more than 8 s).
+  // and nothing about the weather (it would wait more than 8 s). The wake line pinned to
+  // the yawn, so the order is checked whatever the day's turn (audit 2026-11-01b A4).
   await quiet2a();
+  await card.evaluate((el) => { el._wakeLine = () => "*yaaawn*"; });
   const wakeAt = Date.now();
   await inject(pet["sensor.last_care"], { attributes: { moments: [
     { type: "weather", change: "sun_out", at: new Date(wakeAt + 2).toISOString() },
@@ -3842,10 +3851,12 @@ async function main() {
     if (morning[morning.length - 1] !== t) morning.push(t);
     await page.waitForTimeout(300);
   }
+  await card.evaluate((el) => { delete el._wakeLine; });
   const iMorning = morning.findIndex((t) => /morning/.test(t) && !isWake(t));
-  check("2a: wake + good morning + weather: good morning is said, the weather isn't",
-    iMorning >= 0 && !morning.some((t) => /sun came out|sunshine/.test(t)) &&
-      morning.findIndex(isWake) < iMorning, morning.join(" | "));
+  const iYawn = morning.findIndex((t) => t.includes("yaaawn"));
+  check("2a: wake + good morning + weather: the yawn, then good morning; the weather isn't said",
+    iMorning >= 0 && iYawn >= 0 && iYawn < iMorning && !morning.some((t) => /sun came out|sunshine/.test(t)),
+    morning.join(" | "));
 
   // Fresh eyes #9: two quick different taps both count as the viewer's own.
   const twoTaps = await card.evaluate((el) => {
@@ -4343,12 +4354,28 @@ async function main() {
         s.queue = [];
         return out;
       };
+      const more = { gift: el._giftDue, take: el._giftTake, cured: el._curedLine, fav: el._favLine, promise: el._promiseLook,
+        moments: s.privateMoments, welcome: el._welcomeDue, catchUp: el._catchUp };
       try {
         el._channelHeard = () => true;
         el._resumeHeld = () => false;
         el._todayLine = () => null; // the away note's own slot, not the evening's
-        return { long: look(72), short: look(5) };
+        const out = { long: look(72), short: look(5) };
+        // Audit 2026-11-01b B1: the cure, L10 and the promise leave a waiting gift its slot.
+        let took = 0;
+        Object.assign(el, { _giftDue: () => true, _giftTake: () => { took++; }, _curedLine: () => "cured!",
+          _favLine: () => "best friends! ♥", _promiseLook: () => ({ line: "a promise ♪" }) });
+        out.gift = { lines: look(1).map((q) => q.text), took };
+        // B2: back after 3 days to a close friend's welcome home: one welcome, room for news.
+        Object.assign(el, { _giftDue: more.gift, _giftTake: more.take, _curedLine: () => null, _favLine: () => null,
+          _promiseLook: () => null, _welcomeDue: () => true, _catchUp: (sl, said, room) => (room > 0 ? [["the news ♪", Date.now(), "x"]] : []) });
+        s.privateMoments = [{ type: "friend_home", at: new Date().toISOString() }];
+        out.home = look(72).map((q) => q.text);
+        return out;
       } finally {
+        Object.assign(el, { _giftDue: more.gift, _giftTake: more.take, _curedLine: more.cured, _favLine: more.fav,
+          _promiseLook: more.promise, _welcomeDue: more.welcome, _catchUp: more.catchUp });
+        s.privateMoments = more.moments;
         Object.assign(el, { _channelHeard: real.heard, _resumeHeld: real.held, _todayLine: real.today });
         if (had === null) localStorage.removeItem(key); else localStorage.setItem(key, had);
         Object.assign(s, { lookedFirst: true, queue: [], sayUntil: 0, sayClass: 0 });
@@ -4398,6 +4425,12 @@ async function main() {
     check("fresh E8 (A-a): back after 3 days, the look starts with a welcome and has no away note; after 5 h, none",
       WELCOME.includes(e8.long[0]?.text) && !e8.long.some((q) => q.away) && !e8.short.some((q) => WELCOME.includes(q.text)),
       JSON.stringify(e8));
+    check("audit B1: the cure, L10 and the promise leave a waiting gift its first-look slot",
+      e8.gift.took === 1 && e8.gift.lines.length === 2 && e8.gift.lines[0] === "cured!" && !e8.gift.lines.includes("a promise ♪"),
+      JSON.stringify(e8.gift));
+    check("audit B2: back after days to a close friend's welcome home: one welcome, and the news still fits",
+      e8.home.some((t) => /^welcome home, /.test(t)) && !e8.home.some((t) => WELCOME.includes(t)) && e8.home.includes("the news ♪"),
+      JSON.stringify(e8.home));
   }
 
   await unpinAwake(card);
@@ -5341,6 +5374,8 @@ async function main() {
         `hatch-promise-${s.ids.device}-${d4.toDateString()}`];
       keys.forEach((k) => localStorage.removeItem(k));
       const out = {};
+      const pinned = el._promiseLook;
+      delete el._promiseLook; // the real one (hush pins it off)
       try {
         as("child");
         out.child = el._promiseLook(s, d0);
@@ -5355,6 +5390,7 @@ async function main() {
         out.cls = [...s.pet.classList].filter((c) => ["bighop", "spin"].includes(c));
       } finally {
         el._state = real;
+        el._promiseLook = pinned;
         keys.forEach((k) => localStorage.removeItem(k));
       }
       return out;
@@ -8475,6 +8511,8 @@ async function main() {
       const seenBefore = localStorage.getItem(seenKey);
       const out = {};
       el._rareDay = (sl, kind) => kind === "guest";
+      const pinnedGuest = el._visitorGuest;
+      delete el._visitorGuest; // the real one (hush pins it off)
       s.house = { ...(s.house || {}), visit: null };
       const at = (h) => new Date(new Date().setHours(h, 30, 0, 0));
       try {
@@ -8499,6 +8537,7 @@ async function main() {
         out.home = s.worldKey;
       } finally {
         el._rareDay = real.rare;
+        el._visitorGuest = pinnedGuest;
         s.house = real.house;
         s.screen.classList.remove("night");
       }
