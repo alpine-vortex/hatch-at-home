@@ -105,6 +105,10 @@ class HatchPetCardMoment extends HatchPetCardVisit {
           say(this._nightLine(s) || this._lines(s, "fell_asleep", pick(["good night...", "night night...", "sleep tight..."])).text, 4000);
         }
         break;
+      case "rest_ended": // R1: back from resting, with a stretch (no line going in: rest_started)
+        say(this._lines(s, "rest.back", pick(REST_LINES.back)).text, 4500,
+          () => this._animate(s, s.pet, "stretch", 1100));
+        break;
       case "good_morning":
         speak(this._lines(s, "good_morning", pick(["morning!! you're up!", "morning! ♪"])).text, 4500,
           () => this._animate(s, s.pet, "stretch", 1100));

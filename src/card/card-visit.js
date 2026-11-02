@@ -184,7 +184,10 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     const own = !type ? [] : first ? type.hello.map((line) => line(first)) : [...type.hello_shared];
     if (type && bond && first && bond.level >= BOND.warm) own.push(...type.hello_warm.map((line) => line(first)));
     if (type && bond && first && bond.level >= BOND.hearts) own.push(...type.hello_hearts.map((line) => line(first)));
-    this._speak(s, pick(own.length && Math.random() < 0.5 ? own : lines), 4000);
+    // Resting (R1): now and then it was daydreaming; otherwise the usual hello.
+    const daydream = s.resting && Math.random() < REST_DAYDREAM_ODDS
+      && this._lines(s, "rest.visit", REST_LINES.visit).text;
+    this._speak(s, daydream || pick(own.length && Math.random() < 0.5 ? own : lines), 4000);
     const isCalm = calm();
     if (level >= BOND.hop && !isCalm) this._animate(s, s.pet, "greethop", 1400);
     else this._animate(s, s.pet, "perk", 320);

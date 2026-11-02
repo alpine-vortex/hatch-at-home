@@ -421,4 +421,12 @@ const GAME_COPY = {
   idle: "let's dig another time ♪", // Q8, the card closes a dig left idle
   dugThere: "oh! you dug there too ♪", // UX6 F16, a screen adopts the same person's other screen's dig
 };
+// Resting (plan favourite-resting §4.6; copy APPROVED for R1 by the first mate 2026-11-02):
+// idle chatter while resting, the odd hello on a visit, and the lines on leaving rest.
+// Scanned like the rest: a resting pet is content, never sad or parked.
+const RESTING_IDLE = ["just pottering about ♪", "comfy here! ☁", "having a lazy day, hehe", "this is a good spot ♪"];
+const REST_LINES = {
+  visit: "oh! hi ♥ i was just daydreaming",
+  back: ["good stretch! i'm back ♪", "that was a nice rest!"],
+};
 // --- end fresh-expand copy ---

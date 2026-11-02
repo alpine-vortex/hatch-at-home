@@ -119,6 +119,7 @@
       // The mood's own need shows as a flag (the button it wants lights up).
       const flags = [...new Set([...(["hungry", "bored", "dirty", "sick", "sleepy"].includes(mood) ? [mood] : []), ...(pet.flags || [])])];
       if (shot.scene === "rain" && !flags.includes("rainy")) flags.push("rainy");
+      if (pet.resting && !flags.includes("resting")) flags.push("resting"); // R1: the mood's flag
       put("sensor", "mood", mood, { flags, ...(pet.lay ? { requests: ["lay_egg"] } : {}), ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) });
       // `moments`: [{type, ago (minutes), ...}], the public moments the away note reads.
       const moments = (pet.moments || []).map(({ ago = 30, ...m }) => ({ ...m, at: iso(-ago) }));
@@ -135,6 +136,8 @@
         put("select", "next_egg", attrs.next_egg || "Surprise me", { options: ["Surprise me", ...names] });
       }
       put("switch", "lights_out", shot.scene === "dim" ? "on" : "off");
+      // R1: `pet.resting` (true/false) adds the resting switch; left out, an older server's none.
+      if (pet.resting !== undefined) put("switch", "resting", pet.resting ? "on" : "off");
     });
     const noop = () => Promise.resolve(() => {});
     return {

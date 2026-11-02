@@ -239,6 +239,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_linked)
     websocket_api.async_register_command(hass, websocket_greeted)
     websocket_api.async_register_command(hass, websocket_my_day)
+    websocket_api.async_register_command(hass, websocket_rest)
     websocket_api.async_register_command(hass, websocket_set_shell)
     websocket_api.async_register_command(hass, websocket_rename)
     websocket_api.async_register_command(hass, websocket_collect)
@@ -817,6 +818,33 @@ async def websocket_my_day(
         return
     await pet.async_set_my_day(connection.user.id, msg["enabled"])
     connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/rest",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_rest(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Rest the pet, or wake it (plan favourite-resting §4.2): the household's
+    switch, so anyone signed in may flip it, and who did isn't recorded. An
+    egg can't rest (an "egg" error); off works for any pet."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    if await pet.async_set_resting(msg["enabled"]) != "ok":
+        connection.send_error(msg["id"], "egg", "An egg can't rest")
+        return
+    connection.send_result(msg["id"], {"resting": msg["enabled"]})
 
 
 @websocket_api.websocket_command(
