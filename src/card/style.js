@@ -355,6 +355,7 @@ const STYLE = `
   @keyframes pat-soft { 40% { transform: translateY(-2%) scale(1.02, .98); } }
   .pet.pat-slow { animation: perk 1.1s ease-in-out; }
   .pet.rock { animation: rock .6s steps(4, jump-none) 1; transform-origin: 50% 90%; }
+  .pet.rock2 { animation: rock .6s steps(4, jump-none) 2; transform-origin: 50% 90%; } /* a cracking egg: a double rock */
   @keyframes rock { 0% { transform: rotate(-4deg); } 33% { transform: rotate(4deg); } 66% { transform: rotate(-3deg); } 100% { transform: rotate(0); } }
   .pet.hop { animation: hop .7s ease-in-out infinite; }
   .pet.munch { animation: munch .5s ease-in-out 3; }
@@ -366,6 +367,8 @@ const STYLE = `
   .poop { bottom: 5%; height: 15%; }
   .poop.p0 { left: 6%; } .poop.p1 { left: 18%; bottom: 3%; } .poop.p2 { right: 7%; }
   .attention { top: 5%; right: 5%; height: 17%; animation: pulse 1s ease-in-out infinite; }
+  /* A call arriving (_render, once, hidden to shown): pops in, then pulses as ever. */
+  .attention.arrive { animation: pop .3s ease-out, pulse 1s ease-in-out .3s infinite; }
   @keyframes pulse { 50% { transform: scale(1.12); } }
   .prop { left: 67%; bottom: 7%; height: 22%; animation: pop .3s ease-out; }
   /* A clean's extra bubble (fresh-expand M-b): up 30 px over 1.2 s, then it pops. */
@@ -638,8 +641,9 @@ const STYLE = `
   .ghost { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%;
     opacity: 0; display: none; transition: translate .25s ease-out .12s; }
   ha-card.lcd-on .ghost { display: block; }
-  .ghost.wander-l { translate: -16% 0; transition-duration: .9s; }
+  .ghost.wander-l { translate: -16% 0; transition-duration: .9s; transition-delay: .32s; } /* the pet's turn (.2 s) + 120 ms */
   .ghost.wander-r { translate: 16% 0; transition-duration: .9s; }
+  .ghost.look { rotate: y 180deg; } /* a wander left turns, and so does its trace */
   .screen.dim .ghost { filter: brightness(.8); }
   /* The backlight (_backlight): an Indiglo glow over the scene, under the bubble.
      It comes on at once and fades out; the dimmed scene brightens under it. */
@@ -779,8 +783,10 @@ const STYLE = `
   /* Idle life. */
   .pet { transition: translate .25s ease-out, rotate .2s ease-out, scale .25s steps(2); }
   .pet.look { rotate: y 180deg; }
-  .pet.wander-l { translate: -16% 0; transition-duration: .9s; }
-  .pet.wander-r { translate: 16% 0; transition-duration: .9s; }
+  /* A wander left turns first (_wander adds .look with it): the .2 s flip, then the slide
+     (a .2 s delay on the translate). The way home is the plain .pet transition. */
+  .pet.wander-l { translate: -16% 0; transition: translate .9s ease-out .2s, rotate .2s ease-out, scale .25s steps(2); }
+  .pet.wander-r { translate: 16% 0; transition: translate .9s ease-out, rotate .2s ease-out, scale .25s steps(2); }
   /* The infrared link (_linkStart): the beam runs over the track between the two
      devices' top edges, where the backlight buttons sit, so it takes no taps. One
      world art pixel is --u; the sprites are 32 of them square. */
@@ -918,7 +924,7 @@ const STYLE = `
     translate: min(var(--go, 60%), 107.5% - var(--k, 1) * 50%) 0; }
   /* What the pet stands on (species.json "perch"); it follows the pet around. */
   .perch, .screen .pat { transition: translate .25s ease-out; }
-  .perch.wander-l, .screen .pat.wander-l { translate: -16% 0; transition-duration: .9s; }
+  .perch.wander-l, .screen .pat.wander-l { translate: -16% 0; transition-duration: .9s; transition-delay: .2s; } /* after the pet's turn */
   .perch.wander-r, .screen .pat.wander-r { translate: 16% 0; transition-duration: .9s; }
   .status { --sheet-bg: #e9e2c6; position: absolute; inset: 0; background: var(--sheet-bg); color: #2f3a24; padding: var(--sy, 9px) var(--sx, 12px);
     display: none; flex-direction: column; gap: 4px; font-size: 13px; overflow: auto; }

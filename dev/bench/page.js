@@ -626,6 +626,8 @@
     if (shot.reveal) await revealShot(card, cur, shot.reveal);
     // `gift`: a gift said at the first look (see giftShot).
     if (shot.gift) await giftShot(card, cur, shot.gift);
+    // A flush first, so a class that is a CSS transition (`look`, `wander-l`) starts one `petAt` can seek.
+    void cur.pet.offsetWidth;
     for (const c of shot.petClasses || []) cur.pet.classList.add(c);
     // `petStretch`: a mockup only (gaps-seams Q2): the pet drawn that much wider, its
     // height kept, over the species' own scale.
@@ -637,6 +639,14 @@
       for (const a of cur.pet.getAnimations()) {
         a.pause();
         a.currentTime = shot.petAt;
+      }
+    }
+    // `attentionAt`: the call icon as it arrives (`.arrive`, the pop then the pulse), paused that many ms in.
+    if (shot.attentionAt !== undefined) {
+      cur.attention.classList.add("arrive");
+      for (const a of cur.attention.getAnimations()) {
+        a.pause();
+        a.currentTime = shot.attentionAt;
       }
     }
     // `react`: a care reaction (PR 3c) started through the card's own `_reactFrames`
@@ -672,7 +682,10 @@
     slides.forEach((x) => card._stopTyping(x));
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     // The shelf and slides come to rest at once: a shot mid-slide is off the pixel grid.
-    for (const a of root.getAnimations()) if (a instanceof CSSTransition) a.finish();
+    // (Not the pet's own when `petAt` pauses it: a turn or a wander is a transition, seeked there.)
+    for (const a of root.getAnimations()) {
+      if (a instanceof CSSTransition && !(shot.petAt !== undefined && a.effect.target === cur.pet)) a.finish();
+    }
     // The status's LCD wipes (UX fix 2, F13) run to their end too: a shot never catches a half-drawn page.
     for (const a of root.getAnimations()) if (/^lcd-wipe/.test(a.animationName || "")) a.finish();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));

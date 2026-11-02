@@ -7742,6 +7742,42 @@ async function main() {
     eggPat.patOn && eggPat.bubble === "♪" && eggPat.rocked && !eggPat.status && !eggPat.greetedAfter, JSON.stringify(eggPat));
   check("UX4 F10: the egg's bubble keeps '25 min' together, and says 'cracking! ♥' at 6 or fewer",
     /^hatching in about 25\u00a0min$/.test(eggPat.say25) && eggPat.say4 === "cracking! ♥", JSON.stringify(eggPat));
+  // Motion ship 1: an egg on show rocks by itself, now and then (once; twice in a row when
+  // cracking), and not under reduced motion. The timer is the card's (_eggWobble, 40-90 s): forced due here.
+  const eggWobble = () => card.first().evaluate(async (el) => {
+    const s = el._slides[el._index];
+    if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+    // Nothing else going on (the dev pet's own state at this hour is not what is tested).
+    Object.assign(s, { sayUntil: 0, poseUntil: 0, movingUntil: 0, flairUntil: 0, nextWobble: 0, asleep: false, away: false,
+      calling: false, game: null, scene: null, linking: false, power: null, visitor: null });
+    s.pet.classList.remove("rock", "rock2");
+    el._eggWobble(s); // arms the next one (40-90 s out); nothing yet
+    const armed = s.nextWobble - Date.now();
+    const none = !s.pet.classList.contains("rock") && !s.pet.classList.contains("rock2");
+    s.nextWobble = Date.now() - 1;
+    el._eggWobble(s);
+    const now = Date.now();
+    const blocks = Object.entries({ asleep: s.asleep, away: s.away, game: s.game, scene: s.scene, linking: s.linking, power: s.power,
+      visitor: s.visitor, calling: s.calling, status: s.screen.classList.contains("show-status"), say: s.sayUntil > now,
+      pose: s.poseUntil > now, moving: s.movingUntil > now }).filter(([, v]) => v).map(([k]) => k);
+    return { egg: s.egg, blocks, none, armed, rock: s.pet.classList.contains("rock"), rock2: s.pet.classList.contains("rock2"),
+      next: s.nextWobble - Date.now() };
+  });
+  const wobbleIdle = await eggWobble();
+  check("motion 1: an idle egg rocks once on its own, the next 40-90 s out",
+    wobbleIdle.egg && wobbleIdle.none && wobbleIdle.rock && !wobbleIdle.rock2 &&
+      wobbleIdle.armed > 39000 && wobbleIdle.armed <= 90000 && wobbleIdle.next > 39000 && wobbleIdle.next <= 90000, JSON.stringify(wobbleIdle));
+  await inject(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + 4 * 60000).toISOString() } });
+  await page.waitForTimeout(1200);
+  await page.waitForTimeout(700); // the idle rock above is over
+  const wobbleCrack = await eggWobble();
+  check("motion 1: a cracking egg rocks twice in a row (rock2)", wobbleCrack.egg && wobbleCrack.rock2 && !wobbleCrack.rock, JSON.stringify(wobbleCrack));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const wobbleCalm = await eggWobble();
+  await page.emulateMedia({ reducedMotion: null });
+  check("motion 1: an egg does not rock by itself under reduced motion", wobbleCalm.egg && !wobbleCalm.rock && !wobbleCalm.rock2, JSON.stringify(wobbleCalm));
+  await inject(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + 25 * 60000).toISOString() } });
+  await page.waitForTimeout(1200);
   // The name sheet (settings S3): naming the new generation. It lives here, after the moments section, because
   // it swaps the pet's states for a while; the moments checks near the layout and timing limit are touchy about that.
   // (SKIP_S3 leaves it out, to tell its effects from others'.) The lay press, the server's answers and the
@@ -9830,6 +9866,87 @@ async function main() {
     delete el.__calls;
     if (window.__patRandom) Math.random = window.__patRandom;
   });
+  // Motion ship 1 (CSS-first wins), on the awake pet. A wander left turns first: `look` goes on
+  // with `wander-l` and both go off on the one timer; a wander right never turns. The call icon
+  // pops (`.arrive`) once, when a call comes, not on a redraw; the pet settles as it falls asleep.
+  // Under reduced motion none of them starts. (calling and asleep are forced on the card's _state.)
+  const m1 = await card.evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const real = el._state;
+    const force = {};
+    el._state = function (slide, key) {
+      const st = real.call(this, slide, key);
+      return st && key in force ? { ...st, state: force[key] } : st;
+    };
+    const redraw = async () => { el._redraw(s); await wait(300); };
+    const out = { egg: s.egg, sides: [], leftovers: [] };
+    // The wander (idle's own pick, and a reaction's, both go through _wander).
+    for (let i = 0; i < 40 && out.sides.length < 40; i++) {
+      el._wander(s, 80);
+      const left = s.pet.classList.contains("wander-l");
+      out.sides.push(left === s.pet.classList.contains("look") && (left || s.pet.classList.contains("wander-r")) ? (left ? "l" : "r") : "bad");
+      await wait(130);
+      if (/wander|look/.test(s.pet.className)) out.leftovers.push(s.pet.className);
+      if (out.sides.includes("l") && out.sides.includes("r")) break;
+    }
+    // The call: off, then on.
+    force["binary_sensor.calling"] = "off";
+    await redraw();
+    out.beforeCall = s.attention.classList.contains("arrive");
+    force["binary_sensor.calling"] = "on";
+    await redraw();
+    out.popped = s.attention.classList.contains("arrive");
+    out.popAnim = s.attention.getAnimations().map((a) => a.animationName).join();
+    s.attention.classList.remove("arrive"); // a redraw of the same call is not an arrival: no new pop
+    await redraw();
+    out.popOnce = !s.attention.classList.contains("arrive");
+    force["binary_sensor.calling"] = "off";
+    await redraw();
+    out.poppedOff = s.attention.classList.contains("arrive");
+    // Falling asleep seen live.
+    force["binary_sensor.asleep"] = "off";
+    await redraw();
+    s.pet.classList.remove("settle");
+    force["binary_sensor.asleep"] = "on";
+    await redraw(); // _update is async: 300 ms in, the 2.5 s settle is on
+    out.settles = s.pet.classList.contains("settle");
+    await wait(2500);
+    out.settleEnds = !s.pet.classList.contains("settle");
+    force["binary_sensor.asleep"] = "off";
+    await redraw();
+    el._state = real;
+    return out;
+  });
+  check("motion 1: a wander left turns first (look with it), a wander right does not, both clear on one timer",
+    m1.sides.includes("l") && m1.sides.includes("r") && !m1.sides.includes("bad") && !m1.leftovers.length, JSON.stringify(m1));
+  check("motion 1: the call icon pops in (arrive) when a call comes, once, and the class goes with the call",
+    !m1.beforeCall && m1.popped && /pop/.test(m1.popAnim) && m1.popOnce && !m1.poppedOff, JSON.stringify(m1));
+  check("motion 1: the pet settles as it falls asleep live, and the class clears", m1.egg || (m1.settles && m1.settleEnds), JSON.stringify(m1));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const m1calm = await card.evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const real = el._state;
+    const force = { "binary_sensor.asleep": "off" };
+    el._state = function (slide, key) {
+      const st = real.call(this, slide, key);
+      return st && key in force ? { ...st, state: force[key] } : st;
+    };
+    el._redraw(s);
+    await wait(300);
+    force["binary_sensor.asleep"] = "on";
+    el._redraw(s);
+    await wait(300);
+    const out = { settles: s.pet.classList.contains("settle") };
+    force["binary_sensor.asleep"] = "off";
+    el._redraw(s);
+    await wait(300);
+    el._state = real;
+    return out;
+  });
+  check("motion 1: under reduced motion the pet does not settle", !m1calm.settles, JSON.stringify(m1calm));
+  await page.emulateMedia({ reducedMotion: null });
   await patReset();
   await unpinAwake(card);
   }
@@ -11295,12 +11412,16 @@ async function main() {
     const gap = s.nextVisitCheck - s.flairUntil;
     await new Promise((r) => setTimeout(r, 1800));
     const walker = !!s.seasonBox.querySelector(".snowhare.walk.flap");
+    // Motion 1: a hare coming from the left is faced (the art faces right); one from the right is not.
+    const fromLeft = !!s.seasonBox.querySelector(".snowhare.ltr");
+    const faced = s.pet.classList.contains("look");
     const startle = s.bubble.textContent;
     await new Promise((r) => setTimeout(r, 1900));
     const greet = s.bubble.textContent;
     el._react(s, { action: "snack", result: "ok", at: Date.now() / 1000 });
-    return { walker, startle, greet, gap, prop: s.prop.getAttribute("src") || "" };
+    return { walker, fromLeft, faced, startle, greet, gap, prop: s.prop.getAttribute("src") || "" };
   });
+  check("motion 1: the pet faces a snow hare that comes from the left, and not one from the right", hare.fromLeft === hare.faced, JSON.stringify(hare));
   check("winter: a snow hare walks by; the pet says oh!, then hi", hare.walker && hare.startle === "oh!" &&
     hare.greet === "hi, little hare!", JSON.stringify(hare));
   check("winter: a world visitor waits VISIT_AFTER_MS after the hare", hare.gap >= 120000, String(hare.gap));

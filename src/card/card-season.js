@@ -359,7 +359,8 @@ class HatchPetCardSeason extends HatchPetCardGames {
   _seasonVisitor(s, season) {
     const { art, cls, ms, startle, jump, greet } = season.visitor;
     this._seasonVisitEnd(s);
-    const el = this._seasonFly(s, season, art, cls, ms, { walk: !!season.visitor.walk });
+    const ltr = Math.random() < 0.5;
+    const el = this._seasonFly(s, season, art, cls, ms, { ltr, walk: !!season.visitor.walk });
     s.flairUntil = Date.now() + ms; // nothing else meanwhile
     s.visitUntil = s.flairUntil; // a pat wiggles, no line
     s.nextVisitCheck = Math.max(s.nextVisitCheck || 0, s.flairUntil + VISIT_AFTER_MS); // a world one later
@@ -371,6 +372,9 @@ class HatchPetCardSeason extends HatchPetCardGames {
     }, t));
     at(1400, () => {
       if (!this._mayInterrupt(s, FLAVOUR)) return;
+      // The art faces right, so only a visitor on the left is faced (as a world visitor is,
+      // card-visitors.js): turned as the startle begins, held through the greet.
+      if (ltr && !calm()) this._look(s, ms - 1400 - 600);
       this._line(s, FLAVOUR, startle, 1800, { write: true });
       this._animate(s, s.pet, jump, jump === "perk" ? 320 : 800);
       if (season.chirp) this._chirp(s, season.chirp);
