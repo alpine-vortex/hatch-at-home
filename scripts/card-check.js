@@ -799,11 +799,20 @@ async function bigTextChecks({ page, check, cur, shot }) {
     const s = el._slides[el._index];
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
     const fit = () => s.status.scrollWidth <= s.status.clientWidth + 1;
+    // What sticks out, when something does: the innermost elements past the box's right
+    // edge (fm-batch-043 failed here on CI only; this names the culprit next time).
+    const wide = () => {
+      const edge = s.status.getBoundingClientRect().right + 1;
+      return [...s.status.querySelectorAll("*")].filter((e) => e.getBoundingClientRect().right > edge &&
+        ![...e.children].some((c) => c.getBoundingClientRect().right > edge))
+        .slice(0, 4).map((e) => `${e.tagName.toLowerCase()}.${[...e.classList].join(".")} ${Math.round(e.getBoundingClientRect().right - edge)}px "${(e.textContent || "").trim().slice(0, 50)}"`);
+    };
     const out = {};
     s.settings = true; s.journal = false; s.finds = false;
     el._renderStatus(s, []); await wait(200); out.settings = fit();
     s.settings = false;
     el._renderStatus(s, []); await wait(200); out.status = fit();
+    if (!out.status) out.statusWide = wide();
     s.journal = true;
     el._renderStatus(s, []); await wait(1500); out.journal = fit();
     s.journal = false;
