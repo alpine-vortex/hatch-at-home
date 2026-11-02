@@ -30,14 +30,22 @@ import voluptuous as vol
 
 from . import channel, notify, rates as R
 from .const import (
+    ATTR_CATEGORY,
     ATTR_CONFIG_ENTRY_ID,
     ATTR_ENABLED,
     ATTR_END,
     ATTR_FINISH,
+    ATTR_FROM_STATE,
     ATTR_GAME,
     ATTR_GUESS,
     ATTR_HEADLINE,
+    ATTR_HELD,
     ATTR_HOURS,
+    ATTR_MATCH,
+    ATTR_REACTION,
+    ATTR_SOURCE,
+    ATTR_TEXT,
+    ATTR_TO_STATE,
     ATTR_TOPIC,
     CARD_FILENAME,
     CONF_AQI,
@@ -47,10 +55,12 @@ from .const import (
     CONF_WEATHER,
     DOMAIN,
     FRONTEND_URL,
+    HOUSE_CATEGORIES,
     SERVICE_FAST_FORWARD,
     SERVICE_MY_DAY,
     SERVICE_NOTIFY_ME,
     SERVICE_PLAY_GAME,
+    SERVICE_REACT,
     SERVICE_SET_SHELL,
     SERVICE_SHARE_NEWS,
     SERVICE_VISIT,
@@ -62,6 +72,7 @@ from .defaults import default_weather
 from .home import news_text
 from .model import GAMES
 from .people import ANSWERS, People
+from .react import REACTIONS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -131,6 +142,23 @@ SHARE_NEWS_SCHEMA = vol.Schema(
         vol.Optional(ATTR_TOPIC): vol.All(
             cv.string, lambda v: news_text(v, R.NEWS_TOPIC_MAX)
         ),
+    }
+)
+# virtual_pet.react (ha-signals H8). The text never raises (a blank one is no
+# text, a long one is cut), so no player's words reach a log in an error.
+REACT_SCHEMA = vol.Schema(
+    {
+        vol.Required(ATTR_ENTITY_ID): cv.entity_ids,
+        vol.Required(ATTR_CATEGORY): vol.In(HOUSE_CATEGORIES),
+        # The entity that changed: read for its domain and H3 / H6's options,
+        # kept nowhere.
+        vol.Optional(ATTR_SOURCE): vol.Any(None, cv.entity_id),
+        vol.Optional(ATTR_FROM_STATE): vol.Any(None, cv.string),
+        vol.Optional(ATTR_TO_STATE): vol.Any(None, cv.string),
+        vol.Optional(ATTR_HELD): vol.Any(None, vol.Coerce(float)),
+        vol.Optional(ATTR_MATCH): vol.Any(None, cv.string),
+        vol.Optional(ATTR_REACTION): vol.In(REACTIONS),
+        vol.Optional(ATTR_TEXT): lambda v: news_text(v, R.REACT_TEXT_MAX) or None,
     }
 )
 FAST_FORWARD_SCHEMA = vol.Schema(
@@ -290,6 +318,39 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             for pet_id, pet in pets.items()
         }
 
+    async def react(call: ServiceCall) -> ServiceResponse:
+        category = call.data[ATTR_CATEGORY]
+        custom = category == "custom"
+        if custom and ATTR_REACTION not in call.data:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="no_reaction"
+            )
+        pets: dict[str, PetCoordinator] = {}
+        for entity_id in call.data[ATTR_ENTITY_ID]:
+            try:
+                pet = pet_for(entity_id)
+            except ServiceValidationError:
+                continue
+            pets[pet.pet_id] = pet
+        if not pets:
+            raise ServiceValidationError(
+                translation_domain=DOMAIN, translation_key="no_pet"
+            )
+        return {
+            pet_id: pet.react(
+                category,
+                source=call.data.get(ATTR_SOURCE),
+                from_state=call.data.get(ATTR_FROM_STATE),
+                to_state=call.data.get(ATTR_TO_STATE),
+                held=call.data.get(ATTR_HELD),
+                match=call.data.get(ATTR_MATCH),
+                reaction=call.data.get(ATTR_REACTION) if custom else None,
+                # Words only with Custom; with a category, its own lines.
+                text=call.data.get(ATTR_TEXT) if custom else None,
+            )
+            for pet_id, pet in pets.items()
+        }
+
     hass.services.async_register(
         DOMAIN, SERVICE_NOTIFY_ME, notify_me, schema=NOTIFY_ME_SCHEMA
     )
@@ -321,6 +382,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         SERVICE_SHARE_NEWS,
         share_news,
         schema=SHARE_NEWS_SCHEMA,
+        supports_response=SupportsResponse.OPTIONAL,
+    )
+    hass.services.async_register(
+        DOMAIN,
+        SERVICE_REACT,
+        react,
+        schema=REACT_SCHEMA,
         supports_response=SupportsResponse.OPTIONAL,
     )
 

@@ -408,6 +408,9 @@ class HouseMoments:
         self.robot_cleaning: bool | None = None
         self.robot_seen = False
         self.robots: tuple[str, int] = ("", 0)
+        # The doorbell (H5): when the next press may be heard. Memory only, and
+        # never a press time: nothing here says when the bell rang.
+        self.next_doorbell = 0.0
 
     def update(
         self,
@@ -499,6 +502,16 @@ class HouseMoments:
             events.append({"type": "house_answered", "request": request})
         self.answers = (day, count)
         return events
+
+    def doorbell(self, now: float, awake: bool) -> list[dict[str, Any]]:
+        """A doorbell press (the coordinator's own listener calls this; a press
+        is never in Readings). Dropped while the pet is asleep, away or an egg,
+        and for the cooldown after one that was heard: a dropped press
+        starts no wait. One wait per pet, across all its doorbells."""
+        if not awake or now < self.next_doorbell:
+            return []
+        self.next_doorbell = now + R.HOME_DOORBELL_COOLDOWN_MINUTES * 60
+        return [{"type": "doorbell_live"}]
 
     def _robot(self, r: Readings, awake: bool, today: str) -> list[dict[str, Any]]:
         """A vacuum starting to clean (robot_out), and heading home after a run

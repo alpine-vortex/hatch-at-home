@@ -967,6 +967,8 @@ const SHARED_POSES = new Set(Object.values(POSES));
 // What the journal calls a memory.
 const MEMORY_LABELS = {
   first_snow: "first snow", first_frost: "first frost", first_warm: "first warm day", first_fog: "first fog",
+  season_spring: "first day of spring", season_summer: "first day of summer", // ha-signals H7
+  season_autumn: "first day of autumn", season_winter: "first day of winter",
 };
 // Idle life: something small every so often when nothing else is going on.
 const IDLE_MIN_MS = 20000;
@@ -1465,6 +1467,16 @@ const PROMISE_LINES = {
 const PROMISE_MID = "hup! getting there ♪"; // days 1-3, now and then, with the move done small
 // Se-a (E12): the year's first warm day and the season's first fog, live.
 const SEASON_FIRST_LINES = { warm: "first warm day! ☀ ♪", fog: "ooh, the first fog ♪" };
+// ha-signals H7: a season's first day (season_start {season}); its lines and today bit.
+const SEASON_START_LINES = {
+  spring: ["first day of spring! ♪", "spring's here! hop hop ♪"],
+  summer: ["summer's here! ☀ ♪", "first day of summer! ☀"],
+  autumn: ["autumn's here! crunchy leaves ♪", "first day of autumn ♪"],
+  winter: ["winter's here! ❄", "first day of winter! ❄"],
+};
+const SEASON_START_BITS = {
+  spring: "saw spring begin", summer: "saw summer begin", autumn: "saw autumn begin", winter: "saw winter begin",
+};
 // F2: a picked dream's story (the sensor says what was picked, never who): the shared two
 // and the type's own, in turns. Everyone hears it at the first look but "you", which only
 // the asker's note tells (everyone else hears DREAM_FRIENDS); the asker's note then says
@@ -1538,7 +1550,7 @@ const TRICK_ASK = {
 // pet's request, not a person. heating = the blanket ask, cooling = the fan ask; bits are
 // the evening's "today" and the away note's phrases. robot_out / robot_home: a robot
 // vacuum started a run / went home (H4). washer / dishwasher / dryer / machine: a
-// machine finished its cycle (H6, plan copy F). No PERSONA keys: every type says these.
+// machine finished its cycle (H6, plan copy F). doorbell: a press (H5, plan copy G; said live, no bit). No PERSONA keys: every type says these.
 const HOUSE_LINES = {
   heating: ["the heater's on! toasty ♪", "ooh, the house heard me! ♥", "warm air! that's better ♪"],
   cooling: ["ahh, a breeze! that's better ♪", "the house heard me! ahh ♪", "cool air! much better ♪"],
@@ -1548,10 +1560,65 @@ const HOUSE_LINES = {
   dishwasher: ["the dishes are all done! ♪"],
   dryer: ["the dryer's done! warm socks ♪"],
   machine: ["ding! a machine finished ♪", "ooh, something's done! ♪"],
+  doorbell: ["ding dong! eep!", "ooh, the doorbell! ♪", "ding dong! *perks up*"], // H5, channel only: no bit
   bits: { heating: "felt the house warm up", cooling: "felt the house cool down", robot: "watched the robot clean", machine: "heard a machine finish" },
+};
+// HOUSE_MOMENT_LINES (ha-signals H8, virtual_pet.react; DRAFT for the FM's review): what
+// the pet says when the house moment blueprint (or an automation) names what changed, by
+// category (const.py HOUSE_CATEGORIES). Not the house_answered lines: nothing was asked
+// for. Plan Z's lines are folded in where they fit. custom: by reaction, when the player
+// typed no words of their own (and an old card's only line for them).
+const HOUSE_MOMENT_LINES = {
+  heater: ["ooh, the heater's on! toasty ♪", "warm air coming! ♪", "cozy time! the heat's on ♪"],
+  ac: ["the cool air's on! ahh ♪", "ooh, nice and cool ♪", "cool air! ahh, lovely ♪"],
+  fan: ["whoosh! a breeze ♪", "the fan's on! wheee ♪", "ooh, windy! ♪"],
+  washer: ["the washer's finished! ♪", "the laundry's all clean! ♪", "the washer's done! fresh ♪"],
+  dryer: ["the dryer's done! warm socks ♪", "toasty laundry! ♪", "fluffy and warm! ♪"],
+  dishwasher: ["the dishes are all done! ♪", "sparkly dishes! ♪", "all clean in there! ♪"],
+  oven: ["ding! the oven's done ♪", "mm, something smells yummy ♪", "ooh, something's baked! ♪"],
+  coffee: ["the coffee's ready! ♪", "mmm, coffee smell ♪", "bubble bubble! coffee ♪"],
+  printer: ["ooh, the printer made something! ♪", "it's finished printing! ♪", "a new thing! ooh ♪"],
+  ev: ["all charged up! ♪", "bzzt! all charged ♪", "the car's all full of zap ♪"],
+  feeder: ["someone got dinner! ♪", "munch munch! dinnertime ♪", "ooh, food's served! ♪"],
+  plants: ["the plants had a drink ♪", "glug glug! happy plants ♪", "the leaves look perky ♪"],
+  delivery: ["ooh, a delivery came! ♪", "a parcel! ooh ♪", "something came for us! ♪"],
+  timer: ["ding! time's up! ♪", "ding ding! ♪", "the timer rang! ♪"],
+  internet: ["the internet's back! ♪", "we're back online! ♪", "the wifi's back! yay ♪"],
+  custom: { hop: ["*hop hop* ♪"], cheer: ["yay! hooray! ♪"], cozy: ["mm, cozy ♪"], dance: ["♪ dance time! ♪"], startle: ["eep! oh! ♪"] },
 };
 // --- end fresh-expand copy ---
 const HOUSE_REQUEST = { blanket: "heating", fan: "cooling" }; // the request the house answered
+// The house moment's categories (H8; const.py HOUSE_CATEGORIES, card-check holds the two
+// together): the pet's reaction and the house effect (an existing fx stand-in; the fan's
+// breeze is fx-cool until house_breeze lands, the chime waits for H5's). custom: the
+// player picks the reaction. bit: the evening's "today" phrase (HOUSE_LINES.bits), none
+// for the channel-only ones and Custom.
+const HOUSE_CATEGORY = {
+  heater: { react: "cozy", fx: "fx-heat", bit: "heating" },
+  ac: { react: "cozy", fx: "fx-cool", bit: "cooling" },
+  fan: { react: "hop", fx: "fx-cool", bit: "cooling" },
+  washer: { react: "cheer", fx: "fx-suds", bit: "machine" },
+  dryer: { react: "cheer", fx: "fx-tumble", bit: "machine" },
+  dishwasher: { react: "cheer", fx: "fx-suds", bit: "machine" },
+  oven: { react: "cheer" }, // channel only (says someone's home)
+  coffee: { react: "hop" }, // channel only
+  printer: { react: "cheer", bit: "machine" },
+  ev: { react: "cheer" }, // channel only
+  feeder: { react: "hop" },
+  plants: { react: "cozy" },
+  delivery: { react: "startle" }, // channel only
+  timer: { react: "startle" }, // channel only (a kitchen timer: someone is cooking)
+  internet: { react: "dance" },
+  custom: {},
+};
+// Each reaction's move: an existing CSS move (cheer adds the sparkle), for every stage.
+const REACT_POSE = {
+  hop: { move: "greethop", ms: 1400 },
+  cheer: { move: "bighop", ms: 1400, sparkle: true },
+  cozy: { move: "settle", ms: 2500 },
+  dance: { move: "jig", ms: 1800 },
+  startle: { move: "startle", ms: 700 },
+};
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
 // types are partners here, or the same type, are kindred. On KINDRED_ODDS of their
@@ -1870,7 +1937,10 @@ const MOMENTS_KEPT = 10; // const.py MOMENTS_KEPT
 // Moments that come only over the channel: a person's own (const.py
 // PERSONAL_EVENTS) and the house's shows and songs (MEDIA_EVENTS). Only an old
 // server's public list carries them; the card never reads them there.
-const CHANNEL_ONLY = new Set(["bond_up", "bond_record", "bond_favourite", "friend_home", "tucked_in", "watching", "listening"]);
+// house_live / news_live (const.py LIVE_EVENTS): a channel-only house moment, and house
+// words kept off the sensor, said live and kept nowhere (H8); doorbell_live: a doorbell press (H5).
+const CHANNEL_ONLY = new Set(["bond_up", "bond_record", "bond_favourite", "friend_home", "tucked_in", "watching", "listening",
+  "house_live", "news_live", "doorbell_live"]);
 const MEDIA_MOMENTS = new Set(["watching", "listening"]);
 const momentKey = (m) => m && `${m.at}|${m.type}`;
 // Every line has a class (PR 2a). A higher class may interrupt a lower one; one
@@ -1929,12 +1999,16 @@ const MOMENT_CLASS = {
   hatched: KEPT, stage_changed: KEPT, egg_laid: KEPT, trait_learned: KEPT, trait_deepened: KEPT,
   wish_granted: KEPT, bond_up: KEPT, bond_record: KEPT, bond_favourite: KEPT, friend_home: KEPT,
   tucked_in: KEPT, favourite_snack: KEPT, first_snow: KEPT, first_frost: KEPT, first_warm: KEPT, first_fog: KEPT, care_miss: KEPT,
+  season_start: KEPT, // {season}: the first day of spring, summer, autumn or winter (H7)
   call_answered: BEAT, woke_up: BEAT, fell_asleep: BEAT, good_morning: BEAT, discipline_miss: BEAT,
   became_sick: BEAT, someone_home: BEAT,
   sunrise: FLAVOUR, sunset: FLAVOUR, weather: FLAVOUR, forecast: FLAVOUR, news: FLAVOUR,
   house_answered: FLAVOUR, // {request}: the heating or the fan came on for the pet (H3)
   robot_out: FLAVOUR, robot_home: FLAVOUR, // a robot vacuum started / ended a run (H4)
   appliance_done: FLAVOUR, // {kind}: a washer, dryer or dishwasher finished (H6)
+  house_moment: FLAVOUR, house_live: FLAVOUR, // {category[, reaction, text]}: virtual_pet.react (H8)
+  news_live: FLAVOUR, // share_news's headline with house_words_private on (H8)
+  doorbell_live: FLAVOUR, // a doorbell press: said live, kept nowhere (H5)
   pooped: FLAVOUR, tv_off_late: FLAVOUR, watching: FLAVOUR, listening: FLAVOUR,
   tv_on: FLAVOUR, music_on: FLAVOUR, // public: no line (the channel's watching/listening says it)
   found: FLAVOUR, // a find went in the basket: the away note's "found <a find>" (V8); no line
@@ -2986,6 +3060,8 @@ const STYLE = `
   .screen .burst.big { top: 38%; width: 96px; height: 96px; margin-left: -48px; z-index: 2; }
   /* Stand-ins for house poses that are only drawn for the child. */
   .pet.dance { animation: hop .45s ease-in-out infinite; }
+  .pet.jig { animation: hop .45s ease-in-out 4; } /* a house moment's dance (H8): bounded, unlike .dance */
+  .pet.startle { animation: perk .3s ease-out 2; } /* a house moment's startle (H8): a quick double jolt */
   .pet.shiver { animation: shake .25s linear infinite; }
   /* The fan: wind lines cross the scene and the pet sways. */
   .breeze { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 1; }
@@ -3261,6 +3337,14 @@ const STYLE = `
     100% { opacity: 0; transform: rotate(540deg) scale(1.1); } }
   @media (prefers-reduced-motion: reduce) { .screen.fx-suds::before, .screen.fx-suds::after, .screen.fx-tumble::after { animation: none; opacity: .7; } }
   @media (prefers-reduced-motion: reduce) { .screen.fx-robot::before { animation: none; left: 40%; } }
+  /* A doorbell press (H5): two notes pop up above the pet's head for 1.8 s. A text stand-in for
+     the house_chime art (H9). Still, and visible, under reduced motion. */
+  .screen.fx-chime::after { content: "♪ ♫"; position: absolute; left: 58%; top: 26%; z-index: 3; translate: -50% 0;
+    font-size: 20px; line-height: 1; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6), 0 0 6px rgba(255,230,140,.8);
+    pointer-events: none; animation: chime-pop 1.8s ease-out both; }
+  @keyframes chime-pop { 0% { opacity: 0; transform: translateY(10px) scale(.6); } 15%, 70% { opacity: 1; transform: none; }
+    100% { opacity: 0; transform: translateY(-12px); } }
+  @media (prefers-reduced-motion: reduce) { .screen.fx-chime::after { animation: none; opacity: 1; } }
   /* Water worlds: lighter streaks, and rings where the drops land. */
   .screen.raining.watery .rain { opacity: .6; }
   .screen.raining.watery .rain::after { content: ""; position: absolute; inset: 0;
@@ -6827,6 +6911,7 @@ class HatchPetCard extends HTMLElement {
       robot_out: HOUSE_LINES.bits.robot, robot_home: HOUSE_LINES.bits.robot, // H4
       appliance_done: HOUSE_LINES.bits.machine, // H6
     };
+    const houseBit = (m) => HOUSE_LINES.bits[Object.hasOwn(HOUSE_CATEGORY, m.category ?? "") ? HOUSE_CATEGORY[m.category].bit : ""]; // H8
     const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow", rainbow: "saw a rainbow", sun_out: "sunbathed" };
     const CARE_BITS = { feed: "had a meal", snack: "had a snack", play: "played", game: "played a game", clean: "had a bath", chore_treat: "got a chore treat" };
     let found = 0; // "found <a find>": one a find (V8), newest first, FOUND_BITS at most
@@ -6840,7 +6925,9 @@ class HatchPetCard extends HTMLElement {
         continue;
       }
       add(m.type === "weather" ? WEATHER_BITS[m.change]
-        : m.type === "house_answered" ? HOUSE_LINES.bits[HOUSE_REQUEST[m.request]] : MOMENT_BITS[m.type]);
+        : m.type === "house_answered" ? HOUSE_LINES.bits[HOUSE_REQUEST[m.request]]
+        : m.type === "season_start" ? Object.hasOwn(SEASON_START_BITS, m.season ?? "") && SEASON_START_BITS[m.season]
+        : m.type === "house_moment" ? houseBit(m) : MOMENT_BITS[m.type]);
     }
     for (const e of care ? [...(lastCare.log || [])].reverse() : []) {
       if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) add(CARE_BITS[e.action]);
@@ -7237,7 +7324,7 @@ class HatchPetCard extends HTMLElement {
   // answers: a CSS stand-in until the art (house_heat, house_cool) lands.
   // One house effect at a time: a new one replaces the last.
   _houseFx(s, cls) {
-    s.screen.classList.remove("fx-heat", "fx-cool", "fx-suds", "fx-tumble");
+    s.screen.classList.remove("fx-heat", "fx-cool", "fx-suds", "fx-tumble", "fx-chime");
     s.screen.classList.add(cls);
     clearTimeout(s.houseFxTimer);
     s.houseFxTimer = setTimeout(() => s.screen.classList.remove(cls), 2500);
@@ -7374,6 +7461,7 @@ class HatchPetCard extends HTMLElement {
           ? `♪ ooh, ${short(m.artist)}! ♪`
           : `♪ ${short(m.title)} ♪`);
         break;
+      case "news_live": // the same, said on the channel only (house_words_private, H8)
       case "news": { // virtual_pet.share_news: a passing moment, like a TV title
         const h = String(m.headline || "");
         if (!h || s.game) break; // a game's prompt owns the bubble: dropped, like asleep
@@ -7437,6 +7525,36 @@ class HatchPetCard extends HTMLElement {
           this._animate(s, s.pet, "perk", 320);
           this._houseFx(s, kind === "dryer" ? "fx-tumble" : "fx-suds");
         });
+        break;
+      }
+      case "doorbell_live": { // a doorbell press, said live and kept nowhere: a startle and two notes (H5)
+        if (s.game) break; // a game's prompt owns the bubble
+        // The startle and the chime are the bell's own: at once, not waiting on the
+        // line (a FLAVOUR line can wait up to FLAVOUR_WAIT_MS, or be dropped).
+        now(() => {
+          this._animate(s, s.pet, REACT_POSE.startle.move, REACT_POSE.startle.ms);
+          this._houseFx(s, "fx-chime");
+        });
+        speak(pick(HOUSE_LINES.doorbell), 4500);
+        break;
+      }
+      case "house_moment": // virtual_pet.react: something in the house, by category (H8)
+      case "house_live": { // ... said on the channel only: it says someone's home, or the words are kept off the sensor
+        if (s.game) break; // a game's prompt owns the bubble
+        const cat = Object.hasOwn(HOUSE_CATEGORY, m.category ?? "") ? HOUSE_CATEGORY[m.category] : null;
+        if (!cat) break;
+        const custom = m.category === "custom";
+        const reaction = custom ? (Object.hasOwn(REACT_POSE, m.reaction ?? "") ? m.reaction : "hop") : cat.react;
+        const pose = REACT_POSE[reaction];
+        const fx = () => {
+          this._animate(s, s.pet, pose.move, pose.ms);
+          if (pose.sparkle) this._sparkle(s);
+          if (cat.fx) this._houseFx(s, cat.fx);
+        };
+        const words = custom ? String(m.text || "") : "";
+        // The player's own words get no catchphrase (as a headline); the pet's lines may.
+        if (words) line(words, 4000 + words.length * 50, fx);
+        else speak(pick(custom ? HOUSE_MOMENT_LINES.custom[reaction] : HOUSE_MOMENT_LINES[m.category]), 4500, fx);
         break;
       }
       case "forecast": { // something worth a word in today's or tomorrow's forecast
@@ -7546,6 +7664,9 @@ class HatchPetCard extends HTMLElement {
         break;
       case "first_fog":
         speak(SEASON_FIRST_LINES.fog, 4500, () => this._look(s, 900));
+        break;
+      case "season_start": // ha-signals H7: a season's first day, with a sparkle
+        if (Object.hasOwn(SEASON_START_LINES, m.season ?? "")) speak(pick(SEASON_START_LINES[m.season]), 4500, () => this._sparkle(s));
         break;
       case "pooped":
         now(() => {
@@ -11218,6 +11339,8 @@ HatchPetCard.findLines = FIND_LINES;
 HatchPetCard.giftLines = GIFT_LINES;
 HatchPetCard.giftMade = GIFT_MADE;
 HatchPetCard.collectionTiles = collectionTiles;
+HatchPetCard.houseCategories = Object.keys(HOUSE_CATEGORY); // card-check: == const HOUSE_CATEGORIES
+HatchPetCard.houseMomentLines = HOUSE_MOMENT_LINES;
 HatchPetCard.momentClasses = Object.fromEntries(Object.entries(MOMENT_CLASS)
   .map(([type, c]) => [type, { [KEPT]: "kept", [BEAT]: "beat", [FLAVOUR]: "flavour" }[c]]));
 HatchPetCard.seasonNow = seasonNow;

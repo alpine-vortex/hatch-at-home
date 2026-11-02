@@ -46,6 +46,7 @@ from .const import (
     CONF_DASHBOARD,
     CONF_FIREPLACE,
     CONF_HEATING,
+    CONF_HOUSE_WORDS_PRIVATE,
     CONF_INDOOR_TEMP,
     CONF_LUX,
     CONF_MOON_ALTITUDE,
@@ -55,6 +56,7 @@ from .const import (
     CONF_MUSIC,
     CONF_NEW_PET,
     CONF_NEXT_WORLD,
+    CONF_NOTICE_DOORBELL,
     CONF_NOTICE_ROBOT,
     CONF_PRIVACY,
     CONF_RAIN,
@@ -319,6 +321,7 @@ class PetOptionsFlow(OptionsFlowWithReload):
                     None,
                 ),
                 (CONF_NOTICE_ROBOT, BooleanSelector(), True),
+                (CONF_NOTICE_DOORBELL, BooleanSelector(), True),
                 (
                     CONF_APPLIANCES,
                     _entities(["binary_sensor", "sensor", "switch"], True),
@@ -332,6 +335,7 @@ class PetOptionsFlow(OptionsFlowWithReload):
             ],
             "privacy": [
                 (CONF_PRIVACY, BooleanSelector(), True),
+                (CONF_HOUSE_WORDS_PRIVATE, BooleanSelector(), False),
             ],
             "notifications": [
                 (CONF_DASHBOARD, _dashboards(self.hass), None),

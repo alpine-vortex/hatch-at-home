@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/hero.png" alt="Hatch at Home: a virtual pet that lives in your house, for Home Assistant. Two pet devices and a parade of all 30 creatures." width="100%">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/box-front.png" alt="Colorful Hatch at Home toy-box cover with six starter pets, real in-game shell designs, and a bold feature panel" width="100%">
 </p>
 
-<h3 align="center">★ Your very own pixel pet... that lives in your smart home! ★</h3>
+<p align="center"><strong>★ A tiny pixel pal for your big smart home! ★</strong></p>
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-custom-ff6faa?style=for-the-badge" alt="HACS custom repository"></a>
@@ -14,123 +14,104 @@
 
 ## 🥚 IT'S HATCHING!
 
-An egg has arrived at your house. Give it half an hour, and out pops a tiny friend who
-**eats, naps, plays, poops, sulks, dreams and grows up**, right on your Home
-Assistant dashboard.
+Meet the tiny roommate who lives on your Home Assistant dashboard! It **eats,
+naps, plays, gets messy, dreams and grows up**, and it notices what your real
+home is doing. It never dies, and your house can never hurt it.
 
-But this is no ordinary virtual pet. **It knows your house!** It watches the rain
-from the window, curls up when you light the fire, dances when the music plays,
-says good night when the lights go out and cheers when you come home.
+**30 pets • 6 worlds • 3 mini-games • 1 big smart home!**
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/worlds.png" alt="Choose your world: six pet devices, Woodland, Hearth, Terrarium, Tidepool, Pond and Night Sky, each with its creatures" width="100%">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/music-bridge.jpg" alt="A diagonal split pairs the real Hearth shell with a dancing kitten on the Home Assistant side, and a real speaker playing music on a home shelf" width="100%">
 </p>
 
-## ★ FEATURES ★
+<p align="center"><sub>Your home starts the music. Your little roommate joins in.</sub></p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/feature-cards.png" alt="Toy-box feature cards: care buttons, three mini-games, growing up, house reactions, wishes and visitors, and bonds with friends" width="100%">
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/chapter-ribbons.png" alt="Three bright pixel-art feature banners: care, play and grow; the house joins in; and a new story every day" width="100%">
+</p>
+
+## ★ SIX SHELLS. SIX BOXES. ★
+
+Pick a world and its little device. Each starts with its own first pet.
 
 <table>
 <tr>
-<td width="50%" valign="top">
-
-<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/icon_feed.png" width="24" alt=""> **Feed it! Clean it! Tuck it in!**<br>
-Eight toy buttons for meals, snacks, play, clean-ups, medicine, scolding, praise and bedtime.
-
-<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/stat_heart_full.png" width="24" alt=""> **It calls for YOU!**<br>
-Hungry? Bored? Sleepy? It calls, and you have 20 minutes to answer. Your phone can buzz with buttons to answer it right away!
-
-<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/icon_play.png" width="24" alt=""> **Mini-games!**<br>
-*Left or right?*, *Higher or lower?* and *Berry dig*: dig for berries, but keep them before a bee scares them off. Win to make its day!
-
-<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/icon_praise.png" width="24" alt=""> **Raise it right!**<br>
-Scold the fake whines, praise the good days. How you raise it decides who it grows up to be: *devoted*, *steady* or *scrappy*.
-
-</td>
-<td width="50%" valign="top">
-
-<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/flair_music_lover_1.png" width="20" alt=""> **16 traits to learn!**<br>
-Night owl, music lover, snow child, couch potato... It picks up habits from your house and keeps them for life. As a teen it settles into one of eight personalities, from mellow to plucky.
-
-<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/icon_journal.png" width="24" alt=""> **A family that grows!**<br>
-Lay an egg, start a new generation and pass a trait down the family line. Every pet goes in the journal.
-
-<img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/icon_status.png" width="24" alt=""> **Something new every day!**<br>
-A wish of the day, a dream to tell you about, and "while you were out..." stories.
-
-🎙️ **Talk to it!**<br>
-"How's Pip?" "Feed Pip!" It answers through Assist and voice assistants.
-
-</td>
+<td width="33%" align="center"><img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/retail-woodland-bird.jpg" alt="Retail peg-card package with the orange Woodland shell and bird starter"><br><strong>WOODLAND • BIRD</strong><br><sub>Color LCD</sub></td>
+<td width="33%" align="center"><img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/retail-hangtab.jpg" alt="Retail peg-card package with the pink Hearth shell and kitten starter"><br><strong>HEARTH • KITTEN</strong><br><sub>Color LCD</sub></td>
+<td width="33%" align="center"><img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/retail-terrarium-gecko-mono.jpg" alt="Retail peg-card package with the Terrarium shell and gecko on a four-shade green mono display"><br><strong>TERRARIUM • GECKO</strong><br><sub>Four-green mono</sub></td>
+</tr>
+<tr>
+<td width="33%" align="center"><img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/retail-tidepool-otter.jpg" alt="Retail peg-card package with the Tidepool shell and sea otter starter"><br><strong>TIDEPOOL • SEA OTTER</strong><br><sub>Color LCD</sub></td>
+<td width="33%" align="center"><img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/open-front-display.jpg" alt="Retail shelf carton with the Pond shell and tree frog starter"><br><strong>POND • TREE FROG</strong><br><sub>Color LCD</sub></td>
+<td width="33%" align="center"><img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/retail-nightsky-bat-green.jpg" alt="Retail peg-card package with the Night Sky shell and bat on a green-backlit mono display"><br><strong>NIGHT SKY • BAT</strong><br><sub>Mono + green backlight</sub></td>
 </tr>
 </table>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/grow.png" alt="Watch it grow: a kitten goes from egg to baby in 30 minutes, child in a day, teen in five days and adult in fourteen" width="100%">
-</p>
+<p align="center"><sub>Toy-store-style pack shots. The pet itself lives in Home Assistant.</sub></p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/play.png" alt="A life of its own: it greets you by name, picks mini-games, plays higher or lower, shows hearts and meters, makes a daily wish and keeps a family journal" width="100%">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/shell-lineup.png" alt="Six real in-game shells showing lively pixel scenes with each world's first pet: birdwatching, kitten kneading, gecko shedding, sea otter balancing on a rock, tree frog on a lily pad, and bat hanging upside down" width="100%">
 </p>
 
-## 🏠 YOUR HOUSE COMES ALIVE!
+<sub>Real in-game shells! Four more pets wait in every world.</sub>
 
-Hook up the things you already have, and your pet notices them:
+## ★ WHAT'S IN THE BOX? ★
 
-| When your house... | ...your pet! |
+<p align="center">
+  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/grow.png" alt="A kitten grows through five stages: egg, baby, child, teen, and adult" width="100%">
+</p>
+
+- 🍙 **Care!** Feed, play, clean, tuck in
+- 📣 **It calls for YOU!** You get 20 minutes to answer
+- 🎮 **3 mini-games!** *Left or right?*, *Higher or lower?*, *Berry dig*
+- 🌱 **Grows up!** Egg, baby, child, teen, adult
+- 🧬 **Own personality!** Traits, tricks, a family that goes on
+- 💌 **Wishes, dreams and visitors!** A little news every day
+- 💛 **Bonds!** It gets to know each person at home
+- 🎃 **Seasons!** Halloween, Thanksgiving and winter lights
+- 📱 **Phone alerts!** Optional, with buttons to answer
+
+## 🏠 IT KNOWS YOUR HOUSE!
+
+Connect what you already have in Home Assistant, and your pet may:
+
+| When your home… | Your pet… |
 | --- | --- |
-| 🌧️ starts to rain | watches the drops and asks for its blanket |
-| ⛈️ rumbles with thunder | hides! (the screen flashes) |
-| ❄️ sees the first snow | remembers it forever in its journal |
-| 🌡️ gets too warm or cold | sweats or shivers and asks for a fan or a blanket |
-| 🔥 lights the fireplace | curls up by the fire |
-| 📺 turns on the TV | watches along ("ooh, Bluey!") |
-| 🎵 plays music | dances! |
-| 🌙 sees a full moon | gazes up at it |
-| 🚪 hears you come home | gets excited to see you |
-| 💡 goes dark at bedtime | says good night and goes to bed |
-| ✅ ticks off a chore | earns a treat! |
+| 🌧️ gets rain in the forecast | watches the drops and asks for its blanket |
+| 🔥 has a fireplace lit | curls up beside the fire |
+| 🌡️ has mapped heating or cooling | can get help with a blanket or fan request |
+| 🎵 plays music | dances along |
+| 📺 turns on the TV | watches with you |
+| 🤖 starts a robot vacuum | watches it go by and says when it starts and goes home |
+| 🧺 finishes a washer, dryer or dishwasher cycle | lets you know it's done |
+| ✅ ticks off a chore | earns a treat |
+| 🌙 reaches bedtime | says good night and goes to sleep |
+| 🚪 welcomes you home | gets excited to see you |
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/house.png" alt="It knows your house: it reads the forecast, watches TV, sees the first snow, watches sunsets, learns your habits and dresses up for Halloween" width="100%">
-</p>
+Every connection is optional. Away for a while? It waits safely with the sitter.
 
-> [!TIP]
-> **★ SAFE FOR THE WHOLE FAMILY ★**
-> Your house can never hurt your pet: it only changes its mood, its scenery and what
-> it asks for. No matter what, **your pet never dies.** Away for the weekend? With
-> nobody home it goes to the sitter's, and nothing runs down until you're back.
+## 🐣 HOW TO HATCH
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/collect.png" alt="Collect all 30: the adult creatures of every world" width="100%">
-</p>
+**You'll need:** Home Assistant 2026.10+ and [HACS](https://hacs.xyz).
+Batteries not required!
 
-## 🐣 HOW TO HATCH YOUR EGG
-
-1. **Back up Home Assistant first!** (Settings → System → Backups)
-2. **Get it from HACS:** HACS → ⋮ → *Custom repositories* → paste
+1. In HACS, open **⋮ → Custom repositories**, add
    `https://github.com/alpine-vortex/hatch-at-home` as an **Integration**, then
-   download **Virtual Pet**.
-3. **Restart** Home Assistant.
-4. **Hatch!** Settings → Devices & services → *Add integration* → **Virtual Pet**.
-   Name your pet and pick its world. Want more pets? Add it again!
-5. **Put it on display:** edit a dashboard → *Add card* → **Hatch at Home pet shelf**.
+   download **Virtual Pet** and restart Home Assistant.
+2. **Settings → Devices & services → Add integration → Virtual Pet.** Name your
+   pet and pick a world.
+3. Add the **Hatch at Home pet shelf** card to a dashboard. Say hi!
 
-Tap the pet's screen for its status page, and the gear at the top of it for the
-settings: your own switches, this screen's (sounds, screen effects, the mono screen
-and the shared screen) and the pet's **shell**. Pick a finish for each pet, and
-earned ones unlock when it's a teen. A shared screen shows the shell but can't change
-it. The mono screen is per browser; Safari and iOS keep colour.
-
-Then open *What your pet notices* (the ⚙ next to your pet) to connect it to your
-weather, lights, TV and more. Every setting is optional.
-
-📖 **Want every detail?** All the entities, options, rules and events, plus manual
-install and development, are in the **[full guide](docs/guide.md)**.
-For a feature-by-feature map of what is on, off or half-built, see the
-[feature catalog](docs/features.md).
+📖 Back up first, add more pets, connect your house: the
+[full guide](docs/guide.md) has it all.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/footer.png" alt="Ages 8 to 108. Requires Home Assistant. Free and open source, MIT licensed." width="100%">
 </p>
 
-<sub>MIT licensed, see [`LICENSE`](LICENSE). The bundled Tiny5 font is under the SIL
-Open Font License (`custom_components/virtual_pet/frontend/fonts/OFL.txt`).</sub>
+<sub>MIT licensed, see [`LICENSE`](LICENSE). The bundled Tiny5 font is under the
+SIL Open Font License (`custom_components/virtual_pet/frontend/fonts/OFL.txt`).</sub>

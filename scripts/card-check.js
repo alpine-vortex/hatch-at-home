@@ -3272,6 +3272,9 @@ async function main() {
     ["first_snow", {}, "first snow"],
     ["first_warm", {}, "first warm day"], // fresh-expand E12 (Se-a)
     ["first_fog", {}, "the first fog"],
+    // ha-signals H7: a season's first day says one of its season's two lines.
+    ["season_start", { season: "spring" }, "^(first day of spring! ♪|spring's here! hop hop ♪)$"],
+    ["season_start", { season: "autumn" }, "^(autumn's here! crunchy leaves ♪|first day of autumn ♪)$"],
     ["weather", { change: "cold", temperature: -12 }, "−12°"],
     ["weather", { change: "rainbow" }, "rainbow"],
     ["forecast", { when: "tomorrow", kind: "warmer", high: 72 }, "warmer tomorrow: 72°"],
@@ -3835,20 +3838,23 @@ async function main() {
   check("thunder and wind show on screen", /stormy/.test(screen) && /windy/.test(screen), screen);
   await shot("05-storm");
 
-  // The journal keeps the season's firsts. A pet update can replace the injected
-  // memory (and the journal redraws with it), so inject until it shows.
+  // The journal keeps the season's firsts, and a season's first day (H7). A pet update
+  // can replace the injected memories (and the journal redraws with them), so inject
+  // until they show.
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(500);
   await cur().locator(".jlink").click();
   let memory = false;
   for (let i = 0; i < 3 && !memory; i++) {
     await inject(pet["sensor.life_stage"], {
-      attributes: { memories: [{ kind: "first_snow", at: Date.now() / 1000 }] },
+      attributes: { memories: [{ kind: "first_snow", at: Date.now() / 1000 },
+        { kind: "season_spring", at: Date.now() / 1000 }] },
     });
     await page.waitForTimeout(1000);
-    memory = /first snow/.test(await cur().locator(".status").innerText());
+    const text = await cur().locator(".status").innerText();
+    memory = /first snow/.test(text) && /first day of spring/.test(text);
   }
-  check("the journal shows memories", memory);
+  check("the journal shows memories (first snow, first day of spring)", memory);
   await shot("05-memories");
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
@@ -3873,7 +3879,7 @@ async function main() {
     return block ? [...block[1].matchAll(/"([a-z_]+)"/g)].map((x) => x[1]) : [];
   };
   const serverTypes = [...new Set([...pySet("coordinator.py", "MOMENTS"), ...pySet("const.py", "PERSONAL_EVENTS"),
-    ...pySet("const.py", "MEDIA_EVENTS")])];
+    ...pySet("const.py", "MEDIA_EVENTS"), ...pySet("const.py", "LIVE_EVENTS")])];
   const classes = await card.evaluate((el) => el.constructor.momentClasses || {});
   const unclassed = serverTypes.filter((t) => !["kept", "beat", "flavour"].includes(classes[t]));
   check("2a: every moment type has a class (MOMENTS, PERSONAL_EVENTS, MEDIA_EVENTS)",
@@ -4945,6 +4951,81 @@ async function main() {
     check("audit B2: back after days to a close friend's welcome home: one welcome, and the news still fits",
       e8.home.some((t) => /^welcome home, /.test(t)) && !e8.home.some((t) => WELCOME.includes(t)) && e8.home.includes("the news ♪"),
       JSON.stringify(e8.home));
+  }
+
+  // ha-signals H8: virtual_pet.react's house moments, by category. Each says a line of its
+  // own pool (HOUSE_MOMENT_LINES) with its reaction's move and its house effect; Custom says
+  // the player's words or its reaction's line; the card's categories are const.py's.
+  {
+    const constPy = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "const.py"), "utf8");
+    const pyCats = [...(/^HOUSE_CATEGORIES = \(([^)]*)\)/m.exec(constPy)?.[1] || "").matchAll(/"([a-z_]+)"/g)].map((x) => x[1]);
+    const cardCats = await card.evaluate((el) => el.constructor.houseCategories || []);
+    check("H8: the card's house categories are const.py's HOUSE_CATEGORIES (no garage door)",
+      pyCats.length === 16 && JSON.stringify(pyCats) === JSON.stringify(cardCats) && !cardCats.some((c) => /garage/.test(c)),
+      `${pyCats} | ${cardCats}`);
+    const h8 = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const kept = { game: s.game, calling: s.calling };
+      let said = [], moves = [], fxs = [];
+      // Every line this moment says, at once with its move and effect (no queue, no wait).
+      el._line = function (slide, cls, text, ms, opts) { if (slide === s) { said.push(text); opts?.then?.(); } };
+      el._animate = function (slide, node, cls) { moves.push(cls); };
+      el._houseFx = function (slide, cls) { fxs.push(cls); };
+      const run = (m) => {
+        said = []; moves = []; fxs = [];
+        el._moment(s, { at: new Date().toISOString(), ...m });
+        return { said, moves, fxs };
+      };
+      const out = {};
+      try {
+        s.game = null;
+        s.calling = false;
+        for (const c of el.constructor.houseCategories) if (c !== "custom") out[c] = run({ type: "house_moment", category: c });
+        out.live = run({ type: "house_live", category: "coffee" });
+        out.words = run({ type: "house_moment", category: "custom", reaction: "dance", text: "the bread's ready ♪" });
+        out.bare = run({ type: "house_moment", category: "custom", reaction: "cozy" });
+        out.odd = run({ type: "house_moment", category: "custom", reaction: "wiggle" });
+        out.washerWords = run({ type: "house_moment", category: "washer", text: "sneaky words" });
+        out.unknown = run({ type: "house_moment", category: "garage" });
+        s.game = { kind: "left_right" };
+        out.inGame = run({ type: "house_moment", category: "timer" });
+      } finally {
+        delete el._line; delete el._animate; delete el._houseFx;
+        Object.assign(s, kept);
+      }
+      return { out, pools: el.constructor.houseMomentLines };
+    });
+    // The reaction and effect each category should have (plan H8, review s2643 section C).
+    const REACT = { heater: "cozy", ac: "cozy", fan: "hop", washer: "cheer", dryer: "cheer", dishwasher: "cheer",
+      oven: "cheer", coffee: "hop", printer: "cheer", ev: "cheer", feeder: "hop", plants: "cozy", delivery: "startle",
+      timer: "startle", internet: "dance" };
+    const MOVE = { hop: "greethop", cheer: "bighop", cozy: "settle", dance: "jig", startle: "startle" };
+    const FX = { heater: "fx-heat", ac: "fx-cool", fan: "fx-cool", washer: "fx-suds", dishwasher: "fx-suds", dryer: "fx-tumble" };
+    const wrong = Object.entries(REACT).filter(([c, r]) => {
+      const o = h8.out[c];
+      return !o || o.said.length !== 1 || !(h8.pools[c] || []).includes(o.said[0]) || o.moves[0] !== MOVE[r] ||
+        o.fxs.join() !== (FX[c] || "") || h8.pools[c].length < 2 || h8.pools[c].length > 3;
+    }).map(([c]) => `${c}: ${JSON.stringify(h8.out[c])}`);
+    check("H8: each category says a line of its own 2-3, with its reaction's move and its effect",
+      wrong.length === 0 && Object.keys(h8.out).length >= 15, wrong.join(" | "));
+    const o = h8.out;
+    check("H8: Custom says the player's words (dance), else its reaction's line; an odd reaction hops",
+      o.words.said.join() === "the bread's ready ♪" && o.words.moves[0] === "jig" &&
+        h8.pools.custom.cozy.includes(o.bare.said[0]) && o.bare.moves[0] === "settle" &&
+        h8.pools.custom.hop.includes(o.odd.said[0]), JSON.stringify([o.words, o.bare, o.odd]));
+    check("H8: a channel-only house_live says its category's line; a category's moment never says words; garage and a game say nothing",
+      h8.pools.coffee.includes(o.live.said[0]) && h8.pools.washer.includes(o.washerWords.said[0]) &&
+        !o.washerWords.said.includes("sneaky words") && o.unknown.said.length === 0 && o.inGame.said.length === 0,
+      JSON.stringify([o.live, o.washerWords, o.unknown, o.inGame]));
+    // The sensor's route, as the server publishes it: a dishwasher, its line in the bubble.
+    await card.evaluate((el) => Object.assign(el._slides[el._index], { sayUntil: 0, sayClass: 0, sayEntry: null, queue: [], game: null }));
+    await inject(pet["sensor.last_care"], {
+      attributes: { moments: [{ type: "house_moment", category: "dishwasher", at: new Date().toISOString() }] },
+    });
+    await page.waitForTimeout(500);
+    const dish = await bubble();
+    check("H8: a dishwasher's house moment from the sensor says its line", h8.pools.dishwasher.includes(dish), dish);
+    await shot("05-house_moment");
   }
 
   await unpinAwake(card);
@@ -6911,6 +6992,47 @@ async function main() {
       f6.disconnected && f6.observed, JSON.stringify(f6));
   }
 
+  // ha-signals H8: a shared screen says the house's words said live (a channel-only house
+  // moment, house words kept off the sensor): they're the house's, not anyone's.
+  {
+    const me = await evaluate(() => document.querySelector("home-assistant").hass.user.id);
+    const h8s = await page.locator("hatch-pet-card").first().evaluate((el, me) => {
+      const s = el._slides[el._index];
+      const kept = { game: s.game, calling: s.calling };
+      let said = [], moves = [], fxs = [];
+      // Every line this moment says, at once with its move and effect (no queue, no wait).
+      el._line = function (slide, cls, text, ms, opts) { if (slide === s) { said.push(text); opts?.then?.(); } };
+      el._animate = function (slide, node, cls) { moves.push(cls); };
+      el._houseFx = function (slide, cls) { fxs.push(cls); };
+      const run = (m) => {
+        said = []; moves = []; fxs = [];
+        el._moment(s, { at: new Date().toISOString(), ...m });
+        return { said, moves, fxs };
+      };
+      const had = localStorage.getItem("hatch-shared-screen");
+      const out = {};
+      try {
+        localStorage.setItem("hatch-shared-screen", "on");
+        s.game = null;
+        s.calling = false;
+        said = [];
+        el._channel(s, { moment: { type: "house_live", category: "custom", reaction: "cozy", text: "Shared words ♪", at: new Date().toISOString() } }, me);
+        out.words = said;
+        said = [];
+        el._channel(s, { moment: { type: "house_live", category: "delivery", at: new Date(Date.now() + 1).toISOString() } }, me);
+        out.delivery = said;
+        out.pool = el.constructor.houseMomentLines.delivery;
+      } finally {
+        if (had === null) localStorage.removeItem("hatch-shared-screen"); else localStorage.setItem("hatch-shared-screen", had);
+        delete el._line; delete el._animate; delete el._houseFx;
+        Object.assign(s, kept);
+      }
+      return out;
+    }, me);
+    check("H8: a shared screen says a house_live's words, and a delivery's line",
+      h8s.words.join() === "Shared words ♪" && h8s.pool.includes(h8s.delivery[0]), JSON.stringify(h8s));
+  }
+
   await unpinAwake(card);
   }
   if (enter("forget")) {
@@ -7451,6 +7573,113 @@ async function main() {
       reloaded.snapshots >= 1 && reloaded.you && reloaded.mark === "same page", JSON.stringify(reloaded));
     await card.evaluate((el) => { for (const name of ["_speak", "_queue", "_channel"]) delete el[name]; });
     if (await cur().locator(".screen.show-status").count()) await page.locator("hatch-pet-card .statusbtn").click();
+  }
+  // ha-signals H8 (review s2643 F4): house words said live (house_live, news_live) come
+  // from the channel only, once: a repeat, a replayed snapshot or an old server's public
+  // copy says nothing more.
+  {
+    const me = await evaluate(() => document.querySelector("home-assistant").hass.user.id);
+    const h8c = await card.first().evaluate((el, me) => {
+      const s = el._slides[el._index];
+      const kept = { game: s.game, calling: s.calling };
+      let said = [], moves = [], fxs = [];
+      // Every line this moment says, at once with its move and effect (no queue, no wait).
+      el._line = function (slide, cls, text, ms, opts) { if (slide === s) { said.push(text); opts?.then?.(); } };
+      el._animate = function (slide, node, cls) { moves.push(cls); };
+      el._houseFx = function (slide, cls) { fxs.push(cls); };
+      const run = (m) => {
+        said = []; moves = []; fxs = [];
+        el._moment(s, { at: new Date().toISOString(), ...m });
+        return { said, moves, fxs };
+      };
+      const at = new Date().toISOString();
+      const live = { type: "house_live", category: "custom", reaction: "cheer", text: "Check words ♪", at };
+      const news = { type: "news_live", headline: "Check headline", at: new Date(Date.now() + 1).toISOString() };
+      const heard = [];
+      try {
+        s.game = null;
+        s.calling = false;
+        // Each call's lines alone (said is reset before each).
+        const hear = (msg) => { said = []; el._channel(s, msg, me); heard.push(...said); };
+        hear({ moment: live });
+        hear({ moment: live }); // the same again
+        hear({ moment: news });
+        // A replayed snapshot with them says nothing (its moments are the past).
+        hear({ mine: s.mine, house: s.house, moments: [live, news], now: new Date().toISOString() });
+      } finally {
+        delete el._line; delete el._animate; delete el._houseFx;
+        Object.assign(s, kept);
+      }
+      return heard;
+    }, me);
+    const words = h8c.filter((t) => t.includes("Check words")).length;
+    const head = h8c.filter((t) => t.includes("Check headline")).length;
+    check("H8: a house_live's words and a news_live's headline are each said once, from the channel only",
+      words === 1 && head === 1, JSON.stringify(h8c));
+    // The sensor's route never says them (CHANNEL_ONLY), even if an old server put them there.
+    const publicNow = await evaluate((e) =>
+      document.querySelector("home-assistant").hass.states[e].attributes.moments || [], pet["sensor.last_care"]);
+    await card.first().evaluate((el) => { window.__h8 = []; el._line = function (slide, cls, text) { window.__h8.push(text); }; });
+    await inject(pet["sensor.last_care"], { attributes: { moments: [
+      { type: "house_live", category: "custom", reaction: "hop", text: "Old server words", at: new Date().toISOString() }, ...publicNow] } });
+    await page.waitForTimeout(800);
+    const old = await card.first().evaluate((el) => { delete el._line; return window.__h8; });
+    check("H8: a house_live on the sensor (an old server's) is never said", !old.some((t) => /Old server words/.test(t)), JSON.stringify(old));
+    await inject(pet["sensor.last_care"], { attributes: { moments: publicNow } });
+  }
+  // ha-signals H5 (review s2651 #10): a doorbell press (doorbell_live) is said once, from
+  // the channel only; a replayed snapshot and an old server's sensor copy say nothing.
+  {
+    const me = await evaluate(() => document.querySelector("home-assistant").hass.user.id);
+    const h5 = await card.first().evaluate((el, me) => {
+      const s = el._slides[el._index];
+      const kept = { game: s.game, calling: s.calling };
+      let said = [], moves = [], fxs = [];
+      el._line = function (slide, cls, text, ms, opts) { if (slide === s) { said.push(text); opts?.then?.(); } };
+      el._animate = function (slide, node, cls) { moves.push(cls); };
+      el._houseFx = function (slide, cls) { fxs.push(cls); };
+      const ring = { type: "doorbell_live", at: new Date().toISOString() };
+      const out = {};
+      try {
+        s.game = null;
+        s.calling = false;
+        said = []; moves = []; fxs = [];
+        el._channel(s, { moment: ring }, me);
+        out.once = { said: [...said], moves: [...moves], fxs: [...fxs] };
+        said = [];
+        el._channel(s, { moment: ring }, me); // the same press again
+        out.again = [...said];
+        // A line that is dropped or waits (FLAVOUR): the startle and chime still come at once.
+        el._line = function (slide, cls, text) { if (slide === s) said.push(text); };
+        said = []; moves = []; fxs = [];
+        el._channel(s, { moment: { ...ring, at: new Date(Date.now() + 1).toISOString() } }, me);
+        out.unsaid = { moves: [...moves], fxs: [...fxs] };
+        el._line = function (slide, cls, text, ms, opts) { if (slide === s) { said.push(text); opts?.then?.(); } };
+        said = [];
+        el._channel(s, { mine: s.mine, house: s.house, moments: [ring], now: new Date().toISOString() }, me);
+        out.replay = [...said];
+      } finally {
+        delete el._line; delete el._animate; delete el._houseFx;
+        Object.assign(s, kept);
+      }
+      return out;
+    }, me);
+    const pool = ["ding dong! eep!", "ooh, the doorbell! ♪", "ding dong! *perks up*"];
+    check("H5: a doorbell_live is said once (one of the three lines, a startle and fx-chime), from the channel only",
+      h5.once.said.length === 1 && pool.includes(h5.once.said[0]) && h5.once.fxs.join() === "fx-chime"
+        && h5.once.moves.includes("startle") && h5.again.length === 0, JSON.stringify(h5));
+    check("H5: the startle and fx-chime come at once, even when the line is dropped or waits",
+      h5.unsaid.fxs.join() === "fx-chime" && h5.unsaid.moves.includes("startle"), JSON.stringify(h5.unsaid));
+    check("H5: a replayed snapshot holding a doorbell_live says nothing", h5.replay.length === 0, JSON.stringify(h5.replay));
+    const publicNow = await evaluate((e) =>
+      document.querySelector("home-assistant").hass.states[e].attributes.moments || [], pet["sensor.last_care"]);
+    await card.first().evaluate((el) => { window.__h5 = []; el._line = function (slide, cls, text) { window.__h5.push(text); }; });
+    await inject(pet["sensor.last_care"], { attributes: { moments: [
+      { type: "doorbell_live", at: new Date().toISOString() }, ...publicNow] } });
+    await page.waitForTimeout(800);
+    const old = await card.first().evaluate((el) => { delete el._line; return window.__h5; });
+    check("H5: a doorbell_live on the sensor (an old server's) is never said", !old.some((t) => pool.includes(t)), JSON.stringify(old));
+    await inject(pet["sensor.last_care"], { attributes: { moments: publicNow } });
   }
 
   }

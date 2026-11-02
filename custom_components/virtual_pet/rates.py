@@ -288,10 +288,19 @@ HOME_QUIET_MINUTES = 10  # no motion for this long counts as quiet
 HOME_HOLD_MINUTES = 10  # an unavailable sensor keeps its last value this long
 HOME_DEBOUNCE_SECONDS = 10.0
 HOME_GREETING_MINUTES = 10
+HOME_DOORBELL_COOLDOWN_MINUTES = 30  # between doorbell moments, one per pet (memory)
+HOME_DOORBELL_FRESH_SECONDS = 60  # a press older than this was not just now
 HOME_MEDIA_COOLDOWN_MINUTES = 20  # between comments on what's on TV or playing
 NEWS_COOLDOWN_MINUTES = 30  # between bits of news shared with virtual_pet.share_news
 NEWS_HEADLINE_MAX = 60  # characters, so the bubble leaves the pet in view
 NEWS_TOPIC_MAX = 20
+# virtual_pet.react (ha-signals H8): each category's own wait, so a washer and a
+# dishwasher finishing minutes apart are both said, and a short gap across all of
+# them so two bubbles never stack. A dropped call starts neither.
+REACT_COOLDOWN_MINUTES = 10
+REACT_GAP_SECONDS = 20
+REACT_TEXT_MAX = 40  # a custom line is speech: the bubble's line, not news's 60
+HOUSE_MOMENTS_KEPT = 3  # at most this many house moments in the public list
 HOME_GREETING_COOLDOWN_MINUTES = 30  # GPS jitter shouldn't cause repeat greetings
 # Weather the pet remarks on (cosmetic). Wind from the weather entity's speed,
 # for providers that seldom report the "windy" condition.
@@ -413,6 +422,7 @@ NOTES_PER_VISIT = 2  # private lines said at one look; the rest wait
 LOOK_LINES = 3  # lines at one look, the card's own and the notes together
 PEOPLE_WEATHER_DAYS = 4  # days of the house's weather kept
 SEASON_TROPICS_LATITUDE = 23.5  # nearer the equator: no season talk
+SEASON_START_DAYS = 3  # a season's first days: said in these or not at all (H7)
 HOME_WARM_FIRST_C = 20.0  # outdoors at or above: the year's first warm day (E12)
 ASK_LEVEL = 2  # questions ("how was your day?") from this bond level
 ASK_MORNING_FROM = 5  # "did you sleep well?" from this hour to noon
