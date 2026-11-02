@@ -10054,6 +10054,7 @@ async function main() {
       ["tucked in", { action: "blanket", result: "ok" }, "cozy", "settle"],
       ["refused (full)", { action: "feed", result: "full" }, refuse, "look"],
     ];
+    await card.evaluate((el) => { el._slides[el._index].pinVariant = { praise: "hearts" }; }); // not the adult's spin
     for (const [name, entry, mood, move] of cases) {
       const r = await react(entry);
       check(`react: ${stage} ${name} shows ${stage}_${mood} and ${move}`,
@@ -10100,7 +10101,7 @@ async function main() {
     // spoiled is a reaction now (ship A): praise is taken as an ok, with no hearts, then a smug beat.
     const spoil = await card.evaluate((el) => {
       const s = el._slides[el._index];
-      Object.assign(s, { poseUntil: 0, movingUntil: 0 });
+      Object.assign(s, { poseUntil: 0, movingUntil: 0, queue: [], sayUntil: 0, sayClass: 0 });
       s.screen.querySelector(".carehearts")?.remove();
       el._react(s, { at: Date.now() / 1000, action: "praise", result: "spoiled" });
       return { live: s.poseUntil > Date.now(), hearts: !!s.screen.querySelector(".carehearts"), said: s.bubble.textContent,
@@ -10192,6 +10193,7 @@ async function main() {
     const pat = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+      s.pinVariant = { praise: "hearts" };
       el._react(s, { action: "praise", result: "ok", at: Date.now() / 1000 });
       s.sayUntil = 0; s.queue = []; s.sayClass = 0;
       s.pet.classList.remove("perk");

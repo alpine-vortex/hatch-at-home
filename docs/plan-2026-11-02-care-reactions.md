@@ -1264,3 +1264,62 @@ the review drifted a few lines (card-check moved; the `react` check on `unfair` 
 Also from the brief: motion ship 1's skipped **#10 child-stage care parity** is now
 ship A's first task (sections 0, 7, 10, 11). Open questions 1-2 are marked deferred and 3-4
 decided (section 15).
+
+## 19. A shipped: notes for B1 (s2746)
+
+Ship A (the floor, branch `crew/hatch-at-home-s2746-care-reactions-ship-a-the-floo`) changed
+the following. B1 builds on it; names win over lines.
+
+**Code B1 meets**
+
+- `_reactFrames(s, kind, { inGame, ms, frames, variant })` no longer skips the child (section 7).
+  `frames` is the child's own species pose (rung 1; `_react` sets it, `_reactFrames` adds only the
+  move). The move now lives in `_reactMove(s, kind, r, { inGame, ms, variant })` (variants
+  `shake`, `flop`, `spin`). A child's visitor `greet` and a game's `refused` (`inGame`) are still
+  skipped on purpose: they are not care. **`_sceneFrames` and `_actPose` still return null for the
+  child**; B1's scenes need the same ladder (rung 3 = `child_<mood>_<n>`) themselves.
+- `_poseEnd(s)` puts the mood frames back by a timer at `poseUntil` (a newer pose wins).
+  `_reactFrames` calls it; a scene that sets `poseUntil` itself may too.
+- `_propShow(s, sprite, ms, cls)` is the **one way to put a prop on the floor**: it resets the class
+  (`above rise`, `above wag`, `slide`, or none), restarts the drop, and adds `prop-out` by a timer at
+  `ms - 300`. A direct `_show(s, s.prop, ...)` leaves a stale `prop-out` class and the prop is
+  invisible; B1's bowl is `.scene-bowl` (its own element), so it is not affected, but any use of
+  `s.prop` goes through `_propShow`. Under `calm()` there is no `prop-out`; the tick hides the prop.
+- `.prop` is now `drop .4s steps(4)` (was `pop`); `pop` is still `.born` and `.attention.arrive`.
+- `_floorVariant(s, key, list)` is the no-repeat pick, with `s.pinVariant[key]` for the bench. B1's
+  `_careVariant` can wrap or replace it; the bench field `variant` (a map key -> value) already pins it
+  (`{ "refused.full": "shake", praise: "spin", medicine: "sniff" }`). Section 13's `variant: "A"` form is
+  not built.
+- `_react` computes `kind` before the pose branch and has a `spoiled` path (praise, snack, play, as
+  an ok without hearts, then two `rock2`s and the "whining works" line). **A snack's `spoiled` already
+  shows the snack prop on the floor path; B2's scene must treat it as eaten** (as 5.2 says) and drop
+  this prop then.
+- The fan: `aired` kind (cozy frame, `lean` 2.6 s, bounded). `.screen.breezy .pet` and `@keyframes
+  sway` are gone. Scold: `scolded` kind (refuse act, `startle`, 1.2 s) and the finger `above wag`;
+  `unfair` is in `REACT_REFUSALS` (turn away + the wagging finger). Refusals are a pool
+  (`REFUSAL_POOL`, `REFUSAL_VARIANTS`): feed's `full` is `look` or `shake` today, so **B1's push-away
+  after the gate must replace or follow this pick, not stack a second flip**.
+- `_bondHearts(s, kind, n)` takes a count; praise uses `carehearts` (cleared with the others in
+  `_forget`'s neighbour in `card-build.js`).
+- The excited loop is gone: `_render` plays one `greethop` when a pet becomes excited (not over a
+  pose, scene, sleep or away). It replaces the 10 s `hop` loop, so `BOUNCE_MS` is deleted. A snack's
+  `fed` (`munch`) and this greethop can overlap: greethop wins in CSS order. B2 should not add its own.
+- `_startGame` plays a play beat (`played` kind: cheer act or excited frame, `perk`, the ball prop for
+  900 ms) **before** the picker opens; it sits before `s.game` is set.
+- Clean's scene hops over the broom and shakes off (`rock2` at 1.8 s) and meds may sniff first
+  (`sc.sniff`); the engine is untouched, `_sceneRender` only has the two tweaks, so the refactor's
+  PNG-hash check (4.1) must be taken **after** A's commit, not before it.
+- Wake on lights: `woke_up {how: "lights"}` plays a `stretch`, no line (D's wake scene replaces it).
+
+**Tests and bench B1 reuses**
+
+- `tests/js/care_reactions.test.js` (a fake card around the real `_reactFrames`, `_reactMove`,
+  `_poseEnd`, `_propShow`, `_floorVariant`).
+- Bench: `reactEntry: {action, result}` runs the card's own `_react` (the whole floor path) and
+  `reactAt` seeks every animation; `variant` pins picks; `--preset care` is the floor's sheets.
+- card-check: the `react` section's child check, the refusal pool (each variant pinned), the "does
+  nothing" list (now `asleep, egg, away, no_game`) and the "an excited bounce" check were rewritten.
+
+**Not shipped, for the first mate (copy)**: the plan's lines for the wake (`*stretches*`, groggy),
+`ahh, so breezy ♪` (the fan keeps its existing thank-you), and `*shakes its head*` (where it is said
+beside "i'm full!" is not stated). No new player copy went in.

@@ -670,7 +670,8 @@ class HatchPetCardTick extends HatchPetCardLayout {
     if (calm() || !r.move) return;
     if (variant === "shake") { // a head shake: the flip, back, and the flip again
       this._look(s, 300);
-      setTimeout(() => this._look(s, 300), 550);
+      const until = s.poseUntil; // the second flip only while this reaction is still the one on show
+      setTimeout(() => { if (until && s.poseUntil === until) this._look(s, 300); }, 550);
       this._moving(s, 1200);
       return;
     }

@@ -293,8 +293,7 @@ class HatchPetCardActions extends HatchPetCardJournal {
         sc.shone = true;
         const prop = s.species.props?.clean;
         if (prop) {
-          this._show(s, s.prop, prop);
-          s.propUntil = Date.now() + 1500;
+          this._propShow(s, prop, 1500);
         }
         this._sparkle(s);
       }
