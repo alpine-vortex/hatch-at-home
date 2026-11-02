@@ -510,7 +510,7 @@ the pet comes home.
 | --- | --- | --- | --- |
 | Home zone | `zone.home` | Counts the people in it. Someone arriving gets an excited greeting, at most once every 30 minutes. | `zone.home` |
 | Go to the sitter's after | 2 h | With nobody home this long, the pet is frozen: no hunger, no aging, no calls. | 2 h |
-| The sitter settles whining | on | If the pet was whining for attention (a fake call) when it left, the sitter settles it and it comes home happy. Off: the whine waits for you. Real needs always wait. | on |
+| The sitter calms a fussy pet | on | If the pet was fussing for attention (not a real need) when it left, the sitter settles it and it comes home happy. Off: the fussing waits for you. Real needs always wait. | on |
 | TVs | none | On or playing: watches along (small bonus). | `media_player.tv` |
 | Music players | none | Playing anything but video: dances (small bonus). | your speakers |
 | Chore lists | none | To-do lists. Each item someone ticks off earns the pet a treat (a little food and happiness, up to 5 a day). Treats wait if it's asleep or away. | your chores list |
@@ -831,7 +831,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   Say hi ♥". It also goes to
   the phones of anyone who has "notify me" on for another pet in the house. A new
   generation laid as an egg isn't a new pet, and restarts never welcome again.
-- **Dashboard to open:** when you add a pet (or later, in its options under
+- **Dashboard with the pet shelf:** when you add a pet (or later, in its options under
   Notifications), pick the dashboard that tapping its notifications opens, the
   welcome included, or type a path like `/lovelace/pets`.
 - **Restarts never hurt it.** HA downtime freezes the pet: nothing decays,

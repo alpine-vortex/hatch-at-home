@@ -3,16 +3,16 @@
     "step": {
       "user": {
         "title": "Add a pet",
-        "description": "Each pet lives in its own handheld device on the dashboard's pet shelf. Add the integration again for every extra pet.",
+        "description": "Each pet lives in its own little handheld device, shown by the Hatch at Home pet shelf card. To add another pet later, add Virtual Pet again.",
         "data": {
           "name": "Name",
           "world": "World",
-          "dashboard": "Dashboard to open"
+          "dashboard": "Dashboard with the pet shelf"
         },
         "data_description": {
-          "name": "Shown on the card and used in entity IDs, for example button.pip_feed. Voice commands use it too.",
+          "name": "What everyone calls it: on the card, in notifications and to voice assistants. It also names the pet's entities, like button.pip_feed.",
           "world": "Sets the device's look and which creatures can hatch. The egg picks one by surprise.",
-          "dashboard": "Optional. Tapping this pet's phone notifications opens it, and so does the welcome sent to every phone when the pet is added. Pick a dashboard or type a path, like /lovelace/pets."
+          "dashboard": "Optional. Where you'll put the pet shelf card. Tapping one of this pet's notifications opens it, and so does the welcome. Pick one or type a path, like /lovelace/pets."
         }
       },
       "reconfigure": {
@@ -23,6 +23,9 @@
           "world": "World"
         }
       }
+    },
+    "error": {
+      "name_taken": "Another pet here already has that name."
     },
     "abort": {
       "no_worlds": "No pet worlds are ready yet. Reinstall the integration files and try again.",
@@ -45,7 +48,7 @@
               "motion": "Motion sensors"
             },
             "data_description": {
-              "bedtime": "It gets drowsy 30 minutes before. Turning lights-out off after bedtime costs a little happiness.",
+              "bedtime": "It gets drowsy 30 minutes before. Switching \"Lights out\" off again after bedtime costs a little happiness.",
               "wake_time": "It wakes up on its own at this time.",
               "bedtime_lights": "When all of these are off, it's time for bed. Bedroom lights work well. A light left on late doesn't keep the pet up past its own bedtime.",
               "motion": "Indoor motion, occupancy or presence sensors. Movement in the last 10 minutes means the house isn't quiet yet."
@@ -93,7 +96,7 @@
             "data": {
               "zone": "Home zone",
               "away_after": "Go to the sitter's after",
-              "sitter_settles": "The sitter settles whining",
+              "sitter_settles": "The sitter calms a fussy pet",
               "tv": "TVs",
               "music": "Music players",
               "chores": "Chore lists"
@@ -101,7 +104,7 @@
             "data_description": {
               "zone": "The pet counts the people in this zone. Only people tracked in Home Assistant count.",
               "away_after": "How long the house has to be empty first.",
-              "sitter_settles": "On: if the pet was whining for attention when it left (a fake call), the sitter settles it, so it comes home happy. Off: the whine waits for you. Real needs, like hunger, always wait.",
+              "sitter_settles": "On: if the pet was fussing for attention when it left (not a real need), the sitter settles it, so it comes home happy. Off: the fussing waits for you. Real needs, like hunger, always wait.",
               "tv": "Media players that are TVs. On or playing counts as watching.",
               "music": "Speakers and displays. Playing anything that isn't video counts as music.",
               "chores": "To-do lists. Each item someone ticks off earns the pet a treat (up to 5 a day); it waits if the pet is asleep or away."
@@ -135,8 +138,8 @@
             "data_description": {
               "heating": "A thermostat, switch or toggle that is on when the heating is. A thermostat counts while it is heating (or set to heat and below its target). Pick the one for the pet's room: many homes run the heating when nobody is cold.",
               "cooling": "A fan, thermostat, switch or toggle that is on when the room is being cooled. A thermostat counts while it is cooling or running its fan.",
-              "notice_robot": "Every vacuum in the house counts. A vacuum added later needs the integration reloaded.",
-              "notice_doorbell": "Every doorbell in the house counts. A doorbell added later needs the integration reloaded.",
+              "notice_robot": "Every vacuum in the house counts. One added later is noticed once these settings are saved again.",
+              "notice_doorbell": "Every doorbell in the house counts. One added later is noticed once these settings are saved again.",
               "appliances": "Machines that finish a cycle. A switch or sensor that reports power, a sensor that says running and finished, or a binary sensor that is on while it runs. When one finishes the pet says so, once.",
               "appliance_watts": "For power readings: at or below this many watts means the machine is not running. A cycle is seen after 10 minutes running, and over after about 3 minutes idle."
             }
@@ -305,7 +308,7 @@
   },
   "services": {
     "fast_forward": {
-      "name": "Fast forward",
+      "name": "Fast forward (testing)",
       "description": "Debug tool: lives through the given number of hours right now, at normal rates. Calls left unanswered in that time count as care misses.",
       "fields": {
         "hours": {
@@ -334,7 +337,7 @@
     },
     "visit": {
       "name": "Visit",
-      "description": "Tells the pet that you, the user calling it, looked in. The card calls it when you open it: the first visit of the day counts toward your bond with the pet, and an afternoon visit grants a \"come say hi\" wish. Counted at most hourly. The response holds what the pet has to tell only you (notes), each once.",
+      "description": "Tells the pet that you, the user calling it, looked in. The card calls it when you open it: the first visit of the day counts toward your bond with the pet, and an afternoon visit grants a \"come say hi\" wish. Counted at most hourly. It answers with anything the pet saved to tell only you.",
       "fields": {
         "entity_id": {
           "name": "Pet",

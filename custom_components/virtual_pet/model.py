@@ -2001,7 +2001,13 @@ def lay_egg(
 def action_available(
     state: PetState, action: str, now: float = 0.0, settings: Settings | None = None
 ) -> bool:
-    """Whether the button for an action should be available."""
+    """Whether the button for an action should be available.
+
+    An egg can't be cared for (a press would do nothing), so the care buttons
+    fade on its device page, as the card already greys them.
+    """
+    if action in ACTIONS and life_stage(state) == "egg":
+        return False
     if action == "medicine":
         return state.sick
     if action in REQUEST_ACTIONS:
