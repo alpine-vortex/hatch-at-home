@@ -967,6 +967,8 @@ const SHARED_POSES = new Set(Object.values(POSES));
 // What the journal calls a memory.
 const MEMORY_LABELS = {
   first_snow: "first snow", first_frost: "first frost", first_warm: "first warm day", first_fog: "first fog",
+  season_spring: "first day of spring", season_summer: "first day of summer", // ha-signals H7
+  season_autumn: "first day of autumn", season_winter: "first day of winter",
 };
 // Idle life: something small every so often when nothing else is going on.
 const IDLE_MIN_MS = 20000;
@@ -1465,6 +1467,16 @@ const PROMISE_LINES = {
 const PROMISE_MID = "hup! getting there ♪"; // days 1-3, now and then, with the move done small
 // Se-a (E12): the year's first warm day and the season's first fog, live.
 const SEASON_FIRST_LINES = { warm: "first warm day! ☀ ♪", fog: "ooh, the first fog ♪" };
+// ha-signals H7: a season's first day (season_start {season}); its lines and today bit.
+const SEASON_START_LINES = {
+  spring: ["first day of spring! ♪", "spring's here! hop hop ♪"],
+  summer: ["summer's here! ☀ ♪", "first day of summer! ☀"],
+  autumn: ["autumn's here! crunchy leaves ♪", "first day of autumn ♪"],
+  winter: ["winter's here! ❄", "first day of winter! ❄"],
+};
+const SEASON_START_BITS = {
+  spring: "saw spring begin", summer: "saw summer begin", autumn: "saw autumn begin", winter: "saw winter begin",
+};
 // F2: a picked dream's story (the sensor says what was picked, never who): the shared two
 // and the type's own, in turns. Everyone hears it at the first look but "you", which only
 // the asker's note tells (everyone else hears DREAM_FRIENDS); the asker's note then says
@@ -1929,6 +1941,7 @@ const MOMENT_CLASS = {
   hatched: KEPT, stage_changed: KEPT, egg_laid: KEPT, trait_learned: KEPT, trait_deepened: KEPT,
   wish_granted: KEPT, bond_up: KEPT, bond_record: KEPT, bond_favourite: KEPT, friend_home: KEPT,
   tucked_in: KEPT, favourite_snack: KEPT, first_snow: KEPT, first_frost: KEPT, first_warm: KEPT, first_fog: KEPT, care_miss: KEPT,
+  season_start: KEPT, // {season}: the first day of spring, summer, autumn or winter (H7)
   call_answered: BEAT, woke_up: BEAT, fell_asleep: BEAT, good_morning: BEAT, discipline_miss: BEAT,
   became_sick: BEAT, someone_home: BEAT,
   sunrise: FLAVOUR, sunset: FLAVOUR, weather: FLAVOUR, forecast: FLAVOUR, news: FLAVOUR,
@@ -6840,7 +6853,8 @@ class HatchPetCard extends HTMLElement {
         continue;
       }
       add(m.type === "weather" ? WEATHER_BITS[m.change]
-        : m.type === "house_answered" ? HOUSE_LINES.bits[HOUSE_REQUEST[m.request]] : MOMENT_BITS[m.type]);
+        : m.type === "house_answered" ? HOUSE_LINES.bits[HOUSE_REQUEST[m.request]]
+        : m.type === "season_start" ? Object.hasOwn(SEASON_START_BITS, m.season ?? "") && SEASON_START_BITS[m.season] : MOMENT_BITS[m.type]);
     }
     for (const e of care ? [...(lastCare.log || [])].reverse() : []) {
       if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) add(CARE_BITS[e.action]);
@@ -7546,6 +7560,9 @@ class HatchPetCard extends HTMLElement {
         break;
       case "first_fog":
         speak(SEASON_FIRST_LINES.fog, 4500, () => this._look(s, 900));
+        break;
+      case "season_start": // ha-signals H7: a season's first day, with a sparkle
+        if (Object.hasOwn(SEASON_START_LINES, m.season ?? "")) speak(pick(SEASON_START_LINES[m.season]), 4500, () => this._sparkle(s));
         break;
       case "pooped":
         now(() => {

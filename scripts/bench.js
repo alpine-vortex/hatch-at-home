@@ -433,6 +433,28 @@ const PRESETS = {
     }
     return out;
   },
+  // ha-signals H7: a season's first day, its eight lines (set C) and the journal's
+  // four labels, at both widths.
+  seasons() {
+    const out = [];
+    const time = "2027-03-21T12:00:00Z";
+    const day = (iso) => Math.floor(new Date(iso).getTime() / 1000);
+    const memories = [
+      { kind: "season_summer", at: day("2026-06-21T09:00:00Z") }, { kind: "season_autumn", at: day("2026-09-22T09:00:00Z") },
+      { kind: "first_snow", at: day("2026-12-02T09:00:00Z") }, { kind: "season_winter", at: day("2026-12-21T09:00:00Z") },
+      { kind: "season_spring", at: day("2027-03-20T09:00:00Z") },
+    ];
+    for (const width of [420, 330]) {
+      out.push({ name: `seasons/journal-${width}`, group: "seasons-journal", label: `journal ${width}`, world: "woodland",
+        width, time, journal: { memories }, view: "journal", scrollEnd: true });
+    }
+    const lines = ["first day of spring! ♪", "spring's here! hop hop ♪", "summer's here! ☀ ♪", "first day of summer! ☀",
+      "autumn's here! crunchy leaves ♪", "first day of autumn ♪", "winter's here! ❄", "first day of winter! ❄"];
+    lines.forEach((say, i) => {
+      out.push({ name: `seasons/line-${i + 1}`, group: "seasons-lines", label: say, world: "woodland", width: 330, time, say });
+    });
+    return out;
+  },
   // The same sheet on a shared screen: nothing personal, only this screen's rows.
   "settings-shared"() {
     const out = [];

@@ -627,6 +627,23 @@ def season_key(day: date, latitude: float) -> str | None:
     return f"{name}-{year}"
 
 
+def season_start(day: date, latitude: float) -> tuple[str, str] | None:
+    """The season begun within R.SEASON_START_DAYS (its first day or the next
+    two), as (season_key, name); None later in a season and in the tropics. A
+    pet away for those days misses it quietly: no late "it's spring!" in May."""
+    name = season(day, latitude)
+    if name is None:
+        return None
+    if all(
+        season(day - timedelta(days=k), latitude) == name
+        for k in range(1, R.SEASON_START_DAYS + 1)
+    ):
+        return None
+    key = season_key(day, latitude)
+    assert key is not None
+    return key, name
+
+
 def zone_word(zone: str | None) -> str | None:
     """gym, work, school or park, from a zone's name; None for anything else."""
     words = (zone or "").casefold().replace("-", " ").replace("_", " ").split()

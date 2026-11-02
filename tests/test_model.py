@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 import math
 import os
 import random
@@ -13,7 +13,7 @@ import zlib
 
 import pytest
 
-from custom_components.virtual_pet import model, rates as R
+from custom_components.virtual_pet import model, people, rates as R
 from custom_components.virtual_pet.home import REASONS, HomeEffect
 
 HOUR = 3600.0
@@ -2191,6 +2191,68 @@ def test_the_first_fog_once_a_season_from_july():
     assert model.season_first(pet, "fog", later, UTC) == [{"type": "first_fog"}]
     again = datetime(2028, 3, 2, 8, tzinfo=UTC).timestamp()
     assert model.season_first(pet, "fog", again, UTC) == []
+
+
+def test_a_season_starts_once_in_its_first_days_by_hemisphere():
+    # ha-signals H7: the first day of a season, by the house's latitude.
+    north, south, tropics = 52.0, -34.0, 10.0
+    spring = date(2027, 3, 20)
+    at_ = datetime(2027, 3, 20, 9, tzinfo=UTC).timestamp()
+
+    def starts(pet: model.PetState, day: date, latitude: float) -> list:
+        start = people.season_start(day, latitude)
+        return model.season_start(pet, *start, at_) if start else []
+
+    pet = hatched(at(9))
+    assert starts(pet, spring, north) == [{"type": "season_start", "season": "spring"}]
+    assert pet.firsts["season"] == "spring-2027"
+    assert pet.memories[-1] == {"kind": "season_spring", "at": at_}
+    # A second call in the same season: nothing.
+    assert starts(pet, spring, north) == []
+    assert starts(pet, date(2027, 3, 21), north) == []
+    assert [m["kind"] for m in pet.memories] == ["season_spring"]
+    # The south is flipped: the same day is autumn's first.
+    pet = hatched(at(9))
+    assert starts(pet, spring, south) == [{"type": "season_start", "season": "autumn"}]
+    # The tropics: never; 23.5 exactly has seasons (people.season's `<`).
+    assert people.season_start(spring, tropics) is None
+    assert people.season_start(spring, 23.5) == ("spring-2027", "spring")
+    assert people.season_start(spring, -23.5) == ("autumn-2027", "autumn")
+    # The window: the first day and the next two; 3 or 4 days late, nothing.
+    assert people.season_start(date(2027, 3, 22), north) == ("spring-2027", "spring")
+    assert people.season_start(date(2027, 3, 23), north) is None
+    assert people.season_start(date(2027, 3, 24), north) is None
+    pet = hatched(at(9))
+    assert starts(pet, date(2027, 3, 24), north) == []
+    assert "season" not in pet.firsts and pet.memories == []
+    # The other three in the north.
+    for day, name in (((6, 21), "summer"), ((9, 22), "autumn"), ((12, 21), "winter")):
+        assert people.season_start(date(2027, *day), north) == (f"{name}-2027", name)
+    # The south's summer spans New Year: one key, so once.
+    pet = hatched(at(9))
+    assert starts(pet, date(2026, 12, 21), south) == [
+        {"type": "season_start", "season": "summer"}
+    ]
+    assert people.season_key(date(2027, 1, 2), south) == "summer-2026"
+    assert model.season_start(pet, "summer-2026", "summer", at_) == []
+    assert starts(pet, date(2027, 12, 22), south) == [
+        {"type": "season_start", "season": "summer"}
+    ]
+
+
+def test_a_save_without_the_season_first_loads_and_keeps_it_after():
+    # H7 adds firsts["season"]; an older save has no such key (no migration).
+    pet = hatched(at(9))
+    pet.firsts = {"snow": "2026"}
+    data = pet.to_dict()
+    loaded = model.PetState.from_dict(data)
+    assert loaded.firsts == {"snow": "2026"}
+    assert model.season_start(loaded, "spring-2027", "spring", at(9)) == [
+        {"type": "season_start", "season": "spring"}
+    ]
+    again = model.PetState.from_dict(loaded.to_dict())
+    assert again.firsts == {"snow": "2026", "season": "spring-2027"}
+    assert model.season_start(again, "spring-2027", "spring", at(9)) == []
 
 
 # --- Daily check-ins --------------------------------------------------------

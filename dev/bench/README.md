@@ -20,6 +20,7 @@ node scripts/bench.js --preset settings         # the gear's sheet, 420/330, day
 node scripts/bench.js --preset settings-shared  # the same on a shared screen
 node scripts/bench.js --preset picker     # the shell picker: egg (locked) and teen, 420/330
 node scripts/bench.js --preset winter     # winter lights at 330: worlds day/night, mono night, hats, snow hare, auto, holiday names
+node scripts/bench.js --preset seasons    # ha-signals H7: the eight season-start lines at 330, the journal's season labels at 420/330
 node scripts/bench.js --preset visitors   # 28 shots at 330: every world visitor greeting, beats, night, calm, baby, child
 node scripts/bench.js --preset visitors-friends --sheet   # 18 shots: every visitor greeting as a friend (fresh-expand E3), a sheet per world
 node scripts/bench.js --preset visitors-rare --sheet      # 11 shots: a pair day per world and a guest from the next world (fresh-expand E10)

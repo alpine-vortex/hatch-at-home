@@ -115,6 +115,7 @@ stand-in. **not built** = planned, nothing in the code.
 | Its day, in the evening | from 17:00 a teen or adult tells its day once per screen; the status page shows it too (before 17:00, today's dream) | card `_renderStatus` (`stoday`) | none | live |
 | While you were out | after 3 h away, at most two bits; after two days away, a hop and the news first | card `_awayNote` | none | live |
 | Passing moments | sunrise and sunset, TV ("ooh, Bluey!"), weather changes, forecasts, first snow, frost, fog and the first warm day | home `HouseMoments`, `forecast_moment`; coord | mapping | live |
+| Season starts | "first day of spring! ♪" once a season (first three days, awake; none in the tropics), a sparkle and a journal memory; today bit "saw spring begin" | people `season_start`, model `season_start`; card `SEASON_START_LINES` | none | live |
 | House signals | a robot vacuum goes by ("a robot's zooming around!"), a washer, dryer or dishwasher finishes ("the dishes are all done!"); the moon from the date when no sensor is mapped (full and new moon nights) | home (vacuum, appliance and moon logic); card | options: Notice robot vacuums (on), Washer/dryer/dishwasher, Idle power, Moon | live (appliances need mapping) |
 | News | `virtual_pet.share_news` headline in the bubble | home `news_text`; `services.yaml` | automation | live |
 
@@ -184,7 +185,7 @@ stand-in. **not built** = planned, nothing in the code.
 | Status (tap the screen or the pill) | would like, wish, today (its day, or the dream), you two, friends, hunger and happy hearts, energy, health and discipline bars, weight word and hint, traits n/4, learning, upbringing with "missed calls" and "ignored whines", personality, next egg and stage countdown, last 3 care lines, journal › | card `_renderStatus` | live |
 | Settings (gear) | **for <pet>**: notices (the kinds of thing the house shows it, never an entity; admins get "connect more ›"), shell. **For you**: notify me, my day, my birthday, birthday on my phone, baby talk, my data. **This screen**: sounds, babble, screen effects, holiday names, mono, big text, shared screen. | card `_renderSettings` | live |
 | Big text | larger words on status, journal and settings; per browser, off by default | card `bigtext` class | live |
-| Journal | "this week" strip (dream, weather, and the visitor once finds are shown), the world's roster (silhouettes if unraised in this home), "every world ›" page, photos, generations (latest 4 + older), memories (first snow, frost, fog, first warm day), visitors/finds › | card `_renderJournal`, `_weekStrip`, `_renderEveryWorld` | live |
+| Journal | "this week" strip (dream, weather, and the visitor once finds are shown), the world's roster (silhouettes if unraised in this home), "every world ›" page, photos, generations (latest 4 + older), memories (first snow, frost, fog, first warm day, each season's first day), visitors/finds › | card `_renderJournal`, `_weekStrip`, `_renderEveryWorld` | live |
 | Collection | see §8 | card `_renderFinds` | partial |
 | Card editor | picks devices and has a "Seasonal decorations" switch | card `HatchPetCardEditor` | live |
 

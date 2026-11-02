@@ -413,6 +413,7 @@ NOTES_PER_VISIT = 2  # private lines said at one look; the rest wait
 LOOK_LINES = 3  # lines at one look, the card's own and the notes together
 PEOPLE_WEATHER_DAYS = 4  # days of the house's weather kept
 SEASON_TROPICS_LATITUDE = 23.5  # nearer the equator: no season talk
+SEASON_START_DAYS = 3  # a season's first days: said in these or not at all (H7)
 HOME_WARM_FIRST_C = 20.0  # outdoors at or above: the year's first warm day (E12)
 ASK_LEVEL = 2  # questions ("how was your day?") from this bond level
 ASK_MORNING_FROM = 5  # "did you sleep well?" from this hour to noon

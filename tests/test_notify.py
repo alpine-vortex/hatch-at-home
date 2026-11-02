@@ -300,3 +300,7 @@ def test_the_first_warm_day_and_fog_send_no_push():
     # Fresh-expand E12: the card says them; the phone stays quiet.
     for kind in ("first_warm", "first_fog"):
         assert notify.message({"type": kind}, "Pip", {}) is None
+    # ha-signals H7: a season's first day, likewise.
+    assert (
+        notify.message({"type": "season_start", "season": "spring"}, "Pip", {}) is None
+    )
