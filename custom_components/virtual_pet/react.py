@@ -84,6 +84,9 @@ CATEGORIES: dict[str, dict[str, Any]] = {
         "domains": ("binary_sensor", "switch", "input_boolean", "sensor"),
         "rule": "done",
         "held": 600,
+        # OctoPrint-style: printing -> operational is a finished print, but
+        # only from printing (operational after anything else is just idle).
+        "done_after": {"operational": ("printing",)},
     },
     "ev": {
         "domains": ("binary_sensor", "switch", "input_boolean", "sensor"),
@@ -119,6 +122,8 @@ assert CHANNEL_CATEGORIES <= set(CATEGORIES)
 # active -> idle when cancelled too, so its state never says it finished).
 TIMER_FINISHED = "finished"
 PLANTS_RISE = 10  # moisture points (a sensor) that mean they had a drink
+# A parcel-tracking sensor's words that mean it came (not "ordered", "shipped").
+DELIVERED = ("delivered", "arrived", "received")
 
 
 def _number(text: str) -> float | None:
@@ -138,6 +143,10 @@ def _says_done(text: str, extra: tuple[str, ...] = ()) -> bool:
     return any(w.startswith(APPLIANCE_DONE + extra) for w in _words(text))
 
 
+def _says_delivered(text: str) -> bool:
+    return any(w.startswith(DELIVERED) for w in _words(text))
+
+
 def _idle(text: str) -> bool:
     return text in APPLIANCE_IDLE
 
@@ -145,7 +154,6 @@ def _idle(text: str) -> bool:
 def counts(
     category: str,
     domain: str | None,
-    device_class: str | None,
     from_state: str | None,
     to_state: str | None,
     held: float | None,
@@ -153,8 +161,7 @@ def counts(
 ) -> bool:
     """Whether this state change is the category's moment.
 
-    domain and device_class are the source entity's (None when the call names
-    none); held is how long from_state held, in seconds (None: not known, so not
+    domain is the source entity's (None when the call names none); held is how long from_state held, in seconds (None: not known, so not
     held against it). With neither state (an automation calling react from its
     own trigger) the automation has decided, and it counts. match: Custom's
     "the state that counts" (any change when empty).
@@ -179,7 +186,9 @@ def counts(
     if rule in ("heat", "cool"):
         if domain == "climate":
             modes = (
-                ("heat", "heat_cool") if rule == "heat" else ("cool", "dry", "fan_only")
+                ("heat", "heat_cool")
+                if rule == "heat"
+                else ("cool", "dry", "fan_only", "auto", "heat_cool")
             )
             return old == "off" and new in modes
         return old in OFF and new in ON
@@ -190,7 +199,13 @@ def counts(
             return old in ON and new in OFF
         # An enum sensor: to a "done" word, from a state that was running.
         extra = spec.get("done_words", ())
-        return _says_done(new, extra) and not _idle(old) and not _says_done(old, extra)
+        if _says_done(new, extra) and not _idle(old) and not _says_done(old, extra):
+            return True
+        # A word that finishes only from one state (printing -> operational).
+        for word, froms in spec.get("done_after", {}).items():
+            if new.startswith(word) and any(w.startswith(froms) for w in _words(old)):
+                return True
+        return False
     if rule == "watered":
         if onoff:
             return old in ON and new in OFF
@@ -206,6 +221,9 @@ def counts(
         a, b = _number(old), _number(new)
         if a is not None and b is not None:
             return b > a  # a count rose (one that resets at midnight falls)
+        if rule == "arrived":
+            # A status text: only the parcel arriving counts, not every step.
+            return _says_delivered(new) and not _says_delivered(old)
         return True  # a button, an event or a timestamp: a new press
     return False
 

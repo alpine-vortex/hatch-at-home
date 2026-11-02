@@ -1606,7 +1606,7 @@ const HOUSE_CATEGORY = {
   feeder: { react: "hop" },
   plants: { react: "cozy" },
   delivery: { react: "startle" }, // channel only
-  timer: { react: "startle" },
+  timer: { react: "startle" }, // channel only (a kitchen timer: someone is cooking)
   internet: { react: "dance" },
   custom: {},
 };
@@ -6901,7 +6901,7 @@ class HatchPetCard extends HTMLElement {
       robot_out: HOUSE_LINES.bits.robot, robot_home: HOUSE_LINES.bits.robot, // H4
       appliance_done: HOUSE_LINES.bits.machine, // H6
     };
-    const houseBit = (m) => HOUSE_LINES.bits[HOUSE_CATEGORY[m.category]?.bit]; // H8
+    const houseBit = (m) => HOUSE_LINES.bits[Object.hasOwn(HOUSE_CATEGORY, m.category ?? "") ? HOUSE_CATEGORY[m.category].bit : ""]; // H8
     const WEATHER_BITS = { rain_started: "watched the rain", snow_started: "saw snow", rainbow: "saw a rainbow", sun_out: "sunbathed" };
     const CARE_BITS = { feed: "had a meal", snack: "had a snack", play: "played", game: "played a game", clean: "had a bath", chore_treat: "got a chore treat" };
     let found = 0; // "found <a find>": one a find (V8), newest first, FOUND_BITS at most
@@ -7520,10 +7520,10 @@ class HatchPetCard extends HTMLElement {
       case "house_moment": // virtual_pet.react: something in the house, by category (H8)
       case "house_live": { // ... said on the channel only: it says someone's home, or the words are kept off the sensor
         if (s.game) break; // a game's prompt owns the bubble
-        const cat = HOUSE_CATEGORY[m.category];
+        const cat = Object.hasOwn(HOUSE_CATEGORY, m.category ?? "") ? HOUSE_CATEGORY[m.category] : null;
         if (!cat) break;
         const custom = m.category === "custom";
-        const reaction = custom ? (REACT_POSE[m.reaction] ? m.reaction : "hop") : cat.react;
+        const reaction = custom ? (Object.hasOwn(REACT_POSE, m.reaction ?? "") ? m.reaction : "hop") : cat.react;
         const pose = REACT_POSE[reaction];
         const fx = () => {
           this._animate(s, s.pet, pose.move, pose.ms);

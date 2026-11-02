@@ -2867,16 +2867,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         after any house moment) or "shared". Only a shared one starts a wait.
         The source entity is read here and kept nowhere."""
         assert self.state is not None
+        domain = source.partition(".")[0] if source else None
+        if not react_counts(category, domain, from_state, to_state, held, match):
+            # The blueprint calls on every change (a washer's power sensor moves
+            # each second): an ignored one costs no advance, save or publish.
+            return "ignored"
         now = self._now()
         self._advance(now)
-        domain = source.partition(".")[0] if source else None
-        seen = self.hass.states.get(source) if source else None
-        device_class = seen.attributes.get("device_class") if seen else None
-        if not react_counts(
-            category, domain, device_class, from_state, to_state, held, match
-        ):
-            result = "ignored"
-        elif react_native(category, source, dict(self.config_entry.options)):
+        if react_native(category, source, dict(self.config_entry.options)):
             result = "native"
         elif model.life_stage(self.state) == "egg":
             result = "egg"

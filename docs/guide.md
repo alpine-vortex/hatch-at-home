@@ -913,7 +913,7 @@ it is the [house moment blueprint](#let-the-pet-notice-things-house-moment-bluep
 | Pet feeder (`feeder`) | a button or event pressed, a timestamp changing, a count rising, a switch turning on | hop | none |
 | Plants / watering (`plants`) | a valve or switch closing after a minute; a moisture sensor rising 10 points | cozy | none |
 | Mailbox / delivery (`delivery`), card only | a sensor turning on, an event, a count rising | startle | none |
-| Timer (`timer`) | `timer.finished` (the blueprint sends it; a cancelled timer doesn't count) | startle | none |
+| Timer (`timer`), card only | `timer.finished` (the blueprint sends it; a cancelled timer doesn't count) | startle | none |
 | Internet (`internet`) | a connectivity sensor back on after 2 minutes off (never when it goes down) | dance | none |
 | Custom (`custom`) | any change, or only `match` | yours | none |
 
@@ -963,13 +963,13 @@ missed re-call, which isn't a care miss),
 `virtual_pet_watching` and `virtual_pet_listening` (when the pet notices a new show or song, at most every 20 minutes, with
 no `title` or `artist`: for every change, read `media_title` from your media player),
 `virtual_pet_tv_off_late`, `virtual_pet_news` (with `headline`, and `topic` if given),
-`virtual_pet_first_snow`, `virtual_pet_first_frost`,
+`virtual_pet_first_snow`, `virtual_pet_first_frost`, `virtual_pet_season_start` (with `season`),
 `virtual_pet_trait_learned` and `virtual_pet_trait_deepened` (with `trait`, `level`), `virtual_pet_egg_laid` (with `generation`,
 `parent_species`, `inherited_trait`), `virtual_pet_welcomed` (once, when the pet is added),
 `virtual_pet_wish_made` and `virtual_pet_wish_granted` (with `kind`),
 `virtual_pet_someone_home` (anyone signed in came home; it says nobody's name),
 `virtual_pet_holiday` (with `holiday`: `halloween`, `thanksgiving`, `winter_lights` or `winter_treat`), `virtual_pet_weather` (with `change`),
-`virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_house_answered` (with `request`: `blanket` or `fan`; the heating or cooling came on for the pet), `virtual_pet_robot_out` and `virtual_pet_robot_home` (a robot vacuum started a run and went home; no vacuum is named), `virtual_pet_appliance_done` (with `kind`: `washer`, `dryer`, `dishwasher` or `machine`; no machine is named), `virtual_pet_house_moment` (with `category`, and for Custom `reaction` and its `text` unless the words are kept off sensors; never for oven, coffee, EV or delivery, and never naming the entity), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
+`virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_house_answered` (with `request`: `blanket` or `fan`; the heating or cooling came on for the pet), `virtual_pet_robot_out` and `virtual_pet_robot_home` (a robot vacuum started a run and went home; no vacuum is named), `virtual_pet_appliance_done` (with `kind`: `washer`, `dryer`, `dishwasher` or `machine`; no machine is named), `virtual_pet_house_moment` (with `category`, and for Custom `reaction` and its `text` unless the words are kept off sensors; never for oven, coffee, EV, delivery or timer, and never naming the entity), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
 `virtual_pet_favourite_snack` (with `food`),
 `virtual_pet_found` (with `id` and `world`, when the pet finds something; finds aren't shown on the card yet).
 

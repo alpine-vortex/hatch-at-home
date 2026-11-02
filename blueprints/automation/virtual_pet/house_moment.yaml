@@ -18,7 +18,7 @@ blueprint:
     back. Custom: any change, or only the state you name.
 
 
-    The ones marked "card only" (oven, coffee, EV charger, delivery) say
+    The ones marked "card only" (oven, coffee, EV charger, delivery, timer) say
     someone is home, so they're said live on the card and kept nowhere: not on
     a sensor, the event bus or the journal. An entity already in the pet's own
     heating, cooling or appliances settings is left to those (one bubble, not
@@ -71,7 +71,7 @@ blueprint:
               value: plants
             - label: Mailbox / delivery (card only)
               value: delivery
-            - label: Timer
+            - label: Timer (card only)
               value: timer
             - label: Internet
               value: internet

@@ -155,9 +155,9 @@ HOUSE_CATEGORIES = (
     "custom",
 )
 # Categories that say someone is home (a visitor at the door, someone up making
-# coffee or cooking, the car home charging): said live on the channel only, never
+# coffee or cooking, the car home charging, a kitchen timer going off): said live on the channel only, never
 # on a sensor, the bus, the journal, debug or diagnostics (owner, 2026-11-01).
-CHANNEL_CATEGORIES = {"delivery", "coffee", "oven", "ev"}
+CHANNEL_CATEGORIES = {"delivery", "coffee", "oven", "ev", "timer"}
 # Channel moments that are said live and kept nowhere (not for a later
 # subscriber, not in the public list): a channel-only house moment, and house
 # words while house_words_private is on. Their own types, so a card never says

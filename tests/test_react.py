@@ -3,7 +3,7 @@
 The rules (react.counts) are pure and tested as a table. The service is tested
 in a test Home Assistant: its results, the waits, stepping aside for H3 / H6's
 own entities, and where the words go: a public category is a moment on the
-sensor and the bus, a channel-only one (delivery, coffee, oven, EV) is said live
+sensor and the bus, a channel-only one (delivery, coffee, oven, EV, timer) is said live
 on the card and kept nowhere, and a Custom line's own words follow the pet's
 house_words_private option (both states tested, with share_news's headline).
 """
@@ -70,6 +70,10 @@ ROWS = [
     ("coffee", "switch", "on", "off", 20, False),
     ("printer", "sensor", "printing", "complete", DONE, True),
     ("printer", "binary_sensor", "on", "off", DONE, True),
+    ("printer", "sensor", "printing", "operational", DONE, True),
+    ("printer", "sensor", "offline", "operational", DONE, False),  # only after printing
+    ("printer", "sensor", "idle", "operational", DONE, False),
+    ("washer", "sensor", "run", "operational", DONE, False),  # printer's word alone
     ("ev", "sensor", "charging", "charged", DONE, True),
     ("ev", "sensor", "charging", "fully_charged", DONE, True),
     ("ev", "binary_sensor", "on", "off", DONE, True),
@@ -80,6 +84,8 @@ ROWS = [
     ("heater", "switch", "off", "on", 30, True),
     ("ac", "climate", "off", "cool", 30, True),
     ("ac", "climate", "off", "dry", 30, True),
+    ("ac", "climate", "off", "auto", 30, True),
+    ("ac", "climate", "off", "heat_cool", 30, True),
     ("ac", "climate", "off", "heat", 30, False),
     ("ac", "input_boolean", "off", "on", 30, True),
     ("fan", "fan", "off", "on", 30, True),
@@ -114,6 +120,10 @@ ROWS = [
     ("delivery", "binary_sensor", "off", "on", 9, True),
     ("delivery", "binary_sensor", "on", "off", 9, False),
     ("delivery", "sensor", "0", "1", 9, True),
+    ("delivery", "sensor", "ordered", "shipped", 9, False),  # a step, not the parcel
+    ("delivery", "sensor", "out for delivery", "delivered", 9, True),
+    ("delivery", "sensor", "in transit", "Arrived at pickup", 9, True),
+    ("delivery", "sensor", "delivered", "returned", 9, False),
     ("timer", "timer", "active", "finished", 0, True),
     ("timer", "timer", "active", "idle", 0, False),  # cancelled
     ("custom", "sensor", "a", "b", 0, True),
@@ -130,22 +140,22 @@ ROWS = [
 def test_counts(
     category: str, domain: str, old: str, new: str, held: float, expected: bool
 ) -> None:
-    assert counts(category, domain, None, old, new, held) is expected
+    assert counts(category, domain, old, new, held) is expected
 
 
 def test_custom_counts_only_the_state_named() -> None:
-    assert counts("custom", "vacuum", None, "cleaning", "docked", 9, "Docked")
-    assert not counts("custom", "vacuum", None, "docked", "cleaning", 9, "docked")
-    assert counts("custom", "vacuum", None, "docked", "cleaning", 9, "")
+    assert counts("custom", "vacuum", "cleaning", "docked", 9, "Docked")
+    assert not counts("custom", "vacuum", "docked", "cleaning", 9, "docked")
+    assert counts("custom", "vacuum", "docked", "cleaning", 9, "")
 
 
 def test_an_automation_calling_with_no_states_has_decided() -> None:
-    assert counts("washer", None, None, None, None, None)
+    assert counts("washer", None, None, None, None)
 
 
 def test_every_category_has_its_rule_and_no_garage() -> None:
     assert set(CATEGORIES) == set(HOUSE_CATEGORIES) and len(HOUSE_CATEGORIES) == 16
-    assert CHANNEL_CATEGORIES == {"delivery", "coffee", "oven", "ev"}
+    assert CHANNEL_CATEGORIES == {"delivery", "coffee", "oven", "ev", "timer"}
     assert not any("garage" in c for c in HOUSE_CATEGORIES)
     for key, spec in CATEGORIES.items():
         assert spec["rule"] and (key == "custom" or spec["domains"]), key
@@ -192,6 +202,33 @@ async def test_a_public_moment_is_its_category_and_changes_nothing(
     assert "binary_sensor.washer" not in json.dumps(
         [moment, config.runtime_data.debug, [e.data for e in bus]], default=str
     )
+
+
+async def test_an_ignored_call_does_no_work(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A power sensor calls react every second; counts() turns them all away
+    before anything advances, saves or publishes."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    config = await setup_with_house(hass)
+    coordinator = config.runtime_data
+    calls: list[str] = []
+    for name in ("_advance", "_save", "_publish"):
+        original = getattr(coordinator, name)
+
+        def spy(*args: Any, _name: str = name, _original: Any = original, **kw: Any):
+            calls.append(_name)
+            return _original(*args, **kw)
+
+        monkeypatch.setattr(coordinator, name, spy)
+    ignored = {"source": "sensor.washer_power", "from_state": "3", "to_state": "4"}
+    assert await react(hass, "washer", **ignored) == "ignored"
+    assert calls == []
+    assert await react(hass, "washer", **washer_done()) == "shared"
+    assert "_advance" in calls and "_publish" in calls
 
 
 async def test_each_result(
@@ -333,7 +370,7 @@ async def test_house_moments_never_push_a_hatching_out(
     config.runtime_data._fire([{"type": "hatched", "species": "x"}])
     for _ in range(10):
         freezer.tick(timedelta(minutes=R.REACT_COOLDOWN_MINUTES + 1))
-        assert await react(hass, "timer") == "shared"
+        assert await react(hass, "feeder") == "shared"
     moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
     assert [m["type"] for m in moments].count("house_moment") == R.HOUSE_MOMENTS_KEPT
     assert any(m["type"] == "hatched" for m in moments)
