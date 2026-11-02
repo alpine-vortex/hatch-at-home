@@ -573,7 +573,7 @@ disagree, UX5 wins.
 - **UX5 (F4, Q4): the missing-entities repair names the topic.** Compute `{topics}` from
   which option keys hold the missing IDs (via the topic map) and use it in the repair
   text (`issues.missing_entities`). Approved text: "…Open Settings → Devices & services
-  → Virtual Pet → the gear next to {pet}, then {topics}, and pick the new entities or
+  → Hatch at Home → the gear next to {pet}, then {topics}, and pick the new entities or
   clear those fields. This warning goes away once that's saved." **S5b (new, M, after
   S5; first mate: yes):** make that repair fixable. A one-step repair flow, "Forget
   them", removes only the missing IDs from `options` and reloads the pet: one tap, no

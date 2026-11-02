@@ -139,7 +139,7 @@
       states, entities, devices,
       user: { id: "bench-user", name: "Sam Bench", is_admin: true },
       locale: { language: "en" }, language: "en",
-      themes: {}, selectedTheme: null,
+      themes: shot.haDark === undefined ? {} : { darkMode: !!shot.haDark }, selectedTheme: null,
       // The card asks once for a server clock reading; none arrives here.
       connection: { subscribeEvents: noop, subscribeMessage: noop },
       // `digReplies`: play_game answers, in order, for a `game: "dig"` shot (the server's dig is random).
@@ -486,6 +486,12 @@
     if (shot.look) lookStart(card, cur, shot.look);
     if (shot.ask) card._ask(cur, shot.ask);
     if (shot.say !== undefined) card._write(cur, shot.say, 1e9);
+    // `fx`: a house effect class (fx-heat, fx-cool, fx-suds, fx-tumble, fx-chime) held on the screen, its
+    // animation paused 1 s in (at full strength; reduced motion has none, so it just shows).
+    if (shot.fx) {
+      cur.screen.classList.add(shot.fx);
+      for (const a of cur.screen.getAnimations({ subtree: true })) { a.pause(); a.currentTime = 1000; }
+    }
     if (shot.ask && shot.say !== undefined) card._askPlace(cur, cur.screen.querySelector(".askday")); // the line is in the bubble now
     // `idle`: the pet's idle mumble through the card's own _idle, the first move (a mumble)
     // and the type's side of the coin forced (draws: next-idle delay, move, coin).

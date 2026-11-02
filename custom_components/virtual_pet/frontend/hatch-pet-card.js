@@ -229,7 +229,8 @@ function babble(text, voice) {
       const gain = audio.createGain();
       osc.type = "triangle";
       osc.frequency.value = voice.pitch * 2 ** (semis / 12);
-      gain.gain.setValueAtTime(0.04, t);
+      gain.gain.setValueAtTime(0, t); // a 5 ms ramp in: a note that starts at full gain clicks (UX7 F7)
+      gain.gain.linearRampToValueAtTime(0.04, t + 0.005);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
       osc.connect(gain).connect(audio.destination);
       osc.start(t);
@@ -392,6 +393,21 @@ function saveStashedAnswers(userId, list) {
   }
 }
 
+let lastChirp = {}; // the last chirp any card played: {card, name, device, at} (see _chirp)
+
+// Every chirp goes through one lowpass at about 3 kHz (UX7 F10): the toy's square beep, less shrill
+// next to the voice's soft triangle babble.
+let chirpBus = null;
+function chirpOut() {
+  if (!chirpBus || chirpBus.context !== audio) {
+    chirpBus = audio.createBiquadFilter();
+    chirpBus.type = "lowpass";
+    chirpBus.frequency.value = 3000;
+    chirpBus.connect(audio.destination);
+  }
+  return chirpBus;
+}
+
 function playChirp(name) {
   const notes = CHIRPS[name];
   if (!notes) return;
@@ -404,9 +420,10 @@ function playChirp(name) {
       const gain = audio.createGain();
       osc.type = "square";
       osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.06, t);
+      gain.gain.setValueAtTime(0, t); // a 5 ms ramp in: a note that starts at full gain clicks (UX7 F7)
+      gain.gain.linearRampToValueAtTime(0.05, t + 0.005);
       gain.gain.exponentialRampToValueAtTime(0.001, t + len);
-      osc.connect(gain).connect(audio.destination);
+      osc.connect(gain).connect(chirpOut());
       osc.start(t);
       osc.stop(t + len);
     }
@@ -657,6 +674,7 @@ function thanksgiving(year, days = 0) {
   return [at.getMonth() + 1, at.getDate()];
 }
 const seasonDate = (when, year) => (typeof when === "function" ? when(year) : when);
+const HEAD_SPRITE = 75; // px the sprite is drawn at inside a head crop (UX7 F2)
 const HEAD_TOPS = new Map(); // frame|x -> the top of the head (see _headTop)
 const FRAME_IMGS = new Map(); // src -> Image, for measuring frames not on show
 const SEASON_COSTUME_MS = [600000, 900000]; // between costume moments (10-15 min)
@@ -2648,15 +2666,20 @@ const STYLE = `
   .foot { gap: 8px; }
   .nav { flex-shrink: 0; }
   .dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0; min-width: 0; }
-  /* 44 x 44 hit area (4c's size); the drawn dot is still 10 px, and the boxes sit edge to edge. */
+  /* 44 x 44 hit area (4c's size); the drawn dot is a 16 px head, and the boxes sit edge to edge. */
   .dot { width: 44px; height: 44px; border: none; padding: 0; cursor: pointer;
     background: none; display: flex; align-items: center; justify-content: center; }
-  .dot::before { content: ""; width: 10px; height: 10px; border-radius: 5px;
-    background: color-mix(in srgb, var(--hp-ink) 55%, transparent); transition: width .3s; }
-  .dot[aria-current="true"]::before { width: 20px; background: var(--hp-ink); }
+  /* The dot is the pet's head (UX7 F8): 16 px, a 2 px ring, the sprite cropped as the status band's head is
+     (_headCrop). The one on show is full colour; the others sit back at 55%. Before the sprite is drawn the
+     ring alone shows. */
+  .dot::before { content: ""; width: 16px; height: 16px; border-radius: 8px; box-sizing: border-box;
+    border: 2px solid var(--hp-ink); opacity: .55; image-rendering: pixelated;
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 43px) var(--say-size, 43px) no-repeat border-box,
+      color-mix(in srgb, var(--hp-ink) 25%, transparent); }
+  .dot[aria-current="true"]::before { opacity: 1; }
   /* A pet this browser hasn't shown yet (UX fix 4, F4): a small pulse till its slide is first shown
-     (reduced motion: no pulse, a darker dot). */
-  .dot.fresh::before { background: var(--hp-ink); animation: dotpulse 1.6s ease-in-out infinite; }
+     (reduced motion: no pulse, but full colour like the one on show). */
+  .dot.fresh::before { opacity: 1; animation: dotpulse 1.6s ease-in-out infinite; }
   @keyframes dotpulse { 50% { transform: scale(1.5); } }
   .slide.away-slide { cursor: pointer; }
   /* The empty card's toy (UX fix 4, F5): an egg's silhouette (the journal's "???" look), no buttons. */
@@ -2810,11 +2833,19 @@ const STYLE = `
   .finish-glow:has(.screen.dim) :is(.loop, .lid, .roof) > .mould, .finish-glow:has(.screen.dim) .feet .mould {
     background: #9fdc7c; }
   .finish-glow:has(.screen.night) .crescent > .mould, .finish-glow:has(.screen.dim) .crescent > .mould { background: #d3f7ad; }
+  /* The plastic lights up in a dark HA theme (ha-card.ha-dark, from hass.themes.darkMode: UX7 F6), not
+     in the OS's dark mode; where HA doesn't say, the OS's is the fallback. */
+  ha-card.ha-dark .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
+  ha-card.ha-dark .finish-glow .body { box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
+  ha-card.ha-dark .finish-glow :is(.loop, .lid, .roof) > .mould,
+  ha-card.ha-dark .finish-glow .feet .mould { background: #9fdc7c; }
+  ha-card.ha-dark .finish-glow .crescent > .mould { background: #d3f7ad; }
   @media (prefers-color-scheme: dark) {
-    .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
-    .finish-glow .body { box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
-    .finish-glow :is(.loop, .lid, .roof) > .mould, .finish-glow .feet .mould { background: #9fdc7c; }
-    .finish-glow .crescent > .mould { background: #d3f7ad; }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .body { box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow :is(.loop, .lid, .roof) > .mould,
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .feet .mould { background: #9fdc7c; }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .crescent > .mould { background: #d3f7ad; }
   }
   /* Prints any world can wear (FINISHES): a tile of whole cells (--print-<key>) over the
      plastic's face (--d-face), tiled at the grid's size. */
@@ -3439,16 +3470,17 @@ const STYLE = `
   .screen.raining .rain { display: block; }
   .screen.raining .bg { filter: brightness(.82) saturate(.75); }
   @keyframes rainfall { to { background-position: -10px 40px; } }
-  /* The house answers (H3): heat shimmer / cool wisps for 2.5 s. A stand-in for the art. */
+  /* The house answers (H3): a warm glow rising from the floor (heat) or a pale frost in the top
+     corners (cool) for 2.5 s. A stand-in for the art. Neither crosses the pet's face (UX7 F3); under
+     reduced motion the same tint just stays for the 2.5 s: an edge glow doesn't read as a flash. */
   .screen.fx-heat::after, .screen.fx-cool::after { content: ""; position: absolute; inset: 0; z-index: 3;
     pointer-events: none; animation: house-fx 2.5s ease-in-out both; }
-  .screen.fx-heat::after { background: repeating-linear-gradient(0deg, rgba(255,170,90,.0) 0 7px,
-    rgba(255,150,60,.5) 7px 12px); background-size: 100% 22px; }
-  .screen.fx-cool::after { background: repeating-linear-gradient(100deg, rgba(200,235,255,0) 0 12px,
-    rgba(210,240,255,.6) 12px 16px); background-size: 40px 100%; }
+  .screen.fx-heat::after { background: linear-gradient(to top, rgba(255,150,60,.35), transparent 45%); }
+  .screen.fx-cool::after { background: radial-gradient(circle at 0 0, rgba(210,240,255,.5), transparent 40%),
+    radial-gradient(circle at 100% 0, rgba(210,240,255,.5), transparent 40%); }
   @keyframes house-fx { 0% { opacity: 0; transform: translateY(6px); } 8%, 70% { opacity: 1; }
     100% { opacity: 0; transform: translateY(-10px); } }
-  @media (prefers-reduced-motion: reduce) { .screen.fx-heat::after, .screen.fx-cool::after { animation: none; opacity: .5; } }
+  @media (prefers-reduced-motion: reduce) { .screen.fx-heat::after, .screen.fx-cool::after { animation: none; opacity: .7; } }
   /* The robot vacuum (H4): a 22x12 rounded box, dark grey with a light rim and a blinking dot,
      gliding across the floor line in 6 s. A stand-in for the house_robot art. */
   .screen.fx-robot::before { content: ""; position: absolute; left: 0; bottom: 3%; z-index: 1; width: 22px; height: 12px;
@@ -3514,6 +3546,10 @@ const STYLE = `
   /* The backlight lights the menus too (F10): the sheet and its back band lift toward the glow's
      mint, a faint lift by day and a stronger one in the dark, fading out with the glow. */
   .status, .shead { transition: background-color .6s ease-out; }
+  /* At night and dim the sheet and the bubble sink into the dark LCD instead of staying daylight-bright
+     (UX7 F5); the backlight (.lit, below) still lifts the sheet. Dark ink stays above 7:1. */
+  .screen.night .status, .screen.dim .status { --sheet-bg: color-mix(in srgb, #e9e2c6 72%, #1d2440); }
+  .screen.night .bubble, .screen.dim .bubble { background: color-mix(in srgb, #fffdf5 80%, #1d2440); }
   .screen.lit .status { --sheet-bg: color-mix(in srgb, #e9e2c6 55%, #dffbf2); }
   .screen.lit.night .status, .screen.lit.dim .status, .screen.lit.faded .status { --sheet-bg: color-mix(in srgb, #e9e2c6 15%, #dffbf2); }
   .screen.lit .status, .screen.lit .shead { transition: none; }
@@ -3576,7 +3612,7 @@ const STYLE = `
   /* The pet's head and name at the status band's left (UX fix 2, F10). */
   .who { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
   .whohead { flex: none; width: 28px; height: 28px; image-rendering: pixelated;
-    background: var(--say-img, none) var(--say-at, 0 0) / 128px 128px no-repeat; }
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 75px) var(--say-size, 75px) no-repeat; }
   .whoname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .gear { margin-left: auto; display: flex; align-items: center; justify-content: center;
     min-width: 44px; min-height: 44px; padding: 0 5px; border: none; background: none;
@@ -3643,7 +3679,7 @@ const STYLE = `
     background: #fbf7e6; color: #2f3a24; line-height: 1.15; }
   .status-feedback.say[hidden] { display: none; }
   .status-feedback.say::before { content: ""; flex: none; width: 28px; height: 28px;
-    background: var(--say-img, none) var(--say-at, 0 0) / 128px 128px no-repeat; image-rendering: pixelated; }
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 75px) var(--say-size, 75px) no-repeat; image-rendering: pixelated; }
   .shead:has(.pback) .status-feedback.say { left: var(--sx, 12px); right: var(--sx, 12px); }
   .jdream, .stoday { font-size: 13px; color: var(--hp-subink); margin: 2px 0 4px; } /* today's dream, today's line (E9) */
   .jweek { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; margin: 0 0 6px; } /* E14 */
@@ -3794,6 +3830,17 @@ const STYLE = `
     translate: var(--ask-dx, 0px) var(--ask-dy, -14%); /* _askPlace measures the chips and the bubble */
     scale: calc(var(--k, 1) * var(--ask-f, .9)) !important; } /* !important: the species scale is inline */
   .screen:has(> .askday) .pet { transition: translate .25s steps(2), rotate .2s ease-out, scale .25s steps(2); }
+  /* Beside the bubble (UX7 F1): it wraps in the room left of the pet's column. No room at all: the
+     pet's head sits in the bubble and the pet itself waits out the question. */
+  .screen:has(> .askday) .bubble { max-width: var(--ask-bw, 64%); }
+  .screen:has(> .askday.nopet) .bubble { top: 2%; padding: 1px 6px 1px 36px; min-height: 20px; font-size: 12px; line-height: 1.15; }
+  .porthole .screen:has(> .askday.nopet) .bubble { top: 4%; left: 7%; }
+  .screen .askday.nopet { bottom: 2%; } /* the chips and the bubble share the whole height */
+  .porthole .screen .askday.nopet { bottom: 2%; }
+  .screen:has(> .askday.nopet) .bubble::before { content: ""; position: absolute; left: 4px; top: 50%;
+    width: 28px; height: 28px; margin-top: -14px; image-rendering: pixelated;
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 75px) var(--say-size, 75px) no-repeat; }
+  .screen:has(> .askday.nopet) .pet, .screen:has(> .askday.nopet) .perch, .screen:has(> .askday.nopet) .ghost { visibility: hidden; }
   /* Big text reaches the pet's words too (F9). */
   ha-card.bigtext .bubble { font-size: 16px; }
   /* Big text reaches the game (UX fix 6, F10): the score, the guess labels and the picker. */
@@ -3871,6 +3918,7 @@ class HatchPetCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    this._syncTheme();
     if (this._resumedAt && !document.hidden && hass?.states !== this._resumeStates) {
       this._resumedAt = this._resumeStates = null; // fresh states: the look may begin
     }
@@ -3878,6 +3926,14 @@ class HatchPetCard extends HTMLElement {
     this._watchServerClock(hass);
     this._resendAnswers();
     this._update();
+  }
+
+  // HA's own dark mode, as ha-dark / ha-light on the card (the glow finish lights up in a dark theme);
+  // neither class when the theme doesn't say (an older HA): the OS's colour scheme decides then.
+  _syncTheme() {
+    const dark = this._hass?.themes?.darkMode;
+    this._card?.classList.toggle("ha-dark", dark === true);
+    this._card?.classList.toggle("ha-light", dark === false);
   }
 
   // Answers kept on this device (a failed save, twice) go out one by one when
@@ -3995,6 +4051,8 @@ class HatchPetCard extends HTMLElement {
 
   disconnectedCallback() {
     clearInterval(this._timer);
+    clearTimeout(this._headTimer);
+    this._headTimer = 0;
     this._linkEnd();
     this._resize?.disconnect();
     this._io?.disconnect();
@@ -4274,6 +4332,7 @@ class HatchPetCard extends HTMLElement {
         </div>
       </ha-card>`;
     this._card = root.querySelector("ha-card");
+    this._syncTheme();
     this._card.classList.toggle("lcd-on", lcdOn());
     this._card.classList.toggle("mono", monoOn());
     this._card.classList.toggle("bigtext", bigOn());
@@ -4329,7 +4388,7 @@ class HatchPetCard extends HTMLElement {
     // iOS locks audio again after a reload until a tap: any tap unlocks it
     // (the end of a touch counts as a gesture there, its start doesn't).
     const unlock = () => {
-      if (!soundsOn() && !babbleOn()) return;
+      if (!soundsOn()) return; // babble needs sounds here too
       try {
         unlockAudio();
       } catch (err) {
@@ -4761,7 +4820,7 @@ class HatchPetCard extends HTMLElement {
         ? "The pets this card shows aren't here any more. Edit the card to pick them again."
         : this._hass.user?.is_admin === false
           ? "Ask whoever runs Home Assistant to add a pet."
-          : "Add the Virtual Pet integration to hatch one.";
+          : "Add the Hatch at Home integration to hatch one.";
       if (configured) {
         this._emptyToken = null;
       } else if (keep) {
@@ -5393,7 +5452,19 @@ class HatchPetCard extends HTMLElement {
     const days = stage?.attributes.age_days;
     const kind = stage?.state === "egg" ? "Egg" : s.species?.name || "";
     const title = this._card.querySelector(".title");
-    if (!s.empty) { // the empty card keeps its own title and line (_update)
+    // On a swipe the name and the line change when the new pet is half there (250 ms into the
+    // slide), not at once over the old pet (UX7 F4). Under reduced motion they change at once.
+    const swapHead = !!this._headFor && this._headFor !== s && !s.empty && !calm();
+    if (swapHead && !this._headTimer) {
+      this._headTimer = setTimeout(() => {
+        this._headTimer = 0;
+        this._headFor = null;
+        this._renderShelf();
+      }, 250);
+    }
+    const headNow = !this._headTimer;
+    if (headNow && !s.empty) this._headFor = s;
+    if (headNow && !s.empty) { // the empty card keeps its own title and line (_update)
       title.textContent = device?.name_by_user || device?.name || "Pet";
       title.classList.toggle("long", title.textContent.length > 9);
     }
@@ -5414,7 +5485,7 @@ class HatchPetCard extends HTMLElement {
       if (src && img.getAttribute("src") !== src) img.src = src;
     });
     // The world is on the device's plate and the emblem, so the line stays short.
-    if (!s.empty) {
+    if (headNow && !s.empty) {
       this._card.querySelector(".sub").textContent = [kind,
         stage?.state !== "egg" ? STAGE_LABELS[stage?.state]?.toLowerCase() : null,
         days != null ? `day ${Math.floor(days) + 1}` : null].filter(Boolean).join(" · ");
@@ -5437,6 +5508,7 @@ class HatchPetCard extends HTMLElement {
       dot.classList.toggle("fresh", this._slides.length > 1 && !this._shown.has(device) && !this._seenRead(device));
       const name = this._hass.devices?.[this._slides[i].ids?.device];
       dot.setAttribute("aria-label", `Show ${name?.name_by_user || name?.name || `pet ${i + 1}`}`);
+      this._headCrop(this._slides[i], dot, 8, 1.7); // its head, as the dot's mark (UX7 F8)
       dot.setAttribute("aria-current", i === this._index ? "true" : "false");
     });
     this._card.querySelector(".statusbtn").setAttribute(
@@ -6424,7 +6496,7 @@ class HatchPetCard extends HTMLElement {
       }, 40);
       s.typing = job;
       s.bubble.dataset.typing = "1";
-      if (sound && babbleOn() && this._mayPlay(s) && !s.game) {
+      if (sound && soundsOn() && babbleOn() && this._mayPlay(s) && !s.game) { // "sounds here" is the master (UX7 F11)
         try {
           s.babbling = babble(text, voice);
         } catch (err) {
@@ -7626,6 +7698,8 @@ class HatchPetCard extends HTMLElement {
     const scr = s.screen;
     const pet = s.pet;
     if (!pet || pet.offsetParent !== scr || !scr.clientHeight) return;
+    scr.style.removeProperty("--ask-bw");
+    box.classList.remove("nopet");
     const k = Number(pet.style.scale) || 1;
     const W = scr.clientWidth;
     const petH = pet.offsetHeight * k;
@@ -7635,11 +7709,26 @@ class HatchPetCard extends HTMLElement {
     const under = bubble ? bubble.offsetTop + bubble.offsetHeight + 2 : 0;
     let f = Math.min(0.9, (stand - under) / petH);
     let dx = 0;
-    if (f < 0.6) { // no room under the bubble: beside it, above the chips
-      f = Math.min(0.9, Math.max(0.4, (stand - 4) / petH));
+    if (f < 0.6) { // no room under the bubble: beside it, in a column of its own (UX7 F1)
+      // Never above the screen: the pet's top stays 2 px down, so it may shrink under .4.
+      f = Math.min(0.9, Math.max(0.25, (stand - 2) / petH));
       const w = petW * f;
-      const right = bubble ? bubble.offsetLeft + bubble.offsetWidth + 4 + w / 2 : W / 2;
-      dx = Math.min(W - 2 - w / 2, Math.max(W / 2, right)) - W / 2;
+      const inset = W * (scr.closest(".porthole") ? 0.09 : 0.04); // the porthole's rim eats the right edge
+      dx = W - inset - w / 2 - W / 2;
+      if (bubble) { // the bubble wraps in what is left of the row, so the two never overlap
+        // The bubble's max-width is its text's: its padding and border come on top.
+        const chrome = () => bubble.offsetWidth - parseFloat(getComputedStyle(bubble).width);
+        const room = (taken) => `${Math.max(60, Math.floor(taken - bubble.offsetLeft - chrome()))}px`;
+        scr.style.setProperty("--ask-bw", room(W - inset - w - 6));
+        // Wrapped, the bubble may still reach down into the chips: then there is no room for the pet
+        // at all. Its head goes in the bubble instead, and the bubble takes its whole width again.
+        if (bubble.offsetTop + bubble.offsetHeight > box.offsetTop - 2 || f < 0.3) {
+          box.classList.add("nopet");
+          scr.style.setProperty("--ask-bw", room(W - inset));
+          this._headCrop(s, bubble, 14, 3);
+          dx = 0;
+        }
+      }
     }
     const dy = Math.min(0, stand - (pet.offsetTop + pet.offsetHeight));
     scr.style.setProperty("--ask-dx", `${Math.round(dx)}px`);
@@ -7816,6 +7905,14 @@ class HatchPetCard extends HTMLElement {
   // Only the pet on show chirps: the shelf's other slides update too.
   _chirp(s, name) {
     if (!soundsOn() || !this._mayPlay(s)) return;
+    // Two cards on one pet (a big and a small one, or two views) see the same event: only the first
+    // chirps. Another card's chirp for this pet and this sound under 300 ms ago is the same one (UX7 F9);
+    // this card's own quick repeats (taps in a game) all play.
+    const device = s.ids?.device;
+    const now = Date.now();
+    if (lastChirp.card && lastChirp.card !== this && lastChirp.name === name && lastChirp.device === device
+      && now - lastChirp.at < 300) return;
+    lastChirp = { card: this, name, device, at: now };
     try {
       playChirp(name);
     } catch (err) {
@@ -8680,7 +8777,10 @@ class HatchPetCard extends HTMLElement {
       ${sharedScreen() ? "" : row(null, "my data", forgetButton("forgetme", "forget_me", "forget my data: your birthday, answers and settings for every pet; your bonds stay"))}
       <div class="sec">this screen</div>
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
-      ${s.species?.voice ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`) : ""}
+      ${s.species?.voice ? (soundsOn()
+        ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`)
+        // "sounds here" is the master: babble waits for it (its own switch keeps its setting)
+        : row(null, "babble", `<span><button class="bell babble" aria-label="babble: needs sounds here first" aria-pressed="false" aria-disabled="true">needs sounds</button></span>`)) : ""}
       ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "holiday names", `<span><button class="bell named" aria-label="holiday names" aria-pressed="${namedHolidays()}">${namedHolidays() ? "on" : "off"}</button></span>`)}
       ${row(null, "mono screen", `<span><button class="bell mono" aria-label="mono screen: ${monoOn() ? "on" : "off"}, change" aria-pressed="${monoOn()}">${monoOn() ? "on" : "off"}</button></span>`)}
@@ -8709,7 +8809,7 @@ class HatchPetCard extends HTMLElement {
       this._wipe(s);
       s.status.querySelector(".pback")?.focus({ preventScroll: true });
     });
-    // An admin's way to the pet's options (Settings → Devices & services → Virtual Pet).
+    // An admin's way to the pet's options (Settings → Devices & services → Hatch at Home).
     s.status.querySelector(".connect")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);
@@ -8918,6 +9018,7 @@ class HatchPetCard extends HTMLElement {
     });
     s.status.querySelector(".bell.babble")?.addEventListener("click", (e) => {
       e.stopPropagation();
+      if (!soundsOn()) return; // disabled: sounds here is off
       this._tapped(e.currentTarget);
       const on = !babbleOn();
       try {
@@ -9349,18 +9450,27 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
-  // Set the pet's head, cropped from the sprite on show, as the background of `el` (28 px, the
-  // crop the settings bubble uses); (cx, cy) is where the head's centre and top sit in it.
+  // Set the pet's head, cropped from the sprite on show, as the background of `el` (a square of
+  // 2 * cx px, 28 by default, the crop the settings bubble and the status band use); (cx, cy) is where
+  // the head's centre and top sit in it. The sprite is drawn at 75 px (a 96-sprite-px window), so the box
+  // shows a face and not just the crown that species.head marks (UX7 F2). A species that still
+  // shows a back, a wing or a shell there gives species.json "face": {stage: [x, y, size]}: the face's
+  // centre and the width of the window around it, in sprite px, and that wins.
   _headCrop(s, el, cx, cy) {
     if (!s.pet?.src || !s.drawn) return false;
     const [hx, hy] = s.species?.head?.[s.drawn] || [128, 96];
-    let top = this._headTop(s.pet, hx, hy); // the head's top, where a hat sits
+    const face = s.species?.face?.[s.drawn];
+    let top = face ? hy : this._headTop(s.pet, hx, hy); // the head's top, where a hat sits
     if (top === null && !s.pet.complete) { // not drawn yet (a status opened at once): crop again when it is
       s.pet.addEventListener("load", () => { if (el.isConnected) this._headCrop(s, el, cx, cy); }, { once: true });
     }
     top ??= hy;
+    // px per sprite px: the face's window fills the box; else a fixed 75 px sprite
+    const k = face ? (cx * 2) / face[2] : (HEAD_SPRITE * (cx / 14)) / 256; // the 75 px sprite scales with the box
     el.style.setProperty("--say-img", `url("${s.pet.src}")`);
-    el.style.setProperty("--say-at", `${cx - hx / 2}px ${cy - top / 2}px`);
+    el.style.setProperty("--say-size", `${(256 * k).toFixed(2)}px`);
+    el.style.setProperty("--say-at", face ? `${(cx - face[0] * k).toFixed(2)}px ${(cx - face[1] * k).toFixed(2)}px`
+      : `${(cx - hx * k).toFixed(2)}px ${(cy - top * k).toFixed(2)}px`);
     return true;
   }
 

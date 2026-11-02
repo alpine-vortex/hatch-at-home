@@ -591,6 +591,7 @@ async function runShots(browser, base, shots, outDir, workers) {
         const motion = shot.motion === "reduce" ? "reduce" : "no-preference";
         if (page.motion !== motion && (page.motion || motion === "reduce")) await page.emulateMedia({ reducedMotion: motion });
         page.motion = motion;
+        await page.emulateMedia({ colorScheme: shot.os || null }); // `os`: the OS's colour scheme (dark / light)
         // `missing`: sprite file names (e.g. "adult_eat_1") the server answers 404, for a load-fail shot.
         const miss = (shot.missing || []).map((n) => `${n}.png`);
         // `acts`: the new poses' PNGs are not drawn yet; a shot that fakes them is served the species'
