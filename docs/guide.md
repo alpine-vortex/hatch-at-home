@@ -289,7 +289,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   Tap it for the settings sheet; "‹ settings" at the top of any sub-page takes you
   back. The sheet has up to three parts:
   - **for the pet** (or **for** its name): "notices", the kinds of thing the house
-    shows the pet (weather, lights, tv, music, chores, fireplace, heater, fan, robot, moon; the moon always
+    shows the pet (weather, lights, tv, music, chores, fireplace, heater, fan, robot, machines, moon; the moon always
     shows), then the pet's "shell" row, see below. An admin also gets "connect
     more ›", which opens the pet's page in Settings → Devices & services.
   - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk and
@@ -472,7 +472,7 @@ the pet comes home.
 | Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Rain sensor | none | On/off "it's raining", or a rain rate where anything above 0 means rain. Beats the forecast. Rain brings a rainy scene and a **blanket?** request. | `input_boolean.raining` |
-| Weather forecast | none | Sunny, snow and fog, and rain when there's no rain sensor. Wind from the condition or the wind speed (30 km/h, or gusts of 50). Its daily forecast, if it has one, gives the pet something to talk about (see Passing moments). A new pet starts with your Met home weather here (or your only weather entity), and pets made before this update were given it once. To undo it, clear the field and Submit: it stays clear. | `weather.forecast_home` |
+| Weather forecast | none | Sunny, snow and fog, and rain when there's no rain sensor. Wind from the condition or the wind speed (30 km/h, or gusts of 50). Its daily forecast, if it has one, gives the pet something to talk about (see Passing moments). A new pet starts with your Met home weather here (or your only weather entity). A pet made before this update got it only if it had nothing set in that weather section; a weather integration you add later isn't filled in for existing pets. To undo it, clear the field and Submit: it stays clear. | `weather.forecast_home` |
 | Indoor temperature | none | Outside the comfort range: shivers or sweats and asks for a **blanket** or a **fan**. | `sensor.indoor_temperature` |
 | Too cold below | 18 °C / 64.5 °F | Shown in your unit system. No blanket request while the fireplace is lit. | default |
 | Too warm above | 26.5 °C / 79.5 °F | | default |
@@ -505,6 +505,8 @@ the pet comes home.
 | Heating | none | Thermostats (heating, or set to heat and below the target), switches and toggles that are on. While it's on the chilly pet doesn't ask for a blanket and shows "nice and cozy". If it comes on while the pet is chilly and awake, the house tucks it in (as a blanket would), at most twice a day. A blanket for rain or thunder stays yours. | your living-room thermostat |
 | Cooling | none | Fans, thermostats (cooling or running the fan), switches and toggles that are on. The same for a warm pet and the fan. | `fan.bedroom` |
 | Notice robot vacuums | on | Every `vacuum.*` in the house counts, with nothing to pick. While one is cleaning the pet watches the robot go by ("a robot's zooming around!"); when it starts and when it heads home the pet says so (at most 3 starts a day; nothing while the pet is asleep or at the sitter's). Cosmetic only. A vacuum added after the pet started listening needs the integration reloaded (Settings → Devices & services → Hatch at Home → ⋮ → Reload) before it's noticed. Off: the pet ignores robots. | all your vacuums |
+| Washer, dryer, dishwasher | none | Pick any number of switches, sensors and binary sensors; the pet says so when one finishes a cycle (once, never repeated or reminded; nothing while the pet is asleep or at the sitter's; at most once an hour per machine). A **binary sensor** counts as running after 10 minutes on, and done when it goes off. A **sensor that names a state** (Home Connect, SmartThings, LG ThinQ, Miele) is done when it moves from a running state to one with "finish", "end", "complete", "done" or "ready" in it. A **power sensor** (device class power) or a **switch that reports `current_power_w`** is running above the idle power for 10 minutes and done after about 3 minutes at or under it. A plain switch that reports no power says nothing. The 10 and 3 minutes are checked when the machine changes and every 5 minutes, so they can run up to about 5 minutes long. The pet says "the washer's finished!", "the dishes are all done!", "the dryer's done!" or "a machine finished", from the entity's device class or name (wash, dry, dish), else machine. After a restart the pet times a machine that is already running from the restart, and one that finished meanwhile isn't counted. Cosmetic only; only the kind is shared, never which machine. | `binary_sensor.washing_machine_running` |
+| Idle power | 5 W | For power readings: at or under this many watts counts as not running. | `5` |
 
 ### Sky
 
@@ -894,7 +896,7 @@ no `title` or `artist`: for every change, read `media_title` from your media pla
 `virtual_pet_wish_made` and `virtual_pet_wish_granted` (with `kind`),
 `virtual_pet_someone_home` (anyone signed in came home; it says nobody's name),
 `virtual_pet_holiday` (with `holiday`: `halloween`, `thanksgiving`, `winter_lights` or `winter_treat`), `virtual_pet_weather` (with `change`),
-`virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_house_answered` (with `request`: `blanket` or `fan`; the heating or cooling came on for the pet), `virtual_pet_robot_out` and `virtual_pet_robot_home` (a robot vacuum started a run and went home; no vacuum is named), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
+`virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_house_answered` (with `request`: `blanket` or `fan`; the heating or cooling came on for the pet), `virtual_pet_robot_out` and `virtual_pet_robot_home` (a robot vacuum started a run and went home; no vacuum is named), `virtual_pet_appliance_done` (with `kind`: `washer`, `dryer`, `dishwasher` or `machine`; no machine is named), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
 `virtual_pet_favourite_snack` (with `food`),
 `virtual_pet_found` (with `id` and `world`, when the pet finds something; finds aren't shown on the card yet).
 
