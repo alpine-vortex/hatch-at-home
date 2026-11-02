@@ -3179,7 +3179,19 @@ async function main() {
   for (let r = 0; r < 5 && !(await cur().locator(".game").isHidden()); r++) {
     gameSaid.push(await cur().locator(".bubble").textContent());
     await cur().locator(r % 2 ? ".gr" : ".gl").click();
-    await page.waitForTimeout(1400);
+    if (r === 0) {
+      // UX fix 6 (F4, F1): while the pet shows where it went the guess buttons are faded, and
+      // the result is still in the bubble 1.5 s after the guess (the prompt waits for 2.5 s).
+      await page.waitForTimeout(350);
+      const faded = await cur().locator(".gl").evaluate((el) => Number(getComputedStyle(el).opacity));
+      await page.waitForTimeout(1150);
+      const held = await cur().locator(".bubble").textContent();
+      check("left or right: the guess buttons fade while the pet shows where it went, and the result stays readable",
+        faded <= 0.2 && /yes|nope/.test(held), `opacity ${faded}, bubble ${held}`);
+      await page.waitForTimeout(400);
+    } else {
+      await page.waitForTimeout(1400);
+    }
     rounds++;
   }
   const moodLine = await evaluate((id) => document.querySelector("home-assistant").hass.states[id]?.attributes.reason || "",
@@ -3204,7 +3216,17 @@ async function main() {
   for (let r = 0; r < 5 && !(await cur().locator(".game").isHidden()); r++) {
     const shown = Number(await cur().locator(".gnum").getAttribute("data-n"));
     numbers.push(shown);
-    if (r === 2) await shot("04c-higher-lower");
+    if (r === 2) {
+      await shot("04c-higher-lower");
+      // UX fix 6 (F2): the number card sits clear of the pet, so its face shows all game.
+      const clear = await cur().locator(".gnum").evaluate((num) => {
+        const a = num.getBoundingClientRect();
+        const b = num.getRootNode().querySelector(".pet").getBoundingClientRect();
+        return { clear: a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom,
+          num: [a.left, a.top, a.right, a.bottom].map(Math.round), pet: [b.left, b.top, b.right, b.bottom].map(Math.round) };
+      });
+      check("higher or lower: the number card doesn't cover the pet", clear.clear, JSON.stringify(clear));
+    }
     await cur().locator(shown > 5 ? ".gl" : ".gr").click();
     await page.waitForTimeout(1400);
     hlRounds++;
@@ -3392,7 +3414,11 @@ async function main() {
         el._gameView(s, "higher_lower");
         reply({ result: "no_game" });
         await el._guess(s, "right");
-        out.hl = { live: !!s.game, said: s.bubble.textContent };
+        out.hl = { live: !!s.game, said: s.bubble.textContent, busy: s.game?.busy };
+        // F13: the line comes true: a new game of the same kind starts after it.
+        reply({ result: "ok", game: "higher_lower", round: 0, rounds: 5, wins: 0, number: 4, done: false });
+        await new Promise((r) => setTimeout(r, 1900));
+        out.hl2 = { kind: s.game?.kind, round: s.game?.round, number: s.gameNum.dataset.n, busy: s.game?.busy };
       } finally {
         hass.callService = real;
         if (s.game) el._endGame(s, null);
@@ -3402,8 +3428,10 @@ async function main() {
     check("idle drop, Left/Right: a restarted game is adopted as its round 1, no someone-else line",
       idle.lr.live && idle.lr.round === 1 && idle.lr.wins === 1 && idle.lr.said === "yes! you found me" &&
         idle.lr.score === "round 1/5 · 1 right", JSON.stringify(idle.lr));
-    check("idle drop, Higher/Lower: no_game ends the game with let's start over",
-      !idle.hl.live && idle.hl.said === "let's start over", JSON.stringify(idle.hl));
+    check("idle drop, Higher/Lower: no_game says let's start over, ignores taps, then starts a new game",
+      idle.hl.live && idle.hl.busy && idle.hl.said === "let's start over" &&
+        idle.hl2.kind === "higher_lower" && idle.hl2.round === 0 && idle.hl2.number === "4" && !idle.hl2.busy,
+      JSON.stringify(idle.hl) + JSON.stringify(idle.hl2));
 
     // Berry dig (playtime 2a): the per-tap contract, with stubbed replies (the
     // pytest owns the odds). A berry isn't a round; a bee and a keep end one; keep
@@ -3437,12 +3465,20 @@ async function main() {
           labels: [...s.gameBox.querySelectorAll(".gl, .gr")].map((b) => b.getAttribute("aria-label")) };
         await el._guess(s, "left"); // keep on an empty basket: nothing sent
         out.emptyKeep = sent.length;
+        out.emptySaid = s.bubble.textContent; // F12: it says so, then asks again after 2 s
+        await new Promise((r) => setTimeout(r, 2100));
+        out.emptyAfter = s.bubble.textContent;
         queue.push({ ...base, round: 0, wins: 0, basket: 1, leaves: 7, found: "berry", round_over: false });
         await el._guess(s, "right");
         out.berry = { round: s.game.round, basket: s.game.basket, num: s.gameNum.dataset.n, said: s.bubble.textContent,
           score: s.gameScore.textContent, guess: sent.at(-1)?.guess };
         await new Promise((r) => setTimeout(r, 400));
         out.berryKeep = keep();
+        // F1: the result is still in the bubble at 1.5 s, and the prompt is back by 2.8 s.
+        await new Promise((r) => setTimeout(r, 1100));
+        out.berryHeld = s.bubble.textContent;
+        await new Promise((r) => setTimeout(r, 1300));
+        out.berryPrompt = s.bubble.textContent;
         queue.push({ ...base, round: 1, wins: 1, basket: 0, leaves: 8, found: "kept", round_over: true });
         await el._guess(s, "left");
         out.kept = { round: s.game.round, wins: s.game.wins, said: s.bubble.textContent, guess: sent.at(-1)?.guess };
@@ -3452,6 +3488,10 @@ async function main() {
         out.bee = { round: s.game.round, wins: s.game.wins, said: s.bubble.textContent, prop: !s.propEl.hidden };
         await new Promise((r) => setTimeout(r, 1000));
         out.afterBee = { prop: !s.propEl.hidden, said: s.bubble.textContent, keep: keep() };
+        await new Promise((r) => setTimeout(r, 1700));
+        out.beePrompt = s.bubble.textContent;
+        out.quitLine = [el._quitLine(s), el._quitLine({ game: { kind: "dig", round: 0, wins: 0, basket: 0 } }),
+          el._quitLine({ game: { kind: "left_right", round: 2, wins: 1 } })];
         const hass = el._hass;
         const real = hass.callService;
         hass.callService = async (d, svc, data) => { out.end = data; return { response: {} }; };
@@ -3464,7 +3504,10 @@ async function main() {
         // A reply out of step (a berry while we think the basket holds 0, banked 2).
         s.game = { picking: true };
         queue.push({ ...base, round: 2, wins: 1, basket: 0, leaves: 8 });
+        s.greeted = false; // F7: playing together is the hello
         await el._pickGame(s, "dig");
+        out.resume = s.bubble.textContent; // F8: a parked dig carried on says so
+        out.greeted = s.greeted;
         queue.push({ ...base, round: 2, wins: 1, basket: 3, leaves: 5, found: "berry", round_over: false });
         await el._guess(s, "right");
         out.stray = { live: !!s.game, said: s.bubble.textContent };
@@ -3480,7 +3523,7 @@ async function main() {
         await new Promise((r) => setTimeout(r, 400));
         queue.push({ ...base, round: 4, wins: 5, basket: 0, leaves: 8, found: "kept", round_over: true, done: true, won: true });
         await el._guess(s, "left");
-        await new Promise((r) => setTimeout(r, 1000));
+        await new Promise((r) => setTimeout(r, 2100)); // the last result is read first (1.8 s)
         out.won = { live: !!s.game, said: s.bubble.textContent };
       } finally {
         delete el._playCall;
@@ -3495,6 +3538,13 @@ async function main() {
         dig.start.said === "dig or keep?" && dig.start.labels.join("|") === "Keep the basket|Dig a leaf",
       JSON.stringify(dig.start));
     check("dig: keep on an empty basket sends nothing", dig.emptyKeep === 1, String(dig.emptyKeep));
+    check("dig: keep on an empty basket says dig first, then asks again",
+      dig.emptySaid === "dig first! the basket's empty" && dig.emptyAfter === "dig or keep?", JSON.stringify([dig.emptySaid, dig.emptyAfter]));
+    check("dig: the result stays in the bubble at 1.5 s, the prompt is back after",
+      dig.berryHeld === "a berry!" && dig.berryPrompt === "dig or keep?", JSON.stringify([dig.berryHeld, dig.berryPrompt]));
+    check("dig: a ✕ that parks says so; a fresh pile or another game says maybe later; the resume says it's back; playing is the hello",
+      dig.quitLine.join("|") === "ok! i'll keep our pile safe ♪|maybe later!|maybe later!" &&
+        dig.resume === "we're back! dig or keep ♪" && dig.greeted === true, JSON.stringify([dig.quitLine, dig.resume, dig.greeted]));
     check("dig: a berry is not a round (round 0, basket 1, 7 leaves), keep enabled after",
       dig.berry.round === 0 && dig.berry.basket === 1 && dig.berry.num === "7" && dig.berry.guess === "dig" &&
         dig.berry.said === "a berry!" && dig.berryKeep === "false", JSON.stringify(dig.berry) + dig.berryKeep);
@@ -3542,7 +3592,7 @@ async function main() {
           Math.random = () => 0;
           queue.push({ ...base, game: "left_right", round: 5, wins: 5, correct: true, went: "left", done: true, won: true });
           await el._guess(s, "left");
-          await new Promise((r) => setTimeout(r, 1100));
+          await new Promise((r) => setTimeout(r, 2100)); // the last result is read first (1.8 s)
           out.count = s.bubble.textContent;
           await new Promise((r) => setTimeout(r, 4200));
           out.typeLine = said.slice();
@@ -3608,8 +3658,9 @@ async function main() {
     }
     check("dig: a bee ends the round, shows the bee, then asks again with keep disabled",
       dig.bee.round === 2 && dig.bee.wins === 1 && dig.bee.prop && dig.bee.said === "bzz! the berries rolled away" &&
-        !dig.afterBee.prop && dig.afterBee.said === "dig or keep?" && dig.afterBee.keep === "true",
-      JSON.stringify([dig.bee, dig.afterBee]));
+        !dig.afterBee.prop && dig.afterBee.said === "bzz! the berries rolled away" && dig.afterBee.keep === "true" &&
+        dig.beePrompt === "dig or keep?",
+      JSON.stringify([dig.bee, dig.afterBee, dig.beePrompt]));
     check("dig: the x sends end for the dig (the server parks it), and the pile's label goes",
       dig.end?.game === "dig" && dig.end?.end === true && dig.numLabel === null, JSON.stringify([dig.end, dig.numLabel]));
     check("dig: a reply out of step ends the game as someone else's",
@@ -3708,6 +3759,22 @@ async function main() {
     });
     check("an idle Left/Right game stays at 2 min and closes silently at 3 min, no server call",
       idleClose.at2 && !idleClose.at3 && idleClose.hidden && idleClose.calls === 0, JSON.stringify(idleClose));
+    // UX fix 6 (Q8): a dig left idle is closed by the card with its own line (no auto-park).
+    const idleDig = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const realNow = Date.now;
+      try {
+        s.game = { kind: "dig", round: 1, wins: 0, basket: 1, busy: false, prompt: "dig or keep?", lastAt: realNow.call(Date) };
+        el._gameView(s, "dig");
+        Date.now = () => realNow.call(Date) + 3 * 60 * 1000 + 1000;
+        el._renderSlide(s);
+        return { live: !!s.game, said: s.bubble.textContent };
+      } finally {
+        Date.now = realNow;
+        if (s.game) el._endGame(s, null);
+      }
+    });
+    check("an idle dig closes with \"let's dig another time\"", !idleDig.live && idleDig.said === "let's dig another time ♪", JSON.stringify(idleDig));
 
     // Batch 6 audit #1: a tap on the scene mid-game keeps the game; Status ends it.
     await open("left_right");
@@ -9229,7 +9296,7 @@ async function main() {
       return out;
     });
     check(`react: ${stage} a won game's log reacts even if the game is still open`, won.live && won.src.includes(`/${stage}_${own("cheer")}_`), JSON.stringify(won));
-    for (const result of ["asleep", "egg", "away", "no_game", "unfair", "spoiled", "lost"]) {
+    for (const result of ["asleep", "egg", "away", "no_game", "unfair", "spoiled"]) {
       const r = await react({ action: "play", result });
       check(`react: ${stage} ${result} does nothing`, !r.live && r.moves.length === 0, JSON.stringify(r));
     }
@@ -9245,6 +9312,10 @@ async function main() {
     check(`react: ${stage} back to the mood frame after 2.5 s`,
       !after.live && after.shown && new RegExp(`/${stage}_${after.mood}_|/${stage}_content_`).test(after.src) &&
       !after.moves.some((c) => ["munch", "greethop", "look", "settle"].includes(c)), JSON.stringify(after));
+    // UX fix 6 (F5): a lost game settles on the content frames (a species with acts.aww plays it).
+    const lostReact = await react({ action: "play", result: "lost" });
+    check(`react: ${stage} lost settles on the content frames`,
+      lostReact.live && lostReact.moves.includes("settle") && lostReact.src.includes(`/${stage}_content_`), JSON.stringify(lostReact));
     // Fallback: an act whose sprites do not load swaps back to the mood frames, and is remembered
     // (_poseOk, keyed species/stage/act, apart from the waves). No broken image left on show.
     if (acts) {
@@ -9456,8 +9527,9 @@ async function main() {
     check(`react: ${stage} without acts a pat is as before`, !N.pat.src.includes("_pat_") && !N.pat.live && !N.patInReaction.live, JSON.stringify(N.pat));
     check(`react: ${stage} acts.refuse plays, else the bored frame and look`,
       H.refuse.src.includes(`${sg}refuse_`) && H.refuse.live && N.refuse.src.includes(`${sg}bored_`) && N.refuse.look && N.refuse.live, JSON.stringify([H.refuse, N.refuse]));
-    check(`react: ${stage} acts.aww plays after a lost game (even with the game still open); none without`,
-      H.aww.live && H.aww.src.includes(`${sg}aww_`) && H.awwLog.live && H.awwLog.src.includes(`${sg}aww_`) && !N.aww.live && !N.awwLog.live, JSON.stringify([H.aww, H.awwLog, N.aww, N.awwLog]));
+    check(`react: ${stage} acts.aww plays after a lost game (even with the game still open); without it the content frames settle (UX fix 6, F5)`,
+      H.aww.live && H.aww.src.includes(`${sg}aww_`) && H.awwLog.live && H.awwLog.src.includes(`${sg}aww_`) &&
+        N.aww.live && N.awwLog.live && !N.aww.src.includes("aww_") && N.aww.src.includes(`${sg}content_`), JSON.stringify([H.aww, H.awwLog, N.aww, N.awwLog]));
     check(`react: ${stage} acts.ready plays ~1.2 s at a game's start; none without`,
       !H.picker.live && H.ready.live && H.ready.src.includes(`${sg}ready_`) && H.ready.ms <= 1300 && !N.ready.live, JSON.stringify([H.ready, N.ready]));
     check(`react: ${stage} acts.splash is the clean scene's last beat; without it the cheer or clean frames`,

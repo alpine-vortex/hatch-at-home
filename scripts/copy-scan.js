@@ -56,6 +56,7 @@ const COPY_TABLES = {
   SETTINGS_REACT: {}, // settings UX fix 1 (F14)
   STATUS_COPY: { fill: "creature" }, // status UX fix 2 (F12, F14)
   TALK_COPY: {}, // talking UX fix 3 (F11, F12, F14)
+  GAME_COPY: {}, // games UX fix 6 (F8, F12, Q8)
   SETUP_COPY: { fill: "creature" }, // settings S2: the lay sheet (the longest name is C15')
 };
 

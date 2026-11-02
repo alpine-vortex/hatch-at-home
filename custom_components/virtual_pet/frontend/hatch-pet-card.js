@@ -72,14 +72,6 @@ function digit(n, px = 6) {
     `shape-rendering="crispEdges" role="img" aria-label="${n}">${rects}</svg>`;
 }
 
-// Icons for the game picker.
-function gameIcon(key) {
-  if (key === "left_right") return `${icon("prev", 16)}${icon("next", 16)}`;
-  if (key === "higher_lower") return `${digit(1, 2)}<span class="gi-arrow">↕</span>${digit(9, 2)}`;
-  if (key === "dig") return `<img src="${BASE}/ui/catch_decoy_1.png?v=${VERSION}" width="20" height="20" alt="">`;
-  return `<img src="${BASE}/ui/flair_player.png?v=${VERSION}" width="20" height="20" alt="">`;
-}
-
 function icon(name, size = 22) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[name]}</svg>`;
 }
@@ -126,6 +118,9 @@ const trickMonth = (ageDays) => Math.max(0, Math.floor((Number(ageDays) - ADULT_
 const tricksBy = (month) => TRICKS.slice(0, Math.min(month, TRICKS.length)); // month 1: spin; 2: + perk2; 3: all
 const GAME_TYPE_ODDS = 0.5; // a game's end: the type's own line after the count, 4 s on (G-c)
 const GAME_TYPE_MS = 4000;
+const PICK_SHORT = "pick a game!"; // the picker's line where a longer one doesn't fit (UX fix 6, F6)
+const GAME_READ_MS = 2500; // a game's result stays in the bubble this long after a tap (UX fix 6, F1)
+const GAME_END_MS = 1800; // a game's last result is read this long before its end line
 // Sounds: little square-wave chirps, off until someone turns them on for this
 // device (status screen). Never while the pet sleeps, nor late at night.
 const SOUND_KEY = "hatch-sounds";
@@ -142,6 +137,7 @@ const CHIRPS = { // [frequency Hz, length s] notes, played one after another
   tap: [[1319, 0.04], [1568, 0.06]], // a pat on the egg (UX fix 4, F2): soft
   link: [[1319, 0.06], [0, 0.03], [1760, 0.09]], // the infrared link
   boot: [[523, 0.08], [784, 0.08], [1047, 0.2]],
+  buzz: [[330, 0.06], [262, 0.1]], // a bee, a wrong guess (UX fix 6, F14)
 };
 let audio = null; // one AudioContext for every card on the page
 
@@ -1442,9 +1438,9 @@ const CURED_LINES = ["feeling much better today ♪", "I feel all better today �
 // type yet says the generic one.
 const GAME_PICK_LINES = {
   dig: "ooh, berry dig today ♪",
-  left_right: "I'm extra sneaky today ♪",
-  higher_lower: "I feel lucky today ♪",
-  generic: "I picked a game for us ♪",
+  left_right: "i'm extra sneaky today ♪",
+  higher_lower: "i feel lucky today ♪",
+  generic: "i picked a game for us ♪",
 };
 const LUCKY_LINE = "my lucky number! ★"; // G-b, over higher or lower's number
 const DIG_WATCH = (v) => `the ${v} is watching ♪`; // D-a, a dig on a day it came by
@@ -1667,6 +1663,15 @@ const TALK_COPY = {
   fan: "ahh, a breeze! thank you ♪", // F11
   layArmed: "i'll wait for you in the journal ♥", // F12
   today: "today", // F14
+};
+// Games and playtime UX fix 6 (review 6; first mate's decisions 2026-11-02, owner delegated
+// copy): a parked dig kept, a resumed one, a tap on an empty basket's keep, and the card
+// closing an idle dig (F8, F12, Q8). Scanned like the rest.
+const GAME_COPY = {
+  parked: "ok! i'll keep our pile safe ♪", // F8, a ✕ that parks the dig
+  back: "we're back! dig or keep ♪", // F8, a dig carried on
+  empty: "dig first! the basket's empty", // F12, keep on an empty basket
+  idle: "let's dig another time ♪", // Q8, the card closes a dig left idle
 };
 // --- end fresh-expand copy ---
 // Approved lines the scan's nag words ("again", "forgot...") would refuse: a retry, "just us",
@@ -2068,13 +2073,13 @@ const REACTIONS = {
   refused: { mood: "bored", move: "look", ms: 1200 },
   tucked: { mood: "cozy", move: "settle", ms: REACT_MS },
   // Only with the species' own act (STAGE_POSES): without it these do nothing (R2).
-  lost: { mood: "content", move: "settle", ms: 1200, poseOnly: true }, // a good sport; the log can land before the game closes
+  lost: { mood: "content", move: "settle", ms: 1200 }, // a good sport (acts.aww, else content frames: UX fix 6, F5); the log can land before the game closes
   ready: { mood: "content", move: null, ms: 1200, poseOnly: true }, // a game just began
 };
 const READY_MS = 1200;
 const PAT_POSE_MS = 900; // acts.pat on a pat; apart from poseUntil so the next pat's `reacting` is unchanged
 // Which species.json "acts" pose a reaction plays at baby, teen and adult (R1, R2).
-// refused: the act, else the bored frame; lost and ready: the act, else nothing.
+// refused and lost: the act, else the mood frame; ready: the act, else nothing (the game perks instead).
 const STAGE_POSES = { fed: "eat", praised: "cheer", greet: "cheer", refused: "refuse", lost: "aww", ready: "ready" };
 // Idle manner (P3): the copies of moves each type adds to _idle's list, in the
 // plan's order (docs/plan-2026-10-28-personality-types.md, "Idle manner"). Only
@@ -2964,8 +2969,11 @@ const STYLE = `
   .game[hidden] { display: none; }
   .game button { pointer-events: auto; position: absolute; display: grid; place-items: center;
     min-width: 44px; min-height: 44px; border-radius: 50%; border: 2px solid #3a2a1a;
-    background: #fffdf5; color: #3a2a1a; box-shadow: 2px 2px 0 #3a2a1a; cursor: pointer; padding: 0; }
+    background: #fffdf5; color: #3a2a1a; box-shadow: 2px 2px 0 #3a2a1a; cursor: pointer; padding: 0;
+    font: inherit; } /* the card's own font, not the browser's button font (F3) */
   .game button[aria-disabled="true"] { opacity: .5; cursor: default; }
+  /* F4: while the pet shows where it went, the guess buttons fade out of its way. */
+  .game.showgo .gl, .game.showgo .gr { opacity: .15; }
   .game button:focus-visible { outline: 3px solid #fffdf5; outline-offset: 2px;
     box-shadow: 0 0 0 6px #1d2a22; }
   .game .gl { left: 4%; bottom: 8%; }
@@ -2980,25 +2988,22 @@ const STYLE = `
     min-width: 168px; border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a;
     box-shadow: 0 4px 0 #3a2a1a; transition: transform .08s, box-shadow .08s; }
   .game .gpick button:active { transform: translateY(3px); box-shadow: 0 1px 0 #3a2a1a; }
-  .game .gpick .gi { display: inline-flex; align-items: center; justify-content: center; gap: 1px;
-    width: 40px; height: 28px; border-radius: 8px; background: var(--hp-screen-tint, #f3e7c9); }
-  .game .gpick .gi img { image-rendering: pixelated; }
-  .game .gpick .gi-arrow { font-size: 12px; margin: 0 1px; }
   /* _fitPicker puts the picker's top under the close button. When a column of
      games doesn't fit there, they wrap into rows of labels (no icons), still
      44 px tall (4c's tap size). */
   .game .gpick.wrap { left: 3%; right: 3%; flex-flow: row wrap; align-content: center; gap: 6px 4px; }
   .game .gpick.wrap button { min-width: 0; padding: 0 10px; font-size: 12px; justify-content: center; }
-  .game .gpick.wrap .gi { display: none; }
   .game .gpick.wrap.tight { left: 1%; right: 1%; gap: 4px 3px; } /* still too tall: two a row */
   .game .gpick.wrap.tight button { padding: 0 6px; font-size: 11px; }
-  .game .gnum { position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
-    display: grid; place-items: center; min-width: 52px; min-height: 56px; padding: 6px 10px;
+  /* F2: the pile's leaves, or higher or lower's number, beside the pet (opposite the bubble,
+     under the close button), so its face shows all game. */
+  .game .gnum { position: absolute; right: 5%; top: 34%;
+    display: grid; place-items: center; min-width: 30px; min-height: 36px; padding: 5px 7px;
     border-radius: 10px; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
     box-shadow: 2px 2px 0 #3a2a1a; }
   .game .gnum.flip { animation: perk .3s ease-out; }
   /* D-a: today's visitor watching a dig, still, behind the buttons (fresh-expand E5). */
-  .game .gwatch { position: absolute; left: 66%; bottom: 30%; height: 18%; image-rendering: pixelated;
+  .game .gwatch { position: absolute; right: 4%; bottom: 26%; height: 18%; image-rendering: pixelated;
     pointer-events: none; transform: scaleX(-1); }
   /* Trait flair: placed in JS from the head point and the feet line. Every piece
      must read standing still too (reduced motion turns all animation off). */
@@ -3777,6 +3782,12 @@ const STYLE = `
   .screen:has(> .askday) .pet { transition: translate .25s steps(2), rotate .2s ease-out, scale .25s steps(2); }
   /* Big text reaches the pet's words too (F9). */
   ha-card.bigtext .bubble { font-size: 16px; }
+  /* Big text reaches the game (UX fix 6, F10): the score, the guess labels and the picker. */
+  ha-card.bigtext .game .gscore { font-size: 14px; }
+  ha-card.bigtext.compact .game .gscore.two { font-size: 12px; }
+  ha-card.bigtext .game .hl { font-size: 16px; }
+  ha-card.bigtext .game .gpick.wrap button { font-size: 14px; }
+  ha-card.bigtext .game .gpick.wrap.tight button { font-size: 13px; }
   ha-card.bigtext .screen .askday button { font-size: 15px; }
   .screen .bondhearts img, .screen .linkhearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
     opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }
@@ -4451,7 +4462,7 @@ class HatchPetCard extends HTMLElement {
     // Taps on the game mustn't reach the screen behind (which opens the status).
     s.gameBox.addEventListener("click", (e) => e.stopPropagation());
     s.gameBox.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && s.game) this._quitGame(s, "maybe later!");
+      if (e.key === "Escape" && s.game) this._quitGame(s, this._quitLine(s));
     });
     // The settings sheet and its picker keep the player's place (UX fix 1, F1/F2): a tap
     // that misses a button (a label, a gap, a note) must not fall through to the screen's
@@ -4479,7 +4490,7 @@ class HatchPetCard extends HTMLElement {
     q(".gr").addEventListener("click", () => this._guess(s, "right"));
     q(".gx").addEventListener("click", (e) => {
       this._tapped(e.currentTarget, s);
-      this._quitGame(s, "maybe later!");
+      this._quitGame(s, this._quitLine(s));
     });
     q(".gpick").addEventListener("click", (e) => {
       const b = e.target.closest("button[data-game]");
@@ -5698,7 +5709,8 @@ class HatchPetCard extends HTMLElement {
     if (s.game && (asleep || away || egg)) this._endGame(s, null);
     else if (s.game && SERVER_GAMES.has(s.game.kind) &&
         !s.game.busy && s.game.lastAt && Date.now() - s.game.lastAt >= GAME_IDLE_MS) {
-      this._endGame(s, null); // the server has dropped it already: no call, no line
+      // the server has dropped it already: no call. A dig left idle says so (Q8).
+      this._endGame(s, s.game.kind === "dig" ? GAME_COPY.idle : null);
     }
     s.hatchesAt = egg ? stageState?.attributes.hatches_at : null;
     if (!s.sayUntil || Date.now() > s.sayUntil) {
@@ -8131,7 +8143,7 @@ class HatchPetCard extends HTMLElement {
         break;
       }
       case "bond_favourite":
-        if (!sharedScreen()) line(pick(["our favourite game! ♥", "I love playing this with you ♥"]), 4500, null, { perk: true });
+        if (!sharedScreen()) line(pick(["our favourite game! ♥", "i love playing this with you ♥"]), 4500, null, { perk: true });
         break;
       case "favourite_snack": // at most once a day (the server's); a holiday snack says its own
         if (!seasonNow(this._config)?.snack) {
@@ -8372,7 +8384,7 @@ class HatchPetCard extends HTMLElement {
         this._show(s, s.pet, s.poseFrames[0]);
       } else {
         const ok = entry.result === "ok";
-        // A lost game: a good sport, only with acts.aww (else no reaction, as before).
+        // A lost game: a good sport, acts.aww, else the content frames settle.
         const kind = entry.result === "lost" ? "lost" : entry.result === "won" ? "praised"
           : ok && (entry.action === "feed" || entry.action === "snack") ? "fed"
           : ok && entry.action === "praise" ? "praised"
@@ -10270,18 +10282,18 @@ class HatchPetCard extends HTMLElement {
     // Once a day the wide prompt is the game of the day's line (G-a); the day after
     // someone picked tomorrow's game, it's that game's line instead (F6), once.
     const picked = this._followGame(s);
-    const pickLine = picked && !picked.said && this._slideW >= 300 && (picked.said = true) && picked.line;
-    const dayLine = pickLine || (this._slideW >= 300 && oncePerDay(`gamepick-${s.ids?.device}`) &&
+    // F6: at any width. Where the games can't sit clear of a long line, it is said for 2 s,
+    // then "pick a game!" (see _pickerSay).
+    const pickLine = picked && !picked.said && (picked.said = true) && picked.line;
+    const dayLine = pickLine || (oncePerDay(`gamepick-${s.ids?.device}`) &&
       (this._typeKey(s) ? GAME_PICK_LINES[today] : GAME_PICK_LINES.generic));
-    s.game = { picking: true, prompt: dayLine || (this._slideW < 300 ? "pick a game!" : "what shall we play?") };
+    s.game = { picking: true, prompt: dayLine || (this._slideW < 300 ? PICK_SHORT : "what shall we play?") };
     // Built each time: the card's options decide which games are offered.
     s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
-      `<button data-game="${g.key}"><span class="gi" aria-hidden="true">${gameIcon(g.key)}</span>` +
-      `${g.label}</button>`).join("");
+      `<button data-game="${g.key}">${g.label}</button>`).join("");
     this._gameView(s, "pick");
     // A narrow card has room for one short line beside the close button.
-    this._write(s, s.game.prompt, 60000);
-    this._fitPicker(s); // measured with the prompt in the bubble
+    this._pickerSay(s, s.game, s.game.prompt);
     let last = null;
     try {
       last = localStorage.getItem(LAST_GAME_KEY);
@@ -10313,23 +10325,33 @@ class HatchPetCard extends HTMLElement {
     if (!button) return;
     list.prepend(button);
     button.focus({ preventScroll: true });
-    if (this._slideW >= 300) {
-      s.followGame.said = true;
-      s.game.prompt = line;
-      this._write(s, line, 60000);
+    s.followGame.said = true;
+    this._pickerSay(s, s.game, line);
+  }
+
+  // The picker's line in the bubble, with the games fitted under it. A long line the games
+  // can't sit clear of (a phone's narrow screen) is said for 2 s, then "pick a game!" (F6).
+  _pickerSay(s, g, line) {
+    g.prompt = line;
+    this._write(s, line, 60000);
+    if (this._fitPicker(s) || line === PICK_SHORT) return;
+    this._gameLater(s, g, 2000, () => {
+      g.prompt = PICK_SHORT;
+      this._write(s, PICK_SHORT, 60000);
       this._fitPicker(s);
-    }
+    });
   }
 
   // The picker sits under the close button (and the one-line prompt beside
   // it), down to the screen's foot. A column of games that doesn't fit there
   // wraps into rows (.wrap), so no width from 300 to 420 hides or covers one.
+  // True when the games sit clear of the prompt and the close button (F6).
   _fitPicker(s) {
     const pick = s.gameBox.querySelector(".gpick");
     const gx = s.gameBox.querySelector(".gx");
-    if (!pick || !gx || pick.hidden) return;
+    if (!pick || !gx || pick.hidden) return true;
     const box = s.gameBox.getBoundingClientRect();
-    if (!box.height) return;
+    if (!box.height) return true;
     pick.classList.remove("wrap", "tight");
     const buttons = [...pick.querySelectorAll("button")];
     // First the plain column where it has always been, if it covers nothing: not
@@ -10341,14 +10363,27 @@ class HatchPetCard extends HTMLElement {
     if (buttons.every((b) => {
       const r = b.getBoundingClientRect();
       return r.bottom + 4 <= box.bottom && !keep.some((k) => hit(r, k));
-    })) return;
-    pick.style.top = `${Math.round(gx.getBoundingClientRect().bottom - box.top + 6)}px`;
+    })) return true;
     pick.style.bottom = "2%";
     // The games' height, from the first one's top to the last one's foot, + the press shadow.
     const need = () => Math.max(...buttons.map((b) => b.offsetTop + b.offsetHeight)) -
       Math.min(...buttons.map((b) => b.offsetTop)) + 4;
-    if (need() > pick.clientHeight) pick.classList.add("wrap");
-    if (need() > pick.clientHeight) pick.classList.add("tight");
+    const rows = () => {
+      pick.classList.remove("wrap", "tight");
+      if (need() > pick.clientHeight) pick.classList.add("wrap");
+      if (need() > pick.clientHeight) pick.classList.add("tight");
+      return need() <= pick.clientHeight;
+    };
+    // Under the close button and, if it fits there, under a wrapped prompt too (F6).
+    const bubble = keep.find((r) => r.left < box.left + box.width / 2);
+    const under = Math.max(gx.getBoundingClientRect().bottom, bubble?.bottom || 0);
+    pick.style.top = `${Math.round(under - box.top + 6)}px`;
+    let clear = rows();
+    if (!clear) {
+      pick.style.top = `${Math.round(gx.getBoundingClientRect().bottom - box.top + 6)}px`;
+      rows();
+    }
+    return clear;
   }
 
   // Show the picker ("pick") or a game's buttons (its key) in the game overlay.
@@ -10379,8 +10414,13 @@ class HatchPetCard extends HTMLElement {
     }
     const g = s.game = { kind, round: 0, wins: 0, busy: false };
     s.pet.classList.remove("go-left", "go-right");
+    s.gameBox.classList.remove("showgo");
     this._gameView(s, kind);
+    // Playing together is the hello (F7): the day's "hi, <name>!" doesn't wait out the game.
+    if (!s.greeted) this._greetSpent(s);
     this._reactFrames(s, "ready", { inGame: true }); // acts.ready, if the species has it
+    const ready = s.species?.acts?.ready;
+    if (!(Array.isArray(ready) || ready === true) && !calm()) this._animate(s, s.pet, "perk", 300); // F5: else a perk
     s.gameScore.textContent = "round 1/5";
     // The server keeps the game: a start while one of this kind runs carries
     // on (same round, wins and number), so the card adopts what it replies.
@@ -10402,14 +10442,17 @@ class HatchPetCard extends HTMLElement {
       this._digShow(s, info);
       g.prompt = "dig or keep?";
       const watcher = this._digWatcher(s);
-      this._write(s, watcher ? DIG_WATCH(watcher.name) : g.prompt);
-      if (watcher) this._gameLater(s, g, 1500, () => this._write(s, g.prompt, 60000));
+      // A parked dig carried on says so first (F8), then the visitor, then the prompt.
+      const resumed = !!(info.round || info.wins || info.basket);
+      const said = [resumed && GAME_COPY.back, watcher && DIG_WATCH(watcher.name), g.prompt].filter(Boolean);
+      this._write(s, said[0]);
+      said.slice(1).forEach((line, i) => this._gameLater(s, g, 1500 * (i + 1), () => this._write(s, line, 60000)));
       s.sayUntil = Date.now() + 60000;
       // Keep is disabled on an empty basket: start on dig then.
       s.gameBox.querySelector(info.basket ? ".gl" : ".gr").focus({ preventScroll: true });
       return;
     } else if (kind === "left_right") {
-      this._write(s, (g.prompt = "left or right? guess where I'll go!"));
+      this._write(s, (g.prompt = "left or right? guess where i'll go!"));
     } else {
       // Higher or Lower shows its number before the next guess.
       this._showNumber(s, info.number);
@@ -10432,7 +10475,7 @@ class HatchPetCard extends HTMLElement {
   }
 
   _showNumber(s, n) {
-    s.gameNum.innerHTML = digit(n);
+    s.gameNum.innerHTML = digit(n, 3);
     s.gameNum.dataset.n = String(n);
   }
 
@@ -10458,6 +10501,13 @@ class HatchPetCard extends HTMLElement {
       // Lower game the server dropped for idling): said here.
       // A dig: keep on an empty basket means another screen kept it first; no
       // game while theirs is parked means another screen put it aside.
+      if (info?.result === "no_game" && !info.parked && data.guess && data.game !== "dig") {
+        // F13: the server lost this game (a restart, the idle drop): the line comes true, a
+        // new game starts after it (taps are ignored meanwhile: the game is still busy).
+        this._write(s, REFUSALS.no_game, 60000);
+        this._gameLater(s, game, 1500, () => this._pickGame(s, data.game));
+        return null;
+      }
       this._endGame(s, info?.result === "empty_basket" ? "oh! someone else is playing with me"
         : info?.result === "no_game" && info.parked ? "maybe later!"
         : info?.result === "no_game" ? REFUSALS.no_game : REFUSALS[info?.result] ? null : "not now");
@@ -10478,6 +10528,7 @@ class HatchPetCard extends HTMLElement {
     }
     const g = s.game;
     g.busy = true;
+    const mark = g.tap = (g.tap || 0) + 1;
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
     s.gameScore.textContent = "thinking…";
     const info = await this._playCall(s, { game: kind, guess });
@@ -10505,11 +10556,18 @@ class HatchPetCard extends HTMLElement {
       this._write(s, info.correct ? `yes! ${info.number}` : `nope, ${info.number}!`);
     } else {
       s.pet.classList.add(`go-${info.went}`);
-      this._write(s, info.correct ? "yes! you found me" : `nope, I went ${info.went}!`);
+      s.gameBox.classList.add("showgo"); // F4: the guess buttons fade, so the pet shows
+      this._write(s, info.correct ? "yes! you found me" : `nope, i went ${info.went}!`);
     }
+    this._chirp(s, info.correct ? "tap" : "buzz"); // F14
     s.gameScore.textContent = `round ${info.round}/${info.rounds} · ${info.wins} right`;
-    this._gameLater(s, g, 900, () => {
+    const prompt = kind === "higher_lower" ? "higher or lower?" : "one more! left or right?";
+    const at = Date.now();
+    // F1: the buttons come back as before, but the result stays in the bubble until it can
+    // be read (GAME_READ_MS since this guess); a game's last guess waits longer (GAME_END_MS).
+    this._gameLater(s, g, info.done ? GAME_END_MS : 900, () => {
       s.pet.classList.remove("go-left", "go-right");
+      s.gameBox.classList.remove("showgo");
       if (info.done) {
         if (info.won) this._chirp(s, "win");
         this._endGame(s, info.won ? `${info.wins}/${info.rounds}! you win ♪` :
@@ -10520,8 +10578,18 @@ class HatchPetCard extends HTMLElement {
       g.busy = false;
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
-      g.prompt = kind === "higher_lower" ? "higher or lower?" : "one more! left or right?";
-      if (kind !== "higher_lower" || !this._luckyNumber(s, g, info.number)) this._write(s, g.prompt);
+      g.prompt = prompt;
+      if (kind === "higher_lower" && this._luckyNumber(s, g, info.number)) return;
+      this._promptLater(s, g, mark, at);
+    });
+  }
+
+  // F1: the bubble asks again only when nothing has been tapped since `mark` for
+  // GAME_READ_MS (counted from that tap): a tap in between has its own result to show.
+  _promptLater(s, g, mark, since = Date.now()) {
+    const wait = Math.max(0, GAME_READ_MS - (Date.now() - since));
+    this._gameLater(s, g, wait, () => {
+      if (g.tap === mark && !g.busy) this._write(s, g.prompt, 60000);
     });
   }
 
@@ -10592,8 +10660,17 @@ class HatchPetCard extends HTMLElement {
   // Anything else means someone else is playing the same server game.
   async _digTap(s, guess) {
     const g = s.game;
-    if (guess === "keep" && !g.basket) return; // nothing to keep: the server would refuse it
+    if (guess === "keep" && !g.basket) {
+      // Nothing to keep: the server would refuse it. Say so (F12), then the prompt again.
+      const mark = g.tap = (g.tap || 0) + 1;
+      this._write(s, GAME_COPY.empty, 60000, MINE);
+      this._gameLater(s, g, 2000, () => {
+        if (g.tap === mark && !g.busy) this._write(s, g.prompt, 60000);
+      });
+      return;
+    }
     g.busy = true;
+    const mark = g.tap = (g.tap || 0) + 1;
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
     s.gameScore.textContent = "thinking…";
     const info = await this._playCall(s, { game: "dig", guess });
@@ -10622,16 +10699,26 @@ class HatchPetCard extends HTMLElement {
       s.propEl.style.transform = "";
       s.propEl.hidden = false;
       this._write(s, "bzz! the berries rolled away");
+      this._reactFrames(s, "refused", { inGame: true }); // F5: a bored look at the bee
+      this._chirp(s, "buzz"); // F14
     } else if (info.round_over) {
       this._animate(s, s.pet, "perk", 300);
       this._write(s, "safe in the basket ♪");
+      this._chirp(s, "tap");
     } else if (Math.random() < SHINY_ODDS) {
       this._sparkle(s); // D-b: a shiny one, said only (the berry is the server's, the same)
       this._write(s, SHINY_LINE);
+      this._animate(s, s.pet, "perk", 300); // F5
+      this._chirp(s, "tap");
     } else {
       this._write(s, "a berry!");
+      this._animate(s, s.pet, "perk", 300); // F5
+      this._chirp(s, "tap");
     }
-    this._gameLater(s, g, info.round_over ? 900 : 300, () => {
+    const at = Date.now();
+    // F1: keep and dig come back on the same timers as before; the result stays in the
+    // bubble until GAME_READ_MS after the tap, and the game's last one a little longer.
+    this._gameLater(s, g, info.done ? GAME_END_MS : info.round_over ? 900 : 300, () => {
       s.propEl.hidden = true;
       if (info.done) {
         if (info.won) this._chirp(s, "win");
@@ -10641,7 +10728,8 @@ class HatchPetCard extends HTMLElement {
       }
       g.busy = false;
       this._digShow(s, info);
-      this._write(s, (g.prompt = "dig or keep?"));
+      g.prompt = "dig or keep?";
+      this._promptLater(s, g, mark, at);
       // Keep is disabled on an empty basket: focus on it moves to dig.
       const gl = s.gameBox.querySelector(".gl");
       if (!g.basket && this.shadowRoot?.activeElement === gl) {
@@ -11985,6 +12073,13 @@ class HatchPetCard extends HTMLElement {
   // something, so the next dig carries on. Every card-driven quit (✕, Escape,
   // a swipe, the status sheet, Play mid-game) comes here, so each one parks.
   // Fire and forget; a failed call is silent.
+  // What a person's ✕ or Escape says: a dig that has shown something is parked, and says
+  // so (F8); anything else is "maybe later!".
+  _quitLine(s) {
+    const g = s.game;
+    return g?.kind === "dig" && (g.round || g.wins || g.basket) ? GAME_COPY.parked : "maybe later!";
+  }
+
   _quitGame(s, line) {
     const kind = s.game?.kind;
     const id = s.ids?.["sensor.mood"];
@@ -12014,6 +12109,7 @@ class HatchPetCard extends HTMLElement {
     if (focused) s.buttons.play?.focus({ preventScroll: true });
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
     s.pet.classList.remove("go-left", "go-right");
+    s.gameBox.classList.remove("showgo");
     if (line) this._write(s, line);
     s.sayUntil = line ? Date.now() + 4000 : 0;
   }
