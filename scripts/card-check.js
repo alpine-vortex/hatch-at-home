@@ -1206,17 +1206,23 @@ async function main() {
   // non-admin only the text; a pet that moves in takes the button away.
   const emptyCard = await card.evaluate(async (el) => {
     const out = {};
-    const one = document.createElement("hatch-pet-card");
-    one.style.cssText = "position:fixed;left:0;top:0;width:400px;z-index:-1";
-    one.setConfig({ ...el._config, entities: undefined, entity: undefined, devices: undefined });
-    document.body.append(one);
     const bare = { ...el._hass, devices: {}, entities: {}, states: { "sun.sun": el._hass.states["sun.sun"] } };
     const real = history.pushState;
+    const mount = () => {
+      const one = document.createElement("hatch-pet-card");
+      one.style.cssText = "position:fixed;left:0;top:0;width:400px;z-index:-1";
+      one.setConfig({ ...el._config, entities: undefined, entity: undefined, devices: undefined });
+      document.body.append(one);
+      return one;
+    };
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    let one = null;
     try {
-      for (const admin of [true, false]) {
+      for (const admin of [true, false]) { // a viewer's role never changes, so one card each
+        one = mount();
         one.hass = { ...bare, user: { ...el._hass.user, is_admin: admin } };
-        for (let i = 0; i < 20 && !one.shadowRoot?.querySelector(".addpet"); i++) await new Promise((r) => setTimeout(r, 100));
-        await new Promise((r) => setTimeout(r, 300));
+        for (let i = 0; i < 30 && !one.shadowRoot?.querySelector(".sub")?.textContent; i++) await wait(100);
+        await wait(300);
         const button = one.shadowRoot.querySelector(".addpet");
         out[admin ? "admin" : "user"] = { shown: !button.hidden, text: button.textContent,
           sub: one.shadowRoot.querySelector(".sub").textContent };
@@ -1224,16 +1230,20 @@ async function main() {
           let to = null;
           history.pushState = (st, t, url) => { to = url; }; // stubbed: the check stays on its page
           button.click();
+          history.pushState = real;
           out.to = to;
+          // The page's own pets move in: no empty state, no button.
+          one.setConfig(el._config);
+          one.hass = el._hass;
+          for (let i = 0; i < 30 && !one._slides?.[0]?.species; i++) await wait(100);
+          out.after = !one.shadowRoot.querySelector(".addpet").hidden;
         }
+        one.remove();
+        one = null;
       }
-      one.hass = el._hass; // the page's own pets: no empty state, no button
-      one.setConfig(el._config);
-      for (let i = 0; i < 20 && one.shadowRoot.querySelector(".addpet")?.hidden === false; i++) await new Promise((r) => setTimeout(r, 100));
-      out.after = !one.shadowRoot.querySelector(".addpet").hidden;
     } finally {
       history.pushState = real;
-      one.remove();
+      one?.remove();
     }
     return out;
   });
