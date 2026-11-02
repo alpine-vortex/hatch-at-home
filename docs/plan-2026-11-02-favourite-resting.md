@@ -165,6 +165,13 @@ Entering (`on` and not already resting):
   stay as they are**: the settled needs re-arm on the first `_calls` after waking.
   A napping pet is left napping (rule 3 above ends the nap). Poops stay (they were
   earned, and visiting can clean them). `sick` stays.
+- **Refill cooldown (owner, 2026-11-02, R1-1 from audit s2739; replaces Open question
+  1's "none"):** the settling above (the refill to `REST_FLOOR`, `call = None`,
+  `recent_misses = []`, `last_recall_at = now`) happens **at most once per
+  `R.REST_REFILL_HOURS` = 12 h**, by one saved stamp `last_rest_refill_at` (float, `None`
+  in an old save = allowed). A rest entered inside the window only pauses, as rest
+  does: no refill, and an open call and the misses stay (held, as every timer is).
+  `stayed_up_since = None` and `drop_game` still run on every entry.
 - `rest_since = now` (new float on `PetState`, `None` when awake), used by the birthday
   rule below.
 - Event `{"type": "rest_started"}`.
@@ -690,6 +697,7 @@ with the recommendation:
 
 1. **Refill cooldown [S7]:** none. Feeding and playing are already free and unlimited, and
    entry cannot hide a miss already counted or heal a sickness.
+   **Superseded** by the owner, 2026-11-02 (R1-1, audit s2739): once per 12 h, see §3.3.
 2. **Pet birthday while resting [S4]:** none while resting; on leaving, `hatched_on` moves
    forward by the days rested (§3.3).
 3. **Telling others [S10]:** no push. The card label, the offer's helper line and the guide

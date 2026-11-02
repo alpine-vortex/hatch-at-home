@@ -637,7 +637,9 @@ in its settings changes), or open the options page it names to pick the new ones
 Each pet has a **resting** switch, off by default: in settings (the gear on the
 status screen, "resting") or as `switch.<pet>_resting`. Turning it on refills
 hunger, happiness and energy to at least 55 (health stays as it is) and settles an
-open call, with no miss and no push left on the phone. While it rests:
+open call, with no miss and no push left on the phone. That refill comes at most once
+in 12 hours: rest it again sooner and it only pauses, keeping its needs, an open call
+and its misses as they were until it wakes. While it rests:
 
 - nothing lowers its needs by itself, it makes no hunger, happiness, energy or
   pretend calls, misses nothing, can't fall ill, and doesn't poop;
