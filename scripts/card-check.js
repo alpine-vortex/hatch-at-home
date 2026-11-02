@@ -10603,6 +10603,10 @@ async function main() {
     await prep();
     const first = await card.evaluate((el) => {
       for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k);
+      // This is about the day's first-link timer, not who is free: with finds shown a line can
+      // land (a find, a gift) between prep and here, and a pet with a line waiting is not free.
+      // So clear them again in this same step, and report what was left if a try still fails.
+      for (const s of el._slides) Object.assign(s, { queue: [], sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
       const h = el._slides[el._index];
       const now = Date.now();
       const tries = {};
@@ -10630,7 +10634,8 @@ async function main() {
       for (let i = 0; i < 20; i++) { el._linkFirstMs = undefined; el._touchedAt = null; el._linkTick(h); ms.push(el._linkFirstMs); }
       el._linkAt = Date.now() + 1e9;
       localStorage.setItem(`hatch-link-cardcheck-${new Date().toDateString()}`, "1");
-      return { tries, lo: Math.min(...ms), hi: Math.max(...ms) };
+      return { tries, lo: Math.min(...ms), hi: Math.max(...ms),
+        free: el._slides.map((x) => [el._free(x), x.queue?.length || 0, x.moodState]) };
     });
     check(`the day's first link waits for a touched, shown look 1-3 min in (${width}px)`,
       first.tries.watched && !first.tries.untouched && !first.tries.soon && !first.tries.stale && !first.tries.hidden && !first.tries.offscreen
