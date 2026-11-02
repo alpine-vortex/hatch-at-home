@@ -28,13 +28,13 @@ The egg decides which of that world's creatures hatches. See `docs/design-worlds
 2. Get the files, through HACS (recommended) or by hand:
    - **HACS:** HACS → ⋮ (top right) → Custom repositories. Paste
      `https://github.com/alpine-vortex/hatch-at-home`, pick type **Integration**
-     and press Add. Then search HACS for **Virtual Pet** and press Download.
+     and press Add. Then search HACS for **Hatch at Home** and press Download.
    - **By hand:** copy `custom_components/virtual_pet/` from this repo into your
      HA config folder, so you end up with
      `/config/custom_components/virtual_pet/manifest.json`. The Samba share, the
      SSH add-on or the Studio Code Server add-on all work.
 3. Restart HA: Settings → System → power icon (top right) → Restart Home Assistant.
-4. Settings → Devices & services → Add integration → search **Virtual Pet**,
+4. Settings → Devices & services → Add integration → search **Hatch at Home**,
    then name your pet and pick its world: Woodland, Terrarium, Hearth, Tidepool, Pond
    or Night Sky (five creatures each). Add the integration again for each extra pet device.
 5. **Add the card:** edit a dashboard → Add card → **Hatch at Home pet shelf** (see *Add the
@@ -410,7 +410,7 @@ pet; it's only how the screen looks.
 ## What you get
 
 One device named after your pet, with the entities below. To rename the pet or move
-it to another world, open Settings → Devices & services → Virtual Pet → ⋮ next to the
+it to another world, open Settings → Devices & services → Hatch at Home → ⋮ next to the
 pet → **Reconfigure**. Entity IDs stay the same, and notifications and the journal
 follow the new name. A pet that has hatched stays in its world; its next egg starts
 in the new one (the status screen says "next egg in …"). To name a new generation,
@@ -463,7 +463,7 @@ entities:
 
 ## Connect it to your house (options)
 
-Settings → Devices & services → **Virtual Pet** → the gear (⚙) next to your pet. The
+Settings → Devices & services → **Hatch at Home** → the gear (⚙) next to your pet. The
 dialog is titled **"What <name> notices"**. Every field is optional except the ones
 with defaults, and anything left empty is ignored. Saving applies the changes straight
 away. Each pet has its own settings.
@@ -1053,7 +1053,7 @@ then make one automation from it for each thing.
 
 ## Testing with fast-forward
 
-Developer Tools → Actions → **Virtual Pet: Fast forward**, with `hours: 6`. The
+Developer Tools → Actions → **Hatch at Home: Fast forward**, with `hours: 6`. The
 pet lives those hours instantly at normal rates, with nobody caring for it, so
 unanswered calls become care misses. Tick "return response" to see the
 events. Admin only.

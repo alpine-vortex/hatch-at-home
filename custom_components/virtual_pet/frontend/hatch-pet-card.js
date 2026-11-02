@@ -4800,7 +4800,7 @@ class HatchPetCard extends HTMLElement {
         ? "The pets this card shows aren't here any more. Edit the card to pick them again."
         : this._hass.user?.is_admin === false
           ? "Ask whoever runs Home Assistant to add a pet."
-          : "Add the Virtual Pet integration to hatch one.";
+          : "Add the Hatch at Home integration to hatch one.";
       if (configured) {
         this._emptyToken = null;
       } else if (keep) {
@@ -8771,7 +8771,7 @@ class HatchPetCard extends HTMLElement {
       this._wipe(s);
       s.status.querySelector(".pback")?.focus({ preventScroll: true });
     });
-    // An admin's way to the pet's options (Settings → Devices & services → Virtual Pet).
+    // An admin's way to the pet's options (Settings → Devices & services → Hatch at Home).
     s.status.querySelector(".connect")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);

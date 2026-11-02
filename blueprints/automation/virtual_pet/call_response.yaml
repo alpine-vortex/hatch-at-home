@@ -1,5 +1,5 @@
 blueprint:
-  name: Virtual pet calls into the house
+  name: "Hatch at Home: calls into the house"
   description: >-
     When the pet calls for attention, briefly pulse lamps that are already on
     and/or play a short sound. Lamps change colour or flash, never brightness,
