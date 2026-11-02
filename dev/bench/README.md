@@ -18,6 +18,7 @@ node scripts/bench.js --preset ui         # status, game picker, bubble
 node scripts/bench.js --preset finishes   # 576 shots: every shell finish, every world
 node scripts/bench.js --preset settings         # the gear's sheet, 420/330, day/night
 node scripts/bench.js --preset settings-shared  # the same on a shared screen
+node scripts/bench.js --preset lay        # 9 shots: the lay sheet (settings S2), two worlds at 420/330, big text, a pick, a pick made in HA, a waiting world
 node scripts/bench.js --preset picker     # the shell picker: egg (locked) and teen, 420/330
 node scripts/bench.js --preset winter     # winter lights at 330: worlds day/night, mono night, hats, snow hare, auto, holiday names
 node scripts/bench.js --preset seasons    # ha-signals H7: the eight season-start lines at 330, the journal's season labels at 420/330
@@ -55,14 +56,14 @@ A shot (all optional):
 | --- | --- |
 | `name` | output path under `out/`, without `.png` |
 | `species`, `stage`, `mood`, `world` | the first pet (default: the world's first species, adult, content, woodland). Stages: egg baby child teen adult. |
-| `pet` | more of the first pet: `name`, `age_days`, `flags`, `energy`, `weight` (none by default: the row shows –), `hatch_minutes`... |
+| `pet` | more of the first pet: `name`, `age_days`, `flags`, `energy`, `weight` (none by default: the row shows –), `hatch_minutes`, `raised` (ids, or `"world"`: three of its world's), `next_egg` (a name), `next_world` (a name), `lay` (`true` or `{egg_world}`: the lay request, the next-egg select and `egg_roster`; settings S2)... |
 | `pets` | a number (extra pets are children from the world's roster) or an array of pet overrides; the first is on show, the card gets its dots |
 | `shell` | `{shape, color, bezel, finish}` over the world's own; `finish: "none"` drops it. Shapes: egg tank house porthole pad moon |
 | `scene` | `day` (default), `night`, `dim` (lights out), `rain` |
 | `season` | `false` (default: no seasonal touches), `"auto"` (by `time`), or a season key such as `halloween` |
 | `time` | pinned clock, ISO (default `2026-06-15T12:00:00Z`; the browser runs in UTC) |
 | `width` | card width in px (420, or 330 for the compact layout); `dpr` pixel ratio |
-| `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `picker` (the sheet's shell picker; needs `shellOptions`), `journal` (see below), `everyworld` (the journal's "every world ›" page; `journal: {raised}` sets what's drawn), `collection` (the journal's "finds ›" page; see `collection`), `games` (game picker) |
+| `view` | `card`, `status` (status screen), `settings` (the status screen's gear sheet), `picker` (the sheet's shell picker; needs `shellOptions`), `journal` (see below), `everyworld` (the journal's "every world ›" page; `journal: {raised}` sets what's drawn), `collection` (the journal's "finds ›" page; see `collection`), `games` (game picker), `lay` (the lay sheet: needs `pet: {lay: true}`) |
 | `shellOptions`, `shellFinish`, `shellLocked` | the lead pet's `shell_finish_options` (finish keys it may wear), `shell_finish` (its pick, default none: the world's own) and `shell_locked` (`{key: stage}`). Without `shellOptions` the card has no shell row, as with an older server |
 | `preview` | in the picker, the tile tapped: that finish on the live shell, unsaved (`""` is the world's own) |
 | `scroll` | a selector in the status box brought into view (the picker scrolls), e.g. `.tile.now` or `.sec[data-group="specials"]` (its top just under the back row) |
