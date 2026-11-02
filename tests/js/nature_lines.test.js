@@ -178,8 +178,8 @@ test("the fire falls back to the heating answering, then to the sun", () => {
   assert.strictEqual(none.c._skyReact(none.s, false), false);
 });
 
-test("not for an egg, a baby, baby talk, a resting pet or a species with no nature", () => {
-  for (const opts of [{ stage: "egg" }, { stage: "baby" }, { stage: "child", babyTalk: true }, { resting: true },
+test("not for an egg, a baby, a child, baby talk, a resting pet or a species with no nature", () => {
+  for (const opts of [{ stage: "egg" }, { stage: "baby" }, { stage: "child" }, { stage: "child", babyTalk: true }, { resting: true },
     { sp: { ...otter, nature: undefined } }, { sp: { ...otter, nature: { ...otter.nature, sky: "lava" } } }]) {
     fresh();
     const { c, s } = card(opts);
@@ -187,12 +187,6 @@ test("not for an egg, a baby, baby talk, a resting pet or a species with no natu
     assert.deepStrictEqual(s.written, []);
     assert.strictEqual(oncePerDay("sky-d1"), true, "the day's key is not spent"); // still unspent
   }
-});
-
-test("a child with no baby talk reacts (it gets the lines)", () => {
-  fresh();
-  const { c, s } = card({ stage: "child" });
-  assert.strictEqual(c._skyReact(s, false), true);
 });
 
 test("a weather line in the last minute holds it off, without spending the key", () => {

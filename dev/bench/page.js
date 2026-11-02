@@ -508,10 +508,18 @@
     if (shot.idle) {
       const real = Math.random;
       let n = 0;
-      Math.random = () => (n++ < 2 ? 0 : 0.1);
+      // `idle.draw`: the draw after the delay, for the sky reaction's line pick (0 the first line, .99 the second).
+      Math.random = () => { const i = n++; return i === 1 && shot.idle.draw !== undefined ? shot.idle.draw : i < 2 ? 0 : 0.1; };
       Object.assign(cur, { moodState: shot.idle.mood || "content", nextIdle: 1, sayUntil: 0, poseUntil: 0, movingUntil: 0 });
       card._idle(cur);
       Math.random = real;
+      cur.sayUntil = Date.now() + 1e9;
+    }
+    // `moment`: a public moment (`{type: "sunset"}`) put through the card's own _moment, so the line it says is shown.
+    if (shot.moment) {
+      Object.assign(cur, { sayUntil: 0, sayEntry: null, queue: [] });
+      card._moment(cur, { at: new Date().toISOString(), ...shot.moment });
+      card._stopTyping(cur);
       cur.sayUntil = Date.now() + 1e9;
     }
     const root = card.shadowRoot;

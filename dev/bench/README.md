@@ -15,6 +15,7 @@ The repo has no `node_modules`; point `NODE_PATH` at a checkout with Playwright
 export NODE_PATH=/home/poe/github/relink/node_modules
 node scripts/bench.js --preset shells     # 144 shots, ~8 s
 node scripts/bench.js --preset species    # 1230 shots, ~35 s
+node scripts/bench.js --preset nature     # species nature N1: each sky's reaction line (both lines, 330 and 300, calm), the sunset and morning lines per clock, a baby and a child with none
 node scripts/bench.js --preset ui         # status, game picker, bubble
 node scripts/bench.js --preset finishes   # 576 shots: every shell finish, every world
 node scripts/bench.js --preset settings         # the gear's sheet, 420/330, day/night
@@ -77,7 +78,8 @@ A shot (all optional):
 | `power` | the low-battery gag pinned mid-play: `battery` (one bar, first line) or `line` (full battery, second line) |
 | `costume` | `{season, art, frame}`: the costume put on through the card's own `_costume` (frame 1 or 2 showing). `bench.js` writes the seat it used (`_frames(s)[0]`, `drawn`, `_hatSeat`) to `<name>.json` beside the PNG |
 | `pet.personality`, `hatched_on`, `upbringing` | the first pet's type (teen or adult), birth date and upbringing as `sensor.life_stage` carries them; `pet.reason` / `pet.reason_key` put the server's mood sentence on `sensor.mood`, so the mood line (P2b) shows through the card's own `_say` |
-| `idle` | `{mood}`: the pet's idle mumble through the card's own `_idle` (a mumble, the type's side of the coin) |
+| `idle` | `{mood, draw}`: the pet's idle mumble through the card's own `_idle` (a mumble, the type's side of the coin). With the pet's sky flag up (`pet.flags`) it is the sky reaction instead (species nature N1); `draw` (0..1) is the draw after the delay, which picks one of its two lines |
+| `moment` | a public moment (`{type: "sunset"}`, `{type: "good_morning"}`) put through the card's own `_moment`, the line it says shown in the bubble (species nature N1: the clock lines) |
 | `ask` | a question kind (`catchphrase`) put through the card's own `_ask`, so its answer buttons show |
 | `note` | on `settings` / `picker`: a line shown in the feedback bubble (the pet's head and the note, under the back row), through the card's own `_statusMessage` |
 | `afterChange`, `afterWait` | on `settings`: the sheet closed after that change (a `SETTINGS_REACT` key: `monoOn`, `monoOff`, `effectsOff`, `shell`, `sharedOn`, `notifyOn`), through the card's own `_settingsChanged` and Status chip, so the pet perks and says its line (settings UX F14); `afterWait` ms to let it type (default 1500) |

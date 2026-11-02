@@ -453,13 +453,13 @@ class HatchPetCardMoment extends HatchPetCardVisit {
 
   // Species nature, sky (N1): when the house has this species' sky up, its body reacts, once a
   // day, as one of its idle choices: a short action line and a perk (a settle for a slow one).
-  // Body only, never a liking. Not for an egg, a baby, a resting pet, a day the person's own
+  // Body only, never a liking. Not for an egg, a baby or a child (plan section 10), a resting pet, a day the person's own
   // favourite-weather note was said, or within a minute of a weather line. The day's key is
   // spent only by a reaction, so a skipped look leaves it for a later one. True if it reacted.
   _skyReact(s, isCalm) {
     const n = nature(s.species);
     const stage = this._state(s, "sensor.life_stage")?.state;
-    if (!n || s.resting || s.egg || stage === "egg" || stage === "baby" || this._babyStage(s)) return false;
+    if (!n || s.resting || s.egg || ["egg", "baby", "child"].includes(stage) || this._babyStage(s)) return false;
     if (Date.now() - (s.skySaid || 0) < SKY_WAIT_MS) return false;
     const device = s.ids?.device;
     if (usedToday(`favweather-said-${device}`)) return false;
