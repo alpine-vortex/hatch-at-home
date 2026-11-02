@@ -827,6 +827,7 @@ const BUBBLE_POP_ODDS = 1 / 8; // a clean's chance of one bubble drifting up and
 const mealPart = (hour) => (hour >= 5 && hour < 11 ? "breakfast" : hour >= 11 && hour < 16 ? "lunch" : hour >= 16 && hour < 22 ? "supper" : null);
 const VISIT_IN_MS = 1400; // to arrive (or leave), unless the visitor says
 const VISIT_STAY_MS = 3000; // at the edge, past the greet's start
+const VISIT_SWIPE_GRACE_MS = 600; // a swipe away and back within it keeps the visitor
 const VISIT_CALM_MS = 5000; // reduced motion: still, then gone
 const VISIT_CHECK_MS = 20000; // between looks for a visit
 const VISIT_SHOWN_MS = 10000; // the slide on show this long first
@@ -5094,6 +5095,12 @@ class HatchPetCard extends HTMLElement {
       this._stopTyping(x);
       if (x.laySheet && i !== to) this._closeLay(x); // the lay sheet stays with its pet
       this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
+      if (x.visitor && i !== to) { // a world visitor goes too, after a grace: a slip of the finger keeps it (UX8 F11)
+        const V = x.visitor;
+        setTimeout(() => {
+          if (x.visitor === V && this._slides[this._index] !== x) this._visitorEnd(x);
+        }, VISIT_SWIPE_GRACE_MS);
+      }
       if (x.picker) { // and leaves the shell picker unsaved: the sheet again
         this._closePicker(x);
         if (x.screen.classList.contains("show-status")) this._renderStatus(x, this._state(x, "sensor.last_care")?.attributes.log || []);
