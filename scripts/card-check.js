@@ -1366,13 +1366,10 @@ async function main() {
       out.day = await close("monoOn", 12);
       out.night = await close("monoOff", 23);
       out.none = await close("effectsOn", 12); // no such line: nothing said
-      s.settings = false;
-      el._toggleStatus(s);
-      return out;
+      return out; // the sheet is open again
     });
     check("settings UX F14: the pet says its line for the last change when the sheet closes, not at night",
       /all green/.test(react.day) && react.night === "" && react.none === "", JSON.stringify(react));
-    await cur().locator(".status .sback").count() || await openSheet();
   }
   // Sounds start off and turn on for this browser only.
   const sound = cur().locator(".bell.sound");
