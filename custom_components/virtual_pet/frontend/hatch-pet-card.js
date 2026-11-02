@@ -929,6 +929,15 @@ function onceEver(name) {
   }
   return true;
 }
+// Whether onceEver(name) has already been spent, without spending it.
+function onceSeen(name) {
+  const key = `hatch-${name}`;
+  try {
+    return !!localStorage.getItem(key);
+  } catch (err) {
+    return !!onceEver.seen?.has(key);
+  }
+}
 const WEEK_OLD = ["one week old today! ♥", "a whole week together! ♥"]; // gaps-seams 1b
 // The card's own per-day keys (oncePerDay's `hatch-<name>-<Date.toDateString()>`, and the
 // treat's `hatch-treat-...-<toDateString>`) older than PRUNE_DAYS go, once at card start.
@@ -1443,6 +1452,8 @@ const WAKE_LINES = ["*yaaawn*", "*yawn* ...morning already ♪", "*stretch* mm, 
 // S-b: lights out after a visitor seen here today (by its name), else after today's sunset.
 const NIGHT_VISITOR = [(v) => `night, little ${v} ♪`, (v) => `sweet dreams, ${v} ♪`];
 const NIGHT_SUNSET = "night... what a nice sunset ♥";
+// A new pet's first bedtime, said once (owner, 2026-11-02, UX review 4 Q5).
+const FIRST_NIGHT = "my first night here... ♥";
 // F-a: a meal by the device's clock (none from 22 to 05: "yum" only).
 const MEAL_LINES = {
   breakfast: ["breakfast! ♪", "a good start to the day ♪", "morning munchies! yum", "breakfast time, yum ♥"],
@@ -8062,6 +8073,13 @@ class HatchPetCard extends HTMLElement {
         if (m.how === "collapsed") {
           say("so... sleepy... zzz", 5000);
         } else if (m.how === "house" || m.how === "lights") {
+          // The pet's first bedtime (its first day, one per pet and generation on this browser):
+          // its own line, spent when it is said, not in the catch-up and not for an egg.
+          const first = !capture && this._firstNightKey(s);
+          if (first) {
+            say(FIRST_NIGHT, 4500, () => onceEver(first));
+            break;
+          }
           say(this._nightLine(s) || this._lines(s, "fell_asleep", pick(["good night...", "night night...", "sleep tight..."])).text, 4000);
         }
         break;
@@ -8402,6 +8420,15 @@ class HatchPetCard extends HTMLElement {
   _wakeLine(s, date = turnNow()) {
     const line = turnPick(WAKE_LINES, `${s.ids?.device}|wake`, date);
     return line === WAKE_LINES[WAKE_LINES.length - 1] && !this._dreamToday(s) ? WAKE_LINES[0] : line;
+  }
+
+  // The once-ever key of this pet's first bedtime while it is still due (a hatched pet in
+  // its first day that has not said it), else null.
+  _firstNightKey(s) {
+    const stage = this._state(s, "sensor.life_stage");
+    if (!stage || stage.state === "egg" || !(stage.attributes?.age_days < 1)) return null;
+    const key = `firstnight-${s.ids?.device}-${stage.attributes.generation || 1}`;
+    return onceSeen(key) ? null : key;
   }
 
   // S-b: lights out after a visitor seen here today, else after today's sunset: once a
