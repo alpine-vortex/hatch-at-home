@@ -1567,10 +1567,15 @@ const WELCOME_SAME_ARRIVAL_MS = 10 * 60 * 1000; // pets' reports this close: one
 // F1: a typed answer as sent and said: control and format characters gone, whitespace
 // collapsed, at most FOLLOW_TEXT_MAX code points (the server cleans it again). Null if empty.
 const FOLLOW_TEXT_MAX = 20;
-const FOLLOW_EVENING_HOUR = 17; // a big day's evening beat could be due from here
+// From 19 a big day's evening beat (the server's hour; this browser's clock only times the
+// in-tab check, so a traveller's tab may ask at the wrong hour and get {}, critique #10).
+const FOLLOW_EVENING_HOUR = 19;
+// Said inside a line ("good luck with {it}! ♥"): no trailing punctuation or emoticon of
+// its own (critique #8), as the server's clean_text.
+const TYPED_TAIL = /(?:\s*(?:[.!?,;:]+|[:;=]-?[()DPpOo/|\\[\]]|<3))+$/u;
 const cleanTyped = (value) => {
-  const kept = String(value ?? "").replace(/\p{C}/gu, "").replace(/\s+/g, " ").trim();
-  return Array.from(kept).slice(0, FOLLOW_TEXT_MAX).join("").trim() || null;
+  const kept = String(value ?? "").replace(/\p{C}/gu, "").replace(/\s+/g, " ").trim().replace(TYPED_TAIL, "");
+  return Array.from(kept).slice(0, FOLLOW_TEXT_MAX).join("").trim().replace(TYPED_TAIL, "") || null;
 };
 // Questions the pet asks; the server picks which and when (visit's "ask"), so
 // the daily limit holds across pets and devices. "keep" answers go back to the
@@ -6294,6 +6299,7 @@ class HatchPetCard extends HTMLElement {
   _followEvening(s) {
     if (!s.lookedFirst || s.asleep || new Date().getHours() < FOLLOW_EVENING_HOUR) return;
     if (s.followEve === new Date().toDateString() || !this._followWanted(s) || !this._channelHeard(s)) return;
+    if (s.queue?.length) return; // the first look's lines first: a fourth would crowd them
     this._followFetch(s);
   }
 
@@ -6324,10 +6330,10 @@ class HatchPetCard extends HTMLElement {
   // A follow-up answer, fire and forget: only to a server that takes them, never on a
   // shared screen, never stashed or retried.
   _sendFollow(s, entity, question, answer, text = null) {
-    if (!this._followOk || sharedScreen() || !entity) return;
+    if (!this._followOk || sharedScreen() || !entity) return Promise.resolve(false);
     const msg = { type: "virtual_pet/answer", entity_id: entity, question, answer };
     if (text) msg.text = text;
-    this._hass.callWS(msg).catch(() => {});
+    return this._hass.callWS(msg).then(() => true, () => false);
   }
 
   // After a big day's "yes": "what is it?", then one input with "ok" and "skip". However
@@ -6388,8 +6394,10 @@ class HatchPetCard extends HTMLElement {
     clearTimeout(step.timer);
     s.asking = false;
     if (s.queue?.length) s.queue = s.queue.filter((q) => q.text !== BIG_DAY.what || !q.ask);
-    this._sendFollow(s, step.entity, step.kind || "big_day", "yes", text);
-    if (said && s.ids?.["sensor.life_stage"] === step.entity) this._speak(s, BIG_DAY.kept, 3500);
+    // "I'll remember" only once the server kept it (a step ending past midnight is refused).
+    this._sendFollow(s, step.entity, step.kind || "big_day", "yes", text).then((ok) => {
+      if (ok && said && s.ids?.["sensor.life_stage"] === step.entity) this._speak(s, BIG_DAY.kept, 3500);
+    });
   }
 
   // --- Gifts (plan visitors v2 §5) ----------------------------------------------

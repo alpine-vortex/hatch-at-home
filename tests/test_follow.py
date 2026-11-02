@@ -58,6 +58,10 @@ def test_a_typed_text_is_cleaned_and_cut():
     assert P.clean_text("‮⁦") is None
     assert P.clean_text(None) is None and P.clean_text(42) is None
     assert P.clean_text({"a": "b"}) is None
+    # Said inside a line: no trailing punctuation or emoticon of their own (critique #8).
+    assert P.clean_text("the dentist :(") == "the dentist"
+    assert P.clean_text("exam!!") == "exam" and P.clean_text("party :D!") == "party"
+    assert P.clean_text("a:b") == "a:b" and P.clean_text("?!") is None
 
 
 @pytest.mark.parametrize(
@@ -132,6 +136,33 @@ def test_a_follow_up_takes_the_slot_but_never_the_rotations_own_how_day():
             assert ask(asked_all(), today, pet_kinds=("game",)) == "game", today
         assert ask(asked_all(), today, early_tomorrow=True) != "big_day"
         assert ask(asked_all(), today, hour=15) not in P.FOLLOW_QUESTIONS
+
+
+def test_a_follow_up_left_unanswered_twice_rests_two_weeks():
+    """Critique s2632 #6: two asks of a kind in a row with no "yes" (no answer,
+    "no", "later") and it rests 14 days; a "yes" starts the count over."""
+    person: dict[str, Any] = {}
+    P.mark_asked(person, "2026-11-01", 18, "big_day")  # no answer
+    assert P.follow_question(person, "2026-11-08") == "big_day"  # a week on
+    P.mark_asked(person, "2026-11-08", 18, "big_day")  # "no"
+    person["follow_asked"] = []  # the weekly cap aside
+    assert person["follow_miss"] == {"big_day": 2}
+    assert P.follow_question(person, "2026-11-15") is None  # resting
+    assert P.follow_question(person, "2026-11-22") == "big_day"  # 14 days on
+    person["follow_miss"] = {"big_day": 1}  # asked once more: then a "yes"
+    record = P._person(person)
+    assert record["follow_miss"] == {"big_day": 1}
+    assert (
+        P._person({"follow_miss": {"parade": 3, "weekend": "x"}})["follow_miss"] == {}
+    )
+
+
+async def test_a_yes_starts_the_rest_count_over(hass: HomeAssistant):
+    people = People(hass)
+    P.mark_asked(people.person("u1"), "2026-11-01", 18, "big_day")
+    assert people.person("u1")["follow_miss"] == {"big_day": 1}
+    people.open_follow("u1", "big_day", "2026-11-01")
+    assert people.person("u1")["follow_miss"] == {}
 
 
 def test_the_follow_ups_are_tried_in_order_each_weekly():
@@ -271,12 +302,14 @@ async def test_a_big_days_beats_once_each_then_gone(hass: HomeAssistant):
     }
     assert people.follow_due("u1", "2026-11-02", 9) == {}  # once
     assert people.follow_due("u2", "2026-11-02", 9) == {}  # theirs only
-    assert people.follow_due("u1", "2026-11-02", 17) == {
+    assert people.follow_due("u1", "2026-11-02", 18) == {}  # the morning's, said
+    assert P.FOLLOW_EVENING_HOUR == 19  # late enough that the day is likely over
+    assert people.follow_due("u1", "2026-11-02", 19) == {
         "kind": "big_day",
         "beat": "evening",
         "text": SAID,
     }
-    assert people.follow_due("u1", "2026-11-02", 18) == {}
+    assert people.follow_due("u1", "2026-11-02", 20) == {}
     assert people.open_event("u1") is None and people._texts == {}
     # An evening seen first: the morning is skipped. Past its day: pruned.
     people.open_follow("u1", "big_day", "2026-11-03", None)

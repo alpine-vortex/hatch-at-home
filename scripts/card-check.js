@@ -4512,10 +4512,11 @@ async function main() {
       const realWS = el._hass.callWS;
       const sent = [];
       let reply = {};
+      let answerOk = false;
       el._hass.callWS = (msg) => {
         sent.push(msg);
         if (msg.type === "virtual_pet/follow") return Promise.resolve(reply);
-        if (msg.type === "virtual_pet/answer") return Promise.reject({ code: "unknown_error" });
+        if (msg.type === "virtual_pet/answer") return answerOk ? Promise.resolve(null) : Promise.reject({ code: "unknown_error" });
         return realWS.call(el._hass, msg);
       };
       const shared = localStorage.getItem("hatch-shared-screen");
@@ -4568,7 +4569,7 @@ async function main() {
         input?.dispatchEvent(new KeyboardEvent("keydown", { key: "e", bubbles: true, composed: true }));
         document.removeEventListener("keydown", onKey);
         out.leaked = leaked;
-        if (input) input.value = "  my\u200b exam ";
+        if (input) input.value = "  my\u200b exam!! ";
         Object.assign(s, { sayUntil: 0, sayClass: 0 });
         s.screen.querySelector(".asktext button")?.click(); // ok
         await new Promise((r) => setTimeout(r, 50));
@@ -4576,6 +4577,15 @@ async function main() {
         out.kept = s.bubble.textContent;
         out.stash = Object.keys(localStorage).filter((k) => k.startsWith("hatch-answers-"));
         out.boxGone = !s.screen.querySelector(".asktext");
+        // Kept: "I'll remember" only once the server took it (critique #7).
+        answerOk = true;
+        Object.assign(s, { sayUntil: 0, sayClass: 0 });
+        el._askTextStart(s, entity);
+        s.queue.find((q) => q.ask)?.then();
+        s.screen.querySelector(".asktext button")?.click();
+        await new Promise((r) => setTimeout(r, 50));
+        out.keptOk = s.bubble.textContent;
+        answerOk = false;
         sent.length = 0;
         el._askTextStart(s, entity);
         s.textStep.until = 0;
@@ -4646,9 +4656,9 @@ async function main() {
     check("fresh E13: a soft morning says a soft line; a shared screen asks the server nothing and says nothing",
       [...SOFT, ...typeLines("soft"), "*snuggle* hi hi ♥"].includes(f1.soft[0]) && f1.shared.length === 0 && f1.sharedCalls === 0,
       JSON.stringify({ soft: f1.soft, shared: f1.shared, calls: f1.sharedCalls }));
-    check("fresh F1: the typed step keeps HA's keys, sends yes once with the cleaned text, stashes nothing; its time sends no text",
+    check("fresh F1: the typed step keeps HA's keys, sends yes once with the cleaned text, says it'll remember only once kept, stashes nothing; its time sends no text",
       f1.box && f1.leaked === 0 && f1.sent.length === 1 && f1.sent[0].question === "big_day" && f1.sent[0].answer === "yes" &&
-        f1.sent[0].text === "my exam" && f1.kept === BIG.kept && f1.stash.length === 0 && f1.boxGone &&
+        f1.sent[0].text === "my exam" && f1.kept !== BIG.kept && f1.keptOk === BIG.kept && f1.stash.length === 0 && f1.boxGone &&
         f1.timeout.length === 1 && !("text" in f1.timeout[0]), JSON.stringify({ ...f1, am: undefined }));
     check("fresh E8 (A-a): back after 3 days, the look starts with a welcome and has no away note; after 5 h, none",
       WELCOME.includes(e8.long[0]?.text) && !e8.long.some((q) => q.away) && !e8.short.some((q) => WELCOME.includes(q.text)),

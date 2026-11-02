@@ -112,6 +112,10 @@ FOLLOW_CLASSES: dict[str, tuple[str, ...]] = {
 }
 FOLLOW_EVENT_MAX_DAYS = 7
 FOLLOW_ASK_PER_WEEK = 2  # follow-up asks per person per 7 days
+# A kind asked this many times in a row without a "yes" (no answer, "no", "later") rests
+# FOLLOW_REST_DAYS before it's asked again; a "yes" starts the count over (critique #6).
+FOLLOW_MISSES = 2
+FOLLOW_REST_DAYS = 14
 FOLLOW_TEXT_MAX = 20  # code points of a typed answer ({it})
 # Each kind's beats, in order; the last one said closes the event.
 FOLLOW_BEATS: dict[str, tuple[str, ...]] = {
@@ -121,7 +125,9 @@ FOLLOW_BEATS: dict[str, tuple[str, ...]] = {
     "game": ("day",),  # F6: when the picker opens, the day after
     "trick": ("shown",),  # F7: a first look from day 3 to day 5
 }
-FOLLOW_EVENING_HOUR = 17  # big day: the morning beat before, the evening beat from
+# A big day's morning beat before this hour, its evening beat from it: late enough that
+# the day is likely over (a recital, a match, a late shift; critique s2632 #4).
+FOLLOW_EVENING_HOUR = 19
 # The follow-up questions (asked in the later slot) in the order they're tried, those
 # that take a typed text, and a pet's own (said only by the pet that asked).
 FOLLOW_QUESTIONS = ("weekend", "big_day", "trick", "game")
@@ -135,6 +141,9 @@ TRICK_UNTIL_DAYS = 5  # to the 5th
 LATER_CHECKED = {"how_day", *FOLLOW_QUESTIONS}
 QUESTION_KINDS = {*QUESTIONS, *ANSWERS, *FOLLOW_QUESTIONS, "phone"}
 _SPACES = re.compile(r"\s+")
+# Said inside a line ("good luck with {it}! ♥"): no trailing punctuation or emoticon of
+# their own (critique #8), as the card's cleanTyped.
+_TAIL = re.compile(r"(?:\s*(?:[.!?,;:]+|[:;=]-?[()DPpOo/|\\\[\]]|<3))+$")
 
 
 class People:
@@ -318,7 +327,9 @@ class People:
         due, until = follow_dates(kind, today)
         event = {"kind": kind, "asked": today, "due": due, "until": until, "said": []}
         event.update(extra)
-        self.person(user).setdefault("follow", {})["event"] = event
+        person = self.person(user)
+        person.setdefault("follow", {})["event"] = event
+        person.get("follow_miss", {}).pop(kind, None)  # answered: no rest
         self._texts.pop(user, None)
         if kind in FOLLOW_TEXT_KINDS and (cleaned := clean_text(text)):
             self._texts[user] = cleaned
@@ -506,6 +517,12 @@ def _person(record: dict[str, Any]) -> dict[str, Any]:
             k: d
             for k, d in _str_dict(out["follow_last"]).items()
             if k in FOLLOW_QUESTIONS and _iso(d)
+        }
+    if "follow_miss" in out:
+        out["follow_miss"] = {
+            k: n
+            for k, n in _mapping(out["follow_miss"]).items()
+            if k in FOLLOW_QUESTIONS and isinstance(n, int) and 0 < n < 100
         }
     if out.get("my_day") is not True:
         out.pop("zone", None)  # older saves: kept only while "my day" is on
@@ -749,6 +766,9 @@ def mark_asked(
     if kind in FOLLOW_QUESTIONS:
         person.setdefault("follow_asked", []).append(today)
         person.setdefault("follow_last", {})[kind] = today
+        # A miss until its "yes" comes (open_follow starts the count over).
+        misses = person.setdefault("follow_miss", {})
+        misses[kind] = misses.get(kind, 0) + 1
 
 
 def asked_later(person: dict[str, Any], today: str, kind: str) -> bool:
@@ -780,9 +800,11 @@ def follow_question(
     if len(recent) >= FOLLOW_ASK_PER_WEEK:
         return None
     lasts = person.get("follow_last") or {}
+    misses = person.get("follow_miss") or {}
     for kind in FOLLOW_QUESTIONS:
         last = lasts.get(kind)
-        if last is not None and (day - date.fromisoformat(last)).days < 7:
+        rest = FOLLOW_REST_DAYS if misses.get(kind, 0) >= FOLLOW_MISSES else 7
+        if last is not None and (day - date.fromisoformat(last)).days < rest:
             continue
         if kind == "weekend" and day.weekday() == 4:
             return kind
@@ -818,7 +840,8 @@ def clean_text(text: Any) -> str | None:
     if not isinstance(text, str):
         return None
     kept = "".join(c for c in text if not unicodedata.category(c).startswith("C"))
-    kept = _SPACES.sub(" ", kept).strip()[:FOLLOW_TEXT_MAX].strip()
+    kept = _TAIL.sub("", _SPACES.sub(" ", kept).strip())[:FOLLOW_TEXT_MAX]
+    kept = _TAIL.sub("", kept.strip())
     if kept[:3] in ("my ", "My "):
         yours = "your " + kept[3:]
         if len(yours) <= FOLLOW_TEXT_MAX:
