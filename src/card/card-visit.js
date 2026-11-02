@@ -261,7 +261,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
       this._queue(s, turnPick(DREAM_TAIL, `${device}|dreamtail`), 4000, { personal: true });
       return;
     }
-    let line = NOTES[note.kind]?.(note);
+    let line = NOTES[note.kind]?.(note, s.ids?.device);
     if (!line) return;
     if (CELEBRATION_NOTES.has(note.kind) && madeRoom && s.queue) {
       // The look was full and the server made room for a celebration: it

@@ -13,6 +13,7 @@ const SETTINGS_AGAIN = {
   sharedOff: "just us again ♥",
   forgotBirthday: "ok, forgotten. i won't ask ♪",
   forgotMe: "forgotten. we'll start fresh ♥",
+  askAgain: "ask me again", // the favourites' button (memory plan M0-c, label DRAFT)
 };
 const HOUSE_REQUEST = { blanket: "heating", fan: "cooling" }; // the request the house answered
 // The house moment's categories (H8; const.py HOUSE_CATEGORIES, card-check holds the two
@@ -280,8 +281,7 @@ const NOTES = {
       ? (n.guess === "rain" ? "oh, sunny after all! good guess though ♥" : "oh, it rained after all! good guess though ♥")
       : "it was cloudy all day! nobody wins ♥",
   back_from: (n) => PLACES[n.place],
-  fav_weather: (n) => ({ sun: "it's sunny, your favourite! ☀", rain: "it's raining, your favourite! ☂",
-    snow: "it's snowing, your favourite!! ❄", storms: "a storm! your favourite!" })[n.weather],
+  fav_weather: (n, device) => turnPick(FAV_WEATHER_LINES[n.weather], `${device}|favweather`),
   season: (n) => n.holiday && namedHolidays()
     ? `${n.holiday === "halloween" ? "Halloween" : "Thanksgiving"} in your favourite season! ♥`
     : `it's ${n.season}, your favourite! ${SEASON_ICONS[n.season] || ""}`.trim(),
@@ -547,6 +547,9 @@ const CONFIRM_ARIA = {
   lay_egg: "Sure? Press again to lay an egg",
   forget_birthday: "Sure? Press again to forget my birthday",
   forget_me: "Sure? Press again to forget my data",
+  ask_again_fav_weather: "Sure? Press again to be asked about your favourite weather",
+  ask_again_fav_season: "Sure? Press again to be asked about your favourite season",
+  ask_again_fav_visitor: "Sure? Press again to be asked about your favourite visitor",
 };
 
 const STAGE_LABELS = { egg: "Egg", baby: "Baby", child: "Child", teen: "Teen", adult: "Adult" };

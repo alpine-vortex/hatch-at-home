@@ -184,6 +184,15 @@ const WISH_MORE = {
 const WELCOME_BACK = ["you're here! ♥ hop hop", "yay, a visit! ♥", "hello hello! ♥ come in"];
 // B-a: a best friend's (bond 10) own screen, at most once a week. Never on a shared one.
 const FAV_LINES = ["I made up a song for you ♪", "you're my favourite ♥", "I saved you the comfy spot ♥", "*hums your song* ♪"];
+// M0-b (memory plan section 7): the favourite-weather note, said once a day on a matching day,
+// now a list per weather in turns (turnPick, `${device}|favweather`) so it doesn't repeat word
+// for word. One approved line each so far; the plan's 3 per weather are owed (its copy is DRAFT).
+const FAV_WEATHER_LINES = {
+  sun: ["it's sunny, your favourite! ☀"],
+  rain: ["it's raining, your favourite! ☂"],
+  snow: ["it's snowing, your favourite!! ❄"],
+  storms: ["a storm! your favourite!"],
+};
 // LS-a: an adult's new trick, the first look of each month it learns one.
 const TRICK_LINES = ["look what I can do! ♪", "ta-da! a new trick ♪", "I learned a new move! ♪"];
 // L-a (E9): over an infrared link, now and then the guest's news of today's visitor

@@ -1958,7 +1958,7 @@ async function main() {
   await page.waitForTimeout(800);
   // A shared screen shows nothing personal: no bond row, no "my day", no visit,
   // a greeting without a name.
-  const PERSONAL_BELLS = [".bell.notify", ".bell.myday", ".bell.babytalk", ".bell.forgetme", ".bell.forgetbday", ".bell.bdayphone"]
+  const PERSONAL_BELLS = [".bell.notify", ".bell.myday", ".bell.babytalk", ".bell.forgetme", ".bell.forgetbday", ".bell.bdayphone", ".bell.askagain"]
     .map((q) => `.status ${q}`).join(", ");
   const personalSheet = await cur().evaluate((sl) => !!sl.querySelector(".status .bell.notify") &&
     !!sl.querySelector(".status .bell.myday"));
@@ -2736,6 +2736,62 @@ async function main() {
   });
   check("on all three guarded controls a second tap a second later confirms",
     slow.forgetbday && slow.forgetme && slow.egg === "lay_egg", JSON.stringify(slow));
+  // "Ask me again" for the favourites (memory plan M0-c): a row each in the settings sheet's
+  // personal group, only on a personal screen with a bond and a favourite set; two taps, then one
+  // virtual_pet/ask_again call with shared: false, and the row goes.
+  const asks = await page.locator("hatch-pet-card").evaluate(async (el) => {
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const s = el._slides[el._index];
+    const out = {};
+    const realWS = el._hass.callWS;
+    const sent = [];
+    const mine = s.mine;
+    const kept = { ...(mine || {}) };
+    el._hass.callWS = async (msg) => { sent.push(msg); return null; };
+    const rows = () => [...s.status.querySelectorAll(".bell.askagain")].map((b) => b.dataset.kind);
+    try {
+      s.mine = { ...(mine || {}), bond: mine?.bond || { level: 3 }, fav_weather: "snow", fav_season: "<b>winter</b>", fav_visitor: null };
+      s.confirm = null;
+      s.settings = true;
+      el._renderStatus(s, []);
+      out.rows = rows().join();
+      out.text = s.status.querySelector(".favvalue")?.textContent;
+      out.markup = !!s.status.querySelector(".favvalue b");
+      const first = s.status.querySelector(".bell.askagain");
+      first.click();
+      out.armed = first.textContent;
+      out.calledEarly = sent.length;
+      await wait(1000);
+      s.status.querySelector(".bell.askagain").click();
+      await wait(150);
+      out.sent = sent.map((m) => [m.type, m.kind, m.shared, !!m.entity_id].join("|"));
+      out.after = rows().join();
+      // No bond: no rows. A shared screen: no rows.
+      s.mine = { ...s.mine, bond: null, fav_weather: "snow" };
+      el._renderStatus(s, []);
+      out.noBond = rows().length;
+      s.mine = { ...s.mine, bond: { level: 3 } };
+      localStorage.setItem("hatch-shared-screen", "on");
+      el._renderStatus(s, []);
+      out.shared = rows().length;
+    } finally {
+      localStorage.setItem("hatch-shared-screen", "off");
+      el._hass.callWS = realWS;
+      s.mine = mine;
+      if (mine) Object.assign(mine, kept);
+      s.confirm = null;
+      s.settings = false;
+    }
+    return out;
+  });
+  check("the settings sheet offers 'ask me again' per favourite, as text, behind a confirm tap",
+    asks.rows === "fav_weather,fav_season" && asks.text === "snow" && !asks.markup &&
+    asks.armed === "sure? tap again" && asks.calledEarly === 0, JSON.stringify(asks));
+  check("the second tap sends one ask_again with shared false, and the row goes",
+    asks.sent.length === 1 && asks.sent[0] === "virtual_pet/ask_again|fav_weather|false|true" &&
+    asks.after === "fav_season", JSON.stringify(asks));
+  check("no 'ask me again' row on a pet with no bond, or on a shared screen",
+    asks.noBond === 0 && asks.shared === 0, JSON.stringify(asks));
   // The lay sheet (settings S2): the next egg chosen in the lay confirm. The server's egg_roster is
   // real; the pet's raised creatures, its stage and the calls are stubbed on this card's own hass
   // (a copy, put back at the end), so each state is pinned.
