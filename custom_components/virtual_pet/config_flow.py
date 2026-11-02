@@ -102,6 +102,28 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
             DEFAULT_NAME,
         )
 
+    def _first_unused_world(self, keys: list[str]) -> str:
+        """The first world, in catalog order, that no pet here lives in or moves to.
+
+        A disabled pet still lives in its world, so entries count by their
+        data, not their state. All taken: the default world.
+        """
+        used: set[str] = set()
+        for entry in self._async_current_entries():
+            coordinator = getattr(entry, "runtime_data", None)
+            world = (
+                coordinator.world
+                if coordinator is not None
+                else entry.data.get(CONF_WORLD)
+            )
+            used.add(world or DEFAULT_WORLD)
+            if entry.data.get(CONF_NEXT_WORLD):
+                used.add(entry.data[CONF_NEXT_WORLD])
+        free = next((k for k in keys if k not in used), None)
+        if free is not None:
+            return free
+        return DEFAULT_WORLD if DEFAULT_WORLD in keys else keys[0]
+
     async def _world_options(self) -> list[SelectOptionDict] | None:
         catalog = await self.hass.async_add_executor_job(load_catalog)
         if not catalog.worlds:
@@ -208,7 +230,7 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
         if options is None:
             return self.async_abort(reason="no_worlds")
         keys = [o["value"] for o in options]
-        default = DEFAULT_WORLD if DEFAULT_WORLD in keys else keys[0]
+        default = self._first_unused_world(keys)
         typed = user_input or {}  # what they had typed, when a name is taken
         return self.async_show_form(
             step_id="user",
