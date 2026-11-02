@@ -32,6 +32,7 @@
   "backgrounds": { "day": "treefrog/bg_day", "night": "treefrog/bg_night", "rain": "treefrog/bg_rain", "dim": "treefrog/bg_night" },
   "words": { "food": "bloodworms", "home": "pond" },
   "voice": { "sound": "blep", "catchphrase": "smiley", "pitch": 460, "pace": 28, "likes": ["bloodworms", "earthworms", "shrimp"] },
+  "nature": { "clock": "night", "sky": "fog", "company": "solo", "habit": "watcher" },
   "reactions": { "play": "float", "won": "gill_flutter", "praise": "smile", "snack": "smile" },
   "head": { "baby": [170, 144], "child": [184, 124], "teen": [192, 104], "adult": [226, 140] },
   "hat": {

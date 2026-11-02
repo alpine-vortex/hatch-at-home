@@ -70,6 +70,7 @@
     "home": "burrow"
   },
   "voice": { "sound": "arr", "catchphrase": "flap flap", "pitch": 600, "pace": 38, "likes": ["sand eels", "herring", "capelin"] },
+  "nature": { "clock": "day", "sky": "wind", "company": "social", "habit": "builder" },
   "reactions": {
     "feed": "fish_bill",
     "snack": "fish_bill",

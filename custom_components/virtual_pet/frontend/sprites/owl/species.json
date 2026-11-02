@@ -70,6 +70,7 @@
     "home": "hollow"
   },
   "voice": { "sound": "hoo", "catchphrase": "who knows", "pitch": 380, "pace": 27, "likes": ["moths", "beetles", "crickets"] },
+  "nature": { "clock": "night", "sky": "fog", "company": "solo", "habit": "watcher" },
   "reactions": {
     "play": "head_turn",
     "won": "toot",

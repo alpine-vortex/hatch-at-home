@@ -429,4 +429,28 @@ const REST_LINES = {
   visit: "oh! hi ♥ i was just daydreaming",
   back: ["good stretch! i'm back ♪", "that was a nice rest!"],
 };
+// Species nature, N1 (docs/plan-2026-11-02-species-nature.md section 5.2-5.3): the body's own
+// reaction to its sky, once a day, and the sunset and morning lines by clock. Action lines
+// for the body, never a liking: the words "favourite", "fond" and "love" stay out of them.
+const SKY_REACT = {
+  sun: ["*turns toward the warm light*", "*soaks up a little sun*"],
+  rain: ["*listens to the pitter patter*", "*shakes off a drop*"],
+  snow: ["*watches the flakes drift*", "*blinks at all the white*"],
+  fog: ["*peers into the mist*", "*sniffs the damp air*"],
+  wind: ["*leans into the breeze*", "*gets nicely ruffled*"],
+  fire: ["*soaks up the warmth*", "*stretches toward the warm air*"],
+  moon: ["*gazes up at the moon*", "*bathes in the moonlight*"],
+};
+const CLOCK_LINES = {
+  sunset: {
+    day: ["*winds down for the evening*", "*settles in as the light fades*"],
+    dusk: ["ooh, evening! *perks up* ♪", "the evening is here ♪ *wiggles*"],
+    night: ["*stirs* the night is starting ♪", "*wakes right up* hello, dark ♪"],
+  },
+  good_morning: {
+    day: ["morning!! what a bright one ♪", "rise and shine ♪ *bounces*"],
+    dusk: ["morning... *stretch* getting there", "*slow blink* morning, more or less"],
+    night: ["five more minutes... ♥", "*curls up tighter* too early..."],
+  },
+};
 // --- end fresh-expand copy ---

@@ -11,6 +11,7 @@
   "backgrounds": {"day": "otter/bg_day", "night": "otter/bg_night", "rain": "otter/bg_rain", "dim": "otter/bg_night"},
   "words": {"food": "fish", "home": "rock"},
   "voice": { "sound": "arf", "catchphrase": "flip flop", "pitch": 560, "pace": 34, "likes": ["herring", "squid", "sardines"] },
+  "nature": { "clock": "day", "sky": "sun", "company": "social", "habit": "basker" },
   "reactions": {"praise": "banana", "won": "flipper_clap", "play": "flipper_clap", "scold": "splash"},
   "head": {"baby": [158, 132], "child": [170, 120], "teen": [176, 88], "adult": [194, 116]},
   "murk": "otter/murk",

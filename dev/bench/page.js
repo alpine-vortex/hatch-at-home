@@ -508,10 +508,18 @@
     if (shot.idle) {
       const real = Math.random;
       let n = 0;
-      Math.random = () => (n++ < 2 ? 0 : 0.1);
+      // `idle.draw`: the draw after the delay, for the sky reaction's line pick (0 the first line, .99 the second).
+      Math.random = () => { const i = n++; return i === 1 && shot.idle.draw !== undefined ? shot.idle.draw : i < 2 ? 0 : 0.1; };
       Object.assign(cur, { moodState: shot.idle.mood || "content", nextIdle: 1, sayUntil: 0, poseUntil: 0, movingUntil: 0 });
       card._idle(cur);
       Math.random = real;
+      cur.sayUntil = Date.now() + 1e9;
+    }
+    // `moment`: a public moment (`{type: "sunset"}`) put through the card's own _moment, so the line it says is shown.
+    if (shot.moment) {
+      Object.assign(cur, { sayUntil: 0, sayEntry: null, queue: [] });
+      card._moment(cur, { at: new Date().toISOString(), ...shot.moment });
+      card._stopTyping(cur);
       cur.sayUntil = Date.now() + 1e9;
     }
     const root = card.shadowRoot;
@@ -521,7 +529,9 @@
     // so "you two" and "my day" show, and the switches behind the settings rows.
     if (shot.mine) {
       const mine = { bond: { level: 6, nickname: null }, notify_me: true, my_day: true, birthday_kept: true, birthday_phone: false };
-      slides.forEach((s) => { s.mine = { ...mine, ...(typeof shot.mine === "object" ? shot.mine : {}) }; });
+      // An array is one view per pet (the favourite's heart is one pet's, R2).
+      const over = (i) => (Array.isArray(shot.mine) ? shot.mine[i] || {} : typeof shot.mine === "object" ? shot.mine : {});
+      slides.forEach((s, i) => { s.mine = { ...mine, ...over(i) }; });
     }
     // The house view the channel would send (`house`, an object over it), and `basket`:
     // how many finds wait (house.basket, 0-3), so the basket shows through _basketSync.

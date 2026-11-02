@@ -69,6 +69,7 @@
     "home": "rock"
   },
   "voice": { "sound": "puff", "catchphrase": "sun's out", "pitch": 560, "pace": 33, "likes": ["crickets", "collard greens", "squash"] },
+  "nature": { "clock": "day", "sky": "sun", "company": "social", "habit": "basker" },
   "reactions": {
     "praise": "bask",
     "won": "bask",

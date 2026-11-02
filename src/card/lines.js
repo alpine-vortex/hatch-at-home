@@ -49,6 +49,44 @@ const MEMORY_LABELS = {
 // Idle life: something small every so often when nothing else is going on.
 const IDLE_MIN_MS = 20000;
 const IDLE_SPREAD_MS = 25000;
+// Species nature (docs/plan-2026-11-02-species-nature.md): four facts in species.json, flavour only.
+// A missing block or an unknown value is no nature at all, never an error. Pace is not a key:
+// it comes from voice.pace (40 or more quick, 29 or less slow, else steady).
+const NATURE_VALUES = {
+  clock: ["day", "dusk", "night"],
+  sky: ["sun", "rain", "snow", "fog", "wind", "fire", "moon"],
+  company: ["social", "solo"],
+  habit: ["hoarder", "builder", "basker", "groomer", "explorer", "watcher", "performer"],
+};
+function nature(sp) {
+  const n = sp?.nature;
+  if (!n || typeof n !== "object") return null;
+  return Object.entries(NATURE_VALUES).every(([key, ok]) => ok.includes(n[key])) ? n : null;
+}
+function paceOf(sp) {
+  const pace = sp?.voice?.pace;
+  return !(pace > 0) ? "steady" : pace >= 40 ? "quick" : pace <= 29 ? "slow" : "steady";
+}
+// The idle cadence by pace (at most 25% either way). Not for a calm card, a baby or a species
+// with no nature: those keep the common cadence.
+const SKY_WAIT_MS = 60000; // the sky reaction holds off this long after a weather line
+const PACE_SCALE = { quick: 0.8, steady: 1, slow: 1.25 };
+// Idle manner: the copies of existing idle moves a teen or adult's habit adds (at most 3).
+const SPECIES_ADDS = {
+  hoarder: ["speck", "speck", "munch"],
+  builder: ["settle", "wander"],
+  basker: ["settle", "settle", "look"],
+  groomer: ["rock", "settle"],
+  explorer: ["wander", "wander", "look"],
+  watcher: ["look", "look", "look"],
+  performer: ["perk", "perk", "rock"],
+};
+// The house flag each sky waits for. The fire has two stand-ins: the heating answering a chill
+// ("cozy"), and else the sun, so a house with no fireplace still sees it.
+const SKY_FLAGS = {
+  sun: ["sunny"], rain: ["rainy"], snow: ["snowy"], fog: ["foggy"], wind: ["windy"],
+  fire: ["fireside", "cozy", "sunny"], moon: ["full_moon"],
+};
 const EGG_WOBBLE_MIN_MS = 40000; // an idle egg rocks once in 40-90 s (_eggWobble)
 const EGG_WOBBLE_SPREAD_MS = 50000;
 const IDLE_MOODS = new Set(["content", "cozy", "bored", "excited", "sleepy", "hungry", "dirty"]);

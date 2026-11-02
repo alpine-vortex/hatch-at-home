@@ -62,6 +62,8 @@ const COPY_TABLES = {
   SETUP_COPY: { fill: "creature" }, // settings S2: the lay sheet (the longest name is C15')
   RESTING_IDLE: {}, // resting R1 (plan favourite-resting §4.6)
   REST_LINES: {},
+  SKY_REACT: {}, // species nature N1 (plan-2026-11-02-species-nature.md)
+  CLOCK_LINES: {},
 };
 
 function lines(value, path, out) {

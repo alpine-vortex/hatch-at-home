@@ -70,6 +70,7 @@
     "home": "hollow"
   },
   "voice": { "sound": "click", "catchphrase": "hang in there", "pitch": 600, "pace": 31, "likes": ["persimmons", "ripe pears", "snails"] },
+  "nature": { "clock": "night", "sky": "fire", "company": "solo", "habit": "builder" },
   "reactions": {
     "play": "tail_curl",
     "won": "play_dead",
