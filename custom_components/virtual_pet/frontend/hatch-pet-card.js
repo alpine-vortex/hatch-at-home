@@ -7212,9 +7212,12 @@ class HatchPetCard extends HTMLElement {
 
   // Heat shimmer (fx-heat) or cool wisps (fx-cool) over the screen for 2.5 s as the house
   // answers: a CSS stand-in until the art (house_heat, house_cool) lands.
+  // One house effect at a time: a new one replaces the last.
   _houseFx(s, cls) {
+    s.screen.classList.remove("fx-heat", "fx-cool", "fx-suds", "fx-tumble");
     s.screen.classList.add(cls);
-    setTimeout(() => s.screen.classList.remove(cls), 2500);
+    clearTimeout(s.houseFxTimer);
+    s.houseFxTimer = setTimeout(() => s.screen.classList.remove(cls), 2500);
   }
 
   // The robot vacuum's stand-in (fx-robot, 6 s across the floor line) until the art

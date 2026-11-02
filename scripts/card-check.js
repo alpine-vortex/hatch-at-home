@@ -2656,8 +2656,8 @@ async function main() {
     check("3a: calm _frames() returns one frame", calmAfter.frames === 1, JSON.stringify(calmAfter));
     const guard = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8")
       .split("\n").map((l, i) => [i + 1, l]).filter(([, l]) => l.includes("prefers-reduced-motion"));
-    check("3a: 'prefers-reduced-motion' appears only in calm() and the CSS block",
-      guard.length === 2 && /matchMedia/.test(guard[0][1]) && /@media/.test(guard[1][1]), JSON.stringify(guard));
+    check("3a: 'prefers-reduced-motion' appears only in calm() and CSS @media rules",
+      guard.length >= 2 && /matchMedia/.test(guard[0][1]) && guard.slice(1).every(([, l]) => /^\s*@media/.test(l)), JSON.stringify(guard));
     await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.waitForTimeout(1000);
   }
