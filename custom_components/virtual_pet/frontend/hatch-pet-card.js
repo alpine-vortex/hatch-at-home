@@ -657,6 +657,7 @@ function thanksgiving(year, days = 0) {
   return [at.getMonth() + 1, at.getDate()];
 }
 const seasonDate = (when, year) => (typeof when === "function" ? when(year) : when);
+const HEAD_SPRITE = 75; // px the sprite is drawn at inside a head crop (UX7 F2)
 const HEAD_TOPS = new Map(); // frame|x -> the top of the head (see _headTop)
 const FRAME_IMGS = new Map(); // src -> Image, for measuring frames not on show
 const SEASON_COSTUME_MS = [600000, 900000]; // between costume moments (10-15 min)
@@ -3563,7 +3564,7 @@ const STYLE = `
   /* The pet's head and name at the status band's left (UX fix 2, F10). */
   .who { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
   .whohead { flex: none; width: 28px; height: 28px; image-rendering: pixelated;
-    background: var(--say-img, none) var(--say-at, 0 0) / 128px 128px no-repeat; }
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 75px) var(--say-size, 75px) no-repeat; }
   .whoname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .gear { margin-left: auto; display: flex; align-items: center; justify-content: center;
     min-width: 44px; min-height: 44px; padding: 0 5px; border: none; background: none;
@@ -3630,7 +3631,7 @@ const STYLE = `
     background: #fbf7e6; color: #2f3a24; line-height: 1.15; }
   .status-feedback.say[hidden] { display: none; }
   .status-feedback.say::before { content: ""; flex: none; width: 28px; height: 28px;
-    background: var(--say-img, none) var(--say-at, 0 0) / 128px 128px no-repeat; image-rendering: pixelated; }
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 75px) var(--say-size, 75px) no-repeat; image-rendering: pixelated; }
   .shead:has(.pback) .status-feedback.say { left: var(--sx, 12px); right: var(--sx, 12px); }
   .jdream, .stoday { font-size: 13px; color: var(--hp-subink); margin: 2px 0 4px; } /* today's dream, today's line (E9) */
   .jweek { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; margin: 0 0 6px; } /* E14 */
@@ -3789,7 +3790,7 @@ const STYLE = `
   .porthole .screen .askday.nopet { bottom: 2%; }
   .screen:has(> .askday.nopet) .bubble::before { content: ""; position: absolute; left: 4px; top: 50%;
     width: 28px; height: 28px; margin-top: -14px; image-rendering: pixelated;
-    background: var(--say-img, none) var(--say-at, 0 0) / 128px 128px no-repeat; }
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 75px) var(--say-size, 75px) no-repeat; }
   .screen:has(> .askday.nopet) .pet, .screen:has(> .askday.nopet) .perch, .screen:has(> .askday.nopet) .ghost { visibility: hidden; }
   /* Big text reaches the pet's words too (F9). */
   ha-card.bigtext .bubble { font-size: 16px; }
@@ -9339,18 +9340,27 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
-  // Set the pet's head, cropped from the sprite on show, as the background of `el` (28 px, the
-  // crop the settings bubble uses); (cx, cy) is where the head's centre and top sit in it.
+  // Set the pet's head, cropped from the sprite on show, as the background of `el` (a square of
+  // 2 * cx px, 28 by default, the crop the settings bubble and the status band use); (cx, cy) is where
+  // the head's centre and top sit in it. The sprite is drawn at 75 px (a 96-sprite-px window), so the box
+  // shows a face and not just the crown that species.head marks (UX7 F2). A species that still
+  // shows a back, a wing or a shell there gives species.json "face": {stage: [x, y, size]}: the face's
+  // centre and the width of the window around it, in sprite px, and that wins.
   _headCrop(s, el, cx, cy) {
     if (!s.pet?.src || !s.drawn) return false;
     const [hx, hy] = s.species?.head?.[s.drawn] || [128, 96];
-    let top = this._headTop(s.pet, hx, hy); // the head's top, where a hat sits
+    const face = s.species?.face?.[s.drawn];
+    let top = face ? hy : this._headTop(s.pet, hx, hy); // the head's top, where a hat sits
     if (top === null && !s.pet.complete) { // not drawn yet (a status opened at once): crop again when it is
       s.pet.addEventListener("load", () => { if (el.isConnected) this._headCrop(s, el, cx, cy); }, { once: true });
     }
     top ??= hy;
+    // px per sprite px: the face's window fills the box; else a fixed 75 px sprite
+    const k = face ? (cx * 2) / face[2] : HEAD_SPRITE / 256;
     el.style.setProperty("--say-img", `url("${s.pet.src}")`);
-    el.style.setProperty("--say-at", `${cx - hx / 2}px ${cy - top / 2}px`);
+    el.style.setProperty("--say-size", `${(256 * k).toFixed(2)}px`);
+    el.style.setProperty("--say-at", face ? `${(cx - face[0] * k).toFixed(2)}px ${(cx - face[1] * k).toFixed(2)}px`
+      : `${(cx - hx * k).toFixed(2)}px ${(cy - top * k).toFixed(2)}px`);
     return true;
   }
 
