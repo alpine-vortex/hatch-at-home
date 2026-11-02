@@ -568,7 +568,8 @@ Who is home decides whether the pet is with you or at the sitter's. The two swit
 ### Privacy: what the pets remember
 
 **What the pets remember about you.** Your birthday, your answers to its questions,
-your alarm times, the last zone you came back from (only while "my day" is on), and
+your alarm times, the last zone you came back from (only while "my day" is on), the
+dream you picked for tonight (and, the next morning, that it was your idea), and
 your "baby talk", "my day" and "birthday on my phone" switches are kept for you alone,
 for every pet. They stay
 when you remove a pet, even the last one, so they're there if you set it up again.

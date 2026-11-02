@@ -79,7 +79,7 @@ from .coordinator import (
 from .defaults import default_weather
 from .home import news_text
 from .model import GAMES
-from .people import ANSWERS, People
+from .people import ANSWERS, ASK_AGAIN_KINDS, People
 from .react import REACTIONS
 
 _LOGGER = logging.getLogger(__name__)
@@ -233,6 +233,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_baby_talk)
     websocket_api.async_register_command(hass, websocket_photos)
     websocket_api.async_register_command(hass, websocket_forget_me)
+    websocket_api.async_register_command(hass, websocket_ask_again)
     websocket_api.async_register_command(hass, websocket_subscribe)
     websocket_api.async_register_command(hass, websocket_notify_me)
     websocket_api.async_register_command(hass, websocket_linked)
@@ -573,6 +574,39 @@ async def websocket_forget_me(
         if pet.state is not None:
             await pet.async_forget_games(user)  # their parked Berry dig names them
             pet.async_set_updated_data(pet.state)
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/ask_again",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("kind"): vol.In(ASK_AGAIN_KINDS),
+        # No default, and refused unless False: a card that forgets the flag, or a
+        # shared screen, changes nothing (a card-honesty guard, as the gift path).
+        vol.Required("shared"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_ask_again(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Ask me again (memory plan M0-c): the signed-in person's favourite of this
+    kind is dropped and the pet asks it afresh on a later look. Only on their own
+    screen. A websocket command, so the choice stays off the event bus."""
+    if msg["shared"] is not False:
+        connection.send_error(
+            msg["id"], "shared", "That is asked again on its person's own screen"
+        )
+        return
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    await pet.async_ask_again(connection.user.id, msg["kind"])
     connection.send_result(msg["id"])
 
 

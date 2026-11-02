@@ -2229,6 +2229,26 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.people.save()
         self._push_everywhere()
 
+    async def async_ask_again(self, user: str, kind: str) -> None:
+        """Ask me again (memory plan M0-c): drop this person's favourite of this
+        kind (the visitor: this world's) and start its tries over, so the next
+        eligible look asks it again. Nothing else changes: the 3-day gap
+        (once_last), `noted`, the birthday, the switches stay. Saved at once, as
+        a forget is. A record that isn't there is not made."""
+        if kind not in P.ASK_AGAIN_KINDS:
+            return
+        async with self.people.lock(user):
+            person = self.people.data["people"].get(user)
+            if person is None:
+                return
+            key = P.fav_visitor_key(self.world) if kind == "fav_visitor" else kind
+            tries = f"fav_visitor_{self.world}" if kind == "fav_visitor" else kind
+            gone = (person.get("likes") or {}).pop(key, None)
+            (person.get("likes_asked") or {}).pop(tries, None)
+            if gone is not None:
+                await self.people.async_save_now()
+        self._push_everywhere()  # their mine
+
     async def async_set_my_day(self, user: str, enabled: bool) -> None:
         """Let the pets notice this person's day (steps, sleep, where they've
         been...), or stop. One switch per person, for every pet."""
@@ -2577,10 +2597,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "birthday_kept": bool(person.get("birthday")),
             # Their waiting gift, {id, world}, or None (plan visitors v2 §5).
             "gift": model.known_gift(bond, self.known_finds),
-            # Their favourite of this world's visitors (an id), or None (F4).
+            # Their favourite of this world's visitors (an id), or None (F4), and of
+            # the weather and the season, so the settings sheet can show them and
+            # offer "ask me again" (memory plan M0-c). Their own channel only.
             "fav_visitor": (person.get("likes") or {}).get(
                 P.fav_visitor_key(self.world)
             ),
+            "fav_weather": (person.get("likes") or {}).get("fav_weather"),
+            "fav_season": (person.get("likes") or {}).get("fav_season"),
             # Where a follow-up beat may wait for them today ("look", "picker"), so
             # their card keeps a first-look slot only then (F1); never what it is.
             "follow_at": self.people.follow_at(
@@ -2786,13 +2810,22 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     async def async_forget_games(self, user: str) -> None:
         """Forget my data: this person's parked dig goes, and a dig in progress
-        no longer names them (it's the household's now). Written at once, as
-        the people store is."""
+        no longer names them (it's the household's now). So does their dream
+        pick, waiting for tonight, and their name on this morning's dream (the
+        story stays, "your idea" does not; memory plan M0-d). Written at once,
+        as the people store is."""
         assert self.state is not None
         dropped = self.state.parked.pop(user, None) is not None
         game = self.state.game
         if game is not None and game.player == user:
             game.player = None
+            dropped = True
+        picks = [p for p in self.state.dream_picks if p["user"] != user]
+        if len(picks) != len(self.state.dream_picks):
+            self.state.dream_picks = picks
+            dropped = True
+        if (self.state.dream or {}).get("user") == user:
+            del self.state.dream["user"]
             dropped = True
         if dropped:
             await self.store.async_save(self.state.to_dict())

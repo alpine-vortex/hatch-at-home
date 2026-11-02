@@ -32,6 +32,7 @@ const COPY_TABLES = {
   WISH_MORE: {},
   WELCOME_BACK: {},
   FAV_LINES: {},
+  FAV_WEATHER_LINES: {},
   TRICK_LINES: {},
   LINK_VISITOR_NEWS: { fill: "visitor" },
   LINK_NEWS_REPLY: {},
