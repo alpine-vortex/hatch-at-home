@@ -1,4 +1,4 @@
-"""Constants for the Virtual Pet integration."""
+"""Constants for the Hatch at Home integration."""
 
 from __future__ import annotations
 

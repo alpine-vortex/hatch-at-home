@@ -1,1 +1,1 @@
-"""Tests for the Virtual Pet integration."""
+"""Tests for the Hatch at Home integration."""
