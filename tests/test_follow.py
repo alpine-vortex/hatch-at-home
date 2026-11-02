@@ -396,6 +396,8 @@ async def test_a_big_day_end_to_end_keeps_its_words_to_itself(
     assert msg["success"] and people._texts == {ada.id: "quokka" * 3 + "qu"}
     msg = await answer(client, "big_day", "yes", text=SECRET)
     assert msg["success"] and people._texts == {ada.id: SAID}
+    # The typing browser learns how long to keep its own copy (owner Q1 A), never more.
+    assert msg["result"] == {"until": people.open_event(ada.id)["until"]}
     # A shared screen's text is refused (the yes stands).
     msg = await answer(theirs, "big_day", "yes", text="pelican", shared=True)
     assert msg["error"]["code"] == "not_asked"  # nobody asked them

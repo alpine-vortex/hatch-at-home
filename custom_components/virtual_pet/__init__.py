@@ -376,11 +376,15 @@ async def websocket_answer(
     # Never a shared screen's text: it's one person's, said back only to them.
     text = None if msg.get("shared") else msg.get("text")
     try:
-        await pet.async_answer(connection.user.id, msg["question"], msg["answer"], text)
+        kept = await pet.async_answer(
+            connection.user.id, msg["question"], msg["answer"], text
+        )
     except ValueError:
         connection.send_error(msg["id"], "not_asked", "It didn't ask that")
         return
-    connection.send_result(msg["id"])
+    # A follow-up's yes: {"until": its last day}, so the typing browser keeps its own copy
+    # of the words that long (owner Q1 A on critique s2632); else nothing.
+    connection.send_result(msg["id"], kept)
 
 
 @websocket_api.websocket_command(

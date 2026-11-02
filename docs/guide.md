@@ -525,15 +525,20 @@ erase everyone's, an admin can stop Home Assistant and delete
 **Follow-ups.** Answer "tough" to "how was your day?" and the pet keeps only the
 date, in memory, to be a little softer the next morning on your own screen; a restart
 forgets it, and "great" or "ok" never leave the card. Say "yes" to "big day tomorrow?"
-and it keeps that day (the date, not what it is) for a week at most, to wish you luck
-in the morning and ask nothing of it in the evening. What you type in "what is it?"
-(optional, 20 characters at most) is kept in memory only: never on a sensor, in a log,
-a notification, diagnostics, Assist or a backup, and a restart forgets it. The pet says
-it back only to you, on your own screens, never on a shared one. Two things to know:
-if someone turns on debug logging for `homeassistant.components.websocket_api`, Home
-Assistant logs every message, your typed words included; and if a family shares one
-Home Assistant account, every personal screen signed in to it hears it (as with
-birthdays). "forget my data" erases all of it.
+or "anything fun this weekend?" and it keeps that day (the date, not what it is) for a
+week at most, to wish you luck or welcome you back. "what should we play tomorrow?" and
+"should I learn a new trick?" keep only your pick, for that pet. What you type in "what
+is it?" (optional, 20 characters at most) is kept in Home Assistant's memory only (never
+on a sensor, in a log, a notification, diagnostics, Assist or a backup; a restart there
+forgets it) and in the browser you typed it on, until that day is over, so a restart
+doesn't lose it there. The pet says your words back only to you, on the browser you
+typed them on or on a phone or the Home Assistant app, never on a shared screen; other
+screens get its usual line. Things to know: if someone turns on debug logging for
+`homeassistant.components.websocket_api`, Home Assistant logs every message, your typed
+words included; if a family shares one Home Assistant account, every phone signed in to
+it can hear them (as with birthdays); and "forget my data" erases all of it in Home
+Assistant and in the browser you press it on, but a copy in another browser stays there
+until its day is over.
 
 With no pets left there's no card, so no "forget my data" button. An admin can
 delete `.storage/virtual_pet.people` (and any `virtual_pet.people.damaged.*` copies) then, with Home Assistant stopped.

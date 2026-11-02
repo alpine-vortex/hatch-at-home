@@ -4516,7 +4516,7 @@ async function main() {
       el._hass.callWS = (msg) => {
         sent.push(msg);
         if (msg.type === "virtual_pet/follow") return Promise.resolve(reply);
-        if (msg.type === "virtual_pet/answer") return answerOk ? Promise.resolve(null) : Promise.reject({ code: "unknown_error" });
+        if (msg.type === "virtual_pet/answer") return answerOk ? Promise.resolve({ until: "2999-12-31" }) : Promise.reject({ code: "unknown_error" });
         return realWS.call(el._hass, msg);
       };
       const shared = localStorage.getItem("hatch-shared-screen");
@@ -4537,15 +4537,26 @@ async function main() {
         const said = s.queue.map((q) => q.text);
         return said;
       };
+      const textKey = `hatch-followtext-${el._hass.user.id}`;
+      const textHad = localStorage.getItem(textKey);
+      const ownCopy = (kind, it) => localStorage.setItem(textKey, JSON.stringify({ kind, it, until: "2999-12-31" }));
       try {
         localStorage.setItem("hatch-shared-screen", "off");
+        // Owner Q2 A: the server's words alone aren't said on a desktop browser (this one);
+        // this browser's own copy (it typed them) is.
+        localStorage.removeItem(textKey);
+        out.notHere = await fetch({ kind: "big_day", beat: "morning", text: "your exam" });
+        ownCopy("big_day", "your exam");
         out.am = await fetch({ kind: "big_day", beat: "morning", text: "your exam" });
         out.pm = await fetch({ kind: "big_day", beat: "evening", text: "your exam" });
+        localStorage.removeItem(textKey); // no words anywhere: the plain lines
         out.amPlain = await fetch({ kind: "big_day", beat: "morning" });
         out.pmPlain = await fetch({ kind: "big_day", beat: "evening" });
         out.soft = await fetch({ kind: "soft", beat: "morning" });
         out.none = await fetch({});
+        ownCopy("big_day", "<img src=x onerror=alert(1)>");
         await fetch({ kind: "big_day", beat: "morning", text: "<img src=x onerror=alert(1)>" });
+        localStorage.removeItem(textKey);
         Object.assign(s, { sayUntil: 0, sayClass: 0 });
         el._sayQueued(s);
         out.html = { text: s.bubble.textContent, img: !!s.bubble.querySelector("img") };
@@ -4593,6 +4604,7 @@ async function main() {
         out.timeout = sent.filter((m) => m.type === "virtual_pet/answer");
         // F5: the weekend's typed step sends its own question.
         sent.length = 0;
+        answerOk = true; // kept: this browser keeps its own copy of the words (Q1 A)
         el._askTextStart(s, entity, "weekend");
         s.queue.find((q) => q.ask)?.then();
         const wkInput = s.screen.querySelector(".asktext input");
@@ -4600,10 +4612,14 @@ async function main() {
         s.screen.querySelector(".asktext button")?.click();
         await new Promise((r) => setTimeout(r, 50));
         out.weekendSent = sent.filter((m) => m.type === "virtual_pet/answer");
+        answerOk = false;
         s.queue = [];
         // F5 Monday; F7 a trick shown (with the move, in its idle list today), skipped
         // when LS-a's monthly line was said here today.
+        out.kept = { copy: JSON.parse(localStorage.getItem(textKey) || "null") };
+        out.monServerOnly = await fetch({ kind: "weekend", beat: "monday" }); // the copy fills it
         out.mon = await fetch({ kind: "weekend", beat: "monday", text: "the fair" });
+        localStorage.removeItem(textKey);
         out.monPlain = await fetch({ kind: "weekend", beat: "monday" });
         s.followTrick = null;
         s.trickSaid = null;
@@ -4628,6 +4644,7 @@ async function main() {
         el._hass.callWS = realWS;
         el._followOk = followOk;
         s.mine = mine;
+        if (textHad === null) localStorage.removeItem(textKey); else localStorage.setItem(textKey, textHad);
         if (shared === null) localStorage.removeItem("hatch-shared-screen"); else localStorage.setItem("hatch-shared-screen", shared);
         Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0, asking: false, textStep: null, followTrick: null, followGame: null });
       }
@@ -4638,6 +4655,11 @@ async function main() {
     const GTM = require("vm").runInNewContext(`(${src4.match(/\nconst GAME_TOMORROW = (\{[\s\S]*?\n\});/)[1]})`);
     check("fresh F1: no follow_at in the viewer's mine, no fetch",
       f1.unasked === null && f1.unaskedCalls === 0, JSON.stringify({ unasked: f1.unasked, calls: f1.unaskedCalls }));
+    check("owner Q1/Q2: the typing browser keeps its words to the event's end and fills a reply without them; the server's alone aren't said on a desktop",
+      f1.kept.copy?.kind === "weekend" && f1.kept.copy?.it === "the fair" && f1.kept.copy?.until === "2999-12-31" &&
+        WKND.monText.map((f) => f("the fair")).includes(f1.monServerOnly[0]) &&
+        [...BIG.am, ...typeLines("bigday_am")].includes(f1.notHere[0]),
+      JSON.stringify({ kept: f1.kept, filled: f1.monServerOnly, notHere: f1.notHere }));
     check("fresh F5: the weekend's typed step sends weekend yes with the text; Monday says their words, else a Monday line",
       f1.weekendSent.length === 1 && f1.weekendSent[0].question === "weekend" && f1.weekendSent[0].text === "the fair" &&
         WKND.monText.map((f) => f("the fair")).includes(f1.mon[0]) && WKND.mon.includes(f1.monPlain[0]),

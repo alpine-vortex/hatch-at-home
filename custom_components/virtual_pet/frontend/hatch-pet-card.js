@@ -1573,6 +1573,37 @@ const FOLLOW_EVENING_HOUR = 19;
 // Said inside a line ("good luck with {it}! ♥"): no trailing punctuation or emoticon of
 // its own (critique #8), as the server's clean_text.
 const TYPED_TAIL = /(?:\s*(?:[.!?,;:]+|[:;=]-?[()DPpOo/|\\[\]]|<3))+$/u;
+// The typing browser's own copy of a big day's or weekend's words (owner Q1 A on critique
+// s2632): one key per person, {kind, it, until}, gone after its event's last day or at
+// "forget my data" here. Never on Home Assistant's disk; a restart there doesn't lose it.
+const FOLLOW_TEXT_KEY = "hatch-followtext-";
+function followTextKeep(user, kind, it, until) {
+  try {
+    localStorage.setItem(FOLLOW_TEXT_KEY + user, JSON.stringify({ kind, it, until }));
+  } catch (err) {
+    // no storage: the server's copy only
+  }
+}
+// The words typed here for this kind, while its event lasts (by the local date), or null.
+function followTextRead(user, kind, today = new Date()) {
+  try {
+    const kept = JSON.parse(localStorage.getItem(FOLLOW_TEXT_KEY + user) || "null");
+    if (!kept) return null;
+    const day = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    if (typeof kept.until !== "string" || kept.until < day) {
+      localStorage.removeItem(FOLLOW_TEXT_KEY + user);
+      return null;
+    }
+    return kept.kind === kind && typeof kept.it === "string" ? kept.it : null;
+  } catch (err) {
+    return null;
+  }
+}
+// A phone, or the Home Assistant app: where typed words may be said back without this
+// browser having typed them (owner Q2 A). A desktop or tablet browser gets the plain line.
+function phoneLike(ua = navigator.userAgent || "") {
+  return /Home ?Assistant\//.test(ua) || /iPhone|Android.+Mobile/.test(ua);
+}
 const cleanTyped = (value) => {
   const kept = String(value ?? "").replace(/\p{C}/gu, "").replace(/\s+/g, " ").trim().replace(TYPED_TAIL, "");
   return Array.from(kept).slice(0, FOLLOW_TEXT_MAX).join("").trim().replace(TYPED_TAIL, "") || null;
@@ -6314,17 +6345,26 @@ class HatchPetCard extends HTMLElement {
     }
     if (reply.kind === "big_day" && (reply.beat === "morning" || reply.beat === "evening")) {
       const am = reply.beat === "morning";
-      const it = cleanTyped(reply.text);
+      const it = this._followIt(reply);
       const salt = `${device}|bigday|${reply.beat}`;
       if (it) return turnPick(am ? BIG_DAY.amText : BIG_DAY.pmText, salt)(it);
       return turnPick([...((am ? type.bigday_am : type.bigday_pm) || []), ...(am ? BIG_DAY.am : BIG_DAY.pm)], salt);
     }
     if (reply.kind === "weekend" && reply.beat === "monday") {
-      const it = cleanTyped(reply.text);
+      const it = this._followIt(reply);
       return it ? turnPick(WEEKEND.monText, `${device}|weekend`)(it) : turnPick(WEEKEND.mon, `${device}|weekend`);
     }
     if (reply.kind === "trick" && reply.beat === "shown") return turnPick(TRICK_ASK.shown, `${device}|trickshown`);
     return null;
+  }
+
+  // Their words for this beat: this browser's own copy (it typed them), else the server's
+  // on a phone or the app only (owner Q2 A); else none, and the plain line is said.
+  _followIt(reply) {
+    const user = this._hass?.user?.id;
+    const own = user && followTextRead(user, reply.kind);
+    if (own) return cleanTyped(own);
+    return phoneLike() ? cleanTyped(reply.text) : null;
   }
 
   // A follow-up answer, fire and forget: only to a server that takes them, never on a
@@ -6333,7 +6373,7 @@ class HatchPetCard extends HTMLElement {
     if (!this._followOk || sharedScreen() || !entity) return Promise.resolve(false);
     const msg = { type: "virtual_pet/answer", entity_id: entity, question, answer };
     if (text) msg.text = text;
-    return this._hass.callWS(msg).then(() => true, () => false);
+    return this._hass.callWS(msg).then((r) => r || true, () => false);
   }
 
   // After a big day's "yes": "what is it?", then one input with "ok" and "skip". However
@@ -6395,7 +6435,11 @@ class HatchPetCard extends HTMLElement {
     s.asking = false;
     if (s.queue?.length) s.queue = s.queue.filter((q) => q.text !== BIG_DAY.what || !q.ask);
     // "I'll remember" only once the server kept it (a step ending past midnight is refused).
-    this._sendFollow(s, step.entity, step.kind || "big_day", "yes", text).then((ok) => {
+    const kind = step.kind || "big_day";
+    const user = this._hass?.user?.id;
+    this._sendFollow(s, step.entity, kind, "yes", text).then((ok) => {
+      if (ok && text && user && typeof ok.until === "string") followTextKeep(user, kind, text, ok.until);
+      else if (ok && user) followTextKeep(user, kind, "", "0000-00-00"); // no words: an old copy goes
       if (ok && said && s.ids?.["sensor.life_stage"] === step.entity) this._speak(s, BIG_DAY.kept, 3500);
     });
   }
@@ -7907,6 +7951,7 @@ class HatchPetCard extends HTMLElement {
             }
             greets.forEach((key) => localStorage.removeItem(key));
             localStorage.removeItem(ANSWERS_KEY + user);
+            localStorage.removeItem(FOLLOW_TEXT_KEY + user); // their typed words (Q1 A)
           } catch (err) {
             // no storage (a private window): nothing kept here
           }

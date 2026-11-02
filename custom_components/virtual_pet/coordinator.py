@@ -1980,7 +1980,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     async def async_answer(
         self, user: str, question: str, answer: str, text: Any = None
-    ) -> None:
+    ) -> dict[str, Any] | None:
         """A remembered answer: a favourite, tonight's dream, a guess, its
         catchphrase, or a follow-up's (F1: a tough day's softer morning, a big
         day's "yes" with its optional text). Nothing here is logged."""
@@ -1989,6 +1989,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             if answer not in P.ANSWERS.get(question, ()):
                 raise ValueError("Not an answer the pet keeps")
             today = self._today(self._now())[0]
+            kept: dict[str, Any] | None = None
             async with self.people.lock(user):
                 person = self.people.data["people"].get(user, {})
                 if not P.asked_later(person, today, question):
@@ -2004,8 +2005,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     self.people.open_follow(user, "trick", today, pet=self.pet_id)
                 elif answer == "yes":  # big_day, weekend: with their words, if any
                     self.people.open_follow(user, question, today, text)
+                    kept = {"until": self.people.open_event(user)["until"]}
             self._push_everywhere()  # their follow_at
-            return  # "no", "later" keep nothing
+            return kept
         if question == "birthday":
             # Theirs, kept only in the people store; "skip" sticks. Never echoed.
             person = self.people.person(user)
