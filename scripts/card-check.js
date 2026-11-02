@@ -5100,6 +5100,60 @@ async function main() {
       e4.dream.every((l, i) => !i || l !== e4.dream[i - 1]), JSON.stringify(e4));
     check("fresh E4 (S-b): lights out after a visitor seen here says its callback once a day; no visitor or sunset, the usual",
       /robin/.test(e4.night[0] || "") && e4.night[1] === null && e4.plain === null, JSON.stringify(e4.night));
+    // The first night (s2682): a new pet's first bedtime says its line once, when it is said live;
+    // not on day 2, not again on a reload, not for an egg, not in the catch-up, and a new
+    // generation has a first night of its own.
+    const fn = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const real = { state: el._state, night: el._nightLine, line: el._line };
+      const key = (g) => `hatch-firstnight-${s.ids?.device}-${g}`;
+      const had = [1, 2].map((g) => localStorage.getItem(key(g)));
+      const out = {};
+      const as = (state, age, generation) => {
+        el._state = function (sl, k) {
+          const st = real.state.call(this, sl, k);
+          return k === "sensor.life_stage" && st
+            ? { ...st, state, attributes: { ...st.attributes, age_days: age, generation } } : st;
+        };
+      };
+      const asleep = (capture) => {
+        const said = [];
+        el._line = function (sl, cls, text, ...rest) { said.push(text); return real.line.call(this, sl, cls, text, ...rest); };
+        Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0 });
+        el._moment(s, { type: "fell_asleep", how: "house", at: "fn" }, capture);
+        el._line = real.line;
+        return said;
+      };
+      try {
+        el._nightLine = () => null;
+        [1, 2].forEach((g) => localStorage.removeItem(key(g)));
+        as("egg", 0.2, 1);
+        out.egg = asleep();
+        as("baby", 0.5, 1);
+        const cap = [];
+        asleep(cap);
+        out.catchUp = cap;
+        out.first = asleep();
+        out.reload = asleep(); // the same moment seen again: it is spent
+        as("baby", 1.6, 1);
+        out.day2 = asleep();
+        as("baby", 0.5, 2);
+        out.newPet = asleep();
+        as("baby", 0.5, 1);
+        localStorage.removeItem(key(1));
+        as("baby", 1.6, 1);
+        out.late = asleep();
+      } finally {
+        Object.assign(el, { _state: real.state, _nightLine: real.night, _line: real.line });
+        [1, 2].forEach((g, i) => { if (had[i] === null) localStorage.removeItem(key(g)); else localStorage.setItem(key(g), had[i]); });
+        Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0 });
+      }
+      return out;
+    });
+    const FN = "my first night here... \u2665";
+    check("first night: day-1 bedtime says the line once; not for an egg, in the catch-up, on day 2 or again on a reload; a new pet has its own",
+      fn.first.includes(FN) && !fn.egg.includes(FN) && !fn.catchUp.includes(FN) && !fn.reload.includes(FN) &&
+      !fn.day2.includes(FN) && fn.newPet.includes(FN) && !fn.late.includes(FN), JSON.stringify(fn));
     // Fresh-expand E6 (W-a, W-b): a wish's phrasing takes turns a day each; a live grant
     // with random 0 says what it got (TODAY_WISH), and that evening's today line isn't it.
     const TODAY_WISH6 = require("vm").runInNewContext(`(${src4.match(/\nconst TODAY_WISH = (\{[\s\S]*?\n\});/)[1]})`);
