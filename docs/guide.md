@@ -403,7 +403,7 @@ lay the egg, then rename it.
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline`, `_weight` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. Weight is healthy between 25 and 75. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `reason_key` (which sentence that is, for the card's baby talk), `call_deadline`. |
-| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `memories` (first snow, frost and fog, and the first warm day), `hatches_at` (while an egg), `next_world`, `next_egg` and `journal` (the device's retired pets). |
+| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `memories` (first snow, frost and fog, and the first warm day), `hatches_at` (while an egg), `next_world`, `next_egg`, `journal` (the device's retired pets) and `week` (the journal's strip: days with a dream, a credited visitor or notable weather; kept out of history). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far (attribute `discipline_misses`: fake calls nobody answered). |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them; `moments`: the last 10 things that happened to it, for the card to react to. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
@@ -711,7 +711,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   `select.<pet>_next_egg` (on the pet's device page, under Configuration) before the
   egg hatches, for example before laying it. It lists the egg's world, the new one if
   a world change is waiting. The choice is for one egg; the next is a surprise again.
-- **The journal:** on the status screen, tap "journal". It shows the world's
+- **The journal:** on the status screen, tap "journal". Under its title, "this week"
+  shows the last seven days that held something, oldest first: ✦ a dream, the day's
+  first weather (☂ rain, ❄ snow, ☀ sun, ⚡ a storm, ☁ fog), and the visitor who came while
+  finds are shown. Quiet days are left out, not shown blank. It shows the world's
   creatures (ones nobody in this home has raised yet are silhouettes) and this
   device's family line: each generation with its traits, stars, upbringing and
   personality. The latest four show; past them, "older generations (N)" opens the rest,

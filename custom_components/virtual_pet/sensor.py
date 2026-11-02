@@ -168,6 +168,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "shell_locked",
             "senses",
             "social_level",
+            "week",
         }
     )
 
@@ -240,6 +241,8 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "senses": self.coordinator.senses,
             # The social meter, 0-10 over the week (top10 §6); the days stay saved.
             "social_level": self.coordinator.social_level,
+            # The journal's week strip (E14): days with a dream, a visitor or weather.
+            "week": self.coordinator.week,
             "raised": list(self.pet.raised),
             "traits": list(self.pet.traits),
             "trait_levels": {

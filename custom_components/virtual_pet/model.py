@@ -15,6 +15,7 @@ from dataclasses import asdict, dataclass, field, fields
 from datetime import UTC, date, datetime, time, timedelta, tzinfo
 import math
 import random
+import re
 from typing import Any
 import zlib
 
@@ -293,9 +294,17 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+# The journal's week strip (fresh-expand E14) rides on the social days: each day may
+# also keep its dream's kind, the credited visitor's id and the first notable weather.
+WEEK_WEATHER = ("storm", "snow", "rain", "fog", "sun")  # the first seen, this order
+_WEEK_KIND = re.compile(r"[a-z_]{1,32}")
+
+
 def social_from(v: Any) -> dict[str, dict[str, Any]]:
     """The social meter's days as loaded: a day key that is a date, with a bool
-    `visitor` and a list of str `links` (each once); anything else dropped."""
+    `visitor` and a list of str `links` (each once), and the week strip's `dream`
+    (a kind), `visit` (a visitor id) and `weather` (WEEK_WEATHER) where kept;
+    anything else dropped."""
     out: dict[str, dict[str, Any]] = {}
     for day, entry in _mapping(v).items():
         try:
@@ -311,6 +320,55 @@ def social_from(v: Any) -> dict[str, dict[str, Any]]:
             if isinstance(links, list)
             else [],
         }
+        for key in ("dream", "visit"):
+            value = entry.get(key)
+            if isinstance(value, str) and _WEEK_KIND.fullmatch(value):
+                out[day][key] = value
+        if entry.get("weather") in WEEK_WEATHER:
+            out[day]["weather"] = entry["weather"]
+    return out
+
+
+def week_mark(state: PetState, day: str, key: str, value: str) -> bool:
+    """The week strip's first `key` of a day (E14): kept once, never replaced.
+    True if the save changed. The days are pruned by _social_day."""
+    try:
+        date.fromisoformat(day)
+    except (TypeError, ValueError):
+        return False
+    entry = state.social.setdefault(day, {"visitor": False, "links": []})
+    if key in entry:
+        return False
+    entry[key] = value
+    return True
+
+
+def week_weather(state: PetState, today: str, kinds: set[str]) -> bool:
+    """Today's first notable house weather for the strip (the most notable of
+    those seen at once). True if the save changed."""
+    seen = [k for k in WEEK_WEATHER if k in kinds]
+    if not seen:
+        return False
+    _social_day(state, today)
+    return week_mark(state, today, "weather", seen[0])
+
+
+def week_strip(state: PetState, today: str) -> list[dict[str, Any]]:
+    """The last R.SOCIAL_DAYS days that hold something, oldest first: {day,
+    dream?: True, visit?: id, weather?: kind}. A dream is only that there was
+    one (a show's or song's kind is the house's); never who, never a wish."""
+    first = (date.fromisoformat(today) - timedelta(days=R.SOCIAL_DAYS - 1)).isoformat()
+    out = []
+    for day in sorted(d for d in state.social if first <= d <= today):
+        entry = state.social[day]
+        cell: dict[str, Any] = {"day": day}
+        if "dream" in entry:
+            cell["dream"] = True
+        for key in ("visit", "weather"):
+            if key in entry:
+                cell[key] = entry[key]
+        if len(cell) > 1:
+            out.append(cell)
     return out
 
 
@@ -2666,6 +2724,7 @@ def credit_visit(state: PetState, now: float, world: str) -> bool:
     page = state.collection.setdefault(world, {"visitors": {}, "finds": {}})
     page.setdefault("visitors", {}).setdefault(visit["id"], visit["day"])
     visit["credited"] = True
+    week_mark(state, visit["day"], "visit", visit["id"])  # its day on the strip (E14)
     return True
 
 
@@ -3128,6 +3187,7 @@ def dream_on_waking(
             "user": chosen["user"],
             "day": today,
         }
+        week_mark(state, today, "dream", "picked")  # the strip's ✦ (E14)
         return [{"type": "dreamed", "kind": "picked"}]
     if fresh:
         # A visitor's dream only when nothing else happened (top10 6d).
@@ -3137,6 +3197,7 @@ def dream_on_waking(
         state.dream = {"kind": plain_dream(pet_id, today), "day": today}
     else:
         return []
+    week_mark(state, today, "dream", state.dream["kind"])  # the strip's ✦ (E14)
     # The event says only what kind: the title, the pick and who asked stay in
     # state.dream (the channel's house.dream, the card's first look).
     return [{"type": "dreamed", "kind": state.dream["kind"]}]

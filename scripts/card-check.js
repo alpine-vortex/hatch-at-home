@@ -4417,6 +4417,46 @@ async function main() {
       }
       return out;
     });
+    // Fresh-expand E14: the journal's week strip shows only the days that hold something,
+    // oldest first, each labelled; a visitor (icon and name) only while finds are shown.
+    const e14 = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const realState = el._state;
+      const realShown = el.constructor.findsShown;
+      const v = (el._worlds?.[s.worldKey]?.visitors || []).find((x) => x.name);
+      const week = [
+        { day: "2026-10-27", visit: v?.id }, // only a visitor: hidden with the finds
+        { day: "2026-10-28", dream: true, weather: "rain" },
+        { day: "2026-10-30", weather: "storm", visit: v?.id },
+      ];
+      el._state = function (slide, k) {
+        const st = realState.call(this, slide, k);
+        return k === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, week } } : st;
+      };
+      const strip = async (shown) => {
+        el.constructor.findsShown = shown;
+        s.journal = true;
+        await el._renderJournal(s);
+        const box = s.status.querySelector(".jweek");
+        const out = { cells: [...(box?.querySelectorAll(".wday") || [])].map((c) => [c.getAttribute("aria-label"), c.textContent]),
+          imgs: box?.querySelectorAll("img").length ?? -1, role: box?.getAttribute("role") };
+        s.journal = false;
+        return out;
+      };
+      try {
+        return { hidden: await strip(false), shown: await strip(true), name: v?.name };
+      } finally {
+        el._state = realState;
+        el.constructor.findsShown = realShown;
+        s.journal = false;
+        el._renderStatus(s, []);
+      }
+    });
+    check("fresh E14: the week strip: filled days only, labelled, no visitor while finds are hidden; its icon and name when shown",
+      JSON.stringify(e14.hidden.cells) === JSON.stringify([["wed: a dream, rain", "wed✦☂"], ["fri: a storm", "fri⚡"]]) &&
+        e14.hidden.imgs === 0 && e14.hidden.role === "list" && e14.shown.cells.length === 3 &&
+        e14.shown.cells[0][0] === `tue: the ${e14.name}` && e14.shown.cells[2][0] === `fri: a storm, the ${e14.name}` &&
+        e14.shown.imgs === 2, JSON.stringify(e14));
     check("fresh E9 (L-a): a link guest's news is today's dream, else today's visitor, else none",
       e9.dream === "I dreamed about a rainbow!" && e9.none === null && e9.visitor === "a robin came to see me today ♪", JSON.stringify(e9));
     check("fresh E9 (J-a, St-a): the journal's head has today's dream; status has the evening's today line, else the dream",

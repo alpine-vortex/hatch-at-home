@@ -1586,6 +1586,10 @@ const TYPED_TAIL = /(?:\s*(?:[.!?,;:]+|[:;=]-?[()DPpOo/|\\[\]]|<3))+$/u;
 const FOLLOW_TEXT_KEY = "hatch-followtext-";
 // The big day's buttons (opp #2): a day n days from today, as the local date, and its label.
 const DAY_SHORT = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+// E14, the journal's week strip: a day's glyphs and its words for screen readers. Only the
+// days that hold something; a visitor only while finds are shown (review #16); no wish.
+const WEEK_GLYPH = { rain: "☂", snow: "❄", sun: "☀", storm: "⚡", fog: "☁" };
+const WEEK_WORD = { rain: "rain", snow: "snow", sun: "sun", storm: "a storm", fog: "fog", dream: "a dream" };
 function daysAhead(n, today = new Date()) {
   const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -3307,6 +3311,10 @@ const STYLE = `
     background: #2f3a24; color: #e9e2c6; font-size: 12px; min-height: 14px; }
   .jhead { display: flex; justify-content: space-between; align-items: baseline; }
   .jdream, .stoday { font-size: 13px; color: var(--hp-subink); margin: 2px 0 4px; } /* today's dream, today's line (E9) */
+  .jweek { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; margin: 0 0 6px; } /* E14 */
+  .jweek .wday { display: inline-flex; align-items: center; gap: 3px; }
+  .jweek .wday b { font-weight: 600; font-size: 11px; opacity: .8; }
+  .jweek img { width: 18px; height: 18px; image-rendering: pixelated; }
   .jgrid { display: flex; flex-wrap: wrap; gap: 6px 10px; }
   .jtile { display: flex; flex-direction: column; align-items: center; width: 64px; font-size: 11px;
     text-align: center; line-height: 1.1; }
@@ -6902,6 +6910,26 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
+  // E14: the week strip, oldest first, from the life stage sensor's `week`: no fixed seven
+  // slots, no blanks, no counts. Each day's label says what its glyphs show.
+  _weekStrip(s) {
+    const week = this._state(s, "sensor.life_stage")?.attributes.week;
+    if (!Array.isArray(week)) return "";
+    const list = visitorList(this._worlds?.[s.worldKey]);
+    const cells = week.map((c) => {
+      if (!c || typeof c.day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(c.day)) return "";
+      const v = findsShown() && c.visit && list.find((x) => x.id === c.visit && x.name);
+      const words = [c.dream && WEEK_WORD.dream, WEEK_WORD[c.weather], v && `the ${v.name}`].filter(Boolean);
+      if (!words.length) return "";
+      const day = DAY_SHORT[new Date(`${c.day}T12:00`).getDay()];
+      const icons = (c.dream ? "✦" : "") + (WEEK_GLYPH[c.weather] || "") +
+        (v ? `<img src="${BASE}/ui/visitor_${s.worldKey}_${v.id}_1.png?v=${VERSION}" alt="">` : "");
+      return `<span class="wday" role="listitem" aria-label="${escape(`${day}: ${words.join(", ")}`)}">` +
+        `<b aria-hidden="true">${day}</b><span aria-hidden="true">${icons}</span></span>`;
+    }).filter(Boolean);
+    return cells.length ? `<div class="jweek" role="list" aria-label="this week">${cells.join("")}</div>` : "";
+  }
+
   // A question's line: the big day's evening names it only from this browser's own copy
   // (opp #1; the server's words never come with an ask).
   _askLine(kind) {
@@ -8424,6 +8452,7 @@ class HatchPetCard extends HTMLElement {
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
       ${this._dreamSaid(s) ? `<div class="jdream">${escape(this._dreamSaid(s))}</div>` : ""}
+      ${this._weekStrip(s)}
       <div class="jgrid">${tiles.join("")}</div>
       <button class="wlink">every world ›</button>
       ${this._photoRow(s)}

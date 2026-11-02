@@ -341,6 +341,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         return notify.dashboard_path(self.config_entry.options.get(CONF_DASHBOARD))
 
     @property
+    def week(self) -> list[dict[str, Any]]:
+        """The journal's week strip (E14): the days that hold something."""
+        assert self.state is not None
+        return model.week_strip(self.state, self._today(self._now())[0])
+
+    @property
     def social_level(self) -> int:
         """The social meter, 0-10 over the last week (top10 §6)."""
         assert self.state is not None
@@ -859,6 +865,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         )
         if kinds:  # the house's weather, while the pet is out too
             self.people.saw_weather(self._today(now)[0], kinds)
+        # The journal's week strip: the day's first notable weather (E14).
+        strip = self._weather_now | ({"fog"} if readings.condition in FOGGY else set())
+        if model.week_weather(self.state, self._today(now)[0], strip):
+            self._save()
         arrivals, self._arrivals = self._arrivals, []
         if self._awake():
             self._fire(
