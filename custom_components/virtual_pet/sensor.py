@@ -260,7 +260,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
                 for t, p in model.trait_progress(self.pet).items()
             },
             "roster": list(self.coordinator.roster),
-            # The next egg's creatures, in the select's option order (it follows
+            # The next egg's creatures, in the select's option order (it tracks
             # next_world, not the current world): the card's lay sheet names its
             # offer from these. Exactly the select's options minus "Surprise me".
             "egg_roster": [
