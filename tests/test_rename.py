@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from unittest.mock import patch
 
@@ -11,6 +12,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.util import dt as dt_util
 import pytest
 
+from custom_components import virtual_pet
 from custom_components.virtual_pet.const import DOMAIN
 from custom_components.virtual_pet.coordinator import RenameError, clean_name
 
@@ -251,11 +253,24 @@ async def test_a_rename_after_a_lay_that_moves_the_world_waits_then_sticks(
     await hass.async_block_till_done()
     client = await hass_ws_client(hass)
 
-    await press(hass, "button.pip_lay_egg")
-    # The reload is scheduled, not yet run: the entities are on their way out.
-    reply = await rename(client, "Fern")
-    assert reply["error"]["code"] == "not_ready"
-    await hass.async_block_till_done()
+    # Hold the reload between its unload and its setup, so the not_ready window is
+    # there however loaded the machine is (it used to be a race with the scheduled reload).
+    unloaded = asyncio.Event()
+    release = asyncio.Event()
+    real_setup = virtual_pet.async_setup_entry
+
+    async def held_setup(hass: HomeAssistant, entry: Any) -> bool:
+        unloaded.set()  # the old pet is gone from hass.data, the new one not yet made
+        await release.wait()
+        return await real_setup(hass, entry)
+
+    with patch.object(virtual_pet, "async_setup_entry", held_setup):
+        await press(hass, "button.pip_lay_egg")
+        await asyncio.wait_for(unloaded.wait(), 10)
+        reply = await rename(client, "Fern")
+        assert reply["error"]["code"] == "not_ready"
+        release.set()
+        await hass.async_block_till_done()
     assert config.data["world"] == "pond" and config.state is ConfigEntryState.LOADED
     assert hass.states.get(STAGE).state == "egg"
     assert (await rename(client, "Fern"))["success"]
