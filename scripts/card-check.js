@@ -9300,10 +9300,6 @@ async function main() {
       const r = await react({ action: "play", result });
       check(`react: ${stage} ${result} does nothing`, !r.live && r.moves.length === 0, JSON.stringify(r));
     }
-    // UX fix 6 (F5): a lost game settles on the content frames (a species with acts.aww plays it).
-    const lostReact = await react({ action: "play", result: "lost" });
-    check(`react: ${stage} lost settles on the content frames`,
-      lostReact.live && lostReact.moves.includes("settle") && lostReact.src.includes(`/${stage}_content_`), JSON.stringify(lostReact));
     const after = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       el._react(s, { action: "feed", result: "ok", at: Date.now() / 1000 });
@@ -9316,6 +9312,10 @@ async function main() {
     check(`react: ${stage} back to the mood frame after 2.5 s`,
       !after.live && after.shown && new RegExp(`/${stage}_${after.mood}_|/${stage}_content_`).test(after.src) &&
       !after.moves.some((c) => ["munch", "greethop", "look", "settle"].includes(c)), JSON.stringify(after));
+    // UX fix 6 (F5): a lost game settles on the content frames (a species with acts.aww plays it).
+    const lostReact = await react({ action: "play", result: "lost" });
+    check(`react: ${stage} lost settles on the content frames`,
+      lostReact.live && lostReact.moves.includes("settle") && lostReact.src.includes(`/${stage}_content_`), JSON.stringify(lostReact));
     // Fallback: an act whose sprites do not load swaps back to the mood frames, and is remembered
     // (_poseOk, keyed species/stage/act, apart from the waves). No broken image left on show.
     if (acts) {
