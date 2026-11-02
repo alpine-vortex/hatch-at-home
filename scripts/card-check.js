@@ -4422,6 +4422,75 @@ async function main() {
     check("fresh E9 (J-a, St-a): the journal's head has today's dream; status has the evening's today line, else the dream",
       e9.jdream === "I dreamed about a rainbow!" && e9.evening === "today I watched the sunset! ♪" && e9.morning === "I dreamed about a rainbow!",
       JSON.stringify(e9));
+    // Fresh-expand F2: a picked sea dream (the sensor has the pick) is told as a sea story at
+    // a shared screen's first look; the asker's note says only the tail, once; nobody
+    // else's note says anything; the story comes back once, 2-4 days later. "you": the look
+    // says "my friends", the asker's note the you story and the tail.
+    const STORIES = require("vm").runInNewContext(`(${src4.match(/\nconst DREAM_STORIES = (\{[\s\S]*?\n\});/)[1]})`);
+    const TAILS = require("vm").runInNewContext(src4.match(/\nconst DREAM_TAIL = (\[[^\n]*\]);/)[1]);
+    const f2 = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const device = s.ids.device;
+      const real = { state: el._state, today: el._todayLine, catchUp: el._catchUp };
+      const keys = [`hatch-dreamstory-${device}`, "hatch-shared-screen", `hatch-dream-${device}-${new Date().toDateString()}`];
+      const had = keys.map((k) => localStorage.getItem(k));
+      let dream = { kind: "picked", pick: "sea" };
+      const houseWas = s.house;
+      const out = {};
+      try {
+        el._state = function (sl, k) {
+          const st = real.state.call(this, sl, k);
+          return k === "sensor.life_stage" && st && sl === s ? { ...st, attributes: { ...st.attributes, dream } } : st;
+        };
+        el._todayLine = () => null;
+        el._catchUp = () => []; // room for the dream: the look's own news is checked elsewhere
+        const look = () => {
+          localStorage.removeItem(keys[2]);
+          s.house = { ...(houseWas || {}), dream: undefined };
+          Object.assign(s, { lookedFirst: false, queue: [], asleep: false, sayUntil: Date.now() + 60000 });
+          el._firstLook(s);
+          const said = s.queue.map((q) => q.text);
+          s.queue = [];
+          return said;
+        };
+        const note = (n) => {
+          s.queue = [];
+          el._note(s, { kind: "dream", ...n });
+          const said = s.queue.map((q) => q.text);
+          s.queue = [];
+          return said;
+        };
+        localStorage.setItem("hatch-shared-screen", "on");
+        localStorage.removeItem(keys[0]);
+        out.shared = look();
+        localStorage.setItem("hatch-shared-screen", "off");
+        out.mine = note({ pick: "sea", yours: true });
+        out.theirs = note({ pick: "sea", yours: false });
+        out.told = JSON.parse(localStorage.getItem(keys[0]) || "null");
+        const day = (n) => new Date(Date.now() + n * 864e5);
+        out.later = [0, 1, 2, 3, 4, 5].map((n) => el._dreamCallback(s, day(n)));
+        dream = { kind: "picked", pick: "you" };
+        out.youLook = look();
+        out.youMine = note({ pick: "you", yours: true });
+        out.youTheirs = note({ pick: "you", yours: false });
+        out.youKey = localStorage.getItem(keys[0]);
+      } finally {
+        Object.assign(el, { _state: real.state, _todayLine: real.today, _catchUp: real.catchUp });
+        s.house = houseWas;
+        keys.forEach((k, i) => (had[i] === null ? localStorage.removeItem(k) : localStorage.setItem(k, had[i])));
+        Object.assign(s, { lookedFirst: true, queue: [], sayUntil: 0, sayClass: 0 });
+      }
+      return out;
+    });
+    const seaStory = (t) => STORIES.sea.includes(t) || /sea|wave|seal|ship|pearl|fish/.test(t || "");
+    const cb = f2.later.filter(Boolean);
+    check("fresh F2: a picked sea dream is a sea story at a shared look; the asker's note is the tail, nobody else's anything",
+      f2.shared.some(seaStory) && f2.mine.length === 1 && TAILS.includes(f2.mine[0]) && f2.theirs.length === 0 &&
+        f2.told?.pick === "sea", JSON.stringify(f2));
+    check("fresh F2: the sea story comes back once, 2-4 days later; \"you\" is \"my friends\" to the look, its story and the tail to the asker",
+      cb.length === 1 && cb[0] === "I keep thinking of my sea dream ♪" && !f2.later[0] && !f2.later[1] &&
+        f2.youLook.includes("I dreamed about my friends ♥") && f2.youMine.length === 2 && TAILS.includes(f2.youMine[1]) &&
+        !TAILS.includes(f2.youMine[0]) && f2.youTheirs.length === 0 && f2.youKey === null, JSON.stringify(f2));
     check("fresh E8 (A-a): back after 3 days, the look starts with a welcome and has no away note; after 5 h, none",
       WELCOME.includes(e8.long[0]?.text) && !e8.long.some((q) => q.away) && !e8.short.some((q) => WELCOME.includes(q.text)),
       JSON.stringify(e8));

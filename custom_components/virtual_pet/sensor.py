@@ -24,6 +24,9 @@ from . import model, rates as R
 from .const import MEDIA_EVENTS, PRIVATE_READINGS
 from .coordinator import PetConfigEntry, PetCoordinator
 from .entity import PetEntity
+from .people import ANSWERS
+
+DREAM_PICKS = set(ANSWERS["dream"])  # stars, sea, snacks, you
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -180,11 +183,15 @@ class LifeStageSensor(PetEntity, SensorEntity):
 
     def _dream(self) -> dict[str, Any] | None:
         """This morning's dream, its kind only (a visitor's dream adds which
-        visitor and world, top10 6d: nobody's, like the day's visit). A dream of
-        a show or song is the house's (its title is on the private channel), so
-        none here."""
-        dream = self._today_only(self.pet.dream, ("kind", "id", "world"))
-        if dream is not None and dream.get("kind") != "visitor":
+        visitor and world, top10 6d: nobody's, like the day's visit; a picked
+        dream adds what was picked, never who picked it, fresh-expand F2). A dream
+        of a show or song is the house's (its title is on the private channel),
+        so none here."""
+        dream = self._today_only(self.pet.dream, ("kind", "id", "world", "pick"))
+        if dream is not None and dream.get("kind") == "picked":
+            pick = dream.get("pick")
+            dream = {"kind": "picked"} | ({"pick": pick} if pick in DREAM_PICKS else {})
+        elif dream is not None and dream.get("kind") != "visitor":
             dream = {"kind": dream["kind"]}
         if dream is not None and dream.get("kind") in MEDIA_EVENTS:
             return None

@@ -2515,7 +2515,8 @@ async def test_tonights_dream_is_the_one_they_picked(
     for _ in range(11 * 12):
         await settle(hass, freezer, 5 * 60)
     assert hass.states.get("sensor.pip_life_stage").attributes["dream"] == {
-        "kind": "picked"
+        "kind": "picked",
+        "pick": "sea",  # what, never who (fresh-expand F2)
     }
     notes = (await coordinator.async_visit(me.id))["notes"]
     assert {"kind": "dream", "pick": "sea", "yours": True} in notes
@@ -3981,5 +3982,8 @@ async def test_a_visitor_dream_names_its_visitor_and_no_other_dream_grows(
         "world": "woodland",
     }
     assert shown({"kind": "picked", "pick": "sea", "user": "abc", "id": "x"}) == {
-        "kind": "picked"
+        "kind": "picked",
+        "pick": "sea",
     }
+    # An unknown pick (a hand-edited save) is left out; the user never shows.
+    assert shown({"kind": "picked", "pick": "<b>", "user": "abc"}) == {"kind": "picked"}

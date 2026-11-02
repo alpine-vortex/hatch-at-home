@@ -1259,7 +1259,8 @@ const PERSONA = {
 // scripts/copy-scan.js's COPY_TABLES, which card-check and node scan line by line.
 // PERSONA_FRESH: each type's lines for the new keys, merged into PERSONA below.
 // pat (P-a): a spoken pat while content or excited; praise (P-c): in place of "♥";
-// game_win / game_lose (G-c): after a game's count line; reply_* (Q-a): how_day's answers.
+// game_win / game_lose (G-c): after a game's count line; reply_* (Q-a): how_day's answers;
+// dream_<pick> (F2): the type's own story of a picked dream, with DREAM_STORIES' shared two.
 const PERSONA_FRESH = {
   mellow: {
     pat: ["mm, right there ♪", "*melts a little* ahh ♥"],
@@ -1269,6 +1270,8 @@ const PERSONA_FRESH = {
     reply_great: ["mm, a good day. nice ♥"],
     reply_ok: ["ok days can be cozy too ♪"],
     reply_tough: ["*leans on you* I'm here ♥"],
+    dream_stars: ["I napped on a star all night ★"], dream_sea: ["I floated on the sea all night ♪"],
+    dream_snacks: ["I dreamed I napped in a soft bun ♪"], dream_you: ["we napped in the sun in my dream ♥"],
   },
   sweet: {
     pat: ["aw, you ♥", "that's so nice ♥ hehe"],
@@ -1278,6 +1281,8 @@ const PERSONA_FRESH = {
     reply_great: ["yay! I'm so glad ♥"],
     reply_ok: ["ok is nice too ♥"],
     reply_tough: ["*sits close* I'm here ♥"],
+    dream_stars: ["I dreamed a star tucked me in ★"], dream_sea: ["I dreamed a seal gave me a hug ♥"],
+    dream_snacks: ["I dreamed I shared cake with friends ♥"], dream_you: ["I dreamed we held paws all night ♥"],
   },
   bouncy: {
     pat: ["hee! that tickles!", "pat pat! hup! ♪"],
@@ -1287,6 +1292,8 @@ const PERSONA_FRESH = {
     reply_great: ["woo! great day! high five! hup"],
     reply_ok: ["ok! more hops tomorrow, then!"],
     reply_tough: ["*hops over softly* I'm here ♥"],
+    dream_stars: ["I bounced right up to the stars!"], dream_sea: ["I surfed a giant wave! wheee!"],
+    dream_snacks: ["I dreamed of a snack race! I won!"], dream_you: ["we raced in my dream! you won! ♥"],
   },
   starry: {
     pat: ["a pat for the star! ★", "my favourite kind of applause ★"],
@@ -1296,6 +1303,8 @@ const PERSONA_FRESH = {
     reply_great: ["a great day! bravo ★"],
     reply_ok: ["every show has quiet nights ★"],
     reply_tough: ["you're my star anyway ★"],
+    dream_stars: ["I dreamed the stars gave me a bow ★"], dream_sea: ["the sea sang me a song in my dream ★"],
+    dream_snacks: ["a cake threw me a party ★"], dream_you: ["you were my co-star last night ★"],
   },
   old_soul: {
     pat: ["hm. that's rather nice.", "ah. just the thing."],
@@ -1305,6 +1314,8 @@ const PERSONA_FRESH = {
     reply_great: ["hm. good to hear."],
     reply_ok: ["hm. ok days count too, friend."],
     reply_tough: ["hm. sit with me a while ♥"],
+    dream_stars: ["I dreamed I counted the stars. hm."], dream_sea: ["I dreamed of a quiet, wide sea."],
+    dream_snacks: ["I dreamed of soup. it was good."], dream_you: ["we had tea in my dream. nice ♥"],
   },
   fancy: {
     pat: ["how very kind ♥", "mind the fluff! ♥ hehe"],
@@ -1314,6 +1325,8 @@ const PERSONA_FRESH = {
     reply_great: ["how marvellous, darling ♥"],
     reply_ok: ["ok is perfectly fine, darling ♥"],
     reply_tough: ["come here, darling ♥"],
+    dream_stars: ["I dreamed I wore a star crown ★"], dream_sea: ["I dreamed of a pearl just my size ♥"],
+    dream_snacks: ["I dreamed of a fancy tea party ♥"], dream_you: ["we went to a ball in my dream ♥"],
   },
   charming: {
     pat: ["oh, how delightful ♥", "a splendid pat, thank you"],
@@ -1323,6 +1336,8 @@ const PERSONA_FRESH = {
     reply_great: ["splendid news! ♥"],
     reply_ok: ["a fair day, then ♥"],
     reply_tough: ["tea and a cuddle, then ♥"],
+    dream_stars: ["I danced with a comet last night ★"], dream_sea: ["I sailed a teacup across the sea ♪"],
+    dream_snacks: ["I dreamed of a grand snack ball ♥"], dream_you: ["we waltzed all night in my dream ♥"],
   },
   plucky: {
     pat: ["hah! good pat ♥", "heh, not bad at all ♥"],
@@ -1332,6 +1347,8 @@ const PERSONA_FRESH = {
     reply_great: ["heck yes! good day ♥"],
     reply_ok: ["ok's a win in my book ♥"],
     reply_tough: ["I've got you. *hug* ♥"],
+    dream_stars: ["I raced a shooting star. I won! ★"], dream_sea: ["I dreamed I steered a big ship! hah"],
+    dream_snacks: ["I climbed a mountain of muffins! hah"], dream_you: ["we were a team in my dream! hah ♥"],
   },
 };
 // P-b: now and then a spoken pat finds the sweet spot (any stage but a baby).
@@ -1430,6 +1447,22 @@ const PROMISE_LINES = {
 const PROMISE_MID = "hup! getting there ♪"; // days 1-3, now and then, with the move done small
 // Se-a (E12): the year's first warm day and the season's first fog, live.
 const SEASON_FIRST_LINES = { warm: "first warm day! ☀ ♪", fog: "ooh, the first fog ♪" };
+// F2: a picked dream's story (the sensor says what was picked, never who): the shared two
+// and the type's own, in turns. Everyone hears it at the first look but "you", which only
+// the asker's note tells (everyone else hears DREAM_FRIENDS); the asker's note then says
+// only the tail. A stars, sea or snacks story comes back once, 2-4 days later.
+const DREAM_STORIES = {
+  stars: ["I dreamed I hopped star to star ★", "a star waved at me in my dream ★"],
+  sea: ["I dreamed a wave carried me home ♪", "a little fish showed me a shell ♪"],
+  snacks: ["I dreamed a cookie said hello! ♪", "I found a pie tree in my dream ♪"],
+  you: ["I dreamed we had a picnic ♥", "you were in my dream! we sang ♪"],
+};
+const DREAM_TAIL = ["you picked it! ♥", "your idea! thank you ♥"];
+const DREAM_CALLBACK = {
+  stars: "my star dream was the best ★",
+  sea: "I keep thinking of my sea dream ♪",
+  snacks: "that snack dream... yum ♪",
+};
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -1554,7 +1587,7 @@ const NOTES = {
   rain_walk: () => pick(["you walked in the rain! so brave! ☂", "rain or not, look at all those steps! ☂"]),
   snow_walk: () => "a walk in the snow! ❄ so brave!",
   dream: (n) => n.pick === "you"
-    ? (n.yours ? "I dreamed about you, like you said! ♥" : "I dreamed about my friends ♥")
+    ? (n.yours ? "I dreamed about you, like you said! ♥" : DREAM_FRIENDS)
     : `I dreamed about ${{ stars: "the stars", sea: "the sea", snacks: "snacks" }[n.pick] || n.pick}${n.yours ? ", like you said! ♥" : "..."}`,
   guess: (n) => n.outcome === "right"
     ? (n.guess === "rain" ? "you were right!! it rained ☂" : "you were right!! sunny ☀")
@@ -1571,6 +1604,8 @@ const NOTES = {
   up_early: () => "mmh... you're up before the sun... zzz ♥",
   photo: () => "I made you something! it's in your journal ♥",
 };
+const DREAM_FRIENDS = "I dreamed about my friends ♥"; // a "you" dream, to everyone but its asker
+const DREAM_CALLBACK_DAYS = [2, 3, 4]; // a told story's callback, days later (F2), by the pet and day
 const DREAMS = {
   watching: (d) => `I dreamed about ${short(d.title)}!`,
   listening: (d) => `♪ I dreamed of ${short(d.title)} ♪`,
@@ -6032,9 +6067,10 @@ class HatchPetCard extends HTMLElement {
     // The hold ran out on states that may be yesterday's: no dream or wish this look (their
     // keys stay unused for the next).
     const stale = !!this._resumedAt;
-    const dreamLine = !stale && dreamt && DREAMS[dreamt.kind]?.(dreamt, this._words(s), this._worlds);
+    const dreamLine = !stale && this._dreamText(s, dreamt);
     if (dreamLine && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
       lines.push([dreamLine, 5000]);
+      if (dreamt.kind === "picked") this._dreamStoryTold(s, dreamt.pick); // its callback (F2)
     }
     const wish = !stale && stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
     if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);
@@ -6062,6 +6098,9 @@ class HatchPetCard extends HTMLElement {
       lines.push([turnPick(TRICK_LINES, `${device}|trick`), 4500]);
       if (!calm()) setTimeout(() => this._trickMove(s, trick), 600);
     }
+    // A dream story told here 2-4 days ago, once (F2).
+    const callback = !stale && lines.length < FIRST_LOOK_LINES && this._dreamCallback(s);
+    if (callback) lines.push([callback, 4500]);
     // The pet's own promise (F3): day 0 says it, day 4 (to 7) the payoff, with the move.
     const promise = lines.length < extras && this._promiseLook(s);
     if (promise) {
@@ -6481,6 +6520,16 @@ class HatchPetCard extends HTMLElement {
 
   // Something the pet has to tell only the viewer (from the visit).
   _note(s, note, madeRoom = false) {
+    // F2: with the dream's pick on the sensor, the first look told everyone its story: the
+    // asker's note says only the tail ("you": that story, then the tail); nobody else's.
+    const picked = note.kind === "dream" && this._state(s, "sensor.life_stage")?.attributes?.dream;
+    if (picked?.kind === "picked" && picked.pick === note.pick && Object.hasOwn(DREAM_STORIES, note.pick)) {
+      if (!note.yours) return;
+      const device = s.ids?.device;
+      if (note.pick === "you") this._queue(s, turnPick(this._storyList(s, "you"), `${device}|dream|you`), 5000, { personal: true });
+      this._queue(s, turnPick(DREAM_TAIL, `${device}|dreamtail`), 4000, { personal: true });
+      return;
+    }
     let line = NOTES[note.kind]?.(note);
     if (!line) return;
     if (CELEBRATION_NOTES.has(note.kind) && madeRoom && s.queue) {
@@ -6985,8 +7034,55 @@ class HatchPetCard extends HTMLElement {
 
   // Today's dream as the first look says it (DREAMS), or null (E9 J-a, St-a).
   _dreamSaid(s) {
-    const dream = this._dreamToday(s);
-    return (dream && DREAMS[dream.kind]?.(dream, this._words(s), this._worlds)) || null;
+    return this._dreamText(s, this._dreamToday(s));
+  }
+
+  // --- Fresh-expand F2: dream stories ------------------------------------------------
+
+  // A dream as said: a picked one's story (F2), else its DREAMS line; null if none.
+  _dreamText(s, dream, date = turnNow()) {
+    if (!dream) return null;
+    if (dream.kind === "picked") return this._dreamStory(s, dream.pick, date);
+    return DREAMS[dream.kind]?.(dream, this._words(s), this._worlds) || null;
+  }
+
+  // A picked dream's story for everyone: the shared two and the type's own, in turns per
+  // pet; "you" names no one (DREAM_FRIENDS). Null with no pick (an older server).
+  _dreamStory(s, pick, date = turnNow()) {
+    if (!Object.hasOwn(DREAM_STORIES, pick)) return null;
+    if (pick === "you") return DREAM_FRIENDS;
+    return turnPick(this._storyList(s, pick), `${s.ids?.device}|dream|${pick}`, date);
+  }
+
+  _storyList(s, pick) {
+    return [...DREAM_STORIES[pick], ...(PERSONA[this._typeKey(s)]?.[`dream_${pick}`] || [])];
+  }
+
+  // A told stars, sea or snacks story, kept to come back once (one key per pet, overwritten).
+  _dreamStoryTold(s, pick, date = turnNow()) {
+    if (!Object.hasOwn(DREAM_CALLBACK, pick)) return;
+    try {
+      localStorage.setItem(`hatch-dreamstory-${s.ids?.device}`, JSON.stringify({ pick, day: dayOrdinal(date) }));
+    } catch (err) {
+      // private mode: no callback
+    }
+  }
+
+  // Its callback, 2-4 days after the story (by the pet and the story's day), once; a week
+  // on, it lapses.
+  _dreamCallback(s, date = turnNow()) {
+    const key = `hatch-dreamstory-${s.ids?.device}`;
+    try {
+      const told = JSON.parse(localStorage.getItem(key) || "null");
+      if (!told || !Object.hasOwn(DREAM_CALLBACK, told.pick) || !Number.isInteger(told.day)) return null;
+      const ago = dayOrdinal(date) - told.day;
+      const wait = DREAM_CALLBACK_DAYS[turnHash(`${s.ids?.device}|dreamcb|${told.day}`) % DREAM_CALLBACK_DAYS.length];
+      if (ago < wait) return null;
+      localStorage.removeItem(key);
+      return ago <= 7 ? DREAM_CALLBACK[told.pick] : null;
+    } catch (err) {
+      return null;
+    }
   }
 
   // S-a: a morning wake, in turns per pet; the dream line only on a dream day.
@@ -10143,8 +10239,7 @@ class HatchPetCard extends HTMLElement {
   // The guest's news over a link (E9 L-a): today's dream as DREAMS says it, else today's
   // visitor seen on the guest's device, else null.
   _linkNews(guest) {
-    const dream = this._dreamToday(guest);
-    const said = dream && DREAMS[dream.kind]?.(dream, this._words(guest), this._worlds);
+    const said = this._dreamText(guest, this._dreamToday(guest));
     if (said) return said;
     const seen = this._visitSeen(guest);
     return seen ? LINK_VISITOR_NEWS(seen) : null;

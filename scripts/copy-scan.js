@@ -38,6 +38,9 @@ const COPY_TABLES = {
   PROMISE_LINES: {},
   PROMISE_MID: {},
   SEASON_FIRST_LINES: {},
+  DREAM_STORIES: {},
+  DREAM_TAIL: {},
+  DREAM_CALLBACK: {},
 };
 
 function lines(value, path, out) {
