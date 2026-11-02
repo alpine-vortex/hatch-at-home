@@ -461,6 +461,41 @@ def music_bridge():
     im.convert("RGB").save(OUT / "music-bridge.jpg", quality=91, optimize=True, progressive=True)
 
 
+def retail_gecko_sprite():
+    """Use the real one-tail gecko sprite in the photographed mono-screen pack."""
+    path = OUT / "retail-terrarium-gecko-mono.jpg"
+    im = Image.open(path).convert("RGBA")
+    sprite = Image.open(FRONT / "sprites/gecko/child_content_1.png").convert("RGBA")
+    sprite = sprite.crop(sprite.getchannel("A").getbbox())
+
+    # Keep the sprite's exact silhouette and pixel placement while matching the
+    # package's four-green LCD. This deliberately avoids redrawing the creature.
+    width = 153
+    height = round(sprite.height * width / sprite.width)
+    sprite = sprite.resize((width, height), Image.Resampling.NEAREST)
+    alpha = sprite.getchannel("A")
+    mono = Image.new("RGBA", sprite.size, (0, 0, 0, 0))
+    pixels = []
+    for r, g, b, a in sprite.getdata():
+        lum = (r * 299 + g * 587 + b * 114) // 1000
+        if lum < 48:
+            color = (24, 45, 29)
+        elif lum < 112:
+            color = (59, 83, 42)
+        elif lum < 178:
+            color = (118, 145, 74)
+        else:
+            color = (174, 198, 116)
+        pixels.append((*color, a))
+    mono.putdata(pixels)
+    mono.putalpha(alpha)
+
+    # The screen is nearly front-on in this product photograph. The pet sits
+    # on its lower edge, matching the scale and placement of the other LCD art.
+    im.alpha_composite(mono, ((im.width - width) // 2, 590))
+    im.convert("RGB").save(path, quality=93, optimize=True, progressive=True)
+
+
 def chapter_ribbons():
     w, h = 1600, 360
     im = Image.new("RGBA", (w, h), PURPLE)
@@ -495,3 +530,4 @@ if __name__ == "__main__":
     feature_cards()
     music_bridge()
     chapter_ribbons()
+    retail_gecko_sprite()
