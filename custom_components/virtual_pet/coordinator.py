@@ -355,7 +355,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """The kinds of house signal mapped in the options (SENSES), never
         which entities: for the card's "notices" row (top10 2a)."""
         options = self.config_entry.options
-        return [kind for kind, keys in SENSES if any(options.get(k) for k in keys)]
+        # The moon always shows: every pet reads it from the date at least.
+        return [
+            kind
+            for kind, keys in SENSES
+            if kind == "moon" or any(options.get(k) for k in keys)
+        ]
 
     @property
     def privacy(self) -> bool:

@@ -256,8 +256,8 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   Tap it for the settings sheet; "‹ settings" at the top of any sub-page takes you
   back. The sheet has up to three parts:
   - **for the pet** (or **for** its name): "notices", the kinds of thing the house
-    shows the pet (weather, lights, tv, music, chores, fireplace, moon; "just the clock"
-    with none), then the pet's "shell" row, see below. An admin also gets "connect
+    shows the pet (weather, lights, tv, music, chores, fireplace, moon; the moon always
+    shows), then the pet's "shell" row, see below. An admin also gets "connect
     more ›", which opens the pet's page in Settings → Devices & services.
   - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk and
     my data. These follow your login. A shared screen doesn't show this part.
@@ -469,7 +469,7 @@ the pet comes home.
 
 | Field | Default | What it does |
 | --- | --- | --- |
-| Moon phase | none | Any phase sensor, such as `sensor.moon_phase` from HA's Moon integration. Full moon at night: "the moon is so big tonight!" and a little happiness (+1 an hour) if it's awake. New moon: a starry night, cosmetic only. |
+| Moon phase | none | Any phase sensor, such as `sensor.moon_phase` from HA's Moon integration. Full moon at night: "the moon is so big tonight!" and a little happiness (+1 an hour) if it's awake. New moon: a starry night, cosmetic only. With no moon sensor at all, the pet still goes by the date: full for about 3 nights a month, new for about 3. A sensor you map wins. |
 | Moon illumination | none | Optional, the lit fraction (0–1 or %). Used when there's no phase sensor: 97% or more is full, 3% or less is new. |
 | Moon altitude | none | Optional, degrees. The moon only counts while it's above the horizon. |
 

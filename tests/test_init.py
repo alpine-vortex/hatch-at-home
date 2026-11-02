@@ -3840,11 +3840,11 @@ async def test_senses_are_kinds_never_entities(
         "bedtime",
     ):
         assert value not in text, value
-    # Nothing mapped: an empty list.
+    # Nothing mapped: only the moon, which every pet reads from the date.
     hass.config_entries.async_update_entry(config, options={})
     await hass.config_entries.async_reload(config.entry_id)
     await hass.async_block_till_done()
-    assert hass.states.get("sensor.pip_life_stage").attributes["senses"] == []
+    assert hass.states.get("sensor.pip_life_stage").attributes["senses"] == ["moon"]
 
 
 async def test_social_meter_links_and_a_greeted_visitor(
