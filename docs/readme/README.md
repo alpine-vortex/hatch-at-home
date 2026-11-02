@@ -8,8 +8,7 @@ The current cover, shell lineup, feature cards, music bridge and chapter ribbons
 are `pack/box-front.png`, `pack/shell-lineup.png`, `pack/feature-cards.png`,
 `pack/music-bridge.jpg` and `pack/chapter-ribbons.png`, generated from
 `scripts/readme/box_art.py`. The cover and shell lineup use real shell shots and
-the six starter species in color; the cover's secondary-pet teasers are filled
-black profiles placed behind the starters. The six retail-style product photos
+the six starter species in color (no teaser silhouettes: they read as smudges). The six retail-style product photos
 are `pack/retail-*.jpg` and `pack/open-front-display.jpg`; each was generated
 using a real shell capture and starter sprite as reference. They are mockups,
 not photographs of merchandise for sale. The music bridge combines a generated
