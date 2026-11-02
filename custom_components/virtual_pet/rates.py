@@ -174,6 +174,9 @@ STAGE_STARTS: list[tuple[str, float]] = [
     ("teen", 120.0),
     ("adult", 336.0),  # about two weeks
 ]
+# The card's tricks (E8 LS-a): one a month from the adult's start, this many (F7 asks
+# "should I learn a new trick?" only while one is left).
+TRICKS_COUNT = 3
 
 # --- Shell finishes: the device's plastic, per pet ------------------------
 

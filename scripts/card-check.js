@@ -4466,6 +4466,10 @@ async function main() {
         localStorage.setItem("hatch-shared-screen", "off");
         out.mine = note({ pick: "sea", yours: true });
         out.theirs = note({ pick: "sea", yours: false });
+        // FM Q4 A: a look with no room left the story untold here: the note tells it.
+        localStorage.removeItem(keys[2]);
+        out.untold = note({ pick: "sea", yours: true });
+        out.untoldAgain = note({ pick: "sea", yours: true });
         out.told = JSON.parse(localStorage.getItem(keys[0]) || "null");
         const day = (n) => new Date(Date.now() + n * 864e5);
         out.later = [0, 1, 2, 3, 4, 5].map((n) => el._dreamCallback(s, day(n)));
@@ -4487,6 +4491,9 @@ async function main() {
     check("fresh F2: a picked sea dream is a sea story at a shared look; the asker's note is the tail, nobody else's anything",
       f2.shared.some(seaStory) && f2.mine.length === 1 && TAILS.includes(f2.mine[0]) && f2.theirs.length === 0 &&
         f2.told?.pick === "sea", JSON.stringify(f2));
+    check("fresh F2: the asker's note tells the story then the tail when the look didn't, once a day",
+      f2.untold.length === 2 && seaStory(f2.untold[0]) && TAILS.includes(f2.untold[1]) &&
+        f2.untoldAgain.length === 1 && TAILS.includes(f2.untoldAgain[0]), JSON.stringify({ untold: f2.untold, again: f2.untoldAgain }));
     check("fresh F2: the sea story comes back once, 2-4 days later; \"you\" is \"my friends\" to the look, its story and the tail to the asker",
       cb.length === 1 && cb[0] === "I keep thinking of my sea dream ♪" && !f2.later[0] && !f2.later[1] &&
         f2.youLook.includes("I dreamed about my friends ♥") && f2.youMine.length === 2 && TAILS.includes(f2.youMine[1]) &&
@@ -4513,7 +4520,14 @@ async function main() {
       };
       const shared = localStorage.getItem("hatch-shared-screen");
       const followOk = el._followOk;
+      const mine = s.mine;
       const out = {};
+      // Without a follow_at in their mine, no fetch (a slot is kept only then).
+      s.mine = { ...(mine || {}), follow_at: [] };
+      s.following = false;
+      out.unasked = await el._followFetch(s);
+      out.unaskedCalls = sent.length;
+      s.mine = { ...(mine || {}), follow_at: ["look", "picker"] };
       const fetch = async (r) => {
         reply = r;
         s.queue = [];
@@ -4567,14 +4581,63 @@ async function main() {
         s.textStep.until = 0;
         el._askTextEnd(s); // what the tick does once its time is up
         out.timeout = sent.filter((m) => m.type === "virtual_pet/answer");
+        // F5: the weekend's typed step sends its own question.
+        sent.length = 0;
+        el._askTextStart(s, entity, "weekend");
+        s.queue.find((q) => q.ask)?.then();
+        const wkInput = s.screen.querySelector(".asktext input");
+        if (wkInput) wkInput.value = "the fair";
+        s.screen.querySelector(".asktext button")?.click();
+        await new Promise((r) => setTimeout(r, 50));
+        out.weekendSent = sent.filter((m) => m.type === "virtual_pet/answer");
+        s.queue = [];
+        // F5 Monday; F7 a trick shown (with the move, in its idle list today), skipped
+        // when LS-a's monthly line was said here today.
+        out.mon = await fetch({ kind: "weekend", beat: "monday", text: "the fair" });
+        out.monPlain = await fetch({ kind: "weekend", beat: "monday" });
+        s.followTrick = null;
+        s.trickSaid = null;
+        out.shown = await fetch({ kind: "trick", beat: "shown" });
+        out.trick = { follow: s.followTrick, idle: el._tricks(s), toShow: el._trickToShow(s) };
+        s.trickSaid = new Date().toDateString();
+        out.shownSkipped = await fetch({ kind: "trick", beat: "shown" });
+        s.trickSaid = null;
+        // F6: the game picked yesterday leads the picker and says its line.
+        reply = { kind: "game", beat: "day", choice: "dig" };
+        s.followGame = null;
+        el._startGame(s, s.buttons.play);
+        await new Promise((r) => setTimeout(r, 100));
+        out.picker = {
+          first: s.gameBox.querySelector(".gpick button")?.dataset.game,
+          prompt: s.game?.prompt, wide: el._slideW >= 300,
+          calls: sent.filter((m) => m.type === "virtual_pet/follow" && m.at === "picker").length,
+          ofDay: el._gameOfDay(s),
+        };
+        el._quitGame(s, null);
       } finally {
         el._hass.callWS = realWS;
         el._followOk = followOk;
+        s.mine = mine;
         if (shared === null) localStorage.removeItem("hatch-shared-screen"); else localStorage.setItem("hatch-shared-screen", shared);
-        Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0, asking: false, textStep: null });
+        Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0, asking: false, textStep: null, followTrick: null, followGame: null });
       }
       return out;
     });
+    const WKND = require("vm").runInNewContext(`(${src4.match(/\nconst WEEKEND = (\{[\s\S]*?\n\});/)[1]})`);
+    const TRK = require("vm").runInNewContext(`(${src4.match(/\nconst TRICK_ASK = (\{[\s\S]*?\n\});/)[1]})`);
+    const GTM = require("vm").runInNewContext(`(${src4.match(/\nconst GAME_TOMORROW = (\{[\s\S]*?\n\});/)[1]})`);
+    check("fresh F1: no follow_at in the viewer's mine, no fetch",
+      f1.unasked === null && f1.unaskedCalls === 0, JSON.stringify({ unasked: f1.unasked, calls: f1.unaskedCalls }));
+    check("fresh F5: the weekend's typed step sends weekend yes with the text; Monday says their words, else a Monday line",
+      f1.weekendSent.length === 1 && f1.weekendSent[0].question === "weekend" && f1.weekendSent[0].text === "the fair" &&
+        WKND.monText.map((f) => f("the fair")).includes(f1.mon[0]) && WKND.mon.includes(f1.monPlain[0]),
+      JSON.stringify({ sent: f1.weekendSent, mon: f1.mon, plain: f1.monPlain }));
+    check("fresh F7: a trick shown says its line and joins today's idle moves; none after LS-a's line here today",
+      TRK.shown.includes(f1.shown[0]) && f1.trick.follow?.move === f1.trick.toShow && f1.trick.idle.includes(f1.trick.toShow) &&
+        f1.shownSkipped.length === 0, JSON.stringify({ shown: f1.shown, trick: f1.trick, skipped: f1.shownSkipped }));
+    check("fresh F6: yesterday's pick leads the picker (over the daily pick) and its line is the wide prompt",
+      f1.picker.calls === 1 && f1.picker.first === "dig" && f1.picker.ofDay === "dig" &&
+        (!f1.picker.wide || GTM.day.includes(f1.picker.prompt)), JSON.stringify(f1.picker));
     const withIt = (fns) => fns.map((f) => f("your exam"));
     check("fresh F1: a big day's morning and evening say their words, else the type's or shared lines; HTML shows as text",
       f1.am.length === 1 && withIt(BIG.amText).includes(f1.am[0]) && withIt(BIG.pmText).includes(f1.pm[0]) &&

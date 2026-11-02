@@ -62,6 +62,9 @@ ANSWERS: dict[str, tuple[str, ...]] = {
     # server. how_day's "tough" is E13's soft morning; "great" and "ok" stay on the card.
     "how_day": ("tough",),
     "big_day": ("yes", "no"),
+    "weekend": ("yes", "no"),  # F5; "no" is the card's "not really"
+    "game": ("left_right", "higher_lower", "dig"),  # F6: the choice (model.GAMES)
+    "trick": ("yes", "later"),  # F7; "later" is the card's "maybe later"
 }
 # One-time questions about the person, in the order they're asked, with the bond
 # level each needs. (The pet's own one-time question, its catchphrase, comes from
@@ -105,7 +108,7 @@ DAY_ZONES = {"work", "school"}
 # preference class (a favourite visitor, F4) lives in likes.
 FOLLOW_CLASSES: dict[str, tuple[str, ...]] = {
     "mood": ("soft",),
-    "event": ("big_day",),
+    "event": ("big_day", "weekend", "game", "trick"),
 }
 FOLLOW_EVENT_MAX_DAYS = 7
 FOLLOW_ASK_PER_WEEK = 2  # follow-up asks per person per 7 days
@@ -114,11 +117,20 @@ FOLLOW_TEXT_MAX = 20  # code points of a typed answer ({it})
 FOLLOW_BEATS: dict[str, tuple[str, ...]] = {
     "soft": ("morning",),
     "big_day": ("morning", "evening"),
+    "weekend": ("monday",),  # F5: Monday's first look (or Tuesday's)
+    "game": ("day",),  # F6: when the picker opens, the day after
+    "trick": ("shown",),  # F7: a first look from day 3 to day 5
 }
 FOLLOW_EVENING_HOUR = 17  # big day: the morning beat before, the evening beat from
-# The follow-up questions (asked in the later slot), and those that take a typed text.
-FOLLOW_QUESTIONS = ("big_day",)
-FOLLOW_TEXT_KINDS = {"big_day"}
+# The follow-up questions (asked in the later slot) in the order they're tried, those
+# that take a typed text, and a pet's own (said only by the pet that asked).
+FOLLOW_QUESTIONS = ("weekend", "big_day", "trick", "game")
+FOLLOW_TEXT_KINDS = {"big_day", "weekend"}
+FOLLOW_PET_KINDS = {"game", "trick"}
+# Where a beat is fetched: a first look (or a tab's return), or the game picker (F6).
+FOLLOW_AT = {"look": ("soft", "big_day", "weekend", "trick"), "picker": ("game",)}
+TRICK_DUE_DAYS = 3  # F7: shown from the 3rd day after the yes
+TRICK_UNTIL_DAYS = 5  # to the 5th
 # Questions whose answer the server checks against today's later ask.
 LATER_CHECKED = {"how_day", *FOLLOW_QUESTIONS}
 QUESTION_KINDS = {*QUESTIONS, *ANSWERS, *FOLLOW_QUESTIONS, "phone"}
@@ -299,11 +311,12 @@ class People:
     def open_follow(
         self, user: str, kind: str, today: str, text: Any = None, **extra: str
     ) -> None:
-        """A "yes" to a follow-up question: the event, due tomorrow (big day). A
+        """A "yes" to a follow-up question: the event, due by its kind (big day
+        and game tomorrow, a weekend on Monday to Tuesday, a trick day 3 to 5). A
         second answer in a race replaces the open record (asks never come while one
         is open). The typed text, cleaned, is kept in memory only."""
-        due = tomorrow(today)
-        event = {"kind": kind, "asked": today, "due": due, "until": due, "said": []}
+        due, until = follow_dates(kind, today)
+        event = {"kind": kind, "asked": today, "due": due, "until": until, "said": []}
         event.update(extra)
         self.person(user).setdefault("follow", {})["event"] = event
         self._texts.pop(user, None)
@@ -312,20 +325,33 @@ class People:
         self.save()
 
     def follow_due(
-        self, user: str, today: str, hour: int, pet: str | None = None
+        self,
+        user: str,
+        today: str,
+        hour: int,
+        pet: str | None = None,
+        at: str = "look",
     ) -> dict[str, Any]:
         """The beat due for this person now, marked said (the caller holds their
-        lock, with no await before this returns): {kind, beat, text?} or {}. An
-        event's beat comes before a mood's; the next look gets the other."""
+        lock, with no await before this returns): {kind, beat, text?, choice?} or
+        {}. At a look an event's beat comes before a mood's (the next look gets the
+        other); at the picker only a game's."""
         if self.prune(today):
             self.save()
         person = self.data["people"].get(user, {})
         event = (person.get("follow") or {}).get("event")
-        if event and (beat := _event_beat(event, today, hour, pet)):
+        kinds = FOLLOW_AT.get(at, ())
+        if (
+            event
+            and event["kind"] in kinds
+            and (beat := _event_beat(event, today, hour, pet))
+        ):
             event["said"].append(beat)
             out = {"kind": event["kind"], "beat": beat}
             if user in self._texts:
                 out["text"] = self._texts[user]
+            if "choice" in event:
+                out["choice"] = event["choice"]
             if beat == FOLLOW_BEATS[event["kind"]][-1]:
                 del person["follow"]["event"]  # its last beat: done
                 if not person["follow"]:
@@ -334,12 +360,33 @@ class People:
             self.save()
             return out
         mood = self._moods.get(user)
-        if mood and date.fromisoformat(mood["day"]) + timedelta(days=1) == (
-            date.fromisoformat(today)
+        if (
+            mood
+            and mood["kind"] in kinds
+            and date.fromisoformat(mood["day"]) + timedelta(days=1)
+            == date.fromisoformat(today)
         ):
             del self._moods[user]
             return {"kind": mood["kind"], "beat": "morning"}
         return {}
+
+    def follow_at(self, user: str, today: str, pet: str | None) -> list[str]:
+        """Where a beat may be waiting for this person today, from this pet
+        ("look", "picker"): so their card keeps a first-look slot only then. No
+        kind, no text: only that something is."""
+        out = set()
+        event = self.open_event(user)
+        if (
+            event
+            and event.get("pet") in (None, pet)
+            and event["due"] <= today <= event["until"]
+            and len(event["said"]) < len(FOLLOW_BEATS[event["kind"]])
+        ):
+            out.add("picker" if event["kind"] == "game" else "look")
+        mood = self._moods.get(user)
+        if mood and tomorrow(mood["day"]) == today:
+            out.add("look")
+        return sorted(out)
 
 
 def _mapping(v: Any) -> dict[Any, Any]:
@@ -418,9 +465,13 @@ def _event_ok(v: Any) -> bool:
     said = v.get("said")
     if not isinstance(said, list) or not all(b in FOLLOW_BEATS[kind] for b in said):
         return False
-    if "choice" in v and kind != "game":
+    if ("choice" in v) != (kind == "game") or (
+        kind == "game" and v["choice"] not in ANSWERS["game"]
+    ):
         return False
-    return "pet" not in v or (kind in ("game", "trick") and isinstance(v["pet"], str))
+    if kind in FOLLOW_PET_KINDS:
+        return isinstance(v.get("pet"), str)
+    return "pet" not in v
 
 
 def _follow(v: Any) -> dict[str, Any]:
@@ -564,6 +615,7 @@ def choose_question(
     dreamed: bool = False,
     early_tomorrow: bool = False,
     world: str | None = None,
+    pet_kinds: tuple[str, ...] = (),
 ) -> str | None:
     """The question to ask on this visit, or None: at most one in the morning
     (before noon) and one later, per person per day, across every pet. A
@@ -593,16 +645,19 @@ def choose_question(
     kind = rotation(date.fromisoformat(today))
     if kind == "how_day" and hour >= R.ASK_DAY_FROM:
         return "how_day"
+    # A due follow-up (F1, FM Q1 A on the reconcile) takes the place of the day's dream
+    # or guess, asked now or not, or of the fallback how_day; never of the rotation's
+    # own how_day, a came-home how_day or a one-time question. Capped by the week.
+    if hour >= R.ASK_DAY_FROM and (
+        follow := follow_question(
+            person, today, early_tomorrow=early_tomorrow, pet_kinds=pet_kinds
+        )
+    ):
+        return follow
     if kind == "dream" and 0 < to_bed_minutes <= R.ASK_DREAM_BEFORE_BED_MINUTES:
         return "dream"
     if kind == "guess" and has_forecast and hour >= R.ASK_GUESS_FROM:
         return "guess"
-    # A due follow-up (F1) takes the place of the fallback how_day, or of a dream or
-    # guess that can't be asked now, so the questions a week don't grow.
-    if hour >= R.ASK_DAY_FROM and (
-        follow := follow_question(person, today, early_tomorrow=early_tomorrow)
-    ):
-        return follow
     # Today's dream or guess can't be asked now (the dream before its window, a guess
     # with no forecast or too early): how_day stands in on ASK_FALLBACK_DAYS of every 7
     # (fresh-moment 5b), so most evenings get a question but it isn't nightly.
@@ -703,11 +758,17 @@ def asked_later(person: dict[str, Any], today: str, kind: str) -> bool:
 
 
 def follow_question(
-    person: dict[str, Any], today: str, *, early_tomorrow: bool = False
+    person: dict[str, Any],
+    today: str,
+    *,
+    early_tomorrow: bool = False,
+    pet_kinds: tuple[str, ...] = (),
 ) -> str | None:
     """A follow-up question due today, or None: never while an event is open,
-    at most FOLLOW_ASK_PER_WEEK a week. Big day: Sunday to Thursday, at most once
-    a week, not with an early alarm tomorrow."""
+    at most FOLLOW_ASK_PER_WEEK a week, each kind at most once a week, tried in
+    FOLLOW_QUESTIONS' order. Weekend: Fridays. Big day: Sunday to Thursday, not
+    with an early alarm tomorrow. Trick and game: only from a pet that can ask
+    them (pet_kinds: a trick left, not asked this month)."""
     if (person.get("follow") or {}).get("event"):
         return None
     day = date.fromisoformat(today)
@@ -718,11 +779,36 @@ def follow_question(
     ]
     if len(recent) >= FOLLOW_ASK_PER_WEEK:
         return None
-    last = (person.get("follow_last") or {}).get("big_day")
-    week_ago = last is not None and (day - date.fromisoformat(last)).days < 7
-    if day.weekday() in (6, 0, 1, 2, 3) and not early_tomorrow and not week_ago:
-        return "big_day"
+    lasts = person.get("follow_last") or {}
+    for kind in FOLLOW_QUESTIONS:
+        last = lasts.get(kind)
+        if last is not None and (day - date.fromisoformat(last)).days < 7:
+            continue
+        if kind == "weekend" and day.weekday() == 4:
+            return kind
+        if (
+            kind == "big_day"
+            and day.weekday() in (6, 0, 1, 2, 3)
+            and not early_tomorrow
+        ):
+            return kind
+        if kind in pet_kinds:
+            return kind
     return None
+
+
+def follow_dates(kind: str, today: str) -> tuple[str, str]:
+    """An event's due and until days from the day of its yes."""
+    day = date.fromisoformat(today)
+    if kind == "weekend":
+        monday = day + timedelta(days=7 - day.weekday())
+        return monday.isoformat(), (monday + timedelta(days=1)).isoformat()
+    if kind == "trick":
+        return (
+            (day + timedelta(days=TRICK_DUE_DAYS)).isoformat(),
+            (day + timedelta(days=TRICK_UNTIL_DAYS)).isoformat(),
+        )
+    return tomorrow(today), tomorrow(today)
 
 
 def clean_text(text: Any) -> str | None:
@@ -752,7 +838,9 @@ def _event_beat(
             return None
         beat = "morning" if hour < FOLLOW_EVENING_HOUR else "evening"
         return None if beat in said or "evening" in said else beat
-    return None
+    if not event["due"] <= today <= event["until"] or said:
+        return None
+    return FOLLOW_BEATS[event["kind"]][0]
 
 
 def model_today(hass: HomeAssistant) -> str:

@@ -1505,6 +1505,28 @@ const FAVV_LINES = {
   reply: (v) => `the ${v}! good pick ♪`,
   greet: (v) => `your favourite, the ${v}! ♥`,
 };
+// F5 weekend (B7d): asked on Fridays; "yes" takes the big day's typed step. Monday's
+// line, with their words ({it}) or not.
+const WEEKEND = {
+  q: "anything fun this weekend?",
+  yes: ["ooh, fun! ♪"],
+  no: ["a restful one, then ♥"],
+  monText: [(it) => `back from ${it}! ♥`, (it) => `hope ${it} was fun ♥`],
+  mon: ["welcome back from the weekend ♪", "I saved you a Monday hug ♥"],
+};
+// F6 game (B7d): tomorrow's pick, and the picker's line the day after.
+const GAME_TOMORROW = {
+  q: "what should we play tomorrow?",
+  reply: "ok! I'll get ready ♪",
+  day: ["let's play your pick today ♪", "ready for your game ♪"],
+};
+// F7 trick (B7d): "yes" and it shows a trick it hadn't learned, 3 to 5 days on.
+const TRICK_ASK = {
+  q: "should I learn a new trick?",
+  yes: ["ok! I'll practise ♪"],
+  later: ["ok! another time ♪"],
+  shown: ["I learned it! look ♪", "you said I should! ta-da ♪"],
+};
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -1562,6 +1584,13 @@ const QUESTIONS = {
     reply: (a, s) => FAVV_LINES.reply(visitorList(s.world).find((v) => v.id === a)?.name || a) },
   // F1: asked the evening before (Sun-Thu); "yes" opens the optional typed answer.
   big_day: { q: BIG_DAY.q, answers: { yes: BIG_DAY.yes, no: BIG_DAY.no } },
+  // F5-F7: the weekend (Fridays; "yes" as the big day's), tomorrow's game, a new trick.
+  weekend: { q: WEEKEND.q, answers: { yes: WEEKEND.yes, no: WEEKEND.no },
+    label: (a) => (a === "no" ? "not really" : a) },
+  game: { q: GAME_TOMORROW.q, answers: {}, options: () => GAMES.map((g) => g.key),
+    label: (a) => GAMES.find((g) => g.key === a)?.label || a, reply: () => GAME_TOMORROW.reply },
+  trick: { q: TRICK_ASK.q, answers: { yes: TRICK_ASK.yes, later: TRICK_ASK.later },
+    label: (a) => (a === "later" ? "maybe later" : a) },
   how_day: { q: "how was your day?", answers: {
     great: ["yay!! that makes me so happy ♥", "a great day! tell me everything! ♥"],
     ok: ["ok days are good days too ♥", "I'm glad you're here now ♥"],
@@ -5495,7 +5524,10 @@ class HatchPetCard extends HTMLElement {
   // The tricks an adult has learned (one a month from its 14th day), else none.
   _tricks(s) {
     const st = this._state(s, "sensor.life_stage");
-    return st?.state === "adult" ? tricksBy(trickMonth(st.attributes?.age_days)) : [];
+    const learned = st?.state === "adult" ? tricksBy(trickMonth(st.attributes?.age_days)) : [];
+    // F7: the trick it showed someone today joins them for the day.
+    const shown = s.followTrick?.day === new Date().toDateString() ? s.followTrick.move : null;
+    return shown && !learned.includes(shown) ? [...learned, shown] : learned;
   }
 
   // The trick new this month, the first look of the month on this browser (once), or null.
@@ -6141,44 +6173,54 @@ class HatchPetCard extends HTMLElement {
     // The day after a cure seen here (E4 M-a): after the wish, before the away note.
     const cured = lines.length < extras && this._curedLine(s);
     if (cured) lines.push([cured, 4500]);
+    // A follow-up beat for the viewer (F1, E13, F5, F7), when their mine says one may wait:
+    // its slot kept here, as the gift's (the reply is async), after the cure and before
+    // the rest (FM Q2 A on the reconcile). A reply of {} leaves it unsaid.
+    // A waiting gift keeps its own slot over it, as over the other fresh-expand extras.
+    let follow = this._followWanted(s, "look") && lines.length < extras;
+    const cap = FIRST_LOOK_LINES - (follow ? 1 : 0);
+    const capExtras = extras - (follow ? 1 : 0);
     // What happened while you were out comes after what's new (fresh-moment 2, owner Q2).
     // From TODAY_FROM_HOUR, once a day here: a line about its day, in the away note's place.
-    const today = !longAway && this._evening() && lines.length < FIRST_LOOK_LINES && this._todayLine(s, wishTold);
+    const today = !longAway && this._evening() && lines.length < cap && this._todayLine(s, wishTold);
     const seen = mark?.seen || 0;
     if (today && oncePerDay(`today-${device}`)) lines.push([today, 5000, { away: true }]);
-    else if (!longAway && seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS && lines.length < FIRST_LOOK_LINES) {
+    else if (!longAway && seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS && lines.length < cap) {
       const note = this._awayNote(s, seen);
       if (note) lines.push([note, 5500, { away: true }]);
     }
     // A best friend's own screen, at most once a week (E8 B-a).
-    const fav = lines.length < extras && this._favLine(s);
+    const fav = lines.length < capExtras && this._favLine(s);
     if (fav) {
       lines.push([fav, 4500]);
       this._chirp(s, "win");
     }
     // An adult's new trick, the first look of the month it learns one (E8 LS-a).
-    const trick = lines.length < extras && this._trickNew(s, stage);
+    const trick = lines.length < capExtras && this._trickNew(s, stage);
     if (trick) {
       lines.push([turnPick(TRICK_LINES, `${device}|trick`), 4500]);
+      s.trickSaid = new Date().toDateString(); // F7's payoff skips this look's (Q5 A)
       if (!calm()) setTimeout(() => this._trickMove(s, trick), 600);
     }
     // A dream story told here 2-4 days ago, once (F2).
-    const callback = !stale && lines.length < FIRST_LOOK_LINES && this._dreamCallback(s);
+    const callback = !stale && lines.length < capExtras && this._dreamCallback(s);
     if (callback) lines.push([callback, 4500]);
     // The pet's own promise (F3): day 0 says it, day 4 (to 7) the payoff, with the move.
-    const promise = lines.length < extras && this._promiseLook(s);
+    const promise = lines.length < capExtras && this._promiseLook(s);
     if (promise) {
       lines.push([promise.line, 4500]);
       if (promise.move) setTimeout(() => this._promiseMove(s, promise.move), 600);
     }
     // Last, and only if there is room: an adult on how it was raised, once a week.
     const raised = this._state(s, "sensor.life_stage")?.state === "adult" && UPBRINGING_LINES[stage.upbringing];
-    if (raised && lines.length < FIRST_LOOK_LINES && upbringingDue(device)) lines.push([raised, 5000]);
+    if (raised && lines.length < cap && upbringingDue(device)) lines.push([raised, 5000]);
     // Then a gift waiting for the viewer (visitors v2 §5): its slot is kept here, as the
     // reply that says it is async; it wins over the missed visitor (review Q3).
-    const gift = this._giftDue(s) && lines.length < FIRST_LOOK_LINES;
-    // And a follow-up beat for the viewer (F1, E13): its slot kept the same way.
-    const follow = this._followWanted(s) && lines.length < FIRST_LOOK_LINES - (gift ? 1 : 0);
+    let gift = this._giftDue(s) && lines.length < cap;
+    if (!gift && follow && this._giftDue(s) && lines.length < FIRST_LOOK_LINES) {
+      follow = false; // the gift's place stays as it was: the beat waits for a later look
+      gift = true;
+    }
     const room = FIRST_LOOK_LINES - (gift ? 1 : 0) - (follow ? 1 : 0);
     // Very last, flavour: today's visitor came and went with nobody here to see it
     // (its window over, the day's visit flag unset). Said once, and the flag used up,
@@ -6204,32 +6246,48 @@ class HatchPetCard extends HTMLElement {
   // websocket (never a service, so never on the bus), said back only in the reply to
   // them, and written as text. Nothing of it is kept in this browser.
 
-  _followWanted(s) {
-    return !sharedScreen() && !!this._hass?.user && !!s.ids?.["sensor.life_stage"] && !s.following;
+  // at: "look" (a first look, a tab's return, the evening) or "picker" (F6); only when
+  // the viewer's own mine says a beat may wait there today.
+  _followWanted(s, at = "look") {
+    return !sharedScreen() && !!this._hass?.user && !!s.ids?.["sensor.life_stage"] && !s.following &&
+      Array.isArray(s.mine?.follow_at) && s.mine.follow_at.includes(at);
   }
 
   // One virtual_pet/follow: the server marks the beat said for this person (their other
   // screens get {}). An older server has no command: nothing is said.
-  async _followFetch(s) {
+  async _followFetch(s, at = "look") {
     const entity = s.ids?.["sensor.life_stage"];
-    if (!this._followWanted(s)) return;
+    if (!this._followWanted(s, at)) return null;
     s.following = true;
-    if (new Date().getHours() >= FOLLOW_EVENING_HOUR) s.followEve = new Date().toDateString();
+    if (at === "look" && new Date().getHours() >= FOLLOW_EVENING_HOUR) s.followEve = new Date().toDateString();
     let reply = null;
     try {
-      reply = await this._hass.callWS({ type: "virtual_pet/follow", entity_id: entity });
+      reply = await this._hass.callWS({ type: "virtual_pet/follow", entity_id: entity, at });
     } catch (err) {
       reply = null; // an older server: no follow-ups
     }
     s.following = false;
-    if (!reply?.kind || sharedScreen() || s.ids?.["sensor.life_stage"] !== entity) return;
+    if (!reply?.kind || sharedScreen() || s.ids?.["sensor.life_stage"] !== entity) return null;
+    if (at === "picker") return reply; // F6: the picker says it
+    // F7: one trick line a look: LS-a's monthly one said here today wins (Q5 A).
+    if (reply.kind === "trick" && s.trickSaid === new Date().toDateString()) return null;
     const line = this._followLine(s, reply);
-    if (!line) return;
+    if (!line) return null;
     const soft = reply.kind === "soft";
+    const move = reply.kind === "trick" && this._trickToShow(s);
+    if (move) s.followTrick = { move, day: new Date().toDateString() }; // in its idle moves today
     this._queue(s, line, 5000, {
       personal: true, type: "follow", still: () => !sharedScreen(),
-      then: soft && !calm() ? () => this._bondHearts(s) : undefined,
+      then: soft && !calm() ? () => this._bondHearts(s) : move && !calm() ? () => this._trickMove(s, move) : undefined,
     });
+    return reply;
+  }
+
+  // F7: a trick the pet hasn't learned yet (a teen's first; an adult's next), or null.
+  _trickToShow(s) {
+    const st = this._state(s, "sensor.life_stage");
+    const learned = st?.state === "adult" ? tricksBy(trickMonth(st.attributes?.age_days)) : [];
+    return TRICKS.find((t) => !learned.includes(t)) || null;
   }
 
   // Once at the first tick from FOLLOW_EVENING_HOUR on a day (a big day's evening beat).
@@ -6255,6 +6313,11 @@ class HatchPetCard extends HTMLElement {
       if (it) return turnPick(am ? BIG_DAY.amText : BIG_DAY.pmText, salt)(it);
       return turnPick([...((am ? type.bigday_am : type.bigday_pm) || []), ...(am ? BIG_DAY.am : BIG_DAY.pm)], salt);
     }
+    if (reply.kind === "weekend" && reply.beat === "monday") {
+      const it = cleanTyped(reply.text);
+      return it ? turnPick(WEEKEND.monText, `${device}|weekend`)(it) : turnPick(WEEKEND.mon, `${device}|weekend`);
+    }
+    if (reply.kind === "trick" && reply.beat === "shown") return turnPick(TRICK_ASK.shown, `${device}|trickshown`);
     return null;
   }
 
@@ -6270,12 +6333,12 @@ class HatchPetCard extends HTMLElement {
   // After a big day's "yes": "what is it?", then one input with "ok" and "skip". However
   // it ends (ok, skip, empty, the time, a slide switch, the tab hiding) the "yes" is sent
   // once, with the text only if there is one.
-  _askTextStart(s, entity) {
+  _askTextStart(s, entity, kind = "big_day") {
     if (!this._followOk || sharedScreen()) {
-      this._sendFollow(s, entity, "big_day", "yes");
+      this._sendFollow(s, entity, kind, "yes");
       return;
     }
-    const step = s.textStep = { entity, sent: false, until: Date.now() + ASK_MS * 2 };
+    const step = s.textStep = { entity, kind, sent: false, until: Date.now() + ASK_MS * 2 };
     s.asking = true;
     (s.queue ??= []).push({ text: BIG_DAY.what, ms: ASK_MS, ask: true, cls: KEPT, perk: true, then: () => this._askText(s, step) });
   }
@@ -6325,7 +6388,7 @@ class HatchPetCard extends HTMLElement {
     clearTimeout(step.timer);
     s.asking = false;
     if (s.queue?.length) s.queue = s.queue.filter((q) => q.text !== BIG_DAY.what || !q.ask);
-    this._sendFollow(s, step.entity, "big_day", "yes", text);
+    this._sendFollow(s, step.entity, step.kind || "big_day", "yes", text);
     if (said && s.ids?.["sensor.life_stage"] === step.entity) this._speak(s, BIG_DAY.kept, 3500);
   }
 
@@ -6719,12 +6782,19 @@ class HatchPetCard extends HTMLElement {
 
   // Something the pet has to tell only the viewer (from the visit).
   _note(s, note, madeRoom = false) {
-    // F2: with the dream's pick on the sensor, the first look told everyone its story: the
-    // asker's note says only the tail ("you": that story, then the tail); nobody else's.
+    // F2 (FM Q4 A): with the dream's pick on the sensor, the first look tells everyone its
+    // story once a day here (dream-<device>). The asker's note carries it: the story too
+    // when the look had no room for it (the key unspent, so spent now), then the tail
+    // ("you": their own story, then the tail). Nobody else's note repeats it.
     const picked = note.kind === "dream" && this._state(s, "sensor.life_stage")?.attributes?.dream;
     if (picked?.kind === "picked" && picked.pick === note.pick && Object.hasOwn(DREAM_STORIES, note.pick)) {
       if (!note.yours) return;
       const device = s.ids?.device;
+      const untold = oncePerDay(`dream-${device}`);
+      if (untold && note.pick !== "you") {
+        this._queue(s, this._dreamStory(s, note.pick), 5000, { personal: true });
+        this._dreamStoryTold(s, note.pick);
+      }
       if (note.pick === "you") this._queue(s, turnPick(this._storyList(s, "you"), `${device}|dream|you`), 5000, { personal: true });
       this._queue(s, turnPick(DREAM_TAIL, `${device}|dreamtail`), 4000, { personal: true });
       return;
@@ -6811,7 +6881,9 @@ class HatchPetCard extends HTMLElement {
       // Follow-ups (F1, E13): a tough day goes to the server (memory only, a softer
       // morning tomorrow); a big day's "yes" asks what it is first. Never stashed.
       if (kind === "how_day" && answer === "tough") this._sendFollow(s, entity, "how_day", "tough");
-      if (kind === "big_day" && answer === "yes") this._askTextStart(s, entity);
+      if ((kind === "big_day" || kind === "weekend") && answer === "yes") this._askTextStart(s, entity, kind);
+      if (kind === "game") this._sendFollow(s, entity, "game", answer); // F6: the choice
+      if (kind === "trick" && answer === "yes") this._sendFollow(s, entity, "trick", "yes");
       if (kind === "phone" && answer === "yes") {
         this._setNotify(s, true).then((ok) => {
           if (!ok && s.ids?.["sensor.life_stage"] === entity) this._write(s, "hm, that one slipped away ♪", 3500);
@@ -9023,9 +9095,12 @@ class HatchPetCard extends HTMLElement {
       return;
     }
     // The long prompt wraps to two lines (over the picker) on a slide under 300 px.
-    // Once a day the wide prompt is the game of the day's line (G-a).
-    const dayLine = this._slideW >= 300 && oncePerDay(`gamepick-${s.ids?.device}`) &&
-      (this._typeKey(s) ? GAME_PICK_LINES[today] : GAME_PICK_LINES.generic);
+    // Once a day the wide prompt is the game of the day's line (G-a); the day after
+    // someone picked tomorrow's game, it's that game's line instead (F6), once.
+    const picked = this._followGame(s);
+    const pickLine = picked && !picked.said && this._slideW >= 300 && (picked.said = true) && picked.line;
+    const dayLine = pickLine || (this._slideW >= 300 && oncePerDay(`gamepick-${s.ids?.device}`) &&
+      (this._typeKey(s) ? GAME_PICK_LINES[today] : GAME_PICK_LINES.generic));
     s.game = { picking: true, prompt: dayLine || (this._slideW < 300 ? "pick a game!" : "what shall we play?") };
     // Built each time: the card's options decide which games are offered.
     s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
@@ -9044,6 +9119,34 @@ class HatchPetCard extends HTMLElement {
     const pick = s.gameBox.querySelector(`.gpick [data-game="${last}"]`) ||
       s.gameBox.querySelector(".gpick button");
     pick.focus({ preventScroll: true });
+    if (!picked) this._pickerFollow(s); // F6: tomorrow's game, picked yesterday
+  }
+
+  // F6: the game someone picked yesterday for today (from this pet's follow-up), or null.
+  _followGame(s) {
+    const f = s.followGame;
+    return f && f.day === new Date().toDateString() && GAMES.some((g) => g.key === f.key) ? f : null;
+  }
+
+  // Fetched as the picker opens (the server marks it said): the picked game moves to the
+  // front with the focus, and the wide prompt becomes its line.
+  async _pickerFollow(s) {
+    const reply = await this._followFetch(s, "picker");
+    if (reply?.kind !== "game" || !GAMES.some((g) => g.key === reply.choice)) return;
+    const line = turnPick(GAME_TOMORROW.day, `${s.ids?.device}|gamepick`);
+    s.followGame = { key: reply.choice, day: new Date().toDateString(), line, said: false };
+    if (!s.game?.picking) return;
+    const list = s.gameBox.querySelector(".gpick");
+    const button = list?.querySelector(`[data-game="${reply.choice}"]`);
+    if (!button) return;
+    list.prepend(button);
+    button.focus({ preventScroll: true });
+    if (this._slideW >= 300) {
+      s.followGame.said = true;
+      s.game.prompt = line;
+      this._write(s, line, 60000);
+      this._fitPicker(s);
+    }
   }
 
   // The picker sits under the close button (and the one-line prompt beside
@@ -9254,7 +9357,8 @@ class HatchPetCard extends HTMLElement {
 
   // G-a: this pet's game of the day (the same all day; a type leans to its game).
   _gameOfDay(s) {
-    return dailyPick(gameDayList(this._typeKey(s)), `${s.ids?.device}|game`);
+    const picked = this._followGame(s); // F6: someone's pick for today leads
+    return picked ? picked.key : dailyPick(gameDayList(this._typeKey(s)), `${s.ids?.device}|game`);
   }
 
   // G-b: this pet's lucky number today, 1-9 (the server's numbers).

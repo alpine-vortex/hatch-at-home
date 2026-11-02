@@ -2848,6 +2848,10 @@ async def test_a_look_has_room_for_three_lines(
     coordinator.state.wish = None
     picked = {"kind": "picked", "pick": "sea", "user": me.id, "day": "2026-10-29"}
     coordinator.state.dream = dict(picked)
+    # No follow-up due this week (one would take the dream's slot, F1).
+    coordinator.people.person(me.id)["follow_last"] = dict.fromkeys(
+        P.FOLLOW_QUESTIONS, "2026-10-29"
+    )
     first = await coordinator.async_visit(me.id, queued=2)
     assert len(first["notes"]) == 1 and first["ask"] is None  # 2 + 1 = 3: no room
     coordinator._visits.clear()

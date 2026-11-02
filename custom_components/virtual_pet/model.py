@@ -252,6 +252,7 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
         "day": _str,
         "tucked_at": _num,
         "next_gift_at": _num,
+        "trick_asked": _str,  # F7: "<generation>-<trick month>" of its trick ask
     }
     for key, check in checks.items():
         if key in out and not check(out[key]):

@@ -1876,6 +1876,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             dreamed=bool(self.state.dream and self.state.dream.get("day") == today),
             early_tomorrow=self._early_tomorrow(user, now),
             world=self.world if self.visitors else None,
+            pet_kinds=self._follow_kinds(user),
         )
         if kind is None:
             return None
@@ -1885,8 +1886,35 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if kind == "catchphrase":
             self._catch_ask(user)["asked"].append(today)
             self._save()
+        if kind == "trick":
+            # Once a generation-month per person, in this pet's bond (F7).
+            if (bond := self.state.bonds.get(user)) is not None:
+                bond["trick_asked"] = self._trick_key()
+            self._save()
         self.people.save()
         return kind
+
+    def _trick_key(self) -> str:
+        """This pet's generation and trick month (an adult's month from its 14th
+        day, as the card's trickMonth; a teen's is 0)."""
+        assert self.state is not None
+        adult = dict(R.STAGE_STARTS)["adult"]
+        months = max(0, int((self.state.age_hours - adult) // (30 * 24)))
+        return f"{self.state.generation}-{months}"
+
+    def _follow_kinds(self, user: str) -> tuple[str, ...]:
+        """The follow-ups only this pet asks (F6, F7): a game always; a trick
+        only with one left to learn (a teen, or an adult before its 3rd trick
+        month), at most once a generation-month for this person."""
+        assert self.state is not None
+        kinds = ["game"]
+        stage = model.life_stage(self.state)
+        months = int(self._trick_key().rsplit("-", 1)[1])
+        left = stage == "teen" or (stage == "adult" and months < R.TRICKS_COUNT)
+        bond = self.state.bonds.get(user) or {}
+        if left and bond.get("trick_asked") != self._trick_key():
+            kinds.insert(0, "trick")
+        return tuple(kinds)
 
     def _early_tomorrow(self, user: str, now: float) -> bool:
         """An early alarm tomorrow on their phone ("my day" on), at ask time, any
@@ -1967,9 +1995,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     raise ValueError("It didn't ask that")
                 if question == "how_day":
                     self.people.set_mood(user, today)  # memory only (E13)
-                elif answer == "yes":
+                elif question == "game":
+                    # The choice, said back by this pet tomorrow (F6).
+                    self.people.open_follow(
+                        user, "game", today, choice=answer, pet=self.pet_id
+                    )
+                elif question == "trick" and answer == "yes":
+                    self.people.open_follow(user, "trick", today, pet=self.pet_id)
+                elif answer == "yes":  # big_day, weekend: with their words, if any
                     self.people.open_follow(user, question, today, text)
-            return  # "no" keeps nothing
+            self._push_everywhere()  # their follow_at
+            return  # "no", "later" keep nothing
         if question == "birthday":
             # Theirs, kept only in the people store; "skip" sticks. Never echoed.
             person = self.people.person(user)
@@ -2031,13 +2067,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.people.save()
         self._push_everywhere()  # a birthday kept
 
-    async def async_follow(self, user: str) -> dict[str, Any]:
+    async def async_follow(self, user: str, at: str = "look") -> dict[str, Any]:
         """The follow-up beat due for this person now (virtual_pet/follow), marked
         said under their lock with no await in between: their other screens and
-        pets get {}."""
+        pets get {}. at: "look" (a first look, a tab's return) or "picker" (F6)."""
         today, hour = self._today(self._now())
         async with self.people.lock(user):
-            return self.people.follow_due(user, today, hour, self.config_entry.entry_id)
+            beat = self.people.follow_due(user, today, hour, self.pet_id, at)
+        if beat:
+            self._push_everywhere()  # their follow_at
+        return beat
 
     async def async_set_birthday_phone(self, user: str, enabled: bool) -> None:
         """Whether this person's phone hears "happy birthday" on the day."""
@@ -2391,6 +2430,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             # Their favourite of this world's visitors (an id), or None (F4).
             "fav_visitor": (person.get("likes") or {}).get(
                 P.fav_visitor_key(self.world)
+            ),
+            # Where a follow-up beat may wait for them today ("look", "picker"), so
+            # their card keeps a first-look slot only then (F1); never what it is.
+            "follow_at": self.people.follow_at(
+                user, self._today(self._now())[0], self.pet_id
             ),
         }
 

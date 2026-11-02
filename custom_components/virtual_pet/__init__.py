@@ -387,6 +387,8 @@ async def websocket_answer(
     {
         vol.Required("type"): f"{DOMAIN}/follow",
         vol.Required("entity_id"): cv.entity_id,
+        # A first look or a tab's return, or the game picker (F6).
+        vol.Optional("at", default="look"): vol.In(["look", "picker"]),
     }
 )
 @websocket_api.async_response
@@ -403,7 +405,9 @@ async def websocket_follow(
     if pet is None or pet.state is None:
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
-    connection.send_result(msg["id"], await pet.async_follow(connection.user.id))
+    connection.send_result(
+        msg["id"], await pet.async_follow(connection.user.id, msg["at"])
+    )
 
 
 @websocket_api.websocket_command(

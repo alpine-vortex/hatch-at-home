@@ -44,6 +44,9 @@ const COPY_TABLES = {
   BIG_DAY: { fill: "it", asks: ["q", "what"] },
   SOFT_MORNING: {},
   FAVV_LINES: { fill: "visitor", asks: ["q"] },
+  WEEKEND: { fill: "it", asks: ["q"] },
+  GAME_TOMORROW: { asks: ["q"] },
+  TRICK_ASK: { asks: ["q"] },
 };
 
 function lines(value, path, out) {

@@ -93,17 +93,14 @@ def test_a_big_day_ask_is_weekly_capped_and_never_while_open():
 
 
 def ask(person: dict[str, Any], today: str, hour: int = 18, **kw: Any) -> Any:
-    return P.choose_question(
-        person,
-        today,
-        hour,
-        level=5,
-        to_bed_minutes=600,
-        has_forecast=False,
-        came_home=None,
-        rested=False,
-        **kw,
-    )
+    args = {
+        "level": 5,
+        "to_bed_minutes": 600,
+        "has_forecast": False,
+        "came_home": None,
+        "rested": False,
+    } | kw
+    return P.choose_question(person, today, hour, **args)
 
 
 def asked_all() -> dict[str, Any]:
@@ -114,20 +111,61 @@ def asked_all() -> dict[str, Any]:
     }
 
 
-def test_a_big_day_takes_the_fallback_slot_only():
+def test_a_follow_up_takes_the_slot_but_never_the_rotations_own_how_day():
+    """FM Q1 A on the reconcile: a due follow-up takes the later slot from the
+    fallback how_day and from the day's dream or guess, askable or not; never
+    from the rotation's own how_day."""
     days = [date(2026, 11, 1) + timedelta(days=i) for i in range(14)]
     for day in days:
         today = day.isoformat()
         own = P.rotation(day)
         got = ask(asked_all(), today)
+        near_bed = ask(asked_all(), today, to_bed_minutes=60)  # a dream askable now
         if own == "how_day":
-            assert got == "how_day", today  # the rotation's own keeps its evening
+            assert got == near_bed == "how_day", today  # keeps its evening
         elif day.weekday() in (6, 0, 1, 2, 3):
-            assert got == "big_day", today  # a dream or guess that can't be asked now
+            assert got == near_bed == "big_day", today
+        elif day.weekday() == 4:
+            assert got == near_bed == "weekend", today
         else:
-            assert got in (None, "how_day"), today
+            assert got in (None, "how_day"), today  # Saturday: nothing to follow
+            assert ask(asked_all(), today, pet_kinds=("game",)) == "game", today
         assert ask(asked_all(), today, early_tomorrow=True) != "big_day"
-        assert ask(asked_all(), today, hour=15) != "big_day"
+        assert ask(asked_all(), today, hour=15) not in P.FOLLOW_QUESTIONS
+
+
+def test_the_follow_ups_are_tried_in_order_each_weekly():
+    person: dict[str, Any] = {}
+    kinds = ("trick", "game")
+    assert P.follow_question(person, "2026-11-06", pet_kinds=kinds) == "weekend"
+    assert P.follow_question(person, "2026-11-05", pet_kinds=kinds) == "big_day"
+    assert P.follow_question(person, "2026-11-07", pet_kinds=kinds) == "trick"
+    assert P.follow_question(person, "2026-11-07", pet_kinds=("game",)) == "game"
+    assert P.follow_question(person, "2026-11-07") is None  # no pet's own
+    P.mark_asked(person, "2026-11-07", 18, "trick")
+    assert P.follow_question(person, "2026-11-09", pet_kinds=kinds) == "big_day"
+    P.mark_asked(person, "2026-11-09", 18, "big_day")
+    assert P.follow_question(person, "2026-11-10", pet_kinds=kinds) is None  # cap 2
+    person["follow_asked"] = ["2026-11-07"]
+    assert P.follow_question(person, "2026-11-10", pet_kinds=kinds) == "game"
+
+
+def test_each_kinds_dates_and_beat():
+    assert P.follow_dates("weekend", "2026-11-06") == ("2026-11-09", "2026-11-10")
+    assert P.follow_dates("trick", "2026-11-06") == ("2026-11-09", "2026-11-11")
+    assert P.follow_dates("game", "2026-11-06") == ("2026-11-07", "2026-11-07")
+    assert P.follow_dates("big_day", "2026-11-06") == ("2026-11-07", "2026-11-07")
+    weekend = event(kind="weekend", asked="2026-11-06", due="2026-11-09")
+    weekend["until"] = "2026-11-10"
+    assert P._event_beat(weekend, "2026-11-08", 9, "pet") is None  # Sunday: not yet
+    assert P._event_beat(weekend, "2026-11-10", 20, "pet") == "monday"  # Tuesday too
+    weekend["said"] = ["monday"]
+    assert P._event_beat(weekend, "2026-11-10", 9, "pet") is None  # once
+    trick = event(kind="trick", asked="2026-11-06", due="2026-11-09", pet="a")
+    trick["until"] = "2026-11-11"
+    assert P._event_beat(trick, "2026-11-09", 9, "a") == "shown"
+    assert P._event_beat(trick, "2026-11-09", 9, "b") is None  # another pet
+    assert P._event_beat(trick, "2026-11-12", 9, "a") is None  # past day 5
 
 
 @pytest.mark.parametrize(
@@ -142,6 +180,9 @@ def test_a_big_day_takes_the_fallback_slot_only():
         {"said": "morning"},
         {"choice": "dig"},  # only a game's
         {"pet": "abc"},  # only a game's or a trick's
+        {"kind": "game", "pet": "a"},  # a game needs its choice
+        {"kind": "game", "pet": "a", "choice": "chess"},
+        {"kind": "trick"},  # a trick needs its pet
         {"text": SECRET},  # memory only
         {"extra": 1},
     ],
@@ -433,3 +474,138 @@ async def test_a_favourite_visitor_is_one_of_its_worlds_and_theirs_alone(
     await client.send_json_auto_id({"type": f"{DOMAIN}/forget_me"})
     assert (await client.receive_json())["success"]
     assert pet._mine(ada.id)["fav_visitor"] is None
+
+
+# --- Weekend, game, trick (F5-F7) --------------------------------------------------
+
+
+async def test_a_game_and_a_trick_are_this_pets_own(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    freezer: FrozenDateTimeFactory,
+    now: float,
+):
+    ada, token = await a_user(hass)
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    pet = (await setup(hass)).runtime_data
+    people = pet.people
+    today = pet._today(pet._now())[0]
+    person = people.person(ada.id)
+    client = await hass_ws_client(hass, token)
+    # Asked tonight: the choice is the answer, kept with this pet's id.
+    P.mark_asked(person, today, 19, "game")
+    await pet.async_answer(ada.id, "game", "dig")
+    game = people.open_event(ada.id)
+    assert game["choice"] == "dig" and game["pet"] == pet.pet_id
+    assert game["due"] == game["until"] == P.tomorrow(today)
+    assert pet._mine(ada.id)["follow_at"] == []  # not today
+    freezer.tick(timedelta(days=1))
+    assert pet._mine(ada.id)["follow_at"] == ["picker"]
+    assert await pet.async_follow(ada.id) == {}  # a look never takes a game's beat
+    await client.send_json_auto_id(
+        {
+            "type": f"{DOMAIN}/follow",
+            "entity_id": "sensor.pip_life_stage",
+            "at": "picker",
+        }
+    )
+    msg = await client.receive_json()
+    assert msg["result"] == {"kind": "game", "beat": "day", "choice": "dig"}
+    assert (
+        people.open_event(ada.id) is None
+        and await pet.async_follow(ada.id, "picker") == {}
+    )
+    # A trick: "maybe later" keeps nothing; "yes" is shown from day 3 to day 5, here.
+    today = pet._today(pet._now())[0]
+    P.mark_asked(person, today, 19, "trick")
+    await pet.async_answer(ada.id, "trick", "later")
+    assert people.open_event(ada.id) is None
+    await pet.async_answer(ada.id, "trick", "yes")
+    assert people.open_event(ada.id)["pet"] == pet.pet_id
+    freezer.tick(timedelta(days=2))
+    assert await pet.async_follow(ada.id) == {}  # day 2: not yet
+    assert await pet.async_follow(ada.id, "picker") == {}
+    freezer.tick(timedelta(days=1))
+    assert pet._mine(ada.id)["follow_at"] == ["look"]
+    assert await pet.async_follow(ada.id) == {"kind": "trick", "beat": "shown"}
+    assert people.open_event(ada.id) is None
+
+
+async def test_another_pets_trick_stays_with_it(
+    hass: HomeAssistant, hass_storage: dict[str, Any], now: float
+):
+    ada, _ = await a_user(hass)
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    pet = (await setup(hass)).runtime_data
+    today = pet._today(pet._now())[0]
+    pet.people.open_follow(ada.id, "trick", today, pet="another-pet")
+    for _ in range(3):
+        today = P.tomorrow(today)
+    assert pet.people.follow_at(ada.id, today, pet.pet_id) == []
+    assert pet.people.follow_due(ada.id, today, 9, pet.pet_id) == {}
+    assert pet.people.follow_due(ada.id, today, 9, "another-pet")["kind"] == "trick"
+
+
+async def test_a_weekend_comes_back_on_monday_with_its_words(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer: FrozenDateTimeFactory
+):
+    freezer.move_to("2026-11-06 20:00:00+00:00")  # a Friday evening
+    ada, _ = await a_user(hass)
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    pet = (await setup(hass)).runtime_data
+    people = pet.people
+    today = pet._today(pet._now())[0]
+    assert today == "2026-11-06"
+    P.mark_asked(people.person(ada.id), today, 20, "weekend")
+    await pet.async_answer(ada.id, "weekend", "no")
+    assert people.open_event(ada.id) is None and people._texts == {}
+    await pet.async_answer(ada.id, "weekend", "yes", "my parade")
+    assert people.open_event(ada.id)["due"] == "2026-11-09"
+    assert "text" not in people.open_event(ada.id) and people._texts == {
+        ada.id: "your parade"
+    }
+    freezer.move_to("2026-11-08 09:00:00+00:00")  # Sunday: not yet
+    assert await pet.async_follow(ada.id) == {}
+    freezer.move_to("2026-11-09 08:00:00+00:00")
+    assert await pet.async_follow(ada.id) == {
+        "kind": "weekend",
+        "beat": "monday",
+        "text": "your parade",
+    }
+    assert people.open_event(ada.id) is None and people._texts == {}
+
+
+async def test_a_trick_is_asked_only_with_one_left_once_a_month(
+    hass: HomeAssistant, hass_storage: dict[str, Any], now: float
+):
+    ada, _ = await a_user(hass)
+    hass_storage[STORE_KEY] = hatched_pet(now, bonds={"x": {"points": 0}})
+    pet = (await setup(hass)).runtime_data
+    pet.state.bonds[ada.id] = {"points": 0}
+    assert pet._follow_kinds(ada.id) == ("game",)  # a child has no tricks to learn
+    pet.state.age_hours = 130.0  # a teen: the first
+    assert pet._follow_kinds(ada.id) == ("trick", "game")
+    pet.state.age_hours = 336.0 + 30 * 24 * 2 + 1  # an adult in its 2nd trick month
+    assert pet._follow_kinds(ada.id) == ("trick", "game")
+    assert pet._trick_key() == f"{pet.state.generation}-2"
+    pet.state.bonds[ada.id]["trick_asked"] = pet._trick_key()
+    assert pet._follow_kinds(ada.id) == ("game",)  # asked this month
+    pet.state.age_hours = 336.0 + 30 * 24 * 3 + 1  # all three learned
+    assert pet._follow_kinds(ada.id) == ("game",)
+
+
+async def test_a_full_look_still_has_room_for_the_question(
+    hass: HomeAssistant, hass_storage: dict[str, Any], freezer: FrozenDateTimeFactory
+):
+    """Reconcile #2: a first look of 2 card lines and no notes still asks."""
+    freezer.move_to("2026-11-01 18:00:00+00:00")  # a Sunday evening: a big day's eve
+    ada, _ = await a_user(hass)
+    hass_storage[STORE_KEY] = hatched_pet(dt_util.utcnow().timestamp())
+    pet = (await setup(hass)).runtime_data
+    pet.state.bonds[ada.id] = {"points": P.R.BOND_LEVELS[5], "since": "2026-10-20"}
+    pet.state.wish = None
+    pet.people.person(ada.id).update(asked_all())
+    pet.people.person(ada.id)["likes"][P.fav_visitor_key(pet.world)] = "x"
+    visit = await pet.async_visit(ada.id, queued=2)
+    assert visit["notes"] == [] and visit["ask"] is not None, visit
