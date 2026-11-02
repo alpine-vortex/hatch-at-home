@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from homeassistant.auth.permissions.const import POLICY_CONTROL
 from homeassistant.components import persistent_notification, websocket_api
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
@@ -67,7 +68,13 @@ from .const import (
     STORE_VERSION,
     VERSION,
 )
-from .coordinator import PetConfigEntry, PetCoordinator, PetStore
+from .coordinator import (
+    PetConfigEntry,
+    PetCoordinator,
+    PetStore,
+    RenameError,
+    async_rename,
+)
 from .defaults import default_weather
 from .home import news_text
 from .model import GAMES
@@ -205,6 +212,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_greeted)
     websocket_api.async_register_command(hass, websocket_my_day)
     websocket_api.async_register_command(hass, websocket_set_shell)
+    websocket_api.async_register_command(hass, websocket_rename)
     websocket_api.async_register_command(hass, websocket_collect)
     websocket_api.async_register_command(hass, websocket_collection)
 
@@ -777,6 +785,39 @@ async def websocket_set_shell(
         connection.send_error(msg["id"], "shell_locked", "Not grown into that yet")
         return
     connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/rename",
+        vol.Required("entity_id"): cv.entity_id,
+        # Any value passes the schema (a schema failure is logged with it); the
+        # handler takes only a clean string of 1-20 characters (bad_name).
+        vol.Required("name"): object,
+    }
+)
+@websocket_api.async_response
+async def websocket_rename(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Name the new generation, in its first day (egg or baby), for any login that
+    may control the pet. A websocket command is not covered by the service layer's
+    permission check, so this one asks for POLICY_CONTROL itself. Like set_shell,
+    who renamed isn't recorded. A not_ready answer is retryable: the entry is
+    reloading (a lay that moved the world)."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    if entity is None or entity.platform != DOMAIN or not entity.config_entry_id:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    if not connection.user.permissions.check_entity(msg["entity_id"], POLICY_CONTROL):
+        connection.send_error(msg["id"], "read_only", "This login can't name the pet")
+        return
+    try:
+        name = await async_rename(hass, entity.config_entry_id, msg["name"])
+    except RenameError as err:
+        connection.send_error(msg["id"], err.code, "The pet was not renamed")
+        return
+    connection.send_result(msg["id"], {"name": name})
 
 
 @websocket_api.websocket_command(

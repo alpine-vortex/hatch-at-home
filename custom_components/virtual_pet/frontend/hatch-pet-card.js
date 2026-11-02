@@ -1651,6 +1651,18 @@ const SETUP_COPY = {
   layOutside: "set in home assistant", // N25
   eggSurprise: "surprise", // N7
   eggComing: (creature) => `a ${creature.toLowerCase()} is coming`, // C15'
+  // S3: naming the new generation (N12, the field's aria-label, is built where it is drawn).
+  nameHeading: "a name for the egg", // N8
+  nameSave: "name it", // N9
+  nameKeep: (name) => `keep ${name}`, // N10
+  nameRow: "name", // N11
+  nameChange: "change", // N11
+  nameSaved: (name) => `${name}! i like it ♥`, // N13
+  nameBad: "keep it short, and not blank", // N14 (plan §13)
+  nameTaken: "another pet here has that name", // N15
+  nameNotNow: "only a new egg or baby can be named", // N16
+  nameReadOnly: "this login can't name, sorry", // N17
+  nameFailed: "hm, that name didn't stick ♪", // N18
 };
 // Settings UX fix 1 (review 1, F12/F14/F16; copy APPROVED by the first mate 2026-11-02, owner
 // delegated): the sheet's notes in the pet's voice, lowercase, and the pet's word when the
@@ -2217,6 +2229,13 @@ const REQUEST_ARIA = {
 // redraw keeps it, and arming one control can't confirm another.
 const CONFIRM_MS = 4000;
 const CONFIRM_GAP_MS = 600;
+// Naming the new generation (settings S3): the lay is waited for 30 s (longer while the entry
+// reloads, up to 2 minutes), a not_ready answer is retried once after 2 s, the field takes 20.
+const NAME_WAIT_MS = 30000;
+const NAME_WAIT_MAX_MS = 120000;
+const NAME_RETRY_MS = 2000;
+const NAME_MAX = 20;
+const NAME_ERRORS = { bad_name: "nameBad", taken: "nameTaken", not_now: "nameNotNow", read_only: "nameReadOnly" };
 function confirmTap(s, key, now = Date.now()) {
   const c = s.confirm;
   if (c?.key === key && now - c.at < CONFIRM_MS) {
@@ -3681,6 +3700,19 @@ const STYLE = `
   .layrow { box-sizing: border-box; width: 100%; text-align: left; }
   .layrow.ro { display: flex; align-items: center; border-style: dashed; cursor: default;
     background: #2f3a24; color: #e9e2c6; }
+  /* The name sheet (plan S3): the lay sheet's band (keep at the left, "name it" at the right), the
+     field in the sheet's own ink, and the error line under it. 16px in the field so a phone's
+     browser doesn't zoom in on it. */
+  .namego { margin-left: auto; flex: none; }
+  .nameback { min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nameinput { box-sizing: border-box; width: 100%; min-height: 44px; margin-top: 4px; padding: 3px 10px;
+    border: 2px solid #2f3a24; border-radius: 10px; background: transparent; color: inherit;
+    font: 400 16px 'Tiny5', monospace; }
+  .nameinput:focus-visible { outline: 2px solid #2f3a24; outline-offset: 2px; }
+  .nameerr { padding: 4px 2px 0; font-size: 12px; }
+  .nameval { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px; min-width: 0; }
+  .nameval .nm { min-width: 0; overflow-wrap: anywhere; }
+  .nameval .bell { flex: none; }
   .game button[aria-disabled="true"] { opacity: .55; }
   .status-feedback { position: sticky; bottom: 0; margin-top: auto; padding: 5px 7px;
     background: #2f3a24; color: #e9e2c6; font-size: 12px; min-height: 14px; }
@@ -3727,7 +3759,9 @@ const STYLE = `
   ha-card.bigtext .status .status-feedback, ha-card.bigtext .status .sback, ha-card.bigtext .status .jlink,
   ha-card.bigtext .status .flink, ha-card.bigtext .status .wlink, ha-card.bigtext .status .jolder,
   ha-card.bigtext .status .fheart { font-size: 15px; }
-  ha-card.bigtext .status .layrow, ha-card.bigtext .status .laygo { font-size: 15px; }
+  ha-card.bigtext .status .layrow, ha-card.bigtext .status .laygo,
+  ha-card.bigtext .status .namego, ha-card.bigtext .status .namechange, ha-card.bigtext .status .nameerr { font-size: 15px; }
+  ha-card.bigtext .status .nameinput { font-size: 18px; }
   ha-card.bigtext .status .sec, ha-card.bigtext .status .shellnote, ha-card.bigtext .status .jtile,
   ha-card.bigtext .status .ftile, ha-card.bigtext .status .tile { font-size: 13px; }
   ha-card.bigtext .status .tile .tsub { font-size: 12px; }
@@ -4555,7 +4589,7 @@ class HatchPetCard extends HTMLElement {
     // The journal, finds and every-world pages are deeper pages and keep it the same way
     // (UX fix 2, F1): a tap on a tile or a heading is not a tap on the screen.
     s.status.addEventListener("click", (e) => {
-      if ((s.settings || s.journal || s.finds || s.everyWorld) && !s.laySheet) e.stopPropagation();
+      if ((s.settings || s.journal || s.finds || s.everyWorld || s.nameSheet) && !s.laySheet) e.stopPropagation();
     });
     // Escape steps back one page, like the back link (UX fix 2, F4): a sheet or picker to
     // where it came from, every world and finds to the journal, the journal to the status,
@@ -4563,6 +4597,10 @@ class HatchPetCard extends HTMLElement {
     s.status.addEventListener("keydown", (e) => {
       if (e.key !== "Escape" || s.laySheet) return;
       e.preventDefault();
+      if (s.nameSheet) { // "keep", whichever control has the focus
+        this._nameKeep(s);
+        return;
+      }
       const back = s.status.querySelector(".sback");
       if (back && (s.settings || s.journal || s.finds || s.everyWorld)) {
         back.click(); // back from the picker, the sheet (F8) or a journal page
@@ -5029,10 +5067,15 @@ class HatchPetCard extends HTMLElement {
     s.everyWorld = false;
     s.settings = false;
     s.settingsChanged = null;
-    if (s.laySheet) { // another pet's slide: its lay sheet goes (S2)
+    if (s.laySheet || s.nameSheet) { // another pet's slide: its lay sheet and name sheet go (S2, S3)
       s.laySheet = false;
+      s.nameSheet = false;
       s.screen.classList.remove("show-status");
     }
+    this._layDrop(s); // a lay waited for belongs to the last pet
+    this._clearNameTimers(s);
+    s.nameFrom = null;
+    s.nameBusy = false;
     this._closePicker(s);
     this._shellSettled(s);
     s.statusHtml = null;
@@ -5099,6 +5142,7 @@ class HatchPetCard extends HTMLElement {
       slide.screen.querySelector(".bondhearts")?.remove();
       slide.screen.querySelector(".linkhearts")?.remove(); // a visit's, mid-way
       if (slide.laySheet) this._closeLay(slide); // the shared-screen switch closes the lay sheet (S2)
+      if (slide.nameSheet) this._closeName(slide); // and the name sheet (S3)
       slide.journal = false;
       slide.finds = false; // the settings sheet stays, without its personal rows
       slide.everyWorld = false;
@@ -5120,6 +5164,7 @@ class HatchPetCard extends HTMLElement {
     this._sharedSeen = false;
     for (const slide of this._slides || []) {
       if (slide.laySheet) this._closeLay(slide);
+      if (slide.nameSheet) this._closeName(slide);
       this._dropFinds(slide); // the shared screen's page, read again with the viewer's own ♥
       if (slide.finds) this._loadFinds(slide);
       slide.statusHtml = null;
@@ -5177,6 +5222,7 @@ class HatchPetCard extends HTMLElement {
       if (x.game && i !== to) this._quitGame(x, null);
       this._stopTyping(x);
       if (x.laySheet && i !== to) this._closeLay(x); // the lay sheet stays with its pet
+      if (x.nameSheet && i !== to) this._closeName(x); // and so does the name sheet (S3)
       this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
       if (x.visitor && i !== to) { // a world visitor goes too, after a grace: a slip of the finger keeps it (UX8 F11)
         const V = x.visitor;
@@ -5699,6 +5745,7 @@ class HatchPetCard extends HTMLElement {
     const mood = this._state(s, "sensor.mood");
     const stageState = this._state(s, "sensor.life_stage");
     const stage = stageState?.state;
+    this._nameWatch(s, stageState); // a lay made here opens the name sheet (S3)
     const flags = mood?.attributes.flags || [];
     const calling = this._state(s, "binary_sensor.calling")?.state === "on";
     const lightsOut = this._state(s, "switch.lights_out")?.state === "on";
@@ -5911,7 +5958,7 @@ class HatchPetCard extends HTMLElement {
     s.wipeTimer = setTimeout(() => s.status.classList.remove("wipe-side", "wipe-down"), 220);
   }
 
-  _toggleStatus(s, lay = false) {
+  _toggleStatus(s, lay = false, name = false) {
     const open = !s.screen.classList.contains("show-status");
     const wasSettings = !open && s.settings && !s.laySheet;
     if (open && this._link?.host === s) this._linkEnd(); // the guest never stands over the page (UX8 F1)
@@ -5925,6 +5972,8 @@ class HatchPetCard extends HTMLElement {
     s.tileSaid = null;
     s.settings = false;
     s.laySheet = open && lay; // the lay sheet closes with the status (S2)
+    s.nameSheet = open && name; // and the name sheet (S3)
+    if (!open) s.nameFrom = null;
     this._closePicker(s);
     if (open) {
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
@@ -8589,6 +8638,10 @@ class HatchPetCard extends HTMLElement {
       this._renderLaySheet(s);
       return;
     }
+    if (s.nameSheet) {
+      this._renderNameSheet(s);
+      return;
+    }
     if (s.everyWorld) {
       this._renderEveryWorld(s);
       return;
@@ -8704,10 +8757,15 @@ class HatchPetCard extends HTMLElement {
     const eggLeft = isEgg ? this._eggMinutes(this._state(s, "sensor.life_stage")) : null;
     const eggRow = eggLeft === null ? "" : row(null, "hatching", `<span>${escape(eggLeft <= 6 ? STATUS_COPY.eggCracking
       : eggLeft <= 15 ? STATUS_COPY.eggSoon : STATUS_COPY.eggGrowing)}</span>`);
+    // The first day (egg and baby) can still be named, by anyone (settings S3, N11).
+    const nameRow = (isEgg || this._state(s, "sensor.life_stage")?.state === "baby") && petName
+      ? row(null, SETUP_COPY.nameRow, `<span class="nameval"><span class="nm">${escape(petName)}</span>` +
+        `<button class="bell namechange" aria-label="${escape(`name: ${petName}, change`)}">${SETUP_COPY.nameChange}</button></span>`) : "";
     const html = isEgg ? `
       ${band}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
       ${eggRow}
+      ${nameRow}
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>` : `
       ${band}
@@ -8731,6 +8789,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
       ${nextStage ? row(null, nextStage[0], `<span>${nextStage[1]}</span>`) : ""}
       ${nextEgg ? row(null, "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
+      ${nameRow}
       <div class="log">${lines.join("") || "<div>all new here ♪</div>"}</div>
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
@@ -8750,6 +8809,11 @@ class HatchPetCard extends HTMLElement {
     if (head) this._headCrop(s, head, 14, 3);
     this._journalLink(s, true);
     this._gearLink(s);
+    s.status.querySelector(".namechange")?.addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      this._tapped(e.currentTarget);
+      this._openName(s, "status");
+    });
   }
 
   // The settings sheet, in the status box like the journal: the viewer's own
@@ -9353,6 +9417,201 @@ class HatchPetCard extends HTMLElement {
       const refused = /unauthori|forbidden|permission/i.test(`${err?.code} ${err?.message}`);
       this._statusMessage(s, refused ? SETUP_COPY.layRefused : SETTINGS_AGAIN.failed);
     }
+  }
+
+  // --- Naming the new generation (settings S3) -------------------------------------------
+  // The pet's name as the household sees it: the device's own name if set, else its name.
+  _petName(s) {
+    const device = this._hass.devices?.[s.ids?.device];
+    return device?.name_by_user || device?.name || "";
+  }
+
+  // The tap of a lay: remember which generation it is leaving. The name sheet opens when this
+  // pet's life-stage sensor shows an egg of the next one (_nameWatch). A lay the server refuses
+  // changes nothing, so nothing opens; the wait is dropped after 30 s (longer while the entry
+  // reloads, as it does after a lay that moves the world), on a pet change and on a failed press.
+  _layWatch(s) {
+    const generation = Number(this._state(s, "sensor.life_stage")?.attributes.generation);
+    this._layDrop(s);
+    if (!Number.isFinite(generation)) return null;
+    const mark = { generation, at: Date.now() };
+    s.layAt = mark;
+    const check = () => {
+      if (s.layAt !== mark) return;
+      if (s.reloading && Date.now() - mark.at < NAME_WAIT_MAX_MS) {
+        s.layTimer = setTimeout(check, 5000); // still reloading: keep waiting
+        return;
+      }
+      s.layAt = null;
+    };
+    s.layTimer = setTimeout(check, NAME_WAIT_MS);
+    return mark;
+  }
+
+  _layDrop(s) {
+    s.layAt = null;
+    clearTimeout(s.layTimer);
+  }
+
+  // Called with each drawn state of a pet that is not reloading: opens the name sheet when the
+  // lay this screen made has hatched a new egg, and closes it when it has nothing left to name.
+  _nameWatch(s, stageState) {
+    const stage = stageState?.state;
+    const generation = Number(stageState?.attributes.generation);
+    if (s.layAt && stage === "egg" && generation === s.layAt.generation + 1) {
+      this._layDrop(s);
+      this._openName(s, "lay");
+    }
+    if (s.nameSheet && ((stage !== "egg" && stage !== "baby") || !Object.is(generation, s.nameGen))) {
+      this._closeName(s); // a child, or another generation: nothing to name here
+    }
+  }
+
+  // Open the sheet: from the lay (the status box opens on it) or from the status page's row.
+  _openName(s, from) {
+    this._clearNameTimers(s);
+    s.confirm = null;
+    s.nameFrom = from;
+    s.nameGen = Number(this._state(s, "sensor.life_stage")?.attributes.generation);
+    s.nameBusy = false;
+    if (from === "lay") {
+      s.screen.classList.remove("show-status");
+      this._toggleStatus(s, false, true);
+    } else {
+      s.nameSheet = true;
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      this._wipe(s);
+    }
+    s.nameSheetAt = Date.now();
+    s.status.scrollTop = 0;
+    s.status.querySelector(".nameinput")?.focus({ preventScroll: true });
+  }
+
+  // Every exit comes here (the status chip and the page flags go through _toggleStatus, which
+  // clears the flag itself).
+  _closeName(s) {
+    const from = s.nameFrom;
+    this._clearNameTimers(s);
+    s.nameSheet = false;
+    s.nameFrom = null;
+    s.nameBusy = false;
+    if (from === "status" && s.screen.classList.contains("show-status")) {
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      s.status.scrollTop = 0;
+      this._wipe(s);
+      s.status.querySelector(".namechange")?.focus({ preventScroll: true });
+    } else if (s.screen.classList.contains("show-status")) {
+      this._toggleStatus(s);
+    }
+  }
+
+  _clearNameTimers(s) {
+    clearTimeout(s.nameRetry);
+    s.nameRetry = null;
+  }
+
+  _renderNameSheet(s) {
+    const stage = this._state(s, "sensor.life_stage")?.state;
+    if (stage !== "egg" && stage !== "baby") {
+      this._closeName(s);
+      return;
+    }
+    const name = this._petName(s);
+    const html = `
+      <div class="shead"><button class="sback nameback">${escape(SETUP_COPY.nameKeep(name))}</button>
+        <button class="bell namego">${SETUP_COPY.nameSave}</button></div>
+      <div class="sec">${SETUP_COPY.nameHeading}</div>
+      <input class="nameinput" type="text" value="${escape(name)}" maxlength="${NAME_MAX}"
+        aria-label="the new egg's name, up to ${NAME_MAX} characters" aria-describedby="nameerr"
+        autocomplete="off" autocapitalize="words" spellcheck="false" enterkeyhint="done">
+      <div class="nameerr" id="nameerr" role="alert" hidden></div>
+      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
+    if (!this._setStatus(s, html)) return;
+    const input = s.status.querySelector(".nameinput");
+    s.status.querySelectorAll(".sec, .shead").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
+    input.addEventListener("click", (e) => e.stopPropagation());
+    input.addEventListener("input", () => this._nameError(s, null));
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        e.stopPropagation();
+        this._nameSave(s);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        e.stopPropagation(); // "keep", not the status's own Escape
+        this._nameKeep(s);
+      }
+    });
+    s.status.querySelector(".nameback").addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (Date.now() - (s.nameSheetAt || 0) < CONFIRM_GAP_MS) return; // the tap that opened it
+      this._tapped(e.currentTarget);
+      this._nameKeep(s);
+    });
+    s.status.querySelector(".namego").addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (Date.now() - (s.nameSheetAt || 0) < CONFIRM_GAP_MS) return;
+      this._tapped(e.currentTarget, s);
+      this._nameSave(s);
+    });
+  }
+
+  _nameKeep(s) {
+    if (s.nameBusy) return;
+    this._closeName(s);
+  }
+
+  // The error line under the field (null clears it).
+  _nameError(s, line) {
+    const note = s.status.querySelector(".nameerr");
+    if (!note) return;
+    note.textContent = line || "";
+    note.hidden = !line;
+  }
+
+  async _nameSave(s) {
+    if (s.nameBusy || !s.nameSheet) return;
+    const input = s.status.querySelector(".nameinput");
+    const typed = input.value.normalize("NFC").split(/\s+/).filter(Boolean).join(" ");
+    if (!typed) {
+      this._nameError(s, SETUP_COPY.nameBad);
+      input.focus({ preventScroll: true });
+      return;
+    }
+    const generation = s.nameGen;
+    const still = () => s.nameSheet && s.nameGen === generation;
+    s.nameBusy = true;
+    s.status.querySelector(".namego")?.classList.add("pending");
+    const entity = s.ids?.["sensor.life_stage"];
+    let name = null;
+    let code = null;
+    for (let attempt = 0; attempt < 2 && name === null; attempt++) {
+      try {
+        const reply = await this._hass.callWS({ type: "virtual_pet/rename", entity_id: entity, name: typed });
+        name = reply?.name || typed;
+      } catch (err) {
+        code = err?.code || "unknown";
+        // The entry is reloading (a lay that moved the world): once more in 2 s, then N18.
+        if (code !== "not_ready" || attempt) break;
+        await new Promise((resolve) => { s.nameRetry = setTimeout(resolve, NAME_RETRY_MS); });
+        if (!still()) return;
+      }
+    }
+    if (!still()) return; // the sheet closed meanwhile (a swipe, the chip, a child)
+    s.nameBusy = false;
+    s.status.querySelector(".namego")?.classList.remove("pending");
+    if (name === null) {
+      this._nameError(s, NAME_ERRORS[code] ? SETUP_COPY[NAME_ERRORS[code]] : SETUP_COPY.nameFailed);
+      input.focus({ preventScroll: true });
+      return;
+    }
+    const line = SETUP_COPY.nameSaved(name);
+    const stage = this._state(s, "sensor.life_stage")?.state;
+    const from = s.nameFrom;
+    this._closeName(s);
+    if (from === "status") this._statusMessage(s, line); // the status page is where the tap was
+    else if (stage === "egg") this._write(s, line, 4000); // an egg can't talk: the line on the screen
+    else this._speak(s, line, 4000);
   }
 
   // A tap on a two-tap control (confirmTap): true when it confirms. Otherwise
@@ -10151,10 +10410,12 @@ class HatchPetCard extends HTMLElement {
     button.classList.add("pending");
     try {
       await this._hass.callService(domain, service, { entity_id: entityId });
+      return true;
     } catch (err) {
       button.classList.add("failed");
       setTimeout(() => button.classList.remove("failed"), 400);
       this._write(s, "hmm, that didn't work", 3500);
+      return false;
     } finally {
       this._inflight.delete(button);
       button.classList.remove("pending");
@@ -10180,7 +10441,10 @@ class HatchPetCard extends HTMLElement {
     // Its log entry is "mine" (PR 2a); a few kept, so two quick taps both count.
     s.pressed = [...(s.pressed || []).filter((p) => Date.now() - p.pressedAt < MINE_MATCH_MS), { action, pressedAt: Date.now() }];
     this._sceneStart(s, action);
-    this._call(button, s, "button", "press", id);
+    const layAt = action === "lay_egg" ? this._layWatch(s) : null; // the name sheet waits for the lay (S3)
+    Promise.resolve(this._call(button, s, "button", "press", id)).then((ok) => {
+      if (ok === false && layAt && s.layAt === layAt) this._layDrop(s); // a failed press: nothing to wait for
+    });
   }
 
   // --- Care scenes ----------------------------------------------------------
