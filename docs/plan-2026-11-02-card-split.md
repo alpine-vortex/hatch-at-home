@@ -114,7 +114,7 @@ card. Python and shell entry points run `node scripts/build-card.js` first.
 | `scripts/bench.js`, `dev/bench/server.js`, `index.html:27` | serve `frontend/hatch-pet-card.js` | `ensureBuilt()` at the start of `bench.js` |
 | `scripts/card-check.js` (:1126) | reads `BOOT_VERSION` | `ensureBuilt()` at the start |
 | `scripts/costume-preview.js` (:25, :40), `scripts/readme/shots.js` (:68) | read the file | `ensureBuilt()` at the start |
-| `scripts/pick-sections` (:23, :71) | diffs the card file by line number | see below |
+| `scripts/pick-sections` (:23, :73) | diffs the card file by line number | see below |
 | hassfest, `hacs/action` | never read the card | none expected; the move's CI run confirms |
 
 `pick-sections` must read the parts: take the changed `src/card/*.js` files from the diff,
