@@ -394,3 +394,4 @@ Splash pose (`acts.splash`), Luna (gpt-5.6-luna), probe kitten teen / ball pytho
 - Terrarium (ballpython, beardeddragon, gecko, tarantula, tortoise): splash baby/teen/adult, all facing right.
 - Pond (axolotl, beaver, duckling, pondturtle, treefrog): splash baby/teen/adult, all facing right.
 - Tidepool (hermitcrab, octopus, otter, puffin, seal): splash baby/teen/adult, all facing right.
+- Night Sky (bat, firefly, lunamoth, opossum, owl): splash baby/teen/adult, all facing right.
