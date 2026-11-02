@@ -358,8 +358,8 @@ class People:
         at: str = "look",
     ) -> dict[str, Any]:
         """The beat due for this person now, marked said (the caller holds their
-        lock, with no await before this returns): {kind, beat, text?, choice?} or
-        {}. At a look an event's beat comes before a mood's (the next look gets the
+        lock, with no await before this returns): {kind, beat, text?, choice?}, {} or
+        {"deferred": True} (a big day's evening waiting on an open question). At a look an event's beat comes before a mood's (the next look gets the
         other); at the picker only a game's."""
         if self.prune(today):
             self.save()
@@ -379,8 +379,9 @@ class People:
             ):
                 # Audit 0.43.0 F-01: today's later slot still holds an unanswered
                 # question; the evening's ask would take its answer. Leave the beat
-                # unsaid (the card asks again on a later tick, once it is answered).
-                return {}
+                # unsaid, and say so ({"deferred": True}, no kind): the card tries again on
+                # a later tick, once it is answered, not marking its day as tried.
+                return {"deferred": True}
             event["said"].append(beat)
             out = {"kind": event["kind"], "beat": beat}
             if event["kind"] == "big_day" and beat == "evening":

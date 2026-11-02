@@ -4606,7 +4606,7 @@ async function main() {
       el._hass.callWS = (msg) => {
         if (msg.type !== "virtual_pet/follow") return realWS.call(el._hass, msg);
         calls.push(msg);
-        return mode === "fail" ? Promise.reject({ code: "unknown_error" }) : Promise.resolve({});
+        return mode === "fail" ? Promise.reject({ code: "unknown_error" }) : Promise.resolve(mode === "deferred" ? { deferred: true } : {});
       };
       el._channelHeard = () => true;
       const out = {};
@@ -4625,6 +4625,9 @@ async function main() {
         out.asking = await run(eve, { asking: true });
         out.game = await run(eve, { game: true });
         out.askingKept = s.followEve === undefined;
+        mode = "deferred"; // the server holds the evening for an open question
+        out.deferred = await run(eve);
+        out.deferredMarker = s.followEve === undefined;
         mode = "fail";
         out.failed = await run(eve);
         out.failedMarker = s.followEve === undefined;
@@ -4651,8 +4654,8 @@ async function main() {
       }
       return out;
     });
-    check("audit 0.43.0 F-01: the evening follow-up isn't fetched while a question or game is up",
-      fe.asking === 0 && fe.game === 0 && fe.askingKept, JSON.stringify(fe));
+    check("audit 0.43.0 F-01: the evening follow-up isn't fetched while a question or game is up; a deferred reply leaves the day untried",
+      fe.asking === 0 && fe.game === 0 && fe.askingKept && fe.deferred === 1 && fe.deferredMarker, JSON.stringify(fe));
     check("audit 0.43.0 F-02: a failed evening fetch leaves the day's marker unset and is tried again; once answered, no more that day",
       fe.failed === 1 && fe.failedMarker && fe.retried === 1 && fe.marker === "2031-05-06" && fe.again === 0, JSON.stringify(fe));
     check("audit 0.43.0 F-03: the evening gate and marker follow the server's day and evening; an older server's mine falls back to this browser's clock",

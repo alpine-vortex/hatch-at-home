@@ -2130,7 +2130,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         today, hour = self._today(self._now())
         async with self.people.lock(user):
             beat = self.people.follow_due(user, today, hour, self.pet_id, at)
-        if beat:
+        if beat and not beat.get("deferred"):
             self._push_everywhere()  # their follow_at
         return beat
 

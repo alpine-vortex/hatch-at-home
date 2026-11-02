@@ -6416,7 +6416,8 @@ class HatchPetCard extends HTMLElement {
     try {
       reply = await this._hass.callWS({ type: "virtual_pet/follow", entity_id: entity, at });
       // F-02: the evening is tried once a day, but only once the server has answered.
-      if (at === "look" && clock.eve) s.followEve = clock.day;
+      // A deferred evening (the server's open question first) isn't tried yet.
+      if (at === "look" && clock.eve && !reply?.deferred) s.followEve = clock.day;
     } catch (err) {
       reply = null; // an older server: no follow-ups; a failed call tries again later
     }

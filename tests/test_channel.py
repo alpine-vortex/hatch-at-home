@@ -442,3 +442,32 @@ async def test_became_sick_moment_keeps_only_the_weight_cause(
         for m in coordinator.moments
         if m["type"] == "became_sick"
     )
+
+
+async def test_the_evening_reaches_an_open_card_with_nothing_else_changing(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    hass_admin_user: Any,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Audit 0.43.0 F-03: mine.follow_evening is pushed by the coordinator's own
+    5-minute tick (its listener is _push_watchers) when Home Assistant's hour
+    reaches 19, to a card already open, with no care or other change."""
+    me = hass_admin_user.id
+    hass_storage[STORE_KEY] = hatched_pet(now, bonds={me: {"points": LEVELS[1]}})
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    coordinator.state.visit = {"day": today(), "world": "woodland", "id": None}
+    client = await hass_ws_client(hass)
+    snapshot = await subscribe(client)  # at 14:00
+    assert snapshot["mine"]["follow_evening"] is False
+    freezer.move_to("2026-10-26 18:52:00+00:00")
+    heard: list[bool] = []
+    for _ in range(4):  # the ticks to 19:12; nothing else is touched
+        await settle(hass, freezer, model.R.TICK_MINUTES * 60)
+        heard += [
+            e["mine"]["follow_evening"] for e in await pushed(client) if "mine" in e
+        ]
+    assert heard == [True]  # once, when the hour came

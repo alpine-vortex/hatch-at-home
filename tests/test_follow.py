@@ -522,10 +522,11 @@ async def test_an_open_later_question_is_not_overwritten_by_the_evening(
     people.open_follow(ada.id, "big_day", "2026-11-03", SECRET, day="2026-11-04")
     freezer.move_to("2026-11-04 19:30:00+00:00")
     P.mark_asked(people.person(ada.id), "2026-11-04", 15, "how_day")  # open
-    assert await follow(client) == {}
+    # Deferred, and said so (no kind), so the card doesn't count the evening as tried.
+    assert await follow(client) == {"deferred": True}
     assert people.open_event(ada.id)["said"] == []  # not consumed
     assert people.person(ada.id)["asked"]["later_kind"] == "how_day"  # not replaced
-    assert await follow(client) == {}
+    assert await follow(client) == {"deferred": True}
     assert (await answer(client, "how_day", "tough"))["success"]  # still answerable
     assert "later_kind" not in people.person(ada.id)["asked"]
     assert (await answer(client, "how_day", "tough"))["error"]["code"] == "not_asked"
