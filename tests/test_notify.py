@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date
+from datetime import date, timedelta
 import logging
 
 from homeassistant.core import HomeAssistant, ServiceCall
@@ -16,11 +16,63 @@ from custom_components.virtual_pet import notify
 def test_every_call_reads_as_one_sentence():
     for reason in notify.CALLS:
         text = notify.message({"type": "call_started", "reason": reason}, "Pip", {})
-        assert text is not None and text.startswith("Pip ")
+        assert text is not None and text.startswith("Pip")  # "Pip is", "Pip's"
         assert not text.endswith("?!") and text[-1] in "!?"
-    assert notify.message({"type": "call_started", "reason": "energy"}, "Pip", {}) == (
-        "Pip is sleepy. Lights out?"
-    )
+    assert notify.message({"type": "call_started", "reason": "energy"}, "Pip", {}) in {
+        "Pip is sleepy. Lights out?",
+        "Pip is yawning. Lights out?",
+        "Pip is drowsy. Lights out?",
+    }
+
+
+NEEDS = {
+    "hunger": ("hungry", "tummy", "meal"),
+    "happiness": ("play", "game"),
+    "energy": ("Lights out",),
+    "dirty": ("clean", "wash", "Bath"),
+    "sick": ("medicine", "Medicine", "sick"),
+}
+
+
+def test_call_phrasings_fit_end_and_name_the_need():
+    # Fresh-expand E11: 3 per reason, each a sentence that fits with a 12-letter name
+    # and says what the pet needs.
+    for reason, pool in notify.CALLS.items():
+        assert len(pool) == 3
+        for template in pool:
+            text = template.format(name="W" * 12)
+            assert len(text) <= 40, text
+            assert text[-1] in ".!?", text
+            assert any(word in text for word in NEEDS[reason]), text
+            friend = notify.to_friend(text, "sunbeam")
+            assert friend.endswith(text[-1]) and ", sunbeam" in friend
+
+
+def test_a_call_reads_the_same_all_day_and_differently_over_three():
+    day = date(2026, 11, 2)
+    for reason in notify.CALLS:
+        days = [
+            notify.message(
+                {"type": "call_started", "reason": reason},
+                "Pip",
+                {},
+                day + timedelta(days=i),
+            )
+            for i in range(3)
+        ]
+        assert len(set(days)) == 3, days
+        again = notify.message(
+            {"type": "call_started", "reason": reason}, "Pip", {}, day
+        )
+        assert again == days[0]
+
+
+def test_became_sick_says_that_days_sick_call():
+    for i in range(3):
+        day = date(2026, 11, 2) + timedelta(days=i)
+        assert notify.message({"type": "became_sick"}, "Pip", {}, day) == (
+            notify.message({"type": "call_started", "reason": "sick"}, "Pip", {}, day)
+        )
 
 
 def test_quiet_events_send_nothing():

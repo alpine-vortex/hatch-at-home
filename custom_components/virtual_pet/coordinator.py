@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 import copy
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import random
 from typing import Any
 
@@ -2094,11 +2094,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 {"type": "call_started", "reason": reason},
                 state.name,
                 self.species_names,
+                self._call_day(),
             )
             or state.name,
             list(state.notify_users),
             lambda user: self.bond_for(user)[1],
         )
+
+    def _call_day(self) -> date:
+        """The local day the standing call started (its phrasing's day, so a re-call
+        after midnight reads as the call did), else today."""
+        call = self.state.call if self.state else None
+        when = call.started if call else self._now()
+        return dt_util.as_local(dt_util.utc_from_timestamp(when)).date()
 
     def update_recalls(self, started: str | None = None) -> None:
         """Bring the house's re-call bundle up to date with every pet."""
@@ -2149,7 +2157,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             # The call is over: take its notification off the phones.
             self._call_notified = False
             self._send(users, "clear_notification", notify.call_tag(self.pet_id))
-        text = notify.message(event, self.state.name, self.species_names)
+        text = notify.message(
+            event, self.state.name, self.species_names, self._call_day()
+        )
         if text is None:
             return
         if event["type"] in notify.CALL_EVENTS:

@@ -16,20 +16,55 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 import math
 from typing import Any
+import zlib
 
 from homeassistant.core import HomeAssistant
-from homeassistant.util import slugify
+from homeassistant.util import dt as dt_util, slugify
 
 from . import rates as R
 from .const import LOGGER
 
+# A call's phrasings (fresh-expand E11): one a day per pet and reason (call_line), so an
+# alert reads the same all day and differently over a week. The first of each is the
+# line as it was. Each ends in ".", "!" or "?" (to_friend puts the nickname before it).
 CALLS = {
-    "hunger": "is hungry",
-    "happiness": "wants to play",
-    "energy": "is sleepy. Lights out?",
-    "dirty": "needs a clean-up",
-    "sick": "feels sick. Medicine?",
+    "hunger": (
+        "{name} is hungry!",
+        "{name}'s tummy is rumbling!",
+        "{name} could use a meal!",
+    ),
+    "happiness": (
+        "{name} wants to play!",
+        "{name} is up for a game!",
+        "{name} would love some playtime!",
+    ),
+    "energy": (
+        "{name} is sleepy. Lights out?",
+        "{name} is yawning. Lights out?",
+        "{name} is drowsy. Lights out?",
+    ),
+    "dirty": (
+        "{name} needs a clean-up!",
+        "{name} could use a wash!",
+        "{name} is a bit messy. Bath time?",
+    ),
+    "sick": (
+        "{name} feels sick. Medicine?",
+        "{name} feels poorly. Medicine?",
+        "{name} needs some medicine!",
+    ),
 }
+
+
+def call_line(reason: str, name: str, day: date | None = None) -> str:
+    """A call's phrasing on a day (the call's start day): the same all day for one pet
+    and reason, the next one the next day. An unknown reason is just calling."""
+    pool = CALLS.get(reason)
+    if not pool:
+        return f"{name} is calling!"
+    when = day or dt_util.now().date()
+    pick = (when.toordinal() + zlib.crc32(f"{name}|{reason}".encode())) % len(pool)
+    return pool[pick].format(name=name)
 
 
 # How each trait reads in "Pip ... now" and "Pip's ... runs deep now".
@@ -241,14 +276,19 @@ def _trait(trait: str) -> tuple[str, str]:
     return TRAITS.get(trait, (f"is {_a(words)}", words))
 
 
-def message(event: dict[str, Any], name: str, species: dict[str, str]) -> str | None:
-    """The notification for a pet event, or None for events that don't notify."""
+def message(
+    event: dict[str, Any],
+    name: str,
+    species: dict[str, str],
+    day: date | None = None,
+) -> str | None:
+    """The notification for a pet event, or None for events that don't notify. A
+    call's phrasing is its start day's (`day`; today if not given)."""
     kind = event["type"]
     if kind == "call_started":
-        text = f"{name} {CALLS.get(event.get('reason', ''), 'is calling')}"
-        return text if text.endswith("?") else f"{text}!"
+        return call_line(event.get("reason", ""), name, day)
     if kind == "became_sick":
-        return f"{name} feels sick. Medicine?"
+        return call_line("sick", name, day)  # the same as that day's sick call
     if kind == "hatched":
         found = species.get(event.get("species", ""), "new friend")
         return f"{name} hatched: it's {_a(found.lower())}!"
