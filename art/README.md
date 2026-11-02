@@ -357,3 +357,4 @@ Final art for the visitors-v2 finds (docs/plan-2026-11-01-visitors-v2.md §9): 6
 - Woodland: the acorn and the wild strawberry share a round-with-a-stem outline; their colours and the cap/leaf tops tell them apart.
 - Terrarium: the pressed fern and the seed pod are both leaf-shaped; the fern keeps its stem and jagged edge.
 - Hearth: the button and the cookie are both round; the cookie's edge is lumpy and bitten.
+- Pond: the cattail keeps its loose white fluff specks (the cutter keeps every part in a cell and leaves 1-3 px specks unoutlined); the frogbit's notch closes at 16 cells, so it reads by size and green against the gold koi scale.
