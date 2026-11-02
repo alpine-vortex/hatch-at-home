@@ -45,6 +45,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
         }
         this._seen(s);
         this._idle(s);
+        this._eggWobble(s);
         this._flairTick(s);
         this._firstMove(s);
         this._seasonTick(s);
@@ -90,10 +91,12 @@ class HatchPetCardTick extends HatchPetCardLayout {
   _ghostTrail(s) {
     s.ghost.getAnimations().forEach((a) => a.cancel());
     if (!this._ghosting(s)) return;
-    const move = parseFloat(getComputedStyle(s.pet).transitionDuration) * 1000 || 250;
-    const duration = move + 120 + 180;
+    const cs = getComputedStyle(s.pet); // the first transition is the translate
+    const move = parseFloat(cs.transitionDuration) * 1000 || 250;
+    const turn = parseFloat(cs.transitionDelay) * 1000 || 0; // a wander left turns first
+    const duration = turn + move + 120 + 180;
     s.ghost.setAttribute("src", s.pet.getAttribute("src"));
-    s.ghost.animate([{ opacity: 0.3 }, { opacity: 0.3, offset: (move + 120) / duration }, { opacity: 0 }],
+    s.ghost.animate([{ opacity: 0.3 }, { opacity: 0.3, offset: (turn + move + 120) / duration }, { opacity: 0 }],
       { duration });
     s.ghostUntil = Date.now() + duration;
   }
@@ -160,6 +163,17 @@ class HatchPetCardTick extends HatchPetCardLayout {
     this._moving(s, ms + 250);
     s.pet.classList.add("look");
     setTimeout(() => s.pet.classList.remove("look"), ms);
+  }
+
+  // A wander: a slide a little to one side and back after `ms`. The art faces right, so a
+  // wander left turns first (the paper flip, .2 s, then the slide; see `.pet.wander-l`) and
+  // turns back as it heads home. Callers have checked calm().
+  _wander(s, ms) {
+    const side = pick(["wander-l", "wander-r"]);
+    s.pet.classList.add(side);
+    if (side === "wander-l") s.pet.classList.add("look");
+    this._moving(s, ms + 900); // out, and the slide back
+    setTimeout(() => s.pet.classList.remove(side, "look"), ms);
   }
 
   // Idle life: every so often, something small. Calm when motion is reduced.
@@ -346,6 +360,22 @@ class HatchPetCardTick extends HatchPetCardLayout {
     return (st?.state === "teen" || st?.state === "adult") && IDLE_ADDS[st.attributes?.personality] || [];
   }
 
+  // An egg on show rocks by itself, sparsely: once every 40-90 s, twice in a row (a double
+  // rock) in the crack stage. The same `rock` a pat gives. Nothing under calm motion.
+  _eggWobble(s) {
+    if (!s.egg || calm()) return;
+    const now = Date.now();
+    if (!s.nextWobble) s.nextWobble = now + EGG_WOBBLE_MIN_MS + Math.random() * EGG_WOBBLE_SPREAD_MS;
+    if (now < s.nextWobble) return;
+    s.nextWobble = now + EGG_WOBBLE_MIN_MS + Math.random() * EGG_WOBBLE_SPREAD_MS;
+    if (s.asleep || s.away || s.game || s.scene || s.linking || s.power || s.visitor || s.calling ||
+        s.screen.classList.contains("show-status") || s.sayUntil > now || s.poseUntil > now ||
+        s.movingUntil > now) return;
+    const cracking = this._eggMinutes(this._state(s, "sensor.life_stage")) <= 6;
+    this._animate(s, s.pet, cracking ? "rock2" : "rock", cracking ? 1200 : 600);
+    this._moving(s, cracking ? 1200 : 600);
+  }
+
   _idle(s) {
     const now = Date.now();
     if (!s.nextIdle) s.nextIdle = now + IDLE_MIN_MS / 2 + Math.random() * IDLE_SPREAD_MS;
@@ -370,10 +400,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
     } else if (move === "look") {
       this._look(s, 1800);
     } else if (move === "wander") {
-      const side = pick(["wander-l", "wander-r"]);
-      s.pet.classList.add(side);
-      this._moving(s, 2200 + 900); // out, and the slide back
-      setTimeout(() => s.pet.classList.remove(side), 2200);
+      this._wander(s, 2200);
     } else if (move === "perk") {
       this._animate(s, s.pet, "perk", 320);
     } else if (move === "spin" || move === "perk2") {
@@ -568,10 +595,7 @@ class HatchPetCardTick extends HatchPetCardLayout {
     const move = kind === "praised" ? this._praiseMove(s, inGame) : r.move;
     const moveMs = ms ?? r.ms;
     if (move === "wander") {
-      const side = pick(["wander-l", "wander-r"]);
-      s.pet.classList.add(side);
-      this._moving(s, moveMs + 900);
-      setTimeout(() => s.pet.classList.remove(side), moveMs);
+      this._wander(s, moveMs);
       return;
     }
     this._animate(s, s.pet, move, moveMs);

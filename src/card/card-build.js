@@ -207,6 +207,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
         s.ghost.classList.toggle(c, s.pet.classList.contains(c));
         s.pat.classList.toggle(c, s.pet.classList.contains(c));
       }
+      s.ghost.classList.toggle("look", s.pet.classList.contains("look")); // a turned wander's trace is turned
       s.perch.style.scale = s.ghost.style.scale = s.pat.style.scale = s.pet.style.scale;
       s.screen.style.setProperty("--k", s.pet.style.scale || 1); // go-left / go-right stop at the edge
       if (moved) this._ghostTrail(s);
