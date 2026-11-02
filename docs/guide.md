@@ -289,7 +289,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   Tap it for the settings sheet; "‹ settings" at the top of any sub-page takes you
   back. The sheet has up to three parts:
   - **for the pet** (or **for** its name): "notices", the kinds of thing the house
-    shows the pet (weather, lights, tv, music, chores, fireplace, heater, fan, robot, machines, moon; the moon always
+    shows the pet (weather, lights, tv, music, chores, fireplace, heater, fan, robot, doorbell, machines, moon; the moon always
     shows), then the pet's "shell" row, see below. An admin also gets "connect
     more ›", which opens the pet's page in Settings → Devices & services.
   - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk and
@@ -403,7 +403,7 @@ lay the egg, then rename it.
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline`, `_weight` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. Weight is healthy between 25 and 75. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `reason_key` (which sentence that is, for the card's baby talk), `call_deadline`. |
-| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `memories` (first snow, frost and fog, and the first warm day), `hatches_at` (while an egg), `next_world`, `next_egg`, `journal` (the device's retired pets) and `week` (the journal's strip: days with a dream, a credited visitor or notable weather; kept out of history). |
+| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `memories` (first snow, frost and fog, the first warm day, and each season's first day), `hatches_at` (while an egg), `next_world`, `next_egg`, `journal` (the device's retired pets) and `week` (the journal's strip: days with a dream, a credited visitor or notable weather; kept out of history). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far (attribute `discipline_misses`: fake calls nobody answered). |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them; `moments`: the last 10 things that happened to it, for the card to react to. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
@@ -505,6 +505,7 @@ the pet comes home.
 | Heating | none | Thermostats (heating, or set to heat and below the target), switches and toggles that are on. While it's on the chilly pet doesn't ask for a blanket and shows "nice and cozy". If it comes on while the pet is chilly and awake, the house tucks it in (as a blanket would), at most twice a day. A blanket for rain or thunder stays yours. | your living-room thermostat |
 | Cooling | none | Fans, thermostats (cooling or running the fan), switches and toggles that are on. The same for a warm pet and the fan. | `fan.bedroom` |
 | Notice robot vacuums | on | Every `vacuum.*` in the house counts, with nothing to pick. While one is cleaning the pet watches the robot go by ("a robot's zooming around!"); when it starts and when it heads home the pet says so (at most 3 starts a day; nothing while the pet is asleep or at the sitter's). Cosmetic only. A vacuum added after the pet started listening needs the integration reloaded (Settings → Devices & services → Hatch at Home → ⋮ → Reload) before it's noticed. Off: the pet ignores robots. | all your vacuums |
+| Notice doorbells | on | Every doorbell in the house counts, with nothing to pick: any `event.*` entity whose device class is `doorbell` (Ring, UniFi Protect, Nest and DoorBird provide one). A press makes the pet startle, with two notes and a line. Nothing while the pet is asleep, away or an egg, and at most one every 30 minutes for each pet, however many doorbells. A restart, a reconnect or an old press never counts, only a press that just happened. The pet's "notices" row says "doorbell" and nothing more. **Privacy:** the press is said once, live, on every card open at that moment (remote viewers and shared screens too: anyone in the room heard the bell), and kept nowhere. It is never on a `virtual_pet_*` event, our logs or diagnostics, the sensors, the journal or the debug sensor, and a card opened later doesn't hear it. HA's own event entity and recorder still hold the press, as they always do. A doorbell added after the pet started listening needs the integration reloaded (Settings → Devices & services → Hatch at Home → ⋮ → Reload) before it's noticed. A doorbell you point the house moment blueprint at is heard once, by this setting. Off: the pet ignores doorbells. | all your doorbells |
 | Washer, dryer, dishwasher | none | Pick any number of switches, sensors and binary sensors; the pet says so when one finishes a cycle (once, never repeated or reminded; nothing while the pet is asleep or at the sitter's; at most once an hour per machine). A **binary sensor** counts as running after 10 minutes on, and done when it goes off. A **sensor that names a state** (Home Connect, SmartThings, LG ThinQ, Miele) is done when it moves from a running state to one with "finish", "end", "complete", "done" or "ready" in it. A **power sensor** (device class power) or a **switch that reports `current_power_w`** is running above the idle power for 10 minutes and done after about 3 minutes at or under it. A plain switch that reports no power says nothing. The 10 and 3 minutes are checked when the machine changes and every 5 minutes, so they can run up to about 5 minutes long. The pet says "the washer's finished!", "the dishes are all done!", "the dryer's done!" or "a machine finished", from the entity's device class or name (wash, dry, dish), else machine. After a restart the pet times a machine that is already running from the restart, and one that finished meanwhile isn't counted. Cosmetic only; only the kind is shared, never which machine. | `binary_sensor.washing_machine_running` |
 | Idle power | 5 W | For power readings: at or under this many watts counts as not running. | `5` |
 
@@ -521,6 +522,7 @@ the pet comes home.
 | Field | Default | What it does |
 | --- | --- | --- |
 | Keep presence private | on | An empty house shows the pet napping, never at the sitter's (care while it's away is refused as "asleep"), and the pet never says who came or went. Turn it off to see "at the sitter's". |
+| Keep house words off sensors | off | Off: a news headline (`virtual_pet.share_news`) and a Custom house moment's own words (`virtual_pet.react`) sit on the pet's last-care sensor for a while, like its other moments, where any dashboard or template can read them. On: the open cards say them live, shared screens too, and they're kept nowhere: not on a sensor, not for a card opened later. The `virtual_pet_news` event keeps its headline either way (it's your automation's own words); `virtual_pet_house_moment` never carries the words while this is on. Per pet. |
 
 **What the pets remember about you.** Your birthday, your answers to its questions,
 your alarm times, the last zone you came back from (only while "my day" is on), and
@@ -640,6 +642,9 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
     the first fog of each winter-year (July to June) and the year's first warm day (20 °C
     or more, from March in the north or September in the south, through the six warm
     months; never in the tropics), on the card only.
+  - The first day of each season ("first day of spring! ♪", by your latitude; none in
+    the tropics) is a journal memory, said if the pet is awake in the season's first
+    three days; on the card only.
   - It passes on news an automation tells it ("did you hear? Tamagotchi turns 30!"),
     at most every 30 minutes. See [Sharing news with the pet](#sharing-news-with-the-pet).
 - **Sickness:** health below 25, four care misses in a day, old poop, or being too heavy.
@@ -854,6 +859,10 @@ on the card for a few seconds, like a TV title: "did you hear? …", "guess what
   burst of stories shows only the first. Dropped news doesn't start the wait.
 - With "return response" it answers per pet (by config entry ID) with `shared`,
   `asleep`, `away` (only with privacy off; otherwise `asleep`), `egg` or `too_soon`.
+- **Where the headline goes.** On the `virtual_pet_news` event, and for a while on the
+  pet's last-care sensor (its `moments`), so the card can say it. With "Keep house
+  words off sensors" on (Privacy), the sensor gets only that there was news, and the
+  open cards hear the headline live instead.
 
 For example, when a news sensor's latest headline changes:
 
@@ -873,6 +882,71 @@ actions:
       topic: "{{ trigger.to_state.attributes.source | default('') }}"
 ```
 
+## House moments (virtual_pet.react)
+
+`virtual_pet.react` tells the pet that something in the house happened, and what it is:
+the pet says a line of its own ("the washer's finished! ♪", "ding! time's up! ♪"),
+reacts (a hop, a cheer, a cozy settle, a little dance or a startle) and, where there is
+one, shows a house effect (warm air, cool air, suds, a tumble). The easiest way to use
+it is the [house moment blueprint](#let-the-pet-notice-things-house-moment-blueprint).
+
+| Field | | |
+| --- | --- | --- |
+| `entity_id` | required | Any entity of the pet; a list for several pets. |
+| `category` | required | What it is (the table below). |
+| `source` | optional | The entity that changed. Read to check the change and to step aside for the pet's own house settings, never kept or sent on. |
+| `from_state`, `to_state` | optional | The change it saw. Leave both out and it always counts (your automation has decided). |
+| `held` | optional | Seconds the old state held, so a washer that ran a minute isn't "done". |
+| `match` | optional | Custom only: the state that counts. Empty: any change. |
+| `reaction` | Custom | `hop`, `cheer`, `cozy`, `dance` or `startle`. Required for Custom; every other category has its own. |
+| `text` | optional | Custom only: what the pet says, up to 40 characters (longer is cut with "…"; blank is its own line). Ignored with any other category. |
+
+| Category | Counts when | Reaction | Effect |
+| --- | --- | --- | --- |
+| Heater (`heater`) | a thermostat's mode leaves off for heat (or heat/cool); a switch or toggle turns on | cozy | warm air |
+| Air conditioner (`ac`) | a thermostat's mode leaves off for cool, dry or fan only; a switch or toggle turns on | cozy | cool air |
+| Fan (`fan`) | it turns on | hop | cool air |
+| Washing machine, dryer, dishwasher | on to off after 10 minutes on; a state sensor going from running to finished, end, complete, done or ready | cheer | suds (dryer: a tumble) |
+| Oven (`oven`), card only | on to off after 10 minutes (never when it comes on) | cheer | none |
+| Coffee maker (`coffee`), card only | on to off after a minute | hop | none |
+| 3D printer (`printer`) | as a washer | cheer | none |
+| EV charger (`ev`), card only | as a washer, or a state sensor going to charged or full | cheer | none |
+| Pet feeder (`feeder`) | a button or event pressed, a timestamp changing, a count rising, a switch turning on | hop | none |
+| Plants / watering (`plants`) | a valve or switch closing after a minute; a moisture sensor rising 10 points | cozy | none |
+| Mailbox / delivery (`delivery`), card only | a sensor turning on, an event, a count rising | startle | none |
+| Timer (`timer`), card only | `timer.finished` (the blueprint sends it; a cancelled timer doesn't count) | startle | none |
+| Internet (`internet`) | a connectivity sensor back on after 2 minutes off (never when it goes down) | dance | none |
+| Custom (`custom`) | any change, or only `match` | yours | none |
+
+No garage door: whether a door is open is a security signal, not a moment. Robot vacuums
+and doorbells have their own settings (The house helps).
+
+- **Cosmetic only.** No stat changes, nothing saved, no notification.
+- **Not while it's asleep, away or still an egg:** dropped, not saved for later. It
+  never wakes the pet.
+- **Each category at most every 10 minutes**, and any two house moments at least 20
+  seconds apart, so two bubbles never stack. A washer and a dishwasher finishing
+  minutes apart are both said. Separate from the news's wait. A dropped call starts no
+  wait.
+- **The pet's own settings come first.** A `source` that's already in its Heating,
+  Cooling or Washer, dryer, dishwasher settings is left to those, so one change never
+  gives two bubbles: the call answers `native` and does nothing. The cost: a heater in
+  the Heating setting gets the pet's "the house heard me" moment only when it comes on
+  while the pet was chilly, never a house moment every time it turns on. Take it out of
+  that setting if you'd rather have the moment every time (and lose the tuck-in).
+- With "return response" it answers per pet with `shared`, `ignored` (that change isn't
+  this category's moment), `native`, `asleep`, `away` (only with privacy off), `egg` or
+  `too_soon`.
+- **Card only.** Oven, coffee maker, EV charger and delivery say someone is home (a
+  parcel at the door, someone up making coffee, the car home), so they're said live on
+  the open cards (shared screens too) and kept nowhere: never on a sensor, an event,
+  the journal or diagnostics. A card opened later doesn't hear it.
+- **Custom words** are your automation's own. They're on the `virtual_pet_house_moment`
+  event and for a while on the last-care sensor, unless "Keep house words off sensors"
+  is on (Privacy): then they're said live on the open cards only. Either way they're
+  never in our logs or diagnostics. Home Assistant itself keeps a service call's data
+  in its own `call_service` event and in automation traces; those are out of our hands.
+
 ## Events
 
 Fired on the HA event bus, each with `pet_id` (the config entry ID). No person
@@ -890,13 +964,13 @@ missed re-call, which isn't a care miss),
 `virtual_pet_watching` and `virtual_pet_listening` (when the pet notices a new show or song, at most every 20 minutes, with
 no `title` or `artist`: for every change, read `media_title` from your media player),
 `virtual_pet_tv_off_late`, `virtual_pet_news` (with `headline`, and `topic` if given),
-`virtual_pet_first_snow`, `virtual_pet_first_frost`,
+`virtual_pet_first_snow`, `virtual_pet_first_frost`, `virtual_pet_season_start` (with `season`),
 `virtual_pet_trait_learned` and `virtual_pet_trait_deepened` (with `trait`, `level`), `virtual_pet_egg_laid` (with `generation`,
 `parent_species`, `inherited_trait`), `virtual_pet_welcomed` (once, when the pet is added),
 `virtual_pet_wish_made` and `virtual_pet_wish_granted` (with `kind`),
 `virtual_pet_someone_home` (anyone signed in came home; it says nobody's name),
 `virtual_pet_holiday` (with `holiday`: `halloween`, `thanksgiving`, `winter_lights` or `winter_treat`), `virtual_pet_weather` (with `change`),
-`virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_house_answered` (with `request`: `blanket` or `fan`; the heating or cooling came on for the pet), `virtual_pet_robot_out` and `virtual_pet_robot_home` (a robot vacuum started a run and went home; no vacuum is named), `virtual_pet_appliance_done` (with `kind`: `washer`, `dryer`, `dishwasher` or `machine`; no machine is named), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
+`virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_house_answered` (with `request`: `blanket` or `fan`; the heating or cooling came on for the pet), `virtual_pet_robot_out` and `virtual_pet_robot_home` (a robot vacuum started a run and went home; no vacuum is named), `virtual_pet_appliance_done` (with `kind`: `washer`, `dryer`, `dishwasher` or `machine`; no machine is named; there is no doorbell event: a press is never on the bus), `virtual_pet_house_moment` (with `category`, and for Custom `reaction` and its `text` unless the words are kept off sensors; never for oven, coffee, EV, delivery or timer, and never naming the entity), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
 `virtual_pet_favourite_snack` (with `food`),
 `virtual_pet_found` (with `id` and `world`, when the pet finds something; finds aren't shown on the card yet).
 
@@ -932,6 +1006,28 @@ button, or under Settings → Automations & scenes → Blueprints → Import, fr
 - After a response, further calls are ignored for the cooldown (30 minutes by
   default). Fast-forward calls are ignored.
 - A fake call (see "How the pet works") looks the same as a real one, here too.
+
+### Let the pet notice things (house moment blueprint)
+
+[![Import the blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Falpine-vortex%2Fhatch-at-home%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Fvirtual_pet%2Fhouse_moment.yaml)
+
+Pick an entity and say what it is, and the pet notices it. Import it with the button,
+or under Settings → Automations & scenes → Blueprints → Import, from
+`https://github.com/alpine-vortex/hatch-at-home/blob/main/blueprints/automation/virtual_pet/house_moment.yaml`,
+then make one automation from it for each thing.
+
+- **Pet**: any entity of the pet. **Entity**: the thing. **What it is**: a category
+  from [House moments](#house-moments-virtualpetreact). That's all; you never have to
+  write a line.
+- **Custom**: pick a reaction, and optionally type the words (up to 40 characters) and
+  the state that counts (such as `finished`). Empty words: the pet says its reaction's
+  own line.
+- The blueprint passes every state change of the entity (not attribute changes, and
+  never from or to unavailable) to `virtual_pet.react`, which decides by the category
+  whether it counts. A timer counts on `timer.finished`.
+- A thermostat that's already heating when the heating comes on doesn't change state
+  (only its `hvac_action` does), so the Heater category counts its mode leaving off.
+  The heating coming on for a chilly pet is the Heating setting's job.
 
 ## Testing with fast-forward
 

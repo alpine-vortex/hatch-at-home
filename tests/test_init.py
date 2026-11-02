@@ -439,11 +439,13 @@ async def test_options_flow_saves_a_flat_mapping(
         "zone": "zone.home",
         "tv": ["media_player.tv"],
         "privacy": True,
+        "house_words_private": False,  # H8: house words on the sensor by default
         "comfort_low": 18.0,
         "comfort_high": 26.5,
         "away_after": 2.0,
         "sitter_settles": True,
         "notice_robot": True,
+        "notice_doorbell": True,
         "appliance_watts": 5.0,
     }
 

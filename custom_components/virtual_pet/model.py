@@ -2646,6 +2646,17 @@ def warm_first(
     return season_first(state, "warm", now, tz, start)
 
 
+def season_start(state: PetState, key: str, name: str, now: float) -> list[Event]:
+    """The first day of a season (H7): once per season, by its season_key
+    ("spring-2027") under firsts["season"], kept in the journal as season_<name>."""
+    if state.firsts.get("season") == key:
+        return []
+    state.firsts["season"] = key
+    state.memories.append({"kind": f"season_{name}", "at": now})
+    del state.memories[:-MEMORIES_KEPT]
+    return [{"type": "season_start", "season": name}]
+
+
 # --- Daily check-ins: a wish and a dream ---------------------------------------
 
 # What the pet can wish for, and what grants it. Each needs the house to be able
