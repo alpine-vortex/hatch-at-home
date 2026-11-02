@@ -82,7 +82,7 @@ stand-in. **not built** = planned, nothing in the code.
 |---|---|---|---|---|
 | Six device shapes | egg, tank, house, porthole, lily pad, moon, each with a backdrop, deco and trim | worlds.json `shell/backdrop/deco/trim`; card `_mould`, `_dress` | none | live |
 | Scene follows the sun and lights | day, night, dim; rain overlay; wind | card `_renderSlide`; home `evaluate` | `sun.sun` | live |
-| Shell picker | settings → "shell": world plastics, specials, prints; preview, then **use** / **world default** | card `_renderPicker`, `_saveShell`; `virtual_pet/set_shell`; model `shell_options` | per pet; read-only on a shared screen | live |
+| Shell picker | settings → "shell": world plastics, specials, prints; preview, then **use** (the world's own is the first tile) | card `_renderPicker`, `_saveShell`; `virtual_pet/set_shell`; model `shell_options` | per pet; read-only on a shared screen | live |
 | "Earned" shells | glitter, glow, smoke, sunset, constellation, stars unlock **at teen by age** | model `shell_unlocked`, rates `SHELL_UNLOCKS` | none | live |
 
 ## 5. Games

@@ -286,8 +286,12 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   personality (from teen), the next egg, recent care, and a link to the journal.
   Tap again to go back. The switches live behind the gear (below).
 - **The settings gear.** A gear sits at the top of the status page ("settings").
-  Tap it for the settings sheet; "‹ settings" at the top of any sub-page takes you
-  back. The sheet has up to three parts:
+  Tap it for the settings sheet. On the sheet, "‹ status" (or the Escape key) takes
+  you back to the status page; on a sub-page such as the shell picker, "‹ settings"
+  takes you back to the sheet. A tap on a label or the empty space beside a switch
+  leaves the sheet open. When the pet has something to say about a change ("no phone
+  pings, ok ♪"), it says it in a small bubble with its head under the top row; and when
+  you leave the sheet after some changes, the pet may remark on the last one. The sheet has up to three parts:
   - **for the pet** (or **for** its name): "notices", the kinds of thing the house
     shows the pet (weather, lights, tv, music, chores, fireplace, heater, fan, robot, doorbell, machines, moon; the moon always
     shows), then the pet's "shell" row, see below. An admin also gets "connect
@@ -307,9 +311,10 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 - **The shell picker.** On a server that offers it, the sheet has a "shell" row
   showing the pet's current shell. Tap it to open the picker, a list of finishes in
   groups (world plastics, specials, prints), starting with the world's own. Tap a
-  tile to see it on the pet's shell as a preview, then **use** to keep it, or
-  **world default** to go back to the world's own. "‹ settings" leaves without
-  saving. Each pet has its own shell. The earned shells (glitter, glow, smoke,
+  tile to see it on the pet's shell as a preview, then **use** (top right, dimmed until
+  the preview differs from the saved pick) to keep it. The world's own shell is the
+  first tile, marked "default"; use it to go back to the world's own. "‹ settings"
+  leaves without saving. Each pet has its own shell. The earned shells (glitter, glow, smoke,
   sunset, constellation and stars) unlock when the pet is a teen: before that their
   tiles are dimmed with the stage they open at, and tapping one says "I get this one
   as a teen ♪". On a shared screen the row is read-only: it shows the shell and says
@@ -363,7 +368,8 @@ pet; it's only how the screen looks.
   egg's shoulder, the tank lid's right grip, a lamp on the house's chimney, the
   porthole's top-right rivet, a dewdrop on the lily pad's rim and a star on the
   moon. Tap it ("Light up the screen") and the screen glows blue-green for three
-  seconds, then fades; tap again to keep it lit. It shows best at night, when a
+  seconds, then fades; tap again for three more seconds. It lights the status page and
+  the settings sheet too. It shows best at night, when a
   sleeping pet glows under it (it stays asleep). It only lights the screen: it
   doesn't turn the lights on, wake the pet or tell Home Assistant anything. With
   sounds on it clicks, except at night and while the pet sleeps.

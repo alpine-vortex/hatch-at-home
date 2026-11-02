@@ -74,6 +74,8 @@ A shot (all optional):
 | `pet.personality`, `hatched_on`, `upbringing` | the first pet's type (teen or adult), birth date and upbringing as `sensor.life_stage` carries them; `pet.reason` / `pet.reason_key` put the server's mood sentence on `sensor.mood`, so the mood line (P2b) shows through the card's own `_say` |
 | `idle` | `{mood}`: the pet's idle mumble through the card's own `_idle` (a mumble, the type's side of the coin) |
 | `ask` | a question kind (`catchphrase`) put through the card's own `_ask`, so its answer buttons show |
+| `note` | on `settings` / `picker`: a line shown in the feedback bubble (the pet's head and the note, under the back row), through the card's own `_statusMessage` |
+| `afterChange`, `afterWait` | on `settings`: the sheet closed after that change (a `SETTINGS_REACT` key: `monoOn`, `monoOff`, `effectsOff`, `shell`, `sharedOn`, `notifyOn`), through the card's own `_settingsChanged` and Status chip, so the pet perks and says its line (settings UX F14); `afterWait` ms to let it type (default 1500) |
 | `say` | text put in the bubble (`""` clears it) |
 | `clip` | `card` (whole card, default), `device` (the toy), `screen` (the LCD only) |
 | `motion` | `reduce` emulates `prefers-reduced-motion: reduce` (`--motion reduce`) |

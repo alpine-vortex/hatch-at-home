@@ -1601,7 +1601,39 @@ const SETUP_COPY = {
   eggSurprise: "surprise", // N7
   eggComing: (creature) => `a ${creature.toLowerCase()} is coming`, // C15'
 };
+// Settings UX fix 1 (review 1, F12/F14/F16; copy APPROVED by the first mate 2026-11-02, owner
+// delegated): the sheet's notes in the pet's voice, lowercase, and the pet's word when the
+// sheet closes after a change. Scanned like the rest.
+const SETTINGS_COPY = {
+  backToStatus: "‹ status", // F16: the sheet's back button (the picker keeps "‹ settings")
+  notifyOn: "i'll ping your phone! ♪",
+  notifyOff: "no phone pings, ok ♪",
+  myDayOff: "ok, i won't peek",
+  sharedOn: "shh, nothing personal here now",
+  cantKeep: "this screen can't keep that, sorry",
+  cantKeepSounds: "this screen can't keep sounds, sorry",
+  myDayOn: "i'll notice your good days! ♥",
+  phoneOn: "your phone will hear it on the day ♥",
+  phoneOff: "just here, then ♪",
+  babyTalkOn: "ok, baby talk for babies and kids ♥",
+};
+const SETTINGS_REACT = {
+  monoOn: "ooh, all green! like the old days ♪",
+  monoOff: "colours back! ♪",
+  effectsOff: "nice and crisp ♪",
+  shell: "new shell! i look so nice ♥",
+  sharedOn: "ok! i'll keep our secrets ♥",
+  notifyOn: "i'll ring if i need you ♥",
+};
 // --- end fresh-expand copy ---
+// Approved lines the scan's nag words ("again", "forgot...") would refuse: a retry, "just us",
+// and the two that say a forget worked. Not nagging, so unscanned.
+const SETTINGS_AGAIN = {
+  failed: "hm, that didn't work. try again soon",
+  sharedOff: "just us again ♥",
+  forgotBirthday: "ok, forgotten. i won't ask ♪",
+  forgotMe: "forgotten. we'll start fresh ♥",
+};
 const HOUSE_REQUEST = { blanket: "heating", fan: "cooling" }; // the request the house answered
 // The house moment's categories (H8; const.py HOUSE_CATEGORIES, card-check holds the two
 // together): the pet's reaction and the house effect (an existing fx stand-in; the fan's
@@ -2454,6 +2486,12 @@ function finishSwatch(key, color) {
   const stops = bands.map((b, i) => `${b} 0 ${Math.round(((i + 1) * 100) / bands.length)}%`);
   return `linear-gradient(180deg, ${stops.join(", ")})`;
 }
+// The sheet's and the picker's notes (F13): the pet speaking, a bubble with its head, hung under
+// the back band (inside it, so it sticks with it and moves nothing), never over a row's taps.
+const SAY_NOTE = `<div class="status-feedback say" role="status" aria-live="polite" hidden></div>`;
+// Classes a button wears only for a moment (a tap, a call in flight): never part of the selector
+// that puts focus back after a redraw.
+const PASSING_CLASSES = new Set(["tap-feedback", "tapped", "pressed", "pending"]);
 // A failed shell save, by the server's error code; anything else is the generic line.
 const SHELL_ERRORS = {
   no_pet: "can't find this pet",
@@ -3379,9 +3417,15 @@ const STYLE = `
   .perch, .screen .pat { transition: translate .25s ease-out; }
   .perch.wander-l, .screen .pat.wander-l { translate: -16% 0; transition-duration: .9s; }
   .perch.wander-r, .screen .pat.wander-r { translate: 16% 0; transition-duration: .9s; }
-  .status { position: absolute; inset: 0; background: #e9e2c6; color: #2f3a24; padding: var(--sy, 9px) var(--sx, 12px);
+  .status { --sheet-bg: #e9e2c6; position: absolute; inset: 0; background: var(--sheet-bg); color: #2f3a24; padding: var(--sy, 9px) var(--sx, 12px);
     display: none; flex-direction: column; gap: 4px; font-size: 13px; overflow: auto; }
   .screen.show-status .status { display: flex; }
+  /* The backlight lights the menus too (F10): the sheet and its back band lift toward the glow's
+     mint, a faint lift by day and a stronger one in the dark, fading out with the glow. */
+  .status, .shead { transition: background-color .6s ease-out; }
+  .screen.lit .status { --sheet-bg: color-mix(in srgb, #e9e2c6 55%, #dffbf2); }
+  .screen.lit.night .status, .screen.lit.dim .status, .screen.lit.faded .status { --sheet-bg: color-mix(in srgb, #e9e2c6 15%, #dffbf2); }
+  .screen.lit .status, .screen.lit .shead { transition: none; }
   .screen.show-status .bubble { display: none; }
   /* Power-on: a plain pale-green LCD with the logo, over everything on the screen. */
   .boot { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column;
@@ -3428,9 +3472,13 @@ const STYLE = `
   .jlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
     min-height: 44px; min-width: 44px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
+  /* A sheet row (UX fix 1, F5): the label takes the room, the switch sits at the right edge,
+     so the switches line up in one column; no empty icon slot. */
+  .row.srow, .compact .row.srow { grid-template-columns: minmax(0, 1fr) fit-content(60%); }
+  .srow > :last-child { justify-self: end; text-align: right; }
   /* The status view's gear and the settings sheet's back row and headings. */
   .shead { position: sticky; top: calc(var(--sy, 9px) * -1); z-index: 1; display: flex; align-items: center;
-    margin-top: calc(var(--sy, 9px) * -1); padding-top: calc(var(--sy, 9px) - 6px); background: #e9e2c6; }
+    margin-top: calc(var(--sy, 9px) * -1); padding-top: calc(var(--sy, 9px) - 6px); background: var(--sheet-bg); }
   .gear { margin-left: auto; display: flex; align-items: center; justify-content: center;
     min-width: 44px; min-height: 44px; padding: 0 5px; border: none; background: none;
     color: inherit; cursor: pointer; }
@@ -3459,22 +3507,19 @@ const STYLE = `
   .tile.sel { border-color: #2f3a24; }
   .tile.locked .sw { opacity: .45; border-style: dashed; }
   .tile.locked .tname { opacity: .65; }
-  /* The picker's back row and button bar: full-width bands of the screen's own colour,
-     so the list scrolls out of sight under them; its headings sit closer. */
+  /* The picker's back row ("use" at its right end): a full-width band of the screen's own
+     colour, so the list scrolls out of sight under it; its headings sit closer. */
   .status:has(.pback) { gap: 2px; }
   .status:has(.pback) .sec { margin-top: 1px; }
   .shead:has(.pback) { z-index: 2; margin: calc(var(--sy, 9px) * -1) calc(var(--sx, 12px) * -1) 0;
     padding: calc(var(--sy, 9px) - 9px) var(--sx, 12px) 0; }
-  .pbtns { flex: none; position: sticky; bottom: calc(var(--sy, 9px) * -1); z-index: 2; display: flex;
-    justify-content: flex-end; gap: 6px; margin: 0 calc(var(--sx, 12px) * -1) calc(var(--sy, 9px) * -1);
-    padding: 3px var(--sx, 12px) calc(var(--sy, 9px) - 2px); background: #e9e2c6; }
-  .status-feedback.over { bottom: 30px; z-index: 3; }
-  /* A narrow card: tighter still, so two whole rows of tiles show between the bands. */
+  .puse { margin-left: auto; }
+  .bell[aria-disabled="true"] { opacity: .55; cursor: default; }
+  /* A narrow card: tighter still, so two whole rows of tiles show under the back row. */
   .compact .status:has(.pback) { gap: 1px; }
   .compact .status:has(.pback) .sec { margin-top: 0; padding-bottom: 1px; }
   .compact .tile { padding: 0 1px; font-size: 10px; }
   .compact .tile .tsub { font-size: 9px; }
-  .compact .pbtns { padding: 2px var(--sx, 12px) calc(var(--sy, 9px) - 6px); }
   .bell { border: 2px solid #2f3a24; border-radius: 10px; background: none; color: inherit;
     font: 400 12px 'Tiny5', monospace; padding: 3px 10px; min-width: 44px; min-height: 44px;
     cursor: pointer; }
@@ -3489,6 +3534,15 @@ const STYLE = `
   .game button[aria-disabled="true"] { opacity: .55; }
   .status-feedback { position: sticky; bottom: 0; margin-top: auto; padding: 5px 7px;
     background: #2f3a24; color: #e9e2c6; font-size: 12px; min-height: 14px; }
+  /* The pet speaking (F13): a bubble with its head, hung under the back band; taps go through. */
+  .status-feedback.say { position: absolute; top: 100%; left: 0; right: 0; bottom: auto; margin: 2px 0 0;
+    z-index: 3; pointer-events: none; display: flex; align-items: center; gap: 6px; min-height: 34px;
+    box-sizing: border-box; padding: 3px 8px 3px 5px; border: 2px solid #2f3a24; border-radius: 10px;
+    background: #fbf7e6; color: #2f3a24; line-height: 1.15; }
+  .status-feedback.say[hidden] { display: none; }
+  .status-feedback.say::before { content: ""; flex: none; width: 28px; height: 28px;
+    background: var(--say-img, none) var(--say-at, 0 0) / 128px 128px no-repeat; image-rendering: pixelated; }
+  .shead:has(.pback) .status-feedback.say { left: var(--sx, 12px); right: var(--sx, 12px); }
   .jhead { display: flex; justify-content: space-between; align-items: baseline; }
   .jdream, .stoday { font-size: 13px; color: var(--hp-subink); margin: 2px 0 4px; } /* today's dream, today's line (E9) */
   .jweek { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; margin: 0 0 6px; } /* E14 */
@@ -3529,6 +3583,8 @@ const STYLE = `
   ha-card.bigtext .status .sec, ha-card.bigtext .status .shellnote, ha-card.bigtext .status .jtile,
   ha-card.bigtext .status .ftile, ha-card.bigtext .status .tile { font-size: 13px; }
   ha-card.bigtext .status .tile .tsub { font-size: 12px; }
+  ha-card.bigtext.compact .status .tile { font-size: 12px; } /* "tidepool" whole in the porthole's three columns */
+  ha-card.bigtext.compact .status .tile .tsub { font-size: 11px; }
   .photos { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
   .prow { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px; }
   .print { margin: 0; flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
@@ -4286,6 +4342,17 @@ class HatchPetCard extends HTMLElement {
     s.gameBox.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && s.game) this._quitGame(s, "maybe later!");
     });
+    // The settings sheet and its picker keep the player's place (UX fix 1, F1/F2): a tap
+    // that misses a button (a label, a gap, a note) must not fall through to the screen's
+    // "tap = Status". The Status chip, "‹ settings" and Escape are the ways out.
+    s.status.addEventListener("click", (e) => {
+      if (s.settings && !s.laySheet) e.stopPropagation();
+    });
+    s.status.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape" || !s.settings || s.laySheet) return;
+      e.preventDefault();
+      s.status.querySelector(".sback")?.click(); // back from the picker, or from the sheet (F8)
+    });
     q(".gl").addEventListener("click", () => this._guess(s, "left"));
     q(".gr").addEventListener("click", () => this._guess(s, "right"));
     q(".gx").addEventListener("click", (e) => {
@@ -4620,6 +4687,7 @@ class HatchPetCard extends HTMLElement {
     s.finds = false;
     s.everyWorld = false;
     s.settings = false;
+    s.settingsChanged = null;
     if (s.laySheet) { // another pet's slide: its lay sheet goes (S2)
       s.laySheet = false;
       s.screen.classList.remove("show-status");
@@ -5438,6 +5506,7 @@ class HatchPetCard extends HTMLElement {
 
   _toggleStatus(s, lay = false) {
     const open = !s.screen.classList.contains("show-status");
+    const wasSettings = !open && s.settings && !s.laySheet;
     if (open) this._stopTyping(s); // the bubble hides: the line is said whole
     if (open && s.game) this._quitGame(s, null); // the sheet covers it: nobody plays it unseen
     s.screen.classList.toggle("show-status", open);
@@ -5449,6 +5518,8 @@ class HatchPetCard extends HTMLElement {
     this._closePicker(s);
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     this._patSync(s); // back at once when the status closes, not at the next tick
+    if (wasSettings) this._settingsReact(s); // closed from the sheet: the pet's word on a change
+    else if (!open) s.settingsChanged = null;
     if (s === this._slides[this._index]) {
       this._card.querySelector(".statusbtn").setAttribute("aria-pressed", open ? "true" : "false");
     }
@@ -8112,7 +8183,7 @@ class HatchPetCard extends HTMLElement {
     const birthdayKept = this._mineSwitch(s, "birthday_kept", this._birthdayKept);
     const birthdayPhone = this._mineSwitch(s, "birthday_phone", this._birthdayPhone);
     const row = (iconName, label, value) =>
-      `<div class="row"><span></span><span>${label}</span>${value}</div>`;
+      `<div class="row srow"><span>${label}</span>${value}</div>`;
     // A two-tap "forget", armed or not (confirmTap).
     const forgetButton = (cls, key, aria) => {
       const sure = confirmArmed(s, key);
@@ -8145,7 +8216,7 @@ class HatchPetCard extends HTMLElement {
     // Who each part changes: the pet (everyone), the viewer (follows their login),
     // or this browser.
     const html = `
-      <div class="shead"><button class="sback">‹ settings</button></div>
+      <div class="shead"><button class="sback">${SETTINGS_COPY.backToStatus}</button>${SAY_NOTE}</div>
       ${shellRows}
       ${sharedScreen() ? "" : `<div class="sec">for you</div>`}
       ${sharedScreen() ? "" : row(null, "notify me", `<span><button class="bell notify" aria-label="notify me" aria-pressed="${notifying}">${notifying ? "on" : "off"}</button></span>`)}
@@ -8163,8 +8234,7 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "mono screen", `<span><button class="bell mono" aria-label="mono screen: ${monoOn() ? "on" : "off"}, change" aria-pressed="${monoOn()}">${monoOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "big text", `<span><button class="bell bigtext" aria-label="big text: larger words on this screen's pages" aria-pressed="${bigOn()}">${bigOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
-      <div class="shellnote sharednote">a family tablet? give it its own login, and we'll make friends ♥</div>
-      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
+      <div class="shellnote sharednote">a family tablet? give it its own login, and we'll make friends ♥</div>`;
     if (!this._setStatus(s, html)) return;
     s.status.querySelector(".sback").addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
@@ -8194,14 +8264,18 @@ class HatchPetCard extends HTMLElement {
     });
     s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
       e.stopPropagation();
-      this._tapped(e.currentTarget);
-      this._setMyDay(s, !myDay, e.currentTarget);
+      const button = e.currentTarget;
+      if (button.classList.contains("pending")) return; // a call is in flight (F3)
+      this._tapped(button);
+      this._setMyDay(s, button.getAttribute("aria-pressed") !== "true", button); // its value now, not at draw
     });
     // No "notify me" row on a shared screen.
     s.status.querySelector(".bell.notify")?.addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
-      this._tapped(e.currentTarget);
-      this._setNotify(s, !notifying, e.currentTarget);
+      const button = e.currentTarget;
+      if (button.classList.contains("pending")) return; // a call is in flight (F3)
+      this._tapped(button);
+      this._setNotify(s, button.getAttribute("aria-pressed") !== "true", button); // its value now, not at draw
     });
     s.status.querySelector(".bell.shared").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -8210,14 +8284,15 @@ class HatchPetCard extends HTMLElement {
       try {
         localStorage.setItem(SHARED_KEY, on ? "on" : "off");
       } catch (err) {
-        this._statusMessage(s, "This browser can't save that setting.");
+        this._statusMessage(s, SETTINGS_COPY.cantKeep);
         return;
       }
       if (on) this._goShared();
       else this._goPersonal();
+      this._settingsChanged(s, on ? "sharedOn" : null);
       window.dispatchEvent(new CustomEvent(SHARED_EVENT, { detail: { on, from: this } }));
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
-      this._statusMessage(s, on ? "Nothing personal on this screen now." : "This screen is personal again.");
+      this._statusMessage(s, on ? SETTINGS_COPY.sharedOn : SETTINGS_AGAIN.sharedOff);
     });
     s.status.querySelector(".bell.sound").addEventListener("click", (e) => {
       e.stopPropagation();
@@ -8226,7 +8301,7 @@ class HatchPetCard extends HTMLElement {
       try {
         localStorage.setItem(SOUND_KEY, on ? "on" : "off");
       } catch (err) {
-        this._statusMessage(s, "This browser can't save sound settings.");
+        this._statusMessage(s, SETTINGS_COPY.cantKeepSounds);
         return; // no storage: sounds stay off
       }
       let skipped = null;
@@ -8249,9 +8324,11 @@ class HatchPetCard extends HTMLElement {
       try {
         localStorage.setItem(LCD_KEY, on ? "on" : "off");
       } catch (err) {
+        this._statusMessage(s, SETTINGS_COPY.cantKeep); // F9: not silent
         return; // no storage: the effects stay as they are
       }
       this._card.classList.toggle("lcd-on", on);
+      this._settingsChanged(s, on ? null : "effectsOff");
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
     s.status.querySelector(".bell.named").addEventListener("click", (e) => {
@@ -8262,7 +8339,7 @@ class HatchPetCard extends HTMLElement {
         if (on) localStorage.removeItem(NAMED_KEY);
         else localStorage.setItem(NAMED_KEY, "off");
       } catch (err) {
-        this._statusMessage(s, "This browser can't save that setting.");
+        this._statusMessage(s, SETTINGS_COPY.cantKeep);
         return;
       }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
@@ -8275,9 +8352,11 @@ class HatchPetCard extends HTMLElement {
         if (on) localStorage.setItem(MONO_KEY, "4");
         else localStorage.removeItem(MONO_KEY);
       } catch (err) {
+        this._statusMessage(s, SETTINGS_COPY.cantKeep); // F9: not silent
         return; // no storage: the screen stays as it is
       }
       this._card.classList.toggle("mono", on);
+      this._settingsChanged(s, on ? "monoOn" : "monoOff");
       window.dispatchEvent(new CustomEvent(MONO_EVENT)); // any other card on this page
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
@@ -8289,7 +8368,7 @@ class HatchPetCard extends HTMLElement {
         if (on) localStorage.setItem(BIG_KEY, "on");
         else localStorage.removeItem(BIG_KEY);
       } catch (err) {
-        this._statusMessage(s, "This browser can't save that setting.");
+        this._statusMessage(s, SETTINGS_COPY.cantKeep);
         return;
       }
       this._card.classList.toggle("bigtext", on);
@@ -8298,21 +8377,33 @@ class HatchPetCard extends HTMLElement {
     });
     s.status.querySelector(".bell.bdayphone")?.addEventListener("click", (e) => {
       e.stopPropagation();
-      this._tapped(e.currentTarget);
-      const enabled = !birthdayPhone;
+      const button = e.currentTarget;
+      if (button.classList.contains("pending")) return; // a call is in flight (F3)
+      this._tapped(button);
+      const enabled = button.getAttribute("aria-pressed") !== "true";
+      button.classList.add("pending");
+      button.setAttribute("aria-pressed", String(enabled)); // at once, so a second tap undoes it
+      button.textContent = enabled ? "on" : "off";
       this._hass.callWS({ type: "virtual_pet/birthday_phone", entity_id: s.ids?.["sensor.life_stage"], enabled })
         .then(() => {
           this._birthdayPhone = enabled;
           this._setMine("birthday_phone", enabled);
-          this._statusMessage(s, enabled ? "Your phone will hear it on the day ♥" : "Only here, then.");
+          this._statusMessage(s, enabled ? SETTINGS_COPY.phoneOn : SETTINGS_COPY.phoneOff);
           this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
         })
-        .catch(() => this._statusMessage(s, "That didn't work. Try again."));
+        .catch(() => {
+          button.setAttribute("aria-pressed", String(!enabled));
+          button.textContent = !enabled ? "on" : "off";
+          this._statusMessage(s, SETTINGS_AGAIN.failed);
+        })
+        .finally(() => button.classList.remove("pending"));
     });
     s.status.querySelector(".bell.babytalk")?.addEventListener("click", (e) => {
       e.stopPropagation();
-      this._tapped(e.currentTarget);
-      this._setBabyTalk(s, !babyTalk(this._hass.user?.id), e.currentTarget);
+      const button = e.currentTarget;
+      if (button.classList.contains("pending")) return; // a call is in flight (F3)
+      this._tapped(button);
+      this._setBabyTalk(s, button.getAttribute("aria-pressed") !== "true", button);
     });
     const redrawStatus = () => this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     s.status.querySelector(".bell.forgetbday")?.addEventListener("click", (e) => {
@@ -8326,11 +8417,11 @@ class HatchPetCard extends HTMLElement {
           this._setMine("birthday_kept", false);
           this._setMine("birthday_phone", false);
           redrawStatus(); // first: a redraw replaces the message's line
-          this._statusMessage(s, "Forgotten. I won't ask again.");
+          this._statusMessage(s, SETTINGS_AGAIN.forgotBirthday);
         })
         .catch(() => {
           redrawStatus(); // "forget" again, not "sure?"
-          this._statusMessage(s, "That didn't work. Try again.");
+          this._statusMessage(s, SETTINGS_AGAIN.failed);
         });
     });
     // "forget my data": this person's record in the people store, for every
@@ -8364,11 +8455,11 @@ class HatchPetCard extends HTMLElement {
             // no storage (a private window): nothing kept here
           }
           redrawStatus(); // first: a redraw replaces the message's line
-          this._statusMessage(s, "Forgotten. The pets start fresh with you ♥");
+          this._statusMessage(s, SETTINGS_AGAIN.forgotMe);
         })
         .catch(() => {
           redrawStatus(); // "forget" again, not "sure?"
-          this._statusMessage(s, "That didn't work. Try again.");
+          this._statusMessage(s, SETTINGS_AGAIN.failed);
         });
     });
     s.status.querySelector(".bell.babble")?.addEventListener("click", (e) => {
@@ -8378,7 +8469,7 @@ class HatchPetCard extends HTMLElement {
       try {
         localStorage.setItem(BABBLE_KEY, on ? "on" : "off");
       } catch (err) {
-        this._statusMessage(s, "This browser can't save sound settings.");
+        this._statusMessage(s, SETTINGS_COPY.cantKeepSounds);
         return;
       }
       let skipped = null;
@@ -8436,27 +8527,26 @@ class HatchPetCard extends HTMLElement {
     const now = this._tileId(s, this._shellChoice(s));
     const tile = (key) => {
       const id = this._tileId(s, key);
-      const name = this._shellName(s, key);
+      const isOwn = key == null || key === own;
+      const name = isOwn ? this._worldName(s).toLowerCase() : finishName(key); // the world's own: its name only (F6)
       const open = key == null || options.has(key);
       const at = open ? null : locked[key];
       const aria = at ? `${name} shell, opens at ${at}` : `${name} shell`;
       return `<button class="tile${id === now ? " now" : ""}${open ? "" : " locked"}" data-finish="${id}" ` +
         `aria-label="${escape(aria)}"><span class="sw" style="background: ${finishSwatch(key ?? own, color)}"></span>` +
-        `<span class="tname">${escape(name)}</span><span class="tsub">${id === now ? "now" : at ? escape(at) : ""}</span></button>`;
+        `<span class="tname">${escape(name)}</span><span class="tsub">${isOwn ? (id === now ? "default · now" : "default") : id === now ? "now" : at ? escape(at) : ""}</span></button>`;
     };
     const groups = SHELL_GROUPS.map(([head, keys], i) => `<div class="sec" data-group="${head}">${head}</div><div class="tiles">` +
       `${i === 0 ? tile(null) : ""}${keys.filter((k) => k !== own).map(tile).join("")}</div>`).join("");
     const html = `
-      <div class="shead"><button class="sback pback" aria-label="back to settings">‹ settings</button></div>
-      ${groups}
-      <div class="pbtns"><button class="bell puse" aria-label="${escape(this._useAria(s, this._shellChoice(s)))}">use</button>` +
-      `<button class="bell pdefault" aria-label="use the world's own shell">world default</button></div>
-      <div class="status-feedback over" role="status" aria-live="polite" hidden></div>`;
+      <div class="shead"><button class="sback pback" aria-label="back to settings">‹ settings</button>
+        <button class="bell puse" aria-label="${escape(this._useAria(s, this._shellChoice(s)))}" aria-disabled="true">use</button>${SAY_NOTE}</div>
+      ${groups}`;
     if (!this._setStatus(s, html)) return;
     this._pickerMarks(s);
     if (s.pickerNote && Date.now() < s.pickerNote.until) this._statusMessage(s, s.pickerNote.text); // a redraw dropped it
     const log = () => this._state(s, "sensor.last_care")?.attributes.log || [];
-    s.status.querySelectorAll(".sec, .shead, .pbtns").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
+    s.status.querySelectorAll(".sec, .shead").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
     s.status.querySelector(".pback").addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);
@@ -8479,13 +8569,9 @@ class HatchPetCard extends HTMLElement {
     }));
     s.status.querySelector(".puse").addEventListener("click", (e) => {
       e.stopPropagation();
+      if (e.currentTarget.getAttribute("aria-disabled") === "true") return; // nothing new to save (F7)
       this._tapped(e.currentTarget);
-      this._saveShell(s, s.previewFinish !== undefined ? s.previewFinish : this._shellChoice(s));
-    });
-    s.status.querySelector(".pdefault").addEventListener("click", (e) => {
-      e.stopPropagation();
-      this._tapped(e.currentTarget);
-      this._saveShell(s, null);
+      this._saveShell(s, s.previewFinish);
     });
   }
 
@@ -8494,12 +8580,16 @@ class HatchPetCard extends HTMLElement {
     if (!s.picker) return;
     const key = s.previewFinish !== undefined ? s.previewFinish : this._shellChoice(s);
     const sel = this._tileId(s, key);
+    const now = this._tileId(s, this._shellChoice(s));
     s.status.querySelectorAll(".tile").forEach((t) => {
       const on = t.dataset.finish === sel;
       t.classList.toggle("sel", on);
       t.setAttribute("aria-pressed", on ? "true" : "false");
     });
-    s.status.querySelector(".puse")?.setAttribute("aria-label", this._useAria(s, key));
+    const use = s.status.querySelector(".puse");
+    use?.setAttribute("aria-label", this._useAria(s, key));
+    // `use` is the confirm step: dimmed until the preview differs from the saved pick (F7).
+    use?.setAttribute("aria-disabled", String(s.previewFinish === undefined || this._tileId(s, s.previewFinish) === now));
   }
 
   // `use`'s label: the finish it saves, or the world's own.
@@ -8550,6 +8640,7 @@ class HatchPetCard extends HTMLElement {
         this._dress(s, this._shellKey(s));
         if (s.picker) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []); // `now` moves
         this._pickerNote(s, key === null ? "back to the world's own ♪" : "shell saved ♪");
+        this._settingsChanged(s, "shell");
       })
       .catch((err) => failed(err?.code));
   }
@@ -8642,7 +8733,7 @@ class HatchPetCard extends HTMLElement {
         ${offer.outside ? `<div class="bell layrow ro" aria-current="true">${SETUP_COPY.layOutside}</div>` : ""}
         ${offer.offered.map((r) => row(r.id, r.name.toLowerCase(), offer.choice?.id === r.id)).join("")}
       </div>
-      <div class="status-feedback over" role="status" aria-live="polite" hidden></div>`;
+      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     s.status.querySelectorAll(".sec, .shead, .shellnote, .laylist").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
     s.status.querySelector(".layback").addEventListener("click", (e) => {
@@ -8675,7 +8766,7 @@ class HatchPetCard extends HTMLElement {
     } catch (err) {
       // A read-only login is refused: the choice stays as it was.
       const refused = /unauthori|forbidden|permission/i.test(`${err?.code} ${err?.message}`);
-      this._statusMessage(s, refused ? SETUP_COPY.layRefused : "That didn't work. Try again.");
+      this._statusMessage(s, refused ? SETUP_COPY.layRefused : SETTINGS_AGAIN.failed);
     }
   }
 
@@ -8705,12 +8796,12 @@ class HatchPetCard extends HTMLElement {
     try {
       await this._callOwn("my_day", { entity_id: id, enabled });
       this._myDay = enabled; // one switch per person, for every pet
-      this._statusMessage(s, enabled ? "I'll notice your good days! ♥" : "OK, I won't peek.");
+      this._statusMessage(s, enabled ? SETTINGS_COPY.myDayOn : SETTINGS_COPY.myDayOff);
     } catch (err) {
       this._setMine("my_day", !enabled);
       button.setAttribute("aria-pressed", String(!enabled));
       button.textContent = !enabled ? "on" : "off";
-      this._statusMessage(s, "That didn't work. Try again.");
+      this._statusMessage(s, SETTINGS_AGAIN.failed);
     } finally {
       button.classList.remove("pending");
     }
@@ -8732,7 +8823,7 @@ class HatchPetCard extends HTMLElement {
       if (enabled) {
         // The status screen hides the bubble, so the note always shows; a baby
         // or child on screen says hello as well, for when the screen closes.
-        this._statusMessage(s, "OK, baby talk for babies and children ♥");
+        this._statusMessage(s, SETTINGS_COPY.babyTalkOn);
         if (this._babyStage(s)) {
           const name = short(this._hass.user?.name?.trim().split(/\s+/)[0], 16);
           const baby = this._babySet(s, "greet"); // a child's hello is the normal one
@@ -8744,7 +8835,7 @@ class HatchPetCard extends HTMLElement {
       this._setMine("baby_talk", !enabled);
       button.setAttribute("aria-pressed", String(!enabled));
       button.textContent = !enabled ? "on" : "off";
-      this._statusMessage(s, "That didn't work. Try again.");
+      this._statusMessage(s, SETTINGS_AGAIN.failed);
     } finally {
       button.classList.remove("pending");
     }
@@ -8787,7 +8878,8 @@ class HatchPetCard extends HTMLElement {
     if (s.mine) s.mine.notify_me = enabled;
     try {
       await this._callOwn("notify_me", { entity_id: id, enabled });
-      this._statusMessage(s, enabled ? "I'll ping your phone!" : "Phone pings off.");
+      this._statusMessage(s, enabled ? SETTINGS_COPY.notifyOn : SETTINGS_COPY.notifyOff);
+      this._settingsChanged(s, enabled ? "notifyOn" : null);
       return true;
     } catch (err) {
       if (s.mine) s.mine.notify_me = !enabled;
@@ -8795,7 +8887,7 @@ class HatchPetCard extends HTMLElement {
         button.setAttribute("aria-pressed", String(!enabled));
         button.textContent = !enabled ? "on" : "off";
       }
-      this._statusMessage(s, "That didn't work. Try again.");
+      this._statusMessage(s, SETTINGS_AGAIN.failed);
       return false;
     } finally {
       button?.classList.remove("pending");
@@ -8806,7 +8898,23 @@ class HatchPetCard extends HTMLElement {
     const note = s.status.querySelector(".status-feedback");
     if (!note) return;
     note.textContent = message;
+    if (note.classList.contains("say") && s.pet?.src && s.drawn) { // its head, cropped from the sprite on show
+      const [hx, hy] = s.species?.head?.[s.drawn] || [128, 96];
+      const top = this._headTop(s.pet, hx, hy) ?? hy; // the head's top, where a hat sits
+      note.style.setProperty("--say-img", `url("${s.pet.src}")`);
+      note.style.setProperty("--say-at", `${14 - hx / 2}px ${3 - top / 2}px`);
+    }
     note.hidden = false;
+    note.style.top = "";
+    const tap = this._tapRect && Date.now() - this._tapRect.at < 6000 ? this._tapRect : null;
+    if (tap && note.classList.contains("say")) { // never hide the row just changed: the bubble drops to the foot
+      const hits = (top, bottom) => bottom > tap.top - 2 && top < tap.bottom + 2;
+      const box = note.getBoundingClientRect();
+      const foot = s.status.getBoundingClientRect().bottom - 4 - box.height;
+      if (hits(box.top, box.bottom) && !hits(foot, foot + box.height)) {
+        note.style.top = `${foot - s.status.querySelector(".shead").getBoundingClientRect().top}px`;
+      }
+    }
     clearTimeout(s.statusMessageTimer);
     s.statusMessageTimer = setTimeout(() => {
       note.hidden = true;
@@ -8823,7 +8931,8 @@ class HatchPetCard extends HTMLElement {
     const keep = !s.status.contains(active) ? null
       : active.dataset?.finish !== undefined ? `.tile[data-finish="${active.dataset.finish}"]` // its marks move
         : active.className
-          ? `.${active.className.trim().split(/\s+/).join(".")}${active.dataset?.gen ? `[data-gen="${active.dataset.gen}"]` : ""}` : null;
+          // not the classes a tap puts on for a moment (_tapped), or the redrawn button never matches (F4)
+          ? `.${active.className.trim().split(/\s+/).filter((c) => !PASSING_CLASSES.has(c)).join(".")}${active.dataset?.gen ? `[data-gen="${active.dataset.gen}"]` : ""}` : null;
     s.statusHtml = html;
     s.status.innerHTML = html;
     if (keep) s.status.querySelector(keep)?.focus({ preventScroll: true });
@@ -9336,6 +9445,8 @@ class HatchPetCard extends HTMLElement {
   // The real reaction (a prop, or a refusal in the bubble) follows on response.
   _tapped(button, s) {
     if (!button || button.disabled) return;
+    const at = button.getBoundingClientRect(); // where it was, for a note that must not cover it (F13)
+    this._tapRect = { top: at.top, bottom: at.bottom, at: Date.now() };
     button.classList.add("tap-feedback", "tapped", "pressed");
     setTimeout(() => button.classList.remove("pressed"), 160);
     setTimeout(() => button.classList.remove("tapped"), 400);
@@ -9348,12 +9459,35 @@ class HatchPetCard extends HTMLElement {
     if (navigator.vibrate) {
       try { navigator.vibrate(12); } catch (err) { /* Unsupported or blocked by the browser. */ }
     }
-    if (s?.pet) {
-      s.pet.classList.remove("perk");
-      void s.pet.offsetWidth; // restart the animation
-      s.pet.classList.add("perk");
-      setTimeout(() => s.pet.classList.remove("perk"), 320); // let "hop" run again
-    }
+    this._perk(s);
+  }
+
+  // The pet perks up (a quick hop).
+  _perk(s) {
+    if (!s?.pet) return;
+    s.pet.classList.remove("perk");
+    void s.pet.offsetWidth; // restart the animation
+    s.pet.classList.add("perk");
+    setTimeout(() => s.pet.classList.remove("perk"), 320); // let "hop" run again
+  }
+
+  // The pet's word on the last change made in the settings sheet (F14), said when the
+  // status closes: once per change, only where it may make a sound (not at night, not
+  // asleep: _mayPlay), and never about a personal switch on a shared screen. A change
+  // with no line (or one put back) clears it. Only while the sheet is up.
+  _settingsChanged(s, key) {
+    if (!s.settings) return;
+    s.settingsChanged = SETTINGS_REACT[key] ? key : null;
+  }
+
+  _settingsReact(s) {
+    const key = s.settingsChanged;
+    s.settingsChanged = null;
+    if (!key || !SETTINGS_REACT[key]) return;
+    if (key === "notifyOn" && sharedScreen()) return; // personal
+    if (!this._mayPlay(s)) return;
+    this._perk(s);
+    this._speak(s, SETTINGS_REACT[key], 4000);
   }
 
   async _call(button, s, domain, service, entityId) {
