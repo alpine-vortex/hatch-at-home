@@ -3516,6 +3516,10 @@ const STYLE = `
   /* The backlight lights the menus too (F10): the sheet and its back band lift toward the glow's
      mint, a faint lift by day and a stronger one in the dark, fading out with the glow. */
   .status, .shead { transition: background-color .6s ease-out; }
+  /* At night and dim the sheet and the bubble sink into the dark LCD instead of staying daylight-bright
+     (UX7 F5); the backlight (.lit, below) still lifts the sheet. Dark ink stays above 7:1. */
+  .screen.night .status, .screen.dim .status { --sheet-bg: color-mix(in srgb, #e9e2c6 72%, #1d2440); }
+  .screen.night .bubble, .screen.dim .bubble { background: color-mix(in srgb, #fffdf5 80%, #1d2440); }
   .screen.lit .status { --sheet-bg: color-mix(in srgb, #e9e2c6 55%, #dffbf2); }
   .screen.lit.night .status, .screen.lit.dim .status, .screen.lit.faded .status { --sheet-bg: color-mix(in srgb, #e9e2c6 15%, #dffbf2); }
   .screen.lit .status, .screen.lit .shead { transition: none; }
