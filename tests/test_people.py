@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 
 from custom_components.virtual_pet import people as P, rates as R
 
@@ -113,12 +113,21 @@ def test_the_pets_own_one_time_question_comes_after_the_persons():
     ) != ("catchphrase")
 
 
+def _rotation_day(kind: str) -> str:
+    """The first day from 2026-11-01 of this kind that how_day may stand in on."""
+    first = date(2026, 11, 1)
+    return next(
+        d.isoformat()
+        for d in (first + timedelta(days=i) for i in range(60))
+        if P.rotation(d) == kind and P.fallback_day(d)
+    )
+
+
 def test_the_later_question_rotates_by_day():
     person = {"likes": {"fav_weather": "sun", "fav_season": "autumn"}}
     seen = {}
-    for day in range(1, 4):
-        today = f"2026-11-0{day}"
-        kind = P.rotation(date.fromisoformat(today))
+    for kind in P.ROTATION:
+        today = _rotation_day(kind)
         seen[kind] = (
             ask(person, today=today, hour=17),
             ask(person, today=today, hour=22, to_bed_minutes=60),
@@ -127,16 +136,8 @@ def test_the_later_question_rotates_by_day():
     assert seen["guess"][0] == "guess"
     # The dream only near bedtime; before, how_day stands in (fresh-moment 5b).
     assert seen["dream"] == ("how_day", "dream")
-    guess_day = next(
-        f"2026-11-0{d}" for d in range(1, 4) if P.rotation(date(2026, 11, d)) == "guess"
-    )
+    guess_day = _rotation_day("guess")
     assert ask(person, today=guess_day, hour=17, has_forecast=False) == "how_day"
-
-
-def _rotation_day(kind: str) -> str:
-    return next(
-        f"2026-11-0{d}" for d in range(1, 4) if P.rotation(date(2026, 11, d)) == kind
-    )
 
 
 def test_a_later_question_on_most_evenings():
@@ -179,13 +180,29 @@ def test_the_how_day_stand_in_comes_at_most_4_evenings_in_7():
         )
         if P.rotation(day) == "how_day":
             assert got == "how_day"  # never capped (FM regression check)
-            own += day.toordinal() % 7 >= R.ASK_FALLBACK_DAYS
+            own += not P.fallback_day(day)
             continue
         assert got in ("how_day", None)
-        assert (got == "how_day") == (day.toordinal() % 7 < R.ASK_FALLBACK_DAYS)
+        assert (got == "how_day") == P.fallback_day(day)
         stand_ins += got == "how_day"
     assert own > 0  # a how_day day off the cap's days was covered
     assert R.ASK_FALLBACK_DAYS == 4 and stand_ins <= 3 * 4
+
+
+def test_the_stand_in_days_are_4_a_week_on_weekdays_drawn_per_week():
+    """Audit 2026-11-01b B4: 4 days of each ISO week, not the same weekdays
+    every week (it was always Sunday to Wednesday)."""
+    monday = date(2026, 11, 2)
+    weeks = [
+        frozenset(
+            d.weekday()
+            for d in (monday + timedelta(days=7 * w + i) for i in range(7))
+            if P.fallback_day(d)
+        )
+        for w in range(8)
+    ]
+    assert all(len(w) == R.ASK_FALLBACK_DAYS for w in weeks)
+    assert len(set(weeks)) > 1
 
 
 def test_sleep_question_on_alternate_dream_mornings():

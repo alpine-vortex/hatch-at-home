@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 from datetime import date, timedelta
 from pathlib import Path
+import random
 import statistics
 from typing import Any
 
@@ -388,14 +389,22 @@ def choose_question(
     if kind == "guess" and has_forecast and hour >= R.ASK_GUESS_FROM:
         return "guess"
     # Today's dream or guess can't be asked now (the dream before its window, a guess
-    # with no forecast or too early): how_day stands in on ASK_FALLBACK_DAYS of every 7,
-    # by the day (fresh-moment 5b), so most evenings get a question but it isn't nightly.
+    # with no forecast or too early): how_day stands in on ASK_FALLBACK_DAYS of every 7
+    # (fresh-moment 5b), so most evenings get a question but it isn't nightly.
     # The rotation's own how_day days, above, aren't capped.
     # Still one later question a day: "later" is marked either way.
-    fallback_day = date.fromisoformat(today).toordinal() % 7 < R.ASK_FALLBACK_DAYS
-    if fallback_day and hour >= R.ASK_DAY_FROM:
+    if fallback_day(date.fromisoformat(today)) and hour >= R.ASK_DAY_FROM:
         return "how_day"
     return None
+
+
+def fallback_day(day: date) -> bool:
+    """One of the ASK_FALLBACK_DAYS weekdays of its ISO week that how_day may
+    stand in on, drawn per week (audit 2026-11-01b B4), so it isn't always the
+    same evenings of the week."""
+    year, week, _ = day.isocalendar()
+    days = random.Random(f"ask|{year}-{week}").sample(range(7), R.ASK_FALLBACK_DAYS)
+    return day.weekday() in days
 
 
 def once_due(
