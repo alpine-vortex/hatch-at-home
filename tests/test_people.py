@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from custom_components.virtual_pet import people as P
+from custom_components.virtual_pet import people as P, rates as R
 
 
 def test_seasons_follow_the_hemisphere_and_skip_the_tropics():
@@ -125,11 +125,79 @@ def test_the_later_question_rotates_by_day():
         )
     assert seen["how_day"][0] == "how_day"
     assert seen["guess"][0] == "guess"
-    assert seen["dream"] == (None, "dream")  # only near bedtime
+    # The dream only near bedtime; before, how_day stands in (fresh-moment 5b).
+    assert seen["dream"] == ("how_day", "dream")
     guess_day = next(
         f"2026-11-0{d}" for d in range(1, 4) if P.rotation(date(2026, 11, d)) == "guess"
     )
-    assert ask(person, today=guess_day, hour=17, has_forecast=False) is None
+    assert ask(person, today=guess_day, hour=17, has_forecast=False) == "how_day"
+
+
+def _rotation_day(kind: str) -> str:
+    return next(
+        f"2026-11-0{d}" for d in range(1, 4) if P.rotation(date(2026, 11, d)) == kind
+    )
+
+
+def test_a_later_question_on_most_evenings():
+    """Fresh-moment 5b (owner Q6): the dream question from 4 h before bed, so a
+    19:30 look before a 23:00 bed gets it; a kind that can't be asked now falls
+    back to how_day; still one later question per person a day."""
+    person = {"likes": {"fav_weather": "sun", "fav_season": "autumn"}}
+    dream_day, guess_day = _rotation_day("dream"), _rotation_day("guess")
+    assert R.ASK_DREAM_BEFORE_BED_MINUTES == 240
+    assert ask(person, today=dream_day, hour=19, to_bed_minutes=210) == "dream"
+    assert ask(person, today=dream_day, hour=17, to_bed_minutes=360) == "how_day"
+    assert ask(person, today=guess_day, hour=17, has_forecast=False) == "how_day"
+    assert (
+        ask(person, today=guess_day, hour=16, has_forecast=True) == "how_day"
+    )  # too early to guess
+    assert ask(person, today=guess_day, hour=17, has_forecast=True) == "guess"
+    # No fallback before how_day's own hour.
+    assert ask(person, today=dream_day, hour=15, to_bed_minutes=480) is None
+    P.mark_asked(person, dream_day, 19)
+    assert (
+        ask(person, today=dream_day, hour=20, to_bed_minutes=180) is None
+    )  # one a day
+
+
+def test_the_how_day_stand_in_comes_at_most_4_evenings_in_7():
+    """Fresh-moment 5b (review s2622 #5, FM): the stand-in for an unaskable dream
+    or guess isn't nightly: on ASK_FALLBACK_DAYS of every 7 days only, by the
+    day. The rotation's own how_day days are always asked, cap or not."""
+    person = {"likes": {"fav_weather": "sun", "fav_season": "autumn"}}
+    first = date(2026, 11, 1).toordinal()
+    stand_ins = 0
+    own = 0
+    for day in (date.fromordinal(first + i) for i in range(21)):
+        got = ask(
+            person,
+            today=day.isoformat(),
+            hour=17,
+            to_bed_minutes=360,
+            has_forecast=False,
+        )
+        if P.rotation(day) == "how_day":
+            assert got == "how_day"  # never capped (FM regression check)
+            own += day.toordinal() % 7 >= R.ASK_FALLBACK_DAYS
+            continue
+        assert got in ("how_day", None)
+        assert (got == "how_day") == (day.toordinal() % 7 < R.ASK_FALLBACK_DAYS)
+        stand_ins += got == "how_day"
+    assert own > 0  # a how_day day off the cap's days was covered
+    assert R.ASK_FALLBACK_DAYS == 4 and stand_ins <= 3 * 4
+
+
+def test_sleep_question_on_alternate_dream_mornings():
+    """Fresh-moment 5b (FM): a dream to tell stands in for "did you sleep well?"
+    on alternate days only, so with a dream nearly every morning (slice 6) the
+    question still comes about half the mornings; with no dream, every morning."""
+    first = date(2026, 11, 1).toordinal()
+    days = [date.fromordinal(first + i).isoformat() for i in range(14)]
+    asked = [ask({}, today=d, hour=8, dreamed=True) for d in days]
+    assert asked.count("slept") == 7 and asked.count(None) == 7
+    assert all(a != b for a, b in zip(asked, asked[1:], strict=False))  # alternate
+    assert all(ask({}, today=d, hour=8, dreamed=False) == "slept" for d in days)
 
 
 def test_a_damaged_record_keeps_what_its_readers_can_use():

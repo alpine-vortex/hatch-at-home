@@ -26,6 +26,8 @@
   };
 
   const NAMES = ["Pip", "Mochi", "Bean", "Juniper", "Waffle", "Comet", "Nori", "Sprout"];
+  // A dig shot's start with no `digReplies`: round 2, 2 banked, 2 in the basket.
+  const DIG_REPLY = { result: "ok", game: "dig", round: 1, rounds: 5, wins: 2, basket: 2, leaves: 6, win_at: 5, done: false };
 
   // The virtual_pet/collection reply for the lead pet's world. `collection`: true, a
   // part-met page (two visitors; three plain finds and one with a `when`; gifts: one met,
@@ -76,12 +78,14 @@
       if (pet.personality) attrs.personality = pet.personality; // a teen or adult's type (P2a/P2b)
       if (pet.hatched_on) attrs.hatched_on = pet.hatched_on;
       if (pet.upbringing) attrs.upbringing = pet.upbringing;
+      // Today's wish and dream (`{kind, granted}`, `{kind}`) and traits, for a `look` shot.
+      for (const key of ["wish", "dream", "traits", "trait_levels"]) if (pet[key]) attrs[key] = pet[key];
       if (shot.journal && i === 0) {
         // The journal's data: every creature of the world raised, the two pets before
         // this one, a trait or two and a memory. `journal: {..}` overrides any of it.
         const roster = rosterOf(worlds[world]);
         const past = (k) => ({ generation: k + 1, name: ["Pip", "Mochi"][k], species: roster[(k + 1) % roster.length],
-          age_days: 31 + k * 9, upbringing: ["playful", "caring"][k], personality: ["bold", "gentle"][k], games: { catch: 3 + k },
+          age_days: 31 + k * 9, upbringing: ["playful", "caring"][k], personality: ["bold", "gentle"][k], games: { left_right: 3 + k },
           traits: ["sunny"], trait_levels: { sunny: 2 } });
         Object.assign(attrs, { raised: roster, generation: 3, traits: ["sunny", "cuddly"], trait_levels: { sunny: 1, cuddly: 3 },
           inherited_trait: "sunny", journal: [past(0), past(1)], memories: [{ kind: "first_frost", at: Math.floor(now.getTime() / 1000) - 5 * 86400 }],
@@ -89,6 +93,8 @@
       }
       // The shell the server would send (the lead pet): its pick, the finishes it may
       // wear and the locked ones with their stage. Left out, the card hides the row.
+      if (i === 0 && shot.senses !== undefined) attrs.senses = shot.senses; // top10 2b: the kinds the house shows it
+      if (i === 0 && shot.social !== undefined) attrs.social_level = shot.social; // top10 §6: the social meter, 0-10
       if (i === 0 && shot.shellOptions !== undefined) {
         Object.assign(attrs, { shell_finish: shot.shellFinish ?? null, shell_finish_options: shot.shellOptions,
           shell_locked: shot.shellLocked || {} });
@@ -99,8 +105,11 @@
       const flags = [...new Set([...(["hungry", "bored", "dirty", "sick", "sleepy"].includes(mood) ? [mood] : []), ...(pet.flags || [])])];
       if (shot.scene === "rain" && !flags.includes("rainy")) flags.push("rainy");
       put("sensor", "mood", mood, { flags, ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) });
-      put("sensor", "last_care", iso(-45), { log: pet.log || [] });
+      // `moments`: [{type, ago (minutes), ...}], the public moments the away note reads.
+      const moments = (pet.moments || []).map(({ ago = 30, ...m }) => ({ ...m, at: iso(-ago) }));
+      put("sensor", "last_care", iso(-45), { log: pet.log || [], ...(pet.moments ? { moments } : {}) });
       put("sensor", "energy", String(pet.energy ?? 80));
+      if (pet.weight !== undefined) put("sensor", "weight", String(pet.weight));
       put("sensor", "poop", String(pet.poop ?? (mood === "dirty" ? 2 : 0)));
       put("sensor", "care_misses", "0");
       put("binary_sensor", "calling", pet.calling || mood === "calling" ? "on" : "off");
@@ -116,7 +125,9 @@
       themes: {}, selectedTheme: null,
       // The card asks once for a server clock reading; none arrives here.
       connection: { subscribeEvents: noop, subscribeMessage: noop },
-      callService: async (domain, service) => ({ response: service === "visit" ? (shot.visit || { counted: true }) : {} }),
+      // `digReplies`: play_game answers, in order, for a `game: "dig"` shot (the server's dig is random).
+      callService: async (domain, service) => ({ response: service === "visit" ? (shot.visit || { counted: true })
+        : service === "play_game" && shot.digReplies?.length ? shot.digReplies.shift() : {} }),
       callWS: async (msg) => {
         if (msg.type === "virtual_pet/photos") return { photos: [] };
         // The finds page (visitors v2 §4): `collection` ({visitors, finds, gifts?}, see
@@ -176,6 +187,56 @@
       for (const a of el.getAnimations()) {
         a.pause();
         a.currentTime = 300;
+      }
+    }
+  }
+
+  // `look`: a look played over time by the card's own tick (the driver moves the pinned
+  // clock and calls bench.step): {at: seconds in, resumed: a tab back after 3 h hidden
+  // (fresh-moment 1), seenAgo: hours since this device last looked (the away note)}.
+  // The first look, greeting, idle and flair run; the channel counts as heard.
+  function lookStart(card, s, look) {
+    for (const k of Object.keys(localStorage)) if (/^hatch-greet-/.test(k)) localStorage.removeItem(k);
+    window.bench.info = { said: [], moves: [], t0: Date.now() };
+    if (look.seenAgo !== undefined) {
+      localStorage.setItem(`hatch-seen-${s.ids.device}`, JSON.stringify({ seen: Date.now() - look.seenAgo * 3600e3, said: Date.now() }));
+    }
+    Object.assign(s, { subscribed: true, queue: [], sayUntil: 0, nextIdle: 0, nextFlair: 0, voicedAt: 0, visitedAt: Date.now() });
+    if (look.resumed) {
+      Object.assign(s, { lookedFirst: true, greeted: true }); // this page looked before it was hidden
+      card._hiddenAt = Date.now() - 3 * 3600e3 - 1000;
+      card._onHidden(); // visible again
+      card.hass = { ...card._hass, states: { ...card._hass.states } }; // fresh states
+    } else {
+      Object.assign(s, { lookedFirst: false, greeted: false });
+    }
+  }
+
+  // One step of a `look`: a tick, each line written whole (typing needs a running clock).
+  function step() {
+    const card = document.querySelector("hatch-pet-card");
+    card._tick();
+    card._slides.forEach((x) => card._stopTyping(x));
+    // What the bubble said and the moves made, in order (written beside the shot).
+    const s = card._slides[card._index];
+    const info = window.bench.info ||= { said: [], moves: [] };
+    const text = s.bubble.textContent;
+    if (text && s.sayUntil > Date.now() && info.said.at(-1) !== text) info.said.push(text);
+    const move = s.screen.querySelector(".flair") ? "flair" : s.poseUntil > Date.now() ? "pose" : s.movingUntil > Date.now() ? "move" : null;
+    if (move && info.moves.at(-1)?.[0] !== move) info.moves.push([move, Date.now()]);
+    if (move === "flair" && !info.flairAt) info.flairAt = Date.now();
+  }
+
+  // The end of a `look`: a flair's CSS runs on the real clock, so it is seeked to the
+  // pinned clock's time since it began, and held.
+  function lookEnd() {
+    const card = document.querySelector("hatch-pet-card");
+    const s = card._slides[card._index];
+    const info = window.bench.info || {};
+    for (const el of s.screen.querySelectorAll(".flair, .flair *")) {
+      for (const a of el.getAnimations()) {
+        a.pause();
+        a.currentTime = Date.now() - (info.flairAt || Date.now());
       }
     }
   }
@@ -326,6 +387,7 @@
     };
   }
 
+  let FINDS_DEFAULT;
   async function mount(shot) {
     await customElements.whenDefined("hatch-pet-card");
     const stage = document.getElementById("stage");
@@ -348,6 +410,12 @@
       if (shot.shell.finish === "none") delete world.shell.finish;
     }
 
+    // FINDS_SHOWN (the card's release switch, off until V-F): `findsShown: true` turns it
+    // on for this shot; every other shot gets the card's own default back.
+    const Card = customElements.get("hatch-pet-card");
+    if (FINDS_DEFAULT === undefined) FINDS_DEFAULT = Card.findsShown;
+    Card.findsShown = shot.findsShown === undefined ? FINDS_DEFAULT : !!shot.findsShown;
+
     const card = document.createElement("hatch-pet-card");
     card.setConfig({ seasonal: shot.season === "auto" ? undefined : shot.season, ...(shot.config || {}) });
     card.hass = buildHass(shot, WORLDS);
@@ -364,6 +432,8 @@
     const cur = slides[card._index];
     // `acts`: a fake species.json "acts" put on every pet's species (`{eat: [stages], cheer: [...]}`).
     if (shot.acts) for (const s of slides) s.species = { ...s.species, acts: shot.acts };
+    if (shot.look) lookStart(card, cur, shot.look);
+    if (shot.ask) card._ask(cur, shot.ask);
     if (shot.say !== undefined) card._write(cur, shot.say, 1e9);
     // `idle`: the pet's idle mumble through the card's own _idle, the first move (a mumble)
     // and the type's side of the coin forced (draws: next-idle delay, move, coin).
@@ -405,6 +475,8 @@
       // `preview`: a tile tapped (its finish on the live shell, unsaved); "" is the world's own.
       if (shot.preview !== undefined) root.querySelector(`.tile[data-finish="${shot.preview}"]`).click();
     }
+    // `scrollEnd` on the status box's own views: its end (the bigtext preset's status-end).
+    if (shot.scrollEnd && ["status", "settings", "picker"].includes(shot.view)) cur.status.scrollTop = cur.status.scrollHeight;
     // `scroll`: a selector in the status box brought into view (the picker's list scrolls).
     if (shot.scroll) {
       const box = cur.status;
@@ -419,6 +491,16 @@
       // (Date is pinned, so count the tries instead of reading the clock.)
       for (let n = 0; !root.querySelector(".jgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
     }
+    // The journal's "every world ›" page (top10 8a); `journal: {raised: [..]}` sets what's drawn.
+    if (shot.view === "everyworld") {
+      root.querySelector(".statusbtn").click();
+      root.querySelector(".jlink").click();
+      for (let n = 0; !root.querySelector(".wlink") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+      root.querySelector(".wlink").click();
+      for (let n = 0; !root.querySelector(".jgrid") && n < 120; n++) await new Promise((r) => setTimeout(r, 25));
+      await Promise.all([...root.querySelectorAll(".jgrid img")].map((img) => img.decode().catch(() => {})));
+      if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight;
+    }
     if (shot.view === "collection") {
       root.querySelector(".statusbtn").click();
       root.querySelector(".jlink").click();
@@ -430,25 +512,14 @@
       if (shot.scrollEnd) cur.status.scrollTop = cur.status.scrollHeight; // the foot's links
     }
     if (shot.view === "games") card._startGame(cur, cur.buttons.play); // the button itself can be disabled
-    // `catch`: a Catch round (needs config.experimental_catch) held at its `far` or `near` spot.
-    // Under motion "reduce" those are the two steps; the round clock is moved through c.start.
-    if (shot.catch) {
+    // `game: "dig"`: a Berry dig started through the card's own picker, then `digTaps`
+    // ("dig" or "keep") played, each answered by the next of `digReplies` (scripted).
+    // Held on the last reply, before its pause (a bee still shows).
+    if (shot.game === "dig") {
+      shot.digReplies = [...(shot.digReplies || [DIG_REPLY])];
       card._startGame(cur, cur.buttons.play);
-      cur.gameBox.querySelector('.gpick [data-game="catch"]').click();
-      let c;
-      for (let n = 0; n < 120 && !(c = cur.game?.cur); n++) await new Promise((r) => requestAnimationFrame(r));
-      if (shot.catchSide || shot.catchDecoy) { // force the round: its side, and a bee (a later round)
-        cancelAnimationFrame(c.raf);
-        cur.game.round = shot.catchDecoy ? 1 : 0;
-        const rolls = [shot.catchSide === "right" ? 0.9 : 0.1, shot.catchDecoy ? 0 : 0.9];
-        const was = Math.random;
-        Math.random = () => (rolls.length ? rolls.shift() : was());
-        card._catchRound(cur);
-        Math.random = was;
-        c = cur.game.cur;
-      }
-      const sec = shot.catch === "near" ? c.travel - c.window + 0.2 : 0.1;
-      await new Promise((r) => requestAnimationFrame((ts) => { c.start = ts - sec * 1000; r(); }));
+      await card._pickGame(cur, "dig");
+      for (const tap of shot.digTaps || []) await card._guess(cur, tap === "keep" ? "left" : "right");
     }
     // `classes`: screen states the fake hass cannot pin (`lit`, `faded`...), put on last.
     for (const c of shot.classes || []) cur.screen.classList.add(c);
@@ -462,6 +533,12 @@
     // `gift`: a gift said at the first look (see giftShot).
     if (shot.gift) await giftShot(card, cur, shot.gift);
     for (const c of shot.petClasses || []) cur.pet.classList.add(c);
+    // `petStretch`: a mockup only (gaps-seams Q2): the pet drawn that much wider, its
+    // height kept, over the species' own scale.
+    if (shot.petStretch) {
+      const k = Number(cur.pet.style.scale) || 1;
+      cur.pet.style.scale = `${k * shot.petStretch} ${k}`;
+    }
     if (shot.petAt !== undefined) {
       for (const a of cur.pet.getAnimations()) {
         a.pause();
@@ -496,5 +573,5 @@
     return true;
   }
 
-  window.bench = { mount };
+  window.bench = { mount, step, lookEnd };
 })();

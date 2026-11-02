@@ -102,6 +102,11 @@ GAME_WIN_HAPPINESS = 30.0  # left/right is luck: a game pays at least like Play
 # 20.3) is not below Play's 20; at 30 it would be the best happiness button.
 SKILL_GAME_WIN_HAPPINESS = 21.0
 GAME_LOSE_HAPPINESS = 12.0
+# Berry dig, the slower game: win at this many berries banked. Best play wins
+# about 76% (tests/test_dig.py simulates it), so a win pays a little more
+# than Higher or Lower: 0.764 * 23 + 0.236 * 12 = 20.4, at least Play's 20.
+DIG_WIN_AT = 5
+DIG_WIN_HAPPINESS = 23.0
 GAME_IDLE_MINUTES = 3  # an unfinished game is dropped after this
 OPENING_KEEP_MINUTES = 30  # a dropped Higher or Lower opening is shown again
 
@@ -316,11 +321,25 @@ WISH_SAY_HI_AFTER_HOUR = 12  # "come say hi this afternoon"
 WISH_FOR_CHANCE = 0.35  # a person's wish is aimed at a close friend
 DREAM_SEEDS_KEPT = 12  # the day's moments a dream can be about
 DREAM_SEED_HOURS = 30.0  # older seeds are forgotten
-DREAM_PLAIN_CHANCE = 0.5  # with nothing to dream about: a plain dream, or none
+DREAM_PLAIN_CHANCE = (
+    1.0  # with nothing to dream about: a plain dream (fresh-moment 6: every morning)
+)
 # World visitors (docs/plan-2026-11-01-visitors-v2.md §1): the server's day plan.
 VISIT_CYCLE_DAYS = 7  # a visit on VISIT_DAYS of every VISIT_CYCLE_DAYS
 VISIT_DAYS = 4
 VISIT_HOURS = 3  # the window's length
+
+# The social meter (top10 §6): a level 0-10 (five hearts, in halves) over a rolling
+# SOCIAL_DAYS of the pet's own social life. A visitor someone greeted (looked in
+# during its window, the pet awake) is worth SOCIAL_VISITOR halves, or
+# SOCIAL_VISITOR_SOLO for a pet with no link all week (four good days still fill
+# it); each neighbour
+# met over the infrared link, SOCIAL_LINK a day. Display only: it changes nothing.
+SOCIAL_DAYS = 7
+SOCIAL_MAX = 10
+SOCIAL_VISITOR = 2
+SOCIAL_VISITOR_SOLO = 3
+SOCIAL_LINK = 1
 VISIT_DAY_STARTS = (9, 15)  # a day visitor's window starts in this hour range (local)
 VISIT_NIGHT_STARTS = (19, 20)  # a night visitor's
 VISIT_LEAVES_FIND = 0.33  # a visitor leaves a find when its window ends
@@ -396,7 +415,8 @@ BIRTHDAY_ASK_LEVEL = 4  # "when's your birthday?"
 CATCHPHRASE_LEVEL = 7  # "what should I say at the end of things?"
 BIRTHDAY_QUIET_BELOW = 30.0  # happiness: below it, a quiet "happy birthday ♥"
 ASK_DAY_FROM = 16  # "how was your day?" on its rotation day
-ASK_DREAM_BEFORE_BED_MINUTES = 180  # "what should I dream about?"
+ASK_FALLBACK_DAYS = 4  # of 7 days, how_day may stand in for a kind not askable now
+ASK_DREAM_BEFORE_BED_MINUTES = 240  # "what should I dream about?"
 ASK_GUESS_FROM = 17  # "rain or sun tomorrow?"
 GUESS_FROM_HOUR = 18  # the guessed day is judged from here, or the day after
 JUST_HOME_HOURS = 2.0  # "how was your day?" after coming home, within this

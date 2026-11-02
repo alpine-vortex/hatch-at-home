@@ -5,7 +5,11 @@ from __future__ import annotations
 from collections import Counter
 from datetime import UTC, datetime
 import math
+import os
 import random
+import subprocess
+import sys
+import zlib
 
 import pytest
 
@@ -1627,8 +1631,11 @@ def test_a_game_pays_at_least_what_play_does():
     # Left or Right: about even odds. Higher or Lower: a good player wins ~92%.
     luck = 0.49 * R.GAME_WIN_HAPPINESS + 0.51 * R.GAME_LOSE_HAPPINESS
     skill = 0.92 * R.SKILL_GAME_WIN_HAPPINESS + 0.08 * R.GAME_LOSE_HAPPINESS
+    # The Berry dig: best play wins 76.4% (exact; tests/test_dig.py measures it).
+    dig = 0.764 * R.DIG_WIN_HAPPINESS + 0.236 * R.GAME_LOSE_HAPPINESS
     assert luck >= R.PLAY_HAPPINESS
     assert skill >= R.PLAY_HAPPINESS
+    assert dig >= R.PLAY_HAPPINESS
 
 
 def test_weight_burn_is_plain_at_50_and_restoring_above():
@@ -2182,13 +2189,56 @@ def test_it_dreams_of_yesterday_and_forgets_old_seeds():
     # The event says what kind only: the title stays in state.dream.
     assert events == [{"type": "dreamed", "kind": "watching"}]
     assert pet.dream_seeds == []
-    # Nothing to dream of: a plain dream, or none.
-    kinds = set()
-    for seed in range(20):
-        pet.dream = None
-        model.dream_on_waking(pet, at(7, day=3), "d3", random.Random(seed))
-        kinds.add(pet.dream and pet.dream["kind"])
-    assert None in kinds and kinds - {None} <= {"flying", "clouds", "feast"}
+    # Nothing to dream of: a plain dream every morning (fresh-moment 6).
+    pet.dream = None
+    model.dream_on_waking(pet, at(7, day=3), "2026-11-03", random.Random(0), "pet-a")
+    assert pet.dream["kind"] in model.PLAIN_DREAMS
+
+
+def test_plain_dreams_turn_through_the_whole_list():
+    """Fresh-moment 6: with no seeds, each cycle of len(PLAIN_DREAMS) mornings gives
+    every plain kind once, in a per-pet shuffled order (two pets don't keep step),
+    never the same two mornings running, the same after a restart (a fixed hash,
+    unlike hash()); no saved history."""
+    n = len(model.PLAIN_DREAMS)
+    assert n == len(set(model.PLAIN_DREAMS)) >= 15
+    first = datetime(2026, 11, 1).toordinal()
+
+    def day(i: int) -> str:
+        return datetime.fromordinal(first + i).date().isoformat()
+
+    for pet_id in ("pet-a", "01JBX9Q7ZK"):
+        # A cycle starts where (ordinal + offset) is a multiple of n.
+        start = next(
+            i
+            for i in range(n)
+            if (first + i + zlib.crc32(f"dream|{pet_id}".encode()) % n) % n == 0
+        )
+        pet = hatched(at(20))
+        kinds = []
+        for i in range(start, start + n):
+            pet.dream = None
+            model.dream_on_waking(pet, at(7, day=2), day(i), random.Random(i), pet_id)
+            kinds.append(pet.dream["kind"])
+        assert sorted(kinds) == sorted(model.PLAIN_DREAMS)
+        run = [model.plain_dream(pet_id, day(i)) for i in range(4 * n)]
+        assert all(a != b for a, b in zip(run, run[1:], strict=False))
+        assert (
+            run[:n] != run[n : 2 * n] or run[n : 2 * n] != run[2 * n : 3 * n]
+        )  # cycles differ
+    a = [model.plain_dream("pet-a", day(i)) for i in range(n)]
+    b = [model.plain_dream("pet-b", day(i)) for i in range(n)]
+    assert sum(x == y for x, y in zip(a, b, strict=True)) < n // 2
+    # The same in another process with another hash seed.
+    code = "from custom_components.virtual_pet import model; print(model.plain_dream('pet-a', '2026-11-05'))"
+    other = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "PYTHONHASHSEED": "12345"},
+    )
+    assert other.stdout.strip() == model.plain_dream("pet-a", "2026-11-05")
 
 
 def test_dream_seeds_are_capped():
@@ -2927,3 +2977,69 @@ def test_an_away_pet_does_not_become_sick():
     pet.away = True
     events = run(pet, start + 5 * HOUR)
     assert "became_sick" not in types(events)
+
+
+# --- The social meter (top10 §6) ------------------------------------------------
+
+
+def test_social_meter_counts_greeted_visitors_and_links_over_a_week() -> None:
+    pet = model.PetState.new("Pip", 0.0)
+    # A visit today, 10:00-13:00 (epoch seconds are only compared here).
+    pet.visit = {
+        "day": "2026-11-01",
+        "world": "woodland",
+        "id": "hedgehog",
+        "hours": "day",
+        "from": 1000.0,
+        "until": 2000.0,
+        "credited": False,
+    }
+    assert not model.social_greet(
+        pet, 999.0, "2026-11-01", "woodland"
+    )  # before it came
+    assert not model.social_greet(pet, 1500.0, "2026-11-01", "pond")  # another world's
+    assert model.social_greet(pet, 1500.0, "2026-11-01", "woodland")
+    assert not model.social_greet(pet, 1600.0, "2026-11-01", "woodland")  # once a day
+    # No link all week: the solo credit (a pet alone, or on a card of its own).
+    assert model.social_level(pet, "2026-11-01") == R.SOCIAL_VISITOR_SOLO
+    assert model.social_link(pet, "2026-11-01", "other-pet")
+    assert not model.social_link(pet, "2026-11-01", "other-pet")  # once a day each
+    # A link this week: the plain visitor credit plus the link.
+    assert model.social_level(pet, "2026-11-01") == R.SOCIAL_VISITOR + R.SOCIAL_LINK
+    # A rolling week: the day falls off on the eighth; the level never passes the cap.
+    assert model.social_level(pet, "2026-11-07") == R.SOCIAL_VISITOR + R.SOCIAL_LINK
+    assert model.social_level(pet, "2026-11-08") == 0
+    # Once the link is out of the week, a visitor counts solo again.
+    pet.social["2026-11-09"] = {"visitor": True, "links": []}
+    assert model.social_level(pet, "2026-11-09") == R.SOCIAL_VISITOR_SOLO
+    del pet.social["2026-11-09"]
+    for d in range(1, 8):
+        model.social_link(pet, f"2026-11-0{d}", "a")
+        model.social_link(pet, f"2026-11-0{d}", "b")
+    assert model.social_level(pet, "2026-11-07") == R.SOCIAL_MAX
+    # Writing a new day prunes the ones before the week (and any ahead of it).
+    pet.social["2026-12-25"] = {"visitor": True, "links": []}
+    model.social_link(pet, "2026-11-09", "a")
+    assert min(pet.social) >= "2026-11-03" and max(pet.social) == "2026-11-09"
+
+
+def test_social_days_load_checked_and_a_new_egg_starts_at_zero() -> None:
+    pet = model.PetState.new("Pip", 0.0)
+    data = pet.to_dict()
+    data["social"] = {
+        "2026-11-01": {"visitor": True, "links": ["a", "a", 3, "b"]},
+        "not a day": {"visitor": True},
+        "2026-11-02": "broken",
+        "2026-11-03": {"visitor": "yes", "links": "a"},
+    }
+    loaded = model.PetState.from_dict(data)
+    assert loaded.social == {
+        "2026-11-01": {"visitor": True, "links": ["a", "b"]},
+        "2026-11-03": {"visitor": False, "links": []},
+    }
+    assert model.PetState.from_dict({**data, "social": "junk"}).social == {}
+    # A new egg starts its own social life (owner S6).
+    parent = hatched(at(12), age_hours=ADULT + R.LAY_EGG_AFTER_ADULT_HOURS + 5)
+    model.social_link(parent, "2026-11-01", "a")
+    egg, _ = model.lay_egg(parent, at(12), random.Random(1))
+    assert egg is not parent and egg.social == {}

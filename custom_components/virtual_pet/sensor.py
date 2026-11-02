@@ -163,6 +163,8 @@ class LifeStageSensor(PetEntity, SensorEntity):
             "birthday",
             "shell_finish_options",
             "shell_locked",
+            "senses",
+            "social_level",
         }
     )
 
@@ -177,9 +179,13 @@ class LifeStageSensor(PetEntity, SensorEntity):
         return {k: record[k] for k in keys if k in record}
 
     def _dream(self) -> dict[str, Any] | None:
-        """This morning's dream, its kind only. A dream of a show or song is
-        the house's (its title is on the private channel), so none here."""
-        dream = self._today_only(self.pet.dream, ("kind",))
+        """This morning's dream, its kind only (a visitor's dream adds which
+        visitor and world, top10 6d: nobody's, like the day's visit). A dream of
+        a show or song is the house's (its title is on the private channel), so
+        none here."""
+        dream = self._today_only(self.pet.dream, ("kind", "id", "world"))
+        if dream is not None and dream.get("kind") != "visitor":
+            dream = {"kind": dream["kind"]}
         if dream is not None and dream.get("kind") in MEDIA_EVENTS:
             return None
         return dream
@@ -223,6 +229,10 @@ class LifeStageSensor(PetEntity, SensorEntity):
             ),
             "shell_finish_options": model.shell_options(self.pet),
             "shell_locked": model.shell_locked(self.pet),
+            # The kinds the house shows it (weather, tv...), never an entity.
+            "senses": self.coordinator.senses,
+            # The social meter, 0-10 over the week (top10 §6); the days stay saved.
+            "social_level": self.coordinator.social_level,
             "raised": list(self.pet.raised),
             "traits": list(self.pet.traits),
             "trait_levels": {

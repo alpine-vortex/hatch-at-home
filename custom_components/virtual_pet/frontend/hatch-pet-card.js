@@ -3,7 +3,7 @@
 // Arrows, dots or a swipe move to the next device. All state lives in Home
 // Assistant; the card only draws and presses the pets' buttons and switch.
 
-const VERSION = "0.40.0";
+const VERSION = "0.42.0";
 const BASE = "/virtual_pet/frontend";
 // The world's grid: cells across the pet's box (46.5% of the screen's width).
 // The shell (--px), the LCD and the link beam are cut on it, and the props, UI
@@ -76,6 +76,7 @@ function digit(n, px = 6) {
 function gameIcon(key) {
   if (key === "left_right") return `${icon("prev", 16)}${icon("next", 16)}`;
   if (key === "higher_lower") return `${digit(1, 2)}<span class="gi-arrow">↕</span>${digit(9, 2)}`;
+  if (key === "dig") return `<img src="${BASE}/ui/catch_decoy_1.png?v=${VERSION}" width="20" height="20" alt="">`;
   return `<img src="${BASE}/ui/flair_player.png?v=${VERSION}" width="20" height="20" alt="">`;
 }
 
@@ -98,25 +99,14 @@ const ACTIONS = [
 const GAMES = [
   { key: "left_right", label: "left or right", guesses: ["left", "right"] },
   { key: "higher_lower", label: "higher or lower", guesses: ["lower", "higher"] },
+  { key: "dig", label: "berry dig", guesses: ["keep", "dig"] },
 ];
-// Matches rates.GAME_IDLE_MINUTES: the server drops a Left/Right or Higher/Lower
-// game left idle this long, and the card closes its own copy then, silently.
+// The server games (all of GAMES).
+const SERVER_GAMES = new Set(GAMES.map((g) => g.key));
+// Matches rates.GAME_IDLE_MINUTES: the server drops a server game left idle
+// this long, and the card closes its own copy then, silently.
 const GAME_IDLE_MS = 3 * 60 * 1000;
 const LAST_GAME_KEY = "hatch-last-game";
-// Catch, the Giga Pets reflex game: a prototype, offered only with the card
-// option experimental_catch: true. The card times the taps; nothing goes to the
-// server and it gives no reward.
-const CATCH_GAME = { key: "catch", label: "catch!", guesses: ["left", "right"] };
-// Calm Catch's far spot: [left %, right %, bottom], above the nav buttons (.gl/.gr/.gx) at any width.
-const CALM_FAR = [8, 76, "42%"];
-const CATCH = {
-  rounds: 5, winAt: 3,
-  travel: [1.9, 1.0], // seconds for the prop to reach the pet, round 1 to round 5
-  window: [1.2, 0.6], // the last part of its trip in which a tap catches it
-  decoyChance: 0.25, // from round 2
-};
-const BEST_CATCH_KEY = "hatch-best-catch";
-
 // Sounds: little square-wave chirps, off until someone turns them on for this
 // device (status screen). Never while the pet sleeps, nor late at night.
 const SOUND_KEY = "hatch-sounds";
@@ -259,6 +249,20 @@ function monoOn() {
   }
 }
 
+// Big text: the status box's pages (status, journal, settings, picker) in larger
+// words; off unless turned on for this browser (top10 4b). It rides on the mono
+// screen's event and storage listeners (MONO_EVENT, _onMono): both are this
+// screen's look.
+const BIG_KEY = "hatch-big-text";
+
+function bigOn() {
+  try {
+    return localStorage.getItem(BIG_KEY) === "on";
+  } catch (err) {
+    return false;
+  }
+}
+
 // Holiday names: on unless turned off for this browser (only "off" is kept). Off,
 // no line names a festival: the season's dated lines go, and so does any line
 // FESTIVAL_NAMES matches (that pattern is the tag); the generic lines stay.
@@ -308,6 +312,12 @@ function soundsOn() {
 const SHARED_KEY = "hatch-shared-screen";
 // Fired on window when the switch flips, so every card on the page follows.
 const SHARED_EVENT = "hatch-shared-changed";
+// A shared screen's Berry dig is the household's, not the signed-in user's:
+// put aside with ✕, it is carried on by the household (play_game shared).
+function digShared(kind) {
+  return kind === "dig" && sharedScreen() ? { shared: true } : {};
+}
+
 function sharedScreen() {
   try {
     return localStorage.getItem(SHARED_KEY) === "on";
@@ -395,9 +405,39 @@ function playChirp(name) {
 // variants (_1 big, _2 small); otherwise one image.
 const FEED_FULL_AT = 95; // rates.py FEED_FULL_AT: a meal is refused above this
 const TRAIT_CAP = 4; // rates.py TRAIT_CAP, until the server says (life_stage trait_cap)
+const STAGE_DAYS = { teen: 5, adult: 14 }; // rates.py STAGE_STARTS (120 h, 336 h), from the egg
 const LINK_AFTER_MS = [600000, 1500000]; // the infrared link: 10-25 min after the page loads (random)
+// The day's first link waits for someone watching (gaps-seams 5a, owner Q7): 1-3 min into
+// a look (the first tap or swipe on a shown card, after none for LINK_TOUCHED_MS), and
+// only while the last one was under LINK_TOUCHED_MS ago. Never on a hidden tab or an
+// untouched wall tablet. Later links keep LINK_AFTER_MS.
+// An idle line about a neighbour on the shelf (gaps-seams 5b), 1 in 6 idle lines.
+const NEIGHBOUR_ODDS = 1 / 6;
+const NEIGHBOUR_LINES = [(n) => `wonder what ${n} is up to ♪`, (n) => `*waves toward ${n}*`, (n) => `I hope ${n} is having a nice day`];
+const LINK_FIRST_MS = [60000, 180000];
+const LINK_TOUCHED_MS = 300000;
+// A link already today on this browser (oncePerDay's `hatch-link-<pair>-<day>` keys).
+function linkedToday(day = new Date()) {
+  const end = `-${day.toDateString()}`;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("hatch-link-") && key.endsWith(end)) return true;
+    }
+  } catch (err) {
+    // no storage: oncePerDay's own memory
+  }
+  return [...(oncePerDay.seen || [])].some((key) => key.startsWith("hatch-link-") && key.endsWith(end));
+}
 const FLAIR_EVERY_MS = [50000, 70000]; // between moments (random in this range)
 const FLAIR_MS = 4200; // how long a moment lasts
+// A first look's one early move (fresh-moment 7): this long after the look begins (the
+// greeting's line done, the first look's first one on), and given up if not free by
+// FIRST_MOVE_LATE_MS after.
+const FIRST_MOVE_MS = 6000;
+const FIRST_MOVE_LATE_MS = 15000;
+// A first look's missed day visitor waits at most this long for its turn (fresh-moment 3).
+const LATE_VISIT_MS = 60000;
 const FLAIR = {
   storm_watcher: { place: "head", art: "frames" },
   thunder_heart: { place: "head", art: "frames" },
@@ -446,7 +486,7 @@ const SEASONS = [
       terrarium: { corners: ["left", "right"] }, // a tarantula's tank
       nightsky: { dayFlyers: true, nightFlyer: true }, // bats by day too; the witch at night
     },
-    lines: ["boo!", "happy Halloween!", "spooky~", "trick or treat?", "do I look spooky?"],
+    lines: ["boo!", "happy Halloween!", "spooky~", "trick or treat! hehe", "look how spooky I am!"],
     treat: [10, 31],
     treatLine: "trick or treat!",
     countdown: "Halloween", // "3 sleeps till Halloween!" before the treat day
@@ -495,7 +535,7 @@ const SEASONS = [
     corner: "leaves",
     sweet: "plate",
     snack: "pie",
-    snackLines: ["pie!! ♪", "pumpkin pie, my favourite!", "mmm, still warm ♪"],
+    snackLines: ["pie!! ♪", "pumpkin pie, my favourite!", "mmm, warm from the oven ♪"],
     flyer: { art: ["goose_1", "goose_2"], cls: "sgoose", ms: 8000, flock: 3 },
     visitor: { art: ["turkey_1", "turkey_2"], cls: "sturkey", ms: 7000, walk: true, startle: "gobble?!", jump: "perk",
       greet: ["hi, turkey!", "happy Thanksgiving, turkey ♪", "gobble gobble to you too!"] },
@@ -631,20 +671,20 @@ const VISITOR_PLAY = {
   chickadee: { lines: ["chick-a-dee-dee! ♪", "hello, little chickadee!"] },
   stellersjay: { lines: ["ooh, so blue!", "hi, jay! ♪"] },
   snail: { walk: true, in: 2600, stay: 4200, lines: ["take your time, snail~", "hello, slow friend"] },
-  pillbug: { walk: true, lines: ["hi, pill bug! don't roll away~", "a tiny armadillo!"] },
-  ladybird: { lines: ["a ladybird! lucky ♪", "count your spots for me?"] },
-  moth: { lines: ["hi, moth! the light's over there~", "fuzzy friend ♪"] },
+  pillbug: { walk: true, lines: ["hi, pill bug! don't roll away~", "you look like a tiny armadillo!"] },
+  ladybird: { lines: ["a ladybird! lucky ♪", "hi, ladybird! nice spots ♪"] },
+  moth: { lines: ["hi, moth! the light's over there~", "hello, fuzzy friend ♪"] },
   robin: { walk: true, lines: ["hello, robin! ♪", "a robin at the window!"] },
-  mouse: { walk: true, in: 900, lines: ["shh... hi, mouse ♪", "a crumb for you?"] },
+  mouse: { walk: true, in: 900, lines: ["shh... hi, mouse ♪", "here, have a crumb ♪"] },
   cricket: { walk: true, lines: ["cri-cri! ♪", "sing me a song, cricket"] },
-  gull: { lines: ["hi, gull! no snacks here~", "hello from the sea ♪"] },
+  gull: { lines: ["hi, gull! no snacks here~", "you smell like the sea ♪"] },
   shorecrab: { walk: true, lines: ["sideways hello! ♪", "hi, little crab!"] },
   seastar: { walk: true, in: 2600, stay: 4800, lines: ["a star in the water!", "hello, sea star~"] },
   dragonfly: { in: 900, lines: ["zoom! hi, dragonfly ♪", "so shiny!"] },
-  strider: { walk: true, lines: ["walking on water?!", "hi, strider ♪"] },
+  strider: { walk: true, lines: ["whoa, it walks on water!", "hi, strider ♪"] },
   heron: { walk: true, in: 2000, lines: ["a heron! so tall...", "shh, it's fishing~"] },
-  shootingstar: { catchup: "a shooting star went by! ♪", cross: true, lines: ["a shooting star! make a wish ✦", "ooh! did you see that?"] },
-  nighthawk: { lines: ["hi, nighthawk ♪", "night flyer friend!"] },
+  shootingstar: { catchup: "a shooting star went by! ♪", cross: true, lines: ["a shooting star! make a wish ✦", "whoa, look at it go! ✦"] },
+  nighthawk: { lines: ["hi, nighthawk ♪", "my night flyer friend! ♪"] },
   raccoon: { walk: true, lines: ["hello, masked friend!", "a raccoon! say hi ♪"] },
 };
 // A world's visitors: worlds.json's roster ({id, name, hours, leaves?}, the server's
@@ -663,6 +703,14 @@ const FIND_LINES = {
 const FIND_STEP_MS = 2500; // the reveal: one find each
 const FIND_LINE_MS = 2200; // its line, gone before the next find's
 const FOUND_BITS = 3; // the away note's "found <a find>" bits, newest first
+// Release switch (owner, 2026-11-01): off until V-F's final art. While off, the card
+// shows no basket, reveal or find line (V1-V4), no "found" bit in the away note (V8),
+// no gift take, line or pop (V5-V7: it never sends collect {gift}, so a gift waits on
+// the server), and the finds page draws its visitors only. The server is unchanged: finds
+// and gifts keep accruing, and turning this on shows them. Read through findsShown(), so
+// card-check and the bench can turn it on (HatchPetCard.findsShown).
+const FINDS_SHOWN = false;
+const findsShown = () => !!HatchPetCard.findsShown;
 // Gifts (plan visitors v2 §5, §7 V5-V7): said once, on the receiver's own screen, at a
 // first look. V5 names the find (its `name`, so "message in a bottle" is 40 characters);
 // a gift-only find has no name in the line: "made" for the three in GIFT_MADE, "found"
@@ -747,6 +795,19 @@ function oncePerDay(name, day = new Date()) {
   }
   return true;
 }
+// Once on this browser, ever (a key that isn't per day, so pruning leaves it).
+function onceEver(name) {
+  const key = `hatch-${name}`;
+  try {
+    if (localStorage.getItem(key)) return false;
+    localStorage.setItem(key, "1");
+  } catch (err) {
+    if (onceEver.seen?.has(key)) return false;
+    (onceEver.seen ??= new Set()).add(key);
+  }
+  return true;
+}
+const WEEK_OLD = ["one week old today! ♥", "a whole week together! ♥"]; // gaps-seams 1b
 // The card's own per-day keys (oncePerDay's `hatch-<name>-<Date.toDateString()>`, and the
 // treat's `hatch-treat-...-<toDateString>`) older than PRUNE_DAYS go, once at card start.
 // Only keys that start "hatch-" and end in a day like "Fri Oct 31 2026" are touched.
@@ -776,9 +837,8 @@ function seasonNow(config, date = new Date()) {
   return SEASONS.find((x) => after(md, seasonDate(x.from, year)) && after(seasonDate(x.to, year), md)) || null;
 }
 
-// Catch's decoy: Sol's bee (ui/catch_decoy_1, _2: wings up, down), facing left.
+// The dig's bee: Sol's bee (ui/catch_decoy_1, _2: wings up, down), facing left.
 const BEE_FRAMES = [1, 2].map((n) => `${BASE}/ui/catch_decoy_${n}.png?v=${VERSION}`);
-const BEE_FLAP_MS = 120;
 
 const REFUSALS = {
   full: "I'm full!",
@@ -930,6 +990,10 @@ const PERSONA = {
     idle_excited: ["hehe! ok, nap now", "mm! that was fun ♪", "hehe, nice ♥"],
     mood_content: ["taking it easy", "comfy and calm"],
     mood_excited: ["hehe, that was nice", "mm, that was fun"],
+    mood_cozy: ["mm, perfect nap spot", "warm and comfy... ♪"],
+    mood_bored: ["a nap sounds nice...", "just lazing about"],
+    today: ["a slow, cozy sort of day ♪", "mm, a comfy kind of day", "today was nice and lazy ♪"], // the evening's line about its day (fresh-moment 4)
+    visit: ["oh, hi there... ♪", "mm, a visitor... nice"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `oh hey, ${n}... ♪`, (n) => `${n}... come sit a while ♥`],
     link_guest: [(n) => `mm, hi, ${n}... ♪`],
     link_kindred: [(n) => `${n}, we do cosy well ♥`, "mm, a nap with you sounds nice ♪"],
@@ -950,6 +1014,10 @@ const PERSONA = {
     idle_excited: ["hehe, so happy!", "yay! ♥", "that was lovely ♥"],
     mood_content: ["all warm and happy", "nice and homey ♥"],
     mood_excited: ["that was lovely!", "hehe, that was fun ♥"],
+    mood_cozy: ["all snug ♥", "warm and happy ♥"],
+    mood_bored: ["wish someone would visit ♥", "waiting for a friend ♥"],
+    today: ["today was a lovely day ♥", "such a warm, homey day ♥", "a nice, gentle day today ♥"], // the evening's line about its day (fresh-moment 4)
+    visit: ["a visitor! welcome ♥", "hello, little friend ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! hi! so glad you came ♥`, (n) => `hello hello, ${n} ♥`],
     link_guest: [(n) => `hi, ${n}! ♥ hello ♥`],
     link_kindred: [(n) => `${n}, we think alike ♥`, "it's nice to meet a kind heart ♥"],
@@ -970,6 +1038,10 @@ const PERSONA = {
     idle_excited: ["wheee! hup hup!", "woo! yes!", "*bounce bounce*"],
     mood_content: ["full of beans", "ready for anything"],
     mood_excited: ["that was great!", "woo! so much fun!"],
+    mood_cozy: ["cozy... but ready to hop!", "warm paws, happy hops"],
+    mood_bored: ["need to hop about!", "so... much... sitting"],
+    today: ["today was a hoppy one!", "what a zippy day! hup!", "today went boing boing! ♪"], // the evening's line about its day (fresh-moment 4)
+    visit: ["a visitor! hup hup, hi!", "hiya, friend! *bounce*"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! hup hup, hi!`, (n) => `hiya, ${n}! *bounce*`],
     link_guest: [(n) => `hup! hi, ${n}!`],
     link_kindred: [(n) => `${n}! race you to the corner! hup`, "two of us, twice the hops!"],
@@ -990,6 +1062,10 @@ const PERSONA = {
     idle_excited: ["ta-da! ★", "what a show! ★", "♪ tra la la! ♪"],
     mood_content: ["humming a little tune", "ready for my close-up ★"],
     mood_excited: ["what a show!", "bravo! that was fun ★"],
+    mood_cozy: ["cozy, like backstage ★", "a warm spotlight ♪"],
+    mood_bored: ["no audience today...", "waiting for my cue ★"],
+    today: ["today was a little show ★", "a day worth an encore ★", "today had its own sparkle ★"], // the evening's line about its day (fresh-moment 4)
+    visit: ["a guest star! ★", "welcome to the show! ★"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}! my co-star ★`, (n) => `ah, ${n}! cue the music ★`],
     link_guest: [(n) => `hello, ${n}! ★ take a bow`],
     link_kindred: [(n) => `${n}! a duet, you and me ★`, "we shine best together ★"],
@@ -1010,6 +1086,10 @@ const PERSONA = {
     idle_excited: ["heh. not bad at all.", "heh. well, well.", "ha. that was fun."],
     mood_content: ["all's well", "a fine day"],
     mood_excited: ["heh. that was nice", "well, that was fun"],
+    mood_cozy: ["a fine warm spot", "cozy. as it should be."],
+    mood_bored: ["hm. quiet day.", "nothing doing. hm."],
+    today: ["hm. a good, quiet day.", "a fine day, all told.", "hm. today was well spent."], // the evening's line about its day (fresh-moment 4)
+    visit: ["well, hello there.", "ah. a visitor. welcome."], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `hello, ${n}. come in.`, (n) => `${n}. good to see you.`],
     link_guest: [(n) => `hm. hello, ${n}.`],
     link_kindred: [(n) => `hm. ${n}. we understand each other.`, "good company, you."],
@@ -1030,6 +1110,10 @@ const PERSONA = {
     idle_excited: ["oh, how lovely!", "divine! ♥", "*twirls prettily*"],
     mood_content: ["looking my best", "all pretty and calm ♥"],
     mood_excited: ["oh, how lovely!", "that was divine ♥"],
+    mood_cozy: ["cozy and fabulous ♥", "warm and lovely ♥"],
+    mood_bored: ["how dull...", "nothing lovely to do"],
+    today: ["a rather elegant day ♥", "today was simply divine ♥", "such a stylish day, darling ♥"], // the evening's line about its day (fresh-moment 4)
+    visit: ["oh, a visitor! how lovely ♥", "welcome, welcome, dear ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `${n}, darling! how lovely ♥`, (n) => `oh, ${n}! welcome, welcome ♥`],
     link_guest: [(n) => `${n}, darling! ♥`],
     link_kindred: [(n) => `${n}, darling, we have such taste ♥`, "a fellow connoisseur ♥"],
@@ -1050,6 +1134,10 @@ const PERSONA = {
     idle_excited: ["simply splendid!", "marvellous! ♥", "what an occasion!"],
     mood_content: ["life is splendid", "all quite marvellous"],
     mood_excited: ["simply splendid!", "what a marvellous time"],
+    mood_cozy: ["splendidly cozy", "warm as a welcome"],
+    mood_bored: ["a bit dull today, I must say", "awaiting company"],
+    today: ["what a splendid day it was ♥", "a marvellous little day ♥", "today was quite grand ♥"], // the evening's line about its day (fresh-moment 4)
+    visit: ["a visitor! what an honour", "do come in, friend ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `ah, ${n}! a delight ♥`, (n) => `${n}! what an honour ♥`],
     link_guest: [(n) => `${n}! how splendid ♥`],
     link_kindred: [(n) => `${n}! two of a kind, you and I ♥`, "such a grand pair we make ♥"],
@@ -1070,6 +1158,10 @@ const PERSONA = {
     idle_excited: ["hah! nailed it!", "yes! heck yes!", "hah! go team!"],
     mood_content: ["all under control", "all clear here"],
     mood_excited: ["hah! that was great", "heck yes, that was fun"],
+    mood_cozy: ["cozy post, all clear", "warm and on watch"],
+    mood_bored: ["nothing to guard...", "waiting for orders!"],
+    today: ["today was a good run! hah", "all handled today ♥", "today went great. heck yes!"], // the evening's line about its day (fresh-moment 4)
+    visit: ["who goes there? oh, hi!", "visitor spotted! hi! ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `yo, ${n}! all clear here`, (n) => `${n}! reporting in ♥`],
     link_guest: [(n) => `hey, ${n}! ♥ hi hi`],
     link_kindred: [(n) => `${n}! good team, you and me ♥`, "we've got each other's backs ♥"],
@@ -1124,13 +1216,18 @@ const QUESTIONS = {
     ok: ["a cozy morning then ♥"],
     "not really": ["aww, take it easy today ♥", "a slow morning then... *yawn* ♥"] } },
   fav_weather: { q: "what's your favourite weather?", keep: true, answers: {
-    sun: ["sunny days! me too ☀"], rain: ["ooh, cozy rain ☂"], snow: ["snow!! ❄ I'll remember"],
+    sun: ["sunny days! me too ☀"], rain: ["ooh, rain is so cozy ☂"], snow: ["snow!! ❄ I'll remember"],
     storms: ["storms! so exciting!"] } },
   fav_season: { q: "what's your favourite season?", keep: true, answers: {
-    spring: ["spring! flowers everywhere ♪"], summer: ["summer! sunshine! ☀"],
-    autumn: ["autumn! crunchy leaves ♪"], winter: ["winter! snuggly ❄"] } },
+    spring: ["spring! flowers everywhere ♪"], summer: ["summer! all that sunshine ☀"],
+    autumn: ["autumn! crunchy leaves ♪"], winter: ["winter! snuggle season ❄"] } },
+  // Asked once ever, after a missed call, of someone with the HA app (top10 1a; the
+  // server decides). "yes" turns on "notify me" for this pet (_ask).
+  phone: { q: "can I call your phone when I need you?", answers: {
+    yes: ["yay! I'll ring you ♥"], "not now": ["ok! you can say yes in settings ♥"] },
+  label: (a) => (a === "yes" ? "yes ♥" : a) },
   dream: { q: "what should I dream about tonight?", keep: true, answers: {
-    stars: ["the stars... ok!"], sea: ["the sea! ok!"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ ok!"] } },
+    stars: ["ooh, the stars. ok! ★"], sea: ["the sea it is! ♪"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ I'd like that"] } },
   guess: { q: "rain or sun tomorrow?", keep: true, answers: {
     rain: ["rain! we'll see ☂"], sun: ["sun! we'll see ☀"] } },
   // Theirs, kept privately on the server ("skip" sticks; forgotten on the status screen).
@@ -1159,37 +1256,38 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const dayOptions = (n) => Array.from({ length: n }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
 // Its yearly birthday: a party hat (the season costume code places it) and confetti.
 const PARTY = { key: "party", costumes: [{ art: "hat", sink: 7, width: 56 }],
-  lines: ["party hat on! ♪", "do you like my party hat?", "best birthday ever! ♪"] };
+  lines: ["party hat on! ♪", "look, I'm all dressed up! ♪", "best birthday ever! ♪"] };
 // The visit's celebration lines: one a look, and always a place for it.
 const CELEBRATION_NOTES = new Set(["your_birthday", "pet_birthday", "birthday_friends", "friends_for"]);
 const months = (n) => `${n} month${n === 1 ? "" : "s"}`;
+const berries = (n) => (n ? `${n} ${n === 1 ? "berry" : "berries"}` : "no berries"); // the dig's count, said
 const PLACES = {
-  gym: "back from the gym?! so strong!", work: "home from work! ♥",
-  school: "back from class? ♥", park: "did you have fun at the park?",
+  gym: "back from the gym! so strong!", work: "home from work! ♥",
+  school: "back from class! ♥", park: "I hope the park was fun! ♪",
 };
 const HOME_WEATHER = {
   wet: "it's wet out there! come get cozy ☂", snowy: "snow on your shoes! ❄",
-  cold: "brr, was it cold out there?", hot: "you must be thirsty after that heat!",
+  cold: "brr, it looks cold out there!", hot: "you must be thirsty after that heat!",
 };
 const SEASON_ICONS = { spring: "♪", summer: "☀", autumn: "♥", winter: "❄" };
 // What the pet tells only you (virtual_pet.visit's notes), each once.
 const NOTES = {
   pet_birthday: (n) => (n.years ? `it's my birthday!! I'm ${n.years} today! ♥` : `I'm ${months(n.months)} old today! ♥`),
-  birthday_friends: (n) => `I'm ${months(n.months)} old, and we've been friends all that time! ♥`,
+  birthday_friends: (n) => `I'm ${months(n.months)} old! friends from day one ♥`,
   your_birthday: (n) => (n.quiet ? "happy birthday ♥" : "happy birthday!! ♥"), // _note adds the name
   friends_for: (n) => n.months % 12 === 0
     ? `we've been friends for ${n.months === 12 ? "a whole year" : `${n.months / 12} years`}!! ♥`
     : `we've been friends for ${n.months === 1 ? "a month" : `${n.months} months`}! ♥`,
   tucked_in: () => pick(["thanks for tucking me in last night ♥", "I slept so well after you tucked me in ♥"]),
-  steps: (n) => `${n.steps.toLocaleString()} steps?! you've been busy!`,
-  more_than_usual: () => pick(["you've walked way more than usual today!", "so many steps today! you've been so active!"]),
+  steps: (n) => `wow, ${n.steps.toLocaleString()} steps! you've been busy!`,
+  more_than_usual: () => pick(["you've walked way more than usual today!", "so many steps! you've been on the go!"]),
   best_day: () => "your most active day in weeks!! ♥",
-  bike: () => "were you on a bike?! wheee!",
-  run: () => "did you go for a run?! so fast!",
-  stairs: (n) => `${n.floors} floors of stairs?! you're a climber!`,
+  bike: () => "you went for a bike ride! wheee!",
+  run: () => "you went for a run! so fast!",
+  stairs: (n) => `${n.floors} floors of stairs! what a climber!`,
   rested: () => pick(["you got a good sleep! ♥", "you slept so well! ♥"]),
-  rain_walk: () => pick(["you walked in the rain?! so brave!", "out in the rain and still so many steps! ☂"]),
-  snow_walk: () => "you went walking in the snow?! ❄ so brave!",
+  rain_walk: () => pick(["you walked in the rain! so brave! ☂", "rain or not, look at all those steps! ☂"]),
+  snow_walk: () => "a walk in the snow! ❄ so brave!",
   dream: (n) => n.pick === "you"
     ? (n.yours ? "I dreamed about you, like you said! ♥" : "I dreamed about my friends ♥")
     : `I dreamed about ${{ stars: "the stars", sea: "the sea", snacks: "snacks" }[n.pick] || n.pick}${n.yours ? ", like you said! ♥" : "..."}`,
@@ -1204,7 +1302,7 @@ const NOTES = {
   season: (n) => n.holiday && namedHolidays()
     ? `${n.holiday === "halloween" ? "Halloween" : "Thanksgiving"} in your favourite season! ♥`
     : `it's ${n.season}, your favourite! ${SEASON_ICONS[n.season] || ""}`.trim(),
-  early_alarm: () => "early start tomorrow? sleep well ♥",
+  early_alarm: () => "early start tomorrow! sleep well ♥",
   up_early: () => "mmh... you're up before the sun... zzz ♥",
   photo: () => "I made you something! it's in your journal ♥",
 };
@@ -1217,13 +1315,62 @@ const DREAMS = {
   moon: () => "I dreamed I flew to the moon!",
   game: () => "I dreamed we played and I won!",
   chore: () => "I dreamed about treats...",
-  wish: () => "I dreamed my wish came true again ♥",
+  wish: () => "I dreamed about my wish all night ♥",
   trait: () => "I had such a big dream last night...",
   flying: () => "I dreamed I could fly!",
   clouds: () => "I dreamed I napped on a cloud...",
   feast: (d, w) => `I dreamed about a mountain of ${w?.food || "snacks"}!`,
+  // Plain dreams (fresh-moment 6; model.PLAIN_DREAMS turns through them, one a morning).
+  swim_fish: () => "I dreamed I swam with the fish ♪",
+  acorn: () => "I dreamed of a giant acorn!",
+  tall: () => "I dreamed I was really, really tall!",
+  stars_sang: () => "I dreamed the stars sang to me ★",
+  blanket: () => "I dreamed of a big warm blanket...",
+  secret_door: () => "I dreamed I found a secret door!",
+  leaf_ride: () => "I dreamed I rode a leaf down a stream",
+  bubbles: () => "I dreamed of bubbles, so many bubbles!",
+  birds_talk: () => "I dreamed I could talk to birds ♪",
+  tiny_boat: () => "I dreamed I was a tiny boat ♪",
+  pillow_hill: () => "I dreamed of a hill made of pillows",
+  moon_dance: () => "I dreamed I danced in the moonlight ★",
+  pie: () => "I dreamed I baked the biggest pie!",
+  rainbow_slide: () => "I dreamed I slid down a rainbow ♪",
+  candy_clouds: () => "I dreamed the clouds were candy floss",
+  tiny_hat: () => "I dreamed I wore a teeny tiny hat ♪",
+  giant_sock: () => "I dreamed I hid in a giant sock!",
+  parade: () => "I dreamed of a parade just for me ★",
+  juggling: () => "I dreamed I juggled shiny pebbles!",
+  pink_sky: () => "I dreamed I painted the sky pink ♪",
+  big_puddle: () => "I dreamed of a puddle as big as a lake",
+  sing_along: () => "I dreamed I sang and everyone joined ♪",
+  bean: () => "I dreamed I was the size of a bean!",
+  cake_house: () => "I dreamed of a house made of cake!",
+  jelly: () => "I dreamed I bounced on a big jelly ♪",
+  lantern: () => "I dreamed of a lantern that hummed ♪",
+  whistle: () => "I dreamed I learned to whistle ♪",
+  // Yesterday's world visitor (top10 6d), by its name in worlds.json; none known: no dream line.
+  visitor: (d, w, worlds) => {
+    const v = worlds?.[d.world]?.visitors?.find((x) => x.id === d.id);
+    return v?.name ? `I dreamed about the ${v.name}! ♪` : null;
+  },
 };
 const AWAY_NOTE_AFTER_MS = 3 * 3600 * 1000;
+// The evening's line about its own day (fresh-moment 4, owner 2026-11-01): from this hour,
+// at the first look; a granted wish's line by kind (tuck_in is granted at bedtime, after).
+const TODAY_FROM_HOUR = 17;
+const TODAY_WISH = {
+  play: "I got to play a game today! ♪",
+  snack: "I got a snack after lunch! ♥",
+  bath: "I got my bubble bath today! ♥",
+  praise: "somebody said I'm good today ♥",
+  sunset: "I got to watch the sunset today ♥",
+  music: "I got some music today ♪",
+  tv: "I got to watch TV today ♪",
+  chore: "I got a chore treat today! ♥",
+  rain: "I got to see the rain today! ♪",
+  say_hi: "I got a hello this afternoon ♥",
+};
+const RESUME_HOLD_MS = 5000; // a tab back after AWAY_NOTE_AFTER_MS: its first look waits for fresh states
 // A bond with each person (only the viewer's own, from the private channel's
 // "mine"). What each level brings, as in rates.py: a warmer hello, a
 // hop when they look in, the nickname it picked, its favourite of their games,
@@ -1250,6 +1397,7 @@ const momentKey = (m) => m && `${m.at}|${m.type}`;
 // question nothing below kept interrupts. 0 is the rest (a greeting, the mood line).
 const MINE = 4; // the viewer's own care press: never overwritten for MINE_MS
 const KEPT = 3; // never dropped, may wait
+const SOCIAL_MAX = 10; // the social meter's top (rates.SOCIAL_MAX): five hearts, in halves
 const BEAT = 2; // care by someone else, calls, sleep
 const FLAVOUR = 1; // may be dropped, never replayed as a barrage
 const MINE_MS = 3000;
@@ -1337,7 +1485,24 @@ const POSE_MOODS = new Set(["content", "excited", "cozy", "bored", "sleepy"]);
 // The same bands as rates.py (WEIGHT_LIGHT_BELOW, WEIGHT_HEAVY_ABOVE).
 function weightLabel(v) {
   if (v === null) return "–";
-  return `${Math.round(v)} · ${v < 25 ? "a bit light" : v > 75 ? "a bit heavy" : "just right"}`;
+  return `${Math.round(v)} · ${v < 25 ? "a bit light · a meal would help" : v > 75 ? "a bit heavy · snacks add up" : "just right"}`;
+}
+const isHeavy = (v) => v !== null && v > 75; // rates.py WEIGHT_HEAVY_ABOVE
+// A heavy pet's snack, half the time (gaps-seams 2a): snacks are what tip it.
+// Sick from weight (gaps-seams 2b, owner Q3), and in baby talk.
+const SICK_WEIGHT = ["ugh... too many snacks, I think", "my tummy's grumbly... too many snacks"];
+const SICK_WEIGHT_BABY = "tummy hurts... too many snacks";
+const HEAVY_SNACK = ["one more and I'll be round as a ball!", "*pats tummy* getting a bit round..."];
+
+// The status row counting down to the next stage (gaps-seams 1a), or null: a child
+// to teen, a teen to grown up. "About", since ageing pauses while it's away.
+function growsUp(stage, ageDays) {
+  const next = { child: "teen", teen: "adult" }[stage];
+  if (!next || typeof ageDays !== "number") return null;
+  const left = Math.round(STAGE_DAYS[next] - ageDays);
+  if (left < 1) return null;
+  const when = left === 1 ? "tomorrow" : `in about ${left} days`;
+  return next === "adult" ? ["grows up", when] : ["next", `teen ${when}`];
 }
 
 // What it would like, in the status sheet (2c, C9): a call's need, else medicine
@@ -1807,8 +1972,9 @@ const STYLE = `
   /* Dots share what room the arrows leave; many pets wrap onto a second row. */
   .foot { gap: 8px; }
   .nav { flex-shrink: 0; }
-  .dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0 4px; min-width: 0; }
-  .dot { width: 24px; height: 24px; border: none; padding: 0; cursor: pointer;
+  .dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0; min-width: 0; }
+  /* 44 x 44 hit area (4c's size); the drawn dot is still 10 px, and the boxes sit edge to edge. */
+  .dot { width: 44px; height: 44px; border: none; padding: 0; cursor: pointer;
     background: none; display: flex; align-items: center; justify-content: center; }
   .dot::before { content: ""; width: 10px; height: 10px; border-radius: 5px;
     background: color-mix(in srgb, var(--hp-ink) 55%, transparent); transition: width .3s; }
@@ -2069,6 +2235,8 @@ const STYLE = `
   .screen.dim .bg { filter: brightness(.5) saturate(.75); }
   .screen.dim .pet { filter: brightness(.8); }
   .pet, .perch, .screen .pat { left: 50%; bottom: 4%; height: 62%; margin-left: -23.25%; transform-origin: 50% 100%; }
+  /* Heavy (gaps-seams 2c): 6% wider, height and feet kept, still centred. */
+  .pet.heavy, .ghost.heavy { aspect-ratio: 1.06; margin-left: -24.645%; }
   /* The pat (PR 3b): a clear button over the pet's box (the img takes no taps), above the
      bubble and below a question, a game, the status and the boot screen. Written as
      ".screen .pat" so _tapped's .tap-feedback (position: relative) can't move it. */
@@ -2131,6 +2299,14 @@ const STYLE = `
     width: 40px; height: 28px; border-radius: 8px; background: var(--hp-screen-tint, #f3e7c9); }
   .game .gpick .gi img { image-rendering: pixelated; }
   .game .gpick .gi-arrow { font-size: 12px; margin: 0 1px; }
+  /* _fitPicker puts the picker's top under the close button. When a column of
+     games doesn't fit there, they wrap into rows of labels (no icons), still
+     44 px tall (4c's tap size). */
+  .game .gpick.wrap { left: 3%; right: 3%; flex-flow: row wrap; align-content: center; gap: 6px 4px; }
+  .game .gpick.wrap button { min-width: 0; padding: 0 10px; font-size: 12px; justify-content: center; }
+  .game .gpick.wrap .gi { display: none; }
+  .game .gpick.wrap.tight { left: 1%; right: 1%; gap: 4px 3px; } /* still too tall: two a row */
+  .game .gpick.wrap.tight button { padding: 0 6px; font-size: 11px; }
   .game .gnum { position: absolute; left: 50%; top: 30%; transform: translateX(-50%);
     display: grid; place-items: center; min-width: 52px; min-height: 56px; padding: 6px 10px;
     border-radius: 10px; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
@@ -2287,13 +2463,18 @@ const STYLE = `
   .confetti i { position: absolute; top: -6%; left: var(--x); width: 5px; height: 8px; background: var(--c);
     animation: confetti 2.6s linear var(--d) forwards; }
   @keyframes confetti { to { top: 106%; rotate: 540deg; } }
-  .game .gcatch { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
+  .game .gprop { position: absolute; bottom: 10%; width: 16%; image-rendering: pixelated;
     pointer-events: none; will-change: left, transform; }
-  .game .gcatch[hidden] { display: none; }
+  .game .gprop[hidden] { display: none; }
   .game .hl { font: inherit; font-size: 14px; }
   .game .gscore { position: absolute; left: 50%; bottom: 4%; transform: translateX(-50%);
     padding: 2px 8px; border-radius: 8px; background: #fffdf5; color: #3a2a1a;
     border: 2px solid #3a2a1a; font-size: 12px; white-space: nowrap; }
+  .game .gscore.two { white-space: pre; text-align: center; line-height: 1.25; } /* the dig: round, then bank and basket */
+  /* The dig at 300 px: the two-line score between keep and dig, clear of both. */
+  .compact .game .gscore.two { font-size: 10px; padding: 1px 3px; bottom: 3%; letter-spacing: -.3px; }
+  .compact .game.dig .gl { left: 1.5%; }
+  .compact .game.dig .gr { right: 1.5%; }
   .screen.show-status .flair, .screen.show-status .game, .screen.show-status .rain, .screen.show-status .breeze,
   .screen.show-status .flash, .screen.show-status .speck, .screen.show-status .lcd, .screen.show-status .glow,
   .screen.show-status .bondhearts, .screen.show-status .linkhearts,
@@ -2685,7 +2866,7 @@ const STYLE = `
      pixels), the unmet ones dark silhouettes with no name, the viewer's gifts with a ♥. */
   .jfoot { display: flex; justify-content: space-between; align-items: flex-end; }
   .jfoot .jlink { align-self: auto; }
-  .flink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
+  .flink, .wlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
     min-height: 44px; min-width: 44px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
   .fgrid { display: flex; flex-wrap: wrap; gap: 6px 8px; }
@@ -2699,6 +2880,15 @@ const STYLE = `
   ha-card.mono .ftile.locked img { opacity: .5; }
   .ftile .fheart { position: absolute; top: 0; right: 0; font-size: 12px; line-height: 1; }
   .jlist { font-size: 12px; opacity: .9; display: flex; flex-direction: column; gap: 3px; }
+  /* Big text (top10 4b): every size on the status box's pages, about 3 px up. */
+  ha-card.bigtext .status { font-size: 16px; }
+  ha-card.bigtext .status .log, ha-card.bigtext .status .jlist, ha-card.bigtext .status .photos,
+  ha-card.bigtext .status .status-feedback, ha-card.bigtext .status .sback, ha-card.bigtext .status .jlink,
+  ha-card.bigtext .status .flink, ha-card.bigtext .status .wlink, ha-card.bigtext .status .jolder,
+  ha-card.bigtext .status .fheart { font-size: 15px; }
+  ha-card.bigtext .status .sec, ha-card.bigtext .status .shellnote, ha-card.bigtext .status .jtile,
+  ha-card.bigtext .status .ftile, ha-card.bigtext .status .tile { font-size: 13px; }
+  ha-card.bigtext .status .tile .tsub { font-size: 12px; }
   .photos { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
   .prow { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 2px; }
   .print { margin: 0; flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; }
@@ -2767,7 +2957,7 @@ const STYLE = `
   .screen .askday.many { max-width: 236px; } /* three a row at most */
   .compact .screen .askday { gap: 4px; bottom: 2%; }
   .compact .screen .askday.many { max-width: 100%; }
-  .compact .screen .askday button, .compact .screen .askday select { min-height: 40px; min-width: 44px;
+  .compact .screen .askday button, .compact .screen .askday select { min-height: 44px; min-width: 44px;
     font-size: 12px; padding: 2px 7px; border-radius: 10px; }
   .screen .askday select, .compact .screen .askday select { font-size: 16px; } /* iOS zooms in under 16 px */
   .screen .askday select { font: inherit; font-size: 14px; min-height: 44px; border-radius: 14px;
@@ -2845,6 +3035,9 @@ class HatchPetCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    if (this._resumedAt && !document.hidden && hass?.states !== this._resumeStates) {
+      this._resumedAt = this._resumeStates = null; // fresh states: the look may begin
+    }
     this._listenReady(hass?.connection);
     this._watchServerClock(hass);
     this._resendAnswers();
@@ -2914,11 +3107,17 @@ class HatchPetCard extends HTMLElement {
       this._hiddenAt ??= Date.now();
       return;
     }
-    // Back after a long while (owner Q1): a gift waiting is said, as at a first look.
+    // Back after a long while (owner Q1): a new look, as a fresh page would have, a gift
+    // waiting too (fresh-moment 1). The look waits for fresh states (RESUME_HOLD_MS at
+    // most): a phone back from sleep holds yesterday's, and a set hass with the same
+    // states object (a connection change) isn't fresh.
     if (this._hiddenAt && Date.now() - this._hiddenAt >= AWAY_NOTE_AFTER_MS) {
-      (this._slides || []).forEach((x) => { x.giftAgain = true; });
+      this._newLook(this._slides || [], { resumed: true });
+      this._resumedAt = Date.now();
+      this._resumeStates = this._hass?.states;
     }
     this._hiddenAt = null;
+    this._touchedAt = null; // a new look begins at its first touch (gaps-seams 5a)
   };
 
   connectedCallback() {
@@ -2934,6 +3133,7 @@ class HatchPetCard extends HTMLElement {
     window.addEventListener(MONO_EVENT, this._onMono);
     window.addEventListener("storage", this._onMonoStorage);
     this._card?.classList.toggle("mono", monoOn());
+    this._card?.classList.toggle("bigtext", bigOn());
     // Shared screen turned on or off while the card was away (its listeners
     // were off): catch up now, before a queued personal line is said.
     if (this._slides?.length && sharedScreen() !== this._sharedSeen) {
@@ -2967,7 +3167,7 @@ class HatchPetCard extends HTMLElement {
     window.removeEventListener(MONO_EVENT, this._onMono);
     window.removeEventListener("storage", this._onMonoStorage);
     this._listenReady(null);
-    // A game (Catch's animation loop above all) stops with the card, and so
+    // A game stops with the card, and so
     // does a line typing out, and the private channel.
     for (const s of this._slides || []) {
       if (s.game) this._endGame(s, null);
@@ -3239,6 +3439,7 @@ class HatchPetCard extends HTMLElement {
     this._card = root.querySelector("ha-card");
     this._card.classList.toggle("lcd-on", lcdOn());
     this._card.classList.toggle("mono", monoOn());
+    this._card.classList.toggle("bigtext", bigOn());
     // The shell hardware's art: ui/shell_<part>.png, drawn by art/shell-parts/make_parts.py (see REQUEST.md there).
     const ui = (name) => `url("${BASE}/ui/${name}.png?v=${VERSION}")`;
     for (const k of ["screw", "slot", "stripes", "fleck", "glare", "logo", "plate", "battery", "light_on", "light_off"])
@@ -3295,6 +3496,12 @@ class HatchPetCard extends HTMLElement {
       }
     };
     for (const type of ["touchend", "pointerup", "click"]) this._card.addEventListener(type, unlock, true);
+    // Someone is watching (gaps-seams 5a): a tap or swipe; the first after a gap starts a look.
+    this._card.addEventListener("pointerdown", () => {
+      const now = Date.now();
+      if (!this._touchedAt || now - this._touchedAt >= LINK_TOUCHED_MS) this._lookAt = now;
+      this._touchedAt = now;
+    }, true);
     this._resize = new ResizeObserver(() => this._layout());
     this._resize.observe(this._viewport);
     this._visible = true;
@@ -3341,9 +3548,9 @@ class HatchPetCard extends HTMLElement {
             <button class="pat" type="button" hidden></button>
             <button class="basket" type="button" aria-label="the basket" hidden><img alt=""></button>
             <div class="game" hidden>
-              <div class="gpick" role="group" aria-label="Pick a game">${this._games().map((g) =>
+              <div class="gpick" role="group" aria-label="Pick a game">${GAMES.map((g) =>
                 `<button data-game="${g.key}">${g.label}</button>`).join("")}</div>
-              <img class="gcatch" alt="" hidden>
+              <img class="gprop" alt="" hidden>
               <span class="gnum" aria-live="polite" hidden></span>
               <button class="gl" aria-label="Guess left">${icon("prev", 22)}</button>
               <span class="gscore" aria-live="polite"></span>
@@ -3367,7 +3574,7 @@ class HatchPetCard extends HTMLElement {
       attention: q(".attention"), bubble: q(".bubble"), status: q(".status"),
       poops: [...slide.querySelectorAll(".poop")], murk: q(".murk"), buttons: {}, frame: 0,
       request: q(".request"), gameBox: q(".game"), gameScore: q(".gscore"), gameNum: q(".gnum"),
-      catchEl: q(".gcatch"), live: q(".sr[role=status]"), seasonBox: q(".season"),
+      propEl: q(".gprop"), live: q(".sr[role=status]"), seasonBox: q(".season"),
       basket: q(".basket"),
     };
     // The LCD grid: one cell per world art pixel, measured on the screen itself
@@ -3756,6 +3963,7 @@ class HatchPetCard extends HTMLElement {
     s.wasCalling = undefined; // a call already on doesn't chirp
     s.journal = false;
     s.finds = false;
+    s.everyWorld = false;
     s.settings = false;
     this._closePicker(s);
     this._shellSettled(s);
@@ -3824,6 +4032,7 @@ class HatchPetCard extends HTMLElement {
       slide.screen.querySelector(".linkhearts")?.remove(); // a visit's, mid-way
       slide.journal = false;
       slide.finds = false; // the settings sheet stays, without its personal rows
+      slide.everyWorld = false;
       this._closePicker(slide); // and without the picker (read-only here)
       slide.confirm = null; // an armed "forget" is a personal row
       slide.status.innerHTML = ""; // drawn again, without its personal rows
@@ -3864,13 +4073,14 @@ class HatchPetCard extends HTMLElement {
 
   _onMono = () => {
     this._card?.classList.toggle("mono", monoOn());
+    this._card?.classList.toggle("bigtext", bigOn());
     this._slides?.forEach((x) => { // an open sheet's row text and aria-pressed stay true
       if (x.screen.classList.contains("show-status") && !x.picker) this._renderStatus(x, this._state(x, "sensor.last_care")?.attributes.log || []);
     });
   };
 
   _onMonoStorage = (e) => {
-    if (e.key === MONO_KEY || e.key === null) this._onMono(); // null: storage cleared
+    if (e.key === MONO_KEY || e.key === BIG_KEY || e.key === null) this._onMono(); // null: storage cleared
   };
 
   // Take an open question off the screen (a game, another pet on this slide).
@@ -3893,8 +4103,7 @@ class HatchPetCard extends HTMLElement {
     if (!n) return;
     const to = (index + n) % n;
     this._slides.forEach((x, i) => {
-      // A game stops on the slide being left: nobody plays it unseen (Catch
-      // would score itself).
+      // A game stops on the slide being left: nobody plays it unseen.
       if (x.game && i !== to) this._quitGame(x, null);
       this._stopTyping(x);
       this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
@@ -3918,6 +4127,7 @@ class HatchPetCard extends HTMLElement {
       this._redraw(); // the trim is sized for the layout: draw every slide again
     }
     for (const s of this._slides) s.el.style.width = `${this._slideW}px`;
+    for (const s of this._slides) if (s.game?.picking) this._fitPicker(s);
     this._renderShelf();
   }
 
@@ -4420,6 +4630,11 @@ class HatchPetCard extends HTMLElement {
     const drawn = sp.stages?.includes(stage) ? stage : sp.stage_fallback?.[stage];
     s.drawn = drawn;
     s.pet.style.scale = String(sp.scale?.[drawn] || 1);
+    // A heavy pet is drawn a little wider (gaps-seams 2c, owner: x1.06, only while heavy).
+    const weight = Number.parseFloat(this._state(s, "sensor.weight")?.state);
+    const heavy = stage !== "egg" && isHeavy(Number.isFinite(weight) ? weight : null);
+    s.pet.classList.toggle("heavy", heavy);
+    s.ghost?.classList.toggle("heavy", heavy);
     // Baby, teen and adult have no house poses: a hop dances, a shake shivers.
     const standIn = drawn !== "child" && !away && !asleep && POSE_MOODS.has(mood?.state);
     s.pet.classList.toggle("dance", standIn && flags.includes("dancing"));
@@ -4477,7 +4692,7 @@ class HatchPetCard extends HTMLElement {
     }
     const egg = stage === "egg";
     if (s.game && (asleep || away || egg)) this._endGame(s, null);
-    else if (s.game && (s.game.kind === "left_right" || s.game.kind === "higher_lower") &&
+    else if (s.game && SERVER_GAMES.has(s.game.kind) &&
         !s.game.busy && s.game.lastAt && Date.now() - s.game.lastAt >= GAME_IDLE_MS) {
       this._endGame(s, null); // the server has dropped it already: no call, no line
     }
@@ -4543,11 +4758,12 @@ class HatchPetCard extends HTMLElement {
     return mine ? dailyPick([reason, reason, ...mine], `${born}|${key}`) : this._lines(s, `reason.${key}`, reason).text;
   }
 
-  // A teen or adult's own content/excited mood line (P2b), or null. It is picked
-  // by dailyPick (no Math.random): the sentence is redrawn every tick, so it must
-  // not change until the date does. Babies and children keep baby talk.
+  // A teen or adult's own content, excited, cozy or bored mood line (P2b; cozy and
+  // bored since gaps-seams 4a), or null. It is picked by dailyPick (no Math.random):
+  // the sentence is redrawn every tick, so it must not change until the date does.
+  // Babies and children keep baby talk.
   _moodOwn(s, key) {
-    if (key !== "content" && key !== "excited") return null;
+    if (!["content", "excited", "cozy", "bored"].includes(key)) return null;
     return this._persona(s)?.[`mood_${key}`] || null;
   }
 
@@ -4558,6 +4774,7 @@ class HatchPetCard extends HTMLElement {
     s.screen.classList.toggle("show-status", open);
     s.journal = false;
     s.finds = false;
+    s.everyWorld = false;
     s.settings = false;
     this._closePicker(s);
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
@@ -4661,6 +4878,12 @@ class HatchPetCard extends HTMLElement {
   _tick() {
     if (!this._slides || !this._visible || document.hidden) return;
     this._ticks = (this._ticks || 0) + 1;
+    // A screen left on overnight (a wall tablet never hides): a new day is a new look.
+    const day = new Date().toDateString();
+    if (this._lookDay !== day) {
+      if (this._lookDay) this._newLook(this._slides);
+      this._lookDay = day;
+    }
     this._slides.forEach((s, i) => {
       if (s.poseUntil && Date.now() > s.poseUntil) s.poseUntil = 0;
       if (s.patPoseUntil && Date.now() > s.patPoseUntil) s.patPoseUntil = 0;
@@ -4689,10 +4912,12 @@ class HatchPetCard extends HTMLElement {
         if (!this._booting) {
           this._sayQueued(s);
           this._wishMention(s);
+          this._socialFull(s);
         }
         this._seen(s);
         this._idle(s);
         this._flairTick(s);
+        this._firstMove(s);
         this._seasonTick(s);
         this._partyTick(s);
         this._linkTick(s);
@@ -4711,13 +4936,13 @@ class HatchPetCard extends HTMLElement {
 
   // Ghosting: a slow LCD leaves a fading trace where the pet was. Only the pet on
   // show, with screen effects on, never with reduced motion or more contrast, and
-  // never in Catch (a reflex game needs a clean pet). The fades are Web Animations,
+  // The fades are Web Animations,
   // which the reduced-motion CSS rule doesn't reach: hence the checks here.
   _ghosting(s) {
     const media = (q) => window.matchMedia?.(q).matches;
     return s === this._slides[this._index] && this._visible && !document.hidden && !s.linking &&
       this._card.classList.contains("lcd-on") && s.pet.style.display !== "none" && !s.scene &&
-      s.game?.kind !== "catch" && !calm() &&
+      !calm() &&
       !media("(prefers-contrast: more)");
   }
 
@@ -4760,6 +4985,40 @@ class HatchPetCard extends HTMLElement {
       !s.screen.classList.contains("show-status") &&
       !(s.sayUntil > now) && !(s.poseUntil > now) && !(s.propUntil > now) &&
       !(s.flairUntil > now) && !(s.movingUntil > now);
+  }
+
+  // Free but for a line being said: a move with no words may play over it (fresh-moment 7).
+  _freeBody(s) {
+    const now = Date.now();
+    return s.species && !s.asleep && !s.calling && !s.game && !s.scene && !s.linking && !s.power && !s.visitor &&
+      IDLE_MOODS.has(s.moodState) && !s.screen.classList.contains("show-status") &&
+      !(s.poseUntil > now) && !(s.propUntil > now) && !(s.flairUntil > now) && !(s.movingUntil > now);
+  }
+
+  // Only a question on show, its 60 s hold the one thing busy: a visitor or flair may
+  // still come (fresh-moment 5a), the question keeping its bubble and buttons.
+  _askOnly(s) {
+    return this._questionOn(s) && !!this._freeBody(s) && !s.queue?.length &&
+      this._state(s, "sensor.life_stage")?.state !== "egg";
+  }
+
+  // A first look's one early move (fresh-moment 7), so a 30 s look sees the pet do
+  // something, not only talk: its flair (traits), else a look around (not when calm).
+  // Over a line, as it has no bubble. Then flair and idle keep their own timers.
+  _firstMove(s) {
+    const now = Date.now();
+    if (!s.firstMoveAt || now < s.firstMoveAt) return;
+    if (!this._freeBody(s)) {
+      if (now - s.firstMoveAt > FIRST_MOVE_LATE_MS) s.firstMoveAt = 0;
+      return;
+    }
+    s.firstMoveAt = 0;
+    if (this._flair(s).length) {
+      const [lo, hi] = FLAIR_EVERY_MS;
+      s.nextFlair = now + lo + Math.random() * (hi - lo);
+    } else if (!calm()) {
+      this._look(s, 1800);
+    }
   }
 
   // A wander or a look moves the pet off its spot for a while; a hat placed
@@ -4876,17 +5135,21 @@ class HatchPetCard extends HTMLElement {
       const words = this._words(s);
       const lines = this._babySet(s, `idle.${IDLE_LINES.has(s.moodState) ? s.moodState : "default"}`) || {
         sleepy: ["*yawn*", "mm... sleepy", ...(words.home ? [`my ${words.home} looks cozy...`] : [])],
-        bored: ["hmm...", "*rolls around*", "anyone wanna play?"],
+        bored: ["hmm...", "*rolls around*", "I could go for a game ♪"],
         excited: ["hehe!", "wheee"],
-        hungry: ["*tummy rumbles*", "is it snack time?", ...(words.food ? [`mmm... ${words.food}...`] : [])],
+        hungry: ["*tummy rumbles*", "a snack sounds good...", ...(words.food ? [`mmm... ${words.food}...`] : [])],
         dirty: ["ew...", "*sniff sniff*"],
       }[s.moodState] || ["♪ hm hm hm ♪", "...", "*looks around*", "la la la"];
       // A teen or adult says its type's idle lines half the time, except for the
       // body's own (sleepy, hungry, dirty, sick), which stay normal.
       const bodily = ["sleepy", "hungry", "dirty", "sick"].includes(s.moodState);
       const key = s.moodState === "bored" ? "idle_bored" : s.moodState === "excited" ? "idle_excited" : "idle";
+      // Now and then a neighbour on the shelf, by name (gaps-seams 5b): flavour, nothing counted.
+      const others = this._slides.filter((x) => x !== s);
+      const neighbour = !bodily && !this._babyStage(s) && others.length && Math.random() < NEIGHBOUR_ODDS
+        && this._linkName(pick(others));
       const normal = pick(lines);
-      this._write(s, bodily ? normal : this._lines(s, key, normal).text, 2500);
+      this._write(s, neighbour ? pick(NEIGHBOUR_LINES)(neighbour) : bodily ? normal : this._lines(s, key, normal).text, 2500);
       s.plain = s.bubble.textContent; // idle chatter isn't read out
     }
   }
@@ -5013,9 +5276,9 @@ class HatchPetCard extends HTMLElement {
 
   // A reaction to care for baby, teen and adult (the child has species poses): that
   // stage's mood frame for REACT_MS and a bounded move. Not over a scene, a link, the
-  // low-battery gag, sleep, away or the egg; a game only for a catch (`inGame`).
+  // low-battery gag, sleep, away or the egg; a game only with `inGame`.
   // Under reduced motion only the frame changes (calm() shows its first). With ms
-  // (a catch's pounce), the frame and the move both last that long.
+  // (a win beat), the frame and the move both last that long.
   _reactFrames(s, kind, { inGame = false, ms } = {}) {
     const r = REACTIONS[kind];
     if (!r || !s.species || s.drawn === "child" || s.scene || s.linking || s.power ||
@@ -5278,16 +5541,38 @@ class HatchPetCard extends HTMLElement {
     if (said === null || said === undefined || t > said) this._seenWrite(device, { said: t });
   }
 
+  // A new look on the same page (fresh-moment 1): the greeting, the first look, the visit
+  // and the wish mention start over; each line's own once-key still stops a double. A
+  // tab back from hiding also says a gift waiting, and leaves what happened meanwhile
+  // to the catch-up (no live replay of moments, as _forget).
+  _newLook(slides, { resumed = false } = {}) {
+    for (const x of slides) {
+      x.lookedFirst = x.greeted = false;
+      x.visitedAt = x.nextWish = 0;
+      if (resumed) {
+        x.giftAgain = true;
+        x.lastMoment = x.lastLogAt = undefined;
+      }
+    }
+  }
+
+  // A tab just back after a long while, its states not yet fresh (fresh-moment 1).
+  _resumeHeld() {
+    return !!this._resumedAt && Date.now() - this._resumedAt < RESUME_HOLD_MS;
+  }
+
   // The first look at this pet on this device: what happened while you were
   // out, this morning's dream and today's wish (each once a day per device).
   _firstLook(s) {
     if (!this._channelHeard(s)) return; // the viewer's bond and wish first
+    if (this._resumeHeld()) return; // fresh states first
     const away = this._state(s, "sensor.mood")?.state === "away";
     if (s.lookedFirst || !s.species || s.asleep || away || this._eggMinutes(this._state(s, "sensor.life_stage")) !== null) return;
     s.lookedFirst = true;
+    s.firstMoveAt = Date.now() + FIRST_MOVE_MS;
     const stage = this._state(s, "sensor.life_stage")?.attributes || {};
     const device = s.ids?.device;
-    // At most FIRST_LOOK_LINES lines, in this order; what doesn't fit isn't said
+    // At most FIRST_LOOK_LINES lines, in this order, the newest first; what doesn't fit isn't said
     // (the dream and wish come again at the next first look; the visit's notes
     // are budgeted on the server from what's queued here).
     const lines = [];
@@ -5301,28 +5586,42 @@ class HatchPetCard extends HTMLElement {
       if (HOME_WEATHER[home.weather]) lines.push([HOME_WEATHER[home.weather], 4500]);
     }
     const mark = this._seenRead(device);
+    let wishTold = false;
     // Kept milestones said nowhere here (the card was closed): once, as lines of
     // this look. A browser with no record yet starts from now, so a new one
     // never replays the house's history.
     if (typeof mark?.said === "number") {
-      for (const [text, at] of this._catchUp(s, mark.said, FIRST_LOOK_LINES - lines.length)) {
+      for (const [text, at, type] of this._catchUp(s, mark.said, FIRST_LOOK_LINES - lines.length)) {
         lines.push([text, 5000, { at }]);
+        if (type === "wish_granted") wishTold = true; // the today line won't tell it again
       }
     } else {
       this._seenWrite(device, { said: serverNow() });
     }
+    // A week old (gaps-seams 1b): on a first look during its 8th day, once per pet and
+    // generation on this browser.
+    if (stage.age_days >= 7 && stage.age_days < 8 && lines.length < FIRST_LOOK_LINES && onceEver(`week-${device}-${stage.generation || 1}`)) {
+      lines.push([this._pick(WEEK_OLD), 5000]);
+    }
+    const dreamt = s.house?.dream || stage.dream; // a show or song's, from the house
+    // The hold ran out on states that may be yesterday's: no dream or wish this look (their
+    // keys stay unused for the next).
+    const stale = !!this._resumedAt;
+    const dreamLine = !stale && dreamt && DREAMS[dreamt.kind]?.(dreamt, this._words(s), this._worlds);
+    if (dreamLine && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
+      lines.push([dreamLine, 5000]);
+    }
+    const wish = !stale && stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
+    if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);
+    // What happened while you were out comes after what's new (fresh-moment 2, owner Q2).
+    // From TODAY_FROM_HOUR, once a day here: a line about its day, in the away note's place.
+    const today = this._evening() && lines.length < FIRST_LOOK_LINES && this._todayLine(s, wishTold);
     const seen = mark?.seen || 0;
-    if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS) {
+    if (today && oncePerDay(`today-${device}`)) lines.push([today, 5000, { away: true }]);
+    else if (seen && Date.now() - seen >= AWAY_NOTE_AFTER_MS && lines.length < FIRST_LOOK_LINES) {
       const note = this._awayNote(s, seen);
       if (note) lines.push([note, 5500, { away: true }]);
     }
-    const dreamt = s.house?.dream || stage.dream; // a show or song's, from the house
-    const dream = dreamt && DREAMS[dreamt.kind];
-    if (dream && lines.length < FIRST_LOOK_LINES && oncePerDay(`dream-${device}`)) {
-      lines.push([dream(dreamt, this._words(s)), 5000]);
-    }
-    const wish = stage.wish?.open !== false && !stage.wish?.granted && stage.wish && this._wishLine(stage.wish, s);
-    if (wish && lines.length < FIRST_LOOK_LINES && oncePerDay(`wish-${device}`)) lines.push([this._wishSaid(s, stage.wish, wish), 5000, { type: "wish" }]);
     // Last, and only if there is room: an adult on how it was raised, once a week.
     const raised = this._state(s, "sensor.life_stage")?.state === "adult" && UPBRINGING_LINES[stage.upbringing];
     if (raised && lines.length < FIRST_LOOK_LINES && upbringingDue(device)) lines.push([raised, 5000]);
@@ -5333,12 +5632,17 @@ class HatchPetCard extends HTMLElement {
     // Very last, flavour: today's visitor came and went with nobody here to see it
     // (its window over, the day's visit flag unset). Said once, and the flag used up,
     // so the visit can't also play; only with room, so it never pushes a line out.
-    const missed = this._visitorMissed(s);
+    // A day visitor on a day screen isn't told: it comes by live instead (_visitorLate).
+    const missed = !this._visitorLate(s) && this._visitorMissed(s);
     if (missed && lines.length < room && oncePerDay(`visit-${device}`, this._visitDay(s))) {
       const baby = this._babyStage(s) === "baby";
       lines.push([baby ? "hi hi! ♪" : missed.catchup || `a ${missed.name} came by today ♪`, 4500, { cls: FLAVOUR }]);
     }
     for (const [text, ms, opts] of lines.slice(0, FIRST_LOOK_LINES)) this._queue(s, text, ms, opts);
+    // A missed day visitor comes by right after this look's first line, not after them
+    // all (fresh-moment 3, review s2622 #7): _visitorTick starts it once the queue is down
+    // to the rest and the line on show is done.
+    s.lateVisit = this._visitorLate(s) ? { left: Math.max(Math.min(lines.length, FIRST_LOOK_LINES) - 1, 0), made: Date.now() } : null;
     s.giftAgain = false; // this look is the one a tab coming back would have had
     if (gift) this._giftTake(s);
   }
@@ -5349,7 +5653,7 @@ class HatchPetCard extends HTMLElement {
   // after being hidden at least AWAY_NOTE_AFTER_MS (owner Q1); never while watching.
 
   _giftDue(s) {
-    return !!s.mine?.gift && !sharedScreen() && !s.gifting;
+    return findsShown() && !!s.mine?.gift && !sharedScreen() && !s.gifting;
   }
 
   // The take: one virtual_pet/collect {gift}, and only a non-empty reply speaks (another
@@ -5358,7 +5662,7 @@ class HatchPetCard extends HTMLElement {
   // older server, or `shared`) is no gift.
   async _giftTake(s) {
     const entity = s.ids?.["sensor.life_stage"];
-    if (!entity || !this._hass) return;
+    if (!entity || !this._hass || !findsShown()) return;
     s.gifting = true;
     const epoch = s.giftEpoch = (s.giftEpoch || 0) + 1;
     let gift = null;
@@ -5496,6 +5800,7 @@ class HatchPetCard extends HTMLElement {
   // When this device last saw the pet (for the away note), every minute.
   _seen(s) {
     const now = Date.now();
+    if (this._resumeHeld()) return; // a tab back: its first look reads the old mark first (fresh-moment 1)
     if (s.seenAt && now - s.seenAt < 60000) return;
     s.seenAt = now;
     this._seenWrite(s.ids?.device, { seen: now }); // said stays as it is
@@ -5524,7 +5829,7 @@ class HatchPetCard extends HTMLElement {
       if (m.type === "care_miss" && miss) continue;
       if (m.type === "care_miss") miss = true;
       const text = this._catchUpLine(s, m);
-      if (text) out.push([text, m.at]);
+      if (text) out.push([text, m.at, m.type]);
     }
     return out.reverse();
   }
@@ -5534,7 +5839,7 @@ class HatchPetCard extends HTMLElement {
     if (m.type === "stage_changed") {
       if (m.stage === "baby" || !m.stage) return null; // hatching says hello
       const a = /^[aeiou]/.test(m.stage) ? "an" : "a";
-      return this._lines(s, "catchup_stage", `guess what? I'm ${a} ${m.stage} now!`).text;
+      return this._lines(s, "catchup_stage", `guess what! I'm ${a} ${m.stage} now!`).text;
     }
     if (m.type === "trait_learned") {
       return this._lines(s, "catchup_trait", `I learned something: ${String(m.trait).replaceAll("_", " ")}!`).text;
@@ -5549,6 +5854,17 @@ class HatchPetCard extends HTMLElement {
   // "while you were out, I napped, watched the rain and had a snack!": up to
   // three things from the moments and care since the device last looked.
   _awayNote(s, since) {
+    const bits = this._dayBits(s, since);
+    // A nap alone isn't news (fresh-moment 2, owner Q2): no note.
+    if (bits.every((b) => b === "napped")) return null;
+    const list = bits.slice(0, 2); // two at most: a bubble on a 330 px card
+    return `while you were out, I ${list.join(" and ")}!`;
+  }
+
+  // What the pet did since then, newest first, as bits ("watched TV"): its moments, the
+  // finds while shown, then care unless care is false (the away note's, and the
+  // evening's today line's, which leaves care out).
+  _dayBits(s, since, care = true) {
     const lastCare = this._state(s, "sensor.last_care")?.attributes || {};
     const after = (at) => new Date(at).getTime() > since;
     const bits = [];
@@ -5565,7 +5881,7 @@ class HatchPetCard extends HTMLElement {
     for (const m of [...(lastCare.moments || [])].reverse()) {
       if (!after(m.at)) continue;
       if (m.type === "found") {
-        if (found < FOUND_BITS && foundBit(this._worlds, m)) {
+        if (findsShown() && found < FOUND_BITS && foundBit(this._worlds, m)) {
           found++;
           add(foundBit(this._worlds, m));
         }
@@ -5573,12 +5889,46 @@ class HatchPetCard extends HTMLElement {
       }
       add(m.type === "weather" ? WEATHER_BITS[m.change] : MOMENT_BITS[m.type]);
     }
-    for (const e of [...(lastCare.log || [])].reverse()) {
+    for (const e of care ? [...(lastCare.log || [])].reverse() : []) {
       if (after(e.at) && (e.result === "ok" || e.result === "won" || e.result === "lost")) add(CARE_BITS[e.action]);
     }
-    if (!bits.length) return null;
-    const list = bits.slice(0, 2); // two at most: a bubble on a 330 px card
-    return `while you were out, I ${list.join(" and ")}!`;
+    return bits;
+  }
+
+  // The evening's line about the pet's own day (fresh-moment 4, owner Q4), a teen's or
+  // adult's: today's wish come true (unless this look's catch-up just told it), else a
+  // visitor seen here today, else the newest of today's moments as a bit (not a nap, no
+  // care), else its type's line. Names nobody and never an open wish, so a shared
+  // screen gets it too. null: nothing to say (the away note's turn).
+  _todayLine(s, wishTold = false) {
+    const life = this._state(s, "sensor.life_stage");
+    if (life?.state !== "teen" && life?.state !== "adult") return null;
+    const wish = life.attributes?.wish;
+    if (wish?.granted && !wishTold && TODAY_WISH[wish.kind]) return TODAY_WISH[wish.kind];
+    const seen = this._visitSeen(s);
+    if (seen) return `a ${seen} visited me today ♪`;
+    const midnight = new Date().setHours(0, 0, 0, 0);
+    const bit = this._dayBits(s, midnight, false) // a find's bit, once shown, only if the line fits
+      .find((b) => b !== "napped" && b !== "got my wish" && `today I ${b}! ♪`.length <= 40);
+    if (bit) return `today I ${bit}! ♪`;
+    const type = this._persona(s);
+    return type ? dailyPick(type.today, `${s.ids?.device}|today`) : null;
+  }
+
+  // The evening, for the today line: from TODAY_FROM_HOUR on this device's clock.
+  _evening() {
+    return new Date().getHours() >= TODAY_FROM_HOUR;
+  }
+
+  // The name of today's world visitor if it came by live on this device (for the today
+  // line), else null. One key per device, overwritten: nothing piles up.
+  _visitSeen(s) {
+    try {
+      const seen = JSON.parse(localStorage.getItem(`hatch-visitseen-${s.ids?.device}`) || "null");
+      return seen?.day === this._visitDay(s).toDateString() ? seen.name : null;
+    } catch (err) {
+      return null;
+    }
   }
 
   _hourHello(first) {
@@ -5646,7 +5996,7 @@ class HatchPetCard extends HTMLElement {
     // Not before the first look has run (it needs the creature and the
     // channel's first word): it says what's queued.
     if (!id || !s.species || !this._channelHeard(s) || !this._hass.user || sharedScreen() ||
-      Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS) return;
+      Date.now() - (s.visitedAt || 0) < VISIT_EVERY_MS || this._resumeHeld()) return;
     s.visitedAt = Date.now();
     // Only kept lines count: a waiting beat or flavour may yet be dropped.
     const queued = Math.min((s.queue || []).filter((q) => lineClass(q) >= KEPT).length, 6);
@@ -5755,9 +6105,20 @@ class HatchPetCard extends HTMLElement {
       else if (["tough", "not really"].includes(answer) && !isCalm) this._bondHearts(s);
       else this._animate(s, s.pet, "perk", 320);
       if (question.keep) this._keepAnswer(s, kind, answer, entity);
+      if (kind === "phone" && answer === "yes") {
+        this._setNotify(s, true).then((ok) => {
+          if (!ok && s.ids?.["sensor.life_stage"] === entity) this._write(s, "hm, that one slipped away ♪", 3500);
+        });
+      }
     });
     s.screen.append(box);
     s.askTimer = setTimeout(done, ASK_MS);
+    // The phone question is asked for good only once it's on screen (top10 1a): one
+    // dropped before this comes again another day. A websocket answer, off the bus.
+    if (kind === "phone") {
+      this._hass.callWS({ type: "virtual_pet/answer", entity_id: entity, question: "phone", answer: "shown" })
+        .catch(() => {}); // an older server, or a lost reply: it may ask again, once
+    }
   }
 
   // A websocket command, not a service call: answers stay off the event bus.
@@ -5887,7 +6248,9 @@ class HatchPetCard extends HTMLElement {
         say("ok, ok... ♪");
         break;
       case "became_sick": // feeling poorly (2b): said once, dropped if it's well by then
-        line(this._lines(s, "became_sick", "I don't feel so good...").text, 4500,
+        // From weight, the public moment keeps its cause (gaps-seams 2b): it says why.
+        line(m.cause === "weight" ? (this._babyStage(s) ? SICK_WEIGHT_BABY : pick(SICK_WEIGHT))
+          : this._lines(s, "became_sick", "I don't feel so good...").text, 4500,
           () => this._animate(s, s.pet, "droop", 2800),
           { write: true, still: () => this._isSick(s) });
         break;
@@ -5936,6 +6299,7 @@ class HatchPetCard extends HTMLElement {
       case "woke_up":
         if (m.how === "morning") {
           say("*yaaawn*", 4500, () => this._animate(s, s.pet, "stretch", 1100));
+          if (!capture) this._newLook([s]); // up for the day, seen live: the morning's look begins (fresh-moment 1)
         } else if (m.how === "night") {
           say("...so sleepy");
         }
@@ -5962,14 +6326,14 @@ class HatchPetCard extends HTMLElement {
         if (!m.title) break;
         // A long title gets the short lines, so the bubble leaves the pet in view.
         const title = short(m.title);
-        line(pick([`ooh, ${title}!`, `is this ${title}?`, `${title}! I love this one`]), 4500,
+        line(pick([`ooh, ${title}!`, `*watches ${title}*`, `${title}! I love this one`]), 4500,
           () => this._animate(s, s.pet, "perk", 320));
         break;
       }
       case "listening":
         if (!m.title) break;
         line(m.artist && Math.random() < 0.5
-          ? `♪ is this ${short(m.artist)}? ♪`
+          ? `♪ ooh, ${short(m.artist)}! ♪`
           : `♪ ${short(m.title)} ♪`);
         break;
       case "news": { // virtual_pet.share_news: a passing moment, like a TV title
@@ -5993,8 +6357,8 @@ class HatchPetCard extends HTMLElement {
         const t = degrees(m.temperature);
         const lines = {
           rain_started: ["ooh, it's raining!", "pitter patter...", "here comes the rain!"],
-          rain_stopped: ["the rain stopped!", "all dry again~"],
-          rainbow: ["the rain stopped... a rainbow?!", "sun after rain... rainbow?"],
+          rain_stopped: ["the rain stopped!", "all dry now~"],
+          rainbow: ["the rain stopped... a rainbow!", "ooh, a rainbow! so pretty"],
           snow_started: ["it's snowing!! ❄", "snowflakes!! ❄"],
           sun_out: ["the sun came out!", "ooh, sunshine!"],
           hot: t ? [`${t} out there! phew`, `so hot out... ${t}!`] : ["so hot out there!"],
@@ -6014,12 +6378,12 @@ class HatchPetCard extends HTMLElement {
         const hi = degrees(m.high);
         const lines = {
           storm: today ? ["thunder later... eek"] : ["storms tomorrow... eek"],
-          snow: today ? ["snow today?!", "it might snow today!!"] : ["snow tomorrow!!", "ooh, snow tomorrow?!"],
+          snow: today ? ["ooh, snow today!", "it might snow today!!"] : ["snow tomorrow!!", "snow tomorrow! I can't wait ❄"],
           hot: hi ? [today ? `hot one today: ${hi}!` : `${hi} tomorrow! phew`] : [today ? "hot one today!" : "hot tomorrow, phew"],
           cold: hi ? [today ? `cold one today: ${hi}, brr` : `brr, only ${hi} tomorrow`] : [today ? "cold one today, brr" : "cold tomorrow, brr"],
           warmer: hi ? [today ? `warmer today: ${hi}!` : `warmer tomorrow: ${hi}!`] : [today ? "warmer today!" : "warmer tomorrow!"],
           colder: hi ? [today ? `colder today, only ${hi}` : `colder tomorrow... ${hi}`] : [today ? "colder today..." : "colder tomorrow..."],
-          rain: today ? ["rain later today...", "rain's coming later"] : ["rain tomorrow... blanket day?"],
+          rain: today ? ["rain later today...", "rain's coming later"] : ["rain tomorrow... a blanket day ♪"],
           sunny: today ? ["sunny today! yay"] : ["sun tomorrow! yay"],
         }[m.kind];
         if (!lines) break;
@@ -6041,7 +6405,7 @@ class HatchPetCard extends HTMLElement {
         if (sharedScreen()) break; // nothing personal on a shared screen
         const game = GAMES.find((g) => g.key === m.favourite);
         line(game ? `${game.label} is our game now! ♥`
-          : m.nickname ? `can I call you ${m.nickname}? ♥`
+          : m.nickname ? `I'll call you ${m.nickname} now ♥`
           : m.level >= BOND.max ? "you're my very best friend ♥"
           : m.level === BOND.max - 1 ? "you make every day better ♥"
           : m.level >= BOND.hearts ? "I'm always so happy when you're here ♥"
@@ -6069,7 +6433,8 @@ class HatchPetCard extends HTMLElement {
       case "bond_record": { // only its person
         if (sharedScreen()) break; // nothing personal on a shared screen
         const game = GAMES.find((g) => g.key === m.game);
-        line(`new best at ${game ? game.label : "a game"}! ${m.wins}/5 ♥`, 4500, () => this._sparkle(s), { perk: true });
+        const best = m.game === "dig" ? berries(m.wins) : `${m.wins}/5`; // the dig's best is berries banked
+        line(`new best at ${game ? game.label : "a game"}! ${best} ♥`, 4500, () => this._sparkle(s), { perk: true });
         break;
       }
       case "tucked_in": {
@@ -6093,7 +6458,7 @@ class HatchPetCard extends HTMLElement {
         }
         break;
       case "tv_off_late":
-        say(pick(["*yawn* bedtime?", "all done? sleepy now..."]));
+        say(pick(["*yawn* bedtime soon...", "all done! sleepy now..."]));
         break;
       case "first_snow":
         speak("the first snow!! ❄", 4500, () => {
@@ -6209,6 +6574,10 @@ class HatchPetCard extends HTMLElement {
       if (candy) {
         said = [pick(season.snackLines || ["a treat! ♪"]), 2500];
       }
+      const weight = Number.parseFloat(this._state(s, "sensor.weight")?.state);
+      if (entry.action === "snack" && isHeavy(Number.isFinite(weight) ? weight : null) && Math.random() < 0.5) {
+        said = [pick(HEAVY_SNACK), 3000];
+      }
       const prop = candy || s.species?.props?.[key] || FALLBACK_PROPS[key];
       if (prop) {
         this._show(s, s.prop, prop);
@@ -6226,6 +6595,10 @@ class HatchPetCard extends HTMLElement {
   }
 
   _renderStatus(s, log) {
+    if (s.everyWorld) {
+      this._renderEveryWorld(s);
+      return;
+    }
     if (s.finds) {
       this._renderFinds(s);
       return;
@@ -6267,12 +6640,6 @@ class HatchPetCard extends HTMLElement {
         .filter(([t, p]) => !held.has(t) && FLAIR[t] && p > 0.05 && p < 1)
         .sort((a, b) => b[1] - a[1])[0]
       : null;
-    let bestCatch = 0;
-    try {
-      bestCatch = this._config?.experimental_catch ? Number(localStorage.getItem(BEST_CATCH_KEY) || 0) : 0;
-    } catch (err) {
-      // no storage: no best score to show
-    }
     // The viewer's own bond, in five hearts (a half heart a level).
     const bond = this._bond(s);
     const bondHearts = (level) => {
@@ -6283,6 +6650,18 @@ class HatchPetCard extends HTMLElement {
         out += img(left >= 2 ? "full" : left === 1 ? "half" : "empty");
       }
       return `<span class="hearts" role="img" aria-label="bond level ${level} of ${BOND.max}">${out}</span>`;
+    };
+    // The social meter (top10 §6): the pet's week beyond the house, five hearts in
+    // halves; hidden at 0 and from an older server.
+    const social = Number(stageAttrs.social_level) || 0;
+    const socialHearts = (level) => {
+      const img = (n) => `<img src="${BASE}/ui/stat_heart_${n}.png?v=${VERSION}" alt="">`;
+      let out = "";
+      for (let i = 0; i < SOCIAL_MAX / 2; i++) {
+        const left = level - i * 2;
+        out += img(left >= 2 ? "full" : left === 1 ? "half" : "empty");
+      }
+      return `<span class="hearts" role="img" aria-label="friends this week: ${level} of ${SOCIAL_MAX}">${out}</span>`;
     };
     const ic = (n) => pixelIcon(n, 18);
     const bar = (v) => v === null ? "–"
@@ -6298,6 +6677,7 @@ class HatchPetCard extends HTMLElement {
     // The creature picked for the next egg (if any), and its world if that changes.
     const nextEgg = [stageAttrs.next_egg?.toLowerCase(), stageAttrs.next_world && `in ${stageAttrs.next_world}`]
       .filter(Boolean).join(" ");
+    const nextStage = growsUp(this._state(s, "sensor.life_stage")?.state, stageAttrs.age_days);
     // What it would like most, above today's wish; none asleep, away or in the egg.
     const moodNow = this._state(s, "sensor.mood");
     const wantKey = moodNow?.attributes.reason_key;
@@ -6305,7 +6685,12 @@ class HatchPetCard extends HTMLElement {
       : (moodNow?.attributes.requests || []).find((r) => r !== "lay_egg" && WANT_WORDS[r]
         && this._state(s, `button.${r}`));
     const want = s.asleep || moodNow?.state === "away" || isEgg ? null
-      : (String(wantKey).startsWith("call_") && WANT_WORDS[wantKey]) || WANT_WORDS[wantsNow] || null;
+      : (String(wantKey).startsWith("call_") && WANT_WORDS[wantKey]) || WANT_WORDS[wantsNow]
+        || (isHeavy(value("weight")) ? "a game, to run it off" : null);
+    // How care is going, beside the upbringing it shapes (top10 4a; was in settings).
+    const careMisses = this._state(s, "sensor.care_misses");
+    const misses = row(null, "missed calls", `<span>${Number.parseFloat(careMisses?.state) || 0}</span>`)
+      + row(null, "ignored whines", `<span>${careMisses?.attributes.discipline_misses ?? 0}</span>`);
     // Today's wish comes first of the rest: it changes daily, the rest is there every day.
     const html = `
       <div class="shead">${this._gearButton()}</div>
@@ -6313,6 +6698,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
         ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
+      ${social > 0 && !isEgg ? row(null, "friends", socialHearts(social)) : ""}
       ${row("icon_feed", "hunger", hearts(value("hunger"), FEED_FULL_AT))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}
@@ -6320,11 +6706,12 @@ class HatchPetCard extends HTMLElement {
       ${row("stat_discipline", "discipline", bar(value("discipline")))}
       ${row(null, "weight", `<span>${weightLabel(value("weight"))}</span>`)}
       ${row(null, traits.length > cap ? "traits" : `traits ${traits.length}/${cap}`, `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
-      ${bestCatch ? row(null, "best catch", `<span>${bestCatch}/${CATCH.rounds}</span>`) : ""}
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
         `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
+      ${isEgg ? "" : misses}
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
+      ${nextStage ? row(null, nextStage[0], `<span>${nextStage[1]}</span>`) : ""}
       ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>
@@ -6354,18 +6741,25 @@ class HatchPetCard extends HTMLElement {
     const shellOptions = this._state(s, "sensor.life_stage")?.attributes.shell_finish_options;
     const shellName = escape(this._shellName(s, this._shellChoice(s)));
     const shellSwatch = `<span class="sw" style="background: ${finishSwatch(this._shellKey(s), s.world.shell?.color || "#e8834a")}"></span>`;
-    // The pet's group always renders: misses and whines (read-only, also on a shared screen),
-    // then the shell where the server offers it.
-    const missRows = row(null, "misses", `<span>${Number.parseFloat(this._state(s, "sensor.care_misses")?.state) || 0}</span>`)
-      + row(null, "whines", `<span>${this._state(s, "sensor.care_misses")?.attributes.discipline_misses ?? 0}</span>`);
-    const shellRows = sharedScreen()
-      ? `<div class="sec">for the pet</div>
-      ${missRows}
-      ${Array.isArray(shellOptions) ? row(null, "shell", `<span class="shellro">${shellSwatch}${shellName}</span>`) + `
+    // What the house shows it (top10 2b): the kinds the server lists, never an
+    // entity; everyone sees it, and an admin gets a link to the options.
+    const senses = this._state(s, "sensor.life_stage")?.attributes.senses;
+    const notices = !Array.isArray(senses) ? ""
+      : row(null, "notices", `<span class="senses">${senses.length ? senses.map(escape).join(" · ") : "just the clock"}</span>`)
+        + (this._hass.user?.is_admin && !sharedScreen() ? `<button class="wlink connect">connect more ›</button>` : "");
+    // The pet's group: what it notices, then the shell, where the server offers it
+    // (read-only on a shared screen). Misses and whines moved to the status page
+    // (top10 4a), so an older server's sheet has no pet group at all.
+    const hasShell = Array.isArray(shellOptions);
+    const shellRows = !hasShell && !notices ? ""
+      : sharedScreen()
+        ? `<div class="sec">for the pet</div>
+      ${notices}
+      ${hasShell ? `${row(null, "shell", `<span class="shellro">${shellSwatch}${shellName}</span>`)}
       <div class="shellnote">ask a grown-up to change it</div>` : ""}`
-      : `<div class="sec">for ${escape(this._linkName(s))}</div>
-      ${missRows}
-      ${Array.isArray(shellOptions) ? row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`) : ""}`;
+        : `<div class="sec">for ${escape(this._linkName(s))}</div>
+      ${notices}
+      ${hasShell ? row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`) : ""}`;
     // Who each part changes: the pet (everyone), the viewer (follows their login),
     // or this browser.
     const html = `
@@ -6385,7 +6779,9 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "holiday names", `<span><button class="bell named" aria-label="holiday names" aria-pressed="${namedHolidays()}">${namedHolidays() ? "on" : "off"}</button></span>`)}
       ${row(null, "mono screen", `<span><button class="bell mono" aria-label="mono screen: ${monoOn() ? "on" : "off"}, change" aria-pressed="${monoOn()}">${monoOn() ? "on" : "off"}</button></span>`)}
+      ${row(null, "big text", `<span><button class="bell bigtext" aria-label="big text: larger words on this screen's pages" aria-pressed="${bigOn()}">${bigOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "shared screen", `<span><button class="bell shared" aria-label="shared screen: nothing personal on this device" aria-pressed="${sharedScreen()}">${sharedScreen() ? "on" : "off"}</button></span>`)}
+      <div class="shellnote sharednote">a family tablet? give it its own login, and we'll make friends ♥</div>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     s.status.querySelector(".sback").addEventListener("click", (e) => {
@@ -6406,6 +6802,13 @@ class HatchPetCard extends HTMLElement {
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
       s.status.querySelector(".pback")?.focus({ preventScroll: true });
+    });
+    // An admin's way to the pet's options (Settings → Devices & services → Virtual Pet).
+    s.status.querySelector(".connect")?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      history.pushState(null, "", "/config/integrations/integration/virtual_pet");
+      window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
     });
     s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -6494,6 +6897,21 @@ class HatchPetCard extends HTMLElement {
       }
       this._card.classList.toggle("mono", on);
       window.dispatchEvent(new CustomEvent(MONO_EVENT)); // any other card on this page
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+    });
+    s.status.querySelector(".bell.bigtext").addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(e.currentTarget);
+      const on = !bigOn();
+      try {
+        if (on) localStorage.setItem(BIG_KEY, "on");
+        else localStorage.removeItem(BIG_KEY);
+      } catch (err) {
+        this._statusMessage(s, "This browser can't save that setting.");
+        return;
+      }
+      this._card.classList.toggle("bigtext", on);
+      window.dispatchEvent(new CustomEvent(MONO_EVENT)); // any other card on this page (_onMono)
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     });
     s.status.querySelector(".bell.bdayphone")?.addEventListener("click", (e) => {
@@ -6866,7 +7284,7 @@ class HatchPetCard extends HTMLElement {
   // Phone notifications are per user: this only changes them for whoever is signed in.
   async _setNotify(s, enabled) {
     const id = s.ids?.["sensor.life_stage"];
-    if (!id) return;
+    if (!id) return false;
     const button = s.status.querySelector(".bell.notify");
     if (button) {
       button.classList.add("pending");
@@ -6878,6 +7296,7 @@ class HatchPetCard extends HTMLElement {
     try {
       await this._callOwn("notify_me", { entity_id: id, enabled });
       this._statusMessage(s, enabled ? "I'll ping your phone!" : "Phone pings off.");
+      return true;
     } catch (err) {
       if (s.mine) s.mine.notify_me = !enabled;
       if (button) {
@@ -6885,6 +7304,7 @@ class HatchPetCard extends HTMLElement {
         button.textContent = !enabled ? "on" : "off";
       }
       this._statusMessage(s, "That didn't work. Try again.");
+      return false;
     } finally {
       button?.classList.remove("pending");
     }
@@ -6988,13 +7408,15 @@ class HatchPetCard extends HTMLElement {
       <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
         <span>gen ${stage.generation || 1}</span></div>
       <div class="jgrid">${tiles.join("")}</div>
+      <button class="wlink">every world ›</button>
       ${this._photoRow(s)}
       <div class="jlist">${olderLink}<div class="jmore"></div>${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
-      <div class="jfoot"><button class="jlink">‹ status</button><button class="flink">finds ›</button></div>
+      <div class="jfoot"><button class="jlink">‹ status</button><button class="flink">${findsShown() ? "finds" : "visitors"} ›</button></div>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
     this._journalLink(s, false);
     this._findsLink(s, true);
+    this._everyWorldLink(s, true);
     const showOlder = () => {
       s.status.querySelector(".jmore").innerHTML = older.map(line).join("");
       s.status.querySelector(".jolder")?.remove();
@@ -7244,6 +7666,55 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
+  // --- Every world (top10 8a) ---------------------------------------------------
+  // Each world's creatures, one row a world: drawn and named if a pet on this card has
+  // raised it (any world: a device that changed world keeps its `raised`), "???" if
+  // not, as in the journal. Nothing locked, nothing counted (owner Q6), no new state.
+
+  // "every world ›" under the journal's grid (open) or "‹ journal" on the page (back).
+  _everyWorldLink(s, open) {
+    s.status.querySelector(".wlink")?.addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      this._tapped(e.currentTarget);
+      s.everyWorld = open;
+      s.journal = !open;
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      s.status.scrollTop = 0; // a new view starts at its top
+      s.status.querySelector(open ? ".wlink" : ".jlink")?.focus({ preventScroll: true });
+    });
+  }
+
+  async _renderEveryWorld(s) {
+    const foot = `<div class="jfoot"><button class="wlink">‹ journal</button></div>`;
+    const loading = `<div class="jhead"><span>every world</span><span>opening…</span></div>${foot}`;
+    if (this._setStatus(s, loading)) this._everyWorldLink(s, false);
+    const raised = new Set();
+    for (const other of this._slides) (this._state(other, "sensor.life_stage")?.attributes.raised || []).forEach((r) => raised.add(r));
+    const worlds = Object.entries(this._worlds || {});
+    // A creature whose species.json won't load isn't ready: no tile (never a broken image).
+    const names = {};
+    await Promise.all(worlds.flatMap(([, w]) => (w.roster || []).map((id) => loadJson(`sprites/${id}/species.json`)
+      .then((d) => { names[id] = d.name || id; }).catch(() => {}))));
+    if (!s.everyWorld) return; // closed (or back to the journal) while the names loaded
+    const rows = worlds.map(([, w]) => {
+      const tiles = (w.roster || []).filter((id) => names[id]).map((id) => {
+        const known = raised.has(id);
+        return `<div class="jtile${known ? "" : " locked"}">` +
+          `<img src="${BASE}/sprites/${id}/child_content_1.png?v=${VERSION}" alt="">` +
+          `<span>${known ? escape(names[id]).toLowerCase() : "???"}</span></div>`;
+      });
+      return tiles.length ? `<div class="sec">${escape(w.name || "")}</div><div class="jgrid">${tiles.join("")}</div>` : "";
+    });
+    const html = `
+      <div class="jhead"><span>every world</span></div>
+      ${rows.join("")}
+      ${foot}
+      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
+    if (!this._setStatus(s, html)) return;
+    this._everyWorldLink(s, false);
+    s.status.querySelectorAll(".sec, .jhead").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
+  }
+
   // --- The finds page (visitors v2 §4, V-D) --------------------------------------
   // This world's visitors and finds, read on open from virtual_pet/collection (never a
   // sensor) and kept only while the page is: never in localStorage. The viewer's gifts
@@ -7304,7 +7775,8 @@ class HatchPetCard extends HTMLElement {
     if (!data && !s.findsLoad) this._loadFinds(s); // dropped meanwhile (a shared-screen flip)
     const key = data?.reply?.world || s.worldKey;
     const world = this._worlds?.[key];
-    const head = `finds · ${escape(world?.name || this._worldName(s))}`;
+    // Named by what it shows: visitors only while FINDS_SHOWN is off (top10 7a).
+    const head = `${findsShown() ? "finds" : "visitors"} · ${escape(world?.name || this._worldName(s))}`;
     const foot = `<button class="flink">‹ journal</button>`;
     let html;
     if (!data) {
@@ -7324,7 +7796,7 @@ class HatchPetCard extends HTMLElement {
       html = `
       <div class="jhead"><span>${head}</span></div>
       <div class="fgrid">${tiles.filter((t) => t.kind === "visitor").map(tile).join("")}</div>
-      <div class="fgrid">${tiles.filter((t) => t.kind === "find").map(tile).join("")}</div>
+      ${findsShown() ? `<div class="fgrid">${tiles.filter((t) => t.kind === "find").map(tile).join("")}</div>` : ""}
       ${foot}
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     }
@@ -7682,7 +8154,7 @@ class HatchPetCard extends HTMLElement {
 
   _startGame(s, button) {
     this._tapped(button, s);
-    if (s.game) this._quitGame(s, null); // Play mid-game starts over (Catch's ball goes too)
+    if (s.game) this._quitGame(s, null); // Play mid-game starts over
     this._clearAsk(s); // a game takes the screen
     const energy = Number.parseFloat(this._state(s, "sensor.energy")?.state);
     const refusal = s.asleep ? REFUSALS.asleep : energy < 15 ? REFUSALS.too_tired : null;
@@ -7692,12 +8164,13 @@ class HatchPetCard extends HTMLElement {
     }
     if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
     s.screen.querySelector(".flair")?.remove();
-    const games = this._games();
+    const games = GAMES;
     if (games.length === 1) {
       this._pickGame(s, games[0].key);
       return;
     }
-    s.game = { picking: true, prompt: this._card.classList.contains("compact") ? "pick a game!" : "what shall we play?" };
+    // The long prompt wraps to two lines (over the picker) on a slide under 300 px.
+    s.game = { picking: true, prompt: this._slideW < 300 ? "pick a game!" : "what shall we play?" };
     // Built each time: the card's options decide which games are offered.
     s.gameBox.querySelector(".gpick").innerHTML = games.map((g) =>
       `<button data-game="${g.key}"><span class="gi" aria-hidden="true">${gameIcon(g.key)}</span>` +
@@ -7705,6 +8178,7 @@ class HatchPetCard extends HTMLElement {
     this._gameView(s, "pick");
     // A narrow card has room for one short line beside the close button.
     this._write(s, s.game.prompt, 60000);
+    this._fitPicker(s); // measured with the prompt in the bubble
     let last = null;
     try {
       last = localStorage.getItem(LAST_GAME_KEY);
@@ -7716,26 +8190,52 @@ class HatchPetCard extends HTMLElement {
     pick.focus({ preventScroll: true });
   }
 
-  // The games the play button offers: Catch only with experimental_catch.
-  _games() {
-    return this._config?.experimental_catch ? [...GAMES, CATCH_GAME] : GAMES;
+  // The picker sits under the close button (and the one-line prompt beside
+  // it), down to the screen's foot. A column of games that doesn't fit there
+  // wraps into rows (.wrap), so no width from 300 to 420 hides or covers one.
+  _fitPicker(s) {
+    const pick = s.gameBox.querySelector(".gpick");
+    const gx = s.gameBox.querySelector(".gx");
+    if (!pick || !gx || pick.hidden) return;
+    const box = s.gameBox.getBoundingClientRect();
+    if (!box.height) return;
+    pick.classList.remove("wrap", "tight");
+    const buttons = [...pick.querySelectorAll("button")];
+    // First the plain column where it has always been, if it covers nothing: not
+    // the close button, not the prompt, and none cut off at the foot.
+    pick.style.top = pick.style.bottom = "";
+    const hit = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+    const keep = [gx, s.bubble].filter((el) => el && !el.hidden).map((el) => el.getBoundingClientRect())
+      .filter((r) => r.height);
+    if (buttons.every((b) => {
+      const r = b.getBoundingClientRect();
+      return r.bottom + 4 <= box.bottom && !keep.some((k) => hit(r, k));
+    })) return;
+    pick.style.top = `${Math.round(gx.getBoundingClientRect().bottom - box.top + 6)}px`;
+    pick.style.bottom = "2%";
+    // The games' height, from the first one's top to the last one's foot, + the press shadow.
+    const need = () => Math.max(...buttons.map((b) => b.offsetTop + b.offsetHeight)) -
+      Math.min(...buttons.map((b) => b.offsetTop)) + 4;
+    if (need() > pick.clientHeight) pick.classList.add("wrap");
+    if (need() > pick.clientHeight) pick.classList.add("tight");
   }
 
   // Show the picker ("pick") or a game's buttons (its key) in the game overlay.
   _gameView(s, view) {
     const box = s.gameBox;
     box.hidden = false;
+    box.classList.toggle("dig", view === "dig");
     box.querySelector(".gpick").hidden = view !== "pick";
-    s.gameNum.hidden = view !== "higher_lower";
+    s.gameNum.hidden = view !== "higher_lower" && view !== "dig";
     const [gl, gr] = [box.querySelector(".gl"), box.querySelector(".gr")];
     gl.hidden = gr.hidden = view === "pick";
     s.gameScore.hidden = view === "pick";
     const hl = view === "higher_lower";
-    gl.innerHTML = hl ? '<span class="hl">lo</span>' : icon("prev", 22);
-    gr.innerHTML = hl ? '<span class="hl">hi</span>' : icon("next", 22);
-    const katch = view === "catch";
-    gl.setAttribute("aria-label", hl ? "Guess lower" : katch ? "Catch it on the left" : "Guess left");
-    gr.setAttribute("aria-label", hl ? "Guess higher" : katch ? "Catch it on the right" : "Guess right");
+    const dig = view === "dig";
+    gl.innerHTML = hl ? '<span class="hl">lo</span>' : dig ? '<span class="hl">keep</span>' : icon("prev", 22);
+    gr.innerHTML = hl ? '<span class="hl">hi</span>' : dig ? '<span class="hl">dig</span>' : icon("next", 22);
+    gl.setAttribute("aria-label", hl ? "Guess lower" : dig ? "Keep the basket" : "Guess left");
+    gr.setAttribute("aria-label", hl ? "Guess higher" : dig ? "Dig a leaf" : "Guess right");
     box.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
   }
 
@@ -7751,12 +8251,6 @@ class HatchPetCard extends HTMLElement {
     this._gameView(s, kind);
     this._reactFrames(s, "ready", { inGame: true }); // acts.ready, if the species has it
     s.gameScore.textContent = "round 1/5";
-    if (kind === "catch") {
-      this._write(s, (g.prompt = "catch it! tap its side as it reaches me"), 60000);
-      s.gameBox.querySelector(".gl").focus({ preventScroll: true });
-      this._gameLater(s, g, 900, () => this._catchRound(s));
-      return;
-    }
     // The server keeps the game: a start while one of this kind runs carries
     // on (same round, wins and number), so the card adopts what it replies.
     g.busy = true;
@@ -7771,7 +8265,16 @@ class HatchPetCard extends HTMLElement {
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
     s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
     // The prompt is kept on the game: a care line said over it gives way to it again.
-    if (kind === "left_right") {
+    if (kind === "dig") {
+      // A fresh pile, or a parked dig carried on: the same round, bank and basket.
+      g.basket = info.basket;
+      this._digShow(s, info);
+      this._write(s, (g.prompt = "dig or keep?"));
+      s.sayUntil = Date.now() + 60000;
+      // Keep is disabled on an empty basket: start on dig then.
+      s.gameBox.querySelector(info.basket ? ".gl" : ".gr").focus({ preventScroll: true });
+      return;
+    } else if (kind === "left_right") {
       this._write(s, (g.prompt = "left or right? guess where I'll go!"));
     } else {
       // Higher or Lower shows its number before the next guess.
@@ -7807,7 +8310,7 @@ class HatchPetCard extends HTMLElement {
     let info;
     try {
       const res = await this._hass.callService(
-        "virtual_pet", "play_game", { entity_id: id, ...data }, undefined, false, true);
+        "virtual_pet", "play_game", { entity_id: id, ...data, ...digShared(data.game) }, undefined, false, true);
       info = res?.response;
     } catch (err) {
       if (s.game === game) this._endGame(s, "hmm, that didn't work");
@@ -7818,7 +8321,11 @@ class HatchPetCard extends HTMLElement {
       // A known refusal is said once, by _react, from the care log; only an
       // unknown result gets a line here. no_game is never logged (a Higher or
       // Lower game the server dropped for idling): said here.
-      this._endGame(s, info?.result === "no_game" ? REFUSALS.no_game : REFUSALS[info?.result] ? null : "not now");
+      // A dig: keep on an empty basket means another screen kept it first; no
+      // game while theirs is parked means another screen put it aside.
+      this._endGame(s, info?.result === "empty_basket" ? "oh! someone else is playing with me"
+        : info?.result === "no_game" && info.parked ? "maybe later!"
+        : info?.result === "no_game" ? REFUSALS.no_game : REFUSALS[info?.result] ? null : "not now");
       return null;
     }
     return info;
@@ -7828,12 +8335,12 @@ class HatchPetCard extends HTMLElement {
     if (!s.game || s.game.busy || !s.game.kind) return;
     this._tapped(s.gameBox.querySelector(side === "left" ? ".gl" : ".gr"), s);
     const kind = s.game.kind;
-    if (kind === "catch") {
-      this._catchTap(s, side);
-      return;
-    }
     const game = GAMES.find((g) => g.key === kind);
     const guess = game.guesses[side === "left" ? 0 : 1];
+    if (kind === "dig") {
+      await this._digTap(s, guess); // a tap isn't a round: its own checks, not the ones below
+      return;
+    }
     const g = s.game;
     g.busy = true;
     s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
@@ -7871,13 +8378,86 @@ class HatchPetCard extends HTMLElement {
       if (info.done) {
         if (info.won) this._chirp(s, "win");
         this._endGame(s, info.won ? `${info.wins}/${info.rounds}! you win ♪` :
-          `${info.wins}/${info.rounds}... again sometime?`);
+          `${info.wins}/${info.rounds}. let's play another time ♪`);
         return;
       }
       g.busy = false;
       s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "false"); });
       s.gameScore.textContent = `round ${info.round + 1}/${info.rounds} · ${info.wins} right`;
-      this._write(s, (g.prompt = kind === "higher_lower" ? "higher or lower?" : "again! left or right?"));
+      this._write(s, (g.prompt = kind === "higher_lower" ? "higher or lower?" : "one more! left or right?"));
+    });
+  }
+
+  // Berry dig: the pile's leaves left in .gnum, the bank and basket on the
+  // score line, keep only with something in the basket.
+  _digShow(s, info) {
+    this._showNumber(s, info.leaves);
+    s.gameNum.setAttribute("aria-label", `${info.leaves} leaves left`);
+    s.gameScore.classList.add("two");
+    s.gameScore.textContent = `round ${Math.min(info.round + 1, info.rounds)}/${info.rounds}\n` +
+      `${info.wins} banked · basket ${info.basket}`;
+    s.gameBox.querySelector(".gl").setAttribute("aria-disabled", info.basket ? "false" : "true");
+    s.gameBox.querySelector(".gr").setAttribute("aria-disabled", "false");
+  }
+
+  // One tap of a Berry dig. A dig that finds a berry doesn't finish a round, so
+  // the reply must follow from the card's own game: a berry is the same round
+  // and bank with one more in the basket; a bee is the next round, the same
+  // bank; a keep (or the sixth berry) is the next round with the basket banked.
+  // Anything else means someone else is playing the same server game.
+  async _digTap(s, guess) {
+    const g = s.game;
+    if (guess === "keep" && !g.basket) return; // nothing to keep: the server would refuse it
+    g.busy = true;
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+    s.gameScore.textContent = "thinking…";
+    const info = await this._playCall(s, { game: "dig", guess });
+    if (!info) return;
+    const next = info.round === g.round + 1 && info.basket === 0;
+    const fits = info.found === "berry" && !info.round_over
+      ? info.round === g.round && info.wins === g.wins && info.basket === g.basket + 1
+      : info.found === "bee" ? next && info.wins === g.wins
+      : info.found === "kept" ? next && info.wins === g.wins + g.basket
+      : info.found === "berry" && next && info.wins === g.wins + g.basket + 1;
+    if (!fits) {
+      this._endGame(s, "oh! someone else is playing with me");
+      return;
+    }
+    g.round = info.round;
+    g.wins = info.wins;
+    g.basket = info.basket;
+    g.lastAt = Date.now();
+    this._digShow(s, info);
+    s.gameBox.querySelectorAll(".gl, .gr").forEach((b) => { b.setAttribute("aria-disabled", "true"); });
+    this._animate(s, s.gameNum, "flip", 300);
+    if (info.found === "bee") {
+      s.propEl.src = BEE_FRAMES[0];
+      s.propEl.style.left = "10%"; // beside the pile, clear of the score and the buttons
+      s.propEl.style.bottom = "40%";
+      s.propEl.style.transform = "";
+      s.propEl.hidden = false;
+      this._write(s, "bzz! the berries rolled away");
+    } else if (info.round_over) {
+      this._animate(s, s.pet, "perk", 300);
+      this._write(s, "safe in the basket ♪");
+    } else {
+      this._write(s, "a berry!");
+    }
+    this._gameLater(s, g, info.round_over ? 900 : 300, () => {
+      s.propEl.hidden = true;
+      if (info.done) {
+        if (info.won) this._chirp(s, "win");
+        this._endGame(s, info.won ? `${info.wins} berries! you win ♪` : `${berries(info.wins)}. let's dig another time ♪`);
+        return;
+      }
+      g.busy = false;
+      this._digShow(s, info);
+      this._write(s, (g.prompt = "dig or keep?"));
+      // Keep is disabled on an empty basket: focus on it moves to dig.
+      const gl = s.gameBox.querySelector(".gl");
+      if (!g.basket && this.shadowRoot?.activeElement === gl) {
+        s.gameBox.querySelector(".gr").focus({ preventScroll: true });
+      }
     });
   }
 
@@ -8011,7 +8591,7 @@ class HatchPetCard extends HTMLElement {
     const [lo, hi] = SEASON_COSTUME_MS;
     s.nextCostume = now + lo + Math.random() * (hi - lo);
     const fresh = season.costumes && oncePerDay(`costume-${season.key}-${s.ids?.device}`);
-    const line = fresh ? { text: "new costume today! do you like it?", baby: false }
+    const line = fresh ? { text: "new costume today! look at me ♪", baby: false }
       : this._lines(s, `season.${season.key}`, seasonLine(season, today));
     this._costume(s, season, line.text, !line.baby);
     if (fresh && season.chirp) this._chirp(s, season.chirp);
@@ -8306,7 +8886,7 @@ class HatchPetCard extends HTMLElement {
   _visitorDue(s, date) {
     const list = visitorList(s.world);
     if (!list.length) return null;
-    const dark = s.screen.classList.contains("night") || s.screen.classList.contains("dim");
+    const dark = this._screenDark(s);
     const plan = this._visitPlan(s);
     if (plan !== undefined) {
       const v = plan && list.find((x) => x.id === plan.id);
@@ -8321,6 +8901,40 @@ class HatchPetCard extends HTMLElement {
     if (!v || (v.hours === "night") !== dark) return null;
     const start = v.hours === "night" ? d.night : d.day;
     return date.getHours() >= start && date.getHours() < start + 3 ? v : null;
+  }
+
+  // A first look's missed day visitor (s.lateVisit): once its first line is said and done,
+  // it comes by, the look's other lines going on (its greet is a move, no line, while
+  // they wait). Not over a link, game, call, the basket or a busy pet; given up after
+  // LATE_VISIT_MS, when the usual check may still bring it. True: it started.
+  _lateVisitTick(s, now) {
+    const late = s.lateVisit;
+    if (now - late.made > LATE_VISIT_MS) {
+      s.lateVisit = null;
+      return false;
+    }
+    if ((s.queue?.length || 0) > late.left) return false; // the first line not said yet
+    late.after ??= Math.max(s.sayUntil || 0, now); // the line on show is done
+    if (now < late.after || s !== this._slides[this._index] || this._booting || this._link || s.linking ||
+      s.power || s.calling || s.away || this._basketShows(s) || !this._freeBody(s)) return false;
+    s.lateVisit = null;
+    const v = this._visitorLate(s);
+    if (!v || !oncePerDay(`visit-${s.ids?.device}`, this._visitDay(s))) return false;
+    this._visitorStart(s, v);
+    return true;
+  }
+
+  // A night (or dim) screen: night visitors only.
+  _screenDark(s) {
+    return s.screen.classList.contains("night") || s.screen.classList.contains("dim");
+  }
+
+  // A day visitor whose window is over with nobody here to see it (the day's flag, used
+  // by the caller, unset on this device): it comes by live at a daytime look instead of
+  // the catch-up line (fresh-moment 3, owner Q3). Never on a dark screen (Q7).
+  _visitorLate(s) {
+    const v = this._visitorMissed(s);
+    return v && v.hours !== "night" && !this._screenDark(s) ? v : null;
   }
 
   // Today's visitor if its window is over (the first look's catch-up line).
@@ -8340,7 +8954,7 @@ class HatchPetCard extends HTMLElement {
   // basket on show.
   _visitorFree(s, now = Date.now()) {
     return s === this._slides[this._index] && !this._booting && !!s.lookedFirst && !s.visitor &&
-      !this._link && !s.linking && !s.power && !s.calling && !s.away && this._linkFree(s) &&
+      !this._link && !s.linking && !s.power && !s.calling && !s.away && (this._linkFree(s) || this._askOnly(s)) &&
       !this._basketShows(s) && // the basket's floor line: the visitor waits (review C7)
       now - (this._visitShown?.s === s ? this._visitShown.at : now) >= VISIT_SHOWN_MS &&
       now - (this._linkEndedAt ?? -Infinity) >= VISIT_AFTER_MS;
@@ -8362,10 +8976,11 @@ class HatchPetCard extends HTMLElement {
       if (!this._visitorLive(s)) this._visitorEnd(s);
       return;
     }
+    if (s.lateVisit && this._lateVisitTick(s, now)) return;
     if (now < (s.nextVisitCheck || 0)) return;
     s.nextVisitCheck = now + VISIT_CHECK_MS;
     if (!this._visitorFree(s, now)) return;
-    const v = this._visitorDue(s);
+    const v = this._visitorDue(s) || this._visitorLate(s);
     if (v && oncePerDay(`visit-${s.ids?.device}`, this._visitDay(s))) this._visitorStart(s, v);
   }
 
@@ -8392,6 +9007,13 @@ class HatchPetCard extends HTMLElement {
     s.seasonBox.append(el);
     const now = Date.now();
     const V = s.visitor = { el, v, timers: [], until: now + total, greetAt };
+    if (!v.cross) { // seen here today, for the evening's today line (fresh-moment 4)
+      try {
+        localStorage.setItem(`hatch-visitseen-${s.ids?.device}`, JSON.stringify({ day: this._visitDay(s).toDateString(), name: v.name }));
+      } catch (err) {
+        // no storage: no visitor in the today line
+      }
+    }
     s.flairUntil = s.visitUntil = V.until; // nothing else meanwhile; a pat wiggles, no line
     s.nextVisitor = Math.max(s.nextVisitor || 0, now + total + VISIT_AFTER_MS); // a seasonal one later
     const at = (ms, fn) => V.timers.push(setTimeout(() => {
@@ -8411,7 +9033,8 @@ class HatchPetCard extends HTMLElement {
   // and one flavour line, said now or not at all (a kept line, a game or a question
   // wins; the visitor still passes). A baby says baby talk.
   _visitorGreet(s, v) {
-    if (!this._mayInterrupt(s, FLAVOUR)) return;
+    const asking = this._questionOn(s); // its bubble stays: the greet is a move, no line (5a)
+    if (!asking && !this._mayInterrupt(s, FLAVOUR)) return;
     const before = s.poseUntil;
     this._reactFrames(s, "greet");
     // The wave frames (the link greeting's loader and fallbacks) replace the greet
@@ -8423,6 +9046,7 @@ class HatchPetCard extends HTMLElement {
       s.poseFrames = mine;
       this._show(s, s.pet, mine[0]);
     }
+    if (asking) return;
     const { text } = this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]));
     this._line(s, FLAVOUR, text, 3000);
   }
@@ -8447,6 +9071,7 @@ class HatchPetCard extends HTMLElement {
 
   // How many wait, as the picture shows them (no number anywhere).
   _basketCount(s) {
+    if (!findsShown()) return 0; // FINDS_SHOWN off: no basket, no tap, no reveal
     const n = s.house?.basket;
     return Number.isInteger(n) && n > 0 ? Math.min(n, 3) : 0;
   }
@@ -8632,12 +9257,43 @@ class HatchPetCard extends HTMLElement {
     if (this._booting || this._link || this._slides.length < 2) return;
     const now = Date.now();
     const [lo, hi] = LINK_AFTER_MS;
-    this._linkAt ??= now + lo + Math.random() * (hi - lo);
-    if (now < this._linkAt) return;
+    if (!linkedToday()) {
+      const [first, last] = LINK_FIRST_MS;
+      this._linkFirstMs ??= first + Math.random() * (last - first);
+      const watched = !document.hidden && this._visible !== false && this._touchedAt
+        && now - this._touchedAt < LINK_TOUCHED_MS && now - this._lookAt >= this._linkFirstMs;
+      if (!watched) return;
+    } else {
+      this._linkAt ??= now + lo + Math.random() * (hi - lo);
+      if (now < this._linkAt) return;
+    }
     const guest = this._linkPick(host);
     if (!guest) return;
     this._linkAt = now + lo + Math.random() * (hi - lo);
-    this._linkStart(host, guest);
+    if (this._linkStart(host, guest) !== false) this._linkReport(host, guest);
+  }
+
+  // The social meter full (top10 §6): said once a week per pet on this device,
+  // the week from Monday; nothing else on it changes the pet.
+  _socialFull(s) {
+    const level = this._state(s, "sensor.life_stage")?.attributes.social_level;
+    if (level !== SOCIAL_MAX || s.asleep || s.game || !s.ids?.device) return;
+    if (s.sayUntil > Date.now() || s.queue?.some((q) => lineClass(q) >= KEPT)) return;
+    const monday = new Date();
+    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+    if (!oncePerDay(`social-full-${s.ids.device}`, monday)) return;
+    (s.queue ??= []).push({ text: "so many friends this week! ♥", ms: 4500, cls: KEPT, perk: true });
+  }
+
+  // Tell the server the two pets met (top10 §6, the social meter): each counts the
+  // other once a day there, however many screens report it. Nobody's name goes.
+  _linkReport(host, guest) {
+    const a = host.ids?.["sensor.life_stage"];
+    const b = guest.ids?.["sensor.life_stage"];
+    if (!a || !b || a === b) return;
+    this._hass.callWS({ type: "virtual_pet/linked", entity_id: a, other: b }).catch(() => {
+      // an older integration has no meter: the link is the same
+    });
   }
 
   // One visit: the beam, the visit screen, the two lines, the guest's own slide.
@@ -8855,7 +9511,7 @@ class HatchPetCard extends HTMLElement {
     if (now < s.nextFlair) return;
     const [lo, hi] = FLAIR_EVERY_MS;
     s.nextFlair = now + lo + Math.random() * (hi - lo);
-    if (this._free(s)) this._flair(s);
+    if (this._free(s) || this._askOnly(s)) this._flair(s);
   }
 
   // One flair moment: each place shows one of the pet's traits there.
@@ -9014,154 +9670,18 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
-  // --- Catch (prototype) -----------------------------------------------------
-  // Timed in the browser (performance.now, requestAnimationFrame), so network
-  // lag can't matter; the 700 ms tick and hass updates don't touch it.
-
-  _catchRound(s) {
-    const g = s.game;
-    if (!g || g.kind !== "catch") return;
-    const isCalm = calm();
-    const f = g.round / (CATCH.rounds - 1);
-    const lerp = ([a, b]) => a + (b - a) * f;
-    const side = Math.random() < 0.5 ? "left" : "right";
-    const decoy = g.round > 0 && Math.random() < CATCH.decoyChance;
-    const prop = s.species?.props?.play || "";
-    const motion = /cricket/.test(prop) ? "hop" : "roll";
-    g.cur = {
-      side, decoy, motion, done: false, start: performance.now(),
-      calm: isCalm, travel: lerp(CATCH.travel) * (isCalm ? 1.6 : 1),
-      window: lerp(CATCH.window) * (isCalm ? 2 : 1),
-    };
-    const el = s.catchEl;
-    if (decoy) el.src = BEE_FRAMES[0];
-    else this._show(s, el, prop);
-    el.hidden = false;
-    el.style.display = "";
-    el.style.bottom = "";
-    if (isCalm) { // at the far spot at once, not facing a stale transform
-      g.cur.step = 0;
-      el.style.left = `${side === "left" ? CALM_FAR[0] : CALM_FAR[1]}%`;
-      el.style.bottom = CALM_FAR[2];
-      el.style.transform = decoy && side === "left" ? "scaleX(-1)" : "";
-    }
-    s.gameScore.textContent = `round ${g.round + 1}/${CATCH.rounds} · ${g.wins} caught`;
-    const step = (now) => {
-      const c = s.game?.cur;
-      if (!c || c !== g.cur || c.done) return;
-      const p = Math.min(Math.max(now - c.start, 0) / 1000 / c.travel, 1);
-      if (c.calm) { // reduced motion: two fixed spots, no sliding and no transform
-        // The last spot shows one frame (50 ms) before the "too soon" boundary, so a tap
-        // on what is on screen is never judged too soon.
-        const near = (now - c.start) / 1000 >= c.travel - c.window - 50 / 1000;
-        if (c.step !== (near ? 1 : 0)) {
-          c.step = near ? 1 : 0;
-          el.style.left = `${c.side === "left" ? (near ? 28 : CALM_FAR[0]) : (near ? 56 : CALM_FAR[1])}%`;
-          el.style.bottom = near ? "" : CALM_FAR[2]; // far: raised, clear of the nav buttons
-        }
-        if (c.decoy && c.side === "left") el.style.transform = "scaleX(-1)"; // faces its way, still
-        if (p >= 1) {
-          this._catchResolve(s, c.decoy, c.decoy ? "phew, let the bee go!" : "it got away...");
-          return;
-        }
-        c.raf = requestAnimationFrame(step);
-        return;
-      }
-      // From off the edge to just beside the pet (which stands at 50%).
-      const from = c.side === "left" ? -16 : 100;
-      const to = c.side === "left" ? 28 : 56;
-      el.style.left = `${from + (to - from) * p}%`;
-      if (c.decoy) { // a bee flies: flapping, bobbing, facing where it goes
-        // (rAF's first timestamp can come just before c.start)
-        const flap = Math.floor(Math.max(now - c.start, 0) / BEE_FLAP_MS) % 2;
-        if (c.flap !== flap) el.src = BEE_FRAMES[(c.flap = flap)];
-        el.style.transform = `translateY(${Math.sin(p * Math.PI * 6) * 12}%)` +
-          (c.side === "left" ? " scaleX(-1)" : "");
-      } else el.style.transform = c.motion === "hop"
-        ? `translateY(${-Math.abs(Math.sin(p * Math.PI * 4)) * 40}%)`
-        : `rotate(${(c.side === "left" ? 1 : -1) * p * 540}deg)`;
-      if (p >= 1) {
-        // It reached the pet untouched: a real one got away, a decoy was dodged.
-        this._catchResolve(s, c.decoy, c.decoy ? "phew, let the bee go!" : "it got away...");
-        return;
-      }
-      c.raf = requestAnimationFrame(step);
-    };
-    g.cur.raf = requestAnimationFrame(step);
-  }
-
-  _catchTap(s, side) {
-    const c = s.game?.cur;
-    if (!c || c.done) return;
-    s.game.tapped = true; // a game nobody tapped keeps no best
-    const t = (performance.now() - c.start) / 1000;
-    if (c.decoy) {
-      this._catchResolve(s, false, "bzz! not the bee!");
-    } else if (side !== c.side) {
-      this._catchResolve(s, false, "other side!");
-    } else if (t < c.travel - c.window - (c.calm ? 0.05 : 0)) { // calm: the last spot shows 50 ms early
-      this._catchResolve(s, false, "too soon!");
-    } else {
-      s.pet.classList.add(`go-${side}`);
-      this._catchResolve(s, true, "got it!");
-    }
-  }
-
-  _catchResolve(s, ok, line) {
-    const g = s.game;
-    const c = g?.cur;
-    if (!c || c.done) return;
-    c.done = true;
-    cancelAnimationFrame(c.raf);
-    s.catchEl.hidden = true;
-    g.round += 1;
-    g.wins += ok ? 1 : 0;
-    this._write(s, line);
-    if (ok) this._pounce(s);
-    s.gameScore.textContent = `round ${g.round}/${CATCH.rounds} · ${g.wins} caught`;
-    this._gameLater(s, g, 1000, () => {
-      s.pet.classList.remove("go-left", "go-right");
-      if (g.round < CATCH.rounds) {
-        this._catchRound(s);
-        return;
-      }
-      let best = g.wins;
-      try {
-        best = Math.max(best, Number(localStorage.getItem(BEST_CATCH_KEY) || 0));
-        if (g.tapped) localStorage.setItem(BEST_CATCH_KEY, String(best));
-      } catch (err) {
-        // no storage: no best score
-      }
-      if (g.wins >= CATCH.winAt) this._chirp(s, "win");
-      this._endGame(s, `${g.wins}/${CATCH.rounds} caught${g.wins >= CATCH.winAt ? "! ♪" : "..."} · best ${best}/${CATCH.rounds}`);
-    });
-  }
-
-  // A catch: the species' own "won" pose where one is drawn (child), else a hop.
-  _pounce(s) {
-    const pose = s.species?.reactions?.won;
-    const frames = s.drawn === "child" && s.species?.extras?.[pose];
-    if (frames) {
-      s.poseFrames = Array.isArray(frames) ? frames : [frames];
-      s.poseUntil = Date.now() + 900;
-      this._show(s, s.pet, s.poseFrames[0]);
-    } else if (s.drawn === "child") {
-      this._animate(s, s.pet, "hop", 700);
-    } else {
-      this._reactFrames(s, "praised", { inGame: true, ms: 900 });
-    }
-  }
-
   // The player (or the card, moving off a game) ends a game: the server drops
-  // it too, with no reward or penalty. Fire and forget; a failed call is silent.
-  // Catch lives only on the card, so it makes no call.
+  // it too, with no reward or penalty, or parks a Berry dig that has shown
+  // something, so the next dig carries on. Every card-driven quit (✕, Escape,
+  // a swipe, the status sheet, Play mid-game) comes here, so each one parks.
+  // Fire and forget; a failed call is silent.
   _quitGame(s, line) {
     const kind = s.game?.kind;
     const id = s.ids?.["sensor.mood"];
-    if (id && (kind === "left_right" || kind === "higher_lower")) {
+    if (id && SERVER_GAMES.has(kind)) {
       try {
         Promise.resolve(this._hass.callService(
-          "virtual_pet", "play_game", { entity_id: id, game: kind, end: true },
+          "virtual_pet", "play_game", { entity_id: id, game: kind, end: true, ...digShared(kind) },
           undefined, false, true)).catch(() => {});
       } catch (err) { /* silent */ }
     }
@@ -9170,7 +9690,10 @@ class HatchPetCard extends HTMLElement {
 
   _endGame(s, line) {
     cancelAnimationFrame(s.game?.cur?.raf);
-    s.catchEl.hidden = true;
+    s.propEl.hidden = true;
+    s.propEl.style.bottom = ""; // the dig's bee sits higher
+    s.gameScore.classList.remove("two");
+    s.gameNum.removeAttribute("aria-label"); // the dig's "n leaves left"
     s.game = null;
     s.gameTimers?.forEach(clearTimeout);
     s.gameTimers?.clear();
@@ -9222,18 +9745,23 @@ class HatchPetCardEditor extends HTMLElement {
         await entities?.constructor?.getConfigElement?.();
       }
       this._form = document.createElement("ha-form");
-      this._form.computeLabel = () => "Pets on this shelf";
-      this._form.computeHelper = () =>
-        "Leave empty to show every pet. The shelf shows them in this order.";
+      const LABELS = { devices: "Pets on this shelf", seasonal: "Seasonal decorations" };
+      const HELPERS = {
+        devices: "Leave empty to show every pet. The shelf shows them in this order.",
+        // gaps-seams 7a: the YAML `seasonal: false`, in the editor.
+        seasonal: "Halloween, Thanksgiving and winter lights on this card. Off hides them on this card only.",
+      };
+      this._form.computeLabel = (field) => LABELS[field.name];
+      this._form.computeHelper = (field) => HELPERS[field.name];
       this._form.schema = [{
         name: "devices",
         selector: { device: { multiple: true, filter: { integration: "virtual_pet" } } },
-      }];
+      }, { name: "seasonal", selector: { boolean: {} } }];
       this._form.addEventListener("value-changed", (e) => this._changed(e.detail.value));
       this.append(this._form);
     }
     this._form.hass = this._hass;
-    this._form.data = { devices: this._devicesOf(this._config) };
+    this._form.data = { devices: this._devicesOf(this._config), seasonal: this._config.seasonal !== false };
   }
 
   _changed(value) {
@@ -9242,6 +9770,9 @@ class HatchPetCardEditor extends HTMLElement {
     delete config.entity;
     if (value.devices?.length) config.devices = value.devices;
     else delete config.devices;
+    // Off is `seasonal: false`; on drops the key, but keeps a preview (`seasonal: "winter"`).
+    if (value.seasonal === false) config.seasonal = false;
+    else if (typeof config.seasonal !== "string") delete config.seasonal;
     this._config = config;
     this.dispatchEvent(new CustomEvent("config-changed", {
       detail: { config }, bubbles: true, composed: true,
@@ -9253,6 +9784,7 @@ class HatchPetCardEditor extends HTMLElement {
 HatchPetCard.seasons = SEASONS;
 HatchPetCard.hanukkah = hanukkah;
 HatchPetCard.seasonLines = seasonLines;
+HatchPetCard.findsShown = FINDS_SHOWN; // card-check and the bench turn it on
 HatchPetCard.findLines = FIND_LINES;
 HatchPetCard.giftLines = GIFT_LINES;
 HatchPetCard.giftMade = GIFT_MADE;

@@ -51,6 +51,9 @@ ANSWERS: dict[str, tuple[str, ...]] = {
     "guess": ("rain", "sun"),
     # The pet's, not the person's: what it says at the end of things.
     "catchphrase": ("hehe", "yay", "and stuff", "la la", "keep"),
+    # The phone question (top10 1a): the card says it showed it, and only then is
+    # it asked for good (a question the card dropped comes again).
+    "phone": ("shown",),
 }
 # One-time questions about the person, in the order they're asked, with the bond
 # level each needs. (The pet's own one-time question, its catchphrase, comes from
@@ -235,6 +238,7 @@ _PERSON_KEYS: dict[str, Any] = {
     "birthday_sent": lambda v: isinstance(v, str),  # the year, "2026"
     "once_last": lambda v: isinstance(v, str),  # a day
     "asked": lambda v: isinstance(v, dict) and isinstance(v.get("day"), str),
+    "phone_asked": lambda v: isinstance(v, bool),  # the phone question (top10 1a)
 }
 
 
@@ -349,18 +353,25 @@ def choose_question(
     came_home: str | None,
     rested: bool,
     pet_once: tuple[str, ...] = (),
+    dreamed: bool = False,
 ) -> str | None:
     """The question to ask on this visit, or None: at most one in the morning
     (before noon) and one later, per person per day, across every pet. A
     one-time question that's due comes first in the later slot; pet_once are
-    the pet's own still open for this person."""
+    the pet's own still open for this person. dreamed: the pet has a dream to
+    tell this morning, which is its morning's say instead of "did you sleep
+    well?" on alternate days (by the day), so that's still asked about half
+    the mornings."""
     if level < R.ASK_LEVEL:
         return None
     asked = person.get("asked") or {}
     if asked.get("day") != today:
         asked = {"day": today}
     if hour < 12:
-        if "morning" in asked or rested or hour < R.ASK_MORNING_FROM:
+        # A dream to tell is the morning's say on alternate days only (by the day), so
+        # "did you sleep well?" still comes about half the mornings (FM, 5b review).
+        dream_says = dreamed and date.fromisoformat(today).toordinal() % 2 == 0
+        if "morning" in asked or rested or dream_says or hour < R.ASK_MORNING_FROM:
             return None
         return "slept"
     if "later" in asked:
@@ -376,6 +387,14 @@ def choose_question(
         return "dream"
     if kind == "guess" and has_forecast and hour >= R.ASK_GUESS_FROM:
         return "guess"
+    # Today's dream or guess can't be asked now (the dream before its window, a guess
+    # with no forecast or too early): how_day stands in on ASK_FALLBACK_DAYS of every 7,
+    # by the day (fresh-moment 5b), so most evenings get a question but it isn't nightly.
+    # The rotation's own how_day days, above, aren't capped.
+    # Still one later question a day: "later" is marked either way.
+    fallback_day = date.fromisoformat(today).toordinal() % 7 < R.ASK_FALLBACK_DAYS
+    if fallback_day and hour >= R.ASK_DAY_FROM:
+        return "how_day"
     return None
 
 

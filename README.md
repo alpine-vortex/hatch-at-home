@@ -39,7 +39,7 @@ Eight toy buttons for meals, snacks, play, clean-ups, medicine, scolding, praise
 Hungry? Bored? Sleepy? It calls, and you have 20 minutes to answer. Your phone can buzz with buttons to answer it right away!
 
 <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/icon_play.png" width="24" alt=""> **Mini-games!**<br>
-*Left or right?* and *Higher or lower?* Win three rounds out of five to make its day!
+*Left or right?*, *Higher or lower?* and *Berry dig*: dig for berries, but keep them before a bee scares them off. Win to make its day!
 
 <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/custom_components/virtual_pet/frontend/ui/icon_praise.png" width="24" alt=""> **Raise it right!**<br>
 Scold the fake whines, praise the good days. How you raise it decides who it grows up to be: *devoted*, *steady* or *scrappy*.
