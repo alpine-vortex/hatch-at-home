@@ -125,6 +125,8 @@ weather, lights, TV and more. Every setting is optional.
 
 📖 **Want every detail?** All the entities, options, rules and events, plus manual
 install and development, are in the **[full guide](docs/guide.md)**.
+For a feature-by-feature map of what is on, off or half-built, see the
+[feature catalog](docs/features.md).
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/footer.png" alt="Ages 8 to 108. Requires Home Assistant. Free and open source, MIT licensed." width="100%">
