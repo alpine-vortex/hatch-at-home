@@ -4410,3 +4410,25 @@ async def test_migration_never_lowers_a_newer_minor_and_still_loads(
 async def test_a_newer_major_version_is_not_migrated(hass: HomeAssistant) -> None:
     config = await _load(hass, _old_pet(version=2))
     assert config.state is ConfigEntryState.MIGRATION_ERROR
+
+
+async def test_the_forecast_guard_reads_the_watchers_weather_not_the_entrys(
+    hass: HomeAssistant, hass_storage: dict[str, Any], now: float
+) -> None:
+    """A save lands in entry.options before the reload: the coordinator must go
+    by the weather ids its watcher has, so no IndexError when options gained one."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    calls = forecast_service(hass, [])
+    config = await setup_with_house(hass)  # no weather mapped
+    pet = config.runtime_data
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert pet._home_started and not calls
+    hass.config_entries.async_update_entry(config, options={"weather": "weather.new"})
+    pet._want_forecast(now + 99 * 3600)  # the entry has weather, the watcher none
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert not calls
+    # And the other way round: the watcher's weather still counts.
+    pet.watcher.options = {"weather": "weather.home"}
+    pet._want_forecast(now + 99 * 3600)
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert len(calls) == 1

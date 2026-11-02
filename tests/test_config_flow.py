@@ -17,7 +17,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 import voluptuous as vol
 
-from custom_components.virtual_pet import config_flow
+from custom_components.virtual_pet import config_flow, rates as R
 from custom_components.virtual_pet.const import DOMAIN
 from custom_components.virtual_pet.topics import TOPIC_LABELS, TOPICS, topics_text
 
@@ -430,3 +430,29 @@ def test_topics_text_names_one_topic_alone() -> None:
     assert topics_text({"tv": ["media_player.a"]}, ["media_player.a"]) == (
         '"The pet\'s room"'
     )
+
+
+async def test_a_fahrenheit_house_stores_the_default_comfort_exactly(
+    hass: HomeAssistant,
+) -> None:
+    hass.config.units = US_CUSTOMARY_SYSTEM
+    config = add_pet_with(hass)  # no comfort values stored yet
+    form = await open_topic(hass, config.entry_id, "weather")
+    assert shown(form)["comfort_low"] == 64.5  # 18.0 °C, to the half degree
+    await hass.config_entries.options.async_configure(form["flow_id"], shown(form))
+    # Exactly the defaults, not 18.06 / 26.39 from a round trip through °F.
+    assert config.options["comfort_low"] == R.HOME_COMFORT_LOW_C
+    assert config.options["comfort_high"] == R.HOME_COMFORT_HIGH_C
+    # A value the owner changed is still converted.
+    await save_topic(
+        hass, config.entry_id, "weather", {**shown(form), "comfort_low": 60}
+    )
+    assert config.options["comfort_low"] == pytest.approx(15.56, abs=0.01)
+
+
+def test_the_missing_entities_fix_flow_has_its_words() -> None:
+    confirm = _strings()["issues"]["missing_entities"]["fix_flow"]["step"]["confirm"]
+    assert confirm["title"] == "{pet} is listening for entities that are gone"
+    for placeholder in ("{pet}", "{entities}", "{topics}"):
+        assert placeholder in confirm["description"]
+    assert "Submit to forget them" in confirm["description"]

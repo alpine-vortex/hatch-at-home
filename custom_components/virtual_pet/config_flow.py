@@ -434,10 +434,16 @@ class PetOptionsFlow(OptionsFlowWithReload):
         keys = TOPICS[topic]
         kept = {k: v for k, v in stored.items() if k not in keys}
         new = dict(entered)
-        for key in (CONF_COMFORT_LOW, CONF_COMFORT_HIGH):
+        defaults = {
+            CONF_COMFORT_LOW: R.HOME_COMFORT_LOW_C,
+            CONF_COMFORT_HIGH: R.HOME_COMFORT_HIGH_C,
+        }
+        for key, default in defaults.items():
             if key in new:
                 if key in stored and new[key] == self._to_unit(stored[key]):
                     new[key] = stored[key]
+                elif key not in stored and new[key] == self._to_unit(default):
+                    new[key] = default  # the shown default, exactly: no unit drift
                 else:
                     new[key] = self._to_celsius(new[key])
         if CONF_DASHBOARD in new:
