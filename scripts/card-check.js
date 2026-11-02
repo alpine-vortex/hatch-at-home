@@ -3734,22 +3734,36 @@ async function main() {
     check("dig: a won game says the berries banked, no /5",
       !dig.won.live && dig.won.said === "5 berries! you win ♪", JSON.stringify(dig.won));
 
-    // Replies across screens (audit s2616 #8/#9), stubbed with no waits: keep on a
-    // basket another screen kept first is someone else; no game while this person's
-    // dig is parked (another screen's x) is "maybe later!", not "let's start over".
+    // Replies across screens (audit s2616 #8/#9, UX6 F16), stubbed with no waits: a reply
+    // out of step ends as someone else's unless the server says the dig is this person's own
+    // (`yours`: their other screen played), which adopts the server's round, bank and basket
+    // and says "oh! you dug there too ♪"; no game while this person's dig is parked (their
+    // other screen's x) closes with the parked line, not "let's start over".
     const across = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       const hass = el._hass;
       const real = hass.callService;
       const out = {};
       try {
-        for (const [key, response] of [["empty", { result: "empty_basket" }],
+        const state = { game: "dig", rounds: 5, done: false, win_at: 5 };
+        for (const [key, response] of [
+          ["empty", { result: "empty_basket" }],
+          ["emptyMine", { ...state, result: "empty_basket", round: 2, wins: 2, basket: 0, leaves: 8, yours: true }],
+          ["emptyOther", { ...state, result: "empty_basket", round: 2, wins: 2, basket: 0, leaves: 8, yours: false }],
+          ["berryMine", { ...state, result: "ok", round: 1, wins: 0, basket: 4, leaves: 4, found: "berry",
+            round_over: false, yours: true }],
+          ["berryOther", { ...state, result: "ok", round: 1, wins: 0, basket: 4, leaves: 4, found: "berry",
+            round_over: false, yours: false }],
+          ["beeMine", { ...state, result: "ok", round: 2, wins: 0, basket: 0, leaves: 8, found: "bee",
+            round_over: true, yours: true }],
           ["parked", { result: "no_game", parked: true }]]) {
           s.game = { kind: "dig", round: 1, wins: 0, basket: 2, busy: false };
           el._gameView(s, "dig");
           hass.callService = async () => ({ response });
-          await el._guess(s, key === "empty" ? "left" : "right");
-          out[key] = { live: !!s.game, said: s.bubble.textContent };
+          await el._guess(s, key === "empty" || key.startsWith("empty") ? "left" : "right");
+          out[key] = { live: !!s.game, said: s.bubble.textContent, round: s.game?.round, wins: s.game?.wins,
+            basket: s.game?.basket, busy: s.game?.busy, score: s.gameScore.textContent };
+          if (s.game) el._endGame(s, null);
         }
       } finally {
         hass.callService = real;
@@ -3757,10 +3771,25 @@ async function main() {
       }
       return out;
     });
-    check("dig: empty_basket from another screen's keep says someone else is playing",
+    check("dig: empty_basket with no word it is this person's says someone else is playing",
       !across.empty.live && across.empty.said === "oh! someone else is playing with me", JSON.stringify(across.empty));
-    check("dig: no game while this person's dig is parked says maybe later",
-      !across.parked.live && across.parked.said === "maybe later!", JSON.stringify(across.parked));
+    check("dig: no game while this person's dig is parked closes with the parked line",
+      !across.parked.live && across.parked.said === "ok! i'll keep our pile safe ♪", JSON.stringify(across.parked));
+    check("dig F16: a berry out of step from this person's other screen is adopted, said once",
+      across.berryMine.live && across.berryMine.said === "oh! you dug there too ♪" &&
+        across.berryMine.round === 1 && across.berryMine.basket === 4 && across.berryMine.wins === 0,
+      JSON.stringify(across.berryMine));
+    check("dig F16: a bee out of step from this person's other screen is adopted too",
+      across.beeMine.live && across.beeMine.said === "oh! you dug there too ♪" &&
+        across.beeMine.round === 2 && across.beeMine.basket === 0, JSON.stringify(across.beeMine));
+    check("dig F16: empty_basket from this person's other screen's keep is adopted, the pile redrawn",
+      across.emptyMine.live && across.emptyMine.said === "oh! you dug there too ♪" && !across.emptyMine.busy &&
+        across.emptyMine.round === 2 && across.emptyMine.wins === 2 && across.emptyMine.basket === 0 &&
+        /round 3\/5/.test(across.emptyMine.score), JSON.stringify(across.emptyMine));
+    check("dig F16: another person's reply out of step still says someone else is playing",
+      !across.berryOther.live && across.berryOther.said === "oh! someone else is playing with me" &&
+        !across.emptyOther.live && across.emptyOther.said === "oh! someone else is playing with me",
+      JSON.stringify([across.berryOther, across.emptyOther]));
 
     // The real server: one dig, the x, and reopening carries on (parked).
     {
@@ -3774,6 +3803,52 @@ async function main() {
       check("dig: after the x, reopening carries on from the parked pile",
         /^round \d\/5\n\d+ banked · basket \d$/.test(played) && back === played, `${played} -> ${back}`);
       await stop();
+    }
+
+    // UX6 F16, the real server: one person, two screens on the dig. The other screen is a
+    // play_game call from the page (the same user). This card's next tap adopts the server's
+    // round and basket and both keep playing; the other screen's x makes this card's next
+    // tap close with the parked line, not "maybe later!".
+    {
+      await open("dig");
+      const other = (data) => card.evaluate(async (el, d) => {
+        const id = el._slides[el._index].ids["sensor.mood"];
+        const res = await el._hass.callService("virtual_pet", "play_game",
+          { entity_id: id, game: "dig", ...d }, undefined, false, true);
+        return res?.response;
+      }, data);
+      // Their screen digs first, and keeps what it found, so a round is done on the server
+      // whatever this card's next tap turns up (a lone bee could look like a normal one).
+      let theirs = await other({ guess: "dig" });
+      if (theirs?.found === "berry") theirs = await other({ guess: "keep" });
+      await cur().locator(".gr").click(); // ours, one step behind
+      await page.waitForTimeout(400);
+      const adopted = await cur().evaluate((slide) => {
+        const el = slide.getRootNode().host;
+        const s = el._slides[el._index];
+        return { live: !!s.game, said: s.bubble.textContent, basket: s.game?.basket, round: s.game?.round,
+          score: s.gameScore.textContent };
+      });
+      await page.waitForTimeout(1400);
+      const again = await score();
+      await cur().locator(".gr").click(); // and it plays on
+      await page.waitForTimeout(1400);
+      const live = await cur().locator(".gx").count();
+      check("dig F16: the second screen of one person adopts the server's round, and both keep playing",
+        theirs?.result === "ok" && adopted.live && adopted.said === "oh! you dug there too ♪" &&
+          adopted.round >= 1 && live === 1,
+        JSON.stringify([theirs, adopted, again, await score()]));
+      await other({ end: true }); // their x
+      await cur().locator(".gr").click();
+      await page.waitForTimeout(400);
+      const closed = await cur().evaluate((slide) => {
+        const s = slide.getRootNode().host._slides[slide.getRootNode().host._index];
+        return { live: !!s.game, said: s.bubble.textContent };
+      });
+      check("dig F16: the other screen's x closes this one quietly with the parked line",
+        !closed.live && closed.said === "ok! i'll keep our pile safe ♪",
+        JSON.stringify(closed));
+      if (await cur().locator(".gx").count()) await stop();
     }
 
     // Batch 6 audit #4: after an HA restart the server's dropped-games memory is gone,
