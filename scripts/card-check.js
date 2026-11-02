@@ -2333,6 +2333,7 @@ async function main() {
   const secret = await page.locator("hatch-pet-card").evaluate((el, me) => {
     const s = el._slides[el._index];
     s.queue = [];
+    el._nightLine = () => null; // E4 S-b's callback after a visitor or sunset: checked in moments
     el._note(s, { kind: "friends_for", months: 1 });
     el._note(s, { kind: "steps", steps: 11000 });
     el._note(s, { kind: "stairs", floors: 12 });
@@ -2346,6 +2347,7 @@ async function main() {
     el._moment(s, { type: "tucked_in", at: "z" });
     out.push(night, s.bubble.textContent, s.queue.length);
     s.queue = [];
+    delete el._nightLine;
     return out;
   }, me);
   check("private notes, records and goodnights are said to their person",
@@ -2367,8 +2369,11 @@ async function main() {
   await askBox.locator('button[data-answer="tough"]').click();
   await page.waitForTimeout(300);
   const reply = await bubble();
+  // E7 Q-a: a typed teen or adult says its own reply half the time.
+  const TOUGH = [...fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"),
+    "utf8").matchAll(/reply_tough: \[("[^"]*")\]/g)].map((m) => JSON.parse(m[1]));
   check("it asks how your day was, and answers kindly", answers.join() === "great,ok,tough" &&
-    /snuggle|cuddle/.test(reply) && await askBox.count() === 0, `${answers.join()} -> ${reply}`);
+    (/snuggle|cuddle/.test(reply) || TOUGH.includes(reply)) && await askBox.count() === 0, `${answers.join()} -> ${reply}`);
   await shot("04e-ask-day-answer");
   // A remembered answer goes to the server as a websocket command, not a service.
   const kept = await page.locator("hatch-pet-card").evaluate(async (el) => {
@@ -3812,6 +3817,11 @@ async function main() {
   check("2a: care_miss is kept, tv_on is flavour, someone_home is a beat",
     classes.care_miss === "kept" && classes.tv_on === "flavour" && classes.someone_home === "beat", JSON.stringify(classes));
 
+  // The wake's own line (fresh-expand E4 S-a, in turns by device) may say "morning": the
+  // cheer is a "morning" line that isn't one (typed out, a part of one).
+  const WAKE4 = require("vm").runInNewContext(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet",
+    "frontend", "hatch-pet-card.js"), "utf8").match(/\nconst WAKE_LINES = (\[[\s\S]*?\]);/)[1]);
+  const isWake = (t) => !!t && WAKE4.some((w) => t.includes(w) || w.startsWith(t));
   // Wake, good morning and weather in one update: the yawn, then good morning,
   // and nothing about the weather (it would wait more than 8 s).
   await quiet2a();
@@ -3827,10 +3837,10 @@ async function main() {
     if (morning[morning.length - 1] !== t) morning.push(t);
     await page.waitForTimeout(300);
   }
-  const iMorning = morning.findIndex((t) => /morning/.test(t));
+  const iMorning = morning.findIndex((t) => /morning/.test(t) && !isWake(t));
   check("2a: wake + good morning + weather: good morning is said, the weather isn't",
     iMorning >= 0 && !morning.some((t) => /sun came out|sunshine/.test(t)) &&
-      morning.findIndex((t) => /yaaawn/.test(t)) < iMorning, morning.join(" | "));
+      morning.findIndex(isWake) < iMorning, morning.join(" | "));
 
   // Fresh eyes #9: two quick different taps both count as the viewer's own.
   const twoTaps = await card.evaluate((el) => {
@@ -3883,8 +3893,11 @@ async function main() {
     const s = el._slides[el._index];
     return { text: s.bubble.textContent, cls: s.sayClass, left: s.sayUntil - Date.now() };
   });
+  // E2 P-c: a typed teen or adult praises in its own words half the time.
+  const PRAISE = [...fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"),
+    "utf8").matchAll(/praise: \[("[^"]*"), ("[^"]*")\]/g)].flatMap((m) => [JSON.parse(m[1]), JSON.parse(m[2])]);
   check("2a: a care press, then sunset and a poop 1 s later, keeps the care line for 3 s",
-    heldMine.text === "♥" && heldMine.cls === 4, JSON.stringify(heldMine));
+    (heldMine.text === "♥" || PRAISE.includes(heldMine.text)) && heldMine.cls === 4, JSON.stringify(heldMine));
 
   // Two kinds of care in one update: the newest's reaction with one line (C4).
   await quiet2a();
@@ -4124,7 +4137,7 @@ async function main() {
     await page.waitForTimeout(300);
   }
   const iSick = heardSick.findIndex((t) => /don't feel so good/.test(t));
-  const iCheer = heardSick.findIndex((t) => /morning/.test(t));
+  const iCheer = heardSick.findIndex((t) => /morning/.test(t) && !isWake(t));
   check("2b: C6 comes before a coinciding good morning (the cheer waits)",
     iSick >= 0 && iCheer > iSick, heardSick.join(" | "));
   // C8: someone else's medicine, the viewer's own after the scene's cheer, and one whose scene is over.
@@ -5440,6 +5453,9 @@ async function main() {
       // F3's practice takes an idle on its days (by the device: any run), and a draw.
       const realPractice = el._promisePractice;
       el._promisePractice = () => false;
+      // E4 S-b: lights out after a visitor or sunset seen today is a once-a-day callback.
+      const realNight = el._nightLine;
+      el._nightLine = () => null;
       const me = el._hass.user.id;
       const keep = { voicedAt: s.voicedAt, queue: s.queue, catchCount: s.catchCount, asleep: s.asleep, calling: s.calling };
       const kept = { shared: localStorage.getItem("hatch-shared-screen"), baby: localStorage.getItem(`hatch-baby-talk-${me}`) };
@@ -5481,6 +5497,7 @@ async function main() {
       } finally {
         el._state = realState;
         el._promisePractice = realPractice;
+        el._nightLine = realNight;
         Math.random = realRandom;
         s.mine = keptMine;
         for (const [k, v] of [["hatch-shared-screen", kept.shared], [`hatch-baby-talk-${me}`, kept.baby]]) {
@@ -9651,6 +9668,9 @@ async function main() {
       localStorage.setItem(`hatch-link-cardcheck-${new Date().toDateString()}`, "1"); // not the day's first
       el._linkEnd();
       el._linkAt = Date.now() + 1e9; // only the forced visits run
+      // E9 L-a's news (1 link in 3, with a guest's dream today) swaps the guest's line and
+      // holds the visit 1.5 s longer: off here; moments checks it.
+      el._linkNews = () => null;
       el._index = index;
       el._renderShelf();
       const realState = el._state;
