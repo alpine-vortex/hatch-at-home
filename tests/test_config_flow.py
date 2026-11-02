@@ -456,3 +456,7 @@ def test_the_missing_entities_fix_flow_has_its_words() -> None:
     for placeholder in ("{pet}", "{entities}", "{topics}"):
         assert placeholder in confirm["description"]
     assert "Submit to forget them" in confirm["description"]
+    abort = _strings()["issues"]["missing_entities"]["fix_flow"]["abort"]
+    assert abort["entry_gone"] == (
+        "This pet has been removed, so there is nothing to forget."
+    )

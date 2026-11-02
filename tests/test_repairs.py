@@ -92,6 +92,7 @@ async def test_a_removed_entry_aborts_the_fix(hass: HomeAssistant) -> None:
         form["flow_id"], {}
     )
     assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "entry_gone"
 
 
 def test_forget_leaves_every_other_option_untouched() -> None:

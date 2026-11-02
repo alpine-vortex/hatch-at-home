@@ -478,6 +478,9 @@
             "title": "{pet} is listening for entities that are gone",
             "description": "{pet}'s settings mention entities that no longer exist in Home Assistant: {entities}.\n\nSubmit to forget them: {pet} stops listening for them, and nothing else in its settings changes. To use new entities instead, close this and open Settings → Devices & services → Hatch at Home → the gear next to {pet}, then {topics}."
           }
+        },
+        "abort": {
+          "entry_gone": "This pet has been removed, so there is nothing to forget."
         }
       }
     },
