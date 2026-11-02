@@ -61,3 +61,19 @@ card-check as four parallel shards (`--shard k/4`), about 5-6 min. Login, the da
 run, and `restart` puts dev's seeded bond and wish back. Sections lean on state their
 predecessors leave (the open sheet, the bond, the slide on show), so a lone section may
 need its neighbour in `--only`; `oldcard` pulls in `restart` by itself.
+
+## Standing rules (moved from Claude memory 2026-11-02)
+
+- **Commit author:** this is a public repo. Commit, cherry-pick and merge as
+  `git -c user.name="Claude" -c user.email="noreply@anthropic.com" ...`, never
+  under the local git username (the `-c` flags set the committer too).
+- **Owner's Codex files:** the owner runs Codex in the main checkout and leaves
+  uncommitted files there (box art, finishes, effect packs). Don't move, revert
+  or commit them; mention them and act only when asked.
+- **Image calls (Sol / Luna via `codex exec`):** run them through
+  `~/github/hatch-art/tools/queue2.sh`, which paces to the image cap (about 100
+  images per 5 h, well under 300 per day), one call at a time. Luna
+  (`gpt-5.6-luna`) by default for poses and simple art, Sol for the misses.
+  Run dirs and the call log stay in gitignored `private-content/art/`; never
+  commit prompts, run logs or recipe detail. Recipe and lessons:
+  `~/github/hatch-art/SOL.md` (local, not in git).
