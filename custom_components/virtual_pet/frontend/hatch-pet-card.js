@@ -2235,6 +2235,10 @@ const NAME_WAIT_MS = 30000;
 const NAME_WAIT_MAX_MS = 120000;
 const NAME_RETRY_MS = 2000;
 const NAME_MAX = 20;
+// A name needs one character you can see: a letter, number, punctuation or symbol (the server's
+// clean_name holds the same rule). Format characters and the blank "filler" letters show nothing.
+const NAME_FILLERS = new Set(["\u3164", "\u115F", "\u1160", "\u2800"]);
+const nameShows = (text) => Array.from(text).some((c) => /[\p{L}\p{N}\p{P}\p{S}]/u.test(c) && !NAME_FILLERS.has(c));
 const NAME_ERRORS = { bad_name: "nameBad", taken: "nameTaken", not_now: "nameNotNow", read_only: "nameReadOnly" };
 function confirmTap(s, key, now = Date.now()) {
   const c = s.confirm;
@@ -2662,7 +2666,9 @@ const STYLE = `
     background: var(--hp-backdrop, #2f4a3a); transition: background .5s; }
   .head { display: flex; align-items: center; justify-content: space-between; gap: 8px;
     padding: 14px 18px 4px; }
-  .title { font: 400 24px 'Tiny5', monospace; color: var(--hp-ink); }
+  .head > div:first-child { min-width: 0; } /* the name column shrinks, so the Status chip stays on the card */
+  .head .chips { flex-shrink: 0; }
+  .title { font: 400 24px 'Tiny5', monospace; color: var(--hp-ink); min-width: 0; overflow-wrap: anywhere; }
   .title.long { font-size: 16px; } /* a long name keeps to two lines */
   .sub { font-size: 13px; color: var(--hp-subink); margin-top: 2px; }
   .chips { display: flex; gap: 6px; align-items: center; }
@@ -3794,7 +3800,7 @@ const STYLE = `
     letter-spacing: .02em; border-radius: 12px;
     color: var(--d-ink); -webkit-tap-highlight-color: transparent; }
   .picon { image-rendering: pixelated; display: block; pointer-events: none; }
-  .title-row { display: flex; align-items: center; gap: 8px; }
+  .title-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
   .emblem { width: 32px; height: 32px; image-rendering: pixelated; }
   .deco { position: absolute; bottom: 6%; width: 48px; height: 48px; image-rendering: pixelated;
     pointer-events: none; transition: opacity .5s; }
@@ -4947,7 +4953,7 @@ class HatchPetCard extends HTMLElement {
       // Only a slide whose own pet (or the sun) changed is drawn again.
       const own = Object.values(devices[i]).map((id) => this._hass.states[id]?.last_updated).join() +
         `|${this._hass.states["sun.sun"]?.state}|${s.species ? s.speciesId : ""}|${this._epoch || 0}` +
-        `|${this._hass.devices?.[devices[i].device]?.name_by_user}`;
+        `|${this._hass.devices?.[devices[i].device]?.name_by_user}|${this._hass.devices?.[devices[i].device]?.name}`;
       if (s.species && own !== s.drawnSig) {
         s.drawnSig = own;
         try {
@@ -5223,6 +5229,7 @@ class HatchPetCard extends HTMLElement {
       this._stopTyping(x);
       if (x.laySheet && i !== to) this._closeLay(x); // the lay sheet stays with its pet
       if (x.nameSheet && i !== to) this._closeName(x); // and so does the name sheet (S3)
+      if (i !== to) this._layDrop(x); // a lay waited for belongs to the slide it was made on: no sheet opens off-screen
       this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
       if (x.visitor && i !== to) { // a world visitor goes too, after a grace: a slip of the finger keeps it (UX8 F11)
         const V = x.visitor;
@@ -5973,7 +5980,11 @@ class HatchPetCard extends HTMLElement {
     s.settings = false;
     s.laySheet = open && lay; // the lay sheet closes with the status (S2)
     s.nameSheet = open && name; // and the name sheet (S3)
-    if (!open) s.nameFrom = null;
+    if (!open) {
+      s.nameFrom = null;
+      s.nameBusy = false; // like every other exit of the name sheet (_closeName)
+      this._clearNameTimers(s);
+    }
     this._closePicker(s);
     if (open) {
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
@@ -8760,7 +8771,7 @@ class HatchPetCard extends HTMLElement {
     // The first day (egg and baby) can still be named, by anyone (settings S3, N11).
     const nameRow = (isEgg || this._state(s, "sensor.life_stage")?.state === "baby") && petName
       ? row(null, SETUP_COPY.nameRow, `<span class="nameval"><span class="nm">${escape(petName)}</span>` +
-        `<button class="bell namechange" aria-label="${escape(`name: ${petName}, change`)}">${SETUP_COPY.nameChange}</button></span>`) : "";
+        `<button class="bell namechange">${SETUP_COPY.nameChange}</button></span>`) : "";
     const html = isEgg ? `
       ${band}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
@@ -9518,7 +9529,7 @@ class HatchPetCard extends HTMLElement {
     }
     const name = this._petName(s);
     const html = `
-      <div class="shead"><button class="sback nameback">${escape(SETUP_COPY.nameKeep(name))}</button>
+      <div class="shead"><button class="sback nameback">${escape(SETUP_COPY.nameKeep(name || "Pet"))}</button>
         <button class="bell namego">${SETUP_COPY.nameSave}</button></div>
       <div class="sec">${SETUP_COPY.nameHeading}</div>
       <input class="nameinput" type="text" value="${escape(name)}" maxlength="${NAME_MAX}"
@@ -9573,7 +9584,7 @@ class HatchPetCard extends HTMLElement {
     if (s.nameBusy || !s.nameSheet) return;
     const input = s.status.querySelector(".nameinput");
     const typed = input.value.normalize("NFC").split(/\s+/).filter(Boolean).join(" ");
-    if (!typed) {
+    if (!nameShows(typed)) {
       this._nameError(s, SETUP_COPY.nameBad);
       input.focus({ preventScroll: true });
       return;

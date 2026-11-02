@@ -3091,6 +3091,8 @@ class RenameError(Exception):
 
 
 NAME_MAX = 20  # characters; the card's field and Reconfigure's old habit
+# Letters and symbols that draw nothing (Hangul fillers, the blank braille cell).
+_NAME_FILLERS = frozenset("\u3164\u115f\u1160\u2800")
 
 
 def clean_name(raw: object) -> str:
@@ -3102,6 +3104,11 @@ def clean_name(raw: object) -> str:
         raise RenameError("bad_name")
     name = " ".join(unicodedata.normalize("NFC", raw).split())
     if not 1 <= len(name) <= NAME_MAX:
+        raise RenameError("bad_name")
+    # At least one character you can see: not only zero-width, format or filler characters.
+    if not any(
+        unicodedata.category(c)[0] in "LNPS" and c not in _NAME_FILLERS for c in name
+    ):
         raise RenameError("bad_name")
     return name
 

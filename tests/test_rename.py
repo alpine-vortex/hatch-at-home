@@ -79,8 +79,34 @@ async def test_a_name_is_made_tidy(
 
 
 @pytest.mark.parametrize(
+    "good",
+    ["Fern", "7", "!", "♥", "\u200bFern", "Fe\u200drn", "\u3164Ed", "👩\u200d🚀"],
+)
+def test_a_name_with_one_visible_character_is_kept(good: str) -> None:
+    assert clean_name(good)
+
+
+@pytest.mark.parametrize(
     "bad",
-    ["x" * 21, "", "   ", "a\x00b", "a\nb", "a\tb", "a b", 12, None, ["Fern"]],
+    [
+        "x" * 21,
+        "",
+        "   ",
+        "a\x00b",
+        "a\nb",
+        "a\tb",
+        "a b",
+        12,
+        None,
+        ["Fern"],
+        # Nothing to see: zero-width, format and filler characters only.
+        "\u200b",
+        "\u200b\u200d\ufeff",
+        "\u3164",
+        "\u115f\u1160",
+        "\u2800 \u2800",
+        "\u202e\u200b",
+    ],
 )
 async def test_a_bad_name_is_refused(
     hass: HomeAssistant, now: float, hass_ws_client: Any, bad: Any
