@@ -1461,28 +1461,113 @@ async function main() {
     const s = el._slides[el._index];
     const raised = new Set(el._slides.flatMap((x) => el._state(x, "sensor.life_stage")?.attributes.raised || []));
     return {
-      head: s.status.querySelector(".jhead")?.textContent.trim(), worlds: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent),
+      head: s.status.querySelector(".shead .stitle")?.textContent.trim(), own: s.worldKey,
+      worlds: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent),
       tiles: [...s.status.querySelectorAll(".jtile")].map((t) => ({ id: (t.querySelector("img")?.getAttribute("src") || "").match(/sprites\/([^/]+)\//)?.[1],
         locked: t.classList.contains("locked"), text: t.textContent })),
-      raised: [...raised], back: s.status.querySelector(".jfoot .wlink")?.textContent, text: s.status.textContent,
+      raised: [...raised], back: s.status.querySelector(".shead .sback")?.textContent, text: s.status.textContent,
       fit: s.status.scrollWidth <= s.status.clientWidth + 1, journal: s.journal, everyWorld: s.everyWorld,
     };
   });
-  const want8 = Object.values(W8).flatMap((w) => w.roster.filter(ready8));
+  // The pet's own world first, then the rest in catalog order; the names lowercase (UX fix 2, F11, F16).
+  const order8 = Object.entries(W8).sort(([a], [b]) => (b === every.own) - (a === every.own)).map(([, w]) => w);
+  const want8 = order8.flatMap((w) => w.roster.filter(ready8));
   check("top10 8a: \"every world\" has a row per world and a tile per ready creature, raised ones named, the rest ???",
-    every.head === "every world" && JSON.stringify(every.worlds) === JSON.stringify(Object.values(W8).map((w) => w.name)) &&
+    every.head === "every world" && JSON.stringify(every.worlds) === JSON.stringify(order8.map((w) => w.name.toLowerCase())) &&
     JSON.stringify(every.tiles.map((t) => t.id)) === JSON.stringify(want8) &&
     every.tiles.every((t) => (every.raised.includes(t.id) ? !t.locked && t.text !== "???" : t.locked && t.text === "???")) &&
     every.everyWorld && !every.journal, JSON.stringify(every));
-  check("top10 8a: no count on the page, \"‹ journal\" at its foot, nothing runs off sideways",
+  check("top10 8a: no count on the page, \"‹ journal\" in the top band, nothing runs off sideways",
     !/\d+\s*(of|\/)\s*\d+|%/.test(every.text) && every.back === "‹ journal" && every.fit, JSON.stringify({ back: every.back, fit: every.fit }));
   await shot("03c-every-world");
-  await cur().locator(".status .jfoot .wlink").click();
+  await cur().locator(".status .shead .sback").click();
   await page.waitForTimeout(1200);
   check("top10 8a: \"‹ journal\" goes back to the journal",
     await cur().locator(".status .jgrid").count() > 0 && /journal ·/.test(await cur().locator(".status").innerText()));
+  // Status UX fix 2 (review 2). The journal keeps the player's place: a tap on a tile does not close the
+  // status (F1) and the pet says one line, once (F14); a state push keeps the scroll (F2); the top band
+  // carries the way back (F3, F5); Escape steps back a page and then closes (F4).
+  const ux2 = () => page.locator("hatch-pet-card").first().evaluate((el) => {
+    const s = el._slides[el._index];
+    const note = s.status.querySelector(".status-feedback");
+    return { open: s.screen.classList.contains("show-status"), journal: s.journal, every: s.everyWorld, finds: s.finds,
+      say: note && !note.hidden ? note.textContent : "", scroll: Math.round(s.status.scrollTop),
+      room: s.status.scrollHeight - s.status.clientHeight, back: s.status.querySelector(".shead .sback")?.textContent || "",
+      focus: el.shadowRoot.activeElement?.className || "", gear: !!s.status.querySelector(".gear") };
+  });
+  await cur().locator(".status .jtile").first().scrollIntoViewIfNeeded();
+  await cur().locator(".status .jtile").first().click();
+  await page.waitForTimeout(300);
+  const tile1 = await ux2();
+  check("UX2 F1/F14: a tap on a journal tile keeps the journal open, and the pet says one line about it",
+    tile1.open && tile1.journal && /^(.+! my old pal ♥|not met one of those yet)$/.test(tile1.say), JSON.stringify(tile1));
+  await page.waitForTimeout(100);
+  await cur().locator(".status .jtile").first().click();
+  const tile2 = await ux2();
+  check("UX2 F1: a second tap on the same tile keeps the journal open", tile2.open && tile2.journal, JSON.stringify(tile2));
+  await card.first().evaluate((el) => { const s = el._slides[el._index]; s.status.scrollTop = Math.min(60, s.status.scrollHeight - s.status.clientHeight); });
+  const before2 = await ux2();
+  await card.first().evaluate((el) => { // a pet update: the energy moves, as at every server tick
+    const s = el._slides[el._index];
+    const id = s.ids["sensor.energy"];
+    const st = el._hass.states[id];
+    el.hass = { ...el._hass, states: { ...el._hass.states, [id]: { ...st, state: String(Number(st.state || 50) - 1), last_updated: new Date().toISOString() } } };
+  });
+  await page.waitForTimeout(600);
+  const after2 = await ux2();
+  check("UX2 F2: a pet update leaves the journal where it was scrolled", before2.scroll > 0 && after2.journal && after2.scroll === before2.scroll,
+    JSON.stringify({ before2, after2 }));
+  check("UX2 F3: the journal's way back is in a top band: \"‹ status\"", after2.back === "‹ status", after2.back);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  const esc1 = await ux2();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(500);
+  const esc2 = await ux2();
+  check("UX2 F4: Escape on the journal goes back to the status, and on the status closes it", esc1.open && !esc1.journal && esc1.gear && !esc2.open,
+    JSON.stringify({ esc1, esc2 }));
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
+  await cur().locator(".jlink").click();
+  await page.waitForTimeout(800);
+  const opened = await ux2();
+  check("UX2 F5: opening the journal puts keyboard focus on its top back link", /sback/.test(opened.focus), JSON.stringify(opened));
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(400);
+  // F6: a mostly vertical drag over the card is not a swipe; a sideways one is. F8: the pet on show is kept per browser.
+  // F7: a care tap with the status open closes it first.
+  const drag = async (dx, dy) => {
+    const vp = await card.first().evaluate((el) => { const r = el._viewport.getBoundingClientRect(); return [r.x + r.width / 2, r.y + 10]; });
+    await card.first().evaluate((el) => { el._swiped = false; });
+    await page.mouse.move(vp[0], vp[1]);
+    await page.mouse.down();
+    await page.mouse.move(vp[0] + dx, vp[1] + dy, { steps: 5 });
+    await page.mouse.up();
+    return card.first().evaluate((el) => ({ swiped: el._swiped, index: el._index }));
+  };
+  const vert = await drag(-50, 90);
+  check("UX2 F6: a mostly vertical drag does not switch pets", !vert.swiped, JSON.stringify(vert));
+  const side = await drag(-80, 10);
+  check("UX2 F6: a sideways drag still does", side.swiped, JSON.stringify(side));
+  const kept = await card.first().evaluate((el) => ({ key: localStorage.getItem(`hatch-shelf-${el._slides[0].ids.device}`), now: el._slides[el._index].ids.device, n: el._slides.length }));
+  check("UX2 F8: the pet on show is kept for a reload (hatch-shelf-<first device>)", kept.key === kept.now, JSON.stringify(kept));
+  await card.first().evaluate((el) => el._go(0));
+  await page.waitForTimeout(600);
+  const care = await card.first().evaluate((el) => {
+    const s = el._slides[el._index];
+    const call = el._call;
+    const calls = [];
+    el._call = (...a) => { calls.push(a[3] + "." + a[4]); };
+    try {
+      if (!s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      const was = s.screen.classList.contains("show-status");
+      el._press(s, "feed");
+      return { was, after: s.screen.classList.contains("show-status"), calls };
+    } finally {
+      el._call = call;
+    }
+  });
+  check("UX2 F7: a care tap with the status open closes it first, then goes out", care.was && !care.after && care.calls.length === 1, JSON.stringify(care));
 
   }
   if (enter("shell")) {
@@ -6074,10 +6159,10 @@ async function main() {
         return { ...st, state: stage, attributes: out };
       };
       s.journal = journal;
-      el._renderStatus(s, []);
-      for (let i = 0; i < 40 && journal && !s.status.querySelector(".gen"); i++) {
-        await new Promise((r) => setTimeout(r, 100));
-      }
+      // The journal page, once drawn, stays on show while a redraw gathers its data (UX fix 2, F2):
+      // a stale .gen is already there, so wait for the redraw itself, not for a .gen to appear.
+      if (journal) await el._renderJournal(s);
+      else el._renderStatus(s, []);
       const text = (sel) => [...s.status.querySelectorAll(sel)].map((r) => r.innerText.replace(/\s+/g, " ").trim());
       return journal ? text(".gen") : text(".row");
     }, { stage, attrs, journal });
@@ -6941,6 +7026,21 @@ async function main() {
       src = (await cur().locator(".pet").getAttribute("src")) || "";
     }
     check(`egg shows ${frames}`, src.includes(frames), src.split("/").slice(-1)[0]);
+  }
+  // UX fix 2, F12: an egg's status page is "you two" and when it hatches, none of the care meters.
+  for (const [minutes, line] of [[25, "warm and growing ♪"], [10, "wiggling! any minute ♪"], [4, "cracking! ♥"]]) {
+    await inject(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + minutes * 60000).toISOString() } });
+    await page.waitForTimeout(1200);
+    const egg = await card.first().evaluate((el) => {
+      const s = el._slides[el._index];
+      if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      el._toggleStatus(s);
+      const out = { rows: [...s.status.querySelectorAll(".row")].map((r) => r.textContent.trim()), text: s.status.textContent };
+      el._toggleStatus(s);
+      return out;
+    });
+    check(`UX2 F12: an egg ${minutes} min out says "${line}" and shows no care meters`,
+      egg.rows.some((r) => r === `hatching${line}`) && !/hunger|happy|energy|health|discipline|weight|traits|no care yet/.test(egg.text), JSON.stringify(egg));
   }
 
   }
@@ -11129,6 +11229,9 @@ async function main() {
         }
       }
     }
+    // The swipes above kept a place in this browser (UX fix 2, F8: hatch-shelf-*, shared by every
+    // tab of the origin). Put it back, or a later page load (restart's) would open on pet 2, not 1.
+    await lp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("hatch-shelf-")).forEach((k) => localStorage.removeItem(k)));
     await lp.close();
   }
 
@@ -12099,8 +12202,8 @@ async function main() {
       await wait(() => s.status.querySelector(".jfoot .flink"));
       const link = s.status.querySelector(".jfoot .flink")?.textContent;
       s.status.querySelector(".jfoot .flink")?.click();
-      const head = s.status.querySelector(".jhead span")?.textContent;
-      return { link, head, world: el._worldName(s) };
+      const head = s.status.querySelector(".shead .stitle")?.textContent.replace(" · opening…", "");
+      return { link, head, world: el._worldName(s).toLowerCase() };
     } finally {
       if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
       el._dropFinds(s);
@@ -12156,7 +12259,7 @@ async function main() {
     await wait(() => s.status.querySelector(".jfoot .flink"));
     const foot = [...(s.status.querySelector(".jfoot")?.querySelectorAll("button") || [])].map((b) => b.textContent);
     s.status.querySelector(".jfoot .flink").click();
-    const loading = [...s.status.querySelectorAll(".jhead span")].map((x) => x.textContent);
+    const loading = s.status.querySelector(".shead .stitle")?.textContent;
     await wait(() => s.status.querySelector(".fgrid") || !s.finds);
     await wait(() => s.status.querySelector(".fgrid") || s.status.querySelector(".jgrid"), 5000); // an error: the journal
     await new Promise((r) => setTimeout(r, 300));
@@ -12166,8 +12269,8 @@ async function main() {
       text: t.textContent.trim(), heart: !!t.querySelector(".fheart") });
     const box = s.status.getBoundingClientRect();
     return { e: s.ids?.["sensor.life_stage"] === e, finds: s.finds, journal: s.journal, foot, loading,
-      head: s.status.querySelector(".jhead")?.textContent.replace(/\s+/g, " ").trim(),
-      back: s.status.querySelector(".flink")?.textContent, text: s.status.textContent,
+      head: s.status.querySelector(".shead .stitle")?.textContent.replace(/\s+/g, " ").trim(),
+      back: s.status.querySelector(".shead .sback")?.textContent, text: s.status.textContent,
       visitors: grids[0] ? [...grids[0].children].map(tile) : null, tiles: grids[1] ? [...grids[1].children].map(tile) : null,
       fit: s.status.scrollWidth <= s.status.clientWidth && [...s.status.querySelectorAll(".ftile")].every((t) => t.getBoundingClientRect().right <= box.right + 0.5),
       jgrid: !!s.status.querySelector(".jgrid"), note: s.status.querySelector(".status-feedback")?.textContent || "",
@@ -12175,13 +12278,13 @@ async function main() {
   }, { e: seedPet, stub });
   const a = await open(null);
   const calls = a.msgs.filter((m) => m.type === "virtual_pet/collection");
-  check("V-D: \"finds ›\" sits in the journal's foot with \"‹ status\", and opens with \"opening…\"",
-    JSON.stringify(a.foot) === JSON.stringify(["‹ status", "finds ›"]) &&
-    JSON.stringify(a.loading) === JSON.stringify([`finds · ${fw.name}`, "opening…"]), JSON.stringify({ foot: a.foot, loading: a.loading }));
+  check("V-D: \"finds ›\" sits in the journal's foot (\"‹ status\" is in its top band), and opens with \"opening…\"",
+    JSON.stringify(a.foot) === JSON.stringify(["finds ›"]) &&
+    a.loading === `finds · ${fw.name.toLowerCase()} · opening…`, JSON.stringify({ foot: a.foot, loading: a.loading }));
   check("V-D: one virtual_pet/collection {shared: false} for this pet, and no call_service",
     calls.length === 1 && calls[0].entity_id === seedPet && calls[0].shared === false && !a.msgs.some((m) => m.type === "call_service"),
     JSON.stringify(a.msgs));
-  check("V-D: the page is \"finds · <world>\" with \"‹ journal\"", a.e && a.finds && a.head === `finds · ${fw.name}` && a.back === "‹ journal",
+  check("V-D: the page is \"finds · <world>\" with \"‹ journal\"", a.e && a.finds && a.head === `finds · ${fw.name.toLowerCase()}` && a.back === "‹ journal",
     JSON.stringify({ head: a.head, back: a.back, finds: a.finds }));
   const wantV = fw.visitors.map((v) => ({ id: v.id, locked: !metV.includes(v.id) }));
   const wantF = fw.finds.filter((f) => !f.gift_only && (metF.includes(f.id) || !timed(f))).map((f) => ({ id: f.id, locked: !metF.includes(f.id) }));
@@ -12224,7 +12327,7 @@ async function main() {
   await page.waitForTimeout(500);
   const back = await card.first().evaluate(async (el) => {
     const s = el._slides[el._index];
-    s.status.querySelector(".flink").click();
+    s.status.querySelector(".shead .sback").click();
     for (const t = Date.now(); !s.status.querySelector(".jgrid") && Date.now() - t < 10000;) await new Promise((r) => setTimeout(r, 50));
     return { finds: s.finds, journal: s.journal, grid: !!s.status.querySelector(".jgrid") };
   });

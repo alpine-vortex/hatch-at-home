@@ -54,6 +54,7 @@ const COPY_TABLES = {
   HOUSE_MOMENT_LINES: {}, // H8: virtual_pet.react, by category
   SETTINGS_COPY: {}, // settings UX fix 1 (F12, F16)
   SETTINGS_REACT: {}, // settings UX fix 1 (F14)
+  STATUS_COPY: { fill: "creature" }, // status UX fix 2 (F12, F14)
   SETUP_COPY: { fill: "creature" }, // settings S2: the lay sheet (the longest name is C15')
 };
 
