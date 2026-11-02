@@ -76,7 +76,7 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
 ### Using the card
 
 - Each pet stands in its device on its world's backdrop. Use the arrows, the dots or a
-  swipe to move to the next device.
+  swipe to move to the next device (a mostly vertical drag, reading or selecting, does nothing). A reload comes back to the pet you were looking at.
 - **Power-on:** the first time a browser shows the card, the screen starts like a
   new toy: a pale-green screen with the HATCH logo and a blinking "▶ tap to start".
   A tap fills in the logo and cuts to the pet (with a rising beep if you turned
@@ -284,7 +284,12 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   the one it's learning next, upbringing with "missed calls" and "ignored whines"
   under it (calls nobody answered in time, and fake calls nobody answered),
   personality (from teen), the next egg, recent care, and a link to the journal.
-  Tap again to go back. The switches live behind the gear (below).
+  The pet's head and name sit at the top left. Tap again to go back, or press Escape;
+  Escape on the journal or the pages under it goes back one page first. An egg's page
+  has just "you two" and when it hatches ("warm and growing ♪", then "wiggling! any
+  minute ♪", then "cracking! ♥"). The status draws in as a four-step wipe (instant
+  with reduced motion). A care button tapped with the status open closes it first, so the
+  pet is seen eating. The switches live behind the gear (below).
 - **The settings gear.** A gear sits at the top of the status page ("settings").
   Tap it for the settings sheet. On the sheet, "‹ status" (or the Escape key) takes
   you back to the status page; on a sub-page such as the shell picker, "‹ settings"
@@ -740,8 +745,12 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   device's family line: each generation with its traits, stars, upbringing and
   personality. The latest four show; past them, "older generations (N)" opens the rest,
   oldest first.
-  Under the creatures, "every world ›" shows all six worlds, five creatures each: the
-  ones a pet on this card has raised are drawn, the rest are silhouettes.
+  Under the creatures, "every world ›" shows all six worlds, five creatures each, the
+  pet's own world first: the ones a pet on this card has raised are drawn, the rest are
+  silhouettes. The journal, finds and every-world pages each have a "‹" back link in a
+  band at the top, like the settings sheet. A tap on a creature's tile keeps the page
+  open and the pet says a line about it, once a tile (the page keeps its place when the
+  pet updates, too).
 - **Notifications:** opt in per person. In settings (the gear on the status screen), tap "notify me" to get
   this pet's calls (each need has three phrasings, one a day: "Pip is hungry!" one day,
   "Pip's tummy is rumbling!" another), sickness, hatching, growing up, new or deeper traits, the season's

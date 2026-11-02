@@ -641,6 +641,8 @@
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     // The shelf and slides come to rest at once: a shot mid-slide is off the pixel grid.
     for (const a of root.getAnimations()) if (a instanceof CSSTransition) a.finish();
+    // The status's LCD wipes (UX fix 2, F13) run to their end too: a shot never catches a half-drawn page.
+    for (const a of root.getAnimations()) if (/^lcd-wipe/.test(a.animationName || "")) a.finish();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     await settled(card);
     window.bench.screenClass = cur.screen.className;

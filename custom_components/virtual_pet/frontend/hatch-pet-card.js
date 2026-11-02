@@ -872,6 +872,26 @@ function oncePerDay(name, day = new Date()) {
   }
   return true;
 }
+// Which pet is on show, kept per browser (UX fix 2, F8): a reload, a phone waking a dropped tab
+// or a rebuilt dashboard view comes back to it, not to the first. Keyed by the card's first
+// device, so two cards don't share a place; a device that is gone is ignored.
+function shelfKey(devices) {
+  return `hatch-shelf-${devices[0]?.device || devices[0]}`;
+}
+function shelfRead(devices) {
+  try {
+    return localStorage.getItem(shelfKey(devices));
+  } catch (err) {
+    return null;
+  }
+}
+function shelfWrite(ids, index) {
+  try {
+    localStorage.setItem(shelfKey(ids), ids[index]);
+  } catch (err) {
+    // no storage: the place is not kept
+  }
+}
 // Was oncePerDay(name) used today on this browser? (Read only.)
 function usedToday(name, day = new Date()) {
   const key = `hatch-${name}-${day.toDateString()}`;
@@ -1624,6 +1644,15 @@ const SETTINGS_REACT = {
   shell: "new shell! i look so nice ♥",
   sharedOn: "ok! i'll keep our secrets ♥",
   notifyOn: "i'll ring if i need you ♥",
+};
+// Status UX fix 2 (review 2, F12/F14; copy APPROVED by the first mate 2026-11-02, owner
+// delegated): an egg's hatching row, and the pet's word on a journal tile. Scanned like the rest.
+const STATUS_COPY = {
+  eggGrowing: "warm and growing ♪", // F12: more than 15 minutes to go
+  eggSoon: "wiggling! any minute ♪", // 15 or fewer
+  eggCracking: "cracking! ♥", // 6 or fewer
+  tileRaised: (name) => `${name}! we raised one ♥`, // F14
+  tileUnmet: "not met one of those yet",
 };
 // --- end fresh-expand copy ---
 // Approved lines the scan's nag words ("again", "forgot...") would refuse: a retry, "just us",
@@ -2572,8 +2601,10 @@ const STYLE = `
   .viewport { position: relative; overflow: hidden; padding: 14px 0 22px; touch-action: pan-y; }
   .ground { position: absolute; left: 0; right: 0; bottom: 0; height: 26%;
     background: var(--hp-ground); transition: background .5s; }
-  .track { position: relative; display: flex; gap: 16px; align-items: flex-end;
+  /* No text selection from a mouse swipe (UX fix 2, F6); the typed-text box still takes typing. */
+  .track { user-select: none; -webkit-user-select: none; position: relative; display: flex; gap: 16px; align-items: flex-end;
     transition: transform .5s cubic-bezier(.2,.8,.2,1); }
+  .track input { user-select: text; -webkit-user-select: text; }
   .slide { flex-shrink: 0; transition: opacity .5s, transform .5s; transform-origin: 50% 100%; }
   .slide.away-slide { opacity: .5; transform: scale(.94); }
   /* Loops pause where nobody watches: the neighbours, or the card scrolled away. */
@@ -2627,6 +2658,9 @@ const STYLE = `
   .porthole .bubble { left: 11%; top: 11%; max-width: 66%; }
   .porthole .screen { container-type: inline-size; }
   .porthole .status { --sy: 6cqw; --sx: 11cqw; } /* the sheet's padding, its bands kept flush */
+  /* Text fades at the lens's rim rather than being sliced mid-letter by the round corners (UX fix 2, F9). */
+  .porthole .status { -webkit-mask-image: linear-gradient(transparent, #000 10px, #000 calc(100% - 10px), transparent);
+    mask-image: linear-gradient(transparent, #000 10px, #000 calc(100% - 10px), transparent); }
   .porthole .attention { right: 13%; top: 9%; }
   /* Pad: a lily pad, its notch and veins cut with the body. */
   .pad .body { border-radius: 50% / 30%; padding: 40px 22px 40px; }
@@ -3420,6 +3454,13 @@ const STYLE = `
   .status { --sheet-bg: #e9e2c6; position: absolute; inset: 0; background: var(--sheet-bg); color: #2f3a24; padding: var(--sy, 9px) var(--sx, 12px);
     display: none; flex-direction: column; gap: 4px; font-size: 13px; overflow: auto; }
   .screen.show-status .status { display: flex; }
+  /* The status draws as a handheld's menu does (UX fix 2, F13): four steps down on open, four
+     across between its pages. Reduced motion makes both instant (the global rule). */
+  @keyframes lcd-wipe-down { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0); } }
+  @keyframes lcd-wipe-side { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
+  .status:focus { outline: none; } /* focused by a tap inside it, so Escape reaches it (UX fix 2, F4) */
+  .screen .status.wipe-down { animation: lcd-wipe-down .16s steps(4) both; }
+  .screen .status.wipe-side { animation: lcd-wipe-side .16s steps(4) both; }
   /* The backlight lights the menus too (F10): the sheet and its back band lift toward the glow's
      mint, a faint lift by day and a stronger one in the dark, fading out with the glow. */
   .status, .shead { transition: background-color .6s ease-out; }
@@ -3479,9 +3520,17 @@ const STYLE = `
   /* The status view's gear and the settings sheet's back row and headings. */
   .shead { position: sticky; top: calc(var(--sy, 9px) * -1); z-index: 1; display: flex; align-items: center;
     margin-top: calc(var(--sy, 9px) * -1); padding-top: calc(var(--sy, 9px) - 6px); background: var(--sheet-bg); }
+  /* The pet's head and name at the status band's left (UX fix 2, F10). */
+  .who { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 13px; }
+  .whohead { flex: none; width: 28px; height: 28px; image-rendering: pixelated;
+    background: var(--say-img, none) var(--say-at, 0 0) / 128px 128px no-repeat; }
+  .whoname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .gear { margin-left: auto; display: flex; align-items: center; justify-content: center;
     min-width: 44px; min-height: 44px; padding: 0 5px; border: none; background: none;
     color: inherit; cursor: pointer; }
+  /* A deeper page's heading (journal, finds, every world), right of its back link (UX fix 2, F3). */
+  .stitle { margin-left: auto; min-width: 0; padding: 0 0 0 8px; text-align: right; font-size: 12px; line-height: 1.1; }
+  .sec.lc { text-transform: none; font-size: 12px; letter-spacing: 0; }
   .sback { border: none; background: none; padding: 0; min-height: 44px; min-width: 44px; color: inherit;
     font: 400 12px 'Tiny5', monospace; text-decoration: underline; cursor: pointer; }
   .sec { margin-top: 4px; padding-bottom: 2px; border-bottom: 2px dotted #2f3a24;
@@ -3543,7 +3592,6 @@ const STYLE = `
   .status-feedback.say::before { content: ""; flex: none; width: 28px; height: 28px;
     background: var(--say-img, none) var(--say-at, 0 0) / 128px 128px no-repeat; image-rendering: pixelated; }
   .shead:has(.pback) .status-feedback.say { left: var(--sx, 12px); right: var(--sx, 12px); }
-  .jhead { display: flex; justify-content: space-between; align-items: baseline; }
   .jdream, .stoday { font-size: 13px; color: var(--hp-subink); margin: 2px 0 4px; } /* today's dream, today's line (E9) */
   .jweek { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; margin: 0 0 6px; } /* E14 */
   .jweek .wday { display: inline-flex; align-items: center; gap: 3px; }
@@ -3557,8 +3605,7 @@ const STYLE = `
   /* The journal's foot (back to the status, on to the finds) and the finds page (V-D):
      a visitor at 18 cells and a find at 16 (--px a cell: their art 1:1 in whole device
      pixels), the unmet ones dark silhouettes with no name, the viewer's gifts with a ♥. */
-  .jfoot { display: flex; justify-content: space-between; align-items: flex-end; }
-  .jfoot .jlink { align-self: auto; }
+  .jfoot { display: flex; justify-content: flex-end; align-items: flex-end; }
   .flink, .wlink { align-self: flex-end; margin-top: 2px; border: none; background: none; padding: 0;
     min-height: 44px; min-width: 44px;
     font: 400 12px 'Tiny5', monospace; color: inherit; text-decoration: underline; cursor: pointer; }
@@ -4176,15 +4223,19 @@ class HatchPetCard extends HTMLElement {
       this._go(this._index + 1);
     });
     let startX = null;
+    let startY = 0;
     this._viewport.addEventListener("pointerdown", (e) => {
       startX = e.clientX;
+      startY = e.clientY;
       this._swiped = false;
     });
     this._viewport.addEventListener("pointerup", (e) => {
       if (startX === null) return;
       const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
       startX = null;
-      if (Math.abs(dx) > 40) {
+      // A swipe is mostly sideways: a mostly vertical drag is someone reading or selecting (UX fix 2, F6).
+      if (Math.abs(dx) > 40 && Math.abs(dx) > 1.5 * Math.abs(dy)) {
         this._swiped = true;
         this._go(this._index + (dx < 0 ? 1 : -1));
       }
@@ -4262,7 +4313,7 @@ class HatchPetCard extends HTMLElement {
               <button class="gr" aria-label="Guess right">${icon("next", 22)}</button>
               <button class="gx" aria-label="Stop the game">✕</button>
             </div>
-            <div class="status"></div>
+            <div class="status" tabindex="-1"></div>
             <i class="batt" data-level="1" aria-hidden="true" hidden><b></b><b></b><b></b></i>
             <button class="boot" hidden><span class="logo"><span class="ink">HATCH</span><span class="fill" aria-hidden="true">HATCH</span></span><span class="go">▶ tap to start</span></button>
           </div><div class="mono-grid"></div><button class="request"></button></div>
@@ -4345,13 +4396,24 @@ class HatchPetCard extends HTMLElement {
     // The settings sheet and its picker keep the player's place (UX fix 1, F1/F2): a tap
     // that misses a button (a label, a gap, a note) must not fall through to the screen's
     // "tap = Status". The Status chip, "‹ settings" and Escape are the ways out.
+    // The journal, finds and every-world pages are deeper pages and keep it the same way
+    // (UX fix 2, F1): a tap on a tile or a heading is not a tap on the screen.
     s.status.addEventListener("click", (e) => {
-      if (s.settings && !s.laySheet) e.stopPropagation();
+      if ((s.settings || s.journal || s.finds || s.everyWorld) && !s.laySheet) e.stopPropagation();
     });
+    // Escape steps back one page, like the back link (UX fix 2, F4): a sheet or picker to
+    // where it came from, every world and finds to the journal, the journal to the status,
+    // and the status closes with focus on its chip. The lay sheet keeps its own way out.
     s.status.addEventListener("keydown", (e) => {
-      if (e.key !== "Escape" || !s.settings || s.laySheet) return;
+      if (e.key !== "Escape" || s.laySheet) return;
       e.preventDefault();
-      s.status.querySelector(".sback")?.click(); // back from the picker, or from the sheet (F8)
+      const back = s.status.querySelector(".sback");
+      if (back && (s.settings || s.journal || s.finds || s.everyWorld)) {
+        back.click(); // back from the picker, the sheet (F8) or a journal page
+        return;
+      }
+      this._toggleStatus(s);
+      this._card.querySelector(".statusbtn")?.focus({ preventScroll: true });
     });
     q(".gl").addEventListener("click", () => this._guess(s, "left"));
     q(".gr").addEventListener("click", () => this._guess(s, "right"));
@@ -4608,7 +4670,13 @@ class HatchPetCard extends HTMLElement {
       this._bootChecked = true;
       if (claimBoot()) this._bootStart();
     }
+    if (!this._shelfRestored) { // the pet that was on show before a reload (UX fix 2, F8)
+      this._shelfRestored = true;
+      const at = devices.findIndex((d) => d.device === shelfRead(devices));
+      if (at > 0) this._index = at;
+    }
     this._index = Math.min(this._index, devices.length - 1);
+    this._shelfDevices = devices.map((d) => d.device);
 
     for (let i = 0; i < devices.length; i++) {
       const s = this._slides[i];
@@ -4844,6 +4912,7 @@ class HatchPetCard extends HTMLElement {
     });
     this._linkEnd(); // a swipe ends the visit at once
     this._index = to;
+    if (this._shelfRestored && this._shelfDevices) shelfWrite(this._shelfDevices, to);
     this._renderShelf();
   }
 
@@ -5504,6 +5573,16 @@ class HatchPetCard extends HTMLElement {
     return this._persona(s)?.[`mood_${key}`] || null;
   }
 
+  // A page change draws as a handheld's menu does: a four-step wipe, sideways between the
+  // pages (UX fix 2, F13). Reduced motion turns the animation off (the global rule).
+  _wipe(s, kind = "side") {
+    s.status.classList.remove("wipe-side", "wipe-down");
+    void s.status.offsetWidth; // restart it
+    s.status.classList.add(`wipe-${kind}`);
+    clearTimeout(s.wipeTimer);
+    s.wipeTimer = setTimeout(() => s.status.classList.remove("wipe-side", "wipe-down"), 220);
+  }
+
   _toggleStatus(s, lay = false) {
     const open = !s.screen.classList.contains("show-status");
     const wasSettings = !open && s.settings && !s.laySheet;
@@ -5513,13 +5592,21 @@ class HatchPetCard extends HTMLElement {
     s.journal = false;
     s.finds = false;
     s.everyWorld = false;
+    s.refocus = null;
+    s.tileSaid = null;
     s.settings = false;
     s.laySheet = open && lay; // the lay sheet closes with the status (S2)
     this._closePicker(s);
-    if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+    if (open) {
+      this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
+      this._wipe(s, "down");
+    }
     this._patSync(s); // back at once when the status closes, not at the next tick
     if (wasSettings) this._settingsReact(s); // closed from the sheet: the pet's word on a change
-    else if (!open) s.settingsChanged = null;
+    else if (!open) {
+      s.settingsChanged = null;
+      this._perk(s); // the pet is back: it perks up (F13)
+    }
     if (s === this._slides[this._index]) {
       this._card.querySelector(".statusbtn").setAttribute("aria-pressed", open ? "true" : "false");
     }
@@ -8144,8 +8231,21 @@ class HatchPetCard extends HTMLElement {
     // Today's wish comes first of the rest: it changes daily, the rest is there every day.
     // Its day so far (E9 St-a): the evening's today line, else today's dream. A page, not a bubble.
     const today = !isEgg && ((this._evening() && this._todayLine(s)) || this._dreamSaid(s));
-    const html = `
-      <div class="shead">${this._gearButton()}</div>
+    // An egg has no meters or traits to read: "you two" and when it hatches (UX fix 2, F12).
+    // The status is the pet's own page: its head and name at the band's left (UX fix 2, F10).
+    const petName = this._hass.devices?.[s.ids?.device]?.name_by_user || this._hass.devices?.[s.ids?.device]?.name || "";
+    const who = petName ? `<span class="who">${isEgg ? "" : `<span class="whohead"></span>`}<span class="whoname">${escape(petName)}</span></span>` : "";
+    const band = `<div class="shead">${who}${this._gearButton()}</div>`;
+    const eggLeft = isEgg ? this._eggMinutes(this._state(s, "sensor.life_stage")) : null;
+    const eggRow = eggLeft === null ? "" : row(null, "hatching", `<span>${escape(eggLeft <= 6 ? STATUS_COPY.eggCracking
+      : eggLeft <= 15 ? STATUS_COPY.eggSoon : STATUS_COPY.eggGrowing)}</span>`);
+    const html = isEgg ? `
+      ${band}
+      ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
+      ${eggRow}
+      <button class="jlink">journal ›</button>
+      <div class="status-feedback" role="status" aria-live="polite" hidden></div>` : `
+      ${band}
       ${today ? `<div class="stoday">${escape(today)}</div>` : ""}
       ${want ? row(null, "would like", `<span>${escape(want)}</span>`) : ""}
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
@@ -8165,11 +8265,13 @@ class HatchPetCard extends HTMLElement {
       ${isEgg ? "" : misses}
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
       ${nextStage ? row(null, nextStage[0], `<span>${nextStage[1]}</span>`) : ""}
-      ${nextEgg ? row(null, isEgg ? "hatching" : "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
+      ${nextEgg ? row(null, "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
       <div class="log">${lines.join("") || "<div>no care yet</div>"}</div>
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
+    const head = s.status.querySelector(".whohead");
+    if (head) this._headCrop(s, head, 14, 3);
     this._journalLink(s, true);
     this._gearLink(s);
   }
@@ -8242,6 +8344,7 @@ class HatchPetCard extends HTMLElement {
       s.settings = false;
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
+      this._wipe(s);
       s.status.querySelector(".gear")?.focus({ preventScroll: true });
     });
     // A heading (or the back row beside its button) is not a button: a tap on it
@@ -8253,6 +8356,7 @@ class HatchPetCard extends HTMLElement {
       s.picker = true;
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
+      this._wipe(s);
       s.status.querySelector(".pback")?.focus({ preventScroll: true });
     });
     // An admin's way to the pet's options (Settings → Devices & services → Virtual Pet).
@@ -8657,6 +8761,7 @@ class HatchPetCard extends HTMLElement {
       s.settings = true;
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
+      this._wipe(s);
       s.status.querySelector(".sback")?.focus({ preventScroll: true });
     });
   }
@@ -8894,16 +8999,26 @@ class HatchPetCard extends HTMLElement {
     }
   }
 
+  // Set the pet's head, cropped from the sprite on show, as the background of `el` (28 px, the
+  // crop the settings bubble uses); (cx, cy) is where the head's centre and top sit in it.
+  _headCrop(s, el, cx, cy) {
+    if (!s.pet?.src || !s.drawn) return false;
+    const [hx, hy] = s.species?.head?.[s.drawn] || [128, 96];
+    let top = this._headTop(s.pet, hx, hy); // the head's top, where a hat sits
+    if (top === null && !s.pet.complete) { // not drawn yet (a status opened at once): crop again when it is
+      s.pet.addEventListener("load", () => { if (el.isConnected) this._headCrop(s, el, cx, cy); }, { once: true });
+    }
+    top ??= hy;
+    el.style.setProperty("--say-img", `url("${s.pet.src}")`);
+    el.style.setProperty("--say-at", `${cx - hx / 2}px ${cy - top / 2}px`);
+    return true;
+  }
+
   _statusMessage(s, message) {
     const note = s.status.querySelector(".status-feedback");
     if (!note) return;
     note.textContent = message;
-    if (note.classList.contains("say") && s.pet?.src && s.drawn) { // its head, cropped from the sprite on show
-      const [hx, hy] = s.species?.head?.[s.drawn] || [128, 96];
-      const top = this._headTop(s.pet, hx, hy) ?? hy; // the head's top, where a hat sits
-      note.style.setProperty("--say-img", `url("${s.pet.src}")`);
-      note.style.setProperty("--say-at", `${14 - hx / 2}px ${3 - top / 2}px`);
-    }
+    if (note.classList.contains("say")) this._headCrop(s, note, 14, 3); // its head, cropped from the sprite on show
     note.hidden = false;
     note.style.top = "";
     const tap = this._tapRect && Date.now() - this._tapRect.at < 6000 ? this._tapRect : null;
@@ -8939,26 +9054,53 @@ class HatchPetCard extends HTMLElement {
     return true;
   }
 
+  // "journal ›" on the status page (open) or "‹ status" in the journal's top band (back).
   _journalLink(s, open) {
-    s.status.querySelector(".jlink").addEventListener("click", (e) => {
+    s.status.querySelector(open ? ".jlink" : ".sback")?.addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
       this._tapped(e.currentTarget);
       s.journal = open;
       s.finds = false;
       s.olderOpen = false; // older generations fold up with the journal
+      s.tileSaid = null;
+      s.refocus = null;
       if (open) this._loadPhotos(s); // a best friend's photos, theirs only
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
+      this._wipe(s);
+      // Open: the band's back link, at the top where the view is (F5). Back: the link just used.
+      s.status.querySelector(open ? ".sback" : ".jlink")?.focus({ preventScroll: true });
     });
+  }
+
+  // The top band of a deeper page, as the settings sheet has (UX fix 2, F3): the way back at
+  // the left, the page's heading at the right, sticky. `page` marks which page is on show.
+  _pageBand(back, title, page, note = "") {
+    return `<div class="shead" data-page="${page}"><button class="sback">${back}</button>` +
+      `<span class="stitle">${title}</span>${note}</div>`;
+  }
+
+  // Is this page (not its loading view) already on show? Then a redraw keeps it and its place (F2).
+  _pageShown(s, page) {
+    return !!s.status.querySelector(`.shead[data-page="${page}"]`);
+  }
+
+  // Focus a control once the page that has it is drawn (the back link lands on the door it used).
+  _refocus(s) {
+    if (!s.refocus) return;
+    s.status.querySelector(s.refocus)?.focus({ preventScroll: true });
+    s.refocus = null;
   }
 
   // The world's creatures (unraised ones as silhouettes) and this device's past pets.
   async _renderJournal(s) {
+    const heading = `journal · ${escape(this._worldName(s).toLowerCase())}`;
     const loading = `
-      <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span><span>opening…</span></div>
-      <div class="log">Gathering your pet's memories…</div>
-      <button class="jlink">‹ status</button>`;
-    if (this._setStatus(s, loading)) this._journalLink(s, false);
+      ${this._pageBand("‹ status", `${heading} · opening…`, "loading")}
+      <div class="log">Gathering your pet's memories…</div>`;
+    // Already drawn: a redraw (a tick, a message, the photos) replaces it in one go and keeps
+    // its place, instead of passing through the short loading view (F2).
+    if (!this._pageShown(s, "journal") && this._setStatus(s, loading)) this._journalLink(s, false);
     const stage = this._state(s, "sensor.life_stage")?.attributes || {};
     const roster = stage.roster || [];
     const raised = new Set();
@@ -8987,7 +9129,7 @@ class HatchPetCard extends HTMLElement {
     if (!s.journal || s.finds) return; // closed (or on to the finds) while the names loaded
     const tiles = roster.map((id) => {
       const known = raised.has(id);
-      return `<div class="jtile${known ? "" : " locked"}">` +
+      return `<div class="jtile${known ? "" : " locked"}" data-id="${escape(id)}" data-name="${known ? escape(names[id]).toLowerCase() : ""}">` +
         `<img src="${BASE}/sprites/${id}/child_content_1.png?v=${VERSION}" alt="">` +
         `<span>${known ? escape(names[id]).toLowerCase() : "???"}</span></div>`;
     });
@@ -8995,7 +9137,7 @@ class HatchPetCard extends HTMLElement {
     const line = (p) =>
       `<div class="gen${p.current ? " now" : ""}">gen ${p.generation}${p.current ? " (now)" : ""} · ` +
       `${escape(p.name)} · ${escape((names[p.species] || "egg").toLowerCase())}` +
-      `${p.age_days != null ? ` · ${Math.round(p.age_days)} d` : ""}` +
+      `${p.age_days != null ? ` · ${Math.round(p.age_days)} days` : ""}` +
       `${p.upbringing ? ` · ${escape(p.upbringing)}` : ""}` +
       `${p.personality ? ` · ${escape(String(p.personality).replaceAll("_", " "))}` : ""}` +
       `${gamesPlayed(p.games) ? ` · ${gamesPlayed(p.games)} games` : ""}` +
@@ -9006,20 +9148,22 @@ class HatchPetCard extends HTMLElement {
     const olderLink = older.length
       ? `<button class="jolder">older generations (${older.length})</button>` : "";
     const html = `
-      <div class="jhead"><span>journal · ${escape(this._worldName(s))}</span>
-        <span>gen ${stage.generation || 1}</span></div>
+      ${this._pageBand("‹ status", `${heading} · gen ${stage.generation || 1}`, "journal", SAY_NOTE)}
       ${this._dreamSaid(s) ? `<div class="jdream">${escape(this._dreamSaid(s))}</div>` : ""}
       ${this._weekStrip(s)}
       <div class="jgrid">${tiles.join("")}</div>
       <button class="wlink">every world ›</button>
       ${this._photoRow(s)}
       <div class="jlist">${olderLink}<div class="jmore"></div>${lines.join("")}${past.length < 2 ? "<div class=\"gt\">a week into adulthood, a pet can lay an egg</div>" : ""}${this._memories(stage.memories)}</div>
-      <div class="jfoot"><button class="jlink">‹ status</button><button class="flink">${findsShown() ? "finds" : "visitors"} ›</button></div>
-      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
+      <div class="jfoot"><button class="flink">${findsShown() ? "finds" : "visitors"} ›</button></div>`;
+    const top = s.status.scrollTop;
     if (!this._setStatus(s, html)) return;
+    s.status.scrollTop = top; // the place a redraw found it at
     this._journalLink(s, false);
     this._findsLink(s, true);
     this._everyWorldLink(s, true);
+    this._tileLines(s);
+    this._refocus(s);
     const showOlder = () => {
       s.status.querySelector(".jmore").innerHTML = older.map(line).join("");
       s.status.querySelector(".jolder")?.remove();
@@ -9276,24 +9420,29 @@ class HatchPetCard extends HTMLElement {
 
   // "every world ›" under the journal's grid (open) or "‹ journal" on the page (back).
   _everyWorldLink(s, open) {
-    s.status.querySelector(".wlink")?.addEventListener("click", (e) => {
+    s.status.querySelector(open ? ".wlink" : ".sback")?.addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
       this._tapped(e.currentTarget);
       s.everyWorld = open;
       s.journal = !open;
+      s.tileSaid = null;
+      // Open: the band's back link (F5). Back: the journal's "every world ›", once it's drawn.
+      s.refocus = open ? null : ".wlink";
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
-      s.status.querySelector(open ? ".wlink" : ".jlink")?.focus({ preventScroll: true });
+      this._wipe(s);
+      if (open) s.status.querySelector(".sback")?.focus({ preventScroll: true });
     });
   }
 
   async _renderEveryWorld(s) {
-    const foot = `<div class="jfoot"><button class="wlink">‹ journal</button></div>`;
-    const loading = `<div class="jhead"><span>every world</span><span>opening…</span></div>${foot}`;
-    if (this._setStatus(s, loading)) this._everyWorldLink(s, false);
+    const loading = this._pageBand("‹ journal", "every world · opening…", "loading");
+    if (!this._pageShown(s, "every") && this._setStatus(s, loading)) this._everyWorldLink(s, false); // F2
     const raised = new Set();
     for (const other of this._slides) (this._state(other, "sensor.life_stage")?.attributes.raised || []).forEach((r) => raised.add(r));
-    const worlds = Object.entries(this._worlds || {});
+    // The pet's own world first, then the rest in catalog order (F11).
+    const worlds = Object.entries(this._worlds || {})
+      .sort(([a], [b]) => (b === s.worldKey) - (a === s.worldKey));
     // A creature whose species.json won't load isn't ready: no tile (never a broken image).
     const names = {};
     await Promise.all(worlds.flatMap(([, w]) => (w.roster || []).map((id) => loadJson(`sprites/${id}/species.json`)
@@ -9302,20 +9451,35 @@ class HatchPetCard extends HTMLElement {
     const rows = worlds.map(([, w]) => {
       const tiles = (w.roster || []).filter((id) => names[id]).map((id) => {
         const known = raised.has(id);
-        return `<div class="jtile${known ? "" : " locked"}">` +
+        return `<div class="jtile${known ? "" : " locked"}" data-id="${escape(id)}" data-name="${known ? escape(names[id]).toLowerCase() : ""}">` +
           `<img src="${BASE}/sprites/${id}/child_content_1.png?v=${VERSION}" alt="">` +
           `<span>${known ? escape(names[id]).toLowerCase() : "???"}</span></div>`;
       });
-      return tiles.length ? `<div class="sec">${escape(w.name || "")}</div><div class="jgrid">${tiles.join("")}</div>` : "";
+      return tiles.length ? `<div class="sec lc">${escape((w.name || "").toLowerCase())}</div><div class="jgrid">${tiles.join("")}</div>` : "";
     });
     const html = `
-      <div class="jhead"><span>every world</span></div>
-      ${rows.join("")}
-      ${foot}
-      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
+      ${this._pageBand("‹ journal", "every world", "every", SAY_NOTE)}
+      ${rows.join("")}`;
+    const top = s.status.scrollTop;
     if (!this._setStatus(s, html)) return;
+    s.status.scrollTop = top; // F2: a redraw keeps its place
     this._everyWorldLink(s, false);
-    s.status.querySelectorAll(".sec, .jhead").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
+    this._tileLines(s);
+    this._refocus(s);
+  }
+
+  // A tap on a creature's tile: the pet says one line, once a tile for as long as the page
+  // is open (UX fix 2, F14). A raised one it names, an unmet one is still a silhouette.
+  _tileLines(s) {
+    s.status.querySelectorAll(".jtile").forEach((tile) => tile.addEventListener("click", () => {
+      const said = (s.tileSaid ??= new Set());
+      if (said.has(tile.dataset.id)) return;
+      said.add(tile.dataset.id);
+      const at = tile.getBoundingClientRect(); // the bubble must not cover the tile just tapped
+      this._tapRect = { top: at.top, bottom: at.bottom, at: Date.now() };
+      this._statusMessage(s, tile.classList.contains("locked") ? STATUS_COPY.tileUnmet
+        : STATUS_COPY.tileRaised(tile.dataset.name));
+    }));
   }
 
   // --- The finds page (visitors v2 §4, V-D) --------------------------------------
@@ -9326,17 +9490,20 @@ class HatchPetCard extends HTMLElement {
 
   // "finds ›" in the journal's foot (open) or "‹ journal" on the page (back).
   _findsLink(s, open) {
-    s.status.querySelector(".flink")?.addEventListener("click", (e) => {
+    s.status.querySelector(open ? ".flink" : ".sback")?.addEventListener("click", (e) => {
       e.stopPropagation(); // the screen behind would close the status
       this._tapped(e.currentTarget);
       s.finds = open;
       s.journal = !open;
+      s.tileSaid = null;
+      s.refocus = open ? null : ".flink"; // back lands on "finds ›" once the journal is drawn
       if (open) {
         this._dropFinds(s); // read again on each open: the page only grows
         this._loadFinds(s);
       }
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
+      this._wipe(s);
     });
   }
 
@@ -9379,11 +9546,10 @@ class HatchPetCard extends HTMLElement {
     const key = data?.reply?.world || s.worldKey;
     const world = this._worlds?.[key];
     // Named by what it shows: visitors only when FINDS_SHOWN is off (top10 7a).
-    const head = `${findsShown() ? "finds" : "visitors"} · ${escape(world?.name || this._worldName(s))}`;
-    const foot = `<button class="flink">‹ journal</button>`;
+    const head = `${findsShown() ? "finds" : "visitors"} · ${escape((world?.name || this._worldName(s)).toLowerCase())}`;
     let html;
     if (!data) {
-      html = `<div class="jhead"><span>${head}</span><span>opening…</span></div>${foot}`;
+      html = this._pageBand("‹ journal", `${head} · opening…`, "loading");
     } else {
       const own = data.own && !sharedScreen();
       const tile = (t) => {
@@ -9397,11 +9563,9 @@ class HatchPetCard extends HTMLElement {
       };
       const tiles = collectionTiles(world, data.reply, own);
       html = `
-      <div class="jhead"><span>${head}</span></div>
+      ${this._pageBand("‹ journal", head, "finds", SAY_NOTE)}
       <div class="fgrid">${tiles.filter((t) => t.kind === "visitor").map(tile).join("")}</div>
-      ${findsShown() ? `<div class="fgrid">${tiles.filter((t) => t.kind === "find").map(tile).join("")}</div>` : ""}
-      ${foot}
-      <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
+      ${findsShown() ? `<div class="fgrid">${tiles.filter((t) => t.kind === "find").map(tile).join("")}</div>` : ""}`;
     }
     if (!this._setStatus(s, html)) return;
     this._findsLink(s, false);
@@ -9521,6 +9685,9 @@ class HatchPetCard extends HTMLElement {
       }
     }
     if (!id) return;
+    // A care with the status open happens in view, as a game does (UX fix 2, F7): the sheet
+    // closes first, so the meal or the medicine shows and a refusal is read in its bubble.
+    if (!s.laySheet && s.screen.classList.contains("show-status")) this._toggleStatus(s);
     // Its log entry is "mine" (PR 2a); a few kept, so two quick taps both count.
     s.pressed = [...(s.pressed || []).filter((p) => Date.now() - p.pressedAt < MINE_MATCH_MS), { action, pressedAt: Date.now() }];
     this._sceneStart(s, action);

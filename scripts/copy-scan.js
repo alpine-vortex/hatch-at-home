@@ -12,6 +12,7 @@ const FILL = {
   name: "Wwwwwwwwwwww", // 12
   it: "Wwwwwwwwwwwwwwwwwwww", // 20, the typed text's cap (FM dialogue pass)
   creature: "Mexican red-knee tarantula", // 26, the longest creature name
+  tile: "giant pacific octopus", // 21, the longest name FM sized the journal's tile line for (review 2, F14)
 };
 // Each table: the fill its functions take, and the keys (at any depth) that may ask.
 const COPY_TABLES = {
@@ -54,6 +55,7 @@ const COPY_TABLES = {
   HOUSE_MOMENT_LINES: {}, // H8: virtual_pet.react, by category
   SETTINGS_COPY: {}, // settings UX fix 1 (F12, F16)
   SETTINGS_REACT: {}, // settings UX fix 1 (F14)
+  STATUS_COPY: { fill: "tile" }, // status UX fix 2 (F12, F14)
   SETUP_COPY: { fill: "creature" }, // settings S2: the lay sheet (the longest name is C15')
 };
 

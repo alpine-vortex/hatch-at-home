@@ -144,6 +144,8 @@ from its unlit twin on more than 5 % of its pixels, or the run exits non-zero.
 
 - `Date` is fixed (so seasons, countdowns and "day N" text hold still) and
   `Math.random` is seeded.
+- The status's LCD wipes (open and between its pages) are run to their end before a shot, so a
+  shot never catches a half-drawn page.
 - The card's tick timer is stopped after one manual tick: frame 1 of every
   animation, no wandering, no idle chatter, no hop. The greeting from that one
   tick is what the bubble shows unless you set `say`.
