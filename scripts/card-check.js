@@ -396,7 +396,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     await page.setViewportSize({ width, height: 860 });
     await page.waitForTimeout(500);
     // The slide dots and the compact answer buttons (330 is the compact layout): 44x44 hit
-    // boxes, the dots edge to edge so none steals a neighbour's tap, the dot itself still 10 px.
+    // boxes, the dots edge to edge so none steals a neighbour's tap, the dot itself a 16 px head (UX7 F8).
     const tapBoxes = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       const dots = [...el.shadowRoot.querySelectorAll(".dots .dot")];
@@ -425,7 +425,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
       if (wasOpen) s.screen.classList.add("show-status");
       return out;
     });
-    if (tapBoxes.dots < 2 || tapBoxes.answers < 2 || tapBoxes.small.length || tapBoxes.overlap || tapBoxes.mark !== 10
+    if (tapBoxes.dots < 2 || tapBoxes.answers < 2 || tapBoxes.small.length || tapBoxes.overlap || tapBoxes.mark !== 16
       || tapBoxes.compact !== (width === 330)) boxIssues.push(`${width} dots/answers: ${JSON.stringify(tapBoxes)}`);
     boxCounts[`${width}-tapBoxes`] = tapBoxes.dots + "d" + tapBoxes.answers + "a";
     for (const view of ["picker", "settings", "status"]) {
@@ -1457,6 +1457,16 @@ async function main() {
     await evaluate(() => localStorage.getItem("hatch-sounds")) === "on");
   await cur().locator(".bell.sound").click(); // off again for the rest of the run
   await page.waitForTimeout(300);
+  // UX7 F11: "sounds here" is the master. With it off the babble row says "needs sounds", is disabled
+  // and a tap changes nothing; with it on, babble starts off and turns on here.
+  const needs = await cur().locator(".bell.babble").evaluate((b) => ({ text: b.textContent, disabled: b.getAttribute("aria-disabled") }));
+  await cur().locator(".bell.babble").click({ force: true });
+  await page.waitForTimeout(200);
+  check("UX7 F11: with sounds here off, the babble row says \"needs sounds\" and a tap changes nothing",
+    needs.text === "needs sounds" && needs.disabled === "true" &&
+    await evaluate(() => localStorage.getItem("hatch-babble")) !== "on", JSON.stringify(needs));
+  await cur().locator(".bell.sound").click(); // sounds on for the babble switch
+  await page.waitForTimeout(300);
   const babbleBefore = await cur().locator(".bell.babble").getAttribute("aria-pressed");
   await cur().locator(".bell.babble").click();
   await page.waitForTimeout(300);
@@ -1464,6 +1474,8 @@ async function main() {
     babbleBefore === "false" && await cur().locator(".bell.babble").getAttribute("aria-pressed") === "true" &&
     await evaluate(() => localStorage.getItem("hatch-babble")) === "on");
   await cur().locator(".bell.babble").click(); // off again
+  await page.waitForTimeout(300);
+  await cur().locator(".bell.sound").click(); // and sounds off again for the rest of the run
   await page.waitForTimeout(300);
   // "notify me" has its own switch; a shared screen has none, and babble is still babble.
   const bells = await page.locator("hatch-pet-card").evaluate((el) => {
@@ -2079,6 +2091,7 @@ async function main() {
     counter.disconnect();
     // Babble (on for this check) never while asleep, in a game or behind the status.
     localStorage.setItem("hatch-babble", "on");
+    localStorage.setItem("hatch-sounds", "on"); // babble needs sounds here too (UX7 F11)
     el._card.dispatchEvent(new Event("touchend")); // a tap unlocks audio
     await wait(300);
     const hour = new Date().getHours();
@@ -2099,6 +2112,7 @@ async function main() {
     out.babbleGame = babbles(() => { s.game = { kind: "left_right" }; });
     out.babbleStatus = babbles(() => el._toggleStatus(s));
     localStorage.setItem("hatch-babble", "off");
+    localStorage.setItem("hatch-sounds", "off");
     // A burst: three queued lines, said one after another; only the first voiced.
     s.voicedAt = 0;
     out.burst = [];
@@ -2288,6 +2302,58 @@ async function main() {
   check("a friend can give it a catchphrase: five choices in two rows on the screen",
     catchy.labels.join("|") === `hehe|yay|and stuff|la la|keep "${p}"` && catchy.rows === 2 && catchy.inside,
     JSON.stringify(catchy));
+  // UX7 F1: an asking pet never hides behind its own bubble, and the question is never cut under
+  // the chips. A sea otter in tidepool (the porthole, the smallest screen) at 330 and 300: the pet's box
+  // and the bubble's don't intersect (or its head is in the bubble and the pet is out of the way), and
+  // the bubble's bottom is above the chips' top. At 300 the porthole may not have the room: it is
+  // looked at but only the other worlds are held to it (see the report), so it is measured, not failed.
+  const lifeId = await page.locator("hatch-pet-card").evaluate((el) => el._slides[el._index].ids["sensor.life_stage"]);
+  const lifeWas = await evaluate((e) => document.querySelector("home-assistant").hass.states[e].attributes, lifeId);
+  const viewWas = page.viewportSize();
+  const askFit = {};
+  try {
+    for (const [world, species] of [["tidepool", "otter"], ["woodland", "fox"]]) {
+      await inject(lifeId, { attributes: { species, world } });
+      for (let i = 0; i < 30; i++) {
+        if (await card.evaluate((el, sp) => el._slides[el._index].speciesId === sp && el._slides[el._index].species, species)) break;
+        await page.waitForTimeout(200);
+      }
+      for (const width of [330, 300]) {
+        await page.setViewportSize({ width, height: 860 });
+        await page.waitForTimeout(500);
+        askFit[`${world}-${width}`] = await card.evaluate(async (el) => {
+          const s = el._slides[el._index];
+          s.screen.classList.remove("show-status");
+          s.voicedAt = Date.now() + 1e9;
+          el._ask(s, "catchphrase");
+          el._write(s, el._askLine("catchphrase"), 1e9);
+          el._askPlace(s, s.screen.querySelector(".askday"));
+          await new Promise((r) => setTimeout(r, 600)); // the two-step move
+          const box = (e) => e.getBoundingClientRect();
+          const bubble = box(s.bubble);
+          const chips = box(s.screen.querySelector(".askday"));
+          const pet = box(s.pet);
+          const nopet = s.screen.querySelector(".askday.nopet");
+          const apart = Math.min(pet.right, bubble.right) - Math.max(pet.left, bubble.left) <= 0
+            || Math.min(pet.bottom, bubble.bottom) - Math.max(pet.top, bubble.top) <= 0;
+          const out = { w: Math.round(box(s.screen).width), apart: apart || !!nopet, head: !!nopet,
+            petTop: Math.round(pet.top - box(s.screen).top), cut: Math.round(bubble.bottom - chips.top) };
+          el._clearAsk(s);
+          s.sayUntil = 0;
+          return out;
+        });
+      }
+    }
+  } finally {
+    await page.setViewportSize(viewWas);
+    await inject(lifeId, { attributes: lifeWas });
+    await page.waitForTimeout(600);
+  }
+  check("UX7 F1: at 330 in tidepool the asking pet and its bubble don't overlap, the question clears the chips",
+    askFit["tidepool-330"]?.apart && askFit["tidepool-330"].cut <= 0, JSON.stringify(askFit["tidepool-330"]));
+  check("UX7 F1: at 300 in a tank world the same holds, and the pet is never above the screen",
+    askFit["woodland-300"]?.apart && askFit["woodland-300"].cut <= 0 && askFit["woodland-300"].petTop >= 0
+    && askFit["tidepool-300"]?.apart && (askFit["tidepool-300"].head || askFit["tidepool-300"].petTop >= 0), JSON.stringify(askFit));
   // Birthdays: yours, picked in the question box (a tap on a picker stays in the
   // box); a celebration takes the away note's place; the pet's party; forgetting.
   const bday = await page.locator("hatch-pet-card").evaluate(async (el) => {
@@ -7988,7 +8054,7 @@ async function main() {
       Object.assign(s, { asleep: false, lightsOut: false });
       Date.prototype.getHours = realHours;
       setup();
-      localStorage.setItem("hatch-sounds", "off");
+      localStorage.setItem("hatch-sounds", bell === ".bell.babble" ? "on" : "off"); // babble needs sounds here (UX7 F11)
       localStorage.setItem("hatch-babble", "off");
       s.statusHtml = null;
       s.settings = true; // the switches live in the settings sheet

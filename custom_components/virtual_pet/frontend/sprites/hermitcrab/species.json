@@ -76,6 +76,7 @@
     "praise": "claw_wave",
     "scold": "shell_peek"
   },
+  "face": {"baby": [148, 176, 48], "child": [170, 161, 56], "teen": [188, 151, 72], "adult": [173, 178, 72]},
   "head": {
     "baby": [
       124,
