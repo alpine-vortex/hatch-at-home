@@ -1277,7 +1277,7 @@ async function main() {
   await page.waitForTimeout(400);
   // The gear opens the settings sheet in the same screen: the status stays up, the
   // switches are there and the stats are not, and focus lands on its back row.
-  const statusRows = /weight/.test(await cur().locator(".status").innerText()) && !await cur().locator(".status .bell").count();
+  const statusRows = /weight/.test(await cur().locator(".status").innerText()) && !await cur().locator(".status .bell:not(.namechange)").count(); // the first day's name row has its own "change" (S3)
   await cur().locator(".status .gear").click();
   await page.waitForTimeout(300);
   const sheet = await page.locator("hatch-pet-card").evaluate((el) => {

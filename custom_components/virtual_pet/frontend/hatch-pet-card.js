@@ -10265,7 +10265,7 @@ class HatchPetCard extends HTMLElement {
     s.pressed = [...(s.pressed || []).filter((p) => Date.now() - p.pressedAt < MINE_MATCH_MS), { action, pressedAt: Date.now() }];
     this._sceneStart(s, action);
     const layAt = action === "lay_egg" ? this._layWatch(s) : null; // the name sheet waits for the lay (S3)
-    this._call(button, s, "button", "press", id).then((ok) => {
+    Promise.resolve(this._call(button, s, "button", "press", id)).then((ok) => {
       if (ok === false && layAt && s.layAt === layAt) this._layDrop(s); // a failed press: nothing to wait for
     });
   }
