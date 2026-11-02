@@ -162,14 +162,16 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     school), "what should I dream about tonight?" (the next morning everyone hears the
     dream's story, and you hear it was your idea), "rain or sun tomorrow?" (judged
     the next evening, no score), "anything big this week?" (Sunday or Monday, at
-    most once a week; "yes" asks which day, then lets you type what it is, and on that
+    most once a week; "yes" asks which day (today included), then lets you type what it is, and on that
     day the pet cheers you on in the morning and, from 7 pm, asks how it went or is
     there for you), and once
     each "what's your favourite weather?" and "...season?", and "who's your favourite
     visitor?" once in each world (its visitors as buttons). After a tough day it's a
     little softer with you the next morning. It remembers favourites, tonight's
     dream, your guess and a big day (see Privacy); the rest of your answers stay on
-    your screen;
+    your screen. While it asks, the pet steps back a little, "lay an egg?" waits out of
+    the way, and a tap beside the buttons does nothing. Every answer gets a reply that
+    stays on show for a few seconds, and a tap right after an answer opens nothing;
   - remembers your favourites: "it's snowing, your favourite!! ❄", "it's autumn, your
     favourite! ♥" once a season (no season talk in the tropics), "Thanksgiving in
     your favourite season! ♥"; your favourite visitor gets its own hello on your
@@ -329,8 +331,10 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   and only changes how the screen looks. Safari and iOS can't draw it and keep
   showing colour.
 - **Big text.** "big text" in the same part makes the words on the status page, the
-  journal and the settings sheet bigger (the page scrolls more). It is per browser and
-  off to begin with: handy on a wall tablet, or for younger and older readers.
+  journal and the settings sheet bigger (the page scrolls more), and the pet's words
+  too: its speech bubble and its answer buttons, with each line held half as long
+  again. It is per browser and off to begin with: handy on a wall tablet, or for
+  younger and older readers.
 - Every tap answers straight away: the button sinks, a ring pops out, the pet perks up
   and phones give a tiny vibration. Then the real reaction follows (a food bowl, a
   sparkle, or a refusal like "I'm full!"). If HA rejects the press, the button shakes
@@ -794,7 +798,7 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   sensor; for a pet from before 0.33, worked out from when its egg was laid). In
   its first year it tells you each month ("I'm 3 months old today!"), then once a
   year it has a party: confetti and a party hat, on every screen. At bond level 4
-  it asks you, once, when your birthday is (or "skip", which it remembers). Your
+  it asks you, once, when your birthday is (two steppers for the month and the day, or "skip", which it remembers). Your
   birthday is kept only for you: never on a sensor, an event or diagnostics. On the
   day, the first pet you look at says "happy birthday!!" with a little tune, and
   if you turn "birthday on my phone" on (in settings; off by default) and have

@@ -486,6 +486,7 @@
     if (shot.look) lookStart(card, cur, shot.look);
     if (shot.ask) card._ask(cur, shot.ask);
     if (shot.say !== undefined) card._write(cur, shot.say, 1e9);
+    if (shot.ask && shot.say !== undefined) card._askPlace(cur, cur.screen.querySelector(".askday")); // the line is in the bubble now
     // `idle`: the pet's idle mumble through the card's own _idle, the first move (a mumble)
     // and the type's side of the coin forced (draws: next-idle delay, move, coin).
     if (shot.idle) {

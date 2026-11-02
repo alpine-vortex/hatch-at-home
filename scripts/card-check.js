@@ -1903,7 +1903,7 @@ async function main() {
     }
   });
   check("top10 1a: the phone question asks with \"yes ♥\" / \"not now\"; not now calls nothing; yes turns notify me on",
-    phoneAsk.yes.aria === "can I call your phone when I need you?" &&
+    phoneAsk.yes.aria === "can i call your phone when i need you?" &&
     JSON.stringify(phoneAsk.yes.labels) === JSON.stringify(["yes ♥", "not now"]) && phoneAsk.callsAfterNo === 0 &&
     phoneAsk.calls.length === 1 && phoneAsk.calls[0].type === "notify_me" && phoneAsk.calls[0].enabled === true,
     JSON.stringify(phoneAsk));
@@ -2241,14 +2241,20 @@ async function main() {
     const out = {};
     el._ask(s, "birthday");
     const box = s.screen.querySelector(".askday");
-    const month = box.querySelector(".bmonth");
-    month.value = "2";
-    month.dispatchEvent(new Event("change", { bubbles: true }));
-    out.febDays = box.querySelector(".bday").options.length;
-    month.click();
-    box.querySelector(".bday").click();
+    // Steppers, "‹ Feb ›" and "‹ 29 ›" (UX 3 F10): the day wraps, a month change keeps it inside.
+    const step = (which, dir) => box.querySelector(`[data-step="${which}"][data-dir="${dir}"]`).click();
+    out.stepperKeys = [...box.querySelectorAll(".stepb")].map((b) => Math.round(b.getBoundingClientRect().height));
+    step("day", -1); // 1 -> 31
+    out.wrap31 = box.querySelector(".bday").dataset.v;
+    step("month", 1); // Jan -> Feb, 31 -> 29
+    out.febDays = Number(box.querySelector(".bday").dataset.v);
+    out.febName = box.querySelector(".bmonth").textContent;
+    step("day", 1); // 29 -> 1
+    step("day", -1); // back to 29
     out.statusAfterPick = s.screen.classList.contains("show-status");
-    box.querySelector(".bday").value = "14";
+    for (let i = 0; i < 15; i++) step("day", -1); // 29 -> 14
+    out.day14 = box.querySelector(".bday").textContent;
+    box.querySelector(".bmonth").click();
     box.querySelector('[data-answer="ok"]').click();
     for (let i = 0; i < 100 && s.bubble.dataset.typing; i++) await wait(50);
     out.reply = s.bubble.textContent;
@@ -2316,11 +2322,12 @@ async function main() {
     return out;
   });
   check("your birthday is picked in the box, and a tap on a picker stays there",
-    bday.febDays === 29 && !bday.statusAfterPick && /Feb 14! I'll remember ♥$/.test(bday.reply), JSON.stringify(bday));
+    bday.febDays === 29 && bday.febName === "Feb" && bday.wrap31 === "31" && bday.day14 === "14" &&
+    bday.stepperKeys.every((h) => h >= 44) && !bday.statusAfterPick && /Feb 14! i'll remember ♥$/.test(bday.reply), JSON.stringify(bday));
   check("a celebration takes the away note's place; yours is by name",
-    bday.queue.join("|") === "a|c|I'm 3 months old today! ♥" &&
+    bday.queue.join("|") === "a|c|i'm 3 months old today! ♥" &&
     /^happy birthday, \S+!! ♥$/.test(bday.yours[0]) &&
-    bday.yours[1] === "I'm 11 months old! friends from day one ♥", JSON.stringify(bday));
+    bday.yours[1] === "i'm 11 months old! friends from day one ♥", JSON.stringify(bday));
   check("its birthday brings confetti and a party hat",
     bday.confetti && /season_party_hat/.test(bday.hat) && /party hat on! ♪$/.test(bday.said), JSON.stringify(bday));
   check("your birthday can be forgotten, never shown on a shared screen",
@@ -2678,6 +2685,12 @@ async function main() {
       // Dream, birthday: never stashed.
       await answerAs("dream", "sea");
       out.dream = localStorage.getItem(key);
+      out.dreamBubble = s.bubble.textContent; // not stashed, so lost: the pet says so
+      // The server will not take it (not_asked): the pet said it will remember, and says nothing more (UX 3 F6).
+      mode = "notasked";
+      await answerAs("dream", "stars");
+      out.notAskedBubble = s.bubble.textContent;
+      mode = "fail";
       await answerAs("birthday", "skip");
       out.birthday = localStorage.getItem(key);
       // A shared screen stores nothing.
@@ -2718,8 +2731,10 @@ async function main() {
     }
     return out;
   });
-  check("a failed save is retried once, the bubble says it slipped away, and the answer is kept for this person",
-    waits.tries === 2 && waits.bubble === "hm, that one slipped away ♪" && waits.stash === "fav_weather=snow", JSON.stringify(waits));
+  check("a failed save of a stashed kind is retried once, kept for this person and the pet stays quiet (UX 3 F6)",
+    waits.tries === 2 && waits.bubble === "snow!! ❄ i'll remember" && waits.stash === "fav_weather=snow", JSON.stringify(waits));
+  check("a failed save of a kind that is not stashed says it slipped away; a refused one (not_asked) says nothing",
+    waits.dreamBubble === "hm, that one slipped away ♪" && waits.notAskedBubble === "ooh, the stars. ok! ★", JSON.stringify(waits));
   check("a kept answer is sent when the card next gets hass with a user, and cleared",
     waits.resent === "fav_weather=snow" && waits.cleared === null, JSON.stringify(waits));
   check("a kept answer the server did not ask for is dropped, a transport error keeps it",
@@ -2728,6 +2743,168 @@ async function main() {
     waits.dream === null && waits.birthday === null && waits.shared === null, JSON.stringify(waits));
   check("forgetting my data removes kept answers", waits.forgotten === null, JSON.stringify(waits));
   check("a retry after the slide changed writes no bubble", waits.late === "", JSON.stringify(waits));
+  // UX fix 3 (review 3): talking with the pet, by real pointer taps where a tap is the point.
+  const card3 = page.locator("hatch-pet-card");
+  const talkSetup = (kind, pill = false) => card3.evaluate((el, [kind, pill]) => {
+    const s = el._slides[el._index];
+    el.scrollIntoView({ block: "center" });
+    s.queue = []; s.sayUntil = 0; s.sayClass = 0; s.game = null; s.confirm = null; s.answeredAt = 0;
+    s.screen.classList.remove("show-status");
+    el._ask(s, kind);
+    if (pill) {
+      s.request.dataset.key = "lay_egg";
+      s.request.textContent = "lay an egg?";
+      s.request.classList.add("show");
+    }
+    const r = (node) => { const b = node.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
+    return { chips: [...s.screen.querySelectorAll(".askday button")].map((b) => ({ a: b.dataset.answer, ...r(b) })),
+      screen: r(s.screen), pill: getComputedStyle(s.request).display };
+  }, [kind, pill]);
+  const talkAfter = () => card3.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { asking: !!s.screen.querySelector(".askday"), status: s.screen.classList.contains("show-status"),
+      said: s.sayEntry?.text ?? s.bubble.textContent, bubble: s.bubble.textContent, confirm: s.confirm?.key || null,
+      pill: s.request.textContent, until: s.sayUntil - Date.now() };
+  });
+  // F1: the lay pill is hidden under a question, so the third chip's right edge answers it.
+  let t3 = await talkSetup("how_day", true);
+  const third = t3.chips[2];
+  await page.mouse.click(third.x + third.w - 4, third.y + third.h / 2);
+  let a3 = await talkAfter();
+  check("UX3 F1: the lay pill is hidden while a question is open, and a tap on the third chip's edge answers it",
+    t3.pill === "none" && !a3.asking && a3.confirm === null && a3.pill === "lay an egg?", JSON.stringify([t3.pill, a3]));
+  // F2: a double tap on an answer leaves the pet's reply on show, not the status.
+  t3 = await talkSetup("how_day");
+  const ok = t3.chips[1];
+  await page.mouse.click(ok.x + ok.w / 2, ok.y + ok.h / 2);
+  await page.waitForTimeout(120);
+  await page.mouse.click(ok.x + ok.w / 2, ok.y + ok.h / 2);
+  await page.waitForTimeout(200);
+  a3 = await talkAfter();
+  check("UX3 F2: a double tap on an answer opens no status, and the reply is on show", !a3.status && !a3.asking && a3.bubble.length > 0, JSON.stringify(a3));
+  // F3: a tap beside the chips during a question opens no status; the question stays.
+  t3 = await talkSetup("how_day");
+  await page.mouse.click(t3.screen.x + t3.screen.w / 2, t3.screen.y + t3.screen.h * 0.5);
+  await page.waitForTimeout(150);
+  a3 = await talkAfter();
+  check("UX3 F3: a tap on the screen during a question does not open the status", !a3.status && a3.asking, JSON.stringify(a3));
+  // F8: the pet steps back while it asks, and is back after.
+  const step = () => card3.evaluate(async (el) => {
+    await new Promise((r) => setTimeout(r, 500));
+    const s = el._slides[el._index];
+    const cs = getComputedStyle(s.pet);
+    return { translate: cs.translate, scale: cs.scale, base: s.pet.style.scale };
+  });
+  const stepIn = await step();
+  await card3.evaluate((el) => el._slides[el._index].screen.querySelector(".askday")?.remove());
+  const stepOut = await step();
+  check("UX3 F8: the pet steps back while a question is open (smaller and up), and returns after",
+    stepIn.translate !== "none" && stepOut.translate === "none" && Number(stepIn.scale) < Number(stepOut.scale),
+    JSON.stringify({ stepIn, stepOut }));
+  // F8, measured: the pet's feet stand on the chips' top, and its head is not under the chip block.
+  const stood = {};
+  for (const kind of ["how_day", "catchphrase", "birthday", "big_day_day"]) {
+    await talkSetup(kind);
+    await page.waitForTimeout(450);
+    stood[kind] = await card3.evaluate((el) => {
+      const s = el._slides[el._index];
+      const p = s.pet.getBoundingClientRect();
+      const c = s.screen.querySelector(".askday").getBoundingClientRect();
+      return { petBottom: Math.round(p.bottom), chipsTop: Math.round(c.top), petTop: Math.round(p.top), petH: Math.round(p.height),
+        chips: s.screen.querySelectorAll(".askday button").length };
+    });
+    await card3.evaluate((el) => el._slides[el._index].screen.querySelector(".askday")?.remove());
+  }
+  check("UX3 F8: with any question open, the pet stands above the chips (feet at their top, at least 20 px tall)",
+    Object.values(stood).every((r) => r.petBottom <= r.chipsTop + 3 && r.petH >= 20), JSON.stringify(stood));
+  // F4: "yes" to the big day gives the day chips at once, not after the question's minute.
+  t3 = await talkSetup("big_day");
+  await card3.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.queue.push({ text: "anything big this week?", ms: 60000, ask: true, cls: 3 });
+    el._sayQueued(s);
+  });
+  await page.mouse.click(t3.chips[0].x + t3.chips[0].w / 2, t3.chips[0].y + t3.chips[0].h / 2);
+  await page.waitForTimeout(1200);
+  const days = await card3.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { chips: [...s.screen.querySelectorAll(".askday button")].map((b) => b.textContent), said: s.bubble.textContent,
+      first: s.screen.querySelector(".askday button")?.dataset.answer };
+  });
+  check("UX3 F4/F14: after \"yes\", the day chips show within 1.2 s, and the first is \"today\"",
+    days.chips.length === 7 && days.chips[0] === "today" && /which day/.test(days.said) &&
+    /^\d{4}-\d\d-\d\d$/.test(days.first), JSON.stringify(days));
+  // F5: the reply to an answer is kept: a flavour line and a beat don't replace it.
+  await talkSetup("how_day");
+  const kept5 = await card3.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    s.screen.querySelector('.askday button[data-answer="tough"]').click();
+    const reply = s.sayEntry?.text;
+    el._line(s, 1, "flavour line", 4500);
+    el._line(s, 2, "a beat", 4500);
+    await new Promise((r) => setTimeout(r, 300));
+    return { reply, bubbleHasOther: /flavour line|a beat/.test(s.bubble.textContent), cls: s.sayClass, queued: s.queue.map((q) => q.text) };
+  });
+  check("UX3 F5: an answer's reply is the viewer's own line: no flavour line or beat replaces it",
+    !!kept5.reply && kept5.cls === 4 && !kept5.bubbleHasOther, JSON.stringify(kept5));
+  // F15: a care press that cuts the question line brings it back for what is left, and only while the question is open.
+  const f15 = await card3.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    s.queue = []; s.sayUntil = 0; s.sayClass = 0; s.game = null;
+    el._ask(s, "how_day");
+    s.queue.push({ text: "how was your day?", ms: 60000, ask: true, cls: 3 });
+    el._sayQueued(s);
+    await new Promise((r) => setTimeout(r, 300));
+    el._line(s, 4, "a care line", 3000);
+    const open = s.queue.map((q) => q.ms);
+    s.screen.querySelector(".askday")?.remove();
+    s.queue = [];
+    s.sayEntry = { text: "how was your day?", ms: 60000, ask: true, cls: 3, shownAt: Date.now() - 300 };
+    s.sayUntil = Date.now() + 59000;
+    el._line(s, 4, "another care line", 3000);
+    return { open, closed: s.queue.length };
+  });
+  check("UX3 F15: a cut question comes back for the time left only while open", f15.open.length === 1 && f15.open[0] < 60000 &&
+    f15.open[0] > 58000 && f15.closed === 0, JSON.stringify(f15));
+  // F9: big text reaches the bubble and the chips, and lines stay longer.
+  const f9 = await card3.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const speak = (ms) => { s.sayUntil = 0; el._speak(s, "ok", ms); return s.sayUntil - Date.now(); };
+    localStorage.setItem("hatch-big-text", "off");
+    el._card.classList.remove("bigtext");
+    const normal = speak(4500);
+    const fontOff = getComputedStyle(s.bubble).fontSize;
+    localStorage.setItem("hatch-big-text", "on");
+    el._card.classList.add("bigtext");
+    const big = speak(4500);
+    const fontOn = getComputedStyle(s.bubble).fontSize;
+    el._ask(s, "how_day");
+    const chip = getComputedStyle(s.screen.querySelector(".askday button")).fontSize;
+    s.screen.querySelector(".askday")?.remove();
+    localStorage.setItem("hatch-big-text", "off");
+    el._card.classList.remove("bigtext");
+    return { normal, big, fontOff, fontOn, chip };
+  });
+  check("UX3 F9: big text makes the bubble 16 px and the chips 15 px, and holds a line 1.5 times as long",
+    f9.fontOff === "14px" && f9.fontOn === "16px" && f9.chip === "15px" && f9.big - f9.normal > 2000 && f9.big - f9.normal < 2500, JSON.stringify(f9));
+  // F12: the lay's first tap is answered by the pet itself.
+  const f12 = await card3.evaluate((el) => {
+    const s = el._slides[el._index];
+    const press = el._press;
+    el._press = () => {};
+    s.queue = []; s.sayUntil = 0; s.sayClass = 0; s.confirm = null; s.game = null;
+    s.screen.querySelector(".askday")?.remove();
+    s.request.dataset.key = "lay_egg";
+    s.request.click();
+    const out = { said: s.sayEntry?.text, cls: s.sayClass, armed: s.request.textContent };
+    el._press = press;
+    s.confirm = null;
+    s.request.dataset.key = "";
+    delete s.request.dataset.key;
+    return out;
+  });
+  check("UX3 F12: the lay's \"sure?\" is also said by the pet, once",
+    f12.said === "i'll wait for you in the journal ♥" && f12.cls === 4 && f12.armed === "sure? tap again", JSON.stringify(f12));
   // A close friend coming home: "you're home!!" to them (their own channel's
   // friend_home), and nothing for anyone else's arrival on a personal card.
   await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
@@ -2807,7 +2984,7 @@ async function main() {
   });
   check("a favourite is kept through the answer command",
     kept.sent.length === 1 && kept.sent[0].type === "virtual_pet/answer" && kept.sent[0].question === "fav_weather" &&
-    kept.sent[0].answer === "snow" && kept.said === "snow!! ❄ I'll remember", JSON.stringify(kept));
+    kept.sent[0].answer === "snow" && kept.said === "snow!! ❄ i'll remember", JSON.stringify(kept));
   // The new lines: a dream someone picked, a guess, a zone, the season, coming home wet.
   const lines = await page.locator("hatch-pet-card").evaluate((el, me) => {
     const s = el._slides[el._index];
@@ -2875,8 +3052,8 @@ async function main() {
   check("the first look: welcome first, three lines at most, no closed wish",
     look.length === 3 && look[0].startsWith("welcome home") && look[1] === "brr, it looks cold out there!" &&
     !look.some((l) => /play a game/.test(l)), look.join(" | "));
-  check("the new private lines read right", lines[0] === "I dreamed about the sea, like you said! ♥" &&
-    lines[1] === "I dreamed about the sea..." && lines[2] === "oh, sunny after all! good guess though ♥" &&
+  check("the new private lines read right", lines[0] === "i dreamed about the sea, like you said! ♥" &&
+    lines[1] === "i dreamed about the sea..." && lines[2] === "oh, sunny after all! good guess though ♥" &&
     lines[3] === "back from the gym! so strong!" && lines[4] === "Thanksgiving in your favourite season! ♥" &&
     /rain/.test(lines[5]) && lines[7] === "it's wet out there! come get cozy ☂", lines.join(" | "));
   check("a friend coming home is cheered, and nobody else's arrival on a personal card",
@@ -5135,14 +5312,15 @@ async function main() {
         const weekBox = s.screen.querySelector(".askday");
         out.week = { buttons: [...(weekBox?.querySelectorAll("button") || [])].map((b) => b.textContent) };
         weekBox?.querySelector('button[data-answer="yes"]')?.click();
-        out.week.which = runAsk();
+        // "yes" says "which day?" at once (UX 3 F4), not after the question's minute: it is on show, not queued.
+        out.week.which = s.queue.some((x) => x.ask) ? runAsk() : s.sayEntry?.text;
         const dayBox = s.screen.querySelector(".askday");
         out.week.days = [...(dayBox?.querySelectorAll("button") || [])].map((b) => [b.dataset.answer, b.textContent]);
         const ahead = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
-        out.week.want = [1, 2, 3, 4, 5, 6].map((n) => {
+        out.week.want = [0, 1, 2, 3, 4, 5, 6].map((n) => { // today first (UX 3 F14), then the next six
           const d = ahead(n);
           return [`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-            ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][d.getDay()]];
+            n === 0 ? "today" : ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][d.getDay()]];
         });
         Object.assign(s, { sayUntil: 0, sayClass: 0 });
         dayBox?.querySelector("button")?.click();
@@ -5308,7 +5486,7 @@ async function main() {
     check("fresh E13: a soft morning says a soft line; a shared screen asks the server nothing and says nothing",
       [...SOFT, ...typeLines("soft"), "*snuggle* hi hi ♥"].includes(f1.soft[0]) && f1.shared.length === 0 && f1.sharedCalls === 0,
       JSON.stringify({ soft: f1.soft, shared: f1.shared, calls: f1.sharedCalls }));
-    check("owner Q3 opp #2: anything big this week? yes / not really; which day? the next six by name; a day's tap cheers, asks what, sends its date",
+    check("owner Q3 opp #2: anything big this week? yes / not really; which day? today, then the next six by name; a day's tap cheers, asks what, sends its date",
       f1.week.buttons.join() === "yes,not really" && f1.week.which === BIG.which &&
         JSON.stringify(f1.week.days) === JSON.stringify(f1.week.want) && BIG.yes.includes(f1.week.reply) &&
         f1.week.what === BIG.what && f1.sent[0]?.day === f1.week.want[0][0], JSON.stringify({ week: f1.week, sent: f1.sent }));
@@ -5571,7 +5749,7 @@ async function main() {
     s.queue = [];
     return out;
   });
-  check("the pet says it made you something", photoLine.join() === "I made you something! it's in your journal ♥",
+  check("the pet says it made you something", photoLine.join() === "i made you something! it's in your journal ♥",
     photoLine.join());
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
@@ -8941,6 +9119,15 @@ async function main() {
       const r = await react(entry);
       check(`react: ${stage} ${name} shows ${stage}_${mood} and ${move}`,
         r.src.includes(`/${stage}_${mood}_`) && r.live && r.moves.join() === move && (move !== "look" || r.moving), JSON.stringify(r));
+    }
+    for (const [action, line] of [["blanket", "so cozy now... thank you ♥"], ["fan", "ahh, a breeze! thank you ♪"]]) {
+      const said = await card.evaluate((el, action) => {
+        const s = el._slides[el._index];
+        s.queue = []; s.sayUntil = 0; s.sayClass = 0;
+        el._react(s, { at: Date.now() / 1000, action, result: "ok" });
+        return s.bubble.textContent;
+      }, action);
+      check(`UX3 F11: ${stage} the ${action} answered gets a thank-you line`, said === line, said);
     }
     for (const result of ["not_needed", "already_clean", "not_sick", "not_sleepy", "too_tired"]) {
       const r = await react({ action: "play", result });

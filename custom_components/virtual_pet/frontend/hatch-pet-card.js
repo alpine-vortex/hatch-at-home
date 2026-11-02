@@ -1521,20 +1521,20 @@ const DREAM_CALLBACK = {
 const BIG_DAY = {
   q: "anything big this week?",
   which: "which day? ♪",
-  yes: ["ooh! I'll cheer for you ♥"],
+  yes: ["ooh! i'll cheer for you ♥"],
   no: ["a cozy week, then ♪"],
   what: "what is it?",
   how: "how did the big day go?",
   howText: (it) => `how did ${it} go?`,
-  kept: "ok! I'll remember ♥",
+  kept: "ok! i'll remember ♥",
   amText: [(it) => `good luck with ${it}! ♥`, (it) => `it's ${it} day! go go ♥`, (it) => `cheering you on: ${it} ♥`],
-  am: ["good luck today! ♥", "big day! I'm cheering for you ♥", "you've got this today ♥"],
+  am: ["good luck today! ♥", "big day! i'm cheering for you ♥", "you've got this today ♥"],
   pmText: [(it) => `hugs after ${it} ♥`, (it) => `${it} is done. rest up ♥`, (it) => `hugs, however ${it} went`],
-  pm: ["big day done. come rest ♥", "however it went, I'm here ♥", "I saved you a cozy spot ♥"],
+  pm: ["big day done. come rest ♥", "however it went, i'm here ♥", "i saved you a cozy spot ♥"],
 };
 // E13: the morning after a tough day, on the answerer's own screen, once. It names nothing.
-const SOFT_MORNING = ["hope today's a softer one ♥", "I'm right here today ♥", "a gentle day to you ♥",
-  "I saved you a cozy spot ♥"];
+const SOFT_MORNING = ["hope today's a softer one ♥", "i'm right here today ♥", "a gentle day to you ♥",
+  "i saved you a cozy spot ♥"];
 // F4: the favourite visitor (B7d): its question, the reply, and its greet on that
 // person's own screen, 1 visit in 2 (over a friend's line, E3).
 const FAVV_LINES = {
@@ -1552,20 +1552,20 @@ const WEEKEND = {
   yes: ["ooh, fun! ♪"],
   no: ["a restful one, then ♥"],
   monText: [(it) => `back from ${it}! ♥`, (it) => `hope ${it} was fun ♥`],
-  mon: ["welcome back from the weekend ♪", "I saved you a Monday hug ♥"],
+  mon: ["welcome back from the weekend ♪", "i saved you a Monday hug ♥"],
 };
 // F6 game (B7d): tomorrow's pick, and the picker's line the day after.
 const GAME_TOMORROW = {
   q: "what should we play tomorrow?",
-  reply: "ok! I'll get ready ♪",
+  reply: "ok! i'll get ready ♪",
   day: ["let's play your pick today ♪", "ready for your game ♪"],
 };
 // F7 trick (B7d): "yes" and it shows a trick it hadn't learned, 3 to 5 days on.
 const TRICK_ASK = {
-  q: "should I learn a new trick?",
-  yes: ["ok! I'll practise ♪"],
+  q: "should i learn a new trick?",
+  yes: ["ok! i'll practise ♪"],
   later: ["ok! another time ♪"],
-  shown: ["I learned it! look ♪", "you said I should! ta-da ♪"],
+  shown: ["i learned it! look ♪", "you said i should! ta-da ♪"],
 };
 // HOUSE_LINES (ha-signals H3, owner-approved set D, 2026-11-01): the house answered the
 // pet's request, not a person. heating = the blanket ask, cooling = the fan ask; bits are
@@ -1653,6 +1653,15 @@ const STATUS_COPY = {
   eggCracking: "cracking! ♥", // 6 or fewer
   tileRaised: (name) => `${name}! my old pal ♥`, // F14 (FM 2026-11-02: 40 with the longest name)
   tileUnmet: "not met one of those yet",
+};
+// Talking with the pet, UX fix 3 (review 3, F11/F12/F14; copy APPROVED by the first mate
+// 2026-11-02, owner delegated): the blanket and the fan answered, the lay's "sure?" in the
+// pet's voice, and "today" among the big day's days. Scanned like the rest.
+const TALK_COPY = {
+  blanket: "so cozy now... thank you ♥", // F11
+  fan: "ahh, a breeze! thank you ♪", // F11
+  layArmed: "i'll wait for you in the journal ♥", // F12
+  today: "today", // F14
 };
 // --- end fresh-expand copy ---
 // Approved lines the scan's nag words ("again", "forgot...") would refuse: a retry, "just us",
@@ -1819,8 +1828,8 @@ const QUESTIONS = {
   // buttons), and the day's tap opens the optional typed answer.
   big_day: { q: BIG_DAY.q, answers: { yes: [], no: BIG_DAY.no },
     label: (a) => (a === "no" ? "not really" : a) },
-  big_day_day: { q: BIG_DAY.which, answers: {}, options: () => [1, 2, 3, 4, 5, 6].map((n) => daysAhead(n)),
-    label: (a) => DAY_SHORT[new Date(`${a}T12:00`).getDay()], reply: () => pick(BIG_DAY.yes) },
+  big_day_day: { q: BIG_DAY.which, answers: {}, options: () => [0, 1, 2, 3, 4, 5, 6].map((n) => daysAhead(n)),
+    label: (a) => (a === daysAhead(0) ? TALK_COPY.today : DAY_SHORT[new Date(`${a}T12:00`).getDay()]), reply: () => pick(BIG_DAY.yes) },
   // Opp #1: the big day's evening, from 19, in its follow beat's place: how_day's answers.
   big_how: { q: BIG_DAY.how, answers: {} },
   // F5-F7: the weekend (Fridays; "yes" as the big day's), tomorrow's game, a new trick.
@@ -1831,52 +1840,61 @@ const QUESTIONS = {
   trick: { q: TRICK_ASK.q, answers: { yes: TRICK_ASK.yes, later: TRICK_ASK.later },
     label: (a) => (a === "later" ? "maybe later" : a) },
   how_day: { q: "how was your day?", answers: {
-    great: ["yay!! that makes me so happy ♥", "a great day! tell me everything! ♥"],
-    ok: ["ok days are good days too ♥", "I'm glad you're here now ♥"],
-    tough: ["aww... come here *snuggle* ♥", "I'm here for you ♥ *cuddle*"] } },
+    great: ["yay!! that makes me so happy ♥", "a great day! that makes me glow ♥"],
+    ok: ["ok days are good days too ♥", "i'm glad you're here now ♥"],
+    tough: ["aww... come here *snuggle* ♥", "i'm here for you ♥ *cuddle*"] } },
   slept: { q: "did you sleep well?", answers: {
     great: ["yay! ♥ good morning!", "me too! ♥"],
     ok: ["a cozy morning then ♥"],
     "not really": ["aww, take it easy today ♥", "a slow morning then... *yawn* ♥"] } },
   fav_weather: { q: "what's your favourite weather?", keep: true, answers: {
-    sun: ["sunny days! me too ☀"], rain: ["ooh, rain is so cozy ☂"], snow: ["snow!! ❄ I'll remember"],
+    sun: ["sunny days! me too ☀"], rain: ["ooh, rain is so cozy ☂"], snow: ["snow!! ❄ i'll remember"],
     storms: ["storms! so exciting!"] } },
   fav_season: { q: "what's your favourite season?", keep: true, answers: {
     spring: ["spring! flowers everywhere ♪"], summer: ["summer! all that sunshine ☀"],
     autumn: ["autumn! crunchy leaves ♪"], winter: ["winter! snuggle season ❄"] } },
   // Asked once ever, after a missed call, of someone with the HA app (top10 1a; the
   // server decides). "yes" turns on "notify me" for this pet (_ask).
-  phone: { q: "can I call your phone when I need you?", answers: {
-    yes: ["yay! I'll ring you ♥"], "not now": ["ok! you can say yes in settings ♥"] },
+  phone: { q: "can i call your phone when i need you?", answers: {
+    yes: ["yay! i'll ring you ♥"], "not now": ["ok! you can say yes in settings ♥"] },
   label: (a) => (a === "yes" ? "yes ♥" : a) },
-  dream: { q: "what should I dream about tonight?", keep: true, answers: {
-    stars: ["ooh, the stars. ok! ★"], sea: ["the sea it is! ♪"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ I'd like that"] } },
+  dream: { q: "what should i dream about tonight?", keep: true, answers: {
+    stars: ["ooh, the stars. ok! ★"], sea: ["the sea it is! ♪"], snacks: ["snacks!! yum, ok!"], you: ["you! ♥ i'd like that"] } },
   guess: { q: "rain or sun tomorrow?", keep: true, answers: {
     rain: ["rain! we'll see ☂"], sun: ["sun! we'll see ☀"] } },
   // Theirs, kept privately on the server ("skip" sticks; forgotten on the status screen).
   birthday: { q: "when's your birthday?", keep: true, answers: { ok: null, skip: null },
-    picker: () => `<select class="bmonth" aria-label="month">${MONTHS.map((m, i) =>
-      `<option value="${i + 1}">${m}</option>`).join("")}</select>` +
-      `<select class="bday" aria-label="day">${dayOptions(31)}</select>`,
-    changed: (box, e) => {
-      if (!e.target.classList.contains("bmonth")) return;
+    // Two steppers in the chips' own look, "‹ Feb ›" and "‹ 29 ›" (UX fix 3, F10). The value
+    // sits in each <output>'s data-v; a month change keeps the day inside the month (29 Feb ok).
+    picker: () => `<span class="stepper" role="group" aria-label="month">${stepBtn("month", -1)}` +
+      `<output class="bmonth" data-v="1">${MONTHS[0]}</output>${stepBtn("month", 1)}</span>` +
+      `<span class="stepper" role="group" aria-label="day">${stepBtn("day", -1)}` +
+      `<output class="bday" data-v="1">1</output>${stepBtn("day", 1)}</span>`,
+    step: (box, which, dir) => {
+      const month = box.querySelector(".bmonth");
       const day = box.querySelector(".bday");
-      const keep = Number(day.value);
-      day.innerHTML = dayOptions(new Date(2000, Number(e.target.value), 0).getDate()); // 2000: 29 Feb
-      day.value = String(Math.min(keep, day.options.length));
+      if (which === "month") month.dataset.v = String((Number(month.dataset.v) - 1 + dir + 12) % 12 + 1);
+      else day.dataset.v = String(Number(day.dataset.v) + dir);
+      const max = new Date(2000, Number(month.dataset.v), 0).getDate(); // 2000: 29 Feb
+      const n = Number(day.dataset.v);
+      // A day step wraps round the month; a month step only keeps the day inside it.
+      day.dataset.v = String(which === "month" ? Math.min(n, max) : n < 1 ? max : n > max ? 1 : n);
+      month.textContent = MONTHS[Number(month.dataset.v) - 1];
+      day.textContent = day.dataset.v;
     },
     value: (box, a) => (a === "skip" ? "skip"
-      : `${box.querySelector(".bmonth").value.padStart(2, "0")}-${box.querySelector(".bday").value.padStart(2, "0")}`),
+      : `${box.querySelector(".bmonth").dataset.v.padStart(2, "0")}-${box.querySelector(".bday").dataset.v.padStart(2, "0")}`),
     reply: (a) => (a === "skip" ? "ok! ♥"
-      : `${MONTHS[Number(a.slice(0, 2)) - 1]} ${Number(a.slice(3))}! I'll remember ♥`) },
+      : `${MONTHS[Number(a.slice(0, 2)) - 1]} ${Number(a.slice(3))}! i'll remember ♥`) },
   // The pet's own, from a close friend (the server checks it asked).
-  catchphrase: { q: "what should I say at the end of things?", keep: true,
+  catchphrase: { q: "what should i say at the end of things?", keep: true,
     answers: { hehe: null, yay: null, "and stuff": null, "la la": null, keep: null },
     label: (a, s, mine) => (a === "keep" ? `keep "${mine}"` : a),
-    reply: (a, s, mine) => (a === "keep" ? `ok! I'll keep saying "${mine}" ♥` : `ok! I'll say "${a}"! ♥`) },
+    reply: (a, s, mine) => (a === "keep" ? `ok! i'll keep saying "${mine}" ♥` : `ok! i'll say "${a}"! ♥`) },
 };
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const dayOptions = (n) => Array.from({ length: n }, (_, i) => `<option value="${i + 1}">${i + 1}</option>`).join("");
+const stepBtn = (which, dir) => `<button type="button" class="stepb" data-step="${which}" data-dir="${dir}" ` +
+  `aria-label="${dir < 0 ? "earlier" : "later"} ${which}">${dir < 0 ? "‹" : "›"}</button>`;
 // Its yearly birthday: a party hat (the season costume code places it) and confetti.
 const PARTY = { key: "party", costumes: [{ art: "hat", sink: 7, width: 56 }],
   lines: ["party hat on! ♪", "look, I'm all dressed up! ♪", "best birthday ever! ♪"] };
@@ -1895,13 +1913,13 @@ const HOME_WEATHER = {
 const SEASON_ICONS = { spring: "♪", summer: "☀", autumn: "♥", winter: "❄" };
 // What the pet tells only you (virtual_pet.visit's notes), each once.
 const NOTES = {
-  pet_birthday: (n) => (n.years ? `it's my birthday!! I'm ${n.years} today! ♥` : `I'm ${months(n.months)} old today! ♥`),
-  birthday_friends: (n) => `I'm ${months(n.months)} old! friends from day one ♥`,
+  pet_birthday: (n) => (n.years ? `it's my birthday!! i'm ${n.years} today! ♥` : `i'm ${months(n.months)} old today! ♥`),
+  birthday_friends: (n) => `i'm ${months(n.months)} old! friends from day one ♥`,
   your_birthday: (n) => (n.quiet ? "happy birthday ♥" : "happy birthday!! ♥"), // _note adds the name
   friends_for: (n) => n.months % 12 === 0
     ? `we've been friends for ${n.months === 12 ? "a whole year" : `${n.months / 12} years`}!! ♥`
     : `we've been friends for ${n.months === 1 ? "a month" : `${n.months} months`}! ♥`,
-  tucked_in: () => pick(["thanks for tucking me in last night ♥", "I slept so well after you tucked me in ♥"]),
+  tucked_in: () => pick(["thanks for tucking me in last night ♥", "i slept so well after you tucked me in ♥"]),
   steps: (n) => `wow, ${n.steps.toLocaleString()} steps! you've been busy!`,
   more_than_usual: () => pick(["you've walked way more than usual today!", "so many steps! you've been on the go!"]),
   best_day: () => "your most active day in weeks!! ♥",
@@ -1912,8 +1930,8 @@ const NOTES = {
   rain_walk: () => pick(["you walked in the rain! so brave! ☂", "rain or not, look at all those steps! ☂"]),
   snow_walk: () => "a walk in the snow! ❄ so brave!",
   dream: (n) => n.pick === "you"
-    ? (n.yours ? "I dreamed about you, like you said! ♥" : DREAM_FRIENDS)
-    : `I dreamed about ${{ stars: "the stars", sea: "the sea", snacks: "snacks" }[n.pick] || n.pick}${n.yours ? ", like you said! ♥" : "..."}`,
+    ? (n.yours ? "i dreamed about you, like you said! ♥" : DREAM_FRIENDS)
+    : `i dreamed about ${{ stars: "the stars", sea: "the sea", snacks: "snacks" }[n.pick] || n.pick}${n.yours ? ", like you said! ♥" : "..."}`,
   guess: (n) => n.outcome === "right"
     ? (n.guess === "rain" ? "you were right!! it rained ☂" : "you were right!! sunny ☀")
     : n.outcome === "wrong"
@@ -1927,7 +1945,7 @@ const NOTES = {
     : `it's ${n.season}, your favourite! ${SEASON_ICONS[n.season] || ""}`.trim(),
   early_alarm: () => "early start tomorrow! sleep well ♥",
   up_early: () => "mmh... you're up before the sun... zzz ♥",
-  photo: () => "I made you something! it's in your journal ♥",
+  photo: () => "i made you something! it's in your journal ♥",
 };
 const DREAM_FRIENDS = "I dreamed about my friends ♥"; // a "you" dream, to everyone but its asker
 const DREAM_CALLBACK_DAYS = [2, 3, 4]; // a told story's callback, days later (F2), by the pet and day
@@ -3319,7 +3337,7 @@ const STYLE = `
   .slide.away-slide .hw.flecks, ha-card.offscreen .hw.flecks { animation-play-state: paused; }
   @media (prefers-contrast: more) { ha-card.lcd-on .lcd, ha-card.lcd-on .ghost { display: none; } }
   /* Idle life. */
-  .pet { transition: translate .25s ease-out, rotate .2s ease-out; }
+  .pet { transition: translate .25s ease-out, rotate .2s ease-out, scale .25s steps(2); }
   .pet.look { rotate: y 180deg; }
   .pet.wander-l { translate: -16% 0; transition-duration: .9s; }
   .pet.wander-r { translate: 16% 0; transition-duration: .9s; }
@@ -3497,6 +3515,8 @@ const STYLE = `
   @keyframes bootblink { 50% { opacity: 0; } }
   /* The pet's request waits while the status screen or a game is up (it covered them). */
   .screen.show-status ~ .request, .screen:has(> .game:not([hidden])) ~ .request { display: none !important; }
+  /* So does an open question: the pill sat over the third answer (UX fix 3, F1). */
+  .screen:has(> .askday) ~ .request { display: none !important; }
   /* With a game up, the bubble leaves room for its close button. */
   .screen:has(> .game:not([hidden])) .bubble { max-width: 54%; }
   /* A narrow card: status rows fit four hearts. */
@@ -3700,15 +3720,29 @@ const STYLE = `
   .screen .askday { position: absolute; left: 0; right: 0; bottom: 3%; display: flex; gap: 8px;
     flex-wrap: wrap; justify-content: center; z-index: 3; margin: 0 auto; }
   .screen .askday.many { max-width: 236px; } /* three a row at most */
+  .screen .askday.many.wide { max-width: 100%; }
+  .screen .askday.wide button { min-width: 52px; padding: 4px 6px; }
   .screen .askday.asktext input { font: inherit; font-size: 16px; min-height: 44px; width: 9.5em; max-width: 46%;
     border-radius: 14px; border: 2px solid #3a2a1a; padding: 2px 10px; box-sizing: border-box; } /* F1; 16 px: no iOS zoom */
   .compact .screen .askday { gap: 4px; bottom: 2%; }
   .compact .screen .askday.many { max-width: 100%; }
-  .compact .screen .askday button, .compact .screen .askday select { min-height: 44px; min-width: 44px;
+  .compact .screen .askday button { min-height: 44px; min-width: 44px;
     font-size: 12px; padding: 2px 7px; border-radius: 10px; }
-  .screen .askday select, .compact .screen .askday select { font-size: 16px; } /* iOS zooms in under 16 px */
-  .screen .askday select { font: inherit; font-size: 14px; min-height: 44px; border-radius: 14px;
-    border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a; padding: 0 6px; }
+  /* The birthday's steppers (F10): "‹ Feb ›", one chip each, 44 px keys either side. */
+  .screen .askday .stepper { display: flex; align-items: center; border: 2px solid #3a2a1a; border-radius: 14px;
+    background: #fffdf5; box-shadow: 0 4px 0 #3a2a1a; color: #3a2a1a; }
+  .screen .askday .stepper output { min-width: 24px; padding: 0 3px; text-align: center; font-size: 14px; }
+  .compact .screen .askday .stepper output { padding: 0; font-size: 13px; } /* both steppers fit one row at 330 */
+  .screen .askday .stepper button.stepb { min-width: 44px; padding: 0; border: 0; background: transparent;
+    box-shadow: none; font-size: 22px; border-radius: 12px; }
+  .compact .screen .askday .stepper button.stepb { min-width: 40px; font-size: 20px; }
+  /* The birthday: steppers, ok and skip in one row where the screen is wide enough (420), with
+     slimmer keys (still 44 px tall); at 330 the steppers take one row and ok, skip the next. */
+  ha-card:not(.compact) .screen .askday.bdaybox { gap: 4px; }
+  .screen .askday.bdaybox .stepper button.stepb { min-width: 34px; }
+  .screen .askday.bdaybox .stepper output { min-width: 0; padding: 0 2px; }
+  ha-card:not(.compact) .screen .askday.bdaybox > button { min-width: 40px; padding: 4px 6px; }
+  .screen .askday .stepper button.stepb:active { transform: none; background: #ffe9a8; }
   .screen .askday button { font: inherit; font-size: 14px; min-height: 44px; min-width: 64px; padding: 4px 10px;
     border-radius: 14px; border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a;
     box-shadow: 0 4px 0 #3a2a1a; transition: transform .08s, box-shadow .08s; }
@@ -3718,6 +3752,17 @@ const STYLE = `
   .screen .askday button[data-answer="keep"] { font-size: 12px; white-space: normal;
     max-width: calc(100% - 72px); }
   .screen.show-status .askday { display: none; }
+  /* In the porthole the round rim cuts a full-width row: the chips take the bubble's inset (F7). */
+  .porthole .screen .askday { left: 4%; right: 4%; bottom: 6%; gap: 3px; }
+  /* While it asks, the pet steps back (2 steps; none under reduced motion) so the chips
+     don't hide it, and its perk then looks at you (F8). --k is its own scale. */
+  .screen:has(> .askday) .pet, .screen:has(> .askday) .perch, .screen:has(> .askday) .ghost {
+    translate: var(--ask-dx, 0px) var(--ask-dy, -14%); /* _askPlace measures the chips and the bubble */
+    scale: calc(var(--k, 1) * var(--ask-f, .9)) !important; } /* !important: the species scale is inline */
+  .screen:has(> .askday) .pet { transition: translate .25s steps(2), rotate .2s ease-out, scale .25s steps(2); }
+  /* Big text reaches the pet's words too (F9). */
+  ha-card.bigtext .bubble { font-size: 16px; }
+  ha-card.bigtext .screen .askday button { font-size: 15px; }
   .screen .bondhearts img, .screen .linkhearts img { position: absolute; left: calc(50% + var(--x)); top: 52%; width: 18px; height: auto;
     opacity: 0; image-rendering: pixelated; pointer-events: none; z-index: 2; animation: bondheart 1.6s ease-out forwards; }
   @keyframes bondheart { 0% { transform: translateY(0) scale(.7); opacity: 0; } 20% { opacity: 1; }
@@ -4438,7 +4483,17 @@ class HatchPetCard extends HTMLElement {
         return;
       }
       if (key === "lay_egg") this._tapped(s.request, s);
-      if (key === "lay_egg" && !this._confirmed(s, key, s.request, () => this._redraw(s))) return;
+      if (key === "lay_egg") {
+        const armed = confirmArmed(s, key);
+        if (!this._confirmed(s, key, s.request, () => this._redraw(s))) {
+          // The pet itself answers the first tap (F12); the pill keeps "sure? tap again".
+          if (!armed) {
+            this._line(s, MINE, TALK_COPY.layArmed, 4000);
+            this._animate(s, s.pet, "perk", 320);
+          }
+          return;
+        }
+      }
       this._press(s, key);
     });
     // The boot screen takes the tap (a button, so a key works too) and nothing under it.
@@ -4455,6 +4510,9 @@ class HatchPetCard extends HTMLElement {
       // A game on show keeps its screen: a stray tap must not end it unseen (the
       // Status button still does, on purpose).
       if (s.game) return;
+      // A question's chips take no stray tap (F3); a tap right after an answer is its
+      // double tap, not the Status button (F2), so the pet's reply is seen.
+      if (this._questionOn(s) || Date.now() - (s.answeredAt || 0) < CONFIRM_GAP_MS) return;
       if (!this._swiped) {
         this._tapped(this._card.querySelector(".statusbtn"));
         this._toggleStatus(s);
@@ -6136,6 +6194,7 @@ class HatchPetCard extends HTMLElement {
   _speak(s, said, ms = 4500, { catch: catchy = false, cls = 0 } = {}) {
     const voice = s.species?.voice;
     const sound = this._soundFor(s, said);
+    if (bigOn() && ms <= 10000) ms = Math.round(ms * 1.5); // larger words are read slower (F9); a question keeps its own 60 s
     let text = said;
     if (sound && catchy && !said.includes("?")) {
       s.catchCount = (s.catchCount || 0) + 1;
@@ -6447,7 +6506,11 @@ class HatchPetCard extends HTMLElement {
     if (cls >= MINE && was && lineClass(was) === KEPT && s.sayUntil > now &&
       now - was.shownAt < was.ms / 2) {
       // The viewer's own press cut off a kept line early: it's said again after.
-      (s.queue ??= []).unshift({ ...was, then: null, shownAt: undefined });
+      // For what is left of its time, and a question's only while it is still open (F15).
+      const left = was.shownAt + was.ms - now;
+      if (left > 0 && (!was.ask || this._questionOn(s))) {
+        (s.queue ??= []).unshift({ ...was, ms: left, then: null, shownAt: undefined });
+      }
     }
     if (q.write) this._write(s, q.text, q.ms, cls);
     else this._speak(s, q.text, q.ms, { ...q.opts, cls });
@@ -6850,6 +6913,7 @@ class HatchPetCard extends HTMLElement {
     });
     box.append(input, ok, skip);
     s.screen.append(box);
+    this._askPlace(s, box);
     step.box = box;
     step.until = Date.now() + ASK_MS + 1000;
     step.timer = setTimeout(() => this._askTextEnd(s), ASK_MS);
@@ -6870,7 +6934,7 @@ class HatchPetCard extends HTMLElement {
     this._sendFollow(s, step.entity, kind, "yes", text, step.day).then((ok) => {
       if (ok && text && user && typeof ok.until === "string") followTextKeep(user, kind, text, ok.until);
       else if (ok && user) followTextKeep(user, kind, "", "0000-00-00"); // no words: an old copy goes
-      if (ok && said && s.ids?.["sensor.life_stage"] === step.entity) this._speak(s, BIG_DAY.kept, 3500);
+      if (ok && said && s.ids?.["sensor.life_stage"] === step.entity) this._line(s, MINE, BIG_DAY.kept, 3500);
     });
   }
 
@@ -7343,6 +7407,34 @@ class HatchPetCard extends HTMLElement {
     return it ? BIG_DAY.howText(it) : QUESTIONS[kind].q;
   }
 
+  // While it asks, the pet steps back (F8): up so its feet stand on the chips' top, smaller to fit
+  // under the bubble, or, when the bubble and the chips leave no room, beside the bubble. Measured
+  // once the chips and the line are on show; the CSS (--ask-dx/dy/f) does the move, in 2 steps.
+  _askPlace(s, box) {
+    const scr = s.screen;
+    const pet = s.pet;
+    if (!pet || pet.offsetParent !== scr || !scr.clientHeight) return;
+    const k = Number(pet.style.scale) || 1;
+    const W = scr.clientWidth;
+    const petH = pet.offsetHeight * k;
+    const petW = pet.offsetWidth * k;
+    const stand = box.offsetTop - 4; // where its feet go
+    const bubble = s.bubble.offsetHeight ? s.bubble : null;
+    const under = bubble ? bubble.offsetTop + bubble.offsetHeight + 2 : 0;
+    let f = Math.min(0.9, (stand - under) / petH);
+    let dx = 0;
+    if (f < 0.6) { // no room under the bubble: beside it, above the chips
+      f = Math.min(0.9, Math.max(0.4, (stand - 4) / petH));
+      const w = petW * f;
+      const right = bubble ? bubble.offsetLeft + bubble.offsetWidth + 4 + w / 2 : W / 2;
+      dx = Math.min(W - 2 - w / 2, Math.max(W / 2, right)) - W / 2;
+    }
+    const dy = Math.min(0, stand - (pet.offsetTop + pet.offsetHeight));
+    scr.style.setProperty("--ask-dx", `${Math.round(dx)}px`);
+    scr.style.setProperty("--ask-dy", `${Math.round(dy)}px`);
+    scr.style.setProperty("--ask-f", f.toFixed(2));
+  }
+
   // A question with its answers as buttons (the line is already in the bubble).
   _ask(s, kind, entity = s.ids?.["sensor.life_stage"]) {
     const question = QUESTIONS[kind];
@@ -7351,6 +7443,7 @@ class HatchPetCard extends HTMLElement {
       return;
     }
     s.screen.querySelector(".askday")?.remove();
+    if (s.confirm?.key === "lay_egg") s.confirm = null; // an armed lay can't carry on under a question (F1)
     const box = document.createElement("div");
     box.className = "askday";
     box.setAttribute("role", "group");
@@ -7359,6 +7452,8 @@ class HatchPetCard extends HTMLElement {
     const answers = question.options ? question.options(s)
       : Object.keys(kind === "big_how" ? QUESTIONS.how_day.answers : question.answers);
     box.classList.toggle("many", answers.length > 3);
+    box.classList.toggle("bdaybox", kind === "birthday");
+    box.classList.toggle("wide", answers.length > 6); // seven days: four and three, not three rows
     box.innerHTML = (question.picker?.() || "") + answers
       .map((a) => `<button data-answer="${escape(a)}">${escape(question.label?.(a, s, mine) ?? a)}</button>`).join("");
     const done = () => {
@@ -7374,30 +7469,40 @@ class HatchPetCard extends HTMLElement {
       s.askTimer = setTimeout(done, ASK_MS);
     };
     box.addEventListener("focusin", wait);
-    box.addEventListener("change", (e) => {
-      wait();
-      question.changed?.(box, e);
-    });
+    box.addEventListener("change", wait);
     box.addEventListener("click", (e) => {
+      const stepper = e.target.closest("button[data-step]");
+      if (stepper) {
+        wait();
+        question.step?.(box, stepper.dataset.step, Number(stepper.dataset.dir));
+        this._tapped(stepper);
+        return;
+      }
       let answer = e.target.closest("button")?.dataset.answer;
       if (!answer) return;
       if (question.value) answer = question.value(box, answer);
       if (!answer) return;
       this._tapped(e.target.closest("button"));
       done();
+      s.answeredAt = Date.now();
+      // The question line's own hold ends with its answer (F4): the next line is not kept
+      // waiting behind it.
+      s.sayUntil = 0;
       // The big day's "yes": which day, as its own ask (opp #2); no reply line before it.
       if (kind === "big_day" && answer === "yes") {
         s.asking = true;
         (s.queue ??= []).push({ text: BIG_DAY.which, ms: ASK_MS, ask: true, cls: KEPT, perk: true,
           then: () => this._ask(s, "big_day_day", entity) });
-        this._animate(s, s.pet, "perk", 320);
+        this._sayQueued(s);
         return;
       }
       const howLike = kind === "how_day" || kind === "big_how"; // opp #1: how_day's replies
       const lines = howLike ? QUESTIONS.how_day.answers[answer]
         : question.answers[answer] ?? question.answers[e.target.closest("button").dataset.answer];
       // how_day's answers in the type's own words half the time (fresh-expand E7, Q-a).
-      this._speak(s, question.reply ? question.reply(answer, s, mine)
+      // The reply is the viewer's own act: kept like a care press, so no flavour line or
+      // beat replaces it a moment later (F5).
+      this._line(s, MINE, question.reply ? question.reply(answer, s, mine)
         : howLike ? this._lines(s, `reply_${answer}`, pick(lines)).text : pick(lines), 4500);
       const isCalm = calm();
       if (["great", "you"].includes(answer) && !isCalm) this._animate(s, s.pet, "greethop", 1400);
@@ -7418,6 +7523,7 @@ class HatchPetCard extends HTMLElement {
       }
     });
     s.screen.append(box);
+    this._askPlace(s, box);
     s.askTimer = setTimeout(done, ASK_MS);
     // The phone question is asked for good only once it's on screen (top10 1a): one
     // dropped before this comes again another day. A websocket answer, off the bus.
@@ -7443,12 +7549,17 @@ class HatchPetCard extends HTMLElement {
     send().then(kept).catch(() => {
       setTimeout(() => {
         send().then(kept).catch((err) => {
-          if (s.ids?.["sensor.life_stage"] === entity) this._write(s, "hm, that one slipped away ♪", 3500);
-          if (!user || !STASHED_QUESTIONS.includes(kind) || sharedScreen()) return;
-          if (err?.code === "not_asked" || err?.code === "invalid_answer") return; // the server will not take it
-          const list = stashedAnswers(user).filter((a) => a.question !== kind);
-          list.push({ question: kind, answer, at: Date.now(), entity });
-          saveStashedAnswers(user, list);
+          // The server will not take it (the same person answered on another screen, or the
+          // question ran out): the pet said it will remember, and nothing slipped. Silent (F6).
+          if (err?.code === "not_asked" || err?.code === "invalid_answer") return;
+          // A stashed kind is resent quietly later (_resendAnswers): not lost either.
+          if (user && STASHED_QUESTIONS.includes(kind) && !sharedScreen()) {
+            const list = stashedAnswers(user).filter((a) => a.question !== kind);
+            list.push({ question: kind, answer, at: Date.now(), entity });
+            saveStashedAnswers(user, list);
+            return;
+          }
+          if (s.ids?.["sensor.life_stage"] === entity) this._line(s, MINE, "hm, that one slipped away ♪", 3500, { write: true });
         });
       }, ANSWER_RETRY_MS);
     });
@@ -8093,6 +8204,10 @@ class HatchPetCard extends HTMLElement {
         s.breezeTimer = setTimeout(() => s.screen.classList.remove("breezy"), 2600);
       }
       const food = this._words(s).food;
+      // The pet asked for the blanket or the fan by name: it thanks you (F11).
+      if (entry.result === "ok" && (entry.action === "blanket" || entry.action === "fan")) {
+        said = [TALK_COPY[entry.action], 3000];
+      }
       if (entry.action === "feed" && entry.result === "ok") said = this._mealLine(s, food); // E4 F-a, F-b
       if (entry.action === "praise") {
         said = [this._lines(s, "praise", "♥", undefined, { fresh: true }).text, 2500]; // P-c: a baby keeps "♥"
