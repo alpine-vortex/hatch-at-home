@@ -240,7 +240,7 @@ def box_front():
     # The left half is a proper toy-box feature panel, so the cover never reads empty.
     d.rounded_rectangle((58, 188, 862, 606), radius=34, fill=PURPLE)
     d.rounded_rectangle((72, 202, 848, 592), radius=28, outline=YELLOW, width=8)
-    pixel_text(im, (460, 238), "YOUR HOME. THEIR WORLD.", 8, YELLOW, anchor="ma")
+    pixel_text(im, (460, 240), "YOUR HOME. THEIR WORLD.", 7, YELLOW, anchor="ma")
     pixel_text(im, (460, 326), "30 PETS  •  6 WORLDS", 7, WHITE, anchor="ma")
     pixel_text(im, (460, 393), "CARE!  PLAY!  GROW!", 7, YELLOW, anchor="ma")
     pixel_text(im, (460, 444), "THEY NOTICE YOUR REAL HOME", 5, WHITE, anchor="ma")
@@ -257,15 +257,12 @@ def box_front():
         tile = rounded(tile, 28)
         drop(im, tile, (center-102, 236), radius=28, border=8, off=8)
         pixel_text(im, (center, 592), key.upper(), 4, PURPLE, anchor="ma")
-    # Each starter is foregrounded; one filled black teaser sits behind it.
+    # Each starter stands alone on the shelf; no offset ghost behind it.
     d.rectangle((0, 664, w, h), fill=PURPLE)
     d.rectangle((0, 664, w, 676), fill=YELLOW)
     slot_w = w // 6
     for i, (world, first, extras) in enumerate(WORLDS):
         center = slot_w*i + slot_w//2
-        if extras:
-            ghost = filled_silhouette(extras[0], 114)
-            im.alpha_composite(ghost, (center+15, 708))
         pet = first_sprite(first, 166)
         im.alpha_composite(pet, (center-83, 686))
         pixel_text(im, (center, 846), NAMES[first].upper(), 4, YELLOW, anchor="ma")
