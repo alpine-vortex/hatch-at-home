@@ -353,3 +353,4 @@ zoom. species.json `"acts"` lists them; the care scenes play them. One world per
 Final art for the visitors-v2 finds (docs/plan-2026-11-01-visitors-v2.md §9): 64 x 64, 16 world cells at 4 px, centred, the silhouette ring snapped to the 128 outline (34, 20, 10). One Luna (gpt-5.6-luna) sheet per world, 5 x 2, style from the world's finished visitors and one 128 sprite; each find given a distinct outline shape (the collection shows unmet finds as silhouettes). Drawn at ~13 art px on a ~18 px pitch and read back 1:1; drawn finer, the cut had to shrink and the insides went to mush.
 
 - Baskets: hand-placed in `art/finds/make_baskets.py` (12 cells is below where the model holds a shape); one wicker body shared by basket_1/2/3, only the peeking things change.
+- Tidepool: green sea glass a chip, blue a round, red a shard (owner 2026-11-01); the pearl in a grey oyster (the cutter fills inside the outline so grey insides are kept).
