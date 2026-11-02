@@ -740,3 +740,11 @@ draft; the owner's own decisions are marked **OWNER**.
   (S2).
 - **Q-G (OWNER):** bedtime and wake time as an attribute on the life-stage sensor is
   fine; add a `test_public` line (S7).
+
+## 13. First mate copy review (2026-11-02; owner delegated copy review)
+
+All DRAFT copy above is APPROVED, with these rewrites (they win over the tables):
+- N14 `bad_name`: "keep it short, and not blank" (28).
+- N24: "sensor privacy is in the pet's options" (38).
+- `appliance_watts` label: "Counts as off at or below".
+Everything else ships as quoted. A builder still adds no string that isn't here.
