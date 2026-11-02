@@ -714,6 +714,7 @@ async def test_options_show_fahrenheit_and_store_celsius(
     result = await hass.config_entries.options.async_configure(
         form["flow_id"], {"comfort_low": 80, "comfort_high": 70}
     )
+    await hass.async_block_till_done()  # the save's reload
     assert result["errors"] == {"comfort_low": "comfort_range"}
     # The form comes back with what was entered (in °F), not the saved options.
     again = shown(result)
@@ -721,6 +722,7 @@ async def test_options_show_fahrenheit_and_store_celsius(
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"comfort_low": 64, "comfort_high": 80}
     )
+    await hass.async_block_till_done()  # the save's reload
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert config.options["comfort_low"] == pytest.approx(17.78, abs=0.01)
     assert config.options["comfort_high"] == pytest.approx(26.67, abs=0.01)
@@ -919,12 +921,14 @@ async def test_options_reject_impossible_settings(
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"bedtime": "23:00:00", "wake_time": "07:00:00"}
     )
+    await hass.async_block_till_done()  # the save's reload
     assert result["type"] is FlowResultType.CREATE_ENTRY
     result = await save_topic(
         hass, config.entry_id, "room", {"fireplace": "sensor.fire_temp"}
     )
     assert result["errors"] == {"fireplace": "fireplace_temperature"}
     result = await hass.config_entries.options.async_configure(result["flow_id"], {})
+    await hass.async_block_till_done()  # the save's reload
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
 

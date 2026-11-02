@@ -190,9 +190,11 @@ async def save_topic(
     """Open a topic and submit these values for it."""
     form = await open_topic(hass, entry_id, topic)
     assert form["type"] is FlowResultType.FORM and form["step_id"] == topic
-    return await hass.config_entries.options.async_configure(
+    result = await hass.config_entries.options.async_configure(
         form["flow_id"], user_input
     )
+    await hass.async_block_till_done()  # the save's reload
+    return result
 
 
 async def test_options_open_on_a_menu_of_topics(hass: HomeAssistant) -> None:
@@ -240,6 +242,7 @@ async def test_saving_each_topic_unchanged_leaves_the_options_equal(
         result = await hass.config_entries.options.async_configure(
             form["flow_id"], shown(form)
         )
+        await hass.async_block_till_done()  # the save's reload
         assert result["type"] is FlowResultType.CREATE_ENTRY, topic
         assert dict(config.options) == FULL, topic
 
@@ -252,6 +255,7 @@ async def test_a_fahrenheit_house_round_trips_26_5_celsius(
     form = await open_topic(hass, config.entry_id, "weather")
     assert shown(form)["comfort_high"] == 79.5  # 26.5 °C, to the half degree
     await hass.config_entries.options.async_configure(form["flow_id"], shown(form))
+    await hass.async_block_till_done()  # the save's reload
     assert config.options["comfort_high"] == 26.5  # not 26.39
     # A changed value is converted, and the other one keeps its stored value.
     result = await save_topic(
@@ -268,6 +272,7 @@ async def test_clearing_tv_removes_only_tv(hass: HomeAssistant) -> None:
     result = await hass.config_entries.options.async_configure(
         form["flow_id"], {**shown(form), "tv": []}
     )
+    await hass.async_block_till_done()  # the save's reload
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert dict(config.options) == {k: v for k, v in FULL.items() if k != "tv"}
 
@@ -299,6 +304,7 @@ async def test_an_entry_with_empty_options_gets_only_the_opened_topics_defaults(
     result = await hass.config_entries.options.async_configure(
         form["flow_id"], shown(form)
     )
+    await hass.async_block_till_done()  # the save's reload
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert dict(config.options) == {
         "zone": "zone.home",
@@ -443,6 +449,7 @@ async def test_a_fahrenheit_house_stores_the_default_comfort_exactly(
     form = await open_topic(hass, config.entry_id, "weather")
     assert shown(form)["comfort_low"] == 64.5  # 18.0 °C, to the half degree
     await hass.config_entries.options.async_configure(form["flow_id"], shown(form))
+    await hass.async_block_till_done()  # the save's reload
     # Exactly the defaults, not 18.06 / 26.39 from a round trip through °F.
     assert config.options["comfort_low"] == R.HOME_COMFORT_LOW_C
     assert config.options["comfort_high"] == R.HOME_COMFORT_HIGH_C
