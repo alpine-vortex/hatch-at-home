@@ -8427,7 +8427,8 @@ class HatchPetCard extends HTMLElement {
   // its first day that has not said it), else null.
   _firstNightKey(s) {
     const stage = this._state(s, "sensor.life_stage");
-    if (!stage || stage.state === "egg" || !(stage.attributes?.age_days < 1)) return null;
+    // A baby only: the first day ends before a pet is a child (and a test pet of 0 days can be any stage).
+    if (stage?.state !== "baby" || !(stage.attributes?.age_days < 1)) return null;
     const key = `firstnight-${s.ids?.device}-${stage.attributes.generation || 1}`;
     return onceSeen(key) ? null : key;
   }
