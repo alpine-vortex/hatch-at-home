@@ -4536,6 +4536,12 @@ class HatchPetCard extends HTMLElement {
       // A game on show keeps its screen: a stray tap must not end it unseen (the
       // Status button still does, on purpose).
       if (s.game) return;
+      // A tap on a visit in progress is a pat on the host, not the Status button: it
+      // would end the hello (UX8 F1).
+      if (s.linking) {
+        if (!this._swiped) this._perk(s);
+        return;
+      }
       // A question's chips take no stray tap (F3); a tap right after an answer is its
       // double tap, not the Status button (F2), so the pet's reply is seen.
       if (this._questionOn(s) || Date.now() - (s.answeredAt || 0) < CONFIRM_GAP_MS) return;
@@ -5804,6 +5810,7 @@ class HatchPetCard extends HTMLElement {
   _toggleStatus(s, lay = false) {
     const open = !s.screen.classList.contains("show-status");
     const wasSettings = !open && s.settings && !s.laySheet;
+    if (open && this._link?.host === s) this._linkEnd(); // the guest never stands over the page (UX8 F1)
     if (open) this._stopTyping(s); // the bubble hides: the line is said whole
     if (open && s.game) this._quitGame(s, null); // the sheet covers it: nobody plays it unseen
     s.screen.classList.toggle("show-status", open);
