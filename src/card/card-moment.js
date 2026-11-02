@@ -110,11 +110,11 @@ class HatchPetCardMoment extends HatchPetCardVisit {
           () => this._animate(s, s.pet, "stretch", 1100));
         break;
       case "good_morning":
-        speak(this._lines(s, "good_morning", pick(["morning!! you're up!", "morning! ♪"])).text, 4500,
+        speak(this._lines(s, "good_morning", pick(this._clockLines(s, "good_morning") || ["morning!! you're up!", "morning! ♪"])).text, 4500,
           () => this._animate(s, s.pet, "stretch", 1100));
         break;
       case "sunset":
-        speak(this._lines(s, "sunset", pick(["ooh, the sunset...", "pretty sky tonight", "the sun's going down"])).text, 4500,
+        speak(this._lines(s, "sunset", pick(this._clockLines(s, "sunset") || ["ooh, the sunset...", "pretty sky tonight", "the sun's going down"])).text, 4500,
           () => this._look(s, 3000));
         break;
       case "sunrise":
@@ -164,6 +164,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
           cold: t ? [`brr, ${t} outside!`, `${t} out there... brr`] : ["brr, so cold out!"],
         }[m.change];
         if (!lines) break;
+        if (!capture) s.skySaid = Date.now(); // the sky reaction waits a minute (_skyReact)
         (m.change === "cold" ? say : speak)(pick(lines), 4500, () => { // a sulk gets no cheery sound
           if (m.change === "rainbow" || m.change === "snow_started") this._sparkle(s);
           if (m.change === "cold") this._animate(s, s.pet, "sulk", 800);
@@ -245,6 +246,7 @@ class HatchPetCardMoment extends HatchPetCardVisit {
           sunny: today ? ["sunny today! yay"] : ["sun tomorrow! yay"],
         }[m.kind];
         if (!lines) break;
+        if (!capture) s.skySaid = Date.now();
         (["storm", "cold", "colder"].includes(m.kind) ? say : speak)(pick(lines), 5000, () => {
           if (m.kind === "cold" || m.kind === "colder") this._animate(s, s.pet, "sulk", 800);
           else this._animate(s, s.pet, "perk", 320);
@@ -440,6 +442,37 @@ class HatchPetCardMoment extends HatchPetCardVisit {
     } catch (err) {
       return null;
     }
+  }
+
+  // Species nature, clock (N1): the sunset's or the morning's own lines for this species' clock,
+  // or null (no nature: the usual lines). The moment's own rules decide when it is said.
+  _clockLines(s, moment) {
+    const n = nature(s.species);
+    return n && CLOCK_LINES[moment]?.[n.clock] || null;
+  }
+
+  // Species nature, sky (N1): when the house has this species' sky up, its body reacts, once a
+  // day, as one of its idle choices: a short action line and a perk (a settle for a slow one).
+  // Body only, never a liking. Not for an egg, a baby or a child (plan section 10), a resting pet, a day the person's own
+  // favourite-weather note was said, or within a minute of a weather line. The day's key is
+  // spent only by a reaction, so a skipped look leaves it for a later one. True if it reacted.
+  _skyReact(s, isCalm) {
+    const n = nature(s.species);
+    const stage = this._state(s, "sensor.life_stage")?.state;
+    if (!n || s.resting || s.egg || ["egg", "baby", "child"].includes(stage) || this._babyStage(s)) return false;
+    if (Date.now() - (s.skySaid || 0) < SKY_WAIT_MS) return false;
+    const device = s.ids?.device;
+    if (usedToday(`favweather-said-${device}`)) return false;
+    const flags = this._state(s, "sensor.mood")?.attributes.flags || [];
+    if (!SKY_FLAGS[n.sky].some((f) => flags.includes(f))) return false;
+    if (!oncePerDay(`sky-${device}`)) return false;
+    this._write(s, pick(SKY_REACT[n.sky]), 3000);
+    s.plain = s.bubble.textContent; // idle chatter isn't read out
+    if (!isCalm) {
+      if (paceOf(s.species) === "slow") this._animate(s, s.pet, "settle", 2500);
+      else this._animate(s, s.pet, "perk", 320);
+    }
+    return true;
   }
 
   // S-a: a morning wake, in turns per pet; the dream line only on a dream day.

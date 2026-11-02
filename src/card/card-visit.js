@@ -269,6 +269,7 @@ class HatchPetCardVisit extends HatchPetCardLooks {
     }
     let line = NOTES[note.kind]?.(note, s.ids?.device);
     if (!line) return;
+    if (note.kind === "fav_weather") oncePerDay(`favweather-said-${s.ids?.device}`); // the sky reaction skips this day (species nature)
     if (CELEBRATION_NOTES.has(note.kind) && madeRoom && s.queue) {
       // The look was full and the server made room for a celebration: it
       // takes the away note's place (if that isn't said yet).

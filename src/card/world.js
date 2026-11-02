@@ -475,6 +475,29 @@ function shelfWrite(ids, index) {
     // no storage: the place is not kept
   }
 }
+// The pet this person's card opens on (the favourite, plan favourite-resting §5.3), by its
+// device: a copy of the server's, so a page load opens there before the channel speaks. A
+// shared screen keeps the household's default instead (no person). Every snapshot refreshes it.
+const OPEN_ON_WAIT_MS = 1500; // the first time (no copy yet): the channel may still move the card
+function openOnKey(user, shared) {
+  return shared ? "hatch-open-house" : user ? `hatch-open-${user}` : null;
+}
+function openOnRead(key) {
+  try {
+    return key ? localStorage.getItem(key) : null;
+  } catch (err) {
+    return null;
+  }
+}
+function openOnWrite(key, device) {
+  try {
+    if (!key) return;
+    if (device) localStorage.setItem(key, device);
+    else localStorage.removeItem(key);
+  } catch (err) {
+    // no storage: the card opens as it would with no choice
+  }
+}
 // Was oncePerDay(name) used today on this browser? (Read only.)
 function usedToday(name, day = new Date()) {
   const key = `hatch-${name}-${day.toDateString()}`;

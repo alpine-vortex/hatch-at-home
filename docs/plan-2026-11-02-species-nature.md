@@ -1061,3 +1061,48 @@ reach, S10's alternative).
 | N5 | 42 vs 49 key count | Folded: count is the 23 filled cells; `visit` and `host` are two keys | 8 N2, 11 |
 
 Also folded from the brief: the **interplay with the core-interactions effort** (section 8a).
+
+## 16. N1 shipped: corrections for N2-N4
+
+N1 is built (branch `crew/hatch-at-home-s2742-n1-species-nature-data-idle-ma`, worker
+s2742). Where the code differed from this plan, the code is right and N2-N4 read from it.
+
+**First mate decisions on N1 (2026-11-02):**
+
+- **Fire fallback = `cozy`, then `sunny`.** The `fire` sky reacts to `fireside`, else the
+  `cozy` flag, else `sunny`. A real "heating on" flag (a server change) is an **N2
+  question**, not N1's.
+- **A child skips the sky reaction** (section 10 wins over section 6 rule 6 for the sky).
+  The cadence still applies to a child. N2 decides for the action lines.
+- **Clock copy is two lines per cell** (3 clocks x 2 moments x 2 = 12), not one, so a pet
+  does not repeat its line every day. With the 14 sky lines N1 ships 26 lines, approved.
+
+**What N1 built, as N2-N4 will find it:**
+
+1. **The heating signal.** The card has no "heating on" flag, only `cozy` (heating on and
+   the house cold, `home.py:272`). N1 uses `cozy`; sun is the last stand-in, so a house with
+   no fireplace, no cold and no sun shows a fire species nothing.
+2. **Child.** Section 6 rule 6 says a child gets the lines; section 10 says a child shot
+   shows none. N1 followed section 10 for the sky.
+3. **`REASONS` is a persistent caption**, the status sentence redrawn every tick, not a timed
+   bubble. Section 5.2 rule 4 therefore needs only the `weather` and `forecast` stamps
+   (`s.skySaid`), done; nothing for `REASONS`.
+4. **`_babyStage` returns a child only while baby talk is on.** The nature rules read
+   `sensor.life_stage` directly (egg, baby, child) and also `_babyStage`.
+5. **The favourite-weather key.** The sky rule reads `favweather-said-<device>`, which
+   `_note` sets for note kind `fav_weather`. If the memory plan's M0-b or M1b queue that line
+   by another path, they must set the same key, or the reaction can land on that day.
+6. **The idle path.** `_skyReact` runs in `_idle` after the promise practice and before the
+   move pick, and takes that idle tick. N2's species line roll (after the persona coin, in
+   the `mumble` branch only) is unaffected. All idle changes sit in `_idle`, `_idleMoves`,
+   `_speciesAdds` and `_idleScale`; `_reactFrames` is untouched, so care-reactions ship A has
+   no overlap.
+7. **card-check.** `hush` stubs `_skyReact` off, the "idle life happens by itself" wait is 120 s
+   (a slow pet's worst case is about 100 s), and the sunset, morning and idle-manner checks
+   accept the clock lines and a child's list without the species adds. N2's `Math.random`
+   order rule (section 5.1) held: the cadence scale draws nothing and no draw comes before
+   the delay and move.
+8. **Bench.** `moment` (a public moment through the card's `_moment`) and `idle.draw` (the
+   draw that picks the sky line) now exist, with `--preset nature`. N2 and N3 shots can reuse
+   them. Not shot in N1: a sky reaction together with a trait flair, and big text (a bubble
+   does not change with it).

@@ -77,8 +77,12 @@ def test_1_off_by_default_and_a_save_without_the_key_loads_awake():
     del saved["resting"], saved["rest_since"]
     loaded = model.PetState.from_dict(saved)
     assert loaded.resting is False and loaded.rest_since is None
-    # The save gains exactly the two keys (S9).
-    assert {"resting": False, "rest_since": None}.items() <= pet.to_dict().items()
+    # The save gains exactly the three keys (S9; the refill stamp, R1-1).
+    assert {
+        "resting": False,
+        "rest_since": None,
+        "last_rest_refill_at": None,
+    }.items() <= pet.to_dict().items()
 
 
 def test_1_a_week_with_no_pet_resting_never_takes_the_rest_path(monkeypatch):
@@ -107,6 +111,57 @@ def test_2_entering_floors_the_needs_to_55_and_leaves_health():
     assert (pet.hunger, pet.happiness, pet.energy) == (R.REST_FLOOR, 55.0, 70.0)
     assert pet.health == 30.0
     assert R.REST_FLOOR > max(hi for _, hi in R.CALL_THRESHOLDS.values())
+
+
+def test_2_the_refill_comes_at_most_once_in_twelve_hours():
+    """Owner 2026-11-02 (R1-1, audit s2739): on, off, on inside the window is
+    one refill; a rest inside it only pauses, holding a call and the misses."""
+    t = at(9)
+    pet = rested(t, hunger=10.0, happiness=10.0, energy=70.0)
+    assert (pet.hunger, pet.happiness) == (R.REST_FLOOR, R.REST_FLOOR)
+    assert pet.last_rest_refill_at == t
+    model.set_resting(pet, False, t + HOUR)
+    run(pet, t + 2 * HOUR)  # the caller advances first
+    pet.hunger, pet.happiness, pet.energy = 10.0, 12.0, 70.0  # spent (say, by play)
+    pet.recent_misses = [t + HOUR]
+    pet.call = model.Call("hunger", t + 2 * HOUR - MIN, t + 2 * HOUR + 10 * MIN)
+    recall = pet.last_recall_at
+    _, events = model.set_resting(pet, True, t + 2 * HOUR)
+    assert types(events) == ["rest_started"] and pet.resting
+    assert (pet.hunger, pet.happiness, pet.energy) == (10.0, 12.0, 70.0)
+    assert pet.call is not None and pet.recent_misses == [t + HOUR]
+    assert pet.last_recall_at == recall and pet.last_rest_refill_at == t
+    # Held, not lost: the call's clock waits while it rests.
+    deadline = pet.call.deadline
+    run(pet, t + 3 * HOUR)
+    assert pet.call.deadline == deadline + HOUR and pet.hunger == 10.0
+    model.set_resting(pet, False, t + 3 * HOUR)
+    # Twelve hours after the last refill, the next rest refills and settles again.
+    later = t + R.REST_REFILL_HOURS * HOUR
+    pet.call = None
+    run(pet, later)
+    pet.hunger = 10.0
+    pet.recent_misses = [later - MIN]
+    pet.call = model.Call("hunger", later - MIN, later + 10 * MIN)
+    model.set_resting(pet, True, later)
+    assert pet.hunger == R.REST_FLOOR and pet.call is None
+    assert pet.recent_misses == [] and pet.last_recall_at == later
+    assert pet.last_rest_refill_at == later
+
+
+@pytest.mark.parametrize("stamp", ["missing", None, "x"])
+def test_2_an_old_save_loads_and_may_refill(stamp: Any):
+    saved = hatched(at(9), hunger=10.0).to_dict()
+    if stamp == "missing":
+        del saved["last_rest_refill_at"]
+    else:
+        saved["last_rest_refill_at"] = stamp
+    pet = model.PetState.from_dict(saved)
+    assert pet.last_rest_refill_at is None
+    model.set_resting(pet, True, at(9))
+    assert pet.hunger == R.REST_FLOOR and pet.last_rest_refill_at == at(9)
+    again = model.PetState.from_dict(json.loads(json.dumps(pet.to_dict())))
+    assert again.last_rest_refill_at == at(9)
 
 
 def test_3_a_day_without_a_visit_holds_everything_but_its_night():

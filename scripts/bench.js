@@ -527,6 +527,34 @@ const PRESETS = {
     out.push({ ...base, admin: false, scroll: ".sleeprow", name: "settings-s7/330-nonadmin", group: "settings-s7-time", label: "not an admin" });
     return out;
   },
+  // Species nature N1 (plan-2026-11-02-species-nature.md section 10): the sky reaction per sky (both
+  // lines, 330 and 300, and calm), the sunset and morning lines per clock, and a baby and a child with none.
+  nature() {
+    const out = [];
+    const skies = [["sun", "tortoise", "terrarium", "sunny"], ["rain", "otter", "tidepool", "rainy"],
+      ["snow", "corgi", "hearth", "snowy"], ["fog", "deer", "woodland", "foggy"], ["wind", "squirrel", "woodland", "windy"],
+      ["fire", "kitten", "hearth", "fireside"], ["moon", "bat", "nightsky", "full_moon"]];
+    for (const [sky, species, world, flag] of skies) {
+      const base = { species, world, width: 330, pet: { flags: [flag] }, group: "nature-sky", scene: sky === "moon" ? "night" : "day" };
+      for (const [i, draw] of [0, 0.99].entries()) {
+        out.push({ ...base, idle: { mood: "content", draw }, name: `nature/sky-${sky}-${i + 1}`, label: `${sky} ${species} line ${i + 1}` });
+        out.push({ ...base, width: 300, idle: { mood: "content", draw }, name: `nature/sky-${sky}-${i + 1}-300`, group: "nature-sky-300", label: `${sky} 300 line ${i + 1}` });
+      }
+      out.push({ ...base, motion: "reduce", idle: { mood: "content", draw: 0 }, name: `nature/sky-${sky}-calm`, group: "nature-sky-calm", label: `${sky} calm` });
+    }
+    const clocks = [["day", "otter", "tidepool"], ["dusk", "kitten", "hearth"], ["night", "owl", "nightsky"]];
+    for (const [clock, species, world] of clocks) {
+      for (const [type, scene] of [["sunset", "day"], ["good_morning", "day"]]) {
+        out.push({ species, world, width: 330, scene, moment: { type }, name: `nature/${type}-${clock}`, group: "nature-clock", label: `${type} ${clock} ${species}` });
+        out.push({ species, world, width: 300, scene, moment: { type }, name: `nature/${type}-${clock}-300`, group: "nature-clock-300", label: `${type} ${clock} 300` });
+      }
+    }
+    for (const stage of ["baby", "child"]) {
+      out.push({ species: "otter", world: "tidepool", stage, width: 330, pet: { flags: ["rainy"] }, idle: { mood: "content" },
+        name: `nature/${stage}-none`, group: "nature-none", label: `${stage}: no nature line` });
+    }
+    return out;
+  },
   // Resting (R1, plan favourite-resting §9): the label and breathing pose, its idle line and a
   // baby's, a sick resting pet (sick wins), the status page's line, and the settings row at
   // 420/330/300, day and night, mono, big text and on a shared screen (read-only).

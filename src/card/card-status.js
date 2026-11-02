@@ -252,6 +252,17 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       ${bedtime}
       ${resting}
       ${hasShell ? row(null, "shell", `<span><button class="bell shellrow" aria-label="shell: ${shellName}, change">${shellSwatch}${shellName}</button></span>`) : ""}`;
+    // The pet this person's card opens on (favourite §5.3), with 2+ pets, on their own screen,
+    // once the channel has said: no ranking word, just where the card opens. An admin also
+    // sets where shared screens open (the household's). An older server sends neither.
+    const petName = escape(this._linkName(s));
+    const several = (this._slides || []).filter((x) => x.ids && !x.empty).length > 1;
+    const openRow = (cls, label, on) =>
+      row(null, label, `<span><button class="bell ${cls}" aria-label="${spoken(label)}" aria-pressed="${on}">${on ? "on" : "off"}</button></span>`);
+    const openOn = !several || sharedScreen() || typeof s.mine?.open_on !== "boolean" ? ""
+      : openRow("openon", OPEN_ON_COPY.mine(petName), s.mine.open_on)
+        + (this._hass.user?.is_admin && typeof s.mine.house_open_on === "boolean"
+          ? openRow("openhouse", OPEN_ON_COPY.house(petName), s.mine.house_open_on) : "");
     // Who each part changes: the pet (everyone), the viewer (follows their login),
     // or this browser.
     const html = `
@@ -276,6 +287,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
         row(null, "birthday on my phone", `<span><button class="bell bdayphone" aria-label="birthday on my phone: a happy birthday message on your phone on the day" aria-pressed="${!!birthdayPhone}">${birthdayPhone ? "on" : "off"}</button></span>`) : ""}
       ${sharedScreen() ? "" : row(null, "baby talk", `<span><button class="bell babytalk" aria-label="baby talk: simpler words while a pet is a baby or child" aria-pressed="${babyTalk(this._hass.user?.id)}">${babyTalk(this._hass.user?.id) ? "on" : "off"}</button></span>`)}
       ${favRows}
+      ${openOn}
       ${sharedScreen() ? "" : row(null, "my data", forgetButton("forgetme", "forget_me", "forget my data: your birthday, answers and settings for every pet; your bonds stay"))}
       ${shellRows}
       <div class="sec">shared screen</div>
@@ -317,6 +329,15 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       this._tapped(button);
       this._setResting(s, button.getAttribute("aria-pressed") !== "true", button);
     });
+    for (const [cls, scope] of [["openon", "me"], ["openhouse", "house"]]) {
+      s.status.querySelector(`.bell.${cls}`)?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const button = e.currentTarget;
+        if (button.classList.contains("pending")) return; // a call is in flight (F3)
+        this._tapped(button);
+        this._setOpenOn(s, button.getAttribute("aria-pressed") !== "true", scope, button);
+      });
+    }
     s.status.querySelector(".bell.myday")?.addEventListener("click", (e) => {
       e.stopPropagation();
       const button = e.currentTarget;
@@ -493,12 +514,15 @@ class HatchPetCardStatus extends HatchPetCardMoment {
           this._birthdayKept = false;
           this._birthdayPhone = false;
           this._memoryOn = false; // memory went with the rest (plan M1a)
-          for (const key of ["my_day", "baby_talk", "birthday_kept", "birthday_phone", "memory_on"]) this._setMine(key, false);
+          for (const key of ["my_day", "baby_talk", "birthday_kept", "birthday_phone", "memory_on", "open_on"]) this._setMine(key, false);
+          for (const key of ["fav_weather", "fav_season", "fav_visitor"]) this._setMine(key, null); // M0-c's, gone too
+          this._openOnSync(); // the heart and the copy of the pet their card opened on
           for (const slide of this._slides || []) { // lines told only to them
             if (slide.queue) slide.queue = slide.queue.filter((q) => !q.personal && !q.opts?.personal && !q.ask);
           }
           try {
             localStorage.removeItem(`hatch-welcomed-${user}`);
+            localStorage.removeItem(openOnKey(user, false)); // the pet their card opened on (§5.2)
             const greets = [];
             for (let i = 0; i < localStorage.length; i++) {
               const key = localStorage.key(i);

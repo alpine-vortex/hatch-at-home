@@ -564,7 +564,12 @@ class HatchPetCardBuild extends HatchPetCardBase {
     }
     if (!this._shelfRestored) { // the pet that was on show before a reload (UX fix 2, F8)
       this._shelfRestored = true;
-      const at = devices.findIndex((d) => d.device === shelfRead(devices));
+      this._openFrom = Date.now();
+      // The pet this person opens on (favourite §5.3) beats the shelf: every page load opens there.
+      const open = openOnRead(this._openKey());
+      let at = open ? devices.findIndex((d) => d.device === open) : -1;
+      this._openedOn = at >= 0;
+      if (at < 0) at = devices.findIndex((d) => d.device === shelfRead(devices));
       if (at > 0) this._index = at;
     }
     this._index = Math.min(this._index, devices.length - 1);
@@ -872,6 +877,7 @@ class HatchPetCardBuild extends HatchPetCardBase {
   _go(index) {
     const n = this._slides.length;
     if (!n) return;
+    this._userMoved = true; // a swipe, an arrow or a dot: the opening pet no longer moves the card
     const to = (index + n) % n;
     this._slides.forEach((x, i) => {
       // A game stops on the slide being left: nobody plays it unseen.

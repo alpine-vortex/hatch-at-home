@@ -344,8 +344,38 @@ class HatchPetCardBase extends HTMLElement {
     if (s.mine && typeof s.mine.baby_talk === "boolean" && user && user === this._hass?.user?.id) {
       setBabyTalk(user, s.mine.baby_talk);
     }
+    if (!user || user === this._hass?.user?.id) this._openOnSync();
     s.statusHtml = null;
     this._redraw(s);
+  }
+
+  // Where this browser keeps its copy of the opening pet: the person's, or a shared screen's.
+  _openKey() {
+    return openOnKey(this._hass?.user?.id, sharedScreen());
+  }
+
+  // The opening pet (favourite §5.3), as the channels report it: the copy follows every
+  // snapshot (the pet reporting it, or none: a copy one of these pets no longer reports
+  // goes). The first time, with no copy, the card moves to it only inside OPEN_ON_WAIT_MS of
+  // its first draw and before any swipe.
+  _openOnSync() {
+    const key = this._openKey();
+    if (!key) return;
+    const shared = sharedScreen();
+    const heard = (this._slides || []).filter((x) => x.ids?.device && x.subscribed);
+    const on = heard.find((x) => (shared ? x.house?.house_open_on : x.mine?.open_on) === true);
+    const kept = openOnRead(key);
+    if (on) {
+      if (kept !== on.ids.device) openOnWrite(key, on.ids.device);
+    } else if (kept && heard.some((x) => x.ids.device === kept)) {
+      openOnWrite(key, null);
+    }
+    if (on && !this._openedOn && !this._userMoved && this._openFrom
+      && Date.now() - this._openFrom < OPEN_ON_WAIT_MS) {
+      this._openedOn = true;
+      const i = this._slides.indexOf(on);
+      if (i >= 0 && i !== this._index) this._go(i);
+    }
   }
 
   // A channel moment is said now, or after the boot screen (only the speaking

@@ -70,6 +70,7 @@
     "home": "hammock"
   },
   "voice": { "sound": "dook", "catchphrase": "tunnel time", "pitch": 860, "pace": 44, "likes": ["chicken", "egg yolk", "salmon"] },
+  "nature": { "clock": "dusk", "sky": "fire", "company": "social", "habit": "hoarder" },
   "reactions": {
     "play": "tunnel",
     "won": "war_dance",
