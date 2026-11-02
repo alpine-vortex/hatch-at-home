@@ -98,6 +98,9 @@ async def test_each_person_hears_only_their_own_bond(
     )
     await setup(hass)
     mine = await subscribe(await hass_ws_client(hass))
+    # Audit 0.43.0 F-03: the server's day and evening, for the card's gate.
+    assert isinstance(mine["mine"].pop("follow_day"), str)
+    assert isinstance(mine["mine"].pop("follow_evening"), bool)
     assert mine["mine"] == {
         "bond": {"level": 5, "nickname": "sunbeam", "favourite": "simon"},
         "notify_me": True,

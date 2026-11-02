@@ -479,6 +479,7 @@ async def test_the_big_days_evening_beat_is_its_how_did_it_go(
     freezer.move_to("2026-11-04 15:00:00+00:00")
     assert pet._mine(ada.id)["follow_at"] == []  # the evening waits for its hour
     P.mark_asked(people.person(ada.id), "2026-11-04", 15, "how_day")  # slot used
+    assert (await answer(client, "how_day", "tough"))["success"]  # ... and answered
     freezer.move_to("2026-11-04 19:30:00+00:00")
     assert pet._mine(ada.id)["follow_at"] == ["look"]
     assert await follow(client) == {
@@ -500,6 +501,61 @@ async def test_the_big_days_evening_beat_is_its_how_did_it_go(
     assert await follow(client) == {}
     freezer.move_to("2026-11-05 07:00:00+00:00")
     assert await follow(client) == {"kind": "soft", "beat": "morning"}
+
+
+async def test_an_open_later_question_is_not_overwritten_by_the_evening(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    freezer: FrozenDateTimeFactory,
+    now: float,
+):
+    """Audit 0.43.0 F-01: the evening's ask takes the person's one later slot; with
+    another question still open there, the beat stays unsaid (retried), and the
+    open question stays answerable."""
+    ada, token = await a_user(hass)
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    config = await setup(hass)
+    pet = config.runtime_data
+    people = pet.people
+    client = await hass_ws_client(hass, token)
+    people.open_follow(ada.id, "big_day", "2026-11-03", SECRET, day="2026-11-04")
+    freezer.move_to("2026-11-04 19:30:00+00:00")
+    P.mark_asked(people.person(ada.id), "2026-11-04", 15, "how_day")  # open
+    assert await follow(client) == {}
+    assert people.open_event(ada.id)["said"] == []  # not consumed
+    assert people.person(ada.id)["asked"]["later_kind"] == "how_day"  # not replaced
+    assert await follow(client) == {}
+    assert (await answer(client, "how_day", "tough"))["success"]  # still answerable
+    assert "later_kind" not in people.person(ada.id)["asked"]
+    assert (await answer(client, "how_day", "tough"))["error"]["code"] == "not_asked"
+    assert (await follow(client))["ask"] == "big_how"  # retried once it is answered
+    assert people.person(ada.id)["asked"]["later_kind"] == "big_how"
+
+
+async def test_the_evening_is_home_assistants_not_the_browsers(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    freezer: FrozenDateTimeFactory,
+    now: float,
+):
+    """Audit 0.43.0 F-03: mine carries the server's day and whether it is the
+    evening, so a browser in another time zone gates on the server's clock."""
+    ada, _ = await a_user(hass)
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    config = await setup(hass)
+    pet = config.runtime_data
+    freezer.move_to("2026-11-04 08:00:00+00:00")
+    mine = pet._mine(ada.id)
+    assert (mine["follow_day"], mine["follow_evening"]) == ("2026-11-04", False)
+    freezer.move_to("2026-11-04 19:30:00+00:00")
+    mine = pet._mine(ada.id)
+    assert (mine["follow_day"], mine["follow_evening"]) == ("2026-11-04", True)
+    assert P.People.follow_clock("2026-11-04", 18)["follow_evening"] is False
+    assert P.People.follow_clock("2026-11-04", 19)["follow_evening"] is True
+    for key in ("follow_day", "follow_evening"):  # no kind or text in it
+        assert SECRET not in json.dumps(mine[key])
 
 
 def test_twelve_weeks_of_evenings_ask_the_dated_follow_ups_weekly():

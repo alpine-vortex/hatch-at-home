@@ -4593,6 +4593,71 @@ async function main() {
       cb.length === 1 && cb[0] === "I keep thinking of my sea dream ♪" && !f2.later[0] && !f2.later[1] &&
         f2.youLook.includes("I dreamed about my friends ♥") && f2.youMine.length === 2 && TAILS.includes(f2.youMine[1]) &&
         !TAILS.includes(f2.youMine[0]) && f2.youTheirs.length === 0 && f2.youKey === null, JSON.stringify(f2));
+    // Audit 0.43.0 F-01..F-03, card side: the evening follow-up waits for a question or
+    // game (not fetched), is tried again after a failed call, and goes by the server's
+    // day and evening (mine.follow_day / follow_evening), else this browser's clock.
+    const fe = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const realWS = el._hass.callWS;
+      const real = { heard: el._channelHeard, mine: s.mine, asking: s.asking, game: s.game, lookedFirst: s.lookedFirst,
+        asleep: s.asleep, queue: s.queue, eve: s.followEve, following: s.following };
+      const calls = [];
+      let mode = "ok";
+      el._hass.callWS = (msg) => {
+        if (msg.type !== "virtual_pet/follow") return realWS.call(el._hass, msg);
+        calls.push(msg);
+        return mode === "fail" ? Promise.reject({ code: "unknown_error" }) : Promise.resolve({});
+      };
+      el._channelHeard = () => true;
+      const out = {};
+      const base = { follow_at: ["look"] };
+      const run = async (mine, extra = {}) => {
+        Object.assign(s, { mine, lookedFirst: true, asleep: false, queue: [], following: false, asking: false, game: false }, extra);
+        const n = calls.length;
+        el._followEvening(s);
+        await new Promise((r) => setTimeout(r, 20));
+        return calls.length - n;
+      };
+      try {
+        const eve = { ...base, follow_day: "2031-05-06", follow_evening: true };
+        const morning = { ...base, follow_day: "2031-05-06", follow_evening: false };
+        s.followEve = undefined;
+        out.asking = await run(eve, { asking: true });
+        out.game = await run(eve, { game: true });
+        out.askingKept = s.followEve === undefined;
+        mode = "fail";
+        out.failed = await run(eve);
+        out.failedMarker = s.followEve === undefined;
+        mode = "ok";
+        out.retried = await run(eve);
+        out.marker = s.followEve;
+        out.again = await run(eve);
+        s.followEve = undefined;
+        out.serverMorning = await run(morning); // the server says morning, whatever this browser's hour
+        out.serverMorningMarker = s.followEve === undefined;
+        s.followEve = "2031-05-06";
+        out.sameDay = await run(eve);
+        out.nextDay = await run({ ...eve, follow_day: "2031-05-07" });
+        const hour = new Date().getHours();
+        s.followEve = undefined;
+        out.oldServer = await run(base); // no clock fields: this browser's hour, as before
+        out.oldServerExpected = hour >= 19 ? 1 : 0;
+        out.oldServerMarker = s.followEve === (hour >= 19 ? new Date().toDateString() : undefined);
+      } finally {
+        el._hass.callWS = realWS;
+        el._channelHeard = real.heard;
+        Object.assign(s, { mine: real.mine, asking: real.asking, game: real.game, lookedFirst: real.lookedFirst,
+          asleep: real.asleep, queue: real.queue, followEve: real.eve, following: real.following });
+      }
+      return out;
+    });
+    check("audit 0.43.0 F-01: the evening follow-up isn't fetched while a question or game is up",
+      fe.asking === 0 && fe.game === 0 && fe.askingKept, JSON.stringify(fe));
+    check("audit 0.43.0 F-02: a failed evening fetch leaves the day's marker unset and is tried again; once answered, no more that day",
+      fe.failed === 1 && fe.failedMarker && fe.retried === 1 && fe.marker === "2031-05-06" && fe.again === 0, JSON.stringify(fe));
+    check("audit 0.43.0 F-03: the evening gate and marker follow the server's day and evening; an older server's mine falls back to this browser's clock",
+      fe.serverMorning === 0 && fe.serverMorningMarker && fe.sameDay === 0 && fe.nextDay === 1 &&
+        fe.oldServer === fe.oldServerExpected && fe.oldServerMarker, JSON.stringify(fe));
     // Fresh-expand F1 + E13, card side (virtual_pet/follow and the answer stubbed): a big
     // day's morning and evening say their words, else the type's or the shared lines; an
     // HTML text shows as text; a soft morning says its line; a shared screen never asks
@@ -4734,9 +4799,15 @@ async function main() {
         eveAsk?.then();
         out.eve.buttons = [...(s.screen.querySelector(".askday")?.querySelectorAll("button") || [])].map((b) => b.textContent);
         s.screen.querySelector(".askday")?.remove();
-        s.asking = true; // another ask is up
+        // Another ask is up. The card doesn't fetch an evening beat then (audit 0.43.0 F-01),
+        // so the server's clock says "not evening" here: the reply's own fallback (an ask
+        // that came up during the call) is what's tested.
+        const mineWas = s.mine;
+        s.mine = { ...s.mine, follow_day: "2031-05-06", follow_evening: false };
+        s.asking = true;
         out.eve.busy = await fetch(eve);
         s.asking = false;
+        s.mine = mineWas;
         localStorage.removeItem(textKey);
         // M1: at a first look, kept words past their day (or unreadable) go, any person's;
         // a current one stays.

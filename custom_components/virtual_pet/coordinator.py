@@ -2053,6 +2053,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 elif answer == "yes":  # weekend: with their words, if any
                     self.people.open_follow(user, question, today, text)
                     kept = {"until": self.people.open_event(user)["until"]}
+                # Audit 0.43.0 F-01: answered, the later slot holds no open question
+                # (the evening's ask may then take it). The dated follow-ups keep it:
+                # their typed step answers the same ask again.
+                asked = person.get("asked")
+                if question in P.SLOT_CLOSED_BY_ANSWER and isinstance(asked, dict):
+                    if asked.pop("later_kind", None):
+                        self.people.save()
             self._push_everywhere()  # their follow_at
             return kept
         if question == "birthday":
@@ -2485,6 +2492,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "follow_at": self.people.follow_at(
                 user, *self._today(self._now()), self.pet_id
             ),
+            # Home Assistant's day and evening, which decide the beats (audit 0.43.0
+            # F-03): the card's evening gate and daily marker follow these.
+            **P.People.follow_clock(*self._today(self._now())),
         }
 
     def _house_view(self) -> dict[str, Any]:

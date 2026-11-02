@@ -129,6 +129,9 @@ FOLLOW_BEATS: dict[str, tuple[str, ...]] = {
 # A big day's morning beat before this hour, its evening beat from it: late enough that
 # the day is likely over (a recital, a match, a late shift; critique s2632 #4).
 FOLLOW_EVENING_HOUR = 19
+# Questions whose one answer closes the later slot (the dated follow-ups answer twice:
+# "yes", then their typed step; a trick says "later", then may say "yes").
+SLOT_CLOSED_BY_ANSWER = ("how_day", "big_how", "game")
 # The follow-up questions (asked in the later slot) in the order they're tried, those
 # that take a typed text, and a pet's own (said only by the pet that asked).
 FOLLOW_QUESTIONS = ("weekend", "big_day", "trick", "game")
@@ -368,6 +371,16 @@ class People:
             and event["kind"] in kinds
             and (beat := _event_beat(event, today, hour, pet))
         ):
+            if (
+                event["kind"] == "big_day"
+                and beat == "evening"
+                and (person.get("asked") or {}).get("day") == today
+                and (person.get("asked") or {}).get("later_kind")
+            ):
+                # Audit 0.43.0 F-01: today's later slot still holds an unanswered
+                # question; the evening's ask would take its answer. Leave the beat
+                # unsaid (the card asks again on a later tick, once it is answered).
+                return {}
             event["said"].append(beat)
             out = {"kind": event["kind"], "beat": beat}
             if event["kind"] == "big_day" and beat == "evening":
@@ -391,6 +404,13 @@ class People:
             del self._moods[user]
             return {"kind": "soft", "beat": "morning"}
         return {}
+
+    @staticmethod
+    def follow_clock(today: str, hour: int) -> dict[str, Any]:
+        """The server's day and whether it is the evening here (audit 0.43.0 F-03):
+        the card gates the evening fetch on this, not its browser's clock. No
+        person, kind or text in it."""
+        return {"follow_day": today, "follow_evening": hour >= FOLLOW_EVENING_HOUR}
 
     def _mood_due(
         self, user: str, today: str, hour: int, kinds: tuple[str, ...]

@@ -6407,13 +6407,18 @@ class HatchPetCard extends HTMLElement {
   async _followFetch(s, at = "look") {
     const entity = s.ids?.["sensor.life_stage"];
     if (!this._followWanted(s, at)) return null;
+    const clock = this._followClock(s);
+    // Audit 0.43.0 F-01: an evening's "how did it go?" would take the open question's
+    // answer (and may not show): wait for a later tick, not consumed.
+    if (at === "look" && clock.eve && (s.asking || s.game)) return null;
     s.following = true;
-    if (at === "look" && new Date().getHours() >= FOLLOW_EVENING_HOUR) s.followEve = new Date().toDateString();
     let reply = null;
     try {
       reply = await this._hass.callWS({ type: "virtual_pet/follow", entity_id: entity, at });
+      // F-02: the evening is tried once a day, but only once the server has answered.
+      if (at === "look" && clock.eve) s.followEve = clock.day;
     } catch (err) {
-      reply = null; // an older server: no follow-ups
+      reply = null; // an older server: no follow-ups; a failed call tries again later
     }
     s.following = false;
     if (!reply?.kind || sharedScreen() || s.ids?.["sensor.life_stage"] !== entity) return null;
@@ -6448,11 +6453,24 @@ class HatchPetCard extends HTMLElement {
     return TRICKS.find((t) => !learned.includes(t)) || null;
   }
 
+  // The day and whether it is the evening, by Home Assistant's clock (audit 0.43.0 F-03):
+  // the server decides the beats by it, so the gate and the daily marker follow it. An
+  // older server sends none: this browser's clock, as before.
+  _followClock(s) {
+    const m = s.mine;
+    if (typeof m?.follow_day === "string" && typeof m.follow_evening === "boolean") {
+      return { day: m.follow_day, eve: m.follow_evening };
+    }
+    const now = new Date();
+    return { day: now.toDateString(), eve: now.getHours() >= FOLLOW_EVENING_HOUR };
+  }
+
   // Once at the first tick from FOLLOW_EVENING_HOUR on a day (a big day's evening beat).
   _followEvening(s) {
-    if (!s.lookedFirst || s.asleep || new Date().getHours() < FOLLOW_EVENING_HOUR) return;
-    if (s.followEve === new Date().toDateString() || !this._followWanted(s) || !this._channelHeard(s)) return;
-    if (s.queue?.length) return; // the first look's lines first: a fourth would crowd them
+    const clock = this._followClock(s);
+    if (!s.lookedFirst || s.asleep || !clock.eve) return;
+    if (s.followEve === clock.day || !this._followWanted(s) || !this._channelHeard(s)) return;
+    if (s.queue?.length || s.asking || s.game) return; // the first look's lines first: a fourth would crowd them
     this._followFetch(s);
   }
 
