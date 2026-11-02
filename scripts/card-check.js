@@ -385,6 +385,11 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     return { n: ctl.length, small, overlap, hidden: seen.filter((x) => !x.ok).map((x) => x.k), rows: seen.length,
       posTab: ctl.filter((c) => Number(c.tab) > 0).length, scroll: s.status.scrollTop };
   }, view);
+  // A fresh hatchling's server-side call (the status's "would like" row) takes a row of
+  // this 158 px box at 330 and pushes the energy meter off it: measure the pet not calling,
+  // as the pinned sections do, and draw the status again so it shows.
+  await pinAwake(card, "shell 4c");
+  await card.evaluate((el) => { for (const s of el._slides) { s.statusHtml = null; s.drawnSig = null; } el._redraw(); });
   const boxIssues = [];
   const boxCounts = {};
   for (const width of [330, 420]) {
@@ -475,6 +480,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await page.waitForTimeout(400);
   check("4c: every status, settings and picker control is 44x44 at 330 and 420, none overlap, the wish and meters show unscrolled, tab order is page order, a shared screen's status has misses/whines",
     boxIssues.length === 0, boxIssues.join(" ; ") || JSON.stringify(boxCounts));
+  await unpinAwake(card);
 
   // Locked tiles (a pet below teen): shown dimmed with their stage, never hidden; a tap
   // says when, saves nothing and leaves the shell as it is.
@@ -1467,6 +1473,14 @@ async function main() {
   await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
   await seasonsOff(); // the reload brought the card back with its own config
   await hush(); // new slides: no sound unless a check asks for one
+  // Record every line the card speaks from the reload on, for every slide: with the pet
+  // pinned awake the hello can come while this check is still walking to the pet, before
+  // a hook installed after the walk (a sample of the bubble would then find a call line).
+  await card.evaluate((el) => {
+    el.__spoken = [];
+    const speak = el._speak;
+    el._speak = function (slide, line, ...rest) { el.__spoken.push([slide, String(line)]); return speak.call(this, slide, line, ...rest); };
+  });
   await pinAwake(card, "play");
   for (let i = 0; i < slides; i++) {
     if ((await page.locator("hatch-pet-card .title").innerText()).trim() === petName) break;
@@ -1479,7 +1493,7 @@ async function main() {
   await card.evaluate((el) => {
     const s = el._slides[el._index];
     s.nextIdle = Date.now() + 600000;
-    el.__said = [];
+    el.__said = el.__spoken.filter(([slide]) => slide === s).map(([, line]) => line);
     const speak = el._speak;
     el._speak = function (slide, line, ...rest) { if (slide === s) el.__said.push(String(line)); return speak.call(this, slide, line, ...rest); };
   });
@@ -1489,7 +1503,7 @@ async function main() {
     const said = await card.evaluate((el) => el.__said);
     greeting = said.find((l) => l.includes(USER.name)) || await bubble();
   }
-  await card.evaluate((el) => { delete el._speak; delete el.__said; el._slides[el._index].nextIdle = 0; }); // idle life back
+  await card.evaluate((el) => { delete el._speak; delete el.__said; delete el.__spoken; el._slides[el._index].nextIdle = 0; }); // idle life back
   check("greets the viewer by first name", greeting.includes(USER.name), greeting);
   await shot("04a-greeting");
 
@@ -11243,6 +11257,16 @@ async function main() {
     localStorage.setItem("hatch-shared-screen", "off");
     els.forEach((el) => el._goPersonal());
   }, { e: seedPet, was: poweredWas });
+  // _goPersonal asks the channel again; dev's own view (mine, with the seeded gift) is
+  // back when it answers, which on a slow runner after a restart takes more than the
+  // checks below would wait. Wait for that answer (a dev with a bond has a mine).
+  await everyCard(async (els, e) => {
+    for (let i = 0; i < 300; i++) {
+      const s = els[0]?._slides?.find((x) => x.ids?.["sensor.life_stage"] === e);
+      if (s?.subscribed && s.mine) return;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }, seedPet);
   await pinAwake(card, "gifts");
   // FINDS_SHOWN on (the default): with restart's basket waiting, the basket shows on the
   // slide on screen.
