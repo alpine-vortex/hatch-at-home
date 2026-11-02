@@ -410,6 +410,7 @@ async def test_options_flow_saves_a_flat_mapping(
             "activity": {"zone": "zone.home", "tv": ["media_player.tv"]},
             "sky": {},
             "privacy": {"privacy": True},
+            "house": {},
             "notifications": {},
         },
     )
@@ -449,6 +450,44 @@ async def test_rain_makes_a_blanket_request(
 
     await press(hass, "button.pip_blanket")
     assert hass.states.get("sensor.pip_mood").state == "cozy"
+
+
+async def test_the_house_answers_a_chilly_pet_when_the_heating_comes_on(
+    hass: HomeAssistant,
+    now: float,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    hass.states.async_set("sensor.indoor", "21", {"unit_of_measurement": "°C"})
+    hass.states.async_set("input_boolean.fake_heater", "off")
+    await setup_with_house(
+        hass, indoor_temperature="sensor.indoor", heating="input_boolean.fake_heater"
+    )
+    heard = async_capture_events(hass, f"{DOMAIN}_house_answered")
+    asked = async_capture_events(hass, f"{DOMAIN}_request_answered")
+    hass.states.async_set("sensor.indoor", "15", {"unit_of_measurement": "°C"})
+    await settle(hass, freezer)
+    mood = hass.states.get("sensor.pip_mood")
+    assert mood.attributes["requests"] == ["blanket"]
+
+    for cycle in range(3):
+        hass.states.async_set("input_boolean.fake_heater", "on")
+        await settle(hass, freezer)
+        mood = hass.states.get("sensor.pip_mood")
+        # Heating on stops the ask for as long as it is on: the pet is cozy.
+        assert mood.attributes["requests"] == []
+        assert mood.attributes["reason"] == "nice and cozy"
+        assert len(heard) == min(cycle + 1, 2)  # two a day, then none
+        hass.states.async_set("input_boolean.fake_heater", "off")
+        for _ in range(25):  # the comfort runs out
+            await settle(hass, freezer, 5 * 60)
+    assert [e.data["request"] for e in heard] == ["blanket", "blanket"]
+    assert not asked  # nobody pressed anything
+    moments = hass.states.get("sensor.pip_last_care").attributes["moments"]
+    answered = [m for m in moments if m["type"] == "house_answered"]
+    assert len(answered) == 2
+    assert set(answered[0]) == {"type", "request", "at"}  # no entity, no more
 
 
 async def test_dropout_holds_then_counts_as_no_signal(
@@ -621,6 +660,7 @@ async def test_options_show_fahrenheit_and_store_celsius(
         "activity": {"zone": "zone.home", "away_after": 2},
         "sky": {},
         "privacy": {"privacy": True},
+        "house": {},
         "notifications": {},
     }
     result = await hass.config_entries.options.async_configure(
@@ -831,6 +871,7 @@ async def test_options_reject_impossible_settings(
         "activity": {"zone": "zone.home"},
         "sky": {},
         "privacy": {"privacy": True},
+        "house": {},
         "notifications": {},
     }
     result = await hass.config_entries.options.async_configure(

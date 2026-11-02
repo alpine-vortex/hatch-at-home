@@ -40,8 +40,10 @@ from .const import (
     CONF_CHORES,
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
+    CONF_COOLING,
     CONF_DASHBOARD,
     CONF_FIREPLACE,
+    CONF_HEATING,
     CONF_INDOOR_TEMP,
     CONF_LUX,
     CONF_MOON_ALTITUDE,
@@ -301,6 +303,18 @@ class PetOptionsFlow(OptionsFlowWithReload):
                 (CONF_MOON_PHASE, _entities("sensor"), None),
                 (CONF_MOON_ILLUMINATION, _entities("sensor"), None),
                 (CONF_MOON_ALTITUDE, _entities("sensor"), None),
+            ],
+            "house": [
+                (
+                    CONF_HEATING,
+                    _entities(["climate", "switch", "input_boolean"], True),
+                    None,
+                ),
+                (
+                    CONF_COOLING,
+                    _entities(["fan", "climate", "switch", "input_boolean"], True),
+                    None,
+                ),
             ],
             "privacy": [
                 (CONF_PRIVACY, BooleanSelector(), True),

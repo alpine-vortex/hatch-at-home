@@ -171,6 +171,7 @@ async def test_the_dashboard_opens_from_every_notification(
             },
             "sky": {},
             "privacy": {"privacy": True},
+            "house": {},
             "notifications": {"dashboard": "/pets"},
         },
     )

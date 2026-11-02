@@ -456,3 +456,109 @@ def test_waking_by_hand_before_bedtime_beats_the_dark_house():
     assert not pet.asleep
     model.advance(pet, at(17, 25), quiet, NoLuck(), max_gap=None)
     assert not pet.asleep  # the switch is the top authority for a while
+
+
+# --- ha-signals H3: the house answers blanket and fan requests ---------------
+
+
+def test_heating_on_stops_the_chilly_blanket_ask():
+    cold = evaluate(Readings(night=False, indoor_c=15))
+    assert cold.requests == ["blanket"] and cold.reason() == "brr... a blanket?"
+    warmed = evaluate(Readings(night=False, indoor_c=15, heating_on=True))
+    assert warmed.requests == []
+    assert warmed.reason() == "nice and cozy"  # the owner's Q-B: cozy, not chilly
+
+
+def test_rain_still_asks_for_a_blanket_while_the_heating_is_on():
+    e = evaluate(Readings(night=False, condition="rainy", indoor_c=15, heating_on=True))
+    assert e.requests == ["blanket"]
+    storm = evaluate(
+        Readings(night=False, condition="lightning", indoor_c=21, heating_on=True)
+    )
+    assert storm.requests == ["blanket"]
+
+
+def test_cooling_on_stops_the_warm_fan_ask():
+    assert evaluate(Readings(night=False, indoor_c=29)).requests == ["fan"]
+    cooled = evaluate(Readings(night=False, indoor_c=29, cooling_on=True))
+    assert cooled.requests == []
+    assert cooled.reason() == "ahh, that breeze"
+    # The heating being on says nothing about a warm room.
+    assert evaluate(Readings(night=False, indoor_c=29, heating_on=True)).requests == [
+        "fan"
+    ]
+
+
+def moments(m, r, today="2026-11-01", **kw):
+    return [e for e in m.update(r, 0.0, kw.pop("awake", True), False, today, **kw)]
+
+
+def cold(**kw):
+    return Readings(night=False, indoor_c=15, **kw)
+
+
+def test_heating_turning_on_while_chilly_is_a_house_moment():
+    m = home.HouseMoments()
+    assert moments(m, cold()) == []  # the first reading is a baseline
+    assert moments(m, cold(heating_on=True)) == [
+        {"type": "house_answered", "request": "blanket"}
+    ]
+    assert moments(m, cold(heating_on=True)) == []  # still on: nothing new
+
+
+def test_heating_already_on_or_a_comfortable_room_gives_no_moment():
+    m = home.HouseMoments()
+    assert moments(m, cold(heating_on=True)) == []  # on at the first reading
+    m = home.HouseMoments()
+    moments(m, Readings(night=False, indoor_c=21))
+    assert moments(m, Readings(night=False, indoor_c=21, heating_on=True)) == []
+    m = home.HouseMoments()
+    moments(m, cold(fireplace=True))
+    assert moments(m, cold(fireplace=True, heating_on=True)) == []  # not asking
+
+
+def test_the_house_waits_for_an_awake_pet_and_an_open_request():
+    m = home.HouseMoments()
+    moments(m, cold())
+    assert moments(m, cold(heating_on=True), awake=False) == []
+    m = home.HouseMoments()
+    moments(m, cold())
+    assert (
+        moments(m, cold(heating_on=True), satisfied=frozenset({"blanket"})) == []
+    )  # already tucked in
+
+
+def test_cooling_turning_on_while_warm_is_a_house_moment():
+    m = home.HouseMoments()
+    warm = Readings(night=False, indoor_c=29)
+    moments(m, warm)
+    assert moments(m, Readings(night=False, indoor_c=29, cooling_on=True)) == [
+        {"type": "house_answered", "request": "fan"}
+    ]
+
+
+def test_the_house_answers_at_most_twice_a_day():
+    m = home.HouseMoments()
+    moments(m, cold())
+    heard = 0
+    for _ in range(3):
+        heard += len(moments(m, cold(heating_on=True)))
+        moments(m, cold())
+    assert heard == R.HOUSE_ANSWERS_PER_DAY == 2
+    moments(m, cold())
+    assert len(moments(m, cold(heating_on=True), today="2026-11-02")) == 1
+
+
+def test_the_house_tucks_the_pet_in_without_a_care_entry():
+    pet = hatched(at(12, 0))
+    before = pet.happiness
+    events = model.house_answer(pet, "blanket", at(12, 0))
+    assert events == [{"type": "house_answered", "request": "blanket"}]
+    assert pet.cozy_until == at(12, 0) + R.COMFORT_MINUTES * 60
+    assert pet.happiness == min(100.0, before + R.BLANKET_HAPPINESS)
+    assert pet.care_log == []
+    assert model.house_answer(pet, "blanket", at(12, 30)) == []  # already cozy
+    fan = model.house_answer(pet, "fan", at(12, 30))
+    assert fan == [{"type": "house_answered", "request": "fan"}]
+    pet.asleep = True
+    assert model.house_answer(pet, "fan", at(18, 0)) == []

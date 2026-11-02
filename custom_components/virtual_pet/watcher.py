@@ -26,7 +26,9 @@ from . import rates as R
 from .const import (
     CONF_AQI,
     CONF_BEDTIME_LIGHTS,
+    CONF_COOLING,
     CONF_FIREPLACE,
+    CONF_HEATING,
     CONF_INDOOR_TEMP,
     CONF_LUX,
     CONF_MOON_ALTITUDE,
@@ -54,6 +56,8 @@ MULTI = (
     CONF_LUX,
     CONF_MUSIC,
     CONF_TV,
+    CONF_HEATING,
+    CONF_COOLING,
 )
 SINGLE = (
     CONF_WEATHER,
@@ -68,6 +72,44 @@ SINGLE = (
 )
 # A fireplace can be a switch, light, climate, fan or sensor: these mean lit.
 LIT = {"on", "heat", "heating", "burning", "playing"}
+
+
+def heating_on(state: State) -> bool:
+    """Whether a mapped entity says the heating is on: a thermostat that is
+    heating (with no hvac_action, set to heat and still below its target), or a
+    switch or boolean that is on."""
+    domain = state.domain
+    if domain == "climate":
+        action = state.attributes.get("hvac_action")
+        if action is not None:
+            return action == "heating"
+        if state.state not in ("heat", "heat_cool"):
+            return False
+        current, target = (
+            _number(state.attributes.get("current_temperature")),
+            _number(state.attributes.get("temperature")),
+        )
+        return current is not None and target is not None and current < target
+    return state.state == "on"
+
+
+def cooling_on(state: State) -> bool:
+    """Whether a mapped entity says cooling is on: a fan that is on, a
+    thermostat that is cooling or running its fan (with no hvac_action, set to
+    cool or fan only), or a switch or boolean that is on."""
+    if state.domain == "climate":
+        action = state.attributes.get("hvac_action")
+        if action is not None:
+            return action in ("cooling", "fan")
+        return state.state in ("cool", "fan_only")
+    return state.state == "on"
+
+
+def _number(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _title(state: State, *keys: str, fallback: bool = True) -> str | None:
@@ -221,6 +263,8 @@ class Watcher:
             tv=any(s.state in ("on", "playing") for s in self._all(CONF_TV, now)),
             aqi=_float(self._one(CONF_AQI, now)),
             fireplace=self._lit(self._one(CONF_FIREPLACE, now)),
+            heating_on=any(heating_on(s) for s in self._all(CONF_HEATING, now)),
+            cooling_on=any(cooling_on(s) for s in self._all(CONF_COOLING, now)),
             company=None if (people := self.people_home(now)) is None else people > 0,
             moon_phase=(
                 moon.state if (moon := self._one(CONF_MOON_PHASE, now)) else None

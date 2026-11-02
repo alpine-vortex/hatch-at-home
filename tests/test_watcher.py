@@ -115,3 +115,57 @@ def test_the_moon_comes_from_the_date_only_when_no_moon_option_is_mapped(
     assert mapped.read(full, night=True).moon_date is None
     lit = Watcher(hass, {"moon_illumination": "sensor.lit"})
     assert lit.read(full, night=True).moon_date is None
+
+
+def test_heating_and_cooling_read_from_climates_switches_and_fans(
+    hass: HomeAssistant,
+) -> None:
+    watcher = Watcher(
+        hass,
+        {
+            "heating": ["climate.hall", "switch.heater"],
+            "cooling": ["fan.bedroom", "climate.hall"],
+        },
+    )
+
+    def read(climate: str, attrs: dict, fan: str = "off", heater: str = "off"):
+        hass.states.async_set("climate.hall", climate, attrs)
+        hass.states.async_set("switch.heater", heater)
+        hass.states.async_set("fan.bedroom", fan)
+        return watcher.read(0, night=False)
+
+    r = read("heat", {"hvac_action": "heating"})
+    assert r.heating_on and not r.cooling_on
+    r = read("heat", {"hvac_action": "idle"})
+    assert not r.heating_on  # set to heat, but not heating now
+    # No hvac_action: set to heat and below the target counts.
+    r = read("heat", {"current_temperature": 18, "temperature": 21})
+    assert r.heating_on
+    r = read("heat", {"current_temperature": 22, "temperature": 21})
+    assert not r.heating_on
+    r = read("heat_cool", {"current_temperature": 18, "temperature": 21})
+    assert r.heating_on
+    r = read("heat", {})
+    assert not r.heating_on  # no target to compare with
+    r = read("off", {}, heater="on")
+    assert r.heating_on
+    # Cooling: a fan on, a climate cooling or running its fan.
+    r = read("cool", {"hvac_action": "cooling"})
+    assert r.cooling_on and not r.heating_on
+    r = read("off", {"hvac_action": "fan"})
+    assert r.cooling_on
+    r = read("cool", {})
+    assert r.cooling_on
+    r = read("fan_only", {})
+    assert r.cooling_on
+    r = read("off", {}, fan="on")
+    assert r.cooling_on
+    r = read("off", {})
+    assert not r.cooling_on and not r.heating_on
+
+
+def test_heating_and_cooling_are_off_when_unmapped(hass: HomeAssistant) -> None:
+    hass.states.async_set("climate.hall", "heat", {"hvac_action": "heating"})
+    r = Watcher(hass, {}).read(0, night=False)
+    assert not r.heating_on and not r.cooling_on
+    assert "climate.hall" in Watcher(hass, {"heating": "climate.hall"}).entity_ids()

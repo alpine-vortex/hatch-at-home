@@ -56,8 +56,10 @@ from .const import (
     CONF_CHORES,
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
+    CONF_COOLING,
     CONF_DASHBOARD,
     CONF_FIREPLACE,
+    CONF_HEATING,
     CONF_INDOOR_TEMP,
     CONF_LUX,
     CONF_MOON_ALTITUDE,
@@ -136,6 +138,7 @@ MOMENTS = {
     "news",
     "weather",
     "forecast",
+    "house_answered",  # {request}: the heating or the fan came on for the pet
     "wish_granted",
     "bond_up",
     "bond_favourite",
@@ -169,6 +172,8 @@ SENSES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("music", (CONF_MUSIC,)),
     ("chores", (CONF_CHORES,)),
     ("fireplace", (CONF_FIREPLACE,)),
+    ("heater", (CONF_HEATING,)),
+    ("fan", (CONF_COOLING,)),
     ("moon", (CONF_MOON_PHASE, CONF_MOON_ILLUMINATION, CONF_MOON_ALTITUDE)),
 )
 
@@ -904,7 +909,29 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             awake,
             morning=wake <= minute < 12 * 60,
             today=local.date().isoformat(),
+            comfort=(
+                self.config_entry.options.get(CONF_COMFORT_LOW, R.HOME_COMFORT_LOW_C),
+                self.config_entry.options.get(CONF_COMFORT_HIGH, R.HOME_COMFORT_HIGH_C),
+            ),
+            satisfied={
+                request
+                for request, until in (
+                    ("blanket", state.cozy_until),
+                    ("fan", state.cool_until),
+                )
+                if now < until
+            },
         )
+        # The house answering: it is the model that tucks the pet in.
+        events = [
+            answer
+            for e in events
+            for answer in (
+                model.house_answer(state, e["request"], now)
+                if e["type"] == "house_answered"
+                else [e]
+            )
+        ]
         if any(e["type"] == "good_morning" for e in events):
             model.morning_stir(state, now, settings)
             self._forecast_due = now + R.HOME_FORECAST_DELAY_MINUTES * 60

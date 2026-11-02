@@ -65,6 +65,8 @@ class Readings:
     music: bool = False
     tv: bool = False
     aqi: float | None = None
+    heating_on: bool = False  # a mapped heater, or thermostat heating, is on
+    cooling_on: bool = False  # a mapped fan, or thermostat cooling, is on
     company: bool | None = None  # someone is home
     moon_phase: str | None = None  # normalized: "full_moon", "new_moon", ...
     moon_illumination: float | None = None  # lit fraction, 0-1
@@ -259,12 +261,20 @@ def evaluate(
     # Indoor temperature: a request, never a drain.
     if r.indoor_c is not None:
         if r.indoor_c < comfort_low_c and not r.fireplace:
-            e.flags.append("chilly")
-            if "blanket" not in e.requests:
-                e.requests.append("blanket")
+            if r.heating_on:
+                # The house is answering already: no ask, and nothing to shiver
+                # about. (A blanket for rain or thunder stays the player's.)
+                e.flags.append("cozy")
+            else:
+                e.flags.append("chilly")
+                if "blanket" not in e.requests:
+                    e.requests.append("blanket")
         elif r.indoor_c > comfort_high_c:
-            e.flags.append("warm")
-            e.requests.append("fan")
+            if r.cooling_on:
+                e.flags.append("cool")
+            else:
+                e.flags.append("warm")
+                e.requests.append("fan")
 
     # Light, read against the clock: only past bedtime is a light "too bright".
     # (Many homes keep lights at full or off, so brightness alone in the evening
@@ -379,13 +389,28 @@ class HouseMoments:
         self.next_weather = 0.0
         self.weather_again: dict[str, float] = {}
         self.said_on: dict[str, str] = {}  # "hot" / "cold": the day it was said
+        # The house answering: whether heating / cooling was on at the last
+        # reading (None before the first), and the answers given today.
+        self.heating_on: bool | None = None
+        self.cooling_on: bool | None = None
+        self.answers: tuple[str, int] = ("", 0)
 
     def update(
-        self, r: Readings, now: float, awake: bool, morning: bool, today: str
+        self,
+        r: Readings,
+        now: float,
+        awake: bool,
+        morning: bool,
+        today: str,
+        comfort: tuple[float, float] = (R.HOME_COMFORT_LOW_C, R.HOME_COMFORT_HIGH_C),
+        satisfied: frozenset[str] | set[str] = frozenset(),
     ) -> list[dict[str, Any]]:
         """Events for what just happened. awake: awake, home and hatched.
-        morning: between wake time and noon, local."""
+        morning: between wake time and noon, local. comfort: the (low, high)
+        indoor temperatures in °C. satisfied: requests already answered
+        ("blanket" / "fan")."""
         events: list[dict[str, Any]] = []
+        events += self._house_answered(r, awake, today, comfort, satisfied)
         if r.sun_up is not None and self.sun_up is not None and r.sun_up != self.sun_up:
             if awake:
                 events.append({"type": "sunrise" if r.sun_up else "sunset"})
@@ -418,6 +443,45 @@ class HouseMoments:
             events.append({"type": "tv_off_late"})
         self.tv_on = r.tv
         events += self._weather(r, now, awake, today)
+        return events
+
+    def _house_answered(
+        self,
+        r: Readings,
+        awake: bool,
+        today: str,
+        comfort: tuple[float, float],
+        satisfied: frozenset[str] | set[str],
+    ) -> list[dict[str, Any]]:
+        """The heating (cooling) turning on while the pet is chilly (warm) and
+        hasn't been tucked in (fanned): the house heard it. A real off to on
+        change only: heating that was on already, or on at the first reading,
+        says nothing. At most HOUSE_ANSWERS_PER_DAY a local day."""
+        was_heating, was_cooling = self.heating_on, self.cooling_on
+        self.heating_on, self.cooling_on = r.heating_on, r.cooling_on
+        low, high = comfort
+        asks = (
+            (
+                "blanket",
+                was_heating is False and r.heating_on,
+                r.indoor_c is not None and r.indoor_c < low and not r.fireplace,
+            ),
+            (
+                "fan",
+                was_cooling is False and r.cooling_on,
+                r.indoor_c is not None and r.indoor_c > high,
+            ),
+        )
+        day, count = self.answers
+        events: list[dict[str, Any]] = []
+        for request, turned_on, open_ in asks:
+            if not (turned_on and open_ and awake) or request in satisfied:
+                continue
+            if day == today and count >= R.HOUSE_ANSWERS_PER_DAY:
+                break
+            day, count = today, (count if day == today else 0) + 1
+            events.append({"type": "house_answered", "request": request})
+        self.answers = (day, count)
         return events
 
     def _weather(

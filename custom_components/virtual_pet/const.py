@@ -73,6 +73,10 @@ PRIVATE_READINGS = {
 }
 DEFAULT_ZONE = "zone.home"
 CONF_FIREPLACE = "fireplace"
+# The house answering the pet's requests (ha-signals H3): what counts as the
+# heating being on, and as cooling (a fan, air conditioning).
+CONF_HEATING = "heating"
+CONF_COOLING = "cooling"
 CONF_COMFORT_LOW = "comfort_low"  # stored in °C, shown in the owner's unit
 CONF_COMFORT_HIGH = "comfort_high"
 CONF_AWAY_AFTER = "away_after"  # hours

@@ -1994,14 +1994,34 @@ def _meets_need(state: PetState, action: str) -> bool:
     return action == "medicine" and state.sick
 
 
+def house_answer(state: PetState, request: str, now: float) -> list[Event]:
+    """The house answers the pet's request itself (the heating or the fan came
+    on): the same comfort and happiness as a player's blanket or fan, but no
+    care-log entry, since no person did it. Nothing if the pet is asleep, away,
+    an egg, or already comfortable."""
+    events: list[Event] = []
+    if (
+        state.asleep
+        or state.away
+        or life_stage(state) == "egg"
+        or now < (state.cozy_until if request == "blanket" else state.cool_until)
+    ):
+        return events
+    _answer_request(state, request, now, None, events, by="house")
+    return events
+
+
 def _answer_request(
     state: PetState,
     action: str,
     now: float,
     settings: Settings | None,
     events: list[Event],
+    by: str | None = None,
 ) -> str:
-    if settings is None or action not in requests(state, now, settings):
+    if by != "house" and (
+        settings is None or action not in requests(state, now, settings)
+    ):
         return "not_needed"
     until = now + R.COMFORT_MINUTES * 60
     if action == "blanket":
@@ -2010,7 +2030,10 @@ def _answer_request(
     else:
         state.happiness = _clamp(state.happiness + R.FAN_HAPPINESS)
         state.cool_until = until
-    events.append({"type": "request_answered", "request": action})
+    if by == "house":
+        events.append({"type": "house_answered", "request": action})
+    else:
+        events.append({"type": "request_answered", "request": action})
     return OK
 
 
