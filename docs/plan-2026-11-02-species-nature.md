@@ -941,26 +941,17 @@ text in the report, as the dig's and Hop's did.
 - **Risk: the sequences of the core-interactions effort** may reshape the snack and clean
   call sites; section 8a keeps them thin so N2 gives way.
 
-## 13. Open questions
+## 13. Open questions: decided (first mate, 2026-11-02)
 
-Only what is truly open:
-
-1. **The 8 new pose ideas in N4** (section 8) need an art prompt and a head-point check
-   before the second batch; the pose **names stay as drafted** (decided, section 1).
-2. **Core-interactions overlap** (section 8a): which of the poses that read as eating
-   (`cheeks`, `stash`, `fish_bill`, `bottoms_up`) change once scout s2735's design is
-   known. The art lead's call when N4 starts.
-3. **Q3's residual "same day" case** (section 5.2, rule 3): Q3 as decided is "never on
-   the same look". A rain pet can still react to rain at a later idle on the day the
-   person's `fav_weather` was rain. Keep as decided, or tighten to "not on a day the
-   note was said" (one more check). The review's recommendation was to decide; the plan
-   keeps Q3 as written until the first mate says. Also whether to **accept** that the
-   8 `fire` and 2 `moon` species rarely show their sky (section 4), or swap them to a
-   sky that needs no extra sensor.
-
-Not open (decided above): where the axes live (Q1), the art order (Q2), the sky wording and
-look rule (Q3), no numeric nudge (Q4), the pose names, 30 hand-written notes, Hop's win
-lines plain.
+1. **The 8 new pose ideas in N4** (section 8): an art prompt and a head-point check before the
+   second batch, at N4 time; names stay as drafted.
+2. **Core-interactions overlap** (section 8a): which eating-like poses (`cheeks`, `stash`,
+   `fish_bill`, `bottoms_up`) change is decided when scout s2735's design lands, before N4.
+3. **Q3 tightened:** the pet's sky reaction is not said on a day the person's own
+   favourite-weather note was said (one more check), not only "never on the same look".
+4. **Rare skies:** `moon` stays (the moon comes from the date with no sensor). `fire` falls
+   back to the house's heating being on (the mapped climate or heater), and to `sun` when
+   nothing is mapped, so the 8 fire species show their sky in any house.
 
 ## 14. Adversarial review checklist
 
