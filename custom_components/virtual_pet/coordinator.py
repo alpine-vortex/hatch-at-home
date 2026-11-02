@@ -277,6 +277,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._damage_backup: str | None = None  # a damaged save's copy, once
         # Last calculation, for the diagnostic sensor.
         self.debug: dict[str, Any] = {}
+        self._bells: tuple[str, ...] = ()  # snapshot taken in _listen
         # Recent events for the card to react to, newest first (not saved).
         self.moments: list[dict[str, Any]] = []
         # The private channel (virtual_pet/subscribe), in memory only: each
@@ -396,7 +397,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             if kind == "moon"
             or any(options.get(k) for k in keys)
             or (kind == "robot" and self.watcher.robot_ids())
-            or (kind == "doorbell" and self.watcher.doorbell_ids())
+            or (kind == "doorbell" and self._bells)
         ]
 
     @property
@@ -752,9 +753,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 async_track_state_change_event(self.hass, list(movers), phone_moved)
             )
 
-        if bells := self.watcher.doorbell_ids():
+        # One snapshot: the listener, the senses and react's "native" all use
+        # it, so a bell added after start is unheard everywhere until a reload.
+        self._bells = tuple(self.watcher.doorbell_ids())
+        if self._bells:
             self.config_entry.async_on_unload(
-                async_track_state_change_event(self.hass, bells, self._doorbell_pressed)
+                async_track_state_change_event(
+                    self.hass, list(self._bells), self._doorbell_pressed
+                )
             )
 
         if persons := self.hass.states.async_entity_ids("person"):
@@ -792,11 +798,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             event.data["old_state"], event.data["new_state"], self._now()
         ):
             return
-        now = self._now()
-        self._advance(now)
-        self._fire(self.house_moments.doorbell(now, self._awake()))
-        self._save()
-        self._publish()
+        # No _advance, _save or _publish: each would stamp the press instant
+        # (last_updated, last_tick, a sensor rewrite) where diagnostics and the
+        # recorder can read it. The tick stays on its own 5-minute grid.
+        self._fire(self.house_moments.doorbell(self._now(), self._awake()))
 
     async def _completed_chores(self, entity_id: str) -> set[str] | None:
         """IDs of the list's completed items, or None if it can't be read."""
@@ -2903,7 +2908,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             category,
             source,
             dict(self.config_entry.options),
-            self.watcher.doorbell_ids(),
+            list(self._bells),
         ):
             result = "native"
         elif model.life_stage(self.state) == "egg":
