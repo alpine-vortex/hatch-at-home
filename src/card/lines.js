@@ -49,6 +49,8 @@ const MEMORY_LABELS = {
 // Idle life: something small every so often when nothing else is going on.
 const IDLE_MIN_MS = 20000;
 const IDLE_SPREAD_MS = 25000;
+const EGG_WOBBLE_MIN_MS = 40000; // an idle egg rocks once in 40-90 s (_eggWobble)
+const EGG_WOBBLE_SPREAD_MS = 50000;
 const IDLE_MOODS = new Set(["content", "cozy", "bored", "excited", "sleepy", "hungry", "dirty"]);
 const IDLE_LINES = new Set(["sleepy", "bored", "excited", "hungry", "dirty"]); // the rest say the default lines
 // A viewer is greeted by name at most this often, per pet.
