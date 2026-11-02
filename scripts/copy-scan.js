@@ -48,6 +48,8 @@ const COPY_TABLES = {
   GAME_TOMORROW: { asks: ["q"] },
   TRICK_ASK: { asks: ["q"] },
   HOUSE_LINES: {},
+  SEASON_START_LINES: {}, // ha-signals H7
+  SEASON_START_BITS: {},
 };
 
 function lines(value, path, out) {
