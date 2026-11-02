@@ -217,3 +217,15 @@ What shipped, where it differs from the plan above:
   - The stand-in earmuffs read as a band over the crown, with the muffs at the brim line rather than over the ears.
   - The final art should hang the muffs lower, or the preview should be run again with a larger `sink`.
   - `scripts/gate` still sweeps only Halloween and Thanksgiving; adding `winter` would cost about 15 min on every full gate.
+
+## Final art (2026-11-01, crew s2609, branch `art-winter-final`)
+
+- **Luna (gpt-5.6-luna), 2026-11-01**, three sheets drawn on the Thanksgiving recipe (style reference from the
+  Halloween/Thanksgiving art, the stand-ins as layout guides), cut onto the stand-ins' canvases and positions:
+  paper_lantern, star_lamp, snow_lantern, deco (snow globe), cookie, knit_cap, star_cap, earmuffs (band high,
+  muffs hanging low over the ears), hare_1/2.
+- **Hand-placed** in `art/seasonal/make_winter_small.py` (Luna's versions turned to mush at 7-10 art px): bunting
+  (tiles: the wire meets both edges at row 0), frost, mug, light_wreath, twinkle_1/2. The same script snaps the
+  hare's and knit cap's sampled mauve outline to the house outline colour.
+- Checked on the bench (`--preset winter`): hats seated, lamps day/night, the string, the hare, mono night (no fails).
+  `costume-preview.js winter` (the earmuffs' sink) still wants a run on HA.
