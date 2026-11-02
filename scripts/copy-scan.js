@@ -11,6 +11,7 @@ const FILL = {
   visitor: "hearth cricket", // the longest visitor name in worlds.json
   name: "Wwwwwwwwwwww", // 12
   it: "Wwwwwwwwwwwwwwwwwwww", // 20, the typed text's cap (FM dialogue pass)
+  creature: "Mexican red-knee tarantula", // 26, the longest creature name
 };
 // Each table: the fill its functions take, and the keys (at any depth) that may ask.
 const COPY_TABLES = {
@@ -51,6 +52,7 @@ const COPY_TABLES = {
   SEASON_START_LINES: {}, // ha-signals H7
   SEASON_START_BITS: {},
   HOUSE_MOMENT_LINES: {}, // H8: virtual_pet.react, by category
+  SETUP_COPY: { fill: "creature" }, // settings S2: the lay sheet (the longest name is C15')
 };
 
 function lines(value, path, out) {

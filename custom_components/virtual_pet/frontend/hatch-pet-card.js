@@ -1587,6 +1587,20 @@ const HOUSE_MOMENT_LINES = {
   internet: ["the internet's back! ♪", "we're back online! ♪", "the wifi's back! yay ♪"],
   custom: { hop: ["*hop hop* ♪"], cheer: ["yay! hooray! ♪"], cozy: ["mm, cozy ♪"], dance: ["♪ dance time! ♪"], startle: ["eep! oh! ♪"] },
 };
+// Settings and new-pet setup (docs/plan-2026-11-02-settings-setup.md §2, S2; copy
+// APPROVED 2026-11-02): the lay sheet's static lines. N6, the lay button's aria-label,
+// is built where it is drawn (it names the pet).
+const SETUP_COPY = {
+  laySheetHeading: "a new egg", // N1
+  layPrompt: "pick who hatches", // N2
+  laySurprise: "surprise me", // N3
+  layConfirm: "lay the egg", // N4
+  layBack: "‹ not yet", // N5
+  layRefused: "this login can't choose, sorry", // C13'
+  layOutside: "set in home assistant", // N25
+  eggSurprise: "surprise", // N7
+  eggComing: (creature) => `a ${creature.toLowerCase()} is coming`, // C15'
+};
 // --- end fresh-expand copy ---
 const HOUSE_REQUEST = { blanket: "heating", fan: "cooling" }; // the request the house answered
 // The house moment's categories (H8; const.py HOUSE_CATEGORIES, card-check holds the two
@@ -3466,6 +3480,12 @@ const STYLE = `
     cursor: pointer; }
   .bell[aria-pressed="true"] { background: #2f3a24; color: #e9e2c6; }
   .bell.pending { opacity: .65; }
+  /* The lay sheet (plan S2): the offer as a list; a choice made in HA is dashed, read-only. */
+  .laylist { display: flex; flex-direction: column; gap: 4px; padding-bottom: 6px; }
+  .laygo { margin-left: auto; }
+  .layrow { box-sizing: border-box; width: 100%; text-align: left; }
+  .layrow.ro { display: flex; align-items: center; border-style: dashed; cursor: default;
+    background: #2f3a24; color: #e9e2c6; }
   .game button[aria-disabled="true"] { opacity: .55; }
   .status-feedback { position: sticky; bottom: 0; margin-top: auto; padding: 5px 7px;
     background: #2f3a24; color: #e9e2c6; font-size: 12px; min-height: 14px; }
@@ -3505,6 +3525,7 @@ const STYLE = `
   ha-card.bigtext .status .status-feedback, ha-card.bigtext .status .sback, ha-card.bigtext .status .jlink,
   ha-card.bigtext .status .flink, ha-card.bigtext .status .wlink, ha-card.bigtext .status .jolder,
   ha-card.bigtext .status .fheart { font-size: 15px; }
+  ha-card.bigtext .status .layrow, ha-card.bigtext .status .laygo { font-size: 15px; }
   ha-card.bigtext .status .sec, ha-card.bigtext .status .shellnote, ha-card.bigtext .status .jtile,
   ha-card.bigtext .status .ftile, ha-card.bigtext .status .tile { font-size: 13px; }
   ha-card.bigtext .status .tile .tsub { font-size: 12px; }
@@ -4281,6 +4302,12 @@ class HatchPetCard extends HTMLElement {
     s.request.addEventListener("click", () => {
       const key = s.request.dataset.key;
       if (!key) return;
+      // With a choice of two or more creatures, laying goes through the lay sheet (S2).
+      if (key === "lay_egg" && (this._eggOffer(s)?.offered.length || 0) >= 2) {
+        this._tapped(s.request, s);
+        this._openLay(s);
+        return;
+      }
       if (key === "lay_egg") this._tapped(s.request, s);
       if (key === "lay_egg" && !this._confirmed(s, key, s.request, () => this._redraw(s))) return;
       this._press(s, key);
@@ -4593,6 +4620,10 @@ class HatchPetCard extends HTMLElement {
     s.finds = false;
     s.everyWorld = false;
     s.settings = false;
+    if (s.laySheet) { // another pet's slide: its lay sheet goes (S2)
+      s.laySheet = false;
+      s.screen.classList.remove("show-status");
+    }
     this._closePicker(s);
     this._shellSettled(s);
     s.statusHtml = null;
@@ -4658,6 +4689,7 @@ class HatchPetCard extends HTMLElement {
       slide.live.textContent = "";
       slide.screen.querySelector(".bondhearts")?.remove();
       slide.screen.querySelector(".linkhearts")?.remove(); // a visit's, mid-way
+      if (slide.laySheet) this._closeLay(slide); // the shared-screen switch closes the lay sheet (S2)
       slide.journal = false;
       slide.finds = false; // the settings sheet stays, without its personal rows
       slide.everyWorld = false;
@@ -4678,6 +4710,7 @@ class HatchPetCard extends HTMLElement {
   _goPersonal() {
     this._sharedSeen = false;
     for (const slide of this._slides || []) {
+      if (slide.laySheet) this._closeLay(slide);
       this._dropFinds(slide); // the shared screen's page, read again with the viewer's own ♥
       if (slide.finds) this._loadFinds(slide);
       slide.statusHtml = null;
@@ -4734,6 +4767,7 @@ class HatchPetCard extends HTMLElement {
       // A game stops on the slide being left: nobody plays it unseen.
       if (x.game && i !== to) this._quitGame(x, null);
       this._stopTyping(x);
+      if (x.laySheet && i !== to) this._closeLay(x); // the lay sheet stays with its pet
       this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
       if (x.picker) { // and leaves the shell picker unsaved: the sheet again
         this._closePicker(x);
@@ -5328,7 +5362,11 @@ class HatchPetCard extends HTMLElement {
     s.hatchesAt = egg ? stageState?.attributes.hatches_at : null;
     if (!s.sayUntil || Date.now() > s.sayUntil) {
       if (s.game?.prompt) this._write(s, s.game.prompt, 60000); // a game waiting on a guess asks again
-      else this._write(s, this._say(s, mood, away));
+      else {
+        const coming = egg ? this._eggComing(s) : null; // the egg's first look (S2, C15')
+        if (coming) this._write(s, coming, 8000);
+        else this._write(s, this._say(s, mood, away));
+      }
     }
 
     for (const action of ACTIONS) {
@@ -5341,6 +5379,8 @@ class HatchPetCard extends HTMLElement {
       else b.removeAttribute("aria-description");
     }
     const wanted = (mood?.attributes.requests || []).find((r) => this._state(s, `button.${r}`));
+    // The pet can't lay any more (stage, or the entry reloaded after a world change): no sheet.
+    if (s.laySheet && !(mood?.attributes.requests || []).includes("lay_egg")) this._closeLay(s);
     s.request.classList.toggle("show", !!wanted && !away && !asleep);
     if (wanted) {
       s.request.dataset.key = wanted;
@@ -5396,7 +5436,7 @@ class HatchPetCard extends HTMLElement {
     return this._persona(s)?.[`mood_${key}`] || null;
   }
 
-  _toggleStatus(s) {
+  _toggleStatus(s, lay = false) {
     const open = !s.screen.classList.contains("show-status");
     if (open) this._stopTyping(s); // the bubble hides: the line is said whole
     if (open && s.game) this._quitGame(s, null); // the sheet covers it: nobody plays it unseen
@@ -5405,6 +5445,7 @@ class HatchPetCard extends HTMLElement {
     s.finds = false;
     s.everyWorld = false;
     s.settings = false;
+    s.laySheet = open && lay; // the lay sheet closes with the status (S2)
     this._closePicker(s);
     if (open) this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
     this._patSync(s); // back at once when the status closes, not at the next tick
@@ -7924,6 +7965,10 @@ class HatchPetCard extends HTMLElement {
   }
 
   _renderStatus(s, log) {
+    if (s.laySheet) {
+      this._renderLaySheet(s);
+      return;
+    }
     if (s.everyWorld) {
       this._renderEveryWorld(s);
       return;
@@ -8004,8 +8049,13 @@ class HatchPetCard extends HTMLElement {
     const teenOrAdult = adult || this._state(s, "sensor.life_stage")?.state === "teen";
     const isEgg = this._state(s, "sensor.life_stage")?.state === "egg";
     // The creature picked for the next egg (if any), and its world if that changes.
-    const nextEgg = [stageAttrs.next_egg?.toLowerCase(), stageAttrs.next_world && `in ${stageAttrs.next_world}`]
-      .filter(Boolean).join(" ");
+    // Only an offered one (raised, S2) is named: a pick made in HA outside the offer reads as
+    // a surprise, and an adult always has the row (S2, N7).
+    const offerNow = this._eggOffer(s);
+    const picked = offerNow?.choice?.name.toLowerCase();
+    const heldPick = stageAttrs.next_egg && !picked ? SETUP_COPY.eggSurprise : null; // any stage
+    const nextEgg = [picked || heldPick || (adult ? SETUP_COPY.eggSurprise : null),
+      stageAttrs.next_world && `in ${stageAttrs.next_world}`].filter(Boolean).join(" ");
     const nextStage = growsUp(this._state(s, "sensor.life_stage")?.state, stageAttrs.age_days);
     // What it would like most, above today's wish; none asleep, away or in the egg.
     const moodNow = this._state(s, "sensor.mood");
@@ -8518,6 +8568,115 @@ class HatchPetCard extends HTMLElement {
       s.status.scrollTop = 0; // a new view starts at its top
       s.status.querySelector(".sback")?.focus({ preventScroll: true });
     });
+  }
+
+  // --- The lay sheet (plan-2026-11-02-settings-setup S2) ------------------------------
+  // The creatures the next egg may be: the server's `egg_roster` (id and select option,
+  // in catalog order) that this card's pets have raised in the egg's world (the pending
+  // world's if one waits, else the current one). Never cached: every draw asks the state.
+  // null: an older server, or no select to choose with. `surprise` is the select's own
+  // first option, sent verbatim; `choice` the offered creature picked now (if any);
+  // `outside` a pick made in Home Assistant that is not offered (never named here).
+  _eggOffer(s) {
+    const stage = this._state(s, "sensor.life_stage")?.attributes;
+    const select = this._hass.states[s.ids?.["select.next_egg"]];
+    if (!Array.isArray(stage?.egg_roster) || !select?.attributes.options?.length) return null;
+    const world = stage.next_world
+      ? Object.keys(this._worlds || {}).find((k) => this._worlds[k]?.name === stage.next_world)
+      : stage.world;
+    if (!world) return null;
+    const raised = new Set();
+    for (const other of this._slides || []) {
+      const st = this._state(other, "sensor.life_stage")?.attributes;
+      if (st?.world === world) (st.raised || []).forEach((r) => raised.add(r));
+    }
+    const offered = stage.egg_roster.filter((r) => raised.has(r.id));
+    const picked = stage.next_egg ?? null;
+    const choice = offered.find((r) => r.name === picked) || null;
+    return { offered, choice, outside: !!picked && !choice, surprise: select.attributes.options[0],
+      entity: select.entity_id };
+  }
+
+  // C15': the egg's first look, when an offered creature was chosen for it: a line on the
+  // screen (an egg doesn't talk), once on this device for this generation.
+  _eggComing(s) {
+    const choice = this._eggOffer(s)?.choice;
+    if (!choice) return null;
+    const generation = this._state(s, "sensor.life_stage")?.attributes.generation ?? 1;
+    return onceEver(`eggcoming-${s.ids?.device}-${generation}`) ? SETUP_COPY.eggComing(choice.name) : null;
+  }
+
+  // Open the lay sheet in the status box (a status already up is redrawn as the sheet).
+  _openLay(s) {
+    s.confirm = null;
+    s.screen.classList.remove("show-status");
+    this._toggleStatus(s, true);
+    s.laySheetAt = Date.now();
+    s.status.scrollTop = 0;
+    s.status.querySelector(".layback")?.focus({ preventScroll: true });
+  }
+
+  // Close it: every exit comes here (or through _toggleStatus, which clears the flag).
+  _closeLay(s) {
+    if (s.screen.classList.contains("show-status")) this._toggleStatus(s);
+    s.laySheet = false;
+  }
+
+  _renderLaySheet(s) {
+    const offer = this._eggOffer(s);
+    if (!offer || offer.offered.length < 2) { // a world change, an older save: the old two taps
+      this._closeLay(s);
+      return;
+    }
+    const row = (id, label, on) =>
+      `<button class="bell layrow" data-id="${escape(id)}" aria-pressed="${on}">${escape(label)}</button>`;
+    const device = this._hass.devices?.[s.ids?.device];
+    const name = device?.name_by_user || device?.name || "Pet";
+    const html = `
+      <div class="shead"><button class="sback layback">${SETUP_COPY.layBack}</button>
+        <button class="bell laygo" aria-label="${escape(`${SETUP_COPY.layConfirm}: ${name} retires to the journal and a new egg takes its place`)}">${SETUP_COPY.layConfirm}</button></div>
+      <div class="sec">${SETUP_COPY.laySheetHeading}</div>
+      <div class="shellnote">${SETUP_COPY.layPrompt}</div>
+      <div class="laylist">
+        ${row("", SETUP_COPY.laySurprise, !offer.choice && !offer.outside)}
+        ${offer.outside ? `<div class="bell layrow ro" aria-current="true">${SETUP_COPY.layOutside}</div>` : ""}
+        ${offer.offered.map((r) => row(r.id, r.name.toLowerCase(), offer.choice?.id === r.id)).join("")}
+      </div>
+      <div class="status-feedback over" role="status" aria-live="polite" hidden></div>`;
+    if (!this._setStatus(s, html)) return;
+    s.status.querySelectorAll(".sec, .shead, .shellnote, .laylist").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
+    s.status.querySelector(".layback").addEventListener("click", (e) => {
+      e.stopPropagation(); // the screen behind would close the status
+      this._tapped(e.currentTarget);
+      this._closeLay(s); // nothing is laid; the pick stays the next egg's
+    });
+    s.status.querySelectorAll(".layrow[data-id]").forEach((b) => b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._tapped(b);
+      this._layPick(s, b.dataset.id);
+    }));
+    s.status.querySelector(".laygo").addEventListener("click", (e) => {
+      e.stopPropagation();
+      // The tap that opened the sheet must not also lay (a fast double tap).
+      if (Date.now() - (s.laySheetAt || 0) < CONFIRM_GAP_MS) return;
+      this._tapped(e.currentTarget, s);
+      this._press(s, "lay_egg");
+      this._closeLay(s);
+    });
+  }
+
+  // A row: the select's own option string, at once ("" is the surprise: options[0]).
+  async _layPick(s, id) {
+    const offer = this._eggOffer(s);
+    const option = id === "" ? offer?.surprise : offer?.offered.find((r) => r.id === id)?.name;
+    if (!option) return; // it left the offer meanwhile: the next draw shows what is
+    try {
+      await this._hass.callService("select", "select_option", { entity_id: offer.entity, option });
+    } catch (err) {
+      // A read-only login is refused: the choice stays as it was.
+      const refused = /unauthori|forbidden|permission/i.test(`${err?.code} ${err?.message}`);
+      this._statusMessage(s, refused ? SETUP_COPY.layRefused : "That didn't work. Try again.");
+    }
   }
 
   // A tap on a two-tap control (confirmTap): true when it confirms. Otherwise
