@@ -340,7 +340,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     {
         vol.Required("type"): f"{DOMAIN}/answer",
         vol.Required("entity_id"): cv.entity_id,
-        vol.Required("question"): vol.In([*ANSWERS, "birthday"]),
+        vol.Required("question"): vol.In([*ANSWERS, "birthday", "fav_visitor"]),
         vol.Required("answer"): cv.string,
         # A follow-up's typed text (F1): any value passes the schema, so a schema
         # failure (logged at ERROR with the value) can never echo it; the handler
@@ -366,7 +366,11 @@ async def websocket_answer(
     if pet is None:
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
-    if msg["question"] != "birthday" and msg["answer"] not in ANSWERS[msg["question"]]:
+    free = (
+        "birthday",
+        "fav_visitor",
+    )  # checked by the pet (a date; its world's visitors)
+    if msg["question"] not in free and msg["answer"] not in ANSWERS[msg["question"]]:
         connection.send_error(msg["id"], "invalid_answer", "Not an answer to that")
         return
     # Never a shared screen's text: it's one person's, said back only to them.

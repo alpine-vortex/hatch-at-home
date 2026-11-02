@@ -1875,12 +1875,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             pet_once=self._pet_once(user, today),
             dreamed=bool(self.state.dream and self.state.dream.get("day") == today),
             early_tomorrow=self._early_tomorrow(user, now),
+            world=self.world if self.visitors else None,
         )
         if kind is None:
             return None
         P.mark_asked(person, today, hour, kind)
         if kind in P.ONCE_KINDS:
-            P.mark_once(person, kind, today)
+            P.mark_once(person, kind, today, self.world)
         if kind == "catchphrase":
             self._catch_ask(user)["asked"].append(today)
             self._save()
@@ -1980,6 +1981,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 raise ValueError("Not a birthday")
             self.people.save()
             self._push_everywhere()  # birthday_kept changed
+            return
+        if question == "fav_visitor":
+            # This pet's world's visitors only (F4); asked again in a new world.
+            if answer not in {v.get("id") for v in self.visitors}:
+                raise ValueError("Not a visitor of this world")
+            self.people.person(user).setdefault("likes", {})[
+                P.fav_visitor_key(self.world)
+            ] = answer
+            self.people.save()
+            self._push_everywhere()  # their mine.fav_visitor
             return
         if answer not in P.ANSWERS.get(question, ()):
             raise ValueError(f"{answer} isn't an answer to {question}")
@@ -2377,6 +2388,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "birthday_kept": bool(person.get("birthday")),
             # Their waiting gift, {id, world}, or None (plan visitors v2 §5).
             "gift": model.known_gift(bond, self.known_finds),
+            # Their favourite of this world's visitors (an id), or None (F4).
+            "fav_visitor": (person.get("likes") or {}).get(
+                P.fav_visitor_key(self.world)
+            ),
         }
 
     def _house_view(self) -> dict[str, Any]:

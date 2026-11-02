@@ -388,3 +388,48 @@ def test_no_reader_outside_the_people_store_and_its_commands_touches_follow_ups(
         source = path.read_text()
         for word in ("follow", "_texts", "_moods", "clean_text"):
             assert word not in source, (name, word)
+
+
+# --- The favourite visitor (F4): a preference, per world ----------------------------
+
+
+def test_the_favourite_visitor_is_asked_per_world():
+    person = {"likes": {"fav_weather": "sun", "fav_season": "spring"}}
+    assert P.once_due(person, "2026-11-01", 15, 5, world="woodland") == "fav_visitor"
+    assert P.once_due(person, "2026-11-01", 15, 5) != "fav_visitor"  # no world, no ask
+    P.mark_once(person, "fav_visitor", "2026-11-01", "woodland")
+    assert person["likes_asked"] == {"fav_visitor_woodland": ["2026-11-01"]}
+    person["likes"][P.fav_visitor_key("woodland")] = "chickadee"
+    later = (date(2026, 11, 1) + timedelta(days=30)).isoformat()
+    assert P.once_due(person, later, 15, 5, world="woodland") != "fav_visitor"
+    assert (
+        P.once_due(person, later, 15, 5, world="pond") == "fav_visitor"
+    )  # a new world
+
+
+async def test_a_favourite_visitor_is_one_of_its_worlds_and_theirs_alone(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+    now: float,
+):
+    ada, token = await a_user(hass)
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    config = await setup(hass)
+    pet = config.runtime_data
+    ids = [v["id"] for v in pet.visitors]
+    client = await hass_ws_client(hass, token)
+    msg = await answer(client, "fav_visitor", "not-a-visitor")
+    assert not msg["success"]
+    assert pet._mine(ada.id)["fav_visitor"] is None
+    msg = await answer(client, "fav_visitor", ids[0])
+    assert msg["success"], msg
+    assert pet._mine(ada.id)["fav_visitor"] == ids[0]
+    assert pet.people.data["people"][ada.id]["likes"] == {
+        P.fav_visitor_key(pet.world): ids[0]
+    }
+    other, _ = await a_user(hass)
+    assert pet._mine(other.id)["fav_visitor"] is None
+    await client.send_json_auto_id({"type": f"{DOMAIN}/forget_me"})
+    assert (await client.receive_json())["success"]
+    assert pet._mine(ada.id)["fav_visitor"] is None

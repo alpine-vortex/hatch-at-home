@@ -8634,6 +8634,64 @@ async function main() {
     check("fresh E3: two starts on one day add 1; a new generation reads 0, and its key replaces the old",
       counted.one === 1 && counted.differ && counted.fresh === 0 && counted.oldGone && counted.nextN === 1, JSON.stringify(counted));
   }
+  // Fresh-expand F4: the viewer's favourite visitor greets them on their own screen
+  // (random stubbed to the fav side), and never on a shared one; the question's buttons
+  // are this world's visitors by name, and the answer sent is the visitor's id.
+  {
+    const favCase = async (shared) => {
+      await vprep(V0);
+      return card.evaluate(async (el, { id, shared, ms }) => {
+        const s = el._slides[el._index];
+        const mine = s.mine;
+        const real = Math.random;
+        s.mine = { ...(mine || {}), fav_visitor: id };
+        if (shared) localStorage.setItem("hatch-shared-screen", "on");
+        Math.random = () => 0.2;
+        try {
+          el.__vtick(s);
+          await new Promise((r) => setTimeout(r, ms));
+        } finally {
+          Math.random = real;
+          s.mine = mine;
+          if (shared) localStorage.setItem("hatch-shared-screen", "off");
+        }
+        const out = { text: s.bubble.textContent };
+        el._visitorEnd(s);
+        return out;
+      }, { id: V0.id, shared, ms: (V0.in || 1400) + 1300 });
+    };
+    const own = await favCase(false);
+    const onShared = await favCase(true);
+    check(`fresh F4: the favourite visitor's greet on the viewer's own screen (${V0.id})`,
+      own.text.includes(`your favourite, the ${V0.name}!`), JSON.stringify(own));
+    check("fresh F4: never the favourite greet on a shared screen",
+      !onShared.text.includes("your favourite") && onShared.text.length > 0, JSON.stringify(onShared));
+    const asked = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const realWS = el._hass.callWS;
+      const sent = [];
+      el._hass.callWS = (m) => { sent.push(m); return Promise.resolve(null); };
+      try {
+        s.asking = true;
+        el._ask(s, "fav_visitor");
+        const buttons = [...s.screen.querySelectorAll(".askday button")];
+        const labels = buttons.map((b) => b.textContent);
+        buttons[0]?.click();
+        await new Promise((r) => setTimeout(r, 200));
+        return { labels, ids: buttons.map((b) => b.dataset.answer), sent: sent.filter((m) => m.type === "virtual_pet/answer"),
+          said: s.bubble.textContent, world: (s.world.visitors || []).map((v) => [v.id, v.name]) };
+      } finally {
+        el._hass.callWS = realWS;
+        s.screen.querySelector(".askday")?.remove();
+        s.asking = false;
+      }
+    });
+    const names = asked.world.map(([, n]) => n);
+    check("fresh F4: the favourite-visitor buttons are this world's visitors; the answer sent is an id",
+      asked.labels.length === asked.world.length && asked.labels.every((l) => names.includes(l)) &&
+      asked.sent.length === 1 && asked.sent[0].question === "fav_visitor" && asked.sent[0].answer === asked.ids[0] &&
+      asked.said.includes(`the ${asked.labels[0]}! good pick`), JSON.stringify(asked));
+  }
   // Fresh-expand E10 (V-b, V-c), card only: on a pinned pair day a friend of the planned
   // visitor comes too (two visitors, a pair line), nothing sent and its friend not counted;
   // on a pinned no-visit guest day a visitor from another world comes in its window, says

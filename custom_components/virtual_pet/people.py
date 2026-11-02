@@ -69,9 +69,19 @@ ANSWERS: dict[str, tuple[str, ...]] = {
 ONCE = (
     ("fav_weather", R.ASK_LIKES_LEVEL),
     ("fav_season", R.ASK_LIKES_LEVEL),
+    # Per world (fresh-expand F4): done once likes has visitor_<world>; its tries are
+    # keyed fav_visitor_<world>, so a pet in a new world asks again.
+    ("fav_visitor", R.ASK_LIKES_LEVEL),
     ("birthday", R.BIRTHDAY_ASK_LEVEL),
 )
 ONCE_KINDS = {kind for kind, _ in ONCE} | {"catchphrase"}
+
+
+def fav_visitor_key(world: str | None) -> str:
+    """likes' key for a world's favourite visitor (an id from worlds.json)."""
+    return f"visitor_{world}"
+
+
 # The later slot's rotation by date, so no question crowds out the others.
 ROTATION = ("how_day", "dream", "guess")
 # Zones worth a word when someone comes back from one (by a word in its name).
@@ -553,6 +563,7 @@ def choose_question(
     pet_once: tuple[str, ...] = (),
     dreamed: bool = False,
     early_tomorrow: bool = False,
+    world: str | None = None,
 ) -> str | None:
     """The question to ask on this visit, or None: at most one in the morning
     (before noon) and one later, per person per day, across every pet. A
@@ -575,7 +586,7 @@ def choose_question(
         return "slept"
     if "later" in asked:
         return None
-    if once := once_due(person, today, hour, level, pet_once):
+    if once := once_due(person, today, hour, level, pet_once, world):
         return once
     if came_home in DAY_ZONES or came_home == "home":
         return "how_day"  # back from work or school, or a friend just home
@@ -617,9 +628,11 @@ def once_due(
     hour: int,
     level: int,
     pet_once: tuple[str, ...] = (),
+    world: str | None = None,
 ) -> str | None:
     """A one-time question due now: each has its own tries, so one left
-    unanswered never holds up the next; a few days apart per person."""
+    unanswered never holds up the next; a few days apart per person. The
+    favourite visitor is asked per world (the pet's; none without one)."""
     if not R.ASK_LIKES_FROM <= hour < R.ASK_LIKES_UNTIL:
         return None
     last = person.get("once_last")
@@ -632,20 +645,26 @@ def once_due(
     done = {*likes, *(["birthday"] if person.get("birthday") else [])}
     if person.get("birthday_skipped"):
         done.add("birthday")
+    if world is None or fav_visitor_key(world) in likes:
+        done.add("fav_visitor")
     for kind, need in ONCE:
+        key = f"fav_visitor_{world}" if kind == "fav_visitor" else kind
         if (
             level >= need
             and kind not in done
-            and may_ask_again(tries.get(kind, []), today)
+            and may_ask_again(tries.get(key, []), today)
         ):
             return kind
     return pet_once[0] if pet_once else None
 
 
-def mark_once(person: dict[str, Any], kind: str, today: str) -> None:
+def mark_once(
+    person: dict[str, Any], kind: str, today: str, world: str | None = None
+) -> None:
     """A one-time question was asked today (its tries; the gap to the next)."""
     if kind in dict(ONCE):
-        person.setdefault("likes_asked", {}).setdefault(kind, []).append(today)
+        key = f"fav_visitor_{world}" if kind == "fav_visitor" else kind
+        person.setdefault("likes_asked", {}).setdefault(key, []).append(today)
     person["once_last"] = today
 
 

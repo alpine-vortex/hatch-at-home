@@ -377,7 +377,7 @@ const ANSWERS_KEY = "hatch-answers-";
 const ANSWER_RETRY_MS = 3000;
 const ANSWER_RESEND_EVERY_MS = 60000; // after a transport failure
 const ANSWER_KEEP_DAYS = 14; // ASK_LIKES_AGAIN_DAYS on the server
-const STASHED_QUESTIONS = ["fav_weather", "fav_season", "catchphrase"];
+const STASHED_QUESTIONS = ["fav_weather", "fav_season", "catchphrase", "fav_visitor"];
 function stashedAnswers(userId) {
   try {
     const list = JSON.parse(localStorage.getItem(ANSWERS_KEY + userId) || "[]");
@@ -1498,6 +1498,13 @@ const BIG_DAY = {
 // E13: the morning after a tough day, on the answerer's own screen, once. It names nothing.
 const SOFT_MORNING = ["hope today's a softer one ♥", "I'm right here today ♥", "a gentle day to you ♥",
   "I saved you a cozy spot ♥"];
+// F4: the favourite visitor (B7d): its question, the reply, and its greet on that
+// person's own screen, 1 visit in 2 (over a friend's line, E3).
+const FAVV_LINES = {
+  q: "who's your favourite visitor?",
+  reply: (v) => `the ${v}! good pick ♪`,
+  greet: (v) => `your favourite, the ${v}! ♥`,
+};
 // --- end fresh-expand copy ---
 for (const [type, keys] of Object.entries(PERSONA_FRESH)) Object.assign(PERSONA[type], keys);
 // Kindred pairs (2b, docs/plan-2026-11-01-kindred-pairs.md): two teen/adult pets whose
@@ -1548,6 +1555,11 @@ const cleanTyped = (value) => {
 // server (virtual_pet/answer); the others stay on the card.
 const ASK_MS = 60000; // a question stays this long (it was not asked for, so focus stays put)
 const QUESTIONS = {
+  // F4: one a world; the buttons are this pet's world's visitors (options), by name.
+  fav_visitor: { q: FAVV_LINES.q, keep: true, answers: {},
+    options: (s) => visitorList(s.world).filter((v) => v.name).slice(0, 3).map((v) => v.id),
+    label: (a, s) => visitorList(s.world).find((v) => v.id === a)?.name || a,
+    reply: (a, s) => FAVV_LINES.reply(visitorList(s.world).find((v) => v.id === a)?.name || a) },
   // F1: asked the evening before (Sun-Thu); "yes" opens the optional typed answer.
   big_day: { q: BIG_DAY.q, answers: { yes: BIG_DAY.yes, no: BIG_DAY.no } },
   how_day: { q: "how was your day?", answers: {
@@ -6759,7 +6771,7 @@ class HatchPetCard extends HTMLElement {
     box.setAttribute("role", "group");
     box.setAttribute("aria-label", question.q);
     const mine = this._state(s, "sensor.life_stage")?.attributes.catchphrase || "mine";
-    const answers = Object.keys(question.answers);
+    const answers = question.options ? question.options(s) : Object.keys(question.answers);
     box.classList.toggle("many", answers.length > 3);
     box.innerHTML = (question.picker?.() || "") + answers
       .map((a) => `<button data-answer="${escape(a)}">${escape(question.label?.(a, s, mine) ?? a)}</button>`).join("");
@@ -9998,9 +10010,18 @@ class HatchPetCard extends HTMLElement {
     if (asking) return;
     const V = s.visitor;
     const baby = this._babySet(s, "visit");
-    // A guest says where it's from; a pair, that there are two (E10); else a friend's
-    // line (E3), else the usual. Baby talk stays.
+    // A guest says where it's from; a pair, that there are two (E10); else the viewer's
+    // favourite (F4); else a friend's line (E3), else the usual. Baby talk stays.
     const rare = !baby && (V?.guest ? VISIT_GUEST[V.guest] : V?.pair ? turnPick(PAIR_LINES, `${s.ids?.device}|pair`) : null);
+    // The favourite: on the viewer's own screen, 1 visit in 2, with a hop and hearts.
+    if (!baby && !rare && !sharedScreen() && s.mine?.fav_visitor === v.id && Math.random() < 0.5) {
+      this._line(s, FLAVOUR, FAVV_LINES.greet(v.name), 3000);
+      if (!calm()) {
+        this._animate(s, s.pet, "greethop", 1400);
+        this._bondHearts(s);
+      }
+      return;
+    }
     const friend = !rare && this._visitFriendLine(s, v);
     const { text } = rare || friend ? { text: rare || friend } : this._lines(s, "visit", pick([...VISIT_LINES, ...v.lines]));
     this._line(s, FLAVOUR, text, 3000);

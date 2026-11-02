@@ -43,6 +43,7 @@ const COPY_TABLES = {
   DREAM_CALLBACK: {},
   BIG_DAY: { fill: "it", asks: ["q", "what"] },
   SOFT_MORNING: {},
+  FAVV_LINES: { fill: "visitor", asks: ["q"] },
 };
 
 function lines(value, path, out) {
