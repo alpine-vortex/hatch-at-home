@@ -379,3 +379,4 @@ forward crouch, eyes wide and bright, a small eager grin, frame 2 a little wiggl
 commit.
 
 - Woodland: banana slug, robin, deer, fox, squirrel.
+- Hearth: bunny, corgi, ferret, hamster, kitten.
