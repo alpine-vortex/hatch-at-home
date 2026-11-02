@@ -1,6 +1,6 @@
-// The release switch (owner, 2026-11-01): FINDS_SHOWN ships off until V-F's final art,
-// and the card reads it only through HatchPetCard.findsShown (card-check and the bench
-// turn that on). node --test tests/js
+// The release switch (owner, 2026-11-01): FINDS_SHOWN is on with V-F's final art, and
+// the card reads it only through HatchPetCard.findsShown (card-check and the bench can
+// set it false to test the off path). node --test tests/js
 const test = require("node:test");
 const assert = require("node:assert");
 const fs = require("fs");
@@ -9,8 +9,8 @@ const path = require("path");
 const src = fs.readFileSync(path.join(__dirname, "..", "..", "custom_components", "virtual_pet", "frontend",
   "hatch-pet-card.js"), "utf8");
 
-test("FINDS_SHOWN ships off, and the static starts from it", () => {
-  assert.match(src, /\nconst FINDS_SHOWN = false;\n/);
+test("FINDS_SHOWN ships on, and the static starts from it", () => {
+  assert.match(src, /\nconst FINDS_SHOWN = true;\n/);
   assert.match(src, /\nHatchPetCard\.findsShown = FINDS_SHOWN;/);
   assert.match(src, /\nconst findsShown = \(\) => !!HatchPetCard\.findsShown;\n/);
 });

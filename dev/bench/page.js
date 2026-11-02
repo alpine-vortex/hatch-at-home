@@ -440,7 +440,7 @@
       if (shot.shell.finish === "none") delete world.shell.finish;
     }
 
-    // FINDS_SHOWN (the card's release switch, off until V-F): `findsShown: true` turns it
+    // FINDS_SHOWN (the card's release switch): `findsShown: true` turns it
     // on for this shot; every other shot gets the card's own default back.
     const Card = customElements.get("hatch-pet-card");
     if (FINDS_DEFAULT === undefined) FINDS_DEFAULT = Card.findsShown;

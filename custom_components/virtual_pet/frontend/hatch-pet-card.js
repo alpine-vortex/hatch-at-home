@@ -758,13 +758,14 @@ const FIND_LINES = {
 const FIND_STEP_MS = 2500; // the reveal: one find each
 const FIND_LINE_MS = 2200; // its line, gone before the next find's
 const FOUND_BITS = 3; // the away note's "found <a find>" bits, newest first
-// Release switch (owner, 2026-11-01): off until V-F's final art. While off, the card
-// shows no basket, reveal or find line (V1-V4), no "found" bit in the away note (V8),
-// no gift take, line or pop (V5-V7: it never sends collect {gift}, so a gift waits on
-// the server), and the finds page draws its visitors only. The server is unchanged: finds
-// and gifts keep accruing, and turning this on shows them. Read through findsShown(), so
-// card-check and the bench can turn it on (HatchPetCard.findsShown).
-const FINDS_SHOWN = false;
+// Release switch (owner, 2026-11-01): on with V-F's final art. While on, the card shows
+// the basket, reveal and find line (V1-V4), the "found" bit in the away note (V8), the
+// gift take, line and pop (V5-V7), and the finds on the finds page. Turned off, it shows
+// none of them (it never sends collect {gift}, so a gift waits on the server) and the
+// finds page draws its visitors only. The server is the same either way: finds and gifts
+// keep accruing. Read through findsShown(), so card-check and the bench can set it
+// (HatchPetCard.findsShown).
+const FINDS_SHOWN = true;
 const findsShown = () => !!HatchPetCard.findsShown;
 // Gifts (plan visitors v2 §5, §7 V5-V7): said once, on the receiver's own screen, at a
 // first look. V5 names the find (its `name`, so "message in a bottle" is 40 characters);
@@ -9109,7 +9110,7 @@ class HatchPetCard extends HTMLElement {
     if (!data && !s.findsLoad) this._loadFinds(s); // dropped meanwhile (a shared-screen flip)
     const key = data?.reply?.world || s.worldKey;
     const world = this._worlds?.[key];
-    // Named by what it shows: visitors only while FINDS_SHOWN is off (top10 7a).
+    // Named by what it shows: visitors only when FINDS_SHOWN is off (top10 7a).
     const head = `${findsShown() ? "finds" : "visitors"} · ${escape(world?.name || this._worldName(s))}`;
     const foot = `<button class="flink">‹ journal</button>`;
     let html;
@@ -11334,7 +11335,7 @@ class HatchPetCardEditor extends HTMLElement {
 HatchPetCard.seasons = SEASONS;
 HatchPetCard.hanukkah = hanukkah;
 HatchPetCard.seasonLines = seasonLines;
-HatchPetCard.findsShown = FINDS_SHOWN; // card-check and the bench turn it on
+HatchPetCard.findsShown = FINDS_SHOWN; // card-check and the bench can set it
 HatchPetCard.findLines = FIND_LINES;
 HatchPetCard.giftLines = GIFT_LINES;
 HatchPetCard.giftMade = GIFT_MADE;

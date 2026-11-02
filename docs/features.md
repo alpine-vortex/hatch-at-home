@@ -146,10 +146,10 @@ stand-in. **not built** = planned, nothing in the code.
 |---|---|---|---|---|
 | World visitors | 4 days in 7, a world creature (robin, heron, shooting star…; 3 per world, 18 in all) drops by in a 3 h window. The pet greets it. A visitor whose window passed unseen still comes by live when you next look in that day (a night or dimmed screen gets a line instead). | model `daily_visit`, `credit_visit`; card `VISITOR_PLAY`, `_visitorStart`, `_visitorGreet`, `_visitorMissed` | none | live |
 | Visitors become friends | seen on three days on a screen, a visitor greets with its own lines; stays longer on a shared screen; rare days bring two together, or a guest from another world; the pet may save a crumb, let it watch a dig or tell a linked pet | model; card (fresh-expand) | none | live |
-| Finds and basket | about 2.4 finds a day go in a basket on the screen; a tap reveals them | model `roll_find`, `pick_find`, `collect_basket`; card `_basketTap`; `virtual_pet/collect` | release switch `FINDS_SHOWN` in the card is **off** | **hidden** on the card; the server still rolls finds and fires `virtual_pet_found` |
-| Visitor leaves a find | a third of the time when its window ends | model `leave_find` | same | hidden |
-| Gifts | bond 3+: every 6–8 days a find set aside for one person; "made this for you ♥" | model `gift_tick`, `pick_gift`, `take_gift`; card `_giftTake` | switch off: a gift **waits on the server** | hidden |
-| Collection page | journal → "visitors ›" (reads "finds ›" once finds are shown): the world's visitors (met or silhouette) and, when shown, its finds | card `_renderFinds`, `collectionTiles`; `virtual_pet/collection` | switch off: **visitors only** | partial |
+| Finds and basket | about 2.4 finds a day go in a basket on the screen; a tap reveals them | model `roll_find`, `pick_find`, `collect_basket`; card `_basketTap`; `virtual_pet/collect` | release switch `FINDS_SHOWN` in the card is **on** | live |
+| Visitor leaves a find | a third of the time when its window ends | model `leave_find` | same | live |
+| Gifts | bond 3+: every 6–8 days a find set aside for one person; "made this for you ♥" | model `gift_tick`, `pick_gift`, `take_gift`; card `_giftTake` | with the switch off a gift **waits on the server** | live |
+| Collection page | journal → "visitors ›" (reads "finds ›" while finds are shown): the world's visitors (met or silhouette) and its finds | card `_renderFinds`, `collectionTiles`; `virtual_pet/collection` | with the switch off: **visitors only** | live |
 | Find art | the find and basket pictures are not final | frontend/ui | none | partial |
 | Bird visits from BirdNET-Pi | on the roadmap | guide "Roadmap" | none | not built |
 
@@ -245,7 +245,7 @@ list.
    "two games (left or right, higher or lower)", and roadmap line 6 lists only those two.
    There are three: the berry dig is in "Using the card" and the README.
 2. **Finds, basket, gifts and the collection page** are in none of the README, guide or
-   how-to. The guide's Events entry says finds "aren't shown on the card yet" (right),
+   how-to. The guide's Events entry no longer says finds are hidden,
    and the journal paragraph mentions "while finds are shown", but nothing describes the
    "visitors ›" page the journal links to.
 3. **Roadmap is thin.** Phase 4 still says "in progress" with BirdNET-Pi visits to come;
