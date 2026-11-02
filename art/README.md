@@ -392,9 +392,11 @@ Splash pose (`acts.splash`), Luna (gpt-5.6-luna), probe kitten teen / ball pytho
 - Woodland (bananaslug, bird, deer, fox, squirrel): splash baby/teen/adult, frame 2 still facing right.
 - Hearth (bunny, corgi, ferret, hamster, kitten): splash baby/teen/adult, all facing right.
 - Terrarium (ballpython, beardeddragon, gecko, tarantula, tortoise): splash baby/teen/adult, all facing right.
-- Pond (axolotl, beaver, duckling, pondturtle, treefrog): splash baby/teen/adult, all facing right.
-- Tidepool (hermitcrab, octopus, otter, puffin, seal): splash baby/teen/adult, all facing right.
-- Night Sky (bat, firefly, lunamoth, opossum, owl): splash baby/teen/adult, all facing right.
+- Pond (axolotl, beaver, duckling, pondturtle, treefrog): splash baby/teen/adult, all facing right; duckling on its water ring.
+- Tidepool (hermitcrab, octopus, otter, puffin, seal): splash baby/teen/adult, facing right; puffin adult frame 2
+  tosses its head left, body and feet still facing right (accepted at landing). Otter keeps its water,
+  puffin and seal their rock.
+- Night Sky (bat, firefly, lunamoth, opossum, owl): splash baby/teen/adult, all facing right. Splash complete for all 30.
 
 ## Finds (V-F, 2026-11-01)
 
