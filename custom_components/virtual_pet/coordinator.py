@@ -32,7 +32,6 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import (
-    device_registry as dr,
     entity_registry as er,
     issue_registry as ir,
 )
@@ -111,6 +110,7 @@ from .home import (
     forecast_moment,
     is_raining,
 )
+from .names import pet_name
 from .react import counts as react_counts, is_native as react_native
 from .species import load_catalog
 from .watcher import Watcher, daily_forecast, doorbell_rang
@@ -483,12 +483,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             LOGGER.warning(
                 "World %s has no ready species yet; %s stays an egg until it does",
                 self.world,
-                self.config_entry.title,
+                pet_name(self.hass, self.config_entry),
             )
         self._issue(
             "world_not_ready",
             not self.roster,
-            {"pet": self.config_entry.title, "world": self.world_name},
+            {"pet": pet_name(self.hass, self.config_entry), "world": self.world_name},
         )
         now = self._now()
         title = self.config_entry.title
@@ -580,7 +580,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 self.hass, self.store.key, STORE_VERSION, data
             )
         await self.store.async_save(self.state.to_dict())
-        placeholders = {"pet": self.config_entry.title, "entry_id": self.pet_id}
+        placeholders = {
+            "pet": pet_name(self.hass, self.config_entry),
+            "entry_id": self.pet_id,
+        }
         if self._damage_backup is None:  # no file, nothing read, no .corrupt copy
             key = "save_damaged_missing"
         else:
@@ -691,7 +694,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._issue(
             "missing_entities",
             bool(missing),
-            {"pet": self.config_entry.title, "entities": ", ".join(missing)},
+            {
+                "pet": pet_name(self.hass, self.config_entry),
+                "entities": ", ".join(missing),
+            },
         )
 
     def _listen(self) -> None:
@@ -1121,10 +1127,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """Follow renames: the device's own name if the owner set one, else the
         entry's title. Notifications and the journal use it."""
         assert self.state is not None
-        device = dr.async_get(self.hass).async_get_device_by_identifier(
-            (DOMAIN, self.pet_id), self.pet_id
-        )
-        name = (device and device.name_by_user) or self.config_entry.title
+        name = pet_name(self.hass, self.config_entry)
         if name != self.state.name:
             self.state.name = name
 
@@ -2424,12 +2427,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         """A new pet: a note in the sidebar, and on the phones of people who
         turned "notify me" on for another pet here (the first pet in a house
         welcomes in the sidebar only). The event names nobody."""
-        text = notify.welcome(self.config_entry.title)
+        name = pet_name(self.hass, self.config_entry)
+        text = notify.welcome(name)
         link = f"\n\n[Open the pet shelf]({self.dashboard})" if self.dashboard else ""
         persistent_notification.async_create(
             self.hass,
             text + link,
-            title="Virtual Pet",
+            title=f"{name} moved in ♥",
             notification_id=f"{DOMAIN}_{self.pet_id}_welcome",
         )
         pets: dict[str, PetCoordinator] = self.hass.data[DOMAIN]["pets"]

@@ -385,6 +385,11 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     return { n: ctl.length, small, overlap, hidden: seen.filter((x) => !x.ok).map((x) => x.k), rows: seen.length,
       posTab: ctl.filter((c) => Number(c.tab) > 0).length, scroll: s.status.scrollTop };
   }, view);
+  // A fresh hatchling's server-side call (the status's "would like" row) takes a row of
+  // this 158 px box at 330 and pushes the energy meter off it: measure the pet not calling,
+  // as the pinned sections do, and draw the status again so it shows.
+  await pinAwake(card, "shell 4c");
+  await card.evaluate((el) => { for (const s of el._slides) { s.statusHtml = null; s.drawnSig = null; } el._redraw(); });
   const boxIssues = [];
   const boxCounts = {};
   for (const width of [330, 420]) {
@@ -459,8 +464,14 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
       const out = { inSheet: /missed calls|ignored whines/.test(t), personal: /notify me|my data|baby talk/.test(t),
         group: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent).join("|") };
       s.settings = false;
+      // The two rows come with the first miss (UX fix 4, F12): give this pet one.
+      const missId = s.ids["sensor.care_misses"];
+      const realHass = el._hass;
+      const was = realHass.states[missId];
+      el._hass = { ...realHass, states: { ...realHass.states, [missId]: { ...was, state: "2", attributes: { ...was?.attributes, discipline_misses: 1 } } } };
       el._renderStatus(s, []);
       out.onStatus = /missed calls/.test(s.status.textContent) && /ignored whines/.test(s.status.textContent);
+      el._hass = realHass;
       s.settings = true;
       localStorage.setItem("hatch-shared-screen", "off");
       el._renderStatus(s, []);
@@ -475,6 +486,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await page.waitForTimeout(400);
   check("4c: every status, settings and picker control is 44x44 at 330 and 420, none overlap, the wish and meters show unscrolled, tab order is page order, a shared screen's status has misses/whines",
     boxIssues.length === 0, boxIssues.join(" ; ") || JSON.stringify(boxCounts));
+  await unpinAwake(card);
 
   // Locked tiles (a pet below teen): shown dimmed with their stage, never hidden; a tap
   // says when, saves nothing and leaves the shell as it is.
@@ -509,10 +521,15 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   const camoAria = await useAria();
   await tap("");
   const ownAria = await useAria();
+  const useOffOnOwn = await cur().locator(".status .puse").getAttribute("aria-disabled"); // nothing new to save (F7)
   await tap("camo");
+  const useOnOnCamo = await cur().locator(".status .puse").getAttribute("aria-disabled");
+  check("shell: use is dimmed until the preview differs from the saved pick (settings UX F7)",
+    useOffOnOwn === "true" && useOnOnCamo === "false", JSON.stringify([useOffOnOwn, useOnOnCamo]));
   check("shell: use is labelled for the tile on the shell, the world's own as such",
     camoAria === "use camo shell" && ownAria === "use the world's own shell", JSON.stringify([camoAria, ownAria]));
   // ...and survives a hass update: a mood tick, then the sun going down and up.
+  const preTick = await look(); // the list's scroll now (the taps above moved it)
   const sun = await evaluate(() => { const st = document.querySelector("home-assistant").hass.states["sun.sun"]; return { state: st.state, attributes: st.attributes }; });
   await inject(a.entity.replace("life_stage", "mood"), { attributes: { cc_tick: Date.now() } });
   await page.waitForTimeout(500);
@@ -523,8 +540,8 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await inject("sun.sun", sun);
   await page.waitForTimeout(300);
   check("shell: the preview survives a mood tick and the sun's change, and the list doesn't redraw",
-    [ticked, sunned].every((l) => l.finish === "finish-camo" && l.sel === "camo" && l.picker && l.scroll === camo.scroll),
-    JSON.stringify({ ticked: ticked.finish, sunned: sunned.finish, scroll: [camo.scroll, ticked.scroll, sunned.scroll] }));
+    [ticked, sunned].every((l) => l.finish === "finish-camo" && l.sel === "camo" && l.picker && l.scroll === preTick.scroll),
+    JSON.stringify({ ticked: ticked.finish, sunned: sunned.finish, scroll: [preTick.scroll, ticked.scroll, sunned.scroll] }));
 
   // Leaving without saving puts the shell back, by every way out.
   const reverted = (l) => l.finish === ownClass(a) && !l.picker && l.preview === "none";
@@ -607,7 +624,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await tab.close();
   await backToDefault("the ways out", a);
 
-  // Pick, use, and a reload keeps it; `world default` clears it.
+  // Pick, use, and a reload keeps it; the world's own tile + `use` clears it (F6: no `world default` button).
   await openPicker();
   await cur().locator('.status .tile[data-finish="stripes"]').scrollIntoViewIfNeeded();
   await tap("stripes");
@@ -624,11 +641,12 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   l = await look(a.entity);
   check("shell: a reload keeps the saved shell", l.finish === "finish-stripes", brief(l));
   await openPicker();
-  await cur().locator(".status .pdefault").click();
+  await tap("");
+  await cur().locator(".status .puse").click();
   const cleared = await waitAttr(a.entity, null);
   await page.waitForTimeout(300);
   l = await look();
-  check("shell: world default clears it: the line, the sensor, `now` and the shell",
+  check("shell: the world's own tile and use clear it: the line, the sensor, `now` and the shell",
     cleared === null && l.note === "back to the world's own ♪" && l.now === "" && l.finish === ownClass(a), brief({ cleared, ...l }));
   await backToDefault("save and reload", a);
 
@@ -1089,8 +1107,10 @@ async function main() {
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
+  const missingSprites = []; // the card warns on the console, never in the bubble (UX fix 4, F11)
   page.on("console", (m) => {
     if (m.type() === "error" && !/Failed to load resource/.test(m.text())) errors.push(m.text());
+    if (m.type() === "warning" && /missing sprites/.test(m.text())) missingSprites.push(m.text());
   });
   await page.goto(CLIENT);
   await page.waitForSelector('input[autocomplete="username"]', { timeout: 60000 });
@@ -1181,14 +1201,61 @@ async function main() {
   if (enter("shelf")) {
   // 1. The shelf draws its devices.
   check("shelf shows the pets", slides >= 2, `${slides} devices`);
-  check("sprites load", !(await bubble()).startsWith("missing sprites"));
+  // UX fix 4, F1: while a pet's states are `unavailable` (an Options reload, an HA restart) it stays in
+  // its own world's device, says one line and has no live buttons; back, the real bubble returns.
+  const gone = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const real = el._hass;
+    const out = { world: s.worldKey, shape: s.device.className };
+    try {
+      const now = new Date().toISOString();
+      const states = { ...real.states };
+      for (const id of Object.values(s.ids)) {
+        if (states[id] && id !== "sun.sun") states[id] = { ...states[id], state: "unavailable", attributes: { restored: true }, last_updated: now };
+      }
+      el._hass = { ...real, states };
+      el._sig = null;
+      await el._update();
+      out.worldDuring = s.worldKey;
+      out.shapeDuring = s.device.className;
+      out.bubble = s.bubble.textContent;
+      out.buttonsOff = Object.values(s.buttons).every((b) => b.disabled);
+      out.patOn = el._patOn(s);
+    } finally {
+      el._hass = real;
+      el._sig = null;
+      await el._update();
+    }
+    out.bubbleBack = s.bubble.textContent;
+    return out;
+  });
+  check("UX4 F1: an unavailable pet keeps its world's device, says one line, has its buttons and pat off",
+    gone.worldDuring === gone.world && gone.shapeDuring === gone.shape && gone.bubble === "one moment... ♪" &&
+    gone.buttonsOff && !gone.patOn && gone.bubbleBack !== "one moment... ♪", JSON.stringify(gone));
+  check("sprites load", !missingSprites.length && !(await bubble()).startsWith("missing sprites"), missingSprites[0]);
   await shot("01-shelf");
 
   // 2. Status and journal.
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(600);
   const status = await cur().locator(".status").innerText();
-  check("status screen opens, with missed calls and ignored whines (top10 4a)", /weight/.test(status) && /missed calls/.test(status) && /ignored whines/.test(status));
+  // A new pet's page has no zero counters (UX fix 4, F12): the rows come with the first miss (top10 4a).
+  const missRows = await page.locator("hatch-pet-card").evaluate((el) => {
+    const s = el._slides[el._index];
+    const none = /missed calls|ignored whines/.test(s.status.textContent);
+    const missId = s.ids["sensor.care_misses"];
+    const realHass = el._hass;
+    const was = realHass.states[missId];
+    const zero = Number.parseFloat(was?.state) || Number(was?.attributes?.discipline_misses) || 0;
+    el._hass = { ...realHass, states: { ...realHass.states, [missId]: { ...was, state: "2", attributes: { ...was?.attributes, discipline_misses: 1 } } } };
+    el._renderStatus(s, []);
+    const both = /missed calls/.test(s.status.textContent) && /ignored whines/.test(s.status.textContent);
+    el._hass = realHass;
+    el._renderStatus(s, []);
+    return { zero, none, both };
+  });
+  check("status screen opens; missed calls and ignored whines show with a miss, not at zero (top10 4a, UX fix 4 F12)",
+    /weight/.test(status) && missRows.both && (missRows.zero ? missRows.none : !missRows.none), JSON.stringify(missRows));
   await shot("02-status");
   // The next egg's creature, picked through its select, shows on the status screen.
   const eggChoice = (await ids())["select.next_egg"];
@@ -1292,6 +1359,94 @@ async function main() {
   await page.waitForTimeout(300);
   check("tapping a heading or the back row's empty end leaves the sheet open",
     await cur().locator(".screen.show-status .sback").count() === 1);
+  // Settings UX fix 1: the sheet keeps the player's place (F1), Escape is a way out (F8), a toggle keeps keyboard
+  // focus (F4), the note is the pet's bubble under the back row and lets taps through (F2/F13), and the pet
+  // has a word when the sheet closes after a change (F14).
+  {
+    const rowBox = await cur().locator(".status .row.srow").first().boundingBox();
+    await page.mouse.click(rowBox.x + 6, rowBox.y + rowBox.height / 2); // a row's label
+    await page.waitForTimeout(250);
+    const afterLabel = await cur().locator(".screen.show-status .sback").count() === 1;
+    await page.mouse.click(rowBox.x + rowBox.width / 2, rowBox.y + rowBox.height / 2); // the gap in the row
+    await page.waitForTimeout(250);
+    const afterGap = await cur().locator(".screen.show-status .sback").count() === 1;
+    check("settings UX F1: a tap on a row's label or the gap in it leaves the sheet open", afterLabel && afterGap, JSON.stringify({ afterLabel, afterGap }));
+    await cur().locator(".status .bell.named").focus();
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(250);
+    const kept = await card.evaluate((el) => el.shadowRoot.activeElement?.className || "");
+    await page.keyboard.press("Enter"); // back to what it was
+    await page.waitForTimeout(250);
+    check("settings UX F4: a toggle pressed by keyboard keeps focus through its redraw", /\bnamed\b/.test(kept), kept);
+    const bubble = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.status.scrollTop = 0;
+      el._tapRect = null;
+      el._statusMessage(s, "no phone pings, ok ♪");
+      const note = s.status.querySelector(".status-feedback");
+      const head = s.status.querySelector(".shead").getBoundingClientRect();
+      const box = note.getBoundingClientRect();
+      const out = { shown: !note.hidden, text: note.textContent, under: box.top >= head.bottom - 1, tapsThrough: getComputedStyle(note).pointerEvents === "none",
+        head: getComputedStyle(note, "::before").backgroundImage.includes("sprites/") };
+      clearTimeout(s.statusMessageTimer);
+      note.hidden = true;
+      note.textContent = "";
+      return out;
+    });
+    check("settings UX F13: a note is the pet's bubble with its head, under the back row, and taps go through it",
+      bubble.shown && bubble.under && bubble.tapsThrough && bubble.head, JSON.stringify(bubble));
+    // A tap under the bubble's place: the note drops to the foot of the box, still clear of it, never over the row (F13).
+    const low = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.status.scrollTop = 0;
+      const head = s.status.querySelector(".shead").getBoundingClientRect();
+      el._tapRect = { top: head.bottom + 4, bottom: head.bottom + 40, at: Date.now() };
+      el._statusMessage(s, "no phone pings, ok ♪");
+      const note = s.status.querySelector(".status-feedback");
+      const box = note.getBoundingClientRect();
+      const foot = s.status.getBoundingClientRect();
+      const out = { atFoot: Math.abs(foot.bottom - 4 - box.bottom) < 3, clear: box.top > head.bottom + 40 };
+      clearTimeout(s.statusMessageTimer);
+      note.hidden = true;
+      note.textContent = "";
+      note.style.top = "";
+      el._tapRect = null;
+      return out;
+    });
+    check("settings UX F13: when the row just tapped sits under the bubble, it drops to the foot of the box", low.atFoot && low.clear, JSON.stringify(low));
+    await cur().locator(".status .sback").focus();
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    const escaped = { gear: await cur().locator(".screen.show-status .gear").count(), sback: await cur().locator(".status .sback").count() };
+    check("settings UX F8: Escape on the sheet goes back to the status", escaped.gear === 1 && escaped.sback === 0, JSON.stringify(escaped));
+    await cur().locator(".status .gear").click();
+    await page.waitForTimeout(250);
+    const react = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const real = Date.prototype.getHours;
+      const out = {};
+      const close = async (key, hour) => {
+        Date.prototype.getHours = () => hour;
+        Object.assign(s, { asleep: false, lightsOut: false });
+        s.bubble.textContent = "";
+        el._settingsChanged(s, key);
+        el._toggleStatus(s); // the status closes from the sheet
+        await new Promise((r) => setTimeout(r, 1500)); // typed out
+        const said = s.bubble.textContent;
+        Date.prototype.getHours = real;
+        el._toggleStatus(s);
+        s.status.querySelector(".gear")?.click();
+        return said;
+      };
+      s.settings = true;
+      out.day = await close("monoOn", 12);
+      out.night = await close("monoOff", 23);
+      out.none = await close("effectsOn", 12); // no such line: nothing said
+      return out; // the sheet is open again
+    });
+    check("settings UX F14: the pet says its line for the last change when the sheet closes, not at night",
+      /all green/.test(react.day) && react.night === "" && react.none === "", JSON.stringify(react));
+  }
   // Sounds start off and turn on for this browser only.
   const sound = cur().locator(".bell.sound");
   const soundBefore = await sound.getAttribute("aria-pressed");
@@ -1361,28 +1516,113 @@ async function main() {
     const s = el._slides[el._index];
     const raised = new Set(el._slides.flatMap((x) => el._state(x, "sensor.life_stage")?.attributes.raised || []));
     return {
-      head: s.status.querySelector(".jhead")?.textContent.trim(), worlds: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent),
+      head: s.status.querySelector(".shead .stitle")?.textContent.trim(), own: s.worldKey,
+      worlds: [...s.status.querySelectorAll(".sec")].map((h) => h.textContent),
       tiles: [...s.status.querySelectorAll(".jtile")].map((t) => ({ id: (t.querySelector("img")?.getAttribute("src") || "").match(/sprites\/([^/]+)\//)?.[1],
         locked: t.classList.contains("locked"), text: t.textContent })),
-      raised: [...raised], back: s.status.querySelector(".jfoot .wlink")?.textContent, text: s.status.textContent,
+      raised: [...raised], back: s.status.querySelector(".shead .sback")?.textContent, text: s.status.textContent,
       fit: s.status.scrollWidth <= s.status.clientWidth + 1, journal: s.journal, everyWorld: s.everyWorld,
     };
   });
-  const want8 = Object.values(W8).flatMap((w) => w.roster.filter(ready8));
+  // The pet's own world first, then the rest in catalog order; the names lowercase (UX fix 2, F11, F16).
+  const order8 = Object.entries(W8).sort(([a], [b]) => (b === every.own) - (a === every.own)).map(([, w]) => w);
+  const want8 = order8.flatMap((w) => w.roster.filter(ready8));
   check("top10 8a: \"every world\" has a row per world and a tile per ready creature, raised ones named, the rest ???",
-    every.head === "every world" && JSON.stringify(every.worlds) === JSON.stringify(Object.values(W8).map((w) => w.name)) &&
+    every.head === "every world" && JSON.stringify(every.worlds) === JSON.stringify(order8.map((w) => w.name.toLowerCase())) &&
     JSON.stringify(every.tiles.map((t) => t.id)) === JSON.stringify(want8) &&
     every.tiles.every((t) => (every.raised.includes(t.id) ? !t.locked && t.text !== "???" : t.locked && t.text === "???")) &&
     every.everyWorld && !every.journal, JSON.stringify(every));
-  check("top10 8a: no count on the page, \"‹ journal\" at its foot, nothing runs off sideways",
+  check("top10 8a: no count on the page, \"‹ journal\" in the top band, nothing runs off sideways",
     !/\d+\s*(of|\/)\s*\d+|%/.test(every.text) && every.back === "‹ journal" && every.fit, JSON.stringify({ back: every.back, fit: every.fit }));
   await shot("03c-every-world");
-  await cur().locator(".status .jfoot .wlink").click();
+  await cur().locator(".status .shead .sback").click();
   await page.waitForTimeout(1200);
   check("top10 8a: \"‹ journal\" goes back to the journal",
     await cur().locator(".status .jgrid").count() > 0 && /journal ·/.test(await cur().locator(".status").innerText()));
+  // Status UX fix 2 (review 2). The journal keeps the player's place: a tap on a tile does not close the
+  // status (F1) and the pet says one line, once (F14); a state push keeps the scroll (F2); the top band
+  // carries the way back (F3, F5); Escape steps back a page and then closes (F4).
+  const ux2 = () => page.locator("hatch-pet-card").first().evaluate((el) => {
+    const s = el._slides[el._index];
+    const note = s.status.querySelector(".status-feedback");
+    return { open: s.screen.classList.contains("show-status"), journal: s.journal, every: s.everyWorld, finds: s.finds,
+      say: note && !note.hidden ? note.textContent : "", scroll: Math.round(s.status.scrollTop),
+      room: s.status.scrollHeight - s.status.clientHeight, back: s.status.querySelector(".shead .sback")?.textContent || "",
+      focus: el.shadowRoot.activeElement?.className || "", gear: !!s.status.querySelector(".gear") };
+  });
+  await cur().locator(".status .jtile").first().scrollIntoViewIfNeeded();
+  await cur().locator(".status .jtile").first().click();
+  await page.waitForTimeout(300);
+  const tile1 = await ux2();
+  check("UX2 F1/F14: a tap on a journal tile keeps the journal open, and the pet says one line about it",
+    tile1.open && tile1.journal && /^(.+! my old pal ♥|not met one of those yet)$/.test(tile1.say), JSON.stringify(tile1));
+  await page.waitForTimeout(100);
+  await cur().locator(".status .jtile").first().click();
+  const tile2 = await ux2();
+  check("UX2 F1: a second tap on the same tile keeps the journal open", tile2.open && tile2.journal, JSON.stringify(tile2));
+  await card.first().evaluate((el) => { const s = el._slides[el._index]; s.status.scrollTop = Math.min(60, s.status.scrollHeight - s.status.clientHeight); });
+  const before2 = await ux2();
+  await card.first().evaluate((el) => { // a pet update: the energy moves, as at every server tick
+    const s = el._slides[el._index];
+    const id = s.ids["sensor.energy"];
+    const st = el._hass.states[id];
+    el.hass = { ...el._hass, states: { ...el._hass.states, [id]: { ...st, state: String(Number(st.state || 50) - 1), last_updated: new Date().toISOString() } } };
+  });
+  await page.waitForTimeout(600);
+  const after2 = await ux2();
+  check("UX2 F2: a pet update leaves the journal where it was scrolled", before2.scroll > 0 && after2.journal && after2.scroll === before2.scroll,
+    JSON.stringify({ before2, after2 }));
+  check("UX2 F3: the journal's way back is in a top band: \"‹ status\"", after2.back === "‹ status", after2.back);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  const esc1 = await ux2();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(500);
+  const esc2 = await ux2();
+  check("UX2 F4: Escape on the journal goes back to the status, and on the status closes it", esc1.open && !esc1.journal && esc1.gear && !esc2.open,
+    JSON.stringify({ esc1, esc2 }));
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
+  await cur().locator(".jlink").click();
+  await page.waitForTimeout(800);
+  const opened = await ux2();
+  check("UX2 F5: opening the journal puts keyboard focus on its top back link", /sback/.test(opened.focus), JSON.stringify(opened));
+  await page.locator("hatch-pet-card .statusbtn").click();
+  await page.waitForTimeout(400);
+  // F6: a mostly vertical drag over the card is not a swipe; a sideways one is. F8: the pet on show is kept per browser.
+  // F7: a care tap with the status open closes it first.
+  const drag = async (dx, dy) => {
+    const vp = await card.first().evaluate((el) => { const r = el._viewport.getBoundingClientRect(); return [r.x + r.width / 2, r.y + 10]; });
+    await card.first().evaluate((el) => { el._swiped = false; });
+    await page.mouse.move(vp[0], vp[1]);
+    await page.mouse.down();
+    await page.mouse.move(vp[0] + dx, vp[1] + dy, { steps: 5 });
+    await page.mouse.up();
+    return card.first().evaluate((el) => ({ swiped: el._swiped, index: el._index }));
+  };
+  const vert = await drag(-50, 90);
+  check("UX2 F6: a mostly vertical drag does not switch pets", !vert.swiped, JSON.stringify(vert));
+  const side = await drag(-80, 10);
+  check("UX2 F6: a sideways drag still does", side.swiped, JSON.stringify(side));
+  const kept = await card.first().evaluate((el) => ({ key: localStorage.getItem(`hatch-shelf-${el._slides[0].ids.device}`), now: el._slides[el._index].ids.device, n: el._slides.length }));
+  check("UX2 F8: the pet on show is kept for a reload (hatch-shelf-<first device>)", kept.key === kept.now, JSON.stringify(kept));
+  await card.first().evaluate((el) => el._go(0));
+  await page.waitForTimeout(600);
+  const care = await card.first().evaluate((el) => {
+    const s = el._slides[el._index];
+    const call = el._call;
+    const calls = [];
+    el._call = (...a) => { calls.push(a[3] + "." + a[4]); };
+    try {
+      if (!s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      const was = s.screen.classList.contains("show-status");
+      el._press(s, "feed");
+      return { was, after: s.screen.classList.contains("show-status"), calls };
+    } finally {
+      el._call = call;
+    }
+  });
+  check("UX2 F7: a care tap with the status open closes it first, then goes out", care.was && !care.after && care.calls.length === 1, JSON.stringify(care));
 
   }
   if (enter("shell")) {
@@ -1422,10 +1662,10 @@ async function main() {
 
   // A content pet that isn't calling: a calling pet is never greeted and has no
   // idle life, and a freshly hatched one may well be calling.
-  // The card's FINDS_SHOWN release switch ships off until V-F's art (no basket, reveal,
-  // gift or finds grid). gifts, finds and collection test the real features, so each turns
-  // it on (HatchPetCard.findsShown): on this page now, and in every tab the context opens
-  // after (an init script, kept for the rest of the run: only these sections follow).
+  // The card's FINDS_SHOWN release switch ships on. gifts, finds and collection still call
+  // showFinds, which sets it true (HatchPetCard.findsShown) on this page and in every tab
+  // the context opens after (an init script), so they hold even after the off-path checks
+  // below set it false and put it back.
   let findsInit = false;
   const showFinds = async () => {
     if (!findsInit) {
@@ -1470,6 +1710,14 @@ async function main() {
   await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
   await seasonsOff(); // the reload brought the card back with its own config
   await hush(); // new slides: no sound unless a check asks for one
+  // Record every line the card speaks from the reload on, for every slide: with the pet
+  // pinned awake the hello can come while this check is still walking to the pet, before
+  // a hook installed after the walk (a sample of the bubble would then find a call line).
+  await card.evaluate((el) => {
+    el.__spoken = [];
+    const speak = el._speak;
+    el._speak = function (slide, line, ...rest) { el.__spoken.push([slide, String(line)]); return speak.call(this, slide, line, ...rest); };
+  });
   await pinAwake(card, "play");
   for (let i = 0; i < slides; i++) {
     if ((await page.locator("hatch-pet-card .title").innerText()).trim() === petName) break;
@@ -1482,7 +1730,7 @@ async function main() {
   await card.evaluate((el) => {
     const s = el._slides[el._index];
     s.nextIdle = Date.now() + 600000;
-    el.__said = [];
+    el.__said = el.__spoken.filter(([slide]) => slide === s).map(([, line]) => line);
     const speak = el._speak;
     el._speak = function (slide, line, ...rest) { if (slide === s) el.__said.push(String(line)); return speak.call(this, slide, line, ...rest); };
   });
@@ -1492,7 +1740,7 @@ async function main() {
     const said = await card.evaluate((el) => el.__said);
     greeting = said.find((l) => l.includes(USER.name)) || await bubble();
   }
-  await card.evaluate((el) => { delete el._speak; delete el.__said; el._slides[el._index].nextIdle = 0; }); // idle life back
+  await card.evaluate((el) => { delete el._speak; delete el.__said; delete el.__spoken; el._slides[el._index].nextIdle = 0; }); // idle life back
   check("greets the viewer by first name", greeting.includes(USER.name), greeting);
   await shot("04a-greeting");
 
@@ -1710,7 +1958,7 @@ async function main() {
     }
   });
   check("top10 1a: the phone question asks with \"yes ♥\" / \"not now\"; not now calls nothing; yes turns notify me on",
-    phoneAsk.yes.aria === "can I call your phone when I need you?" &&
+    phoneAsk.yes.aria === "can i call your phone when i need you?" &&
     JSON.stringify(phoneAsk.yes.labels) === JSON.stringify(["yes ♥", "not now"]) && phoneAsk.callsAfterNo === 0 &&
     phoneAsk.calls.length === 1 && phoneAsk.calls[0].type === "notify_me" && phoneAsk.calls[0].enabled === true,
     JSON.stringify(phoneAsk));
@@ -2048,14 +2296,20 @@ async function main() {
     const out = {};
     el._ask(s, "birthday");
     const box = s.screen.querySelector(".askday");
-    const month = box.querySelector(".bmonth");
-    month.value = "2";
-    month.dispatchEvent(new Event("change", { bubbles: true }));
-    out.febDays = box.querySelector(".bday").options.length;
-    month.click();
-    box.querySelector(".bday").click();
+    // Steppers, "‹ Feb ›" and "‹ 29 ›" (UX 3 F10): the day wraps, a month change keeps it inside.
+    const step = (which, dir) => box.querySelector(`[data-step="${which}"][data-dir="${dir}"]`).click();
+    out.stepperKeys = [...box.querySelectorAll(".stepb")].map((b) => Math.round(b.getBoundingClientRect().height));
+    step("day", -1); // 1 -> 31
+    out.wrap31 = box.querySelector(".bday").dataset.v;
+    step("month", 1); // Jan -> Feb, 31 -> 29
+    out.febDays = Number(box.querySelector(".bday").dataset.v);
+    out.febName = box.querySelector(".bmonth").textContent;
+    step("day", 1); // 29 -> 1
+    step("day", -1); // back to 29
     out.statusAfterPick = s.screen.classList.contains("show-status");
-    box.querySelector(".bday").value = "14";
+    for (let i = 0; i < 15; i++) step("day", -1); // 29 -> 14
+    out.day14 = box.querySelector(".bday").textContent;
+    box.querySelector(".bmonth").click();
     box.querySelector('[data-answer="ok"]').click();
     for (let i = 0; i < 100 && s.bubble.dataset.typing; i++) await wait(50);
     out.reply = s.bubble.textContent;
@@ -2123,11 +2377,12 @@ async function main() {
     return out;
   });
   check("your birthday is picked in the box, and a tap on a picker stays there",
-    bday.febDays === 29 && !bday.statusAfterPick && /Feb 14! I'll remember ♥$/.test(bday.reply), JSON.stringify(bday));
+    bday.febDays === 29 && bday.febName === "Feb" && bday.wrap31 === "31" && bday.day14 === "14" &&
+    bday.stepperKeys.every((h) => h >= 44) && !bday.statusAfterPick && /Feb 14! i'll remember ♥$/.test(bday.reply), JSON.stringify(bday));
   check("a celebration takes the away note's place; yours is by name",
-    bday.queue.join("|") === "a|c|I'm 3 months old today! ♥" &&
+    bday.queue.join("|") === "a|c|i'm 3 months old today! ♥" &&
     /^happy birthday, \S+!! ♥$/.test(bday.yours[0]) &&
-    bday.yours[1] === "I'm 11 months old! friends from day one ♥", JSON.stringify(bday));
+    bday.yours[1] === "i'm 11 months old! friends from day one ♥", JSON.stringify(bday));
   check("its birthday brings confetti and a party hat",
     bday.confetti && /season_party_hat/.test(bday.hat) && /party hat on! ♪$/.test(bday.said), JSON.stringify(bday));
   check("your birthday can be forgotten, never shown on a shared screen",
@@ -2485,6 +2740,12 @@ async function main() {
       // Dream, birthday: never stashed.
       await answerAs("dream", "sea");
       out.dream = localStorage.getItem(key);
+      out.dreamBubble = s.bubble.textContent; // not stashed, so lost: the pet says so
+      // The server will not take it (not_asked): the pet said it will remember, and says nothing more (UX 3 F6).
+      mode = "notasked";
+      await answerAs("dream", "stars");
+      out.notAskedBubble = s.bubble.textContent;
+      mode = "fail";
       await answerAs("birthday", "skip");
       out.birthday = localStorage.getItem(key);
       // A shared screen stores nothing.
@@ -2525,8 +2786,10 @@ async function main() {
     }
     return out;
   });
-  check("a failed save is retried once, the bubble says it slipped away, and the answer is kept for this person",
-    waits.tries === 2 && waits.bubble === "hm, that one slipped away ♪" && waits.stash === "fav_weather=snow", JSON.stringify(waits));
+  check("a failed save of a stashed kind is retried once, kept for this person and the pet stays quiet (UX 3 F6)",
+    waits.tries === 2 && waits.bubble === "snow!! ❄ i'll remember" && waits.stash === "fav_weather=snow", JSON.stringify(waits));
+  check("a failed save of a kind that is not stashed says it slipped away; a refused one (not_asked) says nothing",
+    waits.dreamBubble === "hm, that one slipped away ♪" && waits.notAskedBubble === "ooh, the stars. ok! ★", JSON.stringify(waits));
   check("a kept answer is sent when the card next gets hass with a user, and cleared",
     waits.resent === "fav_weather=snow" && waits.cleared === null, JSON.stringify(waits));
   check("a kept answer the server did not ask for is dropped, a transport error keeps it",
@@ -2535,6 +2798,168 @@ async function main() {
     waits.dream === null && waits.birthday === null && waits.shared === null, JSON.stringify(waits));
   check("forgetting my data removes kept answers", waits.forgotten === null, JSON.stringify(waits));
   check("a retry after the slide changed writes no bubble", waits.late === "", JSON.stringify(waits));
+  // UX fix 3 (review 3): talking with the pet, by real pointer taps where a tap is the point.
+  const card3 = page.locator("hatch-pet-card");
+  const talkSetup = (kind, pill = false) => card3.evaluate((el, [kind, pill]) => {
+    const s = el._slides[el._index];
+    el.scrollIntoView({ block: "center" });
+    s.queue = []; s.sayUntil = 0; s.sayClass = 0; s.game = null; s.confirm = null; s.answeredAt = 0;
+    s.screen.classList.remove("show-status");
+    el._ask(s, kind);
+    if (pill) {
+      s.request.dataset.key = "lay_egg";
+      s.request.textContent = "lay an egg?";
+      s.request.classList.add("show");
+    }
+    const r = (node) => { const b = node.getBoundingClientRect(); return { x: b.x, y: b.y, w: b.width, h: b.height }; };
+    return { chips: [...s.screen.querySelectorAll(".askday button")].map((b) => ({ a: b.dataset.answer, ...r(b) })),
+      screen: r(s.screen), pill: getComputedStyle(s.request).display };
+  }, [kind, pill]);
+  const talkAfter = () => card3.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { asking: !!s.screen.querySelector(".askday"), status: s.screen.classList.contains("show-status"),
+      said: s.sayEntry?.text ?? s.bubble.textContent, bubble: s.bubble.textContent, confirm: s.confirm?.key || null,
+      pill: s.request.textContent, until: s.sayUntil - Date.now() };
+  });
+  // F1: the lay pill is hidden under a question, so the third chip's right edge answers it.
+  let t3 = await talkSetup("how_day", true);
+  const third = t3.chips[2];
+  await page.mouse.click(third.x + third.w - 4, third.y + third.h / 2);
+  let a3 = await talkAfter();
+  check("UX3 F1: the lay pill is hidden while a question is open, and a tap on the third chip's edge answers it",
+    t3.pill === "none" && !a3.asking && a3.confirm === null && a3.pill === "lay an egg?", JSON.stringify([t3.pill, a3]));
+  // F2: a double tap on an answer leaves the pet's reply on show, not the status.
+  t3 = await talkSetup("how_day");
+  const ok = t3.chips[1];
+  await page.mouse.click(ok.x + ok.w / 2, ok.y + ok.h / 2);
+  await page.waitForTimeout(120);
+  await page.mouse.click(ok.x + ok.w / 2, ok.y + ok.h / 2);
+  await page.waitForTimeout(200);
+  a3 = await talkAfter();
+  check("UX3 F2: a double tap on an answer opens no status, and the reply is on show", !a3.status && !a3.asking && a3.bubble.length > 0, JSON.stringify(a3));
+  // F3: a tap beside the chips during a question opens no status; the question stays.
+  t3 = await talkSetup("how_day");
+  await page.mouse.click(t3.screen.x + t3.screen.w / 2, t3.screen.y + t3.screen.h * 0.5);
+  await page.waitForTimeout(150);
+  a3 = await talkAfter();
+  check("UX3 F3: a tap on the screen during a question does not open the status", !a3.status && a3.asking, JSON.stringify(a3));
+  // F8: the pet steps back while it asks, and is back after.
+  const step = () => card3.evaluate(async (el) => {
+    await new Promise((r) => setTimeout(r, 500));
+    const s = el._slides[el._index];
+    const cs = getComputedStyle(s.pet);
+    return { translate: cs.translate, scale: cs.scale, base: s.pet.style.scale };
+  });
+  const stepIn = await step();
+  await card3.evaluate((el) => el._slides[el._index].screen.querySelector(".askday")?.remove());
+  const stepOut = await step();
+  check("UX3 F8: the pet steps back while a question is open (smaller and up), and returns after",
+    stepIn.translate !== "none" && stepOut.translate === "none" && Number(stepIn.scale) < Number(stepOut.scale),
+    JSON.stringify({ stepIn, stepOut }));
+  // F8, measured: the pet's feet stand on the chips' top, and its head is not under the chip block.
+  const stood = {};
+  for (const kind of ["how_day", "catchphrase", "birthday", "big_day_day"]) {
+    await talkSetup(kind);
+    await page.waitForTimeout(450);
+    stood[kind] = await card3.evaluate((el) => {
+      const s = el._slides[el._index];
+      const p = s.pet.getBoundingClientRect();
+      const c = s.screen.querySelector(".askday").getBoundingClientRect();
+      return { petBottom: Math.round(p.bottom), chipsTop: Math.round(c.top), petTop: Math.round(p.top), petH: Math.round(p.height),
+        chips: s.screen.querySelectorAll(".askday button").length };
+    });
+    await card3.evaluate((el) => el._slides[el._index].screen.querySelector(".askday")?.remove());
+  }
+  check("UX3 F8: with any question open, the pet stands above the chips (feet at their top, at least 20 px tall)",
+    Object.values(stood).every((r) => r.petBottom <= r.chipsTop + 3 && r.petH >= 20), JSON.stringify(stood));
+  // F4: "yes" to the big day gives the day chips at once, not after the question's minute.
+  t3 = await talkSetup("big_day");
+  await card3.evaluate((el) => {
+    const s = el._slides[el._index];
+    s.queue.push({ text: "anything big this week?", ms: 60000, ask: true, cls: 3 });
+    el._sayQueued(s);
+  });
+  await page.mouse.click(t3.chips[0].x + t3.chips[0].w / 2, t3.chips[0].y + t3.chips[0].h / 2);
+  await page.waitForTimeout(1200);
+  const days = await card3.evaluate((el) => {
+    const s = el._slides[el._index];
+    return { chips: [...s.screen.querySelectorAll(".askday button")].map((b) => b.textContent), said: s.bubble.textContent,
+      first: s.screen.querySelector(".askday button")?.dataset.answer };
+  });
+  check("UX3 F4/F14: after \"yes\", the day chips show within 1.2 s, and the first is \"today\"",
+    days.chips.length === 7 && days.chips[0] === "today" && /which day/.test(days.said) &&
+    /^\d{4}-\d\d-\d\d$/.test(days.first), JSON.stringify(days));
+  // F5: the reply to an answer is kept: a flavour line and a beat don't replace it.
+  await talkSetup("how_day");
+  const kept5 = await card3.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    s.screen.querySelector('.askday button[data-answer="tough"]').click();
+    const reply = s.sayEntry?.text;
+    el._line(s, 1, "flavour line", 4500);
+    el._line(s, 2, "a beat", 4500);
+    await new Promise((r) => setTimeout(r, 300));
+    return { reply, bubbleHasOther: /flavour line|a beat/.test(s.bubble.textContent), cls: s.sayClass, queued: s.queue.map((q) => q.text) };
+  });
+  check("UX3 F5: an answer's reply is the viewer's own line: no flavour line or beat replaces it",
+    !!kept5.reply && kept5.cls === 4 && !kept5.bubbleHasOther, JSON.stringify(kept5));
+  // F15: a care press that cuts the question line brings it back for what is left, and only while the question is open.
+  const f15 = await card3.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    s.queue = []; s.sayUntil = 0; s.sayClass = 0; s.game = null;
+    el._ask(s, "how_day");
+    s.queue.push({ text: "how was your day?", ms: 60000, ask: true, cls: 3 });
+    el._sayQueued(s);
+    await new Promise((r) => setTimeout(r, 300));
+    el._line(s, 4, "a care line", 3000);
+    const open = s.queue.map((q) => q.ms);
+    s.screen.querySelector(".askday")?.remove();
+    s.queue = [];
+    s.sayEntry = { text: "how was your day?", ms: 60000, ask: true, cls: 3, shownAt: Date.now() - 300 };
+    s.sayUntil = Date.now() + 59000;
+    el._line(s, 4, "another care line", 3000);
+    return { open, closed: s.queue.length };
+  });
+  check("UX3 F15: a cut question comes back for the time left only while open", f15.open.length === 1 && f15.open[0] < 60000 &&
+    f15.open[0] > 58000 && f15.closed === 0, JSON.stringify(f15));
+  // F9: big text reaches the bubble and the chips, and lines stay longer.
+  const f9 = await card3.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const speak = (ms) => { s.sayUntil = 0; el._speak(s, "ok", ms); return s.sayUntil - Date.now(); };
+    localStorage.setItem("hatch-big-text", "off");
+    el._card.classList.remove("bigtext");
+    const normal = speak(4500);
+    const fontOff = getComputedStyle(s.bubble).fontSize;
+    localStorage.setItem("hatch-big-text", "on");
+    el._card.classList.add("bigtext");
+    const big = speak(4500);
+    const fontOn = getComputedStyle(s.bubble).fontSize;
+    el._ask(s, "how_day");
+    const chip = getComputedStyle(s.screen.querySelector(".askday button")).fontSize;
+    s.screen.querySelector(".askday")?.remove();
+    localStorage.setItem("hatch-big-text", "off");
+    el._card.classList.remove("bigtext");
+    return { normal, big, fontOff, fontOn, chip };
+  });
+  check("UX3 F9: big text makes the bubble 16 px and the chips 15 px, and holds a line 1.5 times as long",
+    f9.fontOff === "14px" && f9.fontOn === "16px" && f9.chip === "15px" && f9.big - f9.normal > 2000 && f9.big - f9.normal < 2500, JSON.stringify(f9));
+  // F12: the lay's first tap is answered by the pet itself.
+  const f12 = await card3.evaluate((el) => {
+    const s = el._slides[el._index];
+    const press = el._press;
+    el._press = () => {};
+    s.queue = []; s.sayUntil = 0; s.sayClass = 0; s.confirm = null; s.game = null;
+    s.screen.querySelector(".askday")?.remove();
+    s.request.dataset.key = "lay_egg";
+    s.request.click();
+    const out = { said: s.sayEntry?.text, cls: s.sayClass, armed: s.request.textContent };
+    el._press = press;
+    s.confirm = null;
+    s.request.dataset.key = "";
+    delete s.request.dataset.key;
+    return out;
+  });
+  check("UX3 F12: the lay's \"sure?\" is also said by the pet, once",
+    f12.said === "i'll wait for you in the journal ♥" && f12.cls === 4 && f12.armed === "sure? tap again", JSON.stringify(f12));
   // A close friend coming home: "you're home!!" to them (their own channel's
   // friend_home), and nothing for anyone else's arrival on a personal card.
   await evaluate((me) => localStorage.removeItem(`hatch-welcomed-${me}`), me);
@@ -2614,7 +3039,7 @@ async function main() {
   });
   check("a favourite is kept through the answer command",
     kept.sent.length === 1 && kept.sent[0].type === "virtual_pet/answer" && kept.sent[0].question === "fav_weather" &&
-    kept.sent[0].answer === "snow" && kept.said === "snow!! ❄ I'll remember", JSON.stringify(kept));
+    kept.sent[0].answer === "snow" && kept.said === "snow!! ❄ i'll remember", JSON.stringify(kept));
   // The new lines: a dream someone picked, a guess, a zone, the season, coming home wet.
   const lines = await page.locator("hatch-pet-card").evaluate((el, me) => {
     const s = el._slides[el._index];
@@ -2682,8 +3107,8 @@ async function main() {
   check("the first look: welcome first, three lines at most, no closed wish",
     look.length === 3 && look[0].startsWith("welcome home") && look[1] === "brr, it looks cold out there!" &&
     !look.some((l) => /play a game/.test(l)), look.join(" | "));
-  check("the new private lines read right", lines[0] === "I dreamed about the sea, like you said! ♥" &&
-    lines[1] === "I dreamed about the sea..." && lines[2] === "oh, sunny after all! good guess though ♥" &&
+  check("the new private lines read right", lines[0] === "i dreamed about the sea, like you said! ♥" &&
+    lines[1] === "i dreamed about the sea..." && lines[2] === "oh, sunny after all! good guess though ♥" &&
     lines[3] === "back from the gym! so strong!" && lines[4] === "Thanksgiving in your favourite season! ♥" &&
     /rain/.test(lines[5]) && lines[7] === "it's wet out there! come get cozy ☂", lines.join(" | "));
   check("a friend coming home is cheered, and nobody else's arrival on a personal card",
@@ -2754,7 +3179,19 @@ async function main() {
   for (let r = 0; r < 5 && !(await cur().locator(".game").isHidden()); r++) {
     gameSaid.push(await cur().locator(".bubble").textContent());
     await cur().locator(r % 2 ? ".gr" : ".gl").click();
-    await page.waitForTimeout(1400);
+    if (r === 0) {
+      // UX fix 6 (F4, F1): while the pet shows where it went the guess buttons are faded, and
+      // the result is still in the bubble 1.5 s after the guess (the prompt waits for 2.5 s).
+      await page.waitForTimeout(350);
+      const faded = await cur().locator(".gl").evaluate((el) => Number(getComputedStyle(el).opacity));
+      await page.waitForTimeout(1150);
+      const held = await cur().locator(".bubble").textContent();
+      check("left or right: the guess buttons fade while the pet shows where it went, and the result stays readable",
+        faded <= 0.2 && /yes|nope/.test(held), `opacity ${faded}, bubble ${held}`);
+      await page.waitForTimeout(400);
+    } else {
+      await page.waitForTimeout(1400);
+    }
     rounds++;
   }
   const moodLine = await evaluate((id) => document.querySelector("home-assistant").hass.states[id]?.attributes.reason || "",
@@ -2779,7 +3216,17 @@ async function main() {
   for (let r = 0; r < 5 && !(await cur().locator(".game").isHidden()); r++) {
     const shown = Number(await cur().locator(".gnum").getAttribute("data-n"));
     numbers.push(shown);
-    if (r === 2) await shot("04c-higher-lower");
+    if (r === 2) {
+      await shot("04c-higher-lower");
+      // UX fix 6 (F2): the number card sits clear of the pet, so its face shows all game.
+      const clear = await cur().locator(".gnum").evaluate((num) => {
+        const a = num.getBoundingClientRect();
+        const b = num.getRootNode().querySelector(".pet").getBoundingClientRect();
+        return { clear: a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom,
+          num: [a.left, a.top, a.right, a.bottom].map(Math.round), pet: [b.left, b.top, b.right, b.bottom].map(Math.round) };
+      });
+      check("higher or lower: the number card doesn't cover the pet", clear.clear, JSON.stringify(clear));
+    }
     await cur().locator(shown > 5 ? ".gl" : ".gr").click();
     await page.waitForTimeout(1400);
     hlRounds++;
@@ -2967,7 +3414,11 @@ async function main() {
         el._gameView(s, "higher_lower");
         reply({ result: "no_game" });
         await el._guess(s, "right");
-        out.hl = { live: !!s.game, said: s.bubble.textContent };
+        out.hl = { live: !!s.game, said: s.bubble.textContent, busy: s.game?.busy };
+        // F13: the line comes true: a new game of the same kind starts after it.
+        reply({ result: "ok", game: "higher_lower", round: 0, rounds: 5, wins: 0, number: 4, done: false });
+        await new Promise((r) => setTimeout(r, 1900));
+        out.hl2 = { kind: s.game?.kind, round: s.game?.round, number: s.gameNum.dataset.n, busy: s.game?.busy };
       } finally {
         hass.callService = real;
         if (s.game) el._endGame(s, null);
@@ -2977,8 +3428,10 @@ async function main() {
     check("idle drop, Left/Right: a restarted game is adopted as its round 1, no someone-else line",
       idle.lr.live && idle.lr.round === 1 && idle.lr.wins === 1 && idle.lr.said === "yes! you found me" &&
         idle.lr.score === "round 1/5 · 1 right", JSON.stringify(idle.lr));
-    check("idle drop, Higher/Lower: no_game ends the game with let's start over",
-      !idle.hl.live && idle.hl.said === "let's start over", JSON.stringify(idle.hl));
+    check("idle drop, Higher/Lower: no_game says let's start over, ignores taps, then starts a new game",
+      idle.hl.live && idle.hl.busy && idle.hl.said === "let's start over" &&
+        idle.hl2.kind === "higher_lower" && idle.hl2.round === 0 && idle.hl2.number === "4" && !idle.hl2.busy,
+      JSON.stringify(idle.hl) + JSON.stringify(idle.hl2));
 
     // Berry dig (playtime 2a): the per-tap contract, with stubbed replies (the
     // pytest owns the odds). A berry isn't a round; a bee and a keep end one; keep
@@ -3012,12 +3465,20 @@ async function main() {
           labels: [...s.gameBox.querySelectorAll(".gl, .gr")].map((b) => b.getAttribute("aria-label")) };
         await el._guess(s, "left"); // keep on an empty basket: nothing sent
         out.emptyKeep = sent.length;
+        out.emptySaid = s.bubble.textContent; // F12: it says so, then asks again after 2 s
+        await new Promise((r) => setTimeout(r, 2100));
+        out.emptyAfter = s.bubble.textContent;
         queue.push({ ...base, round: 0, wins: 0, basket: 1, leaves: 7, found: "berry", round_over: false });
         await el._guess(s, "right");
         out.berry = { round: s.game.round, basket: s.game.basket, num: s.gameNum.dataset.n, said: s.bubble.textContent,
           score: s.gameScore.textContent, guess: sent.at(-1)?.guess };
         await new Promise((r) => setTimeout(r, 400));
         out.berryKeep = keep();
+        // F1: the result is still in the bubble at 1.5 s, and the prompt is back by 2.8 s.
+        await new Promise((r) => setTimeout(r, 1100));
+        out.berryHeld = s.bubble.textContent;
+        await new Promise((r) => setTimeout(r, 1300));
+        out.berryPrompt = s.bubble.textContent;
         queue.push({ ...base, round: 1, wins: 1, basket: 0, leaves: 8, found: "kept", round_over: true });
         await el._guess(s, "left");
         out.kept = { round: s.game.round, wins: s.game.wins, said: s.bubble.textContent, guess: sent.at(-1)?.guess };
@@ -3027,6 +3488,10 @@ async function main() {
         out.bee = { round: s.game.round, wins: s.game.wins, said: s.bubble.textContent, prop: !s.propEl.hidden };
         await new Promise((r) => setTimeout(r, 1000));
         out.afterBee = { prop: !s.propEl.hidden, said: s.bubble.textContent, keep: keep() };
+        await new Promise((r) => setTimeout(r, 1700));
+        out.beePrompt = s.bubble.textContent;
+        out.quitLine = [el._quitLine(s), el._quitLine({ game: { kind: "dig", round: 0, wins: 0, basket: 0 } }),
+          el._quitLine({ game: { kind: "left_right", round: 2, wins: 1 } })];
         const hass = el._hass;
         const real = hass.callService;
         hass.callService = async (d, svc, data) => { out.end = data; return { response: {} }; };
@@ -3039,7 +3504,10 @@ async function main() {
         // A reply out of step (a berry while we think the basket holds 0, banked 2).
         s.game = { picking: true };
         queue.push({ ...base, round: 2, wins: 1, basket: 0, leaves: 8 });
+        s.greeted = false; // F7: playing together is the hello
         await el._pickGame(s, "dig");
+        out.resume = s.bubble.textContent; // F8: a parked dig carried on says so
+        out.greeted = s.greeted;
         queue.push({ ...base, round: 2, wins: 1, basket: 3, leaves: 5, found: "berry", round_over: false });
         await el._guess(s, "right");
         out.stray = { live: !!s.game, said: s.bubble.textContent };
@@ -3055,7 +3523,7 @@ async function main() {
         await new Promise((r) => setTimeout(r, 400));
         queue.push({ ...base, round: 4, wins: 5, basket: 0, leaves: 8, found: "kept", round_over: true, done: true, won: true });
         await el._guess(s, "left");
-        await new Promise((r) => setTimeout(r, 1000));
+        await new Promise((r) => setTimeout(r, 2100)); // the last result is read first (1.8 s)
         out.won = { live: !!s.game, said: s.bubble.textContent };
       } finally {
         delete el._playCall;
@@ -3070,6 +3538,13 @@ async function main() {
         dig.start.said === "dig or keep?" && dig.start.labels.join("|") === "Keep the basket|Dig a leaf",
       JSON.stringify(dig.start));
     check("dig: keep on an empty basket sends nothing", dig.emptyKeep === 1, String(dig.emptyKeep));
+    check("dig: keep on an empty basket says dig first, then asks again",
+      dig.emptySaid === "dig first! the basket's empty" && dig.emptyAfter === "dig or keep?", JSON.stringify([dig.emptySaid, dig.emptyAfter]));
+    check("dig: the result stays in the bubble at 1.5 s, the prompt is back after",
+      dig.berryHeld === "a berry!" && dig.berryPrompt === "dig or keep?", JSON.stringify([dig.berryHeld, dig.berryPrompt]));
+    check("dig: a ✕ that parks says so; a fresh pile or another game says maybe later; the resume says it's back; playing is the hello",
+      dig.quitLine.join("|") === "ok! i'll keep our pile safe ♪|maybe later!|maybe later!" &&
+        dig.resume === "we're back! dig or keep ♪" && dig.greeted === true, JSON.stringify([dig.quitLine, dig.resume, dig.greeted]));
     check("dig: a berry is not a round (round 0, basket 1, 7 leaves), keep enabled after",
       dig.berry.round === 0 && dig.berry.basket === 1 && dig.berry.num === "7" && dig.berry.guess === "dig" &&
         dig.berry.said === "a berry!" && dig.berryKeep === "false", JSON.stringify(dig.berry) + dig.berryKeep);
@@ -3117,7 +3592,7 @@ async function main() {
           Math.random = () => 0;
           queue.push({ ...base, game: "left_right", round: 5, wins: 5, correct: true, went: "left", done: true, won: true });
           await el._guess(s, "left");
-          await new Promise((r) => setTimeout(r, 1100));
+          await new Promise((r) => setTimeout(r, 2100)); // the last result is read first (1.8 s)
           out.count = s.bubble.textContent;
           await new Promise((r) => setTimeout(r, 4200));
           out.typeLine = said.slice();
@@ -3183,8 +3658,9 @@ async function main() {
     }
     check("dig: a bee ends the round, shows the bee, then asks again with keep disabled",
       dig.bee.round === 2 && dig.bee.wins === 1 && dig.bee.prop && dig.bee.said === "bzz! the berries rolled away" &&
-        !dig.afterBee.prop && dig.afterBee.said === "dig or keep?" && dig.afterBee.keep === "true",
-      JSON.stringify([dig.bee, dig.afterBee]));
+        !dig.afterBee.prop && dig.afterBee.said === "bzz! the berries rolled away" && dig.afterBee.keep === "true" &&
+        dig.beePrompt === "dig or keep?",
+      JSON.stringify([dig.bee, dig.afterBee, dig.beePrompt]));
     check("dig: the x sends end for the dig (the server parks it), and the pile's label goes",
       dig.end?.game === "dig" && dig.end?.end === true && dig.numLabel === null, JSON.stringify([dig.end, dig.numLabel]));
     check("dig: a reply out of step ends the game as someone else's",
@@ -3283,6 +3759,22 @@ async function main() {
     });
     check("an idle Left/Right game stays at 2 min and closes silently at 3 min, no server call",
       idleClose.at2 && !idleClose.at3 && idleClose.hidden && idleClose.calls === 0, JSON.stringify(idleClose));
+    // UX fix 6 (Q8): a dig left idle is closed by the card with its own line (no auto-park).
+    const idleDig = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const realNow = Date.now;
+      try {
+        s.game = { kind: "dig", round: 1, wins: 0, basket: 1, busy: false, prompt: "dig or keep?", lastAt: realNow.call(Date) };
+        el._gameView(s, "dig");
+        Date.now = () => realNow.call(Date) + 3 * 60 * 1000 + 1000;
+        el._renderSlide(s);
+        return { live: !!s.game, said: s.bubble.textContent };
+      } finally {
+        Date.now = realNow;
+        if (s.game) el._endGame(s, null);
+      }
+    });
+    check("an idle dig closes with \"let's dig another time\"", !idleDig.live && idleDig.said === "let's dig another time ♪", JSON.stringify(idleDig));
 
     // Batch 6 audit #1: a tap on the scene mid-game keeps the game; Status ends it.
     await open("left_right");
@@ -4252,7 +4744,7 @@ async function main() {
     return { lines, queued: sent?.queued, ask: reply?.ask ?? null, asking: s.queue.some((q) => q.ask) };
   });
   check("2a: a look with two lines and a catch-up line sends queued: 3 and asks no question",
-    look.lines.length === 3 && look.lines.some((t) => t === "guess what! I'm a teen now!") &&
+    look.lines.length === 3 && look.lines.some((t) => t === "guess what! i'm a teen now!") &&
       look.queued === 3 && !look.ask && !look.asking, JSON.stringify(look));
   const caught = await card.evaluate((el, at) => {
     const s = el._slides[el._index];
@@ -4269,7 +4761,7 @@ async function main() {
     return { said, again, mark: el._seenRead(s.ids.device), at: new Date(at).getTime() };
   }, stageAt);
   check("2a: a stage_changed 40 s old is said once at the next look",
-    caught.said.filter((t) => /guess what! I'm a teen/.test(t)).length === 1 &&
+    caught.said.filter((t) => /guess what! i'm a teen/.test(t)).length === 1 &&
       !caught.again.some((t) => /guess what/.test(t)) && caught.mark?.said >= caught.at &&
       caught.mark?.seen > 0, JSON.stringify(caught));
   // Fold #12: the catch-up reads the viewer's own moments too (a bond line),
@@ -4942,14 +5434,15 @@ async function main() {
         const weekBox = s.screen.querySelector(".askday");
         out.week = { buttons: [...(weekBox?.querySelectorAll("button") || [])].map((b) => b.textContent) };
         weekBox?.querySelector('button[data-answer="yes"]')?.click();
-        out.week.which = runAsk();
+        // "yes" says "which day?" at once (UX 3 F4), not after the question's minute: it is on show, not queued.
+        out.week.which = s.queue.some((x) => x.ask) ? runAsk() : s.sayEntry?.text;
         const dayBox = s.screen.querySelector(".askday");
         out.week.days = [...(dayBox?.querySelectorAll("button") || [])].map((b) => [b.dataset.answer, b.textContent]);
         const ahead = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
-        out.week.want = [1, 2, 3, 4, 5, 6].map((n) => {
+        out.week.want = [0, 1, 2, 3, 4, 5, 6].map((n) => { // today first (UX 3 F14), then the next six
           const d = ahead(n);
           return [`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`,
-            ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][d.getDay()]];
+            n === 0 ? "today" : ["sun", "mon", "tue", "wed", "thu", "fri", "sat"][d.getDay()]];
         });
         Object.assign(s, { sayUntil: 0, sayClass: 0 });
         dayBox?.querySelector("button")?.click();
@@ -5115,7 +5608,7 @@ async function main() {
     check("fresh E13: a soft morning says a soft line; a shared screen asks the server nothing and says nothing",
       [...SOFT, ...typeLines("soft"), "*snuggle* hi hi ♥"].includes(f1.soft[0]) && f1.shared.length === 0 && f1.sharedCalls === 0,
       JSON.stringify({ soft: f1.soft, shared: f1.shared, calls: f1.sharedCalls }));
-    check("owner Q3 opp #2: anything big this week? yes / not really; which day? the next six by name; a day's tap cheers, asks what, sends its date",
+    check("owner Q3 opp #2: anything big this week? yes / not really; which day? today, then the next six by name; a day's tap cheers, asks what, sends its date",
       f1.week.buttons.join() === "yes,not really" && f1.week.which === BIG.which &&
         JSON.stringify(f1.week.days) === JSON.stringify(f1.week.want) && BIG.yes.includes(f1.week.reply) &&
         f1.week.what === BIG.what && f1.sent[0]?.day === f1.week.want[0][0], JSON.stringify({ week: f1.week, sent: f1.sent }));
@@ -5378,7 +5871,7 @@ async function main() {
     s.queue = [];
     return out;
   });
-  check("the pet says it made you something", photoLine.join() === "I made you something! it's in your journal ♥",
+  check("the pet says it made you something", photoLine.join() === "i made you something! it's in your journal ♥",
     photoLine.join());
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(400);
@@ -5653,7 +6146,7 @@ async function main() {
       lines.home[0]?.text === "you're home! yay yay ♥" && lines.bond[0]?.text === "yay, you! ♥" &&
       lines.miss === "oh! hi hi ♥" && /^night night, \S+ ♥$/.test(lines.tucked), JSON.stringify(lines));
     check("a baby's refusals and wish; an aimed wish keeps its words",
-      lines.refusal.join("|") === "tummy full!|too sleepy to play|I'm not sick!" && lines.wish === "wish... snack after lunch" &&
+      lines.refusal.join("|") === "tummy full!|too sleepy to play|i'm not sick!" && lines.wish === "wish... snack after lunch" &&
       lines.aimed === "will you bring me a snack after lunch?", JSON.stringify(lines));
     check("a refused snack says the full line once",
       lines.snackFull === 1 && lines.snackTotal === 1, JSON.stringify(lines));
@@ -5714,8 +6207,8 @@ async function main() {
       return out;
     });
     check("device clock 10 min fast: the hatch countdown reads the server's after one state event",
-      /^hatching in about 2[01] min$/.test(clock.before) // 20, or 21 with a few seconds of offset left over
-       && clock.after === "hatching in about 30 min" &&
+      /^hatching in about 2[01]\u00a0min$/.test(clock.before) // 20, or 21 with a few seconds of offset left over
+       && clock.after === "hatching in about 30\u00a0min" &&
       clock.unsubscribed === 1 && clock.again === 0, JSON.stringify(clock));
     check("no catchphrase on a baby line, and the count doesn't move",
       lines.granted[0]?.opts?.catch === false && lines.favourite[0]?.opts?.catch === false && lines.count === 2 &&
@@ -5888,9 +6381,9 @@ async function main() {
     check("the baby talk switch: one call per tap, the button follows, a failed call goes back",
       toggle.before === "false" && toggle.after === "true" && toggle.text === "on" && toggle.calls === 1 &&
       toggle.type === "virtual_pet/baby_talk" && toggle.enabled === true && toggle.cache === "on" &&
-      toggle.note === "OK, baby talk for babies and children ♥" &&
-      toggle.failed.pressed === "true" && toggle.failed.calls === 2 && toggle.failed.note === "That didn't work. Try again." &&
-      toggle.failed.cache === "on" && toggle.babyNote === "OK, baby talk for babies and children ♥", JSON.stringify(toggle));
+      toggle.note === "ok, baby talk for babies and kids ♥" &&
+      toggle.failed.pressed === "true" && toggle.failed.calls === 2 && toggle.failed.note === "hm, that didn't work. try again soon" &&
+      toggle.failed.cache === "on" && toggle.babyNote === "ok, baby talk for babies and kids ♥", JSON.stringify(toggle));
     await page.locator("hatch-pet-card").evaluate((el) => { // the switch, on, without the failed tap's note
       const s = el._slides[el._index];
       el._renderStatus(s, []);
@@ -5966,10 +6459,10 @@ async function main() {
         return { ...st, state: stage, attributes: out };
       };
       s.journal = journal;
-      el._renderStatus(s, []);
-      for (let i = 0; i < 40 && journal && !s.status.querySelector(".gen"); i++) {
-        await new Promise((r) => setTimeout(r, 100));
-      }
+      // The journal page, once drawn, stays on show while a redraw gathers its data (UX fix 2, F2):
+      // a stale .gen is already there, so wait for the redraw itself, not for a .gen to appear.
+      if (journal) await el._renderJournal(s);
+      else el._renderStatus(s, []);
       const text = (sel) => [...s.status.querySelectorAll(sel)].map((r) => r.innerText.replace(/\s+/g, " ").trim());
       return journal ? text(".gen") : text(".row");
     }, { stage, attrs, journal });
@@ -6526,7 +7019,7 @@ async function main() {
     check("hellos by type: nameless on a shared screen and never a bond line; bond lines only with the viewer's own bond",
       helloBad.length === 0, helloBad.slice(0, 6).join(" | "));
 
-    // The reveal: "I'm a teen now!", then the type's line in a bubble of its
+    // The reveal: "i'm a teen now!", then the type's line in a bubble of its
     // own (with its catchphrase allowed); none for an adult or without a type.
     const reveal = await typeAs(async (el, s, t, types) => {
       t.pet("teen", null, 0);
@@ -6536,10 +7029,10 @@ async function main() {
       out.none = t.moment({ type: "stage_changed", stage: "teen", from: "child" });
       return out;
     }, TYPES);
-    check("a new teen says its type after \"I'm a teen now!\", in a bubble of its own; an adult or no type, none",
-      TYPES.every((type) => reveal[type].said === "I'm a teen now!" && reveal[type].queued.length === 1 &&
+    check("a new teen says its type after \"i'm a teen now!\", in a bubble of its own; an adult or no type, none",
+      TYPES.every((type) => reveal[type].said === "i'm a teen now!" && reveal[type].queued.length === 1 &&
         PERSONA[type].reveal.includes(reveal[type].queued[0].text) && reveal[type].queued[0].catch) &&
-      reveal.adult.queued.length === 0 && reveal.none.queued.length === 0 && reveal.none.said === "I'm a teen now!",
+      reveal.adult.queued.length === 0 && reveal.none.queued.length === 0 && reveal.none.said === "i'm a teen now!",
       JSON.stringify([reveal.plucky, reveal.adult, reveal.none]));
     await page.emulateMedia({ reducedMotion: null });
 
@@ -6557,7 +7050,7 @@ async function main() {
       revealLine = (await bubble()).trim();
     }
     await shot("07f-reveal-charming");
-    check("live, the reveal shows after the stage line, neither lost", stageLine.trim() === "I'm a teen now!" &&
+    check("live, the reveal shows after the stage line, neither lost", stageLine.trim() === "i'm a teen now!" &&
       PERSONA.charming.reveal.includes(revealLine), `${stageLine} -> ${revealLine}`);
 
     // Side by side, for the owner: a named hello, a shared-screen hello and a
@@ -6834,6 +7327,51 @@ async function main() {
     }
     check(`egg shows ${frames}`, src.includes(frames), src.split("/").slice(-1)[0]);
   }
+  // UX fix 2, F12: an egg's status page is "you two" and when it hatches, none of the care meters.
+  for (const [minutes, line] of [[25, "warm and growing ♪"], [10, "wiggling! any minute ♪"], [4, "cracking! ♥"]]) {
+    await inject(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + minutes * 60000).toISOString() } });
+    await page.waitForTimeout(1200);
+    const egg = await card.first().evaluate((el) => {
+      const s = el._slides[el._index];
+      if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+      el._toggleStatus(s);
+      const out = { rows: [...s.status.querySelectorAll(".row")].map((r) => r.textContent.trim()), text: s.status.textContent };
+      el._toggleStatus(s);
+      return out;
+    });
+    check(`UX2 F12: an egg ${minutes} min out says "${line}" and shows no care meters`,
+      egg.rows.some((r) => r === `hatching${line}`) && !/hunger|happy|energy|health|discipline|weight|traits|no care yet|all new here/.test(egg.text), JSON.stringify(egg));
+  }
+  // UX fix 4, F2: an egg can be patted (it rocks, says "♪", the status stays shut) and doesn't greet
+  // by name (its greeting waits for the hatch). F10: the bubble counts "N min" with a no-break
+  // space, and says what the status says in the last 6 minutes.
+  await inject(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + 25 * 60000).toISOString() } });
+  await page.waitForTimeout(1200);
+  const eggPat = await card.first().evaluate((el) => {
+    const s = el._slides[el._index];
+    if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+    const out = { patOn: el._patOn(s) };
+    const greeted = s.greeted;
+    s.greeted = false;
+    el._greet(s); // an egg doesn't greet: the flag stays down for the hatch
+    out.greetedAfter = s.greeted;
+    s.greeted = greeted;
+    s.patAt = 0;
+    s.sayUntil = 0;
+    out.say25 = el._say(s, null, false);
+    s.hatchesAt = new Date(Date.now() + 4 * 60000).toISOString();
+    out.say4 = el._say(s, null, false);
+    s.hatchesAt = new Date(Date.now() + 25 * 60000).toISOString();
+    s.pat.click();
+    out.bubble = s.bubble.textContent;
+    out.rocked = s.pet.classList.contains("rock");
+    out.status = s.screen.classList.contains("show-status");
+    return out;
+  });
+  check("UX4 F2: an egg's pat rocks it and says ♪, opens no status, and it hasn't greeted",
+    eggPat.patOn && eggPat.bubble === "♪" && eggPat.rocked && !eggPat.status && !eggPat.greetedAfter, JSON.stringify(eggPat));
+  check("UX4 F10: the egg's bubble keeps '25 min' together, and says 'cracking! ♥' at 6 or fewer",
+    /^hatching in about 25\u00a0min$/.test(eggPat.say25) && eggPat.say4 === "cracking! ♥", JSON.stringify(eggPat));
 
   }
   if (enter("sharedscreen")) {
@@ -7020,7 +7558,7 @@ async function main() {
     check("FA: shared screen clears a personal line still typing, on every slide, card and tab",
       typingRound.before.said.includes("sunbeam") && typingRound.before.live.includes("sunbeam") &&
       typingRound.before.otherStatus && typingRound.before.sheetPersonal && typingRound.after.sheetKept && typingRound.clean &&
-      typingRound.after.message === "Nothing personal on this screen now.",
+      typingRound.after.message === "shh, nothing personal here now",
       JSON.stringify({ ...typingRound, typedWhenPressed: typingRound.before.typing }));
     check("FA: every card and tab asks its channel again as a shared screen",
       typingRound.subs.page.shared >= typingRound.subs.page.slides && typingRound.subs.tab.shared >= typingRound.subs.tab.slides,
@@ -7261,7 +7799,7 @@ async function main() {
     const button = () => s.status.querySelector(".bell.forgetme");
     out.label = button()?.closest(".row")?.textContent.trim();
     out.aria = button()?.getAttribute("aria-label");
-    out.order = [...s.status.querySelectorAll(".row")].map((r) => r.children[1]?.textContent)
+    out.order = [...s.status.querySelectorAll(".row")].map((r) => r.children[0]?.textContent) // a sheet row: label first (no icon slot, F5)
       .filter((t) => ["baby talk", "my data", "sounds here"].includes(t)).join();
     const sent = [];
     const realWS = el._hass.callWS.bind(el._hass);
@@ -7323,7 +7861,7 @@ async function main() {
   const unarmed = "forget my data: your birthday, answers and settings for every pet; your bonds stay";
   check("an armed forget goes back to forget when its window closes, and after a failure",
     lapse.armed.text === "sure? tap again" && lapse.lapsed.text === "forget" && lapse.lapsed.aria === unarmed &&
-    lapse.sent.join() === "virtual_pet/forget_me" && lapse.message === "That didn't work. Try again." &&
+    lapse.sent.join() === "virtual_pet/forget_me" && lapse.message === "hm, that didn't work. try again soon" &&
     lapse.failed.text === "forget" && lapse.failed.aria === unarmed && lapse.inSheet, JSON.stringify(lapse));
   check("forget my data is a personal row, after baby talk",
     !forgot.shared && forgot.sharedSheet && forgot.label === "my dataforget" && forgot.order === "baby talk,my data,sounds here" &&
@@ -7336,7 +7874,7 @@ async function main() {
     // A visit within the hour isn't counted (fast_forward doesn't move the clock),
     // and then says only baby talk: that it's off proves the server forgot.
     (forgot.before.counted === false || forgot.before.kept === true) && forgot.before.baby === true &&
-    forgot.sent.join() === "virtual_pet/forget_me" && forgot.message === "Forgotten. The pets start fresh with you ♥" &&
+    forgot.sent.join() === "virtual_pet/forget_me" && forgot.message === "forgotten. we'll start fresh ♥" &&
     !forgot.bdayRows && forgot.babyTalk === "false" && !forgot.myDay && forgot.myDayRow !== "true" &&
     forgot.storage.length === 0 && forgot.othersKept &&
     forgot.after.baby === false && (forgot.after.counted === false || (forgot.after.kept === false && forgot.after.myDay === false)),
@@ -7639,7 +8177,7 @@ async function main() {
     check("P3a: the bell and my day fall back to the services on unknown_command, and only then",
       fallback.ws.join() === "virtual_pet/notify_me,virtual_pet/my_day,virtual_pet/notify_me" &&
       fallback.svc.join() === "virtual_pet.notify_me:true,virtual_pet.my_day:true" &&
-      fallback.message === "That didn't work. Try again.", JSON.stringify(fallback));
+      fallback.message === "hm, that didn't work. try again soon", JSON.stringify(fallback));
     // Retries: a subscribe refused (HA still starting, the pet mid-reload) is
     // asked again after 2 s and 5 s (then 15 s, then every minute); the first
     // look goes ahead meanwhile. And a new socket ("ready") asks again at once.
@@ -8624,8 +9162,9 @@ async function main() {
   await flagged("power", (el) => { el._slides[el._index].power = { timers: [] }; }, (el) => { el._slides[el._index].power = null; });
   await flagged("boot", (el) => { el._slides[el._index].boot.hidden = false; }, (el) => { el._slides[el._index].boot.hidden = true; });
   await flagged("away", (el) => { el._slides[el._index].away = true; }, (el) => { el._slides[el._index].away = false; });
-  await flagged("egg", (el) => { el._slides[el._index].egg = true; }, (el) => { el._slides[el._index].egg = false; });
-  check("the pat box is hidden in the status, a game, a question, a scene, a link, low battery, boot, away and the egg",
+  // An egg is patted now (UX fix 4, F2); a pet whose states are reloading is not.
+  await flagged("reloading", (el) => { el._slides[el._index].reloading = true; }, (el) => { el._slides[el._index].reloading = false; });
+  check("the pat box is hidden in the status, a game, a question, a scene, a link, low battery, boot, away and while reloading",
     Object.values(hiddenIn).length === 9 && Object.values(hiddenIn).every(Boolean), JSON.stringify(hiddenIn));
   check("the pat box is back after", (await patState()).shown);
   // A peeking neighbour: its box is hidden and its device inert, so a real tap there reaches
@@ -8734,6 +9273,15 @@ async function main() {
       check(`react: ${stage} ${name} shows ${stage}_${mood} and ${move}`,
         r.src.includes(`/${stage}_${mood}_`) && r.live && r.moves.join() === move && (move !== "look" || r.moving), JSON.stringify(r));
     }
+    for (const [action, line] of [["blanket", "so cozy now... thank you ♥"], ["fan", "ahh, a breeze! thank you ♪"]]) {
+      const said = await card.evaluate((el, action) => {
+        const s = el._slides[el._index];
+        s.queue = []; s.sayUntil = 0; s.sayClass = 0;
+        el._react(s, { at: Date.now() / 1000, action, result: "ok" });
+        return s.bubble.textContent;
+      }, action);
+      check(`UX3 F11: ${stage} the ${action} answered gets a thank-you line`, said === line, said);
+    }
     for (const result of ["not_needed", "already_clean", "not_sick", "not_sleepy", "too_tired"]) {
       const r = await react({ action: "play", result });
       check(`react: ${stage} refusal ${result} reacts`, r.live && r.moves.join() === "look" && r.src.includes(`/${stage}_`), JSON.stringify(r));
@@ -8748,7 +9296,7 @@ async function main() {
       return out;
     });
     check(`react: ${stage} a won game's log reacts even if the game is still open`, won.live && won.src.includes(`/${stage}_${own("cheer")}_`), JSON.stringify(won));
-    for (const result of ["asleep", "egg", "away", "no_game", "unfair", "spoiled", "lost"]) {
+    for (const result of ["asleep", "egg", "away", "no_game", "unfair", "spoiled"]) {
       const r = await react({ action: "play", result });
       check(`react: ${stage} ${result} does nothing`, !r.live && r.moves.length === 0, JSON.stringify(r));
     }
@@ -8764,6 +9312,10 @@ async function main() {
     check(`react: ${stage} back to the mood frame after 2.5 s`,
       !after.live && after.shown && new RegExp(`/${stage}_${after.mood}_|/${stage}_content_`).test(after.src) &&
       !after.moves.some((c) => ["munch", "greethop", "look", "settle"].includes(c)), JSON.stringify(after));
+    // UX fix 6 (F5): a lost game settles on the content frames (a species with acts.aww plays it).
+    const lostReact = await react({ action: "play", result: "lost" });
+    check(`react: ${stage} lost settles on the content frames`,
+      lostReact.live && lostReact.moves.includes("settle") && lostReact.src.includes(`/${stage}_content_`), JSON.stringify(lostReact));
     // Fallback: an act whose sprites do not load swaps back to the mood frames, and is remembered
     // (_poseOk, keyed species/stage/act, apart from the waves). No broken image left on show.
     if (acts) {
@@ -8975,8 +9527,9 @@ async function main() {
     check(`react: ${stage} without acts a pat is as before`, !N.pat.src.includes("_pat_") && !N.pat.live && !N.patInReaction.live, JSON.stringify(N.pat));
     check(`react: ${stage} acts.refuse plays, else the bored frame and look`,
       H.refuse.src.includes(`${sg}refuse_`) && H.refuse.live && N.refuse.src.includes(`${sg}bored_`) && N.refuse.look && N.refuse.live, JSON.stringify([H.refuse, N.refuse]));
-    check(`react: ${stage} acts.aww plays after a lost game (even with the game still open); none without`,
-      H.aww.live && H.aww.src.includes(`${sg}aww_`) && H.awwLog.live && H.awwLog.src.includes(`${sg}aww_`) && !N.aww.live && !N.awwLog.live, JSON.stringify([H.aww, H.awwLog, N.aww, N.awwLog]));
+    check(`react: ${stage} acts.aww plays after a lost game (even with the game still open); without it the content frames settle (UX fix 6, F5)`,
+      H.aww.live && H.aww.src.includes(`${sg}aww_`) && H.awwLog.live && H.awwLog.src.includes(`${sg}aww_`) &&
+        N.aww.live && N.awwLog.live && !N.aww.src.includes("aww_") && N.aww.src.includes(`${sg}content_`), JSON.stringify([H.aww, H.awwLog, N.aww, N.awwLog]));
     check(`react: ${stage} acts.ready plays ~1.2 s at a game's start; none without`,
       !H.picker.live && H.ready.live && H.ready.src.includes(`${sg}ready_`) && H.ready.ms <= 1300 && !N.ready.live, JSON.stringify([H.ready, N.ready]));
     check(`react: ${stage} acts.splash is the clean scene's last beat; without it the cheer or clean frames`,
@@ -10792,6 +11345,10 @@ async function main() {
     await prep();
     const first = await card.evaluate((el) => {
       for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k);
+      // This is about the day's first-link timer, not who is free: with finds shown a line can
+      // land (a find, a gift) between prep and here, and a pet with a line waiting is not free.
+      // So clear them again in this same step, and report what was left if a try still fails.
+      for (const s of el._slides) Object.assign(s, { queue: [], sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
       const h = el._slides[el._index];
       const now = Date.now();
       const tries = {};
@@ -10819,7 +11376,8 @@ async function main() {
       for (let i = 0; i < 20; i++) { el._linkFirstMs = undefined; el._touchedAt = null; el._linkTick(h); ms.push(el._linkFirstMs); }
       el._linkAt = Date.now() + 1e9;
       localStorage.setItem(`hatch-link-cardcheck-${new Date().toDateString()}`, "1");
-      return { tries, lo: Math.min(...ms), hi: Math.max(...ms) };
+      return { tries, lo: Math.min(...ms), hi: Math.max(...ms),
+        free: el._slides.map((x) => [el._free(x), x.queue?.length || 0, x.moodState]) };
     });
     check(`the day's first link waits for a touched, shown look 1-3 min in (${width}px)`,
       first.tries.watched && !first.tries.untouched && !first.tries.soon && !first.tries.stale && !first.tries.hidden && !first.tries.offscreen
@@ -11016,6 +11574,9 @@ async function main() {
         }
       }
     }
+    // The swipes above kept a place in this browser (UX fix 2, F8: hatch-shelf-*, shared by every
+    // tab of the origin). Put it back, or a later page load (restart's) would open on pet 2, not 1.
+    await lp.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("hatch-shelf-")).forEach((k) => localStorage.removeItem(k)));
     await lp.close();
   }
 
@@ -11427,10 +11988,32 @@ async function main() {
     localStorage.setItem("hatch-shared-screen", "off");
     els.forEach((el) => el._goPersonal());
   }, { e: seedPet, was: poweredWas });
+  // _goPersonal asks the channel again; dev's own view (mine, with the seeded gift) is
+  // back when it answers, which on a slow runner after a restart takes more than the
+  // checks below would wait. Wait for that answer (a dev with a bond has a mine).
+  await everyCard(async (els, e) => {
+    for (let i = 0; i < 300; i++) {
+      const s = els[0]?._slides?.find((x) => x.ids?.["sensor.life_stage"] === e);
+      if (s?.subscribed && s.mine) return;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }, seedPet);
   await pinAwake(card, "gifts");
-  // FINDS_SHOWN off (the default until V-F), with dev's gift and restart's basket both
-  // waiting: no basket shows, a tap, a tab-back and a direct take send no collect, and no
-  // pop or reveal appears. Then it is turned on for the real features below.
+  // FINDS_SHOWN on (the default): with restart's basket waiting, the basket shows on the
+  // slide on screen.
+  const on = await card.first().evaluate((el, e) => {
+    const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+    el._basketSync(s);
+    const b = s.basket;
+    return { def: customElements.get("hatch-pet-card").findsShown, onShow: s === el._slides[el._index],
+      basket: s.house?.basket ?? null, shown: !!b && !b.hidden && getComputedStyle(b).display !== "none" };
+  }, seedPet);
+  check("FINDS_SHOWN on by default: with a full basket waiting, the basket shows",
+    on.def === true && on.onShow && on.basket > 0 && on.shown, JSON.stringify(on));
+  // The switch still works off (HatchPetCard.findsShown = false), with dev's gift and
+  // restart's basket both waiting: no basket shows, a tap, a tab-back and a direct take
+  // send no collect, and no pop or reveal appears. Then it goes back on for the real
+  // features below.
   const off = await card.first().evaluate(async (el, e) => {
     const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
     const conn = el._hass.connection;
@@ -11441,6 +12024,8 @@ async function main() {
       return real.call(this, msg, ...a);
     };
     const onShow = s === el._slides[el._index];
+    const Card = customElements.get("hatch-pet-card");
+    Card.findsShown = false;
     try {
       el._basketSync(s);
       s.giftAgain = true;
@@ -11453,11 +12038,14 @@ async function main() {
       s.giftAgain = false;
     }
     const shown = (b) => !!b && !b.hidden && getComputedStyle(b).display !== "none";
-    return { def: customElements.get("hatch-pet-card").findsShown, onShow, gift: !!s.mine?.gift,
+    const res = { def: Card.findsShown, onShow, gift: !!s.mine?.gift,
       basket: s.house?.basket ?? null, baskets: el._slides.filter((x) => shown(x.basket)).length,
       reveals: el._slides.filter((x) => x.screen?.querySelector(".reveal")).length, sent };
+    Card.findsShown = true;
+    el._slides.forEach((x) => el._basketSync(x));
+    return res;
   }, seedPet);
-  check("FINDS_SHOWN off by default: with a gift and a full basket waiting, no basket or pop shows and no collect is sent",
+  check("FINDS_SHOWN set false: with a gift and a full basket waiting, no basket or pop shows and no collect is sent",
     off.def === false && off.onShow && off.gift && off.basket > 0 && off.baskets === 0 && off.reveals === 0 &&
     off.sent.length === 0, JSON.stringify(off));
   await showFinds();
@@ -11944,8 +12532,8 @@ async function main() {
   await page.waitForTimeout(500);
   await calm();
   await pinAwake(card, "collection");
-  // top10 7a: with FINDS_SHOWN off, the link and the page are named by what they show,
-  // visitors. Checked before showFinds turns the switch on for the rest of the run.
+  // top10 7a: with FINDS_SHOWN set false, the link and the page are named by what they
+  // show, visitors. The switch goes back on after.
   const hidden = await card.first().evaluate(async (el) => {
     const Card = customElements.get("hatch-pet-card");
     const was = Card.findsShown;
@@ -11959,8 +12547,8 @@ async function main() {
       await wait(() => s.status.querySelector(".jfoot .flink"));
       const link = s.status.querySelector(".jfoot .flink")?.textContent;
       s.status.querySelector(".jfoot .flink")?.click();
-      const head = s.status.querySelector(".jhead span")?.textContent;
-      return { link, head, world: el._worldName(s) };
+      const head = s.status.querySelector(".shead .stitle")?.textContent.replace(" · opening…", "");
+      return { link, head, world: el._worldName(s).toLowerCase() };
     } finally {
       if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
       el._dropFinds(s);
@@ -12016,7 +12604,7 @@ async function main() {
     await wait(() => s.status.querySelector(".jfoot .flink"));
     const foot = [...(s.status.querySelector(".jfoot")?.querySelectorAll("button") || [])].map((b) => b.textContent);
     s.status.querySelector(".jfoot .flink").click();
-    const loading = [...s.status.querySelectorAll(".jhead span")].map((x) => x.textContent);
+    const loading = s.status.querySelector(".shead .stitle")?.textContent;
     await wait(() => s.status.querySelector(".fgrid") || !s.finds);
     await wait(() => s.status.querySelector(".fgrid") || s.status.querySelector(".jgrid"), 5000); // an error: the journal
     await new Promise((r) => setTimeout(r, 300));
@@ -12026,8 +12614,8 @@ async function main() {
       text: t.textContent.trim(), heart: !!t.querySelector(".fheart") });
     const box = s.status.getBoundingClientRect();
     return { e: s.ids?.["sensor.life_stage"] === e, finds: s.finds, journal: s.journal, foot, loading,
-      head: s.status.querySelector(".jhead")?.textContent.replace(/\s+/g, " ").trim(),
-      back: s.status.querySelector(".flink")?.textContent, text: s.status.textContent,
+      head: s.status.querySelector(".shead .stitle")?.textContent.replace(/\s+/g, " ").trim(),
+      back: s.status.querySelector(".shead .sback")?.textContent, text: s.status.textContent,
       visitors: grids[0] ? [...grids[0].children].map(tile) : null, tiles: grids[1] ? [...grids[1].children].map(tile) : null,
       fit: s.status.scrollWidth <= s.status.clientWidth && [...s.status.querySelectorAll(".ftile")].every((t) => t.getBoundingClientRect().right <= box.right + 0.5),
       jgrid: !!s.status.querySelector(".jgrid"), note: s.status.querySelector(".status-feedback")?.textContent || "",
@@ -12035,13 +12623,13 @@ async function main() {
   }, { e: seedPet, stub });
   const a = await open(null);
   const calls = a.msgs.filter((m) => m.type === "virtual_pet/collection");
-  check("V-D: \"finds ›\" sits in the journal's foot with \"‹ status\", and opens with \"opening…\"",
-    JSON.stringify(a.foot) === JSON.stringify(["‹ status", "finds ›"]) &&
-    JSON.stringify(a.loading) === JSON.stringify([`finds · ${fw.name}`, "opening…"]), JSON.stringify({ foot: a.foot, loading: a.loading }));
+  check("V-D: \"finds ›\" sits in the journal's foot (\"‹ status\" is in its top band), and opens with \"opening…\"",
+    JSON.stringify(a.foot) === JSON.stringify(["finds ›"]) &&
+    a.loading === `finds · ${fw.name.toLowerCase()} · opening…`, JSON.stringify({ foot: a.foot, loading: a.loading }));
   check("V-D: one virtual_pet/collection {shared: false} for this pet, and no call_service",
     calls.length === 1 && calls[0].entity_id === seedPet && calls[0].shared === false && !a.msgs.some((m) => m.type === "call_service"),
     JSON.stringify(a.msgs));
-  check("V-D: the page is \"finds · <world>\" with \"‹ journal\"", a.e && a.finds && a.head === `finds · ${fw.name}` && a.back === "‹ journal",
+  check("V-D: the page is \"finds · <world>\" with \"‹ journal\"", a.e && a.finds && a.head === `finds · ${fw.name.toLowerCase()}` && a.back === "‹ journal",
     JSON.stringify({ head: a.head, back: a.back, finds: a.finds }));
   const wantV = fw.visitors.map((v) => ({ id: v.id, locked: !metV.includes(v.id) }));
   const wantF = fw.finds.filter((f) => !f.gift_only && (metF.includes(f.id) || !timed(f))).map((f) => ({ id: f.id, locked: !metF.includes(f.id) }));
@@ -12084,7 +12672,7 @@ async function main() {
   await page.waitForTimeout(500);
   const back = await card.first().evaluate(async (el) => {
     const s = el._slides[el._index];
-    s.status.querySelector(".flink").click();
+    s.status.querySelector(".shead .sback").click();
     for (const t = Date.now(); !s.status.querySelector(".jgrid") && Date.now() - t < 10000;) await new Promise((r) => setTimeout(r, 50));
     return { finds: s.finds, journal: s.journal, grid: !!s.status.querySelector(".jgrid") };
   });

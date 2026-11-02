@@ -461,7 +461,7 @@
       if (shot.shell.finish === "none") delete world.shell.finish;
     }
 
-    // FINDS_SHOWN (the card's release switch, off until V-F): `findsShown: true` turns it
+    // FINDS_SHOWN (the card's release switch): `findsShown: true` turns it
     // on for this shot; every other shot gets the card's own default back.
     const Card = customElements.get("hatch-pet-card");
     if (FINDS_DEFAULT === undefined) FINDS_DEFAULT = Card.findsShown;
@@ -486,6 +486,7 @@
     if (shot.look) lookStart(card, cur, shot.look);
     if (shot.ask) card._ask(cur, shot.ask);
     if (shot.say !== undefined) card._write(cur, shot.say, 1e9);
+    if (shot.ask && shot.say !== undefined) card._askPlace(cur, cur.screen.querySelector(".askday")); // the line is in the bubble now
     // `idle`: the pet's idle mumble through the card's own _idle, the first move (a mumble)
     // and the type's side of the coin forced (draws: next-idle delay, move, coin).
     if (shot.idle) {
@@ -526,6 +527,15 @@
       root.querySelector(".shellrow").click();
       // `preview`: a tile tapped (its finish on the live shell, unsaved); "" is the world's own.
       if (shot.preview !== undefined) root.querySelector(`.tile[data-finish="${shot.preview}"]`).click();
+    }
+    // `note`: a line in the sheet's or picker's feedback bubble, as the card's own _statusMessage shows it.
+    if (shot.note && ["settings", "picker"].includes(shot.view)) card._statusMessage(cur, shot.note);
+    // `afterChange`: the sheet closed after that change (a SETTINGS_REACT key such as "monoOn"), through the
+    // card's own _settingsChanged and Status chip: the pet perks and says its line (settings UX F14).
+    if (shot.afterChange && shot.view === "settings") {
+      card._settingsChanged(cur, shot.afterChange);
+      root.querySelector(".statusbtn").click();
+      await new Promise((r) => setTimeout(r, shot.afterWait ?? 1500));
     }
     // `scrollEnd` on the status box's own views: its end (the bigtext preset's status-end).
     if (shot.scrollEnd && ["status", "settings", "picker"].includes(shot.view)) cur.status.scrollTop = cur.status.scrollHeight;
@@ -568,11 +578,18 @@
     // `game: "dig"`: a Berry dig started through the card's own picker, then `digTaps`
     // ("dig" or "keep") played, each answered by the next of `digReplies` (scripted).
     // Held on the last reply, before its pause (a bee still shows).
-    if (shot.game === "dig") {
-      shot.digReplies = [...(shot.digReplies || [DIG_REPLY])];
+    // `game: "left_right"` or `"higher_lower"` the same way (UX fix 6): `digReplies` answers the
+    // start (default: round 0, number 5) and the guesses; `digTaps` are "left" / "right" (or
+    // "lower" / "higher"). A held shot is taken at the last reply.
+    if (shot.game === "dig" || shot.game === "left_right" || shot.game === "higher_lower") {
+      const start = shot.game === "dig" ? DIG_REPLY
+        : { result: "ok", game: shot.game, round: 0, rounds: 5, wins: 0, number: 5 };
+      shot.digReplies = [...(shot.digReplies || [start])];
       card._startGame(cur, cur.buttons.play);
-      await card._pickGame(cur, "dig");
-      for (const tap of shot.digTaps || []) await card._guess(cur, tap === "keep" ? "left" : "right");
+      await card._pickGame(cur, shot.game);
+      for (const tap of shot.digTaps || []) {
+        await card._guess(cur, tap === "keep" || tap === "left" || tap === "lower" ? "left" : "right");
+      }
     }
     // `classes`: screen states the fake hass cannot pin (`lit`, `faded`...), put on last.
     for (const c of shot.classes || []) cur.screen.classList.add(c);
@@ -632,6 +649,8 @@
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     // The shelf and slides come to rest at once: a shot mid-slide is off the pixel grid.
     for (const a of root.getAnimations()) if (a instanceof CSSTransition) a.finish();
+    // The status's LCD wipes (UX fix 2, F13) run to their end too: a shot never catches a half-drawn page.
+    for (const a of root.getAnimations()) if (/^lcd-wipe/.test(a.animationName || "")) a.finish();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     await settled(card);
     window.bench.screenClass = cur.screen.className;

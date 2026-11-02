@@ -3,10 +3,7 @@
 What a player can see and do, feature by feature, with what switches it and whether it
 is on. For the full rules and numbers read the [guide](guide.md); this page is the map.
 
-**Reflects:** version 0.43.0 plus what was merged after it (commit `54d79d9f`): the
-house answering a blanket or fan request (H3), robot vacuums (H4) and a finished washer,
-dryer or dishwasher (H6), and house moments (`virtual_pet.react` and its blueprint,
-H8). Those landed after the 0.43.0 release and ship with the next one.
+**Reflects:** version 0.44.0.
 
 **Keeping it current:** update this page with each release. Read the release's commits,
 change the rows they touch, then re-check the "Where the docs and the code disagree"
@@ -31,7 +28,7 @@ stand-in. **not built** = planned, nothing in the code.
 |---|---|---|---|---|
 | Eight toy buttons | feed, snack, play, clean, meds, scold, praise, sleep/wake. Each button sinks and a ring pops, then the real reaction follows. A rejected press shakes. | card `ACTIONS`, `_press`; `button.py` | none | live |
 | Button glow when needed | Feed glows when hungry, play when bored, and so on. Meds is greyed unless the pet is sick (entity unavailable). | card `_renderSlide` | none | live |
-| Refusals | "I'm full!", "I'm not sick", and so on, in the bubble | card `REFUSALS`; model `_do_action` | none | live |
+| Refusals | "i'm full!", "i'm not sick", and so on, in the bubble | card `REFUSALS`; model `_do_action` | none | live |
 | Care scenes | medicine and clean play a short scene; feeding shows a bowl prop | card `_sceneStart`, `SCENE_PROPS` | none | live |
 | Calls (real) | hunger or happiness under 25, energy under 20, poop over 30 min, or sick: the pet calls, with **20 min** to answer. A miss is a care miss; it asks again every 4 h. Each need has three phrasings, one a day. | model `_calls`, `_start_call` | none | live |
 | Fake calls / whines | nothing is wrong; scold teaches discipline, praise spoils | model `_wants_to_whine` | sitter settles whines (option) | live |
@@ -65,8 +62,8 @@ stand-in. **not built** = planned, nothing in the code.
 | Stages | egg 30 min → baby → child (1 d) → teen (5 d) → adult (14 d). The header shows "Bird · adult · day 13"; a child's or teen's status page counts down to the next stage ("grows up: in about 3 days"). | model `life_stage`, rates `STAGE_STARTS` | none | live |
 | 30 species, 6 worlds | 5 per world (the roster file lists 6 for Terrarium) | worlds.json `roster`; 30 `species.json` with `ready: true` | none | live |
 | Beetle | on Terrarium's roster with sprites but no species.json, so filtered out | sprites/beetle; species.py `load_catalog` | none | hidden/partial |
-| Egg choice | `select.<pet>_next_egg`: Surprise me or a creature of the egg's world | `select.py`; model `lay_egg` | entity only (no card UI) | live |
-| Lay an egg / generations | from day 21, well and home: a "lay an egg?" request button, two taps. The adult retires to the journal; one trait is inherited. | card `REQUEST_LABELS`, `_confirmed`; model `can_lay_egg` | none | live |
+| Egg choice | `select.<pet>_next_egg`: Surprise me or a creature of the egg's world. The lay confirm also offers the creatures this device has raised in that world, plus "surprise me" ("set in home assistant" if the pick was made there); the egg's screen says "a <creature> is coming". | `select.py`; model `lay_egg`; card `_eggOffer`, `SETUP_COPY`; `egg_roster` on the life stage sensor | the lay sheet, or the select | live |
+| Lay an egg / generations | from day 21, well and home: a "lay an egg?" request button, then a lay sheet ("a new egg", "pick who hatches", "lay the egg" / "‹ not yet"). The request waits out of the way while the pet asks. The adult retires to the journal; one trait is inherited. | card `REQUEST_LABELS`, `_confirmed`; model `can_lay_egg` | none | live |
 | Traits (16, ★–★★★) | learned from the house, up to 4; inherited ones deepen | model `_learn`, `trait_progress`; rates | depends on mapped entities | live |
 | Trait flair | drawn around the pet (clouds, notes, embers…) about once a minute | card `FLAIR`, `_flair` | reduced motion: still | live |
 | Upbringing | devoted / steady / scrappy, set at adulthood; small stat effect | model `upbringing`, `_score` | none | live |
@@ -82,7 +79,7 @@ stand-in. **not built** = planned, nothing in the code.
 |---|---|---|---|---|
 | Six device shapes | egg, tank, house, porthole, lily pad, moon, each with a backdrop, deco and trim | worlds.json `shell/backdrop/deco/trim`; card `_mould`, `_dress` | none | live |
 | Scene follows the sun and lights | day, night, dim; rain overlay; wind | card `_renderSlide`; home `evaluate` | `sun.sun` | live |
-| Shell picker | settings → "shell": world plastics, specials, prints; preview, then **use** / **world default** | card `_renderPicker`, `_saveShell`; `virtual_pet/set_shell`; model `shell_options` | per pet; read-only on a shared screen | live |
+| Shell picker | settings → "shell": world plastics, specials, prints; preview, then **use** (the world's own is the first tile) | card `_renderPicker`, `_saveShell`; `virtual_pet/set_shell`; model `shell_options` | per pet; read-only on a shared screen | live |
 | "Earned" shells | glitter, glow, smoke, sunset, constellation, stars unlock **at teen by age** | model `shell_unlocked`, rates `SHELL_UNLOCKS` | none | live |
 
 ## 5. Games
@@ -116,8 +113,8 @@ stand-in. **not built** = planned, nothing in the code.
 | While you were out | after 3 h away, at most two bits; after two days away, a hop and the news first | card `_awayNote` | none | live |
 | Passing moments | sunrise and sunset, TV ("ooh, Bluey!"), weather changes, forecasts, first snow, frost, fog and the first warm day | home `HouseMoments`, `forecast_moment`; coord | mapping | live |
 | Season starts | "first day of spring! ♪" once a season (first three days, awake; none in the tropics), a sparkle and a journal memory; today bit "saw spring begin" | people `season_start`, model `season_start`; card `SEASON_START_LINES` | none | live |
-| House signals | a robot vacuum goes by ("a robot's zooming around!"), a washer, dryer or dishwasher finishes ("the dishes are all done!"); the moon from the date when no sensor is mapped (full and new moon nights) | home (vacuum, appliance and moon logic); card | options: Notice robot vacuums (on), Washer/dryer/dishwasher, Idle power, Moon | live (appliances need mapping) |
-| News | `virtual_pet.share_news` headline in the bubble | home `news_text`; `services.yaml` | automation | live |
+| House signals | a robot vacuum goes by ("a robot's zooming around!"), a washer, dryer or dishwasher finishes ("the dishes are all done!"); a doorbell press makes it startle (Notice doorbells, on by default, existing pets too; any `event.*` with device class doorbell; at most one per 30 minutes per pet; said live on open cards and kept nowhere, never on the bus); the moon from the date when no sensor is mapped (full and new moon nights) | home (vacuum, appliance and moon logic); card | options: Notice robot vacuums (on), Notice doorbells (on), Washer/dryer/dishwasher, Idle power, Moon | live (appliances need mapping) |
+| News | `virtual_pet.share_news` headline in the bubble. It sits on the last-care sensor for a while unless Keep house words off sensors is on (then open cards only). | home `news_text`; `services.yaml` | automation; privacy: Keep house words off sensors (off) | live |
 | House moments | `virtual_pet.react` or the house moment blueprint: pick an entity and what it is (15 categories plus Custom; no garage door), and the pet says a line, reacts and shows a house effect. Oven, coffee, EV charger, delivery and timer are card only (never on a sensor or event). Steps aside (`native`) for entities in its Heating, Cooling or appliance settings. | `react.py` (rules); coord `react`; card `HOUSE_MOMENT_LINES`, `HOUSE_CATEGORY`; guide "House moments" | automation or blueprint; privacy: Keep house words off sensors (off) | live |
 
 ## 7. Bonds and people (per HA login)
@@ -146,11 +143,11 @@ stand-in. **not built** = planned, nothing in the code.
 |---|---|---|---|---|
 | World visitors | 4 days in 7, a world creature (robin, heron, shooting star…; 3 per world, 18 in all) drops by in a 3 h window. The pet greets it. A visitor whose window passed unseen still comes by live when you next look in that day (a night or dimmed screen gets a line instead). | model `daily_visit`, `credit_visit`; card `VISITOR_PLAY`, `_visitorStart`, `_visitorGreet`, `_visitorMissed` | none | live |
 | Visitors become friends | seen on three days on a screen, a visitor greets with its own lines; stays longer on a shared screen; rare days bring two together, or a guest from another world; the pet may save a crumb, let it watch a dig or tell a linked pet | model; card (fresh-expand) | none | live |
-| Finds and basket | about 2.4 finds a day go in a basket on the screen; a tap reveals them | model `roll_find`, `pick_find`, `collect_basket`; card `_basketTap`; `virtual_pet/collect` | release switch `FINDS_SHOWN` in the card is **off** | **hidden** on the card; the server still rolls finds and fires `virtual_pet_found` |
-| Visitor leaves a find | a third of the time when its window ends | model `leave_find` | same | hidden |
-| Gifts | bond 3+: every 6–8 days a find set aside for one person; "made this for you ♥" | model `gift_tick`, `pick_gift`, `take_gift`; card `_giftTake` | switch off: a gift **waits on the server** | hidden |
-| Collection page | journal → "visitors ›" (reads "finds ›" once finds are shown): the world's visitors (met or silhouette) and, when shown, its finds | card `_renderFinds`, `collectionTiles`; `virtual_pet/collection` | switch off: **visitors only** | partial |
-| Find art | the find and basket pictures are not final | frontend/ui | none | partial |
+| Finds and basket | about 2.4 finds a day go in a basket on the screen; a tap reveals them | model `roll_find`, `pick_find`, `collect_basket`; card `_basketTap`; `virtual_pet/collect` | release switch `FINDS_SHOWN` in the card is **on** | live |
+| Visitor leaves a find | a third of the time when its window ends | model `leave_find` | same | live |
+| Gifts | bond 3+: every 6–8 days a find set aside for one person; "made this for you ♥" | model `gift_tick`, `pick_gift`, `take_gift`; card `_giftTake` | with the switch off a gift **waits on the server** | live |
+| Collection page | journal → "visitors ›" (reads "finds ›" while finds are shown): the world's visitors (met or silhouette) and its finds | card `_renderFinds`, `collectionTiles`; `virtual_pet/collection` | with the switch off: **visitors only** | live |
+| Find art | the find and basket pictures are final in all six worlds | frontend/ui | none | live |
 | Bird visits from BirdNET-Pi | on the roadmap | guide "Roadmap" | none | not built |
 
 ## 9. Seasons and holidays
@@ -187,7 +184,7 @@ stand-in. **not built** = planned, nothing in the code.
 | Settings (gear) | **for <pet>**: notices (the kinds of thing the house shows it, never an entity; admins get "connect more ›"), shell. **For you**: notify me, my day, my birthday, birthday on my phone, baby talk, my data. **This screen**: sounds, babble, screen effects, holiday names, mono, big text, shared screen. | card `_renderSettings` | live |
 | Big text | larger words on status, journal and settings; per browser, off by default | card `bigtext` class | live |
 | Journal | "this week" strip (dream, weather, and the visitor once finds are shown), the world's roster (silhouettes if unraised in this home), "every world ›" page, photos, generations (latest 4 + older), memories (first snow, frost, fog, first warm day, each season's first day), visitors/finds › | card `_renderJournal`, `_weekStrip`, `_renderEveryWorld` | live |
-| Collection | see §8 | card `_renderFinds` | partial |
+| Collection | see §8 | card `_renderFinds` | live |
 | Card editor | picks devices and has a "Seasonal decorations" switch | card `HatchPetCardEditor` | live |
 
 ## 12. Notifications and phones
@@ -213,8 +210,8 @@ stand-in. **not built** = planned, nothing in the code.
 | Buttons feed, snack, play, clean, medicine, scold, praise, blanket, fan, lay_egg | `button.py` | live |
 | Services fast_forward, notify_me, visit, my_day, set_shell, play_game, share_news, react | `services.yaml` | live |
 | Websocket commands answer, follow, forget_birthday, birthday_phone, baby_talk, photos, forget_me, subscribe, notify_me, linked, my_day, set_shell, collect, collection | `__init__.py` | live |
-| About 50 bus events (`virtual_pet_*`), including `virtual_pet_house_answered`, `_robot_out`, `_robot_home`, `_appliance_done`, `_house_moment`, `_call_settled`, `_found` | coord `_fire`; guide "Events" | live (all in the guide) |
-| Options "What <name> notices": sleep, weather, room, activity, the house helps (heating, cooling, robot vacuums, machines, idle power), sky, privacy (presence, house words off sensors), notifications | `config_flow.py`; strings.json | live |
+| About 50 bus events (`virtual_pet_*`), including `virtual_pet_season_start`, `virtual_pet_house_answered`, `_robot_out`, `_robot_home`, `_appliance_done`, `_house_moment`, `_call_settled`, `_found` | coord `_fire`; guide "Events" | live (all in the guide) |
+| Options "What <name> notices": sleep, weather, room, activity, the house helps (heating, cooling, robot vacuums, doorbells, machines, idle power), sky, privacy (presence, house words off sensors), notifications | `config_flow.py`; strings.json | live |
 | Repairs: missing entities, world not ready, damaged save (×3), people damaged | strings.json `issues`; `backup.py` | live |
 | Diagnostics (redacted) | `diagnostics.py` | live |
 | Assist: VirtualPetStatus and VirtualPetCare intents (stage and day, wish, the day's visitor), sentences file, LLM tools | `intent.py`, `llm.py`, `docs/custom_sentences` | live (English only) |
@@ -245,7 +242,7 @@ list.
    "two games (left or right, higher or lower)", and roadmap line 6 lists only those two.
    There are three: the berry dig is in "Using the card" and the README.
 2. **Finds, basket, gifts and the collection page** are in none of the README, guide or
-   how-to. The guide's Events entry says finds "aren't shown on the card yet" (right),
+   how-to. The guide's Events entry no longer says finds are hidden,
    and the journal paragraph mentions "while finds are shown", but nothing describes the
    "visitors ›" page the journal links to.
 3. **Roadmap is thin.** Phase 4 still says "in progress" with BirdNET-Pi visits to come;

@@ -1,5 +1,8 @@
 """Find and basket stand-ins (docs/plan-2026-11-01-visitors-v2.md §9), drawn in code.
 
+V-F (2026-11-01) replaces these in ui/ world by world (art/README.md, "Finds (V-F)"): pass an out
+dir when running this, or it overwrites the final art. The final baskets are art/finds/make_baskets.py.
+
 Usage: python art/finds/make_finds.py [out dir]
        (default custom_components/virtual_pet/frontend/ui)
 

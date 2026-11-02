@@ -102,6 +102,12 @@ Review M7, owner Q6; review F17, F18.
 - **Out of scope:** steering creatures across devices (two devices in different worlds
   never share a roster, so nothing else is needed).
 
+**2026-11-02, UX fix 5 (BUILT in s2673):** the setup form also got the world list as rows
+(F3), a `name_taken` error on the name (F2, "Another pet here already has that name."),
+and plain texts (F8): the description now says the pet lives in a handheld device "shown
+by the Hatch at Home pet shelf card"; the Dashboard field is "Dashboard with the pet
+shelf". S1 builds on these strings and must not revert them.
+
 ## S2. Next egg in the lay confirm (M, tier 1)
 
 Review H1, owner Q1, experience PR 4b reshaped (the forms book stays deferred, so 4b's
@@ -362,6 +368,16 @@ instead of a bubble). N13 now keeps the plan's own lowercase rule ("i").
 - **Out of scope:** entity IDs; a rename history; naming from Assist; changing
   Reconfigure itself (S6 changes its words, adds `taken` and the open-form guard).
 
+**2026-11-02, UX fix 5 (F1, BUILT in s2673): one name helper.** The pet's name lives in
+three places: `entry.title` (Reconfigure writes it), the device's `name_by_user` (HA's
+pencil and its "Name and assign" step write it) and `state.name`. `names.py` now has
+`pet_name(hass, entry)` (the device's own name if set, else the title, so it never lags
+a tick like `state.name`), `clear_device_name(hass, entry)` and `name_taken(hass, name,
+except_entry_id=None)`. Every text that names the pet (the Options title, repairs, the
+welcome, Reconfigure's title and default) uses `pet_name`. **S3's card rename uses
+these:** `name_taken` already exists, so S3 must not write a second one, and a rename
+clears `name_by_user` (`clear_device_name`) as Reconfigure now does.
+
 ## S4. First-run links, welcome wording, second pet (S, tier 1)
 
 Review H3 a+b and M1, owner Q3 (the links half; the dashboard checkbox is dropped,
@@ -373,6 +389,12 @@ Q-D). Review F8, F15, F21; the deep links were checked (below).
   button **N19** under the existing sub-line. It navigates (as "connect more ›" does,
   `history.pushState` + `location-changed`) to HA's add-integration dialog for
   `virtual_pet`. A non-admin sees today's text only.
+- **Changed by UX fix 4 (first run, review 4), which S4 builds on:** a non-admin's
+  empty-state text is now "Ask whoever runs Home Assistant to add a pet." (not
+  "today's text"), the not-found text no longer says "entities", the empty card draws
+  the first world's toy with an egg silhouette (N19 goes under it), and the welcome
+  text (`notify.welcome`) now says "Its egg hatches in about half an hour." before
+  "Say hi ♥". N20 and N20b follow that new text.
 - **The link:** `/_my_redirect/config_flow_start?domain=virtual_pet` (HA's own "My"
   redirect, handled by the frontend with no internet). Checked by the s2658 review against
   the pinned frontend 20260930.5: the redirect has no `component` gate; the alternative
@@ -415,6 +437,10 @@ already did it (F8).
   - **No dashboard anywhere:** **N20** (the sidebar note) in place of the link.
 - The phone push (only to people who already have another pet's "notify me") is
   unchanged: they already have a card.
+
+- **The welcome's title (2026-11-02, UX fix 5 F10; BUILT in s2673).** The sidebar note's
+  title is "{name} moved in ♥", no longer "Virtual Pet". `_welcome` already has the
+  name from `pet_name(hass, entry)` (see S3). The body and N20/N20b follow it unchanged.
 
 ### Copy (DRAFT)
 
@@ -505,16 +531,61 @@ house. Every key keeps its name, so **no migration** and no `MINOR_VERSION` bump
 
 ### Copy (DRAFT; plain labels, M2)
 
+**2026-11-02, UX fix 5 (review 5, F4-F6; all approved by the first mate):** the
+tables below are corrected by the notes marked UX5. Where a UX5 line and a draft
+disagree, UX5 wins.
+
 - Menu (`options.step.init`): title "What {name} notices" (existing); description
-  "Pick what to connect. Every field is optional; anything left empty is ignored."
+  ~~"Pick what to connect. Every field is optional; anything left empty is ignored."~~
+  **UX5 (F6):** "Pick what {name} notices. Everything is optional, and the house never
+  hurts the pet: it only changes its mood, its scene and what it asks for." It keeps
+  today's reassurance for a worried parent.
 - Each topic's description: **at most two sentences**. Drafts:
   - Bedtime: "Bedtime and wake time are targets: the pet may turn in up to an hour either side, and lights out always wins. It sleeps when the bedtime lights are off and the house is quiet."
   - People and privacy: "Who is home decides whether the pet is with you or at the sitter's. The privacy switches decide what dashboards and sensors may show."
   - Weather and air: "The pet sees the weather outside and feels the room's temperature and air. It never gets sick from them."
   - The pet's room: "Lights, a fireplace, the TV and music change the pet's scene and mood."
-  - The house helps: "Heating, cooling and appliances give the pet something to notice and help with. A robot vacuum or the doorbell can startle it."
-  - Moon and sky: "Optional: the moon sensors make the night sky match yours."
+  - The house helps: ~~"Heating, cooling and appliances give the pet something to notice and help with. A robot vacuum or the doorbell can startle it."~~ **UX5 (F6):** "When the heating or a fan comes on as the pet asks, the house answers for you. Finished machines, ticked-off chores, robot vacuums and the doorbell give it something to notice." (Chores moved to this topic; here the house helps the pet, not the other way round.)
+  - Moon and sky: ~~"Optional: the moon sensors make the night sky match yours."~~ **UX5 (F6):** "The moon sensors make the pet's night sky match yours, full moons and all." ("Optional" repeated what the menu says.)
   - Notifications: "Phone notifications go to whoever taps "notify me" on the pet's status screen." (existing)
+- **UX5 (F6): the menu label "Notifications"** becomes **"Where notifications open"**
+  (it holds one field, the dashboard a tap opens; someone looking to switch
+  notifications on or off finds nothing there, since that switch is the card's "notify
+  me"). The description stays.
+- **UX5 (F5): every topic form needs a title and `{name}`.** Each
+  `options.step.<topic>` carries a `title` and its step passes
+  `description_placeholders={"name": pet_name(hass, entry)}` (not `entry.title`; see
+  S3/S6). Titles: "{name}'s bedtime", "People and privacy", "Weather and air",
+  "{name}'s room", "The house helps", "Moon and sky", "Where notifications open".
+- **UX5 (F5): one-line menu hints.** HA's pinned frontend supports
+  `menu_option_descriptions` under a menu step, so each entry carries one plain line:
+
+  | Topic | Hint |
+  |---|---|
+  | bedtime | When the pet goes to bed and wakes up |
+  | people | Who's home, the sitter, and privacy |
+  | weather | Rain, sun, indoor temperature and air |
+  | room | Lights, fireplace, TV and music |
+  | house | Heating, fans, machines, chores and visitors |
+  | sky | The moon |
+  | notifications | Which dashboard a tap opens |
+
+- **UX5 (F4, Q4): the missing-entities repair names the topic.** Compute `{topics}` from
+  which option keys hold the missing IDs (via the topic map) and use it in the repair
+  text (`issues.missing_entities`). Approved text: "…Open Settings → Devices & services
+  → Virtual Pet → the gear next to {pet}, then {topics}, and pick the new entities or
+  clear those fields. This warning goes away once that's saved." **S5b (new, M, after
+  S5; first mate: yes):** make that repair fixable. A one-step repair flow, "Forget
+  them", removes only the missing IDs from `options` and reloads the pet: one tap, no
+  form. `is_fixable=True` and a `RepairsFlow` in a new `repairs.py`; the text names
+  what will be forgotten.
+- **UX5 (F8, partly BUILT in s2673 on today's one-form strings; S5 must keep the words
+  when it moves them):** `sitter_settles` is "The sitter calms a fussy pet" (help "…if the
+  pet was fussing for attention when it left (not a real need)…"); `notice_robot` and
+  `notice_doorbell` end "One added later is noticed once these settings are saved again."
+  (saving a topic reloads the pet anyway); the `bedtime` help reads "…Switching "Lights
+  out" off again after bedtime costs a little happiness."; the `away_after` unit is
+  "hours", not "h". The setup form's lines (description, name help, "Dashboard with the pet shelf" and its help) are also built.
 - Label changes (others unchanged):
 
   | Key | Today | DRAFT |
@@ -574,12 +645,26 @@ moved, and the `name_taken` helper) and S5 (strings).
   unloaded entry** (F20: an unloaded entry has `unhatched` false, so the submit path
   already treats it as hatched and the move waits in `next_world`; the label must match
   it). `async_step_reconfigure_hatched` shares the submit code. Labels:
-  - `reconfigure.data.world`: "World" (existing).
+  - `reconfigure.data.world`: "World" (existing). **UX5 (F6):** the description's
+    second and third sentences read "A new name shows everywhere the pet does; its entity
+    IDs stay the same. A newly laid egg can also be named on the card during its first
+    day. A new world changes the device and which creatures hatch." (replaces "A new egg
+    can be named on the card for its first day, too").
+  - **UX5 (F3, BUILT in s2673):** the world select is `SelectSelectorMode.LIST` in Add a
+    pet and Reconfigure (a dropdown cut the creatures off on a phone).
   - `reconfigure_hatched.data.world`: "World for the next egg" (DRAFT), with
     `data_description`: "{name} stays where it is. Its next egg starts in this world."
     (DRAFT).
+- **UX5 (F1, BUILT in s2673): the helper and the device page.** Reconfigure's title,
+  placeholder and default now come from `pet_name(hass, entry)`. A submit with a changed
+  name writes `title` and clears the device's `name_by_user` (`clear_device_name`); an
+  unchanged submit keeps both. What is left for S6: `name_taken` on Reconfigure (below),
+  and the `self._shown` guard stores `pet_name` at the moment the form opens, not at
+  submit (today's code recomputes it at submit, which cannot catch a card rename in
+  between).
 - **A name taken (F9).** Reconfigure had no duplicate check (`config_flow.py:131`), so an
-  admin could give two pets one name. It now uses S3's `name_taken(hass, name,
+  admin could give two pets one name. **Add a pet already has it (UX5 F2, BUILT in
+  s2673: `name_taken` on `name`, the line below).** It now uses `names.name_taken(hass, name,
   except_entry_id)` and shows the error `name_taken` on the name field, with N15's words
   as plain flow text: "Another pet here already has that name." (DRAFT).
 - **Don't undo a card rename (F10).** The form is filled with `entry.title` when it
