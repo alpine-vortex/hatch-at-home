@@ -443,14 +443,14 @@ const SKY_REACT = {
 };
 const CLOCK_LINES = {
   sunset: {
-    day: ["*winds down for the evening*"],
-    dusk: ["ooh, evening! *perks up* ♪"],
-    night: ["*stirs* the night is starting ♪"],
+    day: ["*winds down for the evening*", "*settles in as the light fades*"],
+    dusk: ["ooh, evening! *perks up* ♪", "the evening is here ♪ *wiggles*"],
+    night: ["*stirs* the night is starting ♪", "*wakes right up* hello, dark ♪"],
   },
   good_morning: {
-    day: ["morning!! what a bright one ♪"],
-    dusk: ["morning... *stretch* getting there"],
-    night: ["five more minutes... ♥"],
+    day: ["morning!! what a bright one ♪", "rise and shine ♪ *bounces*"],
+    dusk: ["morning... *stretch* getting there", "*slow blink* morning, more or less"],
+    night: ["five more minutes... ♥", "*curls up tighter* too early..."],
   },
 };
 // --- end fresh-expand copy ---

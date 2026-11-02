@@ -54,13 +54,13 @@ test("the sky and clock tables are in the copy scan, and pass it", () => {
   assert.ok("SKY_REACT" in COPY_TABLES && "CLOCK_LINES" in COPY_TABLES);
 });
 
-test("every sky has two lines and every clock a line in both moments", () => {
+test("every sky has two lines and every clock two in both moments", () => {
   assert.deepStrictEqual(Object.keys(SKY_REACT).sort(), [...NATURE_VALUES.sky].sort());
   for (const sky of NATURE_VALUES.sky) assert.strictEqual(SKY_REACT[sky].length, 2, sky);
   assert.deepStrictEqual(Object.keys(CLOCK_LINES).sort(), ["good_morning", "sunset"]);
   for (const moment of Object.keys(CLOCK_LINES)) {
     assert.deepStrictEqual(Object.keys(CLOCK_LINES[moment]).sort(), [...NATURE_VALUES.clock].sort());
-    for (const clock of NATURE_VALUES.clock) assert.ok(CLOCK_LINES[moment][clock].length >= 1, `${moment}.${clock}`);
+    for (const clock of NATURE_VALUES.clock) assert.strictEqual(CLOCK_LINES[moment][clock].length, 2, `${moment}.${clock}`);
   }
 });
 
