@@ -637,9 +637,10 @@ moved, and the `name_taken` helper) and S5 (strings).
 
 - **Title:** "Rename {name} or change its world" (DRAFT; replaces "Rename or move
   {name}").
-- **Description (DRAFT):** "A new name shows on the card and in notifications; entity
-  IDs stay the same. A new egg can be named on the card for its first day, too. A new
-  world changes the device and which creatures hatch."
+- **Description:** the UX5 text below, on both step ids. (S3 shipped "To name a new
+  generation, lay the egg first, then rename it here." and S5's old "A pet that has
+  already hatched stays where it is" line; both are replaced by it and by the
+  `reconfigure_hatched` help.)
 - **Two step ids.** `async_step_reconfigure` shows `step_id="reconfigure"` for a pet
   still in its egg, and `step_id="reconfigure_hatched"` for a hatched pet **and for an
   unloaded entry** (F20: an unloaded entry has `unhatched` false, so the submit path
@@ -665,8 +666,10 @@ moved, and the `name_taken` helper) and S5 (strings).
 - **A name taken (F9).** Reconfigure had no duplicate check (`config_flow.py:131`), so an
   admin could give two pets one name. **Add a pet already has it (UX5 F2, BUILT in
   s2673: `name_taken` on `name`, the line below).** It now uses `names.name_taken(hass, name,
-  except_entry_id)` and shows the error `name_taken` on the name field, with N15's words
-  as plain flow text: "Another pet here already has that name." (DRAFT).
+  except_entry_id)` (as shipped in S3: it compares `pet_name`, so a title hidden behind a
+  device's own name is free again, UX5 rule; it is not in `coordinator.py`). It is
+  checked only when the submitted name differs from the one the form showed, and shows
+  the error `name_taken` on the name field, with N15's words as plain flow text: "Another pet here already has that name." (DRAFT).
 - **Don't undo a card rename (F10).** The form is filled with `entry.title` when it
   opens (`:161`) and the submit writes `title=name` (`:151-153`), so an admin who opens
   Reconfigure, lets someone rename the egg in the card, then submits for the world would
@@ -676,7 +679,8 @@ moved, and the `name_taken` helper) and S5 (strings).
   creatures hatch and the device's look; shell finish = this pet's colour, picked on
   the card; a rename keeps entity IDs (existing line 395, moved next to it).
 - **Files:** `config_flow.py`, `strings.json`, `translations/en.json`, `docs/guide.md`,
-  `tests/test_init.py`, `tests/test_config_flow.py`.
+  `tests/test_init.py`, `tests/test_names.py` (the name and device-page helpers
+  are there; `tests/test_config_flow.py` needed no change).
 - **Tests:** pytest: an egg gets `reconfigure`, a hatched pet and an unloaded entry
   `reconfigure_hatched`; submitting either keeps today's world rules (egg moves now,
   hatched waits in `next_world`), already covered by the existing reconfigure tests,

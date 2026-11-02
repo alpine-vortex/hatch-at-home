@@ -1519,6 +1519,44 @@ async def test_reconfigure_renames_and_moves_an_egg_now(
     assert hass.states.get("sensor.pip_life_stage").attributes["world"] == "tidepool"
 
 
+async def test_reconfigure_labels_follow_the_pet_stage(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    """An egg moves now (reconfigure); a hatched pet and an unloaded entry wait
+    for the next egg (reconfigure_hatched), and the form says so."""
+    config = await setup(hass)  # a fresh egg
+    egg = await config.start_reconfigure_flow(hass)
+    assert egg["step_id"] == "reconfigure"
+    # Unloaded, it may have hatched: its move waits, so the label matches.
+    assert await hass.config_entries.async_unload(config.entry_id)
+    unloaded = await config.start_reconfigure_flow(hass)
+    assert unloaded["step_id"] == "reconfigure_hatched"
+    result = await hass.config_entries.flow.async_configure(
+        unloaded["flow_id"], {"name": "Pip", "world": "pond"}
+    )
+    await hass.async_block_till_done()
+    assert result["reason"] == "reconfigure_successful"
+    assert config.data["next_world"] == "pond"
+
+
+async def test_reconfigure_labels_a_hatched_pet_for_the_next_egg(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    age = 14 * 24 + 7 * 24 + 1.0
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, age_hours=age, born=now - age * 3600, species="bird", raised=["bird"]
+    )
+    config = await setup(hass)
+    result = await config.start_reconfigure_flow(hass)
+    assert result["step_id"] == "reconfigure_hatched"
+    assert result["description_placeholders"] == {"name": "Pip"}
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Pip", "world": "pond"}
+    )
+    await hass.async_block_till_done()
+    assert config.data["world"] == "woodland" and config.data["next_world"] == "pond"
+
+
 async def test_reconfigure_moves_a_hatched_pet_with_its_next_egg(
     hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
 ) -> None:

@@ -411,10 +411,15 @@ pet; it's only how the screen looks.
 
 One device named after your pet, with the entities below. To rename the pet or move
 it to another world, open Settings → Devices & services → Hatch at Home → ⋮ next to the
-pet → **Reconfigure**. Entity IDs stay the same, and notifications and the journal
-follow the new name. A pet that has hatched stays in its world; its next egg starts
-in the new one (the status screen says "next egg in …"). To name a new generation,
-lay the egg, then rename it.
+pet → **Reconfigure**. A rename keeps the entity IDs, and notifications and the journal
+follow the new name. A newly laid egg can also be named on the card during its first
+day.
+
+Two words are easy to mix up. The **world** is which creatures can hatch and how the
+device looks; Reconfigure changes it. The **shell finish** is this pet's colour, picked
+on the card in settings (the gear); Reconfigure leaves it alone. A pet that has hatched
+stays in its world; a new world starts with its next egg (the status screen says "next
+egg in …"). A pet still in its egg moves at once.
 
 | Entity | What it is |
 | --- | --- |

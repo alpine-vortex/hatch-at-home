@@ -16,11 +16,22 @@
         }
       },
       "reconfigure": {
-        "title": "Rename or move {name}",
-        "description": "A new name shows on the card and in notifications; entity IDs stay the same. To name a new generation, lay the egg first, then rename it here. A new world changes the device and which creatures hatch. A pet that has already hatched stays where it is, and its next egg starts in the new world.",
+        "title": "Rename {name} or change its world",
+        "description": "A new name shows everywhere the pet does; its entity IDs stay the same. A newly laid egg can also be named on the card during its first day. A new world changes the device and which creatures hatch.",
         "data": {
           "name": "Name",
           "world": "World"
+        }
+      },
+      "reconfigure_hatched": {
+        "title": "Rename {name} or change its world",
+        "description": "A new name shows everywhere the pet does; its entity IDs stay the same. A newly laid egg can also be named on the card during its first day. A new world changes the device and which creatures hatch.",
+        "data": {
+          "name": "Name",
+          "world": "World for the next egg"
+        },
+        "data_description": {
+          "world": "{name} stays where it is. Its next egg starts in this world."
         }
       }
     },

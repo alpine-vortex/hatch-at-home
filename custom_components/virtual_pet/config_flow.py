@@ -89,6 +89,8 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
     VERSION = 1
     MINOR_VERSION = 2  # 2: new pets start on the house's weather (ha-signals H2)
 
+    _shown: str | None = None  # Reconfigure: the name the form showed when it opened
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> PetOptionsFlow:
@@ -140,10 +142,20 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reconfigure(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
+        """Rename the pet, or move it to another world (a pet still in its egg)."""
+        return await self._reconfigure(user_input)
+
+    async def async_step_reconfigure_hatched(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """The same form for a hatched pet, whose move waits for its next egg."""
+        return await self._reconfigure(user_input)
+
+    async def _reconfigure(self, user_input: dict[str, Any] | None) -> ConfigFlowResult:
         """Rename the pet, or move it to another world.
 
         A pet that has hatched stays a creature of its world; the move applies
-        to its next egg.
+        to its next egg. The form says which (two step ids, two labels).
         """
         entry = self._get_reconfigure_entry()
         coordinator = getattr(entry, "runtime_data", None)
@@ -153,20 +165,28 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
             coordinator.world if coordinator is not None else entry.data.get(CONF_WORLD)
         )
         current = entry.data.get(CONF_NEXT_WORLD) or world_now or DEFAULT_WORLD
-        shown = pet_name(self.hass, entry)
+        # Unloaded, it may have hatched: a move waits for the next egg.
+        unhatched = (
+            coordinator is not None
+            and coordinator.state is not None
+            and coordinator.state.species is None
+        )
+        if user_input is None or self._shown is None:
+            # The name the form showed, kept from when it opened: a card rename
+            # while the form is open must not be written back over.
+            self._shown = pet_name(self.hass, entry)
+        shown = self._shown
+        errors: dict[str, str] = {}
         if user_input is not None:
             name = user_input[CONF_NAME].strip() or shown
             renamed = name != shown
+            if renamed and name_taken(self.hass, name, entry.entry_id):
+                errors[CONF_NAME] = "name_taken"
+        if user_input is not None and not errors:
             world = user_input[CONF_WORLD]
             data = {k: v for k, v in entry.data.items() if k != CONF_NEXT_WORLD}
             if world_now is not None:
                 data[CONF_WORLD] = world_now
-            # Unloaded, it may have hatched: a move waits for the next egg.
-            unhatched = (
-                coordinator is not None
-                and coordinator.state is not None
-                and coordinator.state.species is None
-            )
             if world_now is None and world == current:
                 # Unknown world, left as shown: keep things as they were.
                 if CONF_NEXT_WORLD in entry.data:
@@ -180,26 +200,32 @@ class VirtualPetConfigFlow(ConfigFlow, domain=DOMAIN):
                 # A device-page name would hide the new one everywhere.
                 clear_device_name(self.hass, entry)
             else:
-                name = entry.title  # the name shown came from the device page
+                # The name shown came from the device page, or the card renamed
+                # the pet meanwhile: the entry's current title stands.
+                name = entry.title
             return self.async_update_reload_and_abort(
                 entry, title=name, data={**data, CONF_NAME: name}
             )
         options = await self._world_options()
         if options is None:
             return self.async_abort(reason="no_worlds")
+        typed = user_input or {}  # what they had typed, when a name is taken
         return self.async_show_form(
-            step_id="reconfigure",
+            step_id="reconfigure" if unhatched else "reconfigure_hatched",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_NAME, default=shown): str,
-                    vol.Required(CONF_WORLD, default=current): SelectSelector(
+                    vol.Required(CONF_NAME, default=typed.get(CONF_NAME, shown)): str,
+                    vol.Required(
+                        CONF_WORLD, default=typed.get(CONF_WORLD, current)
+                    ): SelectSelector(
                         SelectSelectorConfig(
                             options=options, mode=SelectSelectorMode.LIST
                         )
                     ),
                 }
             ),
-            description_placeholders={"name": shown},
+            description_placeholders={"name": self._shown},
+            errors=errors,
         )
 
     async def async_step_user(

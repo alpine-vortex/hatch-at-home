@@ -154,6 +154,83 @@ async def test_add_a_pet_counts_the_name_from_the_device_page(
     assert free["type"] is FlowResultType.CREATE_ENTRY
 
 
+async def test_reconfigure_refuses_a_name_another_pet_has(
+    hass: HomeAssistant,
+    now: float,
+) -> None:
+    config = await setup(hass)
+    other = await start_add(hass, "Fern")
+    assert other["type"] is FlowResultType.CREATE_ENTRY
+    rename_on_device_page(hass, other["result"].entry_id, "Mochi")
+    result = await config.start_reconfigure_flow(hass)
+    taken = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": " mochi ", "world": "pond"}
+    )
+    assert taken["type"] is FlowResultType.FORM
+    assert taken["errors"] == {"name": "name_taken"}
+    assert taken["step_id"] == "reconfigure"
+    assert schema_default(taken, CONF_NAME) == " mochi "  # what they typed stays
+    assert taken["description_placeholders"] == {"name": "Pip"}
+    assert config.title == "Pip" and "next_world" not in config.data
+    # The title behind a device's own name is free again.
+    free = await hass.config_entries.flow.async_configure(
+        taken["flow_id"], {"name": "Fern", "world": "pond"}
+    )
+    assert free["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+    assert config.title == "Fern"
+
+
+async def test_reconfigure_lets_a_pet_keep_its_own_name_in_another_case(
+    hass: HomeAssistant,
+    now: float,
+) -> None:
+    """The pet itself never counts as the other pet that has the name."""
+    config = await setup(hass)
+    result = await config.start_reconfigure_flow(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "pip", "world": "pond"}
+    )
+    assert result["type"] is FlowResultType.ABORT
+    await hass.async_block_till_done()
+    assert config.data["world"] == "pond"
+
+
+async def test_a_card_rename_while_reconfigure_is_open_survives_a_world_save(
+    hass: HomeAssistant,
+    now: float,
+) -> None:
+    config = await setup(hass)  # an egg: the card may name it
+    result = await config.start_reconfigure_flow(hass)
+    assert schema_default(result, CONF_NAME) == "Pip"
+    assert await config.runtime_data.async_rename("Fern") is None
+    await hass.async_block_till_done()
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"name": "Pip", "world": "pond"},  # the name left alone
+    )
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+    assert config.title == "Fern" and config.data[CONF_NAME] == "Fern"
+    assert config.data["world"] == "pond"
+    assert config.runtime_data.state.name == "Fern"
+
+
+async def test_a_name_typed_in_reconfigure_beats_a_card_rename(
+    hass: HomeAssistant,
+    now: float,
+) -> None:
+    config = await setup(hass)
+    result = await config.start_reconfigure_flow(hass)
+    await config.runtime_data.async_rename("Fern")
+    await hass.async_block_till_done()
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Olive", "world": "woodland"}
+    )
+    await hass.async_block_till_done()
+    assert config.title == "Olive"
+
+
 async def test_the_name_field_is_filled_with_a_free_name(
     hass: HomeAssistant,
     now: float,
@@ -216,6 +293,14 @@ async def test_the_welcome_is_titled_with_the_pets_name(
 def test_strings_and_english_translation_are_identical() -> None:
     strings = (PACKAGE / "strings.json").read_text()
     assert strings == (PACKAGE / "translations" / "en.json").read_text()
+    steps = json.loads(strings)["config"]["step"]
+    assert steps["reconfigure"]["title"] == "Rename {name} or change its world"
+    assert steps["reconfigure"]["data"]["world"] == "World"
+    assert steps["reconfigure_hatched"]["data"]["world"] == "World for the next egg"
+    assert (
+        steps["reconfigure_hatched"]["description"]
+        == steps["reconfigure"]["description"]
+    )
     assert (
         json.loads(strings)["config"]["error"]["name_taken"]
         == "Another pet here already has that name."
