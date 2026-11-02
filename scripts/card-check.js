@@ -2879,6 +2879,7 @@ async function main() {
       other.nameSheet = true;
       el._forget(other);
       out.petChange = !other.layAt && !other.nameSheet;
+      other.el.remove(); // _buildSlide put it in the track
       // The status row: on an egg and a baby, not a child; "change" opens the sheet, keep goes back to the page.
       const row = async (stage) => {
         put(stage, gen);
