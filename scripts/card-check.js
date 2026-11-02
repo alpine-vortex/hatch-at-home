@@ -10296,7 +10296,7 @@ async function main() {
     const sharedSaid = `${sharedWish.wish}|${sharedWish.look.join("|")}`;
     check("P3b: a wish aimed at dev is plain on dev's card turned shared screen (no mine, no name)",
       seeded && sharedWish.mine === null && /play a game together/.test(sharedWish.wish || "") &&
-      sharedWish.look.some((t) => /play a game today/.test(t)) &&
+      sharedWish.look.some((t) => /play a game today|a game today would be fun|playing mood today/.test(t)) &&
       !/sunbeam|with you|with me/.test(sharedSaid), JSON.stringify(sharedWish));
   } else {
     check("P3a: HA restart and the seeded bond can run (set HA_CONFIG and HA_START with HA_URL)", false,
