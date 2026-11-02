@@ -527,6 +527,35 @@ const PRESETS = {
     out.push({ ...base, admin: false, scroll: ".sleeprow", name: "settings-s7/330-nonadmin", group: "settings-s7-time", label: "not an admin" });
     return out;
   },
+  // Resting (R1, plan favourite-resting §9): the label and breathing pose, its idle line and a
+  // baby's, a sick resting pet (sick wins), the status page's line, and the settings row at
+  // 420/330/300, day and night, mono, big text and on a shared screen (read-only).
+  resting() {
+    const out = [];
+    const shot = (name, label, extra) => out.push({ name: `resting/${name}`, group: `resting-${extra.view || "card"}`,
+      label, world: "woodland", width: 330, ...extra, pet: { resting: true, ...(extra.pet || {}) } });
+    for (const width of [420, 330, 300]) shot(`card-${width}`, `card ${width}`, { width });
+    shot("card-night", "night", { scene: "night" });
+    shot("card-mono", "mono", { mono: true });
+    shot("card-idle", "idle line", { idle: { mood: "content" } });
+    shot("card-baby", "baby idle", { stage: "baby", idle: { mood: "content" }, storage: { "hatch-baby-talk-bench-user": "on" } });
+    shot("card-sick", "sick: no label", { pet: { mood: "sick" } });
+    shot("card-asleep", "asleep: no label", { scene: "dim", pet: { mood: "asleep" } });
+    shot("status", "status page", { view: "status" });
+    for (const width of [420, 330, 300]) {
+      shot(`settings-${width}`, `settings ${width}`, { width, view: "settings", mine: true, scroll: ".restrow" });
+    }
+    shot("settings-night", "settings night", { scene: "night", view: "settings", mine: true, scroll: ".restrow" });
+    shot("settings-mono", "settings mono", { mono: true, view: "settings", mine: true, scroll: ".restrow" });
+    shot("settings-big", "settings big text", { bigText: true, view: "settings", mine: true, scroll: ".restrow" });
+    shot("settings-big-300", "settings big 300", { width: 300, bigText: true, view: "settings", mine: true, scroll: ".restrow" });
+    shot("settings-off", "settings, off", { view: "settings", mine: true, scroll: ".restrow", pet: { resting: false } });
+    shot("settings-shared", "shared: read-only", { view: "settings", mine: true, scroll: ".restrow",
+      storage: { "hatch-shared-screen": "on" } });
+    shot("settings-shared-300", "shared 300", { width: 300, view: "settings", mine: true, scroll: ".restrow",
+      storage: { "hatch-shared-screen": "on" } });
+    return out;
+  },
   // The same sheet on a shared screen: nothing personal, only this screen's rows.
   "settings-shared"() {
     const out = [];

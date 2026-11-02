@@ -139,6 +139,9 @@ CALL_THRESHOLDS: dict[str, tuple[float, float]] = {
     "happiness": (25.0, 40.0),
     "energy": (20.0, 40.0),
 }
+# Resting (plan favourite-resting §3.3): entering refills hunger, happiness
+# and energy to at least this, above every call level and its re-arm.
+REST_FLOOR = 55.0
 FAKE_CALL_RATE = 0.12  # fake calls per awake hour while everything is fine
 LONELY_CALL_RATE = 0.1  # "a bit lonely" calls per awake hour at happiness 25-40
 # Discipline makes whining rarer: at 100 it whines this much less often.

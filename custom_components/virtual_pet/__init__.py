@@ -79,7 +79,7 @@ from .coordinator import (
 from .defaults import default_weather
 from .home import news_text
 from .model import GAMES
-from .people import ANSWERS, People
+from .people import ANSWERS, ASK_AGAIN_KINDS, People
 from .react import REACTIONS
 
 _LOGGER = logging.getLogger(__name__)
@@ -233,11 +233,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_baby_talk)
     websocket_api.async_register_command(hass, websocket_photos)
     websocket_api.async_register_command(hass, websocket_forget_me)
+    websocket_api.async_register_command(hass, websocket_ask_again)
     websocket_api.async_register_command(hass, websocket_subscribe)
     websocket_api.async_register_command(hass, websocket_notify_me)
     websocket_api.async_register_command(hass, websocket_linked)
     websocket_api.async_register_command(hass, websocket_greeted)
     websocket_api.async_register_command(hass, websocket_my_day)
+    websocket_api.async_register_command(hass, websocket_rest)
     websocket_api.async_register_command(hass, websocket_set_shell)
     websocket_api.async_register_command(hass, websocket_rename)
     websocket_api.async_register_command(hass, websocket_collect)
@@ -578,6 +580,39 @@ async def websocket_forget_me(
 
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): f"{DOMAIN}/ask_again",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("kind"): vol.In(ASK_AGAIN_KINDS),
+        # No default, and refused unless False: a card that forgets the flag, or a
+        # shared screen, changes nothing (a card-honesty guard, as the gift path).
+        vol.Required("shared"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_ask_again(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Ask me again (memory plan M0-c): the signed-in person's favourite of this
+    kind is dropped and the pet asks it afresh on a later look. Only on their own
+    screen. A websocket command, so the choice stays off the event bus."""
+    if msg["shared"] is not False:
+        connection.send_error(
+            msg["id"], "shared", "That is asked again on its person's own screen"
+        )
+        return
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    await pet.async_ask_again(connection.user.id, msg["kind"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): f"{DOMAIN}/birthday_phone",
         vol.Required("entity_id"): cv.entity_id,
         vol.Required("enabled"): bool,
@@ -783,6 +818,33 @@ async def websocket_my_day(
         return
     await pet.async_set_my_day(connection.user.id, msg["enabled"])
     connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/rest",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_rest(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Rest the pet, or wake it (plan favourite-resting §4.2): the household's
+    switch, so anyone signed in may flip it, and who did isn't recorded. An
+    egg can't rest (an "egg" error); off works for any pet."""
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    if await pet.async_set_resting(msg["enabled"]) != "ok":
+        connection.send_error(msg["id"], "egg", "An egg can't rest")
+        return
+    connection.send_result(msg["id"], {"resting": msg["enabled"]})
 
 
 @websocket_api.websocket_command(

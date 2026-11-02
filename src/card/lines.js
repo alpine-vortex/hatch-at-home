@@ -98,6 +98,10 @@ const BABY = {
   "idle.excited": { baby: ["hehe!", "yay yay!"] },
   "idle.hungry": { baby: ["*tummy rumbles*", "snack time..."] },
   "idle.default": { baby: ["♪ la la ♪", "*looks around*"] },
+  // Resting (R1): the baby keeps lines it already says (cozy, a hello, a cheer).
+  "idle.resting": { baby: ["cozy cozy", "♪ la la ♪"] },
+  "rest.visit": { baby: ["oh! hi hi ♥"] },
+  "rest.back": { baby: ["yay yay!", "hehe!"] },
   "yum": { baby: [(food) => `yum yum, ${food}!`] },
   "favourite_snack": { baby: [(food) => `${food}! yay yay!`] },
   "wish_granted": { baby: ["yay yay! ♥"] },

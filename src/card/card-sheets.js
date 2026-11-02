@@ -493,6 +493,25 @@ class HatchPetCardSheets extends HatchPetCardStatus {
     return false;
   }
 
+  // Resting (R1) is the household's, for this pet: a websocket command, so who flipped it
+  // isn't recorded. The switch entity's state confirms it; the pet says so as it wakes.
+  async _setResting(s, enabled, button) {
+    const id = s.ids?.["sensor.life_stage"];
+    if (!id) return;
+    button.classList.add("pending");
+    button.setAttribute("aria-pressed", String(enabled));
+    button.textContent = enabled ? "on" : "off";
+    try {
+      await this._hass.callWS({ type: "virtual_pet/rest", entity_id: id, enabled });
+    } catch (err) {
+      button.setAttribute("aria-pressed", String(!enabled));
+      button.textContent = !enabled ? "on" : "off";
+      this._statusMessage(s, SETTINGS_AGAIN.failed);
+    } finally {
+      button.classList.remove("pending");
+    }
+  }
+
   // "My day" is per person too: steps, stairs and sleep from their own phones.
   async _setMyDay(s, enabled, button) {
     const id = s.ids?.["sensor.life_stage"];

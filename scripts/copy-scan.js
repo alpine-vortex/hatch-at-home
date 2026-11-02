@@ -32,6 +32,7 @@ const COPY_TABLES = {
   WISH_MORE: {},
   WELCOME_BACK: {},
   FAV_LINES: {},
+  FAV_WEATHER_LINES: {},
   TRICK_LINES: {},
   LINK_VISITOR_NEWS: { fill: "visitor" },
   LINK_NEWS_REPLY: {},
@@ -59,6 +60,8 @@ const COPY_TABLES = {
   TALK_COPY: {}, // talking UX fix 3 (F11, F12, F14)
   GAME_COPY: {}, // games UX fix 6 (F8, F12, Q8)
   SETUP_COPY: { fill: "creature" }, // settings S2: the lay sheet (the longest name is C15')
+  RESTING_IDLE: {}, // resting R1 (plan favourite-resting §4.6)
+  REST_LINES: {},
 };
 
 function lines(value, path, out) {

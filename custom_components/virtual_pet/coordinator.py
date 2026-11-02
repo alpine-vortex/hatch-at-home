@@ -164,6 +164,8 @@ MOMENTS = {
     "someone_home",
     "became_sick",
     "found",  # {id, world}: a find went in the basket (no user)
+    "rest_started",  # the resting switch (plan favourite-resting §4.5): no user
+    "rest_ended",
 }
 # A public moment of these types keeps only {type, at}: the bus and the phones
 # still get the cause.
@@ -437,8 +439,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.state, self._now(), self.settings
         )
         if mood == "away" and self.privacy:
-            # Privacy: an empty house looks like a nap on any dashboard.
-            return "asleep", ["asleep"], "zzz", "asleep"
+            # Privacy: an empty house looks like a nap on any dashboard. A
+            # resting pet keeps its flag (its switch says so anyway), so the
+            # flag's absence can't tell that it is away.
+            rest = ["resting"] if "resting" in flags else []
+            return "asleep", ["asleep", *rest], "zzz", "asleep"
         return mood, flags, reason, key
 
     @staticmethod
@@ -1824,7 +1829,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             )
         months = model.friends_for(bond.get("since"), today)
         friends = months and noted.get("friends") != today
-        born = model.pet_birthday(state.hatched_on, today)
+        # No birthday while resting: aging is paused (plan §3.3, S4).
+        born = None if state.resting else model.pet_birthday(state.hatched_on, today)
         if born and noted.get("birthday") != today:
             if friends and born.get("months") == months:
                 note = {"kind": "birthday_friends", "months": months}
@@ -2229,6 +2235,26 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.people.save()
         self._push_everywhere()
 
+    async def async_ask_again(self, user: str, kind: str) -> None:
+        """Ask me again (memory plan M0-c): drop this person's favourite of this
+        kind (the visitor: this world's) and start its tries over, so the next
+        eligible look asks it again. Nothing else changes: the 3-day gap
+        (once_last), `noted`, the birthday, the switches stay. Saved at once, as
+        a forget is. A record that isn't there is not made."""
+        if kind not in P.ASK_AGAIN_KINDS:
+            return
+        async with self.people.lock(user):
+            person = self.people.data["people"].get(user)
+            if person is None:
+                return
+            key = P.fav_visitor_key(self.world) if kind == "fav_visitor" else kind
+            tries = f"fav_visitor_{self.world}" if kind == "fav_visitor" else kind
+            gone = (person.get("likes") or {}).pop(key, None)
+            (person.get("likes_asked") or {}).pop(tries, None)
+            if gone is not None:
+                await self.people.async_save_now()
+        self._push_everywhere()  # their mine
+
     async def async_set_my_day(self, user: str, enabled: bool) -> None:
         """Let the pets notice this person's day (steps, sleep, where they've
         been...), or stop. One switch per person, for every pet."""
@@ -2360,7 +2386,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         batch: list[model.Event] | None = None,
     ) -> None:
         """Tell the users who opted in, on their phones. Never for fast-forward."""
-        if event["type"] in ("recovered", "fell_asleep"):  # off the phones
+        if event["type"] in (
+            "recovered",
+            "fell_asleep",
+            "rest_started",
+        ):  # off the phones
             self._sick_told = False
         if simulated or self.state is None or not self.state.notify_users:
             return
@@ -2577,10 +2607,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "birthday_kept": bool(person.get("birthday")),
             # Their waiting gift, {id, world}, or None (plan visitors v2 §5).
             "gift": model.known_gift(bond, self.known_finds),
-            # Their favourite of this world's visitors (an id), or None (F4).
+            # Their favourite of this world's visitors (an id), or None (F4), and of
+            # the weather and the season, so the settings sheet can show them and
+            # offer "ask me again" (memory plan M0-c). Their own channel only.
             "fav_visitor": (person.get("likes") or {}).get(
                 P.fav_visitor_key(self.world)
             ),
+            "fav_weather": (person.get("likes") or {}).get("fav_weather"),
+            "fav_season": (person.get("likes") or {}).get("fav_season"),
             # Where a follow-up beat may wait for them today ("look", "picker"), so
             # their card keeps a first-look slot only then (F1); never what it is.
             "follow_at": self.people.follow_at(
@@ -2786,13 +2820,22 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     async def async_forget_games(self, user: str) -> None:
         """Forget my data: this person's parked dig goes, and a dig in progress
-        no longer names them (it's the household's now). Written at once, as
-        the people store is."""
+        no longer names them (it's the household's now). So does their dream
+        pick, waiting for tonight, and their name on this morning's dream (the
+        story stays, "your idea" does not; memory plan M0-d). Written at once,
+        as the people store is."""
         assert self.state is not None
         dropped = self.state.parked.pop(user, None) is not None
         game = self.state.game
         if game is not None and game.player == user:
             game.player = None
+            dropped = True
+        picks = [p for p in self.state.dream_picks if p["user"] != user]
+        if len(picks) != len(self.state.dream_picks):
+            self.state.dream_picks = picks
+            dropped = True
+        if (self.state.dream or {}).get("user") == user:
+            del self.state.dream["user"]
             dropped = True
         if dropped:
             await self.store.async_save(self.state.to_dict())
@@ -3017,6 +3060,18 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.state.egg_choice = species
         self._save()
         self._publish()
+
+    async def async_set_resting(self, on: bool) -> str:
+        """Flip the resting switch (plan favourite-resting §4.1). Returns the
+        model's result: "ok", or "egg" when an egg was asked to rest."""
+        assert self.state is not None
+        now = self._now()
+        self._advance(now)
+        result, events = model.set_resting(self.state, on, now)
+        self._fire(events)
+        self._save()
+        self._publish()
+        return result
 
     async def async_set_lights_out(
         self, on: bool, context: Context | None = None

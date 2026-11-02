@@ -348,6 +348,56 @@ zoom. species.json `"acts"` lists them; the care scenes play them. One world per
   `"acts"` entry, so they play now.
 
 
+## Aww at 128 (2026-11-01)
+
+The `aww` act (a good-sport loss after a game: "aww, oh well"): `<stage>_aww_1/2` for every species'
+baby, teen and adult, drawn by `gpt-5.6-luna` on 2026-11-01 from each stage's `content_1` frame (the
+only reference), then cut at 2 px per art pixel with `cut_react` (scale from `content_1`, stage
+palette, outline closed), limbs counted at zoom. The look, approved on the fourth probe: brows up
+and a little worried, eyes open and soft, a small closed mouth (no smile), the head tilted, the
+idle pose kept, one paw palm-up beside the chest; species with no paw to raise (snake, slug,
+lizards, turtles, insects) droop and tilt instead. species.json `"acts"` lists them. One world per
+commit.
+
+- Woodland: banana slug, robin, deer, fox, squirrel.
+- Hearth: bunny, corgi, ferret, hamster, kitten (corgi teen and adult and kitten teen redrawn once:
+  four feet down plus the raised paw made five legs).
+- Terrarium: ball python (adult from the probe), bearded dragon, gecko, tarantula, tortoise (droop and
+  tilt, feet down; the tarantula raises a front leg).
+- Pond: axolotl, beaver, duckling (on its water ring, as in its idle frames), pond turtle (droop), tree frog.
+- Tidepool: hermit crab, octopus, otter (on its water), puffin, seal (puffin and seal teen redrawn once
+  to keep the rock they sit on).
+- Night Sky: bat, firefly (droop), luna moth (caterpillar baby droops), opossum, owl. Aww complete for
+  all 30.
+
+## Ready at 128 (2026-11-01)
+
+The `ready` act (a game about to start): `<stage>_ready_1/2` for every species' baby, teen and
+adult, drawn by `gpt-5.6-luna` on 2026-11-01 from each stage's `content_1` frame (the only
+reference), cut as aww above. The look, approved on its first probe (owner): an eager play-bow or
+forward crouch, eyes wide and bright, a small eager grin, frame 2 a little wiggle. One world per
+commit.
+
+- Woodland: banana slug, robin, deer, fox, squirrel.
+- Hearth: bunny, corgi, ferret, hamster, kitten.
+- Terrarium: ball python (head up, coiled), bearded dragon, gecko, tarantula, tortoise.
+- Pond: axolotl, beaver, duckling (baby and teen redrawn once to keep the water ring), pond turtle, tree frog.
+- Tidepool: hermit crab, octopus, otter (on its water), puffin and seal (on their rock).
+- Night Sky: bat, firefly, luna moth, opossum, owl. Ready complete for all 30.
+
+## Splash at 128 (2026-11-01)
+
+Splash pose (`acts.splash`), Luna (gpt-5.6-luna), probe kitten teen / ball python adult / deer baby approved by the owner 2026-11-01. Frame 2 keeps facing right; no drops, bubbles or towels. One world per commit.
+
+- Woodland (bananaslug, bird, deer, fox, squirrel): splash baby/teen/adult, frame 2 still facing right.
+- Hearth (bunny, corgi, ferret, hamster, kitten): splash baby/teen/adult, all facing right.
+- Terrarium (ballpython, beardeddragon, gecko, tarantula, tortoise): splash baby/teen/adult, all facing right.
+- Pond (axolotl, beaver, duckling, pondturtle, treefrog): splash baby/teen/adult, all facing right; duckling on its water ring.
+- Tidepool (hermitcrab, octopus, otter, puffin, seal): splash baby/teen/adult, facing right; puffin adult frame 2
+  tosses its head left, body and feet still facing right (accepted at landing). Otter keeps its water,
+  puffin and seal their rock.
+- Night Sky (bat, firefly, lunamoth, opossum, owl): splash baby/teen/adult, all facing right. Splash complete for all 30.
+
 ## Finds (V-F, 2026-11-01)
 
 Final art for the visitors-v2 finds (docs/plan-2026-11-01-visitors-v2.md §9): 64 x 64, 16 world cells at 4 px, centred, the silhouette ring snapped to the 128 outline (34, 20, 10). One Luna (gpt-5.6-luna) sheet per world, 5 x 2, style from the world's finished visitors and one 128 sprite; each find given a distinct outline shape (the collection shows unmet finds as silhouettes). Drawn at ~13 art px on a ~18 px pitch and read back 1:1; drawn finer, the cut had to shrink and the insides went to mush.

@@ -146,6 +146,7 @@ CALL_OVER_EVENTS = {
     "call_settled",  # the sitter settled a whine
     "egg_laid",
     "fell_asleep",
+    "rest_started",  # an open call is settled on entering rest
 }
 
 

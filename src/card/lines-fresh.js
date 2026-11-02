@@ -184,6 +184,15 @@ const WISH_MORE = {
 const WELCOME_BACK = ["you're here! ♥ hop hop", "yay, a visit! ♥", "hello hello! ♥ come in"];
 // B-a: a best friend's (bond 10) own screen, at most once a week. Never on a shared one.
 const FAV_LINES = ["I made up a song for you ♪", "you're my favourite ♥", "I saved you the comfy spot ♥", "*hums your song* ♪"];
+// M0-b (memory plan section 7; copy approved by the first mate, 2026-11-02): the
+// favourite-weather note, said once a day on a matching day, a list per weather in turns
+// (turnPick, `${device}|favweather`) so it doesn't repeat word for word.
+const FAV_WEATHER_LINES = {
+  sun: ["it's sunny, your favourite! ☀", "sunshine! your favourite ☀", "look, sun! just how you like it ☀", "a sunny one, for you! ☀"],
+  rain: ["it's raining, your favourite! ☂", "rain! your favourite ☂", "listen, rain! just how you like it ☂", "a rainy one, for you! ☂"],
+  snow: ["it's snowing, your favourite!! ❄", "snow! your favourite ❄", "look, snow! just how you like it ❄", "a snowy one, for you!! ❄"],
+  storms: ["a storm! your favourite!", "thunder! your favourite ⚡", "listen, a storm! just how you like it", "a stormy one, for you!"],
+};
 // LS-a: an adult's new trick, the first look of each month it learns one.
 const TRICK_LINES = ["look what I can do! ♪", "ta-da! a new trick ♪", "I learned a new move! ♪"];
 // L-a (E9): over an infrared link, now and then the guest's news of today's visitor
@@ -411,5 +420,13 @@ const GAME_COPY = {
   empty: "dig first! the basket's empty", // F12, keep on an empty basket
   idle: "let's dig another time ♪", // Q8, the card closes a dig left idle
   dugThere: "oh! you dug there too ♪", // UX6 F16, a screen adopts the same person's other screen's dig
+};
+// Resting (plan favourite-resting §4.6; copy APPROVED for R1 by the first mate 2026-11-02):
+// idle chatter while resting, the odd hello on a visit, and the lines on leaving rest.
+// Scanned like the rest: a resting pet is content, never sad or parked.
+const RESTING_IDLE = ["just pottering about ♪", "comfy here! ☁", "having a lazy day, hehe", "this is a good spot ♪"];
+const REST_LINES = {
+  visit: "oh! hi ♥ i was just daydreaming",
+  back: ["good stretch! i'm back ♪", "that was a nice rest!"],
 };
 // --- end fresh-expand copy ---

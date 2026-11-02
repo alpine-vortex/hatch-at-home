@@ -302,6 +302,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
                     )
                 )
                 and "years" in b
+                and not self.pet.resting  # aging is paused: no party
                 else None
             ),
             "hatches_at": self._hatches_at(),
