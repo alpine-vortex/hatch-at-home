@@ -11338,7 +11338,9 @@ class HatchPetCard extends HTMLElement {
       if (this._visitorLive(s)) fn();
       else this._visitorEnd(s);
     }, ms));
-    if (!isCalm && !v.cross) at(inMs, () => this._look(s, 900));
+    // The art faces right, so only a visitor on the left is faced (UX8 F2): held through
+    // the greet and the stay, never turned away from one coming in on the right.
+    if (!isCalm && !v.cross && ltr) at(inMs, () => this._look(s, greetAt + stay - inMs));
     // A friend of its world along, now and then (E10 V-b): the other side, a little behind.
     const pal = !guest && this._visitorPair(s, v);
     if (pal) {
