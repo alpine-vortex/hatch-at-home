@@ -79,6 +79,8 @@ ONCE = (
     ("birthday", R.BIRTHDAY_ASK_LEVEL),
 )
 ONCE_KINDS = {kind for kind, _ in ONCE} | {"catchphrase"}
+# The favourites a person can have the pet ask again (memory plan M0-c).
+ASK_AGAIN_KINDS = ("fav_weather", "fav_season", "fav_visitor")
 
 
 def fav_visitor_key(world: str | None) -> str:

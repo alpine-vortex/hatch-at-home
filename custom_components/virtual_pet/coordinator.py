@@ -2229,6 +2229,26 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.people.save()
         self._push_everywhere()
 
+    async def async_ask_again(self, user: str, kind: str) -> None:
+        """Ask me again (memory plan M0-c): drop this person's favourite of this
+        kind (the visitor: this world's) and start its tries over, so the next
+        eligible look asks it again. Nothing else changes: the 3-day gap
+        (once_last), `noted`, the birthday, the switches stay. Saved at once, as
+        a forget is. A record that isn't there is not made."""
+        if kind not in P.ASK_AGAIN_KINDS:
+            return
+        async with self.people.lock(user):
+            person = self.people.data["people"].get(user)
+            if person is None:
+                return
+            key = P.fav_visitor_key(self.world) if kind == "fav_visitor" else kind
+            tries = f"fav_visitor_{self.world}" if kind == "fav_visitor" else kind
+            gone = (person.get("likes") or {}).pop(key, None)
+            (person.get("likes_asked") or {}).pop(tries, None)
+            if gone is not None:
+                await self.people.async_save_now()
+        self._push_everywhere()  # their mine
+
     async def async_set_my_day(self, user: str, enabled: bool) -> None:
         """Let the pets notice this person's day (steps, sleep, where they've
         been...), or stop. One switch per person, for every pet."""
@@ -2577,10 +2597,14 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             "birthday_kept": bool(person.get("birthday")),
             # Their waiting gift, {id, world}, or None (plan visitors v2 §5).
             "gift": model.known_gift(bond, self.known_finds),
-            # Their favourite of this world's visitors (an id), or None (F4).
+            # Their favourite of this world's visitors (an id), or None (F4), and of
+            # the weather and the season, so the settings sheet can show them and
+            # offer "ask me again" (memory plan M0-c). Their own channel only.
             "fav_visitor": (person.get("likes") or {}).get(
                 P.fav_visitor_key(self.world)
             ),
+            "fav_weather": (person.get("likes") or {}).get("fav_weather"),
+            "fav_season": (person.get("likes") or {}).get("fav_season"),
             # Where a follow-up beat may wait for them today ("look", "picker"), so
             # their card keeps a first-look slot only then (F1); never what it is.
             "follow_at": self.people.follow_at(
