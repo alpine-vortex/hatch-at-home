@@ -16,13 +16,21 @@ adversarial privacy review like fresh-expand F1 got (section 14).
 before it went in. The review's findings are marked "(review B1)", "(review S3)" and so
 on where they land. The owner's Q1-Q4 and the first mate's decisions are unchanged.
 
+**Revised 2026-11-02 (s2745)** to fold in the adversarial review of M1a/M1b (s2744; three
+blockers, nine should-fixes, five nits) and the first mate's four decisions on it
+(section 1, Q-A to Q-D). Each finding was checked against the code at `afac8d9b` first;
+section 2a is the table, with what was folded and what was not. These marks read
+"(M1 B1)", "(M1 S3)" and so on, to keep them apart from the s2719 marks above. **After
+this revision M1a is ready to build**; M1b waits only on the first mate's go (section 13,
+Q1 is now decided).
+
 ## 0. Summary
 
 | Ship | What | Size | Tier |
 |---|---|---|---|
 | **M0** | Four gap fixes: dated asks before a came-home "how was your day?" (M0-a), fav-weather line in the turn rotation (M0-b), "ask me again" for favourites (M0-c), forget_me clears the dream pick (M0-d) | S-M | M0-b 1; M0-a, c, d **2** |
 | **M1a** | The record and validators, the switch, the admin option and its erase, the WS command rules, the privacy test table, the guide | M | **2** |
-| **M1b** | The one-time ask (with the card's "great" send); doors 2, 4, 5, 6, 12 | M | **2** |
+| **M1b** | The one-time ask (with the card's "great" send); doors 2, 4, 5, 6 (weather + season), 12 | M | **2** |
 | **M2** | Tag chips on big day and weekend; doors 1, 3, 11, then 9 and 10 each as its own commit | M | **2** |
 | **M3a** | "Things you told me" page with per-item forget; the `memory_get` / `memory_forget` commands | M | **2** |
 | **M3b** | Stickers (door 8), the bench preset and the card-check section if not already in M3a | S | **2** |
@@ -68,6 +76,23 @@ built on it.
 - **Copy scan: "still" and "again"**: reword the memory lines first; ask for an exception
   only if a line loses its charm (section 12, as this plan proposed).
 
+### First mate, 2026-11-02, on the M1a/M1b review (s2744)
+
+- **Q-A: keep the "great" server send**, with the blockers fixed: the `shared` guard on
+  every `remember` path (M1 B1) and no soft morning for a great day (M1 B2). Used in
+  section 5 (WS rules) and section 8 (M1b).
+- **Q-B: door 6 = weather + season only, one-shot per favourite; drop "lapsed" from door
+  12.** No visitor door in M1b. Used in section 6 (the door table and "Door timing").
+- **Q-C: erase on removing an entry too.** `async_remove_entry` runs the same check as the
+  options save, on stored options. Used in section 5 (the admin erase) and section 12.
+- **Q-D: hold the memory ask while `baby_talk` is on.** This **confirms the section 13 Q1
+  default**; it is decided, not open. Used in R10, section 5 and section 13.
+
+### Audit tally, 2026-11-02
+
+- **M0 audit (s2739, tier 2): 0 player-impact findings, 6 nits.** (The R1 tally belongs in
+  the favourite plan, not here.)
+
 ## 2. What was checked against the code
 
 Read at `origin/main` `60ebf751`. The scout's claims held, with these corrections:
@@ -81,7 +106,7 @@ Read at `origin/main` `60ebf751`. The scout's claims held, with these correction
 | `_event_ok` forbids `pet` on a big-day event (`people.py:525-527`) | True (`return "pet" not in v` for big_day and weekend). Door 9 therefore keeps its "said by" in memory, not in the event (section 6). |
 | Options are household options | **Not quite.** All options are per pet entry (`config_flow.py`, `topics.py`: `CONF_PRIVACY` and `CONF_HOUSE_WORDS_PRIVATE` sit in the "people" topic and are read from `self.config_entry.options` in `coordinator.py:420-426`). There is no integration-wide option. Section 5 says how a per-person record meets per-pet options. |
 | `People.forget` pops the whole record | True, and keeps `birthday_skipped` (`people.py:244-254`). Section 5 says the same for the memory question. |
-| `REDACT_PEOPLE` exists (`diagnostics.py:72`) | True, and it is **referenced nowhere else**; the people store is not in the dump (`diagnostics.py:66-71`). `memory` joins the set for a later dump, but the live surface to test is the pet's save (`_saved`, `diagnostics.py:96`), where M0-d's `dream_picks` and `dream.user` sit (review S12). |
+| `REDACT_PEOPLE` exists (`diagnostics.py:72`) | True, and it is **referenced nowhere else**; the people store is not in the dump (`diagnostics.py:66-71`). `memory` joins the set for a later dump. **Corrected (M1 B3):** the dump runs `async_redact_data(_saved(pet), REDACT_STATE | PRIVATE_READINGS)` and `REDACT_STATE` already holds `bonds`, `user`, `by`, `for` and `player` (`diagnostics.py:84-93, 126`), so "no user id in the dump" passes vacuously. M0-d's claim is tested on the store (`pet.to_dict()` / `hass_storage`), for `dream_picks` and `dream.user` only (section 10, Diagnostics). |
 | `_mine` is per person and not pushed to shared screens (`coordinator.py:2558`, `2626`, `2664`) | True. |
 | Review B1: a `vol.In` failure echoes the value into the log | **True.** `ActiveConnection.async_handle_exception` builds the message with `humanize_error(msg, err)` for a schema failure and logs it (HA `websocket_api/connection.py`). The repo already knows: `websocket_answer`'s `text` is typed `object` for that reason (`__init__.py:462-464`). Section 5 applies it to every memory field. |
 | Review B2: an options save leaves no safe moment to read "any pet allows it" | **True, with a correction to the cite.** The options flow is `PetOptionsFlow(OptionsFlowWithReload)` (`config_flow.py:337`), saved by `async_create_entry(data=new)` in `_topic_step` (`config_flow.py:522`), and the entry then reloads; `async_unload_entry` pops the pet from `hass.data[DOMAIN]["pets"]` (`__init__.py:994-1001`, "a reload of the only pet (options) keeps its bundle"). The review's `config_flow.py:214` is the reconfigure flow, same effect. There is **no options-update listener**, so the plan's old wording had nothing to hook. The people store is `hass.data[DOMAIN]["people"]` (`__init__.py:219`), reachable from the options flow. |
@@ -89,6 +114,31 @@ Read at `origin/main` `60ebf751`. The scout's claims held, with these correction
 | Review S9: the ask burns on an old card | **True.** `_question` marks the ask and `mark_once` at ask time (`coordinator.py:2004-2006`); the `phone` ask alone waits for the card's "shown" answer (`coordinator.py:1981-1987, 2161-2166`). |
 | (found while checking) "great" never reaches the server | **True.** `ANSWERS["how_day"]` is `("tough",)` and the card sends only "tough" (`people.py:63-66`, `card-visit.js:439-441`): "great" and "ok" stay on the card on purpose. Door 2 needs "great", so M1b adds a card send and an accepted answer that exist **only while memory is on** (section 8). |
 | Assist knows the asker (`intent.py:245`) | True (`bond_for(intent_obj.context.user_id)`). Memory still never reaches `intent.py` or `llm.py`. |
+
+## 2a. The M1a/M1b review (s2744), checked against the code
+
+Read at `afac8d9b`. Every finding was checked; all 17 held (no finding was rejected).
+Where the fix is not what the review recommended, the row says so.
+
+| Finding | Check | Where it landed |
+|---|---|---|
+| **B1** `shared` guard misses the new `remember` paths | **True.** `websocket_answer` has `vol.Optional("shared")` and uses it only to drop typed text (`__init__.py:470, 498`); the card's `_keepAnswer` sends none; `virtual_pet.visit` is a service with no `shared`. | R3, section 5 "WS command rules", section 8 M1b card work, section 10 "Shared screens" |
+| **B2** "great" would set a soft morning | **True.** `coordinator.py:2116-2117` calls `set_mood` for any accepted `how_day` / `big_how` answer; today that is only "tough" (`people.py:63-66`). | section 8 M1b, section 10 "Great answer" |
+| **B3** Diagnostics row passes vacuously | **True** (`diagnostics.py:84-93, 126`; bonds and `care_log[].by` keep ids in the store by the "bonds stay" decision). | section 2 (row for `REDACT_PEOPLE`), R4, section 10 "Diagnostics" |
+| **S1** door 6 specified two ways; "within 3 days" unmeetable | **True.** `turnPick` (`world.js:284-293`) only guarantees no line on two consecutive days; `FAV_WEATHER_LINES` has 4 lines per weather. **Resolved by Q-B.** | section 6 (door 6, "Door timing"), M0-b, section 14 item 8 |
+| **S2** `people.said` / `mark` write `noted`, outside `memory` | **True** (`people.py:258-273`; the visit marks every note, `coordinator.py:1724-1725`). | section 8 M1a, section 10 "Off leaves no trace" |
+| **S3** the ask's `shown` is not `phone`'s way; `ONCE_KINDS` marks it | **True.** `phone` is not in `ONCE`; `_question` calls `mark_once` for every kind in `ONCE_KINDS` (`coordinator.py:2011-2012`). | section 5 "The one-time ask", section 10 "The ask" |
+| **S4** the ask's answers have no guards; loader details left out | **True** (`QUESTION_KINDS` at `people.py:151`, `later_kind` check at `:552`, `_PERSON_KEYS` at `:474`, `forget` at `:246`). | section 5, section 8 M1a and M1b |
+| **S5** door spacing, order and triggers undefined | **True.** | section 6 "Door timing" |
+| **S6** "Door order" row untestable | **True** (door lines come from the `visit` reply). | section 10 "Doors", "Door order" |
+| **S7** flags also ride on `_visit_prefs`; caps on write | **True** (`coordinator.py:1743-1755`; `remember` is sync; the prune is daily, `people.py:321-325`). | R3, section 8 M1a, section 10 `_mine` and Retention rows |
+| **S8** an entry removed while others are off leaves a hole; the flow's `KeyError` | **True** (`__init__.py:219-222`; the settings row is hidden unless `memory_allowed`). **Resolved by Q-C.** | section 5 "The erase", section 12, section 10 |
+| **S9** the guide's "kept for you alone, for every pet" | **True** (`docs/guide.md` "What the pets remember about you"; `forget_me` reaches only loaded pets, `__init__.py:572-575`). | section 8 M1a docs |
+| **N1** `ask_again` is shipped | **True** (`__init__.py:581-612`). | section 4 `since_told`, section 8 M1a |
+| **N2** copy `websocket_ask_again`'s shape | **True.** | section 5 "WS command rules" |
+| **N3** `memory` follows `ask_again`, not `my_day`, for `shared` | **True** (`websocket_my_day` has no `shared`). | section 5 |
+| **N4** `forget_me` is not a memory command; no `shared` field | **True** (`__init__.py:560-579`). | R3 |
+| **N5** docs test strings; HANDOFF line owner | **True.** | section 8 M1a, section 10 |
 
 ## 3. Rules (R1-R12, as decided)
 
@@ -119,11 +169,29 @@ R6 follows Q4 = C; R2 follows Q3 = A; R10 follows Q3's default-on admin option.
   `forget_me` has its two-tap guard. Free-value fields in these commands (`tag`, `key`,
   `list`, `pick`) are typed `object` in the schema and checked in the handler with a
   generic error, so a schema failure can never log a value (review B1, section 5).
+  **Every write path is covered (M1 B1).** The rule is on the *write*, not the command
+  name: any `answer` that would call `remember` (a dream, guess, game or favourite pick,
+  "great", `since_told`, a `tag`) needs `msg.get("shared") is False`. An `answer` with
+  `shared` true or absent still stores its ordinary state (the pick, the like) and writes
+  **nothing** to memory, and it is not an error; the `memory` ask's answers and a `tag`
+  are refused with the generic error. The card passes `shared: false` explicitly (an old
+  card sends none, so it writes no memory: the same fail-closed stance as an old card
+  elsewhere). **What the server cannot guard:** door notes and the `memory` ask come from
+  the `virtual_pet.visit` service's reply, which has no `shared`; the only guard there is
+  the card's own skip (`card-visit.js:216, 230`), and `said` / `memory_asked` are marked
+  at generation. `forget_me` is **not** a memory command and gets no `shared` field (a
+  behaviour change for old cards); the card guards it (`card-status.js`) and it erases.
+  `_visit_prefs` carries `memory_on` and `memory_allowed` too (M1 S7), as booleans only,
+  so a second device never shows a default.
 - **R4. Never off the private path.** Memory is on no entity state or attribute, no bus
   event, no logbook entry, no service call or script trace, no phone notification, no
-  diagnostics dump (`memory` joins `REDACT_PEOPLE`), no integration log, no Assist or LLM
+  diagnostics dump (`memory` joins `REDACT_PEOPLE`; the people store is not dumped, so
+  the real guard is that nothing puts memory into a pet's save), no integration log, no Assist or LLM
   output, no `debug` sensor. Every row of the F1 privacy table (plan-2026-11-01-fresh-expand.md,
-  "The privacy table") applies again, with the same tests.
+  "The privacy table") applies again, with the same tests. **Bonds and `care_log[].by`
+  keep user ids in the store by decision** ("bonds stay", `__init__.py` `forget_me`
+  docstring), so no test or guide line ever claims "no user ids" for the store; the claim
+  is only "no dream pick and no dream asker" (M1 B3, section 10).
 - **R5. Only fixed-list values and dates on disk.** No typed words, no names (not the
   person's, not another person's, not a pet's), no times of day, no places, no free text.
   Anything outside the fixed lists is dropped on load, entry by entry. There is
@@ -139,7 +207,8 @@ R6 follows Q4 = C; R2 follows Q3 = A; R10 follows Q3's default-on admin option.
   `person["memory"]` and saves immediately, like `forget`. "Forget my data" erases it with
   the rest. A per-item forget removes that entry and saves at once. The admin option
   being switched off on the last pet that allowed it (section 5) erases every person's
-  memory, from the options flow's save and nowhere else. Favourites, the birthday and the
+  memory, from the options flow's save or from removing an entry (FM Q-C) and nowhere
+  else. Favourites, the birthday and the
   follow event stay on "off": they predate the option and have their own controls.
 - **R8. Storage and migration.** Memory is a key inside the person record, not a new
   store, so an older version's "forget my data" (which pops the record) still erases it.
@@ -156,8 +225,8 @@ R6 follows Q4 = C; R2 follows Q3 = A; R10 follows Q3's default-on admin option.
   turn it on, **keyed by `connection.user.id`**: a parent's login can't turn it on for a
   child's own account, and the reverse. That says nothing about a **shared login** (a
   family tablet signed in as a parent): whoever holds it can tap "yes" on that record, and
-  their picks then show on that person's page. The guide says so (R3). **Proposed, FM to
-  confirm (section 13):** the one-time ask is **held while the person's `baby_talk` is on**
+  their picks then show on that person's page. The guide says so (R3). **Decided (FM Q-D,
+  2026-11-02; section 1):** the one-time ask is **held while the person's `baby_talk` is on**
   (it delays Q3's "asks once at bond 4", it does not change it; the settings row still
   works), and the page's confirm tap (R3) is the guard for the rest. (c) The admin
   option (section 5) hides the switch for everyone when off; its default is **on** (Q3 =
@@ -189,7 +258,9 @@ memory = {
             "great": [{"day": ..., "ask": "how_day"}, ...]},
   "since_told": {"fav_weather": "2026-11-20", "fav_season": "...", "visitor_<world>": "..."},
                                        # only for a favourite told WHILE memory is on
-  "said": {"door2": "2026-11-15", ...},   # last day a door's line was said
+  "said": {"door2": "2026-11-15", "door6_fav_weather": "2026-11-21", ...},
+                                       # last day a door's line was said; door 6 is one-shot
+                                       # per favourite, so its key holds the day it fired
   "heard": {"day": "...", "pet": "<pet id>"},   # door 9 only; pruned after its day
 }
 ```
@@ -199,12 +270,15 @@ memory = {
 | `tags` | **120 entries**, oldest out | Big day is asked at most once a week and weekend once a week (`BIG_DAY_GAP` 6, `FOLLOW_ASK_PER_WEEK` 2), so at the very most about 104 tags a year. 120 holds the anniversary window (13+ months) even for someone who says yes to everything; for most people it spans several years. About 40 bytes an entry, so under 5 KB. |
 | `picks.dream`, `.game`, `.guess`, `.great` | **5 each**, oldest out | Doors 4, 5 and 12 look at "3 of the last 5"; more history buys no door and keeps more in backups. 20 entries at most. |
 | `since_told` | one per favourite: weather, season, one per world | Bounded by the fixed lists (at most about 12). |
-| `said` | one per door (12) | A "last said" day so a door doesn't repeat; bounded by the door list. |
+| `said` | one per door, plus one per door-6 favourite (about 14) | A "last said" day so a door doesn't repeat; bounded by the door list. **Lives only in `memory["said"]`** (M1 S2): never in `person["noted"]`, which `People.said` / `People.mark` use and which survives "off". |
 | `heard` | 1, dropped after its day | Door 9's "which pet already cheered this big day", so pets don't all say it. Bookkeeping, not a memory (R6). |
 
 The whole record is bounded at roughly 160 entries, well under 10 KB.
 
 **Dates and keys (review S4, S11).**
+- **Caps hold on write, not only on the daily prune** (M1 S7): `remember` drops the oldest
+  entry of its list the moment the list passes its cap (the prune runs once a day,
+  `people.py:321-325`), so 130 tags in one day leave 120.
 - **One entry per key, so a repeat can't double-record.** `tags` holds at most one entry
   per `(day, kind)`; each `picks` list at most one per `day`. A second write for the same
   key **replaces** the entry (a dated follow-up is answered twice for one ask, "yes" then
@@ -223,14 +297,18 @@ The whole record is bounded at roughly 160 entries, well under 10 KB.
   a real, specific day). `weekend` tags feed the page and door 11's recap, nothing else.
 - **`since_told`** has no value for a favourite told before memory was on (`likes` holds
   values with no date, `coordinator.py` answer branch). The page shows no "since" for
-  those and door 6 does not fire for them; nothing is back-filled. `ask_again` (M0-c)
-  pops `likes[kind]`, and M1a makes it pop the matching `since_told` key too, or the page
-  would show a favourite that was un-told.
+  those and door 6 does not fire for them; nothing is back-filled. `ask_again` (M0-c) is
+  **already shipped** (`async_ask_again`, `coordinator.py:2238-2262`, `__init__.py:581-612`)
+  and pops `likes[kind]`; M1a **edits** it to pop the matching `since_told` key (and the
+  door-6 `said` key, so the one-shot can fire for the new answer) too, or the page would
+  show a favourite that was un-told. It pops them **even when the pet's option is off**:
+  that is an erase, not a write (M1 N1). It reads memory with `.get`, never `person()`.
 
 **Not kept, even with the switch on:** typed words (they stay memory-only until the event
 closes, as now); any name; times, places; **a "tough" mood** (the soft morning stays
 memory-only for one day as today; a saved list of someone's bad days has no door that
-needs it, and a backup shouldn't hold one). Only "great" is saved, for door 2. No
+needs it, and a backup shouldn't hold one). Only "great" is saved, for door 2; "great"
+never sets the soft morning (M1 B2, section 8). No
 right/wrong count for guesses or games (the "no score" rule, guide.md "Using the card").
 
 **The fixed tag list (draft):** test, match, show, trip, party, lesson, work thing,
@@ -248,14 +326,28 @@ sticker for either).
 screen only, and only when `mine.memory_allowed`. The forget-me reset (`card-status.js:463`,
 `_setMine(key, false)` over `my_day`, `baby_talk`, `birthday_*`) gains `memory_on`, or the
 card shows a stale "on" after "forget my data" (review nit). WS command
-`virtual_pet/memory` `{entity_id, enabled, shared}` follows `my_day` (`__init__.py:765`):
-pet looked up by `entity_id`, then `async_set_memory(user, enabled)` and
-`_push_everywhere()`. Off erases (R7). Turning **on** is refused when this pet's option is
-off; turning **off** is always allowed.
+`virtual_pet/memory` `{entity_id, enabled, shared}` follows `my_day` (`__init__.py:765`)
+for its pet lookup and `async_set_memory(user, enabled)` then `_push_everywhere()`, **but
+follows `ask_again`, not `my_day`, for `shared`** (M1 N3): `websocket_my_day` has no
+`shared` field (`__init__.py:799-818`). Off erases (R7). Turning **on** is refused when
+this pet's option is off; turning **off** is exempt from the option check only, and
+**still needs `shared: false`** (a shared screen has no row anyway).
 
-**WS command rules (every memory command; review B1, S1, S8).**
+**WS command rules (every memory command; review B1, S1, S8; M1 B1, N2).**
+- **The shape is `websocket_ask_again`'s** (`__init__.py:581-612`): `vol.Required("shared"):
+  bool`, refused first (`if msg["shared"] is not False: send_error(..., "shared", ...)`),
+  **before** the pet lookup, then `no_pet`. The free-value fields are `object` typed and
+  checked in the handler. The fixed error codes are `shared`, `no_pet` and `not_asked`
+  (one generic text each), so a test can assert "one generic error".
 - `shared` is a **required** bool, refused unless `is False` (R3, fail closed); tests send
   it `true` **and absent**.
+- **`answer` is the exception, because it predates memory** (M1 B1): `shared` stays
+  `vol.Optional` there (an old card, or a pick that has nothing to do with memory, must
+  still work). The server calls `remember` only when `msg.get("shared") is False`;
+  otherwise the pick or like is stored as today and memory is left unchanged. A `tag`
+  or the `memory` ask's answer with `shared` not `False` is refused with the generic
+  error. The M1b card passes `shared: false` from `_keepAnswer`, `_sendFollow` and the
+  new "great" send.
 - `tag`, `key`, `list`, `pick` are typed `object` in the schema (as `text` is,
   `__init__.py:462-464`) and checked in the handler, which sends one generic error
   (`not_asked` style) that never repeats the value. HA logs a schema failure at ERROR
@@ -268,19 +360,42 @@ off; turning **off** is always allowed.
   one error when **this pet's** `CONF_MEMORY` is off, even if the person's memory is on
   through another pet. Only the switch-off is exempt.
 
-**The one-time ask (M1b).** A `memory` entry in the one-time list (`people.py` `ONCE`,
-level 4, after `birthday`, so `ASK_ONCE_GAP_DAYS` = 3 keeps them apart), asked only when
-`memory_allowed`, not yet on, not already answered, and **not while the person's
-`baby_talk` is on** (R10, FM to confirm). Answers `ANSWERS["memory"] = ("shown", "yes",
-"not_now")`; `"memory"` joins `QUESTION_KINDS` so `asked_later` accepts it.
-- **It counts as asked only when the card says it showed it** (review S9), in the
-  `phone` ask's way, not only its shape: `_question` marks the day's later slot as for
-  `phone` (`coordinator.py:1981-1987`) but does **not** call `mark_once` for `memory`;
-  the card's `shown` answer does (tries in `likes_asked["memory"]`, `once_last`, as
-  `async_answer "phone"` does at `coordinator.py:2161`). An old cached card (the file
-  keeps its name and URL) ignores an ask kind it doesn't know (`QUESTIONS[ask]`,
-  `card-visit.js:235`), never sends `shown`, and so burns only that day's later slot, not
-  the ask.
+**The one-time ask (M1b).** A `memory` ask, level 4, after `birthday` in the order (so
+`ASK_ONCE_GAP_DAYS` = 3 keeps them apart), asked only when `memory_allowed`, not yet on,
+not already answered, and **not while the person's `baby_talk` is on** (R10, FM Q-D).
+Answers `ANSWERS["memory"] = ("shown", "yes", "not_now")`.
+- **It counts as asked only when the card says it showed it** (review S9; M1 S3). The
+  review found the earlier wording ("in the `phone` ask's way") did not match the code:
+  the `phone` branch of `async_answer` only sets `phone_asked = True`
+  (`coordinator.py:2167-2172`) and `phone` has no tries or `once_last`; and `_question`
+  calls `P.mark_once(...)` for **every** kind in `P.ONCE_KINDS`
+  (`coordinator.py:2011-2012`), which is built from `ONCE` (`people.py:81`). So
+  **`memory` is not added to `ONCE` / `ONCE_KINDS`**: it lives in its own tuple
+  (`MEMORY_ASK = ("memory", <level 4>)`, the level a constant beside `R.BIRTHDAY_ASK_LEVEL`), and `once_due` consults it after the
+  `ONCE` loop. Test: `_question` choosing `memory` writes no `likes_asked`, no `once_last`.
+- **The `shown` write** is `mark_once` (tries in `likes_asked["memory"]`, `once_last`) **plus**
+  the guard `asked_later(person, today, "memory")`, so a stray `shown` counts for nothing.
+- **A stale card cannot starve the later slot** (M1 S3). An old cached card (the file keeps
+  its name and URL) ignores an ask kind it doesn't know (`QUESTIONS[ask]`,
+  `card-visit.js:235`) and never sends `shown`; with no tries counted, the ask would sit
+  first in `once_due` **every day** and burn that day's later slot each time, starving
+  how_day, weekend and the rest. So `_question` records each day it chose `memory` without
+  a `shown` (`memory_chosen_days`, a short list of dates in the person's record, outside
+  `memory`, content-free, kept by `forget`), and **stops choosing it after 3 such days**;
+  it is tried again after the usual weeks gap (`may_ask_again`). Acceptance: a card that
+  never sends `shown` gets `how_day` on day 4.
+- **The answers have guards** (M1 S4). "yes" and "not_now" require
+  `asked_later(person, today, "memory")`: a bare "yes" with no ask today would otherwise
+  be a second, unguarded route into R2's "only by a WS command from a personal screen",
+  and would skip the ask's accounting. "yes" is also refused when **this pet's option is
+  off**, and (R3) needs `shared: false`. Each is a pytest.
+- **Loader and `forget`** (M1 S4). `"memory"` joins `QUESTION_KINDS` (`people.py:151`)
+  **so the load validator at `people.py:552` keeps a saved `later_kind: "memory"`**; if
+  it didn't, the open ask would be dropped on a restart. `_PERSON_KEYS` (`people.py:474`)
+  gains `"memory_asked": bool`, `"memory_chosen_days"` and `"memory"`, each with a
+  validator. `People.forget` (`people.py:246-254`) today writes `{"birthday_skipped":
+  True}` only when set; it must keep **both** flags (a person with both keeps both) and
+  `memory_chosen_days`.
 - **Asked once means any answer ends it** (review S2): "yes" sets the switch **and**
   `memory_asked: true`; "not now" sets `memory_asked: true`. `memory_asked` survives
   `forget_me` as `birthday_skipped` does (`People.forget`, `people.py:244-254`), and
@@ -304,16 +419,34 @@ reload on every options save, and unloading pops a pet from `hass.data[DOMAIN]["
 (`__init__.py:994-1001`), so **live coordinators can never answer "does any pet allow
 it?"**; the plan's earlier "options-update listener and the daily prune evaluate it" had
 no listener to hook and a window where the only pet is absent. The rule:
-- The erase runs **only from the options flow's save** (`PetOptionsFlow._topic_step`, just
-  before `async_create_entry`, `config_flow.py:522`), and only when this save **changes
+- The erase runs from **two places and nowhere else** (FM Q-C, 2026-11-02): the options
+  flow's save, and `async_remove_entry`. **Options save** (`PetOptionsFlow._topic_step`,
+  just before `async_create_entry`, `config_flow.py:522`): only when this save **changes
   `CONF_MEMORY` from on to off** (old = `self.config_entry.options.get(CONF_MEMORY,
   True)`, new = the merged value) **and** every **other** entry of the domain
   (`hass.config_entries.async_entries(DOMAIN)`, whatever its state) has
   `options.get(CONF_MEMORY, True)` false. It compares **stored options**, never live
   coordinators.
-- **Never** on unload, setup, reload, the daily prune, or removing an entry. An unrelated
-  option saved on the only pet leaves memory alone; so does removing the last pet (section
-  12).
+- **Removing an entry** (`async_remove_entry`, `__init__.py:1065`; M1 S8, FM Q-C): the
+  hole the review found is pets A (on) and B (off), the admin removes A. Memory is now
+  allowed on no pet, nothing erased, and nobody can turn it off from the card (the
+  settings row is hidden unless `memory_allowed`). So removal runs **the same comparison
+  of stored options**: if **every other entry of the domain** (`async_entries(DOMAIN)`,
+  filtered by `entry_id != removed.entry_id`, so it does not matter whether HA has already
+  dropped the removed one from the list) has `options.get(CONF_MEMORY, True)` false, the
+  erase runs. If the removed entry itself had memory off and the others are all off, it
+  runs too (nothing allows it). Removing the **only** entry: there are no others, so
+  "every other is off" is vacuously true and it erases; this replaces the earlier "removing
+  the last pet leaves memory" (section 12).
+- **Never** on unload, setup, reload or the daily prune. An unrelated option saved on the
+  only pet leaves memory alone.
+- **Failure modes** (M1 S8). The flow and `async_remove_entry` reach the people store as
+  `hass.data.get(DOMAIN, {}).get("people")`, never `["people"]`: the store exists only
+  while the integration is set up, and an options flow on an entry whose setup failed (or a
+  removal after a failed setup) would otherwise hit a `KeyError` before
+  `async_create_entry`. A missing store **skips the erase and saves the option** (the
+  record is then not loaded anywhere, so nothing is shown; it is cleared by the next
+  options save or "forget my data").
 - **Disabled and not-loaded entries count** by their stored option (a disabled pet whose
   option is on keeps memory allowed; the guide says to turn it off there too). **A pet
   added later defaults on**, which re-allows memory for everyone whose record is now
@@ -326,20 +459,25 @@ no listener to hook and a window where the only pet is absent. The rule:
 - Acceptance (also section 10): save an unrelated option on the only pet -> nothing
   erased; flip memory off on the only pet -> erased once and saved; two pets: off on one
   -> nothing, then off on the second -> erased; a disabled third entry with memory on ->
-  no erase; flip back on -> nothing returns.
+  no erase; flip back on -> nothing returns. **Removal:** A on, B off, remove A -> erased
+  and saved; A on, B on, remove A -> nothing; A on, remove A (the only pet) -> erased; a
+  disabled C with memory on blocks it. **No store:** the flow and the removal with no
+  `people` in `hass.data` save the option (or finish) without an error.
 
 ## 6. The doors, by ship
 
 All lines are DRAFT. Each is said only on that person's own non-shared screen, only with
-the switch on and the option allowed, and once per door per its own spacing (`said`).
+the switch on and the option allowed, and once per door per its own spacing (`said`, in
+`memory["said"]` only, M1 S2; "Door timing" below). The screen guard is the card's own
+skip, since the `visit` service cannot see `shared` (R3).
 
 | # | Door | Example (draft) | Ship |
 |---|---|---|---|
 | 2 | **Good-day echo:** morning after a "great" to how_day or big_how | "yesterday was a great one! more of that" | M1b |
 | 4 | **Running joke:** 3 of the last 5 dream picks the same | "snacks again?! hehe, ok" | M1b |
 | 5 | **Your habit:** the last 5 guesses all the same way | "you always say sun! my sunny friend" | M1b |
-| 6 | **Since you told me:** first time a favourite comes back after it was told. Joins M0-b's rotation as extra lines | "it's snowing! you told me snow's the best" | M1b |
-| 12 | **The game you picked:** the picker opens after a lapsed pick, or it's the most-picked of the last 5 | "your dig again? i'm ready" | M1b |
+| 6 | **Since you told me:** the first time a favourite **weather or season** comes back after it was told (**one-shot per favourite**, FM Q-B). **Not** part of M0-b's rotation: its own short list, replacing that day's plain line | "it's snowing! you told me snow's the best" | M1b |
+| 12 | **The game you picked:** 3 of the last 5 game picks the same. **No "lapsed" clause** (FM Q-B): no "played" signal exists | "your dig again? i'm ready" | M1b |
 | 1 | **Week-later echo:** about 7 days after a tagged `big_day`, once | "i still think about your show!" | M2 |
 | 3 | **Anniversary:** a year after a tagged `big_day` (tag `trip`, `show`, ...) | "a year ago today was your big trip!" | M2 (dormant until a year passes) |
 | 9 | **Pets compare notes:** with several pets, a second pet nods to a big day another pet already cheered | "Mochi told me about your test! good luck" | **M2, its own commit, FM nod needed** (section 13) |
@@ -347,6 +485,38 @@ the switch on and the option allowed, and once per door per its own spacing (`sa
 | 11 | **Friendship-year recap** on the 12-month friendship day (`coordinator.py:1825-1837`); **no numbers** (review S10: section 4 forbids counts shown as a score, and the sticker rule says the same) | "a whole year! so many big days, and so many snack dreams" | M2 |
 | 7 | **"Things you told me" page** | see section 9 | M3a |
 | 8 | **Stickers** | see section 9 | M3b |
+
+### Door timing (M1 S1, S5; FM Q-B)
+
+The review found door 5 ("last 5 guesses all the same") and door 4 still true every day
+after they first fire, so without a spacing they would fire daily. Each door gets one:
+
+| Door | Trigger | Spacing (`said` key) | Window |
+|---|---|---|---|
+| 2 | `picks.great` has an entry for **yesterday** | once per such day (`door2` = the day it was said; it cannot fire twice for one great day) | the first look of the day, before 12:00 |
+| 4 | 3 of the last 5 `picks.dream` entries the same | 7 days (`door4`) | a look, 11:00-20:00 |
+| 5 | the last 5 `picks.guess` entries all the same | 7 days (`door5`) | a look, 11:00-20:00 |
+| 6 | the favourite was told on an earlier day (`since_told[key]` < today) and its matching weather or season comes back | **one-shot per favourite** (`door6_fav_weather`, `door6_fav_season`); `ask_again` clears the key (section 4) | the day's existing fav-weather / season note |
+| 12 | 3 of the last 5 `picks.game` entries the same | 7 days (`door12`) | a look, 11:00-20:00 |
+
+- **Day keys.** `picks.guess` is keyed on the day the answer was **given** (`today`), not
+  the guessed day (`person["guess"]` stores `tomorrow`, `coordinator.py:2197`, for its own
+  outcome line; `remember` is passed `today`). The other picks key on the answer day too.
+- **One door per visit, in door-number order** (2, 4, 5, 12; door 6 is the weather note
+  and never counts), **after** any birthday or celebration note and inside the
+  `NOTES_PER_VISIT` room the look already has; a door that finds no room waits for the next
+  look and is not marked said.
+- **Door 6's carrier.** The server's existing `fav_weather` and `season` /
+  `season_holiday` notes (`coordinator.py:1898-1938`) gain a boolean `told` (e.g.
+  `{"kind": "fav_weather", "weather": fav, "told": true}`), set only when memory is on, the
+  pet's option allows it and `since_told` is an earlier day with no `door6_<kind>` mark;
+  the visit marks `door6_<kind>` when that note goes out. It is **not** a `_mine` field
+  (R3: `_mine` has only the two booleans); the note exists only on the `visit` reply. The
+  card swaps in a door-6 line when `told` is set, else the M0-b rotation as today. A
+  **visitor** favourite has no door in M1b, and a favourite told before memory was on has
+  no `since_told`, so no door 6 (section 4).
+- **Door 12 closes** scout 1.3 item 6 only in the narrow sense above: the "game picked and
+  never played" case stays open (section 12).
 
 **Door 10, now in scope (Q1 = C): M2, its own last commit.** It needs only the M2 tag
 history; the weekday is computed from the saved date, so **no new data is kept** for it.
@@ -374,7 +544,9 @@ updates that HANDOFF line to say so, as the 2026-10-28 journal decline is named 
 Door 9 is pets noticing each other and **no owner answer names it**: it is its own commit,
 not built until the first mate says yes (section 13).
 
-**Door 12 also closes** Part 1 item 6 of the scout (a game picked and never played), gently.
+**Door 12 does not close** Part 1 item 6 of the scout (a game picked and never played):
+FM Q-B dropped the "lapsed" clause because no "played" signal exists, and a new one is not
+in this plan (M1 S5).
 
 ## 7. M0: the gap fixes
 
@@ -435,8 +607,10 @@ fallback how_day.
 
 - `ui-copy.js:283` `fav_weather` returns one string per weather. Replace it with a list
   per weather (3 lines each, **DRAFT**), picked by `turnPick(list, `${device}|favweather`)`
-  as the other day lines take turns (`world.js:252-296`, `lines-fresh.js`). No line twice
-  within 3 days.
+  as the other day lines take turns (`world.js:252-296`, `lines-fresh.js`). **No line on two
+  consecutive days** (M1 S1: that is all `turnPick` guarantees; with 3 or 4 lines a line can
+  come back 2 days later, e.g. `a b c | b a c`, and `FAV_WEATHER_LINES` shipped with 4 per
+  weather).
 - The server stays as is: still one `fav_weather` note per day on a matching day
   (`coordinator.py:1898-1912`, guarded by `people.said`). The fix is only that the line
   varies.
@@ -444,11 +618,15 @@ fallback how_day.
   so the scan checks them (no nagging words, 40 characters with the longest fill, no `?`
   outside a question, no `!!!`, no digits). The scan's nag list includes **"still" and
   "again"**; M0-b's lines must avoid them, and so must M1b's table (section 12).
-- M1b's door 6 lines join this list, so the since-you-told-me variant replaces one
-  plain line after the favourite has been told, not a second line.
+- M1b's door 6 lines are **not** in this list (M1 S1, FM Q-B): door 6 is a one-shot
+  per favourite with its own short list, replacing that day's plain line (section 6), and a
+  `turnPick` member would repeat on every matching day.
 
 **Acceptance.** `tests/js/turn_pick.test.js` style test: for each of the four weathers,
-three consecutive days give three different lines, and no line repeats within 3 days; the
+over a month of days no line is the same on two consecutive days (across a cycle boundary
+too; `turnPick` already guarantees this, so the test pins it for the shipped
+`FAV_WEATHER_LINES`; it does **not** claim "different within 3 days", which `turnPick`
+cannot give, M1 S1); the
 copy scan passes with the new table named in `COPY_TABLES`; card-check section `types`
 (which runs the scan) passes.
 
@@ -504,13 +682,24 @@ false; B's data is untouched.
   the one-per-key rule on load, `set_memory(user, on)`, `memory(user)`, `remember(user,
   list, entry)` (cap-aware, replaces on the same key), `forget_item(user, key)`,
   `forget_memory(user)`, `forget_all_memory()` (the admin erase), and the prune cap step.
-  Memory changes save with the usual delayed save, except **off, forget, per-item forget
+  **`remember` enforces the caps itself on write** (M1 S7), not only the daily prune.
+  **`People.memory_said(user, key)` / `mark_memory_said(user, key, day)`** (M1 S2) read
+  and write `memory["said"]` with `.get`, **never `person()`** and never `person["noted"]`
+  (`People.said` / `mark` write `noted`, which survives "off"). The visit's mark step
+  (`coordinator.py:1724-1725`) calls them for door notes instead of `people.mark`, and the
+  notes list drops door notes when `memory` is gone. **`People.forget`** keeps
+  `birthday_skipped` and `memory_asked` (a person with both keeps both). `_PERSON_KEYS`
+  and `QUESTION_KINDS` as section 5. Memory changes save with the usual delayed save, except **off, forget, per-item forget
   and the admin erase**, which save at once (`async_save_now`).
-- **Locking and the race (review S6).** The code M1a copies does not all lock:
+- **Locking and the race (review S6; M1 S7).** `remember` is a **sync** function, so "takes
+  `people.lock(user)`" can only mean the **caller** holds it: `async_answer`'s non-LATER
+  branches take no lock and the no-`await` rule below is their guard. **Do not add a lock
+  there.** The code M1a copies does not all lock:
   `async_set_my_day` and `async_set_baby_talk` take no lock (`coordinator.py:2232,
   2215`) and `async_answer`'s dream, guess and favourite branches (`coordinator.py:
-  ~2186-2200`) take none either; only the `LATER_CHECKED` branch does (`:2106`). The new
-  functions take `people.lock(user)`, **and the real guard is the order**: `set_memory(off)`
+  ~2186-2200`) take none either; only the `LATER_CHECKED` branch does (`:2106`). The async
+  new functions (`async_set_memory`, the erase) take `people.lock(user)` where they
+  `await`, **and the real guard is the order**: `set_memory(off)`
   pops `person["memory"]` **before** its `await async_save_now()`, and `remember` checks
   that `memory` exists and writes with **no `await` between**, so an answer that lands
   during the save's `await` finds no memory and writes nothing. `remember` reads with
@@ -518,15 +707,21 @@ false; B's data is untouched.
   `person()`**, whose `setdefault` (`people.py:256-257`) would re-create a forgotten record.
 - `coordinator.py`: where an answer is stored today (`async_answer`: the dream pick, the
   guess, a favourite, the game pick, and the "great" below), add `remember(...)` **only
-  when `memory_on` and the pet's option allows it**. `_mine` gets `memory_on` and
-  `memory_allowed`. The door lines are `note` kinds in the existing notes list, with the
-  `said` guard.
-- `__init__.py`: WS `virtual_pet/memory` (switch) under the command rules of section 5.
+  when `memory_on`, the pet's option allows it **and `msg.get("shared") is False`** (R3,
+  M1 B1; `websocket_answer` passes the flag down, `async_answer` gets a `private: bool`
+  parameter, default `False`)**. `_mine` **and `_visit_prefs`** (M1 S7) get `memory_on`
+  and `memory_allowed`, booleans only; the card's `reply` handler reads them from both.
+  The door lines are `note` kinds in the existing notes list, with the `memory["said"]`
+  guard (above, not `people.mark`). Acceptance: after "off" the stored person has no door
+  key anywhere, `noted` included.
+- `__init__.py`: WS `virtual_pet/memory` (switch) under the command rules of section 5;
+  `async_ask_again` (shipped, M0-c) also pops `since_told[key]` (section 4).
   `diagnostics.py`: `REDACT_PEOPLE` gains `memory` (it guards nothing today, section 2).
 - `const.py`, `config_flow.py`, `topics.py`, `strings.json`, `translations/en.json`: the
   option, with a description line saying what it does and that turning it off on every
   pet erases what people told their pets; the erase in `PetOptionsFlow._topic_step`
-  (section 5).
+  (section 5), **and the same check in `async_remove_entry`** (FM Q-C), both reading the
+  people store with `.get` (section 5).
 - Card: the settings row and the forget-me reset (section 5).
 - Docs: guide "Privacy: what the pets remember" gets the memory paragraph (what is kept,
   what is not, backups, the shared login and the localStorage flag, a family's children
@@ -534,20 +729,53 @@ false; B's data is untouched.
   every message, so `memory_get` replies, tags and keys land in a debug log, as the
   fresh-expand table says for birthdays, `plan-2026-11-01-fresh-expand.md:485`; and that a
   disabled pet's option still counts), the settings table gets the switch and the option,
-  `features.md` section 7 gets a row, `docs/HANDOFF.md:525` is updated (section 6). **M1a
-  adds the docs test** the table in section 10 relies on: no test greps the guide today.
+  `features.md` section 7 gets a row. **The `docs/HANDOFF.md:525` update belongs to the
+  door-10 commit in M2** (section 6), not M1a (M1 N5). **The guide's existing "What the
+  pets remember about you" paragraph changes too** (M1 S9): it says the dream pick is
+  "kept for you alone, for every pet", but the pick is a per-pet field in the pet's save,
+  not the people store, and `forget_me` reaches only loaded pets (`__init__.py:572-575`),
+  so a disabled or unloaded pet's pick stays until its entry loads and the pick ages out
+  (`R.DREAM_PICK_HOURS`). Carve it out: "the dream you picked for tonight is kept in each
+  pet's own save, not the people store, and goes with 'forget my data' on every pet that
+  is loaded". Add `memory_asked` to the "stays" list beside "forget my birthday" (a
+  content-free boolean that survives). The guide also says the admin erase now also runs
+  when a pet is removed (section 5). **M1a adds the docs test** the table in section 10
+  relies on: no test greps the guide today. It greps **exact strings** so it can fail:
+  "backups", "shared login", "downgrade", "debug logging", "children", "never typed",
+  the dream-pick carve-out and `memory_asked`'s line.
 
 **M1b (tier 2): the ask and the doors.**
-- The ask as section 5. The answer for the one-time ask is **not** added to
+- The ask as section 5, with its three guards (not in `ONCE_KINDS`, the `shown` write,
+  the 3-day stale-card bound) and the answer guards. **Held while `baby_talk` is on**
+  (FM Q-D). The answer for the one-time ask is **not** added to
   `STASHED_QUESTIONS` (`prefs.js:378`): a failed send leaves nothing in localStorage.
 - **"great" reaches the server only with memory on.** The card sends only "tough" today
   (`card-visit.js:439-441`, `ANSWERS["how_day"]` and `["big_how"]` are `("tough",)`) so a
-  person who never opts in sends nothing new. M1b: the card also sends "great" **only
-  when `mine.memory_on`**, and the server accepts it only when memory is on and the pet's
-  option allows it (otherwise the fixed "not an answer" reply), then `remember`s it under
-  the same `asked_later` check as "tough".
+  person who never opts in sends nothing new. M1b (FM Q-A: **kept**): the card also sends
+  "great" **only when `mine.memory_on`** (`_visit_prefs` carries it too, so a card whose
+  channel hasn't pushed yet reads the visit reply's flag), with `shared: false`; and the
+  server accepts it only when memory is on, the pet's option allows it and `shared` is
+  `False` (otherwise the fixed "not an answer" reply, and **no `set_mood`**), then
+  `remember`s it under the same `asked_later` check as "tough".
+- **"great" must not set the soft morning** (M1 B2). Today the LATER_CHECKED branch calls
+  `set_mood` for **any** accepted `how_day` / `big_how` answer (`coordinator.py:2116-2117`),
+  harmless while `ANSWERS` held only "tough". The branch becomes `if answer == "tough":
+  set_mood(...)`; "great" only `remember`s. "great" **pops `later_kind`** like "tough" does
+  (both are in `SLOT_CLOSED_BY_ANSWER`, `people.py:136`, `coordinator.py:2138`), so a
+  second "great" send fails `asked_later` and cannot record twice. `ANSWERS["how_day"]` and
+  `["big_how"]` become `("tough", "great")`; the `websocket_answer` check
+  (`msg["answer"] not in ANSWERS[...]`) therefore passes "great" even with memory off, so
+  the **handler** (`async_answer`) must refuse it then, with the same `ValueError` text.
+  Acceptance (pytest): "great" with memory on leaves `_moods` empty and writes
+  `picks.great`; "great" with memory off, with the pet's option off, or with `shared`
+  absent gets the fixed refusal and no `set_mood`; "tough" is unchanged (sets the mood, no
+  `picks`).
 - The door lines in `lines-fresh.js` with `COPY_TABLES` entries (the copy scan, section 12).
-- `since_told` is written where a favourite is answered, only while memory is on.
+- `since_told` is written where a favourite is answered, only while memory is on, the
+  pet's option allows it and `shared` is `False`.
+- Doors 2, 4, 5, 6 and 12 as section 6 "Door timing" (door 6 weather + season only, FM
+  Q-B). **Card work:** `_keepAnswer`, `_sendFollow` and the "great" send pass
+  `shared: false` (M1 B1).
 
 **M2 (tier 2).**
 - The tag step in the big_day and weekend flows: after "yes" (and the day, for big day),
@@ -629,22 +857,26 @@ adversarial review should be able to run.
 | Concern | Rule | Test |
 |---|---|---|
 | Sensors and attributes | Never (R4) | Pytest: with memory on and full (caps hit), the JSON of every sensor's attributes, `_house_view`, and `debug` holds none of the memory strings (tags, picks, dates of tags) |
-| `_mine` and the channel | Only `memory_on` and `memory_allowed` booleans (R3) | Pytest: `_mine(user)` and a channel snapshot grep clean for tag and pick values; `memory_get` is the only carrier |
+| `_mine`, `_visit_prefs` and the channel | Only `memory_on` and `memory_allowed` booleans (R3; M1 S7) | Pytest: `_mine(user)`, `_visit_prefs(user)`, the `visit` reply and a channel snapshot grep clean for tag, pick and date values, and hold exactly those two booleans about memory; `memory_get` is the only carrier. A door-6 note holds only the boolean `told` |
 | Bus, logbook, recorder | WS commands, not services | Pytest: a `MATCH_ALL` listener across `memory`, `memory_get`, `memory_forget`, `ask_again`, and the answer with a tag sees no event holding memory or the choice |
 | Logs | No integration log with memory or answers; no schema failure echoing a value (all free-value fields typed `object`, section 5) | Pytest with `caplog` on the integration **and** `homeassistant.components.websocket_api`: a bad tag, a bad `list`, a bad `key` **with a valid day and tag of a real entry**, a wrong type leave no record containing the value; and the handler's own error carries no value. This row can pass only with `object`-typed fields (review B1): with `vol.In` HA logs `humanize_error`'s message |
-| Shared screens | The card never asks, shows, fetches or adds; the server refuses unless `shared` is `false` (fail closed, R3; a card-honesty guard, not authentication) | Pytest: each memory command with `shared: true` **and with `shared` absent** is refused and saves nothing. Card-check `sharedscreen`: no memory WS call, no row, no link, no page |
+| Shared screens | The card never asks, shows, fetches or adds; the server refuses unless `shared` is `false` (fail closed, R3; a card-honesty guard, not authentication). **Every `remember` path** is covered (M1 B1) | Pytest: each memory command with `shared: true` **and with `shared` absent** is refused and saves nothing. **And an `answer` for dream / guess / game / fav / great / a favourite's `since_told` with `shared` true or absent leaves `person["memory"]` unchanged, while the ordinary answer still works** (the pick or like is stored); a `tag` or the `memory` ask's answer with `shared` not `False` is refused with the generic error. Card-check `sharedscreen`: no memory WS call, no row, no link, no page. JS test: `_keepAnswer`, `_sendFollow` and the "great" send pass `shared: false`. Doors and the ask come from `visit`, which cannot see `shared`: see "Doors" |
+| WS shape | The memory commands copy `websocket_ask_again` (M1 N2) | Pytest: each command with `shared` absent is refused **before** the pet lookup (a bad `entity_id` with `shared` true gets `shared`, not `no_pet`); the only error codes are `shared`, `no_pet`, `not_asked`, one generic text each; `forget_me` still takes no `shared` |
 | Other people | Only `connection.user.id` | Pytest: B's `memory_get` and `memory_forget` never see or touch A's entries; B turning memory on leaves A's record alone |
 | WS fetch on demand | The page is fetched on open, held in no cache | Card-check: after closing the page, no memory text in the DOM; no `hatch-memory-*` localStorage key ever; `STASHED_QUESTIONS` doesn't include the memory ask |
 | Erase: off | Pops `person["memory"]`, saved at once | Pytest: turn off, then read the store file (`hass_storage`) with no delay: no `memory` key, no entry. (That HA's `Store` flushes on stop is HA's, not tested here; `async_save_now` writing before the command returns is.) |
 | Erase: forget me | `People.forget` takes memory with the record; `memory_asked` survives like `birthday_skipped` | Pytest: forget, then the store has no memory, no tags, no picks; `memory_asked` stays, so the ask isn't repeated; yes then off, and yes then forget-me, never ask again (review S2) |
-| The ask | Counts only on the card's `shown`; asked once; held for baby talk | Pytest: `_question` for `memory` writes no `likes_asked` and no `once_last` until `shown`; an old card (never sends `shown`) gets the ask again on a later day; "not now" and "yes" both set `memory_asked`; `once_due` skips it after; with `baby_talk` on it is not asked (if the FM agrees) |
+| The ask | Counts only on the card's `shown` (M1 S3); asked once; held for baby talk (FM Q-D); `memory` not in `ONCE_KINDS` | Pytest: `_question` for `memory` writes no `likes_asked` and no `once_last` until `shown`; `shown` writes both only under `asked_later(..., "memory")` (a stray `shown` counts for nothing); a card that never sends `shown` is offered the ask on 3 days and gets `how_day` on day 4, and the ask returns after the weeks gap; "not now" and "yes" both set `memory_asked`; "yes" or "not_now" with no ask today, "yes" with the pet's option off, and either with `shared` not `False` are refused; `once_due` skips it after; with `baby_talk` on it is not asked; a saved `later_kind: "memory"` survives a reload; `forget` keeps `memory_asked` **and** `birthday_skipped` together |
+| Great answer | "great" records, never a soft morning (M1 B2, FM Q-A) | Pytest: "great" with memory on leaves `_moods` empty and writes `picks.great`; with memory off, the pet's option off or `shared` absent it gets the fixed refusal and no `set_mood`; a second "great" send is refused (`later_kind` popped); "tough" still sets the mood |
+| Off leaves no trace | Door guards live in `memory["said"]` only (M1 S2) | Pytest: fire a door note, turn memory off: the stored person has no door key anywhere (`noted` included); the visit's mark step for a door note never calls `people.mark`; `memory_said` on a forgotten person does not re-create the record |
 | Erase: per item | One entry gone, saved at once, a pattern ends with its history | Pytest: forget one tag; store and `memory_get` both lack it; a door 10 pattern with 3 entries stops after one is forgotten |
-| Erase: admin option off | Off on every pet erases every person's memory; the trigger is the options flow's save, comparing **stored options** across all entries (section 5; review B2) | Pytest through the options flow: an unrelated option saved on the only pet erases **nothing** (the reload that follows leaves memory alone, and so does unloading or setting up an entry with zero or one pet loaded); memory off on the only pet erases once, saved at once; two pets: off on one erases nothing, then off on the second erases; a disabled third entry with memory on blocks the erase; the daily prune never erases |
-| Retention | Count caps only (Q4 = C); invalid entries dropped on load | Pytest: 130 tags saved -> 120 kept, oldest gone; a hand-edited store with an unknown tag, a bad date, a text-like value drops those entries and keeps the rest; a 13-month-old tag is **kept** (no time prune) |
+| Erase: admin option off | Off on every pet erases every person's memory; the triggers are the options flow's save **and removing an entry** (FM Q-C), comparing **stored options** across the other entries (section 5; review B2; M1 S8) | Pytest through the options flow **and `async_remove_entry`**: removal: A on and B off, remove A erases and saves; A on and B on, remove A erases nothing; the only pet removed erases; a disabled third entry with memory on blocks it; with no `people` in `hass.data` the flow saves the option and the removal finishes, no `KeyError`. Options flow: an unrelated option saved on the only pet erases **nothing** (the reload that follows leaves memory alone, and so does unloading or setting up an entry with zero or one pet loaded); memory off on the only pet erases once, saved at once; two pets: off on one erases nothing, then off on the second erases; a disabled third entry with memory on blocks the erase; the daily prune never erases |
+| Retention | Count caps only (Q4 = C), **enforced on write** (M1 S7); invalid entries dropped on load | Pytest: 130 tags saved **in one day, before any prune** -> 120 kept, oldest gone; a hand-edited store with an unknown tag, a bad date, a text-like value drops those entries and keeps the rest; a 13-month-old tag is **kept** (no time prune) |
 | What may be stored | Fixed lists and dates only (R5) | Pytest: every key and value in `person["memory"]` after a full flow matches the fixed-list schema; no typed text is anywhere in the store after a big day with words |
 | Typed words | Memory only, as today | Pytest: after a big day with text and memory on, the saved store, the pet state and `memory_get` hold none of the text |
-| Backups | The store is in backups; the guide says so (R11); typed words never are | Guide text exists (the docs test M1a adds greps for the paragraph); pytest: the saved JSON is the full extent of memory, no second file |
-| Diagnostics | `memory` is in `REDACT_PEOPLE` (R4), though no dump uses the set today (section 2) | Pytest: a diagnostics dump with memory filled holds none of it **and** the pet's save in the dump (`_saved`) holds no user id after `forget_me` (M0-d). A test of `REDACT_PEOPLE` alone would pass vacuously |
+| Backups | The store is in backups; the guide says so (R11); typed words never are | Guide text exists (the docs test M1a adds greps for the exact strings in section 8); pytest: the saved JSON is the full extent of memory, no second file |
+| Diagnostics | `memory` is in `REDACT_PEOPLE` (R4), though no dump uses the set today (section 2). Nothing puts memory in a pet's save | Pytest (M1 B3, corrected): (a) memory filled, then the diagnostics dump JSON holds no tag, pick or date of one. This passes because the people store is **not dumped** and nothing writes memory into `_saved`; say so in the test's comment, and it is the real guard. (b) After `forget_me`, **on the store** (`hass_storage` / `pet.to_dict()`, **never the dump**), `dream_picks` has no entry for the user and `dream` has no `user` key. **No test claims "no user id" for the store or the dump**: the dump passes it vacuously (`REDACT_STATE` already holds `bonds`, `user`, `by`, `for`, `player`, `diagnostics.py:84-93`), and the store keeps bond and `care_log[].by` ids by decision. A test of `REDACT_PEOPLE` alone would pass vacuously |
+| No new consumer | The people store has no reader outside coordinator, people and `__init__` | Pytest, structural: a source grep that fails when `People` or `data["people"]` appears in `sensor.py`, `intent.py`, `llm.py`, `diagnostics.py` or `notify.py` (true today, read by the review). The "grep after fill" rows above catch a leak; this catches a later change adding a consumer |
 | Assist and LLM | Never (R9) | Pytest: the spoken status and the LLM tool JSON with memory filled hold no tag, no pick, no "remember" line |
 | Notifications | Never | Pytest: `notify.message()` and send-offs hold no memory |
 | Child users | Only the person turns it on; tags and picks only; admin option can hide it (R10) | Pytest: user A's `memory` command never changes user B's record; the option off removes `memory_allowed`; the guide paragraph for households with children exists |
@@ -652,10 +884,12 @@ adversarial review should be able to run.
 | Migration down | An older version keeps the key unread (R8) | **A read-the-code note, not a test**: today's `_person` validator is the only one a test can run, and the claim rests on `out = dict(record)` keeping unknown keys (`people.py:539-541`). The guide says what a downgrade leaves (review S12) |
 | Damaged store | Memory goes with the record to the `.damaged` copy (R12) | Existing `test_damaged.py` style test with memory present; the guide's erase line names memory |
 | Concurrency | An answer that lands during an off-switch's save can't re-add memory | Pytest: patch `async_save_now` to wait on an event, call `set_memory(off)`, send an answer while it waits, release: no memory in the store and in `memory_get`. Holding the lock is not the test; an `await` held open is (review S6). `remember` on a forgotten person does not re-create the record |
-| Dream pick (M0-d) | forget_me leaves no id in the pet's save | See M0-d acceptance |
+| Dream pick (M0-d) | forget_me leaves no dream pick and no dream asker in the pet's save | See M0-d acceptance and "Diagnostics" (the store, never the dump). The guide's carve-out (section 8, M1 S9) says it is per pet and reaches loaded pets only |
 | HTML | `textContent` only | Card-check: a tag label, a pick value and an item key with markup render as text |
-| Door order | One door per visit; a door never runs on a shared screen or with the switch off | Pytest/JS: the door note is absent in the shared snapshot and with `memory_on` false. (This row and "Concurrency" assert more than they test; the review asks that they not count as evidence on their own.) |
-| Stale card | An old card burns no ask and sends no `great` | See "The ask"; the `great` send only when `mine.memory_on` is a card-side test, and the server refuses it with memory off |
+| Doors | One door per visit, in door-number order (section 6); no door note and no `memory["said"]` write with memory off, the pet's option off or no memory record (M1 S6) | Pytest on `async_visit`: with memory off, with the pet's option off, and with the record missing, no door note and no `said` write; with two doors due, one goes, the lower-numbered, and the other is not marked said; door 5 does not fire on consecutive days (7-day spacing); door 6 fires once per favourite and `ask_again` re-arms it |
+| Door screen guard | The shared-screen guard for doors is the card's (R3; M1 S6) | JS test (`tests/js`): the card does not call `virtual_pet.visit` when `sharedScreen()` (existing behaviour, `card-visit.js:216`). The server cannot test this: `visit` has no `shared`. The guide says so |
+| Door order | (Concurrency and this row assert more than they test; neither counts as evidence alone) | Covered by "Doors" and "Door screen guard" above; the earlier "absent in the shared snapshot" wording is dropped (door lines come from the `visit` reply, not a snapshot) |
+| Stale card | An old card burns no ask and sends no `great`/memory write | See "The ask" (3-day bound) and "Shared screens" (absent `shared` writes no memory); the `great` send only when `mine.memory_on` is a card-side test, and the server refuses it with memory off |
 
 ## 11. Device queue
 
@@ -693,18 +927,24 @@ tools), none of these slices needs one: no new art (section 9).
   without words, still end at the reply. Out of scope here.
 - **`slept: not really`** has no follow-up. Out of scope.
 - **Weekend, game and trick lapse quietly** (scout 1.3 item 6, "no guilt" rule). Door 12
-  softens the game case only when memory is on.
+  no longer touches the "picked and never played" case (FM Q-B dropped "lapsed": no
+  "played" signal exists); it only echoes a repeated pick. A new signal would be its own
+  plan.
+- **Door 6 has no visitor favourite** in M1b (FM Q-B), and none for a favourite told before
+  memory was on (nothing is back-filled).
 - **`back_from` and the guess outcome lines** are fixed lines and repeat. Out of scope;
   the same turn-rotation pass would fix them.
 - **A downgrade** leaves memory on disk unread (R8); the guide says so.
-- **The admin erase's reach.** It runs only from an options save (section 5). A pet entry
-  *removed* or *disabled* does not erase, and a disabled entry's stored option counts. A
-  pet added later defaults to on, so memory is allowed again with an empty record.
+- **The admin erase's reach.** It runs from an options save and from removing an entry
+  (section 5; FM Q-C), on stored options. A pet entry *disabled* does not erase, and a
+  disabled entry's stored option counts. A pet added later defaults to on, so memory is
+  allowed again with an empty record.
 - **`shared` is a claim, not a proof** (R3): a wall tablet whose localStorage flag was
   cleared reads as personal. The guide says so; no server fix exists.
-- **Pet removal** doesn't remove memory (the people store outlives pets, guide "Privacy"),
-  so removing the last pet leaves it unless the person turns it off or forgets first. The
-  guide says this next to the existing line about what stays.
+- **Pet removal** (FM Q-C): removing an entry erases memory when every **other** entry has
+  it off, the only pet included (section 5). Removing a pet while another still allows
+  memory leaves it, as the rest of the people store stays (guide "Privacy"). The guide says
+  this next to the existing line about what stays.
 
 ## 13. Open questions
 
@@ -713,10 +953,11 @@ option off on every pet erases all memory, and door 10 has no separate switch. A
 worker must not treat them as open. What is left came out of the privacy review (s2719),
 each with the default this plan already uses; none blocks M0 or M1a.
 
-**1. Child accounts (review S7).** Hold the memory ask while the person's `baby_talk` is
-on? **Default in this plan: yes** (R10, section 5): it delays Q3's "asks once at bond 4"
-for those people and changes nothing else. The alternative is to ask everyone and rely on
-the page's confirm tap. First mate's call, since it touches Q3.
+**1. Child accounts (review S7). DECIDED (FM Q-D, 2026-11-02):** hold the memory ask while
+the person's `baby_talk` is on, as R10 and section 5 say. It delays Q3's "asks once at bond
+4" for those people and changes nothing else; the settings row still works, and the
+page's confirm tap is the guard for the rest. M1b's acceptance depends on it. Kept here
+only so the numbering of 2 and 3 holds.
 
 **2. The `appointment` tag (review S5).** **Default: dropped from the list** (section 4):
 no door reads it and it would put a health-adjacent dated list in every backup. Keep it
@@ -737,7 +978,9 @@ For the reviewer of each build ship. Try to break each; every item should have a
 2. **Shared screens.** Open the card as a shared screen after memory is on. Is there a
    row, a link, a line from a door, a fetch, or a place where `shared` is ignored (a
    second WS call that forgot the flag)? What about a screen whose "shared" status
-   changes while open?
+   changes while open? Does every `answer` path that calls `remember` (picks, "great",
+   `since_told`, a tag) check `shared is False` on the server, and does an absent `shared`
+   leave memory unchanged but the ordinary answer working (M1 B1)?
 3. **Another person's data.** Can user B read, forget, or write A's memory by any
    command (`memory`, `memory_get`, `memory_forget`, `ask_again`, `answer` with a tag)?
    Does a user with a read-only login get through? (`set_shell` has no permission check,
@@ -759,7 +1002,9 @@ For the reviewer of each build ship. Try to break each; every item should have a
 8. **Doors and nagging.** Does any door's line read as watching, scoring or nagging? Does
    door 10 stay inside its limits (three tags, 3 of 5, eve only, once per 28 days)? Does
    a `work thing` or `something else` tag ever reach a door, a sticker, a count or the recap? Does a door
-   repeat on consecutive days? Do the new tables pass `scripts/copy-scan.js` or have an
+   repeat on consecutive days, or sooner than its spacing (section 6 "Door timing"; door
+   6 is one-shot per favourite)? Do two doors ever fire on one visit? Does a door guard
+   write `person["noted"]`? Do the new tables pass `scripts/copy-scan.js` or have an
    explicit, reviewed exception?
 9. **M0-a's order.** Walk every weekday for a person who has come home (work, school,
    home) with: no event, an open event, 2 dated asks used, a kind resting, level 1 and 2,
@@ -780,12 +1025,13 @@ For the reviewer of each build ship. Try to break each; every item should have a
 14. **Backups and downgrade.** Does the guide say memory is in backups, that older
     backups can't be erased by "off", and what a downgrade leaves? Does an older
     version's validator keep or drop the `memory` key, and is the guide right?
-15. **Admin option.** One option per pet entry: after two pets with different settings,
+15. **Admin option** (also removal, FM Q-C). One option per pet entry: after two pets with different settings,
     what is `memory_allowed` for each, and what does "any pet allows" do on the daily
    prune and on an options change? The erase is decided to fire only from the options
     flow's save, from stored options (section 5): can an unrelated option save, a reload,
-    an unload with zero pets loaded, a disabled entry or a removed entry ever erase? Can
-    the erase fire twice or miss a person?
+    an unload with zero pets loaded or a disabled entry ever erase? Does removing an entry
+    erase exactly when every other entry has memory off, and does a missing people store
+    break the flow or the removal? Can the erase fire twice or miss a person?
 16. **The supersession.** The 2026-10-28 decline of journal memories is superseded for
     the private page only. Does nothing from memory appear in the public journal, the
     photos, the every-world page, or the finds page?
@@ -797,7 +1043,8 @@ For the reviewer of each build ship. Try to break each; every item should have a
 19. **Dedupe and keys.** A dated follow-up answered twice for one ask leaves one tag? Does
     a per-item forget remove exactly one entry with no twin? Which date does a weekend tag
     carry, and which doors read it (section 4)?
-20. **An old card.** Does an old cached card burn the memory ask, or send "great" with
-    memory off?
+20. **An old card.** Does an old cached card burn the memory ask, starve the later slot
+    for more than 3 days, or write memory with no `shared`? Does "great" ever set the soft
+    morning (M1 B2)?
 21. **The pet's own option, server side.** Pets A (off) and B (on), memory on: does
     `memory_get`, `memory_forget` or a `tag` through A work?
