@@ -384,3 +384,8 @@ commit.
 - Pond: axolotl, beaver, duckling (baby and teen redrawn once to keep the water ring), pond turtle, tree frog.
 - Tidepool: hermit crab, octopus, otter (on its water), puffin and seal (on their rock).
 - Night Sky: bat, firefly, luna moth, opossum, owl. Ready complete for all 30.
+
+## Splash at 128 (2026-11-01)
+
+Splash pose (`acts.splash`), Luna (gpt-5.6-luna), probe kitten teen / ball python adult / deer baby approved by the owner 2026-11-01. Frame 2 keeps facing right; no drops, bubbles or towels. One world per commit.
+
