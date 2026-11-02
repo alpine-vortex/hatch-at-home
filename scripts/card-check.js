@@ -3754,7 +3754,7 @@ async function main() {
             round_over: false, yours: true }],
           ["berryOther", { ...state, result: "ok", round: 1, wins: 0, basket: 4, leaves: 4, found: "berry",
             round_over: false, yours: false }],
-          ["beeMine", { ...state, result: "ok", round: 2, wins: 0, basket: 0, leaves: 8, found: "bee",
+          ["beeMine", { ...state, result: "ok", round: 3, wins: 1, basket: 0, leaves: 8, found: "bee",
             round_over: true, yours: true }],
           ["parked", { result: "no_game", parked: true }]]) {
           s.game = { kind: "dig", round: 1, wins: 0, basket: 2, busy: false };
@@ -3781,7 +3781,7 @@ async function main() {
       JSON.stringify(across.berryMine));
     check("dig F16: a bee out of step from this person's other screen is adopted too",
       across.beeMine.live && across.beeMine.said === "oh! you dug there too ♪" &&
-        across.beeMine.round === 2 && across.beeMine.basket === 0, JSON.stringify(across.beeMine));
+        across.beeMine.round === 3 && across.beeMine.wins === 1 && across.beeMine.basket === 0, JSON.stringify(across.beeMine));
     check("dig F16: empty_basket from this person's other screen's keep is adopted, the pile redrawn",
       across.emptyMine.live && across.emptyMine.said === "oh! you dug there too ♪" && !across.emptyMine.busy &&
         across.emptyMine.round === 2 && across.emptyMine.wins === 2 && across.emptyMine.basket === 0 &&
@@ -3848,7 +3848,6 @@ async function main() {
       check("dig F16: the other screen's x closes this one quietly with the parked line",
         !closed.live && closed.said === "ok! i'll keep our pile safe ♪",
         JSON.stringify(closed));
-      if (await cur().locator(".gx").count()) await stop();
     }
 
     // Batch 6 audit #4: after an HA restart the server's dropped-games memory is gone,
