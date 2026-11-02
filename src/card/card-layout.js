@@ -517,8 +517,12 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     s.asleep = asleep;
     s.lightsOut = lightsOut;
     // A new call chirps once (not on load: wasCalling starts undefined).
-    if (calling && s.wasCalling === false && !away) this._chirp(s, "call");
+    const newCall = calling && s.wasCalling === false && !away;
+    if (newCall) this._chirp(s, "call");
     s.wasCalling = calling;
+    // Falling asleep seen live: the pet settles in step with the dim (.6 s). Not on load.
+    if (asleep && s.wasAsleep === false && !s.egg && !calm()) this._animate(s, s.pet, "settle", 2500);
+    s.wasAsleep = asleep;
 
     let scene = "day";
     if (flags.includes("rainy")) scene = "rain";
@@ -590,6 +594,12 @@ class HatchPetCardLayout extends HatchPetCardBuild {
     this._show(s, s.murk, murky ? sp.murk : null);
     s.murk.style.opacity = murky ? [0, 0.45, 0.75, 1][Math.min(poop, 3)] : 0;
     this._show(s, s.attention, calling && !away ? sp.props?.attention : null);
+    if (!calling || away) s.attention.classList.remove("arrive");
+    else if (newCall) { // the icon pops in once, as the call arrives
+      s.attention.classList.remove("arrive");
+      void s.attention.offsetWidth;
+      s.attention.classList.add("arrive");
+    }
     if (!s.propUntil || Date.now() > s.propUntil) this._show(s, s.prop, null);
 
     const lastCare = this._state(s, "sensor.last_care");
