@@ -527,6 +527,15 @@
       // `preview`: a tile tapped (its finish on the live shell, unsaved); "" is the world's own.
       if (shot.preview !== undefined) root.querySelector(`.tile[data-finish="${shot.preview}"]`).click();
     }
+    // `note`: a line in the sheet's or picker's feedback bubble, as the card's own _statusMessage shows it.
+    if (shot.note && ["settings", "picker"].includes(shot.view)) card._statusMessage(cur, shot.note);
+    // `afterChange`: the sheet closed after that change (a SETTINGS_REACT key such as "monoOn"), through the
+    // card's own _settingsChanged and Status chip: the pet perks and says its line (settings UX F14).
+    if (shot.afterChange && shot.view === "settings") {
+      card._settingsChanged(cur, shot.afterChange);
+      root.querySelector(".statusbtn").click();
+      await new Promise((r) => setTimeout(r, shot.afterWait ?? 1500));
+    }
     // `scrollEnd` on the status box's own views: its end (the bigtext preset's status-end).
     if (shot.scrollEnd && ["status", "settings", "picker"].includes(shot.view)) cur.status.scrollTop = cur.status.scrollHeight;
     // `scroll`: a selector in the status box brought into view (the picker's list scrolls).

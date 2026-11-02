@@ -515,7 +515,11 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   const camoAria = await useAria();
   await tap("");
   const ownAria = await useAria();
+  const useOffOnOwn = await cur().locator(".status .puse").getAttribute("aria-disabled"); // nothing new to save (F7)
   await tap("camo");
+  const useOnOnCamo = await cur().locator(".status .puse").getAttribute("aria-disabled");
+  check("shell: use is dimmed until the preview differs from the saved pick (settings UX F7)",
+    useOffOnOwn === "true" && useOnOnCamo === "false", JSON.stringify([useOffOnOwn, useOnOnCamo]));
   check("shell: use is labelled for the tile on the shell, the world's own as such",
     camoAria === "use camo shell" && ownAria === "use the world's own shell", JSON.stringify([camoAria, ownAria]));
   // ...and survives a hass update: a mood tick, then the sun going down and up.
@@ -613,7 +617,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await tab.close();
   await backToDefault("the ways out", a);
 
-  // Pick, use, and a reload keeps it; `world default` clears it.
+  // Pick, use, and a reload keeps it; the world's own tile + `use` clears it (F6: no `world default` button).
   await openPicker();
   await cur().locator('.status .tile[data-finish="stripes"]').scrollIntoViewIfNeeded();
   await tap("stripes");
@@ -630,11 +634,12 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   l = await look(a.entity);
   check("shell: a reload keeps the saved shell", l.finish === "finish-stripes", brief(l));
   await openPicker();
-  await cur().locator(".status .pdefault").click();
+  await tap("");
+  await cur().locator(".status .puse").click();
   const cleared = await waitAttr(a.entity, null);
   await page.waitForTimeout(300);
   l = await look();
-  check("shell: world default clears it: the line, the sensor, `now` and the shell",
+  check("shell: the world's own tile and use clear it: the line, the sensor, `now` and the shell",
     cleared === null && l.note === "back to the world's own ♪" && l.now === "" && l.finish === ownClass(a), brief({ cleared, ...l }));
   await backToDefault("save and reload", a);
 
@@ -1298,6 +1303,77 @@ async function main() {
   await page.waitForTimeout(300);
   check("tapping a heading or the back row's empty end leaves the sheet open",
     await cur().locator(".screen.show-status .sback").count() === 1);
+  // Settings UX fix 1: the sheet keeps the player's place (F1), Escape is a way out (F8), a toggle keeps keyboard
+  // focus (F4), the note is the pet's bubble under the back row and lets taps through (F2/F13), and the pet
+  // has a word when the sheet closes after a change (F14).
+  {
+    const rowBox = await cur().locator(".status .row.srow").first().boundingBox();
+    await page.mouse.click(rowBox.x + 6, rowBox.y + rowBox.height / 2); // a row's label
+    await page.waitForTimeout(250);
+    const afterLabel = await cur().locator(".screen.show-status .sback").count() === 1;
+    await page.mouse.click(rowBox.x + rowBox.width / 2, rowBox.y + rowBox.height / 2); // the gap in the row
+    await page.waitForTimeout(250);
+    const afterGap = await cur().locator(".screen.show-status .sback").count() === 1;
+    check("settings UX F1: a tap on a row's label or the gap in it leaves the sheet open", afterLabel && afterGap, JSON.stringify({ afterLabel, afterGap }));
+    await cur().locator(".status .bell.named").focus();
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(250);
+    const kept = await card.evaluate((el) => el.shadowRoot.activeElement?.className || "");
+    await page.keyboard.press("Enter"); // back to what it was
+    await page.waitForTimeout(250);
+    check("settings UX F4: a toggle pressed by keyboard keeps focus through its redraw", /\bnamed\b/.test(kept), kept);
+    const bubble = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      s.status.scrollTop = 0;
+      el._statusMessage(s, "no phone pings, ok ♪");
+      const note = s.status.querySelector(".status-feedback");
+      const head = s.status.querySelector(".shead").getBoundingClientRect();
+      const box = note.getBoundingClientRect();
+      const out = { shown: !note.hidden, text: note.textContent, under: box.top >= head.bottom - 1, tapsThrough: getComputedStyle(note).pointerEvents === "none",
+        head: getComputedStyle(note, "::before").backgroundImage.includes("sprites/") };
+      clearTimeout(s.statusMessageTimer);
+      note.hidden = true;
+      note.textContent = "";
+      return out;
+    });
+    check("settings UX F13: a note is the pet's bubble with its head, under the back row, and taps go through it",
+      bubble.shown && bubble.under && bubble.tapsThrough && bubble.head, JSON.stringify(bubble));
+    await cur().locator(".status .sback").focus();
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    const escaped = { gear: await cur().locator(".screen.show-status .gear").count(), sback: await cur().locator(".status .sback").count() };
+    check("settings UX F8: Escape on the sheet goes back to the status", escaped.gear === 1 && escaped.sback === 0, JSON.stringify(escaped));
+    await cur().locator(".status .gear").click();
+    await page.waitForTimeout(250);
+    const react = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const real = Date.prototype.getHours;
+      const out = {};
+      const close = async (key, hour) => {
+        Date.prototype.getHours = () => hour;
+        Object.assign(s, { asleep: false, lightsOut: false });
+        s.bubble.textContent = "";
+        el._settingsChanged(s, key);
+        el._toggleStatus(s); // the status closes from the sheet
+        await new Promise((r) => setTimeout(r, 1500)); // typed out
+        const said = s.bubble.textContent;
+        Date.prototype.getHours = real;
+        el._toggleStatus(s);
+        s.status.querySelector(".gear")?.click();
+        return said;
+      };
+      s.settings = true;
+      out.day = await close("monoOn", 12);
+      out.night = await close("monoOff", 23);
+      out.none = await close("effectsOn", 12); // no such line: nothing said
+      s.settings = false;
+      el._toggleStatus(s);
+      return out;
+    });
+    check("settings UX F14: the pet says its line for the last change when the sheet closes, not at night",
+      /all green/.test(react.day) && react.night === "" && react.none === "", JSON.stringify(react));
+    await cur().locator(".status .sback").count() || await openSheet();
+  }
   // Sounds start off and turn on for this browser only.
   const sound = cur().locator(".bell.sound");
   const soundBefore = await sound.getAttribute("aria-pressed");
@@ -5903,7 +5979,7 @@ async function main() {
       toggle.before === "false" && toggle.after === "true" && toggle.text === "on" && toggle.calls === 1 &&
       toggle.type === "virtual_pet/baby_talk" && toggle.enabled === true && toggle.cache === "on" &&
       toggle.note === "OK, baby talk for babies and children ♥" &&
-      toggle.failed.pressed === "true" && toggle.failed.calls === 2 && toggle.failed.note === "That didn't work. Try again." &&
+      toggle.failed.pressed === "true" && toggle.failed.calls === 2 && toggle.failed.note === "hm, that didn't work. try again soon" &&
       toggle.failed.cache === "on" && toggle.babyNote === "OK, baby talk for babies and children ♥", JSON.stringify(toggle));
     await page.locator("hatch-pet-card").evaluate((el) => { // the switch, on, without the failed tap's note
       const s = el._slides[el._index];
@@ -7034,7 +7110,7 @@ async function main() {
     check("FA: shared screen clears a personal line still typing, on every slide, card and tab",
       typingRound.before.said.includes("sunbeam") && typingRound.before.live.includes("sunbeam") &&
       typingRound.before.otherStatus && typingRound.before.sheetPersonal && typingRound.after.sheetKept && typingRound.clean &&
-      typingRound.after.message === "Nothing personal on this screen now.",
+      typingRound.after.message === "shh, nothing personal here now",
       JSON.stringify({ ...typingRound, typedWhenPressed: typingRound.before.typing }));
     check("FA: every card and tab asks its channel again as a shared screen",
       typingRound.subs.page.shared >= typingRound.subs.page.slides && typingRound.subs.tab.shared >= typingRound.subs.tab.slides,
@@ -7337,7 +7413,7 @@ async function main() {
   const unarmed = "forget my data: your birthday, answers and settings for every pet; your bonds stay";
   check("an armed forget goes back to forget when its window closes, and after a failure",
     lapse.armed.text === "sure? tap again" && lapse.lapsed.text === "forget" && lapse.lapsed.aria === unarmed &&
-    lapse.sent.join() === "virtual_pet/forget_me" && lapse.message === "That didn't work. Try again." &&
+    lapse.sent.join() === "virtual_pet/forget_me" && lapse.message === "hm, that didn't work. try again soon" &&
     lapse.failed.text === "forget" && lapse.failed.aria === unarmed && lapse.inSheet, JSON.stringify(lapse));
   check("forget my data is a personal row, after baby talk",
     !forgot.shared && forgot.sharedSheet && forgot.label === "my dataforget" && forgot.order === "baby talk,my data,sounds here" &&
@@ -7653,7 +7729,7 @@ async function main() {
     check("P3a: the bell and my day fall back to the services on unknown_command, and only then",
       fallback.ws.join() === "virtual_pet/notify_me,virtual_pet/my_day,virtual_pet/notify_me" &&
       fallback.svc.join() === "virtual_pet.notify_me:true,virtual_pet.my_day:true" &&
-      fallback.message === "That didn't work. Try again.", JSON.stringify(fallback));
+      fallback.message === "hm, that didn't work. try again soon", JSON.stringify(fallback));
     // Retries: a subscribe refused (HA still starting, the pet mid-reload) is
     // asked again after 2 s and 5 s (then 15 s, then every minute); the first
     // look goes ahead meanwhile. And a new socket ("ready") asks again at once.
