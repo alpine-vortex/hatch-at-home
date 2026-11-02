@@ -1201,6 +1201,37 @@ async function main() {
   if (enter("shelf")) {
   // 1. The shelf draws its devices.
   check("shelf shows the pets", slides >= 2, `${slides} devices`);
+  // UX fix 4, F1: while a pet's states are `unavailable` (an Options reload, an HA restart) it stays in
+  // its own world's device, says one line and has no live buttons; back, the real bubble returns.
+  const gone = await card.evaluate(async (el) => {
+    const s = el._slides[el._index];
+    const real = el._hass;
+    const out = { world: s.worldKey, shape: s.device.className };
+    try {
+      const now = new Date().toISOString();
+      const states = { ...real.states };
+      for (const id of Object.values(s.ids)) {
+        if (states[id] && id !== "sun.sun") states[id] = { ...states[id], state: "unavailable", attributes: { restored: true }, last_updated: now };
+      }
+      el._hass = { ...real, states };
+      el._sig = null;
+      await el._update();
+      out.worldDuring = s.worldKey;
+      out.shapeDuring = s.device.className;
+      out.bubble = s.bubble.textContent;
+      out.buttonsOff = Object.values(s.buttons).every((b) => b.disabled);
+      out.patOn = el._patOn(s);
+    } finally {
+      el._hass = real;
+      el._sig = null;
+      await el._update();
+    }
+    out.bubbleBack = s.bubble.textContent;
+    return out;
+  });
+  check("UX4 F1: an unavailable pet keeps its world's device, says one line, has its buttons and pat off",
+    gone.worldDuring === gone.world && gone.shapeDuring === gone.shape && gone.bubble === "one moment... ♪" &&
+    gone.buttonsOff && !gone.patOn && gone.bubbleBack !== "one moment... ♪", JSON.stringify(gone));
   check("sprites load", !missingSprites.length && !(await bubble()).startsWith("missing sprites"), missingSprites[0]);
   await shot("01-shelf");
 
@@ -7242,8 +7273,38 @@ async function main() {
       return out;
     });
     check(`UX2 F12: an egg ${minutes} min out says "${line}" and shows no care meters`,
-      egg.rows.some((r) => r === `hatching${line}`) && !/hunger|happy|energy|health|discipline|weight|traits|no care yet/.test(egg.text), JSON.stringify(egg));
+      egg.rows.some((r) => r === `hatching${line}`) && !/hunger|happy|energy|health|discipline|weight|traits|no care yet|all new here/.test(egg.text), JSON.stringify(egg));
   }
+  // UX fix 4, F2: an egg can be patted (it rocks, says "♪", the status stays shut) and doesn't greet
+  // by name (its greeting waits for the hatch). F10: the bubble counts "N min" with a no-break
+  // space, and says what the status says in the last 6 minutes.
+  await inject(pet["sensor.life_stage"], { state: "egg", attributes: { hatches_at: new Date(Date.now() + 25 * 60000).toISOString() } });
+  await page.waitForTimeout(1200);
+  const eggPat = await card.first().evaluate((el) => {
+    const s = el._slides[el._index];
+    if (s.screen.classList.contains("show-status")) el._toggleStatus(s);
+    const out = { patOn: el._patOn(s) };
+    const greeted = s.greeted;
+    s.greeted = false;
+    el._greet(s); // an egg doesn't greet: the flag stays down for the hatch
+    out.greetedAfter = s.greeted;
+    s.greeted = greeted;
+    s.patAt = 0;
+    s.sayUntil = 0;
+    out.say25 = el._say(s, null, false);
+    s.hatchesAt = new Date(Date.now() + 4 * 60000).toISOString();
+    out.say4 = el._say(s, null, false);
+    s.hatchesAt = new Date(Date.now() + 25 * 60000).toISOString();
+    s.pat.click();
+    out.bubble = s.bubble.textContent;
+    out.rocked = s.pet.classList.contains("rock");
+    out.status = s.screen.classList.contains("show-status");
+    return out;
+  });
+  check("UX4 F2: an egg's pat rocks it and says ♪, opens no status, and it hasn't greeted",
+    eggPat.patOn && eggPat.bubble === "♪" && eggPat.rocked && !eggPat.status && !eggPat.greetedAfter, JSON.stringify(eggPat));
+  check("UX4 F10: the egg's bubble keeps '25 min' together, and says 'cracking! ♥' at 6 or fewer",
+    /^hatching in about 25\u00a0min$/.test(eggPat.say25) && eggPat.say4 === "cracking! ♥", JSON.stringify(eggPat));
 
   }
   if (enter("sharedscreen")) {
@@ -9034,8 +9095,9 @@ async function main() {
   await flagged("power", (el) => { el._slides[el._index].power = { timers: [] }; }, (el) => { el._slides[el._index].power = null; });
   await flagged("boot", (el) => { el._slides[el._index].boot.hidden = false; }, (el) => { el._slides[el._index].boot.hidden = true; });
   await flagged("away", (el) => { el._slides[el._index].away = true; }, (el) => { el._slides[el._index].away = false; });
-  await flagged("egg", (el) => { el._slides[el._index].egg = true; }, (el) => { el._slides[el._index].egg = false; });
-  check("the pat box is hidden in the status, a game, a question, a scene, a link, low battery, boot, away and the egg",
+  // An egg is patted now (UX fix 4, F2); a pet whose states are reloading is not.
+  await flagged("reloading", (el) => { el._slides[el._index].reloading = true; }, (el) => { el._slides[el._index].reloading = false; });
+  check("the pat box is hidden in the status, a game, a question, a scene, a link, low battery, boot, away and while reloading",
     Object.values(hiddenIn).length === 9 && Object.values(hiddenIn).every(Boolean), JSON.stringify(hiddenIn));
   check("the pat box is back after", (await patState()).shown);
   // A peeking neighbour: its box is hidden and its device inert, so a real tap there reaches
