@@ -79,7 +79,7 @@ from .coordinator import (
 from .defaults import default_weather
 from .home import news_text
 from .model import GAMES
-from .people import ANSWERS, ASK_AGAIN_KINDS, People
+from .people import ANSWERS, ASK_AGAIN_KINDS, People, async_erase_unless_allowed
 from .react import REACTIONS
 
 _LOGGER = logging.getLogger(__name__)
@@ -231,6 +231,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_forget_birthday)
     websocket_api.async_register_command(hass, websocket_birthday_phone)
     websocket_api.async_register_command(hass, websocket_baby_talk)
+    websocket_api.async_register_command(hass, websocket_memory)
     websocket_api.async_register_command(hass, websocket_photos)
     websocket_api.async_register_command(hass, websocket_forget_me)
     websocket_api.async_register_command(hass, websocket_ask_again)
@@ -498,7 +499,15 @@ async def websocket_answer(
     text = None if msg.get("shared") else msg.get("text")
     try:
         kept = await pet.async_answer(
-            connection.user.id, msg["question"], msg["answer"], text, msg.get("day")
+            connection.user.id,
+            msg["question"],
+            msg["answer"],
+            text,
+            msg.get("day"),
+            # Only a card that says it isn't a shared screen may add to memory
+            # (memory plan R3, M1 B1); an old card or a shared one keeps the
+            # answer as ever, and memory is left alone.
+            private=msg.get("shared") is False,
         )
     except ValueError:
         connection.send_error(msg["id"], "not_asked", "It didn't ask that")
@@ -608,6 +617,43 @@ async def websocket_ask_again(
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
     await pet.async_ask_again(connection.user.id, msg["kind"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/memory",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("enabled"): bool,
+        # No default, and refused unless False, before anything else (memory plan
+        # R3): a card that forgets the flag, or a shared screen, changes nothing.
+        vol.Required("shared"): bool,
+    }
+)
+@websocket_api.async_response
+async def websocket_memory(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The signed-in person's memory on or off, for every pet (memory plan M1a).
+    On only through a pet whose option allows it; off always, and it erases. A
+    websocket command, never a service: who turned it on isn't recorded."""
+    if msg["shared"] is not False:
+        connection.send_error(
+            msg["id"], "shared", "That is changed on its person's own screen"
+        )
+        return
+    entity = er.async_get(hass).async_get(msg["entity_id"])
+    pet: PetCoordinator | None = (
+        hass.data[DOMAIN]["pets"].get(entity.config_entry_id) if entity else None
+    )
+    if pet is None:
+        connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
+        return
+    try:
+        await pet.async_set_memory(connection.user.id, msg["enabled"])
+    except ValueError:
+        connection.send_error(msg["id"], "not_asked", "Not on this pet")
+        return
     connection.send_result(msg["id"])
 
 
@@ -1071,4 +1117,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: PetConfigEntry) -> None
     if DOMAIN in hass.data:
         channel.gone(hass, entry.entry_id)
     _refresh_recalls(hass)
+    # Memory allowed on no pet left (this one gone): everyone's is erased, as an
+    # options save turning it off would (memory plan section 5, FM Q-C).
+    await async_erase_unless_allowed(hass, entry.entry_id)
     await PetStore(hass, STORE_VERSION, f"{DOMAIN}.{entry.entry_id}").async_remove()

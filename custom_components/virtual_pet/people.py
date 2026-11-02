@@ -30,7 +30,7 @@ from homeassistant.util import dt as dt_util
 
 from . import model, rates as R
 from .backup import NOTHING, async_backup, async_clear_if_restored
-from .const import DOMAIN, LOGGER
+from .const import CONF_MEMORY, DOMAIN, LOGGER
 
 STORE_KEY = f"{DOMAIN}.people"
 STORE_VERSION = 1
@@ -148,12 +148,46 @@ TRICK_DUE_DAYS = 3  # F7: shown from the 3rd day after the yes
 TRICK_UNTIL_DAYS = 5  # to the 5th
 # Questions whose answer the server checks against today's later ask.
 LATER_CHECKED = {"how_day", "big_how", *FOLLOW_QUESTIONS}
-QUESTION_KINDS = {*QUESTIONS, *ANSWERS, *FOLLOW_QUESTIONS, "phone"}
+# "memory": the one-time memory ask (memory plan M1b); kept as a saved later_kind.
+QUESTION_KINDS = {*QUESTIONS, *ANSWERS, *FOLLOW_QUESTIONS, "phone", "memory"}
 BIG_DAY_ASK_DAYS = (6, 0)  # "anything big this week?": Sunday or Monday (weekday())
 BIG_DAY_AHEAD = 6  # its answer: one of the next 6 days
 # Its weekly gap: a Monday's ask, then the next Sunday's (a 7-day gap would push every
 # week after a Monday ask to Monday, lost when that's the rotation's how_day; audit M2).
 BIG_DAY_GAP = 6
+# --- Memory (memory plan 2026-11-02, M1a) -------------------------------------------
+# person["memory"], only while the person has turned it on: picks and fixed tags with
+# their dates, never words or names (owner Q1 C), kept until forgotten and capped by
+# count only (Q4 C). Every value is from a fixed list or an ISO date; anything else is
+# dropped on load, entry by entry (R5).
+MEMORY_TAG_KINDS = ("big_day", "weekend")
+# The big day and weekend tags (draft labels, M2): keys, never free text. No
+# "appointment" (plan section 4).
+MEMORY_TAGS = (
+    "test",
+    "match",
+    "show",
+    "trip",
+    "party",
+    "lesson",
+    "work_thing",
+    "something_else",
+)
+MEMORY_TAGS_CAP = 120
+MEMORY_PICKS_CAP = 5
+# Each picks list and what its entries hold beside their day.
+MEMORY_PICKS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "dream": ("pick", ANSWERS["dream"]),
+    "game": ("pick", ANSWERS["game"]),
+    "guess": ("pick", ANSWERS["guess"]),
+    "great": ("ask", ("how_day", "big_how")),
+}
+MEMORY_LISTS = ("tags", *MEMORY_PICKS)
+# since_told keys: a favourite told while memory is on (weather, season, a world's
+# visitor); said keys: the last day a door's line was said (door 6, one per favourite).
+_SINCE_TOLD = re.compile(r"fav_weather|fav_season|visitor_[a-z0-9_]{1,32}")
+_MEMORY_SAID = re.compile(r"door(?:[1-9]|1[0-2])(?:_fav_weather|_fav_season)?")
+_PET_ID = re.compile(r"[A-Za-z0-9_]{1,64}")
 _SPACES = re.compile(r"\s+")
 # Said inside a line ("good luck with {it}! ♥"): no trailing punctuation or emoticon of
 # their own (critique #8), as the card's cleanTyped.
@@ -214,12 +248,17 @@ class People:
         }
         raw = _mapping(loaded.get("people"))
         dropped = any(
-            isinstance(r, dict) and r.get("follow") != record.get("follow")
+            isinstance(r, dict)
+            and (
+                r.get("follow") != record.get("follow")
+                or r.get("memory") != record.get("memory")
+            )
             for u, record in self.data["people"].items()
             if isinstance(r := raw.get(u), dict)
         )
         if self.prune(model_today(self._hass)) or dropped:
-            await self.async_save_now()  # an expired or bad follow-up isn't kept
+            # An expired or bad follow-up isn't kept, nor a bad memory entry (R5).
+            await self.async_save_now()
 
     async def _damaged(self, data: Any) -> None:
         backup = await async_backup(self._hass, STORE_KEY, STORE_VERSION, data)
@@ -247,10 +286,12 @@ class People:
         """Erase one person's record ("forget my data"), saved at once: a
         restart inside the save delay must not bring it back. Their lock stays
         (a visit may hold it); the household's weather is no one's. A refusal
-        ("forget my birthday") survives: they are not asked again."""
+        ("forget my birthday") survives: they are not asked again. So does the
+        memory ask's (memory plan M1, content-free): their memory goes with the rest."""
         old = self.data["people"].pop(user, None)
-        if old and old.get("birthday_skipped"):
-            self.data["people"][user] = {"birthday_skipped": True}
+        kept = {k: old[k] for k in _FORGET_KEEPS if old and old.get(k)}
+        if kept:
+            self.data["people"][user] = kept
         self._texts.pop(user, None)  # memory only: gone with the record
         self._moods.pop(user, None)
         await self.async_save_now()
@@ -264,6 +305,102 @@ class People:
     def baby_talk(self, user: str) -> bool:
         """Simpler words from babies and children, on this person's cards."""
         return self.data["people"].get(user, {}).get("baby_talk") is True
+
+    # --- Memory (memory plan M1a) ----------------------------------------------------
+    # Read with .get, never person(): its setdefault would bring back a forgotten
+    # record. A writer checks memory is there and writes with no await between, so an
+    # answer landing during an "off" save finds nothing and writes nothing (review S6).
+
+    def memory(self, user: str) -> dict[str, Any] | None:
+        """This person's memory, or None while it is off."""
+        mem = self.data["people"].get(user, {}).get("memory")
+        return mem if isinstance(mem, dict) else None
+
+    def memory_on(self, user: str) -> bool:
+        return self.memory(user) is not None
+
+    def set_memory(self, user: str, on: bool, today: str) -> bool:
+        """Turn this person's memory on (an empty record, dated) or off (popped:
+        the caller saves at once). True if it changed."""
+        if not on:
+            person = self.data["people"].get(user)
+            return bool(person) and person.pop("memory", None) is not None
+        if self.memory_on(user):
+            return False
+        self.person(user)["memory"] = {"on": True, "since": today}
+        return True
+
+    def remember(self, user: str, kind: str, entry: dict[str, Any]) -> bool:
+        """Keep one entry while their memory is on (sync: the caller's lock, or no
+        await, is the guard). One per key: a second for the same day (and kind, for
+        a tag) replaces it; the oldest goes past the cap, at once (M1 S7). An entry
+        not of the fixed shape is refused. True if kept."""
+        mem = self.memory(user)
+        if mem is None or not _memory_entry_ok(kind, entry):
+            return False
+        entry = dict(entry)
+        if kind == "tags":
+            entries = mem.setdefault("tags", [])
+        else:
+            entries = mem.setdefault("picks", {}).setdefault(kind, [])
+        key = _memory_key(kind, entry)
+        entries[:] = [e for e in entries if _memory_key(kind, e) != key]
+        entries.append(entry)
+        _cap(kind, entries)
+        self.save()
+        return True
+
+    async def forget_item(
+        self, user: str, kind: str, day: str, tag_kind: str | None = None
+    ) -> bool:
+        """Forget one remembered entry, by its key (list and day; a tag's kind
+        too), saved at once. True if one was there."""
+        mem = self.memory(user)
+        if mem is None or kind not in MEMORY_LISTS:
+            return False
+        entries = (
+            mem.get("tags") if kind == "tags" else (mem.get("picks") or {}).get(kind)
+        )
+        if not entries:
+            return False
+        key = (day, tag_kind) if kind == "tags" else (day,)
+        kept = [e for e in entries if _memory_key(kind, e) != key]
+        if len(kept) == len(entries):
+            return False
+        entries[:] = kept
+        await self.async_save_now()
+        return True
+
+    async def forget_memory(self, user: str) -> bool:
+        """Memory off: popped first, then saved at once (R7). True if it was on."""
+        gone = self.set_memory(user, False, "")
+        if gone:
+            await self.async_save_now()
+        return gone
+
+    async def forget_all_memory(self) -> int:
+        """The admin erase (plan section 5): every person's memory, popped with no
+        await between, then saved at once. How many records had one."""
+        gone = sum(
+            person.pop("memory", None) is not None
+            for person in self.data["people"].values()
+        )
+        await self.async_save_now()
+        return gone
+
+    def memory_said(self, user: str, key: str) -> str | None:
+        """The last day a door's line was said to them (M1 S2): in memory only,
+        never `noted`, so "off" takes it."""
+        return ((self.memory(user) or {}).get("said") or {}).get(key)
+
+    def mark_memory_said(self, user: str, key: str, day: str) -> bool:
+        """A door's line said today; nothing without a memory record."""
+        mem = self.memory(user)
+        if mem is None or not _MEMORY_SAID.fullmatch(key) or not _iso(day):
+            return False
+        mem.setdefault("said", {})[key] = day
+        self.save()
+        return True
 
     def said(self, user: str, kind: str, key: str) -> bool:
         """Whether this line was already said (today, or for this key)."""
@@ -302,6 +439,8 @@ class People:
                     del person["follow"]
                 self._texts.pop(user, None)
                 changed = True
+            if (mem := person.get("memory")) and _cap_memory(mem):
+                changed = True  # memory has no time limit (Q4 C): only the caps
             asked = person.get("follow_asked")
             if asked:
                 kept = [d for d in asked if (day - date.fromisoformat(d)).days < 7]
@@ -468,6 +607,10 @@ def _str_dict(v: Any) -> dict[str, str]:
     }
 
 
+# What "forget my data" keeps: refusals with no content, so nobody is asked again.
+_FORGET_KEEPS = ("birthday_skipped", "memory_asked", "memory_chosen_days")
+
+
 # Each key a person's record uses, and the shape its readers expect. A key that
 # doesn't match is dropped (the pets ask, or note it, again); keys this version
 # doesn't know are kept as they are.
@@ -491,6 +634,11 @@ _PERSON_KEYS: dict[str, Any] = {
     "once_last": lambda v: isinstance(v, str),  # a day
     "asked": lambda v: isinstance(v, dict) and isinstance(v.get("day"), str),
     "phone_asked": lambda v: isinstance(v, bool),  # the phone question (top10 1a)
+    # The memory ask (memory plan M1): answered, and the days it was offered unshown.
+    "memory_asked": lambda v: isinstance(v, bool),
+    "memory_chosen_days": lambda v: (
+        isinstance(v, list) and len(v) <= 7 and all(_iso(d) for d in v)
+    ),
 }
 
 
@@ -538,12 +686,113 @@ def _follow(v: Any) -> dict[str, Any]:
     return out
 
 
+def _memory_key(kind: str, entry: dict[str, Any]) -> tuple[Any, ...]:
+    """One entry per key: (day, kind) for a tag, the day for a pick."""
+    return (
+        (entry.get("day"), entry.get("kind")) if kind == "tags" else (entry.get("day"),)
+    )
+
+
+def _memory_entry_ok(kind: str, v: Any) -> bool:
+    """A remembered entry: exactly its keys, a real date, a fixed-list value."""
+    if not isinstance(v, dict) or not _iso(v.get("day")):
+        return False
+    if kind == "tags":
+        return (
+            set(v) == {"day", "kind", "tag"}
+            and v["kind"] in MEMORY_TAG_KINDS
+            and v["tag"] in MEMORY_TAGS
+        )
+    if kind not in MEMORY_PICKS:
+        return False
+    field, values = MEMORY_PICKS[kind]
+    return set(v) == {"day", field} and v[field] in values
+
+
+def _cap(kind: str, entries: list[dict[str, Any]]) -> bool:
+    """Oldest first (by day, a tag's kind after); the oldest go past the cap."""
+    cap = MEMORY_TAGS_CAP if kind == "tags" else MEMORY_PICKS_CAP
+    before = list(entries)
+    entries.sort(key=lambda e: _memory_key(kind, e))
+    del entries[: max(0, len(entries) - cap)]
+    return entries != before
+
+
+def _cap_memory(mem: dict[str, Any]) -> bool:
+    """The caps over a whole memory record (the daily prune's step). True if changed."""
+    changed = False
+    if isinstance(mem.get("tags"), list):
+        changed |= _cap("tags", mem["tags"])
+    for kind, entries in (mem.get("picks") or {}).items():
+        if isinstance(entries, list):
+            changed |= _cap(kind, entries)
+    return changed
+
+
+def _memory(v: Any) -> dict[str, Any] | None:
+    """A saved memory record as loaded (R5, R6): only while on; each entry kept
+    or dropped on its own; one per key (the later wins); the caps applied. None:
+    no memory (missing, off, or not a record)."""
+    if not isinstance(v, dict) or v.get("on") is not True:
+        return None
+    out: dict[str, Any] = {"on": True}
+    if _iso(v.get("since")):
+        out["since"] = v["since"]
+    lists: dict[str, list[dict[str, Any]]] = {}
+    raw_picks = _mapping(v.get("picks"))
+    for kind in MEMORY_LISTS:
+        raw = v.get("tags") if kind == "tags" else raw_picks.get(kind)
+        seen: dict[tuple[Any, ...], dict[str, Any]] = {}
+        for entry in raw if isinstance(raw, list) else []:
+            if _memory_entry_ok(kind, entry):
+                key = _memory_key(kind, entry)
+                seen.pop(key, None)
+                seen[key] = dict(entry)
+        if seen:
+            lists[kind] = list(seen.values())
+            _cap(kind, lists[kind])
+    if "tags" in lists:
+        out["tags"] = lists.pop("tags")
+    if lists:
+        out["picks"] = lists
+    since_told = {
+        k: d
+        for k, d in _str_dict(v.get("since_told")).items()
+        if _SINCE_TOLD.fullmatch(k) and _iso(d)
+    }
+    if since_told:
+        out["since_told"] = since_told
+    said = {
+        k: d
+        for k, d in _str_dict(v.get("said")).items()
+        if _MEMORY_SAID.fullmatch(k) and _iso(d)
+    }
+    if said:
+        out["said"] = said
+    heard = v.get("heard")
+    if (
+        isinstance(heard, dict)
+        and set(heard) == {"day", "pet"}
+        and _iso(heard["day"])
+        and isinstance(heard["pet"], str)
+        and _PET_ID.fullmatch(heard["pet"])
+    ):
+        out["heard"] = dict(heard)
+    return out
+
+
 def _person(record: dict[str, Any]) -> dict[str, Any]:
     """One person's record as loaded, with the shapes its readers expect."""
     out = dict(record)
     for key, ok in _PERSON_KEYS.items():
         if key in out and not ok(out[key]):
             del out[key]
+    if "memory" in out:
+        memory = _memory(out["memory"])
+        if memory is None:
+            del out["memory"]
+        else:
+            out["memory"] = memory
     if "follow" in out:
         out["follow"] = _follow(out["follow"])
         if not out["follow"]:
@@ -949,3 +1198,22 @@ def model_today(hass: HomeAssistant) -> str:
 
 def tomorrow(today: str) -> str:
     return (date.fromisoformat(today) + timedelta(days=1)).isoformat()
+
+
+async def async_erase_unless_allowed(hass: HomeAssistant, leaving: str) -> int:
+    """The admin erase (memory plan section 5, FM Q-C): when no pet entry but the one
+    leaving (an options save turning memory off on it, or its removal) allows
+    memory, every person's memory goes, saved at once. Stored options, never live
+    pets (a reload has none loaded), and disabled entries count; an ignored
+    discovery is no pet. A store that isn't set up skips it. How many records had
+    memory."""
+    if any(
+        entry.options.get(CONF_MEMORY, True)
+        for entry in hass.config_entries.async_entries(DOMAIN, include_ignore=False)
+        if entry.entry_id != leaving
+    ):
+        return 0
+    people: People | None = hass.data.get(DOMAIN, {}).get("people")
+    if people is None:
+        return 0
+    return await people.forget_all_memory()

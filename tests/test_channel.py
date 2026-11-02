@@ -109,6 +109,8 @@ async def test_each_person_hears_only_their_own_bond(
         "baby_talk": False,
         "birthday_phone": False,
         "birthday_kept": False,
+        "memory_on": False,  # memory plan M1a: two booleans, nothing kept
+        "memory_allowed": True,
         "gift": None,  # visitors v2 V-E: their waiting gift, none yet
         "fav_visitor": None,  # F4: their favourite of this world's visitors
         "fav_weather": None,  # M0-c: their favourites, for "ask me again"

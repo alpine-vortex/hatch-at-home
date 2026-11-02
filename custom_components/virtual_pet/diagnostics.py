@@ -79,6 +79,7 @@ REDACT_PEOPLE = {
     "birthday",
     "zone",
     "alarms",
+    "memory",  # memory plan M1a: never in the dump (R4)
 }
 
 REDACT_STATE = {

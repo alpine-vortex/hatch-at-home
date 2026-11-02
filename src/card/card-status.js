@@ -492,7 +492,8 @@ class HatchPetCardStatus extends HatchPetCardMoment {
           this._myDay = false;
           this._birthdayKept = false;
           this._birthdayPhone = false;
-          for (const key of ["my_day", "baby_talk", "birthday_kept", "birthday_phone"]) this._setMine(key, false);
+          this._memoryOn = false; // memory went with the rest (plan M1a)
+          for (const key of ["my_day", "baby_talk", "birthday_kept", "birthday_phone", "memory_on"]) this._setMine(key, false);
           for (const slide of this._slides || []) { // lines told only to them
             if (slide.queue) slide.queue = slide.queue.filter((q) => !q.personal && !q.opts?.personal && !q.ask);
           }
