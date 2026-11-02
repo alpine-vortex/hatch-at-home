@@ -3720,6 +3720,8 @@ const STYLE = `
   .screen .askday { position: absolute; left: 0; right: 0; bottom: 3%; display: flex; gap: 8px;
     flex-wrap: wrap; justify-content: center; z-index: 3; margin: 0 auto; }
   .screen .askday.many { max-width: 236px; } /* three a row at most */
+  .screen .askday.many.wide { max-width: 100%; }
+  .screen .askday.wide button { min-width: 52px; padding: 4px 6px; }
   .screen .askday.asktext input { font: inherit; font-size: 16px; min-height: 44px; width: 9.5em; max-width: 46%;
     border-radius: 14px; border: 2px solid #3a2a1a; padding: 2px 10px; box-sizing: border-box; } /* F1; 16 px: no iOS zoom */
   .compact .screen .askday { gap: 4px; bottom: 2%; }
@@ -3734,6 +3736,12 @@ const STYLE = `
   .screen .askday .stepper button.stepb { min-width: 44px; padding: 0; border: 0; background: transparent;
     box-shadow: none; font-size: 22px; border-radius: 12px; }
   .compact .screen .askday .stepper button.stepb { min-width: 40px; font-size: 20px; }
+  /* The birthday: steppers, ok and skip in one row where the screen is wide enough (420), with
+     slimmer keys (still 44 px tall); at 330 the steppers take one row and ok, skip the next. */
+  ha-card:not(.compact) .screen .askday.bdaybox { gap: 4px; }
+  .screen .askday.bdaybox .stepper button.stepb { min-width: 34px; }
+  .screen .askday.bdaybox .stepper output { min-width: 0; padding: 0 2px; }
+  ha-card:not(.compact) .screen .askday.bdaybox > button { min-width: 40px; padding: 4px 6px; }
   .screen .askday .stepper button.stepb:active { transform: none; background: #ffe9a8; }
   .screen .askday button { font: inherit; font-size: 14px; min-height: 44px; min-width: 64px; padding: 4px 10px;
     border-radius: 14px; border: 2px solid #3a2a1a; background: #fffdf5; color: #3a2a1a;
@@ -3745,11 +3753,12 @@ const STYLE = `
     max-width: calc(100% - 72px); }
   .screen.show-status .askday { display: none; }
   /* In the porthole the round rim cuts a full-width row: the chips take the bubble's inset (F7). */
-  .porthole .screen .askday { left: 9%; right: 9%; bottom: 7%; }
+  .porthole .screen .askday { left: 4%; right: 4%; bottom: 6%; gap: 3px; }
   /* While it asks, the pet steps back (2 steps; none under reduced motion) so the chips
      don't hide it, and its perk then looks at you (F8). --k is its own scale. */
   .screen:has(> .askday) .pet, .screen:has(> .askday) .perch, .screen:has(> .askday) .ghost {
-    translate: 0 -14%; scale: calc(var(--k, 1) * .9) !important; } /* !important: the species scale is inline */
+    translate: var(--ask-dx, 0px) var(--ask-dy, -14%); /* _askPlace measures the chips and the bubble */
+    scale: calc(var(--k, 1) * var(--ask-f, .9)) !important; } /* !important: the species scale is inline */
   .screen:has(> .askday) .pet { transition: translate .25s steps(2), rotate .2s ease-out, scale .25s steps(2); }
   /* Big text reaches the pet's words too (F9). */
   ha-card.bigtext .bubble { font-size: 16px; }
@@ -6904,6 +6913,7 @@ class HatchPetCard extends HTMLElement {
     });
     box.append(input, ok, skip);
     s.screen.append(box);
+    this._askPlace(s, box);
     step.box = box;
     step.until = Date.now() + ASK_MS + 1000;
     step.timer = setTimeout(() => this._askTextEnd(s), ASK_MS);
@@ -7397,6 +7407,34 @@ class HatchPetCard extends HTMLElement {
     return it ? BIG_DAY.howText(it) : QUESTIONS[kind].q;
   }
 
+  // While it asks, the pet steps back (F8): up so its feet stand on the chips' top, smaller to fit
+  // under the bubble, or, when the bubble and the chips leave no room, beside the bubble. Measured
+  // once the chips and the line are on show; the CSS (--ask-dx/dy/f) does the move, in 2 steps.
+  _askPlace(s, box) {
+    const scr = s.screen;
+    const pet = s.pet;
+    if (!pet || pet.offsetParent !== scr || !scr.clientHeight) return;
+    const k = Number(pet.style.scale) || 1;
+    const W = scr.clientWidth;
+    const petH = pet.offsetHeight * k;
+    const petW = pet.offsetWidth * k;
+    const stand = box.offsetTop - 4; // where its feet go
+    const bubble = s.bubble.offsetHeight ? s.bubble : null;
+    const under = bubble ? bubble.offsetTop + bubble.offsetHeight + 2 : 0;
+    let f = Math.min(0.9, (stand - under) / petH);
+    let dx = 0;
+    if (f < 0.6) { // no room under the bubble: beside it, above the chips
+      f = Math.min(0.9, Math.max(0.4, (stand - 4) / petH));
+      const w = petW * f;
+      const right = bubble ? bubble.offsetLeft + bubble.offsetWidth + 4 + w / 2 : W / 2;
+      dx = Math.min(W - 2 - w / 2, Math.max(W / 2, right)) - W / 2;
+    }
+    const dy = Math.min(0, stand - (pet.offsetTop + pet.offsetHeight));
+    scr.style.setProperty("--ask-dx", `${Math.round(dx)}px`);
+    scr.style.setProperty("--ask-dy", `${Math.round(dy)}px`);
+    scr.style.setProperty("--ask-f", f.toFixed(2));
+  }
+
   // A question with its answers as buttons (the line is already in the bubble).
   _ask(s, kind, entity = s.ids?.["sensor.life_stage"]) {
     const question = QUESTIONS[kind];
@@ -7414,6 +7452,8 @@ class HatchPetCard extends HTMLElement {
     const answers = question.options ? question.options(s)
       : Object.keys(kind === "big_how" ? QUESTIONS.how_day.answers : question.answers);
     box.classList.toggle("many", answers.length > 3);
+    box.classList.toggle("bdaybox", kind === "birthday");
+    box.classList.toggle("wide", answers.length > 6); // seven days: four and three, not three rows
     box.innerHTML = (question.picker?.() || "") + answers
       .map((a) => `<button data-answer="${escape(a)}">${escape(question.label?.(a, s, mine) ?? a)}</button>`).join("");
     const done = () => {
@@ -7483,6 +7523,7 @@ class HatchPetCard extends HTMLElement {
       }
     });
     s.screen.append(box);
+    this._askPlace(s, box);
     s.askTimer = setTimeout(done, ASK_MS);
     // The phone question is asked for good only once it's on screen (top10 1a): one
     // dropped before this comes again another day. A websocket answer, off the bus.

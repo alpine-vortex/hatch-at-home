@@ -2801,6 +2801,22 @@ async function main() {
   check("UX3 F8: the pet steps back while a question is open (smaller and up), and returns after",
     stepIn.translate !== "none" && stepOut.translate === "none" && Number(stepIn.scale) < Number(stepOut.scale),
     JSON.stringify({ stepIn, stepOut }));
+  // F8, measured: the pet's feet stand on the chips' top, and its head is not under the chip block.
+  const stood = {};
+  for (const kind of ["how_day", "catchphrase", "birthday", "big_day_day"]) {
+    await talkSetup(kind);
+    await page.waitForTimeout(450);
+    stood[kind] = await card3.evaluate((el) => {
+      const s = el._slides[el._index];
+      const p = s.pet.getBoundingClientRect();
+      const c = s.screen.querySelector(".askday").getBoundingClientRect();
+      return { petBottom: Math.round(p.bottom), chipsTop: Math.round(c.top), petTop: Math.round(p.top), petH: Math.round(p.height),
+        chips: s.screen.querySelectorAll(".askday button").length };
+    });
+    await card3.evaluate((el) => el._slides[el._index].screen.querySelector(".askday")?.remove());
+  }
+  check("UX3 F8: with any question open, the pet stands above the chips (feet at their top, at least 20 px tall)",
+    Object.values(stood).every((r) => r.petBottom <= r.chipsTop + 3 && r.petH >= 20), JSON.stringify(stood));
   // F4: "yes" to the big day gives the day chips at once, not after the question's minute.
   t3 = await talkSetup("big_day");
   await card3.evaluate((el) => {
