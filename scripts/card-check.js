@@ -7432,6 +7432,9 @@ async function main() {
     await page.waitForTimeout(150);
   };
   const PAT = { content: "hehe ♥", excited: "hehe! ♪", sleepy: "mmm...", sick: "thanks... ♥" };
+  // The pet may be content or excited by now (a run's earlier sections, the day's turns):
+  // either mood's pat line is the plain pat (a day-shift run found it excited).
+  const patSaid = (t) => spoke(t, PAT.content) || spoke(t, PAT.excited);
   const spoke = (said, line) => said.replace(/^\S+ /, "") === line || said === line || said.endsWith(` ${line}`);
   await patReset();
   const placed = await patState();
@@ -7644,7 +7647,7 @@ async function main() {
   await page.keyboard.press("Enter");
   await page.waitForTimeout(150);
   const byKey = await patState();
-  check("Enter pats right after a swipe, no status", spoke(await bubble(), PAT.content) && !byKey.status, JSON.stringify(byKey));
+  check("Enter pats right after a swipe, no status", patSaid(await bubble()) && !byKey.status, JSON.stringify(byKey));
   await card.evaluate((el) => { el._swiped = false; });
   // One shared-screen pat: the same line (it names nobody).
   await patReset();
@@ -7652,7 +7655,7 @@ async function main() {
   await tapPet();
   const shared = await bubble();
   await evaluate(() => localStorage.setItem("hatch-shared-screen", "off"));
-  check("a pat on a shared screen gives the same line", spoke(shared, PAT.content), shared);
+  check("a pat on a shared screen gives the same line", patSaid(shared), shared);
   // Asleep: a slow perk, nothing said.
   await patReset();
   const sleepy = await card.evaluate(async (el) => {
@@ -7734,7 +7737,7 @@ async function main() {
     return { soft: s.pet.classList.contains("pat-soft"), moving: (s.movingUntil || 0) !== was };
   }, movedBefore);
   check("under reduced motion a pat gives the line and nothing moves",
-    spoke(calmPat.said.replace(/^\S+ /, ""), PAT.content) || calmPat.said.includes(PAT.content),
+    patSaid(calmPat.said.replace(/^\S+ /, "")) || [PAT.content, PAT.excited].some((l) => calmPat.said.includes(l)),
     JSON.stringify({ calmPat, calmMove }));
   check("under reduced motion a cooldown pat starts no wiggle", !calmMove.soft && !calmMove.moving, JSON.stringify(calmMove));
   await page.emulateMedia({ reducedMotion: null });
