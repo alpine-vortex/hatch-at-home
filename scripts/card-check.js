@@ -385,6 +385,11 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     return { n: ctl.length, small, overlap, hidden: seen.filter((x) => !x.ok).map((x) => x.k), rows: seen.length,
       posTab: ctl.filter((c) => Number(c.tab) > 0).length, scroll: s.status.scrollTop };
   }, view);
+  // A fresh hatchling's server-side call (the status's "would like" row) takes a row of
+  // this 158 px box at 330 and pushes the energy meter off it: measure the pet not calling,
+  // as the pinned sections do, and draw the status again so it shows.
+  await pinAwake(card, "shell 4c");
+  await card.evaluate((el) => { for (const s of el._slides) { s.statusHtml = null; s.drawnSig = null; } el._redraw(); });
   const boxIssues = [];
   const boxCounts = {};
   for (const width of [330, 420]) {
@@ -475,6 +480,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await page.waitForTimeout(400);
   check("4c: every status, settings and picker control is 44x44 at 330 and 420, none overlap, the wish and meters show unscrolled, tab order is page order, a shared screen's status has misses/whines",
     boxIssues.length === 0, boxIssues.join(" ; ") || JSON.stringify(boxCounts));
+  await unpinAwake(card);
 
   // Locked tiles (a pet below teen): shown dimmed with their stage, never hidden; a tap
   // says when, saves nothing and leaves the shell as it is.
@@ -1419,10 +1425,10 @@ async function main() {
 
   // A content pet that isn't calling: a calling pet is never greeted and has no
   // idle life, and a freshly hatched one may well be calling.
-  // The card's FINDS_SHOWN release switch ships off until V-F's art (no basket, reveal,
-  // gift or finds grid). gifts, finds and collection test the real features, so each turns
-  // it on (HatchPetCard.findsShown): on this page now, and in every tab the context opens
-  // after (an init script, kept for the rest of the run: only these sections follow).
+  // The card's FINDS_SHOWN release switch ships on. gifts, finds and collection still call
+  // showFinds, which sets it true (HatchPetCard.findsShown) on this page and in every tab
+  // the context opens after (an init script), so they hold even after the off-path checks
+  // below set it false and put it back.
   let findsInit = false;
   const showFinds = async () => {
     if (!findsInit) {
@@ -1467,6 +1473,14 @@ async function main() {
   await page.waitForSelector("hatch-pet-card .statusbtn", { timeout: 30000 });
   await seasonsOff(); // the reload brought the card back with its own config
   await hush(); // new slides: no sound unless a check asks for one
+  // Record every line the card speaks from the reload on, for every slide: with the pet
+  // pinned awake the hello can come while this check is still walking to the pet, before
+  // a hook installed after the walk (a sample of the bubble would then find a call line).
+  await card.evaluate((el) => {
+    el.__spoken = [];
+    const speak = el._speak;
+    el._speak = function (slide, line, ...rest) { el.__spoken.push([slide, String(line)]); return speak.call(this, slide, line, ...rest); };
+  });
   await pinAwake(card, "play");
   for (let i = 0; i < slides; i++) {
     if ((await page.locator("hatch-pet-card .title").innerText()).trim() === petName) break;
@@ -1479,7 +1493,7 @@ async function main() {
   await card.evaluate((el) => {
     const s = el._slides[el._index];
     s.nextIdle = Date.now() + 600000;
-    el.__said = [];
+    el.__said = el.__spoken.filter(([slide]) => slide === s).map(([, line]) => line);
     const speak = el._speak;
     el._speak = function (slide, line, ...rest) { if (slide === s) el.__said.push(String(line)); return speak.call(this, slide, line, ...rest); };
   });
@@ -1489,7 +1503,7 @@ async function main() {
     const said = await card.evaluate((el) => el.__said);
     greeting = said.find((l) => l.includes(USER.name)) || await bubble();
   }
-  await card.evaluate((el) => { delete el._speak; delete el.__said; el._slides[el._index].nextIdle = 0; }); // idle life back
+  await card.evaluate((el) => { delete el._speak; delete el.__said; delete el.__spoken; el._slides[el._index].nextIdle = 0; }); // idle life back
   check("greets the viewer by first name", greeting.includes(USER.name), greeting);
   await shot("04a-greeting");
 
@@ -10603,6 +10617,10 @@ async function main() {
     await prep();
     const first = await card.evaluate((el) => {
       for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-link-")) localStorage.removeItem(k);
+      // This is about the day's first-link timer, not who is free: with finds shown a line can
+      // land (a find, a gift) between prep and here, and a pet with a line waiting is not free.
+      // So clear them again in this same step, and report what was left if a try still fails.
+      for (const s of el._slides) Object.assign(s, { queue: [], sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0 });
       const h = el._slides[el._index];
       const now = Date.now();
       const tries = {};
@@ -10630,7 +10648,8 @@ async function main() {
       for (let i = 0; i < 20; i++) { el._linkFirstMs = undefined; el._touchedAt = null; el._linkTick(h); ms.push(el._linkFirstMs); }
       el._linkAt = Date.now() + 1e9;
       localStorage.setItem(`hatch-link-cardcheck-${new Date().toDateString()}`, "1");
-      return { tries, lo: Math.min(...ms), hi: Math.max(...ms) };
+      return { tries, lo: Math.min(...ms), hi: Math.max(...ms),
+        free: el._slides.map((x) => [el._free(x), x.queue?.length || 0, x.moodState]) };
     });
     check(`the day's first link waits for a touched, shown look 1-3 min in (${width}px)`,
       first.tries.watched && !first.tries.untouched && !first.tries.soon && !first.tries.stale && !first.tries.hidden && !first.tries.offscreen
@@ -11238,10 +11257,32 @@ async function main() {
     localStorage.setItem("hatch-shared-screen", "off");
     els.forEach((el) => el._goPersonal());
   }, { e: seedPet, was: poweredWas });
+  // _goPersonal asks the channel again; dev's own view (mine, with the seeded gift) is
+  // back when it answers, which on a slow runner after a restart takes more than the
+  // checks below would wait. Wait for that answer (a dev with a bond has a mine).
+  await everyCard(async (els, e) => {
+    for (let i = 0; i < 300; i++) {
+      const s = els[0]?._slides?.find((x) => x.ids?.["sensor.life_stage"] === e);
+      if (s?.subscribed && s.mine) return;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }, seedPet);
   await pinAwake(card, "gifts");
-  // FINDS_SHOWN off (the default until V-F), with dev's gift and restart's basket both
-  // waiting: no basket shows, a tap, a tab-back and a direct take send no collect, and no
-  // pop or reveal appears. Then it is turned on for the real features below.
+  // FINDS_SHOWN on (the default): with restart's basket waiting, the basket shows on the
+  // slide on screen.
+  const on = await card.first().evaluate((el, e) => {
+    const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
+    el._basketSync(s);
+    const b = s.basket;
+    return { def: customElements.get("hatch-pet-card").findsShown, onShow: s === el._slides[el._index],
+      basket: s.house?.basket ?? null, shown: !!b && !b.hidden && getComputedStyle(b).display !== "none" };
+  }, seedPet);
+  check("FINDS_SHOWN on by default: with a full basket waiting, the basket shows",
+    on.def === true && on.onShow && on.basket > 0 && on.shown, JSON.stringify(on));
+  // The switch still works off (HatchPetCard.findsShown = false), with dev's gift and
+  // restart's basket both waiting: no basket shows, a tap, a tab-back and a direct take
+  // send no collect, and no pop or reveal appears. Then it goes back on for the real
+  // features below.
   const off = await card.first().evaluate(async (el, e) => {
     const s = el._slides.find((x) => x.ids?.["sensor.life_stage"] === e);
     const conn = el._hass.connection;
@@ -11252,6 +11293,8 @@ async function main() {
       return real.call(this, msg, ...a);
     };
     const onShow = s === el._slides[el._index];
+    const Card = customElements.get("hatch-pet-card");
+    Card.findsShown = false;
     try {
       el._basketSync(s);
       s.giftAgain = true;
@@ -11264,11 +11307,14 @@ async function main() {
       s.giftAgain = false;
     }
     const shown = (b) => !!b && !b.hidden && getComputedStyle(b).display !== "none";
-    return { def: customElements.get("hatch-pet-card").findsShown, onShow, gift: !!s.mine?.gift,
+    const res = { def: Card.findsShown, onShow, gift: !!s.mine?.gift,
       basket: s.house?.basket ?? null, baskets: el._slides.filter((x) => shown(x.basket)).length,
       reveals: el._slides.filter((x) => x.screen?.querySelector(".reveal")).length, sent };
+    Card.findsShown = true;
+    el._slides.forEach((x) => el._basketSync(x));
+    return res;
   }, seedPet);
-  check("FINDS_SHOWN off by default: with a gift and a full basket waiting, no basket or pop shows and no collect is sent",
+  check("FINDS_SHOWN set false: with a gift and a full basket waiting, no basket or pop shows and no collect is sent",
     off.def === false && off.onShow && off.gift && off.basket > 0 && off.baskets === 0 && off.reveals === 0 &&
     off.sent.length === 0, JSON.stringify(off));
   await showFinds();
@@ -11755,8 +11801,8 @@ async function main() {
   await page.waitForTimeout(500);
   await calm();
   await pinAwake(card, "collection");
-  // top10 7a: with FINDS_SHOWN off, the link and the page are named by what they show,
-  // visitors. Checked before showFinds turns the switch on for the rest of the run.
+  // top10 7a: with FINDS_SHOWN set false, the link and the page are named by what they
+  // show, visitors. The switch goes back on after.
   const hidden = await card.first().evaluate(async (el) => {
     const Card = customElements.get("hatch-pet-card");
     const was = Card.findsShown;

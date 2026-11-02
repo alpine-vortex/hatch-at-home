@@ -972,7 +972,7 @@ no `title` or `artist`: for every change, read `media_title` from your media pla
 `virtual_pet_holiday` (with `holiday`: `halloween`, `thanksgiving`, `winter_lights` or `winter_treat`), `virtual_pet_weather` (with `change`),
 `virtual_pet_forecast` (with `when` and `kind`), `virtual_pet_house_answered` (with `request`: `blanket` or `fan`; the heating or cooling came on for the pet), `virtual_pet_robot_out` and `virtual_pet_robot_home` (a robot vacuum started a run and went home; no vacuum is named), `virtual_pet_appliance_done` (with `kind`: `washer`, `dryer`, `dishwasher` or `machine`; no machine is named; there is no doorbell event: a press is never on the bus), `virtual_pet_house_moment` (with `category`, and for Custom `reaction` and its `text` unless the words are kept off sensors; never for oven, coffee, EV, delivery or timer, and never naming the entity), `virtual_pet_call_settled` (everyone left and the sitter settled its needs),
 `virtual_pet_favourite_snack` (with `food`),
-`virtual_pet_found` (with `id` and `world`, when the pet finds something; finds aren't shown on the card yet).
+`virtual_pet_found` (with `id` and `world`, when the pet finds something).
 
 No person's bond, nickname, favourite game, notifications or aimed wish is ever on an
 event or a sensor: each person's card gets its own over a private websocket
