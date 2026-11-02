@@ -240,7 +240,7 @@ def box_front():
     # The left half is a proper toy-box feature panel, so the cover never reads empty.
     d.rounded_rectangle((58, 188, 862, 606), radius=34, fill=PURPLE)
     d.rounded_rectangle((72, 202, 848, 592), radius=28, outline=YELLOW, width=8)
-    pixel_text(im, (460, 238), "YOUR HOME. THEIR WORLD.", 8, YELLOW, anchor="ma")
+    pixel_text(im, (460, 240), "YOUR HOME. THEIR WORLD.", 7, YELLOW, anchor="ma")
     pixel_text(im, (460, 326), "30 PETS  •  6 WORLDS", 7, WHITE, anchor="ma")
     pixel_text(im, (460, 393), "CARE!  PLAY!  GROW!", 7, YELLOW, anchor="ma")
     pixel_text(im, (460, 444), "THEY NOTICE YOUR REAL HOME", 5, WHITE, anchor="ma")
@@ -257,15 +257,12 @@ def box_front():
         tile = rounded(tile, 28)
         drop(im, tile, (center-102, 236), radius=28, border=8, off=8)
         pixel_text(im, (center, 592), key.upper(), 4, PURPLE, anchor="ma")
-    # Each starter is foregrounded; one filled black teaser sits behind it.
+    # Each starter stands alone on the shelf; no offset ghost behind it.
     d.rectangle((0, 664, w, h), fill=PURPLE)
     d.rectangle((0, 664, w, 676), fill=YELLOW)
     slot_w = w // 6
     for i, (world, first, extras) in enumerate(WORLDS):
         center = slot_w*i + slot_w//2
-        if extras:
-            ghost = filled_silhouette(extras[0], 114)
-            im.alpha_composite(ghost, (center+15, 708))
         pet = first_sprite(first, 166)
         im.alpha_composite(pet, (center-83, 686))
         pixel_text(im, (center, 846), NAMES[first].upper(), 4, YELLOW, anchor="ma")
@@ -464,6 +461,41 @@ def music_bridge():
     im.convert("RGB").save(OUT / "music-bridge.jpg", quality=91, optimize=True, progressive=True)
 
 
+def retail_gecko_sprite():
+    """Use the real one-tail gecko sprite in the photographed mono-screen pack."""
+    path = OUT / "retail-terrarium-gecko-mono.jpg"
+    im = Image.open(path).convert("RGBA")
+    sprite = Image.open(FRONT / "sprites/gecko/child_content_1.png").convert("RGBA")
+    sprite = sprite.crop(sprite.getchannel("A").getbbox())
+
+    # Keep the sprite's exact silhouette and pixel placement while matching the
+    # package's four-green LCD. This deliberately avoids redrawing the creature.
+    width = 153
+    height = round(sprite.height * width / sprite.width)
+    sprite = sprite.resize((width, height), Image.Resampling.NEAREST)
+    alpha = sprite.getchannel("A")
+    mono = Image.new("RGBA", sprite.size, (0, 0, 0, 0))
+    pixels = []
+    for r, g, b, a in sprite.getdata():
+        lum = (r * 299 + g * 587 + b * 114) // 1000
+        if lum < 48:
+            color = (24, 45, 29)
+        elif lum < 112:
+            color = (59, 83, 42)
+        elif lum < 178:
+            color = (118, 145, 74)
+        else:
+            color = (174, 198, 116)
+        pixels.append((*color, a))
+    mono.putdata(pixels)
+    mono.putalpha(alpha)
+
+    # The screen is nearly front-on in this product photograph. The pet sits
+    # on its lower edge, matching the scale and placement of the other LCD art.
+    im.alpha_composite(mono, ((im.width - width) // 2, 590))
+    im.convert("RGB").save(path, quality=93, optimize=True, progressive=True)
+
+
 def chapter_ribbons():
     w, h = 1600, 360
     im = Image.new("RGBA", (w, h), PURPLE)
@@ -498,3 +530,4 @@ if __name__ == "__main__":
     feature_cards()
     music_bridge()
     chapter_ribbons()
+    retail_gecko_sprite()
