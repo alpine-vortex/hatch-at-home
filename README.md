@@ -12,15 +12,13 @@
 
 ---
 
-## 🥚 A NEW FRIEND IS HATCHING!
+## 🥚 IT'S HATCHING!
 
-Meet your new pixel pet: a tiny roommate who **eats, naps, plays, gets messy,
-dreams, makes friends and grows up** right on your Home Assistant dashboard.
+Meet the tiny roommate who lives on your Home Assistant dashboard! It **eats,
+naps, plays, gets messy, dreams and grows up**, and it notices what your real
+home is doing. It never dies, and your house can never hurt it.
 
-Pick a world and its shell. There are **30 pet species across six worlds**, each
-with a little device and scene of its own. Then let your real home join the story:
-your pet can notice the weather, moon, lights, music, TV, chores and when you come
-home.
+**30 pets • 6 worlds • 3 mini-games • 1 big smart home!**
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/music-bridge.jpg" alt="A diagonal split pairs the real Hearth shell with a dancing kitten on the Home Assistant side, and a real speaker playing music on a home shelf" width="100%">
@@ -36,10 +34,9 @@ home.
   <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/chapter-ribbons.png" alt="Three bright pixel-art feature banners: care, play and grow; the house joins in; and a new story every day" width="100%">
 </p>
 
-## ★ SIX SHELLS. SIX TOY-STORE BOXES. ★
+## ★ SIX SHELLS. SIX BOXES. ★
 
-Each retail-style pack pairs one of the game's shell designs with its world's
-first pet. Look for a standard color LCD, a four-green mono screen and a green backlight.
+Pick a world and its little device. Each starts with its own first pet.
 
 <table>
 <tr>
@@ -54,105 +51,37 @@ first pet. Look for a standard color LCD, a four-green mono screen and a green b
 </tr>
 </table>
 
-<p align="center"><sub>Six toy-store-style pack shots, one for each starter. The pet itself lives in Home Assistant.</sub></p>
-
-## ★ PICK YOUR SHELL ★
-
-Six little worlds, each with its own device and creature family:
-
-| 🌲 Woodland | 🏡 Hearth | 🪴 Terrarium | 🌊 Tidepool | 🪷 Pond | 🌙 Night Sky |
-| --- | --- | --- | --- | --- | --- |
-| Bird | Tabby kitten | Leopard gecko | Sea otter | Tree frog | Little brown bat |
-
-The cover art shows **actual in-game shells**. Every world gets its first pet in
-color, while a dark little profile peeks out behind it to tease who else may be
-waiting there.
+<p align="center"><sub>Toy-store-style pack shots. The pet itself lives in Home Assistant.</sub></p>
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/pack/shell-lineup.png" alt="Six real in-game shells showing lively pixel scenes with each world's first pet: birdwatching, kitten kneading, gecko shedding, sea otter balancing on a rock, tree frog on a lily pad, and bat hanging upside down" width="100%">
 </p>
 
-## ★ WHAT YOUR PET CAN DO ★
+<sub>Real in-game shells! Four more pets wait in every world.</sub>
+
+## ★ WHAT'S IN THE BOX? ★
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/grow.png" alt="A kitten grows through five stages: egg, baby, child, teen, and adult" width="100%">
 </p>
 
-- **Care for it:** feed it, give it a snack, play, clean up, give medicine, praise
-  it, scold a pretend whine, or tuck it in. Your pet never dies, and house events
-  never hurt it.
-- **It calls for you:** hungry, bored, sleepy or sick? It asks for help, and you
-  have 20 minutes to answer. Opt-in phone alerts can include a button to answer
-  right there.
-- **Play together:** pick *Left or right?*, *Higher or lower?* or *Berry dig*. Win
-  three out of five rounds in the first two, or bank five berries in the dig.
-  Put a dig aside and your own pile waits for you.
-- **Watch it grow:** hatch an egg, raise a baby, and see your pet become a child,
-  teen and adult. It learns from its world, growing up with up to four of 16
-  traits and one of eight personalities. Its upbringing becomes devoted, steady
-  or scrappy; adults can learn tricks and pass a trait to a new generation. Pick
-  the next species yourself or leave it a surprise.
-- **Make it part of the home:** your pet can watch the rain, cozy up by the fire,
-  react to the TV or music, and greet you when you get home.
-- **Collect little moments:** discover a daily wish, hear about a dream, see what
-  happened while you were out, and get an evening recap. Visitors, weather and
-  little surprises build out the family journal week by week.
-- **Build a bond:** it gets to know each person who spends time with it. The bond
-  adds warmth and recognition, never a care score.
+- 🍙 **Care!** Feed, play, clean, tuck in
+- 📣 **It calls for YOU!** You get 20 minutes to answer
+- 🎮 **3 mini-games!** *Left or right?*, *Higher or lower?*, *Berry dig*
+- 🌱 **Grows up!** Egg, baby, child, teen, adult
+- 🧬 **Own personality!** Traits, tricks, a family that goes on
+- 💌 **Wishes, dreams and visitors!** A little news every day
+- 💛 **Bonds!** It gets to know each person at home
+- 🎃 **Seasons!** Halloween, Thanksgiving and winter lights
+- 📱 **Phone alerts!** Optional, with buttons to answer
 
-## ★ LITTLE EXTRAS, BIG PERSONALITY ★
+## 🏠 IT KNOWS YOUR HOUSE!
 
-<table>
-<tr>
-<td width="50%" valign="top">
-
-**It gets to know you!** Each person has their own bond, nickname, favorite game
-and personal bests. Close friends get homecoming cheers; best friends may get a
-framed pet photo for their journal. A second pet can visit over the toy's
-infrared link, and friendly visitors from each world can become familiar faces.
-
-**It has its own voice!** Every creature has a voice, favorite snack and
-catchphrase. Its everyday lines take turns by day, and teens and adults speak in
-their personality's style. Switch on gentle chirps or baby talk when you want them.
-
-</td>
-<td width="50%" valign="top">
-
-**It keeps a calendar!** Birthdays bring party hats and confetti. Halloween,
-Thanksgiving and December's winter lights bring costumes, decorations and special
-greetings; first snow and frost become journal memories.
-
-**It can reach you!** Opt in to phone alerts with buttons to answer calls, or ask
-Home Assistant Assist how your pet is doing and tell it what to do.
-
-</td>
-</tr>
-</table>
-
-Every world has visitors. See one on three days and it becomes a familiar friend;
-rarely, two visitors arrive together or one drops in from another world. If you
-miss a visitor's daytime window, it can still come by the next time you look in.
-Each day brings a wish and a dream, with questions now and then. In the evening,
-teens and adults tell you a little about their day; the journal keeps the week's
-dreams, visitors and notable weather.
-
-“My day” is optional and personal to each Home Assistant user. Shared screens
-leave personal details out, and Home Assistant downtime pauses the pet safely.
-The device gets a little boot-up greeting, a dot-matrix LCD and a backlight.
-Choose shell finishes for each pet; special shells unlock when it becomes a teen.
-Turn on big text for the status page and journal, or switch to a four-green mono
-screen. Chore lists can earn treats, you can share a headline with the
-`virtual_pet.share_news` service, and an optional blueprint can make a call blink
-a light or play a short sound.
-
-## 🏠 YOUR HOME BECOMES PART OF THE STORY!
-
-Connect the things you already use in Home Assistant, and your pet may:
+Connect what you already have in Home Assistant, and your pet may:
 
 | When your home… | Your pet… |
 | --- | --- |
 | 🌧️ gets rain in the forecast | watches the drops and asks for its blanket |
-| 🌕 has no moon sensor mapped | still watches the moon by date |
 | 🔥 has a fireplace lit | curls up beside the fire |
 | 🌡️ has mapped heating or cooling | can get help with a blanket or fan request |
 | 🎵 plays music | dances along |
@@ -163,30 +92,22 @@ Connect the things you already use in Home Assistant, and your pet may:
 | 🌙 reaches bedtime | says good night and goes to sleep |
 | 🚪 welcomes you home | gets excited to see you |
 
-Every home connection is optional. Your pet’s world changes with the house, but
-**the house can never hurt it**. Away for a while? It stays safe with the sitter
-until you come back.
+Every connection is optional. Away for a while? It waits safely with the sitter.
 
-Rain, snow, sunshine, wind, fog and storms can change the scene or spark a
-comment. It may also notice sunsets, a first warm day, a washer finishing, a
-robot rolling by, or your day getting started. It shares only the kind of
-household moment, never the name of an appliance or robot.
+## 🐣 HOW TO HATCH
 
-## 🐣 HATCH YOUR EGG
+**You'll need:** Home Assistant 2026.10+ and [HACS](https://hacs.xyz).
+Batteries not required!
 
-1. **Back up Home Assistant first.** (Settings → System → Backups)
-2. In HACS, open **⋮ → Custom repositories** and add
-   `https://github.com/alpine-vortex/hatch-at-home` as an **Integration**.
-3. Find **Virtual Pet** in HACS and download it, then restart Home Assistant.
-4. Go to **Settings → Devices & services → Add integration → Virtual Pet**.
-   Name your pet and choose a world. Add the integration again for another pet.
-5. Add the **Hatch at Home pet shelf** card to a dashboard and meet your new pal!
+1. In HACS, open **⋮ → Custom repositories**, add
+   `https://github.com/alpine-vortex/hatch-at-home` as an **Integration**, then
+   download **Virtual Pet** and restart Home Assistant.
+2. **Settings → Devices & services → Add integration → Virtual Pet.** Name your
+   pet and pick a world.
+3. Add the **Hatch at Home pet shelf** card to a dashboard. Say hi!
 
-You can connect weather, lights, TV and other home details later. They’re all
-optional.
-
-📖 **Need the full setup guide?** See [the guide](docs/guide.md) for manual
-installation, every entity and option, and development notes.
+📖 Back up first, add more pets, connect your house: the
+[full guide](docs/guide.md) has it all.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/alpine-vortex/hatch-at-home/main/docs/readme/footer.png" alt="Ages 8 to 108. Requires Home Assistant. Free and open source, MIT licensed." width="100%">

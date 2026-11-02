@@ -60,10 +60,10 @@ contact, natural reflections and retail lighting.
 - **Box-back copy:** short, upbeat and full of exclamation marks. Speak to the
   owner ("your pet", "it calls for YOU!").
 - **Headings:** in the README, ALL CAPS behind one emoji or a ★ pair
-  (`## 🥚 IT'S HATCHING!`, `## ★ FEATURES ★`). In the images, ALL CAPS on a
+  (`## 🥚 IT'S HATCHING!`, `## ★ WHAT'S IN THE BOX? ★`). In the images, ALL CAPS on a
   label box ("CHOOSE YOUR WORLD!").
-- **Feature items:** an icon, a **bold exclamation** title, `<br>`, then one or
-  two sentences. Each item is its own paragraph inside the two-column table.
+- **Feature items:** one bullet each: an icon, a **bold exclamation** title, then one
+  short sentence or phrase. No tables of features, no long paragraphs.
 - **Never invent mechanics.** Marketing may exaggerate tone, never facts. Check
   each claim against `docs/guide.md` or the code. Mistakes caught in review so far:
   "keep it warm" (eggs hatch on a timer), "yawns when the lights go out" (it
@@ -73,7 +73,7 @@ contact, natural reflections and retail lighting.
   shortened (Bird, not Robin; Deer, not Fawn). The legacy `NAMES` in `art.py`
   and the starter names in `box_art.py` hold short forms.
 - **Numbers on the current box:**
-  - 6 worlds, 30 creatures and 16 traits.
+  - 6 worlds, 30 creatures.
   - Three mini-games: two five-round games (three correct wins) and Berry dig
     (bank five berries).
   - The stage times: egg → baby 30 min → child 1 day → teen 5 days → adult 14 days.
