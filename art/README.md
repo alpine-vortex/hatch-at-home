@@ -389,3 +389,4 @@ commit.
 
 Splash pose (`acts.splash`), Luna (gpt-5.6-luna), probe kitten teen / ball python adult / deer baby approved by the owner 2026-11-01. Frame 2 keeps facing right; no drops, bubbles or towels. One world per commit.
 
+- Woodland (bananaslug, bird, deer, fox, squirrel): splash baby/teen/adult, frame 2 still facing right.
