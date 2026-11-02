@@ -1655,6 +1655,7 @@ const STATUS_COPY = {
   eggCracking: "cracking! ♥", // 6 or fewer
   tileRaised: (name) => `${name}! my old pal ♥`, // F14 (FM 2026-11-02: 40 with the longest name)
   tileUnmet: "not met one of those yet",
+  friendsHint: "visitors and neighbours this week ♪", // UX8 F9 (FM 2026-11-02, owner delegated): a tap on the friends row
 };
 // Talking with the pet, UX fix 3 (review 3, F11/F12/F14; copy APPROVED by the first mate
 // 2026-11-02, owner delegated): the blanket and the fan answered, the lay's "sure?" in the
@@ -8589,7 +8590,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
         ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
-      ${social > 0 && !isEgg ? row(null, "friends", socialHearts(social)) : ""}
+      ${social > 0 && !isEgg ? row("stat_heart_full", "friends", socialHearts(social)).replace('class="row"', 'class="row friendsrow" role="button" tabindex="0"') : ""}
       ${row("icon_feed", "hunger", hearts(value("hunger"), FEED_FULL_AT))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}
@@ -8608,6 +8609,17 @@ class HatchPetCard extends HTMLElement {
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
+    // The friends row says what it counts (UX8 F9); the tap is not a tap on the screen behind.
+    const friends = s.status.querySelector(".friendsrow");
+    friends?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const at = friends.getBoundingClientRect(); // the note must not cover the row (as _tapped)
+      this._tapRect = { top: at.top, bottom: at.bottom, at: Date.now() };
+      this._statusMessage(s, STATUS_COPY.friendsHint);
+    });
+    friends?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); friends.click(); }
+    });
     const head = s.status.querySelector(".whohead");
     if (head) this._headCrop(s, head, 14, 3);
     this._journalLink(s, true);
