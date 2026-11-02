@@ -3819,7 +3819,7 @@ const STYLE = `
   /* Beside the bubble (UX7 F1): it wraps in the room left of the pet's column. No room at all: the
      pet's head sits in the bubble and the pet itself waits out the question. */
   .screen:has(> .askday) .bubble { max-width: var(--ask-bw, 64%); }
-  .screen:has(> .askday.nopet) .bubble { top: 4%; padding: 1px 6px 1px 36px; min-height: 20px; font-size: 12px; line-height: 1.15; }
+  .screen:has(> .askday.nopet) .bubble { top: 2%; padding: 1px 6px 1px 36px; min-height: 20px; font-size: 12px; line-height: 1.15; }
   .porthole .screen:has(> .askday.nopet) .bubble { top: 4%; left: 7%; }
   .screen .askday.nopet { bottom: 2%; } /* the chips and the bubble share the whole height */
   .porthole .screen .askday.nopet { bottom: 2%; }
