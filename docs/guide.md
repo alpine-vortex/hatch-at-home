@@ -300,16 +300,25 @@ download, restart. HACS replaces the folder you copied.
   takes you back to the sheet. A tap on a label or the empty space beside a switch
   leaves the sheet open. When the pet has something to say about a change ("no phone
   pings, ok ♪"), it says it in a small bubble with its head under the top row; and when
-  you leave the sheet after some changes, the pet may remark on the last one. The sheet has up to three parts:
-  - **for the pet** (or **for** its name): "notices", the kinds of thing the house
-    shows the pet (weather, lights, tv, music, chores, fireplace, heater, fan, robot, doorbell, machines, moon; the moon always
-    shows), then the pet's "shell" row, see below. An admin also gets "connect
-    more ›", which opens the pet's page in Settings → Devices & services.
+  you leave the sheet after some changes, the pet may remark on the last one. The sheet has
+up to four parts, in this order:
+  - **this screen**, in two groups. *sound*: sounds here, and babble (for pets with a
+    voice). Babble waits for "sounds here": with that off its row reads "needs sounds"
+    and can't be switched. *look*: screen effects here, holiday names, mono screen and
+    big text. These are saved in this browser only.
   - **for you**: notify me, my day, my birthday, birthday on my phone, baby talk and
     my data. These follow your login. A shared screen doesn't show this part.
-  - **this screen**: sounds here, babble (for pets with a voice), screen effects
-    here, holiday names, mono screen and shared screen. These are saved in this
-    browser only.
+  - **for the pet** (or **for** its name): "notices", the kinds of thing the house
+    shows the pet (weather, lights, tv, music, chores, fireplace, heater, fan, robot, doorbell, machines, moon; the moon always
+    shows); an admin also gets "connect more ›", which opens the pet's own page in
+    Settings → Devices & services. Then "bedtime", read only: the pet's bedtime and
+    wake time as "about … · up …", in the 12 or 24 hour format of your Home Assistant
+    language and settings. It is the pet's own schedule, not a person's, so a shared
+    screen shows it too. Then the pet's "shell" row, see below. An older server shows
+    no bedtime row.
+  - **shared screen**, at the foot: its switch, a note ("a family tablet? give it its
+    own login, and we'll make friends ♥"), and for an admin (not on a shared screen) a
+    line, "sensor privacy is in the pet's options".
 - **Holiday names.** "holiday names" in the sheet's "this screen" part is on to begin
   with. Turned off, the pet on this screen never names a festival: no Christmas,
   Hanukkah or New Year's Eve lines in December, no "happy Halloween!" or "happy
@@ -469,14 +478,19 @@ entities:
 ## Connect it to your house (options)
 
 Settings → Devices & services → **Hatch at Home** → the gear (⚙) next to your pet. The
-dialog is titled **"What <name> notices"**. Every field is optional except the ones
-with defaults, and anything left empty is ignored. Saving applies the changes straight
+dialog is titled **"What <name> notices"** and opens a menu of seven pages, one topic
+each: Bedtime, People and privacy, Weather and air, The pet's room, The house helps,
+Moon and sky, and Where notifications open. Pick a page, change what you like and
+submit; you come back to the menu. Every field is optional except the ones with
+defaults, and anything left empty is ignored. Saving applies the changes straight
 away. Each pet has its own settings.
 
 The house never hurts the pet. It changes its mood, its scene and what it asks for,
 and it adds at most +3 happiness an hour.
 
-### Sleep
+### Bedtime
+
+Bedtime and wake time are targets: the pet may turn in up to an hour either side.
 
 | Field | Default | What it does | Example |
 | --- | --- | --- | --- |
@@ -503,22 +517,27 @@ the pet comes home.
 
 ### The pet's room
 
+Lights, a fireplace, the TV and music change the pet's scene and mood.
+
 | Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Room lights | none | Still on at half brightness or more after bedtime: squints, "too bright, it's late!". Dim evening light makes it cozy. Daylight and the evening before bedtime never count, so lights kept at full until bed are fine. | living room lights |
 | Fireplace | none | Any entity that's on, heating or above 0 when lit (not a thermometer: that's always above 0). Curls up by it and gets a little happier. | `switch.fireplace` |
 | Light sensors | none | 100 lx or more after bedtime also counts as too bright. | optional |
+| TVs | none | On or playing: watches along (small bonus). | `media_player.tv` |
+| Music players | none | Playing anything but video: dances (small bonus). | your speakers |
 
-### People and activity
+### People and privacy
+
+Who is home decides whether the pet is with you or at the sitter's. The two switches at the end decide what dashboards and sensors may show.
 
 | Field | Default | What it does | Example |
 | --- | --- | --- | --- |
 | Home zone | `zone.home` | Counts the people in it. Someone arriving gets an excited greeting, at most once every 30 minutes. | `zone.home` |
-| Go to the sitter's after | 2 h | With nobody home this long, the pet is frozen: no hunger, no aging, no calls. | 2 h |
+| Off to the sitter's after | 2 h | With nobody home this long, the pet is frozen: no hunger, no aging, no calls. | 2 h |
 | The sitter calms a fussy pet | on | If the pet was fussing for attention (not a real need) when it left, the sitter settles it and it comes home happy. Off: the fussing waits for you. Real needs always wait. | on |
-| TVs | none | On or playing: watches along (small bonus). | `media_player.tv` |
-| Music players | none | Playing anything but video: dances (small bonus). | your speakers |
-| Chore lists | none | To-do lists. Each item someone ticks off earns the pet a treat (a little food and happiness, up to 5 a day). Treats wait if it's asleep or away. | your chores list |
+| Keep presence private | on | An empty house shows the pet napping, never at the sitter's (care while it's away is refused as "asleep"), and the pet never says who came or went. For a wall tablet, also turn on "shared screen" in the card's settings. Turn it off to see "at the sitter's". | default |
+| Keep house words off sensors | off | Off: a news headline (`virtual_pet.share_news`) and a Custom house moment's own words (`virtual_pet.react`) sit on the pet's last-care sensor for a while, like its other moments, where any dashboard or template can read them. On: the open cards say them live, shared screens too, and they're kept nowhere: not on a sensor, not for a card opened later. The `virtual_pet_news` event keeps its headline either way (it's your automation's own words); `virtual_pet_house_moment` never carries the words while this is on. Per pet. | default |
 
 ### The house helps
 
@@ -530,8 +549,9 @@ the pet comes home.
 | Notice doorbells | on | Every doorbell in the house counts, with nothing to pick: any `event.*` entity whose device class is `doorbell` (Ring, UniFi Protect, Nest and DoorBird provide one). A press makes the pet startle, with two notes and a line. Nothing while the pet is asleep, away or an egg, and at most one every 30 minutes for each pet, however many doorbells. A restart, a reconnect or an old press never counts, only a press that just happened. The pet's "notices" row says "doorbell" and nothing more. **Privacy:** the press is said once, live, on every card open at that moment (remote viewers and shared screens too: anyone in the room heard the bell), and kept nowhere. It is never on a `virtual_pet_*` event, our logs or diagnostics, the sensors, the journal or the debug sensor, and a card opened later doesn't hear it. HA's own event entity and recorder still hold the press, as they always do. A doorbell added after the pet started listening needs the integration reloaded (Settings → Devices & services → Hatch at Home → ⋮ → Reload) before it's noticed. A doorbell you point the house moment blueprint at is heard once, by this setting. Off: the pet ignores doorbells. | all your doorbells |
 | Washer, dryer, dishwasher | none | Pick any number of switches, sensors and binary sensors; the pet says so when one finishes a cycle (once, never repeated or reminded; nothing while the pet is asleep or at the sitter's; at most once an hour per machine). A **binary sensor** counts as running after 10 minutes on, and done when it goes off. A **sensor that names a state** (Home Connect, SmartThings, LG ThinQ, Miele) is done when it moves from a running state to one with "finish", "end", "complete", "done" or "ready" in it. A **power sensor** (device class power) or a **switch that reports `current_power_w`** is running above the idle power for 10 minutes and done after about 3 minutes at or under it. A plain switch that reports no power says nothing. The 10 and 3 minutes are checked when the machine changes and every 5 minutes, so they can run up to about 5 minutes long. The pet says "the washer's finished!", "the dishes are all done!", "the dryer's done!" or "a machine finished", from the entity's device class or name (wash, dry, dish), else machine. After a restart the pet times a machine that is already running from the restart, and one that finished meanwhile isn't counted. Cosmetic only; only the kind is shared, never which machine. | `binary_sensor.washing_machine_running` |
 | Idle power | 5 W | For power readings: at or under this many watts counts as not running. | `5` |
+| Chore lists | none | To-do lists. Each item someone ticks off earns the pet a treat (a little food and happiness, up to 5 a day). Treats wait if it's asleep or away. | your chores list |
 
-### Sky
+### Moon and sky
 
 | Field | Default | What it does |
 | --- | --- | --- |
@@ -539,12 +559,13 @@ the pet comes home.
 | Moon illumination | none | Optional, the lit fraction (0–1 or %). Used when there's no phase sensor: 97% or more is full, 3% or less is new. |
 | Moon altitude | none | Optional, degrees. The moon only counts while it's above the horizon. |
 
-### Privacy
+### Where notifications open
 
 | Field | Default | What it does |
 | --- | --- | --- |
-| Keep presence private | on | An empty house shows the pet napping, never at the sitter's (care while it's away is refused as "asleep"), and the pet never says who came or went. Turn it off to see "at the sitter's". |
-| Keep house words off sensors | off | Off: a news headline (`virtual_pet.share_news`) and a Custom house moment's own words (`virtual_pet.react`) sit on the pet's last-care sensor for a while, like its other moments, where any dashboard or template can read them. On: the open cards say them live, shared screens too, and they're kept nowhere: not on a sensor, not for a card opened later. The `virtual_pet_news` event keeps its headline either way (it's your automation's own words); `virtual_pet_house_moment` never carries the words while this is on. Per pet. |
+| Dashboard to open | none | Tapping one of this pet's phone notifications opens this dashboard. Pick one or type a path, like `/lovelace/pets`. Empty opens the app as it was. Setup offers a second pet the first pet's dashboard to start with. |
+
+### Privacy: what the pets remember
 
 **What the pets remember about you.** Your birthday, your answers to its questions,
 your alarm times, the last zone you came back from (only while "my day" is on), and
@@ -582,7 +603,8 @@ With no pets left there's no card, so no "forget my data" button. An admin can
 delete `.storage/virtual_pet.people` (and any `virtual_pet.people.damaged.*` copies) then, with Home Assistant stopped.
 
 If an entity named in these settings is later renamed or removed, Settings →
-**Repairs** says which ones, so you can pick the new ones here.
+**Repairs** says which ones. Submit the repair to make the pet forget them (nothing else
+in its settings changes), or open the options page it names to pick the new ones.
 
 ### Fixed rules (not settings)
 
@@ -893,7 +915,7 @@ on the card for a few seconds, like a TV title: "did you hear? …", "guess what
   `asleep`, `away` (only with privacy off; otherwise `asleep`), `egg` or `too_soon`.
 - **Where the headline goes.** On the `virtual_pet_news` event, and for a while on the
   pet's last-care sensor (its `moments`), so the card can say it. With "Keep house
-  words off sensors" on (Privacy), the sensor gets only that there was news, and the
+  words off sensors" on (People and privacy), the sensor gets only that there was news, and the
   open cards hear the headline live instead.
 
 For example, when a news sensor's latest headline changes:
@@ -975,7 +997,7 @@ and doorbells have their own settings (The house helps).
   the journal or diagnostics. A card opened later doesn't hear it.
 - **Custom words** are your automation's own. They're on the `virtual_pet_house_moment`
   event and for a while on the last-care sensor, unless "Keep house words off sensors"
-  is on (Privacy): then they're said live on the open cards only. Either way they're
+  is on (People and privacy): then they're said live on the open cards only. Either way they're
   never in our logs or diagnostics. Home Assistant itself keeps a service call's data
   in its own `call_service` event and in automation traces; those are out of our hands.
 

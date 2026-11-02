@@ -263,13 +263,3 @@ list.
 7. **Terrarium's beetle.** `worlds.json` lists six Terrarium creatures; the beetle has
    sprites but no `species.json`, so the game offers five and the guide's "five per
    world, 30 in all" is right in practice.
-8. **The guide's settings-sheet paragraph is out of date.** It says the sheet has "up to
-   three parts" (for the pet, for you, this screen) and lists "shared screen" under "this
-   screen". The sheet now has four: this screen (sound, look), for you, for the pet (with
-   a read-only bedtime row), and shared screen at the foot, in that order.
-9. **The guide's options chapter still has the old sections.** "Connect it to your house"
-   says the dialog is one page and groups fields under Sleep, Weather and air, The pet's
-   room, People and activity, The house helps, Sky and Privacy. The options are now a menu
-   of seven pages (Bedtime, People and privacy, Weather and air, The pet's room, The house
-   helps, Moon and sky, Where notifications open); the TVs and music moved to the room
-   page, chore lists to the house page, and the privacy switches to People and privacy.
