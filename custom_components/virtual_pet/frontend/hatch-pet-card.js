@@ -1550,7 +1550,7 @@ const TRICK_ASK = {
 // pet's request, not a person. heating = the blanket ask, cooling = the fan ask; bits are
 // the evening's "today" and the away note's phrases. robot_out / robot_home: a robot
 // vacuum started a run / went home (H4). washer / dishwasher / dryer / machine: a
-// machine finished its cycle (H6, plan copy F). No PERSONA keys: every type says these.
+// machine finished its cycle (H6, plan copy F). doorbell: a press (H5, plan copy G; said live, no bit). No PERSONA keys: every type says these.
 const HOUSE_LINES = {
   heating: ["the heater's on! toasty ♪", "ooh, the house heard me! ♥", "warm air! that's better ♪"],
   cooling: ["ahh, a breeze! that's better ♪", "the house heard me! ahh ♪", "cool air! much better ♪"],
@@ -1560,6 +1560,7 @@ const HOUSE_LINES = {
   dishwasher: ["the dishes are all done! ♪"],
   dryer: ["the dryer's done! warm socks ♪"],
   machine: ["ding! a machine finished ♪", "ooh, something's done! ♪"],
+  doorbell: ["ding dong! eep!", "ooh, the doorbell! ♪", "ding dong! *perks up*"], // H5, channel only: no bit
   bits: { heating: "felt the house warm up", cooling: "felt the house cool down", robot: "watched the robot clean", machine: "heard a machine finish" },
 };
 // HOUSE_MOMENT_LINES (ha-signals H8, virtual_pet.react; DRAFT for the FM's review): what
@@ -1937,9 +1938,9 @@ const MOMENTS_KEPT = 10; // const.py MOMENTS_KEPT
 // PERSONAL_EVENTS) and the house's shows and songs (MEDIA_EVENTS). Only an old
 // server's public list carries them; the card never reads them there.
 // house_live / news_live (const.py LIVE_EVENTS): a channel-only house moment, and house
-// words kept off the sensor, said live and kept nowhere (H8).
+// words kept off the sensor, said live and kept nowhere (H8); doorbell_live: a doorbell press (H5).
 const CHANNEL_ONLY = new Set(["bond_up", "bond_record", "bond_favourite", "friend_home", "tucked_in", "watching", "listening",
-  "house_live", "news_live"]);
+  "house_live", "news_live", "doorbell_live"]);
 const MEDIA_MOMENTS = new Set(["watching", "listening"]);
 const momentKey = (m) => m && `${m.at}|${m.type}`;
 // Every line has a class (PR 2a). A higher class may interrupt a lower one; one
@@ -2007,6 +2008,7 @@ const MOMENT_CLASS = {
   appliance_done: FLAVOUR, // {kind}: a washer, dryer or dishwasher finished (H6)
   house_moment: FLAVOUR, house_live: FLAVOUR, // {category[, reaction, text]}: virtual_pet.react (H8)
   news_live: FLAVOUR, // share_news's headline with house_words_private on (H8)
+  doorbell_live: FLAVOUR, // a doorbell press: said live, kept nowhere (H5)
   pooped: FLAVOUR, tv_off_late: FLAVOUR, watching: FLAVOUR, listening: FLAVOUR,
   tv_on: FLAVOUR, music_on: FLAVOUR, // public: no line (the channel's watching/listening says it)
   found: FLAVOUR, // a find went in the basket: the away note's "found <a find>" (V8); no line
@@ -3335,6 +3337,14 @@ const STYLE = `
     100% { opacity: 0; transform: rotate(540deg) scale(1.1); } }
   @media (prefers-reduced-motion: reduce) { .screen.fx-suds::before, .screen.fx-suds::after, .screen.fx-tumble::after { animation: none; opacity: .7; } }
   @media (prefers-reduced-motion: reduce) { .screen.fx-robot::before { animation: none; left: 40%; } }
+  /* A doorbell press (H5): two notes pop up above the pet's head for 1.8 s. A text stand-in for
+     the house_chime art (H9). Still, and visible, under reduced motion. */
+  .screen.fx-chime::after { content: "♪ ♫"; position: absolute; left: 58%; top: 26%; z-index: 3; translate: -50% 0;
+    font-size: 20px; line-height: 1; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.6), 0 0 6px rgba(255,230,140,.8);
+    pointer-events: none; animation: chime-pop 1.8s ease-out both; }
+  @keyframes chime-pop { 0% { opacity: 0; transform: translateY(10px) scale(.6); } 15%, 70% { opacity: 1; transform: none; }
+    100% { opacity: 0; transform: translateY(-12px); } }
+  @media (prefers-reduced-motion: reduce) { .screen.fx-chime::after { animation: none; opacity: 1; } }
   /* Water worlds: lighter streaks, and rings where the drops land. */
   .screen.raining.watery .rain { opacity: .6; }
   .screen.raining.watery .rain::after { content: ""; position: absolute; inset: 0;
@@ -7314,7 +7324,7 @@ class HatchPetCard extends HTMLElement {
   // answers: a CSS stand-in until the art (house_heat, house_cool) lands.
   // One house effect at a time: a new one replaces the last.
   _houseFx(s, cls) {
-    s.screen.classList.remove("fx-heat", "fx-cool", "fx-suds", "fx-tumble");
+    s.screen.classList.remove("fx-heat", "fx-cool", "fx-suds", "fx-tumble", "fx-chime");
     s.screen.classList.add(cls);
     clearTimeout(s.houseFxTimer);
     s.houseFxTimer = setTimeout(() => s.screen.classList.remove(cls), 2500);
@@ -7514,6 +7524,14 @@ class HatchPetCard extends HTMLElement {
         speak(pick(lines), 4500, () => {
           this._animate(s, s.pet, "perk", 320);
           this._houseFx(s, kind === "dryer" ? "fx-tumble" : "fx-suds");
+        });
+        break;
+      }
+      case "doorbell_live": { // a doorbell press, said live and kept nowhere: a startle and two notes (H5)
+        if (s.game) break; // a game's prompt owns the bubble
+        speak(pick(HOUSE_LINES.doorbell), 4500, () => {
+          this._animate(s, s.pet, REACT_POSE.startle.move, REACT_POSE.startle.ms);
+          this._houseFx(s, "fx-chime");
         });
         break;
       }

@@ -445,6 +445,7 @@ async def test_options_flow_saves_a_flat_mapping(
         "away_after": 2.0,
         "sitter_settles": True,
         "notice_robot": True,
+        "notice_doorbell": True,
         "appliance_watts": 5.0,
     }
 
