@@ -117,6 +117,26 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
     morning for a month.
   - **While you were out**: open the card after a few hours away and it tells you what
     happened ("while you were out, I napped, watched the rain and played a game!").
+    Back after two days or more, it hops and welcomes you back first, with the news
+    before anything else.
+  - **Its day, in the evening**: from 17:00 a teen or adult tells you about its day once
+    (on each screen): its wish come true, a visitor it saw, something it did ("today I
+    watched the sunset! ♪"), or a line of its own. The status screen shows it too, and
+    before 17:00 it shows today's dream; the journal shows today's dream under its title.
+  - **Its own words, in turns**: most everyday lines (waking up, a pat, "good job!",
+    meals at breakfast, lunch and supper, its wish, its answer to "how was your day?")
+    take turns day by day, and a teen or adult often says them in its own way. Now and
+    then a pat finds the sweet spot ("that's the spot!! ♥"). At lights out it may
+    remember the day's visitor or the sunset; the day after a cure it says it feels all
+    better.
+  - **A promise**: every three weeks a teen or adult says it's practising something (a
+    hop, a spin, a song), practises now and then, and a few days later shows you.
+  - **Tricks**: an adult learns a trick a month for its first three months (a spin, a
+    double perk, a look around), shows it off once, and does it now and then after.
+  - **Games**: each day it has a favourite game, first in the list (with a word about it
+    on a wide card), and a lucky number that sparkles when it comes up in Higher or
+    Lower. After a game a teen or adult sometimes adds a word of its own; in Berry dig a
+    berry now and then is a shiny one.
 - **A bond with each person.** The pet gets to know everyone who signs in to Home
   Assistant with their own login, separately (a shared wall-tablet login counts as one
   person). Looking in once a day, caring for it, playing games and granting its wish
@@ -139,16 +159,24 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   - asks you things now and then (from level 2), at most one question in the morning
     and one later, per person, however many pets and screens you have: "did you
     sleep well?", "how was your day?" (always after you come back from work or
-    school), "what should I dream about tonight?" (and the next morning it dreamed
-    it: "I dreamed about the sea, like you said! ♥"), "rain or sun tomorrow?" (judged
-    the next evening, no score), and once each "what's your favourite weather?" and
-    "...season?". It remembers favourites, tonight's dream and your guess; the rest
-    of your answers stay on your screen;
+    school), "what should I dream about tonight?" (the next morning everyone hears the
+    dream's story, and you hear it was your idea), "rain or sun tomorrow?" (judged
+    the next evening, no score), "anything big this week?" (Sunday or Monday, at
+    most once a week; "yes" asks which day, then lets you type what it is, and on that
+    day the pet cheers you on in the morning and, from 7 pm, asks how it went or is
+    there for you), and once
+    each "what's your favourite weather?" and "...season?", and "who's your favourite
+    visitor?" once in each world (its visitors as buttons). After a tough day it's a
+    little softer with you the next morning. It remembers favourites, tonight's
+    dream, your guess and a big day (see Privacy); the rest of your answers stay on
+    your screen;
   - remembers your favourites: "it's snowing, your favourite!! ❄", "it's autumn, your
     favourite! ♥" once a season (no season talk in the tropics), "Thanksgiving in
-    your favourite season! ♥";
+    your favourite season! ♥"; your favourite visitor gets its own hello on your
+    screen now and then ("your favourite, the chickadee! ♥"), and if it came by
+    while you were out, "your chickadee came by today ♥";
   - says what it's like out there when you come home ("it's wet out there! come
-    get cozy ☂", "brr, was it cold out there?");
+    get cozy ☂", "brr, it looks cold out there!");
   - greets you sleepily if you look in before sunrise ("mmh... you're up before the
     sun... zzz ♥").
 
@@ -175,12 +203,12 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   works through Home Assistant's long-term statistics. "Usual" is your own median
   over the last two weeks, from that history; the pet stores none of it. With "my
   day" on, it also notices:
-  - a walk in the rain or snow ("you walked in the rain?! so brave!", level 4);
+  - a walk in the rain or snow ("you walked in the rain! so brave! ☂", level 4);
   - coming back from a zone you made, when its name has gym, work, office, school,
-    college, university or park in it ("back from the gym?! so strong!", level 3;
-    other zones are never named);
+    college, university or park in it ("back from the gym! so strong!", "back from
+    class! ♥", level 3; other zones are never named);
   - an early alarm tomorrow on an Android phone (the Next alarm sensor, which is
-    off by default in the app): "early start tomorrow? sleep well ♥", from 19:00,
+    off by default in the app): "early start tomorrow! sleep well ♥", from 19:00,
     when it's at least 45 minutes before your usual (level 3);
   - a send-off on your phone on a notable morning as you leave ("Pip says: rain
     today, take an umbrella, sunbeam ☂"), with "notify me" on, at most three times a
@@ -209,9 +237,14 @@ Remove it now (Settings → Dashboards → ⋮ → Resources → delete the
   looked in with `virtual_pet.visit`, counted at most hourly.)
 - **Visitors**: on about 4 days in 7 a small creature from the pet's world (a robin, a
   heron, a shooting star...) drops by during a 3-hour window and the pet greets it, once
-  a day on each screen; if the window passed while nobody was looking, the next look
-  that day says so ("a robin came by today ♪"). Home Assistant picks the day's visitor
-  and its window, so every screen agrees and a restart doesn't change it.
+  a day on each screen. If a day visitor's window passed while nobody was looking, it
+  still comes by when you next look in that day (on a night or dimmed screen the pet
+  just says so instead: "a robin came by today ♪"). Home Assistant picks the day's
+  visitor and its window, so every screen agrees and a restart doesn't change it. A
+  visitor seen on a screen on three days becomes a friend there and greets it with its
+  own lines; a visitor stays longer on a shared screen; on rare days two come together,
+  or one drops in from another world. On a visitor day the pet may save it a crumb, let
+  it watch a Berry dig, or tell a linked pet about it.
 - **Seasons** (by the viewing device's date; card option `seasonal: false`, or "Seasonal
   decorations" in the card editor, turns them off): from 20 to 31 October it's **Halloween**. Bunting hangs across the scene, a
   jack-o'-lantern with a new carved face each day sits by the pet and glows at night (it
@@ -370,7 +403,7 @@ lay the egg, then rename it.
 | --- | --- |
 | `sensor.<pet>_hunger`, `_happiness`, `_energy`, `_health`, `_discipline`, `_weight` | Stats, 0–100 whole numbers. Hunger is a fullness meter: 100 is stuffed. Weight is healthy between 25 and 75. |
 | `sensor.<pet>_mood` | `egg`, `away`, `sick`, `asleep`, `calling`, `hungry`, `dirty`, `sleepy`, `bored`, `excited`, `cozy` or `content`. Attributes: `flags`, `reason` (what the speech bubble will say), `reason_key` (which sentence that is, for the card's baby talk), `call_deadline`. |
-| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `memories` (first snow and frost), `hatches_at` (while an egg), `next_world`, `next_egg` and `journal` (the device's retired pets). |
+| `sensor.<pet>_life_stage` | `egg` → `baby` (30 min) → `child` (1 day) → `teen` (5 days) → `adult` (14 days). Attributes include `species`, `traits`, `trait_levels`, `inherited_trait`, `trait_progress` (0–1 per trait), `trait_cap`, `age_days`, `world`, `generation`, `upbringing` (final once adult, what it's on track for before), `upbringing_score`, `personality` (from teen; kept out of history), `games` (played and won per game), `memories` (first snow, frost and fog, and the first warm day), `hatches_at` (while an egg), `next_world`, `next_egg`, `journal` (the device's retired pets) and `week` (the journal's strip: days with a dream, a credited visitor or notable weather; kept out of history). |
 | `sensor.<pet>_poop`, `_care_misses` | Poop on screen (max 3) and care misses so far (attribute `discipline_misses`: fake calls nobody answered). |
 | `sensor.<pet>_last_care` | When it was last cared for. Attribute `log`: the last 20 actions and who did them; `moments`: the last 10 things that happened to it, for the card to react to. |
 | `binary_sensor.<pet>_asleep`, `_calling`, `_sick` | |
@@ -500,6 +533,24 @@ The pets start fresh with you, and they note again when you next come home. To
 erase everyone's, an admin can stop Home Assistant and delete
 `.storage/virtual_pet.people` (and any `virtual_pet.people.damaged.*` copies).
 
+**Follow-ups.** Answer "tough" to "how was your day?" and the pet keeps only the
+date, in memory, to be a little softer the next morning on your own screen; a restart
+forgets it, and "great" or "ok" never leave the card. Say "yes" to "anything big this
+week?" (and pick the day) or "anything fun this weekend?" and it keeps that day (the date, not what it is) for a
+week at most, to wish you luck or welcome you back. "what should we play tomorrow?" and
+"should I learn a new trick?" keep only your pick, for that pet. What you type in "what
+is it?" (optional, 20 characters at most) is kept in Home Assistant's memory only (never
+on a sensor, in a log, a notification, diagnostics, Assist or a backup; a restart there
+forgets it) and in the browser you typed it on, until that day is over, so a restart
+doesn't lose it there. The pet says your words back only to you, on the browser you
+typed them on or on a phone or the Home Assistant app, never on a shared screen; other
+screens get its usual line. Things to know: if someone turns on debug logging for
+`homeassistant.components.websocket_api`, Home Assistant logs every message, your typed
+words included; if a family shares one Home Assistant account, every phone signed in to
+it can hear them (as with birthdays); and "forget my data" erases all of it in Home
+Assistant and in the browser you press it on, but a copy in another browser stays there
+until its day is over.
+
 With no pets left there's no card, so no "forget my data" button. An admin can
 delete `.storage/virtual_pet.people` (and any `virtual_pet.people.damaged.*` copies) then, with Home Assistant stopped.
 
@@ -582,7 +633,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
     only when the day is worth a word: a storm, snow, a hot or cold day, a jump of 8 °C
     from the day before, rain, or sun after rain ("snow tomorrow!!").
   - The season's first snow and first frost (from the weather entity's temperature) are
-    a moment once each winter, kept as memories in the journal. They notify too.
+    a moment once each winter, kept as memories in the journal. They notify too. So are
+    the first fog of each winter-year (July to June) and the year's first warm day (20 °C
+    or more, from March in the north or September in the south, through the six warm
+    months; never in the tropics), on the card only.
   - It passes on news an automation tells it ("did you hear? Tamagotchi turns 30!"),
     at most every 30 minutes. See [Sharing news with the pet](#sharing-news-with-the-pet).
 - **Sickness:** health below 25, four care misses in a day, old poop, or being too heavy.
@@ -664,7 +718,10 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   `select.<pet>_next_egg` (on the pet's device page, under Configuration) before the
   egg hatches, for example before laying it. It lists the egg's world, the new one if
   a world change is waiting. The choice is for one egg; the next is a surprise again.
-- **The journal:** on the status screen, tap "journal". It shows the world's
+- **The journal:** on the status screen, tap "journal". Under its title, "this week"
+  shows the last seven days that held something, oldest first: ✦ a dream, the day's
+  first weather (☂ rain, ❄ snow, ☀ sun, ⚡ a storm, ☁ fog), and the visitor who came while
+  finds are shown. Quiet days are left out, not shown blank. It shows the world's
   creatures (ones nobody in this home has raised yet are silhouettes) and this
   device's family line: each generation with its traits, stars, upbringing and
   personality. The latest four show; past them, "older generations (N)" opens the rest,
@@ -672,7 +729,8 @@ All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
   Under the creatures, "every world ›" shows all six worlds, five creatures each: the
   ones a pet on this card has raised are drawn, the rest are silhouettes.
 - **Notifications:** opt in per person. In settings (the gear on the status screen), tap "notify me" to get
-  this pet's calls, sickness, hatching, growing up, new or deeper traits, the season's
+  this pet's calls (each need has three phrasings, one a day: "Pip is hungry!" one day,
+  "Pip's tummy is rumbling!" another), sickness, hatching, growing up, new or deeper traits, the season's
   first snow and frost, new eggs, and a holiday greeting on the morning of Halloween
   ("Happy Halloween! Pip is dressed up and ready to trick or treat 🎃") and of
   Thanksgiving ("Happy Thanksgiving! Pip is thankful for you 🦃"), and two winter lights

@@ -174,6 +174,9 @@ STAGE_STARTS: list[tuple[str, float]] = [
     ("teen", 120.0),
     ("adult", 336.0),  # about two weeks
 ]
+# The card's tricks (E8 LS-a): one a month from the adult's start, this many (F7 asks
+# "should I learn a new trick?" only while one is left).
+TRICKS_COUNT = 3
 
 # --- Shell finishes: the device's plastic, per pet ------------------------
 
@@ -405,6 +408,7 @@ NOTES_PER_VISIT = 2  # private lines said at one look; the rest wait
 LOOK_LINES = 3  # lines at one look, the card's own and the notes together
 PEOPLE_WEATHER_DAYS = 4  # days of the house's weather kept
 SEASON_TROPICS_LATITUDE = 23.5  # nearer the equator: no season talk
+HOME_WARM_FIRST_C = 20.0  # outdoors at or above: the year's first warm day (E12)
 ASK_LEVEL = 2  # questions ("how was your day?") from this bond level
 ASK_MORNING_FROM = 5  # "did you sleep well?" from this hour to noon
 ASK_LIKES_LEVEL = 3  # "what's your favourite weather?", then season
@@ -423,9 +427,9 @@ ASK_DREAM_BEFORE_BED_MINUTES = 240  # "what should I dream about?"
 ASK_GUESS_FROM = 17  # "rain or sun tomorrow?"
 GUESS_FROM_HOUR = 18  # the guessed day is judged from here, or the day after
 JUST_HOME_HOURS = 2.0  # "how was your day?" after coming home, within this
-ZONE_REMEMBER_HOURS = 8.0  # "back from the gym?!" if they came home within this
+ZONE_REMEMBER_HOURS = 8.0  # "back from the gym! so strong!" if home within this
 ZONE_LEVEL = 3
-HOME_COLD_C = 5.0  # coming home: "was it cold out there?"
+HOME_COLD_C = 5.0  # coming home: "brr, it looks cold out there!"
 HOME_HOT_C = 28.0  # coming home: "you must be thirsty!"
 SENDOFF_LEVEL = 3
 SENDOFF_HOURS = (6, 12)  # mornings only

@@ -39,10 +39,20 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 
-from custom_components.virtual_pet import model, people as P
+from custom_components.virtual_pet import model, notify, people as P
 from custom_components.virtual_pet.const import DOMAIN
 
 STORE_KEY = f"{DOMAIN}.test_pet"
+
+# The one-time likes, all answered (the favourite visitor in every world, F4).
+ASKED_LIKES = {
+    "fav_weather": "sun",
+    "fav_season": "autumn",
+    **{
+        P.fav_visitor_key(w): "x"
+        for w in ("woodland", "terrarium", "hearth", "tidepool", "pond", "nightsky")
+    },
+}
 
 
 def entry() -> MockConfigEntry:
@@ -81,6 +91,12 @@ async def press(hass: HomeAssistant, entity_id: str) -> None:
     await hass.services.async_call(
         "button", "press", {"entity_id": entity_id}, blocking=True
     )
+
+
+def call_texts(reason: str, name: str = "Pip") -> list[list[str]]:
+    """A call's phone message as one of its phrasings (E11: one a day by the
+    call's start day): each as the one-message list a test compares with."""
+    return [[t.format(name=name)] for t in notify.CALLS[reason]]
 
 
 @pytest.fixture
@@ -756,7 +772,7 @@ async def test_notifications_go_to_the_users_who_opted_in(
     for _ in range(6):  # half an hour: hunger drops below 25 and it calls
         await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
-    assert [c.data["message"] for c in mine] == ["Pip is hungry!"]
+    assert [c.data["message"] for c in mine] in call_texts("hunger")
     assert mine[0].data["data"]["tag"] == "virtual_pet_test_pet_call"
     assert mine[0].data["data"]["actions"] == [
         {"action": "VIRTUAL_PET:test_pet:feed", "title": "Feed"}
@@ -1320,7 +1336,7 @@ async def test_notification_buttons_care_for_the_pet_and_clear_the_call(
     for _ in range(6):  # hunger drops below 25 and it calls
         await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
-    assert [c.data["message"] for c in phone] == ["Pip is hungry!"]
+    assert [c.data["message"] for c in phone] in call_texts("hunger")
 
     hass.bus.async_fire(
         "mobile_app_notification_action",
@@ -2346,7 +2362,7 @@ async def test_back_from_the_gym_then_how_was_your_day(
     coordinator.state.wish["kind"] = "bath"
     coordinator.people.person(me.id)["my_day"] = True
     coordinator.people.person(me.id).update(
-        likes={"fav_weather": "sun", "fav_season": "autumn"}, birthday_skipped=True
+        likes=ASKED_LIKES, birthday_skipped=True
     )  # asked before
     for place in ("not_home", "Gym", "not_home", "home"):
         hass.states.async_set("person.sam", place, {"user_id": me.id})
@@ -2551,7 +2567,8 @@ async def test_tonights_dream_is_the_one_they_picked(
     for _ in range(11 * 12):
         await settle(hass, freezer, 5 * 60)
     assert hass.states.get("sensor.pip_life_stage").attributes["dream"] == {
-        "kind": "picked"
+        "kind": "picked",
+        "pick": "sea",  # what, never who (fresh-expand F2)
     }
     notes = (await coordinator.async_visit(me.id))["notes"]
     assert {"kind": "dream", "pick": "sea", "yours": True} in notes
@@ -2647,7 +2664,7 @@ async def test_coming_home_from_anywhere_still_counts_the_visit(
     )
     config = await setup(hass)
     config.runtime_data.people.person(me.id).update(
-        likes={"fav_weather": "sun", "fav_season": "autumn"}, birthday_skipped=True
+        likes=ASKED_LIKES, birthday_skipped=True
     )  # asked before
     hass.states.async_set("person.sam", "not_home", {"user_id": me.id})
     await settle(hass, freezer, 60)
@@ -2747,7 +2764,7 @@ async def test_two_pets_looked_at_together_say_a_person_line_once(
         pets[-1].state.wish = None
     pets[0].people.person(me.id)["my_day"] = True
     pets[0].people.person(me.id).update(
-        likes={"fav_weather": "sun", "fav_season": "autumn"}, birthday_skipped=True
+        likes=ASKED_LIKES, birthday_skipped=True
     )  # asked before
     # Reading the phones' history awaits the recorder: let the other pet run then.
     from custom_components.virtual_pet import wellbeing
@@ -2873,6 +2890,10 @@ async def test_a_look_has_room_for_three_lines(
     coordinator.state.wish = None
     picked = {"kind": "picked", "pick": "sea", "user": me.id, "day": "2026-10-29"}
     coordinator.state.dream = dict(picked)
+    # No follow-up due this week (one would take the dream's slot, F1).
+    coordinator.people.person(me.id)["follow_last"] = dict.fromkeys(
+        P.FOLLOW_QUESTIONS, "2026-10-29"
+    )
     first = await coordinator.async_visit(me.id, queued=2)
     assert len(first["notes"]) == 1 and first["ask"] is None  # 2 + 1 = 3: no room
     coordinator._visits.clear()
@@ -3500,7 +3521,7 @@ async def test_an_old_latch_recalls_once_in_the_bundle_as_a_normal_push(
     for _ in range(3):
         await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
-    assert [c.data["message"] for c in phone] == ["Pip is hungry!"]
+    assert [c.data["message"] for c in phone] in call_texts("hunger")
     data = phone[0].data["data"]
     assert data["tag"] == "virtual_pet_recalls"
     assert "push" not in data and "actions" not in data  # normal, no buttons
@@ -3509,6 +3530,24 @@ async def test_an_old_latch_recalls_once_in_the_bundle_as_a_normal_push(
     await hass.async_block_till_done()
     assert phone[-1].data["message"] == "clear_notification"
     assert phone[-1].data["data"]["tag"] == "virtual_pet_recalls"
+
+
+async def test_a_call_keeps_its_start_days_phrasing_past_midnight(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    # Review #24: the recall bundle re-sends the open call in the words it was
+    # sent with, so the day is the call's start day, not today.
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    started = now - 15 * 3600  # 23:00 the day before
+    coordinator.state.call = model.Call("hunger", started, started + 3600)
+    day = dt_util.as_local(dt_util.utc_from_timestamp(started)).date()
+    assert coordinator._call_day() == day != dt_util.now().date()
+    said = notify.message({"type": "call_started", "reason": "hunger"}, "Pip", {}, day)
+    assert said == notify.call_line("hunger", "Pip", day)
+    coordinator.state.call = None
+    assert coordinator._call_day() == dt_util.now().date()
 
 
 async def test_a_poop_call_sends_no_push(
@@ -3542,7 +3581,7 @@ async def test_falling_ill_sends_one_push(
     await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
     assert hass.states.get("binary_sensor.pip_calling").state == "on"
-    assert [c.data["message"] for c in phone] == ["Pip feels sick. Medicine?"]
+    assert [c.data["message"] for c in phone] in call_texts("sick")
 
 
 async def test_a_poop_call_taking_over_clears_the_call_on_the_phone(
@@ -3558,7 +3597,7 @@ async def test_a_poop_call_taking_over_clears_the_call_on_the_phone(
     phone = await _notified(hass)
     await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
-    assert [c.data["message"] for c in phone] == ["Pip wants to play!"]
+    assert [c.data["message"] for c in phone] in call_texts("happiness")
     await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
     assert phone[-1].data["message"] == "clear_notification"
@@ -3590,7 +3629,7 @@ async def test_a_sickness_woken_by_hand_sends_one_push(
     await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
     assert hass.states.get("binary_sensor.pip_calling").state == "on"
-    assert [c.data["message"] for c in phone] == ["Pip feels sick. Medicine?"]
+    assert [c.data["message"] for c in phone] in call_texts("sick")
 
 
 async def test_removing_the_last_pet_clears_its_recall_bundle(
@@ -3606,7 +3645,7 @@ async def test_removing_the_last_pet_clears_its_recall_bundle(
     phone = await _notified(hass)
     await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
-    assert [c.data["message"] for c in phone] == ["Pip is hungry!"]
+    assert [c.data["message"] for c in phone] in call_texts("hunger")
     # A reload (an options change) keeps it: the pet still asks.
     assert await hass.config_entries.async_reload(config.entry_id)
     await hass.async_block_till_done()
@@ -3999,8 +4038,11 @@ async def test_a_visitor_dream_names_its_visitor_and_no_other_dream_grows(
         "world": "woodland",
     }
     assert shown({"kind": "picked", "pick": "sea", "user": "abc", "id": "x"}) == {
-        "kind": "picked"
+        "kind": "picked",
+        "pick": "sea",
     }
+    # An unknown pick (a hand-edited save) is left out; the user never shows.
+    assert shown({"kind": "picked", "pick": "<b>", "user": "abc"}) == {"kind": "picked"}
 
 
 # --- ha-signals H2: the weather default and its one-time migration ---------------

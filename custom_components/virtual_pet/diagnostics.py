@@ -64,6 +64,21 @@ REDACT_OPTIONS = {
 # People: who cared for the pet, who gets its notifications, and who's close.
 # "player": whose Berry dig it is.
 # "social": the social meter's days (top10 §6).
+# The people store isn't in diagnostics. If a later dump adds it, these go (a person's
+# follow-ups and asks, fresh-expand F1; their typed text and mood are never stored).
+# Its own set: "likes" is a voice key in the pet's debug, so the shared ones can't hold it.
+REDACT_PEOPLE = {
+    "follow",
+    "follow_asked",
+    "follow_last",
+    "follow_miss",
+    "asked",
+    "likes",
+    "birthday",
+    "zone",
+    "alarms",
+}
+
 REDACT_STATE = {
     "by",
     "notify_users",
