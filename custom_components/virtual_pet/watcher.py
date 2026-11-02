@@ -40,6 +40,7 @@ from .const import (
     CONF_MOON_PHASE,
     CONF_MOTION,
     CONF_MUSIC,
+    CONF_NOTICE_DOORBELL,
     CONF_NOTICE_ROBOT,
     CONF_RAIN,
     CONF_ROOM_LIGHTS,
@@ -226,6 +227,32 @@ def is_temperature(state: State | None) -> bool:
     )
 
 
+def doorbell_rang(old: State | None, new: State | None, now: float) -> bool:
+    """Whether this state change is a doorbell press (H5). An event entity's
+    state is the time of its last event, so only a change counts, and not a
+    restore or a reconnect:
+    - no old state (just added) or an old state of unavailable (a restart or
+      reconnect restoring the last time) never counts; unknown does (the first
+      press ever),
+    - the new state is a time that differs from the old, at most 60 s old and
+      not in the future (a 2 s allowance),
+    - the event is a ring, or, for an entity with no ring type, any event."""
+    if old is None or new is None or old.state == STATE_UNAVAILABLE:
+        return False
+    if new.state == old.state or new.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+        return False
+    when = dt_util.parse_datetime(new.state)
+    if when is None:
+        return False
+    age = now - when.timestamp()
+    if not -2 <= age <= R.HOME_DOORBELL_FRESH_SECONDS:
+        return False
+    kind = new.attributes.get("event_type")
+    if not kind:
+        return False
+    return kind == "ring" or "ring" not in (new.attributes.get("event_types") or ())
+
+
 @dataclass
 class _Cycle:
     """One appliance entity's cycle so far (memory only; never leaves the watcher)."""
@@ -265,6 +292,21 @@ class Watcher:
         if not self.options.get(CONF_NOTICE_ROBOT, True):
             return []
         return sorted(self.hass.states.async_entity_ids("vacuum"))
+
+    def doorbell_ids(self) -> list[str]:
+        """Every doorbell in the house: an event entity whose device class is
+        doorbell (no other guess: a door contact must never count), unless the
+        owner turned notice_doorbell off. Not part of entity_ids(): a press is
+        heard by the coordinator's own listener and never read as a state.
+        Listed when the pet starts listening; one added later is heard after the
+        integration reloads."""
+        if not self.options.get(CONF_NOTICE_DOORBELL, True):
+            return []
+        return sorted(
+            s.entity_id
+            for s in self.hass.states.async_all("event")
+            if s.attributes.get("device_class") == "doorbell"
+        )
 
     def entity_ids(self) -> list[str]:
         """Everything worth listening to."""

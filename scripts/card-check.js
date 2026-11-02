@@ -7627,6 +7627,52 @@ async function main() {
     check("H8: a house_live on the sensor (an old server's) is never said", !old.some((t) => /Old server words/.test(t)), JSON.stringify(old));
     await inject(pet["sensor.last_care"], { attributes: { moments: publicNow } });
   }
+  // ha-signals H5 (review s2651 #10): a doorbell press (doorbell_live) is said once, from
+  // the channel only; a replayed snapshot and an old server's sensor copy say nothing.
+  {
+    const me = await evaluate(() => document.querySelector("home-assistant").hass.user.id);
+    const h5 = await card.first().evaluate((el, me) => {
+      const s = el._slides[el._index];
+      const kept = { game: s.game, calling: s.calling };
+      let said = [], moves = [], fxs = [];
+      el._line = function (slide, cls, text, ms, opts) { if (slide === s) { said.push(text); opts?.then?.(); } };
+      el._animate = function (slide, node, cls) { moves.push(cls); };
+      el._houseFx = function (slide, cls) { fxs.push(cls); };
+      const ring = { type: "doorbell_live", at: new Date().toISOString() };
+      const out = {};
+      try {
+        s.game = null;
+        s.calling = false;
+        said = []; moves = []; fxs = [];
+        el._channel(s, { moment: ring }, me);
+        out.once = { said: [...said], moves: [...moves], fxs: [...fxs] };
+        said = [];
+        el._channel(s, { moment: ring }, me); // the same press again
+        out.again = [...said];
+        said = [];
+        el._channel(s, { mine: s.mine, house: s.house, moments: [ring], now: new Date().toISOString() }, me);
+        out.replay = [...said];
+      } finally {
+        delete el._line; delete el._animate; delete el._houseFx;
+        Object.assign(s, kept);
+      }
+      return out;
+    }, me);
+    const pool = ["ding dong! eep!", "ooh, the doorbell! ♪", "ding dong! *perks up*"];
+    check("H5: a doorbell_live is said once (one of the three lines, a startle and fx-chime), from the channel only",
+      h5.once.said.length === 1 && pool.includes(h5.once.said[0]) && h5.once.fxs.join() === "fx-chime"
+        && h5.once.moves.includes("startle") && h5.again.length === 0, JSON.stringify(h5));
+    check("H5: a replayed snapshot holding a doorbell_live says nothing", h5.replay.length === 0, JSON.stringify(h5.replay));
+    const publicNow = await evaluate((e) =>
+      document.querySelector("home-assistant").hass.states[e].attributes.moments || [], pet["sensor.last_care"]);
+    await card.first().evaluate((el) => { window.__h5 = []; el._line = function (slide, cls, text) { window.__h5.push(text); }; });
+    await inject(pet["sensor.last_care"], { attributes: { moments: [
+      { type: "doorbell_live", at: new Date().toISOString() }, ...publicNow] } });
+    await page.waitForTimeout(800);
+    const old = await card.first().evaluate((el) => { delete el._line; return window.__h5; });
+    check("H5: a doorbell_live on the sensor (an old server's) is never said", !old.some((t) => pool.includes(t)), JSON.stringify(old));
+    await inject(pet["sensor.last_care"], { attributes: { moments: publicNow } });
+  }
 
   }
   // Device charm, Part 1: the LCD quirks (docs/plan-2026-10-29-device-charm.md).

@@ -128,6 +128,7 @@
               "heating": "Heating",
               "cooling": "Cooling",
               "notice_robot": "Notice robot vacuums",
+              "notice_doorbell": "Notice doorbells",
               "appliances": "Washer, dryer, dishwasher",
               "appliance_watts": "Idle power"
             },
@@ -135,6 +136,7 @@
               "heating": "A thermostat, switch or toggle that is on when the heating is. A thermostat counts while it is heating (or set to heat and below its target). Pick the one for the pet's room: many homes run the heating when nobody is cold.",
               "cooling": "A fan, thermostat, switch or toggle that is on when the room is being cooled. A thermostat counts while it is cooling or running its fan.",
               "notice_robot": "Every vacuum in the house counts. A vacuum added later needs the integration reloaded.",
+              "notice_doorbell": "Every doorbell in the house counts. A doorbell added later needs the integration reloaded.",
               "appliances": "Machines that finish a cycle. A switch or sensor that reports power, a sensor that says running and finished, or a binary sensor that is on while it runs. When one finishes the pet says so, once.",
               "appliance_watts": "For power readings: at or below this many watts means the machine is not running. A cycle is seen after 10 minutes running, and over after about 3 minutes idle."
             }

@@ -92,6 +92,9 @@ CONF_HEATING = "heating"
 CONF_COOLING = "cooling"
 # Robot vacuums (ha-signals H4): every vacuum.* counts; this turns it off.
 CONF_NOTICE_ROBOT = "notice_robot"
+# Doorbells (ha-signals H5): every event.* with device class doorbell counts;
+# this turns it off.
+CONF_NOTICE_DOORBELL = "notice_doorbell"
 # Appliances that finish a cycle (ha-signals H6): washer, dryer, dishwasher.
 # appliance_watts: at or under this a power reading means "not running" (W).
 CONF_APPLIANCES = "appliances"
@@ -162,4 +165,5 @@ CHANNEL_CATEGORIES = {"delivery", "coffee", "oven", "ev", "timer"}
 # subscriber, not in the public list): a channel-only house moment, and house
 # words while house_words_private is on. Their own types, so a card never says
 # one twice (once from the sensor, once from the channel).
-LIVE_EVENTS = {"house_live", "news_live"}
+# doorbell_live (H5): a doorbell press, heard by the cards open at that moment.
+LIVE_EVENTS = {"house_live", "news_live", "doorbell_live"}
