@@ -506,6 +506,25 @@ const PRESETS = {
     });
     return out;
   },
+  // The S7 rows of the sheet at 330 (and big text at 300): the sub-headings (sound, look), the
+  // bedtime row in 12 h and 24 h, and N24 at the foot (an admin), day, night, mono and big text.
+  "settings-s7"() {
+    const out = [];
+    const base = { world: "woodland", width: 330, view: "settings", mine: true };
+    const parts = [["top", {}], ["bedtime", { scroll: ".sleeprow" }], ["end", { scrollEnd: true }]];
+    for (const [label, extra] of [["day", {}], ["night", { scene: "night" }], ["mono", { mono: true }], ["big", { bigText: true }]]) {
+      for (const [part, scroll] of parts) {
+        out.push({ ...base, ...extra, ...scroll, name: `settings-s7/330-${label}-${part}`, group: `settings-s7-${label}`, label: `${label} ${part}` });
+      }
+    }
+    out.push({ ...base, timeFormat: "12", scroll: ".sleeprow", name: "settings-s7/330-12h", group: "settings-s7-time", label: "12 h" });
+    out.push({ ...base, timeFormat: "24", scroll: ".sleeprow", name: "settings-s7/330-24h", group: "settings-s7-time", label: "24 h" });
+    for (const [part, scroll] of parts) {
+      out.push({ ...base, width: 300, bigText: true, timeFormat: "12", ...scroll, name: `settings-s7/300-big-${part}`, group: "settings-s7-300", label: `300 big ${part}` });
+    }
+    out.push({ ...base, admin: false, scroll: ".sleeprow", name: "settings-s7/330-nonadmin", group: "settings-s7-time", label: "not an admin" });
+    return out;
+  },
   // The same sheet on a shared screen: nothing personal, only this screen's rows.
   "settings-shared"() {
     const out = [];

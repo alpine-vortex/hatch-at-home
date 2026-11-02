@@ -18,6 +18,7 @@ node scripts/bench.js --preset ui         # status, game picker, bubble
 node scripts/bench.js --preset finishes   # 576 shots: every shell finish, every world
 node scripts/bench.js --preset settings         # the gear's sheet, 420/330, day/night
 node scripts/bench.js --preset settings-shared  # the same on a shared screen
+node scripts/bench.js --preset settings-s7 # 18 shots: the sheet's sub-headings, bedtime row (12/24 h) and N24 at 330 and 300, day, night, mono, big text
 node scripts/bench.js --preset lay        # 9 shots: the lay sheet (settings S2), two worlds at 420/330, big text, a pick, a pick made in HA, a waiting world
 node scripts/bench.js --preset name        # 25 shots: the name sheet (settings S3) at 420/330/300, empty and 20-character, each error line, baby, night, dim, big text, mono; the status page's name row
 node scripts/bench.js --preset picker     # the shell picker: egg (locked) and teen, 420/330

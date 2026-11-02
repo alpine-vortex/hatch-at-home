@@ -2325,13 +2325,19 @@ const inAndroidApp = () => inCompanionApp() && /Android/i.test(navigator.userAge
 // digits, so it is not a scanned line.
 function sleepLine(sleep, hass) {
   const fmt = hass?.locale?.time_format;
+  // "system" follows the browser's own locale (as HA does); "language" follows HA's language.
+  const tag = fmt === "system" ? undefined : hass?.locale?.language || undefined;
   const show = (hhmm) => {
     const [h, m] = String(hhmm).split(":").map(Number);
     const at = new Date(2000, 0, 1, h || 0, m || 0);
     const opts = fmt === "24" ? { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }
       : fmt === "12" ? { hour: "numeric", minute: "2-digit", hour12: true }
         : { hour: "numeric", minute: "2-digit" };
-    return at.toLocaleTimeString(hass?.locale?.language || undefined, opts).toLowerCase();
+    try {
+      return at.toLocaleTimeString(tag, opts).toLowerCase();
+    } catch (err) { // a language tag the browser rejects must not blank the sheet
+      return at.toLocaleTimeString(undefined, opts).toLowerCase();
+    }
   };
   return `about ${show(sleep.bedtime)} · up ${show(sleep.wake)}`;
 }
@@ -3703,8 +3709,8 @@ const STYLE = `
   .shellro { opacity: .6; }
   .shellro .sw { border-style: dashed; }
   .shellnote { font-size: 11px; }
-  /* A small sub-heading inside a group (S7: sound, look under "this screen"): no rule, a little lighter. */
-  .sub { margin-top: 2px; font-size: 11px; letter-spacing: 1px; }
+  /* A small sub-heading inside a group (S7: sound, look under "this screen"): no rule, the same ink as .sec. Not .sub: that is the header's paler subtitle. */
+  .ssub { margin-top: 2px; font-size: 11px; letter-spacing: 1px; }
   /* The bedtime row: the label as wide as it is, the target takes the rest and wraps by itself. */
   .row.srow.sleeprow, .compact .row.srow.sleeprow { grid-template-columns: auto minmax(0, 1fr); }
   /* The shell picker: three tiles a row; a locked one dimmed and dashed. */
@@ -3806,7 +3812,7 @@ const STYLE = `
   ha-card.bigtext .status .layrow, ha-card.bigtext .status .laygo,
   ha-card.bigtext .status .namego, ha-card.bigtext .status .namechange, ha-card.bigtext .status .nameerr { font-size: 15px; }
   ha-card.bigtext .status .nameinput { font-size: 18px; }
-  ha-card.bigtext .status .sec, ha-card.bigtext .status .sub, ha-card.bigtext .status .shellnote, ha-card.bigtext .status .jtile,
+  ha-card.bigtext .status .sec, ha-card.bigtext .status .ssub, ha-card.bigtext .status .shellnote, ha-card.bigtext .status .jtile,
   ha-card.bigtext .status .ftile, ha-card.bigtext .status .tile { font-size: 13px; }
   ha-card.bigtext .status .tile .tsub { font-size: 12px; }
   ha-card.bigtext.compact .status .tile { font-size: 12px; } /* "tidepool" whole in the porthole's three columns */
@@ -4915,7 +4921,7 @@ class HatchPetCard extends HTMLElement {
       this._card.querySelector(".chips").style.display = "none";
       this._card.querySelector(".title").textContent = configured ? "Pet not found" : "No pets yet";
       // Plain card text, not the pet's voice (F6): who can add a pet, and no "entities".
-      this._card.querySelector(".sub").textContent = configured
+      this._card.querySelector(".head .sub").textContent = configured
         ? "The pets this card shows aren't here any more. Edit the card to pick them again."
         : this._hass.user?.is_admin === false
           ? "Ask whoever runs Home Assistant to add a pet."
@@ -5079,7 +5085,7 @@ class HatchPetCard extends HTMLElement {
     this._card.classList.add("single");
     this._card.querySelector(".chips").style.display = "none";
     this._card.querySelector(".title").textContent = title;
-    this._card.querySelector(".sub").textContent = "";
+    this._card.querySelector(".head .sub").textContent = "";
     this._card.querySelector(".addpet").hidden = true;
   }
 
@@ -5598,7 +5604,7 @@ class HatchPetCard extends HTMLElement {
     });
     // The world is on the device's plate and the emblem, so the line stays short.
     if (headNow && !s.empty) {
-      this._card.querySelector(".sub").textContent = [kind,
+      this._card.querySelector(".head .sub").textContent = [kind,
         stage?.state !== "egg" ? STAGE_LABELS[stage?.state]?.toLowerCase() : null,
         days != null ? `day ${Math.floor(days) + 1}` : null].filter(Boolean).join(" · ");
     }
@@ -8932,13 +8938,13 @@ class HatchPetCard extends HTMLElement {
     const html = `
       <div class="shead"><button class="sback">${SETTINGS_COPY.backToStatus}</button>${SAY_NOTE}</div>
       <div class="sec">this screen</div>
-      <div class="sub">sound</div>
+      <div class="ssub">sound</div>
       ${row(null, "sounds here", `<span><button class="bell sound" aria-label="sounds here" aria-pressed="${soundsOn()}">${soundsOn() ? "on" : "off"}</button></span>`)}
       ${s.species?.voice ? (soundsOn()
         ? row(null, "babble", `<span><button class="bell babble" aria-label="babble: the pet's voice as it talks, on this device" aria-pressed="${babbleOn()}">${babbleOn() ? "on" : "off"}</button></span>`)
         // "sounds here" is the master: babble waits for it (its own switch keeps its setting)
         : row(null, "babble", `<span><button class="bell babble" aria-label="babble: needs sounds here first" aria-pressed="false" aria-disabled="true">needs sounds</button></span>`)) : ""}
-      <div class="sub">look</div>
+      <div class="ssub">look</div>
       ${row(null, "screen effects here", `<span><button class="bell lcdfx" aria-label="screen effects here" aria-pressed="${lcdOn()}">${lcdOn() ? "on" : "off"}</button></span>`)}
       ${row(null, "holiday names", `<span><button class="bell named" aria-label="holiday names" aria-pressed="${namedHolidays()}">${namedHolidays() ? "on" : "off"}</button></span>`)}
       ${row(null, "mono screen", `<span><button class="bell mono" aria-label="mono screen: ${monoOn() ? "on" : "off"}, change" aria-pressed="${monoOn()}">${monoOn() ? "on" : "off"}</button></span>`)}
@@ -8968,7 +8974,7 @@ class HatchPetCard extends HTMLElement {
     });
     // A heading (or the back row beside its button) is not a button: a tap on it
     // leaves the sheet open.
-    s.status.querySelectorAll(".sec, .sub, .shead, .shellnote").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
+    s.status.querySelectorAll(".sec, .ssub, .shead, .shellnote").forEach((h) => h.addEventListener("click", (e) => e.stopPropagation()));
     s.status.querySelector(".bell.shellrow")?.addEventListener("click", (e) => {
       e.stopPropagation();
       this._tapped(e.currentTarget);
@@ -9844,7 +9850,15 @@ class HatchPetCard extends HTMLElement {
     if (note.classList.contains("say")) this._headCrop(s, note, 14, 3); // its head, cropped from the sprite on show
     note.hidden = false;
     note.style.top = "";
+    note.style.bottom = "";
     const tap = this._tapRect && Date.now() - this._tapRect.at < 6000 ? this._tapRect : null;
+    if (tap && !note.classList.contains("say")) { // the foot note (sticky): lift it clear of the tapped row, not over it
+      const hits = (box) => box.bottom > tap.top - 2 && box.top < tap.bottom + 2;
+      if (hits(note.getBoundingClientRect())) {
+        note.style.bottom = `${Math.max(0, s.status.getBoundingClientRect().bottom - tap.top + 2)}px`;
+        if (hits(note.getBoundingClientRect())) note.style.bottom = ""; // no room above: leave it at the foot
+      }
+    }
     if (tap && note.classList.contains("say")) { // never hide the row just changed: the bubble drops to the foot
       const hits = (top, bottom) => bottom > tap.top - 2 && top < tap.bottom + 2;
       const box = note.getBoundingClientRect();

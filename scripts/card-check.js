@@ -362,7 +362,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   await shot("02d-shell-picker");
 
   // 4c-rest: every control in the status, the settings sheet and the picker is a real 44x44
-  // target at 330 and 420 (.pat is hidden while the status is open), plus the slide dots and
+  // target at 300, 330 and 420 (300: the meters need not fit unscrolled, as the box is shorter) (.pat is hidden while the status is open), plus the slide dots and
   // the answer buttons, no two overlap, the status shows its wish and meters without
   // scrolling, and the tab order is the page order with no positive tabindex.
   const measure = (view) => card.evaluate((el, view) => {
@@ -404,7 +404,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
   });
   const boxIssues = [];
   const boxCounts = {};
-  for (const width of [330, 420]) {
+  for (const width of [300, 330, 420]) {
     await page.setViewportSize({ width, height: 860 });
     await page.waitForTimeout(500);
     // The slide dots and the compact answer buttons (330 is the compact layout): 44x44 hit
@@ -438,7 +438,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
       return out;
     });
     if (tapBoxes.dots < 2 || tapBoxes.answers < 2 || tapBoxes.small.length || tapBoxes.overlap || tapBoxes.mark !== 16
-      || tapBoxes.compact !== (width === 330)) boxIssues.push(`${width} dots/answers: ${JSON.stringify(tapBoxes)}`);
+      || tapBoxes.compact !== (width < 400)) boxIssues.push(`${width} dots/answers: ${JSON.stringify(tapBoxes)}`);
     boxCounts[`${width}-tapBoxes`] = tapBoxes.dots + "d" + tapBoxes.answers + "a";
     for (const view of ["picker", "settings", "status"]) {
       if (view === "settings") await cur().locator(".status .pback").click();
@@ -446,10 +446,27 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
       await page.waitForTimeout(300);
       const m = await measure(view);
       boxCounts[`${width}-${view}`] = m.n;
-      if (m.small.length || m.overlap.length || m.hidden.length || m.posTab || m.n < 2) boxIssues.push(`${width} ${view}: ${JSON.stringify(m)}`);
+      if (m.small.length || m.overlap.length || (m.hidden.length && width > 300) || m.posTab || m.n < 2) boxIssues.push(`${width} ${view}: ${JSON.stringify(m)}`);
       if (view === "status" && m.rows < 3) boxIssues.push(`${width} status: only ${m.rows} meter rows found`);
       if (view === "status" && !await cur().locator(".status .friendsrow").count()) boxIssues.push(`${width} status: no friends row to measure`);
-      if (view === "status") { await cur().locator(".status .gear").click(); await page.waitForTimeout(250); }
+      if (view === "status") {
+        // A tap on the friends row (below the meters) shows its note, and the note does not cover the row.
+        const tap = await card.evaluate(async (el) => {
+          const s = el._slides[el._index];
+          const row = s.status.querySelector(".friendsrow");
+          if (!row) return null;
+          row.scrollIntoView({ block: "nearest" });
+          await new Promise((r) => setTimeout(r, 100));
+          row.click();
+          await new Promise((r) => setTimeout(r, 100));
+          const note = s.status.querySelector(".status-feedback");
+          const a = row.getBoundingClientRect(), b = note.getBoundingClientRect();
+          return { shown: !note.hidden, row: [a.top, a.bottom].map(Math.round), note: [b.top, b.bottom].map(Math.round),
+            hit: !note.hidden && b.bottom > a.top && b.top < a.bottom };
+        });
+        if (!tap?.shown || tap.hit) boxIssues.push(`${width} friends note: ${JSON.stringify(tap)}`);
+        await cur().locator(".status .gear").click(); await page.waitForTimeout(250);
+      }
       if (view === "settings") {
         // Tab from the back row visits the buttons in page order.
         await cur().locator(".status .sback").focus();
@@ -1438,9 +1455,9 @@ async function main() {
       return { text: row?.querySelector(".sleeptimes")?.textContent ?? null, controls: row ? row.querySelectorAll("button, [tabindex]").length : -1,
         afterNotices: !!row && !!notices && at(row) > at(notices),
         inPetGroup: !!row && heads.some((h) => at(h) < at(row) && /^for /.test(h.textContent)) && at(row) < at(heads[heads.length - 1]),
-        subs: [...s.status.querySelectorAll(".sub")].map((h) => h.textContent).join("|"),
-        order: kids.filter((n) => n.matches(".sec, .sub, .bell.sound, .bell.babble, .bell.lcdfx, .bell.named, .bell.mono, .bell.bigtext, .bell.shared") || n.querySelector(".bell.sound, .bell.babble, .bell.lcdfx, .bell.named, .bell.mono, .bell.bigtext, .bell.shared"))
-          .map((n) => n.matches(".sec, .sub") ? n.textContent : n.querySelector(".bell").className.split(" ")[1]).join(">"),
+        subs: [...s.status.querySelectorAll(".ssub")].map((h) => h.textContent).join("|"),
+        order: kids.filter((n) => n.matches(".sec, .ssub, .bell.sound, .bell.babble, .bell.lcdfx, .bell.named, .bell.mono, .bell.bigtext, .bell.shared") || n.querySelector(".bell.sound, .bell.babble, .bell.lcdfx, .bell.named, .bell.mono, .bell.bigtext, .bell.shared"))
+          .map((n) => n.matches(".sec, .ssub") ? n.textContent : n.querySelector(".bell").className.split(" ")[1]).join(">"),
         n24: s.status.querySelector(".sharedprivacy")?.textContent ?? null,
         lastIsShared: heads[heads.length - 1]?.textContent === "shared screen" && !!kids.slice(at(heads[heads.length - 1])).find((n) => n.querySelector(".bell.shared")) };
     };
