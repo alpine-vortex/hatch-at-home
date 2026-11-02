@@ -2811,11 +2811,19 @@ const STYLE = `
   .finish-glow:has(.screen.dim) :is(.loop, .lid, .roof) > .mould, .finish-glow:has(.screen.dim) .feet .mould {
     background: #9fdc7c; }
   .finish-glow:has(.screen.night) .crescent > .mould, .finish-glow:has(.screen.dim) .crescent > .mould { background: #d3f7ad; }
+  /* The plastic lights up in a dark HA theme (ha-card.ha-dark, from hass.themes.darkMode: UX7 F6), not
+     in the OS's dark mode; where HA doesn't say, the OS's is the fallback. */
+  ha-card.ha-dark .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
+  ha-card.ha-dark .finish-glow .body { box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
+  ha-card.ha-dark .finish-glow :is(.loop, .lid, .roof) > .mould,
+  ha-card.ha-dark .finish-glow .feet .mould { background: #9fdc7c; }
+  ha-card.ha-dark .finish-glow .crescent > .mould { background: #d3f7ad; }
   @media (prefers-color-scheme: dark) {
-    .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
-    .finish-glow .body { box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
-    .finish-glow :is(.loop, .lid, .roof) > .mould, .finish-glow .feet .mould { background: #9fdc7c; }
-    .finish-glow .crescent > .mould { background: #d3f7ad; }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .body > .mould { background: color-mix(in srgb, var(--d-shell) 18%, #c6f79c); }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .body { box-shadow: 0 0 18px 4px rgba(173,238,126,.5), 0 16px 34px rgba(20,15,5,.32); }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow :is(.loop, .lid, .roof) > .mould,
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .feet .mould { background: #9fdc7c; }
+    ha-card:not(.ha-light, .ha-dark) .finish-glow .crescent > .mould { background: #d3f7ad; }
   }
   /* Prints any world can wear (FINISHES): a tile of whole cells (--print-<key>) over the
      plastic's face (--d-face), tiled at the grid's size. */
@@ -3872,6 +3880,7 @@ class HatchPetCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    this._syncTheme();
     if (this._resumedAt && !document.hidden && hass?.states !== this._resumeStates) {
       this._resumedAt = this._resumeStates = null; // fresh states: the look may begin
     }
@@ -3879,6 +3888,14 @@ class HatchPetCard extends HTMLElement {
     this._watchServerClock(hass);
     this._resendAnswers();
     this._update();
+  }
+
+  // HA's own dark mode, as ha-dark / ha-light on the card (the glow finish lights up in a dark theme);
+  // neither class when the theme doesn't say (an older HA): the OS's colour scheme decides then.
+  _syncTheme() {
+    const dark = this._hass?.themes?.darkMode;
+    this._card?.classList.toggle("ha-dark", dark === true);
+    this._card?.classList.toggle("ha-light", dark === false);
   }
 
   // Answers kept on this device (a failed save, twice) go out one by one when
@@ -4277,6 +4294,7 @@ class HatchPetCard extends HTMLElement {
         </div>
       </ha-card>`;
     this._card = root.querySelector("ha-card");
+    this._syncTheme();
     this._card.classList.toggle("lcd-on", lcdOn());
     this._card.classList.toggle("mono", monoOn());
     this._card.classList.toggle("bigtext", bigOn());

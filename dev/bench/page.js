@@ -139,7 +139,7 @@
       states, entities, devices,
       user: { id: "bench-user", name: "Sam Bench", is_admin: true },
       locale: { language: "en" }, language: "en",
-      themes: {}, selectedTheme: null,
+      themes: shot.haDark === undefined ? {} : { darkMode: !!shot.haDark }, selectedTheme: null,
       // The card asks once for a server clock reading; none arrives here.
       connection: { subscribeEvents: noop, subscribeMessage: noop },
       // `digReplies`: play_game answers, in order, for a `game: "dig"` shot (the server's dig is random).
