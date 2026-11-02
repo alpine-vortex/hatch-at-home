@@ -229,7 +229,8 @@ function babble(text, voice) {
       const gain = audio.createGain();
       osc.type = "triangle";
       osc.frequency.value = voice.pitch * 2 ** (semis / 12);
-      gain.gain.setValueAtTime(0.04, t);
+      gain.gain.setValueAtTime(0, t); // a 5 ms ramp in: a note that starts at full gain clicks (UX7 F7)
+      gain.gain.linearRampToValueAtTime(0.04, t + 0.005);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
       osc.connect(gain).connect(audio.destination);
       osc.start(t);
@@ -404,7 +405,8 @@ function playChirp(name) {
       const gain = audio.createGain();
       osc.type = "square";
       osc.frequency.value = freq;
-      gain.gain.setValueAtTime(0.06, t);
+      gain.gain.setValueAtTime(0, t); // a 5 ms ramp in: a note that starts at full gain clicks (UX7 F7)
+      gain.gain.linearRampToValueAtTime(0.06, t + 0.005);
       gain.gain.exponentialRampToValueAtTime(0.001, t + len);
       osc.connect(gain).connect(audio.destination);
       osc.start(t);
