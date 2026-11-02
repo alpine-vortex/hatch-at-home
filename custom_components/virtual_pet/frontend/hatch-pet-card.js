@@ -3996,6 +3996,8 @@ class HatchPetCard extends HTMLElement {
 
   disconnectedCallback() {
     clearInterval(this._timer);
+    clearTimeout(this._headTimer);
+    this._headTimer = 0;
     this._linkEnd();
     this._resize?.disconnect();
     this._io?.disconnect();
@@ -5382,7 +5384,19 @@ class HatchPetCard extends HTMLElement {
     const days = stage?.attributes.age_days;
     const kind = stage?.state === "egg" ? "Egg" : s.species?.name || "";
     const title = this._card.querySelector(".title");
-    if (!s.empty) { // the empty card keeps its own title and line (_update)
+    // On a swipe the name and the line change when the new pet is half there (250 ms into the
+    // slide), not at once over the old pet (UX7 F4). Under reduced motion they change at once.
+    const swapHead = !!this._headFor && this._headFor !== s && !s.empty && !calm();
+    if (swapHead && !this._headTimer) {
+      this._headTimer = setTimeout(() => {
+        this._headTimer = 0;
+        this._headFor = null;
+        this._renderShelf();
+      }, 250);
+    }
+    const headNow = !this._headTimer;
+    if (headNow && !s.empty) this._headFor = s;
+    if (headNow && !s.empty) { // the empty card keeps its own title and line (_update)
       title.textContent = device?.name_by_user || device?.name || "Pet";
       title.classList.toggle("long", title.textContent.length > 9);
     }
@@ -5403,7 +5417,7 @@ class HatchPetCard extends HTMLElement {
       if (src && img.getAttribute("src") !== src) img.src = src;
     });
     // The world is on the device's plate and the emblem, so the line stays short.
-    if (!s.empty) {
+    if (headNow && !s.empty) {
       this._card.querySelector(".sub").textContent = [kind,
         stage?.state !== "egg" ? STAGE_LABELS[stage?.state]?.toLowerCase() : null,
         days != null ? `day ${Math.floor(days) + 1}` : null].filter(Boolean).join(" · ");
