@@ -367,3 +367,5 @@ commit.
 - Pond: axolotl, beaver, duckling (on its water ring, as in its idle frames), pond turtle (droop), tree frog.
 - Tidepool: hermit crab, octopus, otter (on its water), puffin, seal (puffin and seal teen redrawn once
   to keep the rock they sit on).
+- Night Sky: bat, firefly (droop), luna moth (caterpillar baby droops), opossum, owl. Aww complete for
+  all 30.
