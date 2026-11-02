@@ -103,3 +103,6 @@ async def test_nothing_personal_is_recorded(
     for secret in day["secrets"]:
         for entity_id, shared in pets:
             assert secret not in shared, (entity_id, secret)
+    # The next egg's offer is for the card, not the history.
+    stage = [shared for e, shared in pets if e == "sensor.pip_life_stage"]
+    assert stage and all('"egg_roster"' not in shared for shared in stage)

@@ -149,6 +149,7 @@ class LifeStageSensor(PetEntity, SensorEntity):
         {
             "raised",
             "roster",
+            "egg_roster",
             "hatches_at",
             "traits",
             "trait_levels",
@@ -259,6 +260,13 @@ class LifeStageSensor(PetEntity, SensorEntity):
                 for t, p in model.trait_progress(self.pet).items()
             },
             "roster": list(self.coordinator.roster),
+            # The next egg's creatures, in the select's option order (it follows
+            # next_world, not the current world): the card's lay sheet names its
+            # offer from these. Exactly the select's options minus "Surprise me".
+            "egg_roster": [
+                {"id": s, "name": n}
+                for s, n in self.coordinator.egg_species_names.items()
+            ],
             # Daily check-ins: today's wish and this morning's dream, for the card
             # (who granted it, and whom it's for, stay on the server: the
             # viewer's own card hears "for you" on its private channel).

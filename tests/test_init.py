@@ -994,6 +994,7 @@ async def test_busy_attributes_stay_out_of_history(
         "shell_finish_options",
         "shell_locked",
         "senses",
+        "egg_roster",
     ):
         assert key in attrs
         assert key in LifeStageSensor._unrecorded_attributes, key
@@ -1715,6 +1716,36 @@ async def test_a_world_change_drops_a_choice_from_the_old_world(
     )
     await hass.async_block_till_done()
     assert hass.states.get("select.pip_next_egg").state == "Surprise me"
+
+
+async def test_egg_roster_names_match_the_selects_options(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    # The card's lay sheet names its offer from egg_roster and sends the name
+    # back to the select, so the names are the select's options minus the
+    # surprise, in order, with and without a move waiting.
+    age = 14 * 24 + 7 * 24 + 1.0
+    hass_storage[STORE_KEY] = hatched_pet(
+        now, age_hours=age, born=now - age * 3600, species="bird", raised=["bird"]
+    )
+    config = await setup(hass)
+
+    def roster() -> list[dict[str, str]]:
+        return hass.states.get("sensor.pip_life_stage").attributes["egg_roster"]
+
+    options = hass.states.get("select.pip_next_egg").attributes["options"]
+    assert [r["name"] for r in roster()] == options[1:]
+    assert [r["id"] for r in roster()][:2] == ["bird", "squirrel"]
+    assert all(set(r) == {"id", "name"} for r in roster())
+    result = await config.start_reconfigure_flow(hass)
+    await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"name": "Pip", "world": "pond"}
+    )
+    await hass.async_block_till_done()
+    options = hass.states.get("select.pip_next_egg").attributes["options"]
+    assert options[1] == "Pacific tree frog"
+    assert [r["name"] for r in roster()] == options[1:]
+    assert hass.states.get("sensor.pip_life_stage").attributes["next_world"] == "Pond"
 
 
 async def test_next_egg_rejects_a_creature_it_cannot_hatch(

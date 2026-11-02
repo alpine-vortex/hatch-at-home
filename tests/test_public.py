@@ -316,6 +316,10 @@ async def test_nothing_personal_on_a_state(
     stage = attrs["sensor.pip_life_stage"]
     assert "bonds" not in stage and "notify_users" not in stage
     assert set(stage["wish"]) == {"kind", "granted", "open"}
+    # The next egg's offer is creature ids and names, the select's own list.
+    assert stage["egg_roster"] and all(
+        set(r) == {"id", "name"} for r in stage["egg_roster"]
+    )
     # This morning's dream was of a show: none on the sensor, the title on the
     # channel's house view.
     assert stage["dream"] is None

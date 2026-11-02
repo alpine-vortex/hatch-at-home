@@ -6,6 +6,7 @@
   const BASE = "/virtual_pet/frontend";
   let WORLDS = null; // the one object the card's cache holds; reset per shot
   let HAVE = new Set(); // species with a species.json, as the server's catalog.roster keeps
+  let SPECIES_NAME = {}; // id -> its species.json name, for the lay sheet's egg_roster
   const rosterOf = (world) => world.roster.filter((sp) => HAVE.has(sp));
 
   // The card reads worlds.json through fetch and keeps the parsed object, so
@@ -79,7 +80,19 @@
       if (pet.hatched_on) attrs.hatched_on = pet.hatched_on;
       if (pet.upbringing) attrs.upbringing = pet.upbringing;
       // Today's wish and dream (`{kind, granted}`, `{kind}`) and traits, for a `look` shot.
-      for (const key of ["wish", "dream", "traits", "trait_levels"]) if (pet[key]) attrs[key] = pet[key];
+      for (const key of ["wish", "dream", "traits", "trait_levels", "raised", "generation", "next_egg", "next_world"]) {
+        if (pet[key]) attrs[key] = pet[key];
+      }
+      // The lay sheet (settings S2): `lay: true` (or `{next_world, outside}`) makes this pet ask to
+      // lay: egg_roster for the egg's world, the next-egg select and the lay_egg request.
+      // `raised` (ids, default the first three of the world's) sets the offer.
+      if (attrs.raised === "world") attrs.raised = rosterOf(worlds[world]).slice(0, 3); // a few of its own world's
+      if (pet.lay) {
+        const lay = pet.lay === true ? {} : pet.lay;
+        const eggWorld = worlds[lay.egg_world || world];
+        attrs.egg_roster = rosterOf(eggWorld).map((id) => ({ id, name: SPECIES_NAME[id] || id }));
+        if (!attrs.raised) attrs.raised = rosterOf(worlds[world]).slice(0, 3);
+      }
       if (shot.journal && i === 0) {
         // The journal's data: every creature of the world raised, the two pets before
         // this one, a trait or two and a memory. `journal: {..}` overrides any of it.
@@ -104,7 +117,7 @@
       // The mood's own need shows as a flag (the button it wants lights up).
       const flags = [...new Set([...(["hungry", "bored", "dirty", "sick", "sleepy"].includes(mood) ? [mood] : []), ...(pet.flags || [])])];
       if (shot.scene === "rain" && !flags.includes("rainy")) flags.push("rainy");
-      put("sensor", "mood", mood, { flags, ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) });
+      put("sensor", "mood", mood, { flags, ...(pet.lay ? { requests: ["lay_egg"] } : {}), ...(pet.reason ? { reason: pet.reason, reason_key: pet.reason_key } : {}) });
       // `moments`: [{type, ago (minutes), ...}], the public moments the away note reads.
       const moments = (pet.moments || []).map(({ ago = 30, ...m }) => ({ ...m, at: iso(-ago) }));
       put("sensor", "last_care", iso(-45), { log: pet.log || [], ...(pet.moments ? { moments } : {}) });
@@ -114,7 +127,11 @@
       put("sensor", "care_misses", "0");
       put("binary_sensor", "calling", pet.calling || mood === "calling" ? "on" : "off");
       put("binary_sensor", "asleep", mood === "asleep" ? "on" : "off");
-      for (const key of ["feed", "snack", "play", "clean", "medicine", "scold", "praise"]) put("button", key, "unknown");
+      for (const key of ["feed", "snack", "play", "clean", "medicine", "scold", "praise", ...(pet.lay ? ["lay_egg"] : [])]) put("button", key, "unknown");
+      if (pet.lay) { // the select: "Surprise me" then the names, its state the pick
+        const names = attrs.egg_roster.map((r) => r.name);
+        put("select", "next_egg", attrs.next_egg || "Surprise me", { options: ["Surprise me", ...names] });
+      }
       put("switch", "lights_out", shot.scene === "dim" ? "on" : "off");
     });
     const noop = () => Promise.resolve(() => {});
@@ -432,8 +449,12 @@
       Object.assign(WORLDS, fresh);
     } else WORLDS = fresh;
     const every = [...new Set(Object.values(WORLDS).flatMap((w) => w.roster || []))];
-    HAVE = new Set((await Promise.all(every.map(async (sp) =>
-      (await realFetch(`${BASE}/sprites/${sp}/species.json`)).ok ? sp : null))).filter(Boolean));
+    SPECIES_NAME = {};
+    HAVE = new Set((await Promise.all(every.map(async (sp) => {
+      const res = await realFetch(`${BASE}/sprites/${sp}/species.json`);
+      if (res.ok) SPECIES_NAME[sp] = (await res.json()).name || sp;
+      return res.ok ? sp : null;
+    }))).filter(Boolean));
     const world = WORLDS[shot.pets[0].world];
     if (world && shot.shell) {
       world.shell = { ...world.shell, ...shot.shell };
@@ -500,6 +521,7 @@
     if (shot.costume) await dress(card, cur, shot.costume);
     if (["status", "settings", "picker"].includes(shot.view)) root.querySelector(".statusbtn").click();
     if (shot.view === "settings" || shot.view === "picker") root.querySelector(".gear").click();
+    if (shot.view === "lay") cur.request.click(); // settings S2: the lay sheet opens
     if (shot.view === "picker") {
       root.querySelector(".shellrow").click();
       // `preview`: a tile tapped (its finish on the live shell, unsaved); "" is the world's own.

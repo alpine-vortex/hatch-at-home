@@ -342,6 +342,27 @@ const PRESETS = {
     }
     return out;
   },
+  // The lay sheet (settings S2): the offer in two worlds at both card widths, big text at
+  // 330, a pick made in HA outside the offer, and a waiting world change (the offer is the
+  // new world's, raised by a second pet there).
+  lay() {
+    const out = [];
+    const lead = (world, pet = {}) => ({ world, stage: "adult", view: "lay", pet: { lay: true, raised: "world", ...pet } });
+    for (const world of ["woodland", "tidepool"]) {
+      for (const width of [420, 330]) {
+        out.push({ name: `lay/${width}/${world}`, group: `lay-${width}`, label: world, width, ...lead(world) });
+      }
+      out.push({ name: `lay/330/${world}-big`, group: "lay-330", label: `${world}, big text`, width: 330, bigText: true,
+        ...lead(world) });
+    }
+    out.push({ name: "lay/330/picked", group: "lay-330", label: "one picked", width: 330, scroll: '.layrow[aria-pressed="true"]', ...lead("woodland", { next_egg: "Black-tailed deer" }) });
+    out.push({ name: "lay/330/outside", group: "lay-330", label: "set in HA, not offered", width: 330, scroll: ".layrow.ro",
+      ...lead("woodland", { next_egg: "Banana slug", raised: ["bird", "squirrel", "deer"] }) });
+    out.push({ name: "lay/330/next-world", group: "lay-330", label: "next world: tidepool", width: 330,
+      ...lead("woodland", { lay: { egg_world: "tidepool" }, next_world: "Tidepool" }),
+      pets: [{}, { world: "tidepool", stage: "adult", raised: "world" }] });
+    return out;
+  },
   // The settings sheet (the status screen's gear) with the viewer's own rows, at
   // both card widths, day and night.
   settings() {
