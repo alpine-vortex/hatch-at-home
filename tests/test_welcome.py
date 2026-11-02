@@ -18,7 +18,14 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.virtual_pet.const import DOMAIN
 
-from .test_init import STORE_KEY, hatched_pet, now, settle, setup  # noqa: F401
+from .test_init import (  # noqa: F401
+    STORE_KEY,
+    call_texts,
+    hatched_pet,
+    now,
+    settle,
+    setup,
+)
 
 WELCOME = "Pip, a new virtual pet, just moved in! Say hi ♥"
 
@@ -188,6 +195,6 @@ async def test_the_dashboard_opens_from_every_notification(
     for _ in range(6):  # hunger drops below 25 and it calls
         await settle(hass, freezer, 5 * 60)
     await hass.async_block_till_done()
-    assert [c.data["message"] for c in phones["Me"]] == ["Pip is hungry!"]
+    assert [c.data["message"] for c in phones["Me"]] in call_texts("hunger")
     assert phones["Me"][0].data["data"]["clickAction"] == "/pets"
     assert phones["Other"] == []

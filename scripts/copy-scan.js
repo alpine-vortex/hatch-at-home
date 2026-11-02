@@ -1,0 +1,78 @@
+// The fresh-expand copy scan (docs/plan-2026-11-01-fresh-expand.md, E1): every table in
+// the card's fresh-expand block must be named in COPY_TABLES, so a new table can't skip
+// the scan, and every line in them is checked: no nagging words, 40 characters at most
+// with the longest fill, no "?" outside a question, no "!!!", no digits. Card-check runs
+// it (section "types"), and so does node --test (tests/js/fresh_copy.test.js).
+const vm = require("vm");
+
+const NAG = /\b(still|again|why|never|pleas\w*|sad|cry|alone|forgot\w*)\b/i;
+// The longest fill for each kind of slot: a visitor's name, a pet's name, typed text.
+const FILL = {
+  visitor: "hearth cricket", // the longest visitor name in worlds.json
+  name: "Wwwwwwwwwwww", // 12
+  it: "Wwwwwwwwwwwwwwwwwwww", // 20, the typed text's cap (FM dialogue pass)
+};
+// Each table: the fill its functions take, and the keys (at any depth) that may ask.
+const COPY_TABLES = {
+  PERSONA_FRESH: {},
+  PAT_SPOT: {},
+  VISIT_FRIENDS: {},
+  WAKE_LINES: {},
+  NIGHT_VISITOR: { fill: "visitor" },
+  NIGHT_SUNSET: {},
+  MEAL_LINES: {},
+  CRUMB_LINE: { fill: "visitor" },
+  CURED_LINES: {},
+  GAME_PICK_LINES: {},
+  LUCKY_LINE: {},
+  DIG_WATCH: { fill: "visitor" },
+  SHINY_LINE: {},
+  WISH_MORE: {},
+  WELCOME_BACK: {},
+  FAV_LINES: {},
+  TRICK_LINES: {},
+  LINK_VISITOR_NEWS: { fill: "visitor" },
+  LINK_NEWS_REPLY: {},
+  PAIR_LINES: {},
+  VISIT_GUEST: {},
+  PROMISE_LINES: {},
+  PROMISE_MID: {},
+  SEASON_FIRST_LINES: {},
+};
+
+function lines(value, path, out) {
+  if (typeof value === "string" || typeof value === "function") out.push([path, value]);
+  else if (Array.isArray(value)) value.forEach((v, i) => lines(v, `${path}[${i}]`, out));
+  else if (value && typeof value === "object") for (const [k, v] of Object.entries(value)) lines(v, `${path}.${k}`, out);
+  return out;
+}
+
+// The card's source -> { bad: [problems], count: lines scanned, tables: [names] }.
+function scanFreshCopy(src) {
+  const bad = [];
+  const parts = src.split("\n// --- fresh-expand copy");
+  if (parts.length !== 2) return { bad: ["no single fresh-expand copy block"], count: 0, tables: [] };
+  const block = parts[1].split("\n// --- end fresh-expand copy")[0];
+  const tables = [...block.matchAll(/\nconst ([A-Z_]+) = /g)].map((m) => m[1]);
+  for (const name of tables) if (!COPY_TABLES[name]) bad.push(`${name}: not in COPY_TABLES`);
+  for (const name of Object.keys(COPY_TABLES)) if (!tables.includes(name)) bad.push(`${name}: in COPY_TABLES, not in the card`);
+  const values = vm.runInNewContext(`${block.replace(/^[^\n]*\n/, "")}\n({${tables.join(", ")}})`);
+  let count = 0;
+  for (const name of tables) {
+    const spec = COPY_TABLES[name] || {};
+    for (const [where, entry] of lines(values[name], name, [])) {
+      const line = typeof entry === "function" ? entry(FILL[spec.fill] ?? FILL.name) : entry;
+      count++;
+      if (typeof line !== "string" || !line.trim()) { bad.push(`${where}: not a line`); continue; }
+      const asks = (spec.asks || []).some((k) => where.includes(`.${k}`));
+      if (NAG.test(line)) bad.push(`${where}: "${line}" nags`);
+      if (line.includes("?") && !asks) bad.push(`${where}: "${line}" asks`);
+      if (/!!!/.test(line)) bad.push(`${where}: "${line}" !!!`);
+      if (/\d/.test(line)) bad.push(`${where}: "${line}" has a digit`);
+      if ([...line].length > 40) bad.push(`${where}: "${line}" ${[...line].length} long`);
+    }
+  }
+  return { bad, count, tables };
+}
+
+module.exports = { scanFreshCopy, COPY_TABLES, FILL };

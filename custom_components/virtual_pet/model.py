@@ -2524,17 +2524,44 @@ def _refuse_play(state: PetState) -> str | None:
 MEMORIES_KEPT = 30
 
 
-def season_first(state: PetState, kind: str, now: float, tz: tzinfo) -> list[Event]:
-    """The first snow (or frost) of the season: a moment once per winter, kept as
-    a memory in the journal. A winter runs from July to June."""
+def warm_start_month(latitude: float) -> int | None:
+    """The month the warm half of the year starts (E12): the spring equinox's,
+    March in the north, September in the south; None in the tropics, as
+    people.season."""
+    if abs(latitude) < R.SEASON_TROPICS_LATITUDE:
+        return None
+    return 3 if latitude > 0 else 9
+
+
+def season_first(
+    state: PetState, kind: str, now: float, tz: tzinfo, start: int = 7
+) -> list[Event]:
+    """The first snow, frost or fog of the season, or the first warm day: a
+    moment once per season-year, kept as a memory in the journal. A season-year
+    runs from the `start` month: July for snow, frost and fog (a winter, July to
+    June); the spring month for warm (warm_start_month)."""
     local = datetime.fromtimestamp(now, tz)
-    season = str(local.year if local.month >= 7 else local.year - 1)
+    season = str(local.year if local.month >= start else local.year - 1)
     if state.firsts.get(kind) == season:
         return []
     state.firsts[kind] = season
     state.memories.append({"kind": f"first_{kind}", "at": now})
     del state.memories[:-MEMORIES_KEPT]
     return [{"type": f"first_{kind}"}]
+
+
+def warm_first(
+    state: PetState, outdoor_c: float | None, now: float, tz: tzinfo, latitude: float
+) -> list[Event]:
+    """The year's first warm day (E12): outdoors at R.HOME_WARM_FIRST_C or more, in
+    the warm half of the year from the spring month (March to August in the north,
+    September to February in the south); never in the tropics."""
+    start = warm_start_month(latitude)
+    if start is None or outdoor_c is None or outdoor_c < R.HOME_WARM_FIRST_C:
+        return []
+    if (datetime.fromtimestamp(now, tz).month - start) % 12 >= 6:
+        return []
+    return season_first(state, "warm", now, tz, start)
 
 
 # --- Daily check-ins: a wish and a dream ---------------------------------------

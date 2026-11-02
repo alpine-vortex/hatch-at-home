@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 import copy
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 import random
 from typing import Any
 
@@ -88,6 +88,7 @@ from .const import (
     STORE_VERSION,
 )
 from .home import (
+    FOGGY,
     RAINY,
     SNOWY,
     STORMY,
@@ -133,6 +134,8 @@ MOMENTS = {
     "tv_off_late",
     "first_snow",
     "first_frost",
+    "first_warm",
+    "first_fog",
     "news",
     "weather",
     "forecast",
@@ -885,7 +888,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
 
     def _passing_moments(self, readings: Readings, now: float) -> list[model.Event]:
         """Sunsets, the morning stir, the TV, the weather and its forecast, the
-        season's first snow or frost."""
+        season's first snow, frost or fog, and the year's first warm day."""
         assert self.state is not None
         state = self.state
         settings = self.settings
@@ -910,6 +913,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             events += first
         if awake and readings.outdoor_c is not None and readings.outdoor_c <= 0:
             events += model.season_first(state, "frost", now, settings.tz)
+        if awake:  # the year's first warm day (E12)
+            events += model.warm_first(
+                state, readings.outdoor_c, now, settings.tz, self.hass.config.latitude
+            )
+        if awake and readings.condition in FOGGY:
+            events += model.season_first(state, "fog", now, settings.tz)
         events += self._forecast_talk(readings, now, awake, minute >= wake)
         if readings.company and any(e["type"] == "sunset" for e in events):
             events += self._grant("sunset", None, now)  # watched it together
@@ -2094,11 +2103,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 {"type": "call_started", "reason": reason},
                 state.name,
                 self.species_names,
+                self._call_day(),
             )
             or state.name,
             list(state.notify_users),
             lambda user: self.bond_for(user)[1],
         )
+
+    def _call_day(self) -> date:
+        """The local day the standing call started (its phrasing's day, so a re-call
+        after midnight reads as the call did), else today."""
+        call = self.state.call if self.state else None
+        when = call.started if call else self._now()
+        return dt_util.as_local(dt_util.utc_from_timestamp(when)).date()
 
     def update_recalls(self, started: str | None = None) -> None:
         """Bring the house's re-call bundle up to date with every pet."""
@@ -2149,7 +2166,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             # The call is over: take its notification off the phones.
             self._call_notified = False
             self._send(users, "clear_notification", notify.call_tag(self.pet_id))
-        text = notify.message(event, self.state.name, self.species_names)
+        text = notify.message(
+            event, self.state.name, self.species_names, self._call_day()
+        )
         if text is None:
             return
         if event["type"] in notify.CALL_EVENTS:

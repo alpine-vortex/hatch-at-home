@@ -2769,6 +2769,11 @@ async function main() {
       };
       const keep = () => s.gameBox.querySelector(".gl").getAttribute("aria-disabled");
       const out = {};
+      // The plain lines here: no watcher (E5 D-a), no shiny berry (D-b), no type line (G-c).
+      const realSeen = el._visitSeen;
+      const realRandom = Math.random;
+      el._visitSeen = () => null;
+      Math.random = () => 0.5;
       try {
         s.game = { picking: true };
         queue.push({ ...base, round: 0, wins: 0, basket: 0, leaves: 8 });
@@ -2825,6 +2830,8 @@ async function main() {
       } finally {
         delete el._playCall;
         if (s.game) el._endGame(s, null);
+        el._visitSeen = realSeen;
+        Math.random = realRandom;
       }
       return out;
     });
@@ -2839,6 +2846,110 @@ async function main() {
     check("dig: a keep banks the basket and ends the round",
       dig.kept.round === 1 && dig.kept.wins === 1 && dig.kept.guess === "keep" && dig.kept.said === "safe in the basket ♪",
       JSON.stringify(dig.kept));
+    // Fresh-expand E5: the lucky number (G-b), the type's line after the count (G-c), the
+    // shiny berry (D-b), the dig's watcher (D-a) and the game of the day leading (G-a).
+    {
+      const src5 = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+      const lit = (name) => require("vm").runInNewContext(src5.match(new RegExp(`\\nconst ${name} = ("[^"\\n]*");`))[1]);
+      const [LUCKY, SHINY] = [lit("LUCKY_LINE"), lit("SHINY_LINE")];
+      const play5 = require("vm").runInNewContext(`(${src5.match(/\nconst VISITOR_PLAY = (\{[\s\S]*?\n\});/)[1]})`);
+      const worlds5 = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "worlds.json"), "utf8"));
+      // Each world's first walking day visitor (by name), for D-a.
+      const walkers = Object.fromEntries(Object.entries(worlds5).map(([w, x]) =>
+        [w, (x.visitors || []).find((v) => play5[v.id]?.walk && v.hours !== "night")?.name || null]));
+      const e5 = await card.evaluate(async (el, walkers) => {
+        const s = el._slides[el._index];
+        const base = { result: "ok", rounds: 5, win_at: 5, done: false };
+        const queue = [];
+        el._playCall = async (x) => (x.game ? queue.shift() : null);
+        const real = { seen: el._visitSeen, random: Math.random, persona: el._persona, line: el._line };
+        const out = {};
+        try {
+          el._visitSeen = () => null;
+          Math.random = () => 0.5;
+          // G-b: the opening number is the lucky one.
+          const lucky = el._lucky(s);
+          s.game = { picking: true };
+          queue.push({ ...base, game: "higher_lower", round: 0, wins: 0, number: lucky });
+          await el._pickGame(s, "higher_lower");
+          out.lucky = { said: s.bubble.textContent, score: s.gameScore.textContent, n: s.gameNum.dataset.n };
+          await new Promise((r) => setTimeout(r, 1700));
+          out.luckyAfter = s.bubble.textContent;
+          el._endGame(s, null);
+          // G-c: a won game's end is the count line, then the type's line 4 s on (random 0).
+          const said = [];
+          el._line = function (sl, cls, text, ...rest) { said.push(text); return real.line.call(this, sl, cls, text, ...rest); };
+          el._persona = () => ({ game_win: ["a winning show! ★"], game_lose: ["bravo, both of us ★"] });
+          s.game = { picking: true };
+          queue.push({ ...base, game: "left_right", round: 4, wins: 4 });
+          await el._pickGame(s, "left_right");
+          Math.random = () => 0;
+          queue.push({ ...base, game: "left_right", round: 5, wins: 5, correct: true, went: "left", done: true, won: true });
+          await el._guess(s, "left");
+          await new Promise((r) => setTimeout(r, 1100));
+          out.count = s.bubble.textContent;
+          await new Promise((r) => setTimeout(r, 4200));
+          out.typeLine = said.slice();
+          el._line = real.line;
+          el._persona = real.persona;
+          // D-b: random 0 on a berry is the shiny one; the basket is the server's, as for any berry.
+          s.game = { picking: true };
+          queue.push({ ...base, game: "dig", round: 0, wins: 0, basket: 0, leaves: 8 });
+          Math.random = () => 0.5;
+          await el._pickGame(s, "dig");
+          Math.random = () => 0;
+          queue.push({ ...base, game: "dig", round: 0, wins: 0, basket: 1, leaves: 7, found: "berry", round_over: false });
+          await el._guess(s, "right");
+          out.shiny = { said: s.bubble.textContent, basket: s.game?.basket };
+          el._endGame(s, null);
+          Math.random = () => 0.5;
+          // D-a: a walking day visitor seen here today watches; a tap on dig still lands.
+          const walker = walkers[s.worldKey] ? { name: walkers[s.worldKey] } : null;
+          el._visitSeen = () => walker?.name || null;
+          s.screen.classList.remove("night", "dim");
+          s.game = { picking: true };
+          queue.push({ ...base, game: "dig", round: 0, wins: 0, basket: 0, leaves: 8 });
+          await el._pickGame(s, "dig");
+          const w = s.gameBox.querySelector(".gwatch");
+          const gr = s.gameBox.querySelector(".gr").getBoundingClientRect();
+          const hit = el.shadowRoot.elementFromPoint(gr.left + gr.width / 2, gr.top + gr.height / 2);
+          out.watch = { on: !!w, who: w?.dataset.visitor, said: s.bubble.textContent, hit: hit?.closest?.(".gr") ? "gr" : hit?.className,
+            walker: walker?.name };
+          el._endGame(s, null);
+          out.watchGone = !s.gameBox.querySelector(".gwatch");
+          s.screen.classList.add("night");
+          s.game = { picking: true };
+          queue.push({ ...base, game: "dig", round: 0, wins: 0, basket: 0, leaves: 8 });
+          await el._pickGame(s, "dig");
+          out.dark = !!s.gameBox.querySelector(".gwatch");
+          el._endGame(s, null);
+          s.screen.classList.remove("night");
+          // G-a: the picker leads with the game of the day.
+          s.game = null;
+          el._startGame(s, s.buttons.play);
+          out.today = el._gameOfDay(s);
+          out.order = [...s.gameBox.querySelectorAll(".gpick button")].map((b) => b.dataset.game);
+          el._endGame(s, null);
+        } finally {
+          delete el._playCall;
+          if (s.game) el._endGame(s, null);
+          Object.assign(el, { _visitSeen: real.seen, _persona: real.persona, _line: real.line });
+          Math.random = real.random;
+        }
+        return out;
+      }, walkers);
+      check("fresh E5 (G-a): the picker leads with the pet's game of the day", e5.order?.[0] === e5.today && e5.order.length === 3,
+        JSON.stringify([e5.today, e5.order]));
+      check("fresh E5 (G-b): the lucky number opening a game says its line, then the prompt; the score is untouched",
+        e5.lucky.said === LUCKY && e5.lucky.score === "round 1/5 · 0 right" && e5.luckyAfter !== LUCKY, JSON.stringify(e5.lucky) + e5.luckyAfter);
+      check("fresh E5 (G-c): a won game ends on the count line, then the type's line 4 s later",
+        e5.count === "5/5! you win ♪" && e5.typeLine.includes("a winning show! ★"), JSON.stringify([e5.count, e5.typeLine]));
+      check("fresh E5 (D-b): random 0 on a berry is the shiny one; the basket is the server's (1)",
+        e5.shiny.said === SHINY && e5.shiny.basket === 1, JSON.stringify(e5.shiny));
+      check("fresh E5 (D-a): today's walking visitor watches a dig on a day screen, a dig tap still lands, gone after; none when dark",
+        !e5.watch.walker || (e5.watch.on && e5.watch.said.includes(e5.watch.walker) && e5.watch.hit === "gr" && e5.watchGone && !e5.dark),
+        JSON.stringify({ watch: e5.watch, gone: e5.watchGone, dark: e5.dark }));
+    }
     check("dig: a bee ends the round, shows the bee, then asks again with keep disabled",
       dig.bee.round === 2 && dig.bee.wins === 1 && dig.bee.prop && dig.bee.said === "bzz! the berries rolled away" &&
         !dig.afterBee.prop && dig.afterBee.said === "dig or keep?" && dig.afterBee.keep === "true",
@@ -3117,6 +3228,8 @@ async function main() {
     ["sunset", {}, "sun|sky"],
     ["watching", { title: "Bluey" }, "Bluey"],
     ["first_snow", {}, "first snow"],
+    ["first_warm", {}, "first warm day"], // fresh-expand E12 (Se-a)
+    ["first_fog", {}, "the first fog"],
     ["weather", { change: "cold", temperature: -12 }, "−12°"],
     ["weather", { change: "rainbow" }, "rainbow"],
     ["forecast", { when: "tomorrow", kind: "warmer", high: 72 }, "warmer tomorrow: 72°"],
@@ -3443,8 +3556,12 @@ async function main() {
     }));
     await shot(name);
   }
+  // The wish as said takes turns by device and day (fresh-expand E6 W-a): any of sunset's.
+  const SUNSET_SAID = ["can we watch the sunset together?", ...require("vm").runInNewContext(`(${fs.readFileSync(
+    path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8")
+    .match(/\nconst WISH_MORE = (\{[\s\S]*?\n\});/)[1]})`).sunset];
   check("the first look tells the dream and wish first, then the day's news (fresh-moment 2)",
-    firstLook[0] === "I dreamed about Bluey!" && firstLook[1] === "can we watch the sunset together?" &&
+    firstLook[0] === "I dreamed about Bluey!" && SUNSET_SAID.includes(firstLook[1]) &&
       /^while you were out, I (napped|watched the rain)/.test(firstLook[2]), firstLook.join(" | "));
   // P3c: the media dream (sensor null, house.dream titled) is said once a day.
   const dreamAgain = await card.evaluate((el) => {
@@ -3534,10 +3651,10 @@ async function main() {
       !resumed.long.looked && !resumed.long.greeted && resumed.long.visited === 0 && resumed.long.mention === 0 && resumed.long.seen &&
       resumed.long.replay && !resumed.short.replay &&
       resumed.first.held.length === 0 && resumed.first.said.includes("I dreamed about Bluey!") &&
-      resumed.first.said.includes("can we watch the sunset together?") &&
-      !resumed.twice.said.some((t) => /dreamed|sunset together/.test(t)), JSON.stringify(resumed));
+      resumed.first.said.some((t) => SUNSET_SAID.includes(t)) &&
+      !resumed.twice.said.some((t) => /dreamed/.test(t) || SUNSET_SAID.includes(t)), JSON.stringify(resumed));
   check("fresh-moment 1: a set hass with the same states keeps the hold; timed out, no dream or wish and their keys unused",
-    resumed.first.held.length === 0 && !resumed.stale.said.some((t) => /dreamed|sunset together/.test(t)) &&
+    resumed.first.held.length === 0 && !resumed.stale.said.some((t) => /dreamed/.test(t) || SUNSET_SAID.includes(t)) &&
       resumed.stale.keys.length === 0, JSON.stringify(resumed.stale));
   check("fresh-moment 1: a screen left on looks again on a new day or a live morning wake-up, not on the same day",
     resumed.rolled === true && resumed.sameDay === false && resumed.woke, JSON.stringify(resumed));
@@ -3598,12 +3715,15 @@ async function main() {
   await page.locator("hatch-pet-card .statusbtn").click();
   await page.waitForTimeout(300);
   await inject(pet["sensor.life_stage"], { attributes: { wish: { kind: "sunset", granted: true } } });
+  // The usual grant line, not E6 W-b's "what it got" (half the time; checked in E6's own).
+  await card.evaluate(() => { window.__grantRandom = Math.random; Math.random = () => 0.9; });
   await inject(pet["sensor.last_care"], {
     attributes: { moments: [{ type: "wish_granted", kind: "sunset", at: new Date().toISOString() },
       { type: "sunset", at: new Date().toISOString() }] },
   });
   await page.waitForTimeout(600);
   const granted = await card.evaluate(async (el) => {
+    Math.random = window.__grantRandom;
     const s = el._slides[el._index];
     const first = s.bubble.textContent; // the wish's line: kept, over the sunset (flavour)
     s.sayUntil = 0;
@@ -4097,6 +4217,170 @@ async function main() {
   await moodBack();
   await quiet2a();
 
+  // Fresh-expand E4 (S-a, S-b, M-a): the morning wake in turns, its dream line only on a
+  // dream day; lights out after a visitor seen here says its callback once a day; the day
+  // after a cure seen here, the first look's line, once.
+  {
+    const src4 = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+    const WAKE = require("vm").runInNewContext(src4.match(/\nconst WAKE_LINES = (\[[\s\S]*?\]);/)[1]);
+    const CURED = require("vm").runInNewContext(src4.match(/\nconst CURED_LINES = (\[[^\n]*\]);/)[1]);
+    const e4 = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const device = s.ids?.device;
+      const real = { dream: el._dreamToday, seen: el._visitSeen, sick: el._isSick };
+      const out = {};
+      const days = (n) => Array.from({ length: n }, (_, i) => new Date(2026, 10, 1 + i, 7));
+      try {
+        el._dreamToday = () => ({ kind: "stars" });
+        out.dream = days(12).map((d) => el._wakeLine(s, d));
+        el._dreamToday = () => null;
+        out.none = days(12).map((d) => el._wakeLine(s, d));
+        const night = `hatch-nightcb-${device}-${new Date().toDateString()}`;
+        localStorage.removeItem(night);
+        el._visitSeen = () => "robin";
+        out.night = [el._nightLine(s), el._nightLine(s)];
+        localStorage.removeItem(night);
+        el._visitSeen = () => null;
+        out.plain = el._nightLine(s);
+        const curedKey = `hatch-cured-${device}`;
+        const cb = `hatch-curedcb-${device}-${new Date().toDateString()}`;
+        localStorage.removeItem(cb);
+        el._isSick = () => false;
+        el._curedMark(s);
+        out.sameDay = [el._curedLine(s), localStorage.getItem(curedKey) !== null];
+        const y = new Date();
+        y.setDate(y.getDate() - 1);
+        localStorage.setItem(curedKey, y.toDateString());
+        out.nextDay = [el._curedLine(s), el._curedLine(s), localStorage.getItem(curedKey)];
+        localStorage.removeItem(cb);
+      } finally {
+        Object.assign(el, { _dreamToday: real.dream, _visitSeen: real.seen, _isSick: real.sick });
+      }
+      return out;
+    });
+    const dreamLine = WAKE[WAKE.length - 1];
+    check("fresh E4 (S-a): the wake takes turns; a dream day can say the dream line, a day with none never",
+      e4.dream.includes(dreamLine) && !e4.none.includes(dreamLine) && e4.none.every((l) => WAKE.includes(l)) &&
+      e4.dream.every((l, i) => !i || l !== e4.dream[i - 1]), JSON.stringify(e4));
+    check("fresh E4 (S-b): lights out after a visitor seen here says its callback once a day; no visitor or sunset, the usual",
+      /robin/.test(e4.night[0] || "") && e4.night[1] === null && e4.plain === null, JSON.stringify(e4.night));
+    // Fresh-expand E6 (W-a, W-b): a wish's phrasing takes turns a day each; a live grant
+    // with random 0 says what it got (TODAY_WISH), and that evening's today line isn't it.
+    const TODAY_WISH6 = require("vm").runInNewContext(`(${src4.match(/\nconst TODAY_WISH = (\{[\s\S]*?\n\});/)[1]})`);
+    const e6 = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const real = { baby: el._babySet, aimed: el._aimedAtMe, line: el._line, state: el._state, seen: el._visitSeen, random: Math.random };
+      const out = {};
+      const key = `hatch-todaywish-${s.ids?.device}-${new Date().toDateString()}`;
+      const had = localStorage.getItem(key);
+      try {
+        el._babySet = () => null;
+        el._aimedAtMe = () => false;
+        // Three days from a cycle's start (the list's length, 3): each line once.
+        let d0 = 3;
+        while (Math.round(Date.UTC(2026, 10, d0) / 864e5) % 3) d0++;
+        out.days = [0, 1, 2].map((i) => el._wishSaid(s, { kind: "play" }, ["base play line", "play"], new Date(2026, 10, d0 + i, 9)));
+        localStorage.removeItem(key);
+        const said = [];
+        el._line = function (sl, cls, text, ...rest) { said.push(text); return real.line.call(this, sl, cls, text, ...rest); };
+        Math.random = () => 0;
+        el._moment(s, { type: "wish_granted", kind: "bath", at: new Date().toISOString() });
+        out.live = said.slice();
+        el._line = real.line;
+        Math.random = real.random;
+        el._visitSeen = () => null;
+        el._state = function (sl, k) {
+          const st = real.state.call(this, sl, k);
+          return k === "sensor.life_stage" && st
+            ? { ...st, state: "adult", attributes: { ...st.attributes, personality: "mellow", wish: { kind: "bath", granted: true } } } : st;
+        };
+        out.today = el._todayLine(s);
+      } finally {
+        Object.assign(el, { _babySet: real.baby, _aimedAtMe: real.aimed, _line: real.line, _state: real.state, _visitSeen: real.seen });
+        Math.random = real.random;
+        if (had === null) localStorage.removeItem(key); else localStorage.setItem(key, had);
+        Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0 });
+      }
+      return out;
+    });
+    check("fresh E6 (W-a): a wish over 3 days is said 3 ways", new Set(e6.days).size === 3, JSON.stringify(e6.days));
+    check("fresh E6 (W-b): a live grant (random 0) says what it got; the evening's today line then isn't the wish",
+      e6.live.includes(TODAY_WISH6.bath) && e6.today !== TODAY_WISH6.bath, JSON.stringify({ live: e6.live, today: e6.today }));
+    check("fresh E4 (M-a): a cure says nothing the same day; the next day's first look says a line once, and the mark goes",
+      e4.sameDay[0] === null && e4.sameDay[1] && CURED.includes(e4.nextDay[0]) && e4.nextDay[1] === null && e4.nextDay[2] === null,
+      JSON.stringify({ sameDay: e4.sameDay, nextDay: e4.nextDay }));
+    // Fresh-expand E8 (A-a): a first look 3 days after the last starts with a welcome and
+    // has no away note; 5 hours after, no welcome.
+    const WELCOME = require("vm").runInNewContext(src4.match(/\nconst WELCOME_BACK = (\[[^\n]*\]);/)[1]);
+    const e8 = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const real = { heard: el._channelHeard, held: el._resumeHeld, today: el._todayLine };
+      const key = `hatch-seen-${s.ids.device}`;
+      const had = localStorage.getItem(key);
+      const look = (agoH) => {
+        localStorage.setItem(key, JSON.stringify({ seen: Date.now() - agoH * 3600e3, said: Date.now() }));
+        Object.assign(s, { lookedFirst: false, queue: [], asleep: false });
+        el._firstLook(s);
+        const out = s.queue.map((q) => ({ text: q.text, away: !!q.away }));
+        s.queue = [];
+        return out;
+      };
+      try {
+        el._channelHeard = () => true;
+        el._resumeHeld = () => false;
+        el._todayLine = () => null; // the away note's own slot, not the evening's
+        return { long: look(72), short: look(5) };
+      } finally {
+        Object.assign(el, { _channelHeard: real.heard, _resumeHeld: real.held, _todayLine: real.today });
+        if (had === null) localStorage.removeItem(key); else localStorage.setItem(key, had);
+        Object.assign(s, { lookedFirst: true, queue: [], sayUntil: 0, sayClass: 0 });
+      }
+    });
+    // Fresh-expand E9: a link guest's news (L-a) is its dream today in DREAMS' words, else
+    // its visitor seen today, else none (yesterday's dream isn't on the sensor); the
+    // journal's head carries today's dream (J-a); status shows the evening's today line,
+    // else today's dream (St-a).
+    const e9 = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const real = { dream: el._dreamToday, seen: el._visitSeen, evening: el._evening, today: el._todayLine };
+      const out = {};
+      try {
+        el._visitSeen = () => null;
+        el._dreamToday = () => ({ kind: "rainbow" });
+        out.dream = el._linkNews(s);
+        el._dreamToday = () => null;
+        out.none = el._linkNews(s);
+        el._visitSeen = () => "robin";
+        out.visitor = el._linkNews(s);
+        el._visitSeen = () => null;
+        el._dreamToday = () => ({ kind: "rainbow" });
+        s.journal = true;
+        await el._renderJournal(s);
+        out.jdream = s.status.querySelector(".jdream")?.textContent || null;
+        s.journal = false;
+        el._evening = () => true;
+        el._todayLine = () => "today I watched the sunset! ♪";
+        el._renderStatus(s, []);
+        out.evening = s.status.querySelector(".stoday")?.textContent || null;
+        el._evening = () => false;
+        el._renderStatus(s, []);
+        out.morning = s.status.querySelector(".stoday")?.textContent || null;
+      } finally {
+        Object.assign(el, { _dreamToday: real.dream, _visitSeen: real.seen, _evening: real.evening, _todayLine: real.today });
+        s.journal = false;
+        el._renderStatus(s, []);
+      }
+      return out;
+    });
+    check("fresh E9 (L-a): a link guest's news is today's dream, else today's visitor, else none",
+      e9.dream === "I dreamed about a rainbow!" && e9.none === null && e9.visitor === "a robin came to see me today ♪", JSON.stringify(e9));
+    check("fresh E9 (J-a, St-a): the journal's head has today's dream; status has the evening's today line, else the dream",
+      e9.jdream === "I dreamed about a rainbow!" && e9.evening === "today I watched the sunset! ♪" && e9.morning === "I dreamed about a rainbow!",
+      JSON.stringify(e9));
+    check("fresh E8 (A-a): back after 3 days, the look starts with a welcome and has no away note; after 5 h, none",
+      WELCOME.includes(e8.long[0]?.text) && !e8.long.some((q) => q.away) && !e8.short.some((q) => WELCOME.includes(q.text)),
+      JSON.stringify(e8));
+  }
 
   await unpinAwake(card);
   }
@@ -4940,6 +5224,130 @@ async function main() {
     await page.locator("hatch-pet-card .statusbtn").click();
     await page.waitForTimeout(400);
   }
+  // Fresh-expand E7 (Q-a): a typed teen's answer to "how was your day?" says its own
+  // reply or a base one; "tough" with random 0 says the type's.
+  {
+    const src7 = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+    const own = require("vm").runInNewContext(`(${src7.match(/\nconst PERSONA_FRESH = (\{[\s\S]*?\n\});/)[1]})`).sweet;
+    const base = require("vm").runInNewContext(`(${src7.match(/\n {2}how_day: \{ q: "how was your day\?", answers: (\{[\s\S]*?\] \}) \},/)[1]})`);
+    const e7 = await card.evaluate(async (el, own) => {
+      const s = el._slides[el._index];
+      const real = { persona: el._persona, speak: el._speak, random: Math.random };
+      const said = [];
+      el._persona = () => own;
+      el._speak = function (sl, text, ...rest) { said.push(text); return real.speak.call(this, sl, text, ...rest); };
+      const answer = (a) => {
+        el._ask(s, "how_day");
+        s.screen.querySelector(`.askday [data-answer="${a}"]`)?.click();
+      };
+      try {
+        Math.random = () => 0;
+        answer("tough");
+        Math.random = () => 0.9;
+        answer("tough");
+        Math.random = real.random;
+        for (let i = 0; i < 6; i++) answer("great");
+      } finally {
+        Object.assign(el, { _persona: real.persona, _speak: real.speak });
+        Math.random = real.random;
+        s.screen.querySelector(".askday")?.remove();
+        Object.assign(s, { asking: false, queue: [], sayUntil: 0, sayClass: 0 });
+      }
+      return said;
+    }, own);
+    // Fresh-expand E8 (LS-a): an adult 45 days old has its first trick (a spin) in its idle
+    // moves, and the month's first look says a trick line once; a teen has none.
+    const TRICK7 = require("vm").runInNewContext(src7.match(/\nconst TRICK_LINES = (\[[^\n]*\]);/)[1]);
+    const ls = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const real = { state: el._state, heard: el._channelHeard, held: el._resumeHeld };
+      const as = (stage, age) => {
+        el._state = function (sl, k) {
+          const st = real.state.call(this, sl, k);
+          return k === "sensor.life_stage" && st ? { ...st, state: stage, attributes: { ...st.attributes, age_days: age, generation: 77 } } : st;
+        };
+      };
+      const out = {};
+      try {
+        for (const k of Object.keys(localStorage)) if (k.startsWith(`hatch-trick-${s.ids.device}-77-`)) localStorage.removeItem(k);
+        as("adult", 45);
+        out.moves = el._idleMoves(s, false, false);
+        out.calmMoves = el._idleMoves(s, false, true);
+        el._channelHeard = () => true;
+        el._resumeHeld = () => false;
+        const look = () => {
+          Object.assign(s, { lookedFirst: false, queue: [], asleep: false });
+          el._firstLook(s);
+          const said = s.queue.map((q) => q.text);
+          s.queue = [];
+          return said;
+        };
+        out.first = look();
+        out.again = look();
+        as("teen", 45);
+        out.teen = el._idleMoves(s, false, false);
+      } finally {
+        Object.assign(el, { _state: real.state, _channelHeard: real.heard, _resumeHeld: real.held });
+        for (const k of Object.keys(localStorage)) if (k.startsWith(`hatch-trick-${s.ids.device}-77-`)) localStorage.removeItem(k);
+        Object.assign(s, { lookedFirst: true, queue: [], sayUntil: 0, sayClass: 0 });
+      }
+      return out;
+    });
+    check("fresh E8 (LS-a): an adult of 45 days spins in its idle moves (none when calm, none for a teen); its trick line once",
+      ls.moves.includes("spin") && !ls.calmMoves.includes("spin") && !ls.teen.includes("spin") &&
+      ls.first.some((l) => TRICK7.includes(l)) && !ls.again.some((l) => TRICK7.includes(l)), JSON.stringify(ls));
+    // Fresh-expand F3: the pet's promise. On its pinned day 0 a teen's first look says the
+    // promise; on day 4 the payoff, once a cycle, with the bigger move; a child, none.
+    const pctx = {};
+    require("vm").runInNewContext([/\nconst dayOrdinal = [^\n]*\n/, /\nconst turnHash = [\s\S]*?\n\};\n/, /\nconst PROMISE_CYCLE = [^\n]*\n/,
+      /\nconst PROMISE_TOPICS = [^\n]*\n/, /\nfunction promiseDay\([\s\S]*?\n\}\n/].map((re) => src7.match(re)[0]).join("") +
+      "this.promiseDay = promiseDay;", pctx);
+    const PROMISE = require("vm").runInNewContext(`(${src7.match(/\nconst PROMISE_LINES = (\{[\s\S]*?\n\});/)[1]})`);
+    const pdevice = await card.evaluate((el) => el._slides[el._index].ids.device);
+    let p0 = 0;
+    while (pctx.promiseDay(pdevice, new Date(2030, 0, 1 + p0, 12)).day !== 0) p0++;
+    const d0 = new Date(2030, 0, 1 + p0, 12);
+    const topic = pctx.promiseDay(pdevice, d0).topic;
+    const pr = await card.evaluate((el, { t0, t4 }) => {
+      const s = el._slides[el._index];
+      const real = el._state;
+      const as = (stage) => {
+        el._state = function (sl, k) {
+          const st = real.call(this, sl, k);
+          return k === "sensor.life_stage" && st ? { ...st, state: stage } : st;
+        };
+      };
+      const d0 = new Date(t0);
+      const d4 = new Date(t4);
+      const keys = [`hatch-promise-${s.ids.device}`, `hatch-promise-${s.ids.device}-${d0.toDateString()}`,
+        `hatch-promise-${s.ids.device}-${d4.toDateString()}`];
+      keys.forEach((k) => localStorage.removeItem(k));
+      const out = {};
+      try {
+        as("child");
+        out.child = el._promiseLook(s, d0);
+        as("teen");
+        out.day0 = el._promiseLook(s, d0);
+        out.day0again = el._promiseLook(s, d0);
+        out.day4 = el._promiseLook(s, d4);
+        localStorage.removeItem(keys[2]);
+        out.day4again = el._promiseLook(s, d4); // paid this cycle
+        s.pet.classList.remove("bighop", "spin");
+        if (out.day4?.move) el._promiseMove(s, out.day4.move);
+        out.cls = [...s.pet.classList].filter((c) => ["bighop", "spin"].includes(c));
+      } finally {
+        el._state = real;
+        keys.forEach((k) => localStorage.removeItem(k));
+      }
+      return out;
+    }, { t0: d0.getTime(), t4: new Date(2030, 0, 5 + p0, 12).getTime() });
+    check("fresh F3: a teen's day 0 says its promise once; day 4 the payoff once a cycle, with the bigger move; a child none",
+      pr.child === null && pr.day0?.line === PROMISE[topic][0] && pr.day0again === null && pr.day4?.line === PROMISE[topic][1] &&
+      pr.day4again === null && (topic === "song" || pr.cls.length === 1), JSON.stringify({ topic, ...pr }));
+    check("fresh E7 (Q-a): how_day's tough answer says the type's reply (random 0) or a base one (0.9); great says either",
+      e7[0] === own.reply_tough[0] && base.tough.includes(e7[1]) &&
+      e7.slice(2).every((l) => [...own.reply_great, ...base.great].includes(l)), JSON.stringify(e7));
+  }
 
   }
   if (enter("types")) {
@@ -4992,6 +5400,12 @@ async function main() {
     }
     check("personality lines: all eight types, every key, 2-3 lines, 40 at most, no nagging, no asking, wishes credit nobody",
       bad.length === 0, bad.join(" | "));
+    // Fresh-expand copy (E1): every table in the card's fresh-expand block is named in
+    // COPY_TABLES (scripts/copy-scan.js) and scanned: no nagging, 40 at most with the
+    // longest fill, asks only in a question slot, no digits.
+    const freshScan = require("./copy-scan.js").scanFreshCopy(src);
+    check(`fresh-expand copy: ${freshScan.tables.length} tables, ${freshScan.count} lines, every table scanned, 40 at most, no nagging, no asking`,
+      freshScan.bad.length === 0 && freshScan.tables.length > 0, freshScan.bad.join(" | "));
     // The basket's reveal lines (visitors v2 §7, V1-V3): the same scan over every find the
     // reveal can show (not the gift-only ones) and each visitor's own left find, 40 at most
     // (no margin: "the nighthawk left a nighthawk feather ♪" is 40). V4 is BABY.find, above.
@@ -5023,6 +5437,9 @@ async function main() {
       const s = el._slides[el._index];
       const realState = el._state;
       const realRandom = Math.random;
+      // F3's practice takes an idle on its days (by the device: any run), and a draw.
+      const realPractice = el._promisePractice;
+      el._promisePractice = () => false;
       const me = el._hass.user.id;
       const keep = { voicedAt: s.voicedAt, queue: s.queue, catchCount: s.catchCount, asleep: s.asleep, calling: s.calling };
       const kept = { shared: localStorage.getItem("hatch-shared-screen"), baby: localStorage.getItem(`hatch-baby-talk-${me}`) };
@@ -5063,6 +5480,7 @@ async function main() {
         return await new Function("el", "s", "t", "arg", `return (${fn})(el, s, t, arg);`)(el, s, t, arg);
       } finally {
         el._state = realState;
+        el._promisePractice = realPractice;
         Math.random = realRandom;
         s.mine = keptMine;
         for (const [k, v] of [["hatch-shared-screen", kept.shared], [`hatch-baby-talk-${me}`, kept.baby]]) {
@@ -5091,6 +5509,8 @@ async function main() {
       const clearToday = () => { for (const k of Object.keys(localStorage)) if (/^hatch-today-/.test(k)) localStorage.removeItem(k); };
       try {
         el._visitSeen = () => null;
+        // A live grant earlier may have told the wish today (E6 W-b): that skips the wish.
+        localStorage.removeItem(`hatch-todaywish-${s.ids?.device}-${new Date().toDateString()}`);
         t.pet("adult", "mellow", 6, { wish: { kind: "bath", granted: true } });
         out.wish = el._todayLine(s);
         el._dayBits = (sl, since, care) => (care === false ? [] : ["had a meal"]);
@@ -5575,6 +5995,45 @@ async function main() {
   }
   if (enter("sharedscreen")) {
   await pinAwake(card, "sharedscreen");
+  // Fresh-expand E8: a best friend's weekly line (B-a) never on a shared screen; a
+  // visitor stays twice as long there (Sh-a).
+  {
+    const e8s = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const mine = s.mine;
+      const favKey = `hatch-fav-${s.ids.device}`;
+      const had = { fav: localStorage.getItem(favKey), shared: localStorage.getItem("hatch-shared-screen") };
+      const out = {};
+      try {
+        s.mine = { ...(mine || {}), bond: { level: 10 } };
+        localStorage.removeItem(favKey);
+        localStorage.setItem("hatch-shared-screen", "on");
+        out.sharedFav = el._favLine(s);
+        const v = { id: "snail", name: "snail", walk: true, lines: ["hi"] };
+        const stay = () => {
+          const V = el._visitorStart(s, v, { count: false });
+          const ms = V.until - Date.now();
+          el._visitorEnd(s);
+          return ms;
+        };
+        out.shared = stay();
+        localStorage.removeItem("hatch-shared-screen");
+        out.personal = stay();
+        out.personalFav = el._favLine(s);
+        out.again = el._favLine(s);
+      } finally {
+        s.mine = mine;
+        if (had.fav === null) localStorage.removeItem(favKey); else localStorage.setItem(favKey, had.fav);
+        if (had.shared === null) localStorage.removeItem("hatch-shared-screen"); else localStorage.setItem("hatch-shared-screen", had.shared);
+        Object.assign(s, { flairUntil: 0, visitUntil: 0 });
+      }
+      return out;
+    });
+    check("fresh E8 (B-a): bond 10 gets its weekly line on a personal screen, once a week, never on a shared one",
+      e8s.sharedFav === null && typeof e8s.personalFav === "string" && e8s.again === null, JSON.stringify(e8s));
+    check("fresh E8 (Sh-a): a visitor stays longer on a shared screen (its stay twice over)",
+      e8s.shared - e8s.personal >= 2900, JSON.stringify(e8s));
+  }
   // 5b. FA: turning on "shared screen" clears every personal line, typed or
   // typing, on every slide of every card on the page and in every tab (privacy P1).
   {
@@ -6875,6 +7334,9 @@ async function main() {
   await calm();
   await page.waitForTimeout(800);
   await pinAwake(card, "pat");
+  // The coin and the sweet spot (fresh-expand P-a, P-b) pinned to the plain line here;
+  // the fresh checks below set their own.
+  await card.evaluate(() => { window.__patRandom ||= Math.random; Math.random = () => 0.9; });
   await card.evaluate((el) => {
     el._slides.forEach((s) => { s.patAt = 0; s.queue = []; s.sayUntil = 0; s.sayClass = 0; });
     el.__realMoving ||= el._moving;
@@ -7009,6 +7471,61 @@ async function main() {
   check("each mood pats with its C10 line (bored and hungry say the content line)",
     spoke(moodLines.excited, PAT.excited) && spoke(moodLines.sleepy, PAT.sleepy) && spoke(moodLines.sick, PAT.sick) &&
     spoke(moodLines.bored, PAT.content) && spoke(moodLines.hungry, PAT.content), JSON.stringify(moodLines));
+  // Fresh-expand E2: a typed teen's spoken pats take turns with its own two lines (P-a),
+  // never the same twice running, and now and then the sweet spot with a hop (P-b);
+  // random 0 is the sweet spot; a sleepy pat keeps its one line.
+  {
+    const vm = require("vm");
+    const src = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+    const FRESH = vm.runInNewContext(`(${src.match(/const PERSONA_FRESH = (\{[\s\S]*?\n\});/)[1]})`);
+    const spot = src.match(/\nconst PAT_SPOT = "([^"]+)";/)[1];
+    const own = FRESH.mellow.pat;
+    const fresh = await card.evaluate((el, { own }) => {
+      const s = el._slides[el._index];
+      const real = { line: el._line, persona: el._persona, state: el._state, mood: s.moodState };
+      const said = [];
+      el._line = function (sl, cls, text, ...rest) { said.push(text); return real.line.call(this, sl, cls, text, ...rest); };
+      el._persona = () => ({ pat: own });
+      el._state = function (sl, key) {
+        const st = real.state.call(this, sl, key);
+        return key === "sensor.life_stage" && st ? { ...st, state: "teen" } : st;
+      };
+      const pat = () => {
+        Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+        s.pet.classList.remove("greethop");
+        el._pat(s, { detail: 0, stopPropagation() {} });
+      };
+      const out = {};
+      try {
+        s.moodState = "content";
+        s.lastPick = {};
+        Math.random = window.__patRandom;
+        for (let i = 0; i < 40; i++) pat();
+        out.forty = said.splice(0);
+        Math.random = () => 0;
+        s.lastPick = {};
+        pat();
+        out.spot = said.splice(0);
+        out.hop = s.pet.classList.contains("greethop");
+        s.moodState = "sleepy";
+        pat();
+        out.sleepy = said.splice(0);
+      } finally {
+        Object.assign(el, { _line: real.line, _persona: real.persona, _state: real.state });
+        Math.random = () => 0.9;
+        s.moodState = real.mood;
+        Object.assign(s, { patAt: 0, queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+      }
+      return out;
+    }, { own });
+    const allowed = new Set([...own, PAT.content, spot]);
+    const runs = fresh.forty.filter((l, i) => i && l === fresh.forty[i - 1]);
+    check("fresh pat (P-a): 40 spoken pats on a typed teen give its lines and the mood line, never twice running",
+      fresh.forty.length === 40 && fresh.forty.every((l) => allowed.has(l)) && runs.length === 0 &&
+      own.every((l) => fresh.forty.includes(l)) && fresh.forty.includes(PAT.content), JSON.stringify(fresh.forty));
+    check("fresh pat (P-b): random 0 is the sweet spot, with a hop", fresh.spot.join() === spot && fresh.hop, JSON.stringify(fresh));
+    check("fresh pat: a sleepy pat keeps its one line", fresh.sleepy.join() === PAT.sleepy, JSON.stringify(fresh.sleepy));
+  }
   // Six spoken pats don't count toward the catchphrase.
   await patReset();
   const cc0 = (await patState()).catchCount;
@@ -7168,6 +7685,7 @@ async function main() {
     if (conn.__realSend) conn.sendMessagePromise = conn.__realSend;
     delete conn.__realSend;
     delete el.__calls;
+    if (window.__patRandom) Math.random = window.__patRandom;
   });
   await patReset();
   await unpinAwake(card);
@@ -7315,6 +7833,34 @@ async function main() {
     });
     check(`react: ${stage} a pat during a reaction speaks, keeps its move, adds no perk`,
       pat.cls.includes("greethop") && !pat.cls.includes("perk") && pat.said.length > 0 && pat.live, JSON.stringify(pat));
+    // Fresh-expand P-c: a typed teen's praise says one of its praise lines or "♥", never
+    // the same twice running.
+    if (stage === "teen") {
+      const vm = require("vm");
+      const src = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+      const own = vm.runInNewContext(`(${src.match(/const PERSONA_FRESH = (\{[\s\S]*?\n\});/)[1]})`).starry.praise;
+      const praised = await card.evaluate((el, own) => {
+        const s = el._slides[el._index];
+        const real = { line: el._line, persona: el._persona };
+        const said = [];
+        el._line = function (sl, cls, text, ...rest) { said.push(text); return real.line.call(this, sl, cls, text, ...rest); };
+        el._persona = () => ({ praise: own });
+        try {
+          s.lastPick = {};
+          for (let i = 0; i < 20; i++) {
+            Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+            el._react(s, { action: "praise", result: "ok", at: Date.now() / 1000 });
+          }
+        } finally {
+          Object.assign(el, { _line: real.line, _persona: real.persona });
+          Object.assign(s, { queue: [], sayUntil: 0, sayClass: 0, poseUntil: 0 });
+        }
+        return said;
+      }, own);
+      check("react: a typed teen's praise says its praise lines or ♥, never twice running",
+        praised.length === 20 && praised.every((l) => [...own, "♥"].includes(l)) &&
+        praised.every((l, i) => !i || l !== praised[i - 1]) && own.some((l) => praised.includes(l)), JSON.stringify(praised));
+    }
     // P3 praise moves, live: a plucky pet's win beat in a game (ms 900) is a perk, back in the
     // middle before the next round (1000 ms); bouncy's praise hop is a greethop, which
     // a hass update (_render toggles "hop") leaves running.
@@ -7552,7 +8098,7 @@ async function main() {
     el._booting = false;
     el._visitShown = { s, at: Date.now() - 60000 };
     el._linkEndedAt = undefined;
-    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
+    for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-") || k.startsWith("hatch-visitfriends-")) localStorage.removeItem(k);
     return { world: s.worldKey, device: s.ids?.device, key: `hatch-visit-${s.ids?.device}-${new Date().toDateString()}` };
   }, due);
   const where = await vprep(null);
@@ -7740,8 +8286,9 @@ async function main() {
   check("visitors: the greet falls back to the excited frames when the waves failed to load",
     fb.skip || (fb.frames?.length && fb.frames.every((f) => !/_wave_/.test(f))), JSON.stringify(fb));
   const added = greeted.keys.filter((k) => !before.includes(k));
-  check("visitors: nothing sent (no callService or callWS), only hatch-visit-* kept",
-    greeted.calls.length === 0 && added.length === 1 && added[0].startsWith("hatch-visit-"), JSON.stringify({ calls: greeted.calls, added }));
+  check("visitors: nothing sent (no callService or callWS), only hatch-visit-* kept (and E3's friends tally)",
+    greeted.calls.length === 0 && added.filter((k) => k.startsWith("hatch-visit-")).length === 1 &&
+    added.every((k) => /^hatch-visit(-|seen-|friends-)/.test(k)), JSON.stringify({ calls: greeted.calls, added }));
   await card.evaluate((el) => { el._hass.callService = el.__realCalls.svc; el._hass.callWS = el.__realCalls.ws; });
   // A kept line arriving mid-visit keeps its bubble: the greet is skipped.
   await vprep(V0);
@@ -7809,6 +8356,141 @@ async function main() {
     return { text };
   }, { key: babyKey, ms: (V0.in || 1400) + 1300 });
   check("visitors: a baby says baby talk (BABY.visit)", VBABY.some((l) => baby.text.includes(l)), JSON.stringify(baby));
+  // Fresh-expand E3 (V-a): a visitor seen here on 3 days is a friend: half its greets are
+  // its friend lines (random stubbed to the friend side). At 2, never. Two starts on one
+  // day add 1. A new generation's tally starts at 0 (its key carries the generation).
+  {
+    const FRIENDS = require("vm").runInNewContext(`(${vsrc.match(/\nconst VISIT_FRIENDS = (\{[\s\S]*?\n\});/)[1]})`);
+    const friendCase = async (n) => {
+      await vprep(V0);
+      return card.evaluate(async (el, { id, n, ms }) => {
+        const s = el._slides[el._index];
+        const key = el._visitFriendKey(s);
+        const real = Math.random;
+        // Counted already today (so this start adds nothing), at n days.
+        localStorage.setItem(key, JSON.stringify({ [id]: { n, day: el._visitDay(s).toDateString() } }));
+        Math.random = () => 0.2;
+        try {
+          el.__vtick(s);
+          await new Promise((r) => setTimeout(r, ms));
+        } finally {
+          Math.random = real;
+        }
+        const out = { text: s.bubble.textContent, tally: JSON.parse(localStorage.getItem(key) || "{}") };
+        el._visitorEnd(s);
+        return out;
+      }, { id: V0.id, n, ms: (V0.in || 1400) + 1300 });
+    };
+    const three = await friendCase(3);
+    const two = await friendCase(2);
+    check(`fresh E3: a visitor seen on 3 days greets as a friend (${V0.id})`,
+      FRIENDS[V0.id].some((l) => three.text.includes(l)), JSON.stringify(three));
+    check("fresh E3: at 2 days, never a friend line", !FRIENDS[V0.id].some((l) => two.text.includes(l)) && two.text.length > 0,
+      JSON.stringify(two));
+    const counted = await card.evaluate((el, v) => {
+      const s = el._slides[el._index];
+      const key = el._visitFriendKey(s);
+      localStorage.removeItem(key);
+      el._visitFriendCount(s, v);
+      el._visitFriendCount(s, v);
+      const one = JSON.parse(localStorage.getItem(key) || "{}")[v.id]?.n;
+      // A new generation: another key, and the old one gone.
+      const real = el._state;
+      el._state = function (slide, k) {
+        const st = real.call(this, slide, k);
+        return k === "sensor.life_stage" && st ? { ...st, attributes: { ...st.attributes, generation: (st.attributes?.generation || 1) + 1 } } : st;
+      };
+      const next = el._visitFriendKey(s);
+      const fresh = el._visitFriends(s)[v.id]?.n || 0;
+      el._visitFriendCount(s, v);
+      const after = { oldGone: localStorage.getItem(key) === null, nextN: JSON.parse(localStorage.getItem(next) || "{}")[v.id]?.n };
+      el._state = real;
+      localStorage.removeItem(next);
+      return { one, differ: next !== key, fresh, ...after };
+    }, V0);
+    check("fresh E3: two starts on one day add 1; a new generation reads 0, and its key replaces the old",
+      counted.one === 1 && counted.differ && counted.fresh === 0 && counted.oldGone && counted.nextN === 1, JSON.stringify(counted));
+  }
+  // Fresh-expand E10 (V-b, V-c), card only: on a pinned pair day a friend of the planned
+  // visitor comes too (two visitors, a pair line), nothing sent and its friend not counted;
+  // on a pinned no-visit guest day a visitor from another world comes in its window, says
+  // its home's line, and visitseen isn't written; a dark screen gets only night guests.
+  {
+    const PAIRS = require("vm").runInNewContext(vsrc.match(/\nconst PAIR_LINES = (\[[^\n]*\]);/)[1]);
+    const GUESTS = require("vm").runInNewContext(`(${vsrc.match(/\nconst VISIT_GUEST = (\{[\s\S]*?\n\});/)[1]})`);
+    const host = list.find((v) => !v.cross && list.some((x) => x.id !== v.id && x.hours === v.hours && !x.cross));
+    if (host) {
+      await vprep(host);
+      const pair = await card.evaluate(async (el, { ms }) => {
+        const s = el._slides[el._index];
+        const real = { rare: el._rareDay, svc: el._hass.callService, ws: el._hass.callWS };
+        const calls = [];
+        el._hass.callService = (...a) => { calls.push(a[1]); return real.svc.apply(el._hass, a); };
+        el._hass.callWS = (m) => { calls.push(m?.type); return real.ws.call(el._hass, m); };
+        el._rareDay = (sl, kind) => kind === "pair";
+        try {
+          el.__vtick(s);
+          await new Promise((r) => setTimeout(r, ms));
+          const out = { vis: [...s.seasonBox.querySelectorAll(".vis")].map((v) => v.dataset.visitor), said: s.bubble.textContent,
+            tally: el._visitFriends(s), calls };
+          el._visitorEnd(s);
+          out.after = s.seasonBox.querySelectorAll(".vis").length;
+          return out;
+        } finally {
+          Object.assign(el, { _rareDay: real.rare });
+          Object.assign(el._hass, { callService: real.svc, callWS: real.ws });
+        }
+      }, { ms: (host.in || 1400) + 1600 });
+      check("fresh E10 (V-b): a pair day brings a second visitor of the world and a pair line; both go; nothing sent; only the planned one counted",
+        pair.vis.length === 2 && new Set(pair.vis).size === 2 && PAIRS.includes(pair.said) && pair.after === 0 &&
+        pair.calls.length === 0 && Object.keys(pair.tally).length === 1, JSON.stringify(pair));
+    }
+    await vprep(null);
+    const guest = await card.evaluate(async (el) => {
+      const s = el._slides[el._index];
+      const real = { rare: el._rareDay, house: s.house };
+      const seenKey = `hatch-visitseen-${s.ids?.device}`;
+      const seenBefore = localStorage.getItem(seenKey);
+      const out = {};
+      el._rareDay = (sl, kind) => kind === "guest";
+      s.house = { ...(s.house || {}), visit: null };
+      const at = (h) => new Date(new Date().setHours(h, 30, 0, 0));
+      try {
+        s.screen.classList.remove("night", "dim");
+        out.day = el._visitorGuest(s, at(10));
+        out.dayLate = el._visitorGuest(s, at(14));
+        s.screen.classList.add("night");
+        out.night = el._visitorGuest(s, at(20));
+        out.nightAtDay = el._visitorGuest(s, at(10));
+        s.screen.classList.remove("night");
+        s.house = { ...s.house, visit: { id: "x", day: "2026-01-01", from: 0, until: 0 } };
+        out.planned = el._visitorGuest(s, at(10));
+        s.house = { ...s.house, visit: null };
+        if (out.day) {
+          el._visitorStart(s, out.day.v, { world: out.day.world, guest: true });
+          await new Promise((r) => setTimeout(r, (out.day.v.in || 1400) + 1300));
+          out.shown = [...s.seasonBox.querySelectorAll(".vis")].map((v) => v.dataset.visitor);
+          out.said = s.bubble.textContent;
+          el._visitorEnd(s);
+        }
+        out.seenSame = localStorage.getItem(seenKey) === seenBefore;
+        out.home = s.worldKey;
+      } finally {
+        el._rareDay = real.rare;
+        s.house = real.house;
+        s.screen.classList.remove("night");
+      }
+      const brief = (g) => g && { id: g.v.id, world: g.world, hours: g.v.hours };
+      return { ...out, day: brief(out.day), dayLate: brief(out.dayLate), night: brief(out.night), nightAtDay: brief(out.nightAtDay),
+        planned: brief(out.planned) };
+    });
+    check("fresh E10 (V-c): a no-visit guest day: another world's day visitor 09-12 (none at 14, none on a visit day), its home's line, visitseen untouched",
+      guest.day && guest.day.world !== guest.home && guest.day.hours === "day" && !guest.dayLate && !guest.planned &&
+      guest.shown?.[0] === `${guest.day.world}/${guest.day.id}` && guest.said === GUESTS[guest.day.world] && guest.seenSame,
+      JSON.stringify(guest));
+    check("fresh E10 (V-c): a dark screen gets only night guests, 19-22",
+      guest.night?.hours === "night" && guest.night.world !== guest.home && !guest.nightAtDay, JSON.stringify(guest));
+  }
   // The catch-up (owner, 2026-10-31): today's visitor's window over and the visit
   // never played here, the next first look says "a <name> came by today ♪" once
   // (flavour, last, only with room), using up the day's flag so the visit can't play.
@@ -8732,6 +9414,39 @@ async function main() {
       Object.values(strips).length === 6 && Object.values(strips).every((g) => g.every(Boolean)),
       Object.keys(strips).join(" "));
     await calm();
+  }
+  // Fresh-expand E4 (F-a, F-b): a feed at 08:00 says a breakfast line or its "yum"; from
+  // 22 to 05, "yum" only; the crumb line (random 0) on a day a visitor came by, once a day.
+  {
+    const src4 = fs.readFileSync(path.join(__dirname, "..", "custom_components", "virtual_pet", "frontend", "hatch-pet-card.js"), "utf8");
+    const MEALS = require("vm").runInNewContext(`(${src4.match(/\nconst MEAL_LINES = (\{[\s\S]*?\n\});/)[1]})`);
+    const meals = await card.evaluate((el) => {
+      const s = el._slides[el._index];
+      const real = { seen: el._visitSeen, random: Math.random };
+      const out = { breakfast: [], late: [] };
+      try {
+        el._visitSeen = () => null;
+        for (let i = 0; i < 30; i++) out.breakfast.push(el._mealLine(s, "seeds", 8)?.[0]);
+        for (let i = 0; i < 10; i++) out.late.push(el._mealLine(s, "seeds", 23)?.[0]);
+        out.noFoodLate = el._mealLine(s, null, 23);
+        const crumbKey = `hatch-crumb-${s.ids?.device}-${new Date().toDateString()}`;
+        localStorage.removeItem(crumbKey);
+        el._visitSeen = () => "snail";
+        Math.random = () => 0;
+        out.crumb = [el._mealLine(s, "seeds", 12)?.[0], el._mealLine(s, "seeds", 12)?.[0]];
+        localStorage.removeItem(crumbKey);
+      } finally {
+        Object.assign(el, { _visitSeen: real.seen });
+        Math.random = real.random;
+      }
+      return out;
+    });
+    const yum = (l) => /seeds/.test(l || "");
+    check("fresh E4 (F-a): feeds at 08:00 say breakfast lines or the food's yum; late at night, yum only",
+      meals.breakfast.every((l) => MEALS.breakfast.includes(l) || yum(l)) && meals.breakfast.some((l) => MEALS.breakfast.includes(l)) &&
+      meals.late.every(yum) && meals.noFoodLate === null, JSON.stringify(meals));
+    check("fresh E4 (F-b): the crumb line for today's visitor, once a day",
+      meals.crumb[0] === "saving a crumb for the snail ♪" && meals.crumb[1] !== meals.crumb[0], JSON.stringify(meals.crumb));
   }
 
   }
