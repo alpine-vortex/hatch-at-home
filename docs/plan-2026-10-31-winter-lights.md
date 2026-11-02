@@ -228,4 +228,10 @@ What shipped, where it differs from the plan above:
   (tiles: the wire meets both edges at row 0), frost, mug, light_wreath, twinkle_1/2. The same script snaps the
   hare's and knit cap's sampled mauve outline to the house outline colour.
 - Checked on the bench (`--preset winter`): hats seated, lamps day/night, the string, the hare, mono night (no fails).
-  `costume-preview.js winter` (the earmuffs' sink) still wants a run on HA.
+- The recipe's `check.py` (size, hard alpha, 4x4 blocks, anchoring): all pass except "not on <edge>" where the redraw is
+  a little smaller than its stand-in's box (knit_cap, star_cap, earmuffs narrower; paper_lantern and hare not to the
+  top; twinkle_1/2 trail a cell shorter). Every bottom edge the hats, lamps and hare stand on holds.
+- **Still open: the earmuffs' sink and skip list.** A bench pass of the earmuffs on all 30 species (baby and adult,
+  sink 9) shows them riding small on the crown rather than over the ears. A skip is proposed for the earless or headless:
+  bananaslug, ballpython, firefly, hermitcrab, octopus, tarantula. The sink is the card's to tune
+  (`costume-preview.js winter` or a bench `costume` shot list).
