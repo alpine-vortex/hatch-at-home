@@ -446,7 +446,7 @@ const LINK_AFTER_MS = [600000, 1500000]; // the infrared link: 10-25 min after t
 // untouched wall tablet. Later links keep LINK_AFTER_MS.
 // An idle line about a neighbour on the shelf (gaps-seams 5b), 1 in 6 idle lines.
 const NEIGHBOUR_ODDS = 1 / 6;
-const NEIGHBOUR_LINES = [(n) => `wonder what ${n} is up to ♪`, (n) => `*waves toward ${n}*`, (n) => `I hope ${n} is having a nice day`];
+const NEIGHBOUR_LINES = [(n) => `wonder what ${n} is up to ♪`, (n) => `*waves toward ${n}*`, (n) => `i hope ${n} is having a nice day`];
 const LINK_FIRST_MS = [60000, 180000];
 const LINK_TOUCHED_MS = 300000;
 // A link already today on this browser (oncePerDay's `hatch-link-<pair>-<day>` keys).
@@ -845,6 +845,7 @@ const BUBBLE_POP_ODDS = 1 / 8; // a clean's chance of one bubble drifting up and
 const mealPart = (hour) => (hour >= 5 && hour < 11 ? "breakfast" : hour >= 11 && hour < 16 ? "lunch" : hour >= 16 && hour < 22 ? "supper" : null);
 const VISIT_IN_MS = 1400; // to arrive (or leave), unless the visitor says
 const VISIT_STAY_MS = 3000; // at the edge, past the greet's start
+const VISIT_SWIPE_GRACE_MS = 600; // a swipe away and back within it keeps the visitor
 const VISIT_CALM_MS = 5000; // reduced motion: still, then gone
 const VISIT_CHECK_MS = 20000; // between looks for a visit
 const VISIT_SHOWN_MS = 10000; // the slide on show this long first
@@ -1270,7 +1271,7 @@ const PERSONA = {
     visit: ["a visitor! what an honour", "do come in, friend ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `ah, ${n}! a delight ♥`, (n) => `${n}! what an honour ♥`],
     link_guest: [(n) => `${n}! how splendid ♥`],
-    link_kindred: [(n) => `${n}! two of a kind, you and I ♥`, "such a grand pair we make ♥"],
+    link_kindred: [(n) => `${n}! two of a kind, you and i ♥`, "such a grand pair we make ♥"],
   },
   plucky: {
     reveal: ["I'm the plucky kind! hmph ♥", "plucky, that's me! ♥"],
@@ -1438,7 +1439,7 @@ const VISIT_FRIENDS = {
 // S-a (E4): a morning's wake line, in turns; the last one only on a day with a dream
 // (on another day its turn says the first).
 const WAKE_LINES = ["*yaaawn*", "*yawn* ...morning already ♪", "*stretch* mm, cozy night ♪", "*yaaawn* ...hi, day ♪",
-  "*blink blink* morning ♪", "*yawn* I had the best dream"];
+  "*blink blink* morning ♪", "*yawn* i had the best dream"];
 // S-b: lights out after a visitor seen here today (by its name), else after today's sunset.
 const NIGHT_VISITOR = [(v) => `night, little ${v} ♪`, (v) => `sweet dreams, ${v} ♪`];
 const NIGHT_SUNSET = "night... what a nice sunset ♥";
@@ -1672,6 +1673,7 @@ const STATUS_COPY = {
   eggCracking: "cracking! ♥", // 6 or fewer
   tileRaised: (name) => `${name}! my old pal ♥`, // F14 (FM 2026-11-02: 40 with the longest name)
   tileUnmet: "not met one of those yet",
+  friendsHint: "visitors and neighbours this week ♪", // UX8 F9 (FM 2026-11-02, owner delegated): a tap on the friends row
 };
 // Talking with the pet, UX fix 3 (review 3, F11/F12/F14; copy APPROVED by the first mate
 // 2026-11-02, owner delegated): the blanket and the fan answered, the lay's "sure?" in the
@@ -3441,10 +3443,20 @@ const STYLE = `
   .visit .vguest.greethop { animation: hop .7s ease-in-out 2; }
   @keyframes ir-in { from { translate: 160% 0; } }
   @keyframes ir-out { to { translate: 160% 0; } }
-  .visit .vsay { position: absolute; right: 5%; top: 27%; max-width: 46%; padding: 5px 9px; border-radius: 10px;
+  /* The guest came from the left (UX8 F5): the visit is mirrored, the guest at 30% facing
+     right, the host on the right facing left, the reply on the left. */
+  .visit.left .vguest { left: 30%; animation-name: ir-in-l; }
+  .visit.left .vguest.greethop { animation: hop .7s ease-in-out 2; }
+  .visit.left .vguest.out { animation: ir-out-l .5s steps(5, end) forwards; }
+  @keyframes ir-in-l { from { translate: -160% 0; } }
+  @keyframes ir-out-l { to { translate: -160% 0; } }
+  .visit.left .vsay { right: auto; left: 5%; }
+  .visit .vsay { position: absolute; right: 5%; top: 27%; max-width: 62%; padding: 5px 9px; border-radius: 10px;
     background: #fff; color: #2a2a2a; font-size: 13px; line-height: 1.25; }
+  ha-card.bigtext .visit .vsay { font-size: 15px; } /* UX8 F3 */
   .screen.linking .perch { display: none; }
   .pet.linking { translate: -43% 0; transition-duration: .5s; }
+  .screen.linkleft .pet.linking { translate: 43% 0; }
   .speck { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff6c9;
     box-shadow: 0 0 6px 2px rgba(255,240,170,.8); top: 45%; z-index: 2; pointer-events: none;
     animation: speck 2.6s ease-in-out forwards; }
@@ -3577,9 +3589,10 @@ const STYLE = `
   .screen:has(> .game:not([hidden])) .bubble { max-width: 54%; }
   /* A narrow card: status rows fit four hearts. */
   .compact .row { grid-template-columns: 16px 70px minmax(0, 1fr); gap: 5px; }
-  .compact .hearts img { width: 14px; height: 14px; }
+  .compact .hearts img { flex-basis: 14px; width: 14px; }
   /* Every row: an icon slot (maybe empty), the label, the value; all on one grid. */
   .row { display: grid; grid-template-columns: 18px 84px minmax(0, 1fr); align-items: center; gap: 6px; }
+  ha-card:not(.bigtext) .porthole .row { grid-template-columns: 16px 60px minmax(0, 1fr); gap: 5px; } /* the rim cuts the value column (UX8 F7) */
   .bar { height: 9px; border: 2px solid #2f3a24; padding: 1px; }
   .bar div { height: 100%; background: #2f3a24; }
   .hearts { letter-spacing: 2px; }
@@ -3745,7 +3758,8 @@ const STYLE = `
   .screen .status img { position: static; } /* not scene sprites */
   .row .picon { width: 18px; height: 18px; }
   .hearts { display: flex; gap: 3px; }
-  .hearts img { width: 18px; height: 18px; image-rendering: pixelated; }
+  /* The hearts shrink to the value column (UX8 F7): five of them clipped in the porthole at 300. */
+  .hearts img { flex: 0 1 18px; min-width: 0; width: 18px; height: auto; aspect-ratio: 1; image-rendering: pixelated; }
   /* A cap is a domed button cut on the grid (_mould): its face is the cap's own
      background, its side (below the box) and the light on it are pseudo-elements, and
      it sinks two cells when pressed. */
@@ -4595,6 +4609,12 @@ class HatchPetCard extends HTMLElement {
       // A game on show keeps its screen: a stray tap must not end it unseen (the
       // Status button still does, on purpose).
       if (s.game) return;
+      // A tap on a visit in progress is a pat on the host, not the Status button: it
+      // would end the hello (UX8 F1).
+      if (s.linking) {
+        if (!this._swiped) this._perk(s);
+        return;
+      }
       // A question's chips take no stray tap (F3); a tap right after an answer is its
       // double tap, not the Status button (F2), so the pet's reply is seen.
       if (this._questionOn(s) || Date.now() - (s.answeredAt || 0) < CONFIRM_GAP_MS) return;
@@ -5146,6 +5166,12 @@ class HatchPetCard extends HTMLElement {
       this._stopTyping(x);
       if (x.laySheet && i !== to) this._closeLay(x); // the lay sheet stays with its pet
       this._sceneEnd(x); // a swipe ends a care scene, showing how things are now
+      if (x.visitor && i !== to) { // a world visitor goes too, after a grace: a slip of the finger keeps it (UX8 F11)
+        const V = x.visitor;
+        setTimeout(() => {
+          if (x.visitor === V && this._slides[this._index] !== x) this._visitorEnd(x);
+        }, VISIT_SWIPE_GRACE_MS);
+      }
       if (x.picker) { // and leaves the shell picker unsaved: the sheet again
         this._closePicker(x);
         if (x.screen.classList.contains("show-status")) this._renderStatus(x, this._state(x, "sensor.last_care")?.attributes.log || []);
@@ -5876,6 +5902,7 @@ class HatchPetCard extends HTMLElement {
   _toggleStatus(s, lay = false) {
     const open = !s.screen.classList.contains("show-status");
     const wasSettings = !open && s.settings && !s.laySheet;
+    if (open && this._link?.host === s) this._linkEnd(); // the guest never stands over the page (UX8 F1)
     if (open) this._stopTyping(s); // the bubble hides: the line is said whole
     if (open && s.game) this._quitGame(s, null); // the sheet covers it: nobody plays it unseen
     s.screen.classList.toggle("show-status", open);
@@ -8660,7 +8687,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
         ? `<span>♥ came true!</span>` : `<span>♡ ${escape(this._wishLine(stageAttrs.wish, s)[1])}</span>`) : ""}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
-      ${social > 0 && !isEgg ? row(null, "friends", socialHearts(social)) : ""}
+      ${social > 0 && !isEgg ? row("stat_heart_full", "friends", socialHearts(social)).replace('class="row"', 'class="row friendsrow" role="button" tabindex="0"') : ""}
       ${row("icon_feed", "hunger", hearts(value("hunger"), FEED_FULL_AT))}
       ${row("icon_play", "happy", hearts(value("happiness")))}
       ${row("stat_energy", "energy", bar(value("energy")))}
@@ -8679,6 +8706,17 @@ class HatchPetCard extends HTMLElement {
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
     if (!this._setStatus(s, html)) return;
+    // The friends row says what it counts (UX8 F9); the tap is not a tap on the screen behind.
+    const friends = s.status.querySelector(".friendsrow");
+    friends?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const at = friends.getBoundingClientRect(); // the note must not cover the row (as _tapped)
+      this._tapRect = { top: at.top, bottom: at.bottom, at: Date.now() };
+      this._statusMessage(s, STATUS_COPY.friendsHint);
+    });
+    friends?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); friends.click(); }
+    });
     const head = s.status.querySelector(".whohead");
     if (head) this._headCrop(s, head, 14, 3);
     this._journalLink(s, true);
@@ -11411,6 +11449,7 @@ class HatchPetCard extends HTMLElement {
   _visitorStart(s, v, { ltr = Math.random() < 0.5, count = true, world = s.worldKey, guest = false } = {}) {
     this._visitorEnd(s);
     if (count && !guest) this._visitFriendCount(s, v);
+    if (count && !guest && !v.cross) this._visitorReport(s);
     const isCalm = calm();
     const inMs = v.in || (v.cross ? 1800 : VISIT_IN_MS);
     const stay = (v.stay || VISIT_STAY_MS) * (sharedScreen() ? 2 : 1); // a shared screen: longer (E8 Sh-a)
@@ -11441,7 +11480,9 @@ class HatchPetCard extends HTMLElement {
       if (this._visitorLive(s)) fn();
       else this._visitorEnd(s);
     }, ms));
-    if (!isCalm && !v.cross) at(inMs, () => this._look(s, 900));
+    // The art faces right, so only a visitor on the left is faced (UX8 F2): held through
+    // the greet and the stay, never turned away from one coming in on the right.
+    if (!isCalm && !v.cross && ltr) at(inMs, () => this._look(s, greetAt + stay - inMs));
     // A friend of its world along, now and then (E10 V-b): the other side, a little behind.
     const pal = !guest && this._visitorPair(s, v);
     if (pal) {
@@ -11519,6 +11560,17 @@ class HatchPetCard extends HTMLElement {
 
   // A live visit adds 1 on a day this visitor wasn't counted yet; this pet's keys from
   // other generations go, so one key per pet.
+  // Tell the server the day's visitor was played here (UX8 F4, the social meter): on any
+  // screen, a shared one too, which the hourly visit call never credits. The server counts
+  // it once a day, inside the visit's window. Nobody's name goes.
+  _visitorReport(s) {
+    const id = s.ids?.["sensor.life_stage"];
+    if (!id || !this._visitPlan(s)?.id) return;
+    this._hass.callWS({ type: "virtual_pet/greeted", entity_id: id }).catch(() => {
+      // an older integration has no such command: the visit's own credit stands
+    });
+  }
+
   _visitFriendCount(s, v) {
     const key = this._visitFriendKey(s);
     const day = this._visitDay(s).toDateString();
@@ -11733,8 +11785,10 @@ class HatchPetCard extends HTMLElement {
   _linkPick(host) {
     if (!this._linkFree(host) || !host.lookedFirst) return null;
     const sides = [1, -1].sort(() => Math.random() - 0.5);
+    const n = this._slides.length;
     for (const side of sides) {
-      const guest = this._slides[this._index + side];
+      // Exactly three pets: the end pets are neighbours too, the way the nav wraps (UX8 F6).
+      const guest = this._slides[n === 3 ? (this._index + side + n) % n : this._index + side];
       if (!this._linkFree(guest)) continue;
       const pair = [host.ids?.device, guest.ids?.device].sort().join("-");
       if (oncePerDay(`link-${pair}`)) return guest;
@@ -11813,8 +11867,14 @@ class HatchPetCard extends HTMLElement {
     const extra = own ? (typeof own === "function" ? own(guestName) : own) : null;
     // Or the guest's news of its day (E9 L-a): public, the pets' own; shared screens too.
     const news = !extra && Math.random() < LINK_NEWS_ODDS ? this._linkNews(guest) : null;
+    L.said = [hello, extra, LINK_NEWS_REPLY]; // the host's lines of this visit (a cut-short visit clears them)
     const stretch = extra ? 1000 : news ? LINK_NEWS_MS : 0; // the visit holds a little longer for it
-    const toRight = this._slides.indexOf(guest) > this._slides.indexOf(host);
+    // With exactly three pets the end pets meet across the wrap: the guest on the far
+    // side stands (and the beam goes) the other way, off the end of the row (UX8 F6).
+    const hi = this._slides.indexOf(host);
+    const gi = this._slides.indexOf(guest);
+    const wrapped = this._slides.length === 3 && Math.abs(gi - hi) === 2;
+    const toRight = wrapped ? gi < hi : gi > hi;
     const k = 0.7; // the pets stand at 70% of their size on the visit screen
     const gs = guest.species;
     const gStage = guest.drawn || "adult";
@@ -11823,7 +11883,7 @@ class HatchPetCard extends HTMLElement {
     L.beamMs = isCalm ? 0 : 1500;
     this._moving(host, 9000);
     this._chirp(host, "link");
-    if (!isCalm) this._linkBeam(host, guest, toRight);
+    if (!isCalm) this._linkBeam(host, guest, toRight, wrapped);
     // the guest's own slide: looking at the host, with a small note
     this._moving(guest, 6500);
     if (toRight) this._look(guest, 6500);
@@ -11832,7 +11892,7 @@ class HatchPetCard extends HTMLElement {
     at(L.beamMs ? 1400 : 0, () => {
       host.linking = true;
       const box = document.createElement("div");
-      box.className = "visit";
+      box.className = toRight ? "visit" : "visit left";
       box.setAttribute("aria-hidden", "true");
       if (!isCalm) box.innerHTML = '<div class="vband"><i></i><i></i><i></i><i></i><i></i></div>';
       host.screen.append(box);
@@ -11842,6 +11902,8 @@ class HatchPetCard extends HTMLElement {
     at(t0, () => {
       L.box.querySelector(".vband")?.remove();
       host.screen.classList.add("linking");
+      host.screen.classList.toggle("linkleft", !toRight);
+      if (!toRight) host.pet.classList.add("look"); // faces the guest on its left
       host.linkFrames = this._linkPose(host.species, host.drawn || "adult", host.speciesId, (f) => {
         if (host.linkFrames) host.linkFrames = f;
       });
@@ -11850,7 +11912,7 @@ class HatchPetCard extends HTMLElement {
       const img = document.createElement("img");
       img.className = "vguest";
       img.alt = "";
-      img.style.scale = `${-gScale} ${gScale}`; // mirrored, to face the host
+      img.style.scale = `${toRight ? -gScale : gScale} ${gScale}`; // faces the host
       this._show(guest, img, gFrames[0]);
       L.box.append(img);
       L.img = img;
@@ -11870,7 +11932,7 @@ class HatchPetCard extends HTMLElement {
           clearTimeout(L.hideAt);
           clearTimeout(L.endAt);
           L.hideAt = at(Math.max(0, left - 600), hide);
-          L.endAt = at(left, () => this._linkEnd());
+          L.endAt = at(left, () => this._linkEnd(true));
         } });
       }
       const say = document.createElement("div");
@@ -11885,6 +11947,13 @@ class HatchPetCard extends HTMLElement {
     at(t0 + 1800, () => {
       L.say.textContent = reply; // visual only: the visit screen is aria-hidden
       L.say.hidden = false;
+      // Under the host's line, wherever it ends (a narrow screen or big text wraps it): UX8 F3.
+      const hb = host.bubble.getBoundingClientRect();
+      if (host.bubble.textContent && hb.height) {
+        const sb = host.screen.getBoundingClientRect();
+        const floor = sb.height * 0.27;
+        L.say.style.top = `${Math.max(floor, hb.bottom - sb.top + 4)}px`;
+      }
       if (!isCalm) this._animate(guest, L.img, "greethop", 1400);
       if (!isCalm) { // both cheer on the "hi hi" line (acts.cheer; none for a child)
         const gBefore = gFrames;
@@ -11913,7 +11982,7 @@ class HatchPetCard extends HTMLElement {
     };
     const endMs = t0 + (isCalm ? 3600 : 4600) + stretch;
     L.hideAt = at(t0 + 4000 + stretch, hide);
-    L.endAt = at(endMs, () => this._linkEnd());
+    L.endAt = at(endMs, () => this._linkEnd(true));
     L.endsIn = Date.now() + endMs; // when the visit ends, unless the extra stretches it
     return true;
   }
@@ -11934,7 +12003,7 @@ class HatchPetCard extends HTMLElement {
   // The beam: a red head with ripples flies along the tops of the devices, a
   // dotted trail behind it, and a burst where it arrives. Pixel-stepped, in world
   // art pixels (WORLD_GRID of them across the pet's 46.5% of the screen).
-  _linkBeam(host, guest, toRight) {
+  _linkBeam(host, guest, toRight, wrapped = false) {
     const L = this._link;
     const track = this._track.getBoundingClientRect();
     const a = host.device.getBoundingClientRect();
@@ -11947,7 +12016,10 @@ class HatchPetCard extends HTMLElement {
       .map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height).map((r) => r.top));
     const u = Math.max(1, Math.round(((host.screen.clientWidth * 0.465) / WORLD_GRID) * 4) / 4);
     const x0 = a.left + a.width / 2 - track.left;
-    const x1 = b.left + b.width / 2 - track.left;
+    // A wrapped guest is far across the row: the head flies one slide's pitch toward where
+    // it would stand if the row went on, and leaves the card there.
+    const x1 = wrapped ? x0 + (toRight ? 1 : -1) * Math.abs(b.left + b.width / 2 - (a.left + a.width / 2)) / 2
+      : b.left + b.width / 2 - track.left;
     const dist = x1 - x0;
     const step = 2 * u;
     const n = Math.max(2, Math.round(Math.abs(dist) / step));
@@ -11987,7 +12059,9 @@ class HatchPetCard extends HTMLElement {
   }
 
   // The visit is over (or cut short): leave nothing behind.
-  _linkEnd() {
+  // done: the visit ran its course. Cut short (a sleep, a tap on Status), a hello still
+  // on show is cleared with the guest's bubble: no hello to an empty room (UX8 F8).
+  _linkEnd(done = false) {
     const L = this._link;
     if (!L) return;
     this._link = null;
@@ -12000,8 +12074,8 @@ class HatchPetCard extends HTMLElement {
     const { host, guest } = L;
     host.linking = false;
     host.linkFrames = null;
-    host.screen.classList.remove("linking");
-    host.pet.classList.remove("linking", "greethop");
+    host.screen.classList.remove("linking", "linkleft");
+    host.pet.classList.remove("linking", "greethop", "look");
     host.pet.style.scale = L.hostScale;
     host.screen.querySelector(".linkhearts")?.remove();
     guest.pet.classList.remove("look");
@@ -12009,6 +12083,8 @@ class HatchPetCard extends HTMLElement {
     guest.sayUntil = 0;
     this._stopTyping?.(guest);
     guest.bubble.textContent = "";
+    const said = host.sayEntry?.text;
+    if (!done && said && L.said?.includes(said) && host.sayUntil > Date.now()) this._write(host, "", 0);
   }
 
   // --- Trait flair ----------------------------------------------------------
