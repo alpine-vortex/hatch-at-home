@@ -48,6 +48,7 @@ const COPY_TABLES = {
   GAME_TOMORROW: { asks: ["q"] },
   TRICK_ASK: { asks: ["q"] },
   HOUSE_LINES: {},
+  HOUSE_MOMENT_LINES: {}, // H8: virtual_pet.react, by category
 };
 
 function lines(value, path, out) {

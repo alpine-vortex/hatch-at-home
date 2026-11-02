@@ -292,6 +292,13 @@ HOME_MEDIA_COOLDOWN_MINUTES = 20  # between comments on what's on TV or playing
 NEWS_COOLDOWN_MINUTES = 30  # between bits of news shared with virtual_pet.share_news
 NEWS_HEADLINE_MAX = 60  # characters, so the bubble leaves the pet in view
 NEWS_TOPIC_MAX = 20
+# virtual_pet.react (ha-signals H8): each category's own wait, so a washer and a
+# dishwasher finishing minutes apart are both said, and a short gap across all of
+# them so two bubbles never stack. A dropped call starts neither.
+REACT_COOLDOWN_MINUTES = 10
+REACT_GAP_SECONDS = 20
+REACT_TEXT_MAX = 40  # a custom line is speech: the bubble's line, not news's 60
+HOUSE_MOMENTS_KEPT = 3  # at most this many house moments in the public list
 HOME_GREETING_COOLDOWN_MINUTES = 30  # GPS jitter shouldn't cause repeat greetings
 # Weather the pet remarks on (cosmetic). Wind from the weather entity's speed,
 # for providers that seldom report the "windy" condition.

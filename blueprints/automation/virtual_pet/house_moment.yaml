@@ -1,0 +1,172 @@
+blueprint:
+  name: Virtual pet house moment
+  description: >-
+    Pick an entity and say what it is, and the pet notices it: a line of its
+    own, a little reaction, and a house effect where there is one (warm air,
+    cool air, suds, a tumble). Cosmetic only: nothing changes for the pet, and
+    nothing is said while it's asleep, away or still an egg.
+
+
+    The pet decides which changes count, by what it is: a washer, dryer,
+    dishwasher, oven, 3D printer or EV charger when it's done (on to off after
+    running 10 minutes, or an enum sensor going to finished / done / complete),
+    the coffee when it's done brewing, a heater or air conditioner or fan when
+    it comes on (a thermostat: its mode leaving off; the heating coming on in a
+    thermostat that's already on is the pet's own heating setting's job), a pet
+    feeder serving, the plants being watered (a valve closing, or the moisture
+    rising), a delivery arriving, a timer finishing, and the internet coming
+    back. Custom: any change, or only the state you name.
+
+
+    The ones marked "card only" (oven, coffee, EV charger, delivery) say
+    someone is home, so they're said live on the card and kept nowhere: not on
+    a sensor, the event bus or the journal. An entity already in the pet's own
+    heating, cooling or appliances settings is left to those (one bubble, not
+    two).
+  domain: automation
+  source_url: https://github.com/alpine-vortex/hatch-at-home/blob/main/blueprints/automation/virtual_pet/house_moment.yaml
+  homeassistant:
+    min_version: "2026.10.0"
+  input:
+    pet:
+      name: Pet
+      description: Any entity of the pet.
+      selector:
+        entity:
+          integration: virtual_pet
+    entity:
+      name: Entity
+      description: The thing in the house the pet notices.
+      selector:
+        entity:
+    category:
+      name: What it is
+      default: washer
+      selector:
+        select:
+          options:
+            - label: Heater
+              value: heater
+            - label: Air conditioner
+              value: ac
+            - label: Fan
+              value: fan
+            - label: Washing machine
+              value: washer
+            - label: Dryer
+              value: dryer
+            - label: Dishwasher
+              value: dishwasher
+            - label: Oven (card only)
+              value: oven
+            - label: Coffee maker (card only)
+              value: coffee
+            - label: 3D printer
+              value: printer
+            - label: EV charger (card only)
+              value: ev
+            - label: Pet feeder
+              value: feeder
+            - label: Plants / watering
+              value: plants
+            - label: Mailbox / delivery (card only)
+              value: delivery
+            - label: Timer
+              value: timer
+            - label: Internet
+              value: internet
+            - label: Custom
+              value: custom
+    reaction:
+      name: Reaction (Custom only)
+      description: How the pet reacts. Every other choice has its own.
+      default: hop
+      selector:
+        select:
+          options:
+            - label: Hop
+              value: hop
+            - label: Cheer
+              value: cheer
+            - label: Cozy
+              value: cozy
+            - label: Dance
+              value: dance
+            - label: Startle
+              value: startle
+    custom_text:
+      name: Words (Custom only)
+      description: >-
+        Optional: what the pet says, up to 40 characters. Leave empty and the
+        pet says a line of its own. Shown on the card; with "Keep house words
+        off sensors" on in the pet's privacy settings, only there.
+      default: ""
+      selector:
+        text:
+    custom_state:
+      name: State that counts (Custom only)
+      description: Optional, such as finished or docked. Empty means any change.
+      default: ""
+      selector:
+        text:
+
+# Each change is one quick call; one at a time is plenty.
+mode: single
+max_exceeded: silent
+
+triggers:
+  # A state change, not an attribute one. The pet's own rules decide (react.py).
+  - trigger: state
+    entity_id: !input entity
+    to: ~
+    id: change
+  # A timer goes active -> idle when it's cancelled too: only this says it finished.
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: !input entity
+    id: timer
+
+variables:
+  pet: !input pet
+  category: !input category
+  reaction: !input reaction
+  custom_text: !input custom_text
+  custom_state: !input custom_state
+  timer: "{{ trigger.id == 'timer' }}"
+  source: "{{ trigger.event.data.entity_id if timer else trigger.entity_id }}"
+  # A new entity has no old state: "" (the condition below drops it).
+  from_state: >-
+    {{ 'active' if timer else (trigger.from_state.state if trigger.from_state else '') }}
+  to_state: >-
+    {{ 'finished' if timer else (trigger.to_state.state if trigger.to_state else '') }}
+  held: >-
+    {{ 0 if timer or not trigger.from_state else
+       (now() - trigger.from_state.last_changed).total_seconds() | int }}
+
+conditions:
+  # No reading is no moment, and a timer's state alone never says it finished.
+  - condition: template
+    value_template: >-
+      {{ timer or (not source.startswith('timer.')
+         and from_state not in ['', 'unavailable', 'unknown']
+         and to_state not in ['', 'unavailable', 'unknown']) }}
+
+actions:
+  - action: virtual_pet.react
+    continue_on_error: true
+    # Custom's fields only with Custom, and only when filled in.
+    data: >-
+      {%- set call = {'entity_id': pet, 'category': category, 'source': source,
+                      'from_state': from_state | string,
+                      'to_state': to_state | string, 'held': held} -%}
+      {%- if category == 'custom' -%}
+        {%- set call = dict(call, reaction=reaction) -%}
+        {%- if custom_text | trim -%}
+          {%- set call = dict(call, text=custom_text) -%}
+        {%- endif -%}
+        {%- if custom_state | trim -%}
+          {%- set call = dict(call, match=custom_state) -%}
+        {%- endif -%}
+      {%- endif -%}
+      {{ call }}

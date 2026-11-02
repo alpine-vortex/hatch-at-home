@@ -27,6 +27,15 @@ SERVICE_SHARE_NEWS = "share_news"
 SERVICE_VISIT = "visit"
 SERVICE_MY_DAY = "my_day"
 SERVICE_SET_SHELL = "set_shell"
+SERVICE_REACT = "react"
+ATTR_CATEGORY = "category"
+ATTR_SOURCE = "source"
+ATTR_FROM_STATE = "from_state"
+ATTR_TO_STATE = "to_state"
+ATTR_HELD = "held"
+ATTR_MATCH = "match"
+ATTR_REACTION = "reaction"
+ATTR_TEXT = "text"
 ATTR_FINISH = "finish"
 ATTR_HEADLINE = "headline"
 ATTR_TOPIC = "topic"
@@ -60,6 +69,9 @@ CONF_MUSIC = "music"
 CONF_TV = "tv"
 CONF_ZONE = "zone"
 CONF_PRIVACY = "privacy"
+# Keep house words (share_news's headline, react's custom text) off the sensor:
+# on, they're said live on the card only (ha-signals H8, owner Q-A). Per pet.
+CONF_HOUSE_WORDS_PRIVATE = "house_words_private"
 # What the house was doing, not how the pet is: what's on and who's home.
 PRIVATE_READINGS = {
     "company",
@@ -70,6 +82,7 @@ PRIVATE_READINGS = {
     "title",
     "artist",
     "headline",
+    "text",  # react's custom words (diagnostics and the debug sensor drop them)
 }
 DEFAULT_ZONE = "zone.home"
 CONF_FIREPLACE = "fireplace"
@@ -119,3 +132,34 @@ PRIVATE_EVENT_FIELDS = {
 MEDIA_EVENTS = {"watching", "listening"}
 # A media moment's public stand-in: the recap's "watched TV", with no title.
 PUBLIC_AS = {"watching": "tv_on", "listening": "music_on"}
+
+# The house moment's categories (virtual_pet.react, ha-signals H8; rules in
+# react.py, the card's lines in HOUSE_MOMENT_LINES). No garage door: a security
+# signal, refused (owner, 2026-11-01).
+HOUSE_CATEGORIES = (
+    "heater",
+    "ac",
+    "fan",
+    "washer",
+    "dryer",
+    "dishwasher",
+    "oven",
+    "coffee",
+    "printer",
+    "ev",
+    "feeder",
+    "plants",
+    "delivery",
+    "timer",
+    "internet",
+    "custom",
+)
+# Categories that say someone is home (a visitor at the door, someone up making
+# coffee or cooking, the car home charging): said live on the channel only, never
+# on a sensor, the bus, the journal, debug or diagnostics (owner, 2026-11-01).
+CHANNEL_CATEGORIES = {"delivery", "coffee", "oven", "ev"}
+# Channel moments that are said live and kept nowhere (not for a later
+# subscriber, not in the public list): a channel-only house moment, and house
+# words while house_words_private is on. Their own types, so a card never says
+# one twice (once from the sensor, once from the channel).
+LIVE_EVENTS = {"house_live", "news_live"}

@@ -113,3 +113,72 @@ share_news:
       example: Tamagotchi
       selector:
         text:
+react:
+  fields:
+    entity_id:
+      required: true
+      selector:
+        entity:
+          integration: virtual_pet
+          multiple: true
+    category:
+      required: true
+      example: washer
+      selector:
+        select:
+          translation_key: category
+          options:
+            - heater
+            - ac
+            - fan
+            - washer
+            - dryer
+            - dishwasher
+            - oven
+            - coffee
+            - printer
+            - ev
+            - feeder
+            - plants
+            - delivery
+            - timer
+            - internet
+            - custom
+    source:
+      example: binary_sensor.washer_running
+      selector:
+        entity:
+    from_state:
+      example: "on"
+      selector:
+        text:
+    to_state:
+      example: "off"
+      selector:
+        text:
+    held:
+      example: 1800
+      selector:
+        number:
+          min: 0
+          max: 604800
+          unit_of_measurement: s
+    match:
+      example: finished
+      selector:
+        text:
+    reaction:
+      example: cheer
+      selector:
+        select:
+          translation_key: reaction
+          options:
+            - hop
+            - cheer
+            - cozy
+            - dance
+            - startle
+    text:
+      example: "the bread's ready! ♪"
+      selector:
+        text:
