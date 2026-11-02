@@ -2365,11 +2365,13 @@ async function main() {
       await open();
       put({ raised: [a.id, c.id], requests: [] });
       el._redraw(s);
+      await wait(300); // _update is async
       out.cannotLay = closed();
       put({ raised: [a.id, c.id] });
       await open();
       put({ raised: [a.id] });
       el._redraw(s);
+      await wait(300); // _update is async
       out.oneLeft = closed();
       // Fewer than two offered (one, none, or a state without `raised`): the old two taps, no sheet.
       for (const raised of [[a.id], [], undefined]) {
