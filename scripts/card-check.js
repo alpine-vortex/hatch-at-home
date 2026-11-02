@@ -4511,7 +4511,8 @@ async function main() {
         out.untold = note({ pick: "sea", yours: true });
         out.untoldAgain = note({ pick: "sea", yours: true });
         out.told = JSON.parse(localStorage.getItem(keys[0]) || "null");
-        const day = (n) => new Date(Date.now() + n * 864e5);
+        // From the card's turn day (CARD_CHECK_DAY_SHIFT moves it), as the story's was kept.
+        const day = (n) => new Date(Date.now() + ((Number(globalThis.__hatchDayShift) || 0) + n) * 864e5);
         out.later = [0, 1, 2, 3, 4, 5].map((n) => el._dreamCallback(s, day(n)));
         dream = { kind: "picked", pick: "you" };
         out.youLook = look();

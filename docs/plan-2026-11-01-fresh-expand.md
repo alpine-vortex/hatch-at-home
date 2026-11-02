@@ -750,6 +750,10 @@ The first of each pool is the shipped line, as the dialogue pass s2625 left it.
   - Q4: no wordless echo on shared screens.
   - FM: built as part 2 slices after the critique's errors 1-10, tier 2 (privacy); every new
     player line goes to the FM for review (needs-you) before it ships.
+  - FM copy review (2026-11-01, `copy-review-part2b.md`): all approved as built. Opp #2's
+    lines with "a cozy week, then ♪" replacing "a cozy one, then ♪"; opp #1's ask replaces
+    that evening's beat and closes the event; opp #4 only the two favourite-visitor lines
+    (no extra weather or season variants); E14's labels, empty days omitted.
 
 ## Part 2, as reconciled (s2631; FM answers all A)
 
@@ -867,7 +871,7 @@ Branch `crew/hatch-at-home-s2627-fresh-expand-fold-review-build`.
   errors 1-3, 5. **Critique 4, 6-10** `00c210fc`.
 - **Owner Q1, Q2** `ca0d848f`: the typing browser's own copy of the words
   (`hatch-followtext-<user>`, to the event's `until`), said there or on a phone or the app.
-- **Owner Q3** `dbd0fd46` (opp #1, #2, #4; copy held for the FM's review): "anything big this week?"
+- **Owner Q3** `dbd0fd46` (opp #1, #2, #4; copy approved by the FM): "anything big this week?"
   Sundays and Mondays, the day picked from the next six (`day` in the answer, checked by
   `people.big_day_pick`); the early-alarm rule is gone. The big day's evening, from 19, asks
   "how did it go?" in the later slot (`big_how`, how_day's answers; asking it closes the
@@ -878,4 +882,4 @@ Branch `crew/hatch-at-home-s2627-fresh-expand-fold-review-build`.
   `model.week_mark`, `week_weather`, `week_strip`), the sensor's unrecorded `week`, the
   journal's strip (glyphs, aria-labels, the visitor only with finds shown). Pytest
   `test_week.py`; card-check `moments`; bench shots in the worker's `renders/e14/`. Its
-  labels are held for the FM's copy review with Q3's lines.
+  labels approved with Q3's lines.
