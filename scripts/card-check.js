@@ -5296,7 +5296,8 @@ async function main() {
         const weekBox = s.screen.querySelector(".askday");
         out.week = { buttons: [...(weekBox?.querySelectorAll("button") || [])].map((b) => b.textContent) };
         weekBox?.querySelector('button[data-answer="yes"]')?.click();
-        out.week.which = runAsk();
+        // "yes" says "which day?" at once (UX 3 F4), not after the question's minute: it is on show, not queued.
+        out.week.which = s.queue.some((x) => x.ask) ? runAsk() : s.sayEntry?.text;
         const dayBox = s.screen.querySelector(".askday");
         out.week.days = [...(dayBox?.querySelectorAll("button") || [])].map((b) => [b.dataset.answer, b.textContent]);
         const ahead = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d; };
