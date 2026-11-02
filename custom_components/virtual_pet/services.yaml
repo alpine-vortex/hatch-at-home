@@ -72,6 +72,7 @@ play_game:
           options:
             - left_right
             - higher_lower
+            - dig
     guess:
       required: false
       example: left
@@ -82,10 +83,17 @@ play_game:
             - right
             - lower
             - higher
+            - keep
+            - dig
     end:
       required: false
       default: false
       example: true
+      selector:
+        boolean:
+    shared:
+      required: false
+      default: false
       selector:
         boolean:
 share_news:

@@ -102,6 +102,9 @@ PLAY_GAME_SCHEMA = vol.Schema(
         ),
         # End the game in progress instead (the card's "maybe later").
         vol.Optional(ATTR_END, default=False): cv.boolean,
+        # The card on a shared screen: a berry dig is the household's, not the
+        # signed-in user's (the screen's own claim, as on the channel).
+        vol.Optional("shared", default=False): cv.boolean,
     }
 )
 SHARE_NEWS_SCHEMA = vol.Schema(
@@ -156,6 +159,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     websocket_api.async_register_command(hass, websocket_forget_me)
     websocket_api.async_register_command(hass, websocket_subscribe)
     websocket_api.async_register_command(hass, websocket_notify_me)
+    websocket_api.async_register_command(hass, websocket_linked)
     websocket_api.async_register_command(hass, websocket_my_day)
     websocket_api.async_register_command(hass, websocket_set_shell)
     websocket_api.async_register_command(hass, websocket_collect)
@@ -238,7 +242,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         kind = call.data[ATTR_GAME]
         guess = call.data.get(ATTR_GUESS)
         if call.data[ATTR_END]:
-            return await pet_of(call).async_end_game(kind)
+            return await pet_of(call).async_end_game(
+                kind, call.context, call.data["shared"]
+            )
         if guess is not None and guess not in GAMES[kind]:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
@@ -248,7 +254,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     "guesses": " or ".join(GAMES[kind]),
                 },
             )
-        return await pet_of(call).async_play_game(guess, call.context, kind)
+        return await pet_of(call).async_play_game(
+            guess, call.context, kind, call.data["shared"]
+        )
 
     async def share_news(call: ServiceCall) -> ServiceResponse:
         # One pet that isn't loaded doesn't keep the news from the others.
@@ -401,6 +409,7 @@ async def websocket_forget_me(
         pet._moved.pop(user, None)  # today's moves go with the rest
         pet._private.pop(user, None)  # and their private moments
         if pet.state is not None:
+            await pet.async_forget_games(user)  # their parked Berry dig names them
             pet.async_set_updated_data(pet.state)
     connection.send_result(msg["id"])
 
@@ -532,6 +541,35 @@ async def websocket_notify_me(
         connection.send_error(msg["id"], "no_pet", "No pet owns that entity")
         return
     await pet.async_set_notify(connection.user.id, msg["enabled"])
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): f"{DOMAIN}/linked",
+        vol.Required("entity_id"): cv.entity_id,
+        vol.Required("other"): cv.entity_id,
+    }
+)
+@callback
+def websocket_linked(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """The card played the infrared link between two of the house's pets: each
+    counts the other once today, for the social meter (top10 §6). Nothing about
+    who was looking is kept."""
+    registry = er.async_get(hass)
+    pets = hass.data[DOMAIN]["pets"]
+    found = []
+    for key in ("entity_id", "other"):
+        entity = registry.async_get(msg[key])
+        found.append(pets.get(entity.config_entry_id) if entity else None)
+    one, two = found
+    if one is None or two is None or one is two:
+        connection.send_error(msg["id"], "no_pet", "Two different pets are needed")
+        return
+    one.social_link(two.pet_id)
+    two.social_link(one.pet_id)
     connection.send_result(msg["id"])
 
 

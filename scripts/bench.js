@@ -91,10 +91,40 @@ const PRESETS = {
   ui() {
     const out = [];
     for (const world of ["woodland", "tidepool", "nightsky"]) {
-      for (const [view, extra] of [["status", {}], ["games", {}], ["bubble", { say: "hi, Sam! I missed you~" }]]) {
-        out.push({ name: `ui/${world}-${view}`, group: "ui", label: `${world} ${view}`, world, view: view === "bubble" ? "card" : view, ...extra });
+      for (const [view, extra] of [["status", {}], ["games", {}], ["bubble", { say: "hi, Sam! I missed you~" }],
+        ["phone", { ask: "phone", say: "can I call your phone when I need you?" }]]) { // top10 1a
+        out.push({ name: `ui/${world}-${view}`, group: "ui", label: `${world} ${view}`, world,
+          view: ["bubble", "phone"].includes(view) ? "card" : view, ...extra });
       }
     }
+    return out;
+  },
+  // The Berry dig (playtime 2a) with scripted replies, at 420 and 330 (compact): a
+  // game under way, a berry just dug, a bee, and the three-game picker.
+  dig() {
+    const out = [];
+    const r = (round, wins, basket, more = {}) => ({ result: "ok", game: "dig", round, rounds: 5, wins, basket,
+      leaves: 8 - basket, win_at: 5, done: false, ...more });
+    for (const width of [420, 330]) {
+      const base = { width, world: "woodland", group: `dig-${width}` };
+      out.push({ ...base, name: `dig/${width}-picker`, label: "picker (three games)", view: "games" });
+      out.push({ ...base, name: `dig/${width}-start`, label: "fresh pile, keep disabled", game: "dig",
+        digReplies: [r(0, 0, 0)] });
+      out.push({ ...base, name: `dig/${width}-under-way`, label: "round 2, 2 banked, basket 2", game: "dig" });
+      out.push({ ...base, name: `dig/${width}-berry`, label: "a berry", game: "dig",
+        digReplies: [r(1, 2, 2), r(1, 2, 3, { found: "berry", round_over: false })], digTaps: ["dig"] });
+      out.push({ ...base, name: `dig/${width}-bee`, label: "a bee", game: "dig",
+        digReplies: [r(1, 2, 2), r(2, 2, 0, { found: "bee", round_over: true })], digTaps: ["dig"] });
+    }
+    // The picker fits at every card width (audit s2616 #1/#4): three games.
+    for (const width of [300, 320, 336, 350, 360, 375, 385, 400, 420]) {
+      out.push({ width, world: "woodland", group: "dig-picker", name: `dig/picker-${width}`, label: `${width}`, view: "games" });
+    }
+    out.push({ width: 300, world: "woodland", group: "dig-300", name: "dig/300-under-way", label: "300: round 2, basket 2", game: "dig" });
+    out.push({ width: 300, world: "woodland", group: "dig-300", name: "dig/300-start", label: "300: fresh pile",
+      game: "dig", digReplies: [r(0, 0, 0)] });
+    out.push({ width: 330, world: "woodland", group: "dig-calm", name: "dig/330-bee-calm", label: "a bee, reduced motion",
+      motion: "reduce", game: "dig", digReplies: [r(1, 2, 2), r(2, 2, 0, { found: "bee", round_over: true })], digTaps: ["dig"] });
     return out;
   },
   // World visitors at 330: every one at its greet (its own hours: night ones on a night
@@ -157,6 +187,37 @@ const PRESETS = {
     extra("compact-330", "compact: the basket shows", { world: "woodland", width: 330, basket: 3 });
     return out;
   },
+  // A 30 s look (fresh-moment), played by the card's own tick: a fresh page's morning and
+  // a tab resumed after 3 h hidden, each at 5, 10, 20 and 30 s in, and an evening look. An adult with a type, a
+  // trait, today's wish and dream, and a night's sleep since this device last looked.
+  look() {
+    const out = [];
+    const pet = { personality: "mellow", traits: ["early_bird"], trait_levels: { early_bird: 1 },
+      wish: { kind: "bath", granted: false, open: true }, dream: { kind: "flying" },
+      moments: [{ type: "fell_asleep", ago: 540 }, { type: "woke_up", ago: 30 }] };
+    for (const [kind, resumed] of [["fresh", false], ["resumed", true]]) {
+      for (const at of [5, 10, 20, 30]) {
+        out.push({ group: `look-${kind}`, name: `look/${kind}-${String(at).padStart(2, "0")}s`, label: `${kind}, ${at} s`,
+          world: "woodland", width: 330, time: "2026-11-02T07:30:00Z", pet, look: { at, resumed, seenAgo: 12 } });
+      }
+    }
+    // The evening's today line (fresh-moment 4): a 19:30 look after the sunset; the wish
+    // used up in the morning (its key spent), the dream too.
+    const evening = { ...pet, moments: [{ type: "woke_up", ago: 750 }, { type: "sunset", ago: 60 }] };
+    const spent = { "hatch-dream-bench_dev_0-Mon Nov 02 2026": "1", "hatch-wish-bench_dev_0-Mon Nov 02 2026": "1" };
+    // A question on show as a visitor walks in and greets (fresh-moment 5a): the question
+    // keeps its bubble and buttons, the greet says no line.
+    for (const beat of ["arrive", "greet"]) {
+      out.push({ group: "look-question", name: `look/question-visitor-${beat}`, label: `question, visitor ${beat}`,
+        world: "woodland", width: 330, ask: "how_day", say: "how was your day?", visitor: { beat } });
+    }
+    for (const at of [5, 10]) {
+      out.push({ group: "look-evening", name: `look/evening-${String(at).padStart(2, "0")}s`, label: `evening, ${at} s`,
+        world: "woodland", width: 330, scene: "night", time: "2026-11-02T19:30:00Z", pet: evening, storage: spent,
+        look: { at, seenAgo: 12 } });
+    }
+    return out;
+  },
   // Gifts (visitors v2 §5, V-E2): said at the first look, the find popped above the pet.
   // V5 with the longest name (porthole too), V6 made and found, an old world's gift, V7
   // (baby), calm (still), compact, and an asleep pet's look that takes nothing.
@@ -203,6 +264,38 @@ const PRESETS = {
     extra("mono-hearth-330", "mono hearth 330", { world: "hearth", width: 330, mono: true });
     extra("error-woodland", "older server: the journal (its foot)", { world: "woodland", collection: "error", scrollEnd: true });
     extra("foot-woodland-330", "the page's foot, 330", { world: "woodland", width: 330, scrollEnd: true });
+    return out;
+  },
+  // Every world (top10 8a): none raised, a few from two worlds, and all 30, at 420 and
+  // 330, the 330 ones also scrolled to the foot; big text at 330.
+  everyworld() {
+    const out = [];
+    const all = Object.values(WORLDS).flatMap((w) => w.roster);
+    const cases = { none: [], some: [...WORLDS.woodland.roster.slice(0, 3), ...WORLDS.pond.roster.slice(0, 2)], all };
+    for (const width of [420, 330]) {
+      for (const [k, raised] of Object.entries(cases)) {
+        out.push({ name: `everyworld/${width}/${k}`, group: `everyworld-${width}`, label: k, world: "woodland", width,
+          view: "everyworld", journal: { raised } });
+        if (width === 330) out.push({ name: `everyworld/${width}/${k}-end`, group: `everyworld-${width}`, label: `${k}, end`,
+          world: "woodland", width, view: "everyworld", journal: { raised }, scrollEnd: true });
+      }
+    }
+    out.push({ name: "everyworld/330/big", group: "everyworld-330", label: "big text", world: "woodland", width: 330,
+      view: "everyworld", journal: { raised: cases.some }, bigText: true });
+    return out;
+  },
+  // Big text (top10 4b): every status-box page at 420, 330 and compact (260), the
+  // status page also scrolled to its end. Nothing may clip or run off the box.
+  bigtext() {
+    const out = [];
+    for (const width of [420, 330, 260]) {
+      for (const view of ["status", "settings", "picker", "journal", "collection"]) {
+        out.push({ name: `bigtext/${width}/${view}`, group: `bigtext-${width}`, label: view, world: "woodland", width, view,
+          bigText: true, mine: true, ...(view === "picker" ? { shellOptions: FINISHES, shellFinish: "stripes", stage: "teen" } : {}), ...(view === "collection" ? { collection: true } : {}) });
+      }
+      out.push({ name: `bigtext/${width}/status-end`, group: `bigtext-${width}`, label: "status, end", world: "woodland", width,
+        view: "status", bigText: true, scrollEnd: true });
+    }
     return out;
   },
   // The settings sheet (the status screen's gear) with the viewer's own rows, at
@@ -309,6 +402,9 @@ const PRESETS = {
   },
 };
 
+// Presets of what the card's FINDS_SHOWN switch hides (off until V-F): run with it on.
+const FINDS_PRESETS = new Set(["finds", "gifts", "collection"]);
+
 // --- Shots -----------------------------------------------------------------
 
 function normalize(raw) {
@@ -323,16 +419,16 @@ function normalize(raw) {
     shot.pets.push({ species: roster[i % roster.length], stage: "child", mood: "content", world: shot.world, ...(extra[i] || {}) });
   }
   shot.name ||= `shot-${shot.species || "x"}-${shot.stage}-${shot.mood}`;
-  if (shot.lcd !== undefined || shot.booted || shot.mono) {
+  if (shot.lcd !== undefined || shot.booted || shot.mono || shot.bigText) {
     shot.storage = { ...(shot.booted ? { "hatch-booted": "1" } : {}), ...(shot.lcd !== undefined ? { "hatch-lcd": String(shot.lcd) } : {}),
-      ...(shot.mono ? { "hatch-mono": "4" } : {}), ...shot.storage };
+      ...(shot.mono ? { "hatch-mono": "4" } : {}), ...(shot.bigText ? { "hatch-big-text": "on" } : {}), ...shot.storage };
   }
   return shot;
 }
 
 function parseArgs(argv) {
   const opts = { shot: {}, workers: 6, out: path.join(ROOT, "dev", "bench", "out"), sheet: true };
-  const num = new Set(["width", "dpr", "pets", "seed"]);
+  const num = new Set(["width", "dpr", "pets", "seed", "basket"]);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (!a.startsWith("--")) throw new Error(`unexpected argument ${a}`);
@@ -347,8 +443,10 @@ function parseArgs(argv) {
     else if (key === "shape" || key === "color" || key === "bezel" || key === "finish") (opts.shot.shell ||= {})[key] = val();
     else if (key === "lcd") opts.shot.lcd = val();
     else if (key === "mono") opts.shot.mono = val() !== "off";
+    else if (key === "big-text") opts.shot.bigText = true; // the "big text" switch on (top10 4b)
     else if (key === "boot") opts.shot.booted = false;
     else if (key === "mine") opts.shot.mine = true;
+    else if (key === "finds-shown") opts.shot.findsShown = true; // FINDS_SHOWN on (off until V-F)
     else if (key === "gift") { const [world, id] = val().split("/"); opts.shot.gift = { id, world }; } // --gift woodland/pinecone
     else if (key === "journal") Object.assign(opts.shot, { journal: true, view: "journal" });
     else if (key === "collection") Object.assign(opts.shot, { collection: true, view: "collection" });
@@ -362,7 +460,9 @@ function loadShots(opts) {
   let shots;
   if (opts.preset) {
     if (!PRESETS[opts.preset]) throw new Error(`no preset "${opts.preset}" (${Object.keys(PRESETS).join(", ")})`);
-    shots = PRESETS[opts.preset]().map((s) => ({ ...opts.shot, ...s, shell: { ...opts.shot.shell, ...s.shell } }));
+    // The finds, gifts and collection presets show what FINDS_SHOWN hides, so turn it on.
+    const finds = FINDS_PRESETS.has(opts.preset) ? { findsShown: true } : {};
+    shots = PRESETS[opts.preset]().map((s) => ({ ...finds, ...opts.shot, ...s, shell: { ...opts.shot.shell, ...s.shell } }));
     shots.forEach((s) => { s.name = `${opts.preset}/${s.name.split("/").slice(1).join("/")}`; });
   } else if (opts.shots) {
     const list = JSON.parse(fs.readFileSync(opts.shots, "utf8"));
@@ -420,6 +520,15 @@ async function runShots(browser, base, shots, outDir, workers) {
         } : null;
         if (gate) await page.route("**/sprites/**", gate);
         try { await page.evaluate((s) => window.bench.mount(s), shot); } finally { if (gate) await page.unroute("**/sprites/**", gate); }
+        if (shot.look) { // the look played on: the pinned clock moved on in 250 ms steps, a tick each
+          const t0 = new Date(shot.time).getTime();
+          for (let ms = 250; ms <= (shot.look.at || 0) * 1000; ms += 250) {
+            await page.clock.setFixedTime(new Date(t0 + ms));
+            await page.evaluate(() => window.bench.step());
+          }
+          await page.evaluate(() => window.bench.lookEnd());
+          await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+        }
         const inCard = { screen: ".slide:not(.away-slide) .screen", device: ".slide:not(.away-slide) .device" }[shot.clip];
         const file = path.join(outDir, `${shot.name}.png`);
         fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -433,7 +542,7 @@ async function runShots(browser, base, shots, outDir, workers) {
         const png = await page.screenshot({ path: file, clip });
         shot.file = file;
         if (shot.mono) shot.measure = { screen: await page.evaluate(() => window.bench.screenClass), ...await measureMono(page, clip, png) };
-        if (shot.costume || shot.gift) {
+        if (shot.costume || shot.gift || shot.look) {
           const info = await page.evaluate(() => window.bench.info);
           fs.writeFileSync(file.replace(/\.png$/, ".json"), JSON.stringify(info));
         }

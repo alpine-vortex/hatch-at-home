@@ -49,12 +49,18 @@ from .backup import (
     async_kept_backup,
 )
 from .const import (
+    CONF_AQI,
     CONF_AWAY_AFTER,
     CONF_BEDTIME,
+    CONF_BEDTIME_LIGHTS,
     CONF_CHORES,
     CONF_COMFORT_HIGH,
     CONF_COMFORT_LOW,
     CONF_DASHBOARD,
+    CONF_FIREPLACE,
+    CONF_INDOOR_TEMP,
+    CONF_LUX,
+    CONF_MOON_ALTITUDE,
     CONF_MOON_ILLUMINATION,
     CONF_MOON_PHASE,
     CONF_MUSIC,
@@ -62,6 +68,7 @@ from .const import (
     CONF_NEXT_WORLD,
     CONF_PRIVACY,
     CONF_RAIN,
+    CONF_ROOM_LIGHTS,
     CONF_SITTER_SETTLES,
     CONF_SOLAR,
     CONF_SPECIES,
@@ -143,11 +150,28 @@ MOMENTS = {
 # A public moment of these types keeps only {type, at}: the bus and the phones
 # still get the cause.
 MOMENT_BARE = {"became_sick"}
+# ...except these causes, which the card says ("too many snacks"): weight only
+# (gaps-seams 2b, owner Q3). Neglect and the rest never reach the public list.
+MOMENT_CAUSES_SHOWN = {"weight"}
 MOMENTS_KEPT = 10
 # The visit's celebration lines (one a look, and always a place for it).
 CELEBRATIONS = {"your_birthday", "pet_birthday", "birthday_friends", "friends_for"}
 # Moments a dream can be about, by the dream's kind. (Not news: it stays
 # cosmetic, and changes nothing that's saved.)
+# What the pet notices, as the card's "notices" row names it (top10 2a): a kind
+# shows once any of its options is mapped. Kinds only, never an entity: no
+# presence (zone) or motion, so the row never hints at who's home, and no bedtime
+# (it always has one).
+SENSES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("weather", (CONF_WEATHER, CONF_RAIN, CONF_SOLAR, CONF_INDOOR_TEMP, CONF_AQI)),
+    ("lights", (CONF_ROOM_LIGHTS, CONF_LUX, CONF_BEDTIME_LIGHTS)),
+    ("tv", (CONF_TV,)),
+    ("music", (CONF_MUSIC,)),
+    ("chores", (CONF_CHORES,)),
+    ("fireplace", (CONF_FIREPLACE,)),
+    ("moon", (CONF_MOON_PHASE, CONF_MOON_ILLUMINATION, CONF_MOON_ALTITUDE)),
+)
+
 DREAM_OF = {
     "first_snow": "snow_started",
     "wish_granted": "wish",
@@ -312,6 +336,26 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     def dashboard(self) -> str | None:
         """The dashboard a tap on this pet's notifications opens, if one is set."""
         return notify.dashboard_path(self.config_entry.options.get(CONF_DASHBOARD))
+
+    @property
+    def social_level(self) -> int:
+        """The social meter, 0-10 over the last week (top10 §6)."""
+        assert self.state is not None
+        return model.social_level(self.state, self._today(self._now())[0])
+
+    def social_link(self, other: str) -> None:
+        """The infrared link brought another pet of this house today."""
+        assert self.state is not None
+        if model.social_link(self.state, self._today(self._now())[0], other):
+            self._save()
+            self._publish()
+
+    @property
+    def senses(self) -> list[str]:
+        """The kinds of house signal mapped in the options (SENSES), never
+        which entities: for the card's "notices" row (top10 2a)."""
+        options = self.config_entry.options
+        return [kind for kind, keys in SENSES if any(options.get(k) for k in keys)]
 
     @property
     def privacy(self) -> bool:
@@ -1017,6 +1061,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 moment: dict[str, Any] | None = {"type": as_type, "at": at}
             elif public and event["type"] in MOMENT_BARE:
                 moment = {"type": event["type"], "at": at}
+                if event.get("cause") in MOMENT_CAUSES_SHOWN:
+                    moment["cause"] = event["cause"]
             elif public and event["type"] in MOMENTS:
                 moment = {**scrubbed, "at": at}
             else:
@@ -1263,7 +1309,9 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         now = self._now()
         if model.life_stage(self.state) == "egg":
             return
-        if model.dream_on_waking(self.state, now, self._today(now)[0], self.rng):
+        if model.dream_on_waking(
+            self.state, now, self._today(now)[0], self.rng, self.pet_id
+        ):
             self._save()
 
     def _check_ins(self, events: list[model.Event]) -> None:
@@ -1477,6 +1525,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         devices."""
         assert self.state is not None
         now = self._now()
+        # Someone looked in while the day's visitor was here: a greeted visitor
+        # for the social meter (top10 §6), whatever else this look counts for.
+        if self._awake() and model.social_greet(
+            self.state, now, self._today(now)[0], self.world
+        ):
+            self._save()
+            self._publish()
         person = self.people.person(user)
         last = self._visits.get(user, -1e12)
         just_home = person.get("arrived", 0) > last
@@ -1790,6 +1845,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         assert self.state is not None
         person = self.people.person(user)
         today, hour = self._today(now)
+        if self._phone_ask_due(user, person, today):
+            # Ahead of the day's questions: it matters now. It is the day's
+            # question, and asked for good only once the card says it showed it
+            # (async_answer "phone"): one the card dropped comes on a later day.
+            P.mark_asked(person, today, hour)
+            self.people.save()
+            return "phone"
         kind = P.choose_question(
             person,
             today,
@@ -1800,6 +1862,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             came_home=came_home,
             rested=any(n["kind"] == "rested" for n in notes),
             pet_once=self._pet_once(user, today),
+            dreamed=bool(self.state.dream and self.state.dream.get("day") == today),
         )
         if kind is None:
             return None
@@ -1811,6 +1874,27 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self._save()
         self.people.save()
         return kind
+
+    def _phone_ask_due(self, user: str, person: dict[str, Any], today: str) -> bool:
+        """Whether the pet asks this person "can I call your phone?" (top10 1a):
+        once ever, house-wide (`phone_asked` in the people store; "forget my
+        data" clears it); only with the Home Assistant app signed in as them
+        (their own phones, never anyone else's); not if they already get this
+        pet's calls; and only after a missed call, or while a real call is open."""
+        state = self.state
+        assert state is not None
+        if (
+            person.get("phone_asked")
+            or (person.get("asked") or {}).get("day")
+            == today  # a question today already
+            or user in state.notify_users
+            or model.life_stage(state) == "egg"
+        ):
+            return False
+        call = state.call
+        if not state.recent_misses and (call is None or call.reason == "fake"):
+            return False
+        return bool(notify.phones(self.hass, user))
 
     def _pet_once(self, user: str, today: str) -> tuple[str, ...]:
         """The pet's own one-time questions still open for this person: its
@@ -1858,6 +1942,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return
         if answer not in P.ANSWERS.get(question, ()):
             raise ValueError(f"{answer} isn't an answer to {question}")
+        if question == "phone":
+            # Shown on their card: asked for good ("yes" also turns notify me on,
+            # from the card). Kept in the people store; "forget my data" clears it.
+            self.people.person(user)["phone_asked"] = True
+            self.people.save()
+            return
         if question == "catchphrase":
             # Only from the close friend it asked, while the question is open:
             # it's the pet's, and everyone hears it.
@@ -1974,7 +2064,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return
         local = dt_util.now()
         today = local.date().isoformat()
-        kind = notify.holiday(local.date())
+        kind = notify.holiday_morning(local.date())
         if kind is None or self._holiday_on == today:
             return
         self._holiday_on = today
@@ -2181,6 +2271,31 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             return None
         return wish
 
+    def spoken_wish(self) -> dict[str, Any] | None:
+        """Today's wish for Assist (gaps-seams 6a): open, or granted today. Only
+        its kind and whether it came true: never who it's for."""
+        wish = self.state.wish if self.state else None
+        if (
+            wish
+            and wish.get("granted")
+            and wish.get("day") == dt_util.now().date().isoformat()
+        ):
+            return {"kind": wish.get("kind"), "granted": True}
+        open_wish = self._open_wish()
+        return {"kind": open_wish.get("kind")} if open_wish else None
+
+    def spoken_visitor(self) -> str | None:
+        """Today's visitor's name for Assist (gaps-seams 6a), once its window is
+        over (credited); None before then, so the surprise isn't spoiled."""
+        visit = model.live_visit(self.state, self.world) if self.state else None
+        if not visit or not visit.get("id") or not visit.get("credited"):
+            return None
+        if visit.get("day") != self._today(self._now())[0]:
+            return None
+        return next(
+            (v.get("name") for v in self.visitors if v.get("id") == visit["id"]), None
+        )
+
     def _mine(self, user: str) -> dict[str, Any]:
         """What only this person sees: their bond, and their own switches. Read,
         never created: an open card mustn't bring back a forgotten record."""
@@ -2351,22 +2466,45 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._publish()
         return result
 
-    async def async_end_game(self, kind: str) -> dict[str, Any]:
+    async def async_forget_games(self, user: str) -> None:
+        """Forget my data: this person's parked dig goes, and a dig in progress
+        no longer names them (it's the household's now). Written at once, as
+        the people store is."""
+        assert self.state is not None
+        dropped = self.state.parked.pop(user, None) is not None
+        game = self.state.game
+        if game is not None and game.player == user:
+            game.player = None
+            dropped = True
+        if dropped:
+            await self.store.async_save(self.state.to_dict())
+
+    async def async_end_game(
+        self, kind: str, context: Context | None = None, shared: bool = False
+    ) -> dict[str, Any]:
         """A person ends the game in progress. Harmless with none. It isn't a
         drop: nothing is counted and the kind isn't marked, so the next game
-        is simply new."""
+        is simply new, except a Berry dig that has shown something: that one
+        is parked for the person ending it (the household with no person),
+        and their next dig carries on from it."""
         assert self.state is not None
         now = self._now()
         self._advance(now)
-        ended = model.end_game(self.state, kind, now)
+        # A shared screen's dig is the household's (PARK_HOUSEHOLD).
+        person = None if shared else await self._person(context)
+        how = model.end_game(self.state, kind, now, person)
         self._dropped_games.discard(kind)
-        if ended:
+        if how:
             self._save()
             self._publish()
-        return {"result": model.OK, "ended": ended}
+        return {"result": model.OK, "ended": how is not None, "parked": how == "parked"}
 
     async def async_play_game(
-        self, guess: str | None, context: Context | None, kind: str = "left_right"
+        self,
+        guess: str | None,
+        context: Context | None,
+        kind: str = "left_right",
+        shared: bool = False,
     ) -> dict[str, Any]:
         """One round of a game, or with no guess, the start of one."""
         assert self.state is not None
@@ -2376,11 +2514,16 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         person = await self._person(context)
         dropped = kind in self._dropped_games
         self._dropped_games.discard(kind)
+        # Whose dig it is: a shared screen's is the household's. The bond,
+        # best and record still go to the person who finishes it.
+        player = None if shared else person
         if guess is None:
-            info, events = model.start_game(self.state, kind, now, self.rng, by)
+            info, events = model.start_game(
+                self.state, kind, now, self.rng, by, player=player
+            )
         else:
             info, events = model.play_game(
-                self.state, guess, now, self.rng, by, kind=kind
+                self.state, guess, now, self.rng, by, kind=kind, player=player
             )
             if dropped and info["result"] == model.OK and info["round"] == 1:
                 # The game the guess was for was dropped (idle, away): this

@@ -81,7 +81,9 @@ async def test_status_answers_in_the_pets_voice(
 ) -> None:
     response = await ask(hass, "VirtualPetStatus", pet="pip")
     assert response.response_type is intent.IntentResponseType.QUERY_ANSWER
-    assert speech(response) == "Pip is hungry: a little peckish."
+    assert speech(response).startswith(
+        "Pip is hungry: a little peckish. It's a child, day "
+    )
     slots = response.speech_slots
     assert slots["mood"] == "hungry"
     assert slots["hunger"] == 30
@@ -124,7 +126,7 @@ async def test_unknown_and_ambiguous_pets(
     with pytest.raises(intent.IntentHandleError, match="Which pet, Pip or Moss"):
         await ask(hass, "VirtualPetStatus")
     response = await ask(hass, "VirtualPetStatus", pet="Moss")
-    assert speech(response).startswith("Moss is still in its egg")
+    assert speech(response).startswith("Moss is snug in its egg")
 
 
 async def test_care_presses_the_button_for_you(
@@ -237,8 +239,12 @@ async def test_example_sentences_with_the_built_in_agent(
     hass: HomeAssistant, with_sentences: None, pip: MockConfigEntry
 ) -> None:
     assert await async_setup_component(hass, "conversation", {})
-    assert await say(hass, "how's Pip doing") == "Pip is hungry: a little peckish."
-    assert await say(hass, "check on my pet") == "Pip is hungry: a little peckish."
+    assert (await say(hass, "how's Pip doing")).startswith(
+        "Pip is hungry: a little peckish. It's a child, day "
+    )
+    assert (await say(hass, "check on my pet")).startswith(
+        "Pip is hungry: a little peckish. It's a child, day "
+    )
     assert await say(hass, "give Pip a treat") == "Pip loved the snack."
     assert await say(hass, "feed my pet") == "Pip is eating."
     assert await say(hass, "lights out, Pip") == "Pip is settling down to sleep."
@@ -259,6 +265,69 @@ async def test_the_pet_calls_a_friend_by_nickname(
     )
     assert speech(response) == "Pip is eating. Thanks, sunbeam!"
     assert "sunbeam" not in speech(await ask(hass, "VirtualPetStatus"))
+
+
+def test_spoken_about_the_stage_wish_and_visitor():
+    """gaps-seams 6a: the stage and day, today's wish (plain kind only) and a
+    visitor whose window is over; nothing for an egg's stage."""
+    from custom_components.virtual_pet.intent import WISH_SPOKEN, spoken_about
+
+    assert spoken_about("teen", 5.4, None, None) == ["It's a teen, day 6."]
+    assert spoken_about("adult", 20.0, None, None) == ["It's an adult, day 21."]
+    assert spoken_about("egg", 0.1, {"kind": "play"}, None) == [
+        "Today it wishes for a game together."
+    ]
+    assert spoken_about("teen", 5.4, {"kind": "bath"}, "robin") == [
+        "It's a teen, day 6.",
+        "Today it wishes for a bubble bath.",
+        "A robin came by today.",
+    ]
+    assert spoken_about("teen", 5.4, {"kind": "rain"}, None)[1] == (
+        "Today it wishes to see the rain."
+    )
+    assert spoken_about("teen", 5.4, {"kind": "play", "granted": True}, None)[1] == (
+        "Its wish came true today."
+    )
+    assert spoken_about("teen", 5.4, None, "owl")[1] == "An owl came by today."
+    assert spoken_about("teen", 5.4, None, "shooting star")[1] == (
+        "A shooting star went by today."
+    )
+    from custom_components.virtual_pet import model
+
+    assert set(WISH_SPOKEN) == set(model.WISHES)
+
+
+async def test_status_says_the_wish_and_a_visitor_after_its_window(
+    hass: HomeAssistant, pip: MockConfigEntry
+) -> None:
+    """The aimed wish's friend is never said; the visitor only once credited;
+    asleep (and the sitter's privacy, which says asleep) adds nothing."""
+    coordinator = pip.runtime_data
+    state = coordinator.state
+    today = dt_util.now().date().isoformat()
+    state.wish = {"day": today, "kind": "bath", "for": "someone"}
+    visitor = coordinator.visitors[0]
+    state.visit = {
+        "day": today,
+        "world": coordinator.world,
+        "id": visitor["id"],
+        "from": 0,
+        "until": 1,
+        "credited": False,
+    }
+    text = speech(await ask(hass, "VirtualPetStatus"))
+    assert "Today it wishes for a bubble bath." in text
+    assert "someone" not in text and visitor["name"] not in text
+    state.visit["credited"] = True
+    text = speech(await ask(hass, "VirtualPetStatus"))
+    said = (
+        "A shooting star went by today."
+        if visitor["name"] == "shooting star"
+        else f"{'An' if visitor['name'][:1] in 'aeiou' else 'A'} {visitor['name']} came by today."
+    )
+    assert text.endswith(said)
+    state.asleep = True
+    assert speech(await ask(hass, "VirtualPetStatus")) == "Pip is asleep."
 
 
 def test_spoken_status_reads_well_aloud():
@@ -343,7 +412,9 @@ async def test_status_has_no_personality_before_teen(
 ) -> None:
     response = await ask(hass, "VirtualPetStatus")
     assert response.speech_slots["personality"] is None
-    assert speech(response) == "Pip is hungry: a little peckish."
+    assert speech(response).startswith(
+        "Pip is hungry: a little peckish. It's a child, day "
+    )
 
 
 async def test_llm_prompt_has_the_voice_notes(

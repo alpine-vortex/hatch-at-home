@@ -16,6 +16,7 @@ from datetime import UTC, date, datetime, time, timedelta, tzinfo
 import math
 import random
 from typing import Any
+import zlib
 
 from . import rates as R
 from .home import COZY_FLAGS, EXCITED_FLAGS, REASONS, HomeEffect
@@ -199,6 +200,14 @@ def _game(v: Any) -> Game | None:
         _num(number) and int(number) in NUMBERS
     ):
         return None  # nothing to guess against
+    basket = v.get("basket", 0)
+    if v.get("kind") == "dig" and not (
+        _num(basket)
+        and 0 <= int(basket) < DIG_BERRIES  # the sixth berry banks itself
+        and _int(v.get("wins"), 0, 0) < R.DIG_WIN_AT
+        and _int(v.get("rounds"), 0, 0) < R.GAME_ROUNDS
+    ):
+        return None  # a dig that can't be: one already over, or a pile too full
     return Game(
         started=float(v["started"]),
         last_at=float(v["last_at"]),
@@ -206,7 +215,26 @@ def _game(v: Any) -> Game | None:
         wins=_int(v.get("wins"), 0, 0),
         kind=v.get("kind", "left_right"),
         number=int(number) if _num(number) else None,
+        basket=int(basket) if v.get("kind") == "dig" else 0,
+        player=v["player"] if isinstance(v.get("player"), str) else None,
     )
+
+
+def _parked(v: Any, born: float) -> dict[str, Game]:
+    """The parked digs as loaded. A save from before they were per person
+    holds one dig: it goes to the household. A damaged one, one that isn't a
+    dig, or one older than the pet (an older version's egg kept a later
+    version's key) is dropped."""
+    if isinstance(v, dict) and "kind" in v:
+        v = {PARK_HOUSEHOLD: v}
+    out: dict[str, Game] = {}
+    for slot, raw in _mapping(v).items():
+        game = _game(raw)
+        if isinstance(slot, str) and game and game.kind == "dig":
+            if game.started >= born:
+                game.player = None if slot == PARK_HOUSEHOLD else slot
+                out[slot] = game
+    return out
 
 
 def _bond(bond: dict[str, Any]) -> dict[str, Any]:
@@ -262,6 +290,73 @@ def _bond(bond: dict[str, Any]) -> dict[str, Any]:
     ):
         del out["catchphrase"]  # a broken question is asked afresh
     return out
+
+
+def social_from(v: Any) -> dict[str, dict[str, Any]]:
+    """The social meter's days as loaded: a day key that is a date, with a bool
+    `visitor` and a list of str `links` (each once); anything else dropped."""
+    out: dict[str, dict[str, Any]] = {}
+    for day, entry in _mapping(v).items():
+        try:
+            date.fromisoformat(day)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(entry, dict):
+            continue
+        links = entry.get("links")
+        out[day] = {
+            "visitor": entry.get("visitor") is True,
+            "links": list(dict.fromkeys(x for x in links if isinstance(x, str)))
+            if isinstance(links, list)
+            else [],
+        }
+    return out
+
+
+def _social_day(state: PetState, today: str) -> dict[str, Any]:
+    """Today's entry, the week's older days kept and the rest (and any day
+    ahead of today: a clock that ran ahead) dropped."""
+    first = (date.fromisoformat(today) - timedelta(days=R.SOCIAL_DAYS - 1)).isoformat()
+    state.social = {d: e for d, e in state.social.items() if first <= d <= today}
+    return state.social.setdefault(today, {"visitor": False, "links": []})
+
+
+def social_greet(state: PetState, now: float, today: str, world: str) -> bool:
+    """Someone looked in while the day's visitor was here: the day counts a
+    greeted visitor (once). True if the save changed."""
+    visit = live_visit(state, world)
+    if not visit or not visit.get("id") or not visit["from"] <= now < visit["until"]:
+        return False
+    day = _social_day(state, today)
+    if day["visitor"]:
+        return False
+    day["visitor"] = True
+    return True
+
+
+def social_link(state: PetState, today: str, other: str) -> bool:
+    """The infrared link brought this neighbour today (once a day each). True if
+    the save changed."""
+    day = _social_day(state, today)
+    if other in day["links"]:
+        return False
+    day["links"].append(other)
+    return True
+
+
+def social_level(state: PetState, today: str) -> int:
+    """The week's level, 0 to R.SOCIAL_MAX (halves of five hearts). A pet with
+    no link all week (alone in the house, or on a card of its own) gets more for
+    each visitor, so it can still fill; a linked one keeps the link credit."""
+    first = (date.fromisoformat(today) - timedelta(days=R.SOCIAL_DAYS - 1)).isoformat()
+    week = [e for d, e in state.social.items() if first <= d <= today]
+    solo = not any(e.get("links") for e in week)
+    visitor = R.SOCIAL_VISITOR_SOLO if solo else R.SOCIAL_VISITOR
+    halves = sum(
+        (visitor if e.get("visitor") else 0) + R.SOCIAL_LINK * len(e.get("links", []))
+        for e in week
+    )
+    return min(R.SOCIAL_MAX, halves)
 
 
 def _visit(v: Any) -> dict[str, Any] | None:
@@ -362,6 +457,12 @@ class Game:
     wins: int = 0
     kind: str = "left_right"  # one of GAMES
     number: int | None = None  # Higher or Lower: the number on show
+    # Berry dig: this round's berries, not yet banked (the bank is wins). The
+    # pile left is always DIG_BEES bees and DIG_BERRIES - basket berries.
+    basket: int = 0
+    # Berry dig: whose dig it is (an HA user id; None for the household: an
+    # automation, or a screen with no person), so a ✕ parks it for them.
+    player: str | None = None
 
 
 @dataclass
@@ -443,6 +544,11 @@ class PetState:
     # when: the next start shows it again for OPENING_KEEP_MINUTES (no reroll).
     opening: int | None = None
     opening_at: float | None = None
+    # Berry digs closed with ✕ after they had shown something, one per person
+    # (HA user id, or PARK_HOUSEHOLD for calls with no person): that person's
+    # next dig carries on from theirs. Never in `game`, so no drop (idle,
+    # asleep, away) sees them, and they have no time limit.
+    parked: dict[str, Game] = field(default_factory=dict)
     games: dict[str, dict[str, int]] = field(default_factory=dict)  # kind -> counts
     sick_unannounced: str | None = (
         None  # cause, if it fell sick asleep (told on waking)
@@ -483,6 +589,11 @@ class PetState:
     # scheduled on the first tick the pet can roll). The device's too.
     basket: list[dict[str, Any]] = field(default_factory=list)
     next_find_at: float | None = None
+    # The social meter (top10 §6): the last R.SOCIAL_DAYS local days, {day:
+    # {"visitor": True if someone greeted the day's visitor, "links": [pet ids
+    # met over the infrared link]}}. The pet's own: no person in it, and a new
+    # egg starts with none.
+    social: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the Store, with any keys this version doesn't know."""
@@ -590,6 +701,7 @@ class PetState:
                     call.get("recall") is True,
                 )
         kwargs["game"] = _game(kwargs.get("game"))
+        kwargs["parked"] = _parked(kwargs.get("parked"), kwargs["born"])
         opening, opening_at = (
             kwargs.get("opening"),
             _float(kwargs.get("opening_at"), None),
@@ -629,6 +741,7 @@ class PetState:
         kwargs["visit"] = _visit(kwargs.get("visit"))
         kwargs["collection"] = collection_from(kwargs.get("collection"))
         kwargs["basket"] = basket_from(kwargs.get("basket"))
+        kwargs["social"] = social_from(kwargs.get("social"))
         for key in (
             "favourite_said",
             "catchphrase",
@@ -788,6 +901,9 @@ def shift_times(state: PetState, delta: float) -> None:
         state.game.last_at += delta
     if state.opening_at is not None:
         state.opening_at += delta
+    for parked in state.parked.values():
+        parked.started += delta
+        parked.last_at += delta
     if state.call is not None:
         state.call.started += delta
         state.call.deadline += delta
@@ -2039,21 +2155,43 @@ def _log(state: PetState, entry: dict[str, Any]) -> None:
 # --- Games (the card's play button) -------------------------------------------
 
 SIDES = ("left", "right")
-# Each game and the guesses it takes. left_right is luck (the first-generation
-# Tamagotchi's game); higher_lower is odds (the second generation's).
+# Each game and the guesses it takes, left button first. left_right is luck
+# (the first-generation Tamagotchi's game); higher_lower is odds (the second
+# generation's); dig is push-your-luck (the slower game).
 GAMES: dict[str, tuple[str, ...]] = {
     "left_right": SIDES,
     "higher_lower": ("lower", "higher"),
+    "dig": ("keep", "dig"),
 }
 NUMBERS = range(1, 10)  # Higher or Lower's numbers
+# Berry dig: each round a fresh leaf pile hides this many berries and bees. A
+# dig turns one leaf: a berry goes in the round's basket, a bee scares the
+# basket off and ends the round. Keep banks the basket and ends the round.
+DIG_BERRIES = 6
+DIG_BEES = 2
+# The parked dig of calls with no person (automations, a screen with none).
+# HA user ids are hex, so they never clash with it.
+PARK_HOUSEHOLD = "household"
+
+
+def _slot(player: str | None) -> str:
+    return player or PARK_HOUSEHOLD
 
 
 def start_game(
-    state: PetState, kind: str, now: float, rng: random.Random, by: str | None = None
+    state: PetState,
+    kind: str,
+    now: float,
+    rng: random.Random,
+    by: str | None = None,
+    player: str | None = None,
 ) -> tuple[dict[str, Any], list[Event]]:
     """Start a game of this kind (dropping any game in progress, except one of
     this kind with no guess yet, which carries on), and return its opening:
-    Higher or Lower's first number. The caller advances the pet to now first."""
+    Higher or Lower's first number. A Berry dig is the player's own (player:
+    their HA user id, None for the household): their parked dig carries on,
+    and another person's dig in progress is parked for them, not taken over.
+    The caller advances the pet to now first."""
     if kind not in GAMES:
         raise ValueError(f"unknown game {kind}")
     events: list[Event] = []
@@ -2064,13 +2202,24 @@ def start_game(
         return {"result": refusal}, events
     _spoil_whine(state, events)
     game = state.game
+    if game is not None and game.kind == "dig" == kind and game.player != player:
+        # Someone else's dig: put aside for them (free), as their ✕ would.
+        end_game(state, kind, now, game.player)
+        game = None
     if game is not None and game.kind == kind:
         # Carry on with the same game, guessed or not: the same round, score
         # and number, so starting over can't fish for an easy opening.
         game.last_at = now
         return _round_info(game), events
     events += drop_game(state, now, by, switched=True)
+    if kind == "dig" and _slot(player) in state.parked:
+        # Their dig closed with ✕ carries on: the same round, bank and basket.
+        game = state.game = state.parked.pop(_slot(player))
+        game.last_at = now
+        return _round_info(game), events
     game = state.game = Game(started=now, last_at=now, kind=kind)
+    if kind == "dig":
+        game.player = player
     if kind == "higher_lower":
         kept = state.opening
         if (
@@ -2085,18 +2234,34 @@ def start_game(
     return _round_info(game), events
 
 
-def end_game(state: PetState, kind: str, now: float) -> bool:
+def end_game(
+    state: PetState, kind: str, now: float, player: str | None = None
+) -> str | None:
     """A person ends the game in progress of this kind (the card's "maybe
     later"). Unlike a drop, it costs and earns nothing: no energy, happiness,
     played count, log line or event. A Higher or Lower opening nobody guessed
-    on is kept, as in a drop, so quitting can't reroll it. True if one ended."""
+    on is kept, as in a drop, so quitting can't reroll it. A Berry dig that has
+    shown anything is parked instead, for the person who ends it (player; None
+    for the household), so their next dig carries on from it.
+    Returns "ended", "parked", or None if there was no such game."""
     game = state.game
     if game is None or game.kind != kind:
-        return False
+        return None
     state.game = None
+    if game.kind == "dig" and (game.rounds or game.wins or game.basket):
+        game.player = player
+        state.parked[_slot(player)] = game
+        return "parked"
     if game.rounds == 0 and game.kind == "higher_lower" and game.number is not None:
         state.opening, state.opening_at = game.number, now
-    return True
+    return "ended"
+
+
+def _game_score(game: Game) -> str:
+    """A game's score for the care log."""
+    if game.kind == "dig":
+        return f"{game.wins} berries"
+    return f"{game.wins}/{game.rounds}"
 
 
 def drop_game(
@@ -2132,7 +2297,7 @@ def drop_game(
                 "action": "game",
                 "by": by,
                 "result": "lost",
-                "score": f"{game.wins}/{game.rounds}",
+                "score": _game_score(game),
                 "game": game.kind,
             },
         )
@@ -2165,19 +2330,31 @@ def play_game(
     rng: random.Random,
     by: str | None = None,
     kind: str = "left_right",
+    player: str | None = None,
 ) -> tuple[dict[str, Any], list[Event]]:
     """One round of a game; the last one settles it.
 
     left_right: the pet hides left or right and the player guesses; the first
     guess starts a game. higher_lower: the player guesses whether the next
     number (1-9, never the same) is higher or lower; start_game shows the
-    first. The caller advances the pet to now first. Returns what the card
-    needs to draw the round, and events.
+    first. dig: one tap of a Berry dig (dig a leaf, or keep the basket); a
+    berry doesn't finish a round, so "round" in the reply is rounds finished.
+    start_game starts it, and keep on an empty basket is refused
+    (empty_basket) with nothing changed. The caller advances the pet to now
+    first. Returns what the card needs to draw the round, and events.
     """
     if guess not in GAMES.get(kind, ()):
         raise ValueError(f"{guess} is not a guess in {kind}")
     events: list[Event] = []
     game = state.game
+    if (
+        guess == "keep"
+        and game is not None
+        and game.kind == "dig"
+        and kind == "dig"
+        and game.basket == 0
+    ):
+        return {"result": "empty_basket"}, events  # nothing to keep; nothing changes
     refusal = _refuse_play(state)
     if refusal is None or (
         refusal == "too_tired" and game is not None and game.kind == kind
@@ -2190,6 +2367,9 @@ def play_game(
     if game is None:
         if kind != "left_right":
             # Nothing to guess against yet; the card starts the game first.
+            # A dig of theirs put aside (another screen's ✕) says so.
+            if kind == "dig" and _slot(player) in state.parked:
+                return {"result": "no_game", "parked": True}, events
             return {"result": "no_game"}, events
         info, started = start_game(state, kind, now, rng, by)
         events += started
@@ -2199,8 +2379,34 @@ def play_game(
         assert game is not None
     if kind == "higher_lower":
         assert game.number is not None
-    game.rounds += 1
     game.last_at = now
+    if kind == "dig":
+        extra = _dig(game, guess, rng)
+        info = {**_round_info(game), **extra}
+    else:
+        info = _guess_round(game, guess, rng)
+    if not info["done"]:
+        return info, events
+    state.game = None
+    if kind == "dig":
+        won = game.wins >= R.DIG_WIN_AT
+    else:
+        won = game.wins >= R.GAME_WIN_AT
+    if not won:
+        happiness = R.GAME_LOSE_HAPPINESS
+    elif kind == "left_right":
+        happiness = R.GAME_WIN_HAPPINESS
+    elif kind == "dig":
+        happiness = R.DIG_WIN_HAPPINESS
+    else:
+        happiness = R.SKILL_GAME_WIN_HAPPINESS
+    return _finish_game(state, game, won, happiness, info, now, by, events)
+
+
+def _guess_round(game: Game, guess: str, rng: random.Random) -> dict[str, Any]:
+    """One round of Left or Right or Higher or Lower: one guess, settled."""
+    game.rounds += 1
+    kind = game.kind
     if kind == "higher_lower":
         shown = game.number
         game.number = rng.choice([n for n in NUMBERS if n != shown])
@@ -2211,17 +2417,41 @@ def play_game(
         correct = went == guess
         extra = {"went": went}
     game.wins += correct
-    info = {**_round_info(game), **extra, "correct": correct}
-    if not info["done"]:
-        return info, events
-    state.game = None
-    won = game.wins >= R.GAME_WIN_AT
-    if not won:
-        happiness = R.GAME_LOSE_HAPPINESS
-    elif kind == "left_right":
-        happiness = R.GAME_WIN_HAPPINESS
+    return {**_round_info(game), **extra, "correct": correct}
+
+
+def _dig(game: Game, guess: str, rng: random.Random) -> dict[str, Any]:
+    """One tap of a Berry dig, settled in the same call: a dig is drawn now
+    (no order dealt ahead, so a parked pile can't be peeked at)."""
+    if guess == "keep":
+        found = "kept"
     else:
-        happiness = R.SKILL_GAME_WIN_HAPPINESS
+        berries = DIG_BERRIES - game.basket
+        found = "berry" if rng.randrange(berries + DIG_BEES) < berries else "bee"
+    if found == "berry":
+        game.basket += 1
+        if game.basket < DIG_BERRIES:
+            return {"found": found, "round_over": False}
+        # The sixth berry: only bees are left, so the basket banks itself.
+    if found != "bee":
+        game.wins += game.basket
+    game.basket = 0
+    game.rounds += 1
+    return {"found": found, "round_over": True}
+
+
+def _finish_game(
+    state: PetState,
+    game: Game,
+    won: bool,
+    happiness: float,
+    info: dict[str, Any],
+    now: float,
+    by: str | None,
+    events: list[Event],
+) -> tuple[dict[str, Any], list[Event]]:
+    """A game's last round settled it: pay, count, log and tell."""
+    kind = game.kind
     if won:
         happiness += R.PLAYER_WIN_HAPPINESS * _scale(state, "player")
     happiness_before = state.happiness
@@ -2237,7 +2467,7 @@ def play_game(
     counts["won"] += won
     result = "won" if won else "lost"
     info["won"] = won
-    score = f"{game.wins}/{game.rounds}"
+    score = _game_score(game)
     _log(
         state,
         {
@@ -2262,13 +2492,18 @@ def _round_info(game: Game) -> dict[str, Any]:
     info: dict[str, Any] = {
         "result": OK,
         "game": game.kind,
-        "round": game.rounds,
+        "round": game.rounds,  # rounds finished (a dig that finds a berry isn't one)
         "rounds": R.GAME_ROUNDS,
         "wins": game.wins,
         "done": game.rounds >= R.GAME_ROUNDS,
     }
     if game.kind == "higher_lower":
         info["number"] = game.number
+    if game.kind == "dig":
+        info["basket"] = game.basket
+        info["leaves"] = DIG_BERRIES + DIG_BEES - game.basket
+        info["win_at"] = R.DIG_WIN_AT
+        info["done"] = info["done"] or game.wins >= R.DIG_WIN_AT
     return info
 
 
@@ -2427,6 +2662,9 @@ def daily_visit(
     visitor's gift, not the pet's find). True if the save changed."""
     changed = credit_visit(state, now, world)
     visit = live_visit(state, world)
+    if changed and visit:
+        # Tonight it may dream of the visitor (top10 6d; other seeds come first).
+        dream_seed(state, {"kind": "visitor", "id": visit["id"], "world": world}, now)
     if changed and finds is not None and rng.random() < R.VISIT_LEAVES_FIND:
         leave_find(state, visit, visitors, finds, known or {}, rng)
     if visit and visit.get("day") == today:
@@ -2784,11 +3022,71 @@ def dream_seed(state: PetState, seed: dict[str, Any], now: float) -> None:
     del state.dream_seeds[: -R.DREAM_SEEDS_KEPT]
 
 
+# Plain dreams for a morning with nothing to dream about (fresh-moment 6), each a
+# line in the card's DREAMS. A plain list: any length turns.
+PLAIN_DREAMS = (
+    "flying",
+    "clouds",
+    "feast",
+    "swim_fish",
+    "acorn",
+    "tall",
+    "stars_sang",
+    "blanket",
+    "secret_door",
+    "leaf_ride",
+    "bubbles",
+    "birds_talk",
+    "tiny_boat",
+    "pillow_hill",
+    "moon_dance",
+    "pie",
+    "rainbow_slide",
+    "candy_clouds",
+    "tiny_hat",
+    "giant_sock",
+    "parade",
+    "juggling",
+    "pink_sky",
+    "big_puddle",
+    "sing_along",
+    "bean",
+    "cake_house",
+    "jelly",
+    "lantern",
+    "whistle",
+)
+
+
+def plain_dream(pet_id: str, today: str) -> str:
+    """Today's plain dream for this pet: each cycle of len(PLAIN_DREAMS) days walks
+    the list in its own shuffled order, so no kind comes twice in a cycle and two
+    pets don't keep step. The order is seeded by a fixed hash of the pet (crc32,
+    the same after a restart: hash() is salted per process) and the cycle; a
+    cycle's first never repeats the last one's last. Nothing is saved."""
+    n = len(PLAIN_DREAMS)
+    key = zlib.crc32(f"dream|{pet_id}".encode())
+    cycle, pos = divmod(date.fromisoformat(today).toordinal() + key % n, n)
+
+    def order(c: int) -> list[str]:
+        kinds = list(PLAIN_DREAMS)
+        random.Random(key ^ c).shuffle(kinds)
+        return kinds
+
+    kinds = order(cycle)
+    if n > 1 and kinds[0] == order(cycle - 1)[-1]:
+        kinds[0], kinds[1] = (
+            kinds[1],
+            kinds[0],
+        )  # not the same dream two mornings running
+    return kinds[pos]
+
+
 def dream_on_waking(
-    state: PetState, now: float, today: str, rng: random.Random
+    state: PetState, now: float, today: str, rng: random.Random, pet_id: str = ""
 ) -> list[Event]:
     """In the morning, the pet dreamed of one of yesterday's moments (or, with
-    none, maybe of something plain). The seeds are used up either way."""
+    none, of something plain: plain_dream). The seeds are used up either way."""
     fresh = [s for s in state.dream_seeds if now - s["at"] < R.DREAM_SEED_HOURS * 3600]
     state.dream_seeds = []
     picks = [p for p in state.dream_picks if now - p["at"] < R.DREAM_PICK_HOURS * 3600]
@@ -2804,10 +3102,11 @@ def dream_on_waking(
         }
         return [{"type": "dreamed", "kind": "picked"}]
     if fresh:
-        seed = rng.choice(fresh)
+        # A visitor's dream only when nothing else happened (top10 6d).
+        seed = rng.choice([s for s in fresh if s.get("kind") != "visitor"] or fresh)
         state.dream = {k: v for k, v in seed.items() if k != "at"} | {"day": today}
     elif rng.random() < R.DREAM_PLAIN_CHANCE:
-        state.dream = {"kind": rng.choice(["flying", "clouds", "feast"]), "day": today}
+        state.dream = {"kind": plain_dream(pet_id, today), "day": today}
     else:
         return []
     # The event says only what kind: the title, the pick and who asked stay in
@@ -3250,7 +3549,7 @@ _WEIGHT_REASONS = {
 
 
 _CALL_REASONS = {
-    "sick": "feeling sick, medicine please?",
+    "sick": "feeling sick... medicine?",
     "hunger": "tummy rumbling!",
     "dirty": "it's getting stinky in here",
     "energy": "so tired... sleep time?",

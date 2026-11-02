@@ -442,7 +442,7 @@ async def test_rain_makes_a_blanket_request(
     hass.states.async_set("weather.home", "rainy")
     await settle(hass, freezer)
     mood = hass.states.get("sensor.pip_mood")
-    assert mood.attributes["reason"] == "rainy day, blanket please?"
+    assert mood.attributes["reason"] == "rainy day... a blanket would be nice"
     assert mood.attributes["requests"] == ["blanket"]
     assert hass.states.get("button.pip_blanket").state != STATE_UNAVAILABLE
 
@@ -881,6 +881,7 @@ async def test_busy_attributes_stay_out_of_history(
         "traits",
         "shell_finish_options",
         "shell_locked",
+        "senses",
     ):
         assert key in attrs
         assert key in LifeStageSensor._unrecorded_attributes, key
@@ -1020,7 +1021,7 @@ async def test_ending_a_game_is_free_and_the_next_one_is_new(
     finished = async_capture_events(hass, f"{DOMAIN}_game_finished")
     # No game: harmless.
     reply = await game(hass, end=True)
-    assert reply == {"result": "ok", "ended": False}
+    assert reply == {"result": "ok", "ended": False, "parked": False}
     # Mid Left/Right.
     await game(hass, guess="left")
     await game(hass, guess="left")
@@ -1049,6 +1050,84 @@ async def test_ending_a_game_is_free_and_the_next_one_is_new(
     await game(hass, game="higher_lower")
     fresh = await game(hass, game="higher_lower", guess="higher")
     assert fresh["round"] == 1 and "restarted" not in fresh
+
+
+async def test_a_parked_berry_dig_carries_on_across_a_restart(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    """✕ on a dig that has shown something parks it (free); a restart keeps
+    it; the next dig start carries on. Keep on an empty basket is refused."""
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0, energy=90.0)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    started = await game(hass, game="dig")
+    assert (started["round"], started["basket"], started["leaves"]) == (0, 0, 8)
+    assert await game(hass, game="dig", guess="keep") == {"result": "empty_basket"}
+    # Dig until something is shown, then ✕.
+    tap = await game(hass, game="dig", guess="dig")
+    shown = (tap["round"], tap["wins"], tap["basket"])
+    log = len(coordinator.state.care_log)
+    assert await game(hass, game="dig", end=True) == {
+        "result": "ok",
+        "ended": True,
+        "parked": True,
+    }
+    assert coordinator.state.game is None
+    assert list(coordinator.state.parked) == [
+        model.PARK_HOUSEHOLD
+    ]  # no person: the household's
+    assert len(coordinator.state.care_log) == log and not coordinator.state.games
+    await hass.config_entries.async_reload("test_pet")
+    await hass.async_block_till_done()
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    assert list(coordinator.state.parked) == [model.PARK_HOUSEHOLD]
+    back = await game(hass, game="dig")
+    assert (back["round"], back["wins"], back["basket"]) == shown
+    assert coordinator.state.parked == {} and coordinator.state.game.kind == "dig"
+
+
+async def test_a_parked_berry_dig_is_the_person_who_parked_it(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    hass_storage[STORE_KEY] = hatched_pet(now, happiness=50.0, energy=90.0)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    ann = await hass.auth.async_create_user("Ann")
+    bob = await hass.auth.async_create_user("Bob")
+
+    async def as_(user, **data: Any) -> dict[str, Any]:
+        return await hass.services.async_call(
+            DOMAIN,
+            "play_game",
+            {"entity_id": "button.pip_feed", "game": "dig", **data},
+            blocking=True,
+            return_response=True,
+            context=Context(user_id=user.id),
+        )
+
+    await as_(ann)
+    tap = await as_(ann, guess="dig")
+    assert (await as_(ann, end=True))["parked"] is True
+    assert list(coordinator.state.parked) == [ann.id]
+    fresh = await as_(bob)
+    assert (fresh["round"], fresh["wins"], fresh["basket"]) == (0, 0, 0)
+    assert await as_(bob, end=True) == {"result": "ok", "ended": True, "parked": False}
+    back = await as_(ann)
+    assert (back["round"], back["wins"], back["basket"]) == (
+        tap["round"],
+        tap["wins"],
+        tap["basket"],
+    )
+    # A shared screen (Ann signed in on the kitchen tablet): the household's slot.
+    await as_(ann, end=True)
+    await as_(ann, shared=True)
+    shared_tap = await as_(ann, shared=True, guess="dig")
+    assert (await as_(ann, shared=True, end=True))["parked"] is True
+    assert set(coordinator.state.parked) == {ann.id, model.PARK_HOUSEHOLD}
+    home = await game(hass, game="dig")  # an automation carries on the same one
+    assert (
+        home["basket"] == shared_tap["basket"] and home["round"] == shared_tap["round"]
+    )
 
 
 async def test_a_guess_from_another_game_is_refused(
@@ -3656,3 +3735,227 @@ async def test_unload_after_startup_does_not_remove_a_spent_listener(
     assert await hass.config_entries.async_unload(config.entry_id)
     await hass.async_block_till_done()
     assert "Unable to remove unknown job listener" not in caplog.text
+
+
+async def test_phone_question_once_after_a_miss_with_the_app_only(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """top10 1a: after a missed call the pet asks "can I call your phone?" once
+    ever, only someone signed in to the HA app on a phone of their own, never
+    someone already getting its calls; "forget my data" clears the flag."""
+    freezer.move_to("2026-10-28 17:00:00+00:00")
+    now = dt_util.utcnow().timestamp()
+    me = await friend(hass, 0)
+    other = await hass.auth.async_create_user("Other")
+    hass_storage[STORE_KEY] = hatched_pet(now, recent_misses=[now - 600])
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    # Another person's phone is not mine: no question for me yet.
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": other.id, "device_name": "Their Phone"}
+    ).add_to_hass(hass)
+    async_mock_service(hass, "notify", "mobile_app_their_phone")
+    assert (await look(hass, me.id))["ask"] != "phone"
+    assert "phone_asked" not in coordinator.people.person(me.id)
+    # With my own phone: asked, once.
+    MockConfigEntry(
+        domain="mobile_app", data={"user_id": me.id, "device_name": "My Phone"}
+    ).add_to_hass(hass)
+    async_mock_service(hass, "notify", "mobile_app_my_phone")
+    coordinator._visits.clear()
+    # Today's question already asked: not today (audit #2).
+    coordinator.people.person(me.id)["asked"] = {"day": "2026-10-28"}
+    assert (await look(hass, me.id))["ask"] != "phone"
+    coordinator._visits.clear()
+    coordinator.people.person(me.id).pop("asked", None)
+    assert (await look(hass, me.id))["ask"] == "phone"
+    # Sent, but the card never showed it: not asked for good, so it comes again
+    # (another day: it was the day's question) (audit #1).
+    assert "phone_asked" not in coordinator.people.person(me.id)
+    coordinator._visits.clear()
+    assert (await look(hass, me.id))["ask"] != "phone"  # once a day
+    coordinator._visits.clear()
+    coordinator.people.person(me.id).pop("asked", None)  # the next day
+    assert (await look(hass, me.id))["ask"] == "phone"
+    # The card says it showed it: asked for good.
+    await coordinator.async_answer(me.id, "phone", "shown")
+    assert coordinator.people.person(me.id)["phone_asked"] is True
+    with pytest.raises(ValueError):
+        await coordinator.async_answer(me.id, "phone", "yes")  # only "shown"
+    coordinator._visits.clear()
+    coordinator.people.person(me.id).pop("asked", None)
+    assert (await look(hass, me.id))["ask"] != "phone"
+    # Forget my data: the flag goes with the rest (asked again, once).
+    await coordinator.people.forget(me.id)
+    assert "phone_asked" not in coordinator.people.person(me.id)
+    # Already getting this pet's calls: never asked.
+    coordinator.state.notify_users.append(me.id)
+    coordinator._visits.clear()
+    assert (await look(hass, me.id))["ask"] != "phone"
+    # And no miss, no open call: not asked either.
+    coordinator.state.notify_users.remove(me.id)
+    coordinator.state.recent_misses.clear()
+    coordinator._visits.clear()
+    coordinator.people.person(me.id).pop("asked", None)
+    assert (await look(hass, me.id))["ask"] != "phone"
+    # Nothing about it on any state.
+    for state in hass.states.async_all():
+        assert "phone_asked" not in json.dumps(dict(state.attributes))
+
+
+async def test_senses_are_kinds_never_entities(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    """top10 2a: the life stage's `senses` lists only the kinds mapped (weather,
+    tv...), in a fixed order; never an entity id or name, never presence, motion or
+    bedtime; out of history."""
+    from custom_components.virtual_pet.sensor import LifeStageSensor
+
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    entities = {
+        "weather": "weather.secret_garden",
+        "tv": "media_player.den_tv_xyz",
+        "chores": ["todo.kitchen_jobs"],
+        "moon_phase": "sensor.moon_phase_abc",
+        "zone": "zone.hidden_place",
+        "motion": ["binary_sensor.hall_motion_q"],
+        "bedtime": "21:30:00",
+    }
+    config = await setup_with_house(hass, **entities)
+    attrs = hass.states.get("sensor.pip_life_stage").attributes
+    assert attrs["senses"] == ["weather", "tv", "chores", "moon"]
+    assert "senses" in LifeStageSensor._unrecorded_attributes
+    text = json.dumps(dict(attrs))
+    for value in (
+        "secret_garden",
+        "den_tv",
+        "kitchen_jobs",
+        "moon_phase_abc",
+        "hidden_place",
+        "hall_motion",
+        "motion",
+        "zone",
+        "bedtime",
+    ):
+        assert value not in text, value
+    # Nothing mapped: an empty list.
+    hass.config_entries.async_update_entry(config, options={})
+    await hass.config_entries.async_reload(config.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.pip_life_stage").attributes["senses"] == []
+
+
+async def test_social_meter_links_and_a_greeted_visitor(
+    hass: HomeAssistant,
+    hass_storage: dict[str, Any],
+    hass_ws_client: Any,
+) -> None:
+    """top10 §6: the card's virtual_pet/linked counts each pet once a day for the
+    other; a look during the day's visit counts a greeted visitor; social_level
+    is on the life stage, out of history, and the days are redacted in
+    diagnostics."""
+    from custom_components.virtual_pet import diagnostics
+    from custom_components.virtual_pet.sensor import LifeStageSensor
+
+    await hass.config.async_set_time_zone("UTC")
+    now = dt_util.utcnow().timestamp()
+    pets = []
+    for entry_id, name in (("test_pet", "Pip"), ("other_pet", "Bo")):
+        hass_storage[f"{DOMAIN}.{entry_id}"] = {
+            **hatched_pet(now),
+            "key": f"{DOMAIN}.{entry_id}",
+        }
+        hass_storage[f"{DOMAIN}.{entry_id}"]["data"]["name"] = name
+        config = MockConfigEntry(
+            domain=DOMAIN,
+            title=name,
+            data={CONF_NAME: name, "new_pet": True},
+            entry_id=entry_id,
+        )
+        config.add_to_hass(hass)
+        assert await hass.config_entries.async_setup(config.entry_id)
+        await hass.async_block_till_done()
+        pets.append(config.runtime_data)
+
+    def level(pet: str) -> int:
+        return hass.states.get(f"sensor.{pet}_life_stage").attributes["social_level"]
+
+    assert level("pip") == 0 and level("bo") == 0
+    assert "social_level" in LifeStageSensor._unrecorded_attributes
+    client = await hass_ws_client(hass)
+    for _ in range(2):  # twice the same day: once
+        await client.send_json_auto_id(
+            {
+                "type": "virtual_pet/linked",
+                "entity_id": "sensor.pip_mood",
+                "other": "sensor.bo_mood",
+            }
+        )
+        assert (await client.receive_json())["success"]
+        await hass.async_block_till_done()
+    assert level("pip") == model.R.SOCIAL_LINK and level("bo") == model.R.SOCIAL_LINK
+    assert pets[0].state.social[pets[0]._today(now)[0]]["links"] == ["other_pet"]
+    # One pet linked with itself: refused.
+    await client.send_json_auto_id(
+        {
+            "type": "virtual_pet/linked",
+            "entity_id": "sensor.pip_mood",
+            "other": "sensor.pip_life_stage",
+        }
+    )
+    assert not (await client.receive_json())["success"]
+    # A look while the day's visitor is here: a greeted visitor (two pets: 2 halves).
+    me = await friend(hass, 0)
+    pets[0].state.visit = {
+        "day": pets[0]._today(now)[0],
+        "world": pets[0].world,
+        "id": "hedgehog",
+        "hours": "day",
+        "from": now - 600,
+        "until": now + 3600,
+        "credited": False,
+    }
+    # Asleep (or an egg, or away): a look doesn't greet it (audit #8).
+    pets[0].state.asleep = True
+    await look(hass, me.id)
+    await hass.async_block_till_done()
+    assert not pets[0].state.social[pets[0]._today(now)[0]]["visitor"]
+    pets[0].state.asleep = False
+    pets[0]._visits.clear()
+    await look(hass, me.id)
+    await hass.async_block_till_done()
+    # Linked this week: the plain visitor credit (two pets on separate cards, never
+    # linked, would each get the solo credit: test_model).
+    assert level("pip") == model.R.SOCIAL_LINK + model.R.SOCIAL_VISITOR
+    # Diagnostics: the days are redacted.
+    diag = await diagnostics.async_get_config_entry_diagnostics(
+        hass, hass.config_entries.async_get_entry("test_pet")
+    )
+    assert diag["pet"]["social"] == "**REDACTED**"
+
+
+async def test_a_visitor_dream_names_its_visitor_and_no_other_dream_grows(
+    hass: HomeAssistant, now: float, hass_storage: dict[str, Any]
+) -> None:
+    """top10 6d: the life stage's dream carries a visitor's id and world (nobody's);
+    every other dream stays its kind only."""
+    hass_storage[STORE_KEY] = hatched_pet(now)
+    await setup(hass)
+    coordinator = hass.config_entries.async_entries(DOMAIN)[0].runtime_data
+    today = dt_util.now().date().isoformat()
+
+    def shown(dream: dict[str, Any]) -> Any:
+        coordinator.state.dream = {**dream, "day": today}
+        coordinator.async_set_updated_data(coordinator.state)
+        return hass.states.get("sensor.pip_life_stage").attributes["dream"]
+
+    assert shown({"kind": "visitor", "id": "chickadee", "world": "woodland"}) == {
+        "kind": "visitor",
+        "id": "chickadee",
+        "world": "woodland",
+    }
+    assert shown({"kind": "picked", "pick": "sea", "user": "abc", "id": "x"}) == {
+        "kind": "picked"
+    }
