@@ -77,6 +77,7 @@ A shot (all optional):
 | `note` | on `settings` / `picker`: a line shown in the feedback bubble (the pet's head and the note, under the back row), through the card's own `_statusMessage` |
 | `afterChange`, `afterWait` | on `settings`: the sheet closed after that change (a `SETTINGS_REACT` key: `monoOn`, `monoOff`, `effectsOff`, `shell`, `sharedOn`, `notifyOn`), through the card's own `_settingsChanged` and Status chip, so the pet perks and says its line (settings UX F14); `afterWait` ms to let it type (default 1500) |
 | `say` | text put in the bubble (`""` clears it) |
+| `fx` | a house effect class held on the screen (`fx-heat`, `fx-cool`, `fx-suds`, `fx-tumble`, `fx-chime`), its animation paused 1 s in; with `motion: reduce` there is none, so it just shows |
 | `clip` | `card` (whole card, default), `device` (the toy), `screen` (the LCD only) |
 | `motion` | `reduce` emulates `prefers-reduced-motion: reduce` (`--motion reduce`) |
 | `game`, `digReplies`, `digTaps` | `game: "dig"`: a Berry dig started through the picker, answered by `digReplies` (play_game replies in order; default: round 2, 2 banked, basket 2), then `digTaps` (`"dig"`/`"keep"`) played; held on the last reply (a bee still shows). `game: "left_right"` / `"higher_lower"` the same way (default start: round 0, number 5; `digTaps` `"left"`/`"right"`, or `"lower"`/`"higher"`; a reply is `{result: "ok", game, round, rounds: 5, wins, correct, went / number}`) |

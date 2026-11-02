@@ -3428,16 +3428,17 @@ const STYLE = `
   .screen.raining .rain { display: block; }
   .screen.raining .bg { filter: brightness(.82) saturate(.75); }
   @keyframes rainfall { to { background-position: -10px 40px; } }
-  /* The house answers (H3): heat shimmer / cool wisps for 2.5 s. A stand-in for the art. */
+  /* The house answers (H3): a warm glow rising from the floor (heat) or a pale frost in the top
+     corners (cool) for 2.5 s. A stand-in for the art. Neither crosses the pet's face (UX7 F3); under
+     reduced motion the same tint just stays for the 2.5 s: an edge glow doesn't read as a flash. */
   .screen.fx-heat::after, .screen.fx-cool::after { content: ""; position: absolute; inset: 0; z-index: 3;
     pointer-events: none; animation: house-fx 2.5s ease-in-out both; }
-  .screen.fx-heat::after { background: repeating-linear-gradient(0deg, rgba(255,170,90,.0) 0 7px,
-    rgba(255,150,60,.5) 7px 12px); background-size: 100% 22px; }
-  .screen.fx-cool::after { background: repeating-linear-gradient(100deg, rgba(200,235,255,0) 0 12px,
-    rgba(210,240,255,.6) 12px 16px); background-size: 40px 100%; }
+  .screen.fx-heat::after { background: linear-gradient(to top, rgba(255,150,60,.35), transparent 45%); }
+  .screen.fx-cool::after { background: radial-gradient(circle at 0 0, rgba(210,240,255,.5), transparent 40%),
+    radial-gradient(circle at 100% 0, rgba(210,240,255,.5), transparent 40%); }
   @keyframes house-fx { 0% { opacity: 0; transform: translateY(6px); } 8%, 70% { opacity: 1; }
     100% { opacity: 0; transform: translateY(-10px); } }
-  @media (prefers-reduced-motion: reduce) { .screen.fx-heat::after, .screen.fx-cool::after { animation: none; opacity: .5; } }
+  @media (prefers-reduced-motion: reduce) { .screen.fx-heat::after, .screen.fx-cool::after { animation: none; opacity: .7; } }
   /* The robot vacuum (H4): a 22x12 rounded box, dark grey with a light rim and a blinking dot,
      gliding across the floor line in 6 s. A stand-in for the house_robot art. */
   .screen.fx-robot::before { content: ""; position: absolute; left: 0; bottom: 3%; z-index: 1; width: 22px; height: 12px;
