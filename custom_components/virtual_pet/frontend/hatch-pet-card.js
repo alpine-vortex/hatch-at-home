@@ -3384,6 +3384,8 @@ const STYLE = `
     image-rendering: pixelated; }
   .tnext { display: flex; align-items: center; gap: 4px; min-width: 0; }
   .tnext .bar { flex: 1; min-width: 30px; }
+  /* A long trait wraps rather than push its bar off the box (big text at 330, fm-batch-043). */
+  .tnext .tname { min-width: 0; overflow-wrap: anywhere; }
   .jlist .gen.now { font-weight: 700; }
   .log { margin-top: 3px; font-size: 12px; opacity: .85; }
   .buttons { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 6px; width: 100%; }
@@ -7780,7 +7782,7 @@ class HatchPetCard extends HTMLElement {
       ${row(null, "weight", `<span>${weightLabel(value("weight"))}</span>`)}
       ${row(null, traits.length > cap ? "traits" : `traits ${traits.length}/${cap}`, `<span>${traits.length ? traits.join(" · ") : "none yet"}</span>`)}
       ${nextTrait ? row(null, "learning", `<span class="tnext">${traitIcon(nextTrait[0])}` +
-        `${escape(nextTrait[0].replaceAll("_", " "))}${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
+        `<span class="tname">${escape(nextTrait[0].replaceAll("_", " "))}</span>${bar(Math.round(nextTrait[1] * 100))}</span>`) : ""}
       ${stageAttrs.upbringing ? row(null, adult ? "raised" : "growing up", `<span>${escape(stageAttrs.upbringing)}</span>`) : ""}
       ${isEgg ? "" : misses}
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}

@@ -883,3 +883,15 @@ Branch `crew/hatch-at-home-s2627-fresh-expand-fold-review-build`.
   journal's strip (glyphs, aria-labels, the visitor only with finds shown). Pytest
   `test_week.py`; card-check `moments`; bench shots in the worker's `renders/e14/`. Its
   labels approved with Q3's lines.
+- **fm-batch-043 gate**: `44d85c06` card-check's baby-talk scan knows E13's `soft` key.
+  Big text at 330: the status page's "learning" row pushed its bar 3 px out of the box when
+  the pet was learning a long trait (CI's pet was; this machine's wasn't). `d43db2ce` names
+  what sticks out; the fix lets the trait name wrap (`.tnext .tname`), and a new check pins
+  the longest trait, social butterfly. Merged `origin/fm-batch-043` (`2ccead06`).
+- **Audit s2635** `91e50b42`: H1, the big day's evening beat carries the `big_how` ask
+  (the card asks it in the follow slot; the plain line only when an ask can't show); M1,
+  kept words swept at card start and each first look; M2, only `weekend` and `big_day`
+  count against the week, `big_day` may come back after 6 days (12-week sim: big_day ≥11,
+  weekend ≥8, Fridays that are the rotation's own how_day keep it); L1, morning, Monday
+  and soft beats from `ASK_MORNING_FROM`; L2, `follow_at` only while a beat is due now;
+  N2, `follow_miss` redacted.

@@ -813,6 +813,21 @@ async function bigTextChecks({ page, check, cur, shot }) {
     s.settings = false;
     el._renderStatus(s, []); await wait(200); out.status = fit();
     if (!out.status) out.statusWide = wide();
+    // The widest "learning" row (fm-batch-043's CI failure: a longer trait than this
+    // machine's pet had pushed its bar 3 px out): the longest trait name, learning.
+    const realState = el._state;
+    el._state = function (sl, k) {
+      const st = realState.call(this, sl, k);
+      return k === "sensor.life_stage" && st && sl === s
+        ? { ...st, attributes: { ...st.attributes, traits: [], trait_progress: { social_butterfly: 0.5 } } } : st;
+    };
+    try {
+      el._renderStatus(s, []); await wait(200);
+      out.learning = !!s.status.querySelector(".tnext") && fit();
+      if (!out.learning) out.learningWide = wide();
+    } finally {
+      el._state = realState;
+    }
     s.journal = true;
     el._renderStatus(s, []); await wait(1500); out.journal = fit();
     s.journal = false;
@@ -821,6 +836,7 @@ async function bigTextChecks({ page, check, cur, shot }) {
   });
   await shot("d3-bigtext-330");
   check("big text at 330: status, settings and the journal fit the box's width", fits.status && fits.settings && fits.journal, JSON.stringify(fits));
+  check("big text at 330: the status page learning the longest trait fits the box's width", fits.learning, JSON.stringify(fits));
   await page.setViewportSize(vp);
   // Another tab's change arrives as a storage event (the mono listener reads it too).
   const kept = await card.first().evaluate((el) => {
