@@ -630,6 +630,10 @@ Device queue (the owner, on real screens; none is a gate):
 5. Turn it off: the pet says its leave line (needs `rest_ended` in `MOMENTS` and the
    `_react` case, test 19) and does not call about hunger, happiness or energy for hours.
 
+Audit (s2739, tier 2): **1 player-impact / 8 nits.** The player-impact one, R1-1 (a rest
+on/off/on refilled the needs every time), is fixed by the refill cooldown (§3.3, commit
+`cb273822`).
+
 ### R2, Favourite (tier 2, people-store data)
 
 Acceptance:
