@@ -164,6 +164,8 @@ MOMENTS = {
     "someone_home",
     "became_sick",
     "found",  # {id, world}: a find went in the basket (no user)
+    "rest_started",  # the resting switch (plan favourite-resting §4.5): no user
+    "rest_ended",
 }
 # A public moment of these types keeps only {type, at}: the bus and the phones
 # still get the cause.
@@ -437,8 +439,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             self.state, self._now(), self.settings
         )
         if mood == "away" and self.privacy:
-            # Privacy: an empty house looks like a nap on any dashboard.
-            return "asleep", ["asleep"], "zzz", "asleep"
+            # Privacy: an empty house looks like a nap on any dashboard. A
+            # resting pet keeps its flag (its switch says so anyway), so the
+            # flag's absence can't tell that it is away.
+            rest = ["resting"] if "resting" in flags else []
+            return "asleep", ["asleep", *rest], "zzz", "asleep"
         return mood, flags, reason, key
 
     @staticmethod
@@ -1824,7 +1829,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             )
         months = model.friends_for(bond.get("since"), today)
         friends = months and noted.get("friends") != today
-        born = model.pet_birthday(state.hatched_on, today)
+        # No birthday while resting: aging is paused (plan §3.3, S4).
+        born = None if state.resting else model.pet_birthday(state.hatched_on, today)
         if born and noted.get("birthday") != today:
             if friends and born.get("months") == months:
                 note = {"kind": "birthday_friends", "months": months}
@@ -2360,7 +2366,11 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         batch: list[model.Event] | None = None,
     ) -> None:
         """Tell the users who opted in, on their phones. Never for fast-forward."""
-        if event["type"] in ("recovered", "fell_asleep"):  # off the phones
+        if event["type"] in (
+            "recovered",
+            "fell_asleep",
+            "rest_started",
+        ):  # off the phones
             self._sick_told = False
         if simulated or self.state is None or not self.state.notify_users:
             return
@@ -3017,6 +3027,18 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.state.egg_choice = species
         self._save()
         self._publish()
+
+    async def async_set_resting(self, on: bool) -> str:
+        """Flip the resting switch (plan favourite-resting §4.1). Returns the
+        model's result: "ok", or "egg" when an egg was asked to rest."""
+        assert self.state is not None
+        now = self._now()
+        self._advance(now)
+        result, events = model.set_resting(self.state, on, now)
+        self._fire(events)
+        self._save()
+        self._publish()
+        return result
 
     async def async_set_lights_out(
         self, on: bool, context: Context | None = None

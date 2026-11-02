@@ -116,6 +116,9 @@
         "state": {
           "on": "mdi:lightbulb-night"
         }
+      },
+      "resting": {
+        "default": "mdi:sofa"
       }
     }
   },

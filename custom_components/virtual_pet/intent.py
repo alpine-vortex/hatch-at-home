@@ -47,6 +47,21 @@ MOOD_WORDS = {
     "content": "content",
 }
 
+# Resting is a flag, never a mood (plan favourite-resting §4.5): a calm mood
+# says this instead; any other keeps its word and adds "and resting".
+RESTING_WORD = "taking it easy"
+RESTING_CALM = {"content", "cozy", "bored"}
+
+
+def mood_word(mood: str, flags: list[str]) -> str:
+    """ "Pip is <this>": the mood's word, with resting folded in. Asleep says
+    only "asleep" (the sitter's privacy answers that too)."""
+    word = MOOD_WORDS[mood]
+    if "resting" not in flags or mood == "asleep":
+        return word
+    return RESTING_WORD if mood in RESTING_CALM else f"{word} and resting"
+
+
 # "Pip ..." after a care action that did something.
 DONE = {
     "feed": "is eating",
@@ -256,7 +271,7 @@ class StatusIntent(intent.IntentHandler):
             )
         )
         response.async_set_speech(
-            spoken_status(name, MOOD_WORDS[mood], reason, traits, nickname, about)
+            spoken_status(name, mood_word(mood, flags), reason, traits, nickname, about)
         )
         response.async_set_speech_slots(
             {

@@ -305,6 +305,9 @@
     "switch": {
       "lights_out": {
         "name": "Lights out"
+      },
+      "resting": {
+        "name": "Resting"
       }
     }
   },
