@@ -3,7 +3,7 @@
 What a player can see and do, feature by feature, with what switches it and whether it
 is on. For the full rules and numbers read the [guide](guide.md); this page is the map.
 
-**Reflects:** version 0.44.0.
+**Reflects:** version 0.45.0.
 
 **Keeping it current:** update this page with each release. Read the release's commits,
 change the rows they touch, then re-check the "Where the docs and the code disagree"
@@ -30,7 +30,7 @@ stand-in. **not built** = planned, nothing in the code.
 | Button glow when needed | Feed glows when hungry, play when bored, and so on. Meds is greyed unless the pet is sick (entity unavailable). | card `_renderSlide` | none | live |
 | Refusals | "i'm full!", "i'm not sick", and so on, in the bubble | card `REFUSALS`; model `_do_action` | none | live |
 | Care scenes | medicine and clean play a short scene; feeding shows a bowl prop | card `_sceneStart`, `SCENE_PROPS` | none | live |
-| Calls (real) | hunger or happiness under 25, energy under 20, poop over 30 min, or sick: the pet calls, with **20 min** to answer. A miss is a care miss; it asks again every 4 h. Each need has three phrasings, one a day. | model `_calls`, `_start_call` | none | live |
+| Calls (real) | hunger or happiness under 25, energy under 20, poop over 30 min, or sick: the pet calls, with **20 min** to answer. A miss is a care miss; it asks again every 4 h. Each need has three phrasings, one a day. An asking pet gets its own column beside the bubble; with no room (a narrow card) its head goes in the bubble instead. | model `_calls`, `_start_call` | none | live |
 | Fake calls / whines | nothing is wrong; scold teaches discipline, praise spoils | model `_wants_to_whine` | sitter settles whines (option) | live |
 | Discipline | a bar; fades about 4 a day; less whining when high | model `_decay`, rates | none | live |
 | Praise falloff | 8, 4, 2, 0 within 30 min | model `_praise_gain` | none | live |
@@ -41,7 +41,7 @@ stand-in. **not built** = planned, nothing in the code.
 | Sitter / away | nobody home for 2 h: frozen, no decay | model `come_home`; home `Presence` | away after (h), privacy | live |
 | Pat | tap the pet: wiggle and "hehe ♥"; the line takes turns day by day and now and then finds "the spot" | card `_pat`, `PAT_LINES` | none | live |
 | Blanket / fan requests | the house makes it ask (rain, thunder, too cold or warm); buttons appear only then | model `requests`, `_answer_request`; card `REQUEST_LABELS` | comfort range (options) | live |
-| The house answers | if mapped heating comes on while the pet is chilly (or cooling while it is warm), the house tucks it in as a blanket or fan would, at most twice a day; fires `virtual_pet_house_answered`. A blanket for rain or thunder stays the player's. | model `_answer_request`; home | options: Heating, Cooling | live (needs mapping) |
+| The house answers | if mapped heating comes on while the pet is chilly (or cooling while it is warm), the house tucks it in as a blanket or fan would, at most twice a day (heat shows as a warm glow from the floor, cool as a frost in the top corners; neither crosses the pet, and both stay under reduced motion); fires `virtual_pet_house_answered`. A blanket for rain or thunder stays the player's. | model `_answer_request`; home | options: Heating, Cooling | live (needs mapping) |
 | Chore treats | a ticked to-do item gives a treat (up to 5 a day) | model `give_treats`, `chores_done` | chore lists (options) | live |
 | Fast-forward | admin debug action | `services.yaml` `fast_forward`; model `fast_forward` | admin only | live (dev) |
 
@@ -52,7 +52,7 @@ stand-in. **not built** = planned, nothing in the code.
 | Mood | egg, away, sick, asleep, calling, hungry, dirty, sleepy, bored, excited, cozy, content: a sprite and a bubble line (`reason`). Mood lines read as plain speech, and cozy and bored have lines per personality type. | model `mood_keyed`, `_reason`; `sensor.<pet>_mood` | live |
 | "would like" row | the top need on the status page | card `_renderStatus` | live |
 | Idle life | looks around, wanders, chases a speck, mutters, poses; a bounce after treats; now and then a line about a neighbour on the shelf | card `_idle`, `IDLE_ADDS` | live |
-| Reactions to moments | hatching, growing up, a new trait, a missed call ("…oh, there you are ♥", never guilt) | card `_moment` | live |
+| Reactions to moments | hatching, growing up, a new trait, a missed call ("…oh, there you are ♥", never guilt); a new baby's first bedtime says "my first night here... ♥" once (live, on a baby under a day old, once per pet and generation on this browser) | card `_moment`, `FIRST_NIGHT` | live |
 | Per-species child acts | e.g. the squirrel stuffs its cheeks | species.json `acts`; card `_reactFrames` | live (where art exists) |
 
 ## 3. Life stages and species
@@ -71,16 +71,17 @@ stand-in. **not built** = planned, nothing in the code.
 | Birthdays | monthly in year one, then a yearly party with hat and confetti | model `pet_birthday`; card `PARTY` | none | live |
 | Favourite snack | picked at hatch; "hazelnuts, my favourite!!" at most once a day | model `favourite_snack` | none | live |
 | Tricks and promises | an adult learns a trick a month for its first three months and shows it off; every three weeks a teen or adult promises to practise something and shows it days later | model (fresh-expand); card | none | live |
-| World change | Reconfigure → the next egg hatches in the new world | `config_flow.py` reconfigure; `CONF_NEXT_WORLD` | HA dialog only | live |
+| World change / rename in HA | Reconfigure (⋮ next to the pet): "Rename {name} or change its world". A pet still in its egg moves at once; a hatched pet's form labels the world "World for the next egg" and its next egg hatches there. A rename keeps the entity IDs; a name another pet here already has is refused (`name_taken`), and a card rename made while the form is open is not written back over. | `config_flow.py` `reconfigure`, `reconfigure_hatched`; `CONF_NEXT_WORLD` | HA dialog | live |
+| Name the new generation | an egg or a baby can be named by anyone who may control the pet: after "lay the egg" a name sheet opens ("a name for the egg", "name it" / "keep <name>"), and the status page has a "name" row with "change" for the first day. The pet answers "<name>! i like it ♥". 1–20 characters with at least one visible one; refused with "another pet here has that name", "keep it short, and not blank", "only a new egg or baby can be named" or "this login can't name, sorry". | card `_renderNameSheet`, `_openName`, `SETUP_COPY`; `virtual_pet/rename`; `coordinator.async_rename`; `names.py` | per pet, first day only | live |
 
 ## 4. Worlds and shells
 
 | Feature | What the player sees | Where | Switches | State |
 |---|---|---|---|---|
 | Six device shapes | egg, tank, house, porthole, lily pad, moon, each with a backdrop, deco and trim | worlds.json `shell/backdrop/deco/trim`; card `_mould`, `_dress` | none | live |
-| Scene follows the sun and lights | day, night, dim; rain overlay; wind | card `_renderSlide`; home `evaluate` | `sun.sun` | live |
+| Scene follows the sun and lights | day, night, dim; rain overlay; wind; at night and dim the status sheet and the bubble sink into the dark LCD; the backlight still lifts the sheet. | card `_renderSlide`; home `evaluate` | `sun.sun` | live |
 | Shell picker | settings → "shell": world plastics, specials, prints; preview, then **use** (the world's own is the first tile) | card `_renderPicker`, `_saveShell`; `virtual_pet/set_shell`; model `shell_options` | per pet; read-only on a shared screen | live |
-| "Earned" shells | glitter, glow, smoke, sunset, constellation, stars unlock **at teen by age** | model `shell_unlocked`, rates `SHELL_UNLOCKS` | none | live |
+| "Earned" shells | glitter, glow, smoke, sunset, constellation, stars unlock **at teen by age** (the glow finish lights up in Home Assistant's dark theme, the OS's when HA has none) | model `shell_unlocked`, rates `SHELL_UNLOCKS` | none | live |
 
 ## 5. Games
 
@@ -89,7 +90,7 @@ stand-in. **not built** = planned, nothing in the code.
 | Game picker | play opens a picker (three games, fits 300–420 px) that remembers the last game | card `_pickGame`, `LAST_GAME_KEY` | none | live |
 | Left or right | 5 rounds, 3 wins; mostly luck; a win cheers more than plain play | card `GAMES`, `_guess`; model `play_game`; rates | none | live |
 | Higher or lower | 1–9, guess lo or hi; mostly skill | same | none | live |
-| Berry dig | each round a leaf pile hides 6 berries and 2 bees: **dig** a leaf or **keep** the basket; 5 berries banked wins; pays a little more than higher or lower. ✕ **parks** a started dig: your next dig resumes it, however much later; each person has their own. | card `GAMES` (`dig`); model `play_game` | none | live |
+| Berry dig | each round a leaf pile hides 6 berries and 2 bees: **dig** a leaf or **keep** the basket; 5 berries banked wins; pays a little more than higher or lower. ✕ **parks** a started dig: your next dig resumes it, however much later; each person has their own, and a second screen of the same person joins the dig already going ("oh! you dug there too ♪"). | card `GAMES` (`dig`); model `play_game` | none | live |
 | Game of the day | each day a favourite game leads the list; a lucky number sparkles in Higher or Lower; a shiny berry now and then in the dig; a teen or adult sometimes adds a word after a game | card (fresh-expand); model | none | live |
 | Game records | per-person best, favourite game (bond 6), games played and won in the journal | model `game_record`, `favourite_game` | none | live |
 | `play_game` service | play from automations (`guess` / `end` rules per game) | `services.yaml` | none | live |
@@ -103,7 +104,7 @@ stand-in. **not built** = planned, nothing in the code.
 | Upbringing lines | at most weekly, e.g. "you always looked after me ♥" | card `UPBRINGING_LINES` | none | live |
 | Its own words, in turns | most everyday lines (waking, pat, praise, meals, wish, answer to "how was your day?") take turns day by day; a teen or adult often says them its own way | card `turnPick`, `_fresh` | none | live |
 | Voice and typing | per-species opener ("tweet!"), typed at its own speed | card `_speak`, `OPENERS` | babble (this screen) | live |
-| Babble | a tiny sound per letter | card `BABBLE_KEY` | off by default, per browser | live |
+| Babble | a tiny sound per letter, ramped in; its settings row shows "needs sounds" and is disabled while "sounds here" is off | card `BABBLE_KEY` | off by default, per browser; needs sounds here | live |
 | Catchphrase | a per-species tag; at bond 7 the friend picks a new one | card `QUESTIONS`; rates `CATCHPHRASE_LEVEL` | none | live |
 | Baby talk | simpler lines for babies and children | card `BABY`, `_babySet`; `virtual_pet/baby_talk` | per person, off by default | live |
 | Greeting by name | "morning, Alex!" at most every few hours | card `_greet` | shared screen: no name | live |
@@ -172,20 +173,21 @@ stand-in. **not built** = planned, nothing in the code.
 | Backlight | a shell nub lights the screen for 3 s | card `_backlight`, `BACKLIGHT_MS` | none | live |
 | Infrared link | two or more pets: once a day per pair, a beam and a visit; kindred personality pairs get an extra line; the day's first waits for someone watching; with exactly three pets the end pets meet across the wrap; a guest from the left mirrors the visit | card `_linkStart`, `KINDRED`, `LINK_AFTER_MS` | none | live |
 | Low battery after an HA restart | flicker and a battery gag | card `_powerGag`, `POWER_KEY` | reduced motion: no flicker | live |
-| Sounds (chirps) | call, hatch, trait, win; quiet 21:00–08:00 | card `SOUND_KEY`, `_chirp` | sounds here (off) | live |
-| Swipe, arrows, dots | multi-pet shelf | card `_layout` | card `devices` | live |
+| Sounds (chirps) | call, hatch, trait, win; quiet 21:00–08:00. Chirps stay square but run through one 3 kHz lowpass and ramp in over 5 ms; two cards on one pet chirp once. "sounds here" is the master: babble plays only with it on. | card `SOUND_KEY`, `_chirp` | sounds here (off) | live |
+| Swipe, arrows, dots | multi-pet shelf; the dots are the pets' heads (the one on show in full colour); on a swipe the name and line change when the new pet is half there | card `_layout` | card `devices` | live |
 
 ## 11. Journal, collection, status and settings
 
 | Screen | Contents | Where | State |
 |---|---|---|---|
-| Header | name, species · stage · day N, "Status" pill | card `_build` | live |
-| Status (tap the screen or the pill) | would like, wish, today (its day, or the dream), you two, friends, hunger and happy hearts, energy, health and discipline bars, weight word and hint, traits n/4, learning, upbringing with "missed calls" and "ignored whines", personality, next egg and stage countdown, last 3 care lines, journal › | card `_renderStatus` | live |
-| Settings (gear) | **for <pet>**: notices (the kinds of thing the house shows it, never an entity; admins get "connect more ›", which opens that pet's own entry), shell. **For you**: notify me, my day, my birthday, birthday on my phone, baby talk, my data. **This screen**: sounds, babble, screen effects, holiday names, mono, big text, shared screen. | card `_renderSettings` | live |
+| Header | name, species · stage · day N, "Status" pill; a long name wraps and the pill keeps its size | card `_build` | live |
+| Status (tap the screen or the pill) | would like, wish, today (its day, or the dream), you two, name (an egg or a baby: "change"), friends (below the meters, a 44 px target), hunger and happy hearts, energy, health and discipline bars, weight word and hint, traits n/4, learning, upbringing with "missed calls" and "ignored whines", personality, next egg and stage countdown, last 3 care lines, journal › | card `_renderStatus` | live |
+| Settings (gear) | In this order. **This screen**, in two parts: *sound* (sounds here, babble) and *look* (screen effects here, holiday names, mono screen, big text). **For you** (not on a shared screen): notify me, my day, my birthday, birthday on my phone, baby talk, my data. **For <pet>**: notices (the kinds of thing the house shows it, never an entity; admins get "connect more ›", which opens that pet's own entry), bedtime (read only, "about … · up …" in the viewer's 12 or 24 hour format, also on a shared screen), shell (read only on a shared screen). **Shared screen**, at the foot: the switch, a note about a family tablet, and for an admin "sensor privacy is in the pet's options". | card `_renderSettings`, `sleepLine`; life stage sensor `sleep_times` | live |
 | Big text | larger words on status, journal and settings; per browser, off by default | card `bigtext` class | live |
 | Journal | "this week" strip (dream, weather, and the visitor once finds are shown), the world's roster (silhouettes if unraised in this home), "every world ›" page, photos, generations (latest 4 + older), memories (first snow, frost, fog, first warm day, each season's first day), visitors/finds › | card `_renderJournal`, `_weekStrip`, `_renderEveryWorld` | live |
 | Collection | see §8 | card `_renderFinds` | live |
 | Card editor | picks devices and has a "Seasonal decorations" switch | card `HatchPetCardEditor` | live |
+| Empty card | no pet found: an admin gets "add a pet ›", which opens Home Assistant's add-integration dialog for this integration | card `SETUP_COPY.addPet`, `ADD_PET_PATH` | live |
 
 ## 12. Notifications and phones
 
@@ -197,7 +199,7 @@ stand-in. **not built** = planned, nothing in the code.
 | Holiday mornings | Halloween, Thanksgiving, winter lights (1 and 21 December) | notify `HOLIDAY_MORNINGS` | same | live |
 | Send-off | "rain today, take an umbrella", at most 3 a week | notify | notify me + my day | live |
 | Birthday | from the closest pet | notify `birthday` | birthday on my phone | live |
-| Welcome | sidebar note + phones | notify `welcome` | none | live |
+| Welcome | sidebar note (titled "<name> moved in ♥") + phones of people who turned on notify me for another pet. The note says where the pet shows: with no dashboard named by any setup it asks you to add the pet shelf card to one; the first pet with a dashboard gets the link plus "If it isn't there, add the Hatch at Home pet shelf card."; a later pet on a dashboard the house already named gets the link alone. | notify `welcome`, `welcome_no_dashboard`; coord `_welcome` | none | live |
 | Dashboard to open | the tap target | options → notifications | config | live |
 | Visitors, finds, gifts, appliances, robots | **no** phone message | — | — | not built |
 
@@ -205,18 +207,20 @@ stand-in. **not built** = planned, nothing in the code.
 
 | Feature | Where | State |
 |---|---|---|
-| Sensors: hunger, happiness, energy, health, discipline, weight, mood, life_stage (many attributes, incl. `senses` and `week`), poop, care_misses, last_care, debug (off by default) | `sensor.py`; strings.json `entity.sensor` | live |
+| Sensors: hunger, happiness, energy, health, discipline, weight, mood, life_stage (many attributes, incl. `senses`, `sleep_times` and `week`), poop, care_misses, last_care, debug (off by default) | `sensor.py`; strings.json `entity.sensor` | live |
 | Binary sensors asleep, calling, sick; switch lights_out; select next_egg | `binary_sensor.py`, `switch.py`, `select.py` | live |
 | Buttons feed, snack, play, clean, medicine, scold, praise, blanket, fan, lay_egg | `button.py` | live |
 | Services fast_forward, notify_me, visit, my_day, set_shell, play_game, share_news, react | `services.yaml` | live |
-| Websocket commands answer, follow, forget_birthday, birthday_phone, baby_talk, photos, forget_me, subscribe, notify_me, linked, my_day, set_shell, collect, collection | `__init__.py` | live |
+| Websocket commands answer, follow, forget_birthday, birthday_phone, baby_talk, photos, forget_me, subscribe, notify_me, linked, greeted, my_day, set_shell, rename, collect, collection | `__init__.py` | live |
 | About 50 bus events (`virtual_pet_*`), including `virtual_pet_season_start`, `virtual_pet_house_answered`, `_robot_out`, `_robot_home`, `_appliance_done`, `_house_moment`, `_call_settled`, `_found` | coord `_fire`; guide "Events" | live (all in the guide) |
-| Options "What <name> notices": sleep, weather, room, activity, the house helps (heating, cooling, robot vacuums, doorbells, machines, idle power), sky, privacy (presence, house words off sensors), notifications | `config_flow.py`; strings.json | live |
-| Repairs: missing entities, world not ready, damaged save (×3), people damaged | strings.json `issues`; `backup.py` | live |
+| Options "What <name> notices": a menu of seven topics, each its own page: Bedtime (bedtime, wake time, bedtime lights, motion), People and privacy (home zone, off to the sitter's after, sitter calms a fussy pet, keep presence private, keep house words off sensors), Weather and air, The pet's room (lights, fireplace, light sensors, TVs, music), The house helps (heating, cooling, robot vacuums, doorbells, machines, idle power, chore lists), Moon and sky, Where notifications open | `config_flow.py` `PetOptionsFlow`; `topics.py`; strings.json | live |
+| Repairs: missing entities (fixable: submit to forget them; the text names the topics to open instead), world not ready, damaged save (×3), people damaged | strings.json `issues`; `repairs.py`; `backup.py` | live |
 | Diagnostics (redacted) | `diagnostics.py` | live |
-| Assist: VirtualPetStatus and VirtualPetCare intents (stage and day, wish, the day's visitor), sentences file, LLM tools | `intent.py`, `llm.py`, `docs/custom_sentences` | live (English only) |
-| Blueprint: call response (lamps, sound) | `blueprints/automation/virtual_pet/call_response.yaml` | live (import by hand) |
-| Blueprint: house moment (an entity and what it is) | `blueprints/automation/virtual_pet/house_moment.yaml` | live (import by hand) |
+| The card file: served at `?v=<version>-<8 hex of the file's hash>`, so a changed card is fetched even when the version was not bumped (taken once at start-up; a missing file is logged, and the URL carries the version alone) | `__init__.py` `_card_hash` | live |
+| Display name "Hatch at Home" in `manifest.json` and `hacs.json` (domain `virtual_pet` and every entity ID unchanged) | manifest | live |
+| Assist: VirtualPetStatus and VirtualPetCare intents (stage and day, wish, the day's visitor; a word that fits two pets gets "Which pet, A or B?"), sentences file, LLM tools | `intent.py`, `llm.py`, `docs/custom_sentences` | live (English only) |
+| Blueprint "Hatch at Home: calls into the house" (lamps, sound) | `blueprints/automation/virtual_pet/call_response.yaml` | live (import by hand) |
+| Blueprint "Hatch at Home: house moment" (an entity and what it is) | `blueprints/automation/virtual_pet/house_moment.yaml` | live (import by hand) |
 
 ## 14. Accessibility
 
@@ -233,7 +237,7 @@ stand-in. **not built** = planned, nothing in the code.
 
 ## Where the docs and the code disagree
 
-Checked against the guide, README and how-to at `54d79d9f`. Items fixed since 0.41.0
+Checked against the guide, README and how-to at `f2c5e8a8`. Items fixed since 0.41.0
 (switch locations, care misses on the status page, rosters, `virtual_pet_found` in the
 events list, how-to button names and meters, Catch and its YAML flag) are gone from this
 list.
@@ -250,8 +254,8 @@ list.
    the friends-this-week row, or the house signals (robot vacuums, machines, the house
    answering a request).
 4. **"screen effects here" location.** "Little touches" says the switch is "on the status
-   screen"; it is in the settings sheet's "this screen" part (the other paragraphs say
-   so correctly).
+   screen"; it is in the settings sheet's "this screen" part, under "look" (the other
+   paragraphs say so correctly).
 5. **How-to status view.** It promises "age" on the status view. Age is in the header
    ("day 13"); the status page has a countdown to the next stage instead.
 6. **Time-relative wording in the guide.** The weather-forecast option row says "a pet
