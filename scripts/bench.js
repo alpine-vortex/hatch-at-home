@@ -104,7 +104,7 @@ const PRESETS = {
     out.push({ name: "ui/woodland-praise-starry", group: "ui", label: "praise, starry", ...starry, say: "I'll take a bow for that ★" });
     // Fresh-expand E4: a dream morning's wake line, and a clean's extra bubble mid-pop.
     out.push({ name: "ui/woodland-wake-dream", group: "ui", label: "wake, a dream day", world: "woodland", view: "card",
-      say: "*yawn* I had the best dream" });
+      say: "*yawn* i had the best dream" });
     out.push({ name: "ui/woodland-bubble-pop", group: "ui", label: "clean, a bubble pops", world: "woodland", view: "card",
       bubblePop: true });
     return out;

@@ -429,7 +429,7 @@ const LINK_AFTER_MS = [600000, 1500000]; // the infrared link: 10-25 min after t
 // untouched wall tablet. Later links keep LINK_AFTER_MS.
 // An idle line about a neighbour on the shelf (gaps-seams 5b), 1 in 6 idle lines.
 const NEIGHBOUR_ODDS = 1 / 6;
-const NEIGHBOUR_LINES = [(n) => `wonder what ${n} is up to ♪`, (n) => `*waves toward ${n}*`, (n) => `I hope ${n} is having a nice day`];
+const NEIGHBOUR_LINES = [(n) => `wonder what ${n} is up to ♪`, (n) => `*waves toward ${n}*`, (n) => `i hope ${n} is having a nice day`];
 const LINK_FIRST_MS = [60000, 180000];
 const LINK_TOUCHED_MS = 300000;
 // A link already today on this browser (oncePerDay's `hatch-link-<pair>-<day>` keys).
@@ -1253,7 +1253,7 @@ const PERSONA = {
     visit: ["a visitor! what an honour", "do come in, friend ♥"], // a world visitor's greet (gaps-seams 4b)
     link_host: [(n) => `ah, ${n}! a delight ♥`, (n) => `${n}! what an honour ♥`],
     link_guest: [(n) => `${n}! how splendid ♥`],
-    link_kindred: [(n) => `${n}! two of a kind, you and I ♥`, "such a grand pair we make ♥"],
+    link_kindred: [(n) => `${n}! two of a kind, you and i ♥`, "such a grand pair we make ♥"],
   },
   plucky: {
     reveal: ["I'm the plucky kind! hmph ♥", "plucky, that's me! ♥"],
@@ -1421,7 +1421,7 @@ const VISIT_FRIENDS = {
 // S-a (E4): a morning's wake line, in turns; the last one only on a day with a dream
 // (on another day its turn says the first).
 const WAKE_LINES = ["*yaaawn*", "*yawn* ...morning already ♪", "*stretch* mm, cozy night ♪", "*yaaawn* ...hi, day ♪",
-  "*blink blink* morning ♪", "*yawn* I had the best dream"];
+  "*blink blink* morning ♪", "*yawn* i had the best dream"];
 // S-b: lights out after a visitor seen here today (by its name), else after today's sunset.
 const NIGHT_VISITOR = [(v) => `night, little ${v} ♪`, (v) => `sweet dreams, ${v} ♪`];
 const NIGHT_SUNSET = "night... what a nice sunset ♥";
