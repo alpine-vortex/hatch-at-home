@@ -2664,15 +2664,20 @@ const STYLE = `
   .foot { gap: 8px; }
   .nav { flex-shrink: 0; }
   .dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 0; min-width: 0; }
-  /* 44 x 44 hit area (4c's size); the drawn dot is still 10 px, and the boxes sit edge to edge. */
+  /* 44 x 44 hit area (4c's size); the drawn dot is a 16 px head, and the boxes sit edge to edge. */
   .dot { width: 44px; height: 44px; border: none; padding: 0; cursor: pointer;
     background: none; display: flex; align-items: center; justify-content: center; }
-  .dot::before { content: ""; width: 10px; height: 10px; border-radius: 5px;
-    background: color-mix(in srgb, var(--hp-ink) 55%, transparent); transition: width .3s; }
-  .dot[aria-current="true"]::before { width: 20px; background: var(--hp-ink); }
+  /* The dot is the pet's head (UX7 F8): 16 px, a 2 px ring, the sprite cropped as the status band's head is
+     (_headCrop). The one on show is full colour; the others sit back at 55%. Before the sprite is drawn the
+     ring alone shows. */
+  .dot::before { content: ""; width: 16px; height: 16px; border-radius: 8px; box-sizing: border-box;
+    border: 2px solid var(--hp-ink); opacity: .55; image-rendering: pixelated;
+    background: var(--say-img, none) var(--say-at, 0 0) / var(--say-size, 43px) var(--say-size, 43px) no-repeat border-box,
+      color-mix(in srgb, var(--hp-ink) 25%, transparent); }
+  .dot[aria-current="true"]::before { opacity: 1; }
   /* A pet this browser hasn't shown yet (UX fix 4, F4): a small pulse till its slide is first shown
-     (reduced motion: no pulse, a darker dot). */
-  .dot.fresh::before { background: var(--hp-ink); animation: dotpulse 1.6s ease-in-out infinite; }
+     (reduced motion: no pulse, but full colour like the one on show). */
+  .dot.fresh::before { opacity: 1; animation: dotpulse 1.6s ease-in-out infinite; }
   @keyframes dotpulse { 50% { transform: scale(1.5); } }
   .slide.away-slide { cursor: pointer; }
   /* The empty card's toy (UX fix 4, F5): an egg's silhouette (the journal's "???" look), no buttons. */
@@ -5477,6 +5482,7 @@ class HatchPetCard extends HTMLElement {
       dot.classList.toggle("fresh", this._slides.length > 1 && !this._shown.has(device) && !this._seenRead(device));
       const name = this._hass.devices?.[this._slides[i].ids?.device];
       dot.setAttribute("aria-label", `Show ${name?.name_by_user || name?.name || `pet ${i + 1}`}`);
+      this._headCrop(this._slides[i], dot, 8, 1.7); // its head, as the dot's mark (UX7 F8)
       dot.setAttribute("aria-current", i === this._index ? "true" : "false");
     });
     this._card.querySelector(".statusbtn").setAttribute(
@@ -9422,7 +9428,7 @@ class HatchPetCard extends HTMLElement {
     }
     top ??= hy;
     // px per sprite px: the face's window fills the box; else a fixed 75 px sprite
-    const k = face ? (cx * 2) / face[2] : HEAD_SPRITE / 256;
+    const k = face ? (cx * 2) / face[2] : (HEAD_SPRITE * (cx / 14)) / 256; // the 75 px sprite scales with the box
     el.style.setProperty("--say-img", `url("${s.pet.src}")`);
     el.style.setProperty("--say-size", `${(256 * k).toFixed(2)}px`);
     el.style.setProperty("--say-at", face ? `${(cx - face[0] * k).toFixed(2)}px ${(cx - face[1] * k).toFixed(2)}px`

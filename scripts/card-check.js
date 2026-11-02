@@ -396,7 +396,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
     await page.setViewportSize({ width, height: 860 });
     await page.waitForTimeout(500);
     // The slide dots and the compact answer buttons (330 is the compact layout): 44x44 hit
-    // boxes, the dots edge to edge so none steals a neighbour's tap, the dot itself still 10 px.
+    // boxes, the dots edge to edge so none steals a neighbour's tap, the dot itself a 16 px head (UX7 F8).
     const tapBoxes = await card.evaluate(async (el) => {
       const s = el._slides[el._index];
       const dots = [...el.shadowRoot.querySelectorAll(".dots .dot")];
@@ -425,7 +425,7 @@ async function shellChecks({ page, context, check, cur, evaluate, inject, shot, 
       if (wasOpen) s.screen.classList.add("show-status");
       return out;
     });
-    if (tapBoxes.dots < 2 || tapBoxes.answers < 2 || tapBoxes.small.length || tapBoxes.overlap || tapBoxes.mark !== 10
+    if (tapBoxes.dots < 2 || tapBoxes.answers < 2 || tapBoxes.small.length || tapBoxes.overlap || tapBoxes.mark !== 16
       || tapBoxes.compact !== (width === 330)) boxIssues.push(`${width} dots/answers: ${JSON.stringify(tapBoxes)}`);
     boxCounts[`${width}-tapBoxes`] = tapBoxes.dots + "d" + tapBoxes.answers + "a";
     for (const view of ["picker", "settings", "status"]) {
