@@ -2688,7 +2688,8 @@ async function main() {
   // The name sheet (settings S3): naming the new generation. The lay press, the server's answers and the
   // pet's stage and generation are stubbed on this card's own hass (a copy, put back at the end).
   const naming = await page.locator("hatch-pet-card").evaluate(async (el) => {
-    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const realTimeout = window.setTimeout; // the expiry check swaps setTimeout for a while: waits keep the real one
+    const wait = (ms) => new Promise((r) => realTimeout(r, ms));
     const s = el._slides[el._index];
     const realHass = el._hass;
     const lifeId = s.ids["sensor.life_stage"];
@@ -2732,7 +2733,6 @@ async function main() {
     const err = () => s.status.querySelector(".nameerr");
     const out = {};
     const timers = [];
-    const realTimeout = window.setTimeout;
     try {
       // The trigger: the sheet opens when the sensor shows an egg of the next generation, and not before.
       put("adult", gen);

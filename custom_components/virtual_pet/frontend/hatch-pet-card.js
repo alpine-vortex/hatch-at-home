@@ -8610,13 +8610,12 @@ class HatchPetCard extends HTMLElement {
         `<button class="bell namechange" aria-label="${escape(`name: ${petName}, change`)}">${SETUP_COPY.nameChange}</button></span>`) : "";
     const html = isEgg ? `
       ${band}
-      ${nameRow}
       ${bond ? row(null, "you two", bondHearts(bond.level)) : ""}
       ${eggRow}
+      ${nameRow}
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>` : `
       ${band}
-      ${nameRow}
       ${today ? `<div class="stoday">${escape(today)}</div>` : ""}
       ${want ? row(null, "would like", `<span>${escape(want)}</span>`) : ""}
       ${stageAttrs.wish && WISHES[stageAttrs.wish.kind] ? row(null, "wish", stageAttrs.wish.granted
@@ -8637,6 +8636,7 @@ class HatchPetCard extends HTMLElement {
       ${stageAttrs.personality && teenOrAdult ? row(null, "personality", `<span>${escape(stageAttrs.personality.replaceAll("_", " "))}</span>`) : ""}
       ${nextStage ? row(null, nextStage[0], `<span>${nextStage[1]}</span>`) : ""}
       ${nextEgg ? row(null, "next egg", `<span>${escape(nextEgg)}</span>`) : ""}
+      ${nameRow}
       <div class="log">${lines.join("") || "<div>all new here ♪</div>"}</div>
       <button class="jlink">journal ›</button>
       <div class="status-feedback" role="status" aria-live="polite" hidden></div>`;
