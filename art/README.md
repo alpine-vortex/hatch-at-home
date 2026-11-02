@@ -367,3 +367,13 @@ commit.
 - Pond: axolotl, beaver, duckling (on its water ring, as in its idle frames), pond turtle (droop), tree frog.
 - Tidepool: hermit crab, octopus, otter (on its water), puffin, seal (puffin and seal teen redrawn once
   to keep the rock they sit on).
+
+## Ready at 128 (2026-11-01)
+
+The `ready` act (a game about to start): `<stage>_ready_1/2` for every species' baby, teen and
+adult, drawn by `gpt-5.6-luna` on 2026-11-01 from each stage's `content_1` frame (the only
+reference), cut as aww above. The look, approved on its first probe (owner): an eager play-bow or
+forward crouch, eyes wide and bright, a small eager grin, frame 2 a little wiggle. One world per
+commit.
+
+- Woodland: banana slug, robin, deer, fox, squirrel.
