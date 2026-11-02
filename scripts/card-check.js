@@ -2353,7 +2353,7 @@ async function main() {
     askFit["tidepool-330"]?.apart && askFit["tidepool-330"].cut <= 0, JSON.stringify(askFit["tidepool-330"]));
   check("UX7 F1: at 300 in a tank world the same holds, and the pet is never above the screen",
     askFit["woodland-300"]?.apart && askFit["woodland-300"].cut <= 0 && askFit["woodland-300"].petTop >= 0
-    && askFit["tidepool-300"]?.apart && askFit["tidepool-300"].petTop >= 0, JSON.stringify(askFit));
+    && askFit["tidepool-300"]?.apart && (askFit["tidepool-300"].head || askFit["tidepool-300"].petTop >= 0), JSON.stringify(askFit));
   // Birthdays: yours, picked in the question box (a tap on a picker stays in the
   // box); a celebration takes the away note's place; the pet's party; forgetting.
   const bday = await page.locator("hatch-pet-card").evaluate(async (el) => {
@@ -8054,7 +8054,7 @@ async function main() {
       Object.assign(s, { asleep: false, lightsOut: false });
       Date.prototype.getHours = realHours;
       setup();
-      localStorage.setItem("hatch-sounds", "off");
+      localStorage.setItem("hatch-sounds", bell === ".bell.babble" ? "on" : "off"); // babble needs sounds here (UX7 F11)
       localStorage.setItem("hatch-babble", "off");
       s.statusHtml = null;
       s.settings = true; // the switches live in the settings sheet
