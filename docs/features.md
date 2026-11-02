@@ -5,8 +5,8 @@ is on. For the full rules and numbers read the [guide](guide.md); this page is t
 
 **Reflects:** version 0.43.0 plus what was merged after it (commit `54d79d9f`): the
 house answering a blanket or fan request (H3), robot vacuums (H4) and a finished washer,
-dryer or dishwasher (H6). Those landed after the 0.43.0 release and ship with the next
-one.
+dryer or dishwasher (H6), and house moments (`virtual_pet.react` and its blueprint,
+H8). Those landed after the 0.43.0 release and ship with the next one.
 
 **Keeping it current:** update this page with each release. Read the release's commits,
 change the rows they touch, then re-check the "Where the docs and the code disagree"
@@ -118,6 +118,7 @@ stand-in. **not built** = planned, nothing in the code.
 | Season starts | "first day of spring! ♪" once a season (first three days, awake; none in the tropics), a sparkle and a journal memory; today bit "saw spring begin" | people `season_start`, model `season_start`; card `SEASON_START_LINES` | none | live |
 | House signals | a robot vacuum goes by ("a robot's zooming around!"), a washer, dryer or dishwasher finishes ("the dishes are all done!"); the moon from the date when no sensor is mapped (full and new moon nights) | home (vacuum, appliance and moon logic); card | options: Notice robot vacuums (on), Washer/dryer/dishwasher, Idle power, Moon | live (appliances need mapping) |
 | News | `virtual_pet.share_news` headline in the bubble | home `news_text`; `services.yaml` | automation | live |
+| House moments | `virtual_pet.react` or the house moment blueprint: pick an entity and what it is (15 categories plus Custom; no garage door), and the pet says a line, reacts and shows a house effect. Oven, coffee, EV charger and delivery are card only (never on a sensor or event). Steps aside (`native`) for entities in its Heating, Cooling or appliance settings. | `react.py` (rules); coord `react`; card `HOUSE_MOMENT_LINES`, `HOUSE_CATEGORY`; guide "House moments" | automation or blueprint; privacy: Keep house words off sensors (off) | live |
 
 ## 7. Bonds and people (per HA login)
 
@@ -210,14 +211,15 @@ stand-in. **not built** = planned, nothing in the code.
 | Sensors: hunger, happiness, energy, health, discipline, weight, mood, life_stage (many attributes, incl. `senses` and `week`), poop, care_misses, last_care, debug (off by default) | `sensor.py`; strings.json `entity.sensor` | live |
 | Binary sensors asleep, calling, sick; switch lights_out; select next_egg | `binary_sensor.py`, `switch.py`, `select.py` | live |
 | Buttons feed, snack, play, clean, medicine, scold, praise, blanket, fan, lay_egg | `button.py` | live |
-| Services fast_forward, notify_me, visit, my_day, set_shell, play_game, share_news | `services.yaml` | live |
+| Services fast_forward, notify_me, visit, my_day, set_shell, play_game, share_news, react | `services.yaml` | live |
 | Websocket commands answer, follow, forget_birthday, birthday_phone, baby_talk, photos, forget_me, subscribe, notify_me, linked, my_day, set_shell, collect, collection | `__init__.py` | live |
-| About 50 bus events (`virtual_pet_*`), including `virtual_pet_house_answered`, `_robot_out`, `_robot_home`, `_appliance_done`, `_call_settled`, `_found` | coord `_fire`; guide "Events" | live (all in the guide) |
-| Options "What <name> notices": sleep, weather, room, activity, the house helps (heating, cooling, robot vacuums, machines, idle power), sky, privacy, notifications | `config_flow.py`; strings.json | live |
+| About 50 bus events (`virtual_pet_*`), including `virtual_pet_house_answered`, `_robot_out`, `_robot_home`, `_appliance_done`, `_house_moment`, `_call_settled`, `_found` | coord `_fire`; guide "Events" | live (all in the guide) |
+| Options "What <name> notices": sleep, weather, room, activity, the house helps (heating, cooling, robot vacuums, machines, idle power), sky, privacy (presence, house words off sensors), notifications | `config_flow.py`; strings.json | live |
 | Repairs: missing entities, world not ready, damaged save (×3), people damaged | strings.json `issues`; `backup.py` | live |
 | Diagnostics (redacted) | `diagnostics.py` | live |
 | Assist: VirtualPetStatus and VirtualPetCare intents (stage and day, wish, the day's visitor), sentences file, LLM tools | `intent.py`, `llm.py`, `docs/custom_sentences` | live (English only) |
 | Blueprint: call response (lamps, sound) | `blueprints/automation/virtual_pet/call_response.yaml` | live (import by hand) |
+| Blueprint: house moment (an entity and what it is) | `blueprints/automation/virtual_pet/house_moment.yaml` | live (import by hand) |
 
 ## 14. Accessibility
 

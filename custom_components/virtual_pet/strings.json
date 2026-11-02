@@ -143,10 +143,12 @@
             "name": "Privacy",
             "description": "For wall tablets and shared dashboards.",
             "data": {
-              "privacy": "Keep presence private"
+              "privacy": "Keep presence private",
+              "house_words_private": "Keep house words off sensors"
             },
             "data_description": {
-              "privacy": "On: an empty house shows the pet napping, never at the sitter's, and the pet never names anyone. Off: dashboards show \"at the sitter's\"."
+              "privacy": "On: an empty house shows the pet napping, never at the sitter's, and the pet never names anyone. Off: dashboards show \"at the sitter's\".",
+              "house_words_private": "On: news headlines and a house moment's own words are said on the card only, never kept on the pet's sensors (automations still get a headline). Off: they sit on the last-care sensor for a while, like the pet's other moments."
             }
           },
           "notifications": {
@@ -286,6 +288,9 @@
     "no_pet": {
       "message": "No loaded virtual pet matches that pet or config entry."
     },
+    "no_reaction": {
+      "message": "A Custom house moment needs a reaction: hop, cheer, cozy, dance or startle."
+    },
     "wrong_guess": {
       "message": "\"{guess}\" isn't a guess in that game; try {guesses}."
     },
@@ -406,6 +411,48 @@
           "description": "Optional short label, such as the feed's name (up to 20 characters)."
         }
       }
+    },
+    "react": {
+      "name": "House moment",
+      "description": "Something in the house happened, and the pet reacts with a line of its own (the \"house moment\" blueprint calls this). Cosmetic only: no stat changes, nothing saved, no notification. Dropped while the pet is asleep, away or still an egg; each kind of thing shows at most once every 10 minutes.",
+      "fields": {
+        "entity_id": {
+          "name": "Pet",
+          "description": "Any entity of the pet. Pick several for several pets."
+        },
+        "category": {
+          "name": "What it is",
+          "description": "The kind of thing that changed. It picks the pet's line, reaction and effect, and which changes count."
+        },
+        "source": {
+          "name": "Entity",
+          "description": "The entity that changed. Read to check the change and to step aside for entities the pet's own house settings already watch; never kept."
+        },
+        "from_state": {
+          "name": "From state",
+          "description": "The state it changed from. Leave out, with To state, to always count."
+        },
+        "to_state": {
+          "name": "To state",
+          "description": "The state it changed to."
+        },
+        "held": {
+          "name": "Held for",
+          "description": "Seconds the old state held (a washer must have run a while to be done)."
+        },
+        "match": {
+          "name": "State that counts",
+          "description": "Custom only: the state that counts, such as \"finished\". Empty: any change."
+        },
+        "reaction": {
+          "name": "Reaction",
+          "description": "Custom only: how the pet reacts."
+        },
+        "text": {
+          "name": "Words",
+          "description": "Custom only, optional: what the pet says, up to 40 characters. Empty: the reaction's own line."
+        }
+      }
     }
   },
   "issues": {
@@ -432,6 +479,37 @@
     "people_damaged": {
       "title": "The pets' memories of people were damaged",
       "description": "The file where the pets keep what they know about each person (birthdays, answers, settings) couldn't be read, so they start fresh with everyone. Your pets and your bonds with them are fine. The file as it was is kept as `.storage/{backup}`. To go back to it: stop Home Assistant, fix the file, rename it to `.storage/virtual_pet.people`, and start Home Assistant again."
+    }
+  },
+  "selector": {
+    "category": {
+      "options": {
+        "heater": "Heater",
+        "ac": "Air conditioner",
+        "fan": "Fan",
+        "washer": "Washing machine",
+        "dryer": "Dryer",
+        "dishwasher": "Dishwasher",
+        "oven": "Oven (card only)",
+        "coffee": "Coffee maker (card only)",
+        "printer": "3D printer",
+        "ev": "EV charger (card only)",
+        "feeder": "Pet feeder",
+        "plants": "Plants / watering",
+        "delivery": "Mailbox / delivery (card only)",
+        "timer": "Timer",
+        "internet": "Internet",
+        "custom": "Custom"
+      }
+    },
+    "reaction": {
+      "options": {
+        "hop": "Hop",
+        "cheer": "Cheer",
+        "cozy": "Cozy",
+        "dance": "Dance",
+        "startle": "Startle"
+      }
     }
   }
 }

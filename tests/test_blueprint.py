@@ -202,3 +202,150 @@ async def test_a_broken_speaker_keeps_the_lamps_and_cooldown(hass, tmp_path, cal
     await call(hass)
     await call(hass)
     assert len(calls["light.turn_on"]) == 1
+
+
+# --- The house moment (ha-signals H8): a thin pass-through to virtual_pet.react ---
+
+HOUSE = BLUEPRINT.parent / "house_moment.yaml"
+
+
+async def house(
+    hass: HomeAssistant, tmp_path: Path, *instances: dict[str, Any]
+) -> list:
+    """The blueprint, once per instance (an entity and its inputs)."""
+    target = tmp_path / "blueprints/automation/virtual_pet"
+    target.mkdir(parents=True, exist_ok=True)
+    shutil.copy(HOUSE, target / "house_moment.yaml")
+    hass.config.config_dir = str(tmp_path)
+    calls = async_mock_service(hass, "virtual_pet", "react")
+    config = [
+        {
+            "id": f"moment_{i}",
+            "alias": f"moment {i}",
+            "use_blueprint": {
+                "path": "virtual_pet/house_moment.yaml",
+                "input": {"pet": "button.pip_feed", **inputs},
+            },
+        }
+        for i, inputs in enumerate(instances)
+    ]
+    assert await async_setup_component(hass, "automation", {"automation": config})
+    await hass.async_block_till_done()
+    return calls
+
+
+async def test_a_washer_finishing_calls_react_with_what_it_saw(hass, tmp_path, freezer):
+    hass.states.async_set("input_boolean.washer", "on")
+    calls = await house(
+        hass, tmp_path, {"entity": "input_boolean.washer", "category": "washer"}
+    )
+    freezer.tick(timedelta(minutes=15))
+    hass.states.async_set("input_boolean.washer", "off")
+    await hass.async_block_till_done()
+    [react] = calls
+    assert react.data["entity_id"] == "button.pip_feed"
+    assert react.data["category"] == "washer"
+    assert react.data["source"] == "input_boolean.washer"
+    assert (react.data["from_state"], react.data["to_state"]) == ("on", "off")
+    assert react.data["held"] >= 900
+    # Custom's fields stay out of the call, not "".
+    assert not {"reaction", "text", "match"} & set(react.data)
+
+
+async def test_no_reading_and_attribute_changes_never_call(hass, tmp_path):
+    hass.states.async_set("input_boolean.washer", "unavailable")
+    calls = await house(
+        hass, tmp_path, {"entity": "input_boolean.washer", "category": "washer"}
+    )
+    hass.states.async_set("input_boolean.washer", "off")
+    await hass.async_block_till_done()
+    hass.states.async_set("input_boolean.washer", "off", {"friendly_name": "W"})
+    await hass.async_block_till_done()
+    hass.states.async_set("input_boolean.washer", "unknown")
+    await hass.async_block_till_done()
+    assert not calls
+
+
+async def test_custom_passes_its_words_reaction_and_state(hass, tmp_path):
+    hass.states.async_set("vacuum.rosie", "cleaning")
+    calls = await house(
+        hass,
+        tmp_path,
+        {
+            "entity": "vacuum.rosie",
+            "category": "custom",
+            "reaction": "dance",
+            "custom_text": "rosie's home! ♪",
+            "custom_state": "docked",
+        },
+    )
+    hass.states.async_set("vacuum.rosie", "docked")
+    await hass.async_block_till_done()
+    [react] = calls
+    assert react.data["category"] == "custom"
+    assert react.data["reaction"] == "dance"
+    assert react.data["text"] == "rosie's home! ♪"
+    assert react.data["match"] == "docked"
+
+
+async def test_custom_without_words_sends_none(hass, tmp_path):
+    hass.states.async_set("input_boolean.thing", "off")
+    calls = await house(
+        hass, tmp_path, {"entity": "input_boolean.thing", "category": "custom"}
+    )
+    hass.states.async_set("input_boolean.thing", "on")
+    await hass.async_block_till_done()
+    [react] = calls
+    assert react.data["reaction"] == "hop"  # the input's default
+    assert "text" not in react.data and "match" not in react.data
+
+
+async def test_a_timer_counts_when_it_finishes_not_when_cancelled(hass, tmp_path):
+    hass.states.async_set("timer.tea", "active")
+    calls = await house(hass, tmp_path, {"entity": "timer.tea", "category": "timer"})
+    hass.states.async_set("timer.tea", "idle")  # cancelled, or finished: unknown
+    await hass.async_block_till_done()
+    assert not calls
+    hass.bus.async_fire("timer.finished", {"entity_id": "timer.other"})
+    await hass.async_block_till_done()
+    assert not calls
+    hass.bus.async_fire("timer.finished", {"entity_id": "timer.tea"})
+    await hass.async_block_till_done()
+    [react] = calls
+    assert react.data["source"] == "timer.tea"
+    assert (react.data["from_state"], react.data["to_state"]) == ("active", "finished")
+
+
+async def test_two_instances_watch_their_own_entities(hass, tmp_path):
+    hass.states.async_set("input_boolean.washer", "on")
+    hass.states.async_set("binary_sensor.internet", "off")
+    calls = await house(
+        hass,
+        tmp_path,
+        {"entity": "input_boolean.washer", "category": "washer"},
+        {"entity": "binary_sensor.internet", "category": "internet"},
+    )
+    hass.states.async_set("input_boolean.washer", "off")
+    hass.states.async_set("binary_sensor.internet", "on")
+    await hass.async_block_till_done()
+    assert sorted(c.data["category"] for c in calls) == ["internet", "washer"]
+
+
+async def test_the_blueprint_and_the_service_agree(hass, tmp_path):
+    """Every category in the dropdown is one the service takes, and back."""
+    import yaml
+
+    from custom_components.virtual_pet.const import HOUSE_CATEGORIES
+    from custom_components.virtual_pet.react import REACTIONS
+
+    class Loader(yaml.SafeLoader):
+        pass
+
+    Loader.add_constructor("!input", lambda loader, node: node.value)
+    inputs = yaml.load(HOUSE.read_text(), Loader)["blueprint"]["input"]
+    dropdown = [o["value"] for o in inputs["category"]["selector"]["select"]["options"]]
+    assert dropdown == list(HOUSE_CATEGORIES)
+    reactions = [
+        o["value"] for o in inputs["reaction"]["selector"]["select"]["options"]
+    ]
+    assert tuple(reactions) == REACTIONS

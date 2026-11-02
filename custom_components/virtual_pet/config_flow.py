@@ -46,6 +46,7 @@ from .const import (
     CONF_DASHBOARD,
     CONF_FIREPLACE,
     CONF_HEATING,
+    CONF_HOUSE_WORDS_PRIVATE,
     CONF_INDOOR_TEMP,
     CONF_LUX,
     CONF_MOON_ALTITUDE,
@@ -332,6 +333,7 @@ class PetOptionsFlow(OptionsFlowWithReload):
             ],
             "privacy": [
                 (CONF_PRIVACY, BooleanSelector(), True),
+                (CONF_HOUSE_WORDS_PRIVATE, BooleanSelector(), False),
             ],
             "notifications": [
                 (CONF_DASHBOARD, _dashboards(self.hass), None),

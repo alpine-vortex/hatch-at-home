@@ -50,6 +50,7 @@ const COPY_TABLES = {
   HOUSE_LINES: {},
   SEASON_START_LINES: {}, // ha-signals H7
   SEASON_START_BITS: {},
+  HOUSE_MOMENT_LINES: {}, // H8: virtual_pet.react, by category
 };
 
 function lines(value, path, out) {

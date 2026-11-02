@@ -49,6 +49,7 @@ from .backup import (
     async_kept_backup,
 )
 from .const import (
+    CHANNEL_CATEGORIES,
     CONF_APPLIANCES,
     CONF_AQI,
     CONF_AWAY_AFTER,
@@ -61,6 +62,7 @@ from .const import (
     CONF_DASHBOARD,
     CONF_FIREPLACE,
     CONF_HEATING,
+    CONF_HOUSE_WORDS_PRIVATE,
     CONF_INDOOR_TEMP,
     CONF_LUX,
     CONF_MOON_ALTITUDE,
@@ -82,6 +84,7 @@ from .const import (
     DEFAULT_WORLD,
     DEFAULT_ZONE,
     DOMAIN,
+    LIVE_EVENTS,
     LOGGER,
     MEDIA_EVENTS,
     PERSONAL_EVENTS,
@@ -106,6 +109,7 @@ from .home import (
     forecast_moment,
     is_raining,
 )
+from .react import counts as react_counts, is_native as react_native
 from .species import load_catalog
 from .watcher import Watcher, daily_forecast
 
@@ -147,6 +151,7 @@ MOMENTS = {
     "robot_out",  # a robot vacuum started a run
     "robot_home",  # ... and went home
     "appliance_done",  # {kind}: a washer, dryer or dishwasher finished
+    "house_moment",  # {category[, reaction, text]}: virtual_pet.react (H8)
     "wish_granted",
     "bond_up",
     "bond_favourite",
@@ -165,6 +170,9 @@ MOMENT_BARE = {"became_sick"}
 # (gaps-seams 2b, owner Q3). Neglect and the rest never reach the public list.
 MOMENT_CAUSES_SHOWN = {"weight"}
 MOMENTS_KEPT = 10
+# The house's own words, by moment: what house_words_private keeps off the
+# sensor (said live on the channel instead, as news_live / house_live).
+HOUSE_WORDS = {"news": ("headline", "topic"), "house_moment": ("text",)}
 # The visit's celebration lines (one a look, and always a place for it).
 CELEBRATIONS = {"your_birthday", "pet_birthday", "birthday_friends", "friends_for"}
 # Moments a dream can be about, by the dream's kind. (Not news: it stays
@@ -289,6 +297,10 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self.house_moments = HouseMoments()
         # virtual_pet.share_news: no news before this time (in memory only).
         self.next_news = 0.0
+        # virtual_pet.react: each category's next time, and the gap across all
+        # of them (in memory only).
+        self.next_react: dict[str, float] = {}
+        self.next_react_any = 0.0
         # The weather entity's daily forecast by local date (in memory only),
         # and when the pet next talks about it.
         self.forecast: dict[str, DayForecast] = {}
@@ -389,6 +401,12 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
     def privacy(self) -> bool:
         """Keep presence out of what the pet shows (default on)."""
         return self.config_entry.options.get(CONF_PRIVACY, True)
+
+    @property
+    def house_words_private(self) -> bool:
+        """Keep the house's words (news headlines, react's custom text) off the
+        sensor: said live on the card only (default off; owner Q-A)."""
+        return bool(self.config_entry.options.get(CONF_HOUSE_WORDS_PRIVATE, False))
 
     def current_mood(self) -> tuple[str, list[str], str]:
         """(mood, flags, reason) as shown anywhere outside the pet's own file."""
@@ -1105,12 +1123,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             if event["type"] == "game_finished" and event.get("dropped"):
                 self._dropped_games.add(event["game"])
             # The bus and the public moments get a scrubbed copy, and a bond
-            # moment not even that: it is its person's alone (the channel).
-            # _notify and _to_channel read the event itself (who, the nickname).
-            public = event["type"] not in PERSONAL_EVENTS
+            # moment not even that: it is its person's alone (the channel). A
+            # channel-only house moment is the channel's too (it says someone's
+            # home). _notify and _to_channel read the event itself (who, the
+            # nickname).
+            public = not self._channel_only(event)
             scrubbed = {k: v for k, v in event.items() if k not in PRIVATE_EVENT_FIELDS}
+            # house_words_private: the headline (text) stays off the sensor; the
+            # bus keeps a headline (the automation's own words), never the text.
+            hushed = self._hushed(event)
             if public:
                 data = {k: v for k, v in scrubbed.items() if k != "type"}
+                if hushed and event["type"] == "house_moment":
+                    data.pop("text", None)
                 data["pet_id"] = self.pet_id
                 if simulated:
                     data["simulated"] = True
@@ -1129,13 +1154,19 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                     moment["cause"] = event["cause"]
             elif public and event["type"] in MOMENTS:
                 moment = {**scrubbed, "at": at}
+                if hushed:
+                    for key in HOUSE_WORDS[event["type"]]:
+                        moment.pop(key, None)
+                    # Custom words said live: the public copy would say the
+                    # reaction's line as well (one bubble a moment, review F4).
+                    if event["type"] == "house_moment":
+                        moment = None
             else:
                 moment = None
             if moment is not None:
-                self.moments.insert(0, moment)
-                del self.moments[MOMENTS_KEPT:]
-            self._to_channel(event, at)
-        if shown := [e["type"] for e in events if e["type"] not in PERSONAL_EVENTS]:
+                self._keep_moment(moment)
+            self._to_channel(event, at, hushed)
+        if shown := [e["type"] for e in events if not self._channel_only(e)]:
             self.debug["last_events"] = shown[-10:]
         if simulated or self.state is None:
             return
@@ -2591,11 +2622,48 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         for pet in pets.values():
             pet._push_watchers()
 
-    def _to_channel(self, event: model.Event, at: str) -> None:
+    def _channel_only(self, event: model.Event) -> bool:
+        """A bond moment (its person's), or a house moment that would say
+        someone's home: never on the bus, the public list or debug."""
+        kind = event["type"]
+        return (
+            kind in PERSONAL_EVENTS
+            or kind in LIVE_EVENTS
+            or (kind == "house_moment" and event.get("category") in CHANNEL_CATEGORIES)
+        )
+
+    def _hushed(self, event: model.Event) -> bool:
+        """This moment carries house words, and house_words_private is on."""
+        words = HOUSE_WORDS.get(event["type"], ())
+        return any(event.get(k) for k in words) and self.house_words_private
+
+    def _keep_moment(self, moment: dict[str, Any]) -> None:
+        """Newest first, MOMENTS_KEPT at most. House moments can come often, so
+        only the newest few stay: they never push a hatching out (review F17)."""
+        self.moments.insert(0, moment)
+        house = [i for i, m in enumerate(self.moments) if m["type"] == "house_moment"]
+        for i in reversed(house[R.HOUSE_MOMENTS_KEPT :]):
+            del self.moments[i]
+        del self.moments[MOMENTS_KEPT:]
+
+    def _to_channel(self, event: model.Event, at: str, hushed: bool = False) -> None:
         """A bond moment goes to its person's own channel (without who), and a
-        titled media moment to every channel."""
+        titled media moment to every channel. A channel-only house moment, and
+        house words kept off the sensor (hushed), are said live on every
+        channel, shared screens too, and kept nowhere: a later watcher never
+        gets them."""
         kind = event["type"]
         live = self._current()
+        if kind == "house_moment" and (
+            hushed or event.get("category") in CHANNEL_CATEGORIES
+        ):
+            keys = ("category", "reaction", "text")
+            self._say_live({"type": "house_live"} | _pick(event, keys) | {"at": at})
+            return
+        if kind == "news" and hushed:
+            keys = ("headline", "topic")
+            self._say_live({"type": "news_live"} | _pick(event, keys) | {"at": at})
+            return
         if kind in PERSONAL_EVENTS and (user := event.get("user")):
             moment = {k: v for k, v in event.items() if k != "user"} | {"at": at}
             private = self._private.setdefault(user, deque(maxlen=MOMENTS_KEPT))
@@ -2611,6 +2679,13 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 for _, _, send in list(self._watchers().values()):
                     send({"moment": self._house["media"]})
                 self._push_watchers()
+
+    def _say_live(self, moment: dict[str, Any]) -> None:
+        """Every watcher open now, once; nothing is kept."""
+        if not self._current():
+            return
+        for _, _, send in list(self._watchers().values()):
+            send({"moment": moment})
 
     def _save(self) -> None:
         state = self.state
@@ -2770,6 +2845,63 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         self._publish()
         return result
 
+    def react(
+        self,
+        category: str,
+        *,
+        source: str | None = None,
+        from_state: str | None = None,
+        to_state: str | None = None,
+        held: float | None = None,
+        match: str | None = None,
+        reaction: str | None = None,
+        text: str | None = None,
+    ) -> str:
+        """Something in the house happened (virtual_pet.react, the house moment
+        blueprint): the pet says a line and reacts. Cosmetic only, like
+        share_news: no stat changes, nothing saved, no notification.
+
+        Returns "ignored" (the change isn't the category's moment), "native" (H3
+        or H6 watches this entity already and says it), "egg", "away" (privacy
+        off), "asleep", "too_soon" (the category's own wait, or a short gap
+        after any house moment) or "shared". Only a shared one starts a wait.
+        The source entity is read here and kept nowhere."""
+        assert self.state is not None
+        now = self._now()
+        self._advance(now)
+        domain = source.partition(".")[0] if source else None
+        seen = self.hass.states.get(source) if source else None
+        device_class = seen.attributes.get("device_class") if seen else None
+        if not react_counts(
+            category, domain, device_class, from_state, to_state, held, match
+        ):
+            result = "ignored"
+        elif react_native(category, source, dict(self.config_entry.options)):
+            result = "native"
+        elif model.life_stage(self.state) == "egg":
+            result = "egg"
+        elif self.state.away:
+            result = "asleep" if self.privacy else "away"
+        elif self.state.asleep:
+            result = "asleep"
+        elif now < self.next_react_any or now < self.next_react.get(category, 0):
+            result = "too_soon"
+        else:
+            result = "shared"
+        if result != "shared":
+            self._publish()
+            return result
+        self.next_react[category] = now + R.REACT_COOLDOWN_MINUTES * 60
+        self.next_react_any = now + R.REACT_GAP_SECONDS
+        event: model.Event = {"type": "house_moment", "category": category}
+        if category == "custom":
+            event["reaction"] = reaction or "hop"
+            if text:
+                event["text"] = text
+        self._fire([event])
+        self._publish()
+        return result
+
     async def async_lay_egg(self) -> None:
         """Start the next generation: the adult retires, an egg takes its place."""
         assert self.state is not None
@@ -2871,3 +3003,7 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
         if self.state is not None:
             await self.store.async_save(self.state.to_dict())
         await self.people.async_save_now()
+
+
+def _pick(event: model.Event, keys: tuple[str, ...]) -> dict[str, Any]:
+    return {k: event[k] for k in keys if event.get(k)}
