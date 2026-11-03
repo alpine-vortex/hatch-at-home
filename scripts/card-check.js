@@ -9923,6 +9923,9 @@ async function main() {
   // part's constants too: HATCH_DEVICE_FX, HATCH_DIRECTOR, RECIPES, CLASSES, CLASSES_BY_LAYER, KINDS, WEATHER, KEY_LIST,
   // MOON, moonOf, weatherRecipe, serverClockKnown, and the glass's lease clock (dir-glass-life). Slice 4B added the
   // per-key block at the end of the section (snow, fog, storm, wind on the real CSS, the moon).
+  // A sleeping pet is a busy owner ("asleep"): an echo is refused for it, and the dev pets go to bed at night
+  // (CI's clock is not the desk's). Every echo check below needs a pet that is up, so pin it awake for the section.
+  await pinAwake(card, "devicefx");
   await setLcd(true); // the harness runs with the effects off; the glass needs the switch on
   await card.evaluate((el) => el._dirSwitch());
   const fxWait = (ms) => page.waitForTimeout(ms);
@@ -10200,6 +10203,7 @@ async function main() {
     return 0;`);
   await setLcd(false);
   await card.evaluate((el) => el._dirSwitch());
+  await unpinAwake(card);
   check("devicefx: no page error from any of it", errors.length === 0, errors.slice(-3).join(" | "));
   }
   if (enter("lcd")) {
