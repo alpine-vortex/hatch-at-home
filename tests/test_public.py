@@ -104,6 +104,7 @@ async def scripted_day(
     # Their card opens on this pet, and so do shared screens (favourite §5).
     await pet.async_set_open_on(me.id, True)
     await pet.async_set_open_on(me.id, True, house=True)
+    await pet.async_set_rest_offer(me.id)  # and they answered the rest offer (§6.4)
     # A day's wish aimed at them (the pet's close friend with a person entity).
     monkeypatch.setattr(model.R, "WISH_FOR_CHANCE", 1.0)
     monkeypatch.setattr(pet, "wish_options", lambda: {"play"})
@@ -232,6 +233,7 @@ async def test_nothing_personal_on_the_bus(
             assert secret not in text, (e.event_type, secret)
         assert e.context.user_id is None, e.event_type
         assert "open_on" not in text, e.event_type  # the favourite (§5.2)
+        assert "rest_offer" not in text, e.event_type  # its offer's answer (§6.4)
     made = [e for e in ours if e.event_type == f"{DOMAIN}_wish_made"]
     assert made[-1].data == {"kind": "play", "pet_id": pet.pet_id}  # the aimed one
     # Each of the bond's moments reached their own channel, without who...
@@ -325,11 +327,13 @@ async def test_nothing_personal_on_a_state(
 
     assert day["pet"].people.open_on(day["me"].id) == day["pet"].pet_id
     assert day["pet"].people.house_open_on() == day["pet"].pet_id
-    assert "open_on" not in text
+    assert day["pet"].people.data["people"][day["me"].id]["rest_offer"] is True
+    assert "open_on" not in text and "rest_offer" not in text
     diagnostics = await async_get_config_entry_diagnostics(
         hass, day["pet"].config_entry
     )
     assert "open_on" not in json.dumps(diagnostics, default=str)
+    assert "rest_offer" not in json.dumps(diagnostics, default=str)
     stage = attrs["sensor.pip_life_stage"]
     assert "bonds" not in stage and "notify_users" not in stage
     assert set(stage["wish"]) == {"kind", "granted", "open"}

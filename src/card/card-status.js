@@ -186,6 +186,25 @@ class HatchPetCardStatus extends HatchPetCardMoment {
     });
   }
 
+  // The offer to rest the others, under the "♥ open on" row (favourite §6.1-6.2): card state
+  // (_offerRest), read at each render, so a channel push's redraw keeps it. A render that
+  // finds it no longer true (answered elsewhere, or no other pet can rest) drops it; while
+  // its calls run it stays, both buttons pending.
+  _restOfferRow(s) {
+    const offer = this._restOffer;
+    if (!offer || offer.device !== s.ids?.device) return "";
+    if (sharedScreen() || (!offer.busy && (s.mine?.rest_offer !== false || !this._othersToRest(s).length))) {
+      this._restOffer = null;
+      return "";
+    }
+    const C = REST_OFFER_COPY;
+    const button = (cls, text) =>
+      `<button class="bell ${cls}${offer.busy ? " pending" : ""}" aria-label="${spoken(text)}">${text}</button>`;
+    return `<div class="restoffer" role="group" aria-label="${spoken(`${C.title} ${C.help}`)}">
+      <div class="row srow restofferrow"><span>${C.title}</span><span>${button("restthem", C.rest)} ${button("restnot", C.notNow)}</span></div>
+      <div class="shellnote restoffernote">${C.help}</div></div>`;
+  }
+
   // The settings sheet, in the status box like the journal: the viewer's own
   // switches (none on a shared screen), then this browser's.
   _renderSettings(s) {
@@ -270,6 +289,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       row(null, copy(petName), `<span><button class="bell ${cls}" aria-label="${spoken(copy("{}")).replace("{}", () => petName)}" aria-pressed="${on}">${on ? "on" : "off"}</button></span>`);
     const openOn = !several || sharedScreen() || typeof s.mine?.open_on !== "boolean" ? ""
       : openRow("openon", OPEN_ON_COPY.mine, s.mine.open_on)
+        + this._restOfferRow(s) // the offer, right under this row, never under the house's
         + (this._hass.user?.is_admin && typeof s.mine.house_open_on === "boolean"
           ? openRow("openhouse", OPEN_ON_COPY.house, s.mine.house_open_on) : "");
     // Who each part changes: the pet (everyone), the viewer (follows their login),
@@ -309,6 +329,7 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       e.stopPropagation(); // the screen behind would close the status
       this._tapped(e.currentTarget);
       s.settings = false;
+      this._restOffer = null; // leaving is not an answer: nothing saved (§6.3)
       this._renderStatus(s, this._state(s, "sensor.last_care")?.attributes.log || []);
       s.status.scrollTop = 0; // a new view starts at its top
       this._wipe(s);
@@ -339,6 +360,15 @@ class HatchPetCardStatus extends HatchPetCardMoment {
       this._tapped(button);
       this._setResting(s, button.getAttribute("aria-pressed") !== "true", button);
     });
+    for (const [cls, rest] of [["restthem", true], ["restnot", false]]) {
+      s.status.querySelector(`.bell.${cls}`)?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const button = e.currentTarget;
+        if (button.classList.contains("pending")) return; // the calls are in flight
+        this._tapped(button);
+        this._answerRestOffer(s, rest, button);
+      });
+    }
     for (const [cls, scope] of [["openon", "me"], ["openhouse", "house"]]) {
       s.status.querySelector(`.bell.${cls}`)?.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -533,9 +563,10 @@ class HatchPetCardStatus extends HatchPetCardMoment {
           this._birthdayKept = false;
           this._birthdayPhone = false;
           this._memoryOn = false; // memory went with the rest (plan M1a)
-          for (const key of ["my_day", "baby_talk", "birthday_kept", "birthday_phone", "memory_on", "open_on"]) this._setMine(key, false);
+          for (const key of ["my_day", "baby_talk", "birthday_kept", "birthday_phone", "memory_on", "open_on", "rest_offer"]) this._setMine(key, false);
           for (const key of ["fav_weather", "fav_season", "fav_visitor"]) this._setMine(key, null); // M0-c's, gone too
           this._openOnSync(); // the heart and the copy of the pet their card opened on
+          this._restOffer = null; // and an offer on show: it may come once more (§6.4)
           for (const slide of this._slides || []) { // lines told only to them
             if (slide.queue) slide.queue = slide.queue.filter((q) => !q.personal && !q.opts?.personal && !q.ask);
           }

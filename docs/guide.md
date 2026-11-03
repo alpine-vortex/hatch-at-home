@@ -743,6 +743,13 @@ when someone comes home. Every pet may rest at once (a holiday automation can fl
 the switches); nothing wakes it by itself. An egg can't rest, because it would never
 hatch.
 
+The first time you pick which pet your card opens on, and you have other pets that
+can rest, the settings sheet asks whether to rest them. "rest them" switches resting
+on for the other pets on that card; "not now" leaves them as they are. It asks until
+you answer, then not again ("Forget my data" starts it fresh). Resting pets won't
+get any hungrier and don't grow up until they're back, and anyone can wake one from
+its own settings.
+
 All numbers live in `custom_components/virtual_pet/rates.py`, in units per hour.
 
 - **Calls:** when hunger or happiness drops below 25, energy below 20, a poop

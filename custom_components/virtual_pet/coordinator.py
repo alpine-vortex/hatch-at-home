@@ -2485,6 +2485,17 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
                 await self.people.async_save_now()
         self._push_everywhere()
 
+    async def async_set_rest_offer(self, user: str) -> None:
+        """This person answered the offer to rest the others ("rest them" or
+        "not now", plan favourite-resting §6.4): it doesn't come again until
+        they forget their data. Saved at once, unlike `async_set_open_on`'s on:
+        a once-only answer mustn't come back after a crash. Every pet's channel
+        hears it, so a second slide's sheet doesn't offer again."""
+        async with self.people.lock(user):
+            self.people.person(user)["rest_offer"] = True
+            await self.people.async_save_now()
+        self._push_everywhere()
+
     def _birthday_morning(self) -> None:
         """A friend's birthday: their phone hears it with the first morning of
         any hatched pet at home that notifies them, from the one they're
@@ -2827,6 +2838,8 @@ class PetCoordinator(DataUpdateCoordinator[model.PetState]):
             # Their card opens on this pet (the favourite, §5.3): only theirs, never
             # anyone else's choice.
             "open_on": self.people.open_on(user) == self.pet_id,
+            # They answered the offer to rest the others (§6.4); never "show it now".
+            "rest_offer": person.get("rest_offer") is True,
             **(
                 {"house_open_on": self.people.house_open_on() == self.pet_id}
                 if admin
