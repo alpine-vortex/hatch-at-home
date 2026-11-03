@@ -456,7 +456,11 @@ const STYLE = `
     display: grid; place-items: center; min-width: 30px; min-height: 36px; padding: 5px 7px;
     border-radius: 10px; background: #fffdf5; color: #3a2a1a; border: 2px solid #3a2a1a;
     box-shadow: 2px 2px 0 #3a2a1a; }
-  .game .gnum.flip { animation: perk .3s ease-out; }
+  /* a flip-clock (_flipNumber): the digit tips away and back on rotate (two steps a way), the swap at the
+     edge; a win's perk follows on transform. Reduced motion: the number, instantly (JS and the global rule). */
+  @keyframes flip-clock { 0%, 100% { rotate: x 0deg; } 50% { rotate: x 90deg; } }
+  .game .gnum.flip { animation: flip-clock .16s steps(2); }
+  .game .gnum.flip.win { animation: flip-clock .16s steps(2), perk .3s ease-out .16s; }
   /* D-a: today's visitor watching a dig, still, behind the buttons (fresh-expand E5). */
   .game .gwatch { position: absolute; right: 4%; bottom: 26%; height: 18%; image-rendering: pixelated;
     pointer-events: none; transform: scaleX(-1); }
@@ -581,6 +585,9 @@ const STYLE = `
   .screen .basket::before { content: ""; position: absolute; left: 50%; top: 50%;
     width: max(44px, 100%); height: max(44px, 100%); translate: -50% -50%; }
   .screen .basket.idle, .screen .reveal { pointer-events: none; }
+  /* a find lands (_basketSync): the first pops the basket in, then one rock; a fuller basket only rocks */
+  .screen .basket.lands { animation: pop .3s ease-out, rock .6s steps(4, jump-none) .3s; transform-origin: 50% 100%; }
+  .screen .basket.lands-more { animation: rock .6s steps(4, jump-none); transform-origin: 50% 100%; }
   .screen .basket img, .screen .reveal .rb { position: static; display: block; width: 100%; pointer-events: none; }
   .screen .reveal .rf { position: absolute; left: 50%; bottom: 60%; width: calc(var(--px, 2px) * 16);
     margin-left: calc(var(--px, 2px) * -8); image-rendering: pixelated; }
@@ -661,6 +668,10 @@ const STYLE = `
      trick, 360 degrees in .9 s, below.) */
   .pet.twirl { animation: twirl .6s step-end; }
   @keyframes twirl { 0% { rotate: y 180deg; } 25% { rotate: y 0deg; } 50% { rotate: y 180deg; } 75% { rotate: y 0deg; } }
+  /* the edge-on sprite swap (_swapFlip): the paper flip as a mask. The art swaps while it is a line (90deg). */
+  @keyframes turn-swap { 0% { rotate: y 0deg; animation-timing-function: ease-in; }
+    50% { rotate: y 90deg; animation-timing-function: ease-out; } 100% { rotate: y 0deg; } }
+  .pet.turn { animation: turn-swap .2s linear; }
   /* Thunder: now and then the scene flashes. */
   .flash { position: absolute; inset: 0; pointer-events: none; display: none; z-index: 2;
     background: #fff; opacity: 0; }
@@ -971,9 +982,12 @@ const STYLE = `
      across between its pages. Reduced motion makes both instant (the global rule). */
   @keyframes lcd-wipe-down { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0); } }
   @keyframes lcd-wipe-side { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0); } }
+  @keyframes lcd-wipe-up { from { clip-path: inset(0); } to { clip-path: inset(0 0 100% 0); } }
   .status:focus { outline: none; } /* focused by a tap inside it, so Escape reaches it (UX fix 2, F4) */
   .screen .status.wipe-down { animation: lcd-wipe-down .16s steps(4) both; }
   .screen .status.wipe-side { animation: lcd-wipe-side .16s steps(4) both; }
+  /* closing: show-status is already off; the page is drawn over the screen for the wipe and ignores taps */
+  .screen .status.wipe-up { display: flex; pointer-events: none; animation: lcd-wipe-up .16s steps(4) both; }
   /* The backlight lights the menus too (F10): the sheet and its back band lift toward the glow's
      mint, a faint lift by day and a stronger one in the dark, fading out with the glow. */
   .status, .shead { transition: background-color .6s ease-out; }

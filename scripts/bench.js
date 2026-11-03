@@ -821,6 +821,26 @@ const PRESETS = {
   // reduced-motion tap, the drape's alignment through a settle and a pat; and a drape sheet: every
   // species at every stage with the drape on frame 3, in the day and in the dim (the face stays clear).
   // Pass rules (lightsPass): the calm frames, the 2% compares, the alignment within 1 px.
+  // Motion ship 2 (the flip as a tool): the edge-on sprite swap (a hatch, a stage-up), the status sheet
+  // closing, a game counter flipping, a find landing: each paused mid-motion, and once under reduced motion.
+  motion2() {
+    const out = [];
+    const base = { species: "fox", world: "woodland", width: 330, clip: "screen", say: "" };
+    const add = (name, label, extra) => out.push({ ...base, name: `motion2/${name}`, group: "motion2", label, ...extra });
+    for (const [what, stage] of [["hatch", "egg"], ["hatch-baby", "baby"], ["stage-teen", "teen"], ["stage-adult", "adult"]]) {
+      for (const at of [0, 50, 100, 150]) add(`turn-${what}-${at}`, `${what}: ${at} ms`, { stage, petClasses: ["turn"], petAt: at });
+    }
+    add("turn-adult-reduce", "stage-up under reduced motion: no turn", { stage: "adult", petClasses: ["turn"], motion: "reduce" });
+    for (const at of [0, 40, 80, 120]) add(`close-${at}`, `sheet closing: ${at} ms`, { view: "status", statusClose: at, clip: "card" });
+    add("close-reduce", "sheet closing under reduced motion: closed at once", { view: "status", statusClose: 0, motion: "reduce", clip: "card" });
+    for (const at of [0, 40, 80, 120]) add(`gnum-${at}`, `counter flip: ${at} ms`, { game: "higher_lower", gnumFlip: { at }, clip: "screen" });
+    add("gnum-win-300", "counter, a win: the perk after the flip", { game: "higher_lower", gnumFlip: { at: 300, win: true } });
+    add("gnum-reduce", "counter under reduced motion: the number", { game: "higher_lower", gnumFlip: { at: 0 }, motion: "reduce" });
+    for (const at of [0, 150, 300, 450, 600]) add(`land-${at}`, `a find lands: ${at} ms`, { basket: 1, basketLands: { at }, findsShown: true });
+    add("land-more-450", "a fuller basket rocks", { basket: 3, basketLands: { at: 450, more: true }, findsShown: true });
+    add("land-reduce", "a find lands under reduced motion: the basket", { basket: 1, motion: "reduce", findsShown: true });
+    return out;
+  },
   tuck() {
     const out = [];
     const live = { at: 150, asleep: true };

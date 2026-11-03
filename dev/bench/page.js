@@ -870,6 +870,30 @@
         a.currentTime = shot.petAt;
       }
     }
+    // `statusClose`: ms. The status sheet (`view: "status"`) closed through the card's own _toggleStatus, its
+    // wipe-up paused that many ms in (motion ship 2). Needs `view: "status"`; with `motion: reduce` it just closes.
+    if (shot.statusClose !== undefined) {
+      card._toggleStatus(cur);
+      clearTimeout(cur.wipeTimer); // the card's 170 ms timer would take the sheet off before the shot
+      for (const a of cur.status.getAnimations()) { a.pause(); a.currentTime = shot.statusClose; }
+    }
+    // `gnumFlip`: `{at, win}` (use with `game: "higher_lower"`): the counter as the next number comes in, through
+    // the card's own _flipNumber, paused `at` ms into its .16 s. The swap is a real timer at 80 ms: the bench
+    // waits it out, then shows the old digit for `at` under 80 and the new one from 80.
+    if (shot.gnumFlip) {
+      const old = cur.gameNum.innerHTML;
+      card._flipNumber(cur, (Number(cur.gameNum.dataset.n) % 9) + 1, !!shot.gnumFlip.win);
+      await new Promise((r) => setTimeout(r, 140));
+      if (shot.gnumFlip.at < 80 && shot.motion !== "reduce") cur.gameNum.innerHTML = old;
+      cur.gameNum.style.animation = getComputedStyle(cur.gameNum).animation; // outlives the card's class timer
+      for (const a of cur.gameNum.getAnimations()) { a.pause(); a.currentTime = shot.gnumFlip.at; }
+    }
+    // `basketLands`: `{at, more}` (with `basket: n`): a find landing, the basket's pop and rock paused `at` ms in
+    // (`more`: a fuller basket, the rock alone). Not under `motion: reduce` (the basket just shows).
+    if (shot.basketLands) {
+      cur.basket.classList.add(shot.basketLands.more ? "lands-more" : "lands");
+      for (const a of cur.basket.getAnimations()) { a.pause(); a.currentTime = shot.basketLands.at; }
+    }
     // `attentionAt`: the call icon as it arrives (`.arrive`, the pop then the pulse), paused that many ms in.
     if (shot.attentionAt !== undefined) {
       cur.attention.classList.add("arrive");
@@ -965,7 +989,7 @@
       if (a instanceof CSSTransition && !(shot.petAt !== undefined && a.effect.target === cur.pet)) a.finish();
     }
     // The status's LCD wipes (UX fix 2, F13) run to their end too: a shot never catches a half-drawn page.
-    for (const a of root.getAnimations()) if (/^lcd-wipe/.test(a.animationName || "")) a.finish();
+    for (const a of root.getAnimations()) if (/^lcd-wipe/.test(a.animationName || "") && !(shot.statusClose !== undefined && a.animationName === "lcd-wipe-up")) a.finish();
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     await settled(card);
     window.bench.screenClass = cur.screen.className;

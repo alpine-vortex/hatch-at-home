@@ -13,7 +13,7 @@ const ALLOWED = new Set([
   "munch", "pat-slow", "pat-soft", "perk", "puff", "rock", "rock2", "settle", "sigh", "startle",
   "stretch", "sulk",
   // flips on `rotate` (the individual property, so they compose with a transform keyframe)
-  "spin", "twirl",
+  "spin", "twirl", "turn",
   // loops the existing code stops itself: hop/dance while excited, shiver while cold, resting breath
   "hop", "dance", "shiver", "resting",
 ]);
