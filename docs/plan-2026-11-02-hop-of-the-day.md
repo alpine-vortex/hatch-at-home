@@ -489,7 +489,7 @@ measure; the row is new surface that needs its own fit rule.
 
 **The row.** One button, `.ghop`, a sibling of `.gpick` in `gameBox`, shown in the picker's
 view (`_gameView(s, "pick")`) and hidden in every other view, so it does not exist once a
-board is open (the pad is remapped then; section 1). Its label is draft ("Hop of the Day")
+board is open (the keys sit in the overlay then; section 1). Its label is draft ("Hop of the Day")
 and it carries the state:
 
 | state | row says (draft) | press does |
