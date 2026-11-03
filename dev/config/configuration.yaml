@@ -214,7 +214,9 @@ template:
         event_types: "{{ ['ring'] }}"
   # The washer (map binary_sensor.fake_washer_running under "appliances" in the
   # pet's options): kind washer comes from the entity id. Turn the boolean on, wait
-  # 10 minutes (APPLIANCE_RUN_MINUTES), turn it off: appliance_done {kind: washer}.
+  # about 16 minutes, turn it off: appliance_done {kind: washer}. The run only counts
+  # once a read lands after APPLIANCE_RUN_MINUTES (10): a state change or the 5-min
+  # tick, so an 11-minute run can miss it.
   # Once an hour per machine.
   - binary_sensor:
       - name: Fake washer running
