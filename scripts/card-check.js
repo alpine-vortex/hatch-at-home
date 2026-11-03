@@ -41,7 +41,7 @@ const results = [];
 
 // The gated sections of main(), in file order.
 const SECTIONS = ["shelf", "shell", "play", "resume", "board", "moments", "photos", "personality", "types",
-  "egg", "sharedscreen", "memorytags", "forget", "prefs", "channel", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
+  "egg", "sharedscreen", "memorytags", "forget", "prefs", "channel", "devicefx", "lcd", "mono", "ghost", "backlight", "pat", "react", "visitors", "winter", "care",
   "editor", "boot", "infrared", "lowbattery", "restart", "gifts", "finds", "collection", "oldcard"];
 // oldcard asserts restart's seeded bond; finds taps the basket restart seeds; collection
 // opens the finds page on the collection restart seeds; gifts uses restart's bounce (and
@@ -9912,6 +9912,201 @@ async function main() {
     }, [off.toString("base64"), on.toString("base64")]);
   };
 
+  if (enter("devicefx")) {
+  // 7b. Device-alive slice 3B (docs/plan-2026-11-03-device-alive-interactions.md sections 6.6-6.8): the rain on the
+  // inner glass, driven through the card's own _channel with the wire 3A built (house.device_fx.current,
+  // snapshot.device_fx_recent, a live {"fx": entry}). It names the adapter (_dirLive, _dirView, _dirSync, _dirSwitch,
+  // _dirPause, _dirShown), _channel, _toggleStatus, _go and _onHidden so scripts/pick-sections picks it when one
+  // of them changes (a client-only follow-up would otherwise pick nothing, pick-sections:118-134).
+  await setLcd(true); // the harness runs with the effects off; the glass needs the switch on
+  await card.evaluate((el) => el._dirSwitch());
+  const fxWait = (ms) => page.waitForTimeout(ms);
+  const fxSetup = () => card.evaluate(async (el, me) => {
+    const s = el._slides[el._index];
+    for (let i = 0; i < 50 && !s.subscribed; i++) await new Promise((r) => setTimeout(r, 100));
+    window.__fx = { me, kept: { house: s.house, viewed: s.dirViewed, recent: s.dirRecent }, spoken: [], vib: 0 };
+    for (const name of ["_speak", "_queue"]) {
+      const real = el[name];
+      window.__fx[name] = real;
+      el[name] = function (slide, text, ...rest) {
+        if (slide === s && typeof text === "string") window.__fx.spoken.push(text);
+        return real.call(this, slide, text, ...rest);
+      };
+    }
+    navigator.vibrate = () => { window.__fx.vib++; return true; };
+    return { index: el._index, subscribed: s.subscribed };
+  }, me);
+  const fx = (body) => card.evaluate(new Function("el", `const F = window.__fx; const s = el._slides[el._index]; const me = F.me;
+    const glass = s.glass; const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    const iso = (ago) => new Date(Date.now() - ago).toISOString();
+    const cls = () => [...glass.classList].filter((c) => c.startsWith("dir-")).sort().join();
+    const rainHouse = (rain) => ({ ...F.kept.house, device_fx: { version: 1, current: { rain } } });
+    const ent = (kind, ago, id) => ({ id, kind, scope: "house", occurred_at: iso(ago), expires_at: iso(ago - 90000) });
+    const quiet = async () => { for (let i = 0; i < 60 && /dir-(drop|clear)/.test(cls()); i++) await wait(100); return cls(); };
+    return (async () => { ${body} })();`));
+  const setup = await fxSetup();
+  check("devicefx: the pet on show has been heard, for the section", setup.subscribed === true, JSON.stringify(setup));
+
+  // 17 (the TDZ case, and case 14's element): the card defined, a director on the card, a glass on every slide.
+  const base = await fx(`return {
+    defined: !!customElements.get("hatch-pet-card"), director: typeof el._director?.offer === "function" && typeof el._director?.enterView === "function",
+    glass: el._slides.every((x) => x.glass?.matches(".hw.glass")), n: el._slides.length };`);
+  check("devicefx 17: the card is defined, has a director, and every slide has its glass",
+    base.defined && base.director && base.glass && base.n >= 1, JSON.stringify(base));
+
+  // 1: the house says rain: the sheen; a live onset: one drop, no speech, no haptic, then back to the sheen.
+  const one = await fx(`
+    el._channel(s, { house: rainHouse(true) }, me);
+    const wet = cls();
+    s.dirViewed = true;
+    const said = F.spoken.length;
+    el._channel(s, { fx: ent("rain_started", 0, "cc-1") }, me);
+    const drop = cls();
+    const effect = s.dirEffect;
+    const after = await quiet();
+    el._channel(s, { fx: ent("rain_started", 0, "cc-1") }, me); // the same id again
+    return { wet, drop, effect, after, again: cls(), said: F.spoken.length - said, vib: F.vib, effectEnd: s.dirEffect };`);
+  check("devicefx 1: the house's rain paints the sheen; a live onset is one drop with no speech and no haptic",
+    one.wet === "dir-wet" && one.drop === "dir-drop,dir-wet" && one.effect > 0 && one.said === 0 && one.vib === 0, JSON.stringify(one));
+  check("devicefx 1: the drop ends by itself and leaves the sheen; the same id again plays nothing",
+    one.after === "dir-wet" && one.effectEnd === 0 && one.again === "dir-wet", JSON.stringify(one));
+
+  // 2 and 3: a first view 20 s on gives one shortened echo; 3 min on, ambience only.
+  const echo = await fx(`
+    s.dirViewed = false; s.dirRecent = [ent("rain_started", 20000, "cc-2")];
+    el._dirView(s);
+    const at20 = cls();
+    await quiet();
+    s.dirViewed = false; s.dirRecent = [ent("rain_started", 180000, "cc-3")];
+    el._dirView(s);
+    return { at20, at3min: cls(), viewed: s.dirViewed, recent: s.dirRecent };`);
+  check("devicefx 2: a first view 20 s after the change plays one echo, on the wet sheen",
+    echo.at20 === "dir-drop,dir-echo,dir-wet", JSON.stringify(echo));
+  check("devicefx 3: a first view 3 min after the change is the sheen only", echo.at3min === "dir-wet" && echo.viewed === true && echo.recent === null, JSON.stringify(echo));
+
+  // 7 and M7: a snapshot then the live copy (same id) is one pulse; a reconnect snapshot on a viewed slide never echoes.
+  const dedup = await fx(`
+    s.dirViewed = false;
+    const snap = (ring) => ({ moments: [], mine: s.mine, house: rainHouse(true), device_fx_recent: ring, now: new Date().toISOString() });
+    el._channel(s, snap([ent("rain_started", 15000, "cc-4")]), me);
+    const first = cls(); const effect = s.dirEffect;
+    el._channel(s, { fx: ent("rain_started", 15000, "cc-4") }, me);
+    const same = s.dirEffect === effect && cls() === first;
+    await quiet();
+    el._channel(s, snap([ent("rain_started", 10000, "cc-5")]), me); // a reconnect: viewed already
+    return { first, same, reconnect: cls(), viewed: s.dirViewed, held: s.dirRecent };`);
+  check("devicefx 7: the snapshot's ring and the live fx with the same id are one pulse", dedup.first === "dir-drop,dir-echo,dir-wet" && dedup.same, JSON.stringify(dedup));
+  check("devicefx M7: a reconnect snapshot on a viewed slide paints the state and never echoes", dedup.reconnect === "dir-wet" && dedup.viewed === true, JSON.stringify(dedup));
+
+  // 8: two slides, the same rain on both: the one on show plays, the other holds it (and plays nothing).
+  if (slides >= 2) {
+    const two = await fx(`
+      const o = el._slides.find((x) => x !== s);
+      const keptO = o.house;
+      el._channel(o, { house: { ...(keptO || {}), device_fx: { version: 1, current: { rain: true } } } }, me);
+      const entry = ent("rain_started", 0, "cc-6");
+      el._channel(o, { fx: entry }, me);
+      el._channel(s, { fx: entry }, me);
+      const out = { sel: cls(), other: [...o.glass.classList].filter((c) => c.startsWith("dir-")).sort().join(), pending: el._director.inspect(o)?.pending };
+      await quiet();
+      el._director.cancel(o, "check");
+      el._channel(o, { house: keptO }, me);
+      return out;`);
+    check("devicefx 8: the same rain on two slides: only the one on show plays; the other holds it for its first view",
+      two.sel === "dir-drop,dir-wet" && two.other === "dir-wet" && two.pending === "cc-6", JSON.stringify(two));
+  }
+
+  // 9 and 14: the status sheet open: no echo (busy), the glass is hidden under it; closed: the glass is the screen's
+  // size, deaf to the pointer, below the bubble, and a control under it takes the click.
+  const status = await fx(`
+    el._toggleStatus(s);
+    const open = s.statusOpen === true;
+    await wait(400); // the wipe has finished
+    const rect = s.screen.getBoundingClientRect();
+    const mid = el.shadowRoot.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    const covered = !!mid?.closest(".status");
+    const hidden = getComputedStyle(glass).display === "none";
+    s.dirViewed = false; s.dirRecent = [ent("rain_started", 10000, "cc-7")];
+    el._dirView(s);
+    const echoed = cls();
+    el._toggleStatus(s);
+    await wait(300);
+    return { open, covered, hit: mid ? mid.className || mid.tagName : null, hidden, echoed, closed: s.statusOpen === false };`);
+  check("devicefx 9, 14: with the status sheet open the sheet is on top, the glass is hidden and no echo plays",
+    status.open && status.covered && status.hidden && status.echoed === "dir-wet" && status.closed, JSON.stringify(status));
+  const shape = await fx(`
+    const g = glass.getBoundingClientRect(), sc = s.screen.getBoundingClientRect();
+    const cs = getComputedStyle(glass);
+    const below = (later) => !!later && !!(glass.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const wasHidden = s.pat.hidden;
+    s.pat.hidden = false;
+    const pr = s.pat.getBoundingClientRect();
+    const hit = pr.width > 0 ? el.shadowRoot.elementFromPoint(pr.left + pr.width / 2, pr.top + pr.height / 2) : null;
+    const control = pr.width > 0 && (hit === s.pat || s.pat.contains(hit));
+    s.pat.hidden = wasHidden;
+    const mid = el.shadowRoot.elementFromPoint(sc.left + sc.width / 2, sc.top + sc.height / 2);
+    return { same: Math.abs(g.width - sc.width) < 1 && Math.abs(g.height - sc.height) < 1 && Math.abs(g.left - sc.left) < 1 && Math.abs(g.top - sc.top) < 1,
+      pe: cs.pointerEvents, display: cs.display, z: cs.zIndex, never: mid !== glass,
+      order: [s.bubble, s.status, s.gameBox].every(below), control, patW: pr.width };`);
+  check("devicefx 14: the glass is the screen's box, pointer-events none, z 0, before the bubble, status and game in the DOM",
+    shape.same && shape.pe === "none" && shape.display === "block" && shape.z === "0" && shape.order, JSON.stringify(shape));
+  check("devicefx 14: a control under the glass (the pat box) takes the point; the glass is never the hit", shape.control && shape.never, JSON.stringify(shape));
+
+  // 12: reduced motion: the still sheen, no onset, no echo, no haptic; the switch off: nothing at all.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const calm = await fx(`
+    el._channel(s, { house: rainHouse(true) }, me);
+    el._channel(s, { fx: ent("rain_started", 0, "cc-8") }, me);
+    const live = cls();
+    s.dirViewed = false; s.dirRecent = [ent("rain_started", 5000, "cc-8b")];
+    el._dirView(s);
+    return { live, view: cls(), vib: F.vib, dry: (el._channel(s, { house: rainHouse(false) }, me), cls()) };`);
+  await page.emulateMedia({ reducedMotion: null });
+  check("devicefx 12: reduced motion draws the still sheen and no onset or echo, no haptic",
+    calm.live === "dir-wet" && calm.view === "dir-wet" && calm.vib === 0 && calm.dry === "", JSON.stringify(calm));
+  await setLcd(false);
+  const off = await fx(`
+    el._channel(s, { house: rainHouse(true) }, me);
+    el._dirSwitch();
+    const quietGlass = cls();
+    el._channel(s, { fx: ent("rain_started", 0, "cc-9") }, me);
+    const live = cls(); const shown = getComputedStyle(glass).display;
+    return { quietGlass, live, shown };`);
+  await setLcd(true);
+  const on = await fx(`el._dirSwitch(); return cls();`);
+  check("devicefx 12: the switch off draws nothing (no sheen, no onset); on again paints the sheen",
+    off.quietGlass === "" && off.live === "" && off.shown === "none" && on === "dir-wet", JSON.stringify({ off, on }));
+
+  // 13: a real IntersectionObserver: leaving and coming back is not a replay; the first sight of a slide that
+  // loaded below the fold is its first view (and plays its echo).
+  const io = async (viewed) => {
+    await fx(`s.dirViewed = ${viewed}; s.dirRecent = ${viewed ? "[ent('rain_started', 10000, 'cc-io-" + viewed + "')]" : "[ent('rain_started', 10000, 'cc-io-" + viewed + "')]"};
+      el.style.transform = "translateY(-200000px)";`);
+    await fxWait(500);
+    const away = await card.evaluate((el) => ({ visible: el._visible, off: el._card.classList.contains("offscreen") }));
+    await card.evaluate((el) => { el.style.transform = ""; });
+    await fxWait(600);
+    return { away, back: await fx(`return { cls: cls(), viewed: s.dirViewed, visible: el._visible };`) };
+  };
+  const seen = await io(true);
+  check("devicefx 13: scrolled out and back in, an already-viewed slide does not replay (the sheen stays)",
+    seen.away.visible === false && seen.away.off && seen.back.visible === true && seen.back.cls === "dir-wet", JSON.stringify(seen));
+  const first = await io(false);
+  check("devicefx 13: the first time a slide comes into view, the IntersectionObserver plays its echo",
+    first.away.visible === false && first.back.viewed === true && /dir-echo/.test(first.back.cls), JSON.stringify(first));
+
+  // Put everything back.
+  await fx(`await quiet();
+    el._director.cancel(s, "check");
+    el._channel(s, { house: F.kept.house }, me);
+    s.dirViewed = F.kept.viewed; s.dirRecent = F.kept.recent;
+    for (const name of ["_speak", "_queue"]) el[name] = F[name];
+    delete navigator.vibrate; delete window.__fx;
+    return 0;`);
+  await setLcd(false);
+  await card.evaluate((el) => el._dirSwitch());
+  check("devicefx: no page error from any of it", errors.length === 0, errors.slice(-3).join(" | "));
+  }
   if (enter("lcd")) {
   // The "screen effects here" row: on by default, per browser.
   await card.evaluate((el) => el._toggleStatus(el._slides[el._index]));
