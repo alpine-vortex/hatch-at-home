@@ -826,7 +826,7 @@ const PRESETS = {
     const live = { at: 150, asleep: true };
     const shot = (group, name, label, extra) => out.push({ name: `tuck/${group}/${name}`, group: `tuck-${group}`, label,
       species: "fox", stage: "adult", world: "woodland", width: 330, care: "lights", clip: "screen", say: "",
-      ...extra, pet: { energy: 60, ...extra.pet }, variant: { lights: "A", ...extra.variant } });
+      ...extra, pet: { energy: 60, ...extra.pet }, variant: { lights: "A", "lights.night": "on", ...extra.variant } });
     const wake = { scene: "dim", pet: { mood: "asleep" }, live: { at: 150, asleep: false } };
     for (const at of [0, 400, 700, 1000, 1200, 1400, 1600, 1800, 2400]) {
       shot("day", `day-${at}`, `tuck ${at}`, { careAt: at, live });

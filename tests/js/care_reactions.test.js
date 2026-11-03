@@ -959,13 +959,13 @@ function lightsCard({ calm = false, energy = "60", asleep = false, lights = fals
     setTimeout: (fn, ms) => log.timers.push([fn, ms]), clearTimeout() {}, requestAnimationFrame: () => 1, cancelAnimationFrame() {},
     BASE: "/f", VERSION: "t", MINE: 4, MINE_MS: 3000, MINE_MATCH_MS: 10000, pick: (l) => l[0], REFUSALS: { not_sleepy: "not sleepy yet" }, Image: class { set src(v) { this.s = v; } } };
   const consts = ["SCENE_KIND_OF", "sceneKind", "SCENE_HOLD_MS", "SCENE_EXIT_MS", "SCENE_OWE_MS", "SPOILED_BY", "isYes", "LIGHTS_TIRED_AT", "LIGHTS_QUIET_MS",
-    "DRAPE_FALL_MS", "DRAPE_SLIDE_PX", "WAKE_STRETCH_MS", "DRAPE_ART", "DRAPE_ART_BOX"].map((n) => src.match(new RegExp(`\\nconst ${n} = [^\\n]*`))[0]);
+    "DRAPE_FALL_MS", "DRAPE_SLIDE_PX", "WAKE_STRETCH_MS", "DRAPE_ART", "DRAPE_ART_BOX", "LIGHTS_NIGHT_ODDS"].map((n) => src.match(new RegExp(`\\nconst ${n} = [^\\n]*`))[0]);
   const fn = (name) => src.match(new RegExp(`\\nfunction ${name}\\([\\s\\S]*?\\n\\}\\n`))[0];
   const block = src.slice(src.indexOf("const SCENES = {"), src.indexOf("\n};\n", src.indexOf("const SCENES = {")) + 4);
   const methods = ["_sceneClock", "_sceneOver", "_sceneAnswer", "_sceneFail", "_sceneNow", "_sceneOffer", "_sceneEnd", "_sceneRefusalLine", "_toggleLights", "_lightsLive",
     "_lightsWatch", "_lightsTuck", "_lightsWake", "_lightsSay", "_moodFrames", "_drapeInfo", "_drapeSrc", "_drapePreload", "_drapeShow", "_drapeHide", "_drapeStop", "_drapeMirror",
     "_drapeSync", "_sceneKey", "_bgApply"].map(method).join(",\n");
-  vm.runInNewContext([...consts, konst("DRAPE"), konst("LIGHTS_LINES"), fn("drapeOf"), fn("inSleepWindow"), fn("nature"), block,
+  vm.runInNewContext([...consts, konst("DRAPE"), konst("LIGHTS_LINES"), konst("NATURE_VALUES"), fn("drapeOf"), fn("inSleepWindow"), fn("nature"), block,
     `this.api = {${methods}}; this.SCENES = SCENES; this.drapeOf = drapeOf; this.inSleepWindow = inSleepWindow; this.DRAPE_ART = DRAPE_ART;`].join("\n"), ctx);
   const s = {
     species: { moods: ["content", "sleepy", "asleep", "excited", "bored"], frames: 2, backgrounds: { day: "bg_day", dim: "bg_dim", night: "bg_night" } },
@@ -998,6 +998,24 @@ const flipLive = (f, asleep, lights = asleep) => {
   f.states["switch.lights_out"] = { state: lights ? "on" : "off" };
 };
 const lightsTap = (f) => { f.s.asleep = f.states["binary_sensor.asleep"].state === "on"; f.s.lightsOut = f.states["switch.lights_out"].state === "on"; f.self._toggleLights(f.s); };
+
+test("lights: a night creature's one-more-look is 1 in 4 (LIGHTS_NIGHT_ODDS); the others never, a pin wins", () => {
+  assert.strictEqual(src.match(/\nconst LIGHTS_NIGHT_ODDS = ([\d.]+);/)[1], "0.25");
+  const setup = (clock, roll, pin) => {
+    const f = lightsCard();
+    f.s.species.nature = { clock, sky: "sun", company: "solo", habit: "explorer" };
+    f.ctx.Math = Object.assign(Object.create(Math), { random: () => roll }); // the odds override: a pinned roll
+    if (pin) f.s.pinVariant = { "lights.night": pin };
+    lightsTap(f);
+    return f.s.scene.night;
+  };
+  assert.strictEqual(setup("night", 0.24), true, "under the odds: it looks round");
+  assert.strictEqual(setup("night", 0.25), false, "at the odds or over: the thanks as usual");
+  assert.strictEqual(setup("day", 0), false, "a day creature never");
+  assert.strictEqual(setup("dusk", 0), false, "a dusk creature never");
+  assert.strictEqual(setup("night", 0.9, "on"), true, "a bench pin on");
+  assert.strictEqual(setup("night", 0, "off"), false, "a bench pin off");
+});
 
 test("lights: due for a tuck when tired or at the pet's night, never on a bad reading; always for a wake", () => {
   const due = (o) => { const f = lightsCard(o); f.s.asleep = !!o.asleep; f.s.lightsOut = !!o.lights; return f.ctx.SCENES.lights.due.call(f.self, f.s); };

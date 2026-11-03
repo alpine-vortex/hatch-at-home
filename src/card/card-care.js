@@ -624,7 +624,9 @@ const SCENES = {
       }
       sc.variant = this._careVariant(s, "lights", ["A", "B", "C"]);
       if (sc.variant === "B") sc.ms = 2800; // the peek
-      sc.night = nature(s.species)?.clock === "night"; // a night creature: one more look round first
+      // A night creature (nature.clock) looks round once more first, in 1 in 4 tucks (LIGHTS_NIGHT_ODDS; a bench
+      // pins it with "lights.night": "on" | "off"); the others, and the rest, go straight to the thanks.
+      sc.night = nature(s.species)?.clock === "night" && (s.pinVariant?.["lights.night"] ?? (Math.random() < LIGHTS_NIGHT_ODDS ? "on" : "off")) === "on";
     },
     render(s, sc, t, k) {
       return sc.wake ? this._lightsWake(s, sc, t, k) : this._lightsTuck(s, sc, t, k);
@@ -666,6 +668,7 @@ const DRAPE_ART = { ok: undefined, asked: new Set() }; // false once a drape fil
 const FEED_GOBBLE = 30; // under this hunger the feed may be a gobble (variant C)
 const FEED_MAX_MS = 3200; // a feed scene never runs longer, whatever the pace (plan 8)
 const FEED_EXTRA_ODDS = 0.25; // a heart, a lick or a burp at the end of a meal
+const LIGHTS_NIGHT_ODDS = 0.25; // how often a night creature's tuck says "*one more look around*" (1 in 4, as FEED_EXTRA_ODDS: FM)
 const SNACK_LINE_ODDS = 0.25; // how often a snack scene says its SNACK_LINES line (1 in 4, as FEED_EXTRA_ODDS: FM)
 const SNACK_NIBBLES = [[90, 25, 38], [8, 45, 40], [50, 55, 75]]; // C's three bites: centre (% of the snack) and radius
 
