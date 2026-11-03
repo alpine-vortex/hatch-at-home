@@ -2835,12 +2835,22 @@ async function main() {
     };
     const ids = (offer) => offer?.offered.map((r) => r.id).join();
     const rows = () => [...s.status.querySelectorAll(".layrow")].map((b) => b.textContent);
+    const isOpen = () => !!s.laySheet && s.screen.classList.contains("show-status") && !!s.status.querySelector(".laygo");
+    // Poll for the condition (bounded) rather than sleep a fixed time: the sheet draws in the click, but a
+    // draw already in flight (below) can land on it.
+    const until = async (cond, ms = 2000) => {
+      for (const end = Date.now() + ms; !cond() && Date.now() < end;) await wait(10);
+      return cond();
+    };
     const open = async () => {
       s.request.dataset.key = "lay_egg";
       s.request.click();
       await wait(30);
-      return s.laySheet && s.screen.classList.contains("show-status") && !!s.status.querySelector(".laygo");
+      return await until(isOpen, 500);
     };
+    // _goShared / _goPersonal start an async _update (it awaits worlds.json, and the channel answers later)
+    // that redraws the slide and clears its status. Let it finish before tapping, or it lands on the open sheet.
+    const settled = async () => { await el._update(); await wait(100); };
     const closed = () => !s.laySheet && !s.screen.classList.contains("show-status");
     const shut = () => { if (s.laySheet) el._closeLay(s); };
     el._press = (slide, key) => pressed.push(key);
@@ -2909,6 +2919,7 @@ async function main() {
       localStorage.setItem("hatch-shared-screen", "on");
       el._goShared();
       out.sharedExit = closed();
+      await settled();
       // Shared screens may lay: the sheet opens and lays there too.
       put({ raised: [a.id, c.id] });
       out.sharedOpens = await open();
@@ -2918,6 +2929,7 @@ async function main() {
       pressed.length = 0;
       localStorage.setItem("hatch-shared-screen", "off");
       el._goPersonal();
+      await settled();
       put({ raised: [a.id, c.id] });
       await open();
       put({ raised: [a.id, c.id], requests: [] });
