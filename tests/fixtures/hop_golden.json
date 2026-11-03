@@ -1,14 +1,14 @@
-{"gen_version": 1, "boards": [
-  {"in": ["pet-a", "2026-11-02", "woodland", "hop", "child", 0], "grid": ["..No.", "...f#", "#o.f.", "~.~.P"], "id": "355e5f4d38", "fallback": false},
-  {"in": ["pet-a", "2026-11-03", "woodland", "glide", "teen", 0], "grid": ["~.f.#N", "....o.", "~#...f", "P.~#.f"], "id": "229e952e73", "fallback": false},
-  {"in": ["pet-b", "2026-11-02", "tidepool", "swim", "adult", 0], "grid": ["N.~...", "o...#.", ".~.~f.", "..f.fP"], "id": "ea0af6108d", "fallback": false},
-  {"in": ["pet-b", "2026-11-04", "hearth", "dig", "child", 0], "grid": ["o.No", ".ff.", "#.#.", "P..."], "id": "f9fc795a08", "fallback": false},
-  {"in": ["pet-c", "2026-11-04", "terrarium", "climb", "teen", 0], "grid": ["#.Nof", "o....", "#f...", "f.#.P"], "id": "c1c12e84a4", "fallback": false},
-  {"in": ["pet-c", "2026-11-04", "pond", "squeeze", "adult", 0], "grid": ["N.f#f", ".....", "~fo..", "...#P"], "id": "d427a1d90f", "fallback": false},
-  {"in": ["pet-d", "2026-11-05", "hearth", "hop", "baby", 0], "grid": ["o..N", "~...", "P.f."], "id": "886e39af69", "fallback": false},
-  {"in": ["pet-d", "2026-11-04", "pond", "swim", "baby", 0], "grid": ["Nf~.", "...o", "...P"], "id": "467a961e18", "fallback": false},
-  {"in": ["pet-e", "2026-11-06", "nightsky", "hop", "adult", 0], "grid": ["..o.N#", "~f...#", ".o#...", "Pf..#f"], "id": "5a8fe31e44", "fallback": false},
-  {"in": ["pet-e", "2026-11-07", "nightsky", "glide", "child", 0], "grid": ["..#N.", "f#o..", ".....", "P..f#"], "id": "8505667c37", "fallback": false},
-  {"in": ["pet-f", "2026-11-08", "woodland", "squeeze", "teen", 0], "grid": [".f#N.~", "f..#o.", "..~.f.", "P....."], "id": "632d67dd3f", "fallback": false},
-  {"in": ["pet-f", "2026-11-08", "hearth", "dig", "adult", 1], "grid": ["N#..f.", "...##.", "##..#f", "..of.P"], "id": "ed0a500263", "fallback": false}
+{"gen_version": 2, "boards": [
+  {"in": ["pet-a", "2026-11-02", "woodland", "hop", "child", 0], "grid": ["~oNof", "f....", "..#..", "..#.P"], "id": "52107612ab", "fallback": false},
+  {"in": ["pet-a", "2026-11-03", "woodland", "glide", "teen", 0], "grid": ["..oNf#", "#...f#", "..o.f~", "P~...."], "id": "6afdb1fbfa", "fallback": false},
+  {"in": ["pet-b", "2026-11-02", "tidepool", "swim", "adult", 0], "grid": [".f..#N", "....#~", "..f.of", "P.~#.."], "id": "033c1d0fe9", "fallback": false},
+  {"in": ["pet-b", "2026-11-04", "hearth", "dig", "child", 0], "grid": ["No..", "#.#.", "f.o.", "f.~P"], "id": "5fc31ae27f", "fallback": false},
+  {"in": ["pet-c", "2026-11-04", "terrarium", "climb", "teen", 0], "grid": ["N.#..", "..f.#", "f.###", "o.o.P"], "id": "335e83f601", "fallback": false},
+  {"in": ["pet-c", "2026-11-04", "pond", "squeeze", "adult", 0], "grid": ["N#..#", "...#~", "f..#.", ".ffoP"], "id": "ba967722a4", "fallback": false},
+  {"in": ["pet-d", "2026-11-05", "hearth", "hop", "baby", 0], "grid": ["N.o.", "..f~", "...P"], "id": "11dfaa1604", "fallback": false},
+  {"in": ["pet-d", "2026-11-04", "pond", "swim", "baby", 0], "grid": ["..N.", "f.o.", "P..~"], "id": "2c1cee8b7f", "fallback": false},
+  {"in": ["pet-e", "2026-11-06", "nightsky", "hop", "adult", 0], "grid": ["fN.f..", ".o.#..", "f####~", ".....P"], "id": "14e011090f", "fallback": false},
+  {"in": ["pet-e", "2026-11-07", "nightsky", "glide", "child", 0], "grid": [".N..~", ".#...", "f.f~o", "...oP"], "id": "f087a05c47", "fallback": false},
+  {"in": ["pet-f", "2026-11-08", "woodland", "squeeze", "teen", 0], "grid": [".#..No", "f..f~f", "......", "P...#~"], "id": "ad6b62eb48", "fallback": false},
+  {"in": ["pet-f", "2026-11-08", "hearth", "dig", "adult", 1], "grid": ["oN....", "f.##..", "#f.f..", "o.###P"], "id": "d89f8582bc", "fallback": false}
 ]}

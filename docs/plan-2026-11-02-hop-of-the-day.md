@@ -376,9 +376,10 @@ config entry id (`coordinator.pet_id`), `day` is `_today(now)[0]` (the local dat
 
 **Version guard.** A change to the generator bumps `GEN_VERSION`, and the **board id**
 goes to the card with the board and back with the settle. The id is `board_id()`: the first
-10 hex of sha256 over (`GEN_VERSION`, pet id, day, w, h, grid, family, specials, n) (FM,
-Decided 11). It binds the pet and the day, not only the grid, so a fallback board shared by
-two pets or two days still has two ids, and a list for another pet or day answers
+10 hex of sha256 over (`GEN_VERSION`, pet id, day, world, w, h, grid, family, specials, n)
+(FM, Decided 11; the world was added after the s2773 audit). It binds the pet, the day and
+the world, not only the grid, so a fallback board shared by two pets, two days or two worlds
+still has two ids, and a list for another pet or day answers
 `board_changed`. It is a hash, so the entry id never leaves the server. A mid-day upgrade that changes today's board makes the settle answer
 `board_changed` and the card loads the new board and drops its parked moves. This happens
 at most once per release per pet.
@@ -419,7 +420,8 @@ board (a tidy list must visit every pad); the casual bot (checks 3, 4); then the
 It tries up to `R.HOP_CANDIDATES` = 60 candidates and falls back to the **fallback board**
 for its (family, specials, size) in `hop.py` if none is accepted, so a day never has no
 puzzle. The 37 fallbacks (the baby's 4×3 shared, 6 families × 6 sizes) are not hand-drawn:
-each is the first candidate from the seed `fallback|{family}|{specials}|{w}x{h}` that passed
+each is the first candidate from the seed `fallback|{key}|{specials}|{w}x{h}` (`key` is the
+family, or `base` for the baby's shared board) that passed
 every check (a child's with its win needing the use) and that the noisy bot won 20 times in
 20, then pinned in `hop.py`, so a generator change does not move them and a fallback is
 instant. A test asserts they pass. The fallback share must stay at or under 10% per (family,
@@ -721,14 +723,16 @@ are pinned:
 - `hop.py`: `params_for(stage, day) -> (specials, w, h)`, `family_of(species)`,
   `hop_board(pet_id, day, world, family, specials, w, h, n=0)` (blocking: 2a runs it in the
   executor, never on the loop), `board_id(...)`, `replay(board, moves) -> {legal, bad_index,
-  won, tidy, final, too_long}` (3a), `solve(board, state=None)` (ship 5's hint), `encode` /
+  won, tidy, final, too_long}` (3a; its `final` is the plain form, `State.from_dict` turns it
+  back into a state), `solve(board, state=None)` (ship 5's hint), `encode` /
   `decode`, `legal_targets`, `apply_move`, `Board.from_dict` / `to_dict`.
 - `hop-engine.js`: one `const HATCH_HOP = Object.freeze({...})` (review P12: the card is a
   classic script, so every top-level name is a page global shared with other cards; a
   duplicate `const` would kill the card), in `manifest.txt` right after `world.js`, before
   the class chain; no `this`, no DOM. It holds `start`, `legalTargets(board, state)` (2b's
   lit cells, key `aria-disabled` and preview), `apply`, `replay`, `isTidy`, `encode`,
-  `decode`, `view`; undo is a replay of the list without its last move. It ships in the
+  `decode`, `view`, `fromView` (a view back to a state), `valid` (a reply is a board the rules
+  can play: `Board`'s checks); undo is a replay of the list without its last move. It ships in the
   built card from ship 1 (a few KB, unused until 2b).
 - `hop.py` imports `rates` (`from . import rates as R`), so a script that uses it runs with
   the dev venv, as `scripts/balance_sim.py` does (review P11: importing the package runs its
@@ -770,6 +774,13 @@ Acceptance (pytest, `tests/test_hop.py`; `node --test`, `tests/js/hop_engine.tes
   list and a tidy one, using the same solver. Ship 3a's real-HA round trip uses it: the
   live board depends on the dev pet's entry id and today's date, so no fixture list can
   match it.
+- **Ship 1 audit (s2773): player-impact 0, nits 6, all fixed in
+  `crew/hatch-at-home-s2774-hop-ship-1-audit-fixes-6-nits`.** N1 `decode` counts code points
+  in JS as in Python (fixture cases with emoji); N2 `params_for` raises `ValueError` for an
+  egg or unknown stage; N3 `board_id` hashes the world, `GEN_VERSION` 2, goldens rewritten
+  (Decided 11); N4 `State.from_dict` and `HATCH_HOP.fromView` rebuild a state from a view;
+  N5 the fallback seed text above; N6 `Board` checks `specials` is 0-3, `HATCH_HOP.valid`
+  mirrors the `Board` checks, and the fixture's `bad_boards` pin both.
 
 ### Ship 2a: the `board` service (server, tier 1, S-M)
 
@@ -962,7 +973,8 @@ These were open questions in the first draft. The owner and the first mate settl
 10. **The candidate table as tunable drafts** (first mate, Q3): finds baby 1, child 2, teen
     2-3, adult 3; walls and water at most 25% of the cells (section 4).
 11. **The board id hashes the pet id, the day and `GEN_VERSION`** with the board and `n`
-    (first mate, Q4; section 4).
+    (first mate, Q4; section 4). FM: world added after audit (s2773 N3): the id also hashes
+    the world, and `GEN_VERSION` went to 2 before anything was live.
 
 Also settled by this fold, for the first mate to veto: a nest entry ends the board and
 settles at once, a plain win does not lock the day, and the solved view offers a free restart

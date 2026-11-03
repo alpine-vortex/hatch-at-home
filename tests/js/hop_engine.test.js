@@ -13,7 +13,7 @@ const ctx = {};
 // A top-level const is not on the context: hand it out at the end.
 vm.runInNewContext(`${part}\nthis.HATCH_HOP = HATCH_HOP;`, ctx);
 const H = ctx.HATCH_HOP;
-const { boards, cases } = JSON.parse(fs.readFileSync(path.join(ROOT, "tests", "fixtures", "hop_cases.json"), "utf8"));
+const { boards, cases, bad_boards } = JSON.parse(fs.readFileSync(path.join(ROOT, "tests", "fixtures", "hop_cases.json"), "utf8"));
 const plain = (x) => JSON.parse(JSON.stringify(x)); // across the vm's realm
 
 test("the part is in the built card, before the class chain", () => {
@@ -86,4 +86,37 @@ test("decode and encode", () => {
 test("MAX_MOVES is rates.py's HOP_MAX_MOVES", () => {
   const rates = fs.readFileSync(path.join(ROOT, "custom_components", "virtual_pet", "rates.py"), "utf8");
   assert.strictEqual(Number(rates.match(/^HOP_MAX_MOVES = (\d+)/m)[1]), H.MAX_MOVES);
+});
+
+test("decode counts letters as code points, as hop.py's len", () => {
+  const emoji = "\u{1F600}";
+  assert.strictEqual(H.decode(emoji.repeat(H.MAX_MOVES)).length, H.MAX_MOVES);
+  assert.deepStrictEqual(plain(H.decode(emoji + "a")), [-1, 0]);
+  assert.strictEqual(H.decode(emoji.repeat(H.MAX_MOVES + 1)), null);
+});
+
+test("bad boards are refused, and the good ones are not", () => {
+  for (const c of bad_boards) assert.strictEqual(H.valid(c.board), false, c.why);
+  for (const [name, b] of Object.entries(boards)) assert.strictEqual(H.valid(b), true, name);
+  assert.strictEqual(H.valid(null), false);
+  assert.strictEqual(H.valid({ ...boards.baby, specials: "0" }), false);
+  assert.strictEqual(H.valid({ ...boards.baby, specials: 1.5 }), false);
+});
+
+test("a view round-trips to a state (the audit's e, f repro)", () => {
+  const b = boards.baby;
+  const out = plain(H.replay(b, "ef"));
+  assert.deepStrictEqual(out.final.sunk, [4, 8]);
+  const s = H.fromView(out.final);
+  assert.deepStrictEqual(plain(s), plain(H.apply(b, H.apply(b, H.start(b), 4), 5)));
+  assert.deepStrictEqual(plain(H.legalTargets(b, s)), [1, 9]);
+  assert.deepStrictEqual(plain(H.view(s)), out.final);
+});
+
+test("fromView refuses what is not a view", () => {
+  const ok = { pos: 0, sunk: [1], uses: 0, done: false };
+  assert.ok(H.fromView(ok));
+  const bads = [null, {}, { ...ok, pos: 24 }, { ...ok, pos: -1 }, { ...ok, sunk: [24] }];
+  bads.push({ ...ok, sunk: 3 }, { ...ok, uses: -1 }, { ...ok, uses: 1.5 });
+  for (const bad of bads) assert.strictEqual(H.fromView(bad), null, JSON.stringify(bad));
 });

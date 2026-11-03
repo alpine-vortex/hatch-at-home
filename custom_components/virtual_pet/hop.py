@@ -38,7 +38,7 @@ from . import rates as R
 
 # Bump on any change that can change a board for the same inputs; the golden
 # boards in tests/fixtures/hop_golden.json are then regenerated.
-GEN_VERSION = 1
+GEN_VERSION = 2  # 2: board_id binds the world
 
 FAMILIES = ("hop", "glide", "swim", "dig", "climb", "squeeze")
 DEFAULT_FAMILY = "hop"
@@ -99,6 +99,7 @@ NARROW_WEEKDAY = 2  # date.weekday(): Wednesday
 LETTERS = "abcdefghijklmnopqrstuvwx"  # 6 x 4: a wider board is a format change
 PADS = ".fP"
 CELLS = ".fo~#PN"
+MAX_SPECIALS = 3  # an adult's; STAGES has no more
 
 
 def family_of(species: str | None) -> str:
@@ -107,7 +108,11 @@ def family_of(species: str | None) -> str:
 
 
 def params_for(stage: str, day: str) -> tuple[int, int, int]:
-    """(specials, width, height) for a stage on a day ("YYYY-MM-DD")."""
+    """(specials, width, height) for a stage on a day ("YYYY-MM-DD"). An egg (or
+    any stage not in STAGES) has no board: ValueError, so the caller refuses an
+    egg before it asks."""
+    if stage not in STAGES:
+        raise ValueError(f"no board for stage {stage!r}")
     specials, w, h = STAGES[stage]
     if date.fromisoformat(day).weekday() == NARROW_WEEKDAY:
         w = max(MIN_WIDTH, w - 1)
@@ -153,6 +158,12 @@ class Board:
             raise ValueError("one start and one nest")
         if self.family not in FAMILIES:
             raise ValueError("unknown family")
+        if (
+            not isinstance(self.specials, int)
+            or isinstance(self.specials, bool)
+            or not 0 <= self.specials <= MAX_SPECIALS
+        ):
+            raise ValueError("specials is 0 to 3")
         object.__setattr__(self, "cells", cells)
 
     @classmethod
@@ -224,6 +235,25 @@ class State:
             "uses": self.uses,
             "done": self.done,
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> State:
+        """A state from to_dict()'s form (replay()'s `final`): `sunk` is a list
+        of cells, not the bit mask the rules and the solver take."""
+        cells = range(len(LETTERS))
+        if not (
+            data["pos"] in cells
+            and all(i in cells for i in data["sunk"])
+            and isinstance(data["uses"], int)
+            and data["uses"] >= 0
+        ):
+            raise ValueError("not a state")
+        return cls(
+            int(data["pos"]),
+            _mask(data["sunk"]),
+            int(data["uses"]),
+            bool(data["done"]),
+        )
 
 
 def start_state(board: Board) -> State:
@@ -766,6 +796,7 @@ def _seed(
 def board_id(
     pet_id: str,
     day: str,
+    world: str | None,
     w: int,
     h: int,
     grid: tuple[str, ...] | list[str],
@@ -774,10 +805,11 @@ def board_id(
     n: int = 0,
 ) -> str:
     """The board's id: a hash, so the pet id (an entry id) never leaves the
-    server. Binds the pet, the day, the generator and the board, so another
-    pet's or day's list, or a stale generator's, does not match."""
+    server. Binds the pet, the day, the world, the generator and the board, so
+    another pet's, day's or world's list, or a stale generator's, does not
+    match."""
     text = json.dumps(
-        [GEN_VERSION, pet_id, day, w, h, list(grid), family, specials, n],
+        [GEN_VERSION, pet_id, day, world, w, h, list(grid), family, specials, n],
         separators=(",", ":"),
     )
     return hashlib.sha256(text.encode()).hexdigest()[:10]
@@ -930,7 +962,15 @@ def _stamp(
     tries: int,
 ) -> Board:
     bid = board_id(
-        pet_id, day, board.w, board.h, board.grid, board.family, board.specials, n
+        pet_id,
+        day,
+        world,
+        board.w,
+        board.h,
+        board.grid,
+        board.family,
+        board.specials,
+        n,
     )
     return Board(
         board.w,
