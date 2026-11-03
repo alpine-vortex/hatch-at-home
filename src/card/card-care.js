@@ -277,7 +277,13 @@ const SCENES = {
       sc.bowl.style.opacity = t < 100 ? "0" : "";
       // The food: a stepped clip at each bite's chomp (none for a species with no bowl_rim).
       const chomps = sc.bites.filter((b) => t >= b.at + 120);
-      this._bowlClip(s, sc.bowl, chomps.length ? chomps[chomps.length - 1].step : 0);
+      const clipped = this._bowlClip(s, sc.bowl, chomps.length ? chomps[chomps.length - 1].step : 0);
+      // A bowl with no rim to clip to (25 species) shows each bite another way: the whole bowl
+      // dips, 200 ms (squashed 8% down and back, from its base) at the chomp.
+      if (!clipped) {
+        const dip = Math.max(0, ...sc.bites.map((b) => Math.sin(Math.PI * ramp(b.at + 120, b.at + 320))));
+        if (dip > 0) sc.bowl.style.scale = `${1 + 0.03 * dip} ${1 - 0.08 * dip}`;
+      }
       // Landing dust (two pixels out to the sides), or the night sky's twinkle.
       const base = sh * 0.07;
       sc.dust.forEach((el, i) => {
@@ -372,6 +378,7 @@ const SCENES = {
       const [x0, y0] = (sc.bowl.style.translate || "0px 0px").split(" ").map(Number.parseFloat);
       sc.bowl.style.translate = `${x0 + out * (sw - sc.bowlX)}px ${y0 || 0}px`;
       for (const el of sc.crumbs) el.style.opacity = "0";
+      sc.bowl.style.scale = ""; // stopped mid-dip: whole again
       if (u < 250 && pre) return sc.hungry;
       return sc.refuse;
     },
@@ -387,6 +394,7 @@ const SCENES = {
       const [x0, y0] = (sc.bowl.style.translate || "0px 0px").split(" ").map(Number.parseFloat);
       sc.bowl.style.translate = `${x0 + out * (sw - sc.bowlX)}px ${y0 || 0}px`;
       for (const el of sc.crumbs) el.style.opacity = "0";
+      sc.bowl.style.scale = "";
       return null;
     },
   },

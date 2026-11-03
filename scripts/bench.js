@@ -658,6 +658,18 @@ const PRESETS = {
         }
       }
     }
+    // Care B2: a species with no bowl_rim has each bite dip the whole bowl instead. The feed
+    // scene (variant A, bite 1 chomps at 770 ms) just before it, at the dip's lowest, and after.
+    for (const species of allSpecies().sort()) {
+      if (speciesData(species).bowl_rim !== undefined) continue;
+      const world = worldOf(species);
+      [[700, "before"], [870, "dip"], [1050, "after"]].forEach(([careAt, step]) => {
+        out.push({ name: `bowls/${world}/${species}-dip-${careAt}`, group: `bowls-${world}-dip`, label: `${species} ${step} ${careAt}`,
+          species, stage: "adult", world, width: 330, care: "feed", careAt, answer: { at: 200, result: "ok" },
+          variant: { feed: "A", "feed.extra": "none" }, pet: { hunger: 60 }, mood: "content", clip: "screen",
+          crop: [0.55, 0.45, 0.95, 0.97], dpr: 3, tile: 150, say: "" });
+      });
+    }
     return out;
   },
   // Care B1, the feed scene (plan care-reactions 5.1, 13): an adult fox's four variants every

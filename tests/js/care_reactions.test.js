@@ -426,7 +426,7 @@ function feedEntry() {
   const block = src.slice(src.indexOf("const SCENES = {"), src.indexOf("\n};\n", src.indexOf("const SCENES = {")) + 4);
   const line = (name) => src.match(new RegExp(`\\nconst ${name} = [^\\n]*`))[0];
   const fn = (name) => src.match(new RegExp(`\\nfunction ${name}\\([\\s\\S]*?\\n\\}\\n`))[0];
-  const ctx = { Math, Number, Array, Set, spriteSrc: (id, sp) => `${id}/${sp}`, Date };
+  const ctx = { Math, Number, Array, Set, spriteSrc: (id, sp) => `${id}/${sp}`, Date, bowlColour: () => "#8a5a2b" };
   vm.runInNewContext([line("FEED_FULL_AT"), line("FEED_GOBBLE"), line("FEED_MAX_MS"), line("FEED_EXTRA_ODDS"), line("PACE_SCALE"),
     line("mealPart"), line("isHeavy"), konst("NATURE_VALUES"), fn("nature"), fn("paceOf"), block,
     "this.SCENES = SCENES;"].join("\n"), ctx);
@@ -556,4 +556,40 @@ test("feed's nature hook: a watcher savours (D) more often, a hoarder gobbles on
   assert.ok(count({ habit: "watcher" }, "D") > count({}, "D"));
   assert.strictEqual(count({ habit: "hoarder" }, "C"), 0); // not hungry: no gobble at all
   assert.ok(count({ habit: "hoarder", hunger: "20" }, "C") > 0);
+});
+
+// B2: a bowl with no rim to clip dips whole at each chomp; one with a rim is clipped, not dipped.
+test("feed's per-bite dip: a no-rim bowl squashes at each chomp and is whole again; a clipped bowl never dips", () => {
+  const feed = feedEntry();
+  const run = (clipped, t) => {
+    const f = feedSlide();
+    f.s.pinVariant = { feed: "A" };
+    const sc = f.setup(feed);
+    const style = {};
+    const node = () => ({ style: {}, classList: { toggle() {}, add() {}, remove() {} } });
+    sc.bowl = { style };
+    sc.crumbs = [node(), node(), node()];
+    sc.dust = [node(), node()];
+    sc.fired = new Set();
+    f.s.pet = node();
+    f.s.perch = node();
+    f.self._bowlClip = () => clipped;
+    f.self._animate = () => {};
+    f.self._perk = () => {};
+    f.self._words = () => ({});
+    const ramp = (a, b) => Math.min(1, Math.max(0, (t - a) / (b - a)));
+    feed.render.call(f.self, f.s, sc, t, { sw: 330, sh: 247, ramp, ease: ramp });
+    const refuse = { style: {} };
+    return { style, sc, refuse };
+  };
+  const b0 = run(false, 0).sc.bites[0];
+  const [, sy0] = String(run(false, b0.at).style.scale || "").split(" ");
+  assert.strictEqual(sy0, undefined, "before the chomp: whole"); // no dip yet (scale is the squash's: "")
+  const mid = run(false, b0.at + 220).style.scale.split(" ").map(Number);
+  assert.ok(mid[1] < 0.95 && mid[0] > 1, `dipped at the chomp's middle: ${mid}`);
+  const after = run(false, b0.at + 330).style.scale;
+  assert.ok(!after || Number(after.split(" ")[1]) > 0.999, `whole again: ${after}`);
+  assert.ok(!run(true, b0.at + 220).style.scale, "a clipped bowl is not dipped");
+  assert.match(feed.refuse.toString(), /sc\.bowl\.style\.scale = ""/);
+  assert.match(feed.exit.toString(), /sc\.bowl\.style\.scale = ""/);
 });

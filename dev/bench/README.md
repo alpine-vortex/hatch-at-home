@@ -38,7 +38,7 @@ node scripts/bench.js --preset bigtext    # 18 shots: "big text" on, every statu
 node scripts/bench.js --preset everyworld # 10 shots: the journal's "every world" page, none / some / all raised, 420 and 330, big text
 node scripts/bench.js --preset dig        # 22 shots: the Berry dig at 420/330/300, calm bee, the picker at 300-420
 node scripts/bench.js --preset feed       # care B1: 135 shots of the feed scene: variants A-D every 200 ms, the push-away before and after the gate, the hold and exit, 300 px with poops, the child ladder, water and night-sky worlds, extras, breakfast and supper, resting, big text, mono, reduced motion
-node scripts/bench.js --preset bowls      # care B1: 480 close-ups, every feed bowl at full, 2/3, 1/3, gone (330/420, day/night), a sheet per world and scene, and the clip's pass rule (bowl-pass.json)
+node scripts/bench.js --preset bowls      # care B1: 480 close-ups, every feed bowl at full, 2/3, 1/3, gone (330/420, day/night), a sheet per world and scene, and the clip's pass rule (bowl-pass.json); care B2: and, for the 25 species with no bowl_rim, the feed scene just before, at, and after a bite's whole-bowl dip (a sheet per world, `bowls-<world>-dip`)
 node scripts/bench.js --preset mono       # the mono screen: 2498 shots, ~2.5 min, plus the pass rule
 ```
 
