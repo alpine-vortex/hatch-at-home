@@ -268,6 +268,80 @@
     }
   }
 
+  // A care scene seeked on the bench's own clock, so a shot is the same every run (plan
+  // care-reactions 4.1). The card's rAF loop is stopped (it would end the scene on real time),
+  // and the scene is played from 0 to `careAt` in 10 ms steps with the page's timers on a
+  // virtual clock: a beat's setTimeout (a class taken off, a prop's leave) runs at its scene
+  // time or not at all, and a CSS animation a beat starts is paused at `careAt` minus the
+  // step it began on. Timers still pending at `careAt` are dropped.
+  // The scene's own prop is decoded first: the card measures it at the tap, and an image
+  // still loading has no width (a first tap in a browser can differ; the bench must not).
+  async function careSeek(card, cur, shot) {
+    const at = shot.careAt ?? 1500;
+    const own = { medicine: cur.species?.props?.medicine || "bird/medicine" }[shot.care];
+    if (own) {
+      const img = new Image();
+      img.src = spriteSrc(cur.speciesId, own);
+      await img.decode().catch(() => {});
+      window.bench.warm = img; // kept, so it stays in the page's image cache
+    }
+    const before = new Set(cur.screen.getAnimations({ subtree: true }));
+    const born = new Map();
+    const realSet = window.setTimeout;
+    const realClear = window.clearTimeout;
+    const queue = [];
+    let now = 0;
+    let next = 1;
+    const tag = () => {
+      for (const a of cur.screen.getAnimations({ subtree: true })) if (!before.has(a) && !born.has(a)) born.set(a, now);
+    };
+    window.setTimeout = (fn, ms = 0, ...args) => {
+      const id = `bench-${next++}`;
+      queue.push({ id, due: now + Math.max(0, Number(ms) || 0), fn: () => fn(...args) });
+      return id;
+    };
+    window.clearTimeout = (id) => {
+      const i = queue.findIndex((q) => q.id === id);
+      if (i >= 0) queue.splice(i, 1);
+      else realClear(id);
+    };
+    const runDue = (t) => {
+      for (;;) {
+        queue.sort((a, b) => a.due - b.due);
+        if (!queue.length || queue[0].due > t) return;
+        const q = queue.shift();
+        now = q.due;
+        q.fn();
+        tag();
+      }
+    };
+    try {
+      card._sceneStart(cur, shot.care);
+      const sc = cur.scene;
+      if (sc) {
+        cancelAnimationFrame(sc.raf);
+        sc.paused = true;
+        tag();
+        for (let t = 0; cur.scene === sc; t = Math.min(at, t + 10)) {
+          runDue(t);
+          now = t;
+          if (cur.scene !== sc) break;
+          card._sceneRender(cur, t);
+          tag();
+          if (t >= at) break;
+        }
+      }
+    } finally {
+      window.setTimeout = realSet;
+      window.clearTimeout = realClear;
+    }
+    for (const [a, t] of born) {
+      if (a instanceof CSSTransition) continue;
+      a.pause();
+      a.currentTime = Math.max(0, at - t);
+    }
+  }
+
   async function settled(card) {
     const deadline = Date.now() + 8000;
     for (;;) {
@@ -680,12 +754,8 @@
         }
       }
     }
-    // `care`: "medicine" or "clean" scene started through _sceneStart, paused and seeked to `careAt` ms.
-    if (shot.care) {
-      card._sceneStart(cur, shot.care);
-      cur.scene.paused = true;
-      card._sceneRender(cur, shot.careAt ?? 1500);
-    }
+    // `care`: a care scene started through _sceneStart, paused and seeked to `careAt` ms (careSeek).
+    if (shot.care) await careSeek(card, cur, shot);
     // `reactWait`: ms to let sprite probes (and a failed one's swap back) finish before the shot.
     if (shot.reactWait) await new Promise((r) => setTimeout(r, shot.reactWait));
     // `patTap`: a pat on the pet through the card's own `_pat` (acts.pat shows for ~900 ms).
