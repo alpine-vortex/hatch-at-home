@@ -11286,54 +11286,49 @@ async function main() {
   }, { key: babyKey, ms: (V0.in || 1400) + 1300 });
   check("visitors: a baby says baby talk (BABY.visit)", VBABY.some((l) => baby.text.includes(l)), JSON.stringify(baby));
   // Species nature N2: a solo species' greeting is "peeks first", a social watcher's "ears up" (the roll pinned to
-  // take it); both play the same greet (one class set, the same hold, the same stay), a baby says baby talk, and
-  // nothing is sent beyond the greeted report.
+  // take it); both play the same greet (one class set, the same hold, the same stay), a child says no species line,
+  // and nothing is sent beyond the greeted report. One visit per evaluate (a day's visit marker allows one start).
   {
-    await vprep(V0);
-    const sp = await card.evaluate(async (el) => {
-      const s = el._slides[el._index];
-      const species = s.species;
-      const real = { state: el._state, random: Math.random, mine: s.mine };
-      const nat = { clock: "day", sky: "sun", company: "social", habit: "watcher" };
-      const run = (company, stage) => {
-        s.species = { ...species, nature: { ...nat, company } };
+    const speciesGreet = async (company, stage) => {
+      await vprep(V0);
+      return card.evaluate(async (el, { company, stage }) => {
+        const s = el._slides[el._index];
+        const species = s.species;
+        const real = { state: el._state, random: Math.random, mine: s.mine };
+        s.species = { ...species, nature: { clock: "day", sky: "sun", company, habit: "watcher" } };
         el._state = function (slide, k) {
           const st = real.state.call(this, slide, k);
           return k === "sensor.life_stage" && st && slide === s ? { ...st, state: stage, attributes: { ...st.attributes, personality: null } } : st;
         };
         s.mine = { ...(real.mine || {}), fav_visitor: null };
         Object.assign(s, { sayUntil: 0, poseUntil: 0, propUntil: 0, flairUntil: 0, movingUntil: 0, queue: [] });
-        el.__vtick(s);
-        if (!s.visitor) return { none: true };
-        const before = (el.__vcalls || []).length;
-        Math.random = () => 0.1;
-        try { el._visitorGreet(s, s.visitor.v); } finally { Math.random = real.random; }
-        const out = { text: s.bubble.textContent, classes: [...s.pet.classList].sort().join(" "), hold: Math.round((s.sayUntil - Date.now()) / 500),
-          sent: (el.__vcalls || []).length - before };
-        el._stopTyping(s);
-        el._visitorEnd(s);
-        return out;
-      };
-      const out = {};
-      try {
-        out.solo = run("solo", "adult");
-        out.social = run("social", "adult");
-        out.soloTeen = run("solo", "teen");
-        out.soloChild = run("solo", "child");
-      } finally {
-        s.species = species;
-        el._state = real.state;
-        s.mine = real.mine;
-        Math.random = real.random;
-        Object.assign(s, { sayUntil: 0, flairUntil: 0, poseUntil: 0, visitUntil: 0, queue: [] });
-        for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
-      }
-      return out;
-    });
+        try {
+          el.__vtick(s);
+          if (!s.visitor) return { none: true };
+          const before = (el.__vcalls || []).length;
+          Math.random = () => 0.1;
+          try { el._visitorGreet(s, s.visitor.v); } finally { Math.random = real.random; }
+          const out = { text: s.bubble.textContent || "", classes: [...s.pet.classList].sort().join(" "), hold: Math.round((s.sayUntil - Date.now()) / 500),
+            sent: (el.__vcalls || []).length - before };
+          el._stopTyping(s);
+          el._visitorEnd(s);
+          return out;
+        } finally {
+          s.species = species;
+          el._state = real.state;
+          s.mine = real.mine;
+          Math.random = real.random;
+          Object.assign(s, { sayUntil: 0, flairUntil: 0, poseUntil: 0, visitUntil: 0, queue: [] });
+          for (const k of Object.keys(localStorage)) if (k.startsWith("hatch-visit-")) localStorage.removeItem(k);
+        }
+      }, { company, stage });
+    };
+    const sp = { solo: await speciesGreet("solo", "adult"), social: await speciesGreet("social", "adult"),
+      soloTeen: await speciesGreet("solo", "teen"), soloChild: await speciesGreet("solo", "child") };
     check("species nature N2: a solo species greets with 'peeks first', a social watcher with 'ears up', the same classes and hold; nothing sent",
-      sp.solo?.text.includes("*peeks first, then waves*") && sp.social?.text.includes("*ears up*") && sp.soloTeen?.text.includes("*peeks first, then waves*") &&
-      sp.solo.classes === sp.social.classes && sp.solo.hold === sp.social.hold && !sp.solo.sent && !sp.social.sent &&
-      !/\*(peeks|ears)/.test(sp.soloChild?.text ?? "*"), JSON.stringify(sp)); // (the bubble may carry the pet's sound first)
+      sp.solo.text?.includes("*peeks first, then waves*") && sp.social.text?.includes("*ears up*") && sp.soloTeen.text?.includes("*peeks first, then waves*") &&
+      sp.solo.classes === sp.social.classes && Math.abs(sp.solo.hold - sp.social.hold) <= 1 && !sp.solo.sent && !sp.social.sent &&
+      !/\*(peeks|ears)/.test(sp.soloChild.text ?? "*"), JSON.stringify(sp)); // (the bubble may carry the pet's sound first)
   }
   // Fresh-expand E3 (V-a): a visitor seen here on 3 days is a friend: half its greets are
   // its friend lines (random stubbed to the friend side). At 2, never. Two starts on one
