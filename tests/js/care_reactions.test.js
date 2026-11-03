@@ -1230,6 +1230,11 @@ test("the woke_up lights moment does not stretch twice, nor say a tuck line the 
   assert.deepStrictEqual(plain(run({ asleep: false, scene: null, stretched: Date.now() - 1000 }, { type: "woke_up", how: "lights" }).animated), [], "just after a wake scene's stretch");
   assert.deepStrictEqual(plain(run({ asleep: false, scene: { kind: "lights" } }, { type: "woke_up", how: "lights" }).animated), []);
   assert.deepStrictEqual(plain(run({ scene: { kind: "lights" } }, { type: "fell_asleep", how: "lights" }).lines), [], "the scene says its own");
+  // N4: a hand wake at night is the scene's groggy line, not "...so sleepy" first.
+  const night = { type: "woke_up", how: "night" };
+  assert.deepStrictEqual(plain(run({ scene: { kind: "lights" } }, night).lines), [], "while a lights scene lives");
+  assert.deepStrictEqual(plain(run({ scene: null, stretched: Date.now() - 500 }, night).lines), [], "just after one");
+  assert.deepStrictEqual(plain(run({ scene: null }, night).lines), ["...so sleepy"], "a wake from elsewhere is today's");
   assert.deepStrictEqual(plain(run({ scene: null, tuckedAt: Date.now() - 500 }, { type: "fell_asleep", how: "lights" }).lines), []);
   assert.deepStrictEqual(plain(run({ scene: null }, { type: "fell_asleep", how: "lights" }).lines), ["night night..."], "a tuck seen from elsewhere is today's");
   assert.deepStrictEqual(plain(run({ scene: { kind: "lights" } }, { type: "fell_asleep", how: "house" }).lines), ["night night..."], "only a lights tuck is the scene's");

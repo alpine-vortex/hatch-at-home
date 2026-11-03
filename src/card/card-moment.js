@@ -88,6 +88,8 @@ class HatchPetCardMoment extends HatchPetCardVisit {
           say(this._wakeLine(s), 4500, () => this._animate(s, s.pet, "stretch", 1100));
           if (!capture) this._newLook([s]); // up for the day, seen live: the morning's look begins (fresh-moment 1)
         } else if (m.how === "night") {
+          // A wake scene in the sleep window says its own groggy line: not this one before it, nor after.
+          if (!capture && (s.scene?.kind === "lights" || Date.now() - (s.stretched || 0) < WAKE_STRETCH_MS)) break;
           say("...so sleepy");
         } else if (m.how === "lights") {
           // lights on: a stretch, no line (plan 5.5); not while a wake scene plays, nor two after one (its own stretch)
